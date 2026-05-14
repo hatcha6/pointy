@@ -26,7 +26,19 @@ dev = [
 ]
 
 [tool.setuptools]
-packages = ["pointy", "apps", "apps.core", "apps.catalog", "apps.sales", "apps.payments", "apps.inventory"]
+packages = [
+  "pointy",
+  "apps",
+  "apps.core",
+  "apps.catalog",
+  "apps.catalog.migrations",
+  "apps.inventory",
+  "apps.inventory.migrations",
+  "apps.sales",
+  "apps.sales.migrations",
+  "apps.payments",
+  "apps.payments.migrations",
+]
 
 [tool.pytest.ini_options]
 DJANGO_SETTINGS_MODULE = "pointy.settings"

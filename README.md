@@ -9,6 +9,17 @@ A starter point-of-sale stack with a Django REST Framework backend, Redis-backed
 
 ## Backend Quick Start
 
+With Make:
+
+```sh
+make setup
+make redis
+make backend-migrate
+make backend-run
+```
+
+Or manually:
+
 ```sh
 cd backend
 python -m venv .venv
@@ -34,6 +45,14 @@ celery -A pointy worker -l info
 
 ## Frontend Quick Start
 
+With Make:
+
+```sh
+make frontend-web
+```
+
+Or manually:
+
 ```sh
 cd frontend
 flutter pub get
@@ -41,3 +60,9 @@ flutter run
 ```
 
 The Flutter app currently uses a sample in-memory catalog while the data layer is scaffolded for the API.
+
+Run the full local stack:
+
+```sh
+make dev
+```
