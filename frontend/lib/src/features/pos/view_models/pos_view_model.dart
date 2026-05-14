@@ -37,7 +37,7 @@ class PosViewModel extends ChangeNotifier {
         _products = result.value;
       case Error<List<Product>>():
         _products = _catalogRepository.sampleProducts();
-        _errorMessage = 'Using sample catalog until the API is running.';
+        _errorMessage = 'يتم عرض منتجات تجريبية إلى أن يعمل الخادم.';
     }
 
     _isLoading = false;

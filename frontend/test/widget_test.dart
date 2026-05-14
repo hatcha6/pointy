@@ -10,13 +10,13 @@ void main() {
     await tester.pumpWidget(const PointyApp());
     await tester.pumpAndSettle(const Duration(seconds: 1));
 
-    expect(find.text('Pointy POS'), findsOneWidget);
-    expect(find.text('Current Sale'), findsOneWidget);
+    expect(find.text('نقطة البيع'), findsOneWidget);
+    expect(find.text('البيع الحالي'), findsOneWidget);
 
-    await tester.tap(find.text('House Coffee'));
+    await tester.tap(find.text('قهوة البيت'));
     await tester.pump();
 
-    expect(find.text('Pay \$3.78'), findsOneWidget);
+    expect(find.text('ادفع د.ل 3.78'), findsOneWidget);
     expect(find.byIcon(Icons.delete_outline), findsOneWidget);
   });
 }

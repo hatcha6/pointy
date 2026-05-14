@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../data/models/cart_line.dart';
 import '../../../data/models/product.dart';
 import '../view_models/pos_view_model.dart';
+
+String _formatMoney(double value) => 'د.ل ${value.toStringAsFixed(2)}';
 
 class PosScreen extends StatelessWidget {
   const PosScreen({super.key, required this.viewModel});
@@ -14,12 +17,14 @@ class PosScreen extends StatelessWidget {
     return ListenableBuilder(
       listenable: viewModel,
       builder: (context, _) {
+        final l10n = AppLocalizations.of(context)!;
+
         return Scaffold(
           appBar: AppBar(
-            title: const Text('Pointy POS'),
+            title: Text(l10n.appTitle),
             actions: [
               IconButton(
-                tooltip: 'Refresh catalog',
+                tooltip: l10n.refreshCatalogTooltip,
                 onPressed: viewModel.loadCatalog,
                 icon: const Icon(Icons.sync),
               ),
@@ -70,7 +75,10 @@ class _CatalogPane extends StatelessWidget {
         children: [
           Row(
             children: [
-              Text('Catalog', style: Theme.of(context).textTheme.titleLarge),
+              Text(
+                AppLocalizations.of(context)!.catalogTitle,
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
               const Spacer(),
               if (viewModel.isLoading)
                 const SizedBox.square(
@@ -83,7 +91,7 @@ class _CatalogPane extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.only(top: 8),
               child: Text(
-                viewModel.errorMessage!,
+                AppLocalizations.of(context)!.sampleCatalogNotice,
                 style: TextStyle(
                   color: Theme.of(context).colorScheme.secondary,
                 ),
@@ -91,22 +99,27 @@ class _CatalogPane extends StatelessWidget {
             ),
           const SizedBox(height: 12),
           Expanded(
-            child: GridView.builder(
-              gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                maxCrossAxisExtent: 220,
-                mainAxisExtent: 132,
-                crossAxisSpacing: 12,
-                mainAxisSpacing: 12,
-              ),
-              itemCount: viewModel.products.length,
-              itemBuilder: (context, index) {
-                final product = viewModel.products[index];
-                return _ProductTile(
-                  product: product,
-                  onTap: () => viewModel.addProduct(product),
-                );
-              },
-            ),
+            child: viewModel.products.isEmpty && !viewModel.isLoading
+                ? Center(
+                    child: Text(AppLocalizations.of(context)!.emptyCatalog),
+                  )
+                : GridView.builder(
+                    gridDelegate:
+                        const SliverGridDelegateWithMaxCrossAxisExtent(
+                          maxCrossAxisExtent: 220,
+                          mainAxisExtent: 132,
+                          crossAxisSpacing: 12,
+                          mainAxisSpacing: 12,
+                        ),
+                    itemCount: viewModel.products.length,
+                    itemBuilder: (context, index) {
+                      final product = viewModel.products[index];
+                      return _ProductTile(
+                        product: product,
+                        onTap: () => viewModel.addProduct(product),
+                      );
+                    },
+                  ),
           ),
         ],
       ),
@@ -143,7 +156,7 @@ class _ProductTile extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
-              Text('\$${product.unitPrice.toStringAsFixed(2)}'),
+              Text(_formatMoney(product.unitPrice)),
             ],
           ),
         ),
@@ -159,6 +172,8 @@ class _CartPane extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+
     return ColoredBox(
       color: Colors.white,
       child: Padding(
@@ -169,12 +184,12 @@ class _CartPane extends StatelessWidget {
             Row(
               children: [
                 Text(
-                  'Current Sale',
+                  l10n.currentSaleTitle,
                   style: Theme.of(context).textTheme.titleLarge,
                 ),
                 const Spacer(),
                 IconButton(
-                  tooltip: 'Clear cart',
+                  tooltip: l10n.clearCartTooltip,
                   onPressed: viewModel.cart.isEmpty
                       ? null
                       : viewModel.clearCart,
@@ -185,7 +200,7 @@ class _CartPane extends StatelessWidget {
             const SizedBox(height: 8),
             Expanded(
               child: viewModel.cart.isEmpty
-                  ? const Center(child: Text('No items in cart'))
+                  ? Center(child: Text(l10n.emptyCart))
                   : ListView.separated(
                       itemCount: viewModel.cart.length,
                       separatorBuilder: (_, _) => const Divider(height: 1),
@@ -205,7 +220,7 @@ class _CartPane extends StatelessWidget {
             FilledButton.icon(
               onPressed: viewModel.cart.isEmpty ? null : () {},
               icon: const Icon(Icons.payments_outlined),
-              label: Text('Pay \$${viewModel.total.toStringAsFixed(2)}'),
+              label: Text(l10n.payAmount(_formatMoney(viewModel.total))),
             ),
           ],
         ),
@@ -227,6 +242,8 @@ class _CartLineTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 10),
       child: Row(
@@ -241,29 +258,26 @@ class _CartLineTile extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                 ),
                 Text(
-                  '\$${line.product.unitPrice.toStringAsFixed(2)} each',
+                  l10n.unitPriceEach(_formatMoney(line.product.unitPrice)),
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
               ],
             ),
           ),
           IconButton.filledTonal(
-            tooltip: 'Remove one',
+            tooltip: l10n.removeOneTooltip,
             onPressed: onRemove,
             icon: const Icon(Icons.remove),
           ),
           SizedBox(width: 36, child: Center(child: Text('${line.quantity}'))),
           IconButton.filledTonal(
-            tooltip: 'Add one',
+            tooltip: l10n.addOneTooltip,
             onPressed: onAdd,
             icon: const Icon(Icons.add),
           ),
           SizedBox(
             width: 72,
-            child: Text(
-              '\$${line.total.toStringAsFixed(2)}',
-              textAlign: TextAlign.end,
-            ),
+            child: Text(_formatMoney(line.total), textAlign: TextAlign.end),
           ),
         ],
       ),
@@ -278,12 +292,14 @@ class _Totals extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+
     return Column(
       children: [
-        _TotalRow(label: 'Subtotal', value: viewModel.subtotal),
-        _TotalRow(label: 'Tax', value: viewModel.taxTotal),
+        _TotalRow(label: l10n.subtotal, value: viewModel.subtotal),
+        _TotalRow(label: l10n.tax, value: viewModel.taxTotal),
         const Divider(),
-        _TotalRow(label: 'Total', value: viewModel.total, isStrong: true),
+        _TotalRow(label: l10n.total, value: viewModel.total, isStrong: true),
       ],
     );
   }
@@ -312,7 +328,7 @@ class _TotalRow extends StatelessWidget {
         children: [
           Text(label, style: style),
           const Spacer(),
-          Text('\$${value.toStringAsFixed(2)}', style: style),
+          Text(_formatMoney(value), style: style),
         ],
       ),
     );

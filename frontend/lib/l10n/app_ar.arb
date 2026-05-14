@@ -1,0 +1,37 @@
+{
+  "@@locale": "ar",
+  "appTitle": "نقطة البيع",
+  "@appTitle": {
+    "description": "Application title."
+  },
+  "refreshCatalogTooltip": "تحديث المنتجات",
+  "catalogTitle": "المنتجات",
+  "sampleCatalogNotice": "يتم عرض منتجات تجريبية إلى أن يعمل الخادم.",
+  "emptyCatalog": "لا توجد منتجات",
+  "currentSaleTitle": "البيع الحالي",
+  "clearCartTooltip": "مسح السلة",
+  "emptyCart": "لا توجد عناصر في السلة",
+  "payAmount": "ادفع {amount}",
+  "@payAmount": {
+    "description": "Payment button label with the payable amount.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "unitPriceEach": "{amount} للقطعة",
+  "@unitPriceEach": {
+    "description": "Unit price label for a cart item.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "removeOneTooltip": "إنقاص عنصر",
+  "addOneTooltip": "إضافة عنصر",
+  "subtotal": "المجموع الفرعي",
+  "tax": "الضريبة",
+  "total": "الإجمالي"
+}

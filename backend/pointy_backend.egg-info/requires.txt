@@ -1,0 +1,13 @@
+celery[redis]<6,>=5.4
+django<6,>=5.1
+django-cors-headers<5,>=4.4
+django-environ<1,>=0.11
+django-filter<26,>=24.3
+django-redis<6,>=5.4
+djangorestframework<4,>=3.15
+drf-spectacular<1,>=0.27
+
+[dev]
+pytest<9,>=8
+pytest-django<5,>=4.9
+ruff<1,>=0.8

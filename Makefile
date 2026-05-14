@@ -13,11 +13,11 @@ WEB_PORT ?= 8080
 API_HOST ?= 127.0.0.1
 API_PORT ?= 8000
 
-.PHONY: help setup install redis redis-stop redis-logs \
+.PHONY: help setup install docker-check redis redis-local redis-stop redis-logs redis-ping \
 	backend-venv backend-install backend-env backend-migrate backend-migrations backend-run \
 	backend-shell backend-superuser backend-test backend-check backend-celery \
-	frontend-install frontend-run frontend-web frontend-test frontend-analyze frontend-format \
-	format check test dev clean
+	frontend-install frontend-l10n frontend-run frontend-web frontend-test frontend-analyze frontend-format \
+	format check test dev dev-local dev-no-redis clean
 
 help: ## Show available commands.
 	@awk 'BEGIN {FS = ":.*##"; printf "\nPointy POS commands\n\n"} /^[a-zA-Z0-9_-]+:.*##/ {printf "  %-22s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -26,14 +26,37 @@ setup: backend-env backend-install frontend-install ## Prepare backend and front
 
 install: setup ## Alias for setup.
 
-redis: ## Start Redis in the background with Docker Compose.
+docker-check: ## Check that Docker is reachable.
+	@docker info >/dev/null 2>&1 || { \
+		printf "\nDocker is not reachable.\n"; \
+		printf "Open Docker Desktop, then retry this command.\n"; \
+		printf "If you have redis-server installed locally, use: make dev-local\n\n"; \
+		exit 1; \
+	}
+
+redis: docker-check ## Start Redis in the background with Docker Compose.
 	docker compose up -d redis
+
+redis-local: ## Run Redis locally without Docker.
+	@command -v redis-server >/dev/null 2>&1 || { \
+		printf "\nredis-server was not found on PATH.\n"; \
+		printf "Install Redis locally, or open Docker Desktop and use: make redis\n\n"; \
+		exit 1; \
+	}
+	redis-server --port 6379
 
 redis-stop: ## Stop Redis.
 	docker compose stop redis
 
 redis-logs: ## Tail Redis logs.
 	docker compose logs -f redis
+
+redis-ping: ## Check Redis connectivity on localhost:6379.
+	@command -v redis-cli >/dev/null 2>&1 || { \
+		printf "\nredis-cli was not found on PATH.\n"; \
+		exit 1; \
+	}
+	redis-cli -h 127.0.0.1 -p 6379 ping
 
 backend-venv: ## Create the backend virtual environment.
 	@test -d "$(VENV)" || $(PYTHON) -m venv "$(VENV)"
@@ -74,6 +97,9 @@ backend-celery: backend-env backend-install ## Run a Celery worker.
 frontend-install: ## Install Flutter dependencies.
 	cd "$(FRONTEND_DIR)" && $(FLUTTER) pub get
 
+frontend-l10n: frontend-install ## Generate Flutter localization files.
+	cd "$(FRONTEND_DIR)" && $(FLUTTER) gen-l10n
+
 frontend-run: frontend-install ## Run the Flutter app on the default selected device.
 	cd "$(FRONTEND_DIR)" && $(FLUTTER) run
 
@@ -89,13 +115,19 @@ frontend-analyze: frontend-install ## Run Flutter analyzer.
 frontend-format: ## Format Flutter source and tests.
 	cd "$(FRONTEND_DIR)" && dart format lib test
 
-format: frontend-format ## Format all currently scaffolded code.
+format: frontend-l10n frontend-format ## Format all currently scaffolded code.
 
 check: backend-check frontend-analyze ## Run non-mutating project checks.
 
 test: backend-test frontend-test ## Run backend and frontend tests.
 
 dev: redis backend-migrate ## Run Redis, Django, and Flutter web together.
+	$(MAKE) -j2 backend-run frontend-web
+
+dev-local: backend-migrate ## Run local Redis, Django, and Flutter web together without Docker.
+	$(MAKE) -j3 redis-local backend-run frontend-web
+
+dev-no-redis: backend-migrate ## Run Django and Flutter web without starting Redis.
 	$(MAKE) -j2 backend-run frontend-web
 
 clean: ## Remove generated local caches and build output.

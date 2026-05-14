@@ -34,8 +34,10 @@ python manage.py runserver
 Run Redis with Docker:
 
 ```sh
-docker compose up redis
+make redis
 ```
+
+If Docker Desktop is not running, open it and retry. If Redis is installed locally, use `make dev-local` instead of `make dev`.
 
 Run a Celery worker:
 
@@ -65,4 +67,12 @@ Run the full local stack:
 
 ```sh
 make dev
+```
+
+Useful variants:
+
+```sh
+make dev-local     # Use a local redis-server instead of Docker
+make dev-no-redis  # Start only Django and Flutter
+make redis-ping    # Check Redis connectivity
 ```
