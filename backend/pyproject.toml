@@ -1,0 +1,37 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pointy-backend"
+version = "0.1.0"
+description = "Django REST backend for Pointy POS."
+requires-python = ">=3.12"
+dependencies = [
+  "celery[redis]>=5.4,<6",
+  "django>=5.1,<6",
+  "django-cors-headers>=4.4,<5",
+  "django-environ>=0.11,<1",
+  "django-filter>=24.3,<26",
+  "django-redis>=5.4,<6",
+  "djangorestframework>=3.15,<4",
+  "drf-spectacular>=0.27,<1",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8,<9",
+  "pytest-django>=4.9,<5",
+  "ruff>=0.8,<1",
+]
+
+[tool.setuptools]
+packages = ["pointy", "apps", "apps.core", "apps.catalog", "apps.sales", "apps.payments", "apps.inventory"]
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "pointy.settings"
+python_files = ["tests.py", "test_*.py"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
