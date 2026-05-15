@@ -11,8 +11,8 @@ class OrderLineSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = OrderLine
-        fields = ["id", "product", "product_name", "quantity", "unit_price", "tax_rate", "line_total"]
-        read_only_fields = ("unit_price", "tax_rate")
+        fields = ["id", "product", "product_name", "quantity", "unit_price", "line_total"]
+        read_only_fields = ("unit_price",)
 
 
 class OrderSerializer(serializers.ModelSerializer):
@@ -26,12 +26,11 @@ class OrderSerializer(serializers.ModelSerializer):
             "status",
             "lines",
             "subtotal",
-            "tax_total",
             "total",
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ("receipt_number", "subtotal", "tax_total", "total", "created_at", "updated_at")
+        read_only_fields = ("receipt_number", "subtotal", "total", "created_at", "updated_at")
 
     @transaction.atomic
     def create(self, validated_data):
@@ -44,8 +43,7 @@ class OrderSerializer(serializers.ModelSerializer):
                 product=product,
                 quantity=line_data["quantity"],
                 unit_price=product.unit_price,
-                tax_rate=product.tax_rate,
             )
         order.recalculate()
-        order.save(update_fields=["subtotal", "tax_total", "total", "updated_at"])
+        order.save(update_fields=["subtotal", "total", "updated_at"])
         return order

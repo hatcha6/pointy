@@ -86,7 +86,7 @@ backend-superuser: backend-env backend-install ## Create a Django superuser.
 	$(MANAGE) createsuperuser
 
 backend-test: backend-env backend-install ## Run backend tests.
-	cd "$(BACKEND_DIR)" && .venv/bin/python -m pytest
+	$(MANAGE) test apps
 
 backend-check: backend-env backend-install ## Run Django system checks.
 	$(MANAGE) check

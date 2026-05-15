@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import '../models/product.dart';
+import '../models/product_page.dart';
+import '../models/query.dart';
 
 class PosApiService {
   PosApiService({
@@ -13,8 +15,13 @@ class PosApiService {
   final http.Client _client;
   final String baseUrl;
 
-  Future<List<Product>> fetchProducts() async {
-    final uri = Uri.parse('$baseUrl/products/?is_active=true&ordering=name');
+  Future<ProductPage> fetchProducts({
+    required ModelQuery query,
+    int page = 1,
+  }) async {
+    final uri = Uri.parse(
+      '$baseUrl/products/',
+    ).replace(queryParameters: query.toQueryParameters(page: page));
     final response = await _client.get(uri);
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
@@ -23,11 +30,25 @@ class PosApiService {
       );
     }
 
-    final decoded = jsonDecode(response.body) as Map<String, Object?>;
-    final results = decoded['results'] as List<Object?>;
-    return results
-        .cast<Map<String, Object?>>()
-        .map(Product.fromJson)
-        .toList(growable: false);
+    return ProductPage.fromJson(
+      jsonDecode(response.body) as Map<String, Object?>,
+    );
+  }
+
+  Future<Product> createProduct(ProductDraft draft) async {
+    final uri = Uri.parse('$baseUrl/products/');
+    final response = await _client.post(
+      uri,
+      headers: const {'Content-Type': 'application/json'},
+      body: jsonEncode(draft.toJson()),
+    );
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception(
+        'Product create failed with status ${response.statusCode}',
+      );
+    }
+
+    return Product.fromJson(jsonDecode(response.body) as Map<String, Object?>);
   }
 }

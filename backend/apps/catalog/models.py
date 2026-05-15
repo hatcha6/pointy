@@ -9,7 +9,6 @@ class Product(TimeStampedModel):
     name = models.CharField(max_length=255)
     description = models.TextField(blank=True)
     unit_price = models.DecimalField(max_digits=10, decimal_places=2)
-    tax_rate = models.DecimalField(max_digits=5, decimal_places=4, default=0)
     is_active = models.BooleanField(default=True)
 
     class Meta:

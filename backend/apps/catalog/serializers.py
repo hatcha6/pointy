@@ -13,9 +13,16 @@ class ProductSerializer(serializers.ModelSerializer):
             "name",
             "description",
             "unit_price",
-            "tax_rate",
             "is_active",
             "created_at",
             "updated_at",
         ]
         read_only_fields = ("created_at", "updated_at")
+
+    def validate_unit_price(self, value):
+        if value < 0:
+            raise serializers.ValidationError("Unit price cannot be negative.")
+        return value
+
+    def validate_sku(self, value):
+        return value.strip().upper()

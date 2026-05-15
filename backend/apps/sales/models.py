@@ -15,7 +15,6 @@ class Order(TimeStampedModel):
     receipt_number = models.CharField(max_length=32, unique=True, blank=True)
     status = models.CharField(max_length=16, choices=Status.choices, default=Status.OPEN)
     subtotal = models.DecimalField(max_digits=10, decimal_places=2, default=0)
-    tax_total = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     total = models.DecimalField(max_digits=10, decimal_places=2, default=0)
 
     class Meta:
@@ -23,14 +22,11 @@ class Order(TimeStampedModel):
 
     def recalculate(self) -> None:
         subtotal = Decimal("0.00")
-        tax_total = Decimal("0.00")
         for line in self.lines.select_related("product"):
             line_subtotal = line.unit_price * line.quantity
             subtotal += line_subtotal
-            tax_total += line_subtotal * line.tax_rate
         self.subtotal = subtotal.quantize(Decimal("0.01"))
-        self.tax_total = tax_total.quantize(Decimal("0.01"))
-        self.total = (self.subtotal + self.tax_total).quantize(Decimal("0.01"))
+        self.total = self.subtotal
 
     def save(self, *args, **kwargs):
         if not self.receipt_number:
@@ -49,11 +45,10 @@ class OrderLine(TimeStampedModel):
     product = models.ForeignKey(Product, on_delete=models.PROTECT)
     quantity = models.PositiveIntegerField(default=1)
     unit_price = models.DecimalField(max_digits=10, decimal_places=2)
-    tax_rate = models.DecimalField(max_digits=5, decimal_places=4, default=0)
 
     class Meta:
         ordering = ["created_at"]
 
     @property
     def line_total(self):
-        return (self.unit_price * self.quantity * (1 + self.tax_rate)).quantize(Decimal("0.01"))
+        return (self.unit_price * self.quantity).quantize(Decimal("0.01"))

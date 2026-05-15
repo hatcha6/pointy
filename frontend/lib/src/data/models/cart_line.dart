@@ -8,9 +8,7 @@ class CartLine {
 
   double get subtotal => product.unitPrice * quantity;
 
-  double get tax => subtotal * product.taxRate;
-
-  double get total => subtotal + tax;
+  double get total => subtotal;
 
   CartLine copyWith({int? quantity}) {
     return CartLine(product: product, quantity: quantity ?? this.quantity);

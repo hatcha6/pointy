@@ -1,42 +1,36 @@
 import 'package:flutter/foundation.dart';
 
 import '../../../core/result.dart';
-import '../../../data/models/cart_line.dart';
 import '../../../data/models/product.dart';
 import '../../../data/models/product_page.dart';
 import '../../../data/models/product_query.dart';
 import '../../../data/repositories/catalog_repository.dart';
 
-class PosViewModel extends ChangeNotifier {
-  PosViewModel(this._catalogRepository) {
-    loadCatalog();
+class CatalogViewModel extends ChangeNotifier {
+  CatalogViewModel(this._catalogRepository) {
+    loadProducts();
   }
 
   final CatalogRepository _catalogRepository;
 
   List<Product> _products = [];
-  final List<CartLine> _cart = [];
   bool _isLoading = false;
   bool _isLoadingMore = false;
+  bool _isSaving = false;
   bool _hasMoreProducts = true;
   int _nextProductPage = 1;
   String? _errorMessage;
-  ProductQuery _query = const ProductQuery(
-    availability: ProductAvailabilityFilter.active,
-  );
+  ProductQuery _query = const ProductQuery();
 
   List<Product> get products => List.unmodifiable(_products);
-  List<CartLine> get cart => List.unmodifiable(_cart);
   bool get isLoading => _isLoading;
   bool get isLoadingMore => _isLoadingMore;
+  bool get isSaving => _isSaving;
   bool get hasMoreProducts => _hasMoreProducts;
   String? get errorMessage => _errorMessage;
   ProductQuery get query => _query;
 
-  double get subtotal => _cart.fold(0, (sum, line) => sum + line.subtotal);
-  double get total => subtotal;
-
-  Future<void> loadCatalog() async {
+  Future<void> loadProducts() async {
     _isLoading = true;
     _errorMessage = null;
     _nextProductPage = 1;
@@ -53,16 +47,16 @@ class PosViewModel extends ChangeNotifier {
         _hasMoreProducts = result.value.hasMore;
         _nextProductPage = 2;
       case Error<ProductPage>():
-        _products = _catalogRepository.sampleProducts(_query);
+        _products = [];
         _hasMoreProducts = false;
-        _errorMessage = 'يتم عرض منتجات تجريبية إلى أن يعمل الخادم.';
+        _errorMessage = 'catalog_load_error';
     }
 
     _isLoading = false;
     notifyListeners();
   }
 
-  Future<void> loadMoreCatalog() async {
+  Future<void> loadMoreProducts() async {
     if (_isLoading || _isLoadingMore || !_hasMoreProducts) {
       return;
     }
@@ -80,7 +74,7 @@ class PosViewModel extends ChangeNotifier {
         _hasMoreProducts = result.value.hasMore;
         _nextProductPage += 1;
       case Error<ProductPage>():
-        _errorMessage = 'يتم عرض منتجات تجريبية إلى أن يعمل الخادم.';
+        _errorMessage = 'catalog_load_error';
     }
 
     _isLoadingMore = false;
@@ -92,45 +86,31 @@ class PosViewModel extends ChangeNotifier {
       return;
     }
     _query = _query.copyWith(search: search);
-    await loadCatalog();
+    await loadProducts();
   }
 
   Future<void> applyQuery(ProductQuery query) async {
-    if (query == _query) {
-      return;
-    }
-    _query = query.copyWith(availability: ProductAvailabilityFilter.active);
-    await loadCatalog();
+    _query = query;
+    await loadProducts();
   }
 
-  void addProduct(Product product) {
-    final index = _cart.indexWhere((line) => line.product.id == product.id);
-    if (index == -1) {
-      _cart.add(CartLine(product: product, quantity: 1));
-    } else {
-      final line = _cart[index];
-      _cart[index] = line.copyWith(quantity: line.quantity + 1);
-    }
+  Future<bool> createProduct(ProductDraft draft) async {
+    _isSaving = true;
+    _errorMessage = null;
     notifyListeners();
-  }
 
-  void decrementProduct(Product product) {
-    final index = _cart.indexWhere((line) => line.product.id == product.id);
-    if (index == -1) {
-      return;
+    final result = await _catalogRepository.createProduct(draft);
+    switch (result) {
+      case Ok<Product>():
+        await loadProducts();
+        _isSaving = false;
+        notifyListeners();
+        return true;
+      case Error<Product>():
+        _errorMessage = 'catalog_create_error';
+        _isSaving = false;
+        notifyListeners();
+        return false;
     }
-
-    final line = _cart[index];
-    if (line.quantity <= 1) {
-      _cart.removeAt(index);
-    } else {
-      _cart[index] = line.copyWith(quantity: line.quantity - 1);
-    }
-    notifyListeners();
-  }
-
-  void clearCart() {
-    _cart.clear();
-    notifyListeners();
   }
 }

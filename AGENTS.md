@@ -9,6 +9,7 @@ These rules apply to AI agents working anywhere in this repository.
 - Do not hardcode visible UI copy directly inside widgets. Add strings to Flutter localization files under `frontend/lib/l10n/` and read them through `AppLocalizations`.
 - Preserve right-to-left behavior. Keep Arabic screens tested in RTL and avoid layout assumptions that only work in LTR.
 - Use Arabic labels for POS workflows, including catalog, cart, totals, payment actions, tooltips, empty states, and errors.
+- Do not add tax fields, tax totals, or tax UI unless the user explicitly asks for tax support.
 
 ## Flutter
 
@@ -16,6 +17,8 @@ These rules apply to AI agents working anywhere in this repository.
 - Run `dart format lib test`, `flutter analyze`, and `flutter test` after meaningful frontend changes.
 - Keep UI dense, practical, and cashier-friendly. This is a POS app, not a marketing site.
 - Prefer the existing MVVM-style shape: services, repositories, view models, then views.
+- Keep widgets small and purposeful. Look for existing reusable code before adding new code.
+- Prefer simple, DRY implementations over large files, duplicated UI, or clever abstractions.
 
 ## Backend
 
