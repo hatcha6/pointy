@@ -13,6 +13,7 @@ enum AppCapability {
   createProduct,
   viewRegisterSessions,
   viewRegisterSessionOrders,
+  manageDeviceSettings,
   manageUsers,
   manageShopSettings,
 }
@@ -31,6 +32,7 @@ class AuthorizationCapabilities {
       AppCapability.startRegisterSession,
       AppCapability.resumeRegisterSession,
       AppCapability.closeRegisterSession,
+      AppCapability.manageDeviceSettings,
     };
 
     if (user.permissions.isNotEmpty) {
@@ -124,6 +126,8 @@ class AuthorizationCapabilities {
       allows(AppCapability.viewRegisterSessions);
   bool get canViewRegisterSessionOrders =>
       allows(AppCapability.viewRegisterSessionOrders);
+  bool get canManageDeviceSettings =>
+      allows(AppCapability.manageDeviceSettings);
   bool get canManageUsers => allows(AppCapability.manageUsers);
   bool get canManageShopSettings => allows(AppCapability.manageShopSettings);
 

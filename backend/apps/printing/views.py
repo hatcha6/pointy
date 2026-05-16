@@ -1,0 +1,379 @@
+from django.db import transaction
+from django.utils import timezone
+from rest_framework import mixins, status, viewsets
+from rest_framework.decorators import action
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+
+from apps.core.permissions import HasPointyPermission
+from .models import (
+    PrinterProfile,
+    PrintAgent,
+    PrintJob,
+    PrintJobEvent,
+    PrintTemplate,
+    PrintTemplateVersion,
+)
+from .serializers import (
+    PrinterProfileSerializer,
+    PrintAgentSerializer,
+    PrintJobAgentActionSerializer,
+    PrintJobEventSerializer,
+    PrintJobFailureSerializer,
+    PrintJobSerializer,
+    PrintJobReportSerializer,
+    PrintTemplateSerializer,
+    PrintTemplateVersionSerializer,
+)
+from .services import create_job_event, publish_template_version
+
+
+class PrintTemplateViewSet(viewsets.ModelViewSet):
+    serializer_class = PrintTemplateSerializer
+    permission_classes = [IsAuthenticated, HasPointyPermission]
+    permission_map = {
+        "list": ("printing.view_printtemplate",),
+        "retrieve": ("printing.view_printtemplate",),
+        "create": ("printing.add_printtemplate",),
+        "update": ("printing.change_printtemplate",),
+        "partial_update": ("printing.change_printtemplate",),
+        "destroy": ("printing.delete_printtemplate",),
+    }
+    queryset = PrintTemplate.objects.select_related("current_version")
+    filterset_fields = ("template_type", "is_active")
+    search_fields = ("slug", "name", "description")
+    ordering_fields = ("slug", "name", "created_at", "updated_at")
+
+
+class PrintTemplateVersionViewSet(
+    mixins.CreateModelMixin,
+    mixins.ListModelMixin,
+    mixins.RetrieveModelMixin,
+    viewsets.GenericViewSet,
+):
+    serializer_class = PrintTemplateVersionSerializer
+    permission_classes = [IsAuthenticated, HasPointyPermission]
+    permission_map = {
+        "list": ("printing.view_printtemplateversion",),
+        "retrieve": ("printing.view_printtemplateversion",),
+        "create": ("printing.add_printtemplateversion",),
+        "publish": ("printing.change_printtemplateversion",),
+        "update": ("printing.change_printtemplateversion",),
+        "partial_update": ("printing.change_printtemplateversion",),
+        "destroy": ("printing.delete_printtemplateversion",),
+        "PUT": ("printing.change_printtemplateversion",),
+        "PATCH": ("printing.change_printtemplateversion",),
+        "DELETE": ("printing.delete_printtemplateversion",),
+    }
+    queryset = PrintTemplateVersion.objects.select_related("template", "created_by")
+    filterset_fields = ("template", "status")
+    search_fields = ("template__slug", "content")
+    ordering_fields = ("created_at", "version_number", "published_at")
+
+    @action(detail=True, methods=["post"])
+    def publish(self, request, pk=None):
+        version = publish_template_version(self.get_object())
+        return Response(self.get_serializer(version).data)
+
+
+class PrinterProfileViewSet(viewsets.ModelViewSet):
+    serializer_class = PrinterProfileSerializer
+    permission_classes = [IsAuthenticated, HasPointyPermission]
+    permission_map = {
+        "list": ("printing.view_printerprofile",),
+        "retrieve": ("printing.view_printerprofile",),
+        "create": ("printing.add_printerprofile",),
+        "update": ("printing.change_printerprofile",),
+        "partial_update": ("printing.change_printerprofile",),
+        "destroy": ("printing.delete_printerprofile",),
+    }
+    queryset = PrinterProfile.objects.all()
+    filterset_fields = ("printer_type", "is_default", "is_active")
+    search_fields = ("name",)
+    ordering_fields = ("name", "created_at", "updated_at")
+
+
+class PrintAgentViewSet(viewsets.ModelViewSet):
+    serializer_class = PrintAgentSerializer
+    permission_classes = [IsAuthenticated, HasPointyPermission]
+    permission_map = {
+        "list": ("printing.view_printagent",),
+        "retrieve": ("printing.view_printagent",),
+        "create": ("printing.add_printagent",),
+        "update": ("printing.change_printagent",),
+        "partial_update": ("printing.change_printagent",),
+        "destroy": ("printing.delete_printagent",),
+    }
+    queryset = PrintAgent.objects.select_related("printer_profile")
+    filterset_fields = ("printer_profile", "is_active")
+    search_fields = ("name", "identifier")
+    ordering_fields = ("name", "created_at", "updated_at", "last_seen_at")
+
+
+class PrintJobViewSet(
+    mixins.CreateModelMixin,
+    mixins.ListModelMixin,
+    mixins.RetrieveModelMixin,
+    viewsets.GenericViewSet,
+):
+    serializer_class = PrintJobSerializer
+    permission_classes = [IsAuthenticated, HasPointyPermission]
+    permission_map = {
+        "list": ("printing.view_printjob",),
+        "retrieve": ("printing.view_printjob",),
+        "create": ("printing.add_printjob",),
+        "events": ("printing.view_printjobevent",),
+        "claim": ("printing.change_printjob",),
+        "claim_next": ("printing.change_printjob",),
+        "requeue": ("printing.change_printjob",),
+        "cancel": ("printing.change_printjob",),
+        "printed": ("printing.change_printjob",),
+        "failed": ("printing.change_printjob",),
+        "report": ("printing.change_printjob",),
+    }
+    queryset = (
+        PrintJob.objects.select_related(
+            "order",
+            "template_version",
+            "printer_profile",
+            "claimed_by",
+        )
+        .prefetch_related("events__agent", "events__user")
+        .all()
+    )
+    filterset_fields = ("job_type", "status", "order", "printer_profile", "claimed_by")
+    search_fields = ("idempotency_key", "order__receipt_number", "error_message")
+    ordering_fields = ("created_at", "updated_at", "priority", "attempts")
+
+    @action(detail=True, methods=["get"])
+    def events(self, request, pk=None):
+        events = self.get_object().events.select_related("agent", "user")
+        page = self.paginate_queryset(events)
+        if page is not None:
+            serializer = PrintJobEventSerializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+        return Response(PrintJobEventSerializer(events, many=True).data)
+
+    @action(detail=False, methods=["post"], url_path="claim-next")
+    def claim_next(self, request):
+        serializer = PrintJobAgentActionSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        agent = serializer.validated_data["agent"]
+        now = timezone.now()
+
+        with transaction.atomic():
+            job_queryset = PrintJob.objects.select_for_update().filter(
+                status=PrintJob.Status.QUEUED,
+            )
+            if agent.printer_profile_id:
+                job_queryset = job_queryset.filter(
+                    printer_profile_id__in=[agent.printer_profile_id, None],
+                )
+            job = job_queryset.order_by("-priority", "created_at", "id").first()
+            if job is None:
+                agent.last_seen_at = now
+                agent.save(update_fields=["last_seen_at", "updated_at"])
+                return Response(status=status.HTTP_204_NO_CONTENT)
+
+            job.status = PrintJob.Status.CLAIMED
+            job.claimed_by = agent
+            job.claimed_at = now
+            job.attempts += 1
+            job.error_message = ""
+            job.save(
+                update_fields=[
+                    "status",
+                    "claimed_by",
+                    "claimed_at",
+                    "attempts",
+                    "error_message",
+                    "updated_at",
+                ]
+            )
+            agent.last_seen_at = now
+            agent.save(update_fields=["last_seen_at", "updated_at"])
+            create_job_event(
+                job,
+                PrintJobEvent.Type.CLAIMED,
+                user=request.user,
+                agent=agent,
+                message="Print job claimed.",
+            )
+
+        return Response(self.get_serializer(job).data)
+
+    @action(detail=True, methods=["post"])
+    def claim(self, request, pk=None):
+        serializer = PrintJobAgentActionSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        agent = serializer.validated_data["agent"]
+        now = timezone.now()
+        job = self.get_object()
+        if job.status != PrintJob.Status.QUEUED:
+            return Response(
+                {"detail": "Only queued jobs can be claimed."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        job.status = PrintJob.Status.CLAIMED
+        job.claimed_by = agent
+        job.claimed_at = now
+        job.attempts += 1
+        job.error_message = ""
+        job.save(
+            update_fields=[
+                "status",
+                "claimed_by",
+                "claimed_at",
+                "attempts",
+                "error_message",
+                "updated_at",
+            ]
+        )
+        agent.last_seen_at = now
+        agent.save(update_fields=["last_seen_at", "updated_at"])
+        create_job_event(
+            job,
+            PrintJobEvent.Type.CLAIMED,
+            user=request.user,
+            agent=agent,
+            message="Print job claimed.",
+            metadata={
+                "printer_endpoint": serializer.validated_data.get("printer_endpoint", {})
+            },
+        )
+        return Response(self.get_serializer(job).data)
+
+    @action(detail=True, methods=["post"])
+    def requeue(self, request, pk=None):
+        job = self.get_object()
+        if job.status in (PrintJob.Status.PRINTED, PrintJob.Status.CANCELED):
+            return Response(
+                {"detail": "Printed or canceled jobs cannot be requeued."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        job.status = PrintJob.Status.QUEUED
+        job.claimed_by = None
+        job.claimed_at = None
+        job.failed_at = None
+        job.error_message = ""
+        job.save(
+            update_fields=[
+                "status",
+                "claimed_by",
+                "claimed_at",
+                "failed_at",
+                "error_message",
+                "updated_at",
+            ]
+        )
+        create_job_event(
+            job,
+            PrintJobEvent.Type.REQUEUED,
+            user=request.user,
+            message="Print job requeued.",
+        )
+        return Response(self.get_serializer(job).data)
+
+    @action(detail=True, methods=["post"])
+    def cancel(self, request, pk=None):
+        job = self.get_object()
+        if job.status == PrintJob.Status.PRINTED:
+            return Response(
+                {"detail": "Printed jobs cannot be canceled."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if job.status != PrintJob.Status.CANCELED:
+            job.status = PrintJob.Status.CANCELED
+            job.save(update_fields=["status", "updated_at"])
+            create_job_event(
+                job,
+                PrintJobEvent.Type.CANCELED,
+                user=request.user,
+                message="Print job canceled.",
+            )
+        return Response(self.get_serializer(job).data)
+
+    @action(detail=True, methods=["post"])
+    def printed(self, request, pk=None):
+        serializer = PrintJobAgentActionSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        agent = serializer.validated_data["agent"]
+        job = self.get_object()
+        if job.status != PrintJob.Status.CLAIMED:
+            return Response(
+                {"detail": "Only claimed jobs can be reported printed."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        now = timezone.now()
+        job.status = PrintJob.Status.PRINTED
+        job.claimed_by = agent
+        job.printed_at = now
+        job.error_message = ""
+        job.save(
+            update_fields=[
+                "status",
+                "claimed_by",
+                "printed_at",
+                "error_message",
+                "updated_at",
+            ]
+        )
+        agent.last_seen_at = now
+        agent.save(update_fields=["last_seen_at", "updated_at"])
+        create_job_event(
+            job,
+            PrintJobEvent.Type.PRINTED,
+            user=request.user,
+            agent=agent,
+            message="Print job completed.",
+        )
+        return Response(self.get_serializer(job).data)
+
+    @action(detail=True, methods=["post"])
+    def failed(self, request, pk=None):
+        serializer = PrintJobFailureSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        agent = serializer.validated_data["agent"]
+        job = self.get_object()
+        if job.status != PrintJob.Status.CLAIMED:
+            return Response(
+                {"detail": "Only claimed jobs can be reported failed."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        now = timezone.now()
+        job.status = PrintJob.Status.FAILED
+        job.claimed_by = agent
+        job.failed_at = now
+        job.error_message = serializer.validated_data.get("error_message", "")
+        job.save(
+            update_fields=[
+                "status",
+                "claimed_by",
+                "failed_at",
+                "error_message",
+                "updated_at",
+            ]
+        )
+        agent.last_seen_at = now
+        agent.save(update_fields=["last_seen_at", "updated_at"])
+        create_job_event(
+            job,
+            PrintJobEvent.Type.FAILED,
+            user=request.user,
+            agent=agent,
+            message=job.error_message,
+        )
+        return Response(self.get_serializer(job).data)
+
+    @action(detail=True, methods=["post"])
+    def report(self, request, pk=None):
+        serializer = PrintJobReportSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        report_status = serializer.validated_data["status"]
+        if report_status in (PrintJob.Status.PRINTED, "completed"):
+            return self.printed(request, pk=pk)
+        return self.failed(request, pk=pk)

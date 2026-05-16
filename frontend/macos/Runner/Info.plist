@@ -22,6 +22,19 @@
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>$(MACOSX_DEPLOYMENT_TARGET)</string>
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>تستخدم نقطة البيع البلوتوث للاتصال بطابعات الإيصالات.</string>
+	<key>NSBluetoothPeripheralUsageDescription</key>
+	<string>تستخدم نقطة البيع البلوتوث للاتصال بطابعات الإيصالات.</string>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_pdl-datastream._tcp</string>
+		<string>_printer._tcp</string>
+		<string>_ipp._tcp</string>
+		<string>_ipps._tcp</string>
+	</array>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>تستخدم نقطة البيع الشبكة المحلية لاكتشاف طابعات الإيصالات.</string>
 	<key>NSHumanReadableCopyright</key>
 	<string>$(PRODUCT_COPYRIGHT)</string>
 	<key>NSMainNibFile</key>

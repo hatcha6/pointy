@@ -7,7 +7,14 @@ MANAGER_GROUP = "manager"
 CASHIER_GROUP = "cashier"
 ROLE_GROUPS = (MANAGER_GROUP, CASHIER_GROUP)
 
-MANAGER_PERMISSION_DOMAINS = ("catalog", "core", "inventory", "sales", "payments")
+MANAGER_PERMISSION_DOMAINS = (
+    "catalog",
+    "core",
+    "inventory",
+    "sales",
+    "payments",
+    "printing",
+)
 USER_PERMISSION_CODES = (
     "auth.add_user",
     "auth.change_user",
@@ -23,6 +30,10 @@ CASHIER_PERMISSION_CODES = (
     "sales.view_registersession",
     "payments.add_payment",
     "payments.view_payment",
+    "printing.add_printjob",
+    "printing.change_printjob",
+    "printing.view_printjob",
+    "printing.view_printjobevent",
 )
 
 

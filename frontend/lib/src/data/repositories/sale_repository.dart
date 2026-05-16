@@ -1,4 +1,5 @@
 import '../../core/result.dart';
+import '../models/print_job.dart';
 import '../models/sale_order.dart';
 import '../models/sale_order_page.dart';
 import '../services/pos_api_service.dart';
@@ -24,6 +25,14 @@ class SaleRepository {
       return Ok(
         await _service.fetchRegisterSessionOrders(sessionId, page: page),
       );
+    } on Exception catch (exception) {
+      return Error(exception);
+    }
+  }
+
+  Future<Result<PrintJob>> requestReprint(int saleOrderId) async {
+    try {
+      return Ok(await _service.requestSaleReprint(saleOrderId));
     } on Exception catch (exception) {
       return Error(exception);
     }

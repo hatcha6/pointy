@@ -13,6 +13,13 @@ from apps.core.views import (
 )
 from apps.inventory.views import StockItemViewSet
 from apps.payments.views import PaymentViewSet
+from apps.printing.views import (
+    PrinterProfileViewSet,
+    PrintAgentViewSet,
+    PrintJobViewSet,
+    PrintTemplateVersionViewSet,
+    PrintTemplateViewSet,
+)
 from apps.sales.views import OrderViewSet, RegisterSessionViewSet
 
 router = DefaultRouter()
@@ -22,6 +29,11 @@ router.register("stock", StockItemViewSet)
 router.register("orders", OrderViewSet)
 router.register("register-sessions", RegisterSessionViewSet, basename="register-session")
 router.register("payments", PaymentViewSet)
+router.register("print-templates", PrintTemplateViewSet)
+router.register("print-template-versions", PrintTemplateVersionViewSet)
+router.register("printer-profiles", PrinterProfileViewSet)
+router.register("print-agents", PrintAgentViewSet)
+router.register("print-jobs", PrintJobViewSet)
 
 urlpatterns = [
     path("admin/", admin.site.urls),

@@ -66,7 +66,10 @@ class SessionOrders extends StatelessWidget {
                       Center(child: Text(l10n.emptySessionSales)),
                   separatorBuilder: (_, _) => const Divider(height: 1),
                   itemBuilder: (context, order) {
-                    return SessionOrderTile(order: order);
+                    return SessionOrderTile(
+                      order: order,
+                      onReprint: viewModel.requestReprint,
+                    );
                   },
                 ),
               },
@@ -79,9 +82,10 @@ class SessionOrders extends StatelessWidget {
 }
 
 class SessionOrderTile extends StatelessWidget {
-  const SessionOrderTile({super.key, required this.order});
+  const SessionOrderTile({super.key, required this.order, this.onReprint});
 
   final SaleOrder order;
+  final Future<bool> Function(SaleOrder order)? onReprint;
 
   @override
   Widget build(BuildContext context) {
@@ -101,7 +105,8 @@ class SessionOrderTile extends StatelessWidget {
         formatMoney(order.total),
         style: Theme.of(context).textTheme.titleMedium,
       ),
-      onTap: () => showSaleOrderDetailsSheet(context, order),
+      onTap: () =>
+          showSaleOrderDetailsSheet(context, order, onReprint: onReprint),
     );
   }
 }

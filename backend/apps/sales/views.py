@@ -25,6 +25,7 @@ class OrderViewSet(viewsets.ModelViewSet):
         "retrieve": ("sales.view_order",),
         "create": ("sales.add_order",),
         "checkout": ("sales.add_order",),
+        "reprint": ("sales.view_order", "printing.add_printjob"),
         "update": ("sales.change_order",),
         "partial_update": ("sales.change_order",),
         "destroy": ("sales.delete_order",),
@@ -74,6 +75,14 @@ class OrderViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
         order = serializer.save()
         return Response(OrderSerializer(order).data, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=["post"])
+    def reprint(self, request, pk=None):
+        from apps.printing.serializers import PrintJobSerializer
+        from apps.printing.services import enqueue_manual_receipt_reprint
+
+        job = enqueue_manual_receipt_reprint(self.get_object(), user=request.user)
+        return Response(PrintJobSerializer(job).data, status=status.HTTP_201_CREATED)
 
 
 def register_session_owner_key(request):

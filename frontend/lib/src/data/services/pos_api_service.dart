@@ -5,6 +5,8 @@ import 'package:http/http.dart' as http;
 import '../models/product.dart';
 import '../models/product_page.dart';
 import '../models/pos_user.dart';
+import '../models/print_job.dart';
+import '../models/printer_config.dart';
 import '../models/query.dart';
 import '../models/register_session.dart';
 import '../models/register_session_page.dart';
@@ -334,6 +336,137 @@ class PosApiService {
     return SaleOrder.fromJson(
       jsonDecode(_decodeBody(response)) as Map<String, Object?>,
     );
+  }
+
+  Future<List<PrintJob>> fetchPrintJobs({
+    PrintJobStatus? status,
+    int page = 1,
+  }) async {
+    final uri = Uri.parse('$baseUrl/print-jobs/').replace(
+      queryParameters: {
+        'page': '$page',
+        if (status != null) 'status': _printJobStatusQueryValue(status),
+      },
+    );
+    final response = await _client.get(uri, headers: _requestHeaders());
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception(
+        'Print jobs request failed with status ${response.statusCode}',
+      );
+    }
+
+    return printJobsFromResponse(jsonDecode(_decodeBody(response)));
+  }
+
+  Future<PrintJob> claimPrintJob({
+    required int jobId,
+    required String agentId,
+    required PrinterEndpoint endpoint,
+  }) async {
+    final uri = Uri.parse('$baseUrl/print-jobs/$jobId/claim/');
+    final response = await _client.post(
+      uri,
+      headers: _requestHeaders(includeCsrf: true),
+      body: jsonEncode({
+        'agent_id': agentId,
+        'printer_endpoint': endpoint.toJson(),
+      }),
+    );
+    _captureResponseState(response);
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception(
+        'Print job claim failed with status ${response.statusCode}',
+      );
+    }
+
+    return PrintJob.fromJson(
+      jsonDecode(_decodeBody(response)) as Map<String, Object?>,
+    );
+  }
+
+  Future<PrintJob?> claimNextPrintJob({
+    required String agentId,
+    required PrinterEndpoint endpoint,
+  }) async {
+    final uri = Uri.parse('$baseUrl/print-jobs/claim-next/');
+    final response = await _client.post(
+      uri,
+      headers: _requestHeaders(includeCsrf: true),
+      body: jsonEncode({
+        'agent_id': agentId,
+        'printer_endpoint': endpoint.toJson(),
+      }),
+    );
+    _captureResponseState(response);
+
+    if (response.statusCode == 204) {
+      return null;
+    }
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception(
+        'Print job claim-next failed with status ${response.statusCode}',
+      );
+    }
+
+    return PrintJob.fromJson(
+      jsonDecode(_decodeBody(response)) as Map<String, Object?>,
+    );
+  }
+
+  Future<PrintJob> reportPrintJob({
+    required int jobId,
+    required PrintJobReportDraft report,
+  }) async {
+    final uri = Uri.parse('$baseUrl/print-jobs/$jobId/report/');
+    final response = await _client.post(
+      uri,
+      headers: _requestHeaders(includeCsrf: true),
+      body: jsonEncode(report.toJson()),
+    );
+    _captureResponseState(response);
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception(
+        'Print job report failed with status ${response.statusCode}',
+      );
+    }
+
+    return PrintJob.fromJson(
+      jsonDecode(_decodeBody(response)) as Map<String, Object?>,
+    );
+  }
+
+  Future<PrintJob> requestSaleReprint(int saleOrderId) async {
+    final uri = Uri.parse('$baseUrl/orders/$saleOrderId/reprint/');
+    final response = await _client.post(
+      uri,
+      headers: _requestHeaders(includeCsrf: true),
+    );
+    _captureResponseState(response);
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception(
+        'Sale reprint request failed with status ${response.statusCode}',
+      );
+    }
+
+    return PrintJob.fromJson(
+      jsonDecode(_decodeBody(response)) as Map<String, Object?>,
+    );
+  }
+
+  String _printJobStatusQueryValue(PrintJobStatus status) {
+    return switch (status) {
+      PrintJobStatus.pending => 'queued',
+      PrintJobStatus.claimed => 'claimed',
+      PrintJobStatus.printing => 'printing',
+      PrintJobStatus.completed => 'printed',
+      PrintJobStatus.failed => 'failed',
+      PrintJobStatus.canceled => 'canceled',
+    };
   }
 
   PosUser _decodeUserResponse(String body) {

@@ -8,19 +8,169 @@ import 'package:http/testing.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import 'package:pointy_frontend/src/core/authorization.dart';
+import 'package:pointy_frontend/src/core/result.dart';
 import 'package:pointy_frontend/src/data/models/pos_user.dart';
+import 'package:pointy_frontend/src/data/models/print_job.dart';
+import 'package:pointy_frontend/src/data/models/printer_config.dart';
 import 'package:pointy_frontend/src/data/models/product.dart';
 import 'package:pointy_frontend/src/app.dart';
+import 'package:pointy_frontend/src/data/repositories/printing_repository.dart';
 import 'package:pointy_frontend/src/data/repositories/user_repository.dart';
+import 'package:pointy_frontend/src/data/services/esc_pos_receipt_encoder.dart';
 import 'package:pointy_frontend/src/data/services/pos_api_service.dart';
+import 'package:pointy_frontend/src/data/services/print_transport.dart';
 import 'package:pointy_frontend/src/features/catalog/views/product_details_screen.dart';
 import 'package:pointy_frontend/src/features/pos/views/register_session_close_sheet.dart';
 import 'package:pointy_frontend/src/features/users/view_models/user_management_view_model.dart';
 import 'package:pointy_frontend/src/features/users/views/user_management_screen.dart';
 import 'package:pointy_frontend/src/shared/infinite_scroll_grid.dart';
 import 'package:pointy_frontend/src/shared/product_tile.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
+  setUp(() {
+    SharedPreferences.setMockInitialValues({});
+  });
+
+  test(
+    'printer endpoint parses serial, bluetooth, wifi, and ESC/POS options',
+    () {
+      final endpoint = PrinterEndpoint.fromJson({
+        'kind': 'wifi',
+        'name': 'Counter',
+        'address': '192.168.1.50',
+        'port': 9100,
+        'paper_width_mm': 58,
+        'code_table': 'CP1256',
+        'timeout_ms': 3000,
+      });
+
+      expect(endpoint.kind, PrintTransportKind.wifi);
+      expect(endpoint.address, '192.168.1.50');
+      expect(endpoint.port, 9100);
+      expect(endpoint.paperWidthMm, 58);
+      expect(endpoint.codeTable, 'CP1256');
+      expect(endpoint.timeoutMs, 3000);
+      expect(
+        PrinterEndpoint.fromJson({'kind': 'bluetooth'}).kind,
+        PrintTransportKind.bluetooth,
+      );
+    },
+  );
+
+  test('ESC/POS encoder generates non-empty receipt bytes', () async {
+    final job = PrintJob.fromJson({
+      'id': 1,
+      'status': 'queued',
+      'job_type': 'receipt',
+      'payload': {
+        'shop': {
+          'name': 'متجر نقطة البيع',
+          'receipt_header': 'أهلا بكم',
+          'receipt_footer': 'شكرا لزيارتكم',
+        },
+        'order': {
+          'receipt_number': 'R-1',
+          'created_at': '2026-05-16T12:00:00Z',
+          'total': '3.50',
+          'lines': [
+            {
+              'name': 'قهوة البيت',
+              'quantity': 1,
+              'unit_price': '3.50',
+              'line_total': '3.50',
+            },
+          ],
+        },
+      },
+    });
+    const endpoint = PrinterEndpoint(
+      kind: PrintTransportKind.serial,
+      name: 'Counter',
+      address: '/dev/tty.test',
+    );
+
+    final bytes = await const EscPosReceiptEncoder().encodeJob(
+      job: job,
+      endpoint: endpoint,
+    );
+
+    expect(bytes, isNotEmpty);
+    expect(bytes.first, 27);
+  });
+
+  test('printing repository discovers printers across transports', () async {
+    final repository = PrintingRepository(
+      _mockApiService(),
+      serialTransport: const _StaticDiscoveryTransport([
+        PrinterEndpoint(
+          kind: PrintTransportKind.serial,
+          name: 'USB',
+          address: '/dev/tty.usbserial',
+        ),
+      ]),
+      bluetoothTransport: const _StaticDiscoveryTransport([
+        PrinterEndpoint(
+          kind: PrintTransportKind.bluetooth,
+          name: 'BT',
+          address: '00:11:22:33:44:55',
+        ),
+      ]),
+      wifiTransport: const _StaticDiscoveryTransport([
+        PrinterEndpoint(
+          kind: PrintTransportKind.wifi,
+          name: 'Network',
+          address: '192.168.1.20',
+          port: 9100,
+        ),
+      ]),
+    );
+
+    final result = await repository.discoverPrinters();
+
+    final printers = switch (result) {
+      Ok<List<PrinterEndpoint>>() => result.value,
+      Error<List<PrinterEndpoint>>() => fail('Discovery should not fail'),
+    };
+    expect(printers.map((printer) => printer.kind), [
+      PrintTransportKind.serial,
+      PrintTransportKind.bluetooth,
+      PrintTransportKind.wifi,
+    ]);
+  });
+
+  test(
+    'printing repository saves the default printer as a printable device',
+    () async {
+      final repository = PrintingRepository(_mockApiService());
+      const endpoint = PrinterEndpoint(
+        kind: PrintTransportKind.wifi,
+        name: 'Counter',
+        address: '192.168.1.55',
+        port: 9100,
+      );
+
+      final saveResult = await repository.saveDefaultPrinterConfig(
+        const PrinterConfig(
+          endpoint: endpoint,
+          isEnabled: false,
+          autoClaimJobs: false,
+        ),
+      );
+      expect(saveResult, isA<Ok<void>>());
+
+      final loadResult = await repository.loadDefaultPrinterConfig();
+      final config = switch (loadResult) {
+        Ok<PrinterConfig>() => loadResult.value,
+        Error<PrinterConfig>() => fail('Default printer should load'),
+      };
+
+      expect(config.endpoint.address, '192.168.1.55');
+      expect(config.isEnabled, isTrue);
+      expect(config.autoClaimJobs, isTrue);
+    },
+  );
+
   testWidgets('checkout posts cart lines and clears cart on success', (
     WidgetTester tester,
   ) async {
@@ -205,6 +355,7 @@ void main() {
     expect(find.text('المنتجات'), findsWidgets);
     expect(find.text('جلسات الدرج'), findsOneWidget);
     expect(find.text('المستخدمون'), findsOneWidget);
+    expect(find.text('إعدادات الجهاز'), findsOneWidget);
     expect(find.text('إعدادات المتجر'), findsOneWidget);
     expect(find.text('تسجيل الخروج'), findsOneWidget);
   });
@@ -271,6 +422,7 @@ void main() {
     expect(find.text('إعدادات المتجر'), findsWidgets);
     expect(find.text('هوية المتجر'), findsOneWidget);
     expect(find.text('الإيصالات'), findsOneWidget);
+    expect(find.text('الطابعة المحلية'), findsNothing);
     expect(find.text('جلسة الدرج'), findsOneWidget);
     expect(find.text('تنبيهات المخزون'), findsOneWidget);
 
@@ -282,6 +434,38 @@ void main() {
 
     expect(settingsBody?['shop_name'], 'متجر الاختبار');
     expect(find.text('تم حفظ إعدادات المتجر.'), findsOneWidget);
+  });
+
+  testWidgets('manager can configure and fake-test local printing', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(1200, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(PointyApp(apiService: _mockApiService()));
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+
+    await tester.tap(find.byIcon(Icons.menu));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('إعدادات الجهاز'));
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+
+    expect(find.text('إعدادات الجهاز'), findsWidgets);
+    expect(find.text('الطابعة الافتراضية'), findsOneWidget);
+    expect(find.text('طريقة الاتصال'), findsOneWidget);
+    expect(find.text('تسلسلي'), findsOneWidget);
+    expect(find.text('محاكاة'), findsOneWidget);
+    expect(find.text('تفعيل وكيل الطباعة المحلي'), findsNothing);
+    expect(find.text('استلام مهام الطباعة تلقائيًا'), findsNothing);
+
+    await tester.tap(find.text('محاكاة'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('اختبار الطابعة'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('تم إرسال اختبار الطباعة.'), findsOneWidget);
   });
 
   testWidgets('cashier navigation hides management destinations', (
@@ -311,6 +495,7 @@ void main() {
     expect(find.text('كاشير الوردية'), findsOneWidget);
     expect(find.text('شاشة البيع'), findsOneWidget);
     expect(find.text('جلسات الدرج'), findsOneWidget);
+    expect(find.text('إعدادات الجهاز'), findsOneWidget);
     expect(find.text('المنتجات'), findsNothing);
     expect(find.text('المستخدمون'), findsNothing);
     expect(find.text('إعدادات المتجر'), findsNothing);
@@ -346,6 +531,7 @@ void main() {
             onOpenPos: () {},
             onOpenCatalog: () {},
             onOpenRegisterSessions: () {},
+            onOpenDeviceSettings: () {},
             onLogout: () {},
           ),
         ),
@@ -383,6 +569,39 @@ void main() {
     expect(find.text('مبيعات جلسة RS-1'), findsOneWidget);
     expect(find.text('إيصال R-100'), findsOneWidget);
     expect(find.text('د.ل 7.00'), findsWidgets);
+  });
+
+  testWidgets('sale details can request a receipt reprint', (
+    WidgetTester tester,
+  ) async {
+    String? reprintPath;
+
+    await tester.pumpWidget(
+      PointyApp(
+        apiService: _mockApiService(
+          onReprint: (request) {
+            reprintPath = request.url.path;
+          },
+        ),
+      ),
+    );
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+
+    await tester.tap(find.byIcon(Icons.menu));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('جلسات الدرج'));
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+
+    await tester.tap(find.text('جلسة RS-1'));
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+    await tester.tap(find.text('إيصال R-100'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('إعادة طباعة الإيصال'));
+    await tester.pumpAndSettle();
+
+    expect(reprintPath, '/api/orders/100/reprint/');
+    expect(find.text('تم إرسال طلب إعادة الطباعة.'), findsOneWidget);
   });
 
   testWidgets('session orders load more when the list underfills', (
@@ -567,6 +786,33 @@ void main() {
   });
 }
 
+class _StaticDiscoveryTransport extends PrintTransport {
+  const _StaticDiscoveryTransport(this.endpoints);
+
+  final List<PrinterEndpoint> endpoints;
+
+  @override
+  Future<List<PrinterEndpoint>> discover() async => endpoints;
+
+  @override
+  Future<PrintTransportStatus> status(PrinterEndpoint endpoint) async {
+    return const PrintTransportStatus(isAvailable: true, message: 'ready');
+  }
+
+  @override
+  Future<PrintTransportResult> printJob({
+    required PrintJob job,
+    required PrinterEndpoint endpoint,
+  }) async {
+    return const PrintTransportResult.success('printed');
+  }
+
+  @override
+  Future<PrintTransportResult> printTest(PrinterEndpoint endpoint) async {
+    return const PrintTransportResult.success('printed');
+  }
+}
+
 PosApiService _mockApiService({
   bool isAuthenticated = true,
   bool hasOpenSession = false,
@@ -575,6 +821,7 @@ PosApiService _mockApiService({
   String currentUserDisplayName = 'مدير النظام',
   List<String> currentUserPermissions = const [],
   void Function(http.Request request)? onCheckout,
+  void Function(http.Request request)? onReprint,
   void Function(int page)? onOrderPage,
   void Function(http.Request request)? onShopSettingsUpdate,
 }) {
@@ -739,6 +986,11 @@ PosApiService _mockApiService({
         return _jsonResponse(_orderJson());
       }
 
+      if (path.endsWith('/orders/100/reprint/')) {
+        onReprint?.call(request);
+        return _jsonResponse(_printJobJson());
+      }
+
       return http.Response('not found', 404);
     }),
   );
@@ -854,5 +1106,18 @@ Map<String, Object?> _orderJson({
     'total': total,
     'created_at': createdAt,
     'updated_at': createdAt,
+  };
+}
+
+Map<String, Object?> _printJobJson() {
+  return {
+    'id': 501,
+    'status': 'pending',
+    'job_type': 'receipt',
+    'sale_order': 100,
+    'receipt_number': 'R-100',
+    'payload': {'receipt_number': 'R-100'},
+    'created_at': '2026-05-15T09:11:00Z',
+    'updated_at': '2026-05-15T09:11:00Z',
   };
 }

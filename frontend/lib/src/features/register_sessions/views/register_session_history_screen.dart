@@ -17,6 +17,7 @@ class RegisterSessionHistoryScreen extends StatelessWidget {
     required this.capabilities,
     required this.onOpenPos,
     required this.onOpenCatalog,
+    required this.onOpenDeviceSettings,
     required this.onLogout,
     this.onOpenUsers,
     this.onOpenShopSettings,
@@ -27,6 +28,7 @@ class RegisterSessionHistoryScreen extends StatelessWidget {
   final AuthorizationCapabilities capabilities;
   final VoidCallback onOpenPos;
   final VoidCallback onOpenCatalog;
+  final VoidCallback onOpenDeviceSettings;
   final VoidCallback? onOpenUsers;
   final VoidCallback? onOpenShopSettings;
   final VoidCallback onLogout;
@@ -46,6 +48,7 @@ class RegisterSessionHistoryScreen extends StatelessWidget {
             onOpenPos: onOpenPos,
             onOpenCatalog: onOpenCatalog,
             onOpenRegisterSessions: () {},
+            onOpenDeviceSettings: onOpenDeviceSettings,
             onOpenUsers: onOpenUsers,
             onOpenShopSettings: onOpenShopSettings,
             onLogout: onLogout,

@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../../../core/result.dart';
+import '../../../data/models/print_job.dart';
 import '../../../data/models/register_session.dart';
 import '../../../data/models/register_session_page.dart';
 import '../../../data/models/sale_order.dart';
@@ -167,5 +168,13 @@ class RegisterSessionHistoryViewModel extends ChangeNotifier {
 
     _isLoadingMoreOrders = false;
     notifyListeners();
+  }
+
+  Future<bool> requestReprint(SaleOrder order) async {
+    final result = await _saleRepository.requestReprint(order.id);
+    return switch (result) {
+      Ok<PrintJob>() => true,
+      Error<PrintJob>() => false,
+    };
   }
 }

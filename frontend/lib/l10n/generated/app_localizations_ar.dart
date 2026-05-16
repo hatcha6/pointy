@@ -81,6 +81,9 @@ class AppLocalizationsAr extends AppLocalizations {
   String get registerSessionsDrawerLabel => 'جلسات الدرج';
 
   @override
+  String get deviceSettingsDrawerLabel => 'إعدادات الجهاز';
+
+  @override
   String get usersDrawerLabel => 'المستخدمون';
 
   @override
@@ -184,6 +187,21 @@ class AppLocalizationsAr extends AppLocalizations {
   String get shopSettingsSavedMessage => 'تم حفظ إعدادات المتجر.';
 
   @override
+  String get deviceSettingsTitle => 'إعدادات الجهاز';
+
+  @override
+  String get refreshDeviceSettingsTooltip => 'تحديث إعدادات الجهاز';
+
+  @override
+  String get deviceSettingsLoadError => 'تعذر تحميل إعدادات الجهاز المحلية.';
+
+  @override
+  String get deviceSettingsSaveError => 'تعذر حفظ إعدادات الجهاز المحلية.';
+
+  @override
+  String get devicePrinterSectionTitle => 'الطابعة الافتراضية';
+
+  @override
   String get shopIdentitySectionTitle => 'هوية المتجر';
 
   @override
@@ -239,6 +257,75 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get lowStockThresholdLabel => 'حد تنبيه المخزون المنخفض';
+
+  @override
+  String get printerTransportLabel => 'طريقة الاتصال';
+
+  @override
+  String get printerTransportSerial => 'تسلسلي';
+
+  @override
+  String get printerTransportBluetooth => 'بلوتوث';
+
+  @override
+  String get printerTransportWifi => 'شبكة';
+
+  @override
+  String get printerTransportFake => 'محاكاة';
+
+  @override
+  String get selectedPrinterLabel => 'الطابعة الافتراضية لهذا الجهاز';
+
+  @override
+  String get noSelectedPrinter => 'لم يتم اختيار طابعة';
+
+  @override
+  String get paperWidthLabel => 'عرض الورق بالملليمتر';
+
+  @override
+  String get printerCodeTableLabel => 'جدول ترميز الطابعة';
+
+  @override
+  String get discoveredPrintersLabel => 'الطابعات المكتشفة';
+
+  @override
+  String get selectDiscoveredPrinterHint => 'اختر طابعة';
+
+  @override
+  String get noDiscoveredPrinters => 'لم يتم اكتشاف طابعات بعد';
+
+  @override
+  String get discoverPrintersButton => 'اكتشاف الطابعات';
+
+  @override
+  String get printerDiscoveryError =>
+      'تعذر اكتشاف الطابعات. يمكنك إدخال بيانات الطابعة يدويًا.';
+
+  @override
+  String get testPrinterButton => 'اختبار الطابعة';
+
+  @override
+  String get testingPrinterButton => 'جار الاختبار...';
+
+  @override
+  String get fakePrintButton => 'طباعة تجريبية بالمحاكاة';
+
+  @override
+  String get printerTestSuccess => 'تم إرسال اختبار الطباعة.';
+
+  @override
+  String get printerTestFailure =>
+      'تعذر اختبار الطابعة. تحقق من الاتصال والإعدادات وحاول مرة أخرى.';
+
+  @override
+  String get printerTestUnsupported =>
+      'طريقة الاتصال غير متاحة على هذا الجهاز.';
+
+  @override
+  String get fakePrintSuccess => 'نجحت الطباعة التجريبية بالمحاكاة.';
+
+  @override
+  String get fakePrintFailure => 'تعذرت الطباعة التجريبية بالمحاكاة.';
 
   @override
   String get saveSettingsButton => 'حفظ الإعدادات';
@@ -548,4 +635,16 @@ class AppLocalizationsAr extends AppLocalizations {
   String saleLineQuantityAndPrice(int quantity, String unitPrice) {
     return '$quantity × $unitPrice';
   }
+
+  @override
+  String get saleReprintButton => 'إعادة طباعة الإيصال';
+
+  @override
+  String get saleReprintInProgressButton => 'جار طلب الطباعة...';
+
+  @override
+  String get saleReprintQueuedMessage => 'تم إرسال طلب إعادة الطباعة.';
+
+  @override
+  String get saleReprintError => 'تعذر إرسال طلب إعادة الطباعة.';
 }

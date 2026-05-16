@@ -8,14 +8,17 @@ import 'data/repositories/catalog_repository.dart';
 import 'data/repositories/register_session_repository.dart';
 import 'data/repositories/sale_repository.dart';
 import 'data/repositories/shop_settings_repository.dart';
+import 'data/repositories/printing_repository.dart';
 import 'data/repositories/user_repository.dart';
 import 'data/services/pos_api_service.dart';
 import 'features/auth/view_models/auth_view_model.dart';
 import 'features/auth/views/auth_gate.dart';
 import 'features/catalog/view_models/catalog_view_model.dart';
 import 'features/catalog/views/catalog_screen.dart';
+import 'features/device_settings/views/device_settings_screen.dart';
 import 'features/pos/view_models/pos_view_model.dart';
 import 'features/pos/views/pos_screen.dart';
+import 'features/printing/view_models/printing_settings_view_model.dart';
 import 'features/register_sessions/view_models/register_session_history_view_model.dart';
 import 'features/register_sessions/views/register_session_history_screen.dart';
 import 'features/settings/view_models/shop_settings_view_model.dart';
@@ -39,9 +42,11 @@ class _PointyAppState extends State<PointyApp> {
   late final RegisterSessionRepository _registerSessionRepository;
   late final SaleRepository _saleRepository;
   late final ShopSettingsRepository _shopSettingsRepository;
+  late final PrintingRepository _printingRepository;
   late final UserRepository _userRepository;
   late final AuthViewModel _authViewModel;
   late final PosViewModel _posViewModel;
+  late final PrintingSettingsViewModel _printingSettingsViewModel;
   int? _lastAuthenticatedUserId;
 
   @override
@@ -53,6 +58,7 @@ class _PointyAppState extends State<PointyApp> {
     _registerSessionRepository = RegisterSessionRepository(_service);
     _saleRepository = SaleRepository(_service);
     _shopSettingsRepository = ShopSettingsRepository(_service);
+    _printingRepository = PrintingRepository(_service);
     _userRepository = UserRepository(_service);
     _authViewModel = AuthViewModel(_authRepository)
       ..addListener(_handleAuthChanged);
@@ -61,6 +67,7 @@ class _PointyAppState extends State<PointyApp> {
       _registerSessionRepository,
       _saleRepository,
     );
+    _printingSettingsViewModel = PrintingSettingsViewModel(_printingRepository);
   }
 
   @override
@@ -68,6 +75,7 @@ class _PointyAppState extends State<PointyApp> {
     _authViewModel.removeListener(_handleAuthChanged);
     _authViewModel.dispose();
     _posViewModel.dispose();
+    _printingSettingsViewModel.dispose();
     super.dispose();
   }
 
@@ -145,6 +153,7 @@ class _PointyAppState extends State<PointyApp> {
 
     late WidgetBuilder catalogRouteBuilder;
     late WidgetBuilder registerSessionsRouteBuilder;
+    late WidgetBuilder deviceSettingsRouteBuilder;
     late WidgetBuilder usersRouteBuilder;
     late WidgetBuilder shopSettingsRouteBuilder;
 
@@ -157,6 +166,12 @@ class _PointyAppState extends State<PointyApp> {
       Navigator.of(
         routeContext,
       ).pushReplacement(MaterialPageRoute<void>(builder: usersRouteBuilder));
+    }
+
+    void openDeviceSettings(BuildContext routeContext) {
+      Navigator.of(routeContext).pushReplacement(
+        MaterialPageRoute<void>(builder: deviceSettingsRouteBuilder),
+      );
     }
 
     void openShopSettings(BuildContext routeContext) {
@@ -181,6 +196,10 @@ class _PointyAppState extends State<PointyApp> {
               MaterialPageRoute<void>(builder: registerSessionsRouteBuilder),
             );
           },
+        ),
+        onOpenDeviceSettings: guardedAction(
+          AppCapability.manageDeviceSettings,
+          () => openDeviceSettings(routeContext),
         ),
         onOpenUsers: capabilities.actionFor(
           AppCapability.manageUsers,
@@ -211,6 +230,10 @@ class _PointyAppState extends State<PointyApp> {
             MaterialPageRoute<void>(builder: catalogRouteBuilder),
           );
         }),
+        onOpenDeviceSettings: guardedAction(
+          AppCapability.manageDeviceSettings,
+          () => openDeviceSettings(routeContext),
+        ),
         onOpenUsers: capabilities.actionFor(
           AppCapability.manageUsers,
           () => openUsers(routeContext),
@@ -245,6 +268,10 @@ class _PointyAppState extends State<PointyApp> {
             );
           },
         ),
+        onOpenDeviceSettings: guardedAction(
+          AppCapability.manageDeviceSettings,
+          () => openDeviceSettings(routeContext),
+        ),
         onOpenShopSettings: capabilities.actionFor(
           AppCapability.manageShopSettings,
           () => openShopSettings(routeContext),
@@ -275,9 +302,47 @@ class _PointyAppState extends State<PointyApp> {
             );
           },
         ),
+        onOpenDeviceSettings: guardedAction(
+          AppCapability.manageDeviceSettings,
+          () => openDeviceSettings(routeContext),
+        ),
         onOpenUsers: capabilities.actionFor(
           AppCapability.manageUsers,
           () => openUsers(routeContext),
+        ),
+        onLogout: () => logout(routeContext),
+      );
+    };
+
+    deviceSettingsRouteBuilder = (routeContext) {
+      return DeviceSettingsScreen(
+        viewModel: _printingSettingsViewModel,
+        currentUser: currentUser,
+        capabilities: capabilities,
+        onOpenPos: guardedAction(
+          AppCapability.accessPos,
+          () => openPos(routeContext),
+        ),
+        onOpenCatalog: guardedAction(AppCapability.viewCatalogManagement, () {
+          Navigator.of(routeContext).pushReplacement(
+            MaterialPageRoute<void>(builder: catalogRouteBuilder),
+          );
+        }),
+        onOpenRegisterSessions: guardedAction(
+          AppCapability.viewRegisterSessions,
+          () {
+            Navigator.of(routeContext).pushReplacement(
+              MaterialPageRoute<void>(builder: registerSessionsRouteBuilder),
+            );
+          },
+        ),
+        onOpenUsers: capabilities.actionFor(
+          AppCapability.manageUsers,
+          () => openUsers(routeContext),
+        ),
+        onOpenShopSettings: capabilities.actionFor(
+          AppCapability.manageShopSettings,
+          () => openShopSettings(routeContext),
         ),
         onLogout: () => logout(routeContext),
       );
@@ -303,6 +368,14 @@ class _PointyAppState extends State<PointyApp> {
             MaterialPageRoute<void>(builder: registerSessionsRouteBuilder),
           );
           await _posViewModel.loadCatalog();
+        },
+      ),
+      onOpenDeviceSettings: guardedAction(
+        AppCapability.manageDeviceSettings,
+        () {
+          Navigator.of(
+            context,
+          ).push(MaterialPageRoute<void>(builder: deviceSettingsRouteBuilder));
         },
       ),
       onOpenUsers: capabilities.asyncActionFor(

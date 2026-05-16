@@ -34,8 +34,17 @@ class PaymentSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         payment = super().create(validated_data)
         order = payment.order
+        was_paid = order.status == Order.Status.PAID
         paid_total = sum(order.payments.values_list("amount", flat=True))
-        if paid_total >= order.total:
+        if paid_total >= order.total and not was_paid:
             order.status = Order.Status.PAID
             order.save(update_fields=["status", "updated_at"])
+            order_id = order.pk
+
+            def enqueue_receipt():
+                from apps.printing.services import enqueue_receipt_print_job
+
+                enqueue_receipt_print_job(order_id)
+
+            transaction.on_commit(enqueue_receipt)
         return payment

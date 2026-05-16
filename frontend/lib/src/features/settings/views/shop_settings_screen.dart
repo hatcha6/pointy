@@ -18,6 +18,7 @@ class ShopSettingsScreen extends StatelessWidget {
     required this.onOpenPos,
     required this.onOpenCatalog,
     required this.onOpenRegisterSessions,
+    required this.onOpenDeviceSettings,
     required this.onLogout,
     this.onOpenUsers,
   });
@@ -28,6 +29,7 @@ class ShopSettingsScreen extends StatelessWidget {
   final VoidCallback onOpenPos;
   final VoidCallback onOpenCatalog;
   final VoidCallback onOpenRegisterSessions;
+  final VoidCallback onOpenDeviceSettings;
   final VoidCallback? onOpenUsers;
   final VoidCallback onLogout;
 
@@ -46,6 +48,7 @@ class ShopSettingsScreen extends StatelessWidget {
             onOpenPos: onOpenPos,
             onOpenCatalog: onOpenCatalog,
             onOpenRegisterSessions: onOpenRegisterSessions,
+            onOpenDeviceSettings: onOpenDeviceSettings,
             onOpenUsers: onOpenUsers,
             onOpenShopSettings: () {},
             onLogout: onLogout,

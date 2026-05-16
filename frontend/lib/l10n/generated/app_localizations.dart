@@ -238,6 +238,12 @@ abstract class AppLocalizations {
   /// **'جلسات الدرج'**
   String get registerSessionsDrawerLabel;
 
+  /// No description provided for @deviceSettingsDrawerLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'إعدادات الجهاز'**
+  String get deviceSettingsDrawerLabel;
+
   /// No description provided for @usersDrawerLabel.
   ///
   /// In ar, this message translates to:
@@ -436,6 +442,36 @@ abstract class AppLocalizations {
   /// **'تم حفظ إعدادات المتجر.'**
   String get shopSettingsSavedMessage;
 
+  /// No description provided for @deviceSettingsTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'إعدادات الجهاز'**
+  String get deviceSettingsTitle;
+
+  /// No description provided for @refreshDeviceSettingsTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحديث إعدادات الجهاز'**
+  String get refreshDeviceSettingsTooltip;
+
+  /// No description provided for @deviceSettingsLoadError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر تحميل إعدادات الجهاز المحلية.'**
+  String get deviceSettingsLoadError;
+
+  /// No description provided for @deviceSettingsSaveError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر حفظ إعدادات الجهاز المحلية.'**
+  String get deviceSettingsSaveError;
+
+  /// No description provided for @devicePrinterSectionTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'الطابعة الافتراضية'**
+  String get devicePrinterSectionTitle;
+
   /// No description provided for @shopIdentitySectionTitle.
   ///
   /// In ar, this message translates to:
@@ -537,6 +573,138 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'حد تنبيه المخزون المنخفض'**
   String get lowStockThresholdLabel;
+
+  /// No description provided for @printerTransportLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'طريقة الاتصال'**
+  String get printerTransportLabel;
+
+  /// No description provided for @printerTransportSerial.
+  ///
+  /// In ar, this message translates to:
+  /// **'تسلسلي'**
+  String get printerTransportSerial;
+
+  /// No description provided for @printerTransportBluetooth.
+  ///
+  /// In ar, this message translates to:
+  /// **'بلوتوث'**
+  String get printerTransportBluetooth;
+
+  /// No description provided for @printerTransportWifi.
+  ///
+  /// In ar, this message translates to:
+  /// **'شبكة'**
+  String get printerTransportWifi;
+
+  /// No description provided for @printerTransportFake.
+  ///
+  /// In ar, this message translates to:
+  /// **'محاكاة'**
+  String get printerTransportFake;
+
+  /// No description provided for @selectedPrinterLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الطابعة الافتراضية لهذا الجهاز'**
+  String get selectedPrinterLabel;
+
+  /// No description provided for @noSelectedPrinter.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم يتم اختيار طابعة'**
+  String get noSelectedPrinter;
+
+  /// No description provided for @paperWidthLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'عرض الورق بالملليمتر'**
+  String get paperWidthLabel;
+
+  /// No description provided for @printerCodeTableLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'جدول ترميز الطابعة'**
+  String get printerCodeTableLabel;
+
+  /// No description provided for @discoveredPrintersLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الطابعات المكتشفة'**
+  String get discoveredPrintersLabel;
+
+  /// No description provided for @selectDiscoveredPrinterHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر طابعة'**
+  String get selectDiscoveredPrinterHint;
+
+  /// No description provided for @noDiscoveredPrinters.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم يتم اكتشاف طابعات بعد'**
+  String get noDiscoveredPrinters;
+
+  /// No description provided for @discoverPrintersButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'اكتشاف الطابعات'**
+  String get discoverPrintersButton;
+
+  /// No description provided for @printerDiscoveryError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر اكتشاف الطابعات. يمكنك إدخال بيانات الطابعة يدويًا.'**
+  String get printerDiscoveryError;
+
+  /// No description provided for @testPrinterButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختبار الطابعة'**
+  String get testPrinterButton;
+
+  /// No description provided for @testingPrinterButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'جار الاختبار...'**
+  String get testingPrinterButton;
+
+  /// No description provided for @fakePrintButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'طباعة تجريبية بالمحاكاة'**
+  String get fakePrintButton;
+
+  /// No description provided for @printerTestSuccess.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم إرسال اختبار الطباعة.'**
+  String get printerTestSuccess;
+
+  /// No description provided for @printerTestFailure.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر اختبار الطابعة. تحقق من الاتصال والإعدادات وحاول مرة أخرى.'**
+  String get printerTestFailure;
+
+  /// No description provided for @printerTestUnsupported.
+  ///
+  /// In ar, this message translates to:
+  /// **'طريقة الاتصال غير متاحة على هذا الجهاز.'**
+  String get printerTestUnsupported;
+
+  /// No description provided for @fakePrintSuccess.
+  ///
+  /// In ar, this message translates to:
+  /// **'نجحت الطباعة التجريبية بالمحاكاة.'**
+  String get fakePrintSuccess;
+
+  /// No description provided for @fakePrintFailure.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذرت الطباعة التجريبية بالمحاكاة.'**
+  String get fakePrintFailure;
 
   /// No description provided for @saveSettingsButton.
   ///
@@ -1077,6 +1245,30 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'{quantity} × {unitPrice}'**
   String saleLineQuantityAndPrice(int quantity, String unitPrice);
+
+  /// No description provided for @saleReprintButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'إعادة طباعة الإيصال'**
+  String get saleReprintButton;
+
+  /// No description provided for @saleReprintInProgressButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'جار طلب الطباعة...'**
+  String get saleReprintInProgressButton;
+
+  /// No description provided for @saleReprintQueuedMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم إرسال طلب إعادة الطباعة.'**
+  String get saleReprintQueuedMessage;
+
+  /// No description provided for @saleReprintError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر إرسال طلب إعادة الطباعة.'**
+  String get saleReprintError;
 }
 
 class _AppLocalizationsDelegate

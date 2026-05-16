@@ -40,6 +40,8 @@ packages = [
   "apps.sales.migrations",
   "apps.payments",
   "apps.payments.migrations",
+  "apps.printing",
+  "apps.printing.migrations",
 ]
 
 [tool.pytest.ini_options]

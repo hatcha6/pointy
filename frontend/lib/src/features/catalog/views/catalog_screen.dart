@@ -17,6 +17,7 @@ class CatalogScreen extends StatelessWidget {
     required this.capabilities,
     required this.onOpenPos,
     required this.onOpenRegisterSessions,
+    required this.onOpenDeviceSettings,
     required this.onLogout,
     this.onOpenUsers,
     this.onOpenShopSettings,
@@ -27,6 +28,7 @@ class CatalogScreen extends StatelessWidget {
   final AuthorizationCapabilities capabilities;
   final VoidCallback onOpenPos;
   final VoidCallback onOpenRegisterSessions;
+  final VoidCallback onOpenDeviceSettings;
   final VoidCallback? onOpenUsers;
   final VoidCallback? onOpenShopSettings;
   final VoidCallback onLogout;
@@ -46,6 +48,7 @@ class CatalogScreen extends StatelessWidget {
             onOpenPos: onOpenPos,
             onOpenCatalog: () {},
             onOpenRegisterSessions: onOpenRegisterSessions,
+            onOpenDeviceSettings: onOpenDeviceSettings,
             onOpenUsers: onOpenUsers,
             onOpenShopSettings: onOpenShopSettings,
             onLogout: onLogout,
