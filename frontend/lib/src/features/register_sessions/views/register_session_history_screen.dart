@@ -19,6 +19,7 @@ class RegisterSessionHistoryScreen extends StatelessWidget {
     required this.onOpenCatalog,
     required this.onLogout,
     this.onOpenUsers,
+    this.onOpenShopSettings,
   });
 
   final RegisterSessionHistoryViewModel viewModel;
@@ -27,6 +28,7 @@ class RegisterSessionHistoryScreen extends StatelessWidget {
   final VoidCallback onOpenPos;
   final VoidCallback onOpenCatalog;
   final VoidCallback? onOpenUsers;
+  final VoidCallback? onOpenShopSettings;
   final VoidCallback onLogout;
 
   @override
@@ -45,6 +47,7 @@ class RegisterSessionHistoryScreen extends StatelessWidget {
             onOpenCatalog: onOpenCatalog,
             onOpenRegisterSessions: () {},
             onOpenUsers: onOpenUsers,
+            onOpenShopSettings: onOpenShopSettings,
             onLogout: onLogout,
           ),
           appBar: AppBar(

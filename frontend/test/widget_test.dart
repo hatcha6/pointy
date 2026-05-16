@@ -205,6 +205,7 @@ void main() {
     expect(find.text('المنتجات'), findsWidgets);
     expect(find.text('جلسات الدرج'), findsOneWidget);
     expect(find.text('المستخدمون'), findsOneWidget);
+    expect(find.text('إعدادات المتجر'), findsOneWidget);
     expect(find.text('تسجيل الخروج'), findsOneWidget);
   });
 
@@ -241,6 +242,48 @@ void main() {
     expect(find.text('إضافة مستخدم'), findsOneWidget);
   });
 
+  testWidgets('manager can open and save shop settings', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(1200, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    Map<String, Object?>? settingsBody;
+
+    await tester.pumpWidget(
+      PointyApp(
+        apiService: _mockApiService(
+          onShopSettingsUpdate: (request) {
+            settingsBody = jsonDecode(request.body) as Map<String, Object?>;
+          },
+        ),
+      ),
+    );
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+
+    await tester.tap(find.byIcon(Icons.menu));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('إعدادات المتجر'));
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+
+    expect(find.text('إعدادات المتجر'), findsWidgets);
+    expect(find.text('هوية المتجر'), findsOneWidget);
+    expect(find.text('الإيصالات'), findsOneWidget);
+    expect(find.text('جلسة الدرج'), findsOneWidget);
+    expect(find.text('تنبيهات المخزون'), findsOneWidget);
+
+    await tester.tap(find.text('هوية المتجر'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextFormField).first, 'متجر الاختبار');
+    await tester.tap(find.text('حفظ الإعدادات'));
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+
+    expect(settingsBody?['shop_name'], 'متجر الاختبار');
+    expect(find.text('تم حفظ إعدادات المتجر.'), findsOneWidget);
+  });
+
   testWidgets('cashier navigation hides management destinations', (
     WidgetTester tester,
   ) async {
@@ -270,6 +313,7 @@ void main() {
     expect(find.text('جلسات الدرج'), findsOneWidget);
     expect(find.text('المنتجات'), findsNothing);
     expect(find.text('المستخدمون'), findsNothing);
+    expect(find.text('إعدادات المتجر'), findsNothing);
   });
 
   testWidgets(
@@ -532,6 +576,7 @@ PosApiService _mockApiService({
   List<String> currentUserPermissions = const [],
   void Function(http.Request request)? onCheckout,
   void Function(int page)? onOrderPage,
+  void Function(http.Request request)? onShopSettingsUpdate,
 }) {
   var authenticated = isAuthenticated;
   var currentSessionIsOpen = hasOpenSession;
@@ -600,6 +645,15 @@ PosApiService _mockApiService({
           ),
           ...body,
         });
+      }
+
+      if (path.endsWith('/shop-settings/')) {
+        if (request.method == 'PATCH') {
+          onShopSettingsUpdate?.call(request);
+          final body = jsonDecode(request.body) as Map<String, Object?>;
+          return _jsonResponse({..._shopSettingsJson(), ...body});
+        }
+        return _jsonResponse(_shopSettingsJson());
       }
 
       if (path.endsWith('/register-sessions/current/')) {
@@ -743,6 +797,17 @@ Map<String, Object?> _sessionJson({
     'closed_at': null,
     'created_at': '2026-05-15T09:00:00Z',
     'updated_at': '2026-05-15T09:00:00Z',
+  };
+}
+
+Map<String, Object?> _shopSettingsJson() {
+  return {
+    'shop_name': 'متجر نقطة البيع',
+    'receipt_header': 'أهلا بكم',
+    'receipt_footer': 'شكرا لزيارتكم',
+    'require_opening_cash': true,
+    'auto_print_receipts': false,
+    'low_stock_threshold': 5,
   };
 }
 

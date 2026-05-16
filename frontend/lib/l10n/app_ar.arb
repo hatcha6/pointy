@@ -28,6 +28,7 @@
   "catalogDrawerLabel": "المنتجات",
   "registerSessionsDrawerLabel": "جلسات الدرج",
   "usersDrawerLabel": "المستخدمون",
+  "settingsDrawerLabel": "إعدادات المتجر",
   "logoutButton": "تسجيل الخروج",
   "unauthorizedTitle": "غير مصرح",
   "unauthorizedMessage": "لا يملك هذا المستخدم صلاحية الوصول إلى هذه الشاشة.",
@@ -54,6 +55,54 @@
   "emptyUsers": "لا يوجد مستخدمون بعد.",
   "userStatusActive": "نشط",
   "userStatusInactive": "متوقف",
+  "shopSettingsTitle": "إعدادات المتجر",
+  "refreshShopSettingsTooltip": "تحديث إعدادات المتجر",
+  "shopSettingsLoadError": "تعذر تحميل إعدادات المتجر.",
+  "shopSettingsSaveError": "تعذر حفظ إعدادات المتجر. راجع البيانات وحاول مرة أخرى.",
+  "shopSettingsSavedMessage": "تم حفظ إعدادات المتجر.",
+  "shopIdentitySectionTitle": "هوية المتجر",
+  "shopBehaviorSectionTitle": "سلوك التطبيق",
+  "receiptSettingsSectionTitle": "الإيصالات",
+  "registerSessionSettingsSectionTitle": "جلسة الدرج",
+  "inventorySettingsSectionTitle": "تنبيهات المخزون",
+  "shopSettingsEmptyValue": "غير محدد",
+  "shopSettingsEnabledValue": "مفعل",
+  "shopSettingsDisabledValue": "متوقف",
+  "receiptSettingsSummary": "الطباعة التلقائية: {status}",
+  "@receiptSettingsSummary": {
+    "description": "Summary for receipt settings in the shop settings index.",
+    "placeholders": {
+      "status": {
+        "type": "String"
+      }
+    }
+  },
+  "registerSessionSettingsSummary": "نقدية الافتتاح: {status}",
+  "@registerSessionSettingsSummary": {
+    "description": "Summary for register session settings in the shop settings index.",
+    "placeholders": {
+      "status": {
+        "type": "String"
+      }
+    }
+  },
+  "inventorySettingsSummary": "تنبيه عند {count} قطع أو أقل",
+  "@inventorySettingsSummary": {
+    "description": "Summary for low stock alert threshold in the shop settings index.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "shopNameLabel": "اسم المتجر",
+  "receiptHeaderLabel": "ترويسة الإيصال",
+  "receiptFooterLabel": "خاتمة الإيصال",
+  "requireOpeningCashLabel": "طلب نقدية افتتاح الجلسة",
+  "autoPrintReceiptsLabel": "طباعة الإيصالات تلقائيًا",
+  "lowStockThresholdLabel": "حد تنبيه المخزون المنخفض",
+  "saveSettingsButton": "حفظ الإعدادات",
+  "savingSettingsButton": "جار الحفظ...",
   "catalogTitle": "المنتجات",
   "catalogManagementTitle": "إدارة المنتجات",
   "backTooltip": "رجوع",

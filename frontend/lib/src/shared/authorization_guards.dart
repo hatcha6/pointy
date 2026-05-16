@@ -314,6 +314,29 @@ class UserManagementGuard extends StatelessWidget {
   }
 }
 
+class ShopSettingsGuard extends StatelessWidget {
+  const ShopSettingsGuard({
+    super.key,
+    required this.capabilities,
+    required this.child,
+    this.fallback = const AuthorizationDeniedView(),
+  });
+
+  final AuthorizationCapabilities capabilities;
+  final Widget child;
+  final Widget fallback;
+
+  @override
+  Widget build(BuildContext context) {
+    return AuthorizationGuard(
+      capabilities: capabilities,
+      capability: AppCapability.manageShopSettings,
+      fallback: fallback,
+      child: child,
+    );
+  }
+}
+
 class _PaymentUnauthorizedMessage extends StatelessWidget {
   const _PaymentUnauthorizedMessage();
 

@@ -2,6 +2,7 @@ from django.contrib.auth import authenticate, get_user_model
 from django.contrib.auth.models import Group
 from rest_framework import serializers
 
+from .models import ShopSettings
 from .roles import CASHIER_GROUP, MANAGER_GROUP, ROLE_GROUPS
 
 
@@ -112,3 +113,18 @@ class PosUserSerializer(serializers.ModelSerializer):
         if role:
             self._assign_role(instance, role)
         return instance
+
+
+class ShopSettingsSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ShopSettings
+        fields = [
+            "shop_name",
+            "receipt_header",
+            "receipt_footer",
+            "require_opening_cash",
+            "auto_print_receipts",
+            "low_stock_threshold",
+            "updated_at",
+        ]
+        read_only_fields = ["updated_at"]

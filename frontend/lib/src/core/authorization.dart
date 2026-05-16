@@ -14,6 +14,7 @@ enum AppCapability {
   viewRegisterSessions,
   viewRegisterSessionOrders,
   manageUsers,
+  manageShopSettings,
 }
 
 class AuthorizationCapabilities {
@@ -91,6 +92,14 @@ class AuthorizationCapabilities {
       ])) {
         capabilities.add(AppCapability.manageUsers);
       }
+      if (_hasAny(user, const [
+        'change_shopsettings',
+        'view_shopsettings',
+        'core.change_shopsettings',
+        'core.view_shopsettings',
+      ])) {
+        capabilities.add(AppCapability.manageShopSettings);
+      }
     }
 
     return AuthorizationCapabilities._(capabilities);
@@ -116,6 +125,7 @@ class AuthorizationCapabilities {
   bool get canViewRegisterSessionOrders =>
       allows(AppCapability.viewRegisterSessionOrders);
   bool get canManageUsers => allows(AppCapability.manageUsers);
+  bool get canManageShopSettings => allows(AppCapability.manageShopSettings);
 
   AuthorizedAction? actionFor(
     AppCapability capability,

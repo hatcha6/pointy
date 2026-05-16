@@ -141,6 +141,55 @@ class PosUserManagementTests(TestCase):
         self.assertFalse(self.cashier.groups.filter(name=CASHIER_GROUP).exists())
 
 
+class ShopSettingsApiTests(TestCase):
+    def setUp(self):
+        ensure_role_groups()
+        User = get_user_model()
+        self.manager = User.objects.create_user(username="manager", password="pass")
+        self.manager.groups.add(Group.objects.get(name=MANAGER_GROUP))
+        self.cashier = User.objects.create_user(username="cashier", password="pass")
+        self.cashier.groups.add(Group.objects.get(name=CASHIER_GROUP))
+
+    def test_manager_can_read_and_update_shop_settings(self):
+        client = APIClient()
+        client.force_authenticate(user=self.manager)
+
+        read_response = client.get(reverse("shop-settings"))
+        update_response = client.patch(
+            reverse("shop-settings"),
+            {
+                "shop_name": "متجر الوردية",
+                "receipt_header": "أهلا بكم",
+                "receipt_footer": "شكرا لزيارتكم",
+                "require_opening_cash": False,
+                "auto_print_receipts": True,
+                "low_stock_threshold": 12,
+            },
+            format="json",
+        )
+
+        self.assertEqual(read_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(update_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(update_response.data["shop_name"], "متجر الوردية")
+        self.assertFalse(update_response.data["require_opening_cash"])
+        self.assertTrue(update_response.data["auto_print_receipts"])
+        self.assertEqual(update_response.data["low_stock_threshold"], 12)
+
+    def test_cashier_cannot_access_shop_settings(self):
+        client = APIClient()
+        client.force_authenticate(user=self.cashier)
+
+        read_response = client.get(reverse("shop-settings"))
+        update_response = client.patch(
+            reverse("shop-settings"),
+            {"shop_name": "غير مسموح"},
+            format="json",
+        )
+
+        self.assertEqual(read_response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(update_response.status_code, status.HTTP_403_FORBIDDEN)
+
+
 class RolePermissionBootstrapTests(TestCase):
     def test_role_groups_receive_domain_permissions(self):
         ensure_role_groups()
@@ -151,6 +200,7 @@ class RolePermissionBootstrapTests(TestCase):
         cashier.groups.add(Group.objects.get(name=CASHIER_GROUP))
 
         self.assertTrue(manager.has_perm("catalog.add_product"))
+        self.assertTrue(manager.has_perm("core.change_shopsettings"))
         self.assertTrue(manager.has_perm("inventory.change_stockitem"))
         self.assertTrue(manager.has_perm("sales.delete_order"))
         self.assertTrue(manager.has_perm("payments.change_payment"))

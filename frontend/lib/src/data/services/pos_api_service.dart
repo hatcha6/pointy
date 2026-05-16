@@ -10,6 +10,7 @@ import '../models/register_session.dart';
 import '../models/register_session_page.dart';
 import '../models/sale_order.dart';
 import '../models/sale_order_page.dart';
+import '../models/shop_settings.dart';
 import 'pos_http_client.dart';
 
 class PosApiService {
@@ -124,6 +125,41 @@ class PosApiService {
     }
 
     return PosUser.fromJson(
+      jsonDecode(_decodeBody(response)) as Map<String, Object?>,
+    );
+  }
+
+  Future<ShopSettings> fetchShopSettings() async {
+    final uri = Uri.parse('$baseUrl/shop-settings/');
+    final response = await _client.get(uri, headers: _requestHeaders());
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception(
+        'Shop settings request failed with status ${response.statusCode}',
+      );
+    }
+
+    return ShopSettings.fromJson(
+      jsonDecode(_decodeBody(response)) as Map<String, Object?>,
+    );
+  }
+
+  Future<ShopSettings> updateShopSettings(ShopSettingsDraft draft) async {
+    final uri = Uri.parse('$baseUrl/shop-settings/');
+    final response = await _client.patch(
+      uri,
+      headers: _requestHeaders(includeCsrf: true),
+      body: jsonEncode(draft.toJson()),
+    );
+    _captureResponseState(response);
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception(
+        'Shop settings update failed with status ${response.statusCode}',
+      );
+    }
+
+    return ShopSettings.fromJson(
       jsonDecode(_decodeBody(response)) as Map<String, Object?>,
     );
   }

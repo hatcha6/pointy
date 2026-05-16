@@ -4,7 +4,13 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 import '../core/authorization.dart';
 import '../data/models/pos_user.dart';
 
-enum AppNavigationDestination { pos, catalog, registerSessions, users }
+enum AppNavigationDestination {
+  pos,
+  catalog,
+  registerSessions,
+  users,
+  settings,
+}
 
 class AppNavigationDrawer extends StatelessWidget {
   const AppNavigationDrawer({
@@ -17,6 +23,7 @@ class AppNavigationDrawer extends StatelessWidget {
     required this.onOpenRegisterSessions,
     required this.onLogout,
     this.onOpenUsers,
+    this.onOpenShopSettings,
   });
 
   final AppNavigationDestination selectedDestination;
@@ -26,6 +33,7 @@ class AppNavigationDrawer extends StatelessWidget {
   final VoidCallback onOpenCatalog;
   final VoidCallback onOpenRegisterSessions;
   final VoidCallback? onOpenUsers;
+  final VoidCallback? onOpenShopSettings;
   final VoidCallback onLogout;
 
   @override
@@ -63,6 +71,14 @@ class AppNavigationDrawer extends StatelessWidget {
         selectedIcon: const Icon(Icons.group),
         label: l10n.usersDrawerLabel,
         onTap: onOpenUsers,
+      ),
+      _DrawerDestination(
+        destination: AppNavigationDestination.settings,
+        capability: AppCapability.manageShopSettings,
+        icon: const Icon(Icons.settings_outlined),
+        selectedIcon: const Icon(Icons.settings),
+        label: l10n.settingsDrawerLabel,
+        onTap: onOpenShopSettings,
       ),
     ].where((destination) => destination.isAvailable(capabilities)).toList();
     final selectedIndex = destinations.indexWhere(

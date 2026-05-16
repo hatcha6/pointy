@@ -21,6 +21,7 @@ class PosScreen extends StatelessWidget {
     required this.onOpenRegisterSessions,
     required this.onLogout,
     this.onOpenUsers,
+    this.onOpenShopSettings,
   });
 
   final PosViewModel viewModel;
@@ -29,6 +30,7 @@ class PosScreen extends StatelessWidget {
   final VoidCallback onOpenCatalog;
   final VoidCallback onOpenRegisterSessions;
   final VoidCallback? onOpenUsers;
+  final VoidCallback? onOpenShopSettings;
   final VoidCallback onLogout;
 
   @override
@@ -47,6 +49,7 @@ class PosScreen extends StatelessWidget {
             onOpenCatalog: onOpenCatalog,
             onOpenRegisterSessions: onOpenRegisterSessions,
             onOpenUsers: onOpenUsers,
+            onOpenShopSettings: onOpenShopSettings,
             onLogout: onLogout,
           ),
           appBar: AppBar(

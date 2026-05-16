@@ -19,6 +19,7 @@ class CatalogScreen extends StatelessWidget {
     required this.onOpenRegisterSessions,
     required this.onLogout,
     this.onOpenUsers,
+    this.onOpenShopSettings,
   });
 
   final CatalogViewModel viewModel;
@@ -27,6 +28,7 @@ class CatalogScreen extends StatelessWidget {
   final VoidCallback onOpenPos;
   final VoidCallback onOpenRegisterSessions;
   final VoidCallback? onOpenUsers;
+  final VoidCallback? onOpenShopSettings;
   final VoidCallback onLogout;
 
   @override
@@ -45,6 +47,7 @@ class CatalogScreen extends StatelessWidget {
             onOpenCatalog: () {},
             onOpenRegisterSessions: onOpenRegisterSessions,
             onOpenUsers: onOpenUsers,
+            onOpenShopSettings: onOpenShopSettings,
             onLogout: onLogout,
           ),
           appBar: AppBar(

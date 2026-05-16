@@ -84,6 +84,9 @@ class AppLocalizationsAr extends AppLocalizations {
   String get usersDrawerLabel => 'المستخدمون';
 
   @override
+  String get settingsDrawerLabel => 'إعدادات المتجر';
+
+  @override
   String get logoutButton => 'تسجيل الخروج';
 
   @override
@@ -163,6 +166,85 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get userStatusInactive => 'متوقف';
+
+  @override
+  String get shopSettingsTitle => 'إعدادات المتجر';
+
+  @override
+  String get refreshShopSettingsTooltip => 'تحديث إعدادات المتجر';
+
+  @override
+  String get shopSettingsLoadError => 'تعذر تحميل إعدادات المتجر.';
+
+  @override
+  String get shopSettingsSaveError =>
+      'تعذر حفظ إعدادات المتجر. راجع البيانات وحاول مرة أخرى.';
+
+  @override
+  String get shopSettingsSavedMessage => 'تم حفظ إعدادات المتجر.';
+
+  @override
+  String get shopIdentitySectionTitle => 'هوية المتجر';
+
+  @override
+  String get shopBehaviorSectionTitle => 'سلوك التطبيق';
+
+  @override
+  String get receiptSettingsSectionTitle => 'الإيصالات';
+
+  @override
+  String get registerSessionSettingsSectionTitle => 'جلسة الدرج';
+
+  @override
+  String get inventorySettingsSectionTitle => 'تنبيهات المخزون';
+
+  @override
+  String get shopSettingsEmptyValue => 'غير محدد';
+
+  @override
+  String get shopSettingsEnabledValue => 'مفعل';
+
+  @override
+  String get shopSettingsDisabledValue => 'متوقف';
+
+  @override
+  String receiptSettingsSummary(String status) {
+    return 'الطباعة التلقائية: $status';
+  }
+
+  @override
+  String registerSessionSettingsSummary(String status) {
+    return 'نقدية الافتتاح: $status';
+  }
+
+  @override
+  String inventorySettingsSummary(int count) {
+    return 'تنبيه عند $count قطع أو أقل';
+  }
+
+  @override
+  String get shopNameLabel => 'اسم المتجر';
+
+  @override
+  String get receiptHeaderLabel => 'ترويسة الإيصال';
+
+  @override
+  String get receiptFooterLabel => 'خاتمة الإيصال';
+
+  @override
+  String get requireOpeningCashLabel => 'طلب نقدية افتتاح الجلسة';
+
+  @override
+  String get autoPrintReceiptsLabel => 'طباعة الإيصالات تلقائيًا';
+
+  @override
+  String get lowStockThresholdLabel => 'حد تنبيه المخزون المنخفض';
+
+  @override
+  String get saveSettingsButton => 'حفظ الإعدادات';
+
+  @override
+  String get savingSettingsButton => 'جار الحفظ...';
 
   @override
   String get catalogTitle => 'المنتجات';

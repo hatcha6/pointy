@@ -244,6 +244,12 @@ abstract class AppLocalizations {
   /// **'المستخدمون'**
   String get usersDrawerLabel;
 
+  /// No description provided for @settingsDrawerLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'إعدادات المتجر'**
+  String get settingsDrawerLabel;
+
   /// No description provided for @logoutButton.
   ///
   /// In ar, this message translates to:
@@ -399,6 +405,150 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'متوقف'**
   String get userStatusInactive;
+
+  /// No description provided for @shopSettingsTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'إعدادات المتجر'**
+  String get shopSettingsTitle;
+
+  /// No description provided for @refreshShopSettingsTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحديث إعدادات المتجر'**
+  String get refreshShopSettingsTooltip;
+
+  /// No description provided for @shopSettingsLoadError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر تحميل إعدادات المتجر.'**
+  String get shopSettingsLoadError;
+
+  /// No description provided for @shopSettingsSaveError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر حفظ إعدادات المتجر. راجع البيانات وحاول مرة أخرى.'**
+  String get shopSettingsSaveError;
+
+  /// No description provided for @shopSettingsSavedMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم حفظ إعدادات المتجر.'**
+  String get shopSettingsSavedMessage;
+
+  /// No description provided for @shopIdentitySectionTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'هوية المتجر'**
+  String get shopIdentitySectionTitle;
+
+  /// No description provided for @shopBehaviorSectionTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'سلوك التطبيق'**
+  String get shopBehaviorSectionTitle;
+
+  /// No description provided for @receiptSettingsSectionTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'الإيصالات'**
+  String get receiptSettingsSectionTitle;
+
+  /// No description provided for @registerSessionSettingsSectionTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'جلسة الدرج'**
+  String get registerSessionSettingsSectionTitle;
+
+  /// No description provided for @inventorySettingsSectionTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'تنبيهات المخزون'**
+  String get inventorySettingsSectionTitle;
+
+  /// No description provided for @shopSettingsEmptyValue.
+  ///
+  /// In ar, this message translates to:
+  /// **'غير محدد'**
+  String get shopSettingsEmptyValue;
+
+  /// No description provided for @shopSettingsEnabledValue.
+  ///
+  /// In ar, this message translates to:
+  /// **'مفعل'**
+  String get shopSettingsEnabledValue;
+
+  /// No description provided for @shopSettingsDisabledValue.
+  ///
+  /// In ar, this message translates to:
+  /// **'متوقف'**
+  String get shopSettingsDisabledValue;
+
+  /// Summary for receipt settings in the shop settings index.
+  ///
+  /// In ar, this message translates to:
+  /// **'الطباعة التلقائية: {status}'**
+  String receiptSettingsSummary(String status);
+
+  /// Summary for register session settings in the shop settings index.
+  ///
+  /// In ar, this message translates to:
+  /// **'نقدية الافتتاح: {status}'**
+  String registerSessionSettingsSummary(String status);
+
+  /// Summary for low stock alert threshold in the shop settings index.
+  ///
+  /// In ar, this message translates to:
+  /// **'تنبيه عند {count} قطع أو أقل'**
+  String inventorySettingsSummary(int count);
+
+  /// No description provided for @shopNameLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'اسم المتجر'**
+  String get shopNameLabel;
+
+  /// No description provided for @receiptHeaderLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'ترويسة الإيصال'**
+  String get receiptHeaderLabel;
+
+  /// No description provided for @receiptFooterLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'خاتمة الإيصال'**
+  String get receiptFooterLabel;
+
+  /// No description provided for @requireOpeningCashLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'طلب نقدية افتتاح الجلسة'**
+  String get requireOpeningCashLabel;
+
+  /// No description provided for @autoPrintReceiptsLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'طباعة الإيصالات تلقائيًا'**
+  String get autoPrintReceiptsLabel;
+
+  /// No description provided for @lowStockThresholdLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'حد تنبيه المخزون المنخفض'**
+  String get lowStockThresholdLabel;
+
+  /// No description provided for @saveSettingsButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'حفظ الإعدادات'**
+  String get saveSettingsButton;
+
+  /// No description provided for @savingSettingsButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'جار الحفظ...'**
+  String get savingSettingsButton;
 
   /// No description provided for @catalogTitle.
   ///

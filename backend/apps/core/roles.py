@@ -7,7 +7,7 @@ MANAGER_GROUP = "manager"
 CASHIER_GROUP = "cashier"
 ROLE_GROUPS = (MANAGER_GROUP, CASHIER_GROUP)
 
-MANAGER_PERMISSION_DOMAINS = ("catalog", "inventory", "sales", "payments")
+MANAGER_PERMISSION_DOMAINS = ("catalog", "core", "inventory", "sales", "payments")
 USER_PERMISSION_CODES = (
     "auth.add_user",
     "auth.change_user",

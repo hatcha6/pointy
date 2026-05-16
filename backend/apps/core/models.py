@@ -7,3 +7,24 @@ class TimeStampedModel(models.Model):
 
     class Meta:
         abstract = True
+
+
+class ShopSettings(TimeStampedModel):
+    shop_name = models.CharField(max_length=120, default="نقطة البيع")
+    receipt_header = models.CharField(max_length=240, blank=True)
+    receipt_footer = models.CharField(max_length=240, blank=True)
+    require_opening_cash = models.BooleanField(default=True)
+    auto_print_receipts = models.BooleanField(default=False)
+    low_stock_threshold = models.PositiveIntegerField(default=5)
+
+    class Meta:
+        verbose_name = "shop settings"
+        verbose_name_plural = "shop settings"
+
+    def __str__(self):
+        return self.shop_name
+
+    @classmethod
+    def load(cls):
+        settings, _ = cls.objects.get_or_create(pk=1)
+        return settings
