@@ -1,23 +1,27 @@
 from decimal import Decimal
 
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group
 from django.test import TestCase
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient
 
 from apps.catalog.models import Product
+from apps.core.roles import CASHIER_GROUP, MANAGER_GROUP, ensure_role_groups
 from apps.payments.models import Payment
 from .models import Order, RegisterSession
 
 
 class RegisterSessionApiTests(TestCase):
     def setUp(self):
+        ensure_role_groups()
         self.client = APIClient()
         self.user = get_user_model().objects.create_user(
             username="register-user",
             password="pass",
         )
+        self.user.groups.add(Group.objects.get(name=CASHIER_GROUP))
         self.client.force_authenticate(user=self.user)
 
     def test_current_returns_no_content_without_open_session(self):
@@ -56,6 +60,8 @@ class RegisterSessionApiTests(TestCase):
         User = get_user_model()
         first_user = User.objects.create_user(username="first", password="pass")
         second_user = User.objects.create_user(username="second", password="pass")
+        first_user.groups.add(Group.objects.get(name=CASHIER_GROUP))
+        second_user.groups.add(Group.objects.get(name=CASHIER_GROUP))
 
         first_client = APIClient()
         first_client.force_authenticate(user=first_user)
@@ -115,6 +121,8 @@ class RegisterSessionApiTests(TestCase):
         User = get_user_model()
         first_user = User.objects.create_user(username="history-one", password="pass")
         second_user = User.objects.create_user(username="history-two", password="pass")
+        first_user.groups.add(Group.objects.get(name=CASHIER_GROUP))
+        second_user.groups.add(Group.objects.get(name=CASHIER_GROUP))
 
         first_client = APIClient()
         first_client.force_authenticate(user=first_user)
@@ -141,6 +149,48 @@ class RegisterSessionApiTests(TestCase):
         self.assertEqual(len(response.data["results"]), 1)
         self.assertEqual(response.data["results"][0]["id"], first_session["id"])
 
+    def test_manager_can_view_all_register_session_history(self):
+        User = get_user_model()
+        first_user = User.objects.create_user(username="history-one", password="pass")
+        second_user = User.objects.create_user(username="history-two", password="pass")
+        manager = User.objects.create_user(username="history-manager", password="pass")
+        first_user.groups.add(Group.objects.get(name=CASHIER_GROUP))
+        second_user.groups.add(Group.objects.get(name=CASHIER_GROUP))
+        manager.groups.add(Group.objects.get(name=MANAGER_GROUP))
+
+        first_client = APIClient()
+        first_client.force_authenticate(user=first_user)
+        first_session = first_client.post(reverse("register-session-start"), format="json").data
+
+        second_client = APIClient()
+        second_client.force_authenticate(user=second_user)
+        second_session = second_client.post(reverse("register-session-start"), format="json").data
+
+        manager_client = APIClient()
+        manager_client.force_authenticate(user=manager)
+        response = manager_client.get(reverse("register-session-list"))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        session_ids = {session["id"] for session in response.data["results"]}
+        self.assertSetEqual(session_ids, {first_session["id"], second_session["id"]})
+
+    def test_manager_current_session_still_uses_manager_owner(self):
+        User = get_user_model()
+        cashier = User.objects.create_user(username="cashier-current", password="pass")
+        manager = User.objects.create_user(username="manager-current", password="pass")
+        cashier.groups.add(Group.objects.get(name=CASHIER_GROUP))
+        manager.groups.add(Group.objects.get(name=MANAGER_GROUP))
+
+        cashier_client = APIClient()
+        cashier_client.force_authenticate(user=cashier)
+        cashier_client.post(reverse("register-session-start"), format="json")
+
+        manager_client = APIClient()
+        manager_client.force_authenticate(user=manager)
+        response = manager_client.get(reverse("register-session-current"))
+
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+
     def test_orders_action_returns_sales_for_owned_session(self):
         Product.objects.create(
             sku="TEA",
@@ -159,14 +209,16 @@ class RegisterSessionApiTests(TestCase):
 
         self.assertEqual(checkout_response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(response.data), 1)
-        self.assertEqual(response.data[0]["id"], checkout_response.data["id"])
-        self.assertEqual(response.data[0]["total"], "6.00")
+        self.assertEqual(len(response.data["results"]), 1)
+        self.assertEqual(response.data["results"][0]["id"], checkout_response.data["id"])
+        self.assertEqual(response.data["results"][0]["total"], "6.00")
 
     def test_orders_action_does_not_expose_another_owner_session(self):
         User = get_user_model()
         first_user = User.objects.create_user(username="session-owner", password="pass")
         second_user = User.objects.create_user(username="session-outsider", password="pass")
+        first_user.groups.add(Group.objects.get(name=CASHIER_GROUP))
+        second_user.groups.add(Group.objects.get(name=CASHIER_GROUP))
 
         first_client = APIClient()
         first_client.force_authenticate(user=first_user)
@@ -178,14 +230,46 @@ class RegisterSessionApiTests(TestCase):
 
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
+    def test_manager_can_view_orders_for_any_register_session(self):
+        User = get_user_model()
+        cashier = User.objects.create_user(username="session-owner", password="pass")
+        manager = User.objects.create_user(username="session-manager", password="pass")
+        cashier.groups.add(Group.objects.get(name=CASHIER_GROUP))
+        manager.groups.add(Group.objects.get(name=MANAGER_GROUP))
+
+        product = Product.objects.create(
+            sku="MGR-TEA",
+            barcode="",
+            name="Manager Tea",
+            unit_price=Decimal("2.00"),
+        )
+        cashier_client = APIClient()
+        cashier_client.force_authenticate(user=cashier)
+        session = cashier_client.post(reverse("register-session-start"), format="json").data
+        checkout_response = cashier_client.post(
+            reverse("order-checkout"),
+            {"lines": [{"product": product.pk, "quantity": 2}]},
+            format="json",
+        )
+
+        manager_client = APIClient()
+        manager_client.force_authenticate(user=manager)
+        response = manager_client.get(reverse("register-session-orders", args=[session["id"]]))
+
+        self.assertEqual(checkout_response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["results"][0]["id"], checkout_response.data["id"])
+
 
 class OrderCheckoutApiTests(TestCase):
     def setUp(self):
+        ensure_role_groups()
         self.client = APIClient()
         self.user = get_user_model().objects.create_user(
             username="checkout-user",
             password="pass",
         )
+        self.user.groups.add(Group.objects.get(name=CASHIER_GROUP))
         self.client.force_authenticate(user=self.user)
         self.product = Product.objects.create(
             sku="COFFEE",
@@ -264,6 +348,8 @@ class OrderCheckoutApiTests(TestCase):
         User = get_user_model()
         first_user = User.objects.create_user(username="cashier-one", password="pass")
         second_user = User.objects.create_user(username="cashier-two", password="pass")
+        first_user.groups.add(Group.objects.get(name=CASHIER_GROUP))
+        second_user.groups.add(Group.objects.get(name=CASHIER_GROUP))
 
         first_client = APIClient()
         first_client.force_authenticate(user=first_user)

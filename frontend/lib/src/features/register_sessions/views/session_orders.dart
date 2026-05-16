@@ -1,16 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
+import '../../../core/authorization.dart';
 import '../../../data/models/sale_order.dart';
+import '../../../shared/authorization_guards.dart';
 import '../../../shared/date_formatters.dart';
 import '../../../shared/formatters.dart';
+import '../../../shared/infinite_scroll_grid.dart';
 import '../view_models/register_session_history_view_model.dart';
 import 'sale_order_details_sheet.dart';
 
 class SessionOrders extends StatelessWidget {
-  const SessionOrders({super.key, required this.viewModel});
+  const SessionOrders({
+    super.key,
+    required this.viewModel,
+    required this.capabilities,
+  });
 
   final RegisterSessionHistoryViewModel viewModel;
+  final AuthorizationCapabilities capabilities;
 
   @override
   Widget build(BuildContext context) {
@@ -30,30 +38,39 @@ class SessionOrders extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           Expanded(
-            child: switch ((
-              session,
-              viewModel.isLoadingOrders,
-              viewModel.hasOrderLoadError,
-              viewModel.orders.isEmpty,
-            )) {
-              (null, _, _, _) => Center(
-                child: Text(l10n.selectRegisterSessionPrompt),
-              ),
-              (_, true, _, _) => const Center(
-                child: CircularProgressIndicator(),
-              ),
-              (_, _, true, _) => Center(
-                child: Text(l10n.sessionSalesLoadError),
-              ),
-              (_, _, _, true) => Center(child: Text(l10n.emptySessionSales)),
-              _ => ListView.separated(
-                itemCount: viewModel.orders.length,
-                separatorBuilder: (_, _) => const Divider(height: 1),
-                itemBuilder: (context, index) {
-                  return SessionOrderTile(order: viewModel.orders[index]);
-                },
-              ),
-            },
+            child: RegisterSessionOrdersGuard(
+              capabilities: capabilities,
+              child: switch ((
+                session,
+                viewModel.isLoadingOrders,
+                viewModel.hasOrderLoadError,
+                viewModel.orders.isEmpty,
+              )) {
+                (null, _, _, _) => Center(
+                  child: Text(l10n.selectRegisterSessionPrompt),
+                ),
+                (_, true, _, _) => const Center(
+                  child: CircularProgressIndicator(),
+                ),
+                (_, _, true, _) => Center(
+                  child: Text(l10n.sessionSalesLoadError),
+                ),
+                (_, _, _, true) => Center(child: Text(l10n.emptySessionSales)),
+                _ => InfiniteScrollList(
+                  items: viewModel.orders,
+                  onLoadMore: viewModel.loadMoreOrders,
+                  hasMore: viewModel.hasMoreOrders,
+                  isLoadingInitial: viewModel.isLoadingOrders,
+                  isLoadingMore: viewModel.isLoadingMoreOrders,
+                  emptyBuilder: (context) =>
+                      Center(child: Text(l10n.emptySessionSales)),
+                  separatorBuilder: (_, _) => const Divider(height: 1),
+                  itemBuilder: (context, order) {
+                    return SessionOrderTile(order: order);
+                  },
+                ),
+              },
+            ),
           ),
         ],
       ),

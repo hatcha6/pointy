@@ -1,12 +1,42 @@
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group, Permission
-from django.contrib.contenttypes.models import ContentType
 from django.db import IntegrityError, transaction
 from django.utils.crypto import get_random_string
 
 MANAGER_GROUP = "manager"
 CASHIER_GROUP = "cashier"
 ROLE_GROUPS = (MANAGER_GROUP, CASHIER_GROUP)
+
+MANAGER_PERMISSION_DOMAINS = ("catalog", "inventory", "sales", "payments")
+USER_PERMISSION_CODES = (
+    "auth.add_user",
+    "auth.change_user",
+    "auth.delete_user",
+    "auth.view_user",
+)
+CASHIER_PERMISSION_CODES = (
+    "catalog.view_product",
+    "sales.add_order",
+    "sales.view_order",
+    "sales.add_registersession",
+    "sales.change_registersession",
+    "sales.view_registersession",
+    "payments.add_payment",
+    "payments.view_payment",
+)
+
+
+def _permissions_for_codes(permission_codes):
+    permissions = []
+    for permission_code in permission_codes:
+        app_label, codename = permission_code.split(".", 1)
+        permission = Permission.objects.filter(
+            content_type__app_label=app_label,
+            codename=codename,
+        ).first()
+        if permission is not None:
+            permissions.append(permission)
+    return permissions
 
 
 def ensure_role_groups():
@@ -15,12 +45,14 @@ def ensure_role_groups():
         for role in ROLE_GROUPS
     }
 
-    user_content_type = ContentType.objects.get_for_model(get_user_model())
-    user_permissions = Permission.objects.filter(
-        content_type=user_content_type,
-        codename__in=("add_user", "change_user", "delete_user", "view_user"),
+    manager_permissions = Permission.objects.filter(
+        content_type__app_label__in=MANAGER_PERMISSION_DOMAINS,
     )
-    groups[MANAGER_GROUP].permissions.add(*user_permissions)
+    manager_user_permissions = _permissions_for_codes(USER_PERMISSION_CODES)
+    cashier_permissions = _permissions_for_codes(CASHIER_PERMISSION_CODES)
+
+    groups[MANAGER_GROUP].permissions.add(*manager_permissions, *manager_user_permissions)
+    groups[CASHIER_GROUP].permissions.add(*cashier_permissions)
     return groups
 
 

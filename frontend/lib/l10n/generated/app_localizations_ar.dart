@@ -87,6 +87,13 @@ class AppLocalizationsAr extends AppLocalizations {
   String get logoutButton => 'تسجيل الخروج';
 
   @override
+  String get unauthorizedTitle => 'غير مصرح';
+
+  @override
+  String get unauthorizedMessage =>
+      'لا يملك هذا المستخدم صلاحية الوصول إلى هذه الشاشة.';
+
+  @override
   String get authCheckingSession => 'جار فحص الجلسة...';
 
   @override
@@ -300,6 +307,10 @@ class AppLocalizationsAr extends AppLocalizations {
       'تعذر تسجيل البيع. تحقق من جلسة الدرج وحاول مرة أخرى.';
 
   @override
+  String get paymentUnauthorizedMessage =>
+      'لا يملك هذا المستخدم صلاحية إتمام الدفع.';
+
+  @override
   String unitPriceEach(String amount) {
     return '$amount للقطعة';
   }
@@ -394,7 +405,7 @@ class AppLocalizationsAr extends AppLocalizations {
   String get refreshRegisterSessionsTooltip => 'تحديث سجل الجلسات';
 
   @override
-  String get registerSessionsListTitle => 'جلساتك';
+  String get registerSessionsListTitle => 'جلسات الدرج';
 
   @override
   String get registerSessionHistoryLoadError => 'تعذر تحميل سجل الجلسات.';

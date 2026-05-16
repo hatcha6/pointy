@@ -9,6 +9,7 @@ import '../models/query.dart';
 import '../models/register_session.dart';
 import '../models/register_session_page.dart';
 import '../models/sale_order.dart';
+import '../models/sale_order_page.dart';
 import 'pos_http_client.dart';
 
 class PosApiService {
@@ -205,8 +206,13 @@ class PosApiService {
     );
   }
 
-  Future<List<SaleOrder>> fetchRegisterSessionOrders(int sessionId) async {
-    final uri = Uri.parse('$baseUrl/register-sessions/$sessionId/orders/');
+  Future<SaleOrderPage> fetchRegisterSessionOrders(
+    int sessionId, {
+    int page = 1,
+  }) async {
+    final uri = Uri.parse(
+      '$baseUrl/register-sessions/$sessionId/orders/',
+    ).replace(queryParameters: {'page': '$page'});
     final response = await _client.get(uri, headers: _requestHeaders());
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
@@ -215,7 +221,20 @@ class PosApiService {
       );
     }
 
-    return _decodeListResponse(_decodeBody(response), SaleOrder.fromJson);
+    final decoded = jsonDecode(_decodeBody(response));
+    if (decoded is Map<String, Object?>) {
+      return SaleOrderPage.fromJson(decoded);
+    }
+    if (decoded is List<Object?>) {
+      return SaleOrderPage(
+        orders: decoded
+            .whereType<Map<String, Object?>>()
+            .map(SaleOrder.fromJson)
+            .toList(growable: false),
+        hasMore: false,
+      );
+    }
+    return const SaleOrderPage(orders: [], hasMore: false);
   }
 
   Future<RegisterSession> startRegisterSession({

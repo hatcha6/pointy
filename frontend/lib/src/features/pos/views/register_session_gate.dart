@@ -1,14 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
+import '../../../core/authorization.dart';
+import '../../../shared/authorization_guards.dart';
 import '../../../shared/decimal_text_input_formatter.dart';
 import '../../../shared/formatters.dart';
 import '../view_models/pos_view_model.dart';
 
 class RegisterSessionGate extends StatefulWidget {
-  const RegisterSessionGate({super.key, required this.viewModel});
+  const RegisterSessionGate({
+    super.key,
+    required this.viewModel,
+    required this.capabilities,
+  });
 
   final PosViewModel viewModel;
+  final AuthorizationCapabilities capabilities;
 
   @override
   State<RegisterSessionGate> createState() => _RegisterSessionGateState();
@@ -45,11 +52,18 @@ class _RegisterSessionGateState extends State<RegisterSessionGate> {
               child: switch (widget.viewModel.registerSessionGateStatus) {
                 RegisterSessionGateStatus.loading => _LoadingGate(l10n: l10n),
                 RegisterSessionGateStatus.openSessionAvailable =>
-                  _ResumeSessionGate(viewModel: widget.viewModel),
-                RegisterSessionGateStatus.noOpenSession => _StartSessionGate(
-                  viewModel: widget.viewModel,
-                  openingCashController: _openingCashController,
-                ),
+                  RegisterSessionResumeGuard(
+                    capabilities: widget.capabilities,
+                    child: _ResumeSessionGate(viewModel: widget.viewModel),
+                  ),
+                RegisterSessionGateStatus.noOpenSession =>
+                  RegisterSessionStartGuard(
+                    capabilities: widget.capabilities,
+                    child: _StartSessionGate(
+                      viewModel: widget.viewModel,
+                      openingCashController: _openingCashController,
+                    ),
+                  ),
                 RegisterSessionGateStatus.active => const SizedBox.shrink(),
               },
             ),

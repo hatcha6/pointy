@@ -1,21 +1,25 @@
 from decimal import Decimal
 
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group
 from django.test import TestCase
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient
 
+from apps.core.roles import CASHIER_GROUP, MANAGER_GROUP, ensure_role_groups
 from .models import Product
 
 
 class ProductApiTests(TestCase):
     def setUp(self):
+        ensure_role_groups()
         self.client = APIClient()
         self.user = get_user_model().objects.create_user(
             username="catalog-user",
             password="pass",
         )
+        self.user.groups.add(Group.objects.get(name=MANAGER_GROUP))
         self.client.force_authenticate(user=self.user)
 
     def test_create_product(self):
@@ -101,3 +105,27 @@ class ProductApiTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["results"][0]["id"], newest.id)
         self.assertEqual(response.data["results"][-1]["id"], first.id)
+
+    def test_cashier_can_view_but_cannot_create_products(self):
+        cashier = get_user_model().objects.create_user(
+            username="cashier",
+            password="pass",
+        )
+        cashier.groups.add(Group.objects.get(name=CASHIER_GROUP))
+        client = APIClient()
+        client.force_authenticate(user=cashier)
+        Product.objects.create(
+            sku="VIEW",
+            name="متاح",
+            unit_price=Decimal("1.00"),
+        )
+
+        list_response = client.get(reverse("product-list"))
+        create_response = client.post(
+            reverse("product-list"),
+            {"sku": "NEW", "name": "جديد", "unit_price": "1.00"},
+            format="json",
+        )
+
+        self.assertEqual(list_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(create_response.status_code, status.HTTP_403_FORBIDDEN)

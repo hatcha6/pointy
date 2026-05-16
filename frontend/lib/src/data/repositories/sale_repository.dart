@@ -1,5 +1,6 @@
 import '../../core/result.dart';
 import '../models/sale_order.dart';
+import '../models/sale_order_page.dart';
 import '../services/pos_api_service.dart';
 
 class SaleRepository {
@@ -15,9 +16,14 @@ class SaleRepository {
     }
   }
 
-  Future<Result<List<SaleOrder>>> loadOrdersForSession(int sessionId) async {
+  Future<Result<SaleOrderPage>> loadOrdersForSession(
+    int sessionId, {
+    int page = 1,
+  }) async {
     try {
-      return Ok(await _service.fetchRegisterSessionOrders(sessionId));
+      return Ok(
+        await _service.fetchRegisterSessionOrders(sessionId, page: page),
+      );
     } on Exception catch (exception) {
       return Error(exception);
     }

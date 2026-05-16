@@ -29,6 +29,8 @@
   "registerSessionsDrawerLabel": "جلسات الدرج",
   "usersDrawerLabel": "المستخدمون",
   "logoutButton": "تسجيل الخروج",
+  "unauthorizedTitle": "غير مصرح",
+  "unauthorizedMessage": "لا يملك هذا المستخدم صلاحية الوصول إلى هذه الشاشة.",
   "authCheckingSession": "جار فحص الجلسة...",
   "loginTitle": "تسجيل الدخول",
   "usernameLabel": "اسم المستخدم",
@@ -113,6 +115,7 @@
     }
   },
   "saleCheckoutError": "تعذر تسجيل البيع. تحقق من جلسة الدرج وحاول مرة أخرى.",
+  "paymentUnauthorizedMessage": "لا يملك هذا المستخدم صلاحية إتمام الدفع.",
   "unitPriceEach": "{amount} للقطعة",
   "@unitPriceEach": {
     "description": "Unit price label for a cart item.",
@@ -180,7 +183,7 @@
   "closeRegisterSessionError": "تعذر إغلاق جلسة الدرج. راجع القيم وحاول مرة أخرى.",
   "registerSessionHistoryTitle": "سجل جلسات الدرج",
   "refreshRegisterSessionsTooltip": "تحديث سجل الجلسات",
-  "registerSessionsListTitle": "جلساتك",
+  "registerSessionsListTitle": "جلسات الدرج",
   "registerSessionHistoryLoadError": "تعذر تحميل سجل الجلسات.",
   "emptyRegisterSessionHistory": "لا توجد جلسات درج مسجلة بعد.",
   "registerSessionStatusOpen": "مفتوحة",

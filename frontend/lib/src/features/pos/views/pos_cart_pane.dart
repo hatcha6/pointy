@@ -1,15 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
+import '../../../core/authorization.dart';
+import '../../../shared/authorization_guards.dart';
 import '../../../shared/formatters.dart';
 import '../view_models/pos_view_model.dart';
 import 'cart_line_tile.dart';
 import 'cart_totals.dart';
 
 class PosCartPane extends StatelessWidget {
-  const PosCartPane({super.key, required this.viewModel});
+  const PosCartPane({
+    super.key,
+    required this.viewModel,
+    required this.capabilities,
+  });
 
   final PosViewModel viewModel;
+  final AuthorizationCapabilities capabilities;
 
   @override
   Widget build(BuildContext context) {
@@ -29,12 +36,20 @@ class PosCartPane extends StatelessWidget {
                   style: Theme.of(context).textTheme.titleLarge,
                 ),
                 const Spacer(),
-                IconButton(
-                  tooltip: l10n.clearCartTooltip,
-                  onPressed: viewModel.cart.isEmpty || viewModel.isCheckingOut
-                      ? null
-                      : viewModel.clearCart,
-                  icon: const Icon(Icons.delete_outline),
+                CheckoutCapabilityBuilder(
+                  capabilities: capabilities,
+                  builder: (context, canCheckout) {
+                    return IconButton(
+                      tooltip: l10n.clearCartTooltip,
+                      onPressed:
+                          viewModel.cart.isEmpty ||
+                              viewModel.isCheckingOut ||
+                              !canCheckout
+                          ? null
+                          : viewModel.clearCart,
+                      icon: const Icon(Icons.delete_outline),
+                    );
+                  },
                 ),
               ],
             ),
@@ -47,34 +62,44 @@ class PosCartPane extends StatelessWidget {
                       separatorBuilder: (_, _) => const Divider(height: 1),
                       itemBuilder: (context, index) {
                         final line = viewModel.cart[index];
-                        return CartLineTile(
-                          line: line,
-                          onAdd: viewModel.isCheckingOut
-                              ? null
-                              : () => viewModel.addProduct(line.product),
-                          onRemove: viewModel.isCheckingOut
-                              ? null
-                              : () => viewModel.decrementProduct(line.product),
+                        return CheckoutCapabilityBuilder(
+                          capabilities: capabilities,
+                          builder: (context, canCheckout) {
+                            return CartLineTile(
+                              line: line,
+                              onAdd: viewModel.isCheckingOut || !canCheckout
+                                  ? null
+                                  : () => viewModel.addProduct(line.product),
+                              onRemove: viewModel.isCheckingOut || !canCheckout
+                                  ? null
+                                  : () => viewModel.decrementProduct(
+                                      line.product,
+                                    ),
+                            );
+                          },
                         );
                       },
                     ),
             ),
             CartTotals(viewModel: viewModel),
             const SizedBox(height: 12),
-            FilledButton.icon(
-              onPressed: viewModel.cart.isEmpty || viewModel.isCheckingOut
-                  ? null
-                  : () => _checkout(context),
-              icon: viewModel.isCheckingOut
-                  ? const SizedBox.square(
-                      dimension: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.payments_outlined),
-              label: Text(
-                viewModel.isCheckingOut
-                    ? l10n.checkoutInProgressButton
-                    : l10n.payAmount(formatMoney(viewModel.total)),
+            CheckoutGuard(
+              capabilities: capabilities,
+              child: FilledButton.icon(
+                onPressed: viewModel.cart.isEmpty || viewModel.isCheckingOut
+                    ? null
+                    : () => _checkout(context),
+                icon: viewModel.isCheckingOut
+                    ? const SizedBox.square(
+                        dimension: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.payments_outlined),
+                label: Text(
+                  viewModel.isCheckingOut
+                      ? l10n.checkoutInProgressButton
+                      : l10n.payAmount(formatMoney(viewModel.total)),
+                ),
               ),
             ),
           ],

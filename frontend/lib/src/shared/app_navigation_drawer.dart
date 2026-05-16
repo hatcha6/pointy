@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
+import '../core/authorization.dart';
 import '../data/models/pos_user.dart';
 
 enum AppNavigationDestination { pos, catalog, registerSessions, users }
@@ -10,6 +11,7 @@ class AppNavigationDrawer extends StatelessWidget {
     super.key,
     required this.selectedDestination,
     required this.currentUser,
+    required this.capabilities,
     required this.onOpenPos,
     required this.onOpenCatalog,
     required this.onOpenRegisterSessions,
@@ -19,6 +21,7 @@ class AppNavigationDrawer extends StatelessWidget {
 
   final AppNavigationDestination selectedDestination;
   final PosUser currentUser;
+  final AuthorizationCapabilities capabilities;
   final VoidCallback onOpenPos;
   final VoidCallback onOpenCatalog;
   final VoidCallback onOpenRegisterSessions;
@@ -28,27 +31,49 @@ class AppNavigationDrawer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final selectedIndex = switch (selectedDestination) {
-      AppNavigationDestination.pos => 0,
-      AppNavigationDestination.catalog => 1,
-      AppNavigationDestination.registerSessions => 2,
-      AppNavigationDestination.users => 3,
-    };
-    final canManageUsers = currentUser.role.isManager && onOpenUsers != null;
+    final destinations = [
+      _DrawerDestination(
+        destination: AppNavigationDestination.pos,
+        capability: AppCapability.accessPos,
+        icon: const Icon(Icons.receipt_long_outlined),
+        selectedIcon: const Icon(Icons.receipt_long),
+        label: l10n.posDrawerLabel,
+        onTap: onOpenPos,
+      ),
+      _DrawerDestination(
+        destination: AppNavigationDestination.catalog,
+        capability: AppCapability.viewCatalogManagement,
+        icon: const Icon(Icons.inventory_2_outlined),
+        selectedIcon: const Icon(Icons.inventory_2),
+        label: l10n.catalogDrawerLabel,
+        onTap: onOpenCatalog,
+      ),
+      _DrawerDestination(
+        destination: AppNavigationDestination.registerSessions,
+        capability: AppCapability.viewRegisterSessions,
+        icon: const Icon(Icons.manage_history_outlined),
+        selectedIcon: const Icon(Icons.manage_history),
+        label: l10n.registerSessionsDrawerLabel,
+        onTap: onOpenRegisterSessions,
+      ),
+      _DrawerDestination(
+        destination: AppNavigationDestination.users,
+        capability: AppCapability.manageUsers,
+        icon: const Icon(Icons.group_outlined),
+        selectedIcon: const Icon(Icons.group),
+        label: l10n.usersDrawerLabel,
+        onTap: onOpenUsers,
+      ),
+    ].where((destination) => destination.isAvailable(capabilities)).toList();
+    final selectedIndex = destinations.indexWhere(
+      (destination) => destination.destination == selectedDestination,
+    );
 
     return NavigationDrawer(
-      selectedIndex: selectedIndex,
+      selectedIndex: selectedIndex == -1 ? null : selectedIndex,
       onDestinationSelected: (index) {
         Navigator.of(context).pop();
-        if (index == 0) {
-          onOpenPos();
-        } else if (index == 1) {
-          onOpenCatalog();
-        } else if (index == 2) {
-          onOpenRegisterSessions();
-        } else {
-          onOpenUsers?.call();
-        }
+        destinations[index].onTap?.call();
       },
       children: [
         Padding(
@@ -83,26 +108,11 @@ class AppNavigationDrawer extends StatelessWidget {
           ),
         ),
         const Divider(),
-        NavigationDrawerDestination(
-          icon: const Icon(Icons.receipt_long_outlined),
-          selectedIcon: const Icon(Icons.receipt_long),
-          label: Text(l10n.posDrawerLabel),
-        ),
-        NavigationDrawerDestination(
-          icon: const Icon(Icons.inventory_2_outlined),
-          selectedIcon: const Icon(Icons.inventory_2),
-          label: Text(l10n.catalogDrawerLabel),
-        ),
-        NavigationDrawerDestination(
-          icon: const Icon(Icons.manage_history_outlined),
-          selectedIcon: const Icon(Icons.manage_history),
-          label: Text(l10n.registerSessionsDrawerLabel),
-        ),
-        if (canManageUsers)
+        for (final destination in destinations)
           NavigationDrawerDestination(
-            icon: const Icon(Icons.group_outlined),
-            selectedIcon: const Icon(Icons.group),
-            label: Text(l10n.usersDrawerLabel),
+            icon: destination.icon,
+            selectedIcon: destination.selectedIcon,
+            label: Text(destination.label),
           ),
         const Divider(),
         ListTile(
@@ -122,5 +132,27 @@ class AppNavigationDrawer extends StatelessWidget {
       UserRole.manager => l10n.managerRoleLabel,
       UserRole.cashier => l10n.cashierRoleLabel,
     };
+  }
+}
+
+class _DrawerDestination {
+  const _DrawerDestination({
+    required this.destination,
+    required this.capability,
+    required this.icon,
+    required this.selectedIcon,
+    required this.label,
+    required this.onTap,
+  });
+
+  final AppNavigationDestination destination;
+  final AppCapability capability;
+  final Widget icon;
+  final Widget selectedIcon;
+  final String label;
+  final VoidCallback? onTap;
+
+  bool isAvailable(AuthorizationCapabilities capabilities) {
+    return onTap != null && capabilities.allows(capability);
   }
 }

@@ -28,6 +28,8 @@ class PosUser {
     required this.isActive,
     this.displayName = '',
     this.email = '',
+    this.permissions = const {},
+    this.hasPermissionSnapshot = false,
   });
 
   final int id;
@@ -36,6 +38,8 @@ class PosUser {
   final String email;
   final UserRole role;
   final bool isActive;
+  final Set<String> permissions;
+  final bool hasPermissionSnapshot;
 
   String get label => displayName.trim().isEmpty ? username : displayName;
 
@@ -57,7 +61,42 @@ class PosUser {
       isActive: json['is_active'] is bool
           ? json['is_active'] as bool
           : json['is_active']?.toString() != 'false',
+      permissions: _permissionsFromJson(_permissionPayload(json)),
+      hasPermissionSnapshot: _permissionPayload(json) != null,
     );
+  }
+
+  static Object? _permissionPayload(Map<String, Object?> json) {
+    return json['permissions'] ??
+        json['user_permissions'] ??
+        json['permission_codenames'];
+  }
+
+  static Set<String> _permissionsFromJson(Object? value) {
+    if (value is Iterable) {
+      return value
+          .map(_permissionNameFromJson)
+          .where((permission) => permission.isNotEmpty)
+          .toSet();
+    }
+
+    final permission = _permissionNameFromJson(value);
+    return permission.isEmpty ? const {} : {permission};
+  }
+
+  static String _permissionNameFromJson(Object? value) {
+    if (value is Map) {
+      final appLabel = value['app_label']?.toString();
+      final codename = value['codename']?.toString();
+      if (appLabel != null &&
+          appLabel.isNotEmpty &&
+          codename != null &&
+          codename.isNotEmpty) {
+        return '$appLabel.$codename';
+      }
+      return value['name']?.toString() ?? '';
+    }
+    return value?.toString() ?? '';
   }
 }
 

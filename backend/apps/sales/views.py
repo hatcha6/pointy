@@ -2,8 +2,11 @@ from django.db import IntegrityError, transaction
 from django.utils import timezone
 from rest_framework import mixins, serializers, status, viewsets
 from rest_framework.decorators import action
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
+from apps.core.permissions import HasPointyPermission
+from apps.core.roles import user_is_manager
 from .models import Order, RegisterSession
 from .serializers import (
     CheckoutSerializer,
@@ -16,12 +19,30 @@ from .serializers import (
 
 class OrderViewSet(viewsets.ModelViewSet):
     serializer_class = OrderSerializer
+    permission_classes = [IsAuthenticated, HasPointyPermission]
+    permission_map = {
+        "list": ("sales.view_order",),
+        "retrieve": ("sales.view_order",),
+        "create": ("sales.add_order",),
+        "checkout": ("sales.add_order",),
+        "update": ("sales.change_order",),
+        "partial_update": ("sales.change_order",),
+        "destroy": ("sales.delete_order",),
+    }
     queryset = Order.objects.select_related("register_session").prefetch_related(
         "lines__product"
     )
     filterset_fields = ("status", "register_session", "register_session__status")
     search_fields = ("receipt_number", "lines__product__name", "lines__product__sku")
     ordering_fields = ("created_at", "updated_at", "total", "receipt_number")
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        if user_is_manager(self.request.user):
+            return queryset
+        return queryset.filter(
+            register_session__owner_key=register_session_owner_key(self.request)
+        )
 
     def _open_register_session(self, request):
         return RegisterSession.objects.filter(
@@ -73,10 +94,27 @@ class RegisterSessionViewSet(
     viewsets.GenericViewSet,
 ):
     serializer_class = RegisterSessionSerializer
+    permission_classes = [IsAuthenticated, HasPointyPermission]
+    permission_map = {
+        "list": ("sales.view_registersession",),
+        "retrieve": ("sales.view_registersession",),
+        "orders": ("sales.view_registersession", "sales.view_order"),
+        "current": ("sales.view_registersession",),
+        "start": ("sales.add_registersession",),
+        "close": ("sales.change_registersession",),
+    }
     queryset = RegisterSession.objects.select_related("owner")
 
     def get_queryset(self):
-        return super().get_queryset().filter(owner_key=register_session_owner_key(self.request))
+        queryset = super().get_queryset()
+        if user_is_manager(self.request.user):
+            return queryset
+        return queryset.filter(owner_key=register_session_owner_key(self.request))
+
+    def get_owner_queryset(self):
+        return super().get_queryset().filter(
+            owner_key=register_session_owner_key(self.request)
+        )
 
     @action(detail=True, methods=["get"])
     def orders(self, request, pk=None):
@@ -86,11 +124,15 @@ class RegisterSessionViewSet(
             .prefetch_related("lines__product")
             .order_by("-created_at")
         )
+        page = self.paginate_queryset(orders)
+        if page is not None:
+            serializer = OrderSerializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
         return Response(OrderSerializer(orders, many=True).data)
 
     @action(detail=False, methods=["get"])
     def current(self, request):
-        session = self.get_queryset().filter(status=RegisterSession.Status.OPEN).first()
+        session = self.get_owner_queryset().filter(status=RegisterSession.Status.OPEN).first()
         if session is None:
             return Response(status=status.HTTP_204_NO_CONTENT)
         return Response(self.get_serializer(session).data)

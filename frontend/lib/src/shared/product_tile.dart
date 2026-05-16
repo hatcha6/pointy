@@ -8,7 +8,7 @@ class ProductTile extends StatelessWidget {
   const ProductTile({super.key, required this.product, required this.onTap});
 
   final Product product;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {

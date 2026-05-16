@@ -1,16 +1,23 @@
 import 'package:flutter/material.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
+import '../../../core/authorization.dart';
 import '../../../data/models/register_session.dart';
+import '../../../shared/authorization_guards.dart';
 import '../../../shared/date_formatters.dart';
 import '../../../shared/formatters.dart';
 import '../../../shared/infinite_scroll_grid.dart';
 import '../view_models/register_session_history_view_model.dart';
 
 class RegisterSessionList extends StatelessWidget {
-  const RegisterSessionList({super.key, required this.viewModel});
+  const RegisterSessionList({
+    super.key,
+    required this.viewModel,
+    required this.capabilities,
+  });
 
   final RegisterSessionHistoryViewModel viewModel;
+  final AuthorizationCapabilities capabilities;
 
   @override
   Widget build(BuildContext context) {
@@ -44,11 +51,18 @@ class RegisterSessionList extends StatelessWidget {
                       },
                       separatorBuilder: (_, _) => const Divider(height: 1),
                       itemBuilder: (context, session) {
-                        return RegisterSessionTile(
-                          session: session,
-                          isSelected:
-                              viewModel.selectedSession?.id == session.id,
-                          onTap: () => viewModel.selectSession(session),
+                        return RegisterSessionOrdersCapabilityBuilder(
+                          capabilities: capabilities,
+                          builder: (context, canViewOrders) {
+                            return RegisterSessionTile(
+                              session: session,
+                              isSelected:
+                                  viewModel.selectedSession?.id == session.id,
+                              onTap: canViewOrders
+                                  ? () => viewModel.selectSession(session)
+                                  : null,
+                            );
+                          },
                         );
                       },
                     ),
@@ -65,12 +79,12 @@ class RegisterSessionTile extends StatelessWidget {
     super.key,
     required this.session,
     required this.isSelected,
-    required this.onTap,
+    this.onTap,
   });
 
   final RegisterSession session;
   final bool isSelected;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -94,7 +108,7 @@ class RegisterSessionTile extends StatelessWidget {
           l10n.registerSessionOpeningCash(formatMoney(session.openingCash)),
         ].join(' • '),
       ),
-      trailing: const Icon(Icons.chevron_right),
+      trailing: onTap == null ? null : const Icon(Icons.chevron_right),
       onTap: onTap,
     );
   }

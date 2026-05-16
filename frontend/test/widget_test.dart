@@ -7,11 +7,16 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
+import 'package:pointy_frontend/src/core/authorization.dart';
+import 'package:pointy_frontend/src/data/models/pos_user.dart';
 import 'package:pointy_frontend/src/data/models/product.dart';
 import 'package:pointy_frontend/src/app.dart';
+import 'package:pointy_frontend/src/data/repositories/user_repository.dart';
 import 'package:pointy_frontend/src/data/services/pos_api_service.dart';
 import 'package:pointy_frontend/src/features/catalog/views/product_details_screen.dart';
 import 'package:pointy_frontend/src/features/pos/views/register_session_close_sheet.dart';
+import 'package:pointy_frontend/src/features/users/view_models/user_management_view_model.dart';
+import 'package:pointy_frontend/src/features/users/views/user_management_screen.dart';
 import 'package:pointy_frontend/src/shared/infinite_scroll_grid.dart';
 import 'package:pointy_frontend/src/shared/product_tile.dart';
 
@@ -236,6 +241,82 @@ void main() {
     expect(find.text('إضافة مستخدم'), findsOneWidget);
   });
 
+  testWidgets('cashier navigation hides management destinations', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      PointyApp(
+        apiService: _mockApiService(
+          currentUserRole: 'cashier',
+          currentUserDisplayName: 'كاشير الوردية',
+          currentUserPermissions: const [
+            'catalog.view_product',
+            'sales.add_order',
+            'sales.view_order',
+            'sales.add_registersession',
+            'sales.change_registersession',
+            'sales.view_registersession',
+          ],
+        ),
+      ),
+    );
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+
+    await tester.tap(find.byIcon(Icons.menu));
+    await tester.pumpAndSettle();
+
+    expect(find.text('كاشير الوردية'), findsOneWidget);
+    expect(find.text('شاشة البيع'), findsOneWidget);
+    expect(find.text('جلسات الدرج'), findsOneWidget);
+    expect(find.text('المنتجات'), findsNothing);
+    expect(find.text('المستخدمون'), findsNothing);
+  });
+
+  testWidgets(
+    'user management shows forbidden state for direct cashier entry',
+    (WidgetTester tester) async {
+      final cashier = PosUser.fromJson(
+        _userJson(
+          username: 'cashier',
+          displayName: 'كاشير الوردية',
+          role: 'cashier',
+        ),
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          locale: const Locale('ar'),
+          supportedLocales: AppLocalizations.supportedLocales,
+          localizationsDelegates: const [
+            AppLocalizations.delegate,
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
+          home: UserManagementScreen(
+            viewModel: UserManagementViewModel(
+              UserRepository(_mockApiService(currentUserRole: 'cashier')),
+            ),
+            currentUser: cashier,
+            capabilities: AuthorizationCapabilities.forUser(cashier),
+            onOpenPos: () {},
+            onOpenCatalog: () {},
+            onOpenRegisterSessions: () {},
+            onLogout: () {},
+          ),
+        ),
+      );
+      await tester.pumpAndSettle(const Duration(seconds: 1));
+
+      expect(find.text('غير مصرح'), findsOneWidget);
+      expect(
+        find.text('لا يملك هذا المستخدم صلاحية الوصول إلى هذه الشاشة.'),
+        findsOneWidget,
+      );
+      expect(find.text('إضافة مستخدم'), findsNothing);
+    },
+  );
+
   testWidgets('register session history shows sessions and linked sales', (
     WidgetTester tester,
   ) async {
@@ -258,6 +339,31 @@ void main() {
     expect(find.text('مبيعات جلسة RS-1'), findsOneWidget);
     expect(find.text('إيصال R-100'), findsOneWidget);
     expect(find.text('د.ل 7.00'), findsWidgets);
+  });
+
+  testWidgets('session orders load more when the list underfills', (
+    WidgetTester tester,
+  ) async {
+    final requestedOrderPages = <int>[];
+
+    await tester.pumpWidget(
+      PointyApp(
+        apiService: _mockApiService(onOrderPage: requestedOrderPages.add),
+      ),
+    );
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+
+    await tester.tap(find.byIcon(Icons.menu));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('جلسات الدرج'));
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+
+    await tester.tap(find.text('جلسة RS-1'));
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+
+    expect(requestedOrderPages, containsAllInOrder([1, 2]));
+    expect(find.text('إيصال R-100'), findsOneWidget);
+    expect(find.text('إيصال R-101'), findsOneWidget);
   });
 
   testWidgets('register gate resumes an existing open session', (
@@ -421,7 +527,11 @@ PosApiService _mockApiService({
   bool isAuthenticated = true,
   bool hasOpenSession = false,
   int checkoutStatusCode = 200,
+  String currentUserRole = 'manager',
+  String currentUserDisplayName = 'مدير النظام',
+  List<String> currentUserPermissions = const [],
   void Function(http.Request request)? onCheckout,
+  void Function(int page)? onOrderPage,
 }) {
   var authenticated = isAuthenticated;
   var currentSessionIsOpen = hasOpenSession;
@@ -434,12 +544,24 @@ PosApiService _mockApiService({
         if (!authenticated) {
           return http.Response('', 401);
         }
-        return _jsonResponse(_userJson());
+        return _jsonResponse(
+          _userJson(
+            displayName: currentUserDisplayName,
+            role: currentUserRole,
+            permissions: currentUserPermissions,
+          ),
+        );
       }
 
       if (path.endsWith('/auth/login/')) {
         authenticated = true;
-        return _jsonResponse(_userJson());
+        return _jsonResponse(
+          _userJson(
+            displayName: currentUserDisplayName,
+            role: currentUserRole,
+            permissions: currentUserPermissions,
+          ),
+        );
       }
 
       if (path.endsWith('/auth/logout/')) {
@@ -502,7 +624,32 @@ PosApiService _mockApiService({
       }
 
       if (path.endsWith('/register-sessions/1/orders/')) {
-        return _jsonResponseList([_orderJson()]);
+        final page =
+            int.tryParse(request.url.queryParameters['page'] ?? '1') ?? 1;
+        onOrderPage?.call(page);
+        if (page == 2) {
+          return _jsonResponse({
+            'count': 2,
+            'next': null,
+            'previous':
+                'http://localhost/api/register-sessions/1/orders/?page=1',
+            'results': [
+              _orderJson(
+                id: 101,
+                receiptNumber: 'R-101',
+                total: '3.50',
+                quantity: 1,
+                createdAt: '2026-05-15T09:15:00Z',
+              ),
+            ],
+          });
+        }
+        return _jsonResponse({
+          'count': 2,
+          'next': 'http://localhost/api/register-sessions/1/orders/?page=2',
+          'previous': null,
+          'results': [_orderJson()],
+        });
       }
 
       if (path.endsWith('/register-sessions/')) {
@@ -564,6 +711,7 @@ Map<String, Object?> _userJson({
   String username = 'manager',
   String displayName = 'مدير النظام',
   String role = 'manager',
+  List<String> permissions = const [],
 }) {
   return {
     'id': id,
@@ -571,6 +719,7 @@ Map<String, Object?> _userJson({
     'display_name': displayName,
     'email': '',
     'role': role,
+    'permissions': permissions,
     'is_active': true,
   };
 }
@@ -614,10 +763,16 @@ Map<String, Object?> _productPageJson() {
   };
 }
 
-Map<String, Object?> _orderJson() {
+Map<String, Object?> _orderJson({
+  int id = 100,
+  String receiptNumber = 'R-100',
+  String total = '7.00',
+  int quantity = 2,
+  String createdAt = '2026-05-15T09:10:00Z',
+}) {
   return {
-    'id': 100,
-    'receipt_number': 'R-100',
+    'id': id,
+    'receipt_number': receiptNumber,
     'status': 'paid',
     'register_session': 1,
     'register_session_number': 'RS-1',
@@ -625,14 +780,14 @@ Map<String, Object?> _orderJson() {
       {
         'product': 1,
         'product_name': 'قهوة البيت',
-        'quantity': 2,
+        'quantity': quantity,
         'unit_price': '3.50',
-        'line_total': '7.00',
+        'line_total': total,
       },
     ],
-    'subtotal': '7.00',
-    'total': '7.00',
-    'created_at': '2026-05-15T09:10:00Z',
-    'updated_at': '2026-05-15T09:10:00Z',
+    'subtotal': total,
+    'total': total,
+    'created_at': createdAt,
+    'updated_at': createdAt,
   };
 }

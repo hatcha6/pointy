@@ -7,11 +7,21 @@ from .roles import CASHIER_GROUP, MANAGER_GROUP, ROLE_GROUPS
 
 class UserSerializer(serializers.ModelSerializer):
     role = serializers.SerializerMethodField()
+    permissions = serializers.SerializerMethodField()
 
     class Meta:
         model = get_user_model()
-        fields = ["id", "username", "email", "first_name", "last_name", "is_active", "role"]
-        read_only_fields = ["id", "role"]
+        fields = [
+            "id",
+            "username",
+            "email",
+            "first_name",
+            "last_name",
+            "is_active",
+            "role",
+            "permissions",
+        ]
+        read_only_fields = ["id", "role", "permissions"]
 
     def get_role(self, user):
         if user.is_superuser or user.groups.filter(name=MANAGER_GROUP).exists():
@@ -19,6 +29,9 @@ class UserSerializer(serializers.ModelSerializer):
         if user.groups.filter(name=CASHIER_GROUP).exists():
             return CASHIER_GROUP
         return None
+
+    def get_permissions(self, user):
+        return sorted(user.get_all_permissions())
 
 
 class LoginSerializer(serializers.Serializer):

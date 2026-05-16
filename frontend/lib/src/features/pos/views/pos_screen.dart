@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
+import '../../../core/authorization.dart';
 import '../../../data/models/pos_user.dart';
 import '../../../shared/app_navigation_drawer.dart';
+import '../../../shared/authorization_guards.dart';
 import '../view_models/pos_view_model.dart';
 import 'pos_cart_pane.dart';
 import 'pos_catalog_pane.dart';
@@ -14,6 +16,7 @@ class PosScreen extends StatelessWidget {
     super.key,
     required this.viewModel,
     required this.currentUser,
+    required this.capabilities,
     required this.onOpenCatalog,
     required this.onOpenRegisterSessions,
     required this.onLogout,
@@ -22,6 +25,7 @@ class PosScreen extends StatelessWidget {
 
   final PosViewModel viewModel;
   final PosUser currentUser;
+  final AuthorizationCapabilities capabilities;
   final VoidCallback onOpenCatalog;
   final VoidCallback onOpenRegisterSessions;
   final VoidCallback? onOpenUsers;
@@ -38,6 +42,7 @@ class PosScreen extends StatelessWidget {
           drawer: AppNavigationDrawer(
             selectedDestination: AppNavigationDestination.pos,
             currentUser: currentUser,
+            capabilities: capabilities,
             onOpenPos: () {},
             onOpenCatalog: onOpenCatalog,
             onOpenRegisterSessions: onOpenRegisterSessions,
@@ -57,42 +62,62 @@ class PosScreen extends StatelessWidget {
             title: Text(l10n.appTitle),
             actions: [
               if (viewModel.activeRegisterSession != null)
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                  child: Center(
-                    child: Chip(
-                      avatar: const Icon(Icons.point_of_sale_outlined),
-                      label: Text(
-                        l10n.activeRegisterSessionLabel(
-                          viewModel.activeRegisterSession!.sessionNumber,
+                PosAccessGuard(
+                  capabilities: capabilities,
+                  fallback: const SizedBox.shrink(),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    child: Center(
+                      child: Chip(
+                        avatar: const Icon(Icons.point_of_sale_outlined),
+                        label: Text(
+                          l10n.activeRegisterSessionLabel(
+                            viewModel.activeRegisterSession!.sessionNumber,
+                          ),
                         ),
                       ),
                     ),
                   ),
                 ),
               if (viewModel.activeRegisterSession != null)
-                IconButton(
-                  tooltip: l10n.closeRegisterSessionTooltip,
-                  onPressed: viewModel.isClosingRegisterSession
-                      ? null
-                      : () => _showCloseRegisterSessionSheet(context),
-                  icon: const Icon(Icons.lock_outline),
+                RegisterSessionCloseGuard(
+                  capabilities: capabilities,
+                  child: IconButton(
+                    tooltip: l10n.closeRegisterSessionTooltip,
+                    onPressed: viewModel.isClosingRegisterSession
+                        ? null
+                        : () => _showCloseRegisterSessionSheet(context),
+                    icon: const Icon(Icons.lock_outline),
+                  ),
                 ),
-              IconButton(
-                tooltip: l10n.refreshCatalogTooltip,
-                onPressed: viewModel.activeRegisterSession == null
-                    ? null
-                    : viewModel.loadCatalog,
-                icon: const Icon(Icons.sync),
+              PosAccessGuard(
+                capabilities: capabilities,
+                fallback: const SizedBox.shrink(),
+                child: IconButton(
+                  tooltip: l10n.refreshCatalogTooltip,
+                  onPressed: viewModel.activeRegisterSession == null
+                      ? null
+                      : viewModel.loadCatalog,
+                  icon: const Icon(Icons.sync),
+                ),
               ),
             ],
           ),
           body: SafeArea(
-            child:
-                viewModel.registerSessionGateStatus ==
-                    RegisterSessionGateStatus.active
-                ? _PosWorkspace(viewModel: viewModel)
-                : RegisterSessionGate(viewModel: viewModel),
+            child: PosAccessGuard(
+              capabilities: capabilities,
+              child:
+                  viewModel.registerSessionGateStatus ==
+                      RegisterSessionGateStatus.active
+                  ? _PosWorkspace(
+                      viewModel: viewModel,
+                      capabilities: capabilities,
+                    )
+                  : RegisterSessionGate(
+                      viewModel: viewModel,
+                      capabilities: capabilities,
+                    ),
+            ),
           ),
         );
       },
@@ -125,16 +150,23 @@ class PosScreen extends StatelessWidget {
 }
 
 class _PosWorkspace extends StatelessWidget {
-  const _PosWorkspace({required this.viewModel});
+  const _PosWorkspace({required this.viewModel, required this.capabilities});
 
   final PosViewModel viewModel;
+  final AuthorizationCapabilities capabilities;
 
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final catalog = PosCatalogPane(viewModel: viewModel);
-        final cart = PosCartPane(viewModel: viewModel);
+        final catalog = PosCatalogPane(
+          viewModel: viewModel,
+          capabilities: capabilities,
+        );
+        final cart = PosCartPane(
+          viewModel: viewModel,
+          capabilities: capabilities,
+        );
 
         if (constraints.maxWidth >= 900) {
           return Row(

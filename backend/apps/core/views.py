@@ -6,7 +6,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
-from .permissions import IsManager
+from .permissions import HasPointyPermission
 from .roles import ensure_role_groups
 from .serializers import LoginSerializer, PosUserSerializer, UserSerializer
 
@@ -36,7 +36,15 @@ def me_view(request):
 
 class PosUserViewSet(viewsets.ModelViewSet):
     serializer_class = PosUserSerializer
-    permission_classes = [IsManager]
+    permission_classes = [IsAuthenticated, HasPointyPermission]
+    permission_map = {
+        "list": ("auth.view_user",),
+        "retrieve": ("auth.view_user",),
+        "create": ("auth.add_user",),
+        "update": ("auth.change_user",),
+        "partial_update": ("auth.change_user",),
+        "destroy": ("auth.delete_user",),
+    }
     queryset = get_user_model().objects.order_by("username")
     filterset_fields = ("is_active", "groups__name")
     search_fields = ("username", "email", "first_name", "last_name")

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
+import 'core/authorization.dart';
 import 'data/repositories/auth_repository.dart';
 import 'data/repositories/catalog_repository.dart';
 import 'data/repositories/register_session_repository.dart';
@@ -120,6 +121,19 @@ class _PointyAppState extends State<PointyApp> {
       );
     }
 
+    final capabilities = AuthorizationCapabilities.forUser(currentUser);
+
+    VoidCallback guardedAction(AppCapability capability, VoidCallback action) {
+      return capabilities.actionFor(capability, action) ?? () {};
+    }
+
+    Future<void> Function() guardedAsyncAction(
+      AppCapability capability,
+      Future<void> Function() action,
+    ) {
+      return capabilities.asyncActionFor(capability, action) ?? () async {};
+    }
+
     void openPos(BuildContext routeContext) {
       Navigator.of(routeContext).popUntil((route) => route.isFirst);
     }
@@ -134,9 +148,6 @@ class _PointyAppState extends State<PointyApp> {
     }
 
     void openUsers(BuildContext routeContext) {
-      if (!currentUser.role.isManager) {
-        return;
-      }
       Navigator.of(
         routeContext,
       ).pushReplacement(MaterialPageRoute<void>(builder: usersRouteBuilder));
@@ -146,15 +157,23 @@ class _PointyAppState extends State<PointyApp> {
       return CatalogScreen(
         viewModel: CatalogViewModel(_catalogRepository),
         currentUser: currentUser,
-        onOpenPos: () => openPos(routeContext),
-        onOpenRegisterSessions: () {
-          Navigator.of(routeContext).pushReplacement(
-            MaterialPageRoute<void>(builder: registerSessionsRouteBuilder),
-          );
-        },
-        onOpenUsers: currentUser.role.isManager
-            ? () => openUsers(routeContext)
-            : null,
+        capabilities: capabilities,
+        onOpenPos: guardedAction(
+          AppCapability.accessPos,
+          () => openPos(routeContext),
+        ),
+        onOpenRegisterSessions: guardedAction(
+          AppCapability.viewRegisterSessions,
+          () {
+            Navigator.of(routeContext).pushReplacement(
+              MaterialPageRoute<void>(builder: registerSessionsRouteBuilder),
+            );
+          },
+        ),
+        onOpenUsers: capabilities.actionFor(
+          AppCapability.manageUsers,
+          () => openUsers(routeContext),
+        ),
         onLogout: () => logout(routeContext),
       );
     };
@@ -166,15 +185,20 @@ class _PointyAppState extends State<PointyApp> {
           _saleRepository,
         ),
         currentUser: currentUser,
-        onOpenPos: () => openPos(routeContext),
-        onOpenCatalog: () {
+        capabilities: capabilities,
+        onOpenPos: guardedAction(
+          AppCapability.accessPos,
+          () => openPos(routeContext),
+        ),
+        onOpenCatalog: guardedAction(AppCapability.viewCatalogManagement, () {
           Navigator.of(routeContext).pushReplacement(
             MaterialPageRoute<void>(builder: catalogRouteBuilder),
           );
-        },
-        onOpenUsers: currentUser.role.isManager
-            ? () => openUsers(routeContext)
-            : null,
+        }),
+        onOpenUsers: capabilities.actionFor(
+          AppCapability.manageUsers,
+          () => openUsers(routeContext),
+        ),
         onLogout: () => logout(routeContext),
       );
     };
@@ -183,17 +207,24 @@ class _PointyAppState extends State<PointyApp> {
       return UserManagementScreen(
         viewModel: UserManagementViewModel(_userRepository),
         currentUser: currentUser,
-        onOpenPos: () => openPos(routeContext),
-        onOpenCatalog: () {
+        capabilities: capabilities,
+        onOpenPos: guardedAction(
+          AppCapability.accessPos,
+          () => openPos(routeContext),
+        ),
+        onOpenCatalog: guardedAction(AppCapability.viewCatalogManagement, () {
           Navigator.of(routeContext).pushReplacement(
             MaterialPageRoute<void>(builder: catalogRouteBuilder),
           );
-        },
-        onOpenRegisterSessions: () {
-          Navigator.of(routeContext).pushReplacement(
-            MaterialPageRoute<void>(builder: registerSessionsRouteBuilder),
-          );
-        },
+        }),
+        onOpenRegisterSessions: guardedAction(
+          AppCapability.viewRegisterSessions,
+          () {
+            Navigator.of(routeContext).pushReplacement(
+              MaterialPageRoute<void>(builder: registerSessionsRouteBuilder),
+            );
+          },
+        ),
         onLogout: () => logout(routeContext),
       );
     };
@@ -201,26 +232,34 @@ class _PointyAppState extends State<PointyApp> {
     return PosScreen(
       viewModel: _posViewModel,
       currentUser: currentUser,
-      onOpenCatalog: () async {
-        await Navigator.of(
-          context,
-        ).push(MaterialPageRoute<void>(builder: catalogRouteBuilder));
-        await _posViewModel.loadCatalog();
-      },
-      onOpenRegisterSessions: () async {
-        await Navigator.of(
-          context,
-        ).push(MaterialPageRoute<void>(builder: registerSessionsRouteBuilder));
-        await _posViewModel.loadCatalog();
-      },
-      onOpenUsers: currentUser.role.isManager
-          ? () async {
-              await Navigator.of(
-                context,
-              ).push(MaterialPageRoute<void>(builder: usersRouteBuilder));
-              await _posViewModel.loadCatalog();
-            }
-          : null,
+      capabilities: capabilities,
+      onOpenCatalog: guardedAsyncAction(
+        AppCapability.viewCatalogManagement,
+        () async {
+          await Navigator.of(
+            context,
+          ).push(MaterialPageRoute<void>(builder: catalogRouteBuilder));
+          await _posViewModel.loadCatalog();
+        },
+      ),
+      onOpenRegisterSessions: guardedAsyncAction(
+        AppCapability.viewRegisterSessions,
+        () async {
+          await Navigator.of(context).push(
+            MaterialPageRoute<void>(builder: registerSessionsRouteBuilder),
+          );
+          await _posViewModel.loadCatalog();
+        },
+      ),
+      onOpenUsers: capabilities.asyncActionFor(
+        AppCapability.manageUsers,
+        () async {
+          await Navigator.of(
+            context,
+          ).push(MaterialPageRoute<void>(builder: usersRouteBuilder));
+          await _posViewModel.loadCatalog();
+        },
+      ),
       onLogout: () => logout(context),
     );
   }

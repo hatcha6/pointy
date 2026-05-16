@@ -250,6 +250,18 @@ abstract class AppLocalizations {
   /// **'تسجيل الخروج'**
   String get logoutButton;
 
+  /// No description provided for @unauthorizedTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'غير مصرح'**
+  String get unauthorizedTitle;
+
+  /// No description provided for @unauthorizedMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا يملك هذا المستخدم صلاحية الوصول إلى هذه الشاشة.'**
+  String get unauthorizedMessage;
+
   /// No description provided for @authCheckingSession.
   ///
   /// In ar, this message translates to:
@@ -658,6 +670,12 @@ abstract class AppLocalizations {
   /// **'تعذر تسجيل البيع. تحقق من جلسة الدرج وحاول مرة أخرى.'**
   String get saleCheckoutError;
 
+  /// No description provided for @paymentUnauthorizedMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا يملك هذا المستخدم صلاحية إتمام الدفع.'**
+  String get paymentUnauthorizedMessage;
+
   /// Unit price label for a cart item.
   ///
   /// In ar, this message translates to:
@@ -823,7 +841,7 @@ abstract class AppLocalizations {
   /// No description provided for @registerSessionsListTitle.
   ///
   /// In ar, this message translates to:
-  /// **'جلساتك'**
+  /// **'جلسات الدرج'**
   String get registerSessionsListTitle;
 
   /// No description provided for @registerSessionHistoryLoadError.

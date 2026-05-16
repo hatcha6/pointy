@@ -1,6 +1,8 @@
 from django.core.cache import cache
 from rest_framework import viewsets
+from rest_framework.permissions import IsAuthenticated
 
+from apps.core.permissions import HasPointyPermission
 from .models import Product
 from .serializers import ProductSerializer
 
@@ -8,6 +10,15 @@ from .serializers import ProductSerializer
 class ProductViewSet(viewsets.ModelViewSet):
     active_cache_key = "catalog:active_product_ids"
     serializer_class = ProductSerializer
+    permission_classes = [IsAuthenticated, HasPointyPermission]
+    permission_map = {
+        "list": ("catalog.view_product",),
+        "retrieve": ("catalog.view_product",),
+        "create": ("catalog.add_product",),
+        "update": ("catalog.change_product",),
+        "partial_update": ("catalog.change_product",),
+        "destroy": ("catalog.delete_product",),
+    }
     queryset = Product.objects.all()
     filterset_fields = ("is_active",)
     search_fields = ("sku", "barcode", "name")

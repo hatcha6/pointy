@@ -1,15 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
+import '../../../core/authorization.dart';
+import '../../../shared/authorization_guards.dart';
 import '../../../shared/infinite_scroll_grid.dart';
 import '../../../shared/product_query_controls.dart';
 import '../../../shared/product_tile.dart';
 import '../view_models/pos_view_model.dart';
 
 class PosCatalogPane extends StatelessWidget {
-  const PosCatalogPane({super.key, required this.viewModel});
+  const PosCatalogPane({
+    super.key,
+    required this.viewModel,
+    required this.capabilities,
+  });
 
   final PosViewModel viewModel;
+  final AuthorizationCapabilities capabilities;
 
   @override
   Widget build(BuildContext context) {
@@ -67,9 +74,16 @@ class PosCatalogPane extends StatelessWidget {
                 mainAxisSpacing: 12,
               ),
               itemBuilder: (context, product) {
-                return ProductTile(
-                  product: product,
-                  onTap: () => viewModel.addProduct(product),
+                return CheckoutCapabilityBuilder(
+                  capabilities: capabilities,
+                  builder: (context, canCheckout) {
+                    return ProductTile(
+                      product: product,
+                      onTap: canCheckout
+                          ? () => viewModel.addProduct(product)
+                          : null,
+                    );
+                  },
                 );
               },
             ),

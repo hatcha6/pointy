@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
+import '../../../core/authorization.dart';
 import '../../../data/models/pos_user.dart';
 import '../../../shared/app_navigation_drawer.dart';
+import '../../../shared/authorization_guards.dart';
 import '../view_models/user_management_view_model.dart';
 
 class UserManagementScreen extends StatelessWidget {
@@ -10,6 +12,7 @@ class UserManagementScreen extends StatelessWidget {
     super.key,
     required this.viewModel,
     required this.currentUser,
+    required this.capabilities,
     required this.onOpenPos,
     required this.onOpenCatalog,
     required this.onOpenRegisterSessions,
@@ -18,6 +21,7 @@ class UserManagementScreen extends StatelessWidget {
 
   final UserManagementViewModel viewModel;
   final PosUser currentUser;
+  final AuthorizationCapabilities capabilities;
   final VoidCallback onOpenPos;
   final VoidCallback onOpenCatalog;
   final VoidCallback onOpenRegisterSessions;
@@ -34,6 +38,7 @@ class UserManagementScreen extends StatelessWidget {
           drawer: AppNavigationDrawer(
             selectedDestination: AppNavigationDestination.users,
             currentUser: currentUser,
+            capabilities: capabilities,
             onOpenPos: onOpenPos,
             onOpenCatalog: onOpenCatalog,
             onOpenRegisterSessions: onOpenRegisterSessions,
@@ -52,25 +57,36 @@ class UserManagementScreen extends StatelessWidget {
             ),
             title: Text(l10n.usersManagementTitle),
             actions: [
-              IconButton(
-                tooltip: l10n.refreshUsersTooltip,
-                onPressed: viewModel.loadUsers,
-                icon: const Icon(Icons.sync),
+              UserManagementGuard(
+                capabilities: capabilities,
+                fallback: const SizedBox.shrink(),
+                child: IconButton(
+                  tooltip: l10n.refreshUsersTooltip,
+                  onPressed: viewModel.loadUsers,
+                  icon: const Icon(Icons.sync),
+                ),
               ),
             ],
           ),
           body: SafeArea(
-            child: _UserManagementBody(
-              viewModel: viewModel,
-              currentUser: currentUser,
+            child: UserManagementGuard(
+              capabilities: capabilities,
+              child: _UserManagementBody(
+                viewModel: viewModel,
+                currentUser: currentUser,
+              ),
             ),
           ),
-          floatingActionButton: FloatingActionButton.extended(
-            onPressed: viewModel.isSaving
-                ? null
-                : () => _showCreateUserSheet(context),
-            icon: const Icon(Icons.person_add_alt_1),
-            label: Text(l10n.addUserButton),
+          floatingActionButton: UserManagementGuard(
+            capabilities: capabilities,
+            fallback: const SizedBox.shrink(),
+            child: FloatingActionButton.extended(
+              onPressed: viewModel.isSaving
+                  ? null
+                  : () => _showCreateUserSheet(context),
+              icon: const Icon(Icons.person_add_alt_1),
+              label: Text(l10n.addUserButton),
+            ),
           ),
         );
       },
