@@ -19,6 +19,7 @@ These rules apply to AI agents working anywhere in this repository.
 - Prefer the existing MVVM-style shape: services, repositories, view models, then views.
 - Keep widgets small and purposeful. Look for existing reusable code before adding new code.
 - Prefer simple, DRY implementations over large files, duplicated UI, or clever abstractions.
+- Avoid large files and mixed-responsibility files. Split unrelated behavior into focused files, and extract reusable widgets, helpers, models, or view-model actions when a file starts to bundle multiple concepts.
 
 ## Backend
 

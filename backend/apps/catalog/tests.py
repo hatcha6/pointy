@@ -1,5 +1,6 @@
 from decimal import Decimal
 
+from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
 from rest_framework import status
@@ -11,6 +12,11 @@ from .models import Product
 class ProductApiTests(TestCase):
     def setUp(self):
         self.client = APIClient()
+        self.user = get_user_model().objects.create_user(
+            username="catalog-user",
+            password="pass",
+        )
+        self.client.force_authenticate(user=self.user)
 
     def test_create_product(self):
         response = self.client.post(

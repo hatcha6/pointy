@@ -5,22 +5,51 @@ import '../../../data/models/cart_line.dart';
 import '../../../data/models/product.dart';
 import '../../../data/models/product_page.dart';
 import '../../../data/models/product_query.dart';
+import '../../../data/models/register_session.dart';
+import '../../../data/models/sale_order.dart';
 import '../../../data/repositories/catalog_repository.dart';
+import '../../../data/repositories/register_session_repository.dart';
+import '../../../data/repositories/sale_repository.dart';
+
+part 'pos_cart_actions.dart';
+part 'pos_catalog_actions.dart';
+part 'pos_checkout.dart';
+part 'pos_register_session_actions.dart';
+
+enum RegisterSessionGateStatus {
+  loading,
+  noOpenSession,
+  openSessionAvailable,
+  active,
+}
 
 class PosViewModel extends ChangeNotifier {
-  PosViewModel(this._catalogRepository) {
-    loadCatalog();
+  PosViewModel(
+    this._catalogRepository,
+    this._registerSessionRepository,
+    this._saleRepository,
+  ) {
+    loadCurrentRegisterSession();
   }
 
   final CatalogRepository _catalogRepository;
+  final RegisterSessionRepository _registerSessionRepository;
+  final SaleRepository _saleRepository;
 
   List<Product> _products = [];
   final List<CartLine> _cart = [];
   bool _isLoading = false;
   bool _isLoadingMore = false;
+  bool _isLoadingRegisterSession = false;
+  bool _isStartingRegisterSession = false;
+  bool _isClosingRegisterSession = false;
+  bool _isCheckingOut = false;
   bool _hasMoreProducts = true;
   int _nextProductPage = 1;
   String? _errorMessage;
+  bool _hasRegisterSessionError = false;
+  RegisterSession? _availableRegisterSession;
+  RegisterSession? _activeRegisterSession;
   ProductQuery _query = const ProductQuery(
     availability: ProductAvailabilityFilter.active,
   );
@@ -29,108 +58,33 @@ class PosViewModel extends ChangeNotifier {
   List<CartLine> get cart => List.unmodifiable(_cart);
   bool get isLoading => _isLoading;
   bool get isLoadingMore => _isLoadingMore;
+  bool get isLoadingRegisterSession => _isLoadingRegisterSession;
+  bool get isStartingRegisterSession => _isStartingRegisterSession;
+  bool get isClosingRegisterSession => _isClosingRegisterSession;
+  bool get isCheckingOut => _isCheckingOut;
   bool get hasMoreProducts => _hasMoreProducts;
   String? get errorMessage => _errorMessage;
+  bool get hasRegisterSessionError => _hasRegisterSessionError;
+  RegisterSession? get availableRegisterSession => _availableRegisterSession;
+  RegisterSession? get activeRegisterSession => _activeRegisterSession;
   ProductQuery get query => _query;
 
   double get subtotal => _cart.fold(0, (sum, line) => sum + line.subtotal);
   double get total => subtotal;
-
-  Future<void> loadCatalog() async {
-    _isLoading = true;
-    _errorMessage = null;
-    _nextProductPage = 1;
-    _hasMoreProducts = true;
-    notifyListeners();
-
-    final result = await _catalogRepository.loadProducts(
-      query: _query,
-      page: _nextProductPage,
-    );
-    switch (result) {
-      case Ok<ProductPage>():
-        _products = result.value.products;
-        _hasMoreProducts = result.value.hasMore;
-        _nextProductPage = 2;
-      case Error<ProductPage>():
-        _products = _catalogRepository.sampleProducts(_query);
-        _hasMoreProducts = false;
-        _errorMessage = 'يتم عرض منتجات تجريبية إلى أن يعمل الخادم.';
+  RegisterSessionGateStatus get registerSessionGateStatus {
+    if (_activeRegisterSession != null) {
+      return RegisterSessionGateStatus.active;
     }
-
-    _isLoading = false;
-    notifyListeners();
+    if (_isLoadingRegisterSession) {
+      return RegisterSessionGateStatus.loading;
+    }
+    if (_availableRegisterSession != null) {
+      return RegisterSessionGateStatus.openSessionAvailable;
+    }
+    return RegisterSessionGateStatus.noOpenSession;
   }
 
-  Future<void> loadMoreCatalog() async {
-    if (_isLoading || _isLoadingMore || !_hasMoreProducts) {
-      return;
-    }
-
-    _isLoadingMore = true;
-    notifyListeners();
-
-    final result = await _catalogRepository.loadProducts(
-      query: _query,
-      page: _nextProductPage,
-    );
-    switch (result) {
-      case Ok<ProductPage>():
-        _products = [..._products, ...result.value.products];
-        _hasMoreProducts = result.value.hasMore;
-        _nextProductPage += 1;
-      case Error<ProductPage>():
-        _errorMessage = 'يتم عرض منتجات تجريبية إلى أن يعمل الخادم.';
-    }
-
-    _isLoadingMore = false;
-    notifyListeners();
-  }
-
-  Future<void> updateSearch(String search) async {
-    if (search == _query.search) {
-      return;
-    }
-    _query = _query.copyWith(search: search);
-    await loadCatalog();
-  }
-
-  Future<void> applyQuery(ProductQuery query) async {
-    if (query == _query) {
-      return;
-    }
-    _query = query.copyWith(availability: ProductAvailabilityFilter.active);
-    await loadCatalog();
-  }
-
-  void addProduct(Product product) {
-    final index = _cart.indexWhere((line) => line.product.id == product.id);
-    if (index == -1) {
-      _cart.add(CartLine(product: product, quantity: 1));
-    } else {
-      final line = _cart[index];
-      _cart[index] = line.copyWith(quantity: line.quantity + 1);
-    }
-    notifyListeners();
-  }
-
-  void decrementProduct(Product product) {
-    final index = _cart.indexWhere((line) => line.product.id == product.id);
-    if (index == -1) {
-      return;
-    }
-
-    final line = _cart[index];
-    if (line.quantity <= 1) {
-      _cart.removeAt(index);
-    } else {
-      _cart[index] = line.copyWith(quantity: line.quantity - 1);
-    }
-    notifyListeners();
-  }
-
-  void clearCart() {
-    _cart.clear();
+  void _notifyChanged() {
     notifyListeners();
   }
 }

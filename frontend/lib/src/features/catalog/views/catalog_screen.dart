@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
+import '../../../data/models/pos_user.dart';
 import '../../../shared/app_navigation_drawer.dart';
 import '../view_models/catalog_view_model.dart';
 import 'product_form.dart';
@@ -10,11 +11,19 @@ class CatalogScreen extends StatelessWidget {
   const CatalogScreen({
     super.key,
     required this.viewModel,
+    required this.currentUser,
     required this.onOpenPos,
+    required this.onOpenRegisterSessions,
+    required this.onLogout,
+    this.onOpenUsers,
   });
 
   final CatalogViewModel viewModel;
+  final PosUser currentUser;
   final VoidCallback onOpenPos;
+  final VoidCallback onOpenRegisterSessions;
+  final VoidCallback? onOpenUsers;
+  final VoidCallback onLogout;
 
   @override
   Widget build(BuildContext context) {
@@ -26,8 +35,12 @@ class CatalogScreen extends StatelessWidget {
         return Scaffold(
           drawer: AppNavigationDrawer(
             selectedDestination: AppNavigationDestination.catalog,
+            currentUser: currentUser,
             onOpenPos: onOpenPos,
             onOpenCatalog: () {},
+            onOpenRegisterSessions: onOpenRegisterSessions,
+            onOpenUsers: onOpenUsers,
+            onLogout: onLogout,
           ),
           appBar: AppBar(
             leading: Builder(

@@ -30,6 +30,8 @@ packages = [
   "pointy",
   "apps",
   "apps.core",
+  "apps.core.management",
+  "apps.core.management.commands",
   "apps.catalog",
   "apps.catalog.migrations",
   "apps.inventory",

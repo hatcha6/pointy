@@ -26,6 +26,32 @@
   "navigationMenuSubtitle": "تنقل سريع بين شاشات نقطة البيع",
   "posDrawerLabel": "شاشة البيع",
   "catalogDrawerLabel": "المنتجات",
+  "registerSessionsDrawerLabel": "جلسات الدرج",
+  "usersDrawerLabel": "المستخدمون",
+  "logoutButton": "تسجيل الخروج",
+  "authCheckingSession": "جار فحص الجلسة...",
+  "loginTitle": "تسجيل الدخول",
+  "usernameLabel": "اسم المستخدم",
+  "passwordLabel": "كلمة المرور",
+  "loginButton": "دخول",
+  "loggingInButton": "جار الدخول...",
+  "loginError": "تعذر تسجيل الدخول. تحقق من اسم المستخدم وكلمة المرور.",
+  "managerRoleLabel": "مدير",
+  "cashierRoleLabel": "كاشير",
+  "usersManagementTitle": "إدارة المستخدمين",
+  "refreshUsersTooltip": "تحديث المستخدمين",
+  "addUserButton": "إضافة مستخدم",
+  "userCreateTitle": "مستخدم جديد",
+  "displayNameLabel": "الاسم المعروض",
+  "emailLabel": "البريد الإلكتروني",
+  "roleLabel": "الدور",
+  "activeUserLabel": "مستخدم نشط",
+  "createUserButton": "إنشاء المستخدم",
+  "createUserError": "تعذر إنشاء المستخدم. راجع البيانات وحاول مرة أخرى.",
+  "usersLoadError": "تعذر تحميل المستخدمين.",
+  "emptyUsers": "لا يوجد مستخدمون بعد.",
+  "userStatusActive": "نشط",
+  "userStatusInactive": "متوقف",
   "catalogTitle": "المنتجات",
   "catalogManagementTitle": "إدارة المنتجات",
   "backTooltip": "رجوع",
@@ -75,6 +101,18 @@
       }
     }
   },
+  "checkoutInProgressButton": "جار الدفع...",
+  "saleCheckoutSuccess": "تم تسجيل البيع.",
+  "saleCheckoutSuccessWithReceipt": "تم تسجيل البيع. رقم الإيصال: {receiptNumber}",
+  "@saleCheckoutSuccessWithReceipt": {
+    "description": "Checkout success message with the receipt number.",
+    "placeholders": {
+      "receiptNumber": {
+        "type": "String"
+      }
+    }
+  },
+  "saleCheckoutError": "تعذر تسجيل البيع. تحقق من جلسة الدرج وحاول مرة أخرى.",
   "unitPriceEach": "{amount} للقطعة",
   "@unitPriceEach": {
     "description": "Unit price label for a cart item.",
@@ -87,5 +125,117 @@
   "removeOneTooltip": "إنقاص عنصر",
   "addOneTooltip": "إضافة عنصر",
   "subtotal": "المجموع الفرعي",
-  "total": "الإجمالي"
+  "total": "الإجمالي",
+  "registerSessionGateTitle": "جلسة الدرج",
+  "checkingRegisterSession": "جار فحص جلسة الدرج...",
+  "noOpenRegisterSession": "لا توجد جلسة درج مفتوحة. ابدأ جلسة جديدة قبل البيع.",
+  "registerSessionLoadError": "تعذر الاتصال بجلسة الدرج. حاول مرة أخرى.",
+  "retryRegisterSessionButton": "إعادة المحاولة",
+  "openingCashInputLabel": "نقدية الافتتاح",
+  "startRegisterSessionButton": "بدء الجلسة",
+  "startingRegisterSessionButton": "جار بدء الجلسة...",
+  "resumeRegisterSessionTitle": "جلسة {sessionNumber}",
+  "@resumeRegisterSessionTitle": {
+    "description": "Title for an open register session that can be resumed.",
+    "placeholders": {
+      "sessionNumber": {
+        "type": "String"
+      }
+    }
+  },
+  "registerSessionOpeningCash": "نقدية الافتتاح: {amount}",
+  "@registerSessionOpeningCash": {
+    "description": "Opening cash amount for a register session.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "resumeRegisterSessionButton": "متابعة البيع",
+  "activeRegisterSessionLabel": "جلسة {sessionNumber}",
+  "@activeRegisterSessionLabel": {
+    "description": "Compact app bar label for the active register session.",
+    "placeholders": {
+      "sessionNumber": {
+        "type": "String"
+      }
+    }
+  },
+  "closeRegisterSessionTooltip": "إغلاق جلسة الدرج",
+  "closeRegisterSessionTitle": "إغلاق جلسة الدرج",
+  "closingCashInputLabel": "النقد عند الإغلاق",
+  "denominationCountLabel": "عدد فئة {denomination}",
+  "@denominationCountLabel": {
+    "description": "Label for a denomination count input.",
+    "placeholders": {
+      "denomination": {
+        "type": "String"
+      }
+    }
+  },
+  "cancelButton": "إلغاء",
+  "closeRegisterSessionButton": "إغلاق الجلسة",
+  "closingRegisterSessionButton": "جار الإغلاق...",
+  "closeRegisterSessionError": "تعذر إغلاق جلسة الدرج. راجع القيم وحاول مرة أخرى.",
+  "registerSessionHistoryTitle": "سجل جلسات الدرج",
+  "refreshRegisterSessionsTooltip": "تحديث سجل الجلسات",
+  "registerSessionsListTitle": "جلساتك",
+  "registerSessionHistoryLoadError": "تعذر تحميل سجل الجلسات.",
+  "emptyRegisterSessionHistory": "لا توجد جلسات درج مسجلة بعد.",
+  "registerSessionStatusOpen": "مفتوحة",
+  "registerSessionStatusClosed": "مغلقة",
+  "sessionSalesPlaceholderTitle": "مبيعات الجلسة",
+  "selectRegisterSessionPrompt": "اختر جلسة درج لعرض مبيعاتها.",
+  "sessionSalesTitle": "مبيعات جلسة {sessionNumber}",
+  "@sessionSalesTitle": {
+    "description": "Title for sales linked to a register session.",
+    "placeholders": {
+      "sessionNumber": {
+        "type": "String"
+      }
+    }
+  },
+  "sessionSalesLoadError": "تعذر تحميل مبيعات هذه الجلسة.",
+  "emptySessionSales": "لا توجد مبيعات مسجلة في هذه الجلسة.",
+  "saleReceiptFallback": "بدون رقم",
+  "saleReceiptTitle": "إيصال {receiptNumber}",
+  "@saleReceiptTitle": {
+    "description": "Sale receipt title.",
+    "placeholders": {
+      "receiptNumber": {
+        "type": "String"
+      }
+    }
+  },
+  "saleLineCount": "{count, plural, =0{لا توجد عناصر} =1{عنصر واحد} =2{عنصران} other{{count} عناصر}}",
+  "@saleLineCount": {
+    "description": "Number of sale lines.",
+    "placeholders": {
+      "count": {
+        "type": "num"
+      }
+    }
+  },
+  "saleProductFallback": "منتج رقم {productId}",
+  "@saleProductFallback": {
+    "description": "Fallback product label in a sale line.",
+    "placeholders": {
+      "productId": {
+        "type": "int"
+      }
+    }
+  },
+  "saleLineQuantityAndPrice": "{quantity} × {unitPrice}",
+  "@saleLineQuantityAndPrice": {
+    "description": "Sale line quantity and unit price.",
+    "placeholders": {
+      "quantity": {
+        "type": "int"
+      },
+      "unitPrice": {
+        "type": "String"
+      }
+    }
+  }
 }

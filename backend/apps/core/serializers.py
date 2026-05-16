@@ -1,0 +1,101 @@
+from django.contrib.auth import authenticate, get_user_model
+from django.contrib.auth.models import Group
+from rest_framework import serializers
+
+from .roles import CASHIER_GROUP, MANAGER_GROUP, ROLE_GROUPS
+
+
+class UserSerializer(serializers.ModelSerializer):
+    role = serializers.SerializerMethodField()
+
+    class Meta:
+        model = get_user_model()
+        fields = ["id", "username", "email", "first_name", "last_name", "is_active", "role"]
+        read_only_fields = ["id", "role"]
+
+    def get_role(self, user):
+        if user.is_superuser or user.groups.filter(name=MANAGER_GROUP).exists():
+            return MANAGER_GROUP
+        if user.groups.filter(name=CASHIER_GROUP).exists():
+            return CASHIER_GROUP
+        return None
+
+
+class LoginSerializer(serializers.Serializer):
+    username = serializers.CharField()
+    password = serializers.CharField(trim_whitespace=False, write_only=True)
+
+    def validate(self, attrs):
+        request = self.context.get("request")
+        user = authenticate(
+            request=request,
+            username=attrs["username"],
+            password=attrs["password"],
+        )
+        if user is None:
+            raise serializers.ValidationError({"detail": "Invalid username or password."})
+        if not user.is_active:
+            raise serializers.ValidationError({"detail": "This user account is disabled."})
+        attrs["user"] = user
+        return attrs
+
+
+class PosUserSerializer(serializers.ModelSerializer):
+    role = serializers.ChoiceField(choices=ROLE_GROUPS, write_only=True)
+    assigned_role = serializers.SerializerMethodField(read_only=True)
+    password = serializers.CharField(write_only=True, required=False, allow_blank=False)
+
+    class Meta:
+        model = get_user_model()
+        fields = [
+            "id",
+            "username",
+            "email",
+            "first_name",
+            "last_name",
+            "is_active",
+            "role",
+            "assigned_role",
+            "password",
+        ]
+        read_only_fields = ["id", "assigned_role"]
+        extra_kwargs = {"is_active": {"required": False}}
+
+    def get_assigned_role(self, user):
+        if user.groups.filter(name=MANAGER_GROUP).exists():
+            return MANAGER_GROUP
+        if user.groups.filter(name=CASHIER_GROUP).exists():
+            return CASHIER_GROUP
+        return None
+
+    def validate_username(self, value):
+        return value.strip()
+
+    def validate(self, attrs):
+        if self.instance is None and not attrs.get("password"):
+            raise serializers.ValidationError({"password": "Password is required."})
+        return attrs
+
+    def _assign_role(self, user, role):
+        role_groups = Group.objects.filter(name__in=ROLE_GROUPS)
+        user.groups.remove(*role_groups)
+        user.groups.add(Group.objects.get(name=role))
+
+    def create(self, validated_data):
+        role = validated_data.pop("role")
+        password = validated_data.pop("password")
+        user = get_user_model().objects.create_user(password=password, **validated_data)
+        self._assign_role(user, role)
+        return user
+
+    def update(self, instance, validated_data):
+        role = validated_data.pop("role", None)
+        password = validated_data.pop("password", None)
+        for field, value in validated_data.items():
+            setattr(instance, field, value)
+        if password:
+            instance.set_password(password)
+        instance.save()
+        if role:
+            self._assign_role(instance, role)
+        return instance

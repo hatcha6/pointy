@@ -78,6 +78,86 @@ class AppLocalizationsAr extends AppLocalizations {
   String get catalogDrawerLabel => 'المنتجات';
 
   @override
+  String get registerSessionsDrawerLabel => 'جلسات الدرج';
+
+  @override
+  String get usersDrawerLabel => 'المستخدمون';
+
+  @override
+  String get logoutButton => 'تسجيل الخروج';
+
+  @override
+  String get authCheckingSession => 'جار فحص الجلسة...';
+
+  @override
+  String get loginTitle => 'تسجيل الدخول';
+
+  @override
+  String get usernameLabel => 'اسم المستخدم';
+
+  @override
+  String get passwordLabel => 'كلمة المرور';
+
+  @override
+  String get loginButton => 'دخول';
+
+  @override
+  String get loggingInButton => 'جار الدخول...';
+
+  @override
+  String get loginError =>
+      'تعذر تسجيل الدخول. تحقق من اسم المستخدم وكلمة المرور.';
+
+  @override
+  String get managerRoleLabel => 'مدير';
+
+  @override
+  String get cashierRoleLabel => 'كاشير';
+
+  @override
+  String get usersManagementTitle => 'إدارة المستخدمين';
+
+  @override
+  String get refreshUsersTooltip => 'تحديث المستخدمين';
+
+  @override
+  String get addUserButton => 'إضافة مستخدم';
+
+  @override
+  String get userCreateTitle => 'مستخدم جديد';
+
+  @override
+  String get displayNameLabel => 'الاسم المعروض';
+
+  @override
+  String get emailLabel => 'البريد الإلكتروني';
+
+  @override
+  String get roleLabel => 'الدور';
+
+  @override
+  String get activeUserLabel => 'مستخدم نشط';
+
+  @override
+  String get createUserButton => 'إنشاء المستخدم';
+
+  @override
+  String get createUserError =>
+      'تعذر إنشاء المستخدم. راجع البيانات وحاول مرة أخرى.';
+
+  @override
+  String get usersLoadError => 'تعذر تحميل المستخدمين.';
+
+  @override
+  String get emptyUsers => 'لا يوجد مستخدمون بعد.';
+
+  @override
+  String get userStatusActive => 'نشط';
+
+  @override
+  String get userStatusInactive => 'متوقف';
+
+  @override
   String get catalogTitle => 'المنتجات';
 
   @override
@@ -205,6 +285,21 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
+  String get checkoutInProgressButton => 'جار الدفع...';
+
+  @override
+  String get saleCheckoutSuccess => 'تم تسجيل البيع.';
+
+  @override
+  String saleCheckoutSuccessWithReceipt(String receiptNumber) {
+    return 'تم تسجيل البيع. رقم الإيصال: $receiptNumber';
+  }
+
+  @override
+  String get saleCheckoutError =>
+      'تعذر تسجيل البيع. تحقق من جلسة الدرج وحاول مرة أخرى.';
+
+  @override
   String unitPriceEach(String amount) {
     return '$amount للقطعة';
   }
@@ -220,4 +315,144 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get total => 'الإجمالي';
+
+  @override
+  String get registerSessionGateTitle => 'جلسة الدرج';
+
+  @override
+  String get checkingRegisterSession => 'جار فحص جلسة الدرج...';
+
+  @override
+  String get noOpenRegisterSession =>
+      'لا توجد جلسة درج مفتوحة. ابدأ جلسة جديدة قبل البيع.';
+
+  @override
+  String get registerSessionLoadError =>
+      'تعذر الاتصال بجلسة الدرج. حاول مرة أخرى.';
+
+  @override
+  String get retryRegisterSessionButton => 'إعادة المحاولة';
+
+  @override
+  String get openingCashInputLabel => 'نقدية الافتتاح';
+
+  @override
+  String get startRegisterSessionButton => 'بدء الجلسة';
+
+  @override
+  String get startingRegisterSessionButton => 'جار بدء الجلسة...';
+
+  @override
+  String resumeRegisterSessionTitle(String sessionNumber) {
+    return 'جلسة $sessionNumber';
+  }
+
+  @override
+  String registerSessionOpeningCash(String amount) {
+    return 'نقدية الافتتاح: $amount';
+  }
+
+  @override
+  String get resumeRegisterSessionButton => 'متابعة البيع';
+
+  @override
+  String activeRegisterSessionLabel(String sessionNumber) {
+    return 'جلسة $sessionNumber';
+  }
+
+  @override
+  String get closeRegisterSessionTooltip => 'إغلاق جلسة الدرج';
+
+  @override
+  String get closeRegisterSessionTitle => 'إغلاق جلسة الدرج';
+
+  @override
+  String get closingCashInputLabel => 'النقد عند الإغلاق';
+
+  @override
+  String denominationCountLabel(String denomination) {
+    return 'عدد فئة $denomination';
+  }
+
+  @override
+  String get cancelButton => 'إلغاء';
+
+  @override
+  String get closeRegisterSessionButton => 'إغلاق الجلسة';
+
+  @override
+  String get closingRegisterSessionButton => 'جار الإغلاق...';
+
+  @override
+  String get closeRegisterSessionError =>
+      'تعذر إغلاق جلسة الدرج. راجع القيم وحاول مرة أخرى.';
+
+  @override
+  String get registerSessionHistoryTitle => 'سجل جلسات الدرج';
+
+  @override
+  String get refreshRegisterSessionsTooltip => 'تحديث سجل الجلسات';
+
+  @override
+  String get registerSessionsListTitle => 'جلساتك';
+
+  @override
+  String get registerSessionHistoryLoadError => 'تعذر تحميل سجل الجلسات.';
+
+  @override
+  String get emptyRegisterSessionHistory => 'لا توجد جلسات درج مسجلة بعد.';
+
+  @override
+  String get registerSessionStatusOpen => 'مفتوحة';
+
+  @override
+  String get registerSessionStatusClosed => 'مغلقة';
+
+  @override
+  String get sessionSalesPlaceholderTitle => 'مبيعات الجلسة';
+
+  @override
+  String get selectRegisterSessionPrompt => 'اختر جلسة درج لعرض مبيعاتها.';
+
+  @override
+  String sessionSalesTitle(String sessionNumber) {
+    return 'مبيعات جلسة $sessionNumber';
+  }
+
+  @override
+  String get sessionSalesLoadError => 'تعذر تحميل مبيعات هذه الجلسة.';
+
+  @override
+  String get emptySessionSales => 'لا توجد مبيعات مسجلة في هذه الجلسة.';
+
+  @override
+  String get saleReceiptFallback => 'بدون رقم';
+
+  @override
+  String saleReceiptTitle(String receiptNumber) {
+    return 'إيصال $receiptNumber';
+  }
+
+  @override
+  String saleLineCount(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count عناصر',
+      two: 'عنصران',
+      one: 'عنصر واحد',
+      zero: 'لا توجد عناصر',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String saleProductFallback(int productId) {
+    return 'منتج رقم $productId';
+  }
+
+  @override
+  String saleLineQuantityAndPrice(int quantity, String unitPrice) {
+    return '$quantity × $unitPrice';
+  }
 }

@@ -232,6 +232,162 @@ abstract class AppLocalizations {
   /// **'المنتجات'**
   String get catalogDrawerLabel;
 
+  /// No description provided for @registerSessionsDrawerLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'جلسات الدرج'**
+  String get registerSessionsDrawerLabel;
+
+  /// No description provided for @usersDrawerLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'المستخدمون'**
+  String get usersDrawerLabel;
+
+  /// No description provided for @logoutButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'تسجيل الخروج'**
+  String get logoutButton;
+
+  /// No description provided for @authCheckingSession.
+  ///
+  /// In ar, this message translates to:
+  /// **'جار فحص الجلسة...'**
+  String get authCheckingSession;
+
+  /// No description provided for @loginTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'تسجيل الدخول'**
+  String get loginTitle;
+
+  /// No description provided for @usernameLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'اسم المستخدم'**
+  String get usernameLabel;
+
+  /// No description provided for @passwordLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'كلمة المرور'**
+  String get passwordLabel;
+
+  /// No description provided for @loginButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'دخول'**
+  String get loginButton;
+
+  /// No description provided for @loggingInButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'جار الدخول...'**
+  String get loggingInButton;
+
+  /// No description provided for @loginError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر تسجيل الدخول. تحقق من اسم المستخدم وكلمة المرور.'**
+  String get loginError;
+
+  /// No description provided for @managerRoleLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'مدير'**
+  String get managerRoleLabel;
+
+  /// No description provided for @cashierRoleLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'كاشير'**
+  String get cashierRoleLabel;
+
+  /// No description provided for @usersManagementTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'إدارة المستخدمين'**
+  String get usersManagementTitle;
+
+  /// No description provided for @refreshUsersTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحديث المستخدمين'**
+  String get refreshUsersTooltip;
+
+  /// No description provided for @addUserButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'إضافة مستخدم'**
+  String get addUserButton;
+
+  /// No description provided for @userCreateTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'مستخدم جديد'**
+  String get userCreateTitle;
+
+  /// No description provided for @displayNameLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الاسم المعروض'**
+  String get displayNameLabel;
+
+  /// No description provided for @emailLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'البريد الإلكتروني'**
+  String get emailLabel;
+
+  /// No description provided for @roleLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الدور'**
+  String get roleLabel;
+
+  /// No description provided for @activeUserLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'مستخدم نشط'**
+  String get activeUserLabel;
+
+  /// No description provided for @createUserButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'إنشاء المستخدم'**
+  String get createUserButton;
+
+  /// No description provided for @createUserError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر إنشاء المستخدم. راجع البيانات وحاول مرة أخرى.'**
+  String get createUserError;
+
+  /// No description provided for @usersLoadError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر تحميل المستخدمين.'**
+  String get usersLoadError;
+
+  /// No description provided for @emptyUsers.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا يوجد مستخدمون بعد.'**
+  String get emptyUsers;
+
+  /// No description provided for @userStatusActive.
+  ///
+  /// In ar, this message translates to:
+  /// **'نشط'**
+  String get userStatusActive;
+
+  /// No description provided for @userStatusInactive.
+  ///
+  /// In ar, this message translates to:
+  /// **'متوقف'**
+  String get userStatusInactive;
+
   /// No description provided for @catalogTitle.
   ///
   /// In ar, this message translates to:
@@ -478,6 +634,30 @@ abstract class AppLocalizations {
   /// **'ادفع {amount}'**
   String payAmount(String amount);
 
+  /// No description provided for @checkoutInProgressButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'جار الدفع...'**
+  String get checkoutInProgressButton;
+
+  /// No description provided for @saleCheckoutSuccess.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم تسجيل البيع.'**
+  String get saleCheckoutSuccess;
+
+  /// Checkout success message with the receipt number.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم تسجيل البيع. رقم الإيصال: {receiptNumber}'**
+  String saleCheckoutSuccessWithReceipt(String receiptNumber);
+
+  /// No description provided for @saleCheckoutError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر تسجيل البيع. تحقق من جلسة الدرج وحاول مرة أخرى.'**
+  String get saleCheckoutError;
+
   /// Unit price label for a cart item.
   ///
   /// In ar, this message translates to:
@@ -507,6 +687,228 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'الإجمالي'**
   String get total;
+
+  /// No description provided for @registerSessionGateTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'جلسة الدرج'**
+  String get registerSessionGateTitle;
+
+  /// No description provided for @checkingRegisterSession.
+  ///
+  /// In ar, this message translates to:
+  /// **'جار فحص جلسة الدرج...'**
+  String get checkingRegisterSession;
+
+  /// No description provided for @noOpenRegisterSession.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد جلسة درج مفتوحة. ابدأ جلسة جديدة قبل البيع.'**
+  String get noOpenRegisterSession;
+
+  /// No description provided for @registerSessionLoadError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر الاتصال بجلسة الدرج. حاول مرة أخرى.'**
+  String get registerSessionLoadError;
+
+  /// No description provided for @retryRegisterSessionButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'إعادة المحاولة'**
+  String get retryRegisterSessionButton;
+
+  /// No description provided for @openingCashInputLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'نقدية الافتتاح'**
+  String get openingCashInputLabel;
+
+  /// No description provided for @startRegisterSessionButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'بدء الجلسة'**
+  String get startRegisterSessionButton;
+
+  /// No description provided for @startingRegisterSessionButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'جار بدء الجلسة...'**
+  String get startingRegisterSessionButton;
+
+  /// Title for an open register session that can be resumed.
+  ///
+  /// In ar, this message translates to:
+  /// **'جلسة {sessionNumber}'**
+  String resumeRegisterSessionTitle(String sessionNumber);
+
+  /// Opening cash amount for a register session.
+  ///
+  /// In ar, this message translates to:
+  /// **'نقدية الافتتاح: {amount}'**
+  String registerSessionOpeningCash(String amount);
+
+  /// No description provided for @resumeRegisterSessionButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'متابعة البيع'**
+  String get resumeRegisterSessionButton;
+
+  /// Compact app bar label for the active register session.
+  ///
+  /// In ar, this message translates to:
+  /// **'جلسة {sessionNumber}'**
+  String activeRegisterSessionLabel(String sessionNumber);
+
+  /// No description provided for @closeRegisterSessionTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'إغلاق جلسة الدرج'**
+  String get closeRegisterSessionTooltip;
+
+  /// No description provided for @closeRegisterSessionTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'إغلاق جلسة الدرج'**
+  String get closeRegisterSessionTitle;
+
+  /// No description provided for @closingCashInputLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'النقد عند الإغلاق'**
+  String get closingCashInputLabel;
+
+  /// Label for a denomination count input.
+  ///
+  /// In ar, this message translates to:
+  /// **'عدد فئة {denomination}'**
+  String denominationCountLabel(String denomination);
+
+  /// No description provided for @cancelButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'إلغاء'**
+  String get cancelButton;
+
+  /// No description provided for @closeRegisterSessionButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'إغلاق الجلسة'**
+  String get closeRegisterSessionButton;
+
+  /// No description provided for @closingRegisterSessionButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'جار الإغلاق...'**
+  String get closingRegisterSessionButton;
+
+  /// No description provided for @closeRegisterSessionError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر إغلاق جلسة الدرج. راجع القيم وحاول مرة أخرى.'**
+  String get closeRegisterSessionError;
+
+  /// No description provided for @registerSessionHistoryTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'سجل جلسات الدرج'**
+  String get registerSessionHistoryTitle;
+
+  /// No description provided for @refreshRegisterSessionsTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحديث سجل الجلسات'**
+  String get refreshRegisterSessionsTooltip;
+
+  /// No description provided for @registerSessionsListTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'جلساتك'**
+  String get registerSessionsListTitle;
+
+  /// No description provided for @registerSessionHistoryLoadError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر تحميل سجل الجلسات.'**
+  String get registerSessionHistoryLoadError;
+
+  /// No description provided for @emptyRegisterSessionHistory.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد جلسات درج مسجلة بعد.'**
+  String get emptyRegisterSessionHistory;
+
+  /// No description provided for @registerSessionStatusOpen.
+  ///
+  /// In ar, this message translates to:
+  /// **'مفتوحة'**
+  String get registerSessionStatusOpen;
+
+  /// No description provided for @registerSessionStatusClosed.
+  ///
+  /// In ar, this message translates to:
+  /// **'مغلقة'**
+  String get registerSessionStatusClosed;
+
+  /// No description provided for @sessionSalesPlaceholderTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'مبيعات الجلسة'**
+  String get sessionSalesPlaceholderTitle;
+
+  /// No description provided for @selectRegisterSessionPrompt.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر جلسة درج لعرض مبيعاتها.'**
+  String get selectRegisterSessionPrompt;
+
+  /// Title for sales linked to a register session.
+  ///
+  /// In ar, this message translates to:
+  /// **'مبيعات جلسة {sessionNumber}'**
+  String sessionSalesTitle(String sessionNumber);
+
+  /// No description provided for @sessionSalesLoadError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر تحميل مبيعات هذه الجلسة.'**
+  String get sessionSalesLoadError;
+
+  /// No description provided for @emptySessionSales.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد مبيعات مسجلة في هذه الجلسة.'**
+  String get emptySessionSales;
+
+  /// No description provided for @saleReceiptFallback.
+  ///
+  /// In ar, this message translates to:
+  /// **'بدون رقم'**
+  String get saleReceiptFallback;
+
+  /// Sale receipt title.
+  ///
+  /// In ar, this message translates to:
+  /// **'إيصال {receiptNumber}'**
+  String saleReceiptTitle(String receiptNumber);
+
+  /// Number of sale lines.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, =0{لا توجد عناصر} =1{عنصر واحد} =2{عنصران} other{{count} عناصر}}'**
+  String saleLineCount(num count);
+
+  /// Fallback product label in a sale line.
+  ///
+  /// In ar, this message translates to:
+  /// **'منتج رقم {productId}'**
+  String saleProductFallback(int productId);
+
+  /// Sale line quantity and unit price.
+  ///
+  /// In ar, this message translates to:
+  /// **'{quantity} × {unitPrice}'**
+  String saleLineQuantityAndPrice(int quantity, String unitPrice);
 }
 
 class _AppLocalizationsDelegate

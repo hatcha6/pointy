@@ -8,6 +8,8 @@ env = environ.Env(
     DJANGO_DEBUG=(bool, False),
     DJANGO_ALLOWED_HOSTS=(list, ["localhost", "127.0.0.1"]),
     CORS_ALLOWED_ORIGINS=(list, []),
+    CSRF_TRUSTED_ORIGINS=(list, ["http://localhost:8080", "http://127.0.0.1:8080"]),
+    POINTY_BOOTSTRAP_ADMIN_ENABLED=(bool, True),
 )
 environ.Env.read_env(BASE_DIR / ".env")
 
@@ -97,9 +99,22 @@ CELERY_RESULT_BACKEND = REDIS_URL
 CELERY_TASK_ALWAYS_EAGER = False
 
 CORS_ALLOWED_ORIGINS = env("CORS_ALLOWED_ORIGINS")
+CORS_ALLOW_CREDENTIALS = True
+CSRF_TRUSTED_ORIGINS = env("CSRF_TRUSTED_ORIGINS")
+POINTY_BOOTSTRAP_ADMIN_ENABLED = env("POINTY_BOOTSTRAP_ADMIN_ENABLED")
+POINTY_BOOTSTRAP_ADMIN_USERNAME = env("POINTY_BOOTSTRAP_ADMIN_USERNAME", default="admin")
+POINTY_BOOTSTRAP_ADMIN_EMAIL = env("POINTY_BOOTSTRAP_ADMIN_EMAIL", default="")
+POINTY_BOOTSTRAP_ADMIN_PASSWORD = env("POINTY_BOOTSTRAP_ADMIN_PASSWORD", default=None)
 
 REST_FRAMEWORK = {
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+    "DEFAULT_AUTHENTICATION_CLASSES": [
+        "rest_framework.authentication.SessionAuthentication",
+        "rest_framework.authentication.BasicAuthentication",
+    ],
+    "DEFAULT_PERMISSION_CLASSES": [
+        "rest_framework.permissions.IsAuthenticated",
+    ],
     "DEFAULT_FILTER_BACKENDS": [
         "django_filters.rest_framework.DjangoFilterBackend",
         "rest_framework.filters.SearchFilter",

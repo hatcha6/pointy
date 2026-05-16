@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-class InfiniteScrollGrid<T> extends StatefulWidget {
-  const InfiniteScrollGrid({
+class InfiniteScrollView<T> extends StatefulWidget {
+  const InfiniteScrollView({
     super.key,
     required this.items,
     required this.itemBuilder,
@@ -10,7 +10,7 @@ class InfiniteScrollGrid<T> extends StatefulWidget {
     required this.isLoadingInitial,
     required this.isLoadingMore,
     required this.emptyBuilder,
-    required this.gridDelegate,
+    required this.sliverBuilder,
     this.padding = EdgeInsets.zero,
     this.loadMoreExtent = 480,
   });
@@ -22,15 +22,16 @@ class InfiniteScrollGrid<T> extends StatefulWidget {
   final bool isLoadingInitial;
   final bool isLoadingMore;
   final WidgetBuilder emptyBuilder;
-  final SliverGridDelegate gridDelegate;
+  final Widget Function(BuildContext context, SliverChildDelegate delegate)
+  sliverBuilder;
   final EdgeInsetsGeometry padding;
   final double loadMoreExtent;
 
   @override
-  State<InfiniteScrollGrid<T>> createState() => _InfiniteScrollGridState<T>();
+  State<InfiniteScrollView<T>> createState() => _InfiniteScrollViewState<T>();
 }
 
-class _InfiniteScrollGridState<T> extends State<InfiniteScrollGrid<T>> {
+class _InfiniteScrollViewState<T> extends State<InfiniteScrollView<T>> {
   late final ScrollController _controller;
   bool _loadInFlight = false;
 
@@ -42,7 +43,7 @@ class _InfiniteScrollGridState<T> extends State<InfiniteScrollGrid<T>> {
   }
 
   @override
-  void didUpdateWidget(covariant InfiniteScrollGrid<T> oldWidget) {
+  void didUpdateWidget(covariant InfiniteScrollView<T> oldWidget) {
     super.didUpdateWidget(oldWidget);
     WidgetsBinding.instance.addPostFrameCallback((_) => _maybeLoadMore());
   }
@@ -87,18 +88,17 @@ class _InfiniteScrollGridState<T> extends State<InfiniteScrollGrid<T>> {
       return widget.emptyBuilder(context);
     }
 
+    final delegate = SliverChildBuilderDelegate(
+      (context, index) => widget.itemBuilder(context, widget.items[index]),
+      childCount: widget.items.length,
+    );
+
     return CustomScrollView(
       controller: _controller,
       slivers: [
         SliverPadding(
           padding: widget.padding,
-          sliver: SliverGrid.builder(
-            gridDelegate: widget.gridDelegate,
-            itemCount: widget.items.length,
-            itemBuilder: (context, index) {
-              return widget.itemBuilder(context, widget.items[index]);
-            },
-          ),
+          sliver: widget.sliverBuilder(context, delegate),
         ),
         if (widget.isLoadingMore)
           const SliverToBoxAdapter(
@@ -108,6 +108,112 @@ class _InfiniteScrollGridState<T> extends State<InfiniteScrollGrid<T>> {
             ),
           ),
       ],
+    );
+  }
+}
+
+class InfiniteScrollGrid<T> extends StatefulWidget {
+  const InfiniteScrollGrid({
+    super.key,
+    required this.items,
+    required this.itemBuilder,
+    required this.onLoadMore,
+    required this.hasMore,
+    required this.isLoadingInitial,
+    required this.isLoadingMore,
+    required this.emptyBuilder,
+    required this.gridDelegate,
+    this.padding = EdgeInsets.zero,
+    this.loadMoreExtent = 480,
+  });
+
+  final List<T> items;
+  final Widget Function(BuildContext context, T item) itemBuilder;
+  final Future<void> Function() onLoadMore;
+  final bool hasMore;
+  final bool isLoadingInitial;
+  final bool isLoadingMore;
+  final WidgetBuilder emptyBuilder;
+  final SliverGridDelegate gridDelegate;
+  final EdgeInsetsGeometry padding;
+  final double loadMoreExtent;
+
+  @override
+  State<InfiniteScrollGrid<T>> createState() => _InfiniteScrollGridState<T>();
+}
+
+class _InfiniteScrollGridState<T> extends State<InfiniteScrollGrid<T>> {
+  @override
+  Widget build(BuildContext context) {
+    return InfiniteScrollView<T>(
+      items: widget.items,
+      itemBuilder: widget.itemBuilder,
+      onLoadMore: widget.onLoadMore,
+      hasMore: widget.hasMore,
+      isLoadingInitial: widget.isLoadingInitial,
+      isLoadingMore: widget.isLoadingMore,
+      emptyBuilder: widget.emptyBuilder,
+      padding: widget.padding,
+      loadMoreExtent: widget.loadMoreExtent,
+      sliverBuilder: (context, delegate) {
+        return SliverGrid(
+          gridDelegate: widget.gridDelegate,
+          delegate: delegate,
+        );
+      },
+    );
+  }
+}
+
+class InfiniteScrollList<T> extends StatelessWidget {
+  const InfiniteScrollList({
+    super.key,
+    required this.items,
+    required this.itemBuilder,
+    required this.onLoadMore,
+    required this.hasMore,
+    required this.isLoadingInitial,
+    required this.isLoadingMore,
+    required this.emptyBuilder,
+    this.separatorBuilder,
+    this.padding = EdgeInsets.zero,
+    this.loadMoreExtent = 480,
+  });
+
+  final List<T> items;
+  final Widget Function(BuildContext context, T item) itemBuilder;
+  final IndexedWidgetBuilder? separatorBuilder;
+  final Future<void> Function() onLoadMore;
+  final bool hasMore;
+  final bool isLoadingInitial;
+  final bool isLoadingMore;
+  final WidgetBuilder emptyBuilder;
+  final EdgeInsetsGeometry padding;
+  final double loadMoreExtent;
+
+  @override
+  Widget build(BuildContext context) {
+    return InfiniteScrollView<T>(
+      items: items,
+      itemBuilder: itemBuilder,
+      onLoadMore: onLoadMore,
+      hasMore: hasMore,
+      isLoadingInitial: isLoadingInitial,
+      isLoadingMore: isLoadingMore,
+      emptyBuilder: emptyBuilder,
+      padding: padding,
+      loadMoreExtent: loadMoreExtent,
+      sliverBuilder: (context, delegate) {
+        if (separatorBuilder == null) {
+          return SliverList(delegate: delegate);
+        }
+
+        return SliverList.separated(
+          itemCount: items.length,
+          itemBuilder: (context, index) => itemBuilder(context, items[index]),
+          separatorBuilder: separatorBuilder!,
+        );
+      },
     );
   }
 }
