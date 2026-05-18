@@ -2,10 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../core/authorization.dart';
+import '../../../data/models/product.dart';
 import '../../../data/models/pos_user.dart';
 import '../../../data/repositories/inventory_repository.dart';
 import '../../../shared/app_navigation_drawer.dart';
 import '../../../shared/authorization_guards.dart';
+import '../../../shared/barcode/camera_barcode_scanner_sheet.dart';
+import '../../../shared/barcode/barcode_scan_listener.dart';
 import '../view_models/catalog_view_model.dart';
 import 'product_form.dart';
 import 'product_list.dart';
@@ -82,10 +85,19 @@ class CatalogScreen extends StatelessWidget {
           body: SafeArea(
             child: CatalogManagementGuard(
               capabilities: capabilities,
-              child: ProductList(
-                viewModel: viewModel,
-                inventoryRepository: inventoryRepository,
-                capabilities: capabilities,
+              child: BarcodeScanListener(
+                onBarcodeScanned: (barcode) {
+                  _openProductForBarcode(context, barcode);
+                },
+                child: ProductList(
+                  viewModel: viewModel,
+                  inventoryRepository: inventoryRepository,
+                  capabilities: capabilities,
+                  onBarcodeSubmitted: (barcode) {
+                    return _openProductForBarcode(context, barcode);
+                  },
+                  onOpenCameraScanner: () => _openCameraScanner(context),
+                ),
               ),
             ),
           ),
@@ -100,6 +112,70 @@ class CatalogScreen extends StatelessWidget {
         );
       },
     );
+  }
+
+  Future<bool> _openProductForBarcode(
+    BuildContext context,
+    String barcode,
+  ) async {
+    final l10n = AppLocalizations.of(context)!;
+    final messenger = ScaffoldMessenger.of(context);
+    final normalizedBarcode = barcode.trim();
+    if (normalizedBarcode.isEmpty) {
+      return false;
+    }
+
+    final outcome = await viewModel.findProductByBarcode(normalizedBarcode);
+    if (!context.mounted) {
+      return false;
+    }
+
+    switch (outcome.status) {
+      case CatalogBarcodeLookupStatus.found:
+        await openProductDetails(
+          context,
+          product: outcome.product!,
+          inventoryRepository: inventoryRepository,
+          capabilities: capabilities,
+        );
+        return true;
+      case CatalogBarcodeLookupStatus.notFound:
+        messenger.showSnackBar(
+          SnackBar(content: Text(l10n.barcodeScanNotFound(normalizedBarcode))),
+        );
+        return false;
+      case CatalogBarcodeLookupStatus.error:
+        messenger.showSnackBar(SnackBar(content: Text(l10n.barcodeScanError)));
+        return false;
+    }
+  }
+
+  Future<void> _openCameraScanner(BuildContext context) async {
+    final entries = await showCameraBarcodeScannerSheet(
+      context,
+      mode: CameraBarcodeScannerMode.single,
+      lookupProduct: _lookupProductByBarcode,
+    );
+    if (entries == null || entries.isEmpty || !context.mounted) {
+      return;
+    }
+    await openProductDetails(
+      context,
+      product: entries.first.product,
+      inventoryRepository: inventoryRepository,
+      capabilities: capabilities,
+    );
+  }
+
+  Future<Product?> _lookupProductByBarcode(String barcode) async {
+    final outcome = await viewModel.findProductByBarcode(barcode);
+    return switch (outcome.status) {
+      CatalogBarcodeLookupStatus.found => outcome.product,
+      CatalogBarcodeLookupStatus.notFound => null,
+      CatalogBarcodeLookupStatus.error => throw Exception(
+        'barcode lookup failed',
+      ),
+    };
   }
 
   Future<void> _showProductForm(BuildContext context) {

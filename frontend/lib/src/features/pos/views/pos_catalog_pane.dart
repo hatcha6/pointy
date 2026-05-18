@@ -2,15 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../core/authorization.dart';
+import '../../../core/result.dart';
+import '../../../data/models/product.dart';
 import '../../../shared/authorization_guards.dart';
-import '../../../shared/barcode/barcode_capture_controller.dart';
-import '../../../shared/barcode/barcode_capture_field.dart';
+import '../../../shared/barcode/camera_barcode_scanner_sheet.dart';
 import '../../../shared/infinite_scroll_grid.dart';
 import '../../../shared/product_query_controls.dart';
 import '../../../shared/product_tile.dart';
 import '../view_models/pos_view_model.dart';
 
-class PosCatalogPane extends StatefulWidget {
+class PosCatalogPane extends StatelessWidget {
   const PosCatalogPane({
     super.key,
     required this.viewModel,
@@ -21,24 +22,8 @@ class PosCatalogPane extends StatefulWidget {
   final AuthorizationCapabilities capabilities;
 
   @override
-  State<PosCatalogPane> createState() => _PosCatalogPaneState();
-}
-
-class _PosCatalogPaneState extends State<PosCatalogPane> {
-  final BarcodeCaptureController _barcodeController =
-      BarcodeCaptureController();
-
-  @override
-  void dispose() {
-    _barcodeController.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final viewModel = widget.viewModel;
-    final capabilities = widget.capabilities;
 
     return Padding(
       padding: const EdgeInsets.all(16),
@@ -70,35 +55,14 @@ class _PosCatalogPaneState extends State<PosCatalogPane> {
               ),
             ),
           const SizedBox(height: 12),
-          CheckoutCapabilityBuilder(
+          _PosProductLookupControls(
+            viewModel: viewModel,
             capabilities: capabilities,
-            builder: (context, canCheckout) {
-              return BarcodeCaptureField(
-                controller: _barcodeController,
-                labelText: l10n.posBarcodeFieldLabel,
-                hintText: l10n.posBarcodeFieldHint,
-                clearTooltip: l10n.clearBarcodeTooltip,
-                focusTooltip: l10n.focusBarcodeTooltip,
-                enabled:
-                    canCheckout &&
-                    !viewModel.isCheckingOut &&
-                    !viewModel.isResolvingBarcode,
-                autofocus: true,
-                onSubmitted: viewModel.addProductByBarcode,
-              );
-            },
           ),
           if (viewModel.barcodeScanStatus != BarcodeScanStatus.idle) ...[
             const SizedBox(height: 8),
             _BarcodeScanStatusLine(viewModel: viewModel),
           ],
-          const SizedBox(height: 12),
-          ProductQueryControls(
-            query: viewModel.query,
-            allowAvailabilityFilter: false,
-            onSearchChanged: viewModel.updateSearch,
-            onQueryChanged: viewModel.applyQuery,
-          ),
           const SizedBox(height: 12),
           Expanded(
             child: InfiniteScrollGrid(
@@ -132,6 +96,82 @@ class _PosCatalogPaneState extends State<PosCatalogPane> {
         ],
       ),
     );
+  }
+}
+
+class _PosProductLookupControls extends StatelessWidget {
+  const _PosProductLookupControls({
+    required this.viewModel,
+    required this.capabilities,
+  });
+
+  final PosViewModel viewModel;
+  final AuthorizationCapabilities capabilities;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+
+    return CheckoutCapabilityBuilder(
+      capabilities: capabilities,
+      builder: (context, canCheckout) {
+        return ProductQueryControls(
+          query: viewModel.query,
+          allowAvailabilityFilter: false,
+          searchHint: l10n.posProductLookupHint,
+          searchFieldKey: const ValueKey('product_lookup_field'),
+          autofocus: true,
+          onSearchChanged: viewModel.updateSearch,
+          onOpenCameraScanner:
+              canCheckout &&
+                  !viewModel.isCheckingOut &&
+                  !viewModel.isResolvingBarcode
+              ? () => _openCameraScanner(context)
+              : null,
+          onSearchSubmitted:
+              canCheckout &&
+                  !viewModel.isCheckingOut &&
+                  !viewModel.isResolvingBarcode
+              ? viewModel.addProductByBarcode
+              : null,
+          onQueryChanged: viewModel.applyQuery,
+        );
+      },
+    );
+  }
+
+  Future<void> _openCameraScanner(BuildContext context) async {
+    final entries = await showCameraBarcodeScannerSheet(
+      context,
+      mode: CameraBarcodeScannerMode.multiple,
+      lookupProduct: _lookupProductByBarcode,
+      enableQuantity: true,
+    );
+    if (entries == null || entries.isEmpty) {
+      return;
+    }
+    if (!context.mounted) {
+      return;
+    }
+    for (final entry in entries) {
+      if (viewModel.isCheckingOut) {
+        return;
+      }
+      for (var count = 0; count < entry.quantity; count += 1) {
+        viewModel.addProduct(entry.product);
+      }
+    }
+  }
+
+  Future<Product?> _lookupProductByBarcode(String barcode) async {
+    final result = await viewModel.catalogRepository.findProductByBarcode(
+      barcode,
+      activeOnly: true,
+    );
+    return switch (result) {
+      Ok<Product?>(:final value) => value,
+      Error<Product?>() => throw Exception('barcode lookup failed'),
+    };
   }
 }
 

@@ -9,14 +9,22 @@ class DebouncedSearchField extends StatefulWidget {
     required this.hintText,
     required this.clearTooltip,
     required this.onChanged,
+    this.onSubmitted,
     this.debounceDuration = const Duration(milliseconds: 350),
+    this.enabled = true,
+    this.autofocus = false,
+    this.fieldKey,
   });
 
   final String value;
   final String hintText;
   final String clearTooltip;
   final ValueChanged<String> onChanged;
+  final FutureOr<bool> Function(String value)? onSubmitted;
   final Duration debounceDuration;
+  final bool enabled;
+  final bool autofocus;
+  final Key? fieldKey;
 
   @override
   State<DebouncedSearchField> createState() => _DebouncedSearchFieldState();
@@ -56,7 +64,10 @@ class _DebouncedSearchFieldState extends State<DebouncedSearchField> {
       borderRadius: BorderRadius.circular(8),
       clipBehavior: Clip.antiAlias,
       child: TextField(
+        key: widget.fieldKey,
         controller: _controller,
+        enabled: widget.enabled,
+        autofocus: widget.autofocus,
         textInputAction: TextInputAction.search,
         decoration: InputDecoration(
           hintText: widget.hintText,
@@ -82,7 +93,7 @@ class _DebouncedSearchFieldState extends State<DebouncedSearchField> {
           ),
         ),
         onChanged: _emitDebounced,
-        onSubmitted: _emitNow,
+        onSubmitted: _emitSubmitted,
       ),
     );
   }
@@ -106,5 +117,27 @@ class _DebouncedSearchFieldState extends State<DebouncedSearchField> {
     setState(() {});
     _debounce?.cancel();
     widget.onChanged(value.trim());
+  }
+
+  Future<void> _emitSubmitted(String value) async {
+    final submittedValue = value.trim();
+    _debounce?.cancel();
+
+    final onSubmitted = widget.onSubmitted;
+    if (onSubmitted == null || submittedValue.isEmpty) {
+      _emitNow(submittedValue);
+      return;
+    }
+
+    final shouldClear = await onSubmitted(submittedValue);
+    if (!mounted) {
+      return;
+    }
+    if (shouldClear) {
+      _controller.clear();
+      _emitNow('');
+    } else {
+      _emitNow(submittedValue);
+    }
   }
 }

@@ -7,6 +7,7 @@
   "refreshCatalogTooltip": "تحديث المنتجات",
   "searchProductsHint": "ابحث باسم المنتج أو الرمز",
   "clearSearchTooltip": "مسح البحث",
+  "openCameraScannerTooltip": "فتح ماسح الكاميرا",
   "openFiltersTooltip": "الفلاتر والترتيب",
   "filtersButtonLabel": "الفلاتر",
   "filtersSheetTitle": "الفلاتر والترتيب",
@@ -258,10 +259,7 @@
   },
   "noBarcode": "لا يوجد باركود",
   "noDescription": "لا يوجد وصف لهذا المنتج",
-  "posBarcodeFieldLabel": "الباركود",
-  "posBarcodeFieldHint": "امسح الباركود أو أدخله ثم اضغط إدخال",
-  "clearBarcodeTooltip": "مسح الباركود",
-  "focusBarcodeTooltip": "تركيز إدخال الباركود",
+  "posProductLookupHint": "ابحث عن منتج أو امسح الباركود",
   "clearBarcodeStatusTooltip": "إخفاء حالة الباركود",
   "barcodeScanResolving": "جار البحث عن الباركود...",
   "barcodeScanAdded": "تمت إضافة {productName}",
@@ -283,6 +281,34 @@
     }
   },
   "barcodeScanError": "تعذر البحث عن الباركود. حاول مرة أخرى.",
+  "cameraScannerSingleTitle": "مسح باركود",
+  "cameraScannerMultipleTitle": "مسح عدة منتجات",
+  "cameraScannerStarting": "جار تشغيل الكاميرا...",
+  "cameraScannerPermissionError": "تعذر تشغيل الكاميرا. تحقق من صلاحية الكاميرا وحاول مرة أخرى.",
+  "cameraScannerResolvingProduct": "جار البحث عن منتج للباركود {barcode}...",
+  "@cameraScannerResolvingProduct": {
+    "description": "Status shown while camera scanner resolves a barcode into a product.",
+    "placeholders": {
+      "barcode": {
+        "type": "String"
+      }
+    }
+  },
+  "cameraScannerScanQuantityLabel": "كمية كل مسح",
+  "cameraScannerEmptyScans": "وجّه الكاميرا نحو الباركود أو رمز QR.",
+  "cameraScannerDoneButton": "اعتماد المسح",
+  "cameraScannerQuantityValue": "الكمية: {quantity}",
+  "@cameraScannerQuantityValue": {
+    "description": "Quantity shown for a scanned camera barcode entry.",
+    "placeholders": {
+      "quantity": {
+        "type": "int"
+      }
+    }
+  },
+  "removeScannedCodeTooltip": "حذف الرمز الممسوح",
+  "switchCameraTooltip": "تبديل الكاميرا",
+  "toggleTorchTooltip": "تشغيل أو إيقاف الفلاش",
   "currentSaleTitle": "البيع الحالي",
   "clearCartTooltip": "مسح السلة",
   "emptyCart": "لا توجد عناصر في السلة",

@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../core/authorization.dart';
+import '../../../data/models/product.dart';
 import '../../../data/repositories/inventory_repository.dart';
 import '../../../shared/infinite_scroll_grid.dart';
 import '../../../shared/product_tile.dart';
@@ -16,11 +19,15 @@ class ProductList extends StatelessWidget {
     required this.viewModel,
     required this.inventoryRepository,
     required this.capabilities,
+    required this.onBarcodeSubmitted,
+    required this.onOpenCameraScanner,
   });
 
   final CatalogViewModel viewModel;
   final InventoryRepository inventoryRepository;
   final AuthorizationCapabilities capabilities;
+  final FutureOr<bool> Function(String barcode) onBarcodeSubmitted;
+  final VoidCallback onOpenCameraScanner;
 
   @override
   Widget build(BuildContext context) {
@@ -55,7 +62,10 @@ class ProductList extends StatelessWidget {
           const SizedBox(height: 12),
           ProductQueryControls(
             query: viewModel.query,
+            searchFieldKey: const ValueKey('catalog_product_lookup_field'),
             onSearchChanged: viewModel.updateSearch,
+            onSearchSubmitted: onBarcodeSubmitted,
+            onOpenCameraScanner: onOpenCameraScanner,
             onQueryChanged: viewModel.applyQuery,
           ),
           const SizedBox(height: 12),
@@ -76,19 +86,12 @@ class ProductList extends StatelessWidget {
               itemBuilder: (context, product) {
                 return ProductTile(
                   product: product,
-                  onTap: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute<void>(
-                        builder: (_) => ProductDetailsScreen(
-                          viewModel: ProductStockViewModel(
-                            inventoryRepository,
-                            product,
-                          ),
-                          capabilities: capabilities,
-                        ),
-                      ),
-                    );
-                  },
+                  onTap: () => openProductDetails(
+                    context,
+                    product: product,
+                    inventoryRepository: inventoryRepository,
+                    capabilities: capabilities,
+                  ),
                 );
               },
             ),
@@ -97,4 +100,20 @@ class ProductList extends StatelessWidget {
       ),
     );
   }
+}
+
+Future<void> openProductDetails(
+  BuildContext context, {
+  required Product product,
+  required InventoryRepository inventoryRepository,
+  required AuthorizationCapabilities capabilities,
+}) {
+  return Navigator.of(context).push(
+    MaterialPageRoute<void>(
+      builder: (_) => ProductDetailsScreen(
+        viewModel: ProductStockViewModel(inventoryRepository, product),
+        capabilities: capabilities,
+      ),
+    ),
+  );
 }

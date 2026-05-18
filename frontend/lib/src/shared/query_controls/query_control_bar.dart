@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import 'debounced_search_field.dart';
@@ -14,6 +16,12 @@ class QueryControlBar extends StatelessWidget {
     required this.activeFilterCount,
     required this.onSearchChanged,
     required this.onOpenFilters,
+    this.onSearchSubmitted,
+    this.openCameraScannerTooltip,
+    this.onOpenCameraScanner,
+    this.enabled = true,
+    this.autofocus = false,
+    this.searchFieldKey,
   });
 
   final String searchValue;
@@ -24,6 +32,12 @@ class QueryControlBar extends StatelessWidget {
   final int activeFilterCount;
   final ValueChanged<String> onSearchChanged;
   final VoidCallback onOpenFilters;
+  final FutureOr<bool> Function(String value)? onSearchSubmitted;
+  final String? openCameraScannerTooltip;
+  final VoidCallback? onOpenCameraScanner;
+  final bool enabled;
+  final bool autofocus;
+  final Key? searchFieldKey;
 
   @override
   Widget build(BuildContext context) {
@@ -35,15 +49,29 @@ class QueryControlBar extends StatelessWidget {
             hintText: searchHint,
             clearTooltip: clearSearchTooltip,
             onChanged: onSearchChanged,
+            onSubmitted: onSearchSubmitted,
+            enabled: enabled,
+            autofocus: autofocus,
+            fieldKey: searchFieldKey,
           ),
         ),
         const SizedBox(width: 8),
+        if (onOpenCameraScanner != null) ...[
+          Tooltip(
+            message: openCameraScannerTooltip ?? '',
+            child: IconButton.filledTonal(
+              onPressed: enabled ? onOpenCameraScanner : null,
+              icon: const Icon(Icons.photo_camera_outlined),
+            ),
+          ),
+          const SizedBox(width: 8),
+        ],
         Tooltip(
           message: openFiltersTooltip,
           child: QueryFilterButton(
             label: filterLabel,
             activeCount: activeFilterCount,
-            onPressed: onOpenFilters,
+            onPressed: enabled ? onOpenFilters : null,
           ),
         ),
       ],

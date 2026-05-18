@@ -118,6 +118,12 @@ abstract class AppLocalizations {
   /// **'مسح البحث'**
   String get clearSearchTooltip;
 
+  /// No description provided for @openCameraScannerTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'فتح ماسح الكاميرا'**
+  String get openCameraScannerTooltip;
+
   /// No description provided for @openFiltersTooltip.
   ///
   /// In ar, this message translates to:
@@ -1154,29 +1160,11 @@ abstract class AppLocalizations {
   /// **'لا يوجد وصف لهذا المنتج'**
   String get noDescription;
 
-  /// No description provided for @posBarcodeFieldLabel.
+  /// No description provided for @posProductLookupHint.
   ///
   /// In ar, this message translates to:
-  /// **'الباركود'**
-  String get posBarcodeFieldLabel;
-
-  /// No description provided for @posBarcodeFieldHint.
-  ///
-  /// In ar, this message translates to:
-  /// **'امسح الباركود أو أدخله ثم اضغط إدخال'**
-  String get posBarcodeFieldHint;
-
-  /// No description provided for @clearBarcodeTooltip.
-  ///
-  /// In ar, this message translates to:
-  /// **'مسح الباركود'**
-  String get clearBarcodeTooltip;
-
-  /// No description provided for @focusBarcodeTooltip.
-  ///
-  /// In ar, this message translates to:
-  /// **'تركيز إدخال الباركود'**
-  String get focusBarcodeTooltip;
+  /// **'ابحث عن منتج أو امسح الباركود'**
+  String get posProductLookupHint;
 
   /// No description provided for @clearBarcodeStatusTooltip.
   ///
@@ -1207,6 +1195,78 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'تعذر البحث عن الباركود. حاول مرة أخرى.'**
   String get barcodeScanError;
+
+  /// No description provided for @cameraScannerSingleTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'مسح باركود'**
+  String get cameraScannerSingleTitle;
+
+  /// No description provided for @cameraScannerMultipleTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'مسح عدة منتجات'**
+  String get cameraScannerMultipleTitle;
+
+  /// No description provided for @cameraScannerStarting.
+  ///
+  /// In ar, this message translates to:
+  /// **'جار تشغيل الكاميرا...'**
+  String get cameraScannerStarting;
+
+  /// No description provided for @cameraScannerPermissionError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر تشغيل الكاميرا. تحقق من صلاحية الكاميرا وحاول مرة أخرى.'**
+  String get cameraScannerPermissionError;
+
+  /// Status shown while camera scanner resolves a barcode into a product.
+  ///
+  /// In ar, this message translates to:
+  /// **'جار البحث عن منتج للباركود {barcode}...'**
+  String cameraScannerResolvingProduct(String barcode);
+
+  /// No description provided for @cameraScannerScanQuantityLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'كمية كل مسح'**
+  String get cameraScannerScanQuantityLabel;
+
+  /// No description provided for @cameraScannerEmptyScans.
+  ///
+  /// In ar, this message translates to:
+  /// **'وجّه الكاميرا نحو الباركود أو رمز QR.'**
+  String get cameraScannerEmptyScans;
+
+  /// No description provided for @cameraScannerDoneButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'اعتماد المسح'**
+  String get cameraScannerDoneButton;
+
+  /// Quantity shown for a scanned camera barcode entry.
+  ///
+  /// In ar, this message translates to:
+  /// **'الكمية: {quantity}'**
+  String cameraScannerQuantityValue(int quantity);
+
+  /// No description provided for @removeScannedCodeTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'حذف الرمز الممسوح'**
+  String get removeScannedCodeTooltip;
+
+  /// No description provided for @switchCameraTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'تبديل الكاميرا'**
+  String get switchCameraTooltip;
+
+  /// No description provided for @toggleTorchTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'تشغيل أو إيقاف الفلاش'**
+  String get toggleTorchTooltip;
 
   /// No description provided for @currentSaleTitle.
   ///

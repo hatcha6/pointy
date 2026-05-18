@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -607,7 +608,7 @@ void main() {
 
     await _startRegisterSession(tester);
 
-    expect(find.text('ابحث باسم المنتج أو الرمز'), findsOneWidget);
+    expect(find.text('ابحث عن منتج أو امسح الباركود'), findsOneWidget);
     expect(find.byTooltip('الفلاتر والترتيب'), findsOneWidget);
 
     await tester.tap(find.byTooltip('الفلاتر والترتيب'));
@@ -634,13 +635,37 @@ void main() {
     await _startRegisterSession(tester);
 
     await tester.enterText(
-      find.byKey(const ValueKey('barcode_capture_field')),
+      find.byKey(const ValueKey('product_lookup_field')),
       '123456',
     );
     await tester.testTextInput.receiveAction(TextInputAction.done);
     await tester.pumpAndSettle(const Duration(seconds: 1));
 
     expect(find.text('قهوة البيت'), findsWidgets);
+    expect(find.text('تمت إضافة قهوة البيت'), findsOneWidget);
+    expect(find.text('ادفع 3.50 د.ل'), findsOneWidget);
+  });
+
+  testWidgets('POS captures scanner input when lookup field is not focused', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(1200, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      PointyApp(apiService: _mockApiService(productBarcode: '123456')),
+    );
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+
+    await _startRegisterSession(tester);
+    FocusManager.instance.primaryFocus?.unfocus();
+    await tester.pump();
+
+    await _scanBarcode(tester, '123456');
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+
     expect(find.text('تمت إضافة قهوة البيت'), findsOneWidget);
     expect(find.text('ادفع 3.50 د.ل'), findsOneWidget);
   });
@@ -666,6 +691,53 @@ void main() {
       expect(find.text('حالة المنتج'), findsOneWidget);
       expect(find.text('ترتيب النتائج'), findsOneWidget);
       expect(find.text('السعر: من الأعلى إلى الأقل'), findsOneWidget);
+    },
+  );
+
+  testWidgets('catalog barcode lookup field opens product details', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      PointyApp(apiService: _mockApiService(productBarcode: '123456')),
+    );
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+
+    await tester.tap(find.byIcon(Icons.menu));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('المنتجات').last);
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+
+    await tester.enterText(
+      find.byKey(const ValueKey('catalog_product_lookup_field')),
+      '123456',
+    );
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+
+    expect(find.text('تفاصيل المنتج'), findsOneWidget);
+    expect(find.text('قهوة البيت'), findsOneWidget);
+  });
+
+  testWidgets(
+    'catalog captures scanner input when lookup field is not focused',
+    (WidgetTester tester) async {
+      await tester.pumpWidget(
+        PointyApp(apiService: _mockApiService(productBarcode: '123456')),
+      );
+      await tester.pumpAndSettle(const Duration(seconds: 1));
+
+      await tester.tap(find.byIcon(Icons.menu));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('المنتجات').last);
+      await tester.pumpAndSettle(const Duration(seconds: 1));
+      FocusManager.instance.primaryFocus?.unfocus();
+      await tester.pump();
+
+      await _scanBarcode(tester, '123456');
+      await tester.pumpAndSettle(const Duration(seconds: 1));
+
+      expect(find.text('تفاصيل المنتج'), findsOneWidget);
+      expect(find.text('قهوة البيت'), findsOneWidget);
     },
   );
 
@@ -1351,6 +1423,29 @@ Future<void> _confirmPayment(WidgetTester tester) async {
   expect(find.text('إتمام الدفع'), findsOneWidget);
   await tester.tap(find.text('تأكيد الدفع'));
   await tester.pumpAndSettle(const Duration(seconds: 1));
+}
+
+Future<void> _scanBarcode(WidgetTester tester, String barcode) async {
+  for (final character in barcode.characters) {
+    await tester.sendKeyEvent(_logicalKeyForCharacter(character));
+  }
+  await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+}
+
+LogicalKeyboardKey _logicalKeyForCharacter(String character) {
+  return switch (character) {
+    '0' => LogicalKeyboardKey.digit0,
+    '1' => LogicalKeyboardKey.digit1,
+    '2' => LogicalKeyboardKey.digit2,
+    '3' => LogicalKeyboardKey.digit3,
+    '4' => LogicalKeyboardKey.digit4,
+    '5' => LogicalKeyboardKey.digit5,
+    '6' => LogicalKeyboardKey.digit6,
+    '7' => LogicalKeyboardKey.digit7,
+    '8' => LogicalKeyboardKey.digit8,
+    '9' => LogicalKeyboardKey.digit9,
+    _ => throw ArgumentError.value(character, 'character'),
+  };
 }
 
 class _StaticDiscoveryTransport extends PrintTransport {

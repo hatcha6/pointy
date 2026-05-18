@@ -34,17 +34,17 @@ extension PosCartActions on PosViewModel {
     _notifyChanged();
   }
 
-  bool _addProductToCart(Product product) {
-    if (_isCheckingOut) {
+  bool _addProductToCart(Product product, {int quantity = 1}) {
+    if (_isCheckingOut || quantity <= 0) {
       return false;
     }
 
     final index = _cart.indexWhere((line) => line.product.id == product.id);
     if (index == -1) {
-      _cart.add(CartLine(product: product, quantity: 1));
+      _cart.add(CartLine(product: product, quantity: quantity));
     } else {
       final line = _cart[index];
-      _cart[index] = line.copyWith(quantity: line.quantity + 1);
+      _cart[index] = line.copyWith(quantity: line.quantity + quantity);
     }
     return true;
   }

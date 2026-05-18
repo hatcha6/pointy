@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
@@ -12,12 +14,26 @@ class ProductQueryControls extends StatelessWidget {
     required this.onSearchChanged,
     required this.onQueryChanged,
     this.allowAvailabilityFilter = true,
+    this.onSearchSubmitted,
+    this.onOpenCameraScanner,
+    this.searchHint,
+    this.openCameraScannerTooltip,
+    this.enabled = true,
+    this.autofocus = false,
+    this.searchFieldKey,
   });
 
   final ProductQuery query;
   final ValueChanged<String> onSearchChanged;
   final ValueChanged<ProductQuery> onQueryChanged;
   final bool allowAvailabilityFilter;
+  final FutureOr<bool> Function(String value)? onSearchSubmitted;
+  final VoidCallback? onOpenCameraScanner;
+  final String? searchHint;
+  final String? openCameraScannerTooltip;
+  final bool enabled;
+  final bool autofocus;
+  final Key? searchFieldKey;
 
   @override
   Widget build(BuildContext context) {
@@ -25,13 +41,20 @@ class ProductQueryControls extends StatelessWidget {
 
     return QueryControlBar(
       searchValue: query.search,
-      searchHint: l10n.searchProductsHint,
+      searchHint: searchHint ?? l10n.searchProductsHint,
       clearSearchTooltip: l10n.clearSearchTooltip,
       filterLabel: l10n.filtersButtonLabel,
       openFiltersTooltip: l10n.openFiltersTooltip,
       activeFilterCount: _activeFilterCount,
       onSearchChanged: onSearchChanged,
       onOpenFilters: () => _showFilters(context),
+      onSearchSubmitted: onSearchSubmitted,
+      onOpenCameraScanner: onOpenCameraScanner,
+      openCameraScannerTooltip:
+          openCameraScannerTooltip ?? l10n.openCameraScannerTooltip,
+      enabled: enabled,
+      autofocus: autofocus,
+      searchFieldKey: searchFieldKey,
     );
   }
 

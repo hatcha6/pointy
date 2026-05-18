@@ -21,6 +21,9 @@ class AppLocalizationsAr extends AppLocalizations {
   String get clearSearchTooltip => 'مسح البحث';
 
   @override
+  String get openCameraScannerTooltip => 'فتح ماسح الكاميرا';
+
+  @override
   String get openFiltersTooltip => 'الفلاتر والترتيب';
 
   @override
@@ -575,16 +578,7 @@ class AppLocalizationsAr extends AppLocalizations {
   String get noDescription => 'لا يوجد وصف لهذا المنتج';
 
   @override
-  String get posBarcodeFieldLabel => 'الباركود';
-
-  @override
-  String get posBarcodeFieldHint => 'امسح الباركود أو أدخله ثم اضغط إدخال';
-
-  @override
-  String get clearBarcodeTooltip => 'مسح الباركود';
-
-  @override
-  String get focusBarcodeTooltip => 'تركيز إدخال الباركود';
+  String get posProductLookupHint => 'ابحث عن منتج أو امسح الباركود';
 
   @override
   String get clearBarcodeStatusTooltip => 'إخفاء حالة الباركود';
@@ -604,6 +598,47 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get barcodeScanError => 'تعذر البحث عن الباركود. حاول مرة أخرى.';
+
+  @override
+  String get cameraScannerSingleTitle => 'مسح باركود';
+
+  @override
+  String get cameraScannerMultipleTitle => 'مسح عدة منتجات';
+
+  @override
+  String get cameraScannerStarting => 'جار تشغيل الكاميرا...';
+
+  @override
+  String get cameraScannerPermissionError =>
+      'تعذر تشغيل الكاميرا. تحقق من صلاحية الكاميرا وحاول مرة أخرى.';
+
+  @override
+  String cameraScannerResolvingProduct(String barcode) {
+    return 'جار البحث عن منتج للباركود $barcode...';
+  }
+
+  @override
+  String get cameraScannerScanQuantityLabel => 'كمية كل مسح';
+
+  @override
+  String get cameraScannerEmptyScans => 'وجّه الكاميرا نحو الباركود أو رمز QR.';
+
+  @override
+  String get cameraScannerDoneButton => 'اعتماد المسح';
+
+  @override
+  String cameraScannerQuantityValue(int quantity) {
+    return 'الكمية: $quantity';
+  }
+
+  @override
+  String get removeScannedCodeTooltip => 'حذف الرمز الممسوح';
+
+  @override
+  String get switchCameraTooltip => 'تبديل الكاميرا';
+
+  @override
+  String get toggleTorchTooltip => 'تشغيل أو إيقاف الفلاش';
 
   @override
   String get currentSaleTitle => 'البيع الحالي';

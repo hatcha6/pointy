@@ -6,6 +6,24 @@ import '../../../data/models/product_page.dart';
 import '../../../data/models/product_query.dart';
 import '../../../data/repositories/catalog_repository.dart';
 
+enum CatalogBarcodeLookupStatus { found, notFound, error }
+
+class CatalogBarcodeLookupOutcome {
+  const CatalogBarcodeLookupOutcome._({required this.status, this.product});
+
+  const CatalogBarcodeLookupOutcome.found(Product product)
+    : this._(status: CatalogBarcodeLookupStatus.found, product: product);
+
+  const CatalogBarcodeLookupOutcome.notFound()
+    : this._(status: CatalogBarcodeLookupStatus.notFound);
+
+  const CatalogBarcodeLookupOutcome.error()
+    : this._(status: CatalogBarcodeLookupStatus.error);
+
+  final CatalogBarcodeLookupStatus status;
+  final Product? product;
+}
+
 class CatalogViewModel extends ChangeNotifier {
   CatalogViewModel(this._catalogRepository) {
     loadProducts();
@@ -92,6 +110,28 @@ class CatalogViewModel extends ChangeNotifier {
   Future<void> applyQuery(ProductQuery query) async {
     _query = query;
     await loadProducts();
+  }
+
+  Future<CatalogBarcodeLookupOutcome> findProductByBarcode(
+    String barcode,
+  ) async {
+    final normalizedBarcode = barcode.trim();
+    if (normalizedBarcode.isEmpty) {
+      return const CatalogBarcodeLookupOutcome.notFound();
+    }
+
+    final result = await _catalogRepository.findProductByBarcode(
+      normalizedBarcode,
+      activeOnly: false,
+    );
+    switch (result) {
+      case Ok<Product?>(:final value):
+        return value == null
+            ? const CatalogBarcodeLookupOutcome.notFound()
+            : CatalogBarcodeLookupOutcome.found(value);
+      case Error<Product?>():
+        return const CatalogBarcodeLookupOutcome.error();
+    }
   }
 
   Future<bool> createProduct(ProductDraft draft) async {

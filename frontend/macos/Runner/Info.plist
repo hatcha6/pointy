@@ -26,6 +26,8 @@
 	<string>تستخدم نقطة البيع البلوتوث للاتصال بطابعات الإيصالات.</string>
 	<key>NSBluetoothPeripheralUsageDescription</key>
 	<string>تستخدم نقطة البيع البلوتوث للاتصال بطابعات الإيصالات.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>تستخدم نقطة البيع الكاميرا لمسح الباركود ورموز QR.</string>
 	<key>NSBonjourServices</key>
 	<array>
 		<string>_pdl-datastream._tcp</string>

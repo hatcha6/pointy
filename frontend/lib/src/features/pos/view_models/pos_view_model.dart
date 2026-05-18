@@ -50,6 +50,8 @@ class PosViewModel extends ChangeNotifier {
   final ShopSettingsRepository _shopSettingsRepository;
   final PrintingRepository _printingRepository;
 
+  CatalogRepository get catalogRepository => _catalogRepository;
+
   List<Product> _products = [];
   final List<CartLine> _cart = [];
   ShopSettings? _checkoutSettings;
