@@ -31,26 +31,34 @@ enum ProductOrdering implements QueryOrdering {
 class ProductQuery extends ModelQuery {
   const ProductQuery({
     this.search = '',
+    this.barcode = '',
     this.availability = ProductAvailabilityFilter.all,
     this.ordering = ProductOrdering.name,
   });
 
   @override
   final String search;
+  final String barcode;
   final ProductAvailabilityFilter availability;
   @override
   final ProductOrdering ordering;
 
   @override
-  Iterable<QueryFilter> get filters => availability.filters;
+  Iterable<QueryFilter> get filters => [
+    ...availability.filters,
+    if (barcode.trim().isNotEmpty)
+      QueryFilter(parameter: 'barcode', value: barcode.trim()),
+  ];
 
   ProductQuery copyWith({
     String? search,
+    String? barcode,
     ProductAvailabilityFilter? availability,
     ProductOrdering? ordering,
   }) {
     return ProductQuery(
       search: search ?? this.search,
+      barcode: barcode ?? this.barcode,
       availability: availability ?? this.availability,
       ordering: ordering ?? this.ordering,
     );
@@ -60,10 +68,11 @@ class ProductQuery extends ModelQuery {
   bool operator ==(Object other) {
     return other is ProductQuery &&
         other.search == search &&
+        other.barcode == barcode &&
         other.availability == availability &&
         other.ordering == ordering;
   }
 
   @override
-  int get hashCode => Object.hash(search, availability, ordering);
+  int get hashCode => Object.hash(search, barcode, availability, ordering);
 }

@@ -2,18 +2,9 @@ part of 'pos_view_model.dart';
 
 extension PosCartActions on PosViewModel {
   void addProduct(Product product) {
-    if (_isCheckingOut) {
-      return;
+    if (_addProductToCart(product)) {
+      _notifyChanged();
     }
-
-    final index = _cart.indexWhere((line) => line.product.id == product.id);
-    if (index == -1) {
-      _cart.add(CartLine(product: product, quantity: 1));
-    } else {
-      final line = _cart[index];
-      _cart[index] = line.copyWith(quantity: line.quantity + 1);
-    }
-    _notifyChanged();
   }
 
   void decrementProduct(Product product) {
@@ -41,5 +32,20 @@ extension PosCartActions on PosViewModel {
     }
     _cart.clear();
     _notifyChanged();
+  }
+
+  bool _addProductToCart(Product product) {
+    if (_isCheckingOut) {
+      return false;
+    }
+
+    final index = _cart.indexWhere((line) => line.product.id == product.id);
+    if (index == -1) {
+      _cart.add(CartLine(product: product, quantity: 1));
+    } else {
+      final line = _cart[index];
+      _cart[index] = line.copyWith(quantity: line.quantity + 1);
+    }
+    return true;
   }
 }

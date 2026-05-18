@@ -20,7 +20,7 @@ class ProductViewSet(viewsets.ModelViewSet):
         "destroy": ("catalog.delete_product",),
     }
     queryset = Product.objects.select_related("stock")
-    filterset_fields = ("is_active",)
+    filterset_fields = ("is_active", "barcode")
     search_fields = ("sku", "barcode", "name")
     ordering_fields = ("name", "unit_price", "created_at", "updated_at")
 

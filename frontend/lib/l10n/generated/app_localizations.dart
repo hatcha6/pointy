@@ -1154,6 +1154,60 @@ abstract class AppLocalizations {
   /// **'لا يوجد وصف لهذا المنتج'**
   String get noDescription;
 
+  /// No description provided for @posBarcodeFieldLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الباركود'**
+  String get posBarcodeFieldLabel;
+
+  /// No description provided for @posBarcodeFieldHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'امسح الباركود أو أدخله ثم اضغط إدخال'**
+  String get posBarcodeFieldHint;
+
+  /// No description provided for @clearBarcodeTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'مسح الباركود'**
+  String get clearBarcodeTooltip;
+
+  /// No description provided for @focusBarcodeTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'تركيز إدخال الباركود'**
+  String get focusBarcodeTooltip;
+
+  /// No description provided for @clearBarcodeStatusTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'إخفاء حالة الباركود'**
+  String get clearBarcodeStatusTooltip;
+
+  /// No description provided for @barcodeScanResolving.
+  ///
+  /// In ar, this message translates to:
+  /// **'جار البحث عن الباركود...'**
+  String get barcodeScanResolving;
+
+  /// Status shown after a barcode scan adds a product to the cart.
+  ///
+  /// In ar, this message translates to:
+  /// **'تمت إضافة {productName}'**
+  String barcodeScanAdded(String productName);
+
+  /// Status shown when a barcode scan does not match a product.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم يتم العثور على منتج للباركود {barcode}'**
+  String barcodeScanNotFound(String barcode);
+
+  /// No description provided for @barcodeScanError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر البحث عن الباركود. حاول مرة أخرى.'**
+  String get barcodeScanError;
+
   /// No description provided for @currentSaleTitle.
   ///
   /// In ar, this message translates to:

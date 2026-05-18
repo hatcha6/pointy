@@ -53,6 +53,23 @@ class PaymentSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Order is not available for this user.")
         return order
 
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        order = attrs.get("order", getattr(self.instance, "order", None))
+        amount = attrs.get("amount", getattr(self.instance, "amount", None))
+        if order is None or amount is None or amount <= 0:
+            return attrs
+
+        existing_payments = order.payments.all()
+        if self.instance is not None:
+            existing_payments = existing_payments.exclude(pk=self.instance.pk)
+        paid_total = sum(existing_payments.values_list("amount", flat=True))
+        if paid_total + amount > order.total:
+            raise serializers.ValidationError(
+                {"amount": "Payment total cannot exceed the order total."}
+            )
+        return attrs
+
     @transaction.atomic
     def create(self, validated_data):
         percent, commission = payment_commission_values(

@@ -575,6 +575,37 @@ class AppLocalizationsAr extends AppLocalizations {
   String get noDescription => 'لا يوجد وصف لهذا المنتج';
 
   @override
+  String get posBarcodeFieldLabel => 'الباركود';
+
+  @override
+  String get posBarcodeFieldHint => 'امسح الباركود أو أدخله ثم اضغط إدخال';
+
+  @override
+  String get clearBarcodeTooltip => 'مسح الباركود';
+
+  @override
+  String get focusBarcodeTooltip => 'تركيز إدخال الباركود';
+
+  @override
+  String get clearBarcodeStatusTooltip => 'إخفاء حالة الباركود';
+
+  @override
+  String get barcodeScanResolving => 'جار البحث عن الباركود...';
+
+  @override
+  String barcodeScanAdded(String productName) {
+    return 'تمت إضافة $productName';
+  }
+
+  @override
+  String barcodeScanNotFound(String barcode) {
+    return 'لم يتم العثور على منتج للباركود $barcode';
+  }
+
+  @override
+  String get barcodeScanError => 'تعذر البحث عن الباركود. حاول مرة أخرى.';
+
+  @override
   String get currentSaleTitle => 'البيع الحالي';
 
   @override

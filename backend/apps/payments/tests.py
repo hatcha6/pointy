@@ -76,6 +76,24 @@ class PaymentAuthorizationTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(Payment.objects.filter(order=self.other_order).count(), 1)
 
+    def test_payment_create_cannot_overpay_order(self):
+        client = APIClient()
+        client.force_authenticate(user=self.cashier)
+
+        response = client.post(
+            reverse("payment-list"),
+            {
+                "order": self.cashier_order.pk,
+                "method": Payment.Method.CASH,
+                "amount": "7.00",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("amount", response.data)
+        self.assertEqual(Payment.objects.filter(order=self.cashier_order).count(), 1)
+
     def test_manager_can_list_all_payments(self):
         client = APIClient()
         client.force_authenticate(user=self.manager)

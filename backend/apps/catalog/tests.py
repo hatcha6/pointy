@@ -88,6 +88,30 @@ class ProductApiTests(TestCase):
         results = response.data["results"]
         self.assertEqual([product["sku"] for product in results], ["TEA-100", "COF-100"])
 
+    def test_filter_products_by_exact_barcode(self):
+        Product.objects.create(
+            sku="MATCH",
+            barcode="123456789",
+            name="قهوة مطابقة",
+            unit_price=Decimal("5.50"),
+            is_active=True,
+        )
+        Product.objects.create(
+            sku="PARTIAL",
+            barcode="1234567890",
+            name="قهوة قريبة",
+            unit_price=Decimal("6.50"),
+            is_active=True,
+        )
+
+        response = self.client.get(reverse("product-list"), {"barcode": "123456789"})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            [product["sku"] for product in response.data["results"]],
+            ["MATCH"],
+        )
+
     def test_can_order_products_by_newest(self):
         first = Product.objects.create(
             sku="FIRST",

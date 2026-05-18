@@ -28,6 +28,35 @@ class CatalogRepository {
     }
   }
 
+  Future<Result<Product?>> findProductByBarcode(
+    String barcode, {
+    bool activeOnly = true,
+  }) async {
+    final normalizedBarcode = barcode.trim();
+    if (normalizedBarcode.isEmpty) {
+      return const Ok(null);
+    }
+
+    final query = ProductQuery(
+      barcode: normalizedBarcode,
+      availability: activeOnly
+          ? ProductAvailabilityFilter.active
+          : ProductAvailabilityFilter.all,
+    );
+
+    try {
+      final page = await _service.fetchProducts(query: query, page: 1);
+      for (final product in page.products) {
+        if (product.barcode.trim() == normalizedBarcode) {
+          return Ok(product);
+        }
+      }
+      return const Ok(null);
+    } on Exception catch (exception) {
+      return Error(exception);
+    }
+  }
+
   List<Product> sampleProducts(ProductQuery query) {
     final products = const [
       Product(
@@ -35,6 +64,7 @@ class CatalogRepository {
         sku: 'COF-001',
         name: 'قهوة البيت',
         unitPrice: 3.50,
+        barcode: '1000001',
         quantityOnHand: 12,
       ),
       Product(
@@ -42,6 +72,7 @@ class CatalogRepository {
         sku: 'TEA-001',
         name: 'شاي بالنعناع',
         unitPrice: 2.75,
+        barcode: '1000002',
         quantityOnHand: 12,
       ),
       Product(
@@ -49,6 +80,7 @@ class CatalogRepository {
         sku: 'SNK-012',
         name: 'لوح تمر',
         unitPrice: 1.95,
+        barcode: '1000003',
         quantityOnHand: 12,
       ),
       Product(
@@ -56,6 +88,7 @@ class CatalogRepository {
         sku: 'BKR-044',
         name: 'كرواسون زعتر',
         unitPrice: 4.25,
+        barcode: '1000004',
         quantityOnHand: 12,
       ),
       Product(
@@ -63,6 +96,7 @@ class CatalogRepository {
         sku: 'JCE-002',
         name: 'عصير برتقال',
         unitPrice: 3.25,
+        barcode: '1000005',
         quantityOnHand: 12,
       ),
       Product(
@@ -70,18 +104,25 @@ class CatalogRepository {
         sku: 'SND-019',
         name: 'ساندويتش حلومي',
         unitPrice: 6.80,
+        barcode: '1000006',
         quantityOnHand: 12,
       ),
     ];
 
     final search = query.search.trim().toLowerCase();
-    final filtered = search.isEmpty
+    final barcode = query.barcode.trim();
+    final filtered = search.isEmpty && barcode.isEmpty
         ? products
         : products
               .where((product) {
-                return product.name.toLowerCase().contains(search) ||
+                final matchesSearch =
+                    search.isEmpty ||
+                    product.name.toLowerCase().contains(search) ||
                     product.sku.toLowerCase().contains(search) ||
                     product.barcode.toLowerCase().contains(search);
+                final matchesBarcode =
+                    barcode.isEmpty || product.barcode == barcode;
+                return matchesSearch && matchesBarcode;
               })
               .toList(growable: false);
 

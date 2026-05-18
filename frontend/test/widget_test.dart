@@ -618,6 +618,33 @@ void main() {
     expect(find.text('حالة المنتج'), findsNothing);
   });
 
+  testWidgets('POS barcode scan adds the matching product to the cart', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(1200, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      PointyApp(apiService: _mockApiService(productBarcode: '123456')),
+    );
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+
+    await _startRegisterSession(tester);
+
+    await tester.enterText(
+      find.byKey(const ValueKey('barcode_capture_field')),
+      '123456',
+    );
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+
+    expect(find.text('قهوة البيت'), findsWidgets);
+    expect(find.text('تمت إضافة قهوة البيت'), findsOneWidget);
+    expect(find.text('ادفع 3.50 د.ل'), findsOneWidget);
+  });
+
   testWidgets(
     'catalog screen exposes reusable search, filtering, and ordering controls',
     (WidgetTester tester) async {
@@ -1374,6 +1401,7 @@ PosApiService _mockApiService({
   bool shopSettingsAllowOverselling = false,
   int shopSettingsCashierReturnWindowHours = 42,
   int productQuantityOnHand = 12,
+  String productBarcode = '',
   String registerHistorySessionStatus = 'closed',
   bool orderCanVoid = true,
   bool orderCanReturn = true,
@@ -1598,8 +1626,15 @@ PosApiService _mockApiService({
       }
 
       if (path.endsWith('/products/')) {
+        final requestedBarcode = request.url.queryParameters['barcode'];
+        if (requestedBarcode != null && requestedBarcode != productBarcode) {
+          return _jsonResponse({'next': null, 'results': []});
+        }
         return _jsonResponse(
-          _productPageJson(quantityOnHand: productQuantityOnHand),
+          _productPageJson(
+            quantityOnHand: productQuantityOnHand,
+            barcode: productBarcode,
+          ),
         );
       }
 
@@ -1773,7 +1808,10 @@ Map<String, Object?> _shopSettingsJson({
   };
 }
 
-Map<String, Object?> _productPageJson({int quantityOnHand = 12}) {
+Map<String, Object?> _productPageJson({
+  int quantityOnHand = 12,
+  String barcode = '',
+}) {
   return {
     'next': null,
     'results': [
@@ -1782,7 +1820,7 @@ Map<String, Object?> _productPageJson({int quantityOnHand = 12}) {
         'sku': 'COF-001',
         'name': 'قهوة البيت',
         'unit_price': '3.50',
-        'barcode': '',
+        'barcode': barcode,
         'description': '',
         'is_active': true,
         'quantity_on_hand': quantityOnHand,

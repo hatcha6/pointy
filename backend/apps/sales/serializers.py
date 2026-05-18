@@ -383,6 +383,10 @@ class CheckoutSerializer(serializers.Serializer):
             raise serializers.ValidationError(
                 {"payments": "Payment total must cover the order total."}
             )
+        if paid_total > total:
+            raise serializers.ValidationError(
+                {"payments": "Payment total cannot exceed the order total."}
+            )
 
         attrs["computed_total"] = total
         attrs["payments"] = payments

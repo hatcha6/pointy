@@ -19,6 +19,7 @@ import '../../../data/repositories/shop_settings_repository.dart';
 
 part 'pos_cart_actions.dart';
 part 'pos_catalog_actions.dart';
+part 'pos_barcode_actions.dart';
 part 'pos_checkout.dart';
 part 'pos_register_session_actions.dart';
 
@@ -28,6 +29,8 @@ enum RegisterSessionGateStatus {
   openSessionAvailable,
   active,
 }
+
+enum BarcodeScanStatus { idle, resolving, found, notFound, error }
 
 class PosViewModel extends ChangeNotifier {
   PosViewModel(
@@ -58,10 +61,13 @@ class PosViewModel extends ChangeNotifier {
   bool _isClosingRegisterSession = false;
   bool _isCreatingCashMovement = false;
   bool _isCheckingOut = false;
+  BarcodeScanStatus _barcodeScanStatus = BarcodeScanStatus.idle;
   bool _printInvoiceAfterPayment = false;
   bool _hasMoreProducts = true;
   int _nextProductPage = 1;
   String? _errorMessage;
+  String? _lastScannedBarcode;
+  String? _lastScannedProductName;
   bool _hasRegisterSessionError = false;
   bool _hasCheckoutSettingsError = false;
   RegisterSession? _availableRegisterSession;
@@ -80,9 +86,14 @@ class PosViewModel extends ChangeNotifier {
   bool get isClosingRegisterSession => _isClosingRegisterSession;
   bool get isCreatingCashMovement => _isCreatingCashMovement;
   bool get isCheckingOut => _isCheckingOut;
+  BarcodeScanStatus get barcodeScanStatus => _barcodeScanStatus;
+  bool get isResolvingBarcode =>
+      _barcodeScanStatus == BarcodeScanStatus.resolving;
   bool get printInvoiceAfterPayment => _printInvoiceAfterPayment;
   bool get hasMoreProducts => _hasMoreProducts;
   String? get errorMessage => _errorMessage;
+  String? get lastScannedBarcode => _lastScannedBarcode;
+  String? get lastScannedProductName => _lastScannedProductName;
   bool get hasRegisterSessionError => _hasRegisterSessionError;
   bool get hasCheckoutSettingsError => _hasCheckoutSettingsError;
   RegisterSession? get availableRegisterSession => _availableRegisterSession;

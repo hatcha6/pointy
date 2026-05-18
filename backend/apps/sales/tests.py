@@ -675,6 +675,41 @@ class OrderCheckoutApiTests(TestCase):
         self.assertEqual(payments[1].commission_amount, Decimal("0.03"))
         self.assertEqual(payments[2].commission_amount, Decimal("0.01"))
 
+    def test_checkout_rejects_split_payment_over_total(self):
+        self.start_session()
+
+        response = self.client.post(
+            reverse("order-checkout"),
+            self.checkout_payload(
+                payments=[
+                    {"method": Payment.Method.CASH, "amount": "2.00"},
+                    {"method": Payment.Method.CARD, "amount": "6.00"},
+                ],
+            ),
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("payments", response.data)
+        self.assertEqual(Order.objects.count(), 0)
+        self.assertEqual(Payment.objects.count(), 0)
+        self.assertEqual(StockMovement.objects.count(), 0)
+
+    def test_checkout_rejects_single_payment_over_total(self):
+        self.start_session()
+
+        response = self.client.post(
+            reverse("order-checkout"),
+            self.checkout_payload(amount_received="8.00"),
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("payments", response.data)
+        self.assertEqual(Order.objects.count(), 0)
+        self.assertEqual(Payment.objects.count(), 0)
+        self.assertEqual(StockMovement.objects.count(), 0)
+
     def test_checkout_rejects_disabled_payment_method(self):
         ShopSettings.load()
         ShopSettings.objects.filter(pk=1).update(enable_card_payments=False)

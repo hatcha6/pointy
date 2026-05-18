@@ -258,6 +258,31 @@
   },
   "noBarcode": "لا يوجد باركود",
   "noDescription": "لا يوجد وصف لهذا المنتج",
+  "posBarcodeFieldLabel": "الباركود",
+  "posBarcodeFieldHint": "امسح الباركود أو أدخله ثم اضغط إدخال",
+  "clearBarcodeTooltip": "مسح الباركود",
+  "focusBarcodeTooltip": "تركيز إدخال الباركود",
+  "clearBarcodeStatusTooltip": "إخفاء حالة الباركود",
+  "barcodeScanResolving": "جار البحث عن الباركود...",
+  "barcodeScanAdded": "تمت إضافة {productName}",
+  "@barcodeScanAdded": {
+    "description": "Status shown after a barcode scan adds a product to the cart.",
+    "placeholders": {
+      "productName": {
+        "type": "String"
+      }
+    }
+  },
+  "barcodeScanNotFound": "لم يتم العثور على منتج للباركود {barcode}",
+  "@barcodeScanNotFound": {
+    "description": "Status shown when a barcode scan does not match a product.",
+    "placeholders": {
+      "barcode": {
+        "type": "String"
+      }
+    }
+  },
+  "barcodeScanError": "تعذر البحث عن الباركود. حاول مرة أخرى.",
   "currentSaleTitle": "البيع الحالي",
   "clearCartTooltip": "مسح السلة",
   "emptyCart": "لا توجد عناصر في السلة",
