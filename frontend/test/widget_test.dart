@@ -10,6 +10,7 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import 'package:pointy_frontend/src/core/authorization.dart';
 import 'package:pointy_frontend/src/core/result.dart';
+import 'package:pointy_frontend/src/data/models/barcode_label.dart';
 import 'package:pointy_frontend/src/data/models/pos_user.dart';
 import 'package:pointy_frontend/src/data/models/print_job.dart';
 import 'package:pointy_frontend/src/data/models/printer_config.dart';
@@ -19,6 +20,7 @@ import 'package:pointy_frontend/src/app.dart';
 import 'package:pointy_frontend/src/data/repositories/printing_repository.dart';
 import 'package:pointy_frontend/src/data/repositories/inventory_repository.dart';
 import 'package:pointy_frontend/src/data/repositories/user_repository.dart';
+import 'package:pointy_frontend/src/data/services/esc_pos_barcode_label_encoder.dart';
 import 'package:pointy_frontend/src/data/services/esc_pos_receipt_encoder.dart';
 import 'package:pointy_frontend/src/data/services/pos_api_service.dart';
 import 'package:pointy_frontend/src/data/services/print_transport.dart';
@@ -102,6 +104,34 @@ void main() {
 
     expect(bytes, isNotEmpty);
     expect(bytes.first, 27);
+  });
+
+  test('ESC/POS barcode label encoder prints repeated labels', () async {
+    const endpoint = PrinterEndpoint(
+      kind: PrintTransportKind.serial,
+      name: 'Counter',
+      address: '/dev/tty.test',
+      paperWidthMm: 58,
+    );
+
+    final bytes = await const EscPosBarcodeLabelEncoder().encodeLabels(
+      endpoint: endpoint,
+      lines: const [
+        BarcodeLabelPrintLine(
+          label: BarcodeLabelDraft(
+            productName: 'قهوة عربية',
+            sku: 'COF-100',
+            barcode: '123456789012',
+            unitPrice: 5.5,
+          ),
+          copies: 2,
+        ),
+      ],
+    );
+
+    expect(bytes, isNotEmpty);
+    expect(bytes.first, 27);
+    expect(_countSubsequence(bytes, [29, 107]), 2);
   });
 
   test('printing repository discovers printers across transports', () async {
@@ -399,6 +429,31 @@ void main() {
       ),
       findsOneWidget,
     );
+  });
+
+  test('printing repository sends product barcode label bytes', () async {
+    final transport = _CapturingPrintTransport();
+    final repository = PrintingRepository(
+      _mockApiService(),
+      serialTransport: transport,
+    );
+
+    final result = await repository.printBarcodeLabels([
+      BarcodeLabelPrintLine.product(
+        const Product(
+          id: 1,
+          sku: 'COF-100',
+          name: 'قهوة عربية',
+          unitPrice: 5.5,
+          quantityOnHand: 10,
+          barcode: '123456789012',
+        ),
+      ),
+    ]);
+
+    expect(result.isSuccess, isTrue);
+    expect(transport.printedBytes, isNotEmpty);
+    expect(_countSubsequence(transport.printedBytes, [29, 107]), 1);
   });
 
   testWidgets('checkout keeps cart and shows error on failure', (
@@ -1276,6 +1331,7 @@ void main() {
             InventoryRepository(apiService),
             product,
           ),
+          printingRepository: PrintingRepository(apiService),
           capabilities: AuthorizationCapabilities.forUser(
             PosUser.fromJson(_userJson()),
           ),
@@ -1307,6 +1363,64 @@ void main() {
 
     expect(find.text('123456'), findsOneWidget);
     expect(find.text('حبوب مطحونة بعناية'), findsOneWidget);
+  });
+
+  testWidgets('product details barcode labels ask for copy count', (
+    WidgetTester tester,
+  ) async {
+    final product = const Product(
+      id: 42,
+      sku: 'COF-100',
+      name: 'قهوة عربية',
+      unitPrice: 5.50,
+      quantityOnHand: 8,
+      barcode: '123456789012',
+      description: 'حبوب مطحونة بعناية',
+    );
+    final apiService = _mockApiService();
+    final transport = _CapturingPrintTransport();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        locale: const Locale('ar'),
+        supportedLocales: AppLocalizations.supportedLocales,
+        localizationsDelegates: const [
+          AppLocalizations.delegate,
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
+        home: ProductDetailsScreen(
+          viewModel: ProductStockViewModel(
+            InventoryRepository(apiService),
+            product,
+          ),
+          printingRepository: PrintingRepository(
+            apiService,
+            serialTransport: transport,
+          ),
+          capabilities: AuthorizationCapabilities.forUser(
+            PosUser.fromJson(_userJson()),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+
+    await tester.drag(find.byType(ListView), const Offset(0, -300));
+    await tester.pump();
+    await tester.tap(find.text('طباعة ملصقات'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('طباعة ملصقات الباركود'), findsOneWidget);
+    expect(find.text('عدد النسخ'), findsOneWidget);
+
+    await tester.enterText(find.byType(TextFormField).last, '3');
+    await tester.tap(find.text('طباعة').last);
+    await tester.pumpAndSettle();
+
+    expect(find.text('تم إرسال 3 ملصقات باركود للطابعة.'), findsOneWidget);
+    expect(_countSubsequence(transport.printedBytes, [29, 107]), 3);
   });
 
   testWidgets('catalog product details can create a stock movement', (
@@ -1448,6 +1562,19 @@ LogicalKeyboardKey _logicalKeyForCharacter(String character) {
   };
 }
 
+int _countSubsequence(List<int> values, List<int> pattern) {
+  var count = 0;
+  for (var index = 0; index <= values.length - pattern.length; index += 1) {
+    final matches = Iterable<int>.generate(
+      pattern.length,
+    ).every((offset) => values[index + offset] == pattern[offset]);
+    if (matches) {
+      count += 1;
+    }
+  }
+  return count;
+}
+
 class _StaticDiscoveryTransport extends PrintTransport {
   const _StaticDiscoveryTransport(this.endpoints);
 
@@ -1467,6 +1594,40 @@ class _StaticDiscoveryTransport extends PrintTransport {
     required PrinterEndpoint endpoint,
   }) async {
     return const PrintTransportResult.success('printed');
+  }
+
+  @override
+  Future<PrintTransportResult> printTest(PrinterEndpoint endpoint) async {
+    return const PrintTransportResult.success('printed');
+  }
+}
+
+class _CapturingPrintTransport extends PrintTransport {
+  List<int> printedBytes = const [];
+
+  @override
+  Future<List<PrinterEndpoint>> discover() async => const [];
+
+  @override
+  Future<PrintTransportStatus> status(PrinterEndpoint endpoint) async {
+    return const PrintTransportStatus(isAvailable: true, message: 'ready');
+  }
+
+  @override
+  Future<PrintTransportResult> printJob({
+    required PrintJob job,
+    required PrinterEndpoint endpoint,
+  }) async {
+    return const PrintTransportResult.success('printed');
+  }
+
+  @override
+  Future<PrintTransportResult> printBytes({
+    required List<int> bytes,
+    required PrinterEndpoint endpoint,
+  }) async {
+    printedBytes = List<int>.of(bytes);
+    return const PrintTransportResult.success('printed bytes');
   }
 
   @override

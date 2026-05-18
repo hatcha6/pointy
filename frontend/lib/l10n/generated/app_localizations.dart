@@ -1148,6 +1148,66 @@ abstract class AppLocalizations {
   /// **'{quantity} قطعة'**
   String stockMovementQuantityValue(int quantity);
 
+  /// No description provided for @barcodeLabelPrintTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'طباعة ملصق الباركود'**
+  String get barcodeLabelPrintTitle;
+
+  /// No description provided for @barcodeLabelPrintButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'طباعة ملصقات'**
+  String get barcodeLabelPrintButton;
+
+  /// No description provided for @barcodeLabelPrintInProgressButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'جار الطباعة...'**
+  String get barcodeLabelPrintInProgressButton;
+
+  /// No description provided for @barcodeLabelPrintNoBarcode.
+  ///
+  /// In ar, this message translates to:
+  /// **'أضف باركودًا للمنتج قبل طباعة الملصق.'**
+  String get barcodeLabelPrintNoBarcode;
+
+  /// No description provided for @barcodeLabelCopiesDialogTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'طباعة ملصقات الباركود'**
+  String get barcodeLabelCopiesDialogTitle;
+
+  /// No description provided for @barcodeLabelCopiesLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'عدد النسخ'**
+  String get barcodeLabelCopiesLabel;
+
+  /// No description provided for @barcodeLabelCopiesHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'مثال: 10'**
+  String get barcodeLabelCopiesHint;
+
+  /// No description provided for @barcodeLabelCopiesPrintButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'طباعة'**
+  String get barcodeLabelCopiesPrintButton;
+
+  /// Message shown after barcode label copies are sent to the printer.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, =1{تم إرسال ملصق باركود واحد للطابعة.} =2{تم إرسال ملصقي باركود للطابعة.} other{تم إرسال {count} ملصقات باركود للطابعة.}}'**
+  String barcodeLabelPrintSuccess(num count);
+
+  /// No description provided for @barcodeLabelPrintError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذرت طباعة ملصق الباركود. تحقق من إعدادات الطابعة.'**
+  String get barcodeLabelPrintError;
+
   /// No description provided for @noBarcode.
   ///
   /// In ar, this message translates to:

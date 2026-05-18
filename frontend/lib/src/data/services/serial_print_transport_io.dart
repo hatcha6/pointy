@@ -64,13 +64,21 @@ class SerialPrintTransport extends PrintTransport {
     required PrinterEndpoint endpoint,
   }) async {
     final bytes = await _encoder.encodeJob(job: job, endpoint: endpoint);
+    return printBytes(bytes: bytes, endpoint: endpoint);
+  }
+
+  @override
+  Future<PrintTransportResult> printBytes({
+    required List<int> bytes,
+    required PrinterEndpoint endpoint,
+  }) async {
     return _queue.run(() => _write(endpoint, Uint8List.fromList(bytes)));
   }
 
   @override
   Future<PrintTransportResult> printTest(PrinterEndpoint endpoint) async {
     final bytes = await _encoder.encodeTest(endpoint);
-    return _queue.run(() => _write(endpoint, Uint8List.fromList(bytes)));
+    return printBytes(bytes: bytes, endpoint: endpoint);
   }
 
   Future<PrintTransportResult> _write(

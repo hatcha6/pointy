@@ -93,6 +93,7 @@ class _AuthenticatedRoutes {
     return CatalogScreen(
       viewModel: CatalogViewModel(dependencies.catalogRepository),
       inventoryRepository: dependencies.inventoryRepository,
+      printingRepository: dependencies.printingRepository,
       currentUser: currentUser,
       capabilities: capabilities,
       onOpenPos: guardedAction(

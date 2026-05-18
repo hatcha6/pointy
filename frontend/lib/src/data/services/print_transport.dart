@@ -13,6 +13,13 @@ abstract class PrintTransport {
     required PrinterEndpoint endpoint,
   });
 
+  Future<PrintTransportResult> printBytes({
+    required List<int> bytes,
+    required PrinterEndpoint endpoint,
+  }) async {
+    return const PrintTransportResult.failure('raw printing unsupported');
+  }
+
   Future<PrintTransportResult> printTest(PrinterEndpoint endpoint);
 }
 

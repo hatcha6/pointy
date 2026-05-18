@@ -572,6 +572,47 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
+  String get barcodeLabelPrintTitle => 'طباعة ملصق الباركود';
+
+  @override
+  String get barcodeLabelPrintButton => 'طباعة ملصقات';
+
+  @override
+  String get barcodeLabelPrintInProgressButton => 'جار الطباعة...';
+
+  @override
+  String get barcodeLabelPrintNoBarcode =>
+      'أضف باركودًا للمنتج قبل طباعة الملصق.';
+
+  @override
+  String get barcodeLabelCopiesDialogTitle => 'طباعة ملصقات الباركود';
+
+  @override
+  String get barcodeLabelCopiesLabel => 'عدد النسخ';
+
+  @override
+  String get barcodeLabelCopiesHint => 'مثال: 10';
+
+  @override
+  String get barcodeLabelCopiesPrintButton => 'طباعة';
+
+  @override
+  String barcodeLabelPrintSuccess(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'تم إرسال $count ملصقات باركود للطابعة.',
+      two: 'تم إرسال ملصقي باركود للطابعة.',
+      one: 'تم إرسال ملصق باركود واحد للطابعة.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get barcodeLabelPrintError =>
+      'تعذرت طباعة ملصق الباركود. تحقق من إعدادات الطابعة.';
+
+  @override
   String get noBarcode => 'لا يوجد باركود';
 
   @override

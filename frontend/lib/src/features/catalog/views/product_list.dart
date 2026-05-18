@@ -6,6 +6,7 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 import '../../../core/authorization.dart';
 import '../../../data/models/product.dart';
 import '../../../data/repositories/inventory_repository.dart';
+import '../../../data/repositories/printing_repository.dart';
 import '../../../shared/infinite_scroll_grid.dart';
 import '../../../shared/product_tile.dart';
 import '../../../shared/product_query_controls.dart';
@@ -18,6 +19,7 @@ class ProductList extends StatelessWidget {
     super.key,
     required this.viewModel,
     required this.inventoryRepository,
+    required this.printingRepository,
     required this.capabilities,
     required this.onBarcodeSubmitted,
     required this.onOpenCameraScanner,
@@ -25,6 +27,7 @@ class ProductList extends StatelessWidget {
 
   final CatalogViewModel viewModel;
   final InventoryRepository inventoryRepository;
+  final PrintingRepository printingRepository;
   final AuthorizationCapabilities capabilities;
   final FutureOr<bool> Function(String barcode) onBarcodeSubmitted;
   final VoidCallback onOpenCameraScanner;
@@ -90,6 +93,7 @@ class ProductList extends StatelessWidget {
                     context,
                     product: product,
                     inventoryRepository: inventoryRepository,
+                    printingRepository: printingRepository,
                     capabilities: capabilities,
                   ),
                 );
@@ -106,12 +110,14 @@ Future<void> openProductDetails(
   BuildContext context, {
   required Product product,
   required InventoryRepository inventoryRepository,
+  required PrintingRepository printingRepository,
   required AuthorizationCapabilities capabilities,
 }) {
   return Navigator.of(context).push(
     MaterialPageRoute<void>(
       builder: (_) => ProductDetailsScreen(
         viewModel: ProductStockViewModel(inventoryRepository, product),
+        printingRepository: printingRepository,
         capabilities: capabilities,
       ),
     ),

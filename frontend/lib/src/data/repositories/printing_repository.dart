@@ -1,7 +1,9 @@
 import '../../core/result.dart';
+import '../models/barcode_label.dart';
 import '../models/print_job.dart';
 import '../models/printer_config.dart';
 import '../services/device_settings_storage_service.dart';
+import '../services/esc_pos_barcode_label_encoder.dart';
 import '../services/pos_api_service.dart';
 import '../services/print_transport.dart';
 import '../services/print_transports.dart';
@@ -13,12 +15,15 @@ class PrintingRepository {
     PrintTransport? bluetoothTransport,
     PrintTransport? wifiTransport,
     PrintTransport fakeTransport = const FakePrintTransport(),
+    EscPosBarcodeLabelEncoder barcodeLabelEncoder =
+        const EscPosBarcodeLabelEncoder(),
     DeviceSettingsStorageService storageService =
         const DeviceSettingsStorageService(),
   }) : _serialTransport = serialTransport ?? SerialPrintTransport(),
        _bluetoothTransport = bluetoothTransport ?? BluetoothPrintTransport(),
        _wifiTransport = wifiTransport ?? WifiPrintTransport(),
        _fakeTransport = fakeTransport,
+       _barcodeLabelEncoder = barcodeLabelEncoder,
        _storageService = storageService;
 
   final PosApiService _service;
@@ -26,6 +31,7 @@ class PrintingRepository {
   final PrintTransport _bluetoothTransport;
   final PrintTransport _wifiTransport;
   final PrintTransport _fakeTransport;
+  final EscPosBarcodeLabelEncoder _barcodeLabelEncoder;
   final DeviceSettingsStorageService _storageService;
 
   Future<Result<List<PrintJob>>> loadPrintJobs({
@@ -154,6 +160,35 @@ class PrintingRepository {
 
   Future<PrintTransportResult> printFakeReceipt(PrinterConfig config) {
     return _fakeTransport.printTest(config.endpoint);
+  }
+
+  Future<PrintTransportResult> printBarcodeLabels(
+    List<BarcodeLabelPrintLine> lines,
+  ) async {
+    if (lines.isEmpty) {
+      return const PrintTransportResult.failure('no barcode labels to print');
+    }
+
+    final configResult = await loadDefaultPrinterConfig();
+    final config = switch (configResult) {
+      Ok<PrinterConfig>() => configResult.value,
+      Error<PrinterConfig>() => null,
+    };
+    if (config == null) {
+      return const PrintTransportResult.failure('printer config unavailable');
+    }
+
+    try {
+      final bytes = await _barcodeLabelEncoder.encodeLabels(
+        lines: lines,
+        endpoint: config.endpoint,
+      );
+      return _transportFor(
+        config.endpoint,
+      ).printBytes(bytes: bytes, endpoint: config.endpoint);
+    } on Object catch (error) {
+      return PrintTransportResult.failure(error.toString());
+    }
   }
 
   PrintTransport _transportFor(PrinterEndpoint endpoint) {

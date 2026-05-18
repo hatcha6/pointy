@@ -33,6 +33,16 @@ class FakePrintTransport extends PrintTransport {
   }
 
   @override
+  Future<PrintTransportResult> printBytes({
+    required List<int> bytes,
+    required PrinterEndpoint endpoint,
+  }) async {
+    return PrintTransportResult.success(
+      'fake print sent: ${bytes.length} bytes',
+    );
+  }
+
+  @override
   Future<PrintTransportResult> printTest(PrinterEndpoint endpoint) async {
     return const PrintTransportResult.success('fake test print completed');
   }

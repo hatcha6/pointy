@@ -257,6 +257,24 @@
       }
     }
   },
+  "barcodeLabelPrintTitle": "طباعة ملصق الباركود",
+  "barcodeLabelPrintButton": "طباعة ملصقات",
+  "barcodeLabelPrintInProgressButton": "جار الطباعة...",
+  "barcodeLabelPrintNoBarcode": "أضف باركودًا للمنتج قبل طباعة الملصق.",
+  "barcodeLabelCopiesDialogTitle": "طباعة ملصقات الباركود",
+  "barcodeLabelCopiesLabel": "عدد النسخ",
+  "barcodeLabelCopiesHint": "مثال: 10",
+  "barcodeLabelCopiesPrintButton": "طباعة",
+  "barcodeLabelPrintSuccess": "{count, plural, =1{تم إرسال ملصق باركود واحد للطابعة.} =2{تم إرسال ملصقي باركود للطابعة.} other{تم إرسال {count} ملصقات باركود للطابعة.}}",
+  "@barcodeLabelPrintSuccess": {
+    "description": "Message shown after barcode label copies are sent to the printer.",
+    "placeholders": {
+      "count": {
+        "type": "num"
+      }
+    }
+  },
+  "barcodeLabelPrintError": "تعذرت طباعة ملصق الباركود. تحقق من إعدادات الطابعة.",
   "noBarcode": "لا يوجد باركود",
   "noDescription": "لا يوجد وصف لهذا المنتج",
   "posProductLookupHint": "ابحث عن منتج أو امسح الباركود",
