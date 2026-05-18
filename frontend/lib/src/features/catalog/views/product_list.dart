@@ -1,16 +1,26 @@
 import 'package:flutter/material.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
+import '../../../core/authorization.dart';
+import '../../../data/repositories/inventory_repository.dart';
 import '../../../shared/infinite_scroll_grid.dart';
 import '../../../shared/product_tile.dart';
 import '../../../shared/product_query_controls.dart';
 import '../view_models/catalog_view_model.dart';
+import '../view_models/product_stock_view_model.dart';
 import 'product_details_screen.dart';
 
 class ProductList extends StatelessWidget {
-  const ProductList({super.key, required this.viewModel});
+  const ProductList({
+    super.key,
+    required this.viewModel,
+    required this.inventoryRepository,
+    required this.capabilities,
+  });
 
   final CatalogViewModel viewModel;
+  final InventoryRepository inventoryRepository;
+  final AuthorizationCapabilities capabilities;
 
   @override
   Widget build(BuildContext context) {
@@ -69,7 +79,13 @@ class ProductList extends StatelessWidget {
                   onTap: () {
                     Navigator.of(context).push(
                       MaterialPageRoute<void>(
-                        builder: (_) => ProductDetailsScreen(product: product),
+                        builder: (_) => ProductDetailsScreen(
+                          viewModel: ProductStockViewModel(
+                            inventoryRepository,
+                            product,
+                          ),
+                          capabilities: capabilities,
+                        ),
                       ),
                     );
                   },

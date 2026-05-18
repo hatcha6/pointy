@@ -179,6 +179,29 @@ class RegisterSessionCloseGuard extends StatelessWidget {
   }
 }
 
+class RegisterCashMovementCreateGuard extends StatelessWidget {
+  const RegisterCashMovementCreateGuard({
+    super.key,
+    required this.capabilities,
+    required this.child,
+    this.fallback = const SizedBox.shrink(),
+  });
+
+  final AuthorizationCapabilities capabilities;
+  final Widget child;
+  final Widget fallback;
+
+  @override
+  Widget build(BuildContext context) {
+    return AuthorizationGuard(
+      capabilities: capabilities,
+      capability: AppCapability.createRegisterCashMovement,
+      fallback: fallback,
+      child: child,
+    );
+  }
+}
+
 class CatalogManagementGuard extends StatelessWidget {
   const CatalogManagementGuard({
     super.key,
@@ -219,6 +242,52 @@ class ProductCreateGuard extends StatelessWidget {
     return AuthorizationGuard(
       capabilities: capabilities,
       capability: AppCapability.createProduct,
+      fallback: fallback,
+      child: child,
+    );
+  }
+}
+
+class StockViewGuard extends StatelessWidget {
+  const StockViewGuard({
+    super.key,
+    required this.capabilities,
+    required this.child,
+    this.fallback = const SizedBox.shrink(),
+  });
+
+  final AuthorizationCapabilities capabilities;
+  final Widget child;
+  final Widget fallback;
+
+  @override
+  Widget build(BuildContext context) {
+    return AuthorizationGuard(
+      capabilities: capabilities,
+      capability: AppCapability.viewStock,
+      fallback: fallback,
+      child: child,
+    );
+  }
+}
+
+class StockMovementCreateGuard extends StatelessWidget {
+  const StockMovementCreateGuard({
+    super.key,
+    required this.capabilities,
+    required this.child,
+    this.fallback = const SizedBox.shrink(),
+  });
+
+  final AuthorizationCapabilities capabilities;
+  final Widget child;
+  final Widget fallback;
+
+  @override
+  Widget build(BuildContext context) {
+    return AuthorizationGuard(
+      capabilities: capabilities,
+      capability: AppCapability.createStockMovement,
       fallback: fallback,
       child: child,
     );

@@ -7,10 +7,14 @@ from rest_framework.response import Response
 
 from apps.core.permissions import HasPointyPermission
 from apps.core.roles import user_is_manager
-from .models import Order, RegisterSession
+from .models import Order, RegisterCashMovement, RegisterSession
 from .serializers import (
     CheckoutSerializer,
     OrderSerializer,
+    OrderReturnSerializer,
+    OrderVoidSerializer,
+    RegisterCashMovementCreateSerializer,
+    RegisterCashMovementSerializer,
     RegisterSessionCloseSerializer,
     RegisterSessionSerializer,
     RegisterSessionStartSerializer,
@@ -25,6 +29,8 @@ class OrderViewSet(viewsets.ModelViewSet):
         "retrieve": ("sales.view_order",),
         "create": ("sales.add_order",),
         "checkout": ("sales.add_order",),
+        "return_items": ("sales.add_order",),
+        "void": ("sales.add_order",),
         "reprint": ("sales.view_order", "printing.add_printjob"),
         "update": ("sales.change_order",),
         "partial_update": ("sales.change_order",),
@@ -68,21 +74,132 @@ class OrderViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        print_action_serializer = self._invoice_print_action_serializer(request)
         serializer = CheckoutSerializer(
             data=request.data,
-            context={"register_session": session},
+            context={"register_session": session, "request": request},
         )
         serializer.is_valid(raise_exception=True)
         order = serializer.save()
-        return Response(OrderSerializer(order).data, status=status.HTTP_201_CREATED)
+        response_data = OrderSerializer(order, context={"request": request}).data
+
+        claimed_print_job = self._claim_checkout_invoice_print_job(
+            order,
+            print_action_serializer,
+            request,
+        )
+        if claimed_print_job is not None:
+            from apps.printing.serializers import PrintJobSerializer
+
+            response_data["print_job"] = PrintJobSerializer(claimed_print_job).data
+
+        return Response(response_data, status=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=["post"])
     def reprint(self, request, pk=None):
+        from apps.printing.serializers import PrintJobAgentActionSerializer
         from apps.printing.serializers import PrintJobSerializer
-        from apps.printing.services import enqueue_manual_receipt_reprint
+        from apps.printing.services import claim_print_job, enqueue_manual_receipt_reprint
 
         job = enqueue_manual_receipt_reprint(self.get_object(), user=request.user)
+        if request.data:
+            action_serializer = PrintJobAgentActionSerializer(data=request.data)
+            action_serializer.is_valid(raise_exception=True)
+            job = claim_print_job(
+                job,
+                action_serializer.validated_data["agent"],
+                user=request.user,
+                printer_endpoint=action_serializer.validated_data.get(
+                    "printer_endpoint",
+                    {},
+                ),
+            )
         return Response(PrintJobSerializer(job).data, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=["post"], url_path="return-items")
+    def return_items(self, request, pk=None):
+        order = self.get_object()
+        serializer = OrderReturnSerializer(
+            data=request.data,
+            context={
+                "order": order,
+                "request": request,
+                "adjustment_register_session": self._open_register_session(request),
+            },
+        )
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        order.refresh_from_db()
+        return Response(
+            OrderSerializer(order, context={"request": request}).data,
+            status=status.HTTP_200_OK,
+        )
+
+    @action(detail=True, methods=["post"])
+    def void(self, request, pk=None):
+        order = self.get_object()
+        serializer = OrderVoidSerializer(
+            data=request.data,
+            context={
+                "order": order,
+                "request": request,
+                "adjustment_register_session": self._open_register_session(request),
+            },
+        )
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        order.refresh_from_db()
+        return Response(
+            OrderSerializer(order, context={"request": request}).data,
+            status=status.HTTP_200_OK,
+        )
+
+    def _invoice_print_action_serializer(self, request):
+        print_action = request.data.get("print_invoice")
+        if print_action in (None, False):
+            return None
+        if not isinstance(print_action, dict):
+            raise serializers.ValidationError(
+                {"print_invoice": "Print invoice details must be an object."}
+            )
+
+        from apps.printing.serializers import PrintJobAgentActionSerializer
+
+        action_serializer = PrintJobAgentActionSerializer(data=print_action)
+        action_serializer.is_valid(raise_exception=True)
+        return action_serializer
+
+    def _claim_checkout_invoice_print_job(self, order, action_serializer, request):
+        if action_serializer is None:
+            return None
+
+        from apps.core.models import ShopSettings
+        from apps.printing.services import (
+            claim_print_job,
+            enqueue_manual_receipt_reprint,
+            enqueue_receipt_print_job,
+        )
+
+        if ShopSettings.load().auto_print_receipts:
+            job = enqueue_receipt_print_job(order.pk)
+        else:
+            job = enqueue_manual_receipt_reprint(order, user=request.user)
+
+        if job is None:
+            return None
+
+        try:
+            return claim_print_job(
+                job,
+                action_serializer.validated_data["agent"],
+                user=request.user,
+                printer_endpoint=action_serializer.validated_data.get(
+                    "printer_endpoint",
+                    {},
+                ),
+            )
+        except ValueError:
+            return None
 
 
 def register_session_owner_key(request):
@@ -108,9 +225,21 @@ class RegisterSessionViewSet(
         "list": ("sales.view_registersession",),
         "retrieve": ("sales.view_registersession",),
         "orders": ("sales.view_registersession", "sales.view_order"),
+        "cash_movements": (
+            "sales.view_registersession",
+            "sales.view_registercashmovement",
+        ),
         "current": ("sales.view_registersession",),
         "start": ("sales.add_registersession",),
         "close": ("sales.change_registersession",),
+        "pay_in": (
+            "sales.change_registersession",
+            "sales.add_registercashmovement",
+        ),
+        "pay_out": (
+            "sales.change_registersession",
+            "sales.add_registercashmovement",
+        ),
     }
     queryset = RegisterSession.objects.select_related("owner")
 
@@ -135,9 +264,28 @@ class RegisterSessionViewSet(
         )
         page = self.paginate_queryset(orders)
         if page is not None:
-            serializer = OrderSerializer(page, many=True)
+            serializer = OrderSerializer(
+                page,
+                many=True,
+                context={"request": request},
+            )
             return self.get_paginated_response(serializer.data)
-        return Response(OrderSerializer(orders, many=True).data)
+        return Response(
+            OrderSerializer(orders, many=True, context={"request": request}).data,
+        )
+
+    @action(detail=True, methods=["get"], url_path="cash-movements")
+    def cash_movements(self, request, pk=None):
+        session = self.get_object()
+        movements = session.cash_movements.select_related(
+            "created_by",
+            "register_session",
+        )
+        page = self.paginate_queryset(movements)
+        if page is not None:
+            serializer = RegisterCashMovementSerializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+        return Response(RegisterCashMovementSerializer(movements, many=True).data)
 
     @action(detail=False, methods=["get"])
     def current(self, request):
@@ -173,6 +321,36 @@ class RegisterSessionViewSet(
             )
 
         return Response(self.get_serializer(session).data)
+
+    @action(detail=True, methods=["post"], url_path="pay-in")
+    def pay_in(self, request, pk=None):
+        return self._create_cash_movement(request, RegisterCashMovement.MovementType.PAY_IN)
+
+    @action(detail=True, methods=["post"], url_path="pay-out")
+    def pay_out(self, request, pk=None):
+        return self._create_cash_movement(request, RegisterCashMovement.MovementType.PAY_OUT)
+
+    def _create_cash_movement(self, request, movement_type):
+        session = self.get_object()
+        if session.status != RegisterSession.Status.OPEN:
+            return Response(
+                {"detail": "Register session is already closed."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        serializer = RegisterCashMovementCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        movement = RegisterCashMovement.objects.create(
+            register_session=session,
+            movement_type=movement_type,
+            amount=serializer.validated_data["amount"],
+            reason=serializer.validated_data["reason"],
+            created_by=register_session_owner(request),
+        )
+        return Response(
+            RegisterCashMovementSerializer(movement).data,
+            status=status.HTTP_201_CREATED,
+        )
 
     @action(detail=True, methods=["post"])
     def close(self, request, pk=None):

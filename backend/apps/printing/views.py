@@ -25,7 +25,7 @@ from .serializers import (
     PrintTemplateSerializer,
     PrintTemplateVersionSerializer,
 )
-from .services import create_job_event, publish_template_version
+from .services import claim_print_job, create_job_event, publish_template_version
 
 
 class PrintTemplateViewSet(viewsets.ModelViewSet):
@@ -207,42 +207,21 @@ class PrintJobViewSet(
         serializer = PrintJobAgentActionSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         agent = serializer.validated_data["agent"]
-        now = timezone.now()
         job = self.get_object()
-        if job.status != PrintJob.Status.QUEUED:
+        try:
+            claimed_job = claim_print_job(
+                job,
+                agent,
+                user=request.user,
+                printer_endpoint=serializer.validated_data.get("printer_endpoint", {}),
+            )
+        except ValueError:
             return Response(
                 {"detail": "Only queued jobs can be claimed."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        job.status = PrintJob.Status.CLAIMED
-        job.claimed_by = agent
-        job.claimed_at = now
-        job.attempts += 1
-        job.error_message = ""
-        job.save(
-            update_fields=[
-                "status",
-                "claimed_by",
-                "claimed_at",
-                "attempts",
-                "error_message",
-                "updated_at",
-            ]
-        )
-        agent.last_seen_at = now
-        agent.save(update_fields=["last_seen_at", "updated_at"])
-        create_job_event(
-            job,
-            PrintJobEvent.Type.CLAIMED,
-            user=request.user,
-            agent=agent,
-            message="Print job claimed.",
-            metadata={
-                "printer_endpoint": serializer.validated_data.get("printer_endpoint", {})
-            },
-        )
-        return Response(self.get_serializer(job).data)
+        return Response(self.get_serializer(claimed_job).data)
 
     @action(detail=True, methods=["post"])
     def requeue(self, request, pk=None):

@@ -11,7 +11,7 @@ from apps.core.views import (
     logout_view,
     me_view,
 )
-from apps.inventory.views import StockItemViewSet
+from apps.inventory.views import StockItemViewSet, StockMovementViewSet
 from apps.payments.views import PaymentViewSet
 from apps.printing.views import (
     PrinterProfileViewSet,
@@ -26,6 +26,7 @@ router = DefaultRouter()
 router.register("users", PosUserViewSet, basename="pos-user")
 router.register("products", ProductViewSet)
 router.register("stock", StockItemViewSet)
+router.register("stock-movements", StockMovementViewSet)
 router.register("orders", OrderViewSet)
 router.register("register-sessions", RegisterSessionViewSet, basename="register-session")
 router.register("payments", PaymentViewSet)

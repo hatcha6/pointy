@@ -30,12 +30,48 @@ class CatalogRepository {
 
   List<Product> sampleProducts(ProductQuery query) {
     final products = const [
-      Product(id: 1, sku: 'COF-001', name: 'قهوة البيت', unitPrice: 3.50),
-      Product(id: 2, sku: 'TEA-001', name: 'شاي بالنعناع', unitPrice: 2.75),
-      Product(id: 3, sku: 'SNK-012', name: 'لوح تمر', unitPrice: 1.95),
-      Product(id: 4, sku: 'BKR-044', name: 'كرواسون زعتر', unitPrice: 4.25),
-      Product(id: 5, sku: 'JCE-002', name: 'عصير برتقال', unitPrice: 3.25),
-      Product(id: 6, sku: 'SND-019', name: 'ساندويتش حلومي', unitPrice: 6.80),
+      Product(
+        id: 1,
+        sku: 'COF-001',
+        name: 'قهوة البيت',
+        unitPrice: 3.50,
+        quantityOnHand: 12,
+      ),
+      Product(
+        id: 2,
+        sku: 'TEA-001',
+        name: 'شاي بالنعناع',
+        unitPrice: 2.75,
+        quantityOnHand: 12,
+      ),
+      Product(
+        id: 3,
+        sku: 'SNK-012',
+        name: 'لوح تمر',
+        unitPrice: 1.95,
+        quantityOnHand: 12,
+      ),
+      Product(
+        id: 4,
+        sku: 'BKR-044',
+        name: 'كرواسون زعتر',
+        unitPrice: 4.25,
+        quantityOnHand: 12,
+      ),
+      Product(
+        id: 5,
+        sku: 'JCE-002',
+        name: 'عصير برتقال',
+        unitPrice: 3.25,
+        quantityOnHand: 12,
+      ),
+      Product(
+        id: 6,
+        sku: 'SND-019',
+        name: 'ساندويتش حلومي',
+        unitPrice: 6.80,
+        quantityOnHand: 12,
+      ),
     ];
 
     final search = query.search.trim().toLowerCase();

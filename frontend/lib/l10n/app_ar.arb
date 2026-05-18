@@ -83,21 +83,27 @@
       }
     }
   },
-  "registerSessionSettingsSummary": "نقدية الافتتاح: {status}",
+  "registerSessionSettingsSummary": "نقدية الافتتاح: {status}، صلاحية الكاشير للإرجاع: {window}",
   "@registerSessionSettingsSummary": {
     "description": "Summary for register session settings in the shop settings index.",
     "placeholders": {
       "status": {
         "type": "String"
+      },
+      "window": {
+        "type": "String"
       }
     }
   },
-  "inventorySettingsSummary": "تنبيه عند {count} قطع أو أقل",
+  "inventorySettingsSummary": "تنبيه عند {count} قطع أو أقل، البيع فوق المخزون: {status}",
   "@inventorySettingsSummary": {
-    "description": "Summary for low stock alert threshold in the shop settings index.",
+    "description": "Summary for inventory settings in the shop settings index.",
     "placeholders": {
       "count": {
         "type": "int"
+      },
+      "status": {
+        "type": "String"
       }
     }
   },
@@ -105,7 +111,42 @@
   "receiptHeaderLabel": "ترويسة الإيصال",
   "receiptFooterLabel": "خاتمة الإيصال",
   "requireOpeningCashLabel": "طلب نقدية افتتاح الجلسة",
+  "cashierReturnWindowLabel": "مدة صلاحية الإرجاع للكاشير",
+  "cashierReturnWindowDialogTitle": "مدة صلاحية الإرجاع",
+  "cashierReturnWindowDaysLabel": "الأيام",
+  "cashierReturnWindowHoursLabel": "الساعات",
+  "cashierReturnWindowHoursValue": "{hours} ساعة",
+  "@cashierReturnWindowHoursValue": {
+    "description": "Duration value when only hours are shown.",
+    "placeholders": {
+      "hours": {
+        "type": "int"
+      }
+    }
+  },
+  "cashierReturnWindowDaysValue": "{days} يوم",
+  "@cashierReturnWindowDaysValue": {
+    "description": "Duration value when only days are shown.",
+    "placeholders": {
+      "days": {
+        "type": "int"
+      }
+    }
+  },
+  "cashierReturnWindowDaysHoursValue": "{days} يوم و{hours} ساعة",
+  "@cashierReturnWindowDaysHoursValue": {
+    "description": "Duration value when days and hours are shown.",
+    "placeholders": {
+      "days": {
+        "type": "int"
+      },
+      "hours": {
+        "type": "int"
+      }
+    }
+  },
   "autoPrintReceiptsLabel": "طباعة الإيصالات تلقائيًا",
+  "allowOversellingLabel": "السماح بالبيع فوق المخزون",
   "lowStockThresholdLabel": "حد تنبيه المخزون المنخفض",
   "printerTransportLabel": "طريقة الاتصال",
   "printerTransportSerial": "تسلسلي",
@@ -166,6 +207,33 @@
   "productAvailabilityTitle": "حالة البيع",
   "productAvailableForSale": "هذا المنتج متاح للبيع في نقطة البيع.",
   "productUnavailableForSale": "هذا المنتج متوقف ولا يظهر للبيع.",
+  "stockSummaryTitle": "المخزون",
+  "stockOnHandLabel": "المتاح",
+  "stockLoadError": "تعذر تحميل المخزون.",
+  "stockMovementsButton": "حركات المخزون",
+  "stockMovementsTitle": "حركات المخزون",
+  "emptyStockMovements": "لا توجد حركات مخزون لهذا المنتج.",
+  "stockMovementLoadError": "تعذر تحميل حركات المخزون.",
+  "newStockMovementButton": "حركة مخزون جديدة",
+  "newStockMovementTitle": "حركة مخزون جديدة",
+  "stockMovementTypeLabel": "نوع الحركة",
+  "stockMovementQuantityLabel": "الكمية",
+  "stockMovementNoteLabel": "ملاحظة",
+  "saveStockMovementButton": "حفظ الحركة",
+  "savingStockMovementButton": "جار الحفظ...",
+  "stockMovementCreateError": "تعذر حفظ حركة المخزون. راجع الكمية وحاول مرة أخرى.",
+  "stockMovementIncrease": "زيادة المخزون",
+  "stockMovementDecrease": "نقص المخزون",
+  "stockMovementDamaged": "تالف",
+  "stockMovementQuantityValue": "{quantity} قطعة",
+  "@stockMovementQuantityValue": {
+    "description": "Quantity shown on a stock movement row.",
+    "placeholders": {
+      "quantity": {
+        "type": "int"
+      }
+    }
+  },
   "noBarcode": "لا يوجد باركود",
   "noDescription": "لا يوجد وصف لهذا المنتج",
   "currentSaleTitle": "البيع الحالي",
@@ -181,6 +249,7 @@
     }
   },
   "checkoutInProgressButton": "جار الدفع...",
+  "printInvoiceAfterPaymentLabel": "طباعة الفاتورة بعد الدفع",
   "saleCheckoutSuccess": "تم تسجيل البيع.",
   "saleCheckoutSuccessWithReceipt": "تم تسجيل البيع. رقم الإيصال: {receiptNumber}",
   "@saleCheckoutSuccessWithReceipt": {
@@ -191,7 +260,29 @@
       }
     }
   },
+  "invoicePrintSuccess": "تم إرسال الفاتورة للطابعة.",
+  "invoicePrintError": "تم تسجيل البيع، لكن تعذرت طباعة الفاتورة.",
   "saleCheckoutError": "تعذر تسجيل البيع. تحقق من جلسة الدرج وحاول مرة أخرى.",
+  "oversellWarningTitle": "تنبيه المخزون",
+  "oversellWarningMessage": "تتجاوز بعض عناصر السلة الكمية المتاحة. هل تريد إتمام البيع رغم ذلك؟",
+  "oversellBlockedMessage": "لا يمكن إتمام البيع لأن الكمية المطلوبة تتجاوز المخزون المتاح.",
+  "oversellLine": "{productName}: المطلوب {requested}، المتاح {available}",
+  "@oversellLine": {
+    "description": "Stock shortage line in the oversell warning dialog.",
+    "placeholders": {
+      "productName": {
+        "type": "String"
+      },
+      "requested": {
+        "type": "int"
+      },
+      "available": {
+        "type": "int"
+      }
+    }
+  },
+  "reviewCartButton": "مراجعة السلة",
+  "continueSaleButton": "إتمام البيع",
   "paymentUnauthorizedMessage": "لا يملك هذا المستخدم صلاحية إتمام الدفع.",
   "unitPriceEach": "{amount} للقطعة",
   "@unitPriceEach": {
@@ -212,6 +303,7 @@
   "registerSessionLoadError": "تعذر الاتصال بجلسة الدرج. حاول مرة أخرى.",
   "retryRegisterSessionButton": "إعادة المحاولة",
   "openingCashInputLabel": "نقدية الافتتاح",
+  "openingCashRequiredError": "أدخل نقدية الافتتاح قبل بدء الجلسة.",
   "startRegisterSessionButton": "بدء الجلسة",
   "startingRegisterSessionButton": "جار بدء الجلسة...",
   "resumeRegisterSessionTitle": "جلسة {sessionNumber}",
@@ -242,6 +334,18 @@
       }
     }
   },
+  "cashMovementMenuTooltip": "حركات نقدية للدرج",
+  "payInRegisterSessionTitle": "إضافة نقدية للدرج",
+  "payOutRegisterSessionTitle": "سحب نقدية من الدرج",
+  "payInRegisterSessionButton": "إضافة نقدية",
+  "payOutRegisterSessionButton": "سحب نقدية",
+  "cashMovementAmountLabel": "المبلغ",
+  "cashMovementReasonLabel": "سبب الحركة",
+  "cashMovementReasonRequiredError": "أدخل سبب الحركة قبل الحفظ.",
+  "positiveAmountRequiredError": "أدخل مبلغًا أكبر من صفر.",
+  "savingCashMovementButton": "جار الحفظ...",
+  "cashMovementCreateError": "تعذر حفظ الحركة النقدية. راجع المبلغ والسبب وحاول مرة أخرى.",
+  "cashMovementCreatedMessage": "تم حفظ الحركة النقدية.",
   "closeRegisterSessionTooltip": "إغلاق جلسة الدرج",
   "closeRegisterSessionTitle": "إغلاق جلسة الدرج",
   "closingCashInputLabel": "النقد عند الإغلاق",
@@ -276,8 +380,36 @@
       }
     }
   },
+  "sessionSalesTab": "المبيعات",
+  "sessionCashMovementsTab": "حركات النقد",
+  "sessionSummaryTab": "الملخص",
+  "sessionCashSummaryTitle": "ملخص النقد",
+  "sessionOpeningCashMetric": "نقدية الافتتاح",
+  "sessionCashSalesMetric": "المبيعات النقدية",
+  "sessionPayInMetric": "إضافات الدرج",
+  "sessionPayOutMetric": "سحوبات الدرج",
+  "sessionCashRefundMetric": "مبالغ الإرجاع النقدية",
+  "sessionExpectedCashMetric": "النقد المتوقع",
+  "sessionClosingCashMetric": "النقد المعدود",
+  "sessionDenominationTotalMetric": "إجمالي الفئات",
+  "sessionCashVarianceMetric": "فرق النقد",
+  "sessionDenominationsTitle": "الفئات عند الإغلاق",
+  "sessionVarianceFlag": "فرق {amount}",
+  "@sessionVarianceFlag": {
+    "description": "Compact cash variance label.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "sessionNoVariance": "لا يوجد فرق مسجل",
   "sessionSalesLoadError": "تعذر تحميل مبيعات هذه الجلسة.",
   "emptySessionSales": "لا توجد مبيعات مسجلة في هذه الجلسة.",
+  "sessionCashMovementsLoadError": "تعذر تحميل حركات النقد لهذه الجلسة.",
+  "emptySessionCashMovements": "لا توجد حركات نقد مسجلة في هذه الجلسة.",
+  "cashMovementPayInLabel": "إضافة نقدية",
+  "cashMovementPayOutLabel": "سحب نقدية",
   "saleReceiptFallback": "بدون رقم",
   "saleReceiptTitle": "إيصال {receiptNumber}",
   "@saleReceiptTitle": {
@@ -321,5 +453,32 @@
   "saleReprintButton": "إعادة طباعة الإيصال",
   "saleReprintInProgressButton": "جار طلب الطباعة...",
   "saleReprintQueuedMessage": "تم إرسال طلب إعادة الطباعة.",
-  "saleReprintError": "تعذر إرسال طلب إعادة الطباعة."
+  "saleReprintError": "تعذر إرسال طلب إعادة الطباعة.",
+  "saleVoidButton": "إلغاء الفاتورة",
+  "saleVoidTitle": "إلغاء الفاتورة",
+  "saleVoidMessage": "سيتم عكس كامل المبلغ وإرجاع الكميات المتبقية إلى المخزون.",
+  "saleVoidSuccess": "تم إلغاء الفاتورة.",
+  "saleVoidError": "تعذر إلغاء الفاتورة.",
+  "saleReturnButton": "إرجاع منتجات",
+  "saleReturnTitle": "إرجاع منتجات",
+  "saleReturnSuccess": "تم تسجيل الإرجاع.",
+  "saleReturnError": "تعذر تسجيل الإرجاع.",
+  "saleAdjustmentReasonLabel": "سبب اختياري",
+  "saleAdjustmentReasonHint": "مثال: طلب العميل الإرجاع",
+  "saleReturnQuantityLabel": "كمية الإرجاع",
+  "saleLineReturnedQuantity": "تم إرجاع {returned} من {quantity}",
+  "@saleLineReturnedQuantity": {
+    "description": "Returned quantity status for a sale line.",
+    "placeholders": {
+      "returned": {
+        "type": "int"
+      },
+      "quantity": {
+        "type": "int"
+      }
+    }
+  },
+  "saleReturnNoItemsSelected": "اختر كمية واحدة على الأقل للإرجاع.",
+  "saleNoReturnableItems": "لا توجد كميات متاحة للإرجاع.",
+  "confirmButton": "تأكيد"
 }

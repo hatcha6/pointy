@@ -3,6 +3,7 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../core/authorization.dart';
 import '../../../data/models/pos_user.dart';
+import '../../../data/repositories/inventory_repository.dart';
 import '../../../shared/app_navigation_drawer.dart';
 import '../../../shared/authorization_guards.dart';
 import '../view_models/catalog_view_model.dart';
@@ -13,6 +14,7 @@ class CatalogScreen extends StatelessWidget {
   const CatalogScreen({
     super.key,
     required this.viewModel,
+    required this.inventoryRepository,
     required this.currentUser,
     required this.capabilities,
     required this.onOpenPos,
@@ -24,6 +26,7 @@ class CatalogScreen extends StatelessWidget {
   });
 
   final CatalogViewModel viewModel;
+  final InventoryRepository inventoryRepository;
   final PosUser currentUser;
   final AuthorizationCapabilities capabilities;
   final VoidCallback onOpenPos;
@@ -79,7 +82,11 @@ class CatalogScreen extends StatelessWidget {
           body: SafeArea(
             child: CatalogManagementGuard(
               capabilities: capabilities,
-              child: ProductList(viewModel: viewModel),
+              child: ProductList(
+                viewModel: viewModel,
+                inventoryRepository: inventoryRepository,
+                capabilities: capabilities,
+              ),
             ),
           ),
           floatingActionButton: ProductCreateGuard(

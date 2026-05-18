@@ -2,12 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../core/authorization.dart';
+import '../../../data/models/register_cash_movement.dart';
 import '../../../data/models/pos_user.dart';
 import '../../../shared/app_navigation_drawer.dart';
 import '../../../shared/authorization_guards.dart';
 import '../view_models/pos_view_model.dart';
 import 'pos_cart_pane.dart';
 import 'pos_catalog_pane.dart';
+import 'register_cash_movement_sheet.dart';
 import 'register_session_close_sheet.dart';
 import 'register_session_gate.dart';
 
@@ -86,6 +88,43 @@ class PosScreen extends StatelessWidget {
                   ),
                 ),
               if (viewModel.activeRegisterSession != null)
+                RegisterCashMovementCreateGuard(
+                  capabilities: capabilities,
+                  child: PopupMenuButton<RegisterCashMovementType>(
+                    tooltip: l10n.cashMovementMenuTooltip,
+                    enabled: !viewModel.isCreatingCashMovement,
+                    icon: viewModel.isCreatingCashMovement
+                        ? const SizedBox.square(
+                            dimension: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.account_balance_wallet_outlined),
+                    onSelected: (movementType) {
+                      _showCashMovementSheet(context, movementType);
+                    },
+                    itemBuilder: (context) {
+                      return [
+                        PopupMenuItem(
+                          value: RegisterCashMovementType.payIn,
+                          child: ListTile(
+                            contentPadding: EdgeInsets.zero,
+                            leading: const Icon(Icons.input),
+                            title: Text(l10n.payInRegisterSessionButton),
+                          ),
+                        ),
+                        PopupMenuItem(
+                          value: RegisterCashMovementType.payOut,
+                          child: ListTile(
+                            contentPadding: EdgeInsets.zero,
+                            leading: const Icon(Icons.output),
+                            title: Text(l10n.payOutRegisterSessionButton),
+                          ),
+                        ),
+                      ];
+                    },
+                  ),
+                ),
+              if (viewModel.activeRegisterSession != null)
                 RegisterSessionCloseGuard(
                   capabilities: capabilities,
                   child: IconButton(
@@ -137,9 +176,6 @@ class PosScreen extends StatelessWidget {
       useSafeArea: true,
       builder: (context) {
         return RegisterSessionCloseSheet(
-          initialClosingCash: viewModel.total == 0
-              ? ''
-              : viewModel.total.toStringAsFixed(2),
           onClose: (input) {
             return viewModel.closeActiveRegisterSession(
               closingCash: input.closingCash,
@@ -152,6 +188,37 @@ class PosScreen extends StatelessWidget {
         );
       },
     );
+  }
+
+  Future<void> _showCashMovementSheet(
+    BuildContext context,
+    RegisterCashMovementType movementType,
+  ) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final l10n = AppLocalizations.of(context)!;
+    final didCreate = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (context) {
+        return RegisterCashMovementSheet(
+          movementType: movementType,
+          onSubmit: (input) {
+            return viewModel.createActiveRegisterCashMovement(
+              movementType: input.movementType,
+              amount: input.amount,
+              reason: input.reason,
+            );
+          },
+        );
+      },
+    );
+
+    if (didCreate ?? false) {
+      messenger.showSnackBar(
+        SnackBar(content: Text(l10n.cashMovementCreatedMessage)),
+      );
+    }
   }
 }
 

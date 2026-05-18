@@ -9,6 +9,7 @@ enum AppCapability {
   startRegisterSession,
   resumeRegisterSession,
   closeRegisterSession,
+  createRegisterCashMovement,
   viewCatalogManagement,
   createProduct,
   viewRegisterSessions,
@@ -16,6 +17,8 @@ enum AppCapability {
   manageDeviceSettings,
   manageUsers,
   manageShopSettings,
+  viewStock,
+  createStockMovement,
 }
 
 class AuthorizationCapabilities {
@@ -32,6 +35,7 @@ class AuthorizationCapabilities {
       AppCapability.startRegisterSession,
       AppCapability.resumeRegisterSession,
       AppCapability.closeRegisterSession,
+      AppCapability.createRegisterCashMovement,
       AppCapability.manageDeviceSettings,
     };
 
@@ -48,6 +52,22 @@ class AuthorizationCapabilities {
         'catalog.delete_product',
       ])) {
         capabilities.add(AppCapability.viewCatalogManagement);
+      }
+      if (_hasAny(user, const [
+        'view_stockitem',
+        'view_stockmovement',
+        'inventory.view_stockitem',
+        'inventory.view_stockmovement',
+      ])) {
+        capabilities.add(AppCapability.viewStock);
+      }
+      if (_hasAny(user, const [
+        'add_stockmovement',
+        'inventory.add_stockmovement',
+      ])) {
+        capabilities
+          ..add(AppCapability.viewStock)
+          ..add(AppCapability.createStockMovement);
       }
       if (_hasAny(user, const [
         'view_registersession',
@@ -83,6 +103,14 @@ class AuthorizationCapabilities {
           ..add(AppCapability.closeRegisterSession);
       }
       if (_hasAny(user, const [
+        'add_registercashmovement',
+        'sales.add_registercashmovement',
+      ])) {
+        capabilities
+          ..add(AppCapability.accessPos)
+          ..add(AppCapability.createRegisterCashMovement);
+      }
+      if (_hasAny(user, const [
         'add_user',
         'change_user',
         'delete_user',
@@ -96,9 +124,7 @@ class AuthorizationCapabilities {
       }
       if (_hasAny(user, const [
         'change_shopsettings',
-        'view_shopsettings',
         'core.change_shopsettings',
-        'core.view_shopsettings',
       ])) {
         capabilities.add(AppCapability.manageShopSettings);
       }
@@ -119,6 +145,8 @@ class AuthorizationCapabilities {
       allows(AppCapability.resumeRegisterSession);
   bool get canCloseRegisterSession =>
       allows(AppCapability.closeRegisterSession);
+  bool get canCreateRegisterCashMovement =>
+      allows(AppCapability.createRegisterCashMovement);
   bool get canViewCatalogManagement =>
       allows(AppCapability.viewCatalogManagement);
   bool get canCreateProduct => allows(AppCapability.createProduct);
@@ -130,6 +158,8 @@ class AuthorizationCapabilities {
       allows(AppCapability.manageDeviceSettings);
   bool get canManageUsers => allows(AppCapability.manageUsers);
   bool get canManageShopSettings => allows(AppCapability.manageShopSettings);
+  bool get canViewStock => allows(AppCapability.viewStock);
+  bool get canCreateStockMovement => allows(AppCapability.createStockMovement);
 
   AuthorizedAction? actionFor(
     AppCapability capability,

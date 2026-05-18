@@ -4,6 +4,8 @@ from .models import Product
 
 
 class ProductSerializer(serializers.ModelSerializer):
+    quantity_on_hand = serializers.SerializerMethodField()
+
     class Meta:
         model = Product
         fields = [
@@ -14,6 +16,7 @@ class ProductSerializer(serializers.ModelSerializer):
             "description",
             "unit_price",
             "is_active",
+            "quantity_on_hand",
             "created_at",
             "updated_at",
         ]
@@ -26,3 +29,9 @@ class ProductSerializer(serializers.ModelSerializer):
 
     def validate_sku(self, value):
         return value.strip().upper()
+
+    def get_quantity_on_hand(self, product):
+        try:
+            return product.stock.quantity_on_hand
+        except Product.stock.RelatedObjectDoesNotExist:
+            return 0

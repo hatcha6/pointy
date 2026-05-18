@@ -101,6 +101,38 @@ extension PosRegisterSessionActions on PosViewModel {
     }
   }
 
+  Future<bool> createActiveRegisterCashMovement({
+    required RegisterCashMovementType movementType,
+    required double amount,
+    required String reason,
+  }) async {
+    final session = _activeRegisterSession;
+    if (session == null || _isCreatingCashMovement) {
+      return false;
+    }
+
+    _isCreatingCashMovement = true;
+    _hasRegisterSessionError = false;
+    _notifyChanged();
+
+    final result = await _registerSessionRepository.createCashMovement(
+      sessionId: session.id,
+      movementType: movementType,
+      draft: RegisterCashMovementDraft(amount: amount, reason: reason),
+    );
+    switch (result) {
+      case Ok<RegisterCashMovement>():
+        _isCreatingCashMovement = false;
+        _notifyChanged();
+        return true;
+      case Error<RegisterCashMovement>():
+        _hasRegisterSessionError = true;
+        _isCreatingCashMovement = false;
+        _notifyChanged();
+        return false;
+    }
+  }
+
   void _activateRegisterSession(RegisterSession session) {
     _activeRegisterSession = session;
     _availableRegisterSession = null;

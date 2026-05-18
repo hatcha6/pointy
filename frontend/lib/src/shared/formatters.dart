@@ -1,1 +1,1 @@
-String formatMoney(double value) => 'د.ل ${value.toStringAsFixed(2)}';
+String formatMoney(double value) => '${value.toStringAsFixed(2)} د.ل';

@@ -150,6 +150,43 @@ def get_or_create_print_agent(identifier):
     return agent
 
 
+def claim_print_job(job, agent, *, user=None, printer_endpoint=None):
+    now = timezone.now()
+    with transaction.atomic():
+        locked_job = PrintJob.objects.select_for_update().get(pk=job.pk)
+        if locked_job.status != PrintJob.Status.QUEUED:
+            raise ValueError("Only queued jobs can be claimed.")
+
+        locked_job.status = PrintJob.Status.CLAIMED
+        locked_job.claimed_by = agent
+        locked_job.claimed_at = now
+        locked_job.attempts += 1
+        locked_job.error_message = ""
+        locked_job.save(
+            update_fields=[
+                "status",
+                "claimed_by",
+                "claimed_at",
+                "attempts",
+                "error_message",
+                "updated_at",
+            ]
+        )
+        agent.last_seen_at = now
+        agent.save(update_fields=["last_seen_at", "updated_at"])
+        create_job_event(
+            locked_job,
+            PrintJobEvent.Type.CLAIMED,
+            user=user,
+            agent=agent,
+            message="Print job claimed.",
+            metadata={"printer_endpoint": printer_endpoint or {}},
+        )
+
+    locked_job.refresh_from_db()
+    return locked_job
+
+
 def enqueue_receipt_print_job(order_id):
     order = Order.objects.get(pk=order_id)
     if order.status != Order.Status.PAID:

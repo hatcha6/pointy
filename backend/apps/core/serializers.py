@@ -124,7 +124,9 @@ class ShopSettingsSerializer(serializers.ModelSerializer):
             "receipt_footer",
             "require_opening_cash",
             "auto_print_receipts",
+            "allow_overselling",
             "low_stock_threshold",
+            "cashier_return_window_hours",
             "updated_at",
         ]
         read_only_fields = ["updated_at"]

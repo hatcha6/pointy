@@ -134,8 +134,10 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
   late final TextEditingController _receiptHeaderController;
   late final TextEditingController _receiptFooterController;
   late final TextEditingController _lowStockThresholdController;
+  late int _cashierReturnWindowHours;
   late bool _requireOpeningCash;
   late bool _autoPrintReceipts;
+  late bool _allowOverselling;
   bool _showValidationErrors = false;
 
   @override
@@ -161,8 +163,10 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
         _lowStockThresholdController,
         '${widget.settings.lowStockThreshold}',
       );
+      _cashierReturnWindowHours = widget.settings.cashierReturnWindowHours;
       _requireOpeningCash = widget.settings.requireOpeningCash;
       _autoPrintReceipts = widget.settings.autoPrintReceipts;
+      _allowOverselling = widget.settings.allowOverselling;
     }
   }
 
@@ -186,8 +190,10 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
     _lowStockThresholdController = TextEditingController(
       text: '${settings.lowStockThreshold}',
     );
+    _cashierReturnWindowHours = settings.cashierReturnWindowHours;
     _requireOpeningCash = settings.requireOpeningCash;
     _autoPrintReceipts = settings.autoPrintReceipts;
+    _allowOverselling = settings.allowOverselling;
   }
 
   void _setControllerText(TextEditingController controller, String value) {
@@ -323,12 +329,18 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
     final status = _requireOpeningCash
         ? l10n.shopSettingsEnabledValue
         : l10n.shopSettingsDisabledValue;
-    return l10n.registerSessionSettingsSummary(status);
+    return l10n.registerSessionSettingsSummary(
+      status,
+      _formatCashierReturnWindow(l10n),
+    );
   }
 
   String _inventorySummary(AppLocalizations l10n) {
     final count = int.tryParse(_lowStockThresholdController.text.trim()) ?? 0;
-    return l10n.inventorySettingsSummary(count);
+    final status = _allowOverselling
+        ? l10n.shopSettingsEnabledValue
+        : l10n.shopSettingsDisabledValue;
+    return l10n.inventorySettingsSummary(count, status);
   }
 
   String? _shopNameError(AppLocalizations l10n) {
@@ -425,6 +437,14 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
                 refresh();
               },
       ),
+      const SizedBox(height: 12),
+      _DurationPickerTile(
+        key: const ValueKey('cashier_return_window_picker'),
+        enabled: !widget.viewModel.isSaving,
+        label: l10n.cashierReturnWindowLabel,
+        value: _formatCashierReturnWindow(l10n),
+        onTap: () => _pickCashierReturnWindow(context, l10n, refresh),
+      ),
     ];
   }
 
@@ -447,7 +467,123 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
           prefixIcon: const Icon(Icons.inventory_outlined),
         ),
       ),
+      const SizedBox(height: 4),
+      SwitchListTile(
+        contentPadding: EdgeInsets.zero,
+        value: _allowOverselling,
+        title: Text(l10n.allowOversellingLabel),
+        onChanged: widget.viewModel.isSaving
+            ? null
+            : (value) {
+                setState(() => _allowOverselling = value);
+                refresh();
+              },
+      ),
     ];
+  }
+
+  String _formatCashierReturnWindow(AppLocalizations l10n) {
+    final days = _cashierReturnWindowHours ~/ 24;
+    final hours = _cashierReturnWindowHours % 24;
+    if (days == 0) {
+      return l10n.cashierReturnWindowHoursValue(hours);
+    }
+    if (hours == 0) {
+      return l10n.cashierReturnWindowDaysValue(days);
+    }
+    return l10n.cashierReturnWindowDaysHoursValue(days, hours);
+  }
+
+  Future<void> _pickCashierReturnWindow(
+    BuildContext context,
+    AppLocalizations l10n,
+    VoidCallback refresh,
+  ) async {
+    final picked = await showDialog<int>(
+      context: context,
+      builder: (context) {
+        var selectedDays = _cashierReturnWindowHours ~/ 24;
+        var selectedHours = _cashierReturnWindowHours % 24;
+
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              icon: const Icon(Icons.schedule_outlined),
+              title: Text(l10n.cashierReturnWindowDialogTitle),
+              content: Row(
+                children: [
+                  Expanded(
+                    child: DropdownButtonFormField<int>(
+                      initialValue: selectedDays,
+                      decoration: InputDecoration(
+                        labelText: l10n.cashierReturnWindowDaysLabel,
+                        border: const OutlineInputBorder(),
+                      ),
+                      items: [
+                        for (var value = 0; value <= 30; value++)
+                          DropdownMenuItem<int>(
+                            value: value,
+                            child: Text('$value'),
+                          ),
+                      ],
+                      onChanged: (value) {
+                        if (value == null) {
+                          return;
+                        }
+                        setDialogState(() => selectedDays = value);
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: DropdownButtonFormField<int>(
+                      initialValue: selectedHours,
+                      decoration: InputDecoration(
+                        labelText: l10n.cashierReturnWindowHoursLabel,
+                        border: const OutlineInputBorder(),
+                      ),
+                      items: [
+                        for (var value = 0; value < 24; value++)
+                          DropdownMenuItem<int>(
+                            value: value,
+                            child: Text('$value'),
+                          ),
+                      ],
+                      onChanged: (value) {
+                        if (value == null) {
+                          return;
+                        }
+                        setDialogState(() => selectedHours = value);
+                      },
+                    ),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: Text(l10n.cancelButton),
+                ),
+                FilledButton(
+                  onPressed: () {
+                    Navigator.of(
+                      context,
+                    ).pop(selectedDays * 24 + selectedHours);
+                  },
+                  child: Text(l10n.confirmButton),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+    if (picked == null) {
+      return;
+    }
+
+    setState(() => _cashierReturnWindowHours = picked);
+    refresh();
   }
 
   void _refreshSettingsGroup(VoidCallback refresh) {
@@ -549,8 +685,10 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
         receiptFooter: _receiptFooterController.text.trim(),
         requireOpeningCash: _requireOpeningCash,
         autoPrintReceipts: _autoPrintReceipts,
+        allowOverselling: _allowOverselling,
         lowStockThreshold:
             int.tryParse(_lowStockThresholdController.text.trim()) ?? 0,
+        cashierReturnWindowHours: _cashierReturnWindowHours,
       ),
     );
 
@@ -589,6 +727,39 @@ class _SettingsListSection extends StatelessWidget {
               const Divider(height: 1, indent: 72),
           ],
         ],
+      ),
+    );
+  }
+}
+
+class _DurationPickerTile extends StatelessWidget {
+  const _DurationPickerTile({
+    super.key,
+    required this.enabled,
+    required this.label,
+    required this.value,
+    required this.onTap,
+  });
+
+  final bool enabled;
+  final String label;
+  final String value;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: enabled ? onTap : null,
+      borderRadius: BorderRadius.circular(8),
+      child: InputDecorator(
+        decoration: InputDecoration(
+          labelText: label,
+          border: const OutlineInputBorder(),
+          prefixIcon: const Icon(Icons.schedule_outlined),
+          suffixIcon: const Icon(Icons.expand_more),
+          enabled: enabled,
+        ),
+        child: Text(value, style: Theme.of(context).textTheme.bodyLarge),
       ),
     );
   }

@@ -10,6 +10,7 @@ from rest_framework.test import APIClient
 from apps.catalog.models import Product
 from apps.core.models import ShopSettings
 from apps.core.roles import CASHIER_GROUP, MANAGER_GROUP, ensure_role_groups
+from apps.inventory.models import StockItem
 from apps.payments.models import Payment
 from apps.sales.models import Order
 from .models import PrintAgent, PrintJob, PrintJobEvent, PrintTemplate, PrintTemplateVersion
@@ -67,20 +68,41 @@ class ReceiptAutoPrintTests(PrintingTestMixin, TestCase):
             name="قهوة مختصة",
             unit_price=Decimal("4.25"),
         )
-        self.cashier_client.post(reverse("register-session-start"), format="json")
+        StockItem.objects.create(product=self.product, quantity_on_hand=10)
+        self.cashier_client.post(
+            reverse("register-session-start"),
+            {"opening_cash": "0.00"},
+            format="json",
+        )
 
-    def checkout(self):
+    def checkout(self, extra=None):
+        payload = {
+            "lines": [{"product": self.product.pk, "quantity": 2}],
+            "payment_method": Payment.Method.CASH,
+            "amount_received": "8.50",
+        }
+        if extra:
+            payload.update(extra)
         with self.captureOnCommitCallbacks(execute=True):
             response = self.cashier_client.post(
                 reverse("order-checkout"),
-                {
-                    "lines": [{"product": self.product.pk, "quantity": 2}],
-                    "payment_method": Payment.Method.CASH,
-                    "amount_received": "8.50",
-                },
+                payload,
                 format="json",
             )
         return response
+
+    def print_invoice_payload(self):
+        return {
+            "print_invoice": {
+                "agent_id": "pointy-local-agent",
+                "printer_endpoint": {
+                    "kind": "serial",
+                    "name": "Counter printer",
+                    "address": "/dev/tty.usbserial",
+                    "baud_rate": 9600,
+                },
+            }
+        }
 
     def test_auto_print_job_created_after_successful_checkout_payment(self):
         response = self.checkout()
@@ -126,6 +148,31 @@ class ReceiptAutoPrintTests(PrintingTestMixin, TestCase):
         self.assertEqual(job.payload["order"]["total"], "8.50")
         self.assertEqual(job.payload["order"]["lines"][0]["name"], "قهوة مختصة")
         self.assertEqual(job.payload["order"]["lines"][0]["unit_price"], "4.25")
+
+    def test_checkout_can_return_claimed_auto_print_job(self):
+        response = self.checkout(self.print_invoice_payload())
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertIn("print_job", response.data)
+        self.assertEqual(response.data["print_job"]["status"], PrintJob.Status.CLAIMED)
+        self.assertEqual(response.data["print_job"]["order"], response.data["id"])
+        self.assertEqual(PrintJob.objects.get().attempts, 1)
+        self.assertTrue(
+            PrintAgent.objects.filter(identifier="pointy-local-agent").exists()
+        )
+
+    def test_checkout_can_return_claimed_manual_print_job_when_auto_print_is_disabled(self):
+        ShopSettings.objects.filter(pk=1).update(auto_print_receipts=False)
+
+        response = self.checkout(self.print_invoice_payload())
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertIn("print_job", response.data)
+        self.assertEqual(response.data["print_job"]["status"], PrintJob.Status.CLAIMED)
+        self.assertEqual(response.data["print_job"]["order"], response.data["id"])
+        self.assertTrue(
+            response.data["print_job"]["idempotency_key"].startswith("receipt-reprint:")
+        )
 
 
 class TemplateVersionApiTests(PrintingTestMixin, TestCase):
@@ -280,15 +327,20 @@ class PrintJobAgentApiTests(PrintingTestMixin, TestCase):
 
     def test_order_reprint_endpoint_queues_manual_receipt_job(self):
         ShopSettings.load()
-        Product.objects.create(
+        product = Product.objects.create(
             sku="REPRINT",
             name="قهوة",
             unit_price=Decimal("3.00"),
         )
-        self.cashier_client.post(reverse("register-session-start"), format="json")
+        StockItem.objects.create(product=product, quantity_on_hand=5)
+        self.cashier_client.post(
+            reverse("register-session-start"),
+            {"opening_cash": "0.00"},
+            format="json",
+        )
         checkout_response = self.cashier_client.post(
             reverse("order-checkout"),
-            {"lines": [{"product": Product.objects.get(sku="REPRINT").pk, "quantity": 1}]},
+            {"lines": [{"product": product.pk, "quantity": 1}]},
             format="json",
         )
 

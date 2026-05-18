@@ -5,6 +5,7 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 import 'core/authorization.dart';
 import 'data/repositories/auth_repository.dart';
 import 'data/repositories/catalog_repository.dart';
+import 'data/repositories/inventory_repository.dart';
 import 'data/repositories/register_session_repository.dart';
 import 'data/repositories/sale_repository.dart';
 import 'data/repositories/shop_settings_repository.dart';
@@ -39,6 +40,7 @@ class _PointyAppState extends State<PointyApp> {
   late final PosApiService _service;
   late final AuthRepository _authRepository;
   late final CatalogRepository _catalogRepository;
+  late final InventoryRepository _inventoryRepository;
   late final RegisterSessionRepository _registerSessionRepository;
   late final SaleRepository _saleRepository;
   late final ShopSettingsRepository _shopSettingsRepository;
@@ -55,6 +57,7 @@ class _PointyAppState extends State<PointyApp> {
     _service = widget.apiService ?? PosApiService();
     _authRepository = AuthRepository(_service);
     _catalogRepository = CatalogRepository(_service);
+    _inventoryRepository = InventoryRepository(_service);
     _registerSessionRepository = RegisterSessionRepository(_service);
     _saleRepository = SaleRepository(_service);
     _shopSettingsRepository = ShopSettingsRepository(_service);
@@ -66,6 +69,8 @@ class _PointyAppState extends State<PointyApp> {
       _catalogRepository,
       _registerSessionRepository,
       _saleRepository,
+      _shopSettingsRepository,
+      _printingRepository,
     );
     _printingSettingsViewModel = PrintingSettingsViewModel(_printingRepository);
   }
@@ -86,6 +91,7 @@ class _PointyAppState extends State<PointyApp> {
         _lastAuthenticatedUserId != currentUser.id) {
       _lastAuthenticatedUserId = currentUser.id;
       _posViewModel.loadCurrentRegisterSession();
+      _posViewModel.loadCheckoutSettings();
     }
 
     if (_authViewModel.status == AuthStatus.unauthenticated) {
@@ -183,6 +189,7 @@ class _PointyAppState extends State<PointyApp> {
     catalogRouteBuilder = (routeContext) {
       return CatalogScreen(
         viewModel: CatalogViewModel(_catalogRepository),
+        inventoryRepository: _inventoryRepository,
         currentUser: currentUser,
         capabilities: capabilities,
         onOpenPos: guardedAction(
@@ -394,6 +401,7 @@ class _PointyAppState extends State<PointyApp> {
             context,
           ).push(MaterialPageRoute<void>(builder: shopSettingsRouteBuilder));
           await _posViewModel.loadCatalog();
+          await _posViewModel.loadCheckoutSettings();
         },
       ),
       onLogout: () => logout(context),

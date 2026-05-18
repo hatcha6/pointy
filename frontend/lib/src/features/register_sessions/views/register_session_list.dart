@@ -58,6 +58,8 @@ class RegisterSessionList extends StatelessWidget {
                               session: session,
                               isSelected:
                                   viewModel.selectedSession?.id == session.id,
+                              showCashVariance:
+                                  capabilities.canManageShopSettings,
                               onTap: canViewOrders
                                   ? () => viewModel.selectSession(session)
                                   : null,
@@ -79,11 +81,13 @@ class RegisterSessionTile extends StatelessWidget {
     super.key,
     required this.session,
     required this.isSelected,
+    required this.showCashVariance,
     this.onTap,
   });
 
   final RegisterSession session;
   final bool isSelected;
+  final bool showCashVariance;
   final VoidCallback? onTap;
 
   @override
@@ -108,8 +112,45 @@ class RegisterSessionTile extends StatelessWidget {
           l10n.registerSessionOpeningCash(formatMoney(session.openingCash)),
         ].join(' • '),
       ),
-      trailing: onTap == null ? null : const Icon(Icons.chevron_right),
+      trailing: onTap == null
+          ? null
+          : Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (showCashVariance && session.hasCashVariance) ...[
+                  _VarianceChip(amount: session.cashVariance ?? 0),
+                  const SizedBox(width: 8),
+                ],
+                const Icon(Icons.chevron_right),
+              ],
+            ),
       onTap: onTap,
+    );
+  }
+}
+
+class _VarianceChip extends StatelessWidget {
+  const _VarianceChip({required this.amount});
+
+  final double amount;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Tooltip(
+      message: l10n.sessionCashVarianceMetric,
+      child: Chip(
+        avatar: Icon(
+          Icons.warning_amber_outlined,
+          size: 18,
+          color: colorScheme.error,
+        ),
+        label: Text(l10n.sessionVarianceFlag(formatMoney(amount))),
+        side: BorderSide(color: colorScheme.error),
+        visualDensity: VisualDensity.compact,
+      ),
     );
   }
 }

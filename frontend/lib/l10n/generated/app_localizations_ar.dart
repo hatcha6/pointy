@@ -231,13 +231,13 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
-  String registerSessionSettingsSummary(String status) {
-    return 'نقدية الافتتاح: $status';
+  String registerSessionSettingsSummary(String status, String window) {
+    return 'نقدية الافتتاح: $status، صلاحية الكاشير للإرجاع: $window';
   }
 
   @override
-  String inventorySettingsSummary(int count) {
-    return 'تنبيه عند $count قطع أو أقل';
+  String inventorySettingsSummary(int count, String status) {
+    return 'تنبيه عند $count قطع أو أقل، البيع فوق المخزون: $status';
   }
 
   @override
@@ -253,7 +253,37 @@ class AppLocalizationsAr extends AppLocalizations {
   String get requireOpeningCashLabel => 'طلب نقدية افتتاح الجلسة';
 
   @override
+  String get cashierReturnWindowLabel => 'مدة صلاحية الإرجاع للكاشير';
+
+  @override
+  String get cashierReturnWindowDialogTitle => 'مدة صلاحية الإرجاع';
+
+  @override
+  String get cashierReturnWindowDaysLabel => 'الأيام';
+
+  @override
+  String get cashierReturnWindowHoursLabel => 'الساعات';
+
+  @override
+  String cashierReturnWindowHoursValue(int hours) {
+    return '$hours ساعة';
+  }
+
+  @override
+  String cashierReturnWindowDaysValue(int days) {
+    return '$days يوم';
+  }
+
+  @override
+  String cashierReturnWindowDaysHoursValue(int days, int hours) {
+    return '$days يوم و$hours ساعة';
+  }
+
+  @override
   String get autoPrintReceiptsLabel => 'طباعة الإيصالات تلقائيًا';
+
+  @override
+  String get allowOversellingLabel => 'السماح بالبيع فوق المخزون';
 
   @override
   String get lowStockThresholdLabel => 'حد تنبيه المخزون المنخفض';
@@ -441,6 +471,66 @@ class AppLocalizationsAr extends AppLocalizations {
   String get productUnavailableForSale => 'هذا المنتج متوقف ولا يظهر للبيع.';
 
   @override
+  String get stockSummaryTitle => 'المخزون';
+
+  @override
+  String get stockOnHandLabel => 'المتاح';
+
+  @override
+  String get stockLoadError => 'تعذر تحميل المخزون.';
+
+  @override
+  String get stockMovementsButton => 'حركات المخزون';
+
+  @override
+  String get stockMovementsTitle => 'حركات المخزون';
+
+  @override
+  String get emptyStockMovements => 'لا توجد حركات مخزون لهذا المنتج.';
+
+  @override
+  String get stockMovementLoadError => 'تعذر تحميل حركات المخزون.';
+
+  @override
+  String get newStockMovementButton => 'حركة مخزون جديدة';
+
+  @override
+  String get newStockMovementTitle => 'حركة مخزون جديدة';
+
+  @override
+  String get stockMovementTypeLabel => 'نوع الحركة';
+
+  @override
+  String get stockMovementQuantityLabel => 'الكمية';
+
+  @override
+  String get stockMovementNoteLabel => 'ملاحظة';
+
+  @override
+  String get saveStockMovementButton => 'حفظ الحركة';
+
+  @override
+  String get savingStockMovementButton => 'جار الحفظ...';
+
+  @override
+  String get stockMovementCreateError =>
+      'تعذر حفظ حركة المخزون. راجع الكمية وحاول مرة أخرى.';
+
+  @override
+  String get stockMovementIncrease => 'زيادة المخزون';
+
+  @override
+  String get stockMovementDecrease => 'نقص المخزون';
+
+  @override
+  String get stockMovementDamaged => 'تالف';
+
+  @override
+  String stockMovementQuantityValue(int quantity) {
+    return '$quantity قطعة';
+  }
+
+  @override
   String get noBarcode => 'لا يوجد باركود';
 
   @override
@@ -464,6 +554,9 @@ class AppLocalizationsAr extends AppLocalizations {
   String get checkoutInProgressButton => 'جار الدفع...';
 
   @override
+  String get printInvoiceAfterPaymentLabel => 'طباعة الفاتورة بعد الدفع';
+
+  @override
   String get saleCheckoutSuccess => 'تم تسجيل البيع.';
 
   @override
@@ -472,8 +565,36 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
+  String get invoicePrintSuccess => 'تم إرسال الفاتورة للطابعة.';
+
+  @override
+  String get invoicePrintError => 'تم تسجيل البيع، لكن تعذرت طباعة الفاتورة.';
+
+  @override
   String get saleCheckoutError =>
       'تعذر تسجيل البيع. تحقق من جلسة الدرج وحاول مرة أخرى.';
+
+  @override
+  String get oversellWarningTitle => 'تنبيه المخزون';
+
+  @override
+  String get oversellWarningMessage =>
+      'تتجاوز بعض عناصر السلة الكمية المتاحة. هل تريد إتمام البيع رغم ذلك؟';
+
+  @override
+  String get oversellBlockedMessage =>
+      'لا يمكن إتمام البيع لأن الكمية المطلوبة تتجاوز المخزون المتاح.';
+
+  @override
+  String oversellLine(String productName, int requested, int available) {
+    return '$productName: المطلوب $requested، المتاح $available';
+  }
+
+  @override
+  String get reviewCartButton => 'مراجعة السلة';
+
+  @override
+  String get continueSaleButton => 'إتمام البيع';
 
   @override
   String get paymentUnauthorizedMessage =>
@@ -517,6 +638,9 @@ class AppLocalizationsAr extends AppLocalizations {
   String get openingCashInputLabel => 'نقدية الافتتاح';
 
   @override
+  String get openingCashRequiredError => 'أدخل نقدية الافتتاح قبل بدء الجلسة.';
+
+  @override
   String get startRegisterSessionButton => 'بدء الجلسة';
 
   @override
@@ -539,6 +663,43 @@ class AppLocalizationsAr extends AppLocalizations {
   String activeRegisterSessionLabel(String sessionNumber) {
     return 'جلسة $sessionNumber';
   }
+
+  @override
+  String get cashMovementMenuTooltip => 'حركات نقدية للدرج';
+
+  @override
+  String get payInRegisterSessionTitle => 'إضافة نقدية للدرج';
+
+  @override
+  String get payOutRegisterSessionTitle => 'سحب نقدية من الدرج';
+
+  @override
+  String get payInRegisterSessionButton => 'إضافة نقدية';
+
+  @override
+  String get payOutRegisterSessionButton => 'سحب نقدية';
+
+  @override
+  String get cashMovementAmountLabel => 'المبلغ';
+
+  @override
+  String get cashMovementReasonLabel => 'سبب الحركة';
+
+  @override
+  String get cashMovementReasonRequiredError => 'أدخل سبب الحركة قبل الحفظ.';
+
+  @override
+  String get positiveAmountRequiredError => 'أدخل مبلغًا أكبر من صفر.';
+
+  @override
+  String get savingCashMovementButton => 'جار الحفظ...';
+
+  @override
+  String get cashMovementCreateError =>
+      'تعذر حفظ الحركة النقدية. راجع المبلغ والسبب وحاول مرة أخرى.';
+
+  @override
+  String get cashMovementCreatedMessage => 'تم حفظ الحركة النقدية.';
 
   @override
   String get closeRegisterSessionTooltip => 'إغلاق جلسة الدرج';
@@ -600,10 +761,74 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
+  String get sessionSalesTab => 'المبيعات';
+
+  @override
+  String get sessionCashMovementsTab => 'حركات النقد';
+
+  @override
+  String get sessionSummaryTab => 'الملخص';
+
+  @override
+  String get sessionCashSummaryTitle => 'ملخص النقد';
+
+  @override
+  String get sessionOpeningCashMetric => 'نقدية الافتتاح';
+
+  @override
+  String get sessionCashSalesMetric => 'المبيعات النقدية';
+
+  @override
+  String get sessionPayInMetric => 'إضافات الدرج';
+
+  @override
+  String get sessionPayOutMetric => 'سحوبات الدرج';
+
+  @override
+  String get sessionCashRefundMetric => 'مبالغ الإرجاع النقدية';
+
+  @override
+  String get sessionExpectedCashMetric => 'النقد المتوقع';
+
+  @override
+  String get sessionClosingCashMetric => 'النقد المعدود';
+
+  @override
+  String get sessionDenominationTotalMetric => 'إجمالي الفئات';
+
+  @override
+  String get sessionCashVarianceMetric => 'فرق النقد';
+
+  @override
+  String get sessionDenominationsTitle => 'الفئات عند الإغلاق';
+
+  @override
+  String sessionVarianceFlag(String amount) {
+    return 'فرق $amount';
+  }
+
+  @override
+  String get sessionNoVariance => 'لا يوجد فرق مسجل';
+
+  @override
   String get sessionSalesLoadError => 'تعذر تحميل مبيعات هذه الجلسة.';
 
   @override
   String get emptySessionSales => 'لا توجد مبيعات مسجلة في هذه الجلسة.';
+
+  @override
+  String get sessionCashMovementsLoadError =>
+      'تعذر تحميل حركات النقد لهذه الجلسة.';
+
+  @override
+  String get emptySessionCashMovements =>
+      'لا توجد حركات نقد مسجلة في هذه الجلسة.';
+
+  @override
+  String get cashMovementPayInLabel => 'إضافة نقدية';
+
+  @override
+  String get cashMovementPayOutLabel => 'سحب نقدية';
 
   @override
   String get saleReceiptFallback => 'بدون رقم';
@@ -647,4 +872,55 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get saleReprintError => 'تعذر إرسال طلب إعادة الطباعة.';
+
+  @override
+  String get saleVoidButton => 'إلغاء الفاتورة';
+
+  @override
+  String get saleVoidTitle => 'إلغاء الفاتورة';
+
+  @override
+  String get saleVoidMessage =>
+      'سيتم عكس كامل المبلغ وإرجاع الكميات المتبقية إلى المخزون.';
+
+  @override
+  String get saleVoidSuccess => 'تم إلغاء الفاتورة.';
+
+  @override
+  String get saleVoidError => 'تعذر إلغاء الفاتورة.';
+
+  @override
+  String get saleReturnButton => 'إرجاع منتجات';
+
+  @override
+  String get saleReturnTitle => 'إرجاع منتجات';
+
+  @override
+  String get saleReturnSuccess => 'تم تسجيل الإرجاع.';
+
+  @override
+  String get saleReturnError => 'تعذر تسجيل الإرجاع.';
+
+  @override
+  String get saleAdjustmentReasonLabel => 'سبب اختياري';
+
+  @override
+  String get saleAdjustmentReasonHint => 'مثال: طلب العميل الإرجاع';
+
+  @override
+  String get saleReturnQuantityLabel => 'كمية الإرجاع';
+
+  @override
+  String saleLineReturnedQuantity(int returned, int quantity) {
+    return 'تم إرجاع $returned من $quantity';
+  }
+
+  @override
+  String get saleReturnNoItemsSelected => 'اختر كمية واحدة على الأقل للإرجاع.';
+
+  @override
+  String get saleNoReturnableItems => 'لا توجد كميات متاحة للإرجاع.';
+
+  @override
+  String get confirmButton => 'تأكيد';
 }

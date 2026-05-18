@@ -529,14 +529,14 @@ abstract class AppLocalizations {
   /// Summary for register session settings in the shop settings index.
   ///
   /// In ar, this message translates to:
-  /// **'نقدية الافتتاح: {status}'**
-  String registerSessionSettingsSummary(String status);
+  /// **'نقدية الافتتاح: {status}، صلاحية الكاشير للإرجاع: {window}'**
+  String registerSessionSettingsSummary(String status, String window);
 
-  /// Summary for low stock alert threshold in the shop settings index.
+  /// Summary for inventory settings in the shop settings index.
   ///
   /// In ar, this message translates to:
-  /// **'تنبيه عند {count} قطع أو أقل'**
-  String inventorySettingsSummary(int count);
+  /// **'تنبيه عند {count} قطع أو أقل، البيع فوق المخزون: {status}'**
+  String inventorySettingsSummary(int count, String status);
 
   /// No description provided for @shopNameLabel.
   ///
@@ -562,11 +562,59 @@ abstract class AppLocalizations {
   /// **'طلب نقدية افتتاح الجلسة'**
   String get requireOpeningCashLabel;
 
+  /// No description provided for @cashierReturnWindowLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'مدة صلاحية الإرجاع للكاشير'**
+  String get cashierReturnWindowLabel;
+
+  /// No description provided for @cashierReturnWindowDialogTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'مدة صلاحية الإرجاع'**
+  String get cashierReturnWindowDialogTitle;
+
+  /// No description provided for @cashierReturnWindowDaysLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الأيام'**
+  String get cashierReturnWindowDaysLabel;
+
+  /// No description provided for @cashierReturnWindowHoursLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الساعات'**
+  String get cashierReturnWindowHoursLabel;
+
+  /// Duration value when only hours are shown.
+  ///
+  /// In ar, this message translates to:
+  /// **'{hours} ساعة'**
+  String cashierReturnWindowHoursValue(int hours);
+
+  /// Duration value when only days are shown.
+  ///
+  /// In ar, this message translates to:
+  /// **'{days} يوم'**
+  String cashierReturnWindowDaysValue(int days);
+
+  /// Duration value when days and hours are shown.
+  ///
+  /// In ar, this message translates to:
+  /// **'{days} يوم و{hours} ساعة'**
+  String cashierReturnWindowDaysHoursValue(int days, int hours);
+
   /// No description provided for @autoPrintReceiptsLabel.
   ///
   /// In ar, this message translates to:
   /// **'طباعة الإيصالات تلقائيًا'**
   String get autoPrintReceiptsLabel;
+
+  /// No description provided for @allowOversellingLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'السماح بالبيع فوق المخزون'**
+  String get allowOversellingLabel;
 
   /// No description provided for @lowStockThresholdLabel.
   ///
@@ -928,6 +976,120 @@ abstract class AppLocalizations {
   /// **'هذا المنتج متوقف ولا يظهر للبيع.'**
   String get productUnavailableForSale;
 
+  /// No description provided for @stockSummaryTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'المخزون'**
+  String get stockSummaryTitle;
+
+  /// No description provided for @stockOnHandLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'المتاح'**
+  String get stockOnHandLabel;
+
+  /// No description provided for @stockLoadError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر تحميل المخزون.'**
+  String get stockLoadError;
+
+  /// No description provided for @stockMovementsButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'حركات المخزون'**
+  String get stockMovementsButton;
+
+  /// No description provided for @stockMovementsTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'حركات المخزون'**
+  String get stockMovementsTitle;
+
+  /// No description provided for @emptyStockMovements.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد حركات مخزون لهذا المنتج.'**
+  String get emptyStockMovements;
+
+  /// No description provided for @stockMovementLoadError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر تحميل حركات المخزون.'**
+  String get stockMovementLoadError;
+
+  /// No description provided for @newStockMovementButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'حركة مخزون جديدة'**
+  String get newStockMovementButton;
+
+  /// No description provided for @newStockMovementTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'حركة مخزون جديدة'**
+  String get newStockMovementTitle;
+
+  /// No description provided for @stockMovementTypeLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'نوع الحركة'**
+  String get stockMovementTypeLabel;
+
+  /// No description provided for @stockMovementQuantityLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الكمية'**
+  String get stockMovementQuantityLabel;
+
+  /// No description provided for @stockMovementNoteLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'ملاحظة'**
+  String get stockMovementNoteLabel;
+
+  /// No description provided for @saveStockMovementButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'حفظ الحركة'**
+  String get saveStockMovementButton;
+
+  /// No description provided for @savingStockMovementButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'جار الحفظ...'**
+  String get savingStockMovementButton;
+
+  /// No description provided for @stockMovementCreateError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر حفظ حركة المخزون. راجع الكمية وحاول مرة أخرى.'**
+  String get stockMovementCreateError;
+
+  /// No description provided for @stockMovementIncrease.
+  ///
+  /// In ar, this message translates to:
+  /// **'زيادة المخزون'**
+  String get stockMovementIncrease;
+
+  /// No description provided for @stockMovementDecrease.
+  ///
+  /// In ar, this message translates to:
+  /// **'نقص المخزون'**
+  String get stockMovementDecrease;
+
+  /// No description provided for @stockMovementDamaged.
+  ///
+  /// In ar, this message translates to:
+  /// **'تالف'**
+  String get stockMovementDamaged;
+
+  /// Quantity shown on a stock movement row.
+  ///
+  /// In ar, this message translates to:
+  /// **'{quantity} قطعة'**
+  String stockMovementQuantityValue(int quantity);
+
   /// No description provided for @noBarcode.
   ///
   /// In ar, this message translates to:
@@ -970,6 +1132,12 @@ abstract class AppLocalizations {
   /// **'جار الدفع...'**
   String get checkoutInProgressButton;
 
+  /// No description provided for @printInvoiceAfterPaymentLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'طباعة الفاتورة بعد الدفع'**
+  String get printInvoiceAfterPaymentLabel;
+
   /// No description provided for @saleCheckoutSuccess.
   ///
   /// In ar, this message translates to:
@@ -982,11 +1150,59 @@ abstract class AppLocalizations {
   /// **'تم تسجيل البيع. رقم الإيصال: {receiptNumber}'**
   String saleCheckoutSuccessWithReceipt(String receiptNumber);
 
+  /// No description provided for @invoicePrintSuccess.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم إرسال الفاتورة للطابعة.'**
+  String get invoicePrintSuccess;
+
+  /// No description provided for @invoicePrintError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم تسجيل البيع، لكن تعذرت طباعة الفاتورة.'**
+  String get invoicePrintError;
+
   /// No description provided for @saleCheckoutError.
   ///
   /// In ar, this message translates to:
   /// **'تعذر تسجيل البيع. تحقق من جلسة الدرج وحاول مرة أخرى.'**
   String get saleCheckoutError;
+
+  /// No description provided for @oversellWarningTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'تنبيه المخزون'**
+  String get oversellWarningTitle;
+
+  /// No description provided for @oversellWarningMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'تتجاوز بعض عناصر السلة الكمية المتاحة. هل تريد إتمام البيع رغم ذلك؟'**
+  String get oversellWarningMessage;
+
+  /// No description provided for @oversellBlockedMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا يمكن إتمام البيع لأن الكمية المطلوبة تتجاوز المخزون المتاح.'**
+  String get oversellBlockedMessage;
+
+  /// Stock shortage line in the oversell warning dialog.
+  ///
+  /// In ar, this message translates to:
+  /// **'{productName}: المطلوب {requested}، المتاح {available}'**
+  String oversellLine(String productName, int requested, int available);
+
+  /// No description provided for @reviewCartButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'مراجعة السلة'**
+  String get reviewCartButton;
+
+  /// No description provided for @continueSaleButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'إتمام البيع'**
+  String get continueSaleButton;
 
   /// No description provided for @paymentUnauthorizedMessage.
   ///
@@ -1060,6 +1276,12 @@ abstract class AppLocalizations {
   /// **'نقدية الافتتاح'**
   String get openingCashInputLabel;
 
+  /// No description provided for @openingCashRequiredError.
+  ///
+  /// In ar, this message translates to:
+  /// **'أدخل نقدية الافتتاح قبل بدء الجلسة.'**
+  String get openingCashRequiredError;
+
   /// No description provided for @startRegisterSessionButton.
   ///
   /// In ar, this message translates to:
@@ -1095,6 +1317,78 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'جلسة {sessionNumber}'**
   String activeRegisterSessionLabel(String sessionNumber);
+
+  /// No description provided for @cashMovementMenuTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'حركات نقدية للدرج'**
+  String get cashMovementMenuTooltip;
+
+  /// No description provided for @payInRegisterSessionTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'إضافة نقدية للدرج'**
+  String get payInRegisterSessionTitle;
+
+  /// No description provided for @payOutRegisterSessionTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'سحب نقدية من الدرج'**
+  String get payOutRegisterSessionTitle;
+
+  /// No description provided for @payInRegisterSessionButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'إضافة نقدية'**
+  String get payInRegisterSessionButton;
+
+  /// No description provided for @payOutRegisterSessionButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'سحب نقدية'**
+  String get payOutRegisterSessionButton;
+
+  /// No description provided for @cashMovementAmountLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'المبلغ'**
+  String get cashMovementAmountLabel;
+
+  /// No description provided for @cashMovementReasonLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'سبب الحركة'**
+  String get cashMovementReasonLabel;
+
+  /// No description provided for @cashMovementReasonRequiredError.
+  ///
+  /// In ar, this message translates to:
+  /// **'أدخل سبب الحركة قبل الحفظ.'**
+  String get cashMovementReasonRequiredError;
+
+  /// No description provided for @positiveAmountRequiredError.
+  ///
+  /// In ar, this message translates to:
+  /// **'أدخل مبلغًا أكبر من صفر.'**
+  String get positiveAmountRequiredError;
+
+  /// No description provided for @savingCashMovementButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'جار الحفظ...'**
+  String get savingCashMovementButton;
+
+  /// No description provided for @cashMovementCreateError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر حفظ الحركة النقدية. راجع المبلغ والسبب وحاول مرة أخرى.'**
+  String get cashMovementCreateError;
+
+  /// No description provided for @cashMovementCreatedMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم حفظ الحركة النقدية.'**
+  String get cashMovementCreatedMessage;
 
   /// No description provided for @closeRegisterSessionTooltip.
   ///
@@ -1204,6 +1498,102 @@ abstract class AppLocalizations {
   /// **'مبيعات جلسة {sessionNumber}'**
   String sessionSalesTitle(String sessionNumber);
 
+  /// No description provided for @sessionSalesTab.
+  ///
+  /// In ar, this message translates to:
+  /// **'المبيعات'**
+  String get sessionSalesTab;
+
+  /// No description provided for @sessionCashMovementsTab.
+  ///
+  /// In ar, this message translates to:
+  /// **'حركات النقد'**
+  String get sessionCashMovementsTab;
+
+  /// No description provided for @sessionSummaryTab.
+  ///
+  /// In ar, this message translates to:
+  /// **'الملخص'**
+  String get sessionSummaryTab;
+
+  /// No description provided for @sessionCashSummaryTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'ملخص النقد'**
+  String get sessionCashSummaryTitle;
+
+  /// No description provided for @sessionOpeningCashMetric.
+  ///
+  /// In ar, this message translates to:
+  /// **'نقدية الافتتاح'**
+  String get sessionOpeningCashMetric;
+
+  /// No description provided for @sessionCashSalesMetric.
+  ///
+  /// In ar, this message translates to:
+  /// **'المبيعات النقدية'**
+  String get sessionCashSalesMetric;
+
+  /// No description provided for @sessionPayInMetric.
+  ///
+  /// In ar, this message translates to:
+  /// **'إضافات الدرج'**
+  String get sessionPayInMetric;
+
+  /// No description provided for @sessionPayOutMetric.
+  ///
+  /// In ar, this message translates to:
+  /// **'سحوبات الدرج'**
+  String get sessionPayOutMetric;
+
+  /// No description provided for @sessionCashRefundMetric.
+  ///
+  /// In ar, this message translates to:
+  /// **'مبالغ الإرجاع النقدية'**
+  String get sessionCashRefundMetric;
+
+  /// No description provided for @sessionExpectedCashMetric.
+  ///
+  /// In ar, this message translates to:
+  /// **'النقد المتوقع'**
+  String get sessionExpectedCashMetric;
+
+  /// No description provided for @sessionClosingCashMetric.
+  ///
+  /// In ar, this message translates to:
+  /// **'النقد المعدود'**
+  String get sessionClosingCashMetric;
+
+  /// No description provided for @sessionDenominationTotalMetric.
+  ///
+  /// In ar, this message translates to:
+  /// **'إجمالي الفئات'**
+  String get sessionDenominationTotalMetric;
+
+  /// No description provided for @sessionCashVarianceMetric.
+  ///
+  /// In ar, this message translates to:
+  /// **'فرق النقد'**
+  String get sessionCashVarianceMetric;
+
+  /// No description provided for @sessionDenominationsTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'الفئات عند الإغلاق'**
+  String get sessionDenominationsTitle;
+
+  /// Compact cash variance label.
+  ///
+  /// In ar, this message translates to:
+  /// **'فرق {amount}'**
+  String sessionVarianceFlag(String amount);
+
+  /// No description provided for @sessionNoVariance.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا يوجد فرق مسجل'**
+  String get sessionNoVariance;
+
   /// No description provided for @sessionSalesLoadError.
   ///
   /// In ar, this message translates to:
@@ -1215,6 +1605,30 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'لا توجد مبيعات مسجلة في هذه الجلسة.'**
   String get emptySessionSales;
+
+  /// No description provided for @sessionCashMovementsLoadError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر تحميل حركات النقد لهذه الجلسة.'**
+  String get sessionCashMovementsLoadError;
+
+  /// No description provided for @emptySessionCashMovements.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد حركات نقد مسجلة في هذه الجلسة.'**
+  String get emptySessionCashMovements;
+
+  /// No description provided for @cashMovementPayInLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'إضافة نقدية'**
+  String get cashMovementPayInLabel;
+
+  /// No description provided for @cashMovementPayOutLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'سحب نقدية'**
+  String get cashMovementPayOutLabel;
 
   /// No description provided for @saleReceiptFallback.
   ///
@@ -1269,6 +1683,102 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'تعذر إرسال طلب إعادة الطباعة.'**
   String get saleReprintError;
+
+  /// No description provided for @saleVoidButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'إلغاء الفاتورة'**
+  String get saleVoidButton;
+
+  /// No description provided for @saleVoidTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'إلغاء الفاتورة'**
+  String get saleVoidTitle;
+
+  /// No description provided for @saleVoidMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'سيتم عكس كامل المبلغ وإرجاع الكميات المتبقية إلى المخزون.'**
+  String get saleVoidMessage;
+
+  /// No description provided for @saleVoidSuccess.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم إلغاء الفاتورة.'**
+  String get saleVoidSuccess;
+
+  /// No description provided for @saleVoidError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر إلغاء الفاتورة.'**
+  String get saleVoidError;
+
+  /// No description provided for @saleReturnButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'إرجاع منتجات'**
+  String get saleReturnButton;
+
+  /// No description provided for @saleReturnTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'إرجاع منتجات'**
+  String get saleReturnTitle;
+
+  /// No description provided for @saleReturnSuccess.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم تسجيل الإرجاع.'**
+  String get saleReturnSuccess;
+
+  /// No description provided for @saleReturnError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر تسجيل الإرجاع.'**
+  String get saleReturnError;
+
+  /// No description provided for @saleAdjustmentReasonLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'سبب اختياري'**
+  String get saleAdjustmentReasonLabel;
+
+  /// No description provided for @saleAdjustmentReasonHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'مثال: طلب العميل الإرجاع'**
+  String get saleAdjustmentReasonHint;
+
+  /// No description provided for @saleReturnQuantityLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'كمية الإرجاع'**
+  String get saleReturnQuantityLabel;
+
+  /// Returned quantity status for a sale line.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم إرجاع {returned} من {quantity}'**
+  String saleLineReturnedQuantity(int returned, int quantity);
+
+  /// No description provided for @saleReturnNoItemsSelected.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر كمية واحدة على الأقل للإرجاع.'**
+  String get saleReturnNoItemsSelected;
+
+  /// No description provided for @saleNoReturnableItems.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد كميات متاحة للإرجاع.'**
+  String get saleNoReturnableItems;
+
+  /// No description provided for @confirmButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'تأكيد'**
+  String get confirmButton;
 }
 
 class _AppLocalizationsDelegate

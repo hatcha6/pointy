@@ -5,7 +5,9 @@ class ShopSettings {
     required this.receiptFooter,
     required this.requireOpeningCash,
     required this.autoPrintReceipts,
+    required this.allowOverselling,
     required this.lowStockThreshold,
+    required this.cashierReturnWindowHours,
   });
 
   final String shopName;
@@ -13,7 +15,9 @@ class ShopSettings {
   final String receiptFooter;
   final bool requireOpeningCash;
   final bool autoPrintReceipts;
+  final bool allowOverselling;
   final int lowStockThreshold;
+  final int cashierReturnWindowHours;
 
   factory ShopSettings.fromJson(Map<String, Object?> json) {
     return ShopSettings(
@@ -26,7 +30,12 @@ class ShopSettings {
       autoPrintReceipts: json['auto_print_receipts'] is bool
           ? json['auto_print_receipts'] as bool
           : json['auto_print_receipts']?.toString() == 'true',
+      allowOverselling: json['allow_overselling'] is bool
+          ? json['allow_overselling'] as bool
+          : json['allow_overselling']?.toString() == 'true',
       lowStockThreshold: (json['low_stock_threshold'] as num?)?.toInt() ?? 5,
+      cashierReturnWindowHours:
+          (json['cashier_return_window_hours'] as num?)?.toInt() ?? 42,
     );
   }
 }
@@ -38,7 +47,9 @@ class ShopSettingsDraft {
     required this.receiptFooter,
     required this.requireOpeningCash,
     required this.autoPrintReceipts,
+    required this.allowOverselling,
     required this.lowStockThreshold,
+    required this.cashierReturnWindowHours,
   });
 
   final String shopName;
@@ -46,7 +57,9 @@ class ShopSettingsDraft {
   final String receiptFooter;
   final bool requireOpeningCash;
   final bool autoPrintReceipts;
+  final bool allowOverselling;
   final int lowStockThreshold;
+  final int cashierReturnWindowHours;
 
   Map<String, Object?> toJson() {
     return {
@@ -55,7 +68,9 @@ class ShopSettingsDraft {
       'receipt_footer': receiptFooter,
       'require_opening_cash': requireOpeningCash,
       'auto_print_receipts': autoPrintReceipts,
+      'allow_overselling': allowOverselling,
       'low_stock_threshold': lowStockThreshold,
+      'cashier_return_window_hours': cashierReturnWindowHours,
     };
   }
 }

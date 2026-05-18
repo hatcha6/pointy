@@ -19,7 +19,7 @@ class ProductViewSet(viewsets.ModelViewSet):
         "partial_update": ("catalog.change_product",),
         "destroy": ("catalog.delete_product",),
     }
-    queryset = Product.objects.all()
+    queryset = Product.objects.select_related("stock")
     filterset_fields = ("is_active",)
     search_fields = ("sku", "barcode", "name")
     ordering_fields = ("name", "unit_price", "created_at", "updated_at")
@@ -32,7 +32,7 @@ class ProductViewSet(viewsets.ModelViewSet):
                     Product.objects.filter(is_active=True).values_list("id", flat=True)
                 )
                 self._set_active_product_ids(product_ids)
-            return Product.objects.filter(id__in=product_ids)
+            return Product.objects.select_related("stock").filter(id__in=product_ids)
         return super().get_queryset()
 
     def perform_create(self, serializer):

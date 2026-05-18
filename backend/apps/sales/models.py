@@ -3,7 +3,7 @@ from decimal import Decimal
 from django.conf import settings
 from django.core.validators import MinValueValidator
 from django.db import models, transaction
-from django.db.models import Q
+from django.db.models import Q, Sum
 
 from apps.catalog.models import Product
 from apps.core.models import TimeStampedModel
@@ -62,6 +62,100 @@ class RegisterSession(TimeStampedModel):
             return "RS"
         return f"RS-{self.pk}"
 
+    @property
+    def cash_sales_total(self) -> Decimal:
+        from apps.payments.models import Payment
+
+        total = Payment.objects.filter(
+            order__register_session=self,
+            order__status__in=(Order.Status.PAID, Order.Status.VOID),
+            method=Payment.Method.CASH,
+            amount__gt=0,
+        ).aggregate(total=Sum("amount"))["total"]
+        return (total or Decimal("0.00")).quantize(Decimal("0.01"))
+
+    @property
+    def cash_refund_total(self) -> Decimal:
+        from apps.payments.models import Payment
+
+        total = self.order_adjustments.filter(
+            refund_method=Payment.Method.CASH,
+        ).aggregate(total=Sum("amount"))["total"]
+        return (total or Decimal("0.00")).quantize(Decimal("0.01"))
+
+    @property
+    def pay_in_total(self) -> Decimal:
+        return self._cash_movement_total(RegisterCashMovement.MovementType.PAY_IN)
+
+    @property
+    def pay_out_total(self) -> Decimal:
+        return self._cash_movement_total(RegisterCashMovement.MovementType.PAY_OUT)
+
+    @property
+    def expected_cash(self) -> Decimal:
+        total = self.opening_cash + self.cash_sales_total + self.pay_in_total
+        return (total - self.pay_out_total - self.cash_refund_total).quantize(
+            Decimal("0.01")
+        )
+
+    @property
+    def denomination_total(self) -> Decimal:
+        total = (
+            Decimal("0.25") * self.count_025
+            + Decimal("0.50") * self.count_050
+            + Decimal("0.75") * self.count_075
+            + Decimal("1.00") * self.count_100
+        )
+        return total.quantize(Decimal("0.01"))
+
+    @property
+    def cash_variance(self) -> Decimal | None:
+        if self.closing_cash is None:
+            return None
+        return (self.closing_cash - self.expected_cash).quantize(Decimal("0.01"))
+
+    @property
+    def has_cash_variance(self) -> bool:
+        return self.cash_variance not in (None, Decimal("0.00"))
+
+    def _cash_movement_total(self, movement_type) -> Decimal:
+        total = self.cash_movements.filter(movement_type=movement_type).aggregate(
+            total=Sum("amount"),
+        )["total"]
+        return (total or Decimal("0.00")).quantize(Decimal("0.01"))
+
+
+class RegisterCashMovement(TimeStampedModel):
+    class MovementType(models.TextChoices):
+        PAY_IN = "pay_in", "Pay in"
+        PAY_OUT = "pay_out", "Pay out"
+
+    register_session = models.ForeignKey(
+        RegisterSession,
+        on_delete=models.PROTECT,
+        related_name="cash_movements",
+    )
+    movement_type = models.CharField(max_length=16, choices=MovementType.choices)
+    amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        validators=[MinValueValidator(Decimal("0.01"))],
+    )
+    reason = models.TextField()
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="register_cash_movements",
+        blank=True,
+        null=True,
+    )
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self) -> str:
+        return f"{self.get_movement_type_display()} {self.amount} for {self.register_session}"
+
 
 class Order(TimeStampedModel):
     class Status(models.TextChoices):
@@ -108,6 +202,72 @@ class OrderLine(TimeStampedModel):
     order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name="lines")
     product = models.ForeignKey(Product, on_delete=models.PROTECT)
     quantity = models.PositiveIntegerField(default=1)
+    unit_price = models.DecimalField(max_digits=10, decimal_places=2)
+
+    class Meta:
+        ordering = ["created_at"]
+
+    @property
+    def line_total(self):
+        return (self.unit_price * self.quantity).quantize(Decimal("0.01"))
+
+    @property
+    def returned_quantity(self) -> int:
+        total = self.adjustment_lines.aggregate(total=Sum("quantity"))["total"]
+        return total or 0
+
+    @property
+    def returnable_quantity(self) -> int:
+        return max(self.quantity - self.returned_quantity, 0)
+
+
+class OrderAdjustment(TimeStampedModel):
+    class AdjustmentType(models.TextChoices):
+        VOID = "void", "Void"
+        RETURN = "return", "Return"
+
+    order = models.ForeignKey(
+        Order,
+        on_delete=models.PROTECT,
+        related_name="adjustments",
+    )
+    register_session = models.ForeignKey(
+        RegisterSession,
+        on_delete=models.PROTECT,
+        related_name="order_adjustments",
+    )
+    adjustment_type = models.CharField(max_length=16, choices=AdjustmentType.choices)
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    refund_method = models.CharField(max_length=16, default="cash")
+    reason = models.TextField(blank=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="order_adjustments",
+        blank=True,
+        null=True,
+    )
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self) -> str:
+        return f"{self.adjustment_type} {self.amount} for {self.order_id}"
+
+
+class OrderAdjustmentLine(TimeStampedModel):
+    adjustment = models.ForeignKey(
+        OrderAdjustment,
+        on_delete=models.CASCADE,
+        related_name="lines",
+    )
+    order_line = models.ForeignKey(
+        OrderLine,
+        on_delete=models.PROTECT,
+        related_name="adjustment_lines",
+    )
+    product = models.ForeignKey(Product, on_delete=models.PROTECT)
+    quantity = models.PositiveIntegerField()
     unit_price = models.DecimalField(max_digits=10, decimal_places=2)
 
     class Meta:

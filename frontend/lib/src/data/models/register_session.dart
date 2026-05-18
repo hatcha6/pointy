@@ -9,6 +9,14 @@ class RegisterSession {
     this.count050 = 0,
     this.count075 = 0,
     this.count100 = 0,
+    this.cashSalesTotal = 0,
+    this.payInTotal = 0,
+    this.payOutTotal = 0,
+    this.cashRefundTotal = 0,
+    this.expectedCash = 0,
+    this.denominationTotal = 0,
+    this.cashVariance,
+    this.hasCashVariance = false,
     this.openedAt,
     this.closedAt,
     this.createdAt,
@@ -24,6 +32,14 @@ class RegisterSession {
   final int count050;
   final int count075;
   final int count100;
+  final double cashSalesTotal;
+  final double payInTotal;
+  final double payOutTotal;
+  final double cashRefundTotal;
+  final double expectedCash;
+  final double denominationTotal;
+  final double? cashVariance;
+  final bool hasCashVariance;
   final DateTime? openedAt;
   final DateTime? closedAt;
   final DateTime? createdAt;
@@ -40,6 +56,16 @@ class RegisterSession {
       count050: _intFromJson(json['count_050']),
       count075: _intFromJson(json['count_075']),
       count100: _intFromJson(json['count_100']),
+      cashSalesTotal: _moneyFromJson(json['cash_sales_total']),
+      payInTotal: _moneyFromJson(json['pay_in_total']),
+      payOutTotal: _moneyFromJson(json['pay_out_total']),
+      cashRefundTotal: _moneyFromJson(json['cash_refund_total']),
+      expectedCash: _moneyFromJson(json['expected_cash']),
+      denominationTotal: _moneyFromJson(json['denomination_total']),
+      cashVariance: _nullableMoneyFromJson(json['cash_variance']),
+      hasCashVariance: json['has_cash_variance'] is bool
+          ? json['has_cash_variance'] as bool
+          : json['has_cash_variance']?.toString() == 'true',
       openedAt: _dateTimeFromJson(json['opened_at']),
       closedAt: _dateTimeFromJson(json['closed_at']),
       createdAt: _dateTimeFromJson(json['created_at']),

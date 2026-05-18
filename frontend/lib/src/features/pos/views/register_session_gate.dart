@@ -22,9 +22,8 @@ class RegisterSessionGate extends StatefulWidget {
 }
 
 class _RegisterSessionGateState extends State<RegisterSessionGate> {
-  final TextEditingController _openingCashController = TextEditingController(
-    text: '0.00',
-  );
+  final TextEditingController _openingCashController = TextEditingController();
+  bool _showOpeningCashRequiredError = false;
 
   @override
   void dispose() {
@@ -62,6 +61,17 @@ class _RegisterSessionGateState extends State<RegisterSessionGate> {
                     child: _StartSessionGate(
                       viewModel: widget.viewModel,
                       openingCashController: _openingCashController,
+                      showOpeningCashRequiredError:
+                          _showOpeningCashRequiredError,
+                      onOpeningCashChanged: () {
+                        if (!_showOpeningCashRequiredError) {
+                          return;
+                        }
+                        setState(() => _showOpeningCashRequiredError = false);
+                      },
+                      onOpeningCashRequiredError: () {
+                        setState(() => _showOpeningCashRequiredError = true);
+                      },
                     ),
                   ),
                 RegisterSessionGateStatus.active => const SizedBox.shrink(),
@@ -134,10 +144,16 @@ class _StartSessionGate extends StatelessWidget {
   const _StartSessionGate({
     required this.viewModel,
     required this.openingCashController,
+    required this.showOpeningCashRequiredError,
+    required this.onOpeningCashChanged,
+    required this.onOpeningCashRequiredError,
   });
 
   final PosViewModel viewModel;
   final TextEditingController openingCashController;
+  final bool showOpeningCashRequiredError;
+  final VoidCallback onOpeningCashChanged;
+  final VoidCallback onOpeningCashRequiredError;
 
   @override
   Widget build(BuildContext context) {
@@ -165,9 +181,14 @@ class _StartSessionGate extends StatelessWidget {
           enabled: !viewModel.isStartingRegisterSession,
           keyboardType: const TextInputType.numberWithOptions(decimal: true),
           inputFormatters: [DecimalTextInputFormatter()],
+          onChanged: (_) => onOpeningCashChanged(),
           textInputAction: TextInputAction.done,
           decoration: InputDecoration(
             labelText: l10n.openingCashInputLabel,
+            hintText: viewModel.requireOpeningCash ? null : '0.00',
+            errorText: showOpeningCashRequiredError
+                ? l10n.openingCashRequiredError
+                : null,
             border: const OutlineInputBorder(),
             prefixIcon: const Icon(Icons.payments_outlined),
           ),
@@ -203,6 +224,10 @@ class _StartSessionGate extends StatelessWidget {
 
   Future<void> _startSession(BuildContext context) async {
     final normalized = openingCashController.text.replaceAll(',', '.');
+    if (viewModel.requireOpeningCash && normalized.trim().isEmpty) {
+      onOpeningCashRequiredError();
+      return;
+    }
     final openingCash = double.tryParse(normalized) ?? 0;
     await viewModel.startRegisterSession(openingCash: openingCash);
   }

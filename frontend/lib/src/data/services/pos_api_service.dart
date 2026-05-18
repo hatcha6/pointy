@@ -8,12 +8,40 @@ import '../models/pos_user.dart';
 import '../models/print_job.dart';
 import '../models/printer_config.dart';
 import '../models/query.dart';
+import '../models/register_cash_movement.dart';
+import '../models/register_cash_movement_page.dart';
 import '../models/register_session.dart';
 import '../models/register_session_page.dart';
 import '../models/sale_order.dart';
 import '../models/sale_order_page.dart';
 import '../models/shop_settings.dart';
+import '../models/stock_item.dart';
+import '../models/stock_movement.dart';
+import '../models/stock_movement_page.dart';
 import 'pos_http_client.dart';
+
+class PosApiException implements Exception {
+  const PosApiException({
+    required this.message,
+    required this.statusCode,
+    required this.responseBody,
+  });
+
+  final String message;
+  final int statusCode;
+  final String responseBody;
+
+  Object? get decodedBody {
+    try {
+      return jsonDecode(responseBody);
+    } on FormatException {
+      return null;
+    }
+  }
+
+  @override
+  String toString() => message;
+}
 
 class PosApiService {
   PosApiService({
@@ -206,6 +234,76 @@ class PosApiService {
     );
   }
 
+  Future<StockItem?> fetchStockForProduct(int productId) async {
+    final uri = Uri.parse(
+      '$baseUrl/stock/',
+    ).replace(queryParameters: {'product': '$productId'});
+    final response = await _client.get(uri, headers: _requestHeaders());
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception(
+        'Stock request failed with status ${response.statusCode}',
+      );
+    }
+
+    final results = _resultsFromDecoded(jsonDecode(_decodeBody(response)));
+    if (results.isEmpty) {
+      return null;
+    }
+    return StockItem.fromJson(results.first);
+  }
+
+  Future<StockMovementPage> fetchStockMovementsForProduct(
+    int productId, {
+    int page = 1,
+  }) async {
+    final uri = Uri.parse(
+      '$baseUrl/stock-movements/',
+    ).replace(queryParameters: {'product': '$productId', 'page': '$page'});
+    final response = await _client.get(uri, headers: _requestHeaders());
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception(
+        'Stock movement request failed with status ${response.statusCode}',
+      );
+    }
+
+    final decoded = jsonDecode(_decodeBody(response));
+    if (decoded is Map<String, Object?>) {
+      return StockMovementPage.fromJson(decoded);
+    }
+    if (decoded is List<Object?>) {
+      return StockMovementPage(
+        movements: decoded
+            .whereType<Map<String, Object?>>()
+            .map(StockMovement.fromJson)
+            .toList(growable: false),
+        hasMore: false,
+      );
+    }
+    return const StockMovementPage(movements: [], hasMore: false);
+  }
+
+  Future<StockMovement> createStockMovement(StockMovementDraft draft) async {
+    final uri = Uri.parse('$baseUrl/stock-movements/');
+    final response = await _client.post(
+      uri,
+      headers: _requestHeaders(includeCsrf: true),
+      body: jsonEncode(draft.toJson()),
+    );
+    _captureResponseState(response);
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception(
+        'Stock movement create failed with status ${response.statusCode}',
+      );
+    }
+
+    return StockMovement.fromJson(
+      jsonDecode(_decodeBody(response)) as Map<String, Object?>,
+    );
+  }
+
   Future<RegisterSession?> fetchCurrentRegisterSession() async {
     final uri = Uri.parse('$baseUrl/register-sessions/current/');
     final response = await _client.get(uri, headers: _requestHeaders());
@@ -275,6 +373,67 @@ class PosApiService {
     return const SaleOrderPage(orders: [], hasMore: false);
   }
 
+  Future<RegisterCashMovementPage> fetchRegisterSessionCashMovements(
+    int sessionId, {
+    int page = 1,
+  }) async {
+    final uri = Uri.parse(
+      '$baseUrl/register-sessions/$sessionId/cash-movements/',
+    ).replace(queryParameters: {'page': '$page'});
+    final response = await _client.get(uri, headers: _requestHeaders());
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception(
+        'Register session cash movements request failed with status '
+        '${response.statusCode}',
+      );
+    }
+
+    final decoded = jsonDecode(_decodeBody(response));
+    if (decoded is Map<String, Object?>) {
+      return RegisterCashMovementPage.fromJson(decoded);
+    }
+    if (decoded is List<Object?>) {
+      return RegisterCashMovementPage(
+        movements: decoded
+            .whereType<Map<String, Object?>>()
+            .map(RegisterCashMovement.fromJson)
+            .toList(growable: false),
+        hasMore: false,
+      );
+    }
+    return const RegisterCashMovementPage(movements: [], hasMore: false);
+  }
+
+  Future<RegisterCashMovement> createRegisterCashMovement({
+    required int sessionId,
+    required RegisterCashMovementType movementType,
+    required RegisterCashMovementDraft draft,
+  }) async {
+    final actionPath = switch (movementType) {
+      RegisterCashMovementType.payIn => 'pay-in',
+      RegisterCashMovementType.payOut => 'pay-out',
+    };
+    final uri = Uri.parse('$baseUrl/register-sessions/$sessionId/$actionPath/');
+    final response = await _client.post(
+      uri,
+      headers: _requestHeaders(includeCsrf: true),
+      body: jsonEncode(draft.toJson()),
+    );
+    _captureResponseState(response);
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception(
+        'Register session cash movement create failed with status '
+        '${response.statusCode}',
+      );
+    }
+
+    return RegisterCashMovement.fromJson(
+      jsonDecode(_decodeBody(response)) as Map<String, Object?>,
+    );
+  }
+
   Future<RegisterSession> startRegisterSession({
     required double openingCash,
   }) async {
@@ -330,7 +489,11 @@ class PosApiService {
     _captureResponseState(response);
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw Exception('Checkout failed with status ${response.statusCode}');
+      throw PosApiException(
+        message: 'Checkout failed with status ${response.statusCode}',
+        statusCode: response.statusCode,
+        responseBody: _decodeBody(response),
+      );
     }
 
     return SaleOrder.fromJson(
@@ -458,6 +621,52 @@ class PosApiService {
     );
   }
 
+  Future<SaleOrder> voidSaleOrder({
+    required int saleOrderId,
+    required SaleVoidDraft draft,
+  }) async {
+    final uri = Uri.parse('$baseUrl/orders/$saleOrderId/void/');
+    final response = await _client.post(
+      uri,
+      headers: _requestHeaders(includeCsrf: true),
+      body: jsonEncode(draft.toJson()),
+    );
+    _captureResponseState(response);
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception(
+        'Sale void request failed with status ${response.statusCode}',
+      );
+    }
+
+    return SaleOrder.fromJson(
+      jsonDecode(_decodeBody(response)) as Map<String, Object?>,
+    );
+  }
+
+  Future<SaleOrder> returnSaleOrderItems({
+    required int saleOrderId,
+    required SaleReturnDraft draft,
+  }) async {
+    final uri = Uri.parse('$baseUrl/orders/$saleOrderId/return-items/');
+    final response = await _client.post(
+      uri,
+      headers: _requestHeaders(includeCsrf: true),
+      body: jsonEncode(draft.toJson()),
+    );
+    _captureResponseState(response);
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception(
+        'Sale return request failed with status ${response.statusCode}',
+      );
+    }
+
+    return SaleOrder.fromJson(
+      jsonDecode(_decodeBody(response)) as Map<String, Object?>,
+    );
+  }
+
   String _printJobStatusQueryValue(PrintJobStatus status) {
     return switch (status) {
       PrintJobStatus.pending => 'queued',
@@ -529,5 +738,21 @@ class PosApiService {
         .whereType<Map<String, Object?>>()
         .map(fromJson)
         .toList(growable: false);
+  }
+
+  List<Map<String, Object?>> _resultsFromDecoded(Object? decoded) {
+    if (decoded is Map<String, Object?>) {
+      final results = decoded['results'];
+      if (results is List<Object?>) {
+        return results.whereType<Map<String, Object?>>().toList(
+          growable: false,
+        );
+      }
+      return [decoded];
+    }
+    if (decoded is List<Object?>) {
+      return decoded.whereType<Map<String, Object?>>().toList(growable: false);
+    }
+    return [];
   }
 }

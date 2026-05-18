@@ -15,7 +15,9 @@ class ShopSettings(TimeStampedModel):
     receipt_footer = models.CharField(max_length=240, blank=True)
     require_opening_cash = models.BooleanField(default=True)
     auto_print_receipts = models.BooleanField(default=False)
+    allow_overselling = models.BooleanField(default=False)
     low_stock_threshold = models.PositiveIntegerField(default=5)
+    cashier_return_window_hours = models.PositiveIntegerField(default=42)
 
     class Meta:
         verbose_name = "shop settings"

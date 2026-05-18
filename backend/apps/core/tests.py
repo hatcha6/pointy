@@ -164,6 +164,7 @@ class ShopSettingsApiTests(TestCase):
                 "require_opening_cash": False,
                 "auto_print_receipts": True,
                 "low_stock_threshold": 12,
+                "cashier_return_window_hours": 42,
             },
             format="json",
         )
@@ -174,8 +175,9 @@ class ShopSettingsApiTests(TestCase):
         self.assertFalse(update_response.data["require_opening_cash"])
         self.assertTrue(update_response.data["auto_print_receipts"])
         self.assertEqual(update_response.data["low_stock_threshold"], 12)
+        self.assertEqual(update_response.data["cashier_return_window_hours"], 42)
 
-    def test_cashier_cannot_access_shop_settings(self):
+    def test_cashier_can_read_but_not_update_shop_settings(self):
         client = APIClient()
         client.force_authenticate(user=self.cashier)
 
@@ -186,7 +188,8 @@ class ShopSettingsApiTests(TestCase):
             format="json",
         )
 
-        self.assertEqual(read_response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(read_response.status_code, status.HTTP_200_OK)
+        self.assertIn("auto_print_receipts", read_response.data)
         self.assertEqual(update_response.status_code, status.HTTP_403_FORBIDDEN)
 
 
@@ -202,6 +205,7 @@ class RolePermissionBootstrapTests(TestCase):
         self.assertTrue(manager.has_perm("catalog.add_product"))
         self.assertTrue(manager.has_perm("core.change_shopsettings"))
         self.assertTrue(manager.has_perm("inventory.change_stockitem"))
+        self.assertTrue(manager.has_perm("inventory.add_stockmovement"))
         self.assertTrue(manager.has_perm("sales.delete_order"))
         self.assertTrue(manager.has_perm("payments.change_payment"))
         self.assertTrue(manager.has_perm("auth.view_user"))
@@ -209,9 +213,12 @@ class RolePermissionBootstrapTests(TestCase):
         self.assertTrue(cashier.has_perm("catalog.view_product"))
         self.assertTrue(cashier.has_perm("sales.add_order"))
         self.assertTrue(cashier.has_perm("sales.change_registersession"))
+        self.assertTrue(cashier.has_perm("sales.add_registercashmovement"))
+        self.assertTrue(cashier.has_perm("sales.view_registercashmovement"))
         self.assertTrue(cashier.has_perm("payments.add_payment"))
         self.assertFalse(cashier.has_perm("catalog.add_product"))
         self.assertFalse(cashier.has_perm("inventory.view_stockitem"))
+        self.assertFalse(cashier.has_perm("inventory.add_stockmovement"))
         self.assertFalse(cashier.has_perm("auth.view_user"))
 
 
