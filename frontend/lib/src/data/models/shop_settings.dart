@@ -8,6 +8,11 @@ class ShopSettings {
     required this.allowOverselling,
     required this.lowStockThreshold,
     required this.cashierReturnWindowHours,
+    required this.enableCashPayments,
+    required this.enableCardPayments,
+    required this.enableTransferPayments,
+    required this.cardCommissionPercent,
+    required this.transferCommissionPercent,
   });
 
   final String shopName;
@@ -18,6 +23,11 @@ class ShopSettings {
   final bool allowOverselling;
   final int lowStockThreshold;
   final int cashierReturnWindowHours;
+  final bool enableCashPayments;
+  final bool enableCardPayments;
+  final bool enableTransferPayments;
+  final double cardCommissionPercent;
+  final double transferCommissionPercent;
 
   factory ShopSettings.fromJson(Map<String, Object?> json) {
     return ShopSettings(
@@ -36,6 +46,17 @@ class ShopSettings {
       lowStockThreshold: (json['low_stock_threshold'] as num?)?.toInt() ?? 5,
       cashierReturnWindowHours:
           (json['cashier_return_window_hours'] as num?)?.toInt() ?? 42,
+      enableCashPayments: _boolFromJson(json['enable_cash_payments'], true),
+      enableCardPayments: _boolFromJson(json['enable_card_payments'], true),
+      enableTransferPayments: _boolFromJson(
+        json['enable_transfer_payments'],
+        true,
+      ),
+      cardCommissionPercent: _moneyFromJson(json['card_commission_percent'], 1),
+      transferCommissionPercent: _moneyFromJson(
+        json['transfer_commission_percent'],
+        0,
+      ),
     );
   }
 }
@@ -50,6 +71,11 @@ class ShopSettingsDraft {
     required this.allowOverselling,
     required this.lowStockThreshold,
     required this.cashierReturnWindowHours,
+    required this.enableCashPayments,
+    required this.enableCardPayments,
+    required this.enableTransferPayments,
+    required this.cardCommissionPercent,
+    required this.transferCommissionPercent,
   });
 
   final String shopName;
@@ -60,6 +86,11 @@ class ShopSettingsDraft {
   final bool allowOverselling;
   final int lowStockThreshold;
   final int cashierReturnWindowHours;
+  final bool enableCashPayments;
+  final bool enableCardPayments;
+  final bool enableTransferPayments;
+  final double cardCommissionPercent;
+  final double transferCommissionPercent;
 
   Map<String, Object?> toJson() {
     return {
@@ -71,6 +102,30 @@ class ShopSettingsDraft {
       'allow_overselling': allowOverselling,
       'low_stock_threshold': lowStockThreshold,
       'cashier_return_window_hours': cashierReturnWindowHours,
+      'enable_cash_payments': enableCashPayments,
+      'enable_card_payments': enableCardPayments,
+      'enable_transfer_payments': enableTransferPayments,
+      'card_commission_percent': cardCommissionPercent.toStringAsFixed(2),
+      'transfer_commission_percent': transferCommissionPercent.toStringAsFixed(
+        2,
+      ),
     };
   }
+}
+
+bool _boolFromJson(Object? value, bool fallback) {
+  if (value is bool) {
+    return value;
+  }
+  if (value == null) {
+    return fallback;
+  }
+  return value.toString() == 'true';
+}
+
+double _moneyFromJson(Object? value, double fallback) {
+  if (value == null) {
+    return fallback;
+  }
+  return double.tryParse(value.toString()) ?? fallback;
 }

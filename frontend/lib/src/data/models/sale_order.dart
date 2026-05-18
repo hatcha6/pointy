@@ -18,6 +18,7 @@ class SaleCheckoutDraft {
   factory SaleCheckoutDraft.fromCart({
     required List<CartLine> cart,
     required double amountReceived,
+    PaymentMethod paymentMethod = PaymentMethod.cash,
     PrinterConfig? invoicePrinterConfig,
   }) {
     return SaleCheckoutDraft(
@@ -30,6 +31,7 @@ class SaleCheckoutDraft {
           )
           .toList(growable: false),
       amountReceived: amountReceived,
+      paymentMethod: paymentMethod.apiValue,
       invoicePrinterConfig: invoicePrinterConfig,
     );
   }
@@ -67,6 +69,7 @@ class SaleOrder {
     required this.id,
     required this.status,
     required this.lines,
+    required this.payments,
     required this.subtotal,
     required this.total,
     this.receiptNumber,
@@ -90,6 +93,7 @@ class SaleOrder {
   final bool canReturn;
   final bool requiresManagerAdjustment;
   final List<SaleOrderLine> lines;
+  final List<SalePayment> payments;
   final double subtotal;
   final double total;
   final DateTime? createdAt;
@@ -97,6 +101,7 @@ class SaleOrder {
 
   factory SaleOrder.fromJson(Map<String, Object?> json) {
     final linesJson = (json['lines'] as List<Object?>?) ?? const [];
+    final paymentsJson = (json['payments'] as List<Object?>?) ?? const [];
 
     return SaleOrder(
       id: _intFromJson(json['id']),
@@ -116,10 +121,64 @@ class SaleOrder {
           .whereType<Map<String, Object?>>()
           .map(SaleOrderLine.fromJson)
           .toList(growable: false),
+      payments: paymentsJson
+          .whereType<Map<String, Object?>>()
+          .map(SalePayment.fromJson)
+          .toList(growable: false),
       subtotal: _moneyFromJson(json['subtotal']),
       total: _moneyFromJson(json['total']),
       createdAt: _dateTimeFromJson(json['created_at']),
       updatedAt: _dateTimeFromJson(json['updated_at']),
+    );
+  }
+}
+
+enum PaymentMethod {
+  cash('cash'),
+  card('card'),
+  transfer('transfer');
+
+  const PaymentMethod(this.apiValue);
+
+  final String apiValue;
+
+  static PaymentMethod fromApiValue(Object? value) {
+    return switch (value?.toString()) {
+      'card' => PaymentMethod.card,
+      'transfer' => PaymentMethod.transfer,
+      _ => PaymentMethod.cash,
+    };
+  }
+}
+
+class SalePayment {
+  const SalePayment({
+    required this.id,
+    required this.method,
+    required this.amount,
+    required this.commissionPercent,
+    required this.commissionAmount,
+    this.externalReference = '',
+    this.createdAt,
+  });
+
+  final int id;
+  final PaymentMethod method;
+  final double amount;
+  final double commissionPercent;
+  final double commissionAmount;
+  final String externalReference;
+  final DateTime? createdAt;
+
+  factory SalePayment.fromJson(Map<String, Object?> json) {
+    return SalePayment(
+      id: _intFromJson(json['id']),
+      method: PaymentMethod.fromApiValue(json['method']),
+      amount: _moneyFromJson(json['amount']),
+      commissionPercent: _moneyFromJson(json['commission_percent']),
+      commissionAmount: _moneyFromJson(json['commission_amount']),
+      externalReference: json['external_reference']?.toString() ?? '',
+      createdAt: _dateTimeFromJson(json['created_at']),
     );
   }
 }

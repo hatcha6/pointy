@@ -1,11 +1,11 @@
 # Pointy POS
 
-A starter point-of-sale stack with a Django REST Framework backend, Redis-backed cache/task wiring, and a Flutter frontend.
+A starter point-of-sale stack with a Django REST Framework backend, Redis-backed cache/task wiring, and an Arabic-first Flutter frontend.
 
 ## Layout
 
 - `backend/` - Django API for catalog, sales, payments, inventory, Redis cache, and Celery tasks.
-- `frontend/` - Flutter POS client with a cashier-first sales screen scaffold.
+- `frontend/` - Flutter POS client with cashier-first sales, catalog, register-session, printing, and settings screens.
 
 ## Backend Quick Start
 
@@ -61,7 +61,7 @@ flutter pub get
 flutter run
 ```
 
-The Flutter app currently uses a sample in-memory catalog while the data layer is scaffolded for the API.
+The Flutter app reads from the Django API. The POS catalog keeps a small Arabic sample fallback only for local development when the API is unavailable.
 
 Run the full local stack:
 

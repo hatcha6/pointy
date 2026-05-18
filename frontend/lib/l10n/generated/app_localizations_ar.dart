@@ -214,6 +214,9 @@ class AppLocalizationsAr extends AppLocalizations {
   String get registerSessionSettingsSectionTitle => 'جلسة الدرج';
 
   @override
+  String get paymentSettingsSectionTitle => 'طرق الدفع';
+
+  @override
   String get inventorySettingsSectionTitle => 'تنبيهات المخزون';
 
   @override
@@ -238,6 +241,23 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String inventorySettingsSummary(int count, String status) {
     return 'تنبيه عند $count قطع أو أقل، البيع فوق المخزون: $status';
+  }
+
+  @override
+  String paymentSettingsSummary(
+    num count,
+    String cardCommission,
+    String transferCommission,
+  ) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count طرق دفع مفعلة',
+      two: 'طريقتان مفعّلتان',
+      one: 'طريقة دفع واحدة مفعلة',
+      zero: 'لا توجد طرق دفع مفعلة',
+    );
+    return '$_temp0، بطاقة $cardCommission%، تحويل $transferCommission%';
   }
 
   @override
@@ -284,6 +304,24 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get allowOversellingLabel => 'السماح بالبيع فوق المخزون';
+
+  @override
+  String get paymentMethodCash => 'نقد';
+
+  @override
+  String get paymentMethodCard => 'بطاقة';
+
+  @override
+  String get paymentMethodTransfer => 'تحويل';
+
+  @override
+  String get cardCommissionPercentLabel => 'عمولة البطاقة (%)';
+
+  @override
+  String get transferCommissionPercentLabel => 'عمولة التحويل (%)';
+
+  @override
+  String get paymentMethodsRequiredError => 'فعّل طريقة دفع واحدة على الأقل.';
 
   @override
   String get lowStockThresholdLabel => 'حد تنبيه المخزون المنخفض';
@@ -552,6 +590,25 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get checkoutInProgressButton => 'جار الدفع...';
+
+  @override
+  String get paymentDialogTitle => 'إتمام الدفع';
+
+  @override
+  String get cashReceivedLabel => 'المبلغ المستلم';
+
+  @override
+  String get cashReceivedTooLowError => 'المبلغ المستلم أقل من الإجمالي.';
+
+  @override
+  String get changeDueLabel => 'الباقي للعميل';
+
+  @override
+  String get confirmPaymentButton => 'تأكيد الدفع';
+
+  @override
+  String get noEnabledPaymentMethods =>
+      'لا توجد طريقة دفع مفعلة. راجع إعدادات المتجر.';
 
   @override
   String get printInvoiceAfterPaymentLabel => 'طباعة الفاتورة بعد الدفع';
@@ -909,6 +966,14 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get saleReturnQuantityLabel => 'كمية الإرجاع';
+
+  @override
+  String get salePaymentsTitle => 'المدفوعات';
+
+  @override
+  String salePaymentCommission(String amount, String percent) {
+    return 'العمولة $amount بنسبة $percent%';
+  }
 
   @override
   String saleLineReturnedQuantity(int returned, int quantity) {

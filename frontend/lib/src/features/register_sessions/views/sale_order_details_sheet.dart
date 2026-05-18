@@ -18,6 +18,7 @@ Future<void> showSaleOrderDetailsSheet(
 }) {
   return showModalBottomSheet<void>(
     context: context,
+    isScrollControlled: true,
     useSafeArea: true,
     showDragHandle: true,
     builder: (context) {
@@ -62,10 +63,9 @@ class _SaleOrderDetailsSheetState extends State<_SaleOrderDetailsSheet> {
     final l10n = AppLocalizations.of(context)!;
     final order = widget.order;
 
-    return Padding(
+    return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
       child: Column(
-        mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
@@ -75,36 +75,34 @@ class _SaleOrderDetailsSheetState extends State<_SaleOrderDetailsSheet> {
             style: Theme.of(context).textTheme.titleLarge,
           ),
           const SizedBox(height: 12),
-          Flexible(
-            child: ListView.separated(
-              shrinkWrap: true,
-              itemCount: order.lines.length,
-              separatorBuilder: (_, _) => const Divider(height: 1),
-              itemBuilder: (context, index) {
-                final line = order.lines[index];
-                return ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: Text(
-                    line.productName ??
-                        l10n.saleProductFallback(line.productId),
-                  ),
-                  subtitle: Text(
-                    [
-                      l10n.saleLineQuantityAndPrice(
+          ListView.separated(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: order.lines.length,
+            separatorBuilder: (_, _) => const Divider(height: 1),
+            itemBuilder: (context, index) {
+              final line = order.lines[index];
+              return ListTile(
+                contentPadding: EdgeInsets.zero,
+                title: Text(
+                  line.productName ?? l10n.saleProductFallback(line.productId),
+                ),
+                subtitle: Text(
+                  [
+                    l10n.saleLineQuantityAndPrice(
+                      line.quantity,
+                      formatMoney(line.unitPrice),
+                    ),
+                    if (line.returnedQuantity > 0)
+                      l10n.saleLineReturnedQuantity(
+                        line.returnedQuantity,
                         line.quantity,
-                        formatMoney(line.unitPrice),
                       ),
-                      if (line.returnedQuantity > 0)
-                        l10n.saleLineReturnedQuantity(
-                          line.returnedQuantity,
-                          line.quantity,
-                        ),
-                    ].join(' • '),
-                  ),
-                  trailing: Text(formatMoney(line.total)),
-                );
-              },
-            ),
+                  ].join(' • '),
+                ),
+                trailing: Text(formatMoney(line.total)),
+              );
+            },
           ),
           const Divider(),
           Row(
@@ -117,6 +115,30 @@ class _SaleOrderDetailsSheetState extends State<_SaleOrderDetailsSheet> {
               ),
             ],
           ),
+          if (order.payments.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Text(
+              l10n.salePaymentsTitle,
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 4),
+            for (final payment in order.payments)
+              ListTile(
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                leading: Icon(_paymentIcon(payment.method)),
+                title: Text(_paymentMethodLabel(l10n, payment.method)),
+                subtitle: payment.commissionAmount == 0
+                    ? null
+                    : Text(
+                        l10n.salePaymentCommission(
+                          formatMoney(payment.commissionAmount),
+                          payment.commissionPercent.toStringAsFixed(2),
+                        ),
+                      ),
+                trailing: Text(formatMoney(payment.amount)),
+              ),
+          ],
           if (widget.onReprint != null) ...[
             const SizedBox(height: 12),
             OutlinedButton.icon(
@@ -164,6 +186,22 @@ class _SaleOrderDetailsSheetState extends State<_SaleOrderDetailsSheet> {
         ],
       ),
     );
+  }
+
+  IconData _paymentIcon(PaymentMethod method) {
+    return switch (method) {
+      PaymentMethod.cash => Icons.payments_outlined,
+      PaymentMethod.card => Icons.credit_card_outlined,
+      PaymentMethod.transfer => Icons.account_balance_outlined,
+    };
+  }
+
+  String _paymentMethodLabel(AppLocalizations l10n, PaymentMethod method) {
+    return switch (method) {
+      PaymentMethod.cash => l10n.paymentMethodCash,
+      PaymentMethod.card => l10n.paymentMethodCard,
+      PaymentMethod.transfer => l10n.paymentMethodTransfer,
+    };
   }
 
   bool get _isBusy => _isReprinting || _isAdjusting;

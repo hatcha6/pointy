@@ -92,6 +92,10 @@ class PosViewModel extends ChangeNotifier {
   bool get allowOverselling => _checkoutSettings?.allowOverselling ?? false;
   bool get shouldShowPrintInvoiceCheckbox =>
       _checkoutSettings != null && !_checkoutSettings!.autoPrintReceipts;
+  bool get enableCashPayments => _checkoutSettings?.enableCashPayments ?? true;
+  bool get enableCardPayments => _checkoutSettings?.enableCardPayments ?? true;
+  bool get enableTransferPayments =>
+      _checkoutSettings?.enableTransferPayments ?? true;
 
   double get subtotal => _cart.fold(0, (sum, line) => sum + line.subtotal);
   double get total => subtotal;

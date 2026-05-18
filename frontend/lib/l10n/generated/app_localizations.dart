@@ -496,6 +496,12 @@ abstract class AppLocalizations {
   /// **'جلسة الدرج'**
   String get registerSessionSettingsSectionTitle;
 
+  /// No description provided for @paymentSettingsSectionTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'طرق الدفع'**
+  String get paymentSettingsSectionTitle;
+
   /// No description provided for @inventorySettingsSectionTitle.
   ///
   /// In ar, this message translates to:
@@ -537,6 +543,16 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'تنبيه عند {count} قطع أو أقل، البيع فوق المخزون: {status}'**
   String inventorySettingsSummary(int count, String status);
+
+  /// Summary for payment settings in the shop settings index.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, =0{لا توجد طرق دفع مفعلة} =1{طريقة دفع واحدة مفعلة} =2{طريقتان مفعّلتان} other{{count} طرق دفع مفعلة}}، بطاقة {cardCommission}%، تحويل {transferCommission}%'**
+  String paymentSettingsSummary(
+    num count,
+    String cardCommission,
+    String transferCommission,
+  );
 
   /// No description provided for @shopNameLabel.
   ///
@@ -615,6 +631,42 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'السماح بالبيع فوق المخزون'**
   String get allowOversellingLabel;
+
+  /// No description provided for @paymentMethodCash.
+  ///
+  /// In ar, this message translates to:
+  /// **'نقد'**
+  String get paymentMethodCash;
+
+  /// No description provided for @paymentMethodCard.
+  ///
+  /// In ar, this message translates to:
+  /// **'بطاقة'**
+  String get paymentMethodCard;
+
+  /// No description provided for @paymentMethodTransfer.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحويل'**
+  String get paymentMethodTransfer;
+
+  /// No description provided for @cardCommissionPercentLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'عمولة البطاقة (%)'**
+  String get cardCommissionPercentLabel;
+
+  /// No description provided for @transferCommissionPercentLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'عمولة التحويل (%)'**
+  String get transferCommissionPercentLabel;
+
+  /// No description provided for @paymentMethodsRequiredError.
+  ///
+  /// In ar, this message translates to:
+  /// **'فعّل طريقة دفع واحدة على الأقل.'**
+  String get paymentMethodsRequiredError;
 
   /// No description provided for @lowStockThresholdLabel.
   ///
@@ -1131,6 +1183,42 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'جار الدفع...'**
   String get checkoutInProgressButton;
+
+  /// No description provided for @paymentDialogTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'إتمام الدفع'**
+  String get paymentDialogTitle;
+
+  /// No description provided for @cashReceivedLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'المبلغ المستلم'**
+  String get cashReceivedLabel;
+
+  /// No description provided for @cashReceivedTooLowError.
+  ///
+  /// In ar, this message translates to:
+  /// **'المبلغ المستلم أقل من الإجمالي.'**
+  String get cashReceivedTooLowError;
+
+  /// No description provided for @changeDueLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الباقي للعميل'**
+  String get changeDueLabel;
+
+  /// No description provided for @confirmPaymentButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'تأكيد الدفع'**
+  String get confirmPaymentButton;
+
+  /// No description provided for @noEnabledPaymentMethods.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد طريقة دفع مفعلة. راجع إعدادات المتجر.'**
+  String get noEnabledPaymentMethods;
 
   /// No description provided for @printInvoiceAfterPaymentLabel.
   ///
@@ -1755,6 +1843,18 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'كمية الإرجاع'**
   String get saleReturnQuantityLabel;
+
+  /// No description provided for @salePaymentsTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'المدفوعات'**
+  String get salePaymentsTitle;
+
+  /// Commission line for a recorded payment.
+  ///
+  /// In ar, this message translates to:
+  /// **'العمولة {amount} بنسبة {percent}%'**
+  String salePaymentCommission(String amount, String percent);
 
   /// Returned quantity status for a sale line.
   ///

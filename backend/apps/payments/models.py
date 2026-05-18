@@ -1,4 +1,5 @@
 from django.db import models
+from django.core.validators import MinValueValidator
 
 from apps.core.models import TimeStampedModel
 from apps.sales.models import Order
@@ -8,11 +9,18 @@ class Payment(TimeStampedModel):
     class Method(models.TextChoices):
         CASH = "cash", "Cash"
         CARD = "card", "Card"
-        MOBILE = "mobile", "Mobile"
+        TRANSFER = "transfer", "Transfer"
 
     order = models.ForeignKey(Order, on_delete=models.PROTECT, related_name="payments")
     method = models.CharField(max_length=16, choices=Method.choices)
     amount = models.DecimalField(max_digits=10, decimal_places=2)
+    commission_percent = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=0,
+        validators=[MinValueValidator(0)],
+    )
+    commission_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     external_reference = models.CharField(max_length=128, blank=True)
 
     class Meta:

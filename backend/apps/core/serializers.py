@@ -116,6 +116,20 @@ class PosUserSerializer(serializers.ModelSerializer):
 
 
 class ShopSettingsSerializer(serializers.ModelSerializer):
+    def validate(self, attrs):
+        settings = self.instance or ShopSettings.load()
+        enable_cash = attrs.get("enable_cash_payments", settings.enable_cash_payments)
+        enable_card = attrs.get("enable_card_payments", settings.enable_card_payments)
+        enable_transfer = attrs.get(
+            "enable_transfer_payments",
+            settings.enable_transfer_payments,
+        )
+        if not any((enable_cash, enable_card, enable_transfer)):
+            raise serializers.ValidationError(
+                {"payment_methods": "At least one payment method must be enabled."}
+            )
+        return attrs
+
     class Meta:
         model = ShopSettings
         fields = [
@@ -127,6 +141,11 @@ class ShopSettingsSerializer(serializers.ModelSerializer):
             "allow_overselling",
             "low_stock_threshold",
             "cashier_return_window_hours",
+            "enable_cash_payments",
+            "enable_card_payments",
+            "enable_transfer_payments",
+            "card_commission_percent",
+            "transfer_commission_percent",
             "updated_at",
         ]
         read_only_fields = ["updated_at"]

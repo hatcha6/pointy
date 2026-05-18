@@ -205,6 +205,7 @@ void main() {
 
     await tester.tap(find.text('ادفع 7.00 د.ل'));
     await tester.pumpAndSettle(const Duration(seconds: 1));
+    await _confirmPayment(tester);
 
     expect(checkoutBody, isNotNull);
     expect(checkoutBody?['payment_method'], 'cash');
@@ -249,6 +250,7 @@ void main() {
 
       await tester.tap(find.text('ادفع 3.50 د.ل'));
       await tester.pumpAndSettle(const Duration(seconds: 1));
+      await _confirmPayment(tester);
 
       expect(checkoutBody?['print_invoice'], isA<Map<String, Object?>>());
       expect(reportCalls, 1);
@@ -295,6 +297,7 @@ void main() {
 
     await tester.tap(find.text('ادفع 3.50 د.ل'));
     await tester.pumpAndSettle(const Duration(seconds: 1));
+    await _confirmPayment(tester);
 
     expect(checkoutBody?['print_invoice'], isA<Map<String, Object?>>());
     expect(reportCalls, 1);
@@ -326,6 +329,7 @@ void main() {
 
     await tester.tap(find.text('ادفع 3.50 د.ل'));
     await tester.pumpAndSettle(const Duration(seconds: 1));
+    await _confirmPayment(tester);
 
     expect(find.text('ادفع 3.50 د.ل'), findsOneWidget);
     expect(
@@ -373,6 +377,7 @@ void main() {
 
     await tester.tap(find.text('إتمام البيع'));
     await tester.pumpAndSettle(const Duration(seconds: 1));
+    await _confirmPayment(tester);
 
     expect(checkoutBody, isNotNull);
     expect(find.text('تم تسجيل البيع. رقم الإيصال: R-100'), findsOneWidget);
@@ -629,6 +634,7 @@ void main() {
     expect(find.text('الإيصالات'), findsOneWidget);
     expect(find.text('الطابعة المحلية'), findsNothing);
     expect(find.text('جلسة الدرج'), findsOneWidget);
+    expect(find.text('طرق الدفع'), findsOneWidget);
     expect(find.text('تنبيهات المخزون'), findsOneWidget);
 
     await tester.tap(find.text('جلسة الدرج'));
@@ -654,6 +660,9 @@ void main() {
 
     expect(settingsBody?['shop_name'], 'متجر الاختبار');
     expect(settingsBody?['cashier_return_window_hours'], 42);
+    expect(settingsBody?['enable_card_payments'], true);
+    expect(settingsBody?['card_commission_percent'], '1.00');
+    expect(settingsBody?['transfer_commission_percent'], '0.00');
     expect(find.text('تم حفظ إعدادات المتجر.'), findsOneWidget);
   });
 
@@ -1220,6 +1229,12 @@ Future<void> _startRegisterSession(WidgetTester tester) async {
   await tester.pumpAndSettle(const Duration(seconds: 1));
 }
 
+Future<void> _confirmPayment(WidgetTester tester) async {
+  expect(find.text('إتمام الدفع'), findsOneWidget);
+  await tester.tap(find.text('تأكيد الدفع'));
+  await tester.pumpAndSettle(const Duration(seconds: 1));
+}
+
 class _StaticDiscoveryTransport extends PrintTransport {
   const _StaticDiscoveryTransport(this.endpoints);
 
@@ -1659,6 +1674,11 @@ Map<String, Object?> _shopSettingsJson({
     'allow_overselling': allowOverselling,
     'low_stock_threshold': 5,
     'cashier_return_window_hours': cashierReturnWindowHours,
+    'enable_cash_payments': true,
+    'enable_card_payments': true,
+    'enable_transfer_payments': true,
+    'card_commission_percent': '1.00',
+    'transfer_commission_percent': '0.00',
   };
 }
 
@@ -1764,6 +1784,17 @@ Map<String, Object?> _orderJson({
             returnableQuantity ?? quantity - returnedQuantity,
         'unit_price': '3.50',
         'line_total': total,
+      },
+    ],
+    'payments': [
+      {
+        'id': 900,
+        'method': 'cash',
+        'amount': total,
+        'commission_percent': '0.00',
+        'commission_amount': '0.00',
+        'external_reference': '',
+        'created_at': createdAt,
       },
     ],
     'subtotal': total,

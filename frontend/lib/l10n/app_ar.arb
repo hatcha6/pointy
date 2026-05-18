@@ -70,6 +70,7 @@
   "shopBehaviorSectionTitle": "سلوك التطبيق",
   "receiptSettingsSectionTitle": "الإيصالات",
   "registerSessionSettingsSectionTitle": "جلسة الدرج",
+  "paymentSettingsSectionTitle": "طرق الدفع",
   "inventorySettingsSectionTitle": "تنبيهات المخزون",
   "shopSettingsEmptyValue": "غير محدد",
   "shopSettingsEnabledValue": "مفعل",
@@ -103,6 +104,21 @@
         "type": "int"
       },
       "status": {
+        "type": "String"
+      }
+    }
+  },
+  "paymentSettingsSummary": "{count, plural, =0{لا توجد طرق دفع مفعلة} =1{طريقة دفع واحدة مفعلة} =2{طريقتان مفعّلتان} other{{count} طرق دفع مفعلة}}، بطاقة {cardCommission}%، تحويل {transferCommission}%",
+  "@paymentSettingsSummary": {
+    "description": "Summary for payment settings in the shop settings index.",
+    "placeholders": {
+      "count": {
+        "type": "num"
+      },
+      "cardCommission": {
+        "type": "String"
+      },
+      "transferCommission": {
         "type": "String"
       }
     }
@@ -147,6 +163,12 @@
   },
   "autoPrintReceiptsLabel": "طباعة الإيصالات تلقائيًا",
   "allowOversellingLabel": "السماح بالبيع فوق المخزون",
+  "paymentMethodCash": "نقد",
+  "paymentMethodCard": "بطاقة",
+  "paymentMethodTransfer": "تحويل",
+  "cardCommissionPercentLabel": "عمولة البطاقة (%)",
+  "transferCommissionPercentLabel": "عمولة التحويل (%)",
+  "paymentMethodsRequiredError": "فعّل طريقة دفع واحدة على الأقل.",
   "lowStockThresholdLabel": "حد تنبيه المخزون المنخفض",
   "printerTransportLabel": "طريقة الاتصال",
   "printerTransportSerial": "تسلسلي",
@@ -249,6 +271,12 @@
     }
   },
   "checkoutInProgressButton": "جار الدفع...",
+  "paymentDialogTitle": "إتمام الدفع",
+  "cashReceivedLabel": "المبلغ المستلم",
+  "cashReceivedTooLowError": "المبلغ المستلم أقل من الإجمالي.",
+  "changeDueLabel": "الباقي للعميل",
+  "confirmPaymentButton": "تأكيد الدفع",
+  "noEnabledPaymentMethods": "لا توجد طريقة دفع مفعلة. راجع إعدادات المتجر.",
   "printInvoiceAfterPaymentLabel": "طباعة الفاتورة بعد الدفع",
   "saleCheckoutSuccess": "تم تسجيل البيع.",
   "saleCheckoutSuccessWithReceipt": "تم تسجيل البيع. رقم الإيصال: {receiptNumber}",
@@ -466,6 +494,19 @@
   "saleAdjustmentReasonLabel": "سبب اختياري",
   "saleAdjustmentReasonHint": "مثال: طلب العميل الإرجاع",
   "saleReturnQuantityLabel": "كمية الإرجاع",
+  "salePaymentsTitle": "المدفوعات",
+  "salePaymentCommission": "العمولة {amount} بنسبة {percent}%",
+  "@salePaymentCommission": {
+    "description": "Commission line for a recorded payment.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      },
+      "percent": {
+        "type": "String"
+      }
+    }
+  },
   "saleLineReturnedQuantity": "تم إرجاع {returned} من {quantity}",
   "@saleLineReturnedQuantity": {
     "description": "Returned quantity status for a sale line.",

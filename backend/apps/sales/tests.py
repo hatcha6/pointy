@@ -621,6 +621,43 @@ class OrderCheckoutApiTests(TestCase):
         self.assertEqual(order.status, Order.Status.PAID)
         self.assertEqual(payment.method, Payment.Method.CASH)
         self.assertEqual(payment.amount, Decimal("7.00"))
+        self.assertEqual(payment.commission_percent, Decimal("0.00"))
+        self.assertEqual(payment.commission_amount, Decimal("0.00"))
+        self.assertEqual(response.data["payments"][0]["method"], Payment.Method.CASH)
+
+    def test_checkout_records_card_payment_with_configured_commission(self):
+        ShopSettings.load()
+        ShopSettings.objects.filter(pk=1).update(card_commission_percent=Decimal("1.25"))
+        self.start_session()
+
+        response = self.client.post(
+            reverse("order-checkout"),
+            self.checkout_payload(payment_method=Payment.Method.CARD),
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        payment = Payment.objects.get(order_id=response.data["id"])
+        self.assertEqual(payment.method, Payment.Method.CARD)
+        self.assertEqual(payment.commission_percent, Decimal("1.25"))
+        self.assertEqual(payment.commission_amount, Decimal("0.09"))
+        self.assertEqual(response.data["payments"][0]["commission_percent"], "1.25")
+        self.assertEqual(response.data["payments"][0]["commission_amount"], "0.09")
+
+    def test_checkout_rejects_disabled_payment_method(self):
+        ShopSettings.load()
+        ShopSettings.objects.filter(pk=1).update(enable_card_payments=False)
+        self.start_session()
+
+        response = self.client.post(
+            reverse("order-checkout"),
+            self.checkout_payload(payment_method=Payment.Method.CARD),
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("payment_method", response.data)
+        self.assertEqual(Order.objects.count(), 0)
 
     def test_checkout_decrements_stock_and_records_stock_movement(self):
         self.start_session()

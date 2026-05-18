@@ -17,7 +17,10 @@ extension PosCheckoutActions on PosViewModel {
     return shortages;
   }
 
-  Future<SaleCheckoutOutcome> checkoutCurrentSale() async {
+  Future<SaleCheckoutOutcome> checkoutCurrentSale({
+    PaymentMethod paymentMethod = PaymentMethod.cash,
+    double? amountReceived,
+  }) async {
     if (_isCheckingOut) {
       return const SaleCheckoutOutcome.failure();
     }
@@ -46,7 +49,10 @@ extension PosCheckoutActions on PosViewModel {
     final result = await _saleRepository.checkout(
       SaleCheckoutDraft.fromCart(
         cart: cartSnapshot,
-        amountReceived: cartSnapshot.fold(0, (sum, line) => sum + line.total),
+        amountReceived:
+            amountReceived ??
+            cartSnapshot.fold(0, (sum, line) => sum + line.total),
+        paymentMethod: paymentMethod,
         invoicePrinterConfig: invoicePrinterConfig,
       ),
     );

@@ -165,6 +165,11 @@ class ShopSettingsApiTests(TestCase):
                 "auto_print_receipts": True,
                 "low_stock_threshold": 12,
                 "cashier_return_window_hours": 42,
+                "enable_cash_payments": True,
+                "enable_card_payments": False,
+                "enable_transfer_payments": True,
+                "card_commission_percent": "1.50",
+                "transfer_commission_percent": "0.25",
             },
             format="json",
         )
@@ -176,6 +181,28 @@ class ShopSettingsApiTests(TestCase):
         self.assertTrue(update_response.data["auto_print_receipts"])
         self.assertEqual(update_response.data["low_stock_threshold"], 12)
         self.assertEqual(update_response.data["cashier_return_window_hours"], 42)
+        self.assertTrue(update_response.data["enable_cash_payments"])
+        self.assertFalse(update_response.data["enable_card_payments"])
+        self.assertTrue(update_response.data["enable_transfer_payments"])
+        self.assertEqual(update_response.data["card_commission_percent"], "1.50")
+        self.assertEqual(update_response.data["transfer_commission_percent"], "0.25")
+
+    def test_shop_settings_requires_at_least_one_payment_method(self):
+        client = APIClient()
+        client.force_authenticate(user=self.manager)
+
+        response = client.patch(
+            reverse("shop-settings"),
+            {
+                "enable_cash_payments": False,
+                "enable_card_payments": False,
+                "enable_transfer_payments": False,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("payment_methods", response.data)
 
     def test_cashier_can_read_but_not_update_shop_settings(self):
         client = APIClient()

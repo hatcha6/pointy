@@ -20,7 +20,7 @@ extension PosCatalogActions on PosViewModel {
       case Error<ProductPage>():
         _products = _catalogRepository.sampleProducts(_query);
         _hasMoreProducts = false;
-        _errorMessage = 'يتم عرض منتجات تجريبية إلى أن يعمل الخادم.';
+        _errorMessage = 'sample_catalog_notice';
     }
 
     _isLoading = false;
@@ -45,7 +45,7 @@ extension PosCatalogActions on PosViewModel {
         _hasMoreProducts = result.value.hasMore;
         _nextProductPage += 1;
       case Error<ProductPage>():
-        _errorMessage = 'يتم عرض منتجات تجريبية إلى أن يعمل الخادم.';
+        _errorMessage = 'sample_catalog_notice';
     }
 
     _isLoadingMore = false;

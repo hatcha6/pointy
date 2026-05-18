@@ -7,7 +7,10 @@ import '../../../data/models/pos_user.dart';
 import '../../../data/models/shop_settings.dart';
 import '../../../shared/app_navigation_drawer.dart';
 import '../../../shared/authorization_guards.dart';
+import '../../../shared/decimal_text_input_formatter.dart';
 import '../view_models/shop_settings_view_model.dart';
+
+part 'shop_settings_widgets.dart';
 
 class ShopSettingsScreen extends StatelessWidget {
   const ShopSettingsScreen({
@@ -134,10 +137,15 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
   late final TextEditingController _receiptHeaderController;
   late final TextEditingController _receiptFooterController;
   late final TextEditingController _lowStockThresholdController;
+  late final TextEditingController _cardCommissionController;
+  late final TextEditingController _transferCommissionController;
   late int _cashierReturnWindowHours;
   late bool _requireOpeningCash;
   late bool _autoPrintReceipts;
   late bool _allowOverselling;
+  late bool _enableCashPayments;
+  late bool _enableCardPayments;
+  late bool _enableTransferPayments;
   bool _showValidationErrors = false;
 
   @override
@@ -163,10 +171,21 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
         _lowStockThresholdController,
         '${widget.settings.lowStockThreshold}',
       );
+      _setControllerText(
+        _cardCommissionController,
+        widget.settings.cardCommissionPercent.toStringAsFixed(2),
+      );
+      _setControllerText(
+        _transferCommissionController,
+        widget.settings.transferCommissionPercent.toStringAsFixed(2),
+      );
       _cashierReturnWindowHours = widget.settings.cashierReturnWindowHours;
       _requireOpeningCash = widget.settings.requireOpeningCash;
       _autoPrintReceipts = widget.settings.autoPrintReceipts;
       _allowOverselling = widget.settings.allowOverselling;
+      _enableCashPayments = widget.settings.enableCashPayments;
+      _enableCardPayments = widget.settings.enableCardPayments;
+      _enableTransferPayments = widget.settings.enableTransferPayments;
     }
   }
 
@@ -176,6 +195,8 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
     _receiptHeaderController.dispose();
     _receiptFooterController.dispose();
     _lowStockThresholdController.dispose();
+    _cardCommissionController.dispose();
+    _transferCommissionController.dispose();
     super.dispose();
   }
 
@@ -190,10 +211,19 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
     _lowStockThresholdController = TextEditingController(
       text: '${settings.lowStockThreshold}',
     );
+    _cardCommissionController = TextEditingController(
+      text: settings.cardCommissionPercent.toStringAsFixed(2),
+    );
+    _transferCommissionController = TextEditingController(
+      text: settings.transferCommissionPercent.toStringAsFixed(2),
+    );
     _cashierReturnWindowHours = settings.cashierReturnWindowHours;
     _requireOpeningCash = settings.requireOpeningCash;
     _autoPrintReceipts = settings.autoPrintReceipts;
     _allowOverselling = settings.allowOverselling;
+    _enableCashPayments = settings.enableCashPayments;
+    _enableCardPayments = settings.enableCardPayments;
+    _enableTransferPayments = settings.enableTransferPayments;
   }
 
   void _setControllerText(TextEditingController controller, String value) {
@@ -264,6 +294,32 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
                                           .registerSessionSettingsSectionTitle,
                                       icon: Icons.point_of_sale_outlined,
                                       children: _buildRegisterSessionFields,
+                                    ),
+                            ),
+                            _SettingsNavigationTile(
+                              icon: Icons.payments_outlined,
+                              iconColor: Colors.green,
+                              title: l10n.paymentSettingsSectionTitle,
+                              subtitle: _paymentSummary(l10n),
+                              hasError:
+                                  _paymentMethodsError(l10n) != null ||
+                                  _commissionError(
+                                        l10n,
+                                        _cardCommissionController,
+                                      ) !=
+                                      null ||
+                                  _commissionError(
+                                        l10n,
+                                        _transferCommissionController,
+                                      ) !=
+                                      null,
+                              onTap: widget.viewModel.isSaving
+                                  ? null
+                                  : () => _openSettingsGroup(
+                                      context,
+                                      title: l10n.paymentSettingsSectionTitle,
+                                      icon: Icons.payments_outlined,
+                                      children: _buildPaymentFields,
                                     ),
                             ),
                             _SettingsNavigationTile(
@@ -343,6 +399,19 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
     return l10n.inventorySettingsSummary(count, status);
   }
 
+  String _paymentSummary(AppLocalizations l10n) {
+    final enabledCount = [
+      _enableCashPayments,
+      _enableCardPayments,
+      _enableTransferPayments,
+    ].where((enabled) => enabled).length;
+    return l10n.paymentSettingsSummary(
+      enabledCount,
+      _cardCommissionController.text.trim(),
+      _transferCommissionController.text.trim(),
+    );
+  }
+
   String? _shopNameError(AppLocalizations l10n) {
     if (!_showValidationErrors || _shopNameController.text.trim().isNotEmpty) {
       return null;
@@ -358,22 +427,38 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
     return l10n.requiredField;
   }
 
+  String? _paymentMethodsError(AppLocalizations l10n) {
+    if (!_showValidationErrors ||
+        _enableCashPayments ||
+        _enableCardPayments ||
+        _enableTransferPayments) {
+      return null;
+    }
+    return l10n.paymentMethodsRequiredError;
+  }
+
+  String? _commissionError(
+    AppLocalizations l10n,
+    TextEditingController controller,
+  ) {
+    final value = controller.text.trim().replaceAll(',', '.');
+    if (!_showValidationErrors || double.tryParse(value) != null) {
+      return null;
+    }
+    return l10n.invalidNumber;
+  }
+
   List<Widget> _buildIdentityFields(
     BuildContext context,
     AppLocalizations l10n,
     VoidCallback refresh,
   ) {
     return [
-      TextFormField(
+      _ShopIdentityFields(
         controller: _shopNameController,
         enabled: !widget.viewModel.isSaving,
-        onChanged: (_) => _refreshSettingsGroup(refresh),
-        decoration: InputDecoration(
-          labelText: l10n.shopNameLabel,
-          errorText: _shopNameError(l10n),
-          border: const OutlineInputBorder(),
-          prefixIcon: const Icon(Icons.storefront_outlined),
-        ),
+        errorText: _shopNameError(l10n),
+        onChanged: () => _refreshSettingsGroup(refresh),
       ),
     ];
   }
@@ -384,38 +469,15 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
     VoidCallback refresh,
   ) {
     return [
-      TextFormField(
-        controller: _receiptHeaderController,
+      _ReceiptSettingsFields(
+        headerController: _receiptHeaderController,
+        footerController: _receiptFooterController,
+        autoPrintReceipts: _autoPrintReceipts,
         enabled: !widget.viewModel.isSaving,
-        maxLines: 2,
-        decoration: InputDecoration(
-          labelText: l10n.receiptHeaderLabel,
-          border: const OutlineInputBorder(),
-          prefixIcon: const Icon(Icons.notes_outlined),
-        ),
-      ),
-      const SizedBox(height: 12),
-      TextFormField(
-        controller: _receiptFooterController,
-        enabled: !widget.viewModel.isSaving,
-        maxLines: 2,
-        decoration: InputDecoration(
-          labelText: l10n.receiptFooterLabel,
-          border: const OutlineInputBorder(),
-          prefixIcon: const Icon(Icons.receipt_long_outlined),
-        ),
-      ),
-      const SizedBox(height: 4),
-      SwitchListTile(
-        contentPadding: EdgeInsets.zero,
-        value: _autoPrintReceipts,
-        title: Text(l10n.autoPrintReceiptsLabel),
-        onChanged: widget.viewModel.isSaving
-            ? null
-            : (value) {
-                setState(() => _autoPrintReceipts = value);
-                refresh();
-              },
+        onAutoPrintReceiptsChanged: (value) {
+          setState(() => _autoPrintReceipts = value);
+          refresh();
+        },
       ),
     ];
   }
@@ -426,24 +488,51 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
     VoidCallback refresh,
   ) {
     return [
-      SwitchListTile(
-        contentPadding: EdgeInsets.zero,
-        value: _requireOpeningCash,
-        title: Text(l10n.requireOpeningCashLabel),
-        onChanged: widget.viewModel.isSaving
-            ? null
-            : (value) {
-                setState(() => _requireOpeningCash = value);
-                refresh();
-              },
-      ),
-      const SizedBox(height: 12),
-      _DurationPickerTile(
-        key: const ValueKey('cashier_return_window_picker'),
+      _RegisterSessionSettingsFields(
+        requireOpeningCash: _requireOpeningCash,
         enabled: !widget.viewModel.isSaving,
-        label: l10n.cashierReturnWindowLabel,
-        value: _formatCashierReturnWindow(l10n),
+        returnWindowText: _formatCashierReturnWindow(l10n),
+        onRequireOpeningCashChanged: (value) {
+          setState(() => _requireOpeningCash = value);
+          refresh();
+        },
         onTap: () => _pickCashierReturnWindow(context, l10n, refresh),
+      ),
+    ];
+  }
+
+  List<Widget> _buildPaymentFields(
+    BuildContext context,
+    AppLocalizations l10n,
+    VoidCallback refresh,
+  ) {
+    return [
+      _PaymentSettingsFields(
+        cardCommissionController: _cardCommissionController,
+        transferCommissionController: _transferCommissionController,
+        enabled: !widget.viewModel.isSaving,
+        enableCashPayments: _enableCashPayments,
+        enableCardPayments: _enableCardPayments,
+        enableTransferPayments: _enableTransferPayments,
+        paymentMethodsError: _paymentMethodsError(l10n),
+        cardCommissionError: _commissionError(l10n, _cardCommissionController),
+        transferCommissionError: _commissionError(
+          l10n,
+          _transferCommissionController,
+        ),
+        onEnableCashChanged: (value) {
+          setState(() => _enableCashPayments = value);
+          refresh();
+        },
+        onEnableCardChanged: (value) {
+          setState(() => _enableCardPayments = value);
+          refresh();
+        },
+        onEnableTransferChanged: (value) {
+          setState(() => _enableTransferPayments = value);
+          refresh();
+        },
+        onCommissionChanged: () => _refreshSettingsGroup(refresh),
       ),
     ];
   }
@@ -454,30 +543,16 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
     VoidCallback refresh,
   ) {
     return [
-      TextFormField(
+      _InventorySettingsFields(
         controller: _lowStockThresholdController,
         enabled: !widget.viewModel.isSaving,
-        keyboardType: TextInputType.number,
-        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-        onChanged: (_) => _refreshSettingsGroup(refresh),
-        decoration: InputDecoration(
-          labelText: l10n.lowStockThresholdLabel,
-          errorText: _lowStockThresholdError(l10n),
-          border: const OutlineInputBorder(),
-          prefixIcon: const Icon(Icons.inventory_outlined),
-        ),
-      ),
-      const SizedBox(height: 4),
-      SwitchListTile(
-        contentPadding: EdgeInsets.zero,
-        value: _allowOverselling,
-        title: Text(l10n.allowOversellingLabel),
-        onChanged: widget.viewModel.isSaving
-            ? null
-            : (value) {
-                setState(() => _allowOverselling = value);
-                refresh();
-              },
+        errorText: _lowStockThresholdError(l10n),
+        allowOverselling: _allowOverselling,
+        onThresholdChanged: () => _refreshSettingsGroup(refresh),
+        onAllowOversellingChanged: (value) {
+          setState(() => _allowOverselling = value);
+          refresh();
+        },
       ),
     ];
   }
@@ -673,7 +748,11 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
     final l10n = AppLocalizations.of(context)!;
     setState(() => _showValidationErrors = true);
 
-    if (_shopNameError(l10n) != null || _lowStockThresholdError(l10n) != null) {
+    if (_shopNameError(l10n) != null ||
+        _lowStockThresholdError(l10n) != null ||
+        _paymentMethodsError(l10n) != null ||
+        _commissionError(l10n, _cardCommissionController) != null ||
+        _commissionError(l10n, _transferCommissionController) != null) {
       return;
     }
 
@@ -689,6 +768,13 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
         lowStockThreshold:
             int.tryParse(_lowStockThresholdController.text.trim()) ?? 0,
         cashierReturnWindowHours: _cashierReturnWindowHours,
+        enableCashPayments: _enableCashPayments,
+        enableCardPayments: _enableCardPayments,
+        enableTransferPayments: _enableTransferPayments,
+        cardCommissionPercent: _parsePercent(_cardCommissionController.text),
+        transferCommissionPercent: _parsePercent(
+          _transferCommissionController.text,
+        ),
       ),
     );
 
@@ -706,235 +792,8 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
         ),
       );
   }
-}
 
-class _SettingsListSection extends StatelessWidget {
-  const _SettingsListSection({required this.children});
-
-  final List<Widget> children;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Theme.of(context).colorScheme.surface,
-      borderRadius: BorderRadius.circular(8),
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        children: [
-          for (var index = 0; index < children.length; index++) ...[
-            children[index],
-            if (index != children.length - 1)
-              const Divider(height: 1, indent: 72),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _DurationPickerTile extends StatelessWidget {
-  const _DurationPickerTile({
-    super.key,
-    required this.enabled,
-    required this.label,
-    required this.value,
-    required this.onTap,
-  });
-
-  final bool enabled;
-  final String label;
-  final String value;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: enabled ? onTap : null,
-      borderRadius: BorderRadius.circular(8),
-      child: InputDecorator(
-        decoration: InputDecoration(
-          labelText: label,
-          border: const OutlineInputBorder(),
-          prefixIcon: const Icon(Icons.schedule_outlined),
-          suffixIcon: const Icon(Icons.expand_more),
-          enabled: enabled,
-        ),
-        child: Text(value, style: Theme.of(context).textTheme.bodyLarge),
-      ),
-    );
-  }
-}
-
-class _SettingsNavigationTile extends StatelessWidget {
-  const _SettingsNavigationTile({
-    required this.icon,
-    required this.iconColor,
-    required this.title,
-    required this.subtitle,
-    required this.onTap,
-    this.hasError = false,
-  });
-
-  final IconData icon;
-  final Color iconColor;
-  final String title;
-  final String subtitle;
-  final VoidCallback? onTap;
-  final bool hasError;
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
-    final isRtl = Directionality.of(context) == TextDirection.rtl;
-
-    return InkWell(
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        child: Row(
-          children: [
-            DecoratedBox(
-              decoration: BoxDecoration(
-                color: iconColor.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: SizedBox.square(
-                dimension: 40,
-                child: Icon(icon, color: iconColor),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(title, style: textTheme.titleMedium),
-                  const SizedBox(height: 2),
-                  Text(
-                    subtitle,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: textTheme.bodyMedium?.copyWith(
-                      color: hasError
-                          ? colorScheme.error
-                          : colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 8),
-            Icon(
-              isRtl ? Icons.chevron_right : Icons.chevron_left,
-              color: colorScheme.onSurfaceVariant,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _SettingsDetailSection extends StatelessWidget {
-  const _SettingsDetailSection({
-    required this.icon,
-    required this.title,
-    required this.children,
-  });
-
-  final IconData icon;
-  final String title;
-  final List<Widget> children;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Theme.of(context).colorScheme.surface,
-      borderRadius: BorderRadius.circular(8),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              children: [
-                Icon(icon, color: Theme.of(context).colorScheme.primary),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    title,
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            ...children,
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _SettingsSaveBar extends StatelessWidget {
-  const _SettingsSaveBar({
-    required this.isSaving,
-    required this.hasSaveError,
-    required this.onSubmit,
-  });
-
-  final bool isSaving;
-  final bool hasSaveError;
-  final VoidCallback onSubmit;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
-    final colorScheme = Theme.of(context).colorScheme;
-
-    return Material(
-      color: colorScheme.surface,
-      elevation: 3,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 720),
-            child: Row(
-              children: [
-                if (hasSaveError)
-                  Expanded(
-                    child: Text(
-                      l10n.shopSettingsSaveError,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(color: colorScheme.error),
-                    ),
-                  )
-                else
-                  const Spacer(),
-                const SizedBox(width: 12),
-                FilledButton.icon(
-                  onPressed: isSaving ? null : onSubmit,
-                  icon: isSaving
-                      ? const SizedBox.square(
-                          dimension: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.save_outlined),
-                  label: Text(
-                    isSaving
-                        ? l10n.savingSettingsButton
-                        : l10n.saveSettingsButton,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
+  double _parsePercent(String value) {
+    return double.parse(value.trim().replaceAll(',', '.'));
   }
 }
