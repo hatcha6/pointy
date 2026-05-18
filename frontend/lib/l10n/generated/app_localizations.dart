@@ -1190,6 +1190,12 @@ abstract class AppLocalizations {
   /// **'إتمام الدفع'**
   String get paymentDialogTitle;
 
+  /// No description provided for @paymentMethodLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'طريقة الدفع'**
+  String get paymentMethodLabel;
+
   /// No description provided for @cashReceivedLabel.
   ///
   /// In ar, this message translates to:
@@ -1202,11 +1208,47 @@ abstract class AppLocalizations {
   /// **'المبلغ المستلم أقل من الإجمالي.'**
   String get cashReceivedTooLowError;
 
+  /// No description provided for @paymentTenderAmountLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'المبلغ'**
+  String get paymentTenderAmountLabel;
+
+  /// No description provided for @addSplitTenderButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'إضافة دفعة'**
+  String get addSplitTenderButton;
+
+  /// No description provided for @removeTenderTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'حذف الدفعة'**
+  String get removeTenderTooltip;
+
+  /// No description provided for @paidAmountLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'المدفوع'**
+  String get paidAmountLabel;
+
+  /// No description provided for @remainingAmountLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'المتبقي'**
+  String get remainingAmountLabel;
+
   /// No description provided for @changeDueLabel.
   ///
   /// In ar, this message translates to:
   /// **'الباقي للعميل'**
   String get changeDueLabel;
+
+  /// No description provided for @paymentTotalTooLowError.
+  ///
+  /// In ar, this message translates to:
+  /// **'يجب أن يغطي مجموع الدفعات إجمالي البيع.'**
+  String get paymentTotalTooLowError;
 
   /// No description provided for @confirmPaymentButton.
   ///

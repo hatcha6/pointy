@@ -305,8 +305,28 @@ class CheckoutLineSerializer(serializers.Serializer):
     quantity = serializers.IntegerField(min_value=1)
 
 
+class CheckoutPaymentSerializer(serializers.Serializer):
+    method = serializers.ChoiceField(choices=[])
+    amount = serializers.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        min_value=Decimal("0.01"),
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        from apps.payments.models import Payment
+
+        self.fields["method"].choices = Payment.Method.choices
+
+
 class CheckoutSerializer(serializers.Serializer):
     lines = CheckoutLineSerializer(many=True, allow_empty=False)
+    payments = CheckoutPaymentSerializer(
+        many=True,
+        allow_empty=False,
+        required=False,
+    )
     payment_method = serializers.ChoiceField(required=False, choices=[])
     amount_received = serializers.DecimalField(
         max_digits=10,
@@ -323,36 +343,56 @@ class CheckoutSerializer(serializers.Serializer):
         self.fields["payment_method"].default = Payment.Method.CASH
 
     def validate(self, attrs):
-        payment_method = attrs.get("payment_method")
-        if payment_method is not None and not ShopSettings.load().payment_method_enabled(
-            payment_method
-        ):
-            raise serializers.ValidationError(
-                {"payment_method": "Payment method is disabled."}
-            )
+        settings = ShopSettings.load()
         total = Decimal("0.00")
         for line in attrs["lines"]:
             total += line["product"].unit_price * line["quantity"]
         total = total.quantize(Decimal("0.01"))
 
-        amount_received = attrs.get("amount_received", total)
-        if amount_received < total:
+        payments = attrs.get("payments")
+        if payments is None:
+            from apps.payments.models import Payment
+
+            payment_method = attrs.get("payment_method", Payment.Method.CASH)
+            if not settings.payment_method_enabled(payment_method):
+                raise serializers.ValidationError(
+                    {"payment_method": "Payment method is disabled."}
+                )
+            payments = [
+                {
+                    "method": payment_method,
+                    "amount": attrs.get("amount_received", total),
+                }
+            ]
+
+        disabled_methods = [
+            payment["method"]
+            for payment in payments
+            if not settings.payment_method_enabled(payment["method"])
+        ]
+        if disabled_methods:
             raise serializers.ValidationError(
-                {"amount_received": "Amount received must cover the order total."}
+                {"payments": "One or more payment methods are disabled."}
+            )
+
+        paid_total = sum(
+            (payment["amount"] for payment in payments),
+            Decimal("0.00"),
+        ).quantize(Decimal("0.01"))
+        if paid_total < total:
+            raise serializers.ValidationError(
+                {"payments": "Payment total must cover the order total."}
             )
 
         attrs["computed_total"] = total
-        attrs["amount_received"] = amount_received
+        attrs["payments"] = payments
         return attrs
 
     def create(self, validated_data):
-        from apps.payments.models import Payment
-
         return checkout_order(
             register_session=self.context["register_session"],
             lines_data=validated_data["lines"],
-            payment_method=validated_data.get("payment_method", Payment.Method.CASH),
-            amount_received=validated_data["amount_received"],
+            payments_data=validated_data["payments"],
             request=self.context.get("request"),
         )
 

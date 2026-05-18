@@ -5,20 +5,17 @@ import 'printer_config.dart';
 class SaleCheckoutDraft {
   const SaleCheckoutDraft({
     required this.lines,
-    required this.amountReceived,
-    this.paymentMethod = 'cash',
+    required this.payments,
     this.invoicePrinterConfig,
   });
 
   final List<SaleCheckoutLineDraft> lines;
-  final double amountReceived;
-  final String paymentMethod;
+  final List<SaleCheckoutPaymentDraft> payments;
   final PrinterConfig? invoicePrinterConfig;
 
   factory SaleCheckoutDraft.fromCart({
     required List<CartLine> cart,
-    required double amountReceived,
-    PaymentMethod paymentMethod = PaymentMethod.cash,
+    required List<SaleCheckoutPaymentDraft> payments,
     PrinterConfig? invoicePrinterConfig,
   }) {
     return SaleCheckoutDraft(
@@ -30,8 +27,7 @@ class SaleCheckoutDraft {
             ),
           )
           .toList(growable: false),
-      amountReceived: amountReceived,
-      paymentMethod: paymentMethod.apiValue,
+      payments: payments,
       invoicePrinterConfig: invoicePrinterConfig,
     );
   }
@@ -39,14 +35,24 @@ class SaleCheckoutDraft {
   Map<String, Object?> toJson() {
     return {
       'lines': lines.map((line) => line.toJson()).toList(growable: false),
-      'payment_method': paymentMethod,
-      'amount_received': amountReceived.toStringAsFixed(2),
+      'payments': payments.map((payment) => payment.toJson()).toList(),
       if (invoicePrinterConfig != null)
         'print_invoice': {
           'agent_id': invoicePrinterConfig!.agentId,
           'printer_endpoint': invoicePrinterConfig!.endpoint.toJson(),
         },
     };
+  }
+}
+
+class SaleCheckoutPaymentDraft {
+  const SaleCheckoutPaymentDraft({required this.method, required this.amount});
+
+  final PaymentMethod method;
+  final double amount;
+
+  Map<String, Object?> toJson() {
+    return {'method': method.apiValue, 'amount': amount.toStringAsFixed(2)};
   }
 }
 

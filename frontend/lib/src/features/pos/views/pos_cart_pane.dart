@@ -150,8 +150,7 @@ class PosCartPane extends StatelessWidget {
     }
 
     final outcome = await viewModel.checkoutCurrentSale(
-      paymentMethod: payment.method,
-      amountReceived: payment.amountReceived,
+      payments: payment.payments,
     );
 
     if (!context.mounted) {
@@ -260,14 +259,20 @@ class _PaymentDialog extends StatefulWidget {
 }
 
 class _PaymentDialogState extends State<_PaymentDialog> {
-  late PaymentMethod _method = _initialMethod;
-  late final TextEditingController _cashAmountController =
-      TextEditingController(text: widget.viewModel.total.toStringAsFixed(2));
-  bool _showCashError = false;
+  late final List<_TenderLineInput> _tenders = [
+    _TenderLineInput(
+      method: _initialMethod,
+      amount: widget.viewModel.total.toStringAsFixed(2),
+    ),
+  ];
+  bool _showPaymentError = false;
+  bool _isBalancingTender = false;
 
   @override
   void dispose() {
-    _cashAmountController.dispose();
+    for (final tender in _tenders) {
+      tender.dispose();
+    }
     super.dispose();
   }
 
@@ -285,59 +290,59 @@ class _PaymentDialogState extends State<_PaymentDialog> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final total = widget.viewModel.total;
-    final amountReceived = _method == PaymentMethod.cash
-        ? _parseMoney(_cashAmountController.text)
-        : total;
-    final change = (amountReceived - total).clamp(0, double.infinity);
+    final paid = _paidTotal;
+    final remaining = (total - paid).clamp(0, double.infinity).toDouble();
+    final change = _changeDue(total);
 
     return AlertDialog(
       icon: const Icon(Icons.payments_outlined),
       title: Text(l10n.paymentDialogTitle),
       content: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 420),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            if (!_hasAnyPaymentMethod)
-              Text(l10n.noEnabledPaymentMethods)
-            else
-              SegmentedButton<PaymentMethod>(
-                segments: _paymentSegments(l10n),
-                selected: {_method},
-                showSelectedIcon: false,
-                onSelectionChanged: (selection) {
-                  setState(() {
-                    _method = selection.first;
-                    _showCashError = false;
-                  });
-                },
-              ),
-            const SizedBox(height: 16),
-            TotalRow(label: l10n.total, value: total, isStrong: true),
-            if (_method == PaymentMethod.cash) ...[
-              const SizedBox(height: 12),
-              TextField(
-                controller: _cashAmountController,
-                autofocus: true,
-                keyboardType: const TextInputType.numberWithOptions(
-                  decimal: true,
+        constraints: const BoxConstraints(maxWidth: 520),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (!_hasAnyPaymentMethod)
+                Text(l10n.noEnabledPaymentMethods)
+              else ...[
+                for (var index = 0; index < _tenders.length; index++) ...[
+                  _TenderLineEditor(
+                    key: ValueKey(_tenders[index]),
+                    index: index,
+                    tender: _tenders[index],
+                    enabledMethods: _enabledMethods,
+                    canRemove: _tenders.length > 1,
+                    methodLabel: (method) => _paymentMethodLabel(l10n, method),
+                    onAmountChanged: () => _rebalanceFromTender(index),
+                    onMethodChanged: () =>
+                        setState(() => _showPaymentError = false),
+                    onRemove: () => _removeTender(index),
+                  ),
+                  const SizedBox(height: 10),
+                ],
+                OutlinedButton.icon(
+                  onPressed: _addTender,
+                  icon: const Icon(Icons.add),
+                  label: Text(l10n.addSplitTenderButton),
                 ),
-                inputFormatters: [DecimalTextInputFormatter()],
-                onChanged: (_) => setState(() => _showCashError = false),
-                decoration: InputDecoration(
-                  labelText: l10n.cashReceivedLabel,
-                  errorText: _showCashError
-                      ? l10n.cashReceivedTooLowError
-                      : null,
-                  border: const OutlineInputBorder(),
-                  prefixIcon: const Icon(Icons.payments_outlined),
+              ],
+              const SizedBox(height: 16),
+              TotalRow(label: l10n.total, value: total, isStrong: true),
+              TotalRow(label: l10n.paidAmountLabel, value: paid),
+              TotalRow(label: l10n.remainingAmountLabel, value: remaining),
+              if (change > 0)
+                TotalRow(label: l10n.changeDueLabel, value: change),
+              if (_showPaymentError) ...[
+                const SizedBox(height: 8),
+                Text(
+                  l10n.paymentTotalTooLowError,
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
                 ),
-              ),
-              const SizedBox(height: 8),
-              TotalRow(label: l10n.changeDueLabel, value: change.toDouble()),
+              ],
             ],
-          ],
+          ),
         ),
       ),
       actions: [
@@ -355,16 +360,153 @@ class _PaymentDialogState extends State<_PaymentDialog> {
   }
 
   void _submit(double total) {
-    final amountReceived = _method == PaymentMethod.cash
-        ? _parseMoney(_cashAmountController.text)
-        : total;
-    if (amountReceived < total) {
-      setState(() => _showCashError = true);
+    final payments = _appliedPayments(total);
+    if (payments == null) {
+      setState(() => _showPaymentError = true);
       return;
     }
-    Navigator.of(
-      context,
-    ).pop(_PaymentInput(method: _method, amountReceived: amountReceived));
+    Navigator.of(context).pop(_PaymentInput(payments: payments));
+  }
+
+  void _addTender() {
+    final remaining = (widget.viewModel.total - _paidTotal)
+        .clamp(0, double.infinity)
+        .toDouble();
+    setState(() {
+      _tenders.add(
+        _TenderLineInput(
+          method: _nextTenderMethod,
+          amount: remaining > 0 ? remaining.toStringAsFixed(2) : '',
+        ),
+      );
+      _showPaymentError = false;
+    });
+  }
+
+  void _removeTender(int index) {
+    setState(() {
+      _tenders.removeAt(index).dispose();
+      _rebalanceAfterTenderRemoval();
+      _showPaymentError = false;
+    });
+  }
+
+  void _rebalanceAfterTenderRemoval() {
+    if (_tenders.isEmpty) {
+      return;
+    }
+
+    final balanceIndex = _tenders.length - 1;
+    final totalWithoutBalance = _tenders.indexed
+        .where((entry) => entry.$1 != balanceIndex)
+        .fold<double>(
+          0,
+          (sum, entry) => sum + _parseMoney(entry.$2.amountController.text),
+        );
+    final balanceAmount = (widget.viewModel.total - totalWithoutBalance)
+        .clamp(0, double.infinity)
+        .toDouble();
+    _setTenderAmount(_tenders[balanceIndex], balanceAmount);
+  }
+
+  void _rebalanceFromTender(int editedIndex) {
+    if (_isBalancingTender) {
+      return;
+    }
+    if (_tenders.length < 2) {
+      setState(() => _showPaymentError = false);
+      return;
+    }
+
+    _isBalancingTender = true;
+    final balanceIndex = _balanceTenderIndex(editedIndex);
+    final totalWithoutBalance = _tenders.indexed
+        .where((entry) => entry.$1 != balanceIndex)
+        .fold<double>(
+          0,
+          (sum, entry) => sum + _parseMoney(entry.$2.amountController.text),
+        );
+    final balanceAmount = (widget.viewModel.total - totalWithoutBalance)
+        .clamp(0, double.infinity)
+        .toDouble();
+    _setTenderAmount(_tenders[balanceIndex], balanceAmount);
+    _isBalancingTender = false;
+    setState(() => _showPaymentError = false);
+  }
+
+  int _balanceTenderIndex(int editedIndex) {
+    if (editedIndex < _tenders.length - 1) {
+      return editedIndex + 1;
+    }
+    return editedIndex - 1;
+  }
+
+  void _setTenderAmount(_TenderLineInput tender, double amount) {
+    final text = amount > 0 ? amount.toStringAsFixed(2) : '';
+    if (tender.amountController.text == text) {
+      return;
+    }
+    tender.amountController.value = TextEditingValue(
+      text: text,
+      selection: TextSelection.collapsed(offset: text.length),
+    );
+  }
+
+  List<SaleCheckoutPaymentDraft>? _appliedPayments(double total) {
+    final parsed = [
+      for (final tender in _tenders)
+        _ParsedTender(tender.method, _parseMoney(tender.amountController.text)),
+    ].where((tender) => tender.amount > 0).toList(growable: false);
+    final paid = parsed.fold<double>(0, (sum, tender) => sum + tender.amount);
+    if (parsed.isEmpty || paid < total) {
+      return null;
+    }
+
+    var overage = paid - total;
+    if (overage > 0) {
+      final cashTotal = parsed
+          .where((tender) => tender.method == PaymentMethod.cash)
+          .fold<double>(0, (sum, tender) => sum + tender.amount);
+      if (cashTotal < overage) {
+        return null;
+      }
+    }
+
+    final payments = <SaleCheckoutPaymentDraft>[];
+    for (final tender in parsed.reversed) {
+      var appliedAmount = tender.amount;
+      if (overage > 0 && tender.method == PaymentMethod.cash) {
+        final reduction = appliedAmount < overage ? appliedAmount : overage;
+        appliedAmount -= reduction;
+        overage -= reduction;
+      }
+      if (appliedAmount > 0) {
+        payments.add(
+          SaleCheckoutPaymentDraft(
+            method: tender.method,
+            amount: appliedAmount,
+          ),
+        );
+      }
+    }
+    return payments.reversed.toList(growable: false);
+  }
+
+  double _changeDue(double total) {
+    final paid = _paidTotal;
+    final overage = paid - total;
+    if (overage <= 0 ||
+        !_tenders.any((tender) => tender.method == PaymentMethod.cash)) {
+      return 0;
+    }
+    return overage;
+  }
+
+  double get _paidTotal {
+    return _tenders.fold<double>(
+      0,
+      (sum, tender) => sum + _parseMoney(tender.amountController.text),
+    );
   }
 
   double _parseMoney(String value) {
@@ -377,33 +519,133 @@ class _PaymentDialogState extends State<_PaymentDialog> {
         widget.viewModel.enableTransferPayments;
   }
 
-  List<ButtonSegment<PaymentMethod>> _paymentSegments(AppLocalizations l10n) {
+  List<PaymentMethod> get _enabledMethods {
     return [
-      if (widget.viewModel.enableCashPayments)
-        ButtonSegment(
-          value: PaymentMethod.cash,
-          icon: const Icon(Icons.payments_outlined),
-          label: Text(l10n.paymentMethodCash),
-        ),
-      if (widget.viewModel.enableCardPayments)
-        ButtonSegment(
-          value: PaymentMethod.card,
-          icon: const Icon(Icons.credit_card_outlined),
-          label: Text(l10n.paymentMethodCard),
-        ),
-      if (widget.viewModel.enableTransferPayments)
-        ButtonSegment(
-          value: PaymentMethod.transfer,
-          icon: const Icon(Icons.account_balance_outlined),
-          label: Text(l10n.paymentMethodTransfer),
-        ),
+      if (widget.viewModel.enableCashPayments) PaymentMethod.cash,
+      if (widget.viewModel.enableCardPayments) PaymentMethod.card,
+      if (widget.viewModel.enableTransferPayments) PaymentMethod.transfer,
     ];
+  }
+
+  PaymentMethod get _nextTenderMethod {
+    final usedMethods = _tenders.map((tender) => tender.method).toSet();
+    for (final method in _enabledMethods) {
+      if (!usedMethods.contains(method)) {
+        return method;
+      }
+    }
+    return _initialMethod;
+  }
+
+  String _paymentMethodLabel(AppLocalizations l10n, PaymentMethod method) {
+    return switch (method) {
+      PaymentMethod.cash => l10n.paymentMethodCash,
+      PaymentMethod.card => l10n.paymentMethodCard,
+      PaymentMethod.transfer => l10n.paymentMethodTransfer,
+    };
   }
 }
 
 class _PaymentInput {
-  const _PaymentInput({required this.method, required this.amountReceived});
+  const _PaymentInput({required this.payments});
+
+  final List<SaleCheckoutPaymentDraft> payments;
+}
+
+class _TenderLineInput {
+  _TenderLineInput({required this.method, required String amount})
+    : amountController = TextEditingController(text: amount);
+
+  PaymentMethod method;
+  final TextEditingController amountController;
+
+  void dispose() {
+    amountController.dispose();
+  }
+}
+
+class _ParsedTender {
+  const _ParsedTender(this.method, this.amount);
 
   final PaymentMethod method;
-  final double amountReceived;
+  final double amount;
+}
+
+class _TenderLineEditor extends StatelessWidget {
+  const _TenderLineEditor({
+    super.key,
+    required this.index,
+    required this.tender,
+    required this.enabledMethods,
+    required this.canRemove,
+    required this.methodLabel,
+    required this.onAmountChanged,
+    required this.onMethodChanged,
+    required this.onRemove,
+  });
+
+  final int index;
+  final _TenderLineInput tender;
+  final List<PaymentMethod> enabledMethods;
+  final bool canRemove;
+  final String Function(PaymentMethod method) methodLabel;
+  final VoidCallback onAmountChanged;
+  final VoidCallback onMethodChanged;
+  final VoidCallback onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: DropdownButtonFormField<PaymentMethod>(
+            initialValue: tender.method,
+            decoration: InputDecoration(
+              labelText: l10n.paymentMethodLabel,
+              border: const OutlineInputBorder(),
+            ),
+            items: [
+              for (final method in enabledMethods)
+                DropdownMenuItem(
+                  value: method,
+                  child: Text(methodLabel(method)),
+                ),
+            ],
+            onChanged: (method) {
+              if (method == null) {
+                return;
+              }
+              tender.method = method;
+              onMethodChanged();
+            },
+          ),
+        ),
+        const SizedBox(width: 8),
+        SizedBox(
+          width: 132,
+          child: TextField(
+            key: ValueKey('payment_tender_amount_$index'),
+            controller: tender.amountController,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            inputFormatters: [DecimalTextInputFormatter()],
+            onChanged: (_) => onAmountChanged(),
+            decoration: InputDecoration(
+              labelText: l10n.paymentTenderAmountLabel,
+              border: const OutlineInputBorder(),
+            ),
+          ),
+        ),
+        const SizedBox(width: 4),
+        IconButton(
+          key: ValueKey('payment_tender_remove_$index'),
+          tooltip: l10n.removeTenderTooltip,
+          onPressed: canRemove ? onRemove : null,
+          icon: const Icon(Icons.delete_outline),
+        ),
+      ],
+    );
+  }
 }

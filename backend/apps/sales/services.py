@@ -58,11 +58,9 @@ def checkout_order(
     *,
     register_session,
     lines_data,
-    payment_method,
-    amount_received,
+    payments_data,
     request=None,
 ):
-    from apps.payments.models import Payment
     from apps.payments.serializers import PaymentSerializer
 
     stock_adjustments = prepare_sale_stock_adjustments(lines_data)
@@ -72,15 +70,16 @@ def checkout_order(
     )
     record_sale_stock_movements(order, stock_adjustments, request=request)
 
-    payment_serializer = PaymentSerializer(
-        data={
-            "order": order.pk,
-            "method": payment_method or Payment.Method.CASH,
-            "amount": amount_received,
-        }
-    )
-    payment_serializer.is_valid(raise_exception=True)
-    payment_serializer.save()
+    for payment_data in payments_data:
+        payment_serializer = PaymentSerializer(
+            data={
+                "order": order.pk,
+                "method": payment_data["method"],
+                "amount": payment_data["amount"],
+            }
+        )
+        payment_serializer.is_valid(raise_exception=True)
+        payment_serializer.save()
     order.refresh_from_db()
     return order
 

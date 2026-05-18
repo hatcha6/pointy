@@ -595,13 +595,35 @@ class AppLocalizationsAr extends AppLocalizations {
   String get paymentDialogTitle => 'إتمام الدفع';
 
   @override
+  String get paymentMethodLabel => 'طريقة الدفع';
+
+  @override
   String get cashReceivedLabel => 'المبلغ المستلم';
 
   @override
   String get cashReceivedTooLowError => 'المبلغ المستلم أقل من الإجمالي.';
 
   @override
+  String get paymentTenderAmountLabel => 'المبلغ';
+
+  @override
+  String get addSplitTenderButton => 'إضافة دفعة';
+
+  @override
+  String get removeTenderTooltip => 'حذف الدفعة';
+
+  @override
+  String get paidAmountLabel => 'المدفوع';
+
+  @override
+  String get remainingAmountLabel => 'المتبقي';
+
+  @override
   String get changeDueLabel => 'الباقي للعميل';
+
+  @override
+  String get paymentTotalTooLowError =>
+      'يجب أن يغطي مجموع الدفعات إجمالي البيع.';
 
   @override
   String get confirmPaymentButton => 'تأكيد الدفع';

@@ -208,13 +208,104 @@ void main() {
     await _confirmPayment(tester);
 
     expect(checkoutBody, isNotNull);
-    expect(checkoutBody?['payment_method'], 'cash');
-    expect(checkoutBody?['amount_received'], '7.00');
+    expect(checkoutBody?['payments'], [
+      {'method': 'cash', 'amount': '7.00'},
+    ]);
     expect(checkoutBody?['lines'], [
       {'product': 1, 'quantity': 2},
     ]);
     expect(find.text('لا توجد عناصر في السلة'), findsOneWidget);
     expect(find.text('تم تسجيل البيع. رقم الإيصال: R-100'), findsOneWidget);
+  });
+
+  testWidgets('checkout can split tender across cash and card', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(1200, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    Map<String, Object?>? checkoutBody;
+
+    await tester.pumpWidget(
+      PointyApp(
+        apiService: _mockApiService(
+          onCheckout: (request) {
+            checkoutBody = jsonDecode(request.body) as Map<String, Object?>;
+          },
+        ),
+      ),
+    );
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+
+    await _startRegisterSession(tester);
+
+    await tester.tap(find.byType(ProductTile).first);
+    await tester.pump();
+    await tester.tap(find.byType(ProductTile).first);
+    await tester.pump();
+
+    await tester.tap(find.text('ادفع 7.00 د.ل'));
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+    await tester.tap(find.text('إضافة دفعة'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('payment_tender_amount_0')),
+      '5.00',
+    );
+    await tester.pump();
+    await _confirmPayment(tester);
+
+    expect(checkoutBody?['payments'], [
+      {'method': 'cash', 'amount': '5.00'},
+      {'method': 'card', 'amount': '2.00'},
+    ]);
+  });
+
+  testWidgets('checkout rebalances split tender after deleting a line', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(1200, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    Map<String, Object?>? checkoutBody;
+
+    await tester.pumpWidget(
+      PointyApp(
+        apiService: _mockApiService(
+          onCheckout: (request) {
+            checkoutBody = jsonDecode(request.body) as Map<String, Object?>;
+          },
+        ),
+      ),
+    );
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+
+    await _startRegisterSession(tester);
+    await tester.tap(find.byType(ProductTile).first);
+    await tester.pump();
+    await tester.tap(find.byType(ProductTile).first);
+    await tester.pump();
+
+    await tester.tap(find.text('ادفع 7.00 د.ل'));
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+    await tester.tap(find.text('إضافة دفعة'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('payment_tender_amount_0')),
+      '5.00',
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('payment_tender_remove_0')));
+    await tester.pumpAndSettle();
+    await _confirmPayment(tester);
+
+    expect(checkoutBody?['payments'], [
+      {'method': 'card', 'amount': '7.00'},
+    ]);
   });
 
   testWidgets(

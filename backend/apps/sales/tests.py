@@ -644,6 +644,37 @@ class OrderCheckoutApiTests(TestCase):
         self.assertEqual(response.data["payments"][0]["commission_percent"], "1.25")
         self.assertEqual(response.data["payments"][0]["commission_amount"], "0.09")
 
+    def test_checkout_records_split_payments_with_per_tender_commission(self):
+        ShopSettings.load()
+        ShopSettings.objects.filter(pk=1).update(
+            card_commission_percent=Decimal("1.00"),
+            transfer_commission_percent=Decimal("0.50"),
+        )
+        self.start_session()
+
+        response = self.client.post(
+            reverse("order-checkout"),
+            self.checkout_payload(
+                payments=[
+                    {"method": Payment.Method.CASH, "amount": "2.00"},
+                    {"method": Payment.Method.CARD, "amount": "3.00"},
+                    {"method": Payment.Method.TRANSFER, "amount": "2.00"},
+                ],
+            ),
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        payments = list(Payment.objects.filter(order_id=response.data["id"]).order_by("id"))
+        self.assertEqual([payment.method for payment in payments], [
+            Payment.Method.CASH,
+            Payment.Method.CARD,
+            Payment.Method.TRANSFER,
+        ])
+        self.assertEqual(payments[0].commission_amount, Decimal("0.00"))
+        self.assertEqual(payments[1].commission_amount, Decimal("0.03"))
+        self.assertEqual(payments[2].commission_amount, Decimal("0.01"))
+
     def test_checkout_rejects_disabled_payment_method(self):
         ShopSettings.load()
         ShopSettings.objects.filter(pk=1).update(enable_card_payments=False)
