@@ -112,11 +112,17 @@ class PurchaseOrderViewSet(viewsets.ModelViewSet):
     search_fields = (
         "order_number",
         "supplier__name",
-        "supplier_reference",
+        "supplier_invoice_number",
         "lines__product__name",
         "lines__product__sku",
     )
-    ordering_fields = ("created_at", "updated_at", "total", "order_number")
+    ordering_fields = (
+        "created_at",
+        "updated_at",
+        "total",
+        "order_number",
+        "supplier_invoice_date",
+    )
 
     @action(detail=False, methods=["get"], url_path="last-cost")
     def last_cost(self, request):

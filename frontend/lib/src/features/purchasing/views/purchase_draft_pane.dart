@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../core/result.dart';
@@ -10,7 +11,7 @@ import '../../../shared/formatters.dart';
 import '../../../shared/order_totals.dart';
 import '../view_models/purchase_view_model.dart';
 
-class PurchaseDraftPane extends StatelessWidget {
+class PurchaseDraftPane extends StatefulWidget {
   const PurchaseDraftPane({
     super.key,
     required this.viewModel,
@@ -19,6 +20,44 @@ class PurchaseDraftPane extends StatelessWidget {
 
   final PurchaseViewModel viewModel;
   final ContactRepository contactRepository;
+
+  @override
+  State<PurchaseDraftPane> createState() => _PurchaseDraftPaneState();
+}
+
+class _PurchaseDraftPaneState extends State<PurchaseDraftPane> {
+  late final TextEditingController _supplierInvoiceNumberController =
+      TextEditingController(text: widget.viewModel.supplierInvoiceNumber);
+  late final TextEditingController _supplierInvoiceDateController =
+      TextEditingController(text: widget.viewModel.supplierInvoiceDateInput);
+  final FocusNode _supplierInvoiceNumberFocusNode = FocusNode();
+  final FocusNode _supplierInvoiceDateFocusNode = FocusNode();
+
+  PurchaseViewModel get viewModel => widget.viewModel;
+
+  @override
+  void didUpdateWidget(covariant PurchaseDraftPane oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _syncController(
+      controller: _supplierInvoiceNumberController,
+      focusNode: _supplierInvoiceNumberFocusNode,
+      value: widget.viewModel.supplierInvoiceNumber,
+    );
+    _syncController(
+      controller: _supplierInvoiceDateController,
+      focusNode: _supplierInvoiceDateFocusNode,
+      value: widget.viewModel.supplierInvoiceDateInput,
+    );
+  }
+
+  @override
+  void dispose() {
+    _supplierInvoiceNumberController.dispose();
+    _supplierInvoiceDateController.dispose();
+    _supplierInvoiceNumberFocusNode.dispose();
+    _supplierInvoiceDateFocusNode.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -65,6 +104,54 @@ class PurchaseDraftPane extends StatelessWidget {
                 style: TextStyle(color: Theme.of(context).colorScheme.error),
               ),
             ],
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    key: const ValueKey('supplier_invoice_number_field'),
+                    controller: _supplierInvoiceNumberController,
+                    focusNode: _supplierInvoiceNumberFocusNode,
+                    enabled: !viewModel.isSubmitting,
+                    decoration: InputDecoration(
+                      labelText: l10n.supplierInvoiceNumberLabel,
+                      hintText: l10n.supplierInvoiceNumberHint,
+                      isDense: true,
+                      prefixIcon: const Icon(Icons.receipt_long_outlined),
+                    ),
+                    onChanged: viewModel.updateSupplierInvoiceNumber,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: TextField(
+                    key: const ValueKey('supplier_invoice_date_field'),
+                    controller: _supplierInvoiceDateController,
+                    focusNode: _supplierInvoiceDateFocusNode,
+                    enabled: !viewModel.isSubmitting,
+                    keyboardType: TextInputType.datetime,
+                    inputFormatters: const [_DateDashInputFormatter()],
+                    decoration: InputDecoration(
+                      labelText: l10n.supplierInvoiceDateLabel,
+                      hintText: l10n.supplierInvoiceDateHint,
+                      errorText: viewModel.hasInvalidSupplierInvoiceDate
+                          ? l10n.supplierInvoiceDateInvalid
+                          : null,
+                      isDense: true,
+                      prefixIcon: const Icon(Icons.event_outlined),
+                      suffixIcon: IconButton(
+                        tooltip: l10n.supplierInvoiceDatePickerTooltip,
+                        onPressed: viewModel.isSubmitting
+                            ? null
+                            : () => _pickSupplierInvoiceDate(context),
+                        icon: const Icon(Icons.calendar_month_outlined),
+                      ),
+                    ),
+                    onChanged: viewModel.updateSupplierInvoiceDateInput,
+                  ),
+                ),
+              ],
+            ),
             const SizedBox(height: 8),
             Expanded(
               child: viewModel.draft.isEmpty
@@ -154,11 +241,69 @@ class PurchaseDraftPane extends StatelessWidget {
   Future<void> _selectSupplier(BuildContext context) async {
     final supplier = await showSupplierPickerSheet(
       context: context,
-      repository: contactRepository,
+      repository: widget.contactRepository,
     );
     if (supplier != null) {
       viewModel.selectSupplier(supplier);
     }
+  }
+
+  Future<void> _pickSupplierInvoiceDate(BuildContext context) async {
+    final current = viewModel.supplierInvoiceDate ?? DateTime.now();
+    final selected = await showDatePicker(
+      context: context,
+      initialDate: current,
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2100),
+    );
+    if (selected == null || !context.mounted) {
+      return;
+    }
+
+    final formatted = _formatDateInput(selected);
+    _supplierInvoiceDateController.text = formatted;
+    viewModel.updateSupplierInvoiceDateInput(formatted);
+  }
+
+  void _syncController({
+    required TextEditingController controller,
+    required FocusNode focusNode,
+    required String value,
+  }) {
+    if ((!focusNode.hasFocus || value.isEmpty) && controller.text != value) {
+      controller.text = value;
+    }
+  }
+
+  String _formatDateInput(DateTime date) {
+    final month = date.month.toString().padLeft(2, '0');
+    final day = date.day.toString().padLeft(2, '0');
+    return '${date.year}-$month-$day';
+  }
+}
+
+class _DateDashInputFormatter extends TextInputFormatter {
+  const _DateDashInputFormatter();
+
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    final digits = newValue.text.replaceAll(RegExp(r'[^0-9]'), '');
+    final limited = digits.length > 8 ? digits.substring(0, 8) : digits;
+    final buffer = StringBuffer();
+    for (var index = 0; index < limited.length; index += 1) {
+      if (index == 4 || index == 6) {
+        buffer.write('-');
+      }
+      buffer.write(limited[index]);
+    }
+    final text = buffer.toString();
+    return TextEditingValue(
+      text: text,
+      selection: TextSelection.collapsed(offset: text.length),
+    );
   }
 }
 

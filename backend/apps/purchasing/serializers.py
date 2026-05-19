@@ -304,6 +304,12 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
     receipts = PurchaseReceiptSerializer(many=True, read_only=True)
     adjustments = PurchaseOrderAdjustmentSerializer(many=True, read_only=True)
     supplier_name = serializers.CharField(source="supplier.name", read_only=True)
+    supplier_reference = serializers.CharField(
+        source="supplier_invoice_number",
+        required=False,
+        allow_blank=True,
+        trim_whitespace=True,
+    )
     can_return = serializers.SerializerMethodField()
     can_refund = serializers.SerializerMethodField()
     can_exchange = serializers.SerializerMethodField()
@@ -333,6 +339,8 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
             "order_number",
             "supplier",
             "supplier_name",
+            "supplier_invoice_number",
+            "supplier_invoice_date",
             "supplier_reference",
             "status",
             "notes",
@@ -379,6 +387,29 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         )
+        validators = []
+
+    def to_internal_value(self, data):
+        if isinstance(data, dict):
+            data = data.copy()
+            legacy_number = data.get("supplier_reference")
+            invoice_number = data.get("supplier_invoice_number")
+            if (
+                legacy_number is not None
+                and invoice_number is not None
+                and str(legacy_number).strip() != str(invoice_number).strip()
+            ):
+                raise serializers.ValidationError(
+                    {
+                        "supplier_reference": (
+                            "Use supplier_invoice_number; legacy supplier_reference "
+                            "must match when both are provided."
+                        )
+                    }
+                )
+            if legacy_number is not None and invoice_number is None:
+                data["supplier_invoice_number"] = legacy_number
+        return super().to_internal_value(data)
 
     def get_can_return(self, purchase_order):
         return self._can_adjust(purchase_order)
@@ -403,6 +434,32 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
                 "Each product can appear only once per purchase order."
             )
         return value
+
+    def validate(self, attrs):
+        supplier = attrs.get(
+            "supplier",
+            None if self.instance is None else self.instance.supplier,
+        )
+        invoice_number = attrs.get(
+            "supplier_invoice_number",
+            "" if self.instance is None else self.instance.supplier_invoice_number,
+        )
+        if supplier is not None and invoice_number:
+            matches = PurchaseOrder.objects.filter(
+                supplier=supplier,
+                supplier_invoice_number=invoice_number,
+            )
+            if self.instance is not None:
+                matches = matches.exclude(pk=self.instance.pk)
+            if matches.exists():
+                raise serializers.ValidationError(
+                    {
+                        "supplier_invoice_number": (
+                            "Supplier invoice number already exists for this supplier."
+                        )
+                    }
+                )
+        return attrs
 
     def create(self, validated_data):
         lines_data = validated_data.pop("lines", [])

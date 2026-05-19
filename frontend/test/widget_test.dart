@@ -901,9 +901,10 @@ void main() {
       await tester.pumpAndSettle(const Duration(seconds: 1));
 
       expect(find.text('فواتير المشتريات'), findsOneWidget);
-      expect(find.text('P20260515000200'), findsOneWidget);
+      expect(find.text('أمر الشراء P20260515000200'), findsOneWidget);
+      expect(find.textContaining('فاتورة المورد INV-4432'), findsOneWidget);
       expect(
-        find.text('ابحث برقم الفاتورة أو المورد أو المنتج'),
+        find.text('ابحث برقم أمر الشراء أو فاتورة المورد أو المنتج'),
         findsOneWidget,
       );
       expect(find.textContaining('مسودة'), findsOneWidget);
@@ -921,6 +922,16 @@ void main() {
       await tester.pumpAndSettle();
 
       await tester.enterText(
+        find.byKey(const ValueKey('supplier_invoice_number_field')),
+        'SUP-2026-55',
+      );
+      await tester.enterText(
+        find.byKey(const ValueKey('supplier_invoice_date_field')),
+        '20260518',
+      );
+      expect(find.text('2026-05-18'), findsOneWidget);
+
+      await tester.enterText(
         find.byKey(const ValueKey('purchase_product_lookup_field')),
         '123456',
       );
@@ -933,6 +944,8 @@ void main() {
       await tester.pumpAndSettle(const Duration(seconds: 1));
 
       expect(purchaseBody?['supplier'], 14);
+      expect(purchaseBody?['supplier_invoice_number'], 'SUP-2026-55');
+      expect(purchaseBody?['supplier_invoice_date'], '2026-05-18');
     },
   );
 
@@ -1008,13 +1021,26 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('المشتريات'));
     await tester.pumpAndSettle(const Duration(seconds: 1));
-    await tester.tap(find.text('P20260515000200'));
+    await tester.tap(find.text('أمر الشراء P20260515000200'));
     await tester.pumpAndSettle(const Duration(seconds: 1));
+
+    expect(find.text('رقم أمر الشراء'), findsOneWidget);
+    expect(find.text('P20260515000200'), findsOneWidget);
+    expect(find.text('رقم فاتورة المورد'), findsOneWidget);
+    expect(find.text('INV-4432'), findsOneWidget);
+    expect(find.text('تاريخ فاتورة المورد'), findsOneWidget);
+    expect(find.text('2026/05/18'), findsOneWidget);
+    expect(find.text('إرسال'), findsOneWidget);
+
+    await tester.scrollUntilVisible(find.text('محتويات أمر الشراء'), 120);
+    await tester.pumpAndSettle();
 
     expect(find.text('محتويات أمر الشراء'), findsOneWidget);
     expect(find.text('قهوة البيت'), findsOneWidget);
     expect(find.textContaining('الكمية 2'), findsOneWidget);
-    expect(find.text('إرسال'), findsOneWidget);
+
+    await tester.scrollUntilVisible(find.text('إرسال'), -120);
+    await tester.pumpAndSettle();
 
     await tester.tap(find.text('إرسال'));
     await tester.pumpAndSettle(const Duration(seconds: 1));
@@ -1072,7 +1098,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('المشتريات'));
     await tester.pumpAndSettle(const Duration(seconds: 1));
-    await tester.tap(find.text('P20260515000200'));
+    await tester.tap(find.text('أمر الشراء P20260515000200'));
     await tester.pumpAndSettle(const Duration(seconds: 1));
 
     expect(find.text('تاريخ الاستحقاق'), findsOneWidget);
@@ -1127,7 +1153,7 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('المشتريات'));
       await tester.pumpAndSettle(const Duration(seconds: 1));
-      await tester.tap(find.text('P20260515000200'));
+      await tester.tap(find.text('أمر الشراء P20260515000200'));
       await tester.pumpAndSettle(const Duration(seconds: 1));
 
       await tester.tap(find.text('إرسال'));
@@ -1151,6 +1177,8 @@ void main() {
       expect(receiveBody?['lines'], [
         {'purchase_line': 1, 'quantity_received': 1, 'quantity_damaged': 1},
       ]);
+      await tester.scrollUntilVisible(find.textContaining('تالف 1'), 120);
+      await tester.pumpAndSettle();
       expect(find.textContaining('تالف 1'), findsWidgets);
       await tester.scrollUntilVisible(find.text('سجل الاستلام'), 300);
       await tester.pumpAndSettle();
@@ -2658,6 +2686,8 @@ Map<String, Object?> _purchaseOrderJson({
   bool canAdjust = false,
   int? supplierId = 14,
   String? supplierName = 'مورد المدينة',
+  String supplierInvoiceNumber = 'INV-4432',
+  String? supplierInvoiceDate = '2026-05-18',
   List<Map<String, Object?>> receipts = const [],
   List<Map<String, Object?>> adjustments = const [],
 }) {
@@ -2666,7 +2696,9 @@ Map<String, Object?> _purchaseOrderJson({
     'order_number': orderNumber,
     'supplier': supplierId,
     'supplier_name': supplierName,
-    'supplier_reference': '',
+    'supplier_reference': supplierInvoiceNumber,
+    'supplier_invoice_number': supplierInvoiceNumber,
+    'supplier_invoice_date': supplierInvoiceDate,
     'status': status,
     'notes': '',
     'lines': [

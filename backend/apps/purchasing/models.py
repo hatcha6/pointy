@@ -3,7 +3,7 @@ from decimal import Decimal
 from django.core.validators import MinValueValidator
 from django.conf import settings
 from django.db import models, transaction
-from django.db.models import Sum
+from django.db.models import Q, Sum
 from django.utils import timezone
 
 from apps.catalog.models import Product
@@ -67,7 +67,8 @@ class PurchaseOrder(TimeStampedModel):
         choices=Status.choices,
         default=Status.DRAFT,
     )
-    supplier_reference = models.CharField(max_length=120, blank=True)
+    supplier_invoice_number = models.CharField(max_length=120, blank=True)
+    supplier_invoice_date = models.DateField(blank=True, null=True)
     notes = models.TextField(blank=True)
     subtotal = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     total = models.DecimalField(max_digits=10, decimal_places=2, default=0)
@@ -77,6 +78,13 @@ class PurchaseOrder(TimeStampedModel):
 
     class Meta:
         ordering = ["-created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["supplier", "supplier_invoice_number"],
+                condition=~Q(supplier_invoice_number=""),
+                name="unique_supplier_invoice_number_per_supplier",
+            ),
+        ]
 
     def recalculate(self) -> None:
         subtotal = Decimal("0.00")

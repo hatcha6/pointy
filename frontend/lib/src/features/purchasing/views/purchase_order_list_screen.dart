@@ -201,10 +201,20 @@ class PurchaseOrderTile extends StatelessWidget {
       ),
       child: ListTile(
         leading: Icon(_statusIcon(order.status)),
-        title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
+        title: Text(
+          l10n.purchaseOrderNumberValue(title),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
         subtitle: Text(
           [
             purchaseOrderStatusLabel(l10n, order.status),
+            if (order.supplierInvoiceNumber.isNotEmpty)
+              l10n.supplierInvoiceNumberValue(order.supplierInvoiceNumber),
+            if (order.supplierInvoiceDate != null)
+              l10n.supplierInvoiceDateValue(
+                _formatDate(order.supplierInvoiceDate!),
+              ),
             if (order.paymentStatus.isNotEmpty)
               _paymentStatusLabel(l10n, order.paymentStatus),
             l10n.purchaseOrderLineCount(order.lineCount),

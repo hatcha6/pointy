@@ -125,18 +125,26 @@ class PurchaseOrderDraft {
     required this.lines,
     required this.supplierId,
     this.dueDate,
+    this.supplierInvoiceNumber = '',
+    this.supplierInvoiceDate,
   });
 
   final List<PurchaseOrderLineDraft> lines;
   final int supplierId;
   final DateTime? dueDate;
+  final String supplierInvoiceNumber;
+  final DateTime? supplierInvoiceDate;
 
   factory PurchaseOrderDraft.fromDraftLines(
     List<PurchaseDraftLine> lines, {
     required int supplierId,
+    String supplierInvoiceNumber = '',
+    DateTime? supplierInvoiceDate,
   }) {
     return PurchaseOrderDraft(
       supplierId: supplierId,
+      supplierInvoiceNumber: supplierInvoiceNumber,
+      supplierInvoiceDate: supplierInvoiceDate,
       lines: lines
           .map(
             (line) => PurchaseOrderLineDraft(
@@ -150,10 +158,17 @@ class PurchaseOrderDraft {
   }
 
   Map<String, Object?> toJson() {
+    final invoiceNumber = supplierInvoiceNumber.trim();
     return {
       'supplier': supplierId,
       if (dueDate != null)
         'due_date': dueDate!.toIso8601String().split('T').first,
+      if (invoiceNumber.isNotEmpty) 'supplier_invoice_number': invoiceNumber,
+      if (supplierInvoiceDate != null)
+        'supplier_invoice_date': supplierInvoiceDate!
+            .toIso8601String()
+            .split('T')
+            .first,
       'lines': lines.map((line) => line.toJson()).toList(),
     };
   }
@@ -219,6 +234,8 @@ class PurchaseOrder {
     required this.canExchange,
     this.supplierId,
     this.supplierName,
+    this.supplierInvoiceNumber = '',
+    this.supplierInvoiceDate,
     this.dueDate,
     this.paidTotal = 0,
     this.creditAppliedTotal = 0,
@@ -245,6 +262,8 @@ class PurchaseOrder {
   final bool canExchange;
   final int? supplierId;
   final String? supplierName;
+  final String supplierInvoiceNumber;
+  final DateTime? supplierInvoiceDate;
   final DateTime? dueDate;
   final double paidTotal;
   final double creditAppliedTotal;
@@ -296,6 +315,11 @@ class PurchaseOrder {
       status: status,
       supplierId: _nullableIntFromJson(json['supplier']),
       supplierName: json['supplier_name']?.toString(),
+      supplierInvoiceNumber: _firstNonEmptyString([
+        json['supplier_invoice_number'],
+        json['supplier_reference'],
+      ]),
+      supplierInvoiceDate: _dateTimeFromJson(json['supplier_invoice_date']),
       lineCount: lines.length,
       lines: lines,
       adjustments: adjustments
@@ -943,4 +967,14 @@ DateTime? _dateTimeFromJson(Object? value) {
     return null;
   }
   return DateTime.tryParse(value.toString());
+}
+
+String _firstNonEmptyString(Iterable<Object?> values) {
+  for (final value in values) {
+    final text = value?.toString().trim() ?? '';
+    if (text.isNotEmpty) {
+      return text;
+    }
+  }
+  return '';
 }

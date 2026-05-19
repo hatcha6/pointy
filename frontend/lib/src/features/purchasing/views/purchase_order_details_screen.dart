@@ -52,7 +52,7 @@ class _PurchaseOrderDetailsScreenState
 
         return Scaffold(
           appBar: AppBar(
-            title: Text(title),
+            title: Text(l10n.purchaseOrderNumberValue(title)),
             actions: [
               IconButton(
                 tooltip: l10n.refreshPurchaseOrderDetailsTooltip,
@@ -118,6 +118,22 @@ class _PurchaseOrderSummary extends StatelessWidget {
       title: l10n.purchaseOrderDetailsSummaryTitle,
       child: Column(
         children: [
+          _DetailRow(
+            label: l10n.purchaseOrderNumberLabel,
+            value: order.orderNumber.isEmpty
+                ? l10n.purchaseOrderFallbackTitle(order.id)
+                : order.orderNumber,
+          ),
+          if (order.supplierInvoiceNumber.isNotEmpty)
+            _DetailRow(
+              label: l10n.supplierInvoiceNumberLabel,
+              value: order.supplierInvoiceNumber,
+            ),
+          if (order.supplierInvoiceDate != null)
+            _DetailRow(
+              label: l10n.supplierInvoiceDateLabel,
+              value: _formatDate(order.supplierInvoiceDate!),
+            ),
           _DetailRow(
             label: l10n.purchaseOrderStatusFilterTitle,
             value: purchaseOrderStatusLabel(l10n, order.status),

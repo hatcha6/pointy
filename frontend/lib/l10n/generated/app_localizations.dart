@@ -1403,7 +1403,7 @@ abstract class AppLocalizations {
   /// No description provided for @searchPurchaseOrdersHint.
   ///
   /// In ar, this message translates to:
-  /// **'ابحث برقم الفاتورة أو المورد أو المنتج'**
+  /// **'ابحث برقم أمر الشراء أو فاتورة المورد أو المنتج'**
   String get searchPurchaseOrdersHint;
 
   /// No description provided for @purchaseOrderSupplierFilterTitle.
@@ -1525,6 +1525,66 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'ملخص أمر الشراء'**
   String get purchaseOrderDetailsSummaryTitle;
+
+  /// No description provided for @purchaseOrderNumberLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'رقم أمر الشراء'**
+  String get purchaseOrderNumberLabel;
+
+  /// Internal Pointy purchase order number label.
+  ///
+  /// In ar, this message translates to:
+  /// **'أمر الشراء {orderNumber}'**
+  String purchaseOrderNumberValue(String orderNumber);
+
+  /// No description provided for @supplierInvoiceNumberLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'رقم فاتورة المورد'**
+  String get supplierInvoiceNumberLabel;
+
+  /// No description provided for @supplierInvoiceNumberHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'مثال: INV-1024'**
+  String get supplierInvoiceNumberHint;
+
+  /// Supplier invoice number shown in purchase summaries.
+  ///
+  /// In ar, this message translates to:
+  /// **'فاتورة المورد {invoiceNumber}'**
+  String supplierInvoiceNumberValue(String invoiceNumber);
+
+  /// No description provided for @supplierInvoiceDateLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'تاريخ فاتورة المورد'**
+  String get supplierInvoiceDateLabel;
+
+  /// No description provided for @supplierInvoiceDateHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'مثال: 2026-05-19'**
+  String get supplierInvoiceDateHint;
+
+  /// No description provided for @supplierInvoiceDateInvalid.
+  ///
+  /// In ar, this message translates to:
+  /// **'أدخل التاريخ بصيغة سنة-شهر-يوم.'**
+  String get supplierInvoiceDateInvalid;
+
+  /// No description provided for @supplierInvoiceDatePickerTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختيار تاريخ فاتورة المورد'**
+  String get supplierInvoiceDatePickerTooltip;
+
+  /// Supplier invoice date shown in purchase summaries.
+  ///
+  /// In ar, this message translates to:
+  /// **'تاريخ الفاتورة {date}'**
+  String supplierInvoiceDateValue(String date);
 
   /// No description provided for @purchaseOrderLineCountLabel.
   ///
@@ -2153,7 +2213,7 @@ abstract class AppLocalizations {
   /// No description provided for @purchaseDraftSubmitError.
   ///
   /// In ar, this message translates to:
-  /// **'تعذر إرسال أمر الشراء. راجع العناصر وحاول مرة أخرى.'**
+  /// **'تعذر إرسال أمر الشراء. راجع العناصر ورقم فاتورة المورد وحاول مرة أخرى.'**
   String get purchaseDraftSubmitError;
 
   /// No description provided for @contactsTitle.

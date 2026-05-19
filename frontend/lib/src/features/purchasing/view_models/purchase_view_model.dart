@@ -28,6 +28,8 @@ class PurchaseViewModel extends ChangeNotifier {
   bool _receiveImmediately = true;
   bool _hasMoreProducts = true;
   int _nextProductPage = 1;
+  String _supplierInvoiceNumber = '';
+  String _supplierInvoiceDateInput = '';
   String? _errorMessage;
   ProductQuery _query = const ProductQuery(
     availability: ProductAvailabilityFilter.active,
@@ -42,13 +44,23 @@ class PurchaseViewModel extends ChangeNotifier {
   bool get isCreatingProduct => _isCreatingProduct;
   bool get receiveImmediately => _receiveImmediately;
   bool get hasMoreProducts => _hasMoreProducts;
+  String get supplierInvoiceNumber => _supplierInvoiceNumber;
+  String get supplierInvoiceDateInput => _supplierInvoiceDateInput;
+  DateTime? get supplierInvoiceDate =>
+      _parseSupplierInvoiceDate(_supplierInvoiceDateInput);
+  bool get hasInvalidSupplierInvoiceDate =>
+      _supplierInvoiceDateInput.trim().isNotEmpty &&
+      supplierInvoiceDate == null;
   String? get errorMessage => _errorMessage;
   ProductQuery get query => _query;
 
   double get subtotal => _draft.fold(0, (sum, line) => sum + line.subtotal);
   double get total => subtotal;
   bool get canSubmitDraft =>
-      _draft.isNotEmpty && _selectedSupplier != null && !_isSubmitting;
+      _draft.isNotEmpty &&
+      _selectedSupplier != null &&
+      !hasInvalidSupplierInvoiceDate &&
+      !_isSubmitting;
 
   Future<void> loadCatalog() async {
     _isLoading = true;
@@ -225,6 +237,8 @@ class PurchaseViewModel extends ChangeNotifier {
     }
     _draft.clear();
     _selectedSupplier = null;
+    _supplierInvoiceNumber = '';
+    _supplierInvoiceDateInput = '';
     notifyListeners();
   }
 
@@ -244,6 +258,22 @@ class PurchaseViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
+  void updateSupplierInvoiceNumber(String value) {
+    if (_isSubmitting) {
+      return;
+    }
+    _supplierInvoiceNumber = value;
+    notifyListeners();
+  }
+
+  void updateSupplierInvoiceDateInput(String value) {
+    if (_isSubmitting) {
+      return;
+    }
+    _supplierInvoiceDateInput = value;
+    notifyListeners();
+  }
+
   Future<Result<PurchaseSubmission>> submitDraft() async {
     final supplier = _selectedSupplier;
     if (_draft.isEmpty || supplier == null || _isSubmitting) {
@@ -257,11 +287,15 @@ class PurchaseViewModel extends ChangeNotifier {
       List.of(_draft),
       receiveImmediately: _receiveImmediately,
       supplierId: supplier.id,
+      supplierInvoiceNumber: _supplierInvoiceNumber,
+      supplierInvoiceDate: supplierInvoiceDate,
     );
     switch (result) {
       case Ok<PurchaseSubmission>():
         _draft.clear();
         _selectedSupplier = null;
+        _supplierInvoiceNumber = '';
+        _supplierInvoiceDateInput = '';
       case Error<PurchaseSubmission>():
         break;
     }
@@ -291,5 +325,13 @@ class PurchaseViewModel extends ChangeNotifier {
     };
     _lastCostByProductId[productId] = cost;
     return cost;
+  }
+
+  DateTime? _parseSupplierInvoiceDate(String input) {
+    final normalized = input.trim().replaceAll('/', '-');
+    if (normalized.isEmpty) {
+      return null;
+    }
+    return DateTime.tryParse(normalized);
   }
 }

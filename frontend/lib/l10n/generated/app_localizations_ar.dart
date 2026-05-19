@@ -719,7 +719,7 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get searchPurchaseOrdersHint =>
-      'ابحث برقم الفاتورة أو المورد أو المنتج';
+      'ابحث برقم أمر الشراء أو فاتورة المورد أو المنتج';
 
   @override
   String get purchaseOrderSupplierFilterTitle => 'المورد';
@@ -792,6 +792,42 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get purchaseOrderDetailsSummaryTitle => 'ملخص أمر الشراء';
+
+  @override
+  String get purchaseOrderNumberLabel => 'رقم أمر الشراء';
+
+  @override
+  String purchaseOrderNumberValue(String orderNumber) {
+    return 'أمر الشراء $orderNumber';
+  }
+
+  @override
+  String get supplierInvoiceNumberLabel => 'رقم فاتورة المورد';
+
+  @override
+  String get supplierInvoiceNumberHint => 'مثال: INV-1024';
+
+  @override
+  String supplierInvoiceNumberValue(String invoiceNumber) {
+    return 'فاتورة المورد $invoiceNumber';
+  }
+
+  @override
+  String get supplierInvoiceDateLabel => 'تاريخ فاتورة المورد';
+
+  @override
+  String get supplierInvoiceDateHint => 'مثال: 2026-05-19';
+
+  @override
+  String get supplierInvoiceDateInvalid => 'أدخل التاريخ بصيغة سنة-شهر-يوم.';
+
+  @override
+  String get supplierInvoiceDatePickerTooltip => 'اختيار تاريخ فاتورة المورد';
+
+  @override
+  String supplierInvoiceDateValue(String date) {
+    return 'تاريخ الفاتورة $date';
+  }
 
   @override
   String get purchaseOrderLineCountLabel => 'العناصر';
@@ -1196,7 +1232,7 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get purchaseDraftSubmitError =>
-      'تعذر إرسال أمر الشراء. راجع العناصر وحاول مرة أخرى.';
+      'تعذر إرسال أمر الشراء. راجع العناصر ورقم فاتورة المورد وحاول مرة أخرى.';
 
   @override
   String get contactsTitle => 'العملاء والموردون';

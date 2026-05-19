@@ -66,6 +66,8 @@ class PurchaseRepository {
     List<PurchaseDraftLine> lines, {
     required bool receiveImmediately,
     required int supplierId,
+    String supplierInvoiceNumber = '',
+    DateTime? supplierInvoiceDate,
   }) async {
     if (lines.isEmpty) {
       return Error(Exception('purchase draft is empty'));
@@ -75,6 +77,8 @@ class PurchaseRepository {
       final draft = PurchaseOrderDraft.fromDraftLines(
         lines,
         supplierId: supplierId,
+        supplierInvoiceNumber: supplierInvoiceNumber,
+        supplierInvoiceDate: supplierInvoiceDate,
       );
       final order = await _service.createPurchaseOrder(draft);
       final submittedOrder = await _service.submitPurchaseOrder(order.id);

@@ -38,20 +38,24 @@ class PurchaseOrderApiTests(TestCase):
         )
         self.supplier = Supplier.objects.create(name="Main supplier")
 
+    def purchase_order_payload(self, **overrides):
+        payload = {
+            "supplier": self.supplier.pk,
+            "lines": [
+                {
+                    "product": self.product.pk,
+                    "quantity": 3,
+                    "unit_cost": "2.50",
+                }
+            ],
+        }
+        payload.update(overrides)
+        return payload
+
     def test_create_purchase_order_with_lines_calculates_totals(self):
         response = self.client.post(
             reverse("purchaseorder-list"),
-            {
-                "supplier": self.supplier.pk,
-                "supplier_reference": "INV-100",
-                "lines": [
-                    {
-                        "product": self.product.pk,
-                        "quantity": 3,
-                        "unit_cost": "2.50",
-                    }
-                ],
-            },
+            self.purchase_order_payload(supplier_reference="INV-100"),
             format="json",
         )
 
@@ -60,6 +64,8 @@ class PurchaseOrderApiTests(TestCase):
         self.assertEqual(response.data["subtotal"], "7.50")
         self.assertEqual(response.data["total"], "7.50")
         self.assertTrue(response.data["order_number"].startswith("P"))
+        self.assertEqual(response.data["supplier_invoice_number"], "INV-100")
+        self.assertEqual(response.data["supplier_reference"], "INV-100")
         self.assertEqual(len(response.data["lines"]), 1)
 
         order = PurchaseOrder.objects.get(pk=response.data["id"])
@@ -91,6 +97,108 @@ class PurchaseOrderApiTests(TestCase):
         self.assertEqual(response.data["balance_due"], "7.50")
         self.assertEqual(response.data["payment_status"], "unpaid")
         self.assertFalse(response.data["is_overdue"])
+
+    def test_purchase_order_supplier_invoice_fields_are_serialized(self):
+        response = self.client.post(
+            reverse("purchaseorder-list"),
+            self.purchase_order_payload(
+                supplier_invoice_number="INV-200",
+                supplier_invoice_date="2026-05-18",
+            ),
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(
+            response.data["order_number"],
+            PurchaseOrder.objects.get().order_number,
+        )
+        self.assertEqual(response.data["supplier_invoice_number"], "INV-200")
+        self.assertEqual(response.data["supplier_invoice_date"], "2026-05-18")
+        self.assertEqual(response.data["supplier_reference"], "INV-200")
+
+    def test_supplier_reference_is_accepted_as_legacy_invoice_number(self):
+        response = self.client.post(
+            reverse("purchaseorder-list"),
+            self.purchase_order_payload(supplier_reference="LEGACY-100"),
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        order = PurchaseOrder.objects.get(pk=response.data["id"])
+        self.assertEqual(order.supplier_invoice_number, "LEGACY-100")
+        self.assertEqual(response.data["supplier_invoice_number"], "LEGACY-100")
+        self.assertEqual(response.data["supplier_reference"], "LEGACY-100")
+
+    def test_duplicate_supplier_invoice_number_is_rejected_for_same_supplier(self):
+        self.client.post(
+            reverse("purchaseorder-list"),
+            self.purchase_order_payload(supplier_invoice_number="DUP-100"),
+            format="json",
+        )
+
+        response = self.client.post(
+            reverse("purchaseorder-list"),
+            self.purchase_order_payload(supplier_invoice_number="DUP-100"),
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("supplier_invoice_number", response.data)
+
+    def test_supplier_invoice_number_can_repeat_for_different_suppliers(self):
+        other_supplier = Supplier.objects.create(name="Other supplier")
+        first_response = self.client.post(
+            reverse("purchaseorder-list"),
+            self.purchase_order_payload(supplier_invoice_number="SHARED-100"),
+            format="json",
+        )
+        second_response = self.client.post(
+            reverse("purchaseorder-list"),
+            self.purchase_order_payload(
+                supplier=other_supplier.pk,
+                supplier_invoice_number="SHARED-100",
+            ),
+            format="json",
+        )
+
+        self.assertEqual(first_response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(second_response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(PurchaseOrder.objects.count(), 2)
+
+    def test_blank_supplier_invoice_number_can_repeat(self):
+        first_response = self.client.post(
+            reverse("purchaseorder-list"),
+            self.purchase_order_payload(supplier_invoice_number=""),
+            format="json",
+        )
+        second_response = self.client.post(
+            reverse("purchaseorder-list"),
+            self.purchase_order_payload(supplier_invoice_number=""),
+            format="json",
+        )
+
+        self.assertEqual(first_response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(second_response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(PurchaseOrder.objects.count(), 2)
+
+    def test_update_duplicate_supplier_invoice_number_is_rejected(self):
+        existing = PurchaseOrder.objects.create(
+            supplier=self.supplier,
+            supplier_invoice_number="UPDATE-DUP-100",
+        )
+        order = PurchaseOrder.objects.create(supplier=self.supplier)
+
+        response = self.client.patch(
+            reverse("purchaseorder-detail", args=[order.pk]),
+            {"supplier_invoice_number": existing.supplier_invoice_number},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("supplier_invoice_number", response.data)
+        order.refresh_from_db()
+        self.assertEqual(order.supplier_invoice_number, "")
 
     def test_purchase_order_requires_supplier(self):
         response = self.client.post(

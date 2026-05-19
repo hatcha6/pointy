@@ -339,7 +339,7 @@
   "refreshPurchaseOrderDetailsTooltip": "تحديث تفاصيل أمر الشراء",
   "newPurchaseOrderButton": "أمر شراء جديد",
   "newPurchaseOrderTitle": "أمر شراء جديد",
-  "searchPurchaseOrdersHint": "ابحث برقم الفاتورة أو المورد أو المنتج",
+  "searchPurchaseOrdersHint": "ابحث برقم أمر الشراء أو فاتورة المورد أو المنتج",
   "purchaseOrderSupplierFilterTitle": "المورد",
   "allSuppliersFilterLabel": "كل الموردين",
   "clearSupplierFilterTooltip": "مسح فلتر المورد",
@@ -376,6 +376,40 @@
     }
   },
   "purchaseOrderDetailsSummaryTitle": "ملخص أمر الشراء",
+  "purchaseOrderNumberLabel": "رقم أمر الشراء",
+  "purchaseOrderNumberValue": "أمر الشراء {orderNumber}",
+  "@purchaseOrderNumberValue": {
+    "description": "Internal Pointy purchase order number label.",
+    "placeholders": {
+      "orderNumber": {
+        "type": "String"
+      }
+    }
+  },
+  "supplierInvoiceNumberLabel": "رقم فاتورة المورد",
+  "supplierInvoiceNumberHint": "مثال: INV-1024",
+  "supplierInvoiceNumberValue": "فاتورة المورد {invoiceNumber}",
+  "@supplierInvoiceNumberValue": {
+    "description": "Supplier invoice number shown in purchase summaries.",
+    "placeholders": {
+      "invoiceNumber": {
+        "type": "String"
+      }
+    }
+  },
+  "supplierInvoiceDateLabel": "تاريخ فاتورة المورد",
+  "supplierInvoiceDateHint": "مثال: 2026-05-19",
+  "supplierInvoiceDateInvalid": "أدخل التاريخ بصيغة سنة-شهر-يوم.",
+  "supplierInvoiceDatePickerTooltip": "اختيار تاريخ فاتورة المورد",
+  "supplierInvoiceDateValue": "تاريخ الفاتورة {date}",
+  "@supplierInvoiceDateValue": {
+    "description": "Supplier invoice date shown in purchase summaries.",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
   "purchaseOrderLineCountLabel": "العناصر",
   "purchaseOrderCreatedAtLabel": "تاريخ الإنشاء",
   "purchaseOrderSubmittedAtLabel": "تاريخ الإرسال",
@@ -731,7 +765,7 @@
       }
     }
   },
-  "purchaseDraftSubmitError": "تعذر إرسال أمر الشراء. راجع العناصر وحاول مرة أخرى.",
+  "purchaseDraftSubmitError": "تعذر إرسال أمر الشراء. راجع العناصر ورقم فاتورة المورد وحاول مرة أخرى.",
   "contactsTitle": "العملاء والموردون",
   "customersTab": "العملاء",
   "suppliersTab": "الموردون",

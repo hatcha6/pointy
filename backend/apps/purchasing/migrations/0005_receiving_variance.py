@@ -6,6 +6,16 @@ import django.db.models.deletion
 import django.utils.timezone
 
 
+def assign_missing_purchase_order_suppliers(apps, schema_editor):
+    Supplier = apps.get_model("purchasing", "Supplier")
+    PurchaseOrder = apps.get_model("purchasing", "PurchaseOrder")
+    supplier, _ = Supplier.objects.get_or_create(
+        name="مورد غير محدد",
+        defaults={"notes": "تم إنشاؤه لربط أوامر الشراء القديمة التي لم يكن لها مورد."},
+    )
+    PurchaseOrder.objects.filter(supplier__isnull=True).update(supplier=supplier)
+
+
 class Migration(migrations.Migration):
 
     dependencies = [
@@ -14,6 +24,10 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
+        migrations.RunPython(
+            assign_missing_purchase_order_suppliers,
+            migrations.RunPython.noop,
+        ),
         migrations.AlterField(
             model_name="purchaseorder",
             name="status",

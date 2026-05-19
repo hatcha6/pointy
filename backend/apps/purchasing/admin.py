@@ -47,6 +47,8 @@ class PurchaseOrderAdmin(admin.ModelAdmin):
     list_display = (
         "order_number",
         "supplier",
+        "supplier_invoice_number",
+        "supplier_invoice_date",
         "status",
         "subtotal",
         "total",
@@ -55,7 +57,7 @@ class PurchaseOrderAdmin(admin.ModelAdmin):
         "received_at",
     )
     list_filter = ("status", "supplier")
-    search_fields = ("order_number", "supplier__name", "supplier_reference")
+    search_fields = ("order_number", "supplier__name", "supplier_invoice_number")
     inlines = [PurchaseLineInline]
 
 
