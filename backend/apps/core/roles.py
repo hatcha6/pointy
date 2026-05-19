@@ -12,6 +12,8 @@ MANAGER_PERMISSION_DOMAINS = (
     "core",
     "inventory",
     "sales",
+    "customers",
+    "purchasing",
     "payments",
     "printing",
 )

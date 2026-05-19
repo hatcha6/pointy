@@ -5,6 +5,9 @@ typedef AuthorizedAsyncAction = Future<void> Function();
 
 enum AppCapability {
   accessPos,
+  accessPurchasing,
+  createPurchaseOrder,
+  manageContacts,
   checkoutSale,
   startRegisterSession,
   resumeRegisterSession,
@@ -68,6 +71,42 @@ class AuthorizationCapabilities {
         capabilities
           ..add(AppCapability.viewStock)
           ..add(AppCapability.createStockMovement);
+      }
+      if (_hasAny(user, const [
+        'view_purchaseorder',
+        'change_purchaseorder',
+        'purchasing.view_purchaseorder',
+        'purchasing.change_purchaseorder',
+      ])) {
+        capabilities.add(AppCapability.accessPurchasing);
+      }
+      if (_hasAny(user, const [
+        'add_purchaseorder',
+        'purchasing.add_purchaseorder',
+      ])) {
+        capabilities
+          ..add(AppCapability.accessPurchasing)
+          ..add(AppCapability.createPurchaseOrder);
+      }
+      if (_hasAny(user, const [
+        'view_customer',
+        'add_customer',
+        'change_customer',
+        'delete_customer',
+        'customers.view_customer',
+        'customers.add_customer',
+        'customers.change_customer',
+        'customers.delete_customer',
+        'view_supplier',
+        'add_supplier',
+        'change_supplier',
+        'delete_supplier',
+        'purchasing.view_supplier',
+        'purchasing.add_supplier',
+        'purchasing.change_supplier',
+        'purchasing.delete_supplier',
+      ])) {
+        capabilities.add(AppCapability.manageContacts);
       }
       if (_hasAny(user, const [
         'view_registersession',
@@ -138,6 +177,9 @@ class AuthorizationCapabilities {
   bool allows(AppCapability capability) => _capabilities.contains(capability);
 
   bool get canAccessPos => allows(AppCapability.accessPos);
+  bool get canAccessPurchasing => allows(AppCapability.accessPurchasing);
+  bool get canCreatePurchaseOrder => allows(AppCapability.createPurchaseOrder);
+  bool get canManageContacts => allows(AppCapability.manageContacts);
   bool get canCheckoutSale => allows(AppCapability.checkoutSale);
   bool get canStartRegisterSession =>
       allows(AppCapability.startRegisterSession);

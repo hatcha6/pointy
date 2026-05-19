@@ -3,10 +3,13 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../core/authorization.dart';
 import '../../../data/models/sale_order.dart';
+import '../../../data/repositories/contact_repository.dart';
 import '../../../data/repositories/sale_repository.dart';
 import '../../../shared/authorization_guards.dart';
+import '../../../shared/contact_picker_sheet.dart';
 import '../../../shared/decimal_text_input_formatter.dart';
 import '../../../shared/formatters.dart';
+import '../../../shared/order_totals.dart';
 import '../view_models/pos_view_model.dart';
 import 'cart_line_tile.dart';
 import 'cart_totals.dart';
@@ -15,10 +18,12 @@ class PosCartPane extends StatelessWidget {
   const PosCartPane({
     super.key,
     required this.viewModel,
+    required this.contactRepository,
     required this.capabilities,
   });
 
   final PosViewModel viewModel;
+  final ContactRepository contactRepository;
   final AuthorizationCapabilities capabilities;
 
   @override
@@ -55,6 +60,16 @@ class PosCartPane extends StatelessWidget {
                   },
                 ),
               ],
+            ),
+            const SizedBox(height: 8),
+            ContactSelectionTile(
+              label: l10n.selectedCustomerLabel,
+              value: viewModel.selectedCustomer?.fullName ?? '',
+              placeholder: l10n.walkInCustomerLabel,
+              icon: Icons.person_outline,
+              enabled: !viewModel.isCheckingOut,
+              onSelect: () => _selectCustomer(context),
+              onClear: () => viewModel.selectCustomer(null),
             ),
             const SizedBox(height: 8),
             Expanded(
@@ -183,6 +198,16 @@ class PosCartPane extends StatelessWidget {
     messenger
       ..clearSnackBars()
       ..showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  Future<void> _selectCustomer(BuildContext context) async {
+    final customer = await showCustomerPickerSheet(
+      context: context,
+      repository: contactRepository,
+    );
+    if (customer != null) {
+      viewModel.selectCustomer(customer);
+    }
   }
 
   Future<bool?> _showStockWarningDialog(

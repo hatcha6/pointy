@@ -5,6 +5,8 @@ import '../models/print_job.dart';
 import '../models/printer_config.dart';
 import '../models/product.dart';
 import '../models/product_page.dart';
+import '../models/contact.dart';
+import '../models/purchase_submission.dart';
 import '../models/query.dart';
 import '../models/register_cash_movement.dart';
 import '../models/register_cash_movement_page.dart';
@@ -19,9 +21,11 @@ import '../models/stock_movement_page.dart';
 import 'api_session.dart';
 import 'auth_api_client.dart';
 import 'catalog_api_client.dart';
+import 'customer_api_client.dart';
 import 'inventory_api_client.dart';
 import 'pos_http_client.dart';
 import 'printing_api_client.dart';
+import 'purchasing_api_client.dart';
 import 'register_session_api_client.dart';
 import 'sales_api_client.dart';
 import 'shop_settings_api_client.dart';
@@ -42,9 +46,11 @@ class PosApiService {
     _users = UserApiClient(session);
     _shopSettings = ShopSettingsApiClient(session);
     _catalog = CatalogApiClient(session);
+    _customers = CustomerApiClient(session);
     _inventory = InventoryApiClient(session);
     _registerSessions = RegisterSessionApiClient(session);
     _sales = SalesApiClient(session);
+    _purchasing = PurchasingApiClient(session);
     _printing = PrintingApiClient(session);
   }
 
@@ -54,9 +60,11 @@ class PosApiService {
   late final UserApiClient _users;
   late final ShopSettingsApiClient _shopSettings;
   late final CatalogApiClient _catalog;
+  late final CustomerApiClient _customers;
   late final InventoryApiClient _inventory;
   late final RegisterSessionApiClient _registerSessions;
   late final SalesApiClient _sales;
+  late final PurchasingApiClient _purchasing;
   late final PrintingApiClient _printing;
 
   Future<PosUser> login({required String username, required String password}) {
@@ -96,6 +104,17 @@ class PosApiService {
     return _catalog.createProduct(draft);
   }
 
+  Future<CustomerPage> fetchCustomers({
+    required ContactQuery query,
+    int page = 1,
+  }) {
+    return _customers.fetchCustomers(query: query, page: page);
+  }
+
+  Future<Customer> createCustomer(CustomerDraft draft) {
+    return _customers.createCustomer(draft);
+  }
+
   Future<StockItem?> fetchStockForProduct(int productId) {
     return _inventory.fetchStockForProduct(productId);
   }
@@ -121,9 +140,14 @@ class PosApiService {
 
   Future<SaleOrderPage> fetchRegisterSessionOrders(
     int sessionId, {
+    SaleOrderQuery query = const SaleOrderQuery(),
     int page = 1,
   }) {
-    return _registerSessions.fetchRegisterSessionOrders(sessionId, page: page);
+    return _registerSessions.fetchRegisterSessionOrders(
+      sessionId,
+      query: query,
+      page: page,
+    );
   }
 
   Future<RegisterCashMovementPage> fetchRegisterSessionCashMovements(
@@ -182,6 +206,78 @@ class PosApiService {
     required SaleReturnDraft draft,
   }) {
     return _sales.returnSaleOrderItems(saleOrderId: saleOrderId, draft: draft);
+  }
+
+  Future<PurchaseOrder> createPurchaseOrder(PurchaseOrderDraft draft) {
+    return _purchasing.createPurchaseOrder(draft);
+  }
+
+  Future<PurchaseOrder> fetchPurchaseOrder(int purchaseOrderId) {
+    return _purchasing.fetchPurchaseOrder(purchaseOrderId);
+  }
+
+  Future<double?> fetchLastProductCost(int productId) {
+    return _purchasing.fetchLastProductCost(productId);
+  }
+
+  Future<PurchaseOrderPage> fetchPurchaseOrders({
+    required PurchaseOrderQuery query,
+    int page = 1,
+  }) {
+    return _purchasing.fetchPurchaseOrders(query: query, page: page);
+  }
+
+  Future<PurchaseOrder> submitPurchaseOrder(int purchaseOrderId) {
+    return _purchasing.submitPurchaseOrder(purchaseOrderId);
+  }
+
+  Future<PurchaseOrder> receivePurchaseOrder(int purchaseOrderId) {
+    return _purchasing.receivePurchaseOrder(purchaseOrderId);
+  }
+
+  Future<PurchaseOrder> cancelPurchaseOrder(int purchaseOrderId) {
+    return _purchasing.cancelPurchaseOrder(purchaseOrderId);
+  }
+
+  Future<PurchaseOrder> returnPurchaseOrderItems({
+    required int purchaseOrderId,
+    required PurchaseAdjustmentDraft draft,
+  }) {
+    return _purchasing.returnPurchaseOrderItems(
+      purchaseOrderId: purchaseOrderId,
+      draft: draft,
+    );
+  }
+
+  Future<PurchaseOrder> refundPurchaseOrderItems({
+    required int purchaseOrderId,
+    required PurchaseAdjustmentDraft draft,
+  }) {
+    return _purchasing.refundPurchaseOrderItems(
+      purchaseOrderId: purchaseOrderId,
+      draft: draft,
+    );
+  }
+
+  Future<PurchaseOrder> exchangePurchaseOrderItems({
+    required int purchaseOrderId,
+    required PurchaseAdjustmentDraft draft,
+  }) {
+    return _purchasing.exchangePurchaseOrderItems(
+      purchaseOrderId: purchaseOrderId,
+      draft: draft,
+    );
+  }
+
+  Future<SupplierPage> fetchSuppliers({
+    required ContactQuery query,
+    int page = 1,
+  }) {
+    return _purchasing.fetchSuppliers(query: query, page: page);
+  }
+
+  Future<SupplierContact> createSupplier(SupplierDraft draft) {
+    return _purchasing.createSupplier(draft);
   }
 
   Future<List<PrintJob>> fetchPrintJobs({

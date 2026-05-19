@@ -4,6 +4,7 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 import '../../../core/authorization.dart';
 import '../../../data/models/register_cash_movement.dart';
 import '../../../data/models/pos_user.dart';
+import '../../../data/repositories/contact_repository.dart';
 import '../../../shared/app_navigation_drawer.dart';
 import '../../../shared/authorization_guards.dart';
 import '../../../shared/barcode/barcode_scan_listener.dart';
@@ -18,8 +19,11 @@ class PosScreen extends StatelessWidget {
   const PosScreen({
     super.key,
     required this.viewModel,
+    required this.contactRepository,
     required this.currentUser,
     required this.capabilities,
+    required this.onOpenPurchasing,
+    required this.onOpenContacts,
     required this.onOpenCatalog,
     required this.onOpenRegisterSessions,
     required this.onOpenDeviceSettings,
@@ -29,8 +33,11 @@ class PosScreen extends StatelessWidget {
   });
 
   final PosViewModel viewModel;
+  final ContactRepository contactRepository;
   final PosUser currentUser;
   final AuthorizationCapabilities capabilities;
+  final VoidCallback onOpenPurchasing;
+  final VoidCallback onOpenContacts;
   final VoidCallback onOpenCatalog;
   final VoidCallback onOpenRegisterSessions;
   final VoidCallback onOpenDeviceSettings;
@@ -51,6 +58,8 @@ class PosScreen extends StatelessWidget {
             currentUser: currentUser,
             capabilities: capabilities,
             onOpenPos: () {},
+            onOpenPurchasing: onOpenPurchasing,
+            onOpenContacts: onOpenContacts,
             onOpenCatalog: onOpenCatalog,
             onOpenRegisterSessions: onOpenRegisterSessions,
             onOpenDeviceSettings: onOpenDeviceSettings,
@@ -157,6 +166,7 @@ class PosScreen extends StatelessWidget {
                       RegisterSessionGateStatus.active
                   ? _PosWorkspace(
                       viewModel: viewModel,
+                      contactRepository: contactRepository,
                       capabilities: capabilities,
                     )
                   : RegisterSessionGate(
@@ -224,9 +234,14 @@ class PosScreen extends StatelessWidget {
 }
 
 class _PosWorkspace extends StatelessWidget {
-  const _PosWorkspace({required this.viewModel, required this.capabilities});
+  const _PosWorkspace({
+    required this.viewModel,
+    required this.contactRepository,
+    required this.capabilities,
+  });
 
   final PosViewModel viewModel;
+  final ContactRepository contactRepository;
   final AuthorizationCapabilities capabilities;
 
   @override
@@ -245,10 +260,11 @@ class _PosWorkspace extends StatelessWidget {
           );
           final cart = PosCartPane(
             viewModel: viewModel,
+            contactRepository: contactRepository,
             capabilities: capabilities,
           );
 
-          if (constraints.maxWidth >= 900) {
+          if (constraints.maxWidth >= 720) {
             return Row(
               children: [
                 Expanded(flex: 3, child: catalog),

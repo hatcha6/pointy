@@ -4,6 +4,7 @@ from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 from rest_framework.routers import DefaultRouter
 
 from apps.catalog.views import ProductViewSet
+from apps.customers.views import CustomerViewSet
 from apps.core.views import (
     PosUserViewSet,
     ShopSettingsView,
@@ -20,6 +21,7 @@ from apps.printing.views import (
     PrintTemplateVersionViewSet,
     PrintTemplateViewSet,
 )
+from apps.purchasing.views import PurchaseOrderViewSet, SupplierViewSet
 from apps.sales.views import OrderViewSet, RegisterSessionViewSet
 
 router = DefaultRouter()
@@ -28,6 +30,9 @@ router.register("products", ProductViewSet)
 router.register("stock", StockItemViewSet)
 router.register("stock-movements", StockMovementViewSet)
 router.register("orders", OrderViewSet)
+router.register("customers", CustomerViewSet)
+router.register("suppliers", SupplierViewSet)
+router.register("purchase-orders", PurchaseOrderViewSet)
 router.register("register-sessions", RegisterSessionViewSet, basename="register-session")
 router.register("payments", PaymentViewSet)
 router.register("print-templates", PrintTemplateViewSet)

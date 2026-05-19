@@ -78,6 +78,12 @@ class AppLocalizationsAr extends AppLocalizations {
   String get posDrawerLabel => 'شاشة البيع';
 
   @override
+  String get purchasingDrawerLabel => 'المشتريات';
+
+  @override
+  String get contactsDrawerLabel => 'الجهات';
+
+  @override
   String get catalogDrawerLabel => 'المنتجات';
 
   @override
@@ -472,6 +478,9 @@ class AppLocalizationsAr extends AppLocalizations {
   String get invalidNumber => 'أدخل رقمًا صحيحًا';
 
   @override
+  String get invalidDate => 'أدخل تاريخًا صحيحًا';
+
+  @override
   String get productCreatedMessage => 'تم إنشاء المنتج';
 
   @override
@@ -691,6 +700,456 @@ class AppLocalizationsAr extends AppLocalizations {
   String get emptyCart => 'لا توجد عناصر في السلة';
 
   @override
+  String get purchasingTitle => 'المشتريات';
+
+  @override
+  String get purchaseOrdersTitle => 'فواتير المشتريات';
+
+  @override
+  String get refreshPurchaseOrdersTooltip => 'تحديث فواتير المشتريات';
+
+  @override
+  String get refreshPurchaseOrderDetailsTooltip => 'تحديث تفاصيل أمر الشراء';
+
+  @override
+  String get newPurchaseOrderButton => 'أمر شراء جديد';
+
+  @override
+  String get newPurchaseOrderTitle => 'أمر شراء جديد';
+
+  @override
+  String get searchPurchaseOrdersHint =>
+      'ابحث برقم الفاتورة أو المورد أو المنتج';
+
+  @override
+  String get purchaseOrderSupplierFilterTitle => 'المورد';
+
+  @override
+  String get allSuppliersFilterLabel => 'كل الموردين';
+
+  @override
+  String get clearSupplierFilterTooltip => 'مسح فلتر المورد';
+
+  @override
+  String get purchaseOrderStatusFilterTitle => 'حالة أمر الشراء';
+
+  @override
+  String get purchaseOrderStatusAll => 'كل أوامر الشراء';
+
+  @override
+  String get purchaseOrderStatusDraft => 'مسودة';
+
+  @override
+  String get purchaseOrderStatusSubmitted => 'مرسل';
+
+  @override
+  String get purchaseOrderStatusReceived => 'مستلم';
+
+  @override
+  String get purchaseOrderStatusCancelled => 'ملغى';
+
+  @override
+  String get purchaseOrderOrderingNewest => 'الأحدث أولًا';
+
+  @override
+  String get purchaseOrderOrderingUpdated => 'آخر تحديث';
+
+  @override
+  String get purchaseOrderOrderingTotalDesc => 'الإجمالي: من الأعلى إلى الأقل';
+
+  @override
+  String get purchaseOrderOrderingNumber => 'رقم أمر الشراء';
+
+  @override
+  String get purchaseOrdersLoadError => 'تعذر تحميل فواتير المشتريات.';
+
+  @override
+  String get purchaseOrderDetailsLoadError => 'تعذر تحميل تفاصيل أمر الشراء.';
+
+  @override
+  String get emptyPurchaseOrders => 'لا توجد فواتير مشتريات بعد.';
+
+  @override
+  String purchaseOrderFallbackTitle(int id) {
+    return 'أمر شراء #$id';
+  }
+
+  @override
+  String purchaseOrderLineCount(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count عناصر',
+      two: 'عنصران',
+      one: 'عنصر واحد',
+      zero: 'لا توجد عناصر',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get purchaseOrderDetailsSummaryTitle => 'ملخص أمر الشراء';
+
+  @override
+  String get purchaseOrderLineCountLabel => 'العناصر';
+
+  @override
+  String get purchaseOrderCreatedAtLabel => 'تاريخ الإنشاء';
+
+  @override
+  String get purchaseOrderSubmittedAtLabel => 'تاريخ الإرسال';
+
+  @override
+  String get purchaseOrderReceivedAtLabel => 'تاريخ الاستلام';
+
+  @override
+  String get purchaseOrderActionsTitle => 'إجراءات الحالة';
+
+  @override
+  String get submitPurchaseOrderAction => 'إرسال';
+
+  @override
+  String get receivePurchaseOrderAction => 'تحديد كمستلم';
+
+  @override
+  String get cancelPurchaseOrderAction => 'إلغاء';
+
+  @override
+  String get purchaseOrderAdjustmentsTitle => 'المرتجعات والاستبدالات';
+
+  @override
+  String get returnPurchaseItemsAction => 'إرجاع';
+
+  @override
+  String get refundPurchaseItemsAction => 'استرداد';
+
+  @override
+  String get exchangePurchaseItemsAction => 'استبدال';
+
+  @override
+  String get purchaseOrderStatusChangeError =>
+      'تعذر تغيير حالة أمر الشراء. حاول مرة أخرى.';
+
+  @override
+  String get purchaseOrderAdjustmentError =>
+      'تعذر تسجيل تعديل المشتريات. راجع الكميات والمخزون وحاول مرة أخرى.';
+
+  @override
+  String get purchaseReturnTitle => 'إرجاع مشتريات';
+
+  @override
+  String get purchaseRefundTitle => 'استرداد مشتريات';
+
+  @override
+  String get purchaseExchangeTitle => 'استبدال مشتريات';
+
+  @override
+  String get purchaseAdjustmentReasonLabel => 'سبب التعديل';
+
+  @override
+  String get purchaseAdjustmentReasonHint =>
+      'مثال: تالف، خطأ في الفاتورة، استبدال مع المورد';
+
+  @override
+  String get purchaseNoAdjustableItems => 'لا توجد عناصر قابلة للتعديل.';
+
+  @override
+  String get purchaseAdjustmentNoItemsSelected =>
+      'اختر عنصرًا واحدًا على الأقل.';
+
+  @override
+  String purchaseReturnSuccess(String orderNumber) {
+    return 'تم تسجيل إرجاع المشتريات رقم $orderNumber.';
+  }
+
+  @override
+  String purchaseRefundSuccess(String orderNumber) {
+    return 'تم تسجيل استرداد المشتريات رقم $orderNumber.';
+  }
+
+  @override
+  String purchaseExchangeSuccess(String orderNumber) {
+    return 'تم تسجيل استبدال المشتريات رقم $orderNumber.';
+  }
+
+  @override
+  String purchaseAdjustmentLineRemaining(int remaining, int quantity) {
+    return 'المتبقي $remaining من $quantity';
+  }
+
+  @override
+  String get purchaseAdjustmentHistoryEmpty =>
+      'لا توجد مرتجعات أو استبدالات مسجلة.';
+
+  @override
+  String get purchaseAdjustmentTypeReturn => 'إرجاع';
+
+  @override
+  String get purchaseAdjustmentTypeRefund => 'استرداد';
+
+  @override
+  String get purchaseAdjustmentTypeExchange => 'استبدال';
+
+  @override
+  String purchaseAdjustmentHistoryLineCount(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count عناصر',
+      two: 'عنصران',
+      one: 'عنصر واحد',
+      zero: 'لا توجد عناصر',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String purchaseOrderSubmitSuccess(String orderNumber) {
+    return 'تم إرسال أمر الشراء رقم $orderNumber.';
+  }
+
+  @override
+  String purchaseOrderReceiveSuccess(String orderNumber) {
+    return 'تم استلام أمر الشراء رقم $orderNumber.';
+  }
+
+  @override
+  String purchaseOrderCancelSuccess(String orderNumber) {
+    return 'تم إلغاء أمر الشراء رقم $orderNumber.';
+  }
+
+  @override
+  String get purchaseOrderLinesTitle => 'محتويات أمر الشراء';
+
+  @override
+  String get purchaseOrderUnknownProduct => 'منتج غير محدد';
+
+  @override
+  String purchaseOrderLineQuantity(int quantity) {
+    return 'الكمية $quantity';
+  }
+
+  @override
+  String purchaseOrderPreviousCostValue(String amount) {
+    return 'آخر تكلفة $amount';
+  }
+
+  @override
+  String purchaseOrderCostChangeValue(String amount) {
+    return 'تغير التكلفة $amount';
+  }
+
+  @override
+  String purchaseOrderCostChangePercentValue(String percent) {
+    return '$percent%';
+  }
+
+  @override
+  String get purchaseCatalogTitle => 'كتالوج الشراء';
+
+  @override
+  String get purchaseProductLookupHint => 'ابحث عن منتج لإضافته للمشتريات';
+
+  @override
+  String get purchaseDraftTitle => 'مسودة الشراء';
+
+  @override
+  String get clearPurchaseDraftTooltip => 'مسح مسودة الشراء';
+
+  @override
+  String get emptyPurchaseDraft => 'لا توجد عناصر في مسودة الشراء';
+
+  @override
+  String get purchaseLineCostLabel => 'التكلفة';
+
+  @override
+  String get receivePurchaseImmediatelyLabel => 'استلام أمر الشراء فورًا';
+
+  @override
+  String get quickCreateProductTitle => 'إضافة منتج سريع';
+
+  @override
+  String quickCreateProductMessage(String barcode) {
+    return 'الباركود $barcode غير موجود. أضف المنتج الآن لمتابعة أمر الشراء.';
+  }
+
+  @override
+  String get quickCreateProductNameHint => 'اسم المنتج على فاتورة المورد';
+
+  @override
+  String get quickCreateUnitCostLabel => 'تكلفة الشراء';
+
+  @override
+  String get quickCreateProductButton => 'إضافة للشراء';
+
+  @override
+  String get quickCreateProductSaving => 'جار الإضافة...';
+
+  @override
+  String get quickCreateProductError =>
+      'تعذر إنشاء المنتج. راجع البيانات وحاول مرة أخرى.';
+
+  @override
+  String submitPurchaseDraftButton(String amount) {
+    return 'إرسال أمر الشراء $amount';
+  }
+
+  @override
+  String get purchaseSubmitInProgressButton => 'جار الإرسال...';
+
+  @override
+  String purchaseDraftSubmitSuccess(String draftNumber) {
+    return 'تم إرسال أمر الشراء رقم $draftNumber.';
+  }
+
+  @override
+  String get purchaseDraftSubmitError =>
+      'تعذر إرسال أمر الشراء. راجع العناصر وحاول مرة أخرى.';
+
+  @override
+  String get contactsTitle => 'العملاء والموردون';
+
+  @override
+  String get customersTab => 'العملاء';
+
+  @override
+  String get suppliersTab => 'الموردون';
+
+  @override
+  String get refreshContactsTooltip => 'تحديث العملاء والموردين';
+
+  @override
+  String get contactSearchHint => 'ابحث بالاسم أو الهاتف أو البريد';
+
+  @override
+  String get contactsLoadError => 'تعذر تحميل العملاء والموردين.';
+
+  @override
+  String get emptyCustomers => 'لا يوجد عملاء بعد.';
+
+  @override
+  String get emptySuppliers => 'لا يوجد موردون بعد.';
+
+  @override
+  String get addCustomerButton => 'إضافة عميل';
+
+  @override
+  String get addSupplierButton => 'إضافة مورد';
+
+  @override
+  String get customerFullNameLabel => 'اسم العميل';
+
+  @override
+  String get supplierNameLabel => 'اسم المورد';
+
+  @override
+  String get contactPersonLabel => 'اسم جهة التواصل';
+
+  @override
+  String get phoneOptionalLabel => 'رقم الهاتف (اختياري)';
+
+  @override
+  String get emailOptionalLabel => 'البريد الإلكتروني (اختياري)';
+
+  @override
+  String get birthdayOptionalLabel => 'تاريخ الميلاد (اختياري)';
+
+  @override
+  String get birthdayHint => 'YYYY-MM-DD';
+
+  @override
+  String get genderLabel => 'الجنس';
+
+  @override
+  String get genderUnspecified => 'غير محدد';
+
+  @override
+  String get genderFemale => 'أنثى';
+
+  @override
+  String get genderMale => 'ذكر';
+
+  @override
+  String get genderNonBinary => 'غير ثنائي';
+
+  @override
+  String get genderPreferNotToSay => 'يفضل عدم الإفصاح';
+
+  @override
+  String get marketingConsentLabel => 'وافق على التواصل التسويقي';
+
+  @override
+  String get addressOptionalLabel => 'العنوان (اختياري)';
+
+  @override
+  String get notesOptionalLabel => 'ملاحظات (اختياري)';
+
+  @override
+  String get activeContactLabel => 'نشط';
+
+  @override
+  String get saveCustomerButton => 'حفظ العميل';
+
+  @override
+  String get saveSupplierButton => 'حفظ المورد';
+
+  @override
+  String get contactSavingButton => 'جار الحفظ...';
+
+  @override
+  String get customerCreateError =>
+      'تعذر حفظ العميل. راجع البيانات وحاول مرة أخرى.';
+
+  @override
+  String get supplierCreateError =>
+      'تعذر حفظ المورد. راجع البيانات وحاول مرة أخرى.';
+
+  @override
+  String get customerNumberLabel => 'رقم العميل';
+
+  @override
+  String get customerBirthdayLabel => 'الميلاد';
+
+  @override
+  String get marketingAllowedLabel => 'يسمح بالتسويق';
+
+  @override
+  String get inactiveContactLabel => 'غير نشط';
+
+  @override
+  String get supplierContactLabel => 'جهة التواصل';
+
+  @override
+  String get selectedCustomerLabel => 'العميل';
+
+  @override
+  String get selectedSupplierLabel => 'المورد';
+
+  @override
+  String get walkInCustomerLabel => 'عميل عابر';
+
+  @override
+  String get noSupplierSelectedLabel => 'لا يوجد مورد محدد';
+
+  @override
+  String get chooseCustomerTitle => 'اختيار العميل';
+
+  @override
+  String get chooseSupplierTitle => 'اختيار المورد';
+
+  @override
+  String get changeContactAction => 'تغيير';
+
+  @override
+  String get clearContactTooltip => 'إزالة الاختيار';
+
+  @override
+  String get createNewCustomerAction => 'عميل جديد';
+
+  @override
+  String get createNewSupplierAction => 'مورد جديد';
+
+  @override
   String payAmount(String amount) {
     return 'ادفع $amount';
   }
@@ -755,6 +1214,19 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get invoicePrintError => 'تم تسجيل البيع، لكن تعذرت طباعة الفاتورة.';
+
+  @override
+  String get invoiceProfitLabel => 'الربح';
+
+  @override
+  String invoiceProfitValue(String amount) {
+    return 'الربح $amount';
+  }
+
+  @override
+  String invoiceProfitMarginValue(String percent) {
+    return 'هامش $percent%';
+  }
 
   @override
   String get saleCheckoutError =>
@@ -1001,6 +1473,12 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get emptySessionSales => 'لا توجد مبيعات مسجلة في هذه الجلسة.';
+
+  @override
+  String get allCustomersFilterLabel => 'كل العملاء';
+
+  @override
+  String get clearCustomerFilterTooltip => 'مسح فلتر العميل';
 
   @override
   String get sessionCashMovementsLoadError =>

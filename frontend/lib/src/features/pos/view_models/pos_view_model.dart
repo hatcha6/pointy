@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 
 import '../../../core/result.dart';
 import '../../../data/models/cart_line.dart';
+import '../../../data/models/contact.dart';
 import '../../../data/models/print_job.dart';
 import '../../../data/models/printer_config.dart';
 import '../../../data/models/product.dart';
@@ -65,6 +66,7 @@ class PosViewModel extends ChangeNotifier {
   bool _isCheckingOut = false;
   BarcodeScanStatus _barcodeScanStatus = BarcodeScanStatus.idle;
   bool _printInvoiceAfterPayment = false;
+  Customer? _selectedCustomer;
   bool _hasMoreProducts = true;
   int _nextProductPage = 1;
   String? _errorMessage;
@@ -92,6 +94,7 @@ class PosViewModel extends ChangeNotifier {
   bool get isResolvingBarcode =>
       _barcodeScanStatus == BarcodeScanStatus.resolving;
   bool get printInvoiceAfterPayment => _printInvoiceAfterPayment;
+  Customer? get selectedCustomer => _selectedCustomer;
   bool get hasMoreProducts => _hasMoreProducts;
   String? get errorMessage => _errorMessage;
   String? get lastScannedBarcode => _lastScannedBarcode;
@@ -156,6 +159,14 @@ class PosViewModel extends ChangeNotifier {
       return;
     }
     _printInvoiceAfterPayment = value;
+    _notifyChanged();
+  }
+
+  void selectCustomer(Customer? customer) {
+    if (_isCheckingOut) {
+      return;
+    }
+    _selectedCustomer = customer;
     _notifyChanged();
   }
 }

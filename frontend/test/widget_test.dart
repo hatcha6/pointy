@@ -249,6 +249,42 @@ void main() {
     expect(find.text('تم تسجيل البيع. رقم الإيصال: R-100'), findsOneWidget);
   });
 
+  testWidgets('checkout can select an existing customer', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(1200, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    Map<String, Object?>? checkoutBody;
+
+    await tester.pumpWidget(
+      PointyApp(
+        apiService: _mockApiService(
+          onCheckout: (request) {
+            checkoutBody = jsonDecode(request.body) as Map<String, Object?>;
+          },
+        ),
+      ),
+    );
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+
+    await _startRegisterSession(tester);
+    await tester.tap(find.text('عميل عابر'));
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+    await tester.tap(find.text('ليلى أحمد').last);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byType(ProductTile).first);
+    await tester.pump();
+    await tester.tap(find.text('ادفع 3.50 د.ل'));
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+    await _confirmPayment(tester);
+
+    expect(checkoutBody?['customer'], 12);
+  });
+
   testWidgets('checkout can split tender across cash and card', (
     WidgetTester tester,
   ) async {
@@ -728,7 +764,9 @@ void main() {
   testWidgets(
     'catalog screen exposes reusable search, filtering, and ordering controls',
     (WidgetTester tester) async {
-      await tester.pumpWidget(PointyApp(apiService: _mockApiService()));
+      await tester.pumpWidget(
+        PointyApp(apiService: _mockApiService(productBarcode: '123456')),
+      );
       await tester.pumpAndSettle(const Duration(seconds: 1));
 
       await tester.tap(find.byIcon(Icons.menu));
@@ -807,12 +845,198 @@ void main() {
 
     expect(find.text('مدير النظام'), findsOneWidget);
     expect(find.text('شاشة البيع'), findsOneWidget);
+    expect(find.text('المشتريات'), findsOneWidget);
+    expect(find.text('الجهات'), findsOneWidget);
     expect(find.text('المنتجات'), findsWidgets);
     expect(find.text('جلسات الدرج'), findsOneWidget);
     expect(find.text('المستخدمون'), findsOneWidget);
     expect(find.text('إعدادات الجهاز'), findsOneWidget);
     expect(find.text('إعدادات المتجر'), findsOneWidget);
     expect(find.text('تسجيل الخروج'), findsOneWidget);
+  });
+
+  testWidgets('contacts drawer opens customers and suppliers management', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(PointyApp(apiService: _mockApiService()));
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+
+    await tester.tap(find.byIcon(Icons.menu));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('الجهات'));
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+
+    expect(find.text('العملاء والموردون'), findsOneWidget);
+    expect(find.text('العملاء'), findsOneWidget);
+    expect(find.text('الموردون'), findsOneWidget);
+    expect(find.text('ليلى أحمد'), findsOneWidget);
+    expect(find.textContaining('+218911234567'), findsOneWidget);
+
+    await tester.tap(find.text('الموردون'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('مورد المدينة'), findsOneWidget);
+    expect(find.textContaining('+21891222333'), findsOneWidget);
+  });
+
+  testWidgets(
+    'purchasing drawer opens searchable order list then create flow',
+    (WidgetTester tester) async {
+      Map<String, Object?>? purchaseBody;
+      await tester.pumpWidget(
+        PointyApp(
+          apiService: _mockApiService(
+            productBarcode: '123456',
+            onPurchaseOrderCreate: (request) {
+              purchaseBody = jsonDecode(request.body) as Map<String, Object?>;
+            },
+          ),
+        ),
+      );
+      await tester.pumpAndSettle(const Duration(seconds: 1));
+
+      await tester.tap(find.byIcon(Icons.menu));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('المشتريات'));
+      await tester.pumpAndSettle(const Duration(seconds: 1));
+
+      expect(find.text('فواتير المشتريات'), findsOneWidget);
+      expect(find.text('P20260515000200'), findsOneWidget);
+      expect(
+        find.text('ابحث برقم الفاتورة أو المورد أو المنتج'),
+        findsOneWidget,
+      );
+      expect(find.textContaining('مسودة'), findsOneWidget);
+
+      await tester.tap(find.text('أمر شراء جديد'));
+      await tester.pumpAndSettle(const Duration(seconds: 1));
+
+      expect(find.text('أمر شراء جديد'), findsOneWidget);
+      expect(find.text('كتالوج الشراء'), findsOneWidget);
+      expect(find.text('مسودة الشراء'), findsOneWidget);
+
+      await tester.tap(find.text('لا يوجد مورد محدد'));
+      await tester.pumpAndSettle(const Duration(seconds: 1));
+      await tester.tap(find.text('مورد المدينة').last);
+      await tester.pumpAndSettle();
+
+      await tester.enterText(
+        find.byKey(const ValueKey('purchase_product_lookup_field')),
+        '123456',
+      );
+      await tester.testTextInput.receiveAction(TextInputAction.search);
+      await tester.pumpAndSettle(const Duration(seconds: 1));
+
+      expect(find.text('إرسال أمر الشراء 2.75 د.ل'), findsOneWidget);
+
+      await tester.tap(find.text('إرسال أمر الشراء 2.75 د.ل'));
+      await tester.pumpAndSettle(const Duration(seconds: 1));
+
+      expect(purchaseBody?['supplier'], 14);
+    },
+  );
+
+  testWidgets('purchase order can quick-create a missing barcode product', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(PointyApp(apiService: _mockApiService()));
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+
+    await tester.tap(find.byIcon(Icons.menu));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('المشتريات'));
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+    await tester.tap(find.text('أمر شراء جديد'));
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+
+    await tester.enterText(
+      find.byKey(const ValueKey('purchase_product_lookup_field')),
+      '987654',
+    );
+    await tester.testTextInput.receiveAction(TextInputAction.search);
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+
+    expect(find.text('إضافة منتج سريع'), findsOneWidget);
+    expect(
+      find.text(
+        'الباركود 987654 غير موجود. أضف المنتج الآن لمتابعة أمر الشراء.',
+      ),
+      findsOneWidget,
+    );
+
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'اسم المنتج'),
+      'سكر المورد',
+    );
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'رمز المنتج'),
+      'SUG-1',
+    );
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'تكلفة الشراء'),
+      '4.25',
+    );
+    await tester.tap(find.text('إضافة للشراء'));
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+
+    expect(find.text('سكر المورد'), findsOneWidget);
+    expect(find.text('استلام أمر الشراء فورًا'), findsOneWidget);
+    expect(find.text('إرسال أمر الشراء 4.25 د.ل'), findsOneWidget);
+
+    await tester.tap(find.text('إرسال أمر الشراء 4.25 د.ل'));
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+
+    expect(
+      find.text('تم استلام أمر الشراء رقم P20260515000200.'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('purchase order details show lines and status actions', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(PointyApp(apiService: _mockApiService()));
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+
+    await tester.tap(find.byIcon(Icons.menu));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('المشتريات'));
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+    await tester.tap(find.text('P20260515000200'));
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+
+    expect(find.text('محتويات أمر الشراء'), findsOneWidget);
+    expect(find.text('قهوة البيت'), findsOneWidget);
+    expect(find.textContaining('الكمية 2'), findsOneWidget);
+    expect(find.text('إرسال'), findsOneWidget);
+
+    await tester.tap(find.text('إرسال'));
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+
+    expect(find.text('تحديد كمستلم'), findsOneWidget);
+
+    await tester.tap(find.text('تحديد كمستلم'));
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+
+    expect(find.textContaining('مستلم'), findsWidgets);
+    expect(find.text('تحديد كمستلم'), findsNothing);
+    expect(find.text('إرجاع'), findsOneWidget);
+
+    await tester.tap(find.text('إرجاع'));
+    await tester.pumpAndSettle();
+    expect(find.text('إرجاع مشتريات'), findsOneWidget);
+
+    await tester.tap(find.byIcon(Icons.add).last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('تأكيد'));
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+
+    expect(
+      find.text('تم تسجيل إرجاع المشتريات رقم P20260515000200.'),
+      findsOneWidget,
+    );
+    expect(find.text('المرتجعات والاستبدالات'), findsOneWidget);
+    expect(find.text('إرجاع'), findsWidgets);
   });
 
   testWidgets('login screen authenticates before showing POS', (
@@ -1005,6 +1229,8 @@ void main() {
             capabilities: AuthorizationCapabilities.forUser(cashier),
             onOpenPos: () {},
             onOpenCatalog: () {},
+            onOpenPurchasing: () {},
+            onOpenContacts: () {},
             onOpenRegisterSessions: () {},
             onOpenDeviceSettings: () {},
             onLogout: () {},
@@ -1644,6 +1870,7 @@ PosApiService _mockApiService({
   String currentUserDisplayName = 'مدير النظام',
   List<String> currentUserPermissions = const [],
   void Function(http.Request request)? onCheckout,
+  void Function(http.Request request)? onPurchaseOrderCreate,
   void Function(http.Request request)? onCashMovement,
   void Function(http.Request request)? onReprint,
   void Function(http.Request request)? onReturn,
@@ -1882,6 +2109,16 @@ PosApiService _mockApiService({
       }
 
       if (path.endsWith('/products/')) {
+        if (request.method == 'POST') {
+          final body = jsonDecode(request.body) as Map<String, Object?>;
+          return _jsonResponse({
+            'id': 9,
+            'quantity_on_hand': 0,
+            'description': '',
+            'is_active': true,
+            ...body,
+          });
+        }
         final requestedBarcode = request.url.queryParameters['barcode'];
         if (requestedBarcode != null && requestedBarcode != productBarcode) {
           return _jsonResponse({'next': null, 'results': []});
@@ -1892,6 +2129,113 @@ PosApiService _mockApiService({
             barcode: productBarcode,
           ),
         );
+      }
+
+      if (path.endsWith('/customers/')) {
+        if (request.method == 'POST') {
+          final body = jsonDecode(request.body) as Map<String, Object?>;
+          return _jsonResponse({
+            'id': 12,
+            'customer_number': 'C20260519000012',
+            'created_at': '2026-05-19T09:00:00Z',
+            'updated_at': '2026-05-19T09:00:00Z',
+            ...body,
+          });
+        }
+        return _jsonResponse({
+          'count': 1,
+          'next': null,
+          'previous': null,
+          'results': [_customerJson()],
+        });
+      }
+
+      if (path.endsWith('/suppliers/')) {
+        if (request.method == 'POST') {
+          final body = jsonDecode(request.body) as Map<String, Object?>;
+          return _jsonResponse({
+            'id': 14,
+            'created_at': '2026-05-19T09:00:00Z',
+            'updated_at': '2026-05-19T09:00:00Z',
+            ...body,
+          });
+        }
+        return _jsonResponse({
+          'count': 1,
+          'next': null,
+          'previous': null,
+          'results': [_supplierJson()],
+        });
+      }
+
+      if (path.endsWith('/purchase-orders/')) {
+        if (request.method == 'POST') {
+          onPurchaseOrderCreate?.call(request);
+          final body = jsonDecode(request.body) as Map<String, Object?>;
+          return _jsonResponse({..._purchaseOrderJson(), ...body});
+        }
+        return _jsonResponse({
+          'count': 1,
+          'next': null,
+          'previous': null,
+          'results': [_purchaseOrderJson()],
+        });
+      }
+
+      if (path.endsWith('/purchase-orders/200/submit/')) {
+        return _jsonResponse(
+          _purchaseOrderJson(
+            status: 'submitted',
+            submittedAt: '2026-05-15T10:00:00Z',
+          ),
+        );
+      }
+
+      if (path.endsWith('/purchase-orders/200/receive/')) {
+        return _jsonResponse(
+          _purchaseOrderJson(
+            status: 'received',
+            submittedAt: '2026-05-15T10:00:00Z',
+            receivedAt: '2026-05-15T10:10:00Z',
+            canAdjust: true,
+          ),
+        );
+      }
+
+      if (path.endsWith('/purchase-orders/200/return-items/')) {
+        return _jsonResponse(
+          _purchaseOrderJson(
+            status: 'received',
+            submittedAt: '2026-05-15T10:00:00Z',
+            receivedAt: '2026-05-15T10:10:00Z',
+            adjustedQuantity: 1,
+            adjustableQuantity: 1,
+            canAdjust: true,
+            adjustments: [_purchaseAdjustmentJson()],
+          ),
+        );
+      }
+
+      if (path.endsWith('/purchase-orders/200/cancel/')) {
+        return _jsonResponse(
+          _purchaseOrderJson(
+            status: 'cancelled',
+            submittedAt: '2026-05-15T10:00:00Z',
+          ),
+        );
+      }
+
+      if (path.endsWith('/purchase-orders/last-cost/')) {
+        return _jsonResponse({
+          'product': int.tryParse(
+            request.url.queryParameters['product'] ?? '0',
+          ),
+          'unit_cost': '2.75',
+        });
+      }
+
+      if (path.endsWith('/purchase-orders/200/')) {
+        return _jsonResponse(_purchaseOrderJson(canAdjust: true));
       }
 
       if (path.endsWith('/stock/')) {
@@ -2095,6 +2439,120 @@ Map<String, Object?> _stockItemJson() {
     'reorder_level': 5,
     'created_at': '2026-05-15T09:00:00Z',
     'updated_at': '2026-05-15T09:00:00Z',
+  };
+}
+
+Map<String, Object?> _purchaseOrderJson({
+  int id = 200,
+  String orderNumber = 'P20260515000200',
+  String status = 'draft',
+  String total = '7.50',
+  String? submittedAt,
+  String? receivedAt,
+  int adjustedQuantity = 0,
+  int adjustableQuantity = 2,
+  bool canAdjust = false,
+  List<Map<String, Object?>> adjustments = const [],
+}) {
+  return {
+    'id': id,
+    'order_number': orderNumber,
+    'supplier': null,
+    'supplier_name': null,
+    'supplier_reference': '',
+    'status': status,
+    'notes': '',
+    'lines': [
+      {
+        'id': 1,
+        'product': 1,
+        'product_name': 'قهوة البيت',
+        'product_sku': 'COF-001',
+        'quantity': 2,
+        'adjusted_quantity': adjustedQuantity,
+        'adjustable_quantity': adjustableQuantity,
+        'unit_cost': '3.75',
+        'line_total': total,
+      },
+    ],
+    'adjustments': adjustments,
+    'subtotal': total,
+    'total': total,
+    'can_return': canAdjust,
+    'can_refund': canAdjust,
+    'can_exchange': canAdjust,
+    'submitted_at': submittedAt,
+    'received_at': receivedAt,
+    'created_at': '2026-05-15T09:00:00Z',
+    'updated_at': '2026-05-15T09:30:00Z',
+  };
+}
+
+Map<String, Object?> _purchaseAdjustmentJson() {
+  return {
+    'id': 300,
+    'adjustment_type': 'return',
+    'amount': '3.75',
+    'reason': '',
+    'created_by': 1,
+    'created_by_username': 'manager',
+    'lines': [
+      {
+        'id': 301,
+        'purchase_line': 1,
+        'product': 1,
+        'product_name': 'قهوة البيت',
+        'quantity': 1,
+        'unit_cost': '3.75',
+        'line_total': '3.75',
+      },
+    ],
+    'created_at': '2026-05-15T10:20:00Z',
+    'updated_at': '2026-05-15T10:20:00Z',
+  };
+}
+
+Map<String, Object?> _customerJson({
+  int id = 12,
+  String customerNumber = 'C20260519000012',
+  String fullName = 'ليلى أحمد',
+  String phone = '+218911234567',
+  String gender = 'female',
+  String? birthday = '1995-05-12',
+  bool marketingConsent = true,
+}) {
+  return {
+    'id': id,
+    'customer_number': customerNumber,
+    'full_name': fullName,
+    'phone': phone,
+    'email': 'layla@example.com',
+    'gender': gender,
+    'birthday': birthday,
+    'marketing_consent': marketingConsent,
+    'notes': '',
+    'is_active': true,
+    'created_at': '2026-05-19T09:00:00Z',
+    'updated_at': '2026-05-19T09:00:00Z',
+  };
+}
+
+Map<String, Object?> _supplierJson({
+  int id = 14,
+  String name = 'مورد المدينة',
+  String phone = '+21891222333',
+}) {
+  return {
+    'id': id,
+    'name': name,
+    'contact_name': 'منى',
+    'phone': phone,
+    'email': 'supplier@example.com',
+    'address': 'طرابلس',
+    'notes': '',
+    'is_active': true,
+    'created_at': '2026-05-19T09:00:00Z',
+    'updated_at': '2026-05-19T09:00:00Z',
   };
 }
 

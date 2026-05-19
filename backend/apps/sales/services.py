@@ -47,10 +47,17 @@ def create_order_with_lines(*, lines_data, **order_fields):
             product=product,
             quantity=line_data["quantity"],
             unit_price=product.unit_price,
+            unit_cost=latest_sale_unit_cost(product),
         )
     order.recalculate()
     order.save(update_fields=["subtotal", "total", "updated_at"])
     return order
+
+
+def latest_sale_unit_cost(product):
+    from apps.purchasing.services import latest_product_unit_cost
+
+    return latest_product_unit_cost(product.pk) or Decimal("0.00")
 
 
 @transaction.atomic
@@ -59,6 +66,7 @@ def checkout_order(
     register_session,
     lines_data,
     payments_data,
+    customer=None,
     request=None,
 ):
     from apps.payments.serializers import PaymentSerializer
@@ -66,6 +74,7 @@ def checkout_order(
     stock_adjustments = prepare_sale_stock_adjustments(lines_data)
     order = create_order_with_lines(
         register_session=register_session,
+        customer=customer,
         lines_data=lines_data,
     )
     record_sale_stock_movements(order, stock_adjustments, request=request)

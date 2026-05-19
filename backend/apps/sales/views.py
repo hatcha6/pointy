@@ -36,11 +36,16 @@ class OrderViewSet(viewsets.ModelViewSet):
         "partial_update": ("sales.change_order",),
         "destroy": ("sales.delete_order",),
     }
-    queryset = Order.objects.select_related("register_session").prefetch_related(
+    queryset = Order.objects.select_related("customer", "register_session").prefetch_related(
         "lines__product",
         "payments",
     )
-    filterset_fields = ("status", "register_session", "register_session__status")
+    filterset_fields = (
+        "status",
+        "customer",
+        "register_session",
+        "register_session__status",
+    )
     search_fields = ("receipt_number", "lines__product__name", "lines__product__sku")
     ordering_fields = ("created_at", "updated_at", "total", "receipt_number")
 
@@ -259,10 +264,13 @@ class RegisterSessionViewSet(
     def orders(self, request, pk=None):
         session = self.get_object()
         orders = (
-            session.orders.select_related("register_session")
+            session.orders.select_related("customer", "register_session")
             .prefetch_related("lines__product", "payments")
             .order_by("-created_at")
         )
+        customer_id = request.query_params.get("customer")
+        if customer_id:
+            orders = orders.filter(customer_id=customer_id)
         page = self.paginate_queryset(orders)
         if page is not None:
             serializer = OrderSerializer(

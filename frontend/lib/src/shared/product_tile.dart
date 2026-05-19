@@ -5,10 +5,16 @@ import 'formatters.dart';
 import 'product_status_pill.dart';
 
 class ProductTile extends StatelessWidget {
-  const ProductTile({super.key, required this.product, required this.onTap});
+  const ProductTile({
+    super.key,
+    required this.product,
+    required this.onTap,
+    this.showPrice = true,
+  });
 
   final Product product;
   final VoidCallback? onTap;
+  final bool showPrice;
 
   @override
   Widget build(BuildContext context) {
@@ -45,11 +51,13 @@ class ProductTile extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
-              const SizedBox(height: 10),
-              Text(
-                formatMoney(product.unitPrice),
-                style: Theme.of(context).textTheme.titleSmall,
-              ),
+              if (showPrice) ...[
+                const SizedBox(height: 10),
+                Text(
+                  formatMoney(product.unitPrice),
+                  style: Theme.of(context).textTheme.titleSmall,
+                ),
+              ],
             ],
           ),
         ),

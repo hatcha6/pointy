@@ -6,6 +6,8 @@ import '../data/models/pos_user.dart';
 
 enum AppNavigationDestination {
   pos,
+  purchasing,
+  contacts,
   catalog,
   registerSessions,
   deviceSettings,
@@ -20,6 +22,8 @@ class AppNavigationDrawer extends StatelessWidget {
     required this.currentUser,
     required this.capabilities,
     required this.onOpenPos,
+    required this.onOpenPurchasing,
+    required this.onOpenContacts,
     required this.onOpenCatalog,
     required this.onOpenRegisterSessions,
     required this.onOpenDeviceSettings,
@@ -32,6 +36,8 @@ class AppNavigationDrawer extends StatelessWidget {
   final PosUser currentUser;
   final AuthorizationCapabilities capabilities;
   final VoidCallback onOpenPos;
+  final VoidCallback? onOpenPurchasing;
+  final VoidCallback? onOpenContacts;
   final VoidCallback onOpenCatalog;
   final VoidCallback onOpenRegisterSessions;
   final VoidCallback onOpenDeviceSettings;
@@ -50,6 +56,22 @@ class AppNavigationDrawer extends StatelessWidget {
         selectedIcon: const Icon(Icons.receipt_long),
         label: l10n.posDrawerLabel,
         onTap: onOpenPos,
+      ),
+      _DrawerDestination(
+        destination: AppNavigationDestination.purchasing,
+        capability: AppCapability.accessPurchasing,
+        icon: const Icon(Icons.add_shopping_cart_outlined),
+        selectedIcon: const Icon(Icons.add_shopping_cart),
+        label: l10n.purchasingDrawerLabel,
+        onTap: onOpenPurchasing,
+      ),
+      _DrawerDestination(
+        destination: AppNavigationDestination.contacts,
+        capability: AppCapability.manageContacts,
+        icon: const Icon(Icons.contacts_outlined),
+        selectedIcon: const Icon(Icons.contacts),
+        label: l10n.contactsDrawerLabel,
+        onTap: onOpenContacts,
       ),
       _DrawerDestination(
         destination: AppNavigationDestination.catalog,

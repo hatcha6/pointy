@@ -7,6 +7,7 @@ from django.db.models import Q, Sum
 
 from apps.catalog.models import Product
 from apps.core.models import TimeStampedModel
+from apps.customers.models import Customer
 
 
 class RegisterSession(TimeStampedModel):
@@ -170,6 +171,13 @@ class Order(TimeStampedModel):
         blank=True,
         null=True,
     )
+    customer = models.ForeignKey(
+        Customer,
+        on_delete=models.SET_NULL,
+        related_name="orders",
+        blank=True,
+        null=True,
+    )
     receipt_number = models.CharField(max_length=32, unique=True, blank=True)
     status = models.CharField(max_length=16, choices=Status.choices, default=Status.OPEN)
     subtotal = models.DecimalField(max_digits=10, decimal_places=2, default=0)
@@ -185,6 +193,16 @@ class Order(TimeStampedModel):
             subtotal += line_subtotal
         self.subtotal = subtotal.quantize(Decimal("0.01"))
         self.total = self.subtotal
+
+    @property
+    def total_cost(self):
+        total = sum((line.line_cost for line in self.lines.all()), Decimal("0.00"))
+        return total.quantize(Decimal("0.01"))
+
+    @property
+    def total_profit(self):
+        total = sum((line.line_profit for line in self.lines.all()), Decimal("0.00"))
+        return total.quantize(Decimal("0.01"))
 
     def save(self, *args, **kwargs):
         if not self.receipt_number:
@@ -203,6 +221,7 @@ class OrderLine(TimeStampedModel):
     product = models.ForeignKey(Product, on_delete=models.PROTECT)
     quantity = models.PositiveIntegerField(default=1)
     unit_price = models.DecimalField(max_digits=10, decimal_places=2)
+    unit_cost = models.DecimalField(max_digits=10, decimal_places=2, default=0)
 
     class Meta:
         ordering = ["created_at"]
@@ -210,6 +229,14 @@ class OrderLine(TimeStampedModel):
     @property
     def line_total(self):
         return (self.unit_price * self.quantity).quantize(Decimal("0.01"))
+
+    @property
+    def line_cost(self):
+        return (self.unit_cost * self.quantity).quantize(Decimal("0.01"))
+
+    @property
+    def line_profit(self):
+        return (self.line_total - self.line_cost).quantize(Decimal("0.01"))
 
     @property
     def returned_quantity(self) -> int:

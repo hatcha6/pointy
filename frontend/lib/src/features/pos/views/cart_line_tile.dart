@@ -3,6 +3,7 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../data/models/cart_line.dart';
 import '../../../shared/formatters.dart';
+import '../../../shared/order_line_tile.dart';
 
 class CartLineTile extends StatelessWidget {
   const CartLineTile({
@@ -20,43 +21,15 @@ class CartLineTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 10),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  line.product.name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                Text(
-                  l10n.unitPriceEach(formatMoney(line.product.unitPrice)),
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-              ],
-            ),
-          ),
-          IconButton.filledTonal(
-            tooltip: l10n.removeOneTooltip,
-            onPressed: onRemove,
-            icon: const Icon(Icons.remove),
-          ),
-          SizedBox(width: 36, child: Center(child: Text('${line.quantity}'))),
-          IconButton.filledTonal(
-            tooltip: l10n.addOneTooltip,
-            onPressed: onAdd,
-            icon: const Icon(Icons.add),
-          ),
-          SizedBox(
-            width: 72,
-            child: Text(formatMoney(line.total), textAlign: TextAlign.end),
-          ),
-        ],
-      ),
+    return OrderLineTile(
+      product: line.product,
+      quantity: line.quantity,
+      totalAmount: line.total,
+      unitLabel: l10n.unitPriceEach(formatMoney(line.product.unitPrice)),
+      addTooltip: l10n.addOneTooltip,
+      removeTooltip: l10n.removeOneTooltip,
+      onAdd: onAdd,
+      onRemove: onRemove,
     );
   }
 }

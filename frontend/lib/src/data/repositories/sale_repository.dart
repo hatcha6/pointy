@@ -43,11 +43,16 @@ class SaleRepository {
 
   Future<Result<SaleOrderPage>> loadOrdersForSession(
     int sessionId, {
+    SaleOrderQuery query = const SaleOrderQuery(),
     int page = 1,
   }) async {
     try {
       return Ok(
-        await _service.fetchRegisterSessionOrders(sessionId, page: page),
+        await _service.fetchRegisterSessionOrders(
+          sessionId,
+          query: query,
+          page: page,
+        ),
       );
     } on Exception catch (exception) {
       return Error(exception);

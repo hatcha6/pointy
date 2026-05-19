@@ -1,0 +1,186 @@
+import 'dart:async';
+
+import 'package:flutter/material.dart';
+import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
+
+import '../../../core/authorization.dart';
+import '../../../data/models/pos_user.dart';
+import '../../../data/models/product.dart';
+import '../../../data/repositories/contact_repository.dart';
+import '../../../shared/app_navigation_drawer.dart';
+import '../../../shared/authorization_guards.dart';
+import '../../../shared/barcode/barcode_scan_listener.dart';
+import '../view_models/purchase_view_model.dart';
+import 'purchase_catalog_pane.dart';
+import 'purchase_draft_pane.dart';
+import 'purchase_quick_product_sheet.dart';
+
+class PurchasingScreen extends StatelessWidget {
+  const PurchasingScreen({
+    super.key,
+    required this.viewModel,
+    required this.contactRepository,
+    required this.currentUser,
+    required this.capabilities,
+    required this.onOpenPos,
+    required this.onOpenCatalog,
+    required this.onOpenContacts,
+    required this.onOpenRegisterSessions,
+    required this.onOpenDeviceSettings,
+    required this.onLogout,
+    this.showBackButton = false,
+    this.onOpenUsers,
+    this.onOpenShopSettings,
+  });
+
+  final PurchaseViewModel viewModel;
+  final ContactRepository contactRepository;
+  final PosUser currentUser;
+  final AuthorizationCapabilities capabilities;
+  final VoidCallback onOpenPos;
+  final VoidCallback onOpenCatalog;
+  final VoidCallback onOpenContacts;
+  final VoidCallback onOpenRegisterSessions;
+  final VoidCallback onOpenDeviceSettings;
+  final bool showBackButton;
+  final VoidCallback? onOpenUsers;
+  final VoidCallback? onOpenShopSettings;
+  final VoidCallback onLogout;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+
+    return ListenableBuilder(
+      listenable: viewModel,
+      builder: (context, _) {
+        return Scaffold(
+          drawer: AppNavigationDrawer(
+            selectedDestination: AppNavigationDestination.purchasing,
+            currentUser: currentUser,
+            capabilities: capabilities,
+            onOpenPos: onOpenPos,
+            onOpenPurchasing: () {},
+            onOpenContacts: onOpenContacts,
+            onOpenCatalog: onOpenCatalog,
+            onOpenRegisterSessions: onOpenRegisterSessions,
+            onOpenDeviceSettings: onOpenDeviceSettings,
+            onOpenUsers: onOpenUsers,
+            onOpenShopSettings: onOpenShopSettings,
+            onLogout: onLogout,
+          ),
+          appBar: AppBar(
+            leading: Builder(
+              builder: (context) {
+                return IconButton(
+                  tooltip: showBackButton
+                      ? l10n.backTooltip
+                      : l10n.navigationMenuTooltip,
+                  icon: Icon(showBackButton ? Icons.arrow_back : Icons.menu),
+                  onPressed: showBackButton
+                      ? () => Navigator.of(context).maybePop()
+                      : Scaffold.of(context).openDrawer,
+                );
+              },
+            ),
+            title: Text(l10n.newPurchaseOrderTitle),
+            actions: [
+              AuthorizationGuard(
+                capabilities: capabilities,
+                capability: AppCapability.accessPurchasing,
+                fallback: const SizedBox.shrink(),
+                child: IconButton(
+                  tooltip: l10n.refreshCatalogTooltip,
+                  onPressed: viewModel.loadCatalog,
+                  icon: const Icon(Icons.sync),
+                ),
+              ),
+            ],
+          ),
+          body: SafeArea(
+            child: AuthorizationGuard(
+              capabilities: capabilities,
+              capability: AppCapability.accessPurchasing,
+              child: _PurchasingWorkspace(
+                viewModel: viewModel,
+                contactRepository: contactRepository,
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _PurchasingWorkspace extends StatelessWidget {
+  const _PurchasingWorkspace({
+    required this.viewModel,
+    required this.contactRepository,
+  });
+
+  final PurchaseViewModel viewModel;
+  final ContactRepository contactRepository;
+
+  @override
+  Widget build(BuildContext context) {
+    return BarcodeScanListener(
+      enabled: !viewModel.isSubmitting && !viewModel.isCreatingProduct,
+      onBarcodeScanned: (barcode) {
+        unawaited(_addBarcode(context, barcode));
+      },
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final catalog = PurchaseCatalogPane(viewModel: viewModel);
+          final draft = PurchaseDraftPane(
+            viewModel: viewModel,
+            contactRepository: contactRepository,
+          );
+
+          if (constraints.maxWidth >= 720) {
+            return Row(
+              children: [
+                Expanded(flex: 3, child: catalog),
+                const VerticalDivider(width: 1),
+                SizedBox(width: 420, child: draft),
+              ],
+            );
+          }
+
+          return Column(
+            children: [
+              Expanded(child: catalog),
+              const Divider(height: 1),
+              Expanded(flex: 4, child: draft),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Future<void> _addBarcode(BuildContext context, String barcode) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final l10n = AppLocalizations.of(context)!;
+    Product? product;
+    try {
+      product = await resolveOrCreatePurchaseProduct(
+        context,
+        viewModel: viewModel,
+        barcode: barcode,
+      );
+    } on Exception {
+      if (!context.mounted) {
+        return;
+      }
+      messenger
+        ..clearSnackBars()
+        ..showSnackBar(SnackBar(content: Text(l10n.barcodeScanError)));
+      return;
+    }
+    if (product == null) {
+      return;
+    }
+    await viewModel.addProduct(product);
+  }
+}

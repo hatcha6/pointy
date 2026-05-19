@@ -3,6 +3,7 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../core/authorization.dart';
 import '../../../data/models/pos_user.dart';
+import '../../../data/repositories/contact_repository.dart';
 import '../../../shared/app_navigation_drawer.dart';
 import '../../../shared/authorization_guards.dart';
 import '../view_models/register_session_history_view_model.dart';
@@ -13,10 +14,13 @@ class RegisterSessionHistoryScreen extends StatelessWidget {
   const RegisterSessionHistoryScreen({
     super.key,
     required this.viewModel,
+    required this.contactRepository,
     required this.currentUser,
     required this.capabilities,
     required this.onOpenPos,
     required this.onOpenCatalog,
+    required this.onOpenPurchasing,
+    required this.onOpenContacts,
     required this.onOpenDeviceSettings,
     required this.onLogout,
     this.onOpenUsers,
@@ -24,10 +28,13 @@ class RegisterSessionHistoryScreen extends StatelessWidget {
   });
 
   final RegisterSessionHistoryViewModel viewModel;
+  final ContactRepository contactRepository;
   final PosUser currentUser;
   final AuthorizationCapabilities capabilities;
   final VoidCallback onOpenPos;
   final VoidCallback onOpenCatalog;
+  final VoidCallback onOpenPurchasing;
+  final VoidCallback onOpenContacts;
   final VoidCallback onOpenDeviceSettings;
   final VoidCallback? onOpenUsers;
   final VoidCallback? onOpenShopSettings;
@@ -46,6 +53,8 @@ class RegisterSessionHistoryScreen extends StatelessWidget {
             currentUser: currentUser,
             capabilities: capabilities,
             onOpenPos: onOpenPos,
+            onOpenPurchasing: onOpenPurchasing,
+            onOpenContacts: onOpenContacts,
             onOpenCatalog: onOpenCatalog,
             onOpenRegisterSessions: () {},
             onOpenDeviceSettings: onOpenDeviceSettings,
@@ -81,6 +90,7 @@ class RegisterSessionHistoryScreen extends StatelessWidget {
               capabilities: capabilities,
               child: _HistoryWorkspace(
                 viewModel: viewModel,
+                contactRepository: contactRepository,
                 capabilities: capabilities,
               ),
             ),
@@ -94,10 +104,12 @@ class RegisterSessionHistoryScreen extends StatelessWidget {
 class _HistoryWorkspace extends StatelessWidget {
   const _HistoryWorkspace({
     required this.viewModel,
+    required this.contactRepository,
     required this.capabilities,
   });
 
   final RegisterSessionHistoryViewModel viewModel;
+  final ContactRepository contactRepository;
   final AuthorizationCapabilities capabilities;
 
   @override
@@ -110,6 +122,7 @@ class _HistoryWorkspace extends StatelessWidget {
         );
         final orders = SessionOrders(
           viewModel: viewModel,
+          contactRepository: contactRepository,
           capabilities: capabilities,
         );
 

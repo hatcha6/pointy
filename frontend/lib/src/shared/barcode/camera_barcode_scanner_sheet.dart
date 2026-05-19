@@ -24,11 +24,13 @@ class CameraProductScanEntry {
 }
 
 typedef CameraProductLookup = Future<Product?> Function(String barcode);
+typedef CameraMissingProductCreator = Future<Product?> Function(String barcode);
 
 Future<List<CameraProductScanEntry>?> showCameraBarcodeScannerSheet(
   BuildContext context, {
   required CameraBarcodeScannerMode mode,
   required CameraProductLookup lookupProduct,
+  CameraMissingProductCreator? createMissingProduct,
   bool enableQuantity = false,
   int initialQuantity = 1,
 }) {
@@ -43,6 +45,7 @@ Future<List<CameraProductScanEntry>?> showCameraBarcodeScannerSheet(
         child: CameraBarcodeScannerSheet(
           mode: mode,
           lookupProduct: lookupProduct,
+          createMissingProduct: createMissingProduct,
           enableQuantity: enableQuantity,
           initialQuantity: initialQuantity,
         ),
@@ -56,12 +59,14 @@ class CameraBarcodeScannerSheet extends StatefulWidget {
     super.key,
     required this.mode,
     required this.lookupProduct,
+    this.createMissingProduct,
     this.enableQuantity = false,
     this.initialQuantity = 1,
   });
 
   final CameraBarcodeScannerMode mode;
   final CameraProductLookup lookupProduct;
+  final CameraMissingProductCreator? createMissingProduct;
   final bool enableQuantity;
   final int initialQuantity;
 
@@ -262,6 +267,24 @@ class _CameraBarcodeScannerSheetState extends State<CameraBarcodeScannerSheet> {
     }
 
     if (product == null) {
+      final createMissingProduct = widget.createMissingProduct;
+      if (createMissingProduct != null) {
+        setState(() {
+          _isResolving = false;
+          _isStatusError = true;
+          _statusMessage = l10n.barcodeScanNotFound(code);
+        });
+
+        final createdProduct = await createMissingProduct(code);
+        if (!mounted) {
+          return;
+        }
+        if (createdProduct != null) {
+          _recordProduct(createdProduct);
+          return;
+        }
+      }
+
       setState(() {
         _isResolving = false;
         _isStatusError = true;

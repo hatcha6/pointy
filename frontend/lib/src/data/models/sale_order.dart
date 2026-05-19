@@ -7,16 +7,19 @@ class SaleCheckoutDraft {
     required this.lines,
     required this.payments,
     this.invoicePrinterConfig,
+    this.customerId,
   });
 
   final List<SaleCheckoutLineDraft> lines;
   final List<SaleCheckoutPaymentDraft> payments;
   final PrinterConfig? invoicePrinterConfig;
+  final int? customerId;
 
   factory SaleCheckoutDraft.fromCart({
     required List<CartLine> cart,
     required List<SaleCheckoutPaymentDraft> payments,
     PrinterConfig? invoicePrinterConfig,
+    int? customerId,
   }) {
     return SaleCheckoutDraft(
       lines: cart
@@ -29,12 +32,14 @@ class SaleCheckoutDraft {
           .toList(growable: false),
       payments: payments,
       invoicePrinterConfig: invoicePrinterConfig,
+      customerId: customerId,
     );
   }
 
   Map<String, Object?> toJson() {
     return {
       'lines': lines.map((line) => line.toJson()).toList(growable: false),
+      if (customerId != null) 'customer': customerId,
       'payments': payments.map((payment) => payment.toJson()).toList(),
       if (invoicePrinterConfig != null)
         'print_invoice': {
@@ -81,6 +86,10 @@ class SaleOrder {
     this.receiptNumber,
     this.registerSession,
     this.registerSessionNumber,
+    this.customer,
+    this.customerName,
+    this.profit,
+    this.profitMarginPercent,
     this.invoicePrintJob,
     this.canVoid = false,
     this.canReturn = false,
@@ -94,6 +103,10 @@ class SaleOrder {
   final String status;
   final int? registerSession;
   final String? registerSessionNumber;
+  final int? customer;
+  final String? customerName;
+  final double? profit;
+  final double? profitMarginPercent;
   final PrintJob? invoicePrintJob;
   final bool canVoid;
   final bool canReturn;
@@ -115,6 +128,14 @@ class SaleOrder {
       status: json['status']?.toString() ?? '',
       registerSession: _nullableIntFromJson(json['register_session']),
       registerSessionNumber: json['register_session_number']?.toString(),
+      customer: _nullableIntFromJson(json['customer']),
+      customerName: json['customer_name']?.toString(),
+      profit: _nullableMoneyFromJson(
+        json['profit'] ?? json['gross_profit'] ?? json['total_profit'],
+      ),
+      profitMarginPercent: _nullableMoneyFromJson(
+        json['profit_margin_percent'] ?? json['gross_margin_percent'],
+      ),
       invoicePrintJob: json['print_job'] is Map<String, Object?>
           ? PrintJob.fromJson(json['print_job'] as Map<String, Object?>)
           : null,
@@ -199,6 +220,7 @@ class SaleOrderLine {
     required this.unitPrice,
     required this.total,
     this.productName,
+    this.profit,
   });
 
   final int id;
@@ -209,6 +231,7 @@ class SaleOrderLine {
   final int returnableQuantity;
   final double unitPrice;
   final double total;
+  final double? profit;
 
   factory SaleOrderLine.fromJson(Map<String, Object?> json) {
     return SaleOrderLine(
@@ -220,7 +243,27 @@ class SaleOrderLine {
       returnableQuantity: _intFromJson(json['returnable_quantity']),
       unitPrice: _moneyFromJson(json['unit_price']),
       total: _moneyFromJson(json['line_total'] ?? json['total']),
+      profit: _nullableMoneyFromJson(
+        json['profit'] ?? json['line_profit'] ?? json['gross_profit'],
+      ),
     );
+  }
+}
+
+class SaleOrderQuery {
+  const SaleOrderQuery({this.customerId, this.customerName});
+
+  final int? customerId;
+  final String? customerName;
+
+  bool get hasCustomerFilter => customerId != null;
+
+  Map<String, String> toQueryParameters({required int page}) {
+    return {'page': '$page', if (customerId != null) 'customer': '$customerId'};
+  }
+
+  SaleOrderQuery withCustomer({int? id, String? name}) {
+    return SaleOrderQuery(customerId: id, customerName: name);
   }
 }
 
@@ -285,6 +328,16 @@ int? _nullableIntFromJson(Object? value) {
 
 double _moneyFromJson(Object? value) {
   return double.parse((value ?? 0).toString());
+}
+
+double? _nullableMoneyFromJson(Object? value) {
+  if (value == null) {
+    return null;
+  }
+  if (value is num) {
+    return value.toDouble();
+  }
+  return double.tryParse(value.toString());
 }
 
 bool _boolFromJson(Object? value) {

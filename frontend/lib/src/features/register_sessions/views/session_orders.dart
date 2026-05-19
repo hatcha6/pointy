@@ -5,7 +5,9 @@ import '../../../core/authorization.dart';
 import '../../../data/models/register_cash_movement.dart';
 import '../../../data/models/register_session.dart';
 import '../../../data/models/sale_order.dart';
+import '../../../data/repositories/contact_repository.dart';
 import '../../../shared/authorization_guards.dart';
+import '../../../shared/contact_picker_sheet.dart';
 import '../../../shared/date_formatters.dart';
 import '../../../shared/formatters.dart';
 import '../../../shared/infinite_scroll_grid.dart';
@@ -16,10 +18,12 @@ class SessionOrders extends StatelessWidget {
   const SessionOrders({
     super.key,
     required this.viewModel,
+    required this.contactRepository,
     required this.capabilities,
   });
 
   final RegisterSessionHistoryViewModel viewModel;
+  final ContactRepository contactRepository;
   final AuthorizationCapabilities capabilities;
 
   @override
@@ -64,6 +68,7 @@ class SessionOrders extends StatelessWidget {
                                   _SessionSummaryPanel(session: session),
                                 _SessionSalesList(
                                   viewModel: viewModel,
+                                  contactRepository: contactRepository,
                                   capabilities: capabilities,
                                 ),
                                 _SessionCashMovementList(viewModel: viewModel),
@@ -225,50 +230,115 @@ class _DenominationChip extends StatelessWidget {
 class _SessionSalesList extends StatelessWidget {
   const _SessionSalesList({
     required this.viewModel,
+    required this.contactRepository,
     required this.capabilities,
   });
 
   final RegisterSessionHistoryViewModel viewModel;
+  final ContactRepository contactRepository;
   final AuthorizationCapabilities capabilities;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    return switch ((
-      viewModel.isLoadingOrders,
-      viewModel.hasOrderLoadError,
-      viewModel.orders.isEmpty,
-    )) {
-      (true, _, _) => const Center(child: CircularProgressIndicator()),
-      (_, true, _) => Center(child: Text(l10n.sessionSalesLoadError)),
-      (_, _, true) => Center(child: Text(l10n.emptySessionSales)),
-      _ => InfiniteScrollList(
-        items: viewModel.orders,
-        onLoadMore: viewModel.loadMoreOrders,
-        hasMore: viewModel.hasMoreOrders,
-        isLoadingInitial: viewModel.isLoadingOrders,
-        isLoadingMore: viewModel.isLoadingMoreOrders,
-        emptyBuilder: (context) => Center(child: Text(l10n.emptySessionSales)),
-        separatorBuilder: (_, _) => const Divider(height: 1),
-        itemBuilder: (context, order) {
-          final hasReturnableItems = order.lines.any(
-            (line) => line.returnableQuantity > 0,
-          );
-          final canManagerAdjust =
-              capabilities.canManageShopSettings &&
-              order.status == 'paid' &&
-              hasReturnableItems;
-          final canVoid = order.canVoid || canManagerAdjust;
-          final canReturn = order.canReturn || canManagerAdjust;
-          return SessionOrderTile(
-            order: order,
-            onReprint: viewModel.requestReprint,
-            onVoid: canVoid ? viewModel.voidOrder : null,
-            onReturn: canReturn ? viewModel.returnItems : null,
-          );
-        },
-      ),
-    };
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _SessionOrderFilters(
+          viewModel: viewModel,
+          contactRepository: contactRepository,
+        ),
+        const SizedBox(height: 8),
+        Expanded(
+          child: switch ((
+            viewModel.isLoadingOrders,
+            viewModel.hasOrderLoadError,
+            viewModel.orders.isEmpty,
+          )) {
+            (true, _, _) => const Center(child: CircularProgressIndicator()),
+            (_, true, _) => Center(child: Text(l10n.sessionSalesLoadError)),
+            (_, _, true) => Center(child: Text(l10n.emptySessionSales)),
+            _ => InfiniteScrollList(
+              items: viewModel.orders,
+              onLoadMore: viewModel.loadMoreOrders,
+              hasMore: viewModel.hasMoreOrders,
+              isLoadingInitial: viewModel.isLoadingOrders,
+              isLoadingMore: viewModel.isLoadingMoreOrders,
+              emptyBuilder: (context) =>
+                  Center(child: Text(l10n.emptySessionSales)),
+              separatorBuilder: (_, _) => const Divider(height: 1),
+              itemBuilder: (context, order) {
+                final hasReturnableItems = order.lines.any(
+                  (line) => line.returnableQuantity > 0,
+                );
+                final canManagerAdjust =
+                    capabilities.canManageShopSettings &&
+                    order.status == 'paid' &&
+                    hasReturnableItems;
+                final canVoid = order.canVoid || canManagerAdjust;
+                final canReturn = order.canReturn || canManagerAdjust;
+                return SessionOrderTile(
+                  order: order,
+                  onReprint: viewModel.requestReprint,
+                  onVoid: canVoid ? viewModel.voidOrder : null,
+                  onReturn: canReturn ? viewModel.returnItems : null,
+                );
+              },
+            ),
+          },
+        ),
+      ],
+    );
+  }
+}
+
+class _SessionOrderFilters extends StatelessWidget {
+  const _SessionOrderFilters({
+    required this.viewModel,
+    required this.contactRepository,
+  });
+
+  final RegisterSessionHistoryViewModel viewModel;
+  final ContactRepository contactRepository;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final query = viewModel.orderQuery;
+
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        FilterChip(
+          avatar: const Icon(Icons.person_outline, size: 18),
+          label: Text(query.customerName ?? l10n.allCustomersFilterLabel),
+          selected: query.hasCustomerFilter,
+          onSelected: viewModel.isLoadingOrders
+              ? null
+              : (_) => _chooseCustomer(context),
+        ),
+        if (query.hasCustomerFilter)
+          IconButton.outlined(
+            tooltip: l10n.clearCustomerFilterTooltip,
+            onPressed: viewModel.isLoadingOrders
+                ? null
+                : () => viewModel.filterOrdersByCustomer(null),
+            icon: const Icon(Icons.close),
+          ),
+      ],
+    );
+  }
+
+  Future<void> _chooseCustomer(BuildContext context) async {
+    final customer = await showCustomerPickerSheet(
+      context: context,
+      repository: contactRepository,
+    );
+    if (customer != null) {
+      await viewModel.filterOrdersByCustomer(customer);
+    }
   }
 }
 
@@ -336,11 +406,27 @@ class SessionOrderTile extends StatelessWidget {
         [
           if (order.createdAt != null) formatDateTime(order.createdAt!),
           l10n.saleLineCount(order.lines.length),
+          if (order.customerName != null && order.customerName!.isNotEmpty)
+            order.customerName!,
         ].join(' • '),
       ),
-      trailing: Text(
-        formatMoney(order.total),
-        style: Theme.of(context).textTheme.titleMedium,
+      trailing: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          Text(
+            formatMoney(order.total),
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          if (order.profit != null)
+            Text(
+              l10n.invoiceProfitValue(formatMoney(order.profit!)),
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Theme.of(context).colorScheme.primary,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+        ],
       ),
       onTap: () => showSaleOrderDetailsSheet(
         context,

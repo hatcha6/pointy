@@ -12,8 +12,10 @@ from rest_framework.test import APIClient
 from apps.catalog.models import Product
 from apps.core.models import ShopSettings
 from apps.core.roles import CASHIER_GROUP, MANAGER_GROUP, ensure_role_groups
+from apps.customers.models import Customer
 from apps.inventory.models import StockItem, StockMovement
 from apps.payments.models import Payment
+from apps.purchasing.models import PurchaseOrder, Supplier
 from .models import Order, OrderAdjustment, RegisterCashMovement, RegisterSession
 
 
@@ -585,6 +587,42 @@ class OrderCheckoutApiTests(TestCase):
 
     def test_checkout_links_order_to_active_session_and_captures_prices(self):
         session = self.start_session()
+        customer = Customer.objects.create(
+            full_name="Layla Ahmed",
+            phone="+218911234567",
+        )
+
+        response = self.client.post(
+            reverse("order-checkout"),
+            self.checkout_payload(customer=customer.pk),
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["register_session"], session["id"])
+        self.assertEqual(response.data["register_session_number"], session["session_number"])
+        self.assertEqual(response.data["customer"], customer.pk)
+        self.assertEqual(response.data["customer_name"], "Layla Ahmed")
+        self.assertEqual(response.data["subtotal"], "7.00")
+        self.assertEqual(response.data["total"], "7.00")
+
+        order = Order.objects.get(pk=response.data["id"])
+        self.assertEqual(order.register_session_id, session["id"])
+        self.assertEqual(order.customer_id, customer.pk)
+        self.assertEqual(order.lines.get().unit_price, Decimal("3.50"))
+
+    def test_checkout_exposes_cost_and_profit_snapshot(self):
+        self.start_session()
+        supplier = Supplier.objects.create(name="Profit supplier")
+        first_purchase = PurchaseOrder.objects.create(
+            supplier=supplier,
+            status=PurchaseOrder.Status.RECEIVED,
+        )
+        first_purchase.lines.create(
+            product=self.product,
+            quantity=10,
+            unit_cost=Decimal("2.00"),
+        )
 
         response = self.client.post(
             reverse("order-checkout"),
@@ -592,15 +630,32 @@ class OrderCheckoutApiTests(TestCase):
             format="json",
         )
 
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(response.data["register_session"], session["id"])
-        self.assertEqual(response.data["register_session_number"], session["session_number"])
-        self.assertEqual(response.data["subtotal"], "7.00")
-        self.assertEqual(response.data["total"], "7.00")
+        later_purchase = PurchaseOrder.objects.create(
+            supplier=supplier,
+            status=PurchaseOrder.Status.RECEIVED,
+        )
+        later_purchase.lines.create(
+            product=self.product,
+            quantity=10,
+            unit_cost=Decimal("2.75"),
+        )
+        detail_response = self.client.get(
+            reverse("order-detail", args=[response.data["id"]]),
+        )
+        list_response = self.client.get(reverse("order-list"))
 
-        order = Order.objects.get(pk=response.data["id"])
-        self.assertEqual(order.register_session_id, session["id"])
-        self.assertEqual(order.lines.get().unit_price, Decimal("3.50"))
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["lines"][0]["unit_cost"], "2.00")
+        self.assertEqual(response.data["lines"][0]["line_cost"], "4.00")
+        self.assertEqual(response.data["lines"][0]["line_profit"], "3.00")
+        self.assertEqual(response.data["total_cost"], "4.00")
+        self.assertEqual(response.data["total_profit"], "3.00")
+        self.assertEqual(detail_response.data["lines"][0]["unit_cost"], "2.00")
+        self.assertEqual(detail_response.data["total_profit"], "3.00")
+        self.assertEqual(list_response.data["results"][0]["total_profit"], "3.00")
+
+        order_line = Order.objects.get(pk=response.data["id"]).lines.get()
+        self.assertEqual(order_line.unit_cost, Decimal("2.00"))
 
     def test_checkout_creates_paid_order_and_payment(self):
         self.start_session()
@@ -624,6 +679,60 @@ class OrderCheckoutApiTests(TestCase):
         self.assertEqual(payment.commission_percent, Decimal("0.00"))
         self.assertEqual(payment.commission_amount, Decimal("0.00"))
         self.assertEqual(response.data["payments"][0]["method"], Payment.Method.CASH)
+
+    def test_order_list_filters_by_customer(self):
+        self.start_session()
+        first_customer = Customer.objects.create(full_name="First customer")
+        second_customer = Customer.objects.create(full_name="Second customer")
+        first_response = self.client.post(
+            reverse("order-checkout"),
+            self.checkout_payload(customer=first_customer.pk),
+            format="json",
+        )
+        second_response = self.client.post(
+            reverse("order-checkout"),
+            self.checkout_payload(customer=second_customer.pk),
+            format="json",
+        )
+
+        response = self.client.get(
+            reverse("order-list"),
+            {"customer": first_customer.pk},
+        )
+
+        self.assertEqual(first_response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(second_response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data["results"]), 1)
+        self.assertEqual(response.data["results"][0]["id"], first_response.data["id"])
+        self.assertEqual(response.data["results"][0]["customer"], first_customer.pk)
+
+    def test_session_orders_filters_by_customer(self):
+        session = self.start_session()
+        first_customer = Customer.objects.create(full_name="Session first customer")
+        second_customer = Customer.objects.create(full_name="Session second customer")
+        first_response = self.client.post(
+            reverse("order-checkout"),
+            self.checkout_payload(customer=first_customer.pk),
+            format="json",
+        )
+        second_response = self.client.post(
+            reverse("order-checkout"),
+            self.checkout_payload(customer=second_customer.pk),
+            format="json",
+        )
+
+        response = self.client.get(
+            reverse("register-session-orders", args=[session["id"]]),
+            {"customer": first_customer.pk},
+        )
+
+        self.assertEqual(first_response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(second_response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data["results"]), 1)
+        self.assertEqual(response.data["results"][0]["id"], first_response.data["id"])
+        self.assertEqual(response.data["results"][0]["customer"], first_customer.pk)
 
     def test_checkout_records_card_payment_with_configured_commission(self):
         ShopSettings.load()

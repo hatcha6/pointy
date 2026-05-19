@@ -44,11 +44,12 @@ class RegisterSessionApiClient {
 
   Future<SaleOrderPage> fetchRegisterSessionOrders(
     int sessionId, {
+    SaleOrderQuery query = const SaleOrderQuery(),
     int page = 1,
   }) async {
     final response = await _session.get(
       'register-sessions/$sessionId/orders/',
-      query: {'page': '$page'},
+      query: query.toQueryParameters(page: page),
     );
     _session.ensureSuccess(
       response,

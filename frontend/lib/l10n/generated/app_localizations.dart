@@ -232,6 +232,18 @@ abstract class AppLocalizations {
   /// **'شاشة البيع'**
   String get posDrawerLabel;
 
+  /// No description provided for @purchasingDrawerLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'المشتريات'**
+  String get purchasingDrawerLabel;
+
+  /// No description provided for @contactsDrawerLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الجهات'**
+  String get contactsDrawerLabel;
+
   /// No description provided for @catalogDrawerLabel.
   ///
   /// In ar, this message translates to:
@@ -956,6 +968,12 @@ abstract class AppLocalizations {
   /// **'أدخل رقمًا صحيحًا'**
   String get invalidNumber;
 
+  /// No description provided for @invalidDate.
+  ///
+  /// In ar, this message translates to:
+  /// **'أدخل تاريخًا صحيحًا'**
+  String get invalidDate;
+
   /// No description provided for @productCreatedMessage.
   ///
   /// In ar, this message translates to:
@@ -1346,6 +1364,786 @@ abstract class AppLocalizations {
   /// **'لا توجد عناصر في السلة'**
   String get emptyCart;
 
+  /// No description provided for @purchasingTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'المشتريات'**
+  String get purchasingTitle;
+
+  /// No description provided for @purchaseOrdersTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'فواتير المشتريات'**
+  String get purchaseOrdersTitle;
+
+  /// No description provided for @refreshPurchaseOrdersTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحديث فواتير المشتريات'**
+  String get refreshPurchaseOrdersTooltip;
+
+  /// No description provided for @refreshPurchaseOrderDetailsTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحديث تفاصيل أمر الشراء'**
+  String get refreshPurchaseOrderDetailsTooltip;
+
+  /// No description provided for @newPurchaseOrderButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'أمر شراء جديد'**
+  String get newPurchaseOrderButton;
+
+  /// No description provided for @newPurchaseOrderTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'أمر شراء جديد'**
+  String get newPurchaseOrderTitle;
+
+  /// No description provided for @searchPurchaseOrdersHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'ابحث برقم الفاتورة أو المورد أو المنتج'**
+  String get searchPurchaseOrdersHint;
+
+  /// No description provided for @purchaseOrderSupplierFilterTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'المورد'**
+  String get purchaseOrderSupplierFilterTitle;
+
+  /// No description provided for @allSuppliersFilterLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'كل الموردين'**
+  String get allSuppliersFilterLabel;
+
+  /// No description provided for @clearSupplierFilterTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'مسح فلتر المورد'**
+  String get clearSupplierFilterTooltip;
+
+  /// No description provided for @purchaseOrderStatusFilterTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'حالة أمر الشراء'**
+  String get purchaseOrderStatusFilterTitle;
+
+  /// No description provided for @purchaseOrderStatusAll.
+  ///
+  /// In ar, this message translates to:
+  /// **'كل أوامر الشراء'**
+  String get purchaseOrderStatusAll;
+
+  /// No description provided for @purchaseOrderStatusDraft.
+  ///
+  /// In ar, this message translates to:
+  /// **'مسودة'**
+  String get purchaseOrderStatusDraft;
+
+  /// No description provided for @purchaseOrderStatusSubmitted.
+  ///
+  /// In ar, this message translates to:
+  /// **'مرسل'**
+  String get purchaseOrderStatusSubmitted;
+
+  /// No description provided for @purchaseOrderStatusReceived.
+  ///
+  /// In ar, this message translates to:
+  /// **'مستلم'**
+  String get purchaseOrderStatusReceived;
+
+  /// No description provided for @purchaseOrderStatusCancelled.
+  ///
+  /// In ar, this message translates to:
+  /// **'ملغى'**
+  String get purchaseOrderStatusCancelled;
+
+  /// No description provided for @purchaseOrderOrderingNewest.
+  ///
+  /// In ar, this message translates to:
+  /// **'الأحدث أولًا'**
+  String get purchaseOrderOrderingNewest;
+
+  /// No description provided for @purchaseOrderOrderingUpdated.
+  ///
+  /// In ar, this message translates to:
+  /// **'آخر تحديث'**
+  String get purchaseOrderOrderingUpdated;
+
+  /// No description provided for @purchaseOrderOrderingTotalDesc.
+  ///
+  /// In ar, this message translates to:
+  /// **'الإجمالي: من الأعلى إلى الأقل'**
+  String get purchaseOrderOrderingTotalDesc;
+
+  /// No description provided for @purchaseOrderOrderingNumber.
+  ///
+  /// In ar, this message translates to:
+  /// **'رقم أمر الشراء'**
+  String get purchaseOrderOrderingNumber;
+
+  /// No description provided for @purchaseOrdersLoadError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر تحميل فواتير المشتريات.'**
+  String get purchaseOrdersLoadError;
+
+  /// No description provided for @purchaseOrderDetailsLoadError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر تحميل تفاصيل أمر الشراء.'**
+  String get purchaseOrderDetailsLoadError;
+
+  /// No description provided for @emptyPurchaseOrders.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد فواتير مشتريات بعد.'**
+  String get emptyPurchaseOrders;
+
+  /// Fallback purchase order title when the generated order number is unavailable.
+  ///
+  /// In ar, this message translates to:
+  /// **'أمر شراء #{id}'**
+  String purchaseOrderFallbackTitle(int id);
+
+  /// Line count label shown in a purchase order list item.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, =0{لا توجد عناصر} =1{عنصر واحد} =2{عنصران} other{{count} عناصر}}'**
+  String purchaseOrderLineCount(num count);
+
+  /// No description provided for @purchaseOrderDetailsSummaryTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'ملخص أمر الشراء'**
+  String get purchaseOrderDetailsSummaryTitle;
+
+  /// No description provided for @purchaseOrderLineCountLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'العناصر'**
+  String get purchaseOrderLineCountLabel;
+
+  /// No description provided for @purchaseOrderCreatedAtLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'تاريخ الإنشاء'**
+  String get purchaseOrderCreatedAtLabel;
+
+  /// No description provided for @purchaseOrderSubmittedAtLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'تاريخ الإرسال'**
+  String get purchaseOrderSubmittedAtLabel;
+
+  /// No description provided for @purchaseOrderReceivedAtLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'تاريخ الاستلام'**
+  String get purchaseOrderReceivedAtLabel;
+
+  /// No description provided for @purchaseOrderActionsTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'إجراءات الحالة'**
+  String get purchaseOrderActionsTitle;
+
+  /// No description provided for @submitPurchaseOrderAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'إرسال'**
+  String get submitPurchaseOrderAction;
+
+  /// No description provided for @receivePurchaseOrderAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحديد كمستلم'**
+  String get receivePurchaseOrderAction;
+
+  /// No description provided for @cancelPurchaseOrderAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'إلغاء'**
+  String get cancelPurchaseOrderAction;
+
+  /// No description provided for @purchaseOrderAdjustmentsTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'المرتجعات والاستبدالات'**
+  String get purchaseOrderAdjustmentsTitle;
+
+  /// No description provided for @returnPurchaseItemsAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'إرجاع'**
+  String get returnPurchaseItemsAction;
+
+  /// No description provided for @refundPurchaseItemsAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'استرداد'**
+  String get refundPurchaseItemsAction;
+
+  /// No description provided for @exchangePurchaseItemsAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'استبدال'**
+  String get exchangePurchaseItemsAction;
+
+  /// No description provided for @purchaseOrderStatusChangeError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر تغيير حالة أمر الشراء. حاول مرة أخرى.'**
+  String get purchaseOrderStatusChangeError;
+
+  /// No description provided for @purchaseOrderAdjustmentError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر تسجيل تعديل المشتريات. راجع الكميات والمخزون وحاول مرة أخرى.'**
+  String get purchaseOrderAdjustmentError;
+
+  /// No description provided for @purchaseReturnTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'إرجاع مشتريات'**
+  String get purchaseReturnTitle;
+
+  /// No description provided for @purchaseRefundTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'استرداد مشتريات'**
+  String get purchaseRefundTitle;
+
+  /// No description provided for @purchaseExchangeTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'استبدال مشتريات'**
+  String get purchaseExchangeTitle;
+
+  /// No description provided for @purchaseAdjustmentReasonLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'سبب التعديل'**
+  String get purchaseAdjustmentReasonLabel;
+
+  /// No description provided for @purchaseAdjustmentReasonHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'مثال: تالف، خطأ في الفاتورة، استبدال مع المورد'**
+  String get purchaseAdjustmentReasonHint;
+
+  /// No description provided for @purchaseNoAdjustableItems.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد عناصر قابلة للتعديل.'**
+  String get purchaseNoAdjustableItems;
+
+  /// No description provided for @purchaseAdjustmentNoItemsSelected.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر عنصرًا واحدًا على الأقل.'**
+  String get purchaseAdjustmentNoItemsSelected;
+
+  /// Message shown after returning purchase items.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم تسجيل إرجاع المشتريات رقم {orderNumber}.'**
+  String purchaseReturnSuccess(String orderNumber);
+
+  /// Message shown after refunding purchase items.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم تسجيل استرداد المشتريات رقم {orderNumber}.'**
+  String purchaseRefundSuccess(String orderNumber);
+
+  /// Message shown after exchanging purchase items.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم تسجيل استبدال المشتريات رقم {orderNumber}.'**
+  String purchaseExchangeSuccess(String orderNumber);
+
+  /// Remaining adjustable purchase line quantity.
+  ///
+  /// In ar, this message translates to:
+  /// **'المتبقي {remaining} من {quantity}'**
+  String purchaseAdjustmentLineRemaining(int remaining, int quantity);
+
+  /// No description provided for @purchaseAdjustmentHistoryEmpty.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد مرتجعات أو استبدالات مسجلة.'**
+  String get purchaseAdjustmentHistoryEmpty;
+
+  /// No description provided for @purchaseAdjustmentTypeReturn.
+  ///
+  /// In ar, this message translates to:
+  /// **'إرجاع'**
+  String get purchaseAdjustmentTypeReturn;
+
+  /// No description provided for @purchaseAdjustmentTypeRefund.
+  ///
+  /// In ar, this message translates to:
+  /// **'استرداد'**
+  String get purchaseAdjustmentTypeRefund;
+
+  /// No description provided for @purchaseAdjustmentTypeExchange.
+  ///
+  /// In ar, this message translates to:
+  /// **'استبدال'**
+  String get purchaseAdjustmentTypeExchange;
+
+  /// Line count label for a purchase adjustment history item.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, =0{لا توجد عناصر} =1{عنصر واحد} =2{عنصران} other{{count} عناصر}}'**
+  String purchaseAdjustmentHistoryLineCount(num count);
+
+  /// Message shown after a purchase order is submitted from details.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم إرسال أمر الشراء رقم {orderNumber}.'**
+  String purchaseOrderSubmitSuccess(String orderNumber);
+
+  /// Message shown after a purchase order is received.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم استلام أمر الشراء رقم {orderNumber}.'**
+  String purchaseOrderReceiveSuccess(String orderNumber);
+
+  /// Message shown after a purchase order is cancelled.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم إلغاء أمر الشراء رقم {orderNumber}.'**
+  String purchaseOrderCancelSuccess(String orderNumber);
+
+  /// No description provided for @purchaseOrderLinesTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'محتويات أمر الشراء'**
+  String get purchaseOrderLinesTitle;
+
+  /// No description provided for @purchaseOrderUnknownProduct.
+  ///
+  /// In ar, this message translates to:
+  /// **'منتج غير محدد'**
+  String get purchaseOrderUnknownProduct;
+
+  /// Purchase order line quantity label.
+  ///
+  /// In ar, this message translates to:
+  /// **'الكمية {quantity}'**
+  String purchaseOrderLineQuantity(int quantity);
+
+  /// Previous product purchase cost shown on a purchase order line.
+  ///
+  /// In ar, this message translates to:
+  /// **'آخر تكلفة {amount}'**
+  String purchaseOrderPreviousCostValue(String amount);
+
+  /// Purchase order line cost change compared with the previous cost.
+  ///
+  /// In ar, this message translates to:
+  /// **'تغير التكلفة {amount}'**
+  String purchaseOrderCostChangeValue(String amount);
+
+  /// Purchase order line cost change percent.
+  ///
+  /// In ar, this message translates to:
+  /// **'{percent}%'**
+  String purchaseOrderCostChangePercentValue(String percent);
+
+  /// No description provided for @purchaseCatalogTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'كتالوج الشراء'**
+  String get purchaseCatalogTitle;
+
+  /// No description provided for @purchaseProductLookupHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'ابحث عن منتج لإضافته للمشتريات'**
+  String get purchaseProductLookupHint;
+
+  /// No description provided for @purchaseDraftTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'مسودة الشراء'**
+  String get purchaseDraftTitle;
+
+  /// No description provided for @clearPurchaseDraftTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'مسح مسودة الشراء'**
+  String get clearPurchaseDraftTooltip;
+
+  /// No description provided for @emptyPurchaseDraft.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد عناصر في مسودة الشراء'**
+  String get emptyPurchaseDraft;
+
+  /// No description provided for @purchaseLineCostLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'التكلفة'**
+  String get purchaseLineCostLabel;
+
+  /// No description provided for @receivePurchaseImmediatelyLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'استلام أمر الشراء فورًا'**
+  String get receivePurchaseImmediatelyLabel;
+
+  /// No description provided for @quickCreateProductTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'إضافة منتج سريع'**
+  String get quickCreateProductTitle;
+
+  /// Explains that a scanned barcode is missing and can be created quickly.
+  ///
+  /// In ar, this message translates to:
+  /// **'الباركود {barcode} غير موجود. أضف المنتج الآن لمتابعة أمر الشراء.'**
+  String quickCreateProductMessage(String barcode);
+
+  /// No description provided for @quickCreateProductNameHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'اسم المنتج على فاتورة المورد'**
+  String get quickCreateProductNameHint;
+
+  /// No description provided for @quickCreateUnitCostLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'تكلفة الشراء'**
+  String get quickCreateUnitCostLabel;
+
+  /// No description provided for @quickCreateProductButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'إضافة للشراء'**
+  String get quickCreateProductButton;
+
+  /// No description provided for @quickCreateProductSaving.
+  ///
+  /// In ar, this message translates to:
+  /// **'جار الإضافة...'**
+  String get quickCreateProductSaving;
+
+  /// No description provided for @quickCreateProductError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر إنشاء المنتج. راجع البيانات وحاول مرة أخرى.'**
+  String get quickCreateProductError;
+
+  /// Submit purchase order button label with total amount.
+  ///
+  /// In ar, this message translates to:
+  /// **'إرسال أمر الشراء {amount}'**
+  String submitPurchaseDraftButton(String amount);
+
+  /// No description provided for @purchaseSubmitInProgressButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'جار الإرسال...'**
+  String get purchaseSubmitInProgressButton;
+
+  /// Message shown after a purchase order is submitted.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم إرسال أمر الشراء رقم {draftNumber}.'**
+  String purchaseDraftSubmitSuccess(String draftNumber);
+
+  /// No description provided for @purchaseDraftSubmitError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر إرسال أمر الشراء. راجع العناصر وحاول مرة أخرى.'**
+  String get purchaseDraftSubmitError;
+
+  /// No description provided for @contactsTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'العملاء والموردون'**
+  String get contactsTitle;
+
+  /// No description provided for @customersTab.
+  ///
+  /// In ar, this message translates to:
+  /// **'العملاء'**
+  String get customersTab;
+
+  /// No description provided for @suppliersTab.
+  ///
+  /// In ar, this message translates to:
+  /// **'الموردون'**
+  String get suppliersTab;
+
+  /// No description provided for @refreshContactsTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحديث العملاء والموردين'**
+  String get refreshContactsTooltip;
+
+  /// No description provided for @contactSearchHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'ابحث بالاسم أو الهاتف أو البريد'**
+  String get contactSearchHint;
+
+  /// No description provided for @contactsLoadError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر تحميل العملاء والموردين.'**
+  String get contactsLoadError;
+
+  /// No description provided for @emptyCustomers.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا يوجد عملاء بعد.'**
+  String get emptyCustomers;
+
+  /// No description provided for @emptySuppliers.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا يوجد موردون بعد.'**
+  String get emptySuppliers;
+
+  /// No description provided for @addCustomerButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'إضافة عميل'**
+  String get addCustomerButton;
+
+  /// No description provided for @addSupplierButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'إضافة مورد'**
+  String get addSupplierButton;
+
+  /// No description provided for @customerFullNameLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'اسم العميل'**
+  String get customerFullNameLabel;
+
+  /// No description provided for @supplierNameLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'اسم المورد'**
+  String get supplierNameLabel;
+
+  /// No description provided for @contactPersonLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'اسم جهة التواصل'**
+  String get contactPersonLabel;
+
+  /// No description provided for @phoneOptionalLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'رقم الهاتف (اختياري)'**
+  String get phoneOptionalLabel;
+
+  /// No description provided for @emailOptionalLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'البريد الإلكتروني (اختياري)'**
+  String get emailOptionalLabel;
+
+  /// No description provided for @birthdayOptionalLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'تاريخ الميلاد (اختياري)'**
+  String get birthdayOptionalLabel;
+
+  /// No description provided for @birthdayHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'YYYY-MM-DD'**
+  String get birthdayHint;
+
+  /// No description provided for @genderLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الجنس'**
+  String get genderLabel;
+
+  /// No description provided for @genderUnspecified.
+  ///
+  /// In ar, this message translates to:
+  /// **'غير محدد'**
+  String get genderUnspecified;
+
+  /// No description provided for @genderFemale.
+  ///
+  /// In ar, this message translates to:
+  /// **'أنثى'**
+  String get genderFemale;
+
+  /// No description provided for @genderMale.
+  ///
+  /// In ar, this message translates to:
+  /// **'ذكر'**
+  String get genderMale;
+
+  /// No description provided for @genderNonBinary.
+  ///
+  /// In ar, this message translates to:
+  /// **'غير ثنائي'**
+  String get genderNonBinary;
+
+  /// No description provided for @genderPreferNotToSay.
+  ///
+  /// In ar, this message translates to:
+  /// **'يفضل عدم الإفصاح'**
+  String get genderPreferNotToSay;
+
+  /// No description provided for @marketingConsentLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'وافق على التواصل التسويقي'**
+  String get marketingConsentLabel;
+
+  /// No description provided for @addressOptionalLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'العنوان (اختياري)'**
+  String get addressOptionalLabel;
+
+  /// No description provided for @notesOptionalLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'ملاحظات (اختياري)'**
+  String get notesOptionalLabel;
+
+  /// No description provided for @activeContactLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'نشط'**
+  String get activeContactLabel;
+
+  /// No description provided for @saveCustomerButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'حفظ العميل'**
+  String get saveCustomerButton;
+
+  /// No description provided for @saveSupplierButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'حفظ المورد'**
+  String get saveSupplierButton;
+
+  /// No description provided for @contactSavingButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'جار الحفظ...'**
+  String get contactSavingButton;
+
+  /// No description provided for @customerCreateError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر حفظ العميل. راجع البيانات وحاول مرة أخرى.'**
+  String get customerCreateError;
+
+  /// No description provided for @supplierCreateError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر حفظ المورد. راجع البيانات وحاول مرة أخرى.'**
+  String get supplierCreateError;
+
+  /// No description provided for @customerNumberLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'رقم العميل'**
+  String get customerNumberLabel;
+
+  /// No description provided for @customerBirthdayLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الميلاد'**
+  String get customerBirthdayLabel;
+
+  /// No description provided for @marketingAllowedLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'يسمح بالتسويق'**
+  String get marketingAllowedLabel;
+
+  /// No description provided for @inactiveContactLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'غير نشط'**
+  String get inactiveContactLabel;
+
+  /// No description provided for @supplierContactLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'جهة التواصل'**
+  String get supplierContactLabel;
+
+  /// No description provided for @selectedCustomerLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'العميل'**
+  String get selectedCustomerLabel;
+
+  /// No description provided for @selectedSupplierLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'المورد'**
+  String get selectedSupplierLabel;
+
+  /// No description provided for @walkInCustomerLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'عميل عابر'**
+  String get walkInCustomerLabel;
+
+  /// No description provided for @noSupplierSelectedLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا يوجد مورد محدد'**
+  String get noSupplierSelectedLabel;
+
+  /// No description provided for @chooseCustomerTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختيار العميل'**
+  String get chooseCustomerTitle;
+
+  /// No description provided for @chooseSupplierTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختيار المورد'**
+  String get chooseSupplierTitle;
+
+  /// No description provided for @changeContactAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'تغيير'**
+  String get changeContactAction;
+
+  /// No description provided for @clearContactTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'إزالة الاختيار'**
+  String get clearContactTooltip;
+
+  /// No description provided for @createNewCustomerAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'عميل جديد'**
+  String get createNewCustomerAction;
+
+  /// No description provided for @createNewSupplierAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'مورد جديد'**
+  String get createNewSupplierAction;
+
   /// Payment button label with the payable amount.
   ///
   /// In ar, this message translates to:
@@ -1465,6 +2263,24 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'تم تسجيل البيع، لكن تعذرت طباعة الفاتورة.'**
   String get invoicePrintError;
+
+  /// No description provided for @invoiceProfitLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الربح'**
+  String get invoiceProfitLabel;
+
+  /// Compact invoice profit label with amount.
+  ///
+  /// In ar, this message translates to:
+  /// **'الربح {amount}'**
+  String invoiceProfitValue(String amount);
+
+  /// Invoice profit margin percent label.
+  ///
+  /// In ar, this message translates to:
+  /// **'هامش {percent}%'**
+  String invoiceProfitMarginValue(String percent);
 
   /// No description provided for @saleCheckoutError.
   ///
@@ -1909,6 +2725,18 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'لا توجد مبيعات مسجلة في هذه الجلسة.'**
   String get emptySessionSales;
+
+  /// No description provided for @allCustomersFilterLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'كل العملاء'**
+  String get allCustomersFilterLabel;
+
+  /// No description provided for @clearCustomerFilterTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'مسح فلتر العميل'**
+  String get clearCustomerFilterTooltip;
 
   /// No description provided for @sessionCashMovementsLoadError.
   ///

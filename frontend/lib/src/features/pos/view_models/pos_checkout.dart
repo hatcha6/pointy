@@ -50,6 +50,7 @@ extension PosCheckoutActions on PosViewModel {
         cart: cartSnapshot,
         payments: payments,
         invoicePrinterConfig: invoicePrinterConfig,
+        customerId: _selectedCustomer?.id,
       ),
     );
 
@@ -60,6 +61,7 @@ extension PosCheckoutActions on PosViewModel {
             : InvoicePrintStatus.notRequested;
         _applySoldQuantities(cartSnapshot);
         _cart.clear();
+        _selectedCustomer = null;
         _printInvoiceAfterPayment = false;
         _isCheckingOut = false;
         _notifyChanged();

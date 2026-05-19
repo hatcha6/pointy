@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../../../core/result.dart';
+import '../../../data/models/contact.dart';
 import '../../../data/models/print_job.dart';
 import '../../../data/models/register_cash_movement.dart';
 import '../../../data/models/register_cash_movement_page.dart';
@@ -26,6 +27,7 @@ class RegisterSessionHistoryViewModel extends ChangeNotifier {
   List<SaleOrder> _orders = [];
   List<RegisterCashMovement> _cashMovements = [];
   RegisterSession? _selectedSession;
+  SaleOrderQuery _orderQuery = const SaleOrderQuery();
   bool _isLoadingSessions = false;
   bool _isLoadingMoreSessions = false;
   bool _isLoadingOrders = false;
@@ -47,6 +49,7 @@ class RegisterSessionHistoryViewModel extends ChangeNotifier {
   List<RegisterCashMovement> get cashMovements =>
       List.unmodifiable(_cashMovements);
   RegisterSession? get selectedSession => _selectedSession;
+  SaleOrderQuery get orderQuery => _orderQuery;
   bool get isLoadingSessions => _isLoadingSessions;
   bool get isLoadingMoreSessions => _isLoadingMoreSessions;
   bool get isLoadingOrders => _isLoadingOrders;
@@ -149,6 +152,7 @@ class RegisterSessionHistoryViewModel extends ChangeNotifier {
 
     final result = await _saleRepository.loadOrdersForSession(
       session.id,
+      query: _orderQuery,
       page: _nextOrderPage,
     );
     switch (result) {
@@ -196,6 +200,7 @@ class RegisterSessionHistoryViewModel extends ChangeNotifier {
 
     final result = await _saleRepository.loadOrdersForSession(
       session.id,
+      query: _orderQuery,
       page: _nextOrderPage,
     );
     switch (result) {
@@ -209,6 +214,52 @@ class RegisterSessionHistoryViewModel extends ChangeNotifier {
     }
 
     _isLoadingMoreOrders = false;
+    notifyListeners();
+  }
+
+  Future<void> filterOrdersByCustomer(Customer? customer) async {
+    final nextQuery = _orderQuery.withCustomer(
+      id: customer?.id,
+      name: customer?.fullName,
+    );
+    if (nextQuery.customerId == _orderQuery.customerId) {
+      return;
+    }
+    _orderQuery = nextQuery;
+    final session = _selectedSession;
+    if (session == null) {
+      notifyListeners();
+      return;
+    }
+    await _reloadOrdersForSelectedSession(session);
+  }
+
+  Future<void> _reloadOrdersForSelectedSession(RegisterSession session) async {
+    _orders = [];
+    _isLoadingOrders = true;
+    _isLoadingMoreOrders = false;
+    _hasOrderLoadError = false;
+    _hasMoreOrders = true;
+    _nextOrderPage = 1;
+    notifyListeners();
+
+    final result = await _saleRepository.loadOrdersForSession(
+      session.id,
+      query: _orderQuery,
+      page: _nextOrderPage,
+    );
+    switch (result) {
+      case Ok<SaleOrderPage>():
+        _orders = result.value.orders;
+        _hasMoreOrders = result.value.hasMore;
+        _nextOrderPage = 2;
+      case Error<SaleOrderPage>():
+        _orders = [];
+        _hasOrderLoadError = true;
+        _hasMoreOrders = false;
+    }
+
+    _isLoadingOrders = false;
     notifyListeners();
   }
 

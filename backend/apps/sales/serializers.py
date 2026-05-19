@@ -5,6 +5,7 @@ from rest_framework import serializers
 from apps.catalog.models import Product
 from apps.core.models import ShopSettings
 from apps.core.roles import user_is_manager
+from apps.customers.models import Customer
 from .models import (
     Order,
     OrderLine,
@@ -199,6 +200,12 @@ class RegisterCashMovementCreateSerializer(serializers.Serializer):
 class OrderLineSerializer(serializers.ModelSerializer):
     product_name = serializers.CharField(source="product.name", read_only=True)
     line_total = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
+    line_cost = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
+    line_profit = serializers.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        read_only=True,
+    )
     returned_quantity = serializers.IntegerField(read_only=True)
     returnable_quantity = serializers.IntegerField(read_only=True)
 
@@ -212,9 +219,12 @@ class OrderLineSerializer(serializers.ModelSerializer):
             "returned_quantity",
             "returnable_quantity",
             "unit_price",
+            "unit_cost",
             "line_total",
+            "line_cost",
+            "line_profit",
         ]
-        read_only_fields = ("unit_price",)
+        read_only_fields = ("unit_price", "unit_cost")
 
     def validate_quantity(self, value):
         if value < 1:
@@ -243,6 +253,7 @@ class OrderPaymentSerializer(serializers.Serializer):
 class OrderSerializer(serializers.ModelSerializer):
     lines = OrderLineSerializer(many=True, allow_empty=False)
     payments = OrderPaymentSerializer(many=True, read_only=True)
+    customer_name = serializers.CharField(source="customer.full_name", read_only=True)
     register_session_number = serializers.CharField(
         source="register_session.session_number",
         read_only=True,
@@ -250,6 +261,12 @@ class OrderSerializer(serializers.ModelSerializer):
     can_void = serializers.SerializerMethodField()
     can_return = serializers.SerializerMethodField()
     requires_manager_adjustment = serializers.SerializerMethodField()
+    total_cost = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
+    total_profit = serializers.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        read_only=True,
+    )
 
     class Meta:
         model = Order
@@ -259,10 +276,14 @@ class OrderSerializer(serializers.ModelSerializer):
             "status",
             "register_session",
             "register_session_number",
+            "customer",
+            "customer_name",
             "lines",
             "payments",
             "subtotal",
             "total",
+            "total_cost",
+            "total_profit",
             "can_void",
             "can_return",
             "requires_manager_adjustment",
@@ -273,8 +294,11 @@ class OrderSerializer(serializers.ModelSerializer):
             "receipt_number",
             "register_session",
             "register_session_number",
+            "customer_name",
             "subtotal",
             "total",
+            "total_cost",
+            "total_profit",
             "can_void",
             "can_return",
             "requires_manager_adjustment",
@@ -322,6 +346,11 @@ class CheckoutPaymentSerializer(serializers.Serializer):
 
 class CheckoutSerializer(serializers.Serializer):
     lines = CheckoutLineSerializer(many=True, allow_empty=False)
+    customer = serializers.PrimaryKeyRelatedField(
+        queryset=Customer.objects.all(),
+        required=False,
+        allow_null=True,
+    )
     payments = CheckoutPaymentSerializer(
         many=True,
         allow_empty=False,
@@ -397,6 +426,7 @@ class CheckoutSerializer(serializers.Serializer):
             register_session=self.context["register_session"],
             lines_data=validated_data["lines"],
             payments_data=validated_data["payments"],
+            customer=validated_data.get("customer"),
             request=self.context.get("request"),
         )
 

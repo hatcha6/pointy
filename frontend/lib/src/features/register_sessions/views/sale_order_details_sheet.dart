@@ -93,6 +93,8 @@ class _SaleOrderDetailsSheetState extends State<_SaleOrderDetailsSheet> {
                       line.quantity,
                       formatMoney(line.unitPrice),
                     ),
+                    if (line.profit != null)
+                      l10n.invoiceProfitValue(formatMoney(line.profit!)),
                     if (line.returnedQuantity > 0)
                       l10n.saleLineReturnedQuantity(
                         line.returnedQuantity,
@@ -115,6 +117,36 @@ class _SaleOrderDetailsSheetState extends State<_SaleOrderDetailsSheet> {
               ),
             ],
           ),
+          if (order.profit != null) ...[
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                Text(
+                  l10n.invoiceProfitLabel,
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                const Spacer(),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      formatMoney(order.profit!),
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
+                    ),
+                    if (order.profitMarginPercent != null)
+                      Text(
+                        l10n.invoiceProfitMarginValue(
+                          order.profitMarginPercent!.toStringAsFixed(2),
+                        ),
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                  ],
+                ),
+              ],
+            ),
+          ],
           if (order.payments.isNotEmpty) ...[
             const SizedBox(height: 12),
             Text(

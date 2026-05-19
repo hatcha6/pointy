@@ -26,6 +26,8 @@
   "navigationMenuTitle": "القائمة",
   "navigationMenuSubtitle": "تنقل سريع بين شاشات نقطة البيع",
   "posDrawerLabel": "شاشة البيع",
+  "purchasingDrawerLabel": "المشتريات",
+  "contactsDrawerLabel": "الجهات",
   "catalogDrawerLabel": "المنتجات",
   "registerSessionsDrawerLabel": "جلسات الدرج",
   "deviceSettingsDrawerLabel": "إعدادات الجهاز",
@@ -217,6 +219,7 @@
   "creatingProductButton": "جار الإنشاء...",
   "requiredField": "هذا الحقل مطلوب",
   "invalidNumber": "أدخل رقمًا صحيحًا",
+  "invalidDate": "أدخل تاريخًا صحيحًا",
   "productCreatedMessage": "تم إنشاء المنتج",
   "productCreateError": "تعذر إنشاء المنتج. راجع البيانات وحاول مرة أخرى.",
   "catalogLoadError": "تعذر تحميل المنتجات من الخادم.",
@@ -330,6 +333,275 @@
   "currentSaleTitle": "البيع الحالي",
   "clearCartTooltip": "مسح السلة",
   "emptyCart": "لا توجد عناصر في السلة",
+  "purchasingTitle": "المشتريات",
+  "purchaseOrdersTitle": "فواتير المشتريات",
+  "refreshPurchaseOrdersTooltip": "تحديث فواتير المشتريات",
+  "refreshPurchaseOrderDetailsTooltip": "تحديث تفاصيل أمر الشراء",
+  "newPurchaseOrderButton": "أمر شراء جديد",
+  "newPurchaseOrderTitle": "أمر شراء جديد",
+  "searchPurchaseOrdersHint": "ابحث برقم الفاتورة أو المورد أو المنتج",
+  "purchaseOrderSupplierFilterTitle": "المورد",
+  "allSuppliersFilterLabel": "كل الموردين",
+  "clearSupplierFilterTooltip": "مسح فلتر المورد",
+  "purchaseOrderStatusFilterTitle": "حالة أمر الشراء",
+  "purchaseOrderStatusAll": "كل أوامر الشراء",
+  "purchaseOrderStatusDraft": "مسودة",
+  "purchaseOrderStatusSubmitted": "مرسل",
+  "purchaseOrderStatusReceived": "مستلم",
+  "purchaseOrderStatusCancelled": "ملغى",
+  "purchaseOrderOrderingNewest": "الأحدث أولًا",
+  "purchaseOrderOrderingUpdated": "آخر تحديث",
+  "purchaseOrderOrderingTotalDesc": "الإجمالي: من الأعلى إلى الأقل",
+  "purchaseOrderOrderingNumber": "رقم أمر الشراء",
+  "purchaseOrdersLoadError": "تعذر تحميل فواتير المشتريات.",
+  "purchaseOrderDetailsLoadError": "تعذر تحميل تفاصيل أمر الشراء.",
+  "emptyPurchaseOrders": "لا توجد فواتير مشتريات بعد.",
+  "purchaseOrderFallbackTitle": "أمر شراء #{id}",
+  "@purchaseOrderFallbackTitle": {
+    "description": "Fallback purchase order title when the generated order number is unavailable.",
+    "placeholders": {
+      "id": {
+        "type": "int"
+      }
+    }
+  },
+  "purchaseOrderLineCount": "{count, plural, =0{لا توجد عناصر} =1{عنصر واحد} =2{عنصران} other{{count} عناصر}}",
+  "@purchaseOrderLineCount": {
+    "description": "Line count label shown in a purchase order list item.",
+    "placeholders": {
+      "count": {
+        "type": "num"
+      }
+    }
+  },
+  "purchaseOrderDetailsSummaryTitle": "ملخص أمر الشراء",
+  "purchaseOrderLineCountLabel": "العناصر",
+  "purchaseOrderCreatedAtLabel": "تاريخ الإنشاء",
+  "purchaseOrderSubmittedAtLabel": "تاريخ الإرسال",
+  "purchaseOrderReceivedAtLabel": "تاريخ الاستلام",
+  "purchaseOrderActionsTitle": "إجراءات الحالة",
+  "submitPurchaseOrderAction": "إرسال",
+  "receivePurchaseOrderAction": "تحديد كمستلم",
+  "cancelPurchaseOrderAction": "إلغاء",
+  "purchaseOrderAdjustmentsTitle": "المرتجعات والاستبدالات",
+  "returnPurchaseItemsAction": "إرجاع",
+  "refundPurchaseItemsAction": "استرداد",
+  "exchangePurchaseItemsAction": "استبدال",
+  "purchaseOrderStatusChangeError": "تعذر تغيير حالة أمر الشراء. حاول مرة أخرى.",
+  "purchaseOrderAdjustmentError": "تعذر تسجيل تعديل المشتريات. راجع الكميات والمخزون وحاول مرة أخرى.",
+  "purchaseReturnTitle": "إرجاع مشتريات",
+  "purchaseRefundTitle": "استرداد مشتريات",
+  "purchaseExchangeTitle": "استبدال مشتريات",
+  "purchaseAdjustmentReasonLabel": "سبب التعديل",
+  "purchaseAdjustmentReasonHint": "مثال: تالف، خطأ في الفاتورة، استبدال مع المورد",
+  "purchaseNoAdjustableItems": "لا توجد عناصر قابلة للتعديل.",
+  "purchaseAdjustmentNoItemsSelected": "اختر عنصرًا واحدًا على الأقل.",
+  "purchaseReturnSuccess": "تم تسجيل إرجاع المشتريات رقم {orderNumber}.",
+  "@purchaseReturnSuccess": {
+    "description": "Message shown after returning purchase items.",
+    "placeholders": {
+      "orderNumber": {
+        "type": "String"
+      }
+    }
+  },
+  "purchaseRefundSuccess": "تم تسجيل استرداد المشتريات رقم {orderNumber}.",
+  "@purchaseRefundSuccess": {
+    "description": "Message shown after refunding purchase items.",
+    "placeholders": {
+      "orderNumber": {
+        "type": "String"
+      }
+    }
+  },
+  "purchaseExchangeSuccess": "تم تسجيل استبدال المشتريات رقم {orderNumber}.",
+  "@purchaseExchangeSuccess": {
+    "description": "Message shown after exchanging purchase items.",
+    "placeholders": {
+      "orderNumber": {
+        "type": "String"
+      }
+    }
+  },
+  "purchaseAdjustmentLineRemaining": "المتبقي {remaining} من {quantity}",
+  "@purchaseAdjustmentLineRemaining": {
+    "description": "Remaining adjustable purchase line quantity.",
+    "placeholders": {
+      "remaining": {
+        "type": "int"
+      },
+      "quantity": {
+        "type": "int"
+      }
+    }
+  },
+  "purchaseAdjustmentHistoryEmpty": "لا توجد مرتجعات أو استبدالات مسجلة.",
+  "purchaseAdjustmentTypeReturn": "إرجاع",
+  "purchaseAdjustmentTypeRefund": "استرداد",
+  "purchaseAdjustmentTypeExchange": "استبدال",
+  "purchaseAdjustmentHistoryLineCount": "{count, plural, =0{لا توجد عناصر} =1{عنصر واحد} =2{عنصران} other{{count} عناصر}}",
+  "@purchaseAdjustmentHistoryLineCount": {
+    "description": "Line count label for a purchase adjustment history item.",
+    "placeholders": {
+      "count": {
+        "type": "num"
+      }
+    }
+  },
+  "purchaseOrderSubmitSuccess": "تم إرسال أمر الشراء رقم {orderNumber}.",
+  "@purchaseOrderSubmitSuccess": {
+    "description": "Message shown after a purchase order is submitted from details.",
+    "placeholders": {
+      "orderNumber": {
+        "type": "String"
+      }
+    }
+  },
+  "purchaseOrderReceiveSuccess": "تم استلام أمر الشراء رقم {orderNumber}.",
+  "@purchaseOrderReceiveSuccess": {
+    "description": "Message shown after a purchase order is received.",
+    "placeholders": {
+      "orderNumber": {
+        "type": "String"
+      }
+    }
+  },
+  "purchaseOrderCancelSuccess": "تم إلغاء أمر الشراء رقم {orderNumber}.",
+  "@purchaseOrderCancelSuccess": {
+    "description": "Message shown after a purchase order is cancelled.",
+    "placeholders": {
+      "orderNumber": {
+        "type": "String"
+      }
+    }
+  },
+  "purchaseOrderLinesTitle": "محتويات أمر الشراء",
+  "purchaseOrderUnknownProduct": "منتج غير محدد",
+  "purchaseOrderLineQuantity": "الكمية {quantity}",
+  "@purchaseOrderLineQuantity": {
+    "description": "Purchase order line quantity label.",
+    "placeholders": {
+      "quantity": {
+        "type": "int"
+      }
+    }
+  },
+  "purchaseOrderPreviousCostValue": "آخر تكلفة {amount}",
+  "@purchaseOrderPreviousCostValue": {
+    "description": "Previous product purchase cost shown on a purchase order line.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "purchaseOrderCostChangeValue": "تغير التكلفة {amount}",
+  "@purchaseOrderCostChangeValue": {
+    "description": "Purchase order line cost change compared with the previous cost.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "purchaseOrderCostChangePercentValue": "{percent}%",
+  "@purchaseOrderCostChangePercentValue": {
+    "description": "Purchase order line cost change percent.",
+    "placeholders": {
+      "percent": {
+        "type": "String"
+      }
+    }
+  },
+  "purchaseCatalogTitle": "كتالوج الشراء",
+  "purchaseProductLookupHint": "ابحث عن منتج لإضافته للمشتريات",
+  "purchaseDraftTitle": "مسودة الشراء",
+  "clearPurchaseDraftTooltip": "مسح مسودة الشراء",
+  "emptyPurchaseDraft": "لا توجد عناصر في مسودة الشراء",
+  "purchaseLineCostLabel": "التكلفة",
+  "receivePurchaseImmediatelyLabel": "استلام أمر الشراء فورًا",
+  "quickCreateProductTitle": "إضافة منتج سريع",
+  "quickCreateProductMessage": "الباركود {barcode} غير موجود. أضف المنتج الآن لمتابعة أمر الشراء.",
+  "@quickCreateProductMessage": {
+    "description": "Explains that a scanned barcode is missing and can be created quickly.",
+    "placeholders": {
+      "barcode": {
+        "type": "String"
+      }
+    }
+  },
+  "quickCreateProductNameHint": "اسم المنتج على فاتورة المورد",
+  "quickCreateUnitCostLabel": "تكلفة الشراء",
+  "quickCreateProductButton": "إضافة للشراء",
+  "quickCreateProductSaving": "جار الإضافة...",
+  "quickCreateProductError": "تعذر إنشاء المنتج. راجع البيانات وحاول مرة أخرى.",
+  "submitPurchaseDraftButton": "إرسال أمر الشراء {amount}",
+  "@submitPurchaseDraftButton": {
+    "description": "Submit purchase order button label with total amount.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "purchaseSubmitInProgressButton": "جار الإرسال...",
+  "purchaseDraftSubmitSuccess": "تم إرسال أمر الشراء رقم {draftNumber}.",
+  "@purchaseDraftSubmitSuccess": {
+    "description": "Message shown after a purchase order is submitted.",
+    "placeholders": {
+      "draftNumber": {
+        "type": "String"
+      }
+    }
+  },
+  "purchaseDraftSubmitError": "تعذر إرسال أمر الشراء. راجع العناصر وحاول مرة أخرى.",
+  "contactsTitle": "العملاء والموردون",
+  "customersTab": "العملاء",
+  "suppliersTab": "الموردون",
+  "refreshContactsTooltip": "تحديث العملاء والموردين",
+  "contactSearchHint": "ابحث بالاسم أو الهاتف أو البريد",
+  "contactsLoadError": "تعذر تحميل العملاء والموردين.",
+  "emptyCustomers": "لا يوجد عملاء بعد.",
+  "emptySuppliers": "لا يوجد موردون بعد.",
+  "addCustomerButton": "إضافة عميل",
+  "addSupplierButton": "إضافة مورد",
+  "customerFullNameLabel": "اسم العميل",
+  "supplierNameLabel": "اسم المورد",
+  "contactPersonLabel": "اسم جهة التواصل",
+  "phoneOptionalLabel": "رقم الهاتف (اختياري)",
+  "emailOptionalLabel": "البريد الإلكتروني (اختياري)",
+  "birthdayOptionalLabel": "تاريخ الميلاد (اختياري)",
+  "birthdayHint": "YYYY-MM-DD",
+  "genderLabel": "الجنس",
+  "genderUnspecified": "غير محدد",
+  "genderFemale": "أنثى",
+  "genderMale": "ذكر",
+  "genderNonBinary": "غير ثنائي",
+  "genderPreferNotToSay": "يفضل عدم الإفصاح",
+  "marketingConsentLabel": "وافق على التواصل التسويقي",
+  "addressOptionalLabel": "العنوان (اختياري)",
+  "notesOptionalLabel": "ملاحظات (اختياري)",
+  "activeContactLabel": "نشط",
+  "saveCustomerButton": "حفظ العميل",
+  "saveSupplierButton": "حفظ المورد",
+  "contactSavingButton": "جار الحفظ...",
+  "customerCreateError": "تعذر حفظ العميل. راجع البيانات وحاول مرة أخرى.",
+  "supplierCreateError": "تعذر حفظ المورد. راجع البيانات وحاول مرة أخرى.",
+  "customerNumberLabel": "رقم العميل",
+  "customerBirthdayLabel": "الميلاد",
+  "marketingAllowedLabel": "يسمح بالتسويق",
+  "inactiveContactLabel": "غير نشط",
+  "supplierContactLabel": "جهة التواصل",
+  "selectedCustomerLabel": "العميل",
+  "selectedSupplierLabel": "المورد",
+  "walkInCustomerLabel": "عميل عابر",
+  "noSupplierSelectedLabel": "لا يوجد مورد محدد",
+  "chooseCustomerTitle": "اختيار العميل",
+  "chooseSupplierTitle": "اختيار المورد",
+  "changeContactAction": "تغيير",
+  "clearContactTooltip": "إزالة الاختيار",
+  "createNewCustomerAction": "عميل جديد",
+  "createNewSupplierAction": "مورد جديد",
   "payAmount": "ادفع {amount}",
   "@payAmount": {
     "description": "Payment button label with the payable amount.",
@@ -366,6 +638,25 @@
   },
   "invoicePrintSuccess": "تم إرسال الفاتورة للطابعة.",
   "invoicePrintError": "تم تسجيل البيع، لكن تعذرت طباعة الفاتورة.",
+  "invoiceProfitLabel": "الربح",
+  "invoiceProfitValue": "الربح {amount}",
+  "@invoiceProfitValue": {
+    "description": "Compact invoice profit label with amount.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "invoiceProfitMarginValue": "هامش {percent}%",
+  "@invoiceProfitMarginValue": {
+    "description": "Invoice profit margin percent label.",
+    "placeholders": {
+      "percent": {
+        "type": "String"
+      }
+    }
+  },
   "saleCheckoutError": "تعذر تسجيل البيع. تحقق من جلسة الدرج وحاول مرة أخرى.",
   "oversellWarningTitle": "تنبيه المخزون",
   "oversellWarningMessage": "تتجاوز بعض عناصر السلة الكمية المتاحة. هل تريد إتمام البيع رغم ذلك؟",
@@ -510,6 +801,8 @@
   "sessionNoVariance": "لا يوجد فرق مسجل",
   "sessionSalesLoadError": "تعذر تحميل مبيعات هذه الجلسة.",
   "emptySessionSales": "لا توجد مبيعات مسجلة في هذه الجلسة.",
+  "allCustomersFilterLabel": "كل العملاء",
+  "clearCustomerFilterTooltip": "مسح فلتر العميل",
   "sessionCashMovementsLoadError": "تعذر تحميل حركات النقد لهذه الجلسة.",
   "emptySessionCashMovements": "لا توجد حركات نقد مسجلة في هذه الجلسة.",
   "cashMovementPayInLabel": "إضافة نقدية",
