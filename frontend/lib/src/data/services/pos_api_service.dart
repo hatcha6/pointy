@@ -216,6 +216,22 @@ class PosApiService {
     return _purchasing.fetchPurchaseOrder(purchaseOrderId);
   }
 
+  Future<SupplierPaymentPage> fetchSupplierPayments({
+    int? supplierId,
+    int? purchaseOrderId,
+    int page = 1,
+  }) {
+    return _purchasing.fetchSupplierPayments(
+      supplierId: supplierId,
+      purchaseOrderId: purchaseOrderId,
+      page: page,
+    );
+  }
+
+  Future<SupplierPayment> createSupplierPayment(SupplierPaymentDraft draft) {
+    return _purchasing.createSupplierPayment(draft);
+  }
+
   Future<double?> fetchLastProductCost(int productId) {
     return _purchasing.fetchLastProductCost(productId);
   }
@@ -231,8 +247,11 @@ class PosApiService {
     return _purchasing.submitPurchaseOrder(purchaseOrderId);
   }
 
-  Future<PurchaseOrder> receivePurchaseOrder(int purchaseOrderId) {
-    return _purchasing.receivePurchaseOrder(purchaseOrderId);
+  Future<PurchaseOrder> receivePurchaseOrder(
+    int purchaseOrderId, {
+    PurchaseReceiveDraft? draft,
+  }) {
+    return _purchasing.receivePurchaseOrder(purchaseOrderId, draft: draft);
   }
 
   Future<PurchaseOrder> cancelPurchaseOrder(int purchaseOrderId) {

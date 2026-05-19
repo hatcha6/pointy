@@ -347,6 +347,7 @@
   "purchaseOrderStatusAll": "كل أوامر الشراء",
   "purchaseOrderStatusDraft": "مسودة",
   "purchaseOrderStatusSubmitted": "مرسل",
+  "purchaseOrderStatusPartiallyReceived": "مستلم جزئيًا",
   "purchaseOrderStatusReceived": "مستلم",
   "purchaseOrderStatusCancelled": "ملغى",
   "purchaseOrderOrderingNewest": "الأحدث أولًا",
@@ -379,9 +380,30 @@
   "purchaseOrderCreatedAtLabel": "تاريخ الإنشاء",
   "purchaseOrderSubmittedAtLabel": "تاريخ الإرسال",
   "purchaseOrderReceivedAtLabel": "تاريخ الاستلام",
+  "purchaseOrderDueDateLabel": "تاريخ الاستحقاق",
+  "purchaseOrderDueDateValue": "الاستحقاق {date}",
+  "@purchaseOrderDueDateValue": {
+    "description": "Compact due date shown in purchase order lists.",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "purchaseOrderOverdueValue": "متأخر",
+  "purchaseOrderPaymentStatusLabel": "حالة السداد",
+  "purchasePaymentStatusUnpaid": "غير مدفوع",
+  "purchasePaymentStatusPartial": "مدفوع جزئيًا",
+  "purchasePaymentStatusPaid": "مدفوع",
+  "purchasePaymentStatusCredit": "رصيد دائن",
+  "purchaseOrderPaidTotalLabel": "المدفوع",
+  "purchaseOrderCreditAppliedLabel": "رصيد مستخدم",
+  "purchaseOrderAdjustmentCreditLabel": "رصيد من المرتجعات",
+  "purchaseOrderBalanceDueLabel": "المتبقي للمورد",
   "purchaseOrderActionsTitle": "إجراءات الحالة",
   "submitPurchaseOrderAction": "إرسال",
   "receivePurchaseOrderAction": "تحديد كمستلم",
+  "receivePurchaseLinesAction": "استلام كميات",
   "cancelPurchaseOrderAction": "إلغاء",
   "purchaseOrderAdjustmentsTitle": "المرتجعات والاستبدالات",
   "returnPurchaseItemsAction": "إرجاع",
@@ -389,6 +411,23 @@
   "exchangePurchaseItemsAction": "استبدال",
   "purchaseOrderStatusChangeError": "تعذر تغيير حالة أمر الشراء. حاول مرة أخرى.",
   "purchaseOrderAdjustmentError": "تعذر تسجيل تعديل المشتريات. راجع الكميات والمخزون وحاول مرة أخرى.",
+  "purchaseOrderPaymentError": "تعذر تسجيل دفعة المورد. راجع المبلغ وطريقة الدفع وحاول مرة أخرى.",
+  "recordSupplierPaymentAction": "تسجيل دفعة",
+  "supplierPaymentTitle": "دفعة للمورد",
+  "supplierPaymentAmountLabel": "المبلغ",
+  "supplierPaymentReferenceLabel": "مرجع اختياري",
+  "supplierPaymentNotesLabel": "ملاحظات اختيارية",
+  "supplierPaymentPositiveAmountError": "أدخل مبلغًا أكبر من صفر ولا يتجاوز المتبقي.",
+  "supplierPaymentSuccess": "تم تسجيل دفعة المورد لأمر الشراء رقم {orderNumber}.",
+  "@supplierPaymentSuccess": {
+    "description": "Message shown after a supplier payment is recorded for a purchase order.",
+    "placeholders": {
+      "orderNumber": {
+        "type": "String"
+      }
+    }
+  },
+  "supplierPaymentMethodCredit": "رصيد المورد",
   "purchaseReturnTitle": "إرجاع مشتريات",
   "purchaseRefundTitle": "استرداد مشتريات",
   "purchaseExchangeTitle": "استبدال مشتريات",
@@ -439,6 +478,33 @@
   "purchaseAdjustmentTypeReturn": "إرجاع",
   "purchaseAdjustmentTypeRefund": "استرداد",
   "purchaseAdjustmentTypeExchange": "استبدال",
+  "purchaseAdjustmentSettlementMethod": "التسوية: {method}",
+  "@purchaseAdjustmentSettlementMethod": {
+    "description": "Settlement method shown on a purchase adjustment.",
+    "placeholders": {
+      "method": {
+        "type": "String"
+      }
+    }
+  },
+  "purchaseAdjustmentSupplierCreditCreated": "أنشئ رصيد مورد بقيمة {amount}",
+  "@purchaseAdjustmentSupplierCreditCreated": {
+    "description": "Supplier credit created by a purchase return or adjustment.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "purchaseAdjustmentSupplierCreditRemaining": "المتبقي من الرصيد {amount}",
+  "@purchaseAdjustmentSupplierCreditRemaining": {
+    "description": "Remaining supplier credit balance shown in adjustment history.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
   "purchaseAdjustmentHistoryLineCount": "{count, plural, =0{لا توجد عناصر} =1{عنصر واحد} =2{عنصران} other{{count} عناصر}}",
   "@purchaseAdjustmentHistoryLineCount": {
     "description": "Line count label for a purchase adjustment history item.",
@@ -466,6 +532,60 @@
       }
     }
   },
+  "purchaseReceiveTitle": "استلام كميات أمر الشراء",
+  "purchaseReceiveNoOpenLines": "لا توجد كميات مفتوحة للاستلام.",
+  "purchaseReceiveNoItemsSelected": "أدخل كمية مستلمة أو تالفة أو مرفوضة لعنصر واحد على الأقل.",
+  "purchaseReceiveInvalidQuantityError": "أدخل كميات صحيحة لا تقل عن صفر.",
+  "purchaseReceiveReceivedLabel": "مستلم سليم",
+  "purchaseReceiveDamagedLabel": "تالف عند الوصول",
+  "purchaseReceiveRejectedLabel": "مرفوض/لن يصل",
+  "purchaseReceiveNoteLabel": "ملاحظة الاستلام",
+  "purchaseReceiveNoteHint": "مثال: نقص في الصندوق أو زيادة من المورد",
+  "purchaseReceiveExpectedValue": "المطلوب {quantity}",
+  "@purchaseReceiveExpectedValue": {
+    "description": "Expected purchase line quantity in the receiving dialog.",
+    "placeholders": {
+      "quantity": {
+        "type": "int"
+      }
+    }
+  },
+  "purchaseReceiveAlreadyValue": "استلم سابقًا {quantity}",
+  "@purchaseReceiveAlreadyValue": {
+    "description": "Already received quantity in the receiving dialog.",
+    "placeholders": {
+      "quantity": {
+        "type": "int"
+      }
+    }
+  },
+  "purchaseReceiveOpenValue": "المفتوح {quantity}",
+  "@purchaseReceiveOpenValue": {
+    "description": "Open/backordered quantity in the receiving dialog.",
+    "placeholders": {
+      "quantity": {
+        "type": "int"
+      }
+    }
+  },
+  "purchaseReceiveOpenAfterValue": "المفتوح بعد الإدخال {quantity}",
+  "@purchaseReceiveOpenAfterValue": {
+    "description": "Open or backordered quantity after receiving dialog values are applied.",
+    "placeholders": {
+      "quantity": {
+        "type": "int"
+      }
+    }
+  },
+  "purchaseReceiveAfterVarianceValue": "الفرق بعد الإدخال {quantity}",
+  "@purchaseReceiveAfterVarianceValue": {
+    "description": "Receiving variance after entered quantities are applied.",
+    "placeholders": {
+      "quantity": {
+        "type": "String"
+      }
+    }
+  },
   "purchaseOrderCancelSuccess": "تم إلغاء أمر الشراء رقم {orderNumber}.",
   "@purchaseOrderCancelSuccess": {
     "description": "Message shown after a purchase order is cancelled.",
@@ -483,6 +603,63 @@
     "placeholders": {
       "quantity": {
         "type": "int"
+      }
+    }
+  },
+  "purchaseLineReceivedQuantity": "مستلم {quantity}",
+  "@purchaseLineReceivedQuantity": {
+    "description": "Total received quantity shown on purchase order lines and receipts.",
+    "placeholders": {
+      "quantity": {
+        "type": "int"
+      }
+    }
+  },
+  "purchaseLineOpenQuantity": "مفتوح/متأخر {quantity}",
+  "@purchaseLineOpenQuantity": {
+    "description": "Open or backordered quantity shown on purchase order lines.",
+    "placeholders": {
+      "quantity": {
+        "type": "int"
+      }
+    }
+  },
+  "purchaseLineDamagedQuantity": "تالف {quantity}",
+  "@purchaseLineDamagedQuantity": {
+    "description": "Damaged purchase quantity.",
+    "placeholders": {
+      "quantity": {
+        "type": "int"
+      }
+    }
+  },
+  "purchaseLineRejectedQuantity": "مرفوض {quantity}",
+  "@purchaseLineRejectedQuantity": {
+    "description": "Rejected purchase quantity.",
+    "placeholders": {
+      "quantity": {
+        "type": "int"
+      }
+    }
+  },
+  "purchaseLineVarianceValue": "الفرق {quantity}",
+  "@purchaseLineVarianceValue": {
+    "description": "Purchase receiving variance quantity.",
+    "placeholders": {
+      "quantity": {
+        "type": "String"
+      }
+    }
+  },
+  "purchaseReceiptHistoryTitle": "سجل الاستلام",
+  "purchaseReceiptHistoryEmpty": "لا توجد عمليات استلام مسجلة.",
+  "purchaseReceiptHistoryItemFallback": "عملية استلام",
+  "purchaseReceiptHistoryLineCount": "{count, plural, =0{لا توجد عناصر} =1{عنصر واحد} =2{عنصران} other{{count} عناصر}}",
+  "@purchaseReceiptHistoryLineCount": {
+    "description": "Line count label for a purchase receipt history item.",
+    "placeholders": {
+      "count": {
+        "type": "num"
       }
     }
   },
@@ -592,10 +769,38 @@
   "marketingAllowedLabel": "يسمح بالتسويق",
   "inactiveContactLabel": "غير نشط",
   "supplierContactLabel": "جهة التواصل",
+  "supplierPayableBalanceValue": "مستحق {amount}",
+  "@supplierPayableBalanceValue": {
+    "description": "Supplier payable balance shown in contacts.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "supplierCreditBalanceValue": "رصيد {amount}",
+  "@supplierCreditBalanceValue": {
+    "description": "Supplier credit balance shown in contacts.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "supplierNetBalanceValue": "الصافي {amount}",
+  "@supplierNetBalanceValue": {
+    "description": "Supplier net balance shown in contacts.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
   "selectedCustomerLabel": "العميل",
   "selectedSupplierLabel": "المورد",
   "walkInCustomerLabel": "عميل عابر",
   "noSupplierSelectedLabel": "لا يوجد مورد محدد",
+  "purchaseSupplierRequiredHint": "اختر موردًا قبل إرسال أمر الشراء.",
   "chooseCustomerTitle": "اختيار العميل",
   "chooseSupplierTitle": "اختيار المورد",
   "changeContactAction": "تغيير",

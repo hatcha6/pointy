@@ -75,6 +75,46 @@ class PurchasingApiClient {
     );
   }
 
+  Future<SupplierPaymentPage> fetchSupplierPayments({
+    int? supplierId,
+    int? purchaseOrderId,
+    int page = 1,
+  }) async {
+    final response = await _session.get(
+      'supplier-payments/',
+      query: {
+        'page': '$page',
+        if (supplierId != null) 'supplier': '$supplierId',
+        if (purchaseOrderId != null) 'purchase_order': '$purchaseOrderId',
+      },
+    );
+    _session.throwApiException(
+      response,
+      'Supplier payment list failed with status',
+    );
+    final decoded = _session.decodedBody(response);
+    if (decoded is Map<String, Object?>) {
+      return SupplierPaymentPage.fromJson(decoded);
+    }
+    return const SupplierPaymentPage(payments: [], hasMore: false);
+  }
+
+  Future<SupplierPayment> createSupplierPayment(
+    SupplierPaymentDraft draft,
+  ) async {
+    final response = await _session.post(
+      'supplier-payments/',
+      body: draft.toJson(),
+    );
+    _session.throwApiException(
+      response,
+      'Supplier payment create failed with status',
+    );
+    return SupplierPayment.fromJson(
+      _session.decodedBody(response) as Map<String, Object?>,
+    );
+  }
+
   Future<double?> fetchLastProductCost(int productId) async {
     final response = await _session.get(
       'purchase-orders/last-cost/',
@@ -111,9 +151,13 @@ class PurchasingApiClient {
     );
   }
 
-  Future<PurchaseOrder> receivePurchaseOrder(int purchaseOrderId) async {
+  Future<PurchaseOrder> receivePurchaseOrder(
+    int purchaseOrderId, {
+    PurchaseReceiveDraft? draft,
+  }) async {
     final response = await _session.post(
       'purchase-orders/$purchaseOrderId/receive/',
+      body: draft?.toJson(),
     );
     _session.throwApiException(
       response,

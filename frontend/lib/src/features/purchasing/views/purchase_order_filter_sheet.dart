@@ -163,6 +163,8 @@ String purchaseOrderStatusLabel(AppLocalizations l10n, String status) {
   return switch (status) {
     'draft' => l10n.purchaseOrderStatusDraft,
     'submitted' => l10n.purchaseOrderStatusSubmitted,
+    'partial' ||
+    'partially_received' => l10n.purchaseOrderStatusPartiallyReceived,
     'received' => l10n.purchaseOrderStatusReceived,
     'cancelled' => l10n.purchaseOrderStatusCancelled,
     _ => status,

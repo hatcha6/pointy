@@ -191,6 +191,9 @@ class SupplierContact {
     required this.address,
     required this.notes,
     required this.isActive,
+    this.payableBalance = 0,
+    this.creditBalance = 0,
+    this.netBalance = 0,
   });
 
   final int id;
@@ -201,6 +204,9 @@ class SupplierContact {
   final String address;
   final String notes;
   final bool isActive;
+  final double payableBalance;
+  final double creditBalance;
+  final double netBalance;
 
   factory SupplierContact.fromJson(Map<String, Object?> json) {
     return SupplierContact(
@@ -212,6 +218,9 @@ class SupplierContact {
       address: json['address']?.toString() ?? '',
       notes: json['notes']?.toString() ?? '',
       isActive: json['is_active'] != false,
+      payableBalance: _moneyFromJson(json['payable_balance']),
+      creditBalance: _moneyFromJson(json['credit_balance']),
+      netBalance: _moneyFromJson(json['net_balance']),
     );
   }
 }
@@ -253,6 +262,13 @@ int _intFromJson(Object? value) {
     return value;
   }
   return int.tryParse(value?.toString() ?? '') ?? 0;
+}
+
+double _moneyFromJson(Object? value) {
+  if (value is num) {
+    return value.toDouble();
+  }
+  return double.tryParse(value?.toString() ?? '') ?? 0;
 }
 
 DateTime? _dateFromJson(Object? value) {

@@ -15,6 +15,7 @@ class ContactSelectionTile extends StatelessWidget {
     required this.enabled,
     required this.onSelect,
     required this.onClear,
+    this.allowClear = true,
   });
 
   final String label;
@@ -24,6 +25,7 @@ class ContactSelectionTile extends StatelessWidget {
   final bool enabled;
   final VoidCallback onSelect;
   final VoidCallback onClear;
+  final bool allowClear;
 
   @override
   Widget build(BuildContext context) {
@@ -62,7 +64,7 @@ class ContactSelectionTile extends StatelessWidget {
                   ],
                 ),
               ),
-              if (hasValue)
+              if (hasValue && allowClear)
                 IconButton(
                   tooltip: l10n.clearContactTooltip,
                   onPressed: enabled ? onClear : null,

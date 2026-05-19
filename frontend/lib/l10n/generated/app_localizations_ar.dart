@@ -743,6 +743,9 @@ class AppLocalizationsAr extends AppLocalizations {
   String get purchaseOrderStatusSubmitted => 'مرسل';
 
   @override
+  String get purchaseOrderStatusPartiallyReceived => 'مستلم جزئيًا';
+
+  @override
   String get purchaseOrderStatusReceived => 'مستلم';
 
   @override
@@ -803,6 +806,44 @@ class AppLocalizationsAr extends AppLocalizations {
   String get purchaseOrderReceivedAtLabel => 'تاريخ الاستلام';
 
   @override
+  String get purchaseOrderDueDateLabel => 'تاريخ الاستحقاق';
+
+  @override
+  String purchaseOrderDueDateValue(String date) {
+    return 'الاستحقاق $date';
+  }
+
+  @override
+  String get purchaseOrderOverdueValue => 'متأخر';
+
+  @override
+  String get purchaseOrderPaymentStatusLabel => 'حالة السداد';
+
+  @override
+  String get purchasePaymentStatusUnpaid => 'غير مدفوع';
+
+  @override
+  String get purchasePaymentStatusPartial => 'مدفوع جزئيًا';
+
+  @override
+  String get purchasePaymentStatusPaid => 'مدفوع';
+
+  @override
+  String get purchasePaymentStatusCredit => 'رصيد دائن';
+
+  @override
+  String get purchaseOrderPaidTotalLabel => 'المدفوع';
+
+  @override
+  String get purchaseOrderCreditAppliedLabel => 'رصيد مستخدم';
+
+  @override
+  String get purchaseOrderAdjustmentCreditLabel => 'رصيد من المرتجعات';
+
+  @override
+  String get purchaseOrderBalanceDueLabel => 'المتبقي للمورد';
+
+  @override
   String get purchaseOrderActionsTitle => 'إجراءات الحالة';
 
   @override
@@ -810,6 +851,9 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get receivePurchaseOrderAction => 'تحديد كمستلم';
+
+  @override
+  String get receivePurchaseLinesAction => 'استلام كميات';
 
   @override
   String get cancelPurchaseOrderAction => 'إلغاء';
@@ -833,6 +877,37 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get purchaseOrderAdjustmentError =>
       'تعذر تسجيل تعديل المشتريات. راجع الكميات والمخزون وحاول مرة أخرى.';
+
+  @override
+  String get purchaseOrderPaymentError =>
+      'تعذر تسجيل دفعة المورد. راجع المبلغ وطريقة الدفع وحاول مرة أخرى.';
+
+  @override
+  String get recordSupplierPaymentAction => 'تسجيل دفعة';
+
+  @override
+  String get supplierPaymentTitle => 'دفعة للمورد';
+
+  @override
+  String get supplierPaymentAmountLabel => 'المبلغ';
+
+  @override
+  String get supplierPaymentReferenceLabel => 'مرجع اختياري';
+
+  @override
+  String get supplierPaymentNotesLabel => 'ملاحظات اختيارية';
+
+  @override
+  String get supplierPaymentPositiveAmountError =>
+      'أدخل مبلغًا أكبر من صفر ولا يتجاوز المتبقي.';
+
+  @override
+  String supplierPaymentSuccess(String orderNumber) {
+    return 'تم تسجيل دفعة المورد لأمر الشراء رقم $orderNumber.';
+  }
+
+  @override
+  String get supplierPaymentMethodCredit => 'رصيد المورد';
 
   @override
   String get purchaseReturnTitle => 'إرجاع مشتريات';
@@ -891,6 +966,21 @@ class AppLocalizationsAr extends AppLocalizations {
   String get purchaseAdjustmentTypeExchange => 'استبدال';
 
   @override
+  String purchaseAdjustmentSettlementMethod(String method) {
+    return 'التسوية: $method';
+  }
+
+  @override
+  String purchaseAdjustmentSupplierCreditCreated(String amount) {
+    return 'أنشئ رصيد مورد بقيمة $amount';
+  }
+
+  @override
+  String purchaseAdjustmentSupplierCreditRemaining(String amount) {
+    return 'المتبقي من الرصيد $amount';
+  }
+
+  @override
   String purchaseAdjustmentHistoryLineCount(num count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,
@@ -914,6 +1004,61 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
+  String get purchaseReceiveTitle => 'استلام كميات أمر الشراء';
+
+  @override
+  String get purchaseReceiveNoOpenLines => 'لا توجد كميات مفتوحة للاستلام.';
+
+  @override
+  String get purchaseReceiveNoItemsSelected =>
+      'أدخل كمية مستلمة أو تالفة أو مرفوضة لعنصر واحد على الأقل.';
+
+  @override
+  String get purchaseReceiveInvalidQuantityError =>
+      'أدخل كميات صحيحة لا تقل عن صفر.';
+
+  @override
+  String get purchaseReceiveReceivedLabel => 'مستلم سليم';
+
+  @override
+  String get purchaseReceiveDamagedLabel => 'تالف عند الوصول';
+
+  @override
+  String get purchaseReceiveRejectedLabel => 'مرفوض/لن يصل';
+
+  @override
+  String get purchaseReceiveNoteLabel => 'ملاحظة الاستلام';
+
+  @override
+  String get purchaseReceiveNoteHint =>
+      'مثال: نقص في الصندوق أو زيادة من المورد';
+
+  @override
+  String purchaseReceiveExpectedValue(int quantity) {
+    return 'المطلوب $quantity';
+  }
+
+  @override
+  String purchaseReceiveAlreadyValue(int quantity) {
+    return 'استلم سابقًا $quantity';
+  }
+
+  @override
+  String purchaseReceiveOpenValue(int quantity) {
+    return 'المفتوح $quantity';
+  }
+
+  @override
+  String purchaseReceiveOpenAfterValue(int quantity) {
+    return 'المفتوح بعد الإدخال $quantity';
+  }
+
+  @override
+  String purchaseReceiveAfterVarianceValue(String quantity) {
+    return 'الفرق بعد الإدخال $quantity';
+  }
+
+  @override
   String purchaseOrderCancelSuccess(String orderNumber) {
     return 'تم إلغاء أمر الشراء رقم $orderNumber.';
   }
@@ -927,6 +1072,53 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String purchaseOrderLineQuantity(int quantity) {
     return 'الكمية $quantity';
+  }
+
+  @override
+  String purchaseLineReceivedQuantity(int quantity) {
+    return 'مستلم $quantity';
+  }
+
+  @override
+  String purchaseLineOpenQuantity(int quantity) {
+    return 'مفتوح/متأخر $quantity';
+  }
+
+  @override
+  String purchaseLineDamagedQuantity(int quantity) {
+    return 'تالف $quantity';
+  }
+
+  @override
+  String purchaseLineRejectedQuantity(int quantity) {
+    return 'مرفوض $quantity';
+  }
+
+  @override
+  String purchaseLineVarianceValue(String quantity) {
+    return 'الفرق $quantity';
+  }
+
+  @override
+  String get purchaseReceiptHistoryTitle => 'سجل الاستلام';
+
+  @override
+  String get purchaseReceiptHistoryEmpty => 'لا توجد عمليات استلام مسجلة.';
+
+  @override
+  String get purchaseReceiptHistoryItemFallback => 'عملية استلام';
+
+  @override
+  String purchaseReceiptHistoryLineCount(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count عناصر',
+      two: 'عنصران',
+      one: 'عنصر واحد',
+      zero: 'لا توجد عناصر',
+    );
+    return '$_temp0';
   }
 
   @override
@@ -1120,6 +1312,21 @@ class AppLocalizationsAr extends AppLocalizations {
   String get supplierContactLabel => 'جهة التواصل';
 
   @override
+  String supplierPayableBalanceValue(String amount) {
+    return 'مستحق $amount';
+  }
+
+  @override
+  String supplierCreditBalanceValue(String amount) {
+    return 'رصيد $amount';
+  }
+
+  @override
+  String supplierNetBalanceValue(String amount) {
+    return 'الصافي $amount';
+  }
+
+  @override
   String get selectedCustomerLabel => 'العميل';
 
   @override
@@ -1130,6 +1337,10 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get noSupplierSelectedLabel => 'لا يوجد مورد محدد';
+
+  @override
+  String get purchaseSupplierRequiredHint =>
+      'اختر موردًا قبل إرسال أمر الشراء.';
 
   @override
   String get chooseCustomerTitle => 'اختيار العميل';

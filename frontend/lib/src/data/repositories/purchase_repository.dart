@@ -26,6 +26,34 @@ class PurchaseRepository {
     }
   }
 
+  Future<Result<SupplierPaymentPage>> loadSupplierPayments({
+    int? supplierId,
+    int? purchaseOrderId,
+    int page = 1,
+  }) async {
+    try {
+      return Ok(
+        await _service.fetchSupplierPayments(
+          supplierId: supplierId,
+          purchaseOrderId: purchaseOrderId,
+          page: page,
+        ),
+      );
+    } on Exception catch (exception) {
+      return Error(exception);
+    }
+  }
+
+  Future<Result<SupplierPayment>> createSupplierPayment(
+    SupplierPaymentDraft draft,
+  ) async {
+    try {
+      return Ok(await _service.createSupplierPayment(draft));
+    } on Exception catch (exception) {
+      return Error(exception);
+    }
+  }
+
   Future<Result<double?>> loadLastProductCost(int productId) async {
     try {
       return Ok(await _service.fetchLastProductCost(productId));
@@ -37,7 +65,7 @@ class PurchaseRepository {
   Future<Result<PurchaseSubmission>> submitDraft(
     List<PurchaseDraftLine> lines, {
     required bool receiveImmediately,
-    int? supplierId,
+    required int supplierId,
   }) async {
     if (lines.isEmpty) {
       return Error(Exception('purchase draft is empty'));
@@ -71,6 +99,19 @@ class PurchaseRepository {
   Future<Result<PurchaseOrder>> receiveOrder(int purchaseOrderId) async {
     try {
       return Ok(await _service.receivePurchaseOrder(purchaseOrderId));
+    } on Exception catch (exception) {
+      return Error(exception);
+    }
+  }
+
+  Future<Result<PurchaseOrder>> receiveLines({
+    required int purchaseOrderId,
+    required PurchaseReceiveDraft draft,
+  }) async {
+    try {
+      return Ok(
+        await _service.receivePurchaseOrder(purchaseOrderId, draft: draft),
+      );
     } on Exception catch (exception) {
       return Error(exception);
     }

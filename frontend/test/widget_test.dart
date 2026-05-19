@@ -981,7 +981,13 @@ void main() {
 
     expect(find.text('سكر المورد'), findsOneWidget);
     expect(find.text('استلام أمر الشراء فورًا'), findsOneWidget);
+    expect(find.text('اختر موردًا قبل إرسال أمر الشراء.'), findsOneWidget);
     expect(find.text('إرسال أمر الشراء 4.25 د.ل'), findsOneWidget);
+
+    await tester.tap(find.text('لا يوجد مورد محدد'));
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+    await tester.tap(find.text('مورد المدينة').last);
+    await tester.pumpAndSettle();
 
     await tester.tap(find.text('إرسال أمر الشراء 4.25 د.ل'));
     await tester.pumpAndSettle(const Duration(seconds: 1));
@@ -1013,13 +1019,19 @@ void main() {
     await tester.tap(find.text('إرسال'));
     await tester.pumpAndSettle(const Duration(seconds: 1));
 
-    expect(find.text('تحديد كمستلم'), findsOneWidget);
+    expect(find.text('استلام كميات'), findsOneWidget);
 
-    await tester.tap(find.text('تحديد كمستلم'));
+    await tester.tap(find.text('استلام كميات'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('استلام كميات أمر الشراء'), findsOneWidget);
+    expect(find.text('مستلم سليم'), findsOneWidget);
+    expect(find.text('تالف عند الوصول'), findsOneWidget);
+    await tester.tap(find.text('تأكيد'));
     await tester.pumpAndSettle(const Duration(seconds: 1));
 
     expect(find.textContaining('مستلم'), findsWidgets);
-    expect(find.text('تحديد كمستلم'), findsNothing);
+    expect(find.text('استلام كميات'), findsNothing);
     expect(find.text('إرجاع'), findsOneWidget);
 
     await tester.tap(find.text('إرجاع'));
@@ -1035,9 +1047,116 @@ void main() {
       find.text('تم تسجيل إرجاع المشتريات رقم P20260515000200.'),
       findsOneWidget,
     );
+    await tester.scrollUntilVisible(find.text('المرتجعات والاستبدالات'), 300);
+    await tester.pumpAndSettle();
     expect(find.text('المرتجعات والاستبدالات'), findsOneWidget);
     expect(find.text('إرجاع'), findsWidgets);
   });
+
+  testWidgets('purchase order details can record supplier payment', (
+    WidgetTester tester,
+  ) async {
+    Map<String, Object?>? paymentBody;
+    await tester.pumpWidget(
+      PointyApp(
+        apiService: _mockApiService(
+          onSupplierPaymentCreate: (request) {
+            paymentBody = jsonDecode(request.body) as Map<String, Object?>;
+          },
+        ),
+      ),
+    );
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+
+    await tester.tap(find.byIcon(Icons.menu));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('المشتريات'));
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+    await tester.tap(find.text('P20260515000200'));
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+
+    expect(find.text('تاريخ الاستحقاق'), findsOneWidget);
+    expect(find.text('غير مدفوع'), findsWidgets);
+    expect(find.text('المتبقي للمورد'), findsOneWidget);
+    expect(find.text('تسجيل دفعة'), findsOneWidget);
+
+    await tester.tap(find.text('تسجيل دفعة'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('دفعة للمورد'), findsOneWidget);
+    await tester.enterText(find.widgetWithText(TextField, 'المبلغ'), '3.50');
+    await tester.enterText(
+      find.widgetWithText(TextField, 'مرجع اختياري'),
+      'TR-55',
+    );
+    await tester.enterText(
+      find.widgetWithText(TextField, 'ملاحظات اختيارية'),
+      'دفعة جزئية',
+    );
+    await tester.tap(find.text('تأكيد'));
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+
+    expect(paymentBody?['purchase_order'], 200);
+    expect(paymentBody?['amount'], '3.50');
+    expect(paymentBody?['method'], 'cash');
+    expect(paymentBody?['reference'], 'TR-55');
+    expect(paymentBody?['notes'], 'دفعة جزئية');
+    expect(
+      find.text('تم تسجيل دفعة المورد لأمر الشراء رقم P20260515000200.'),
+      findsOneWidget,
+    );
+    expect(find.text('مدفوع جزئيًا'), findsWidgets);
+  });
+
+  testWidgets(
+    'purchase order details posts partial and damaged receive lines',
+    (WidgetTester tester) async {
+      Map<String, Object?>? receiveBody;
+      await tester.pumpWidget(
+        PointyApp(
+          apiService: _mockApiService(
+            onPurchaseOrderReceive: (request) {
+              receiveBody = jsonDecode(request.body) as Map<String, Object?>;
+            },
+          ),
+        ),
+      );
+      await tester.pumpAndSettle(const Duration(seconds: 1));
+
+      await tester.tap(find.byIcon(Icons.menu));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('المشتريات'));
+      await tester.pumpAndSettle(const Duration(seconds: 1));
+      await tester.tap(find.text('P20260515000200'));
+      await tester.pumpAndSettle(const Duration(seconds: 1));
+
+      await tester.tap(find.text('إرسال'));
+      await tester.pumpAndSettle(const Duration(seconds: 1));
+      await tester.tap(find.text('استلام كميات'));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(find.widgetWithText(TextField, 'مستلم سليم'), '1');
+      await tester.enterText(
+        find.widgetWithText(TextField, 'تالف عند الوصول'),
+        '1',
+      );
+      await tester.enterText(
+        find.widgetWithText(TextField, 'ملاحظة الاستلام'),
+        'قطعة تالفة عند الوصول',
+      );
+      await tester.tap(find.text('تأكيد'));
+      await tester.pumpAndSettle(const Duration(seconds: 1));
+
+      expect(receiveBody?['note'], 'قطعة تالفة عند الوصول');
+      expect(receiveBody?['lines'], [
+        {'purchase_line': 1, 'quantity_received': 1, 'quantity_damaged': 1},
+      ]);
+      expect(find.textContaining('تالف 1'), findsWidgets);
+      await tester.scrollUntilVisible(find.text('سجل الاستلام'), 300);
+      await tester.pumpAndSettle();
+      expect(find.text('سجل الاستلام'), findsOneWidget);
+    },
+  );
 
   testWidgets('login screen authenticates before showing POS', (
     WidgetTester tester,
@@ -1871,6 +1990,8 @@ PosApiService _mockApiService({
   List<String> currentUserPermissions = const [],
   void Function(http.Request request)? onCheckout,
   void Function(http.Request request)? onPurchaseOrderCreate,
+  void Function(http.Request request)? onPurchaseOrderReceive,
+  void Function(http.Request request)? onSupplierPaymentCreate,
   void Function(http.Request request)? onCashMovement,
   void Function(http.Request request)? onReprint,
   void Function(http.Request request)? onReturn,
@@ -1892,6 +2013,7 @@ PosApiService _mockApiService({
 }) {
   var authenticated = isAuthenticated;
   var currentSessionIsOpen = hasOpenSession;
+  var supplierPaidTotal = 0.0;
 
   return PosApiService(
     client: MockClient((request) async {
@@ -2182,6 +2304,35 @@ PosApiService _mockApiService({
         });
       }
 
+      if (path.endsWith('/supplier-payments/')) {
+        if (request.method == 'POST') {
+          onSupplierPaymentCreate?.call(request);
+          final body = jsonDecode(request.body) as Map<String, Object?>;
+          supplierPaidTotal += double.tryParse('${body['amount']}') ?? 0;
+          return _jsonResponse({
+            'id': 501,
+            'supplier': body['supplier'] ?? 14,
+            'supplier_name': 'مورد المدينة',
+            'purchase_order': body['purchase_order'],
+            'purchase_order_number': 'P20260515000200',
+            'amount': body['amount'],
+            'method': body['method'],
+            'reference': body['reference'] ?? '',
+            'notes': body['notes'] ?? '',
+            'paid_at': '2026-05-19T11:00:00Z',
+            'created_by_username': 'manager',
+            'created_at': '2026-05-19T11:00:00Z',
+            'updated_at': '2026-05-19T11:00:00Z',
+          });
+        }
+        return _jsonResponse({
+          'count': 0,
+          'next': null,
+          'previous': null,
+          'results': const [],
+        });
+      }
+
       if (path.endsWith('/purchase-orders/200/submit/')) {
         return _jsonResponse(
           _purchaseOrderJson(
@@ -2192,12 +2343,43 @@ PosApiService _mockApiService({
       }
 
       if (path.endsWith('/purchase-orders/200/receive/')) {
+        onPurchaseOrderReceive?.call(request);
+        final body = request.body.isEmpty
+            ? const <String, Object?>{}
+            : jsonDecode(request.body) as Map<String, Object?>;
+        final lines = body['lines'] is List<Object?>
+            ? body['lines'] as List<Object?>
+            : const <Object?>[];
+        final typedLines = lines.whereType<Map<String, Object?>>().toList();
+        final firstLine = typedLines.isEmpty ? null : typedLines.first;
+        final receivedQuantity = firstLine == null
+            ? 2
+            : int.tryParse('${firstLine['quantity_received']}') ?? 0;
+        final damagedQuantity = firstLine == null
+            ? 0
+            : int.tryParse('${firstLine['quantity_damaged']}') ?? 0;
+        final rejectedQuantity = firstLine == null
+            ? 0
+            : int.tryParse('${firstLine['quantity_rejected']}') ?? 0;
+        final openQuantity =
+            2 - receivedQuantity - damagedQuantity - rejectedQuantity;
         return _jsonResponse(
           _purchaseOrderJson(
-            status: 'received',
+            status: openQuantity > 0 ? 'partially_received' : 'received',
             submittedAt: '2026-05-15T10:00:00Z',
-            receivedAt: '2026-05-15T10:10:00Z',
-            canAdjust: true,
+            receivedAt: openQuantity > 0 ? null : '2026-05-15T10:10:00Z',
+            receivedQuantity: receivedQuantity,
+            damagedQuantity: damagedQuantity,
+            rejectedQuantity: rejectedQuantity,
+            openQuantity: openQuantity,
+            canAdjust: openQuantity <= 0,
+            receipts: [
+              _purchaseReceiptJson(
+                receivedQuantity: receivedQuantity,
+                damagedQuantity: damagedQuantity,
+                note: body['note']?.toString() ?? '',
+              ),
+            ],
           ),
         );
       }
@@ -2235,7 +2417,18 @@ PosApiService _mockApiService({
       }
 
       if (path.endsWith('/purchase-orders/200/')) {
-        return _jsonResponse(_purchaseOrderJson(canAdjust: true));
+        return _jsonResponse(
+          _purchaseOrderJson(
+            canAdjust: true,
+            paidTotal: supplierPaidTotal.toStringAsFixed(2),
+            balanceDue: (7.5 - supplierPaidTotal).toStringAsFixed(2),
+            paymentStatus: supplierPaidTotal <= 0
+                ? 'unpaid'
+                : supplierPaidTotal >= 7.5
+                ? 'paid'
+                : 'partial',
+          ),
+        );
       }
 
       if (path.endsWith('/stock/')) {
@@ -2449,16 +2642,30 @@ Map<String, Object?> _purchaseOrderJson({
   String total = '7.50',
   String? submittedAt,
   String? receivedAt,
+  String? dueDate = '2026-05-25',
+  String paidTotal = '0.00',
+  String creditAppliedTotal = '0.00',
+  String adjustmentCreditTotal = '0.00',
+  String balanceDue = '7.50',
+  String paymentStatus = 'unpaid',
+  bool isOverdue = false,
   int adjustedQuantity = 0,
   int adjustableQuantity = 2,
+  int? receivedQuantity,
+  int? damagedQuantity,
+  int? rejectedQuantity,
+  int? openQuantity,
   bool canAdjust = false,
+  int? supplierId = 14,
+  String? supplierName = 'مورد المدينة',
+  List<Map<String, Object?>> receipts = const [],
   List<Map<String, Object?>> adjustments = const [],
 }) {
   return {
     'id': id,
     'order_number': orderNumber,
-    'supplier': null,
-    'supplier_name': null,
+    'supplier': supplierId,
+    'supplier_name': supplierName,
     'supplier_reference': '',
     'status': status,
     'notes': '',
@@ -2469,15 +2676,27 @@ Map<String, Object?> _purchaseOrderJson({
         'product_name': 'قهوة البيت',
         'product_sku': 'COF-001',
         'quantity': 2,
+        'received_quantity': receivedQuantity,
+        'damaged_quantity': damagedQuantity,
+        'rejected_quantity': rejectedQuantity,
+        'open_quantity': openQuantity,
         'adjusted_quantity': adjustedQuantity,
         'adjustable_quantity': adjustableQuantity,
         'unit_cost': '3.75',
         'line_total': total,
       },
     ],
+    'receipts': receipts,
     'adjustments': adjustments,
     'subtotal': total,
     'total': total,
+    'due_date': dueDate,
+    'paid_total': paidTotal,
+    'credit_applied_total': creditAppliedTotal,
+    'adjustment_credit_total': adjustmentCreditTotal,
+    'balance_due': balanceDue,
+    'payment_status': paymentStatus,
+    'is_overdue': isOverdue,
     'can_return': canAdjust,
     'can_refund': canAdjust,
     'can_exchange': canAdjust,
@@ -2494,8 +2713,17 @@ Map<String, Object?> _purchaseAdjustmentJson() {
     'adjustment_type': 'return',
     'amount': '3.75',
     'reason': '',
+    'settlement_method': 'supplier_credit',
     'created_by': 1,
     'created_by_username': 'manager',
+    'credits': [
+      {
+        'id': 401,
+        'amount': '3.75',
+        'remaining_amount': '3.75',
+        'created_at': '2026-05-15T10:20:00Z',
+      },
+    ],
     'lines': [
       {
         'id': 301,
@@ -2509,6 +2737,29 @@ Map<String, Object?> _purchaseAdjustmentJson() {
     ],
     'created_at': '2026-05-15T10:20:00Z',
     'updated_at': '2026-05-15T10:20:00Z',
+  };
+}
+
+Map<String, Object?> _purchaseReceiptJson({
+  int receivedQuantity = 1,
+  int damagedQuantity = 0,
+  int rejectedQuantity = 0,
+  String note = '',
+}) {
+  return {
+    'id': 350,
+    'note': note,
+    'created_by_username': 'manager',
+    'created_at': '2026-05-15T10:10:00Z',
+    'lines': [
+      {
+        'purchase_line': 1,
+        'product_name': 'قهوة البيت',
+        'quantity_received': receivedQuantity,
+        'quantity_damaged': damagedQuantity,
+        'quantity_rejected': rejectedQuantity,
+      },
+    ],
   };
 }
 
@@ -2551,6 +2802,9 @@ Map<String, Object?> _supplierJson({
     'address': 'طرابلس',
     'notes': '',
     'is_active': true,
+    'payable_balance': '120.00',
+    'credit_balance': '15.00',
+    'net_balance': '105.00',
     'created_at': '2026-05-19T09:00:00Z',
     'updated_at': '2026-05-19T09:00:00Z',
   };

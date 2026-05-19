@@ -56,7 +56,15 @@ class PurchaseDraftPane extends StatelessWidget {
               enabled: !viewModel.isSubmitting,
               onSelect: () => _selectSupplier(context),
               onClear: () => viewModel.selectSupplier(null),
+              allowClear: false,
             ),
+            if (viewModel.selectedSupplier == null) ...[
+              const SizedBox(height: 6),
+              Text(
+                l10n.purchaseSupplierRequiredHint,
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
+            ],
             const SizedBox(height: 8),
             Expanded(
               child: viewModel.draft.isEmpty
@@ -99,9 +107,9 @@ class PurchaseDraftPane extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             FilledButton.icon(
-              onPressed: viewModel.draft.isEmpty || viewModel.isSubmitting
-                  ? null
-                  : () => _submitDraft(context),
+              onPressed: viewModel.canSubmitDraft
+                  ? () => _submitDraft(context)
+                  : null,
               icon: viewModel.isSubmitting
                   ? const SizedBox.square(
                       dimension: 18,

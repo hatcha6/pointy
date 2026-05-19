@@ -205,8 +205,12 @@ class PurchaseOrderTile extends StatelessWidget {
         subtitle: Text(
           [
             purchaseOrderStatusLabel(l10n, order.status),
+            if (order.paymentStatus.isNotEmpty)
+              _paymentStatusLabel(l10n, order.paymentStatus),
             l10n.purchaseOrderLineCount(order.lineCount),
             if (date != null) formatDateTime(date),
+            if (order.dueDate != null)
+              l10n.purchaseOrderDueDateValue(_formatDate(order.dueDate!)),
             if (order.supplierName != null && order.supplierName!.isNotEmpty)
               order.supplierName!,
           ].join(' • '),
@@ -214,7 +218,9 @@ class PurchaseOrderTile extends StatelessWidget {
           overflow: TextOverflow.ellipsis,
         ),
         trailing: Text(
-          formatMoney(order.total),
+          order.balanceDue > 0
+              ? formatMoney(order.balanceDue)
+              : formatMoney(order.total),
           style: Theme.of(context).textTheme.titleMedium,
         ),
         onTap: onTap,
@@ -231,4 +237,20 @@ class PurchaseOrderTile extends StatelessWidget {
       _ => Icons.receipt_long_outlined,
     };
   }
+}
+
+String _paymentStatusLabel(AppLocalizations l10n, String status) {
+  return switch (status) {
+    'partial' => l10n.purchasePaymentStatusPartial,
+    'paid' => l10n.purchasePaymentStatusPaid,
+    'credit' => l10n.purchasePaymentStatusCredit,
+    _ => l10n.purchasePaymentStatusUnpaid,
+  };
+}
+
+String _formatDate(DateTime dateTime) {
+  final date = dateTime.toLocal();
+  final month = date.month.toString().padLeft(2, '0');
+  final day = date.day.toString().padLeft(2, '0');
+  return '${date.year}/$month/$day';
 }

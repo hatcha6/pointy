@@ -1448,6 +1448,12 @@ abstract class AppLocalizations {
   /// **'مرسل'**
   String get purchaseOrderStatusSubmitted;
 
+  /// No description provided for @purchaseOrderStatusPartiallyReceived.
+  ///
+  /// In ar, this message translates to:
+  /// **'مستلم جزئيًا'**
+  String get purchaseOrderStatusPartiallyReceived;
+
   /// No description provided for @purchaseOrderStatusReceived.
   ///
   /// In ar, this message translates to:
@@ -1544,6 +1550,78 @@ abstract class AppLocalizations {
   /// **'تاريخ الاستلام'**
   String get purchaseOrderReceivedAtLabel;
 
+  /// No description provided for @purchaseOrderDueDateLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'تاريخ الاستحقاق'**
+  String get purchaseOrderDueDateLabel;
+
+  /// Compact due date shown in purchase order lists.
+  ///
+  /// In ar, this message translates to:
+  /// **'الاستحقاق {date}'**
+  String purchaseOrderDueDateValue(String date);
+
+  /// No description provided for @purchaseOrderOverdueValue.
+  ///
+  /// In ar, this message translates to:
+  /// **'متأخر'**
+  String get purchaseOrderOverdueValue;
+
+  /// No description provided for @purchaseOrderPaymentStatusLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'حالة السداد'**
+  String get purchaseOrderPaymentStatusLabel;
+
+  /// No description provided for @purchasePaymentStatusUnpaid.
+  ///
+  /// In ar, this message translates to:
+  /// **'غير مدفوع'**
+  String get purchasePaymentStatusUnpaid;
+
+  /// No description provided for @purchasePaymentStatusPartial.
+  ///
+  /// In ar, this message translates to:
+  /// **'مدفوع جزئيًا'**
+  String get purchasePaymentStatusPartial;
+
+  /// No description provided for @purchasePaymentStatusPaid.
+  ///
+  /// In ar, this message translates to:
+  /// **'مدفوع'**
+  String get purchasePaymentStatusPaid;
+
+  /// No description provided for @purchasePaymentStatusCredit.
+  ///
+  /// In ar, this message translates to:
+  /// **'رصيد دائن'**
+  String get purchasePaymentStatusCredit;
+
+  /// No description provided for @purchaseOrderPaidTotalLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'المدفوع'**
+  String get purchaseOrderPaidTotalLabel;
+
+  /// No description provided for @purchaseOrderCreditAppliedLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'رصيد مستخدم'**
+  String get purchaseOrderCreditAppliedLabel;
+
+  /// No description provided for @purchaseOrderAdjustmentCreditLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'رصيد من المرتجعات'**
+  String get purchaseOrderAdjustmentCreditLabel;
+
+  /// No description provided for @purchaseOrderBalanceDueLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'المتبقي للمورد'**
+  String get purchaseOrderBalanceDueLabel;
+
   /// No description provided for @purchaseOrderActionsTitle.
   ///
   /// In ar, this message translates to:
@@ -1561,6 +1639,12 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'تحديد كمستلم'**
   String get receivePurchaseOrderAction;
+
+  /// No description provided for @receivePurchaseLinesAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'استلام كميات'**
+  String get receivePurchaseLinesAction;
 
   /// No description provided for @cancelPurchaseOrderAction.
   ///
@@ -1603,6 +1687,60 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'تعذر تسجيل تعديل المشتريات. راجع الكميات والمخزون وحاول مرة أخرى.'**
   String get purchaseOrderAdjustmentError;
+
+  /// No description provided for @purchaseOrderPaymentError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر تسجيل دفعة المورد. راجع المبلغ وطريقة الدفع وحاول مرة أخرى.'**
+  String get purchaseOrderPaymentError;
+
+  /// No description provided for @recordSupplierPaymentAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'تسجيل دفعة'**
+  String get recordSupplierPaymentAction;
+
+  /// No description provided for @supplierPaymentTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'دفعة للمورد'**
+  String get supplierPaymentTitle;
+
+  /// No description provided for @supplierPaymentAmountLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'المبلغ'**
+  String get supplierPaymentAmountLabel;
+
+  /// No description provided for @supplierPaymentReferenceLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'مرجع اختياري'**
+  String get supplierPaymentReferenceLabel;
+
+  /// No description provided for @supplierPaymentNotesLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'ملاحظات اختيارية'**
+  String get supplierPaymentNotesLabel;
+
+  /// No description provided for @supplierPaymentPositiveAmountError.
+  ///
+  /// In ar, this message translates to:
+  /// **'أدخل مبلغًا أكبر من صفر ولا يتجاوز المتبقي.'**
+  String get supplierPaymentPositiveAmountError;
+
+  /// Message shown after a supplier payment is recorded for a purchase order.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم تسجيل دفعة المورد لأمر الشراء رقم {orderNumber}.'**
+  String supplierPaymentSuccess(String orderNumber);
+
+  /// No description provided for @supplierPaymentMethodCredit.
+  ///
+  /// In ar, this message translates to:
+  /// **'رصيد المورد'**
+  String get supplierPaymentMethodCredit;
 
   /// No description provided for @purchaseReturnTitle.
   ///
@@ -1694,6 +1832,24 @@ abstract class AppLocalizations {
   /// **'استبدال'**
   String get purchaseAdjustmentTypeExchange;
 
+  /// Settlement method shown on a purchase adjustment.
+  ///
+  /// In ar, this message translates to:
+  /// **'التسوية: {method}'**
+  String purchaseAdjustmentSettlementMethod(String method);
+
+  /// Supplier credit created by a purchase return or adjustment.
+  ///
+  /// In ar, this message translates to:
+  /// **'أنشئ رصيد مورد بقيمة {amount}'**
+  String purchaseAdjustmentSupplierCreditCreated(String amount);
+
+  /// Remaining supplier credit balance shown in adjustment history.
+  ///
+  /// In ar, this message translates to:
+  /// **'المتبقي من الرصيد {amount}'**
+  String purchaseAdjustmentSupplierCreditRemaining(String amount);
+
   /// Line count label for a purchase adjustment history item.
   ///
   /// In ar, this message translates to:
@@ -1711,6 +1867,90 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'تم استلام أمر الشراء رقم {orderNumber}.'**
   String purchaseOrderReceiveSuccess(String orderNumber);
+
+  /// No description provided for @purchaseReceiveTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'استلام كميات أمر الشراء'**
+  String get purchaseReceiveTitle;
+
+  /// No description provided for @purchaseReceiveNoOpenLines.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد كميات مفتوحة للاستلام.'**
+  String get purchaseReceiveNoOpenLines;
+
+  /// No description provided for @purchaseReceiveNoItemsSelected.
+  ///
+  /// In ar, this message translates to:
+  /// **'أدخل كمية مستلمة أو تالفة أو مرفوضة لعنصر واحد على الأقل.'**
+  String get purchaseReceiveNoItemsSelected;
+
+  /// No description provided for @purchaseReceiveInvalidQuantityError.
+  ///
+  /// In ar, this message translates to:
+  /// **'أدخل كميات صحيحة لا تقل عن صفر.'**
+  String get purchaseReceiveInvalidQuantityError;
+
+  /// No description provided for @purchaseReceiveReceivedLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'مستلم سليم'**
+  String get purchaseReceiveReceivedLabel;
+
+  /// No description provided for @purchaseReceiveDamagedLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'تالف عند الوصول'**
+  String get purchaseReceiveDamagedLabel;
+
+  /// No description provided for @purchaseReceiveRejectedLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'مرفوض/لن يصل'**
+  String get purchaseReceiveRejectedLabel;
+
+  /// No description provided for @purchaseReceiveNoteLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'ملاحظة الاستلام'**
+  String get purchaseReceiveNoteLabel;
+
+  /// No description provided for @purchaseReceiveNoteHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'مثال: نقص في الصندوق أو زيادة من المورد'**
+  String get purchaseReceiveNoteHint;
+
+  /// Expected purchase line quantity in the receiving dialog.
+  ///
+  /// In ar, this message translates to:
+  /// **'المطلوب {quantity}'**
+  String purchaseReceiveExpectedValue(int quantity);
+
+  /// Already received quantity in the receiving dialog.
+  ///
+  /// In ar, this message translates to:
+  /// **'استلم سابقًا {quantity}'**
+  String purchaseReceiveAlreadyValue(int quantity);
+
+  /// Open/backordered quantity in the receiving dialog.
+  ///
+  /// In ar, this message translates to:
+  /// **'المفتوح {quantity}'**
+  String purchaseReceiveOpenValue(int quantity);
+
+  /// Open or backordered quantity after receiving dialog values are applied.
+  ///
+  /// In ar, this message translates to:
+  /// **'المفتوح بعد الإدخال {quantity}'**
+  String purchaseReceiveOpenAfterValue(int quantity);
+
+  /// Receiving variance after entered quantities are applied.
+  ///
+  /// In ar, this message translates to:
+  /// **'الفرق بعد الإدخال {quantity}'**
+  String purchaseReceiveAfterVarianceValue(String quantity);
 
   /// Message shown after a purchase order is cancelled.
   ///
@@ -1735,6 +1975,60 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'الكمية {quantity}'**
   String purchaseOrderLineQuantity(int quantity);
+
+  /// Total received quantity shown on purchase order lines and receipts.
+  ///
+  /// In ar, this message translates to:
+  /// **'مستلم {quantity}'**
+  String purchaseLineReceivedQuantity(int quantity);
+
+  /// Open or backordered quantity shown on purchase order lines.
+  ///
+  /// In ar, this message translates to:
+  /// **'مفتوح/متأخر {quantity}'**
+  String purchaseLineOpenQuantity(int quantity);
+
+  /// Damaged purchase quantity.
+  ///
+  /// In ar, this message translates to:
+  /// **'تالف {quantity}'**
+  String purchaseLineDamagedQuantity(int quantity);
+
+  /// Rejected purchase quantity.
+  ///
+  /// In ar, this message translates to:
+  /// **'مرفوض {quantity}'**
+  String purchaseLineRejectedQuantity(int quantity);
+
+  /// Purchase receiving variance quantity.
+  ///
+  /// In ar, this message translates to:
+  /// **'الفرق {quantity}'**
+  String purchaseLineVarianceValue(String quantity);
+
+  /// No description provided for @purchaseReceiptHistoryTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'سجل الاستلام'**
+  String get purchaseReceiptHistoryTitle;
+
+  /// No description provided for @purchaseReceiptHistoryEmpty.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد عمليات استلام مسجلة.'**
+  String get purchaseReceiptHistoryEmpty;
+
+  /// No description provided for @purchaseReceiptHistoryItemFallback.
+  ///
+  /// In ar, this message translates to:
+  /// **'عملية استلام'**
+  String get purchaseReceiptHistoryItemFallback;
+
+  /// Line count label for a purchase receipt history item.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, =0{لا توجد عناصر} =1{عنصر واحد} =2{عنصران} other{{count} عناصر}}'**
+  String purchaseReceiptHistoryLineCount(num count);
 
   /// Previous product purchase cost shown on a purchase order line.
   ///
@@ -2084,6 +2378,24 @@ abstract class AppLocalizations {
   /// **'جهة التواصل'**
   String get supplierContactLabel;
 
+  /// Supplier payable balance shown in contacts.
+  ///
+  /// In ar, this message translates to:
+  /// **'مستحق {amount}'**
+  String supplierPayableBalanceValue(String amount);
+
+  /// Supplier credit balance shown in contacts.
+  ///
+  /// In ar, this message translates to:
+  /// **'رصيد {amount}'**
+  String supplierCreditBalanceValue(String amount);
+
+  /// Supplier net balance shown in contacts.
+  ///
+  /// In ar, this message translates to:
+  /// **'الصافي {amount}'**
+  String supplierNetBalanceValue(String amount);
+
   /// No description provided for @selectedCustomerLabel.
   ///
   /// In ar, this message translates to:
@@ -2107,6 +2419,12 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'لا يوجد مورد محدد'**
   String get noSupplierSelectedLabel;
+
+  /// No description provided for @purchaseSupplierRequiredHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر موردًا قبل إرسال أمر الشراء.'**
+  String get purchaseSupplierRequiredHint;
 
   /// No description provided for @chooseCustomerTitle.
   ///

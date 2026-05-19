@@ -21,7 +21,11 @@ from apps.printing.views import (
     PrintTemplateVersionViewSet,
     PrintTemplateViewSet,
 )
-from apps.purchasing.views import PurchaseOrderViewSet, SupplierViewSet
+from apps.purchasing.views import (
+    PurchaseOrderViewSet,
+    SupplierPaymentViewSet,
+    SupplierViewSet,
+)
 from apps.sales.views import OrderViewSet, RegisterSessionViewSet
 
 router = DefaultRouter()
@@ -32,6 +36,7 @@ router.register("stock-movements", StockMovementViewSet)
 router.register("orders", OrderViewSet)
 router.register("customers", CustomerViewSet)
 router.register("suppliers", SupplierViewSet)
+router.register("supplier-payments", SupplierPaymentViewSet)
 router.register("purchase-orders", PurchaseOrderViewSet)
 router.register("register-sessions", RegisterSessionViewSet, basename="register-session")
 router.register("payments", PaymentViewSet)

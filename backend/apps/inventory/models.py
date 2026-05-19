@@ -23,6 +23,10 @@ class StockMovement(TimeStampedModel):
         INCREASE = "increase", "Increase stock"
         DECREASE = "decrease", "Decrease stock"
         DAMAGED = "damaged", "Damaged stock"
+        EXPECTED = "expected", "Expected stock"
+        RECEIVE_EXPECTED = "receive_expected", "Receive expected stock"
+        RECEIVE_DAMAGED = "receive_damaged", "Receive damaged expected stock"
+        CANCEL_EXPECTED = "cancel_expected", "Cancel expected stock"
 
     product = models.ForeignKey(
         Product,

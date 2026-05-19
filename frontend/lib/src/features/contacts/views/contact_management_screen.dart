@@ -6,6 +6,7 @@ import '../../../data/models/pos_user.dart';
 import '../../../shared/app_navigation_drawer.dart';
 import '../../../shared/authorization_guards.dart';
 import '../../../shared/contact_picker_sheet.dart';
+import '../../../shared/formatters.dart';
 import '../view_models/contact_management_view_model.dart';
 
 class ContactManagementScreen extends StatelessWidget {
@@ -293,6 +294,18 @@ class _SupplierList extends StatelessWidget {
                 if (supplier.phone.isNotEmpty) supplier.phone,
                 if (supplier.email.isNotEmpty) supplier.email,
                 if (supplier.address.isNotEmpty) supplier.address,
+                if (supplier.payableBalance > 0)
+                  l10n.supplierPayableBalanceValue(
+                    formatMoney(supplier.payableBalance),
+                  ),
+                if (supplier.creditBalance > 0)
+                  l10n.supplierCreditBalanceValue(
+                    formatMoney(supplier.creditBalance),
+                  ),
+                if (supplier.netBalance != 0)
+                  l10n.supplierNetBalanceValue(
+                    formatMoney(supplier.netBalance),
+                  ),
                 if (!supplier.isActive) l10n.inactiveContactLabel,
               ].join(' • '),
               maxLines: 3,

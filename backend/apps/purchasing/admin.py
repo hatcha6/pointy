@@ -1,6 +1,14 @@
 from django.contrib import admin
 
-from .models import PurchaseLine, PurchaseOrder, Supplier
+from .models import (
+    PurchaseLine,
+    PurchaseOrder,
+    PurchaseReceipt,
+    PurchaseReceiptLine,
+    Supplier,
+    SupplierCredit,
+    SupplierPayment,
+)
 
 
 @admin.register(Supplier)
@@ -15,6 +23,25 @@ class PurchaseLineInline(admin.TabularInline):
     extra = 0
 
 
+class PurchaseReceiptLineInline(admin.TabularInline):
+    model = PurchaseReceiptLine
+    extra = 0
+    readonly_fields = (
+        "purchase_line",
+        "product",
+        "ordered_quantity",
+        "outstanding_before",
+        "accepted_quantity",
+        "damaged_quantity",
+        "cancelled_quantity",
+        "expected_reduction_quantity",
+        "over_received_quantity",
+        "outstanding_after",
+        "notes",
+    )
+    can_delete = False
+
+
 @admin.register(PurchaseOrder)
 class PurchaseOrderAdmin(admin.ModelAdmin):
     list_display = (
@@ -23,9 +50,46 @@ class PurchaseOrderAdmin(admin.ModelAdmin):
         "status",
         "subtotal",
         "total",
+        "due_date",
         "submitted_at",
         "received_at",
     )
     list_filter = ("status", "supplier")
     search_fields = ("order_number", "supplier__name", "supplier_reference")
     inlines = [PurchaseLineInline]
+
+
+@admin.register(PurchaseReceipt)
+class PurchaseReceiptAdmin(admin.ModelAdmin):
+    list_display = ("purchase_order", "received_at", "created_by")
+    list_filter = ("received_at", "created_by")
+    search_fields = ("purchase_order__order_number", "notes")
+    inlines = [PurchaseReceiptLineInline]
+
+
+@admin.register(SupplierPayment)
+class SupplierPaymentAdmin(admin.ModelAdmin):
+    list_display = (
+        "supplier",
+        "purchase_order",
+        "method",
+        "amount",
+        "paid_at",
+        "created_by",
+    )
+    list_filter = ("method", "supplier")
+    search_fields = ("supplier__name", "purchase_order__order_number", "reference")
+
+
+@admin.register(SupplierCredit)
+class SupplierCreditAdmin(admin.ModelAdmin):
+    list_display = (
+        "supplier",
+        "purchase_order",
+        "adjustment",
+        "amount",
+        "remaining_amount",
+        "status",
+    )
+    list_filter = ("status", "supplier")
+    search_fields = ("supplier__name", "purchase_order__order_number", "reason")

@@ -1,15 +1,17 @@
-from rest_framework import serializers, viewsets
+from rest_framework import mixins, serializers, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from apps.core.permissions import HasPointyPermission
-from .models import PurchaseOrder, Supplier
+from .models import PurchaseOrder, Supplier, SupplierPayment
 from .serializers import (
     PurchaseOrderExchangeSerializer,
     PurchaseOrderRefundSerializer,
+    PurchaseReceiptInputSerializer,
     PurchaseOrderReturnSerializer,
     PurchaseOrderSerializer,
+    SupplierPaymentSerializer,
     SupplierSerializer,
 )
 from .services import (
@@ -35,6 +37,34 @@ class SupplierViewSet(viewsets.ModelViewSet):
     filterset_fields = ("is_active",)
     search_fields = ("name", "contact_name", "phone", "email", "address")
     ordering_fields = ("name", "created_at", "updated_at")
+
+
+class SupplierPaymentViewSet(
+    mixins.CreateModelMixin,
+    mixins.ListModelMixin,
+    mixins.RetrieveModelMixin,
+    viewsets.GenericViewSet,
+):
+    serializer_class = SupplierPaymentSerializer
+    permission_classes = [IsAuthenticated, HasPointyPermission]
+    permission_map = {
+        "list": ("purchasing.view_supplierpayment",),
+        "retrieve": ("purchasing.view_supplierpayment",),
+        "create": ("purchasing.add_supplierpayment",),
+    }
+    queryset = SupplierPayment.objects.select_related(
+        "supplier",
+        "purchase_order",
+        "created_by",
+    )
+    filterset_fields = ("supplier", "purchase_order", "method")
+    search_fields = (
+        "supplier__name",
+        "purchase_order__order_number",
+        "reference",
+        "notes",
+    )
+    ordering_fields = ("paid_at", "created_at", "amount")
 
 
 class PurchaseOrderViewSet(viewsets.ModelViewSet):
@@ -69,8 +99,14 @@ class PurchaseOrderViewSet(viewsets.ModelViewSet):
     }
     queryset = PurchaseOrder.objects.select_related("supplier").prefetch_related(
         "lines__product",
+        "lines__receipt_lines",
+        "receipts__lines__product",
+        "receipts__created_by",
         "adjustments__lines__product",
         "adjustments__created_by",
+        "adjustments__supplier_credit",
+        "supplier_payments",
+        "supplier_credits",
     )
     filterset_fields = ("status", "supplier")
     search_fields = (
@@ -98,21 +134,36 @@ class PurchaseOrderViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["post"])
     def submit(self, request, pk=None):
-        purchase_order = submit_purchase_order(self.get_object())
+        purchase_order = submit_purchase_order(self.get_object(), request=request)
         return Response(
             self.get_serializer(purchase_order).data,
         )
 
     @action(detail=True, methods=["post"])
     def receive(self, request, pk=None):
-        purchase_order = receive_purchase_order(self.get_object(), request=request)
+        lines_data = None
+        notes = ""
+        if request.data:
+            serializer = PurchaseReceiptInputSerializer(
+                data=request.data,
+                context={"purchase_order": self.get_object()},
+            )
+            serializer.is_valid(raise_exception=True)
+            lines_data = serializer.validated_data["validated_lines"]
+            notes = serializer.validated_data.get("notes", "")
+        purchase_order = receive_purchase_order(
+            self.get_object(),
+            request=request,
+            lines_data=lines_data,
+            notes=notes,
+        )
         return Response(
             self.get_serializer(purchase_order).data,
         )
 
     @action(detail=True, methods=["post"])
     def cancel(self, request, pk=None):
-        purchase_order = cancel_purchase_order(self.get_object())
+        purchase_order = cancel_purchase_order(self.get_object(), request=request)
         return Response(
             self.get_serializer(purchase_order).data,
         )

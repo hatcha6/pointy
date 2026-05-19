@@ -47,6 +47,8 @@ class PurchaseViewModel extends ChangeNotifier {
 
   double get subtotal => _draft.fold(0, (sum, line) => sum + line.subtotal);
   double get total => subtotal;
+  bool get canSubmitDraft =>
+      _draft.isNotEmpty && _selectedSupplier != null && !_isSubmitting;
 
   Future<void> loadCatalog() async {
     _isLoading = true;
@@ -243,7 +245,8 @@ class PurchaseViewModel extends ChangeNotifier {
   }
 
   Future<Result<PurchaseSubmission>> submitDraft() async {
-    if (_draft.isEmpty || _isSubmitting) {
+    final supplier = _selectedSupplier;
+    if (_draft.isEmpty || supplier == null || _isSubmitting) {
       return Error(Exception('purchase draft is not ready'));
     }
 
@@ -253,7 +256,7 @@ class PurchaseViewModel extends ChangeNotifier {
     final result = await _purchaseRepository.submitDraft(
       List.of(_draft),
       receiveImmediately: _receiveImmediately,
-      supplierId: _selectedSupplier?.id,
+      supplierId: supplier.id,
     );
     switch (result) {
       case Ok<PurchaseSubmission>():

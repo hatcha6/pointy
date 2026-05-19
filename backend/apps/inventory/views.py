@@ -79,6 +79,15 @@ class StockMovementViewSet(
     def _apply_movement(self, stock_item, movement_type, quantity):
         if movement_type == StockMovement.Type.INCREASE:
             stock_item.quantity_on_hand += quantity
+        elif movement_type == StockMovement.Type.EXPECTED:
+            stock_item.quantity_expected += quantity
+        elif movement_type == StockMovement.Type.RECEIVE_EXPECTED:
+            stock_item.quantity_on_hand += quantity
+            stock_item.quantity_expected -= quantity
+        elif movement_type == StockMovement.Type.RECEIVE_DAMAGED:
+            stock_item.quantity_expected -= quantity
+        elif movement_type == StockMovement.Type.CANCEL_EXPECTED:
+            stock_item.quantity_expected -= quantity
         elif movement_type in (
             StockMovement.Type.DECREASE,
             StockMovement.Type.DAMAGED,
@@ -88,6 +97,10 @@ class StockMovementViewSet(
         if stock_item.quantity_on_hand < 0:
             raise serializers.ValidationError(
                 {"quantity": "Stock on hand cannot become negative."}
+            )
+        if stock_item.quantity_expected < 0:
+            raise serializers.ValidationError(
+                {"quantity": "Expected stock cannot become negative."}
             )
 
         return {
