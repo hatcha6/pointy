@@ -19,6 +19,7 @@ enum AppCapability {
   closeRegisterSession,
   createRegisterCashMovement,
   viewCatalogManagement,
+  manageCategories,
   createProduct,
   viewRegisterSessions,
   viewRegisterSessionOrders,
@@ -56,6 +57,16 @@ class AuthorizationCapabilities {
         capabilities
           ..add(AppCapability.viewCatalogManagement)
           ..add(AppCapability.createProduct);
+      }
+      if (_hasAny(user, const [
+        'add_productcategory',
+        'change_productcategory',
+        'delete_productcategory',
+        'catalog.add_productcategory',
+        'catalog.change_productcategory',
+        'catalog.delete_productcategory',
+      ])) {
+        capabilities.add(AppCapability.manageCategories);
       }
       if (_hasAny(user, const [
         'change_product',
@@ -277,6 +288,7 @@ class AuthorizationCapabilities {
       allows(AppCapability.createRegisterCashMovement);
   bool get canViewCatalogManagement =>
       allows(AppCapability.viewCatalogManagement);
+  bool get canManageCategories => allows(AppCapability.manageCategories);
   bool get canCreateProduct => allows(AppCapability.createProduct);
   bool get canViewRegisterSessions =>
       allows(AppCapability.viewRegisterSessions);

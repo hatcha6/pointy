@@ -52,6 +52,7 @@ class PurchaseCatalogPane extends StatelessWidget {
           const SizedBox(height: 12),
           ProductQueryControls(
             query: viewModel.query,
+            catalogRepository: viewModel.catalogRepository,
             allowAvailabilityFilter: false,
             searchHint: l10n.purchaseProductLookupHint,
             searchFieldKey: const ValueKey('purchase_product_lookup_field'),

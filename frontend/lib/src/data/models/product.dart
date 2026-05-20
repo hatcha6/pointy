@@ -1,3 +1,5 @@
+import 'product_category.dart';
+
 class Product {
   const Product({
     required this.id,
@@ -8,6 +10,7 @@ class Product {
     this.barcode = '',
     this.description = '',
     this.isActive = true,
+    this.categories = const [],
   });
 
   final int id;
@@ -18,6 +21,7 @@ class Product {
   final String barcode;
   final String description;
   final bool isActive;
+  final List<ProductCategory> categories;
 
   factory Product.fromJson(Map<String, Object?> json) {
     return Product(
@@ -29,6 +33,7 @@ class Product {
       barcode: (json['barcode'] as String?) ?? '',
       description: (json['description'] as String?) ?? '',
       isActive: (json['is_active'] as bool?) ?? true,
+      categories: _categoriesFromJson(json),
     );
   }
 
@@ -42,7 +47,26 @@ class Product {
       barcode: barcode,
       description: description,
       isActive: isActive,
+      categories: categories,
     );
+  }
+
+  static List<ProductCategory> _categoriesFromJson(Map<String, Object?> json) {
+    final details = json['category_details'];
+    if (details is List<Object?>) {
+      return details
+          .cast<Map<String, Object?>>()
+          .map(ProductCategory.fromJson)
+          .toList(growable: false);
+    }
+    final categoryIds = json['categories'];
+    if (categoryIds is List<Object?>) {
+      return [
+        for (final id in categoryIds)
+          if (id is num) ProductCategory(id: id.toInt(), name: ''),
+      ];
+    }
+    return const [];
   }
 }
 
@@ -54,6 +78,7 @@ class ProductDraft {
     required this.isActive,
     this.barcode = '',
     this.description = '',
+    this.categoryIds = const [],
   });
 
   final String sku;
@@ -62,6 +87,7 @@ class ProductDraft {
   final bool isActive;
   final String barcode;
   final String description;
+  final List<int> categoryIds;
 
   Map<String, Object?> toJson() {
     return {
@@ -71,6 +97,7 @@ class ProductDraft {
       'description': description,
       'unit_price': unitPrice.toStringAsFixed(2),
       'is_active': isActive,
+      'categories': categoryIds,
     };
   }
 }

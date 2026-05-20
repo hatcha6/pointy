@@ -3,7 +3,7 @@ from django.urls import include, path
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 from rest_framework.routers import DefaultRouter
 
-from apps.catalog.views import ProductViewSet
+from apps.catalog.views import ProductCategoryViewSet, ProductViewSet
 from apps.customers.views import CustomerViewSet
 from apps.discounts.views import DiscountRuleViewSet
 from apps.core.views import (
@@ -32,6 +32,7 @@ from apps.sales.views import OrderViewSet, RegisterSessionViewSet
 router = DefaultRouter()
 router.register("users", PosUserViewSet, basename="pos-user")
 router.register("products", ProductViewSet)
+router.register("product-categories", ProductCategoryViewSet)
 router.register("stock", StockItemViewSet)
 router.register("stock-movements", StockMovementViewSet)
 router.register("orders", OrderViewSet)

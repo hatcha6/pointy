@@ -1,17 +1,23 @@
 import 'package:flutter/material.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
+import '../data/models/product_category.dart';
 import '../data/models/product_query.dart';
+import '../data/repositories/catalog_repository.dart';
+import 'async_selection/async_multi_select_picker.dart';
+import 'product_category_picker.dart';
 import 'query_controls/query_filter_sheet.dart';
 
 class ProductFilterSheet extends StatefulWidget {
   const ProductFilterSheet({
     super.key,
     required this.query,
+    required this.catalogRepository,
     required this.allowAvailabilityFilter,
   });
 
   final ProductQuery query;
+  final CatalogRepository catalogRepository;
   final bool allowAvailabilityFilter;
 
   @override
@@ -21,12 +27,17 @@ class ProductFilterSheet extends StatefulWidget {
 class _ProductFilterSheetState extends State<ProductFilterSheet> {
   late ProductAvailabilityFilter _availability;
   late ProductOrdering _ordering;
+  late List<AsyncSelectionOption<int>> _selectedCategories;
 
   @override
   void initState() {
     super.initState();
     _availability = widget.query.availability;
     _ordering = widget.query.ordering;
+    _selectedCategories = [
+      for (final category in widget.query.categories)
+        productCategoryOption(category),
+    ];
   }
 
   @override
@@ -98,6 +109,22 @@ class _ProductFilterSheetState extends State<ProductFilterSheet> {
             ),
           ],
         ),
+        const SizedBox(height: 22),
+        QueryFilterSection(
+          title: l10n.categoryFilterTitle,
+          children: [
+            AsyncSelectionField<int>(
+              fieldKey: const ValueKey('product_category_filter_field'),
+              strings: productCategoryFieldStrings(l10n),
+              selected: _selectedCategories,
+              onPick: () => _pickCategories(context),
+              onClear: _selectedCategories.isEmpty
+                  ? null
+                  : () => setState(() => _selectedCategories = []),
+              validator: (_) => null,
+            ),
+          ],
+        ),
       ],
     );
   }
@@ -115,6 +142,7 @@ class _ProductFilterSheetState extends State<ProductFilterSheet> {
       _availability = widget.allowAvailabilityFilter
           ? ProductAvailabilityFilter.all
           : widget.query.availability;
+      _selectedCategories = [];
       _ordering = ProductOrdering.name;
     });
   }
@@ -125,8 +153,33 @@ class _ProductFilterSheetState extends State<ProductFilterSheet> {
         availability: widget.allowAvailabilityFilter
             ? _availability
             : widget.query.availability,
+        categories: [
+          for (final option in _selectedCategories)
+            ProductCategory(id: option.id, name: option.label),
+        ],
         ordering: _ordering,
       ),
     );
+  }
+
+  Future<void> _pickCategories(BuildContext context) async {
+    final l10n = AppLocalizations.of(context)!;
+    final picked = await showAsyncMultiSelectPicker<int>(
+      context: context,
+      strings: productCategoryPickerStrings(l10n),
+      selected: _selectedCategories,
+      searchFieldKey: const ValueKey('product_category_filter_search_field'),
+      applyButtonKey: const ValueKey('product_category_filter_apply_button'),
+      optionKeyForId: (id) => ValueKey('product_category_filter_option_$id'),
+      loadPage: (search, page) => loadProductCategorySelectionPage(
+        catalogRepository: widget.catalogRepository,
+        search: search,
+        page: page,
+      ),
+    );
+    if (!mounted || picked == null) {
+      return;
+    }
+    setState(() => _selectedCategories = picked);
   }
 }

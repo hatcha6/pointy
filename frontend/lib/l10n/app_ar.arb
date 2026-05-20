@@ -29,6 +29,7 @@
   "purchasingDrawerLabel": "المشتريات",
   "contactsDrawerLabel": "الجهات",
   "catalogDrawerLabel": "المنتجات",
+  "categoriesDrawerLabel": "التصنيفات",
   "registerSessionsDrawerLabel": "جلسات الدرج",
   "deviceSettingsDrawerLabel": "إعدادات الجهاز",
   "usersDrawerLabel": "المستخدمون",
@@ -214,6 +215,56 @@
   "descriptionLabel": "الوصف",
   "descriptionHint": "تفاصيل قصيرة للمنتج",
   "unitPriceLabel": "السعر",
+  "productCategoriesLabel": "تصنيفات المنتج",
+  "productCategoriesEmpty": "لا توجد تصنيفات محددة",
+  "productCategoriesHelper": "اختياري، يساعد في البحث والتصفية داخل نقطة البيع والمشتريات",
+  "productCategoriesOpenPickerTooltip": "اختيار التصنيفات",
+  "productCategoryPickerTitle": "اختيار التصنيفات",
+  "productCategoryPickerSearchHint": "ابحث باسم التصنيف",
+  "productCategoryPickerEmpty": "لا توجد تصنيفات مطابقة",
+  "productCategoryPickerLoadError": "تعذر تحميل التصنيفات.",
+  "productCategoryFallbackLabel": "تصنيف #{id}",
+  "@productCategoryFallbackLabel": {
+    "description": "Fallback category label when the category name is unavailable.",
+    "placeholders": {
+      "id": {
+        "type": "int"
+      }
+    }
+  },
+  "categoryFilterTitle": "التصنيف",
+  "categoryManagementTitle": "إدارة التصنيفات",
+  "addCategoryButton": "إضافة تصنيف",
+  "newCategoryTitle": "تصنيف جديد",
+  "categoryNameLabel": "اسم التصنيف",
+  "parentCategoryLabel": "التصنيف الأب",
+  "noParentCategory": "تصنيف رئيسي",
+  "parentCategoryHelper": "اختياري، اختر أبًا لإنشاء تصنيف فرعي",
+  "activeCategoryLabel": "تصنيف نشط",
+  "createCategoryButton": "إنشاء التصنيف",
+  "creatingCategoryButton": "جار الإنشاء...",
+  "categoryLoadError": "تعذر تحميل التصنيفات.",
+  "categoryCreateError": "تعذر إنشاء التصنيف. راجع البيانات وحاول مرة أخرى.",
+  "categoryEmptyState": "لا توجد تصنيفات بعد.",
+  "rootCategoryLabel": "تصنيف رئيسي",
+  "categoryParentValue": "ضمن {parent}",
+  "@categoryParentValue": {
+    "description": "Shows the parent category name.",
+    "placeholders": {
+      "parent": {
+        "type": "String"
+      }
+    }
+  },
+  "categoryChildrenCount": "{count, plural, =0{لا توجد فروع} =1{فرع واحد} =2{فرعان} other{{count} فروع}}",
+  "@categoryChildrenCount": {
+    "description": "Number of child categories.",
+    "placeholders": {
+      "count": {
+        "type": "num"
+      }
+    }
+  },
   "activeProductLabel": "متاح للبيع",
   "createProductButton": "إنشاء المنتج",
   "creatingProductButton": "جار الإنشاء...",

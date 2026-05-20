@@ -30,6 +30,7 @@ class CatalogScreen extends StatelessWidget {
     required this.onOpenRegisterSessions,
     required this.onOpenDeviceSettings,
     required this.onLogout,
+    this.onOpenCategories,
     this.onOpenDiscounts,
     this.onOpenUsers,
     this.onOpenShopSettings,
@@ -46,6 +47,7 @@ class CatalogScreen extends StatelessWidget {
   final VoidCallback onOpenContacts;
   final VoidCallback onOpenRegisterSessions;
   final VoidCallback onOpenDeviceSettings;
+  final VoidCallback? onOpenCategories;
   final VoidCallback? onOpenDiscounts;
   final VoidCallback? onOpenUsers;
   final VoidCallback? onOpenShopSettings;
@@ -67,6 +69,7 @@ class CatalogScreen extends StatelessWidget {
             onOpenPurchasing: onOpenPurchasing,
             onOpenContacts: onOpenContacts,
             onOpenCatalog: () {},
+            onOpenCategories: onOpenCategories,
             onOpenRegisterSessions: onOpenRegisterSessions,
             onOpenDeviceSettings: onOpenDeviceSettings,
             onOpenDiscounts: onOpenDiscounts,

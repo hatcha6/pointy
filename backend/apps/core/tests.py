@@ -238,6 +238,7 @@ class RolePermissionBootstrapTests(TestCase):
         self.assertTrue(manager.has_perm("auth.view_user"))
 
         self.assertTrue(cashier.has_perm("catalog.view_product"))
+        self.assertTrue(cashier.has_perm("catalog.view_productcategory"))
         self.assertTrue(cashier.has_perm("sales.add_order"))
         self.assertTrue(cashier.has_perm("sales.change_registersession"))
         self.assertTrue(cashier.has_perm("sales.add_registercashmovement"))

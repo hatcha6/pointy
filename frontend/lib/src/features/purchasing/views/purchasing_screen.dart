@@ -24,6 +24,7 @@ class PurchasingScreen extends StatelessWidget {
     required this.capabilities,
     required this.onOpenPos,
     required this.onOpenCatalog,
+    required this.onOpenCategories,
     required this.onOpenContacts,
     required this.onOpenRegisterSessions,
     required this.onOpenDeviceSettings,
@@ -40,6 +41,7 @@ class PurchasingScreen extends StatelessWidget {
   final AuthorizationCapabilities capabilities;
   final VoidCallback onOpenPos;
   final VoidCallback onOpenCatalog;
+  final VoidCallback onOpenCategories;
   final VoidCallback onOpenContacts;
   final VoidCallback onOpenRegisterSessions;
   final VoidCallback onOpenDeviceSettings;
@@ -65,6 +67,7 @@ class PurchasingScreen extends StatelessWidget {
             onOpenPurchasing: () {},
             onOpenContacts: onOpenContacts,
             onOpenCatalog: onOpenCatalog,
+            onOpenCategories: onOpenCategories,
             onOpenRegisterSessions: onOpenRegisterSessions,
             onOpenDeviceSettings: onOpenDeviceSettings,
             onOpenDiscounts: onOpenDiscounts,

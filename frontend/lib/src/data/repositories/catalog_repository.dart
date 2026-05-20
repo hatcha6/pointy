@@ -1,5 +1,7 @@
 import '../../core/result.dart';
 import '../models/product.dart';
+import '../models/product_category.dart';
+import '../models/product_category_query.dart';
 import '../models/product_page.dart';
 import '../models/product_query.dart';
 import '../services/pos_api_service.dart';
@@ -18,6 +20,21 @@ class CatalogRepository {
 
   Future<Result<Product>> createProduct(ProductDraft draft) async {
     return Result.guard(() => _service.createProduct(draft));
+  }
+
+  Future<Result<ProductCategoryPage>> loadProductCategories({
+    ProductCategoryQuery query = const ProductCategoryQuery(),
+    int page = 1,
+  }) async {
+    return Result.guard(
+      () => _service.fetchProductCategories(query: query, page: page),
+    );
+  }
+
+  Future<Result<ProductCategory>> createProductCategory(
+    ProductCategoryDraft draft,
+  ) async {
+    return Result.guard(() => _service.createProductCategory(draft));
   }
 
   Future<Result<Product?>> findProductByBarcode(
@@ -102,7 +119,7 @@ class CatalogRepository {
     final search = query.search.trim().toLowerCase();
     final barcode = query.barcode.trim();
     final filtered = search.isEmpty && barcode.isEmpty
-        ? products
+        ? _filterSampleProductsByCategory(products, query)
         : products
               .where((product) {
                 final matchesSearch =
@@ -112,7 +129,9 @@ class CatalogRepository {
                     product.barcode.toLowerCase().contains(search);
                 final matchesBarcode =
                     barcode.isEmpty || product.barcode == barcode;
-                return matchesSearch && matchesBarcode;
+                return matchesSearch &&
+                    matchesBarcode &&
+                    _matchesSampleCategory(product, query);
               })
               .toList(growable: false);
 
@@ -126,5 +145,24 @@ class CatalogRepository {
       };
     });
     return sorted;
+  }
+
+  List<Product> _filterSampleProductsByCategory(
+    List<Product> products,
+    ProductQuery query,
+  ) {
+    return products
+        .where((product) => _matchesSampleCategory(product, query))
+        .toList(growable: false);
+  }
+
+  bool _matchesSampleCategory(Product product, ProductQuery query) {
+    if (query.categories.isEmpty) {
+      return true;
+    }
+    final categoryIds = query.categories.map((category) => category.id).toSet();
+    return product.categories.any(
+      (category) => categoryIds.contains(category.id),
+    );
   }
 }

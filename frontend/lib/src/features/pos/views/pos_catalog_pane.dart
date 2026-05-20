@@ -201,6 +201,7 @@ class _PosProductLookupControls extends StatelessWidget {
       builder: (context, canCheckout) {
         return ProductQueryControls(
           query: viewModel.query,
+          catalogRepository: viewModel.catalogRepository,
           allowAvailabilityFilter: false,
           searchHint: l10n.posProductLookupHint,
           searchFieldKey: const ValueKey('product_lookup_field'),

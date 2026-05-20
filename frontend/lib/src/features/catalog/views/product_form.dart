@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../data/models/product.dart';
+import '../../../shared/async_selection/async_multi_select_picker.dart';
+import '../../../shared/product_category_picker.dart';
 import '../view_models/catalog_view_model.dart';
 import 'product_form_fields.dart';
 
@@ -22,6 +24,7 @@ class _ProductFormState extends State<ProductForm> {
   final _barcodeController = TextEditingController();
   final _descriptionController = TextEditingController();
   final _priceController = TextEditingController();
+  List<AsyncSelectionOption<int>> _selectedCategories = [];
   bool _isActive = true;
 
   @override
@@ -58,7 +61,11 @@ class _ProductFormState extends State<ProductForm> {
                 barcodeController: _barcodeController,
                 descriptionController: _descriptionController,
                 priceController: _priceController,
+                selectedCategories: _selectedCategories,
                 isActive: _isActive,
+                onPickCategories: _pickCategories,
+                onClearCategories: () =>
+                    setState(() => _selectedCategories = []),
                 onActiveChanged: (value) => setState(() => _isActive = value),
                 requiredValidator: (value) =>
                     _requiredValidator(context, value),
@@ -129,6 +136,7 @@ class _ProductFormState extends State<ProductForm> {
       description: _descriptionController.text.trim(),
       unitPrice: _parseNumber(_priceController.text)!,
       isActive: _isActive,
+      categoryIds: [for (final category in _selectedCategories) category.id],
     );
 
     final created = await widget.viewModel.createProduct(draft);
@@ -143,11 +151,35 @@ class _ProductFormState extends State<ProductForm> {
       _barcodeController.clear();
       _descriptionController.clear();
       _priceController.clear();
-      setState(() => _isActive = true);
+      setState(() {
+        _isActive = true;
+        _selectedCategories = [];
+      });
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(l10n.productCreatedMessage)));
       widget.onCreated?.call();
     }
+  }
+
+  Future<void> _pickCategories() async {
+    final l10n = AppLocalizations.of(context)!;
+    final picked = await showAsyncMultiSelectPicker<int>(
+      context: context,
+      strings: productCategoryPickerStrings(l10n),
+      selected: _selectedCategories,
+      searchFieldKey: const ValueKey('product_form_category_search_field'),
+      applyButtonKey: const ValueKey('product_form_category_apply_button'),
+      optionKeyForId: (id) => ValueKey('product_form_category_option_$id'),
+      loadPage: (search, page) => loadProductCategorySelectionPage(
+        catalogRepository: widget.viewModel.catalogRepository,
+        search: search,
+        page: page,
+      ),
+    );
+    if (!mounted || picked == null) {
+      return;
+    }
+    setState(() => _selectedCategories = picked);
   }
 }

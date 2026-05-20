@@ -1696,6 +1696,7 @@ void main() {
             capabilities: AuthorizationCapabilities.forUser(cashier),
             onOpenPos: () {},
             onOpenCatalog: () {},
+            onOpenCategories: () {},
             onOpenPurchasing: () {},
             onOpenContacts: () {},
             onOpenRegisterSessions: () {},

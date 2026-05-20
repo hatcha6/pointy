@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../data/models/product_query.dart';
+import '../data/repositories/catalog_repository.dart';
 import 'product_filter_sheet.dart';
 import 'query_controls/query_control_bar.dart';
 
@@ -11,6 +12,7 @@ class ProductQueryControls extends StatelessWidget {
   const ProductQueryControls({
     super.key,
     required this.query,
+    required this.catalogRepository,
     required this.onSearchChanged,
     required this.onQueryChanged,
     this.allowAvailabilityFilter = true,
@@ -24,6 +26,7 @@ class ProductQueryControls extends StatelessWidget {
   });
 
   final ProductQuery query;
+  final CatalogRepository catalogRepository;
   final ValueChanged<String> onSearchChanged;
   final ValueChanged<ProductQuery> onQueryChanged;
   final bool allowAvailabilityFilter;
@@ -63,6 +66,7 @@ class ProductQueryControls extends StatelessWidget {
                 query.availability != ProductAvailabilityFilter.all
             ? 1
             : 0) +
+        (query.categories.isEmpty ? 0 : 1) +
         (query.ordering == ProductOrdering.name ? 0 : 1);
   }
 
@@ -74,6 +78,7 @@ class ProductQueryControls extends StatelessWidget {
       builder: (context) {
         return ProductFilterSheet(
           query: query,
+          catalogRepository: catalogRepository,
           allowAvailabilityFilter: allowAvailabilityFilter,
         );
       },

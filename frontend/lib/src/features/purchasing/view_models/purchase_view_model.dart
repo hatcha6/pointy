@@ -19,6 +19,8 @@ class PurchaseViewModel extends ChangeNotifier {
   final CatalogRepository _catalogRepository;
   final PurchaseRepository _purchaseRepository;
 
+  CatalogRepository get catalogRepository => _catalogRepository;
+
   List<Product> _products = [];
   final List<PurchaseDraftLine> _draft = [];
   final Map<int, double> _lastCostByProductId = {};

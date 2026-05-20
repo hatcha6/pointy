@@ -9,6 +9,7 @@ enum AppNavigationDestination {
   purchasing,
   contacts,
   catalog,
+  categories,
   registerSessions,
   discounts,
   deviceSettings,
@@ -30,6 +31,7 @@ class AppNavigationDrawer extends StatelessWidget {
     required this.onOpenDeviceSettings,
     required this.onLogout,
     this.onOpenDiscounts,
+    this.onOpenCategories,
     this.onOpenUsers,
     this.onOpenShopSettings,
   });
@@ -44,6 +46,7 @@ class AppNavigationDrawer extends StatelessWidget {
   final VoidCallback onOpenRegisterSessions;
   final VoidCallback onOpenDeviceSettings;
   final VoidCallback? onOpenDiscounts;
+  final VoidCallback? onOpenCategories;
   final VoidCallback? onOpenUsers;
   final VoidCallback? onOpenShopSettings;
   final VoidCallback onLogout;
@@ -123,6 +126,14 @@ class AppNavigationDrawer extends StatelessWidget {
         selectedIcon: const Icon(Icons.settings),
         label: l10n.settingsDrawerLabel,
         onTap: onOpenShopSettings,
+      ),
+      _DrawerDestination(
+        destination: AppNavigationDestination.categories,
+        capability: AppCapability.manageCategories,
+        icon: const Icon(Icons.category_outlined),
+        selectedIcon: const Icon(Icons.category),
+        label: l10n.categoriesDrawerLabel,
+        onTap: onOpenCategories,
       ),
     ].where((destination) => destination.isAvailable(capabilities)).toList();
     final selectedIndex = destinations.indexWhere(

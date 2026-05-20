@@ -31,6 +31,8 @@ class CatalogViewModel extends ChangeNotifier {
 
   final CatalogRepository _catalogRepository;
 
+  CatalogRepository get catalogRepository => _catalogRepository;
+
   List<Product> _products = [];
   bool _isLoading = false;
   bool _isLoadingMore = false;

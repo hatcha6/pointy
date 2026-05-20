@@ -26,6 +26,7 @@ USER_PERMISSION_CODES = (
 )
 CASHIER_PERMISSION_CODES = (
     "catalog.view_product",
+    "catalog.view_productcategory",
     "sales.add_order",
     "sales.view_order",
     "sales.add_registersession",

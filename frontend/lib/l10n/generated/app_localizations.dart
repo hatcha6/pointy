@@ -250,6 +250,12 @@ abstract class AppLocalizations {
   /// **'المنتجات'**
   String get catalogDrawerLabel;
 
+  /// No description provided for @categoriesDrawerLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'التصنيفات'**
+  String get categoriesDrawerLabel;
+
   /// No description provided for @registerSessionsDrawerLabel.
   ///
   /// In ar, this message translates to:
@@ -937,6 +943,162 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'السعر'**
   String get unitPriceLabel;
+
+  /// No description provided for @productCategoriesLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'تصنيفات المنتج'**
+  String get productCategoriesLabel;
+
+  /// No description provided for @productCategoriesEmpty.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد تصنيفات محددة'**
+  String get productCategoriesEmpty;
+
+  /// No description provided for @productCategoriesHelper.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختياري، يساعد في البحث والتصفية داخل نقطة البيع والمشتريات'**
+  String get productCategoriesHelper;
+
+  /// No description provided for @productCategoriesOpenPickerTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختيار التصنيفات'**
+  String get productCategoriesOpenPickerTooltip;
+
+  /// No description provided for @productCategoryPickerTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختيار التصنيفات'**
+  String get productCategoryPickerTitle;
+
+  /// No description provided for @productCategoryPickerSearchHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'ابحث باسم التصنيف'**
+  String get productCategoryPickerSearchHint;
+
+  /// No description provided for @productCategoryPickerEmpty.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد تصنيفات مطابقة'**
+  String get productCategoryPickerEmpty;
+
+  /// No description provided for @productCategoryPickerLoadError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر تحميل التصنيفات.'**
+  String get productCategoryPickerLoadError;
+
+  /// Fallback category label when the category name is unavailable.
+  ///
+  /// In ar, this message translates to:
+  /// **'تصنيف #{id}'**
+  String productCategoryFallbackLabel(int id);
+
+  /// No description provided for @categoryFilterTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'التصنيف'**
+  String get categoryFilterTitle;
+
+  /// No description provided for @categoryManagementTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'إدارة التصنيفات'**
+  String get categoryManagementTitle;
+
+  /// No description provided for @addCategoryButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'إضافة تصنيف'**
+  String get addCategoryButton;
+
+  /// No description provided for @newCategoryTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'تصنيف جديد'**
+  String get newCategoryTitle;
+
+  /// No description provided for @categoryNameLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'اسم التصنيف'**
+  String get categoryNameLabel;
+
+  /// No description provided for @parentCategoryLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'التصنيف الأب'**
+  String get parentCategoryLabel;
+
+  /// No description provided for @noParentCategory.
+  ///
+  /// In ar, this message translates to:
+  /// **'تصنيف رئيسي'**
+  String get noParentCategory;
+
+  /// No description provided for @parentCategoryHelper.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختياري، اختر أبًا لإنشاء تصنيف فرعي'**
+  String get parentCategoryHelper;
+
+  /// No description provided for @activeCategoryLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'تصنيف نشط'**
+  String get activeCategoryLabel;
+
+  /// No description provided for @createCategoryButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'إنشاء التصنيف'**
+  String get createCategoryButton;
+
+  /// No description provided for @creatingCategoryButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'جار الإنشاء...'**
+  String get creatingCategoryButton;
+
+  /// No description provided for @categoryLoadError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر تحميل التصنيفات.'**
+  String get categoryLoadError;
+
+  /// No description provided for @categoryCreateError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر إنشاء التصنيف. راجع البيانات وحاول مرة أخرى.'**
+  String get categoryCreateError;
+
+  /// No description provided for @categoryEmptyState.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد تصنيفات بعد.'**
+  String get categoryEmptyState;
+
+  /// No description provided for @rootCategoryLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'تصنيف رئيسي'**
+  String get rootCategoryLabel;
+
+  /// Shows the parent category name.
+  ///
+  /// In ar, this message translates to:
+  /// **'ضمن {parent}'**
+  String categoryParentValue(String parent);
+
+  /// Number of child categories.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, =0{لا توجد فروع} =1{فرع واحد} =2{فرعان} other{{count} فروع}}'**
+  String categoryChildrenCount(num count);
 
   /// No description provided for @activeProductLabel.
   ///

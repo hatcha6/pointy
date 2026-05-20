@@ -5,6 +5,8 @@ import 'core/authorization.dart';
 import 'data/models/pos_user.dart';
 import 'data/models/purchase_submission.dart';
 import 'features/catalog/view_models/catalog_view_model.dart';
+import 'features/catalog/view_models/category_management_view_model.dart';
+import 'features/catalog/views/category_management_screen.dart';
 import 'features/catalog/views/catalog_screen.dart';
 import 'features/contacts/views/contact_management_screen.dart';
 import 'features/device_settings/views/device_settings_screen.dart';
@@ -65,6 +67,10 @@ class _AuthenticatedRoutes {
           await push(context, catalogRouteBuilder);
           await dependencies.posViewModel.loadCatalog();
         },
+      ),
+      onOpenCategories: guardedAction(
+        AppCapability.manageCategories,
+        () => push(context, categoryRouteBuilder),
       ),
       onOpenPurchasing: guardedAction(
         AppCapability.accessPurchasing,
@@ -127,6 +133,55 @@ class _AuthenticatedRoutes {
         AppCapability.manageContacts,
         () => replace(routeContext, contactsRouteBuilder),
       ),
+      onOpenCategories: guardedAction(
+        AppCapability.manageCategories,
+        () => replace(routeContext, categoryRouteBuilder),
+      ),
+      onOpenRegisterSessions: guardedAction(
+        AppCapability.viewRegisterSessions,
+        () => replace(routeContext, registerSessionsRouteBuilder),
+      ),
+      onOpenDiscounts: guardedAction(
+        AppCapability.viewDiscountRules,
+        () => replace(routeContext, discountsRouteBuilder),
+      ),
+      onOpenDeviceSettings: guardedAction(
+        AppCapability.manageDeviceSettings,
+        () => replace(routeContext, deviceSettingsRouteBuilder),
+      ),
+      onOpenUsers: capabilities.actionFor(
+        AppCapability.manageUsers,
+        () => replace(routeContext, usersRouteBuilder),
+      ),
+      onOpenShopSettings: capabilities.actionFor(
+        AppCapability.manageShopSettings,
+        () => replace(routeContext, shopSettingsRouteBuilder),
+      ),
+      onLogout: () => logout(routeContext),
+    );
+  }
+
+  Widget categoryRouteBuilder(BuildContext routeContext) {
+    return CategoryManagementScreen(
+      viewModel: CategoryManagementViewModel(dependencies.catalogRepository),
+      currentUser: currentUser,
+      capabilities: capabilities,
+      onOpenPos: guardedAction(
+        AppCapability.accessPos,
+        () => openPos(routeContext),
+      ),
+      onOpenCatalog: guardedAction(
+        AppCapability.viewCatalogManagement,
+        () => replace(routeContext, catalogRouteBuilder),
+      ),
+      onOpenPurchasing: guardedAction(
+        AppCapability.accessPurchasing,
+        () => replace(routeContext, purchasingRouteBuilder),
+      ),
+      onOpenContacts: guardedAction(
+        AppCapability.manageContacts,
+        () => replace(routeContext, contactsRouteBuilder),
+      ),
       onOpenRegisterSessions: guardedAction(
         AppCapability.viewRegisterSessions,
         () => replace(routeContext, registerSessionsRouteBuilder),
@@ -167,6 +222,10 @@ class _AuthenticatedRoutes {
       onOpenCatalog: guardedAction(
         AppCapability.viewCatalogManagement,
         () => replace(routeContext, catalogRouteBuilder),
+      ),
+      onOpenCategories: guardedAction(
+        AppCapability.manageCategories,
+        () => replace(routeContext, categoryRouteBuilder),
       ),
       onOpenPurchasing: guardedAction(
         AppCapability.accessPurchasing,
@@ -209,6 +268,10 @@ class _AuthenticatedRoutes {
         AppCapability.viewCatalogManagement,
         () => replace(routeContext, catalogRouteBuilder),
       ),
+      onOpenCategories: guardedAction(
+        AppCapability.manageCategories,
+        () => replace(routeContext, categoryRouteBuilder),
+      ),
       onOpenPurchasing: guardedAction(
         AppCapability.accessPurchasing,
         () => replace(routeContext, purchasingRouteBuilder),
@@ -249,6 +312,10 @@ class _AuthenticatedRoutes {
       onOpenCatalog: guardedAction(
         AppCapability.viewCatalogManagement,
         () => replace(routeContext, catalogRouteBuilder),
+      ),
+      onOpenCategories: guardedAction(
+        AppCapability.manageCategories,
+        () => replace(routeContext, categoryRouteBuilder),
       ),
       onOpenPurchasing: guardedAction(
         AppCapability.accessPurchasing,
@@ -293,6 +360,10 @@ class _AuthenticatedRoutes {
         AppCapability.viewCatalogManagement,
         () => replace(routeContext, catalogRouteBuilder),
       ),
+      onOpenCategories: guardedAction(
+        AppCapability.manageCategories,
+        () => replace(routeContext, categoryRouteBuilder),
+      ),
       onOpenPurchasing: guardedAction(
         AppCapability.accessPurchasing,
         () => replace(routeContext, purchasingRouteBuilder),
@@ -333,6 +404,10 @@ class _AuthenticatedRoutes {
       onOpenCatalog: guardedAction(
         AppCapability.viewCatalogManagement,
         () => replace(routeContext, catalogRouteBuilder),
+      ),
+      onOpenCategories: guardedAction(
+        AppCapability.manageCategories,
+        () => replace(routeContext, categoryRouteBuilder),
       ),
       onOpenPurchasing: guardedAction(
         AppCapability.accessPurchasing,
@@ -379,6 +454,10 @@ class _AuthenticatedRoutes {
       onOpenCatalog: guardedAction(
         AppCapability.viewCatalogManagement,
         () => replace(routeContext, catalogRouteBuilder),
+      ),
+      onOpenCategories: guardedAction(
+        AppCapability.manageCategories,
+        () => replace(routeContext, categoryRouteBuilder),
       ),
       onOpenRegisterSessions: guardedAction(
         AppCapability.viewRegisterSessions,
@@ -440,6 +519,10 @@ class _AuthenticatedRoutes {
         AppCapability.viewCatalogManagement,
         () => replace(routeContext, catalogRouteBuilder),
       ),
+      onOpenCategories: guardedAction(
+        AppCapability.manageCategories,
+        () => replace(routeContext, categoryRouteBuilder),
+      ),
       onOpenContacts: guardedAction(
         AppCapability.manageContacts,
         () => replace(routeContext, contactsRouteBuilder),
@@ -482,6 +565,10 @@ class _AuthenticatedRoutes {
       onOpenCatalog: guardedAction(
         AppCapability.viewCatalogManagement,
         () => replace(routeContext, catalogRouteBuilder),
+      ),
+      onOpenCategories: guardedAction(
+        AppCapability.manageCategories,
+        () => replace(routeContext, categoryRouteBuilder),
       ),
       onOpenContacts: guardedAction(
         AppCapability.manageContacts,

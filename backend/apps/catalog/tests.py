@@ -10,7 +10,7 @@ from rest_framework.test import APIClient
 
 from apps.core.roles import CASHIER_GROUP, MANAGER_GROUP, ensure_role_groups
 from apps.inventory.models import StockItem
-from .models import Product
+from .models import Product, ProductCategory
 from .views import ProductViewSet
 
 
@@ -26,6 +26,7 @@ class ProductApiTests(TestCase):
         self.client.force_authenticate(user=self.user)
 
     def test_create_product(self):
+        category = ProductCategory.objects.create(name="مشروبات")
         response = self.client.post(
             reverse("product-list"),
             {
@@ -35,6 +36,7 @@ class ProductApiTests(TestCase):
                 "description": "حبوب مطحونة",
                 "unit_price": "5.50",
                 "is_active": True,
+                "categories": [category.id],
             },
             format="json",
         )
@@ -44,6 +46,8 @@ class ProductApiTests(TestCase):
         self.assertEqual(product.sku, "COF-100")
         self.assertEqual(product.name, "قهوة عربية")
         self.assertEqual(product.unit_price, Decimal("5.50"))
+        self.assertEqual(list(product.categories.values_list("id", flat=True)), [category.id])
+        self.assertEqual(response.data["categories"], [category.id])
 
     def test_reject_negative_price(self):
         response = self.client.post(
@@ -90,6 +94,93 @@ class ProductApiTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         results = response.data["results"]
         self.assertEqual([product["sku"] for product in results], ["TEA-100", "COF-100"])
+
+    def test_create_nested_product_category(self):
+        parent = ProductCategory.objects.create(name="المشروبات")
+
+        response = self.client.post(
+            reverse("productcategory-list"),
+            {
+                "name": "القهوة",
+                "description": "قهوة وشاي",
+                "parent": parent.id,
+                "is_active": True,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        category = ProductCategory.objects.get(name="القهوة")
+        self.assertEqual(category.parent, parent)
+        self.assertEqual(response.data["parent_name"], "المشروبات")
+
+    def test_reject_category_parent_cycle(self):
+        parent = ProductCategory.objects.create(name="الأصل")
+        child = ProductCategory.objects.create(name="الفرع", parent=parent)
+
+        response = self.client.patch(
+            reverse("productcategory-detail", args=[parent.id]),
+            {"parent": child.id},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_filter_products_by_category_includes_descendants(self):
+        drinks = ProductCategory.objects.create(name="مشروبات")
+        coffee = ProductCategory.objects.create(name="قهوة", parent=drinks)
+        snack = ProductCategory.objects.create(name="وجبات خفيفة")
+        latte = Product.objects.create(
+            sku="LATTE",
+            barcode="444",
+            name="لاتيه",
+            unit_price=Decimal("6.50"),
+            is_active=True,
+        )
+        dates = Product.objects.create(
+            sku="DATES",
+            barcode="555",
+            name="تمر",
+            unit_price=Decimal("3.00"),
+            is_active=True,
+        )
+        latte.categories.add(coffee)
+        dates.categories.add(snack)
+
+        response = self.client.get(reverse("product-list"), {"category": drinks.id})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            [product["sku"] for product in response.data["results"]],
+            ["LATTE"],
+        )
+
+    def test_active_category_filter_bypasses_active_id_cache(self):
+        category = ProductCategory.objects.create(name="مشروبات")
+        match = Product.objects.create(
+            sku="MATCH",
+            barcode="123",
+            name="قهوة مطابقة",
+            unit_price=Decimal("5.50"),
+            is_active=True,
+        )
+        match.categories.add(category)
+
+        with patch.object(
+            ProductViewSet,
+            "_get_active_product_ids",
+            side_effect=AssertionError("category lookup should not load all active ids"),
+        ):
+            response = self.client.get(
+                reverse("product-list"),
+                {"category": category.id, "is_active": "true"},
+            )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            [product["id"] for product in response.data["results"]],
+            [match.id],
+        )
 
     def test_filter_products_by_exact_barcode(self):
         Product.objects.create(
@@ -206,6 +297,7 @@ class ProductApiTests(TestCase):
         )
 
         list_response = client.get(reverse("product-list"))
+        category_response = client.get(reverse("productcategory-list"))
         create_response = client.post(
             reverse("product-list"),
             {"sku": "NEW", "name": "جديد", "unit_price": "1.00"},
@@ -213,4 +305,5 @@ class ProductApiTests(TestCase):
         )
 
         self.assertEqual(list_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(category_response.status_code, status.HTTP_200_OK)
         self.assertEqual(create_response.status_code, status.HTTP_403_FORBIDDEN)

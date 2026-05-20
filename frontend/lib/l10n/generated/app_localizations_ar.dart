@@ -87,6 +87,9 @@ class AppLocalizationsAr extends AppLocalizations {
   String get catalogDrawerLabel => 'المنتجات';
 
   @override
+  String get categoriesDrawerLabel => 'التصنيفات';
+
+  @override
   String get registerSessionsDrawerLabel => 'جلسات الدرج';
 
   @override
@@ -461,6 +464,100 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get unitPriceLabel => 'السعر';
+
+  @override
+  String get productCategoriesLabel => 'تصنيفات المنتج';
+
+  @override
+  String get productCategoriesEmpty => 'لا توجد تصنيفات محددة';
+
+  @override
+  String get productCategoriesHelper =>
+      'اختياري، يساعد في البحث والتصفية داخل نقطة البيع والمشتريات';
+
+  @override
+  String get productCategoriesOpenPickerTooltip => 'اختيار التصنيفات';
+
+  @override
+  String get productCategoryPickerTitle => 'اختيار التصنيفات';
+
+  @override
+  String get productCategoryPickerSearchHint => 'ابحث باسم التصنيف';
+
+  @override
+  String get productCategoryPickerEmpty => 'لا توجد تصنيفات مطابقة';
+
+  @override
+  String get productCategoryPickerLoadError => 'تعذر تحميل التصنيفات.';
+
+  @override
+  String productCategoryFallbackLabel(int id) {
+    return 'تصنيف #$id';
+  }
+
+  @override
+  String get categoryFilterTitle => 'التصنيف';
+
+  @override
+  String get categoryManagementTitle => 'إدارة التصنيفات';
+
+  @override
+  String get addCategoryButton => 'إضافة تصنيف';
+
+  @override
+  String get newCategoryTitle => 'تصنيف جديد';
+
+  @override
+  String get categoryNameLabel => 'اسم التصنيف';
+
+  @override
+  String get parentCategoryLabel => 'التصنيف الأب';
+
+  @override
+  String get noParentCategory => 'تصنيف رئيسي';
+
+  @override
+  String get parentCategoryHelper => 'اختياري، اختر أبًا لإنشاء تصنيف فرعي';
+
+  @override
+  String get activeCategoryLabel => 'تصنيف نشط';
+
+  @override
+  String get createCategoryButton => 'إنشاء التصنيف';
+
+  @override
+  String get creatingCategoryButton => 'جار الإنشاء...';
+
+  @override
+  String get categoryLoadError => 'تعذر تحميل التصنيفات.';
+
+  @override
+  String get categoryCreateError =>
+      'تعذر إنشاء التصنيف. راجع البيانات وحاول مرة أخرى.';
+
+  @override
+  String get categoryEmptyState => 'لا توجد تصنيفات بعد.';
+
+  @override
+  String get rootCategoryLabel => 'تصنيف رئيسي';
+
+  @override
+  String categoryParentValue(String parent) {
+    return 'ضمن $parent';
+  }
+
+  @override
+  String categoryChildrenCount(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count فروع',
+      two: 'فرعان',
+      one: 'فرع واحد',
+      zero: 'لا توجد فروع',
+    );
+    return '$_temp0';
+  }
 
   @override
   String get activeProductLabel => 'متاح للبيع';

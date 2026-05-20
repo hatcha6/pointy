@@ -4,6 +4,7 @@ import '../models/pos_user.dart';
 import '../models/print_job.dart';
 import '../models/printer_config.dart';
 import '../models/product.dart';
+import '../models/product_category.dart';
 import '../models/product_page.dart';
 import '../models/contact.dart';
 import '../models/discount_rule.dart';
@@ -106,6 +107,17 @@ class PosApiService {
 
   Future<Product> createProduct(ProductDraft draft) {
     return _catalog.createProduct(draft);
+  }
+
+  Future<ProductCategoryPage> fetchProductCategories({
+    required ModelQuery query,
+    int page = 1,
+  }) {
+    return _catalog.fetchProductCategories(query: query, page: page);
+  }
+
+  Future<ProductCategory> createProductCategory(ProductCategoryDraft draft) {
+    return _catalog.createProductCategory(draft);
   }
 
   Future<CustomerPage> fetchCustomers({

@@ -68,6 +68,7 @@ class ProductList extends StatelessWidget {
           const SizedBox(height: 12),
           ProductQueryControls(
             query: viewModel.query,
+            catalogRepository: viewModel.catalogRepository,
             searchFieldKey: const ValueKey('catalog_product_lookup_field'),
             onSearchChanged: viewModel.updateSearch,
             onSearchSubmitted: onBarcodeSubmitted,

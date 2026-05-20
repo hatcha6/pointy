@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../data/models/product.dart';
+import '../../../shared/async_selection/async_multi_select_picker.dart';
 import '../../../shared/decimal_text_input_formatter.dart';
+import '../../../shared/product_category_picker.dart';
 import '../view_models/purchase_view_model.dart';
 
 Future<Product?> resolveOrCreatePurchaseProduct(
@@ -37,6 +39,7 @@ Future<Product?> showPurchaseQuickProductSheet(
     builder: (context) {
       return PurchaseQuickProductSheet(
         barcode: barcode,
+        viewModel: viewModel,
         onCreate: (draft, unitCost) async {
           final product = await viewModel.createQuickProduct(draft);
           if (product != null) {
@@ -53,10 +56,12 @@ class PurchaseQuickProductSheet extends StatefulWidget {
   const PurchaseQuickProductSheet({
     super.key,
     required this.barcode,
+    required this.viewModel,
     required this.onCreate,
   });
 
   final String barcode;
+  final PurchaseViewModel viewModel;
   final Future<Product?> Function(ProductDraft draft, double unitCost) onCreate;
 
   @override
@@ -74,6 +79,7 @@ class _PurchaseQuickProductSheetState extends State<PurchaseQuickProductSheet> {
   );
   final _nameController = TextEditingController();
   final _priceController = TextEditingController();
+  List<AsyncSelectionOption<int>> _selectedCategories = [];
   bool _isSaving = false;
   bool _hasError = false;
 
@@ -162,6 +168,19 @@ class _PurchaseQuickProductSheetState extends State<PurchaseQuickProductSheet> {
               validator: _numberValidator,
               onFieldSubmitted: (_) => _submit(),
             ),
+            const SizedBox(height: 12),
+            AsyncSelectionField<int>(
+              fieldKey: const ValueKey(
+                'purchase_quick_product_categories_field',
+              ),
+              strings: productCategoryFieldStrings(l10n),
+              selected: _selectedCategories,
+              onPick: _pickCategories,
+              onClear: _selectedCategories.isEmpty
+                  ? null
+                  : () => setState(() => _selectedCategories = []),
+              validator: (_) => null,
+            ),
             if (_hasError) ...[
               const SizedBox(height: 8),
               Text(
@@ -245,6 +264,7 @@ class _PurchaseQuickProductSheetState extends State<PurchaseQuickProductSheet> {
         name: _nameController.text.trim(),
         unitPrice: 0,
         isActive: true,
+        categoryIds: [for (final category in _selectedCategories) category.id],
       ),
       unitCost,
     );
@@ -262,5 +282,26 @@ class _PurchaseQuickProductSheetState extends State<PurchaseQuickProductSheet> {
     }
 
     Navigator.of(context).pop(created);
+  }
+
+  Future<void> _pickCategories() async {
+    final l10n = AppLocalizations.of(context)!;
+    final picked = await showAsyncMultiSelectPicker<int>(
+      context: context,
+      strings: productCategoryPickerStrings(l10n),
+      selected: _selectedCategories,
+      searchFieldKey: const ValueKey('purchase_quick_category_search_field'),
+      applyButtonKey: const ValueKey('purchase_quick_category_apply_button'),
+      optionKeyForId: (id) => ValueKey('purchase_quick_category_option_$id'),
+      loadPage: (search, page) => loadProductCategorySelectionPage(
+        catalogRepository: widget.viewModel.catalogRepository,
+        search: search,
+        page: page,
+      ),
+    );
+    if (!mounted || picked == null) {
+      return;
+    }
+    setState(() => _selectedCategories = picked);
   }
 }

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../shared/decimal_text_input_formatter.dart';
+import '../../../shared/async_selection/async_multi_select_picker.dart';
+import '../../../shared/product_category_picker.dart';
 
 class ProductFormFields extends StatelessWidget {
   const ProductFormFields({
@@ -11,7 +13,10 @@ class ProductFormFields extends StatelessWidget {
     required this.barcodeController,
     required this.descriptionController,
     required this.priceController,
+    required this.selectedCategories,
     required this.isActive,
+    required this.onPickCategories,
+    required this.onClearCategories,
     required this.onActiveChanged,
     required this.requiredValidator,
     required this.numberValidator,
@@ -22,7 +27,10 @@ class ProductFormFields extends StatelessWidget {
   final TextEditingController barcodeController;
   final TextEditingController descriptionController;
   final TextEditingController priceController;
+  final List<AsyncSelectionOption<int>> selectedCategories;
   final bool isActive;
+  final VoidCallback onPickCategories;
+  final VoidCallback? onClearCategories;
   final ValueChanged<bool> onActiveChanged;
   final FormFieldValidator<String> requiredValidator;
   final FormFieldValidator<String> numberValidator;
@@ -87,6 +95,15 @@ class ProductFormFields extends StatelessWidget {
             prefixIcon: const Icon(Icons.sell_outlined),
           ),
           validator: numberValidator,
+        ),
+        const SizedBox(height: 12),
+        AsyncSelectionField<int>(
+          fieldKey: const ValueKey('product_form_categories_field'),
+          strings: productCategoryFieldStrings(l10n),
+          selected: selectedCategories,
+          onPick: onPickCategories,
+          onClear: selectedCategories.isEmpty ? null : onClearCategories,
+          validator: (_) => null,
         ),
         const SizedBox(height: 8),
         SwitchListTile(
