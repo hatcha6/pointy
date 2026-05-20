@@ -30,6 +30,11 @@ class PurchaseViewModel extends ChangeNotifier {
   int _nextProductPage = 1;
   String _supplierInvoiceNumber = '';
   String _supplierInvoiceDateInput = '';
+  double _shippingCost = 0;
+  double _customsCost = 0;
+  double _handlingCost = 0;
+  LandedCostAllocationMethod _landedCostAllocationMethod =
+      LandedCostAllocationMethod.byLineValue;
   String? _errorMessage;
   ProductQuery _query = const ProductQuery(
     availability: ProductAvailabilityFilter.active,
@@ -46,6 +51,11 @@ class PurchaseViewModel extends ChangeNotifier {
   bool get hasMoreProducts => _hasMoreProducts;
   String get supplierInvoiceNumber => _supplierInvoiceNumber;
   String get supplierInvoiceDateInput => _supplierInvoiceDateInput;
+  double get shippingCost => _shippingCost;
+  double get customsCost => _customsCost;
+  double get handlingCost => _handlingCost;
+  LandedCostAllocationMethod get landedCostAllocationMethod =>
+      _landedCostAllocationMethod;
   DateTime? get supplierInvoiceDate =>
       _parseSupplierInvoiceDate(_supplierInvoiceDateInput);
   bool get hasInvalidSupplierInvoiceDate =>
@@ -55,7 +65,8 @@ class PurchaseViewModel extends ChangeNotifier {
   ProductQuery get query => _query;
 
   double get subtotal => _draft.fold(0, (sum, line) => sum + line.subtotal);
-  double get total => subtotal;
+  double get landedCostTotal => _shippingCost + _customsCost + _handlingCost;
+  double get total => subtotal + landedCostTotal;
   bool get canSubmitDraft =>
       _draft.isNotEmpty &&
       _selectedSupplier != null &&
@@ -239,6 +250,7 @@ class PurchaseViewModel extends ChangeNotifier {
     _selectedSupplier = null;
     _supplierInvoiceNumber = '';
     _supplierInvoiceDateInput = '';
+    _resetLandedCosts();
     notifyListeners();
   }
 
@@ -274,6 +286,26 @@ class PurchaseViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
+  void updateShippingCost(double value) {
+    _updateLandedCost(value, (cost) => _shippingCost = cost);
+  }
+
+  void updateCustomsCost(double value) {
+    _updateLandedCost(value, (cost) => _customsCost = cost);
+  }
+
+  void updateHandlingCost(double value) {
+    _updateLandedCost(value, (cost) => _handlingCost = cost);
+  }
+
+  void updateLandedCostAllocationMethod(LandedCostAllocationMethod method) {
+    if (_isSubmitting) {
+      return;
+    }
+    _landedCostAllocationMethod = method;
+    notifyListeners();
+  }
+
   Future<Result<PurchaseSubmission>> submitDraft() async {
     final supplier = _selectedSupplier;
     if (_draft.isEmpty || supplier == null || _isSubmitting) {
@@ -289,6 +321,10 @@ class PurchaseViewModel extends ChangeNotifier {
       supplierId: supplier.id,
       supplierInvoiceNumber: _supplierInvoiceNumber,
       supplierInvoiceDate: supplierInvoiceDate,
+      shippingCost: _shippingCost,
+      customsCost: _customsCost,
+      handlingCost: _handlingCost,
+      landedCostAllocationMethod: _landedCostAllocationMethod,
     );
     switch (result) {
       case Ok<PurchaseSubmission>():
@@ -296,6 +332,7 @@ class PurchaseViewModel extends ChangeNotifier {
         _selectedSupplier = null;
         _supplierInvoiceNumber = '';
         _supplierInvoiceDateInput = '';
+        _resetLandedCosts();
       case Error<PurchaseSubmission>():
         break;
     }
@@ -325,6 +362,21 @@ class PurchaseViewModel extends ChangeNotifier {
     };
     _lastCostByProductId[productId] = cost;
     return cost;
+  }
+
+  void _updateLandedCost(double value, ValueChanged<double> assign) {
+    if (_isSubmitting || value < 0) {
+      return;
+    }
+    assign(value);
+    notifyListeners();
+  }
+
+  void _resetLandedCosts() {
+    _shippingCost = 0;
+    _customsCost = 0;
+    _handlingCost = 0;
+    _landedCostAllocationMethod = LandedCostAllocationMethod.byLineValue;
   }
 
   DateTime? _parseSupplierInvoiceDate(String input) {

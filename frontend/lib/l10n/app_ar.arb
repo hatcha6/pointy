@@ -469,6 +469,15 @@
   "purchaseAdjustmentReasonHint": "مثال: تالف، خطأ في الفاتورة، استبدال مع المورد",
   "purchaseNoAdjustableItems": "لا توجد عناصر قابلة للتعديل.",
   "purchaseAdjustmentNoItemsSelected": "اختر عنصرًا واحدًا على الأقل.",
+  "purchaseExchangeNoItemsSelected": "اختر عناصر صادرة وعناصر بديلة للاستبدال.",
+  "purchaseExchangeOutboundSectionTitle": "العناصر الصادرة",
+  "purchaseExchangeReplacementSectionTitle": "العناصر البديلة",
+  "purchaseExchangeAddReplacementLine": "إضافة بديل",
+  "purchaseExchangeNoReplacementProducts": "لا توجد منتجات متاحة للاختيار من هذا الأمر.",
+  "purchaseExchangeInvalidLinesError": "أدخل كمية صادرة واحدة على الأقل وبديلًا بكمية وتكلفة صحيحتين.",
+  "purchaseExchangeReplacementProductLabel": "المنتج البديل",
+  "purchaseExchangeReplacementQuantityLabel": "الكمية",
+  "purchaseExchangeReplacementUnitCostLabel": "التكلفة",
   "purchaseReturnSuccess": "تم تسجيل إرجاع المشتريات رقم {orderNumber}.",
   "@purchaseReturnSuccess": {
     "description": "Message shown after returning purchase items.",
@@ -545,6 +554,30 @@
     "placeholders": {
       "count": {
         "type": "num"
+      }
+    }
+  },
+  "purchaseExchangeReplacementLineCount": "{count, plural, =0{لا توجد بدائل} =1{بديل واحد} =2{بديلان} other{{count} بدائل}}",
+  "@purchaseExchangeReplacementLineCount": {
+    "description": "Replacement line count label for a purchase exchange history item.",
+    "placeholders": {
+      "count": {
+        "type": "num"
+      }
+    }
+  },
+  "purchaseExchangeReplacementHistoryLine": "بديل: {product} × {quantity} بتكلفة {unitCost}",
+  "@purchaseExchangeReplacementHistoryLine": {
+    "description": "Replacement product line shown in purchase exchange history.",
+    "placeholders": {
+      "product": {
+        "type": "String"
+      },
+      "quantity": {
+        "type": "int"
+      },
+      "unitCost": {
+        "type": "String"
       }
     }
   },
@@ -730,6 +763,30 @@
   "clearPurchaseDraftTooltip": "مسح مسودة الشراء",
   "emptyPurchaseDraft": "لا توجد عناصر في مسودة الشراء",
   "purchaseLineCostLabel": "التكلفة",
+  "purchaseShippingCostLabel": "الشحن",
+  "purchaseCustomsCostLabel": "الجمارك",
+  "purchaseHandlingCostLabel": "المناولة",
+  "purchaseLandedCostTotalLabel": "تكاليف الوصول",
+  "landedCostAllocationByLineValueLabel": "حسب قيمة السطر",
+  "landedCostAllocationByQuantityLabel": "حسب الكمية",
+  "purchaseLineLandedCostValue": "تكلفة وصول {amount}",
+  "@purchaseLineLandedCostValue": {
+    "description": "Allocated landed cost shown on a purchase order line.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "purchaseLineEffectiveCostValue": "التكلفة الفعلية {amount}",
+  "@purchaseLineEffectiveCostValue": {
+    "description": "Effective unit cost after landed cost allocation.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
   "receivePurchaseImmediatelyLabel": "استلام أمر الشراء فورًا",
   "quickCreateProductTitle": "إضافة منتج سريع",
   "quickCreateProductMessage": "الباركود {barcode} غير موجود. أضف المنتج الآن لمتابعة أمر الشراء.",

@@ -30,8 +30,21 @@ class _PurchaseDraftPaneState extends State<PurchaseDraftPane> {
       TextEditingController(text: widget.viewModel.supplierInvoiceNumber);
   late final TextEditingController _supplierInvoiceDateController =
       TextEditingController(text: widget.viewModel.supplierInvoiceDateInput);
+  late final TextEditingController _shippingCostController =
+      TextEditingController(
+        text: _costInputText(widget.viewModel.shippingCost),
+      );
+  late final TextEditingController _customsCostController =
+      TextEditingController(text: _costInputText(widget.viewModel.customsCost));
+  late final TextEditingController _handlingCostController =
+      TextEditingController(
+        text: _costInputText(widget.viewModel.handlingCost),
+      );
   final FocusNode _supplierInvoiceNumberFocusNode = FocusNode();
   final FocusNode _supplierInvoiceDateFocusNode = FocusNode();
+  final FocusNode _shippingCostFocusNode = FocusNode();
+  final FocusNode _customsCostFocusNode = FocusNode();
+  final FocusNode _handlingCostFocusNode = FocusNode();
 
   PurchaseViewModel get viewModel => widget.viewModel;
 
@@ -48,14 +61,38 @@ class _PurchaseDraftPaneState extends State<PurchaseDraftPane> {
       focusNode: _supplierInvoiceDateFocusNode,
       value: widget.viewModel.supplierInvoiceDateInput,
     );
+    _syncController(
+      controller: _shippingCostController,
+      focusNode: _shippingCostFocusNode,
+      value: _costInputText(widget.viewModel.shippingCost),
+      syncEmptyWhileFocused: false,
+    );
+    _syncController(
+      controller: _customsCostController,
+      focusNode: _customsCostFocusNode,
+      value: _costInputText(widget.viewModel.customsCost),
+      syncEmptyWhileFocused: false,
+    );
+    _syncController(
+      controller: _handlingCostController,
+      focusNode: _handlingCostFocusNode,
+      value: _costInputText(widget.viewModel.handlingCost),
+      syncEmptyWhileFocused: false,
+    );
   }
 
   @override
   void dispose() {
     _supplierInvoiceNumberController.dispose();
     _supplierInvoiceDateController.dispose();
+    _shippingCostController.dispose();
+    _customsCostController.dispose();
+    _handlingCostController.dispose();
     _supplierInvoiceNumberFocusNode.dispose();
     _supplierInvoiceDateFocusNode.dispose();
+    _shippingCostFocusNode.dispose();
+    _customsCostFocusNode.dispose();
+    _handlingCostFocusNode.dispose();
     super.dispose();
   }
 
@@ -153,6 +190,8 @@ class _PurchaseDraftPaneState extends State<PurchaseDraftPane> {
               ],
             ),
             const SizedBox(height: 8),
+            _buildLandedCostSection(l10n),
+            const SizedBox(height: 8),
             Expanded(
               child: viewModel.draft.isEmpty
                   ? Center(child: Text(l10n.emptyPurchaseDraft))
@@ -174,11 +213,21 @@ class _PurchaseDraftPaneState extends State<PurchaseDraftPane> {
                       },
                     ),
             ),
-            OrderTotals(
-              subtotalLabel: l10n.subtotal,
-              totalLabel: l10n.total,
-              subtotal: viewModel.subtotal,
-              total: viewModel.total,
+            Column(
+              children: [
+                TotalRow(label: l10n.subtotal, value: viewModel.subtotal),
+                if (viewModel.landedCostTotal > 0)
+                  TotalRow(
+                    label: l10n.purchaseLandedCostTotalLabel,
+                    value: viewModel.landedCostTotal,
+                  ),
+                const Divider(),
+                TotalRow(
+                  label: l10n.total,
+                  value: viewModel.total,
+                  isStrong: true,
+                ),
+              ],
             ),
             const SizedBox(height: 8),
             CheckboxListTile(
@@ -214,6 +263,92 @@ class _PurchaseDraftPaneState extends State<PurchaseDraftPane> {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildLandedCostSection(AppLocalizations l10n) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: _LandedCostField(
+                key: const ValueKey('shipping_cost_field'),
+                controller: _shippingCostController,
+                focusNode: _shippingCostFocusNode,
+                label: l10n.purchaseShippingCostLabel,
+                icon: Icons.local_shipping_outlined,
+                enabled: !viewModel.isSubmitting,
+                onChanged: viewModel.updateShippingCost,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _LandedCostField(
+                key: const ValueKey('customs_cost_field'),
+                controller: _customsCostController,
+                focusNode: _customsCostFocusNode,
+                label: l10n.purchaseCustomsCostLabel,
+                icon: Icons.account_balance_outlined,
+                enabled: !viewModel.isSubmitting,
+                onChanged: viewModel.updateCustomsCost,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _LandedCostField(
+                key: const ValueKey('handling_cost_field'),
+                controller: _handlingCostController,
+                focusNode: _handlingCostFocusNode,
+                label: l10n.purchaseHandlingCostLabel,
+                icon: Icons.inventory_2_outlined,
+                enabled: !viewModel.isSubmitting,
+                onChanged: viewModel.updateHandlingCost,
+              ),
+            ),
+          ],
+        ),
+        if (viewModel.landedCostTotal > 0) ...[
+          const SizedBox(height: 8),
+          SegmentedButton<LandedCostAllocationMethod>(
+            showSelectedIcon: false,
+            style: const ButtonStyle(
+              visualDensity: VisualDensity(horizontal: -2, vertical: -2),
+            ),
+            segments: [
+              ButtonSegment(
+                value: LandedCostAllocationMethod.byLineValue,
+                label: Text(
+                  l10n.landedCostAllocationByLineValueLabel,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                icon: const Icon(Icons.payments_outlined),
+                enabled: !viewModel.isSubmitting,
+              ),
+              ButtonSegment(
+                value: LandedCostAllocationMethod.byQuantity,
+                label: Text(
+                  l10n.landedCostAllocationByQuantityLabel,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                icon: const Icon(Icons.numbers_outlined),
+                enabled: !viewModel.isSubmitting,
+              ),
+            ],
+            selected: {viewModel.landedCostAllocationMethod},
+            onSelectionChanged: viewModel.isSubmitting
+                ? null
+                : (selection) {
+                    if (selection.isNotEmpty) {
+                      viewModel.updateLandedCostAllocationMethod(
+                        selection.first,
+                      );
+                    }
+                  },
+          ),
+        ],
+      ],
     );
   }
 
@@ -269,8 +404,11 @@ class _PurchaseDraftPaneState extends State<PurchaseDraftPane> {
     required TextEditingController controller,
     required FocusNode focusNode,
     required String value,
+    bool syncEmptyWhileFocused = true,
   }) {
-    if ((!focusNode.hasFocus || value.isEmpty) && controller.text != value) {
+    final canSync =
+        !focusNode.hasFocus || (syncEmptyWhileFocused && value.isEmpty);
+    if (canSync && controller.text != value) {
       controller.text = value;
     }
   }
@@ -279,6 +417,10 @@ class _PurchaseDraftPaneState extends State<PurchaseDraftPane> {
     final month = date.month.toString().padLeft(2, '0');
     final day = date.day.toString().padLeft(2, '0');
     return '${date.year}-$month-$day';
+  }
+
+  String _costInputText(double value) {
+    return value == 0 ? '' : value.toStringAsFixed(2);
   }
 }
 
@@ -303,6 +445,48 @@ class _DateDashInputFormatter extends TextInputFormatter {
     return TextEditingValue(
       text: text,
       selection: TextSelection.collapsed(offset: text.length),
+    );
+  }
+}
+
+class _LandedCostField extends StatelessWidget {
+  const _LandedCostField({
+    super.key,
+    required this.controller,
+    required this.focusNode,
+    required this.label,
+    required this.icon,
+    required this.enabled,
+    required this.onChanged,
+  });
+
+  final TextEditingController controller;
+  final FocusNode focusNode;
+  final String label;
+  final IconData icon;
+  final bool enabled;
+  final ValueChanged<double> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return TextField(
+      controller: controller,
+      focusNode: focusNode,
+      enabled: enabled,
+      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+      inputFormatters: [DecimalTextInputFormatter()],
+      decoration: InputDecoration(
+        labelText: label,
+        isDense: true,
+        prefixIcon: Icon(icon),
+      ),
+      onChanged: (value) {
+        final normalized = value.trim().replaceAll(',', '.');
+        final parsed = normalized.isEmpty ? 0.0 : double.tryParse(normalized);
+        if (parsed != null && parsed >= 0) {
+          onChanged(parsed);
+        }
+      },
     );
   }
 }

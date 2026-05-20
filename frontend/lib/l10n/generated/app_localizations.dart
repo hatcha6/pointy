@@ -1844,6 +1844,60 @@ abstract class AppLocalizations {
   /// **'اختر عنصرًا واحدًا على الأقل.'**
   String get purchaseAdjustmentNoItemsSelected;
 
+  /// No description provided for @purchaseExchangeNoItemsSelected.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر عناصر صادرة وعناصر بديلة للاستبدال.'**
+  String get purchaseExchangeNoItemsSelected;
+
+  /// No description provided for @purchaseExchangeOutboundSectionTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'العناصر الصادرة'**
+  String get purchaseExchangeOutboundSectionTitle;
+
+  /// No description provided for @purchaseExchangeReplacementSectionTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'العناصر البديلة'**
+  String get purchaseExchangeReplacementSectionTitle;
+
+  /// No description provided for @purchaseExchangeAddReplacementLine.
+  ///
+  /// In ar, this message translates to:
+  /// **'إضافة بديل'**
+  String get purchaseExchangeAddReplacementLine;
+
+  /// No description provided for @purchaseExchangeNoReplacementProducts.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد منتجات متاحة للاختيار من هذا الأمر.'**
+  String get purchaseExchangeNoReplacementProducts;
+
+  /// No description provided for @purchaseExchangeInvalidLinesError.
+  ///
+  /// In ar, this message translates to:
+  /// **'أدخل كمية صادرة واحدة على الأقل وبديلًا بكمية وتكلفة صحيحتين.'**
+  String get purchaseExchangeInvalidLinesError;
+
+  /// No description provided for @purchaseExchangeReplacementProductLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'المنتج البديل'**
+  String get purchaseExchangeReplacementProductLabel;
+
+  /// No description provided for @purchaseExchangeReplacementQuantityLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الكمية'**
+  String get purchaseExchangeReplacementQuantityLabel;
+
+  /// No description provided for @purchaseExchangeReplacementUnitCostLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'التكلفة'**
+  String get purchaseExchangeReplacementUnitCostLabel;
+
   /// Message shown after returning purchase items.
   ///
   /// In ar, this message translates to:
@@ -1915,6 +1969,22 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'{count, plural, =0{لا توجد عناصر} =1{عنصر واحد} =2{عنصران} other{{count} عناصر}}'**
   String purchaseAdjustmentHistoryLineCount(num count);
+
+  /// Replacement line count label for a purchase exchange history item.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, =0{لا توجد بدائل} =1{بديل واحد} =2{بديلان} other{{count} بدائل}}'**
+  String purchaseExchangeReplacementLineCount(num count);
+
+  /// Replacement product line shown in purchase exchange history.
+  ///
+  /// In ar, this message translates to:
+  /// **'بديل: {product} × {quantity} بتكلفة {unitCost}'**
+  String purchaseExchangeReplacementHistoryLine(
+    String product,
+    int quantity,
+    String unitCost,
+  );
 
   /// Message shown after a purchase order is submitted from details.
   ///
@@ -2143,6 +2213,54 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'التكلفة'**
   String get purchaseLineCostLabel;
+
+  /// No description provided for @purchaseShippingCostLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الشحن'**
+  String get purchaseShippingCostLabel;
+
+  /// No description provided for @purchaseCustomsCostLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الجمارك'**
+  String get purchaseCustomsCostLabel;
+
+  /// No description provided for @purchaseHandlingCostLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'المناولة'**
+  String get purchaseHandlingCostLabel;
+
+  /// No description provided for @purchaseLandedCostTotalLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'تكاليف الوصول'**
+  String get purchaseLandedCostTotalLabel;
+
+  /// No description provided for @landedCostAllocationByLineValueLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'حسب قيمة السطر'**
+  String get landedCostAllocationByLineValueLabel;
+
+  /// No description provided for @landedCostAllocationByQuantityLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'حسب الكمية'**
+  String get landedCostAllocationByQuantityLabel;
+
+  /// Allocated landed cost shown on a purchase order line.
+  ///
+  /// In ar, this message translates to:
+  /// **'تكلفة وصول {amount}'**
+  String purchaseLineLandedCostValue(String amount);
+
+  /// Effective unit cost after landed cost allocation.
+  ///
+  /// In ar, this message translates to:
+  /// **'التكلفة الفعلية {amount}'**
+  String purchaseLineEffectiveCostValue(String amount);
 
   /// No description provided for @receivePurchaseImmediatelyLabel.
   ///

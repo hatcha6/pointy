@@ -3,6 +3,8 @@ from django.contrib import admin
 from .models import (
     PurchaseLine,
     PurchaseOrder,
+    PurchaseOrderAdjustment,
+    PurchaseOrderAdjustmentReplacementLine,
     PurchaseReceipt,
     PurchaseReceiptLine,
     Supplier,
@@ -21,6 +23,11 @@ class SupplierAdmin(admin.ModelAdmin):
 class PurchaseLineInline(admin.TabularInline):
     model = PurchaseLine
     extra = 0
+    readonly_fields = (
+        "allocated_landed_cost",
+        "landed_unit_cost",
+        "effective_unit_cost",
+    )
 
 
 class PurchaseReceiptLineInline(admin.TabularInline):
@@ -42,6 +49,13 @@ class PurchaseReceiptLineInline(admin.TabularInline):
     can_delete = False
 
 
+class PurchaseOrderAdjustmentReplacementLineInline(admin.TabularInline):
+    model = PurchaseOrderAdjustmentReplacementLine
+    extra = 0
+    readonly_fields = ("adjustment", "product", "quantity", "unit_cost")
+    can_delete = False
+
+
 @admin.register(PurchaseOrder)
 class PurchaseOrderAdmin(admin.ModelAdmin):
     list_display = (
@@ -51,6 +65,7 @@ class PurchaseOrderAdmin(admin.ModelAdmin):
         "supplier_invoice_date",
         "status",
         "subtotal",
+        "landed_cost_total",
         "total",
         "due_date",
         "submitted_at",
@@ -67,6 +82,23 @@ class PurchaseReceiptAdmin(admin.ModelAdmin):
     list_filter = ("received_at", "created_by")
     search_fields = ("purchase_order__order_number", "notes")
     inlines = [PurchaseReceiptLineInline]
+
+
+@admin.register(PurchaseOrderAdjustment)
+class PurchaseOrderAdjustmentAdmin(admin.ModelAdmin):
+    list_display = (
+        "purchase_order",
+        "adjustment_type",
+        "amount",
+        "outbound_amount",
+        "replacement_amount",
+        "net_amount",
+        "settlement_method",
+        "created_by",
+    )
+    list_filter = ("adjustment_type", "settlement_method")
+    search_fields = ("purchase_order__order_number", "reason")
+    inlines = [PurchaseOrderAdjustmentReplacementLineInline]
 
 
 @admin.register(SupplierPayment)

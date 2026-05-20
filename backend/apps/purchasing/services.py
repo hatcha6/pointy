@@ -10,6 +10,7 @@ from .models import (
     PurchaseOrder,
     PurchaseOrderAdjustment,
     PurchaseOrderAdjustmentLine,
+    PurchaseOrderAdjustmentReplacementLine,
     PurchaseReceipt,
     PurchaseReceiptLine,
     Supplier,
@@ -384,6 +385,13 @@ def purchase_adjustment_amount(lines):
     return amount
 
 
+def purchase_replacement_amount(lines):
+    return sum(
+        (unit_cost * quantity for _, quantity, unit_cost in lines),
+        Decimal("0.00"),
+    ).quantize(Decimal("0.01"))
+
+
 def validate_purchase_order_adjustment_allowed(purchase_order):
     if purchase_order.status not in (
         PurchaseOrder.Status.PARTIALLY_RECEIVED,
@@ -445,6 +453,10 @@ def purchase_adjustment_note(adjustment_type, order_number):
     return f"{label} {order_number}"
 
 
+def purchase_replacement_note(order_number):
+    return f"استلام بديل مشتريات {order_number}"
+
+
 def record_purchase_adjustment_stock_movements(
     *,
     purchase_order,
@@ -474,22 +486,71 @@ def record_purchase_adjustment_stock_movements(
         )
 
 
+def lock_replacement_stock_items(lines, stock_items=None):
+    stock_items = {} if stock_items is None else dict(stock_items)
+    products_by_id = {product.pk: product for product, _, _ in lines}
+    for product_id in sorted(products_by_id):
+        if product_id in stock_items:
+            continue
+        stock_item, _ = StockItem.objects.select_for_update().get_or_create(
+            product=products_by_id[product_id],
+        )
+        stock_items[product_id] = stock_item
+    return stock_items
+
+
+def record_purchase_replacement_stock_movements(
+    *,
+    purchase_order,
+    lines,
+    stock_items,
+    created_by,
+):
+    for product, quantity, _ in lines:
+        stock_item = stock_items[product.pk]
+        before = stock_snapshot(stock_item)
+        stock_item.quantity_on_hand += quantity
+        save_stock_item_quantities(stock_item)
+        StockMovement.objects.create(
+            product=product,
+            stock_item=stock_item,
+            movement_type=StockMovement.Type.INCREASE,
+            quantity=quantity,
+            note=purchase_replacement_note(purchase_order.order_number),
+            created_by=created_by,
+            on_hand_before=before["on_hand"],
+            on_hand_after=stock_item.quantity_on_hand,
+            committed_before=before["committed"],
+            committed_after=stock_item.quantity_committed,
+            expected_before=before["expected"],
+            expected_after=stock_item.quantity_expected,
+        )
+
+
 def create_purchase_order_adjustment(
     *,
     purchase_order,
     adjustment_type,
     lines,
     reason,
+    replacement_lines=None,
     request=None,
     settlement_method="",
 ):
     created_by = purchase_created_by(request)
     stock_items = validate_purchase_stock_available(lines)
-    amount = purchase_adjustment_amount(lines)
+    replacement_lines = replacement_lines or []
+    stock_items = lock_replacement_stock_items(replacement_lines, stock_items)
+    outbound_amount = purchase_adjustment_amount(lines)
+    replacement_amount = purchase_replacement_amount(replacement_lines)
+    net_amount = (replacement_amount - outbound_amount).quantize(Decimal("0.01"))
     adjustment = PurchaseOrderAdjustment.objects.create(
         purchase_order=purchase_order,
         adjustment_type=adjustment_type,
-        amount=amount,
+        amount=outbound_amount,
+        outbound_amount=outbound_amount,
+        replacement_amount=replacement_amount,
+        net_amount=net_amount,
         settlement_method=settlement_method,
         reason=reason,
         created_by=created_by,
@@ -502,10 +563,23 @@ def create_purchase_order_adjustment(
             quantity=quantity,
             unit_cost=line.unit_cost,
         )
+    for product, quantity, unit_cost in replacement_lines:
+        PurchaseOrderAdjustmentReplacementLine.objects.create(
+            adjustment=adjustment,
+            product=product,
+            quantity=quantity,
+            unit_cost=unit_cost,
+        )
     record_purchase_adjustment_stock_movements(
         purchase_order=purchase_order,
         adjustment_type=adjustment_type,
         lines=lines,
+        stock_items=stock_items,
+        created_by=created_by,
+    )
+    record_purchase_replacement_stock_movements(
+        purchase_order=purchase_order,
+        lines=replacement_lines,
         stock_items=stock_items,
         created_by=created_by,
     )
@@ -546,6 +620,7 @@ def adjust_purchase_order_items(
     adjustment_type,
     lines,
     reason,
+    replacement_lines=None,
     request=None,
     settlement_method="",
 ):
@@ -559,6 +634,7 @@ def adjust_purchase_order_items(
         purchase_order=locked_order,
         adjustment_type=adjustment_type,
         lines=lines,
+        replacement_lines=replacement_lines,
         reason=reason,
         request=request,
         settlement_method=settlement_method,

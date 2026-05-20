@@ -20,6 +20,54 @@ from .models import (
 )
 
 
+class PurchaseOrderLandedCostModelTests(TestCase):
+    def setUp(self):
+        self.supplier = Supplier.objects.create(name="Model supplier")
+        self.products = [
+            Product.objects.create(
+                sku=f"MODEL-PUR-{index}",
+                barcode="",
+                name=f"Model product {index}",
+                unit_price=Decimal("1.00"),
+            )
+            for index in range(3)
+        ]
+
+    def test_recalculate_persists_deterministic_landed_cost_allocations(self):
+        order = PurchaseOrder.objects.create(
+            supplier=self.supplier,
+            shipping_amount=Decimal("0.05"),
+            landed_cost_allocation_method=(
+                PurchaseOrder.LandedCostAllocationMethod.QUANTITY
+            ),
+        )
+        for product in self.products:
+            order.lines.create(
+                product=product,
+                quantity=1,
+                unit_cost=Decimal("1.00"),
+            )
+
+        order.recalculate()
+        order.save(update_fields=["subtotal", "total", "updated_at"])
+
+        order.refresh_from_db()
+        lines = list(order.lines.order_by("created_at", "id"))
+        self.assertEqual(order.subtotal, Decimal("3.00"))
+        self.assertEqual(order.landed_cost_total, Decimal("0.05"))
+        self.assertEqual(order.total, Decimal("3.05"))
+        self.assertEqual(
+            [line.allocated_landed_cost for line in lines],
+            [Decimal("0.02"), Decimal("0.02"), Decimal("0.01")],
+        )
+        self.assertEqual(
+            sum(line.allocated_landed_cost for line in lines),
+            Decimal("0.05"),
+        )
+        self.assertEqual(lines[0].landed_unit_cost, Decimal("0.02"))
+        self.assertEqual(lines[0].effective_unit_cost, Decimal("1.02"))
+
+
 class PurchaseOrderApiTests(TestCase):
     def setUp(self):
         ensure_role_groups()
@@ -35,6 +83,12 @@ class PurchaseOrderApiTests(TestCase):
             barcode="",
             name="Purchase coffee",
             unit_price=Decimal("4.00"),
+        )
+        self.other_product = Product.objects.create(
+            sku="PUR-TEA",
+            barcode="",
+            name="Purchase tea",
+            unit_price=Decimal("3.00"),
         )
         self.supplier = Supplier.objects.create(name="Main supplier")
 
@@ -71,6 +125,140 @@ class PurchaseOrderApiTests(TestCase):
         order = PurchaseOrder.objects.get(pk=response.data["id"])
         self.assertEqual(order.lines.count(), 1)
         self.assertEqual(order.total, Decimal("7.50"))
+
+    def test_create_purchase_order_with_landed_costs_allocates_by_line_value(self):
+        response = self.client.post(
+            reverse("purchaseorder-list"),
+            self.purchase_order_payload(
+                shipping_amount="0.60",
+                customs_amount="0.30",
+                handling_amount="0.10",
+                landed_cost_allocation_method=(
+                    PurchaseOrder.LandedCostAllocationMethod.LINE_VALUE
+                ),
+                lines=[
+                    {
+                        "product": self.product.pk,
+                        "quantity": 3,
+                        "unit_cost": "2.50",
+                    },
+                    {
+                        "product": self.other_product.pk,
+                        "quantity": 1,
+                        "unit_cost": "2.50",
+                    },
+                ],
+            ),
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["subtotal"], "10.00")
+        self.assertEqual(response.data["landed_cost_total"], "1.00")
+        self.assertEqual(response.data["total"], "11.00")
+        lines = sorted(response.data["lines"], key=lambda line: line["product"])
+        self.assertEqual(lines[0]["allocated_landed_cost"], "0.75")
+        self.assertEqual(lines[0]["landed_unit_cost"], "0.25")
+        self.assertEqual(lines[0]["effective_unit_cost"], "2.75")
+        self.assertEqual(lines[0]["effective_line_total"], "8.25")
+        self.assertEqual(lines[1]["allocated_landed_cost"], "0.25")
+        self.assertEqual(lines[1]["landed_unit_cost"], "0.25")
+        self.assertEqual(lines[1]["effective_unit_cost"], "2.75")
+        self.assertEqual(lines[1]["effective_line_total"], "2.75")
+
+    def test_create_purchase_order_accepts_landed_cost_frontend_aliases(self):
+        response = self.client.post(
+            reverse("purchaseorder-list"),
+            self.purchase_order_payload(
+                shipping_cost="0.60",
+                customs_cost="0.30",
+                handling_cost="0.10",
+                landed_cost_allocation_method="by_quantity",
+            ),
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["shipping_amount"], "0.60")
+        self.assertEqual(response.data["customs_amount"], "0.30")
+        self.assertEqual(response.data["handling_amount"], "0.10")
+        self.assertEqual(response.data["landed_cost_allocation_method"], "quantity")
+        self.assertEqual(response.data["landed_cost_total"], "1.00")
+        self.assertEqual(response.data["total"], "8.50")
+
+    def test_create_purchase_order_with_landed_costs_allocates_by_quantity(self):
+        response = self.client.post(
+            reverse("purchaseorder-list"),
+            self.purchase_order_payload(
+                shipping_amount="1.00",
+                landed_cost_allocation_method=(
+                    PurchaseOrder.LandedCostAllocationMethod.QUANTITY
+                ),
+                lines=[
+                    {
+                        "product": self.product.pk,
+                        "quantity": 1,
+                        "unit_cost": "1.00",
+                    },
+                    {
+                        "product": self.other_product.pk,
+                        "quantity": 2,
+                        "unit_cost": "1.00",
+                    },
+                ],
+            ),
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["subtotal"], "3.00")
+        self.assertEqual(response.data["total"], "4.00")
+        allocations = [
+            Decimal(line["allocated_landed_cost"])
+            for line in response.data["lines"]
+        ]
+        self.assertEqual(sum(allocations), Decimal("1.00"))
+        lines = sorted(response.data["lines"], key=lambda line: line["quantity"])
+        self.assertEqual(lines[0]["allocated_landed_cost"], "0.33")
+        self.assertEqual(lines[1]["allocated_landed_cost"], "0.67")
+
+    def test_landed_cost_defaults_preserve_purchase_order_totals(self):
+        response = self.client.post(
+            reverse("purchaseorder-list"),
+            self.purchase_order_payload(),
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["shipping_amount"], "0.00")
+        self.assertEqual(response.data["customs_amount"], "0.00")
+        self.assertEqual(response.data["handling_amount"], "0.00")
+        self.assertEqual(response.data["landed_cost_total"], "0.00")
+        self.assertEqual(response.data["total"], "7.50")
+        line = response.data["lines"][0]
+        self.assertEqual(line["allocated_landed_cost"], "0.00")
+        self.assertEqual(line["landed_unit_cost"], "0.00")
+        self.assertEqual(line["effective_unit_cost"], "2.50")
+
+    def test_negative_landed_cost_is_rejected(self):
+        response = self.client.post(
+            reverse("purchaseorder-list"),
+            self.purchase_order_payload(shipping_amount="-0.01"),
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("shipping_amount", response.data)
+
+    def test_invalid_landed_cost_allocation_method_is_rejected(self):
+        response = self.client.post(
+            reverse("purchaseorder-list"),
+            self.purchase_order_payload(landed_cost_allocation_method="weight"),
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("landed_cost_allocation_method", response.data)
 
     def test_purchase_order_due_date_and_accounting_fields_are_serialized(self):
         response = self.client.post(
@@ -623,6 +811,203 @@ class PurchaseOrderApiTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("stock", response.data)
         self.assertEqual(StockItem.objects.get(product=self.product).quantity_on_hand, 1)
+
+    def test_exchange_records_outbound_and_replacement_lines_with_new_cost(self):
+        order = PurchaseOrder.objects.create(
+            supplier=self.supplier,
+            status=PurchaseOrder.Status.RECEIVED,
+        )
+        line = order.lines.create(
+            product=self.product,
+            quantity=4,
+            unit_cost=Decimal("1.25"),
+        )
+        StockItem.objects.create(product=self.product, quantity_on_hand=5)
+        StockItem.objects.create(product=self.other_product, quantity_on_hand=1)
+
+        response = self.client.post(
+            reverse("purchaseorder-exchange-items", args=[order.pk]),
+            {
+                "reason": "Wrong item",
+                "lines": [{"line": line.pk, "quantity": 2}],
+                "replacement_lines": [
+                    {
+                        "product": self.other_product.pk,
+                        "quantity": 3,
+                        "unit_cost": "2.00",
+                    }
+                ],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        adjustment = response.data["adjustments"][0]
+        self.assertEqual(
+            adjustment["adjustment_type"],
+            PurchaseOrderAdjustment.AdjustmentType.EXCHANGE,
+        )
+        self.assertEqual(adjustment["amount"], "2.50")
+        self.assertEqual(adjustment["outbound_amount"], "2.50")
+        self.assertEqual(adjustment["replacement_amount"], "6.00")
+        self.assertEqual(adjustment["net_amount"], "3.50")
+        self.assertEqual(adjustment["settlement_method"], "")
+        self.assertIsNone(adjustment["supplier_credit"])
+        self.assertEqual(adjustment["credits"], [])
+        self.assertEqual(adjustment["lines"][0]["quantity"], 2)
+        self.assertEqual(adjustment["lines"][0]["unit_cost"], "1.25")
+        self.assertEqual(adjustment["replacement_lines"][0]["product"], self.other_product.pk)
+        self.assertEqual(adjustment["replacement_lines"][0]["quantity"], 3)
+        self.assertEqual(adjustment["replacement_lines"][0]["unit_cost"], "2.00")
+        self.assertEqual(SupplierCredit.objects.count(), 0)
+        self.assertEqual(SupplierPayment.objects.count(), 0)
+
+        self.assertEqual(StockItem.objects.get(product=self.product).quantity_on_hand, 3)
+        self.assertEqual(
+            StockItem.objects.get(product=self.other_product).quantity_on_hand,
+            4,
+        )
+        returned_movement = StockMovement.objects.get(
+            product=self.product,
+            movement_type=StockMovement.Type.DECREASE,
+        )
+        self.assertEqual(returned_movement.quantity, 2)
+        self.assertEqual(returned_movement.on_hand_before, 5)
+        self.assertEqual(returned_movement.on_hand_after, 3)
+        self.assertEqual(returned_movement.created_by, self.user)
+        replacement_movement = StockMovement.objects.get(
+            product=self.other_product,
+            movement_type=StockMovement.Type.INCREASE,
+        )
+        self.assertEqual(replacement_movement.quantity, 3)
+        self.assertEqual(replacement_movement.on_hand_before, 1)
+        self.assertEqual(replacement_movement.on_hand_after, 4)
+        self.assertIn("استلام بديل مشتريات", replacement_movement.note)
+        self.assertEqual(replacement_movement.created_by, self.user)
+
+    def test_exchange_replacement_lines_create_stock_item_when_missing(self):
+        order = PurchaseOrder.objects.create(
+            supplier=self.supplier,
+            status=PurchaseOrder.Status.RECEIVED,
+        )
+        line = order.lines.create(
+            product=self.product,
+            quantity=2,
+            unit_cost=Decimal("1.25"),
+        )
+        StockItem.objects.create(product=self.product, quantity_on_hand=2)
+
+        response = self.client.post(
+            reverse("purchaseorder-exchange-items", args=[order.pk]),
+            {
+                "lines": [{"line": line.pk, "quantity": 1}],
+                "replacement_items": [
+                    {
+                        "product": self.other_product.pk,
+                        "quantity": 2,
+                        "unit_cost": "3.25",
+                    }
+                ],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        replacement_stock = StockItem.objects.get(product=self.other_product)
+        self.assertEqual(replacement_stock.quantity_on_hand, 2)
+        self.assertEqual(
+            response.data["adjustments"][0]["replacement_lines"][0]["unit_cost"],
+            "3.25",
+        )
+
+    def test_exchange_rejects_empty_replacement_lines(self):
+        order = PurchaseOrder.objects.create(
+            supplier=self.supplier,
+            status=PurchaseOrder.Status.RECEIVED,
+        )
+        line = order.lines.create(
+            product=self.product,
+            quantity=2,
+            unit_cost=Decimal("1.25"),
+        )
+        StockItem.objects.create(product=self.product, quantity_on_hand=2)
+
+        response = self.client.post(
+            reverse("purchaseorder-exchange-items", args=[order.pk]),
+            {
+                "lines": [{"line": line.pk, "quantity": 1}],
+                "replacement_lines": [],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("replacement_lines", response.data)
+        self.assertEqual(StockItem.objects.get(product=self.product).quantity_on_hand, 2)
+        self.assertEqual(StockMovement.objects.count(), 0)
+
+    def test_exchange_rejects_invalid_replacement_lines(self):
+        order = PurchaseOrder.objects.create(
+            supplier=self.supplier,
+            status=PurchaseOrder.Status.RECEIVED,
+        )
+        line = order.lines.create(
+            product=self.product,
+            quantity=2,
+            unit_cost=Decimal("1.25"),
+        )
+        StockItem.objects.create(product=self.product, quantity_on_hand=2)
+
+        response = self.client.post(
+            reverse("purchaseorder-exchange-items", args=[order.pk]),
+            {
+                "lines": [{"line": line.pk, "quantity": 1}],
+                "replacement_lines": [
+                    {
+                        "quantity": 1,
+                        "unit_cost": "-1.00",
+                    }
+                ],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("replacement_lines", response.data)
+        self.assertEqual(StockItem.objects.get(product=self.product).quantity_on_hand, 2)
+        self.assertEqual(StockMovement.objects.count(), 0)
+
+    def test_exchange_legacy_payload_replaces_same_items_without_net_stock_change(self):
+        order = PurchaseOrder.objects.create(
+            supplier=self.supplier,
+            status=PurchaseOrder.Status.RECEIVED,
+        )
+        line = order.lines.create(
+            product=self.product,
+            quantity=3,
+            unit_cost=Decimal("1.25"),
+        )
+        StockItem.objects.create(product=self.product, quantity_on_hand=5)
+
+        response = self.client.post(
+            reverse("purchaseorder-exchange-items", args=[order.pk]),
+            {"lines": [{"line": line.pk, "quantity": 2}]},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        adjustment = response.data["adjustments"][0]
+        self.assertEqual(adjustment["outbound_amount"], "2.50")
+        self.assertEqual(adjustment["replacement_amount"], "2.50")
+        self.assertEqual(adjustment["net_amount"], "0.00")
+        self.assertEqual(adjustment["replacement_lines"][0]["product"], self.product.pk)
+        self.assertEqual(adjustment["replacement_lines"][0]["quantity"], 2)
+        self.assertEqual(adjustment["replacement_lines"][0]["unit_cost"], "1.25")
+        self.assertEqual(StockItem.objects.get(product=self.product).quantity_on_hand, 5)
+        self.assertEqual(
+            StockMovement.objects.filter(product=self.product).count(),
+            2,
+        )
 
     def test_purchase_adjustments_are_limited_to_received_orders(self):
         order = PurchaseOrder.objects.create(

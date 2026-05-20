@@ -103,6 +103,7 @@ class PurchaseOrderViewSet(viewsets.ModelViewSet):
         "receipts__lines__product",
         "receipts__created_by",
         "adjustments__lines__product",
+        "adjustments__replacement_lines__product",
         "adjustments__created_by",
         "adjustments__supplier_credit",
         "supplier_payments",

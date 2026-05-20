@@ -969,6 +969,36 @@ class AppLocalizationsAr extends AppLocalizations {
       'اختر عنصرًا واحدًا على الأقل.';
 
   @override
+  String get purchaseExchangeNoItemsSelected =>
+      'اختر عناصر صادرة وعناصر بديلة للاستبدال.';
+
+  @override
+  String get purchaseExchangeOutboundSectionTitle => 'العناصر الصادرة';
+
+  @override
+  String get purchaseExchangeReplacementSectionTitle => 'العناصر البديلة';
+
+  @override
+  String get purchaseExchangeAddReplacementLine => 'إضافة بديل';
+
+  @override
+  String get purchaseExchangeNoReplacementProducts =>
+      'لا توجد منتجات متاحة للاختيار من هذا الأمر.';
+
+  @override
+  String get purchaseExchangeInvalidLinesError =>
+      'أدخل كمية صادرة واحدة على الأقل وبديلًا بكمية وتكلفة صحيحتين.';
+
+  @override
+  String get purchaseExchangeReplacementProductLabel => 'المنتج البديل';
+
+  @override
+  String get purchaseExchangeReplacementQuantityLabel => 'الكمية';
+
+  @override
+  String get purchaseExchangeReplacementUnitCostLabel => 'التكلفة';
+
+  @override
   String purchaseReturnSuccess(String orderNumber) {
     return 'تم تسجيل إرجاع المشتريات رقم $orderNumber.';
   }
@@ -1027,6 +1057,28 @@ class AppLocalizationsAr extends AppLocalizations {
       zero: 'لا توجد عناصر',
     );
     return '$_temp0';
+  }
+
+  @override
+  String purchaseExchangeReplacementLineCount(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count بدائل',
+      two: 'بديلان',
+      one: 'بديل واحد',
+      zero: 'لا توجد بدائل',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String purchaseExchangeReplacementHistoryLine(
+    String product,
+    int quantity,
+    String unitCost,
+  ) {
+    return 'بديل: $product × $quantity بتكلفة $unitCost';
   }
 
   @override
@@ -1189,6 +1241,34 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get purchaseLineCostLabel => 'التكلفة';
+
+  @override
+  String get purchaseShippingCostLabel => 'الشحن';
+
+  @override
+  String get purchaseCustomsCostLabel => 'الجمارك';
+
+  @override
+  String get purchaseHandlingCostLabel => 'المناولة';
+
+  @override
+  String get purchaseLandedCostTotalLabel => 'تكاليف الوصول';
+
+  @override
+  String get landedCostAllocationByLineValueLabel => 'حسب قيمة السطر';
+
+  @override
+  String get landedCostAllocationByQuantityLabel => 'حسب الكمية';
+
+  @override
+  String purchaseLineLandedCostValue(String amount) {
+    return 'تكلفة وصول $amount';
+  }
+
+  @override
+  String purchaseLineEffectiveCostValue(String amount) {
+    return 'التكلفة الفعلية $amount';
+  }
 
   @override
   String get receivePurchaseImmediatelyLabel => 'استلام أمر الشراء فورًا';

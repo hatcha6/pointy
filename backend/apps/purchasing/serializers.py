@@ -2,11 +2,13 @@ from decimal import Decimal
 
 from rest_framework import serializers
 
+from apps.catalog.models import Product
 from .models import (
     PurchaseLine,
     PurchaseOrder,
     PurchaseOrderAdjustment,
     PurchaseOrderAdjustmentLine,
+    PurchaseOrderAdjustmentReplacementLine,
     PurchaseReceipt,
     PurchaseReceiptLine,
     Supplier,
@@ -70,10 +72,30 @@ class PurchaseLineSerializer(serializers.ModelSerializer):
     product_name = serializers.CharField(source="product.name", read_only=True)
     product_sku = serializers.CharField(source="product.sku", read_only=True)
     line_total = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
+    effective_line_total = serializers.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        read_only=True,
+    )
     previous_unit_cost = serializers.SerializerMethodField()
     unit_cost_change = serializers.SerializerMethodField()
     unit_cost_change_percent = serializers.SerializerMethodField()
     unit_cost_changed = serializers.SerializerMethodField()
+    allocated_landed_cost = serializers.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        read_only=True,
+    )
+    landed_unit_cost = serializers.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        read_only=True,
+    )
+    effective_unit_cost = serializers.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        read_only=True,
+    )
     adjusted_quantity = serializers.IntegerField(read_only=True)
     accepted_quantity = serializers.IntegerField(read_only=True)
     damaged_quantity = serializers.IntegerField(read_only=True)
@@ -106,6 +128,10 @@ class PurchaseLineSerializer(serializers.ModelSerializer):
             "unit_cost_change",
             "unit_cost_change_percent",
             "unit_cost_changed",
+            "allocated_landed_cost",
+            "landed_unit_cost",
+            "effective_unit_cost",
+            "effective_line_total",
             "line_total",
         ]
         read_only_fields = (
@@ -116,6 +142,10 @@ class PurchaseLineSerializer(serializers.ModelSerializer):
             "unit_cost_change",
             "unit_cost_change_percent",
             "unit_cost_changed",
+            "allocated_landed_cost",
+            "landed_unit_cost",
+            "effective_unit_cost",
+            "effective_line_total",
             "adjusted_quantity",
             "accepted_quantity",
             "damaged_quantity",
@@ -248,6 +278,23 @@ class PurchaseOrderAdjustmentLineSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 
+class PurchaseOrderAdjustmentReplacementLineSerializer(serializers.ModelSerializer):
+    product_name = serializers.CharField(source="product.name", read_only=True)
+    line_total = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
+
+    class Meta:
+        model = PurchaseOrderAdjustmentReplacementLine
+        fields = [
+            "id",
+            "product",
+            "product_name",
+            "quantity",
+            "unit_cost",
+            "line_total",
+        ]
+        read_only_fields = fields
+
+
 class SupplierCreditSerializer(serializers.ModelSerializer):
     class Meta:
         model = SupplierCredit
@@ -267,6 +314,10 @@ class SupplierCreditSerializer(serializers.ModelSerializer):
 
 class PurchaseOrderAdjustmentSerializer(serializers.ModelSerializer):
     lines = PurchaseOrderAdjustmentLineSerializer(many=True, read_only=True)
+    replacement_lines = PurchaseOrderAdjustmentReplacementLineSerializer(
+        many=True,
+        read_only=True,
+    )
     created_by_username = serializers.CharField(
         source="created_by.username",
         read_only=True,
@@ -280,11 +331,15 @@ class PurchaseOrderAdjustmentSerializer(serializers.ModelSerializer):
             "id",
             "adjustment_type",
             "amount",
+            "outbound_amount",
+            "replacement_amount",
+            "net_amount",
             "settlement_method",
             "reason",
             "created_by",
             "created_by_username",
             "lines",
+            "replacement_lines",
             "supplier_credit",
             "credits",
             "created_at",
@@ -304,6 +359,11 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
     receipts = PurchaseReceiptSerializer(many=True, read_only=True)
     adjustments = PurchaseOrderAdjustmentSerializer(many=True, read_only=True)
     supplier_name = serializers.CharField(source="supplier.name", read_only=True)
+    landed_cost_total = serializers.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        read_only=True,
+    )
     supplier_reference = serializers.CharField(
         source="supplier_invoice_number",
         required=False,
@@ -349,6 +409,11 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
             "receipts",
             "adjustments",
             "subtotal",
+            "shipping_amount",
+            "customs_amount",
+            "handling_amount",
+            "landed_cost_allocation_method",
+            "landed_cost_total",
             "total",
             "paid_total",
             "credit_applied_total",
@@ -372,6 +437,7 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
             "adjustments",
             "receipts",
             "subtotal",
+            "landed_cost_total",
             "total",
             "paid_total",
             "credit_applied_total",
@@ -389,9 +455,24 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
         )
         validators = []
 
+    def validate_shipping_amount(self, value):
+        return self._validate_landed_cost_amount(value, "Shipping amount")
+
+    def validate_customs_amount(self, value):
+        return self._validate_landed_cost_amount(value, "Customs amount")
+
+    def validate_handling_amount(self, value):
+        return self._validate_landed_cost_amount(value, "Handling amount")
+
+    def _validate_landed_cost_amount(self, value, label):
+        if value < Decimal("0.00"):
+            raise serializers.ValidationError(f"{label} cannot be negative.")
+        return value
+
     def to_internal_value(self, data):
         if isinstance(data, dict):
             data = data.copy()
+            self._normalize_landed_cost_aliases(data)
             legacy_number = data.get("supplier_reference")
             invoice_number = data.get("supplier_invoice_number")
             if (
@@ -410,6 +491,33 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
             if legacy_number is not None and invoice_number is None:
                 data["supplier_invoice_number"] = legacy_number
         return super().to_internal_value(data)
+
+    def _normalize_landed_cost_aliases(self, data):
+        for canonical, alias in (
+            ("shipping_amount", "shipping_cost"),
+            ("customs_amount", "customs_cost"),
+            ("handling_amount", "handling_cost"),
+        ):
+            alias_value = data.get(alias)
+            canonical_value = data.get(canonical)
+            if (
+                alias_value is not None
+                and canonical_value is not None
+                and str(alias_value).strip() != str(canonical_value).strip()
+            ):
+                raise serializers.ValidationError(
+                    {alias: f"Use {canonical}; aliases must match when both are provided."}
+                )
+            if alias_value is not None and canonical_value is None:
+                data[canonical] = alias_value
+
+        allocation_method = data.get("landed_cost_allocation_method")
+        allocation_aliases = {
+            "by_line_value": PurchaseOrder.LandedCostAllocationMethod.LINE_VALUE,
+            "by_quantity": PurchaseOrder.LandedCostAllocationMethod.QUANTITY,
+        }
+        if allocation_method in allocation_aliases:
+            data["landed_cost_allocation_method"] = allocation_aliases[allocation_method]
 
     def get_can_return(self, purchase_order):
         return self._can_adjust(purchase_order)
@@ -641,6 +749,16 @@ class PurchaseOrderAdjustmentLineInputSerializer(serializers.Serializer):
     quantity = serializers.IntegerField(min_value=1)
 
 
+class PurchaseOrderReplacementLineInputSerializer(serializers.Serializer):
+    product = serializers.PrimaryKeyRelatedField(queryset=Product.objects.all())
+    quantity = serializers.IntegerField(min_value=1)
+    unit_cost = serializers.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        min_value=Decimal("0.00"),
+    )
+
+
 class PurchaseOrderAdjustmentInputSerializer(serializers.Serializer):
     lines = PurchaseOrderAdjustmentLineInputSerializer(many=True, allow_empty=False)
     reason = serializers.CharField(required=False, allow_blank=True, trim_whitespace=True)
@@ -706,6 +824,7 @@ class PurchaseOrderAdjustmentInputSerializer(serializers.Serializer):
             purchase_order=self.context["purchase_order"],
             adjustment_type=self.adjustment_type,
             lines=self.validated_data["validated_lines"],
+            replacement_lines=None,
             reason=self.validated_data.get("reason", ""),
             request=self.context.get("request"),
             settlement_method=self.validated_data.get("settlement_method", ""),
@@ -722,6 +841,61 @@ class PurchaseOrderRefundSerializer(PurchaseOrderAdjustmentInputSerializer):
 
 class PurchaseOrderExchangeSerializer(PurchaseOrderAdjustmentInputSerializer):
     adjustment_type = PurchaseOrderAdjustment.AdjustmentType.EXCHANGE
+    replacement_lines = PurchaseOrderReplacementLineInputSerializer(
+        many=True,
+        required=False,
+        allow_empty=False,
+    )
+
+    def to_internal_value(self, data):
+        if isinstance(data, dict) and "replacement_items" in data:
+            data = data.copy()
+            if (
+                "replacement_lines" in data
+                and data["replacement_lines"] != data["replacement_items"]
+            ):
+                raise serializers.ValidationError(
+                    {
+                        "replacement_items": (
+                            "Use replacement_lines; aliases must match when both are provided."
+                        )
+                    }
+                )
+            data.setdefault("replacement_lines", data["replacement_items"])
+        return super().to_internal_value(data)
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        replacement_lines = attrs.get("replacement_lines")
+        if replacement_lines is None:
+            replacement_lines = [
+                {
+                    "product": line.product,
+                    "quantity": quantity,
+                    "unit_cost": line.unit_cost,
+                }
+                for line, quantity in attrs["validated_lines"]
+            ]
+        attrs["validated_replacement_lines"] = [
+            (
+                line_data["product"],
+                line_data["quantity"],
+                line_data["unit_cost"],
+            )
+            for line_data in replacement_lines
+        ]
+        return attrs
+
+    def save(self, **kwargs):
+        return adjust_purchase_order_items(
+            purchase_order=self.context["purchase_order"],
+            adjustment_type=self.adjustment_type,
+            lines=self.validated_data["validated_lines"],
+            replacement_lines=self.validated_data["validated_replacement_lines"],
+            reason=self.validated_data.get("reason", ""),
+            request=self.context.get("request"),
+            settlement_method=self.validated_data.get("settlement_method", ""),
+        )
 
 
 class SupplierPaymentSerializer(serializers.ModelSerializer):

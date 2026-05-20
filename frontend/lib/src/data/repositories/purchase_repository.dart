@@ -68,6 +68,11 @@ class PurchaseRepository {
     required int supplierId,
     String supplierInvoiceNumber = '',
     DateTime? supplierInvoiceDate,
+    double shippingCost = 0,
+    double customsCost = 0,
+    double handlingCost = 0,
+    LandedCostAllocationMethod landedCostAllocationMethod =
+        LandedCostAllocationMethod.byLineValue,
   }) async {
     if (lines.isEmpty) {
       return Error(Exception('purchase draft is empty'));
@@ -79,6 +84,10 @@ class PurchaseRepository {
         supplierId: supplierId,
         supplierInvoiceNumber: supplierInvoiceNumber,
         supplierInvoiceDate: supplierInvoiceDate,
+        shippingCost: shippingCost,
+        customsCost: customsCost,
+        handlingCost: handlingCost,
+        landedCostAllocationMethod: landedCostAllocationMethod,
       );
       final order = await _service.createPurchaseOrder(draft);
       final submittedOrder = await _service.submitPurchaseOrder(order.id);

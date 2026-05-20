@@ -115,12 +115,17 @@ class PurchaseOrderDetailsViewModel extends ChangeNotifier {
 
   Future<bool> exchangeItems({
     required List<PurchaseAdjustmentLineDraft> lines,
+    required List<PurchaseReplacementLineDraft> replacementLines,
     String reason = '',
   }) {
     return _adjustOrder(
       _purchaseRepository.exchangeItems(
         purchaseOrderId: _order.id,
-        draft: PurchaseAdjustmentDraft(lines: lines, reason: reason),
+        draft: PurchaseAdjustmentDraft(
+          lines: lines,
+          replacementLines: replacementLines,
+          reason: reason,
+        ),
       ),
     );
   }

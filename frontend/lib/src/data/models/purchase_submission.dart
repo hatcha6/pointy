@@ -120,6 +120,22 @@ class PurchaseOrderPage {
   }
 }
 
+enum LandedCostAllocationMethod {
+  byLineValue('line_value'),
+  byQuantity('quantity');
+
+  const LandedCostAllocationMethod(this.apiValue);
+
+  final String apiValue;
+
+  static LandedCostAllocationMethod fromApiValue(Object? value) {
+    return switch (value?.toString()) {
+      'by_quantity' || 'quantity' => LandedCostAllocationMethod.byQuantity,
+      _ => LandedCostAllocationMethod.byLineValue,
+    };
+  }
+}
+
 class PurchaseOrderDraft {
   const PurchaseOrderDraft({
     required this.lines,
@@ -127,6 +143,10 @@ class PurchaseOrderDraft {
     this.dueDate,
     this.supplierInvoiceNumber = '',
     this.supplierInvoiceDate,
+    this.shippingCost = 0,
+    this.customsCost = 0,
+    this.handlingCost = 0,
+    this.landedCostAllocationMethod = LandedCostAllocationMethod.byLineValue,
   });
 
   final List<PurchaseOrderLineDraft> lines;
@@ -134,17 +154,30 @@ class PurchaseOrderDraft {
   final DateTime? dueDate;
   final String supplierInvoiceNumber;
   final DateTime? supplierInvoiceDate;
+  final double shippingCost;
+  final double customsCost;
+  final double handlingCost;
+  final LandedCostAllocationMethod landedCostAllocationMethod;
 
   factory PurchaseOrderDraft.fromDraftLines(
     List<PurchaseDraftLine> lines, {
     required int supplierId,
     String supplierInvoiceNumber = '',
     DateTime? supplierInvoiceDate,
+    double shippingCost = 0,
+    double customsCost = 0,
+    double handlingCost = 0,
+    LandedCostAllocationMethod landedCostAllocationMethod =
+        LandedCostAllocationMethod.byLineValue,
   }) {
     return PurchaseOrderDraft(
       supplierId: supplierId,
       supplierInvoiceNumber: supplierInvoiceNumber,
       supplierInvoiceDate: supplierInvoiceDate,
+      shippingCost: shippingCost,
+      customsCost: customsCost,
+      handlingCost: handlingCost,
+      landedCostAllocationMethod: landedCostAllocationMethod,
       lines: lines
           .map(
             (line) => PurchaseOrderLineDraft(
@@ -169,6 +202,10 @@ class PurchaseOrderDraft {
             .toIso8601String()
             .split('T')
             .first,
+      'shipping_amount': shippingCost.toStringAsFixed(2),
+      'customs_amount': customsCost.toStringAsFixed(2),
+      'handling_amount': handlingCost.toStringAsFixed(2),
+      'landed_cost_allocation_method': landedCostAllocationMethod.apiValue,
       'lines': lines.map((line) => line.toJson()).toList(),
     };
   }
@@ -232,6 +269,11 @@ class PurchaseOrder {
     required this.canReturn,
     required this.canRefund,
     required this.canExchange,
+    this.shippingCost = 0,
+    this.customsCost = 0,
+    this.handlingCost = 0,
+    this.landedCostTotal = 0,
+    this.landedCostAllocationMethod = LandedCostAllocationMethod.byLineValue,
     this.supplierId,
     this.supplierName,
     this.supplierInvoiceNumber = '',
@@ -257,6 +299,11 @@ class PurchaseOrder {
   final List<PurchaseReceipt> receipts;
   final double subtotal;
   final double total;
+  final double shippingCost;
+  final double customsCost;
+  final double handlingCost;
+  final double landedCostTotal;
+  final LandedCostAllocationMethod landedCostAllocationMethod;
   final bool canReturn;
   final bool canRefund;
   final bool canExchange;
@@ -332,6 +379,21 @@ class PurchaseOrder {
           .toList(growable: false),
       subtotal: _moneyFromJson(json['subtotal']),
       total: _moneyFromJson(json['total']),
+      shippingCost: _moneyFromJson(
+        json['shipping_amount'] ?? json['shipping_cost'],
+      ),
+      customsCost: _moneyFromJson(
+        json['customs_amount'] ?? json['customs_cost'],
+      ),
+      handlingCost: _moneyFromJson(
+        json['handling_amount'] ?? json['handling_cost'],
+      ),
+      landedCostTotal: _moneyFromJson(
+        json['landed_cost_total'] ?? json['landed_cost'],
+      ),
+      landedCostAllocationMethod: LandedCostAllocationMethod.fromApiValue(
+        json['landed_cost_allocation_method'],
+      ),
       canReturn: _boolFromJson(json['can_return']),
       canRefund: _boolFromJson(json['can_refund']),
       canExchange: _boolFromJson(json['can_exchange']),
@@ -377,6 +439,10 @@ class PurchaseOrderLine {
     this.previousUnitCost,
     this.unitCostChange,
     this.unitCostChangePercent,
+    this.landedCostAllocation,
+    this.landedUnitCost,
+    this.effectiveUnitCost,
+    this.landedLineTotal,
   });
 
   final int id;
@@ -396,6 +462,10 @@ class PurchaseOrderLine {
   final double? previousUnitCost;
   final double? unitCostChange;
   final double? unitCostChangePercent;
+  final double? landedCostAllocation;
+  final double? landedUnitCost;
+  final double? effectiveUnitCost;
+  final double? landedLineTotal;
 
   int get receivableQuantity => openQuantity < 0 ? 0 : openQuantity;
 
@@ -487,6 +557,20 @@ class PurchaseOrderLine {
             json['cost_change_percent'] ??
             json['cost_delta_percent'],
       ),
+      landedCostAllocation: _nullableMoneyFromJson(
+        json['landed_cost_allocation'] ??
+            json['allocated_landed_cost'] ??
+            json['landed_cost'],
+      ),
+      landedUnitCost: _nullableMoneyFromJson(json['landed_unit_cost']),
+      effectiveUnitCost: _nullableMoneyFromJson(
+        json['effective_unit_cost'] ?? json['unit_cost_with_landed_cost'],
+      ),
+      landedLineTotal: _nullableMoneyFromJson(
+        json['landed_line_total'] ??
+            json['line_total_with_landed_cost'] ??
+            json['effective_line_total'],
+      ),
     );
   }
 
@@ -515,6 +599,10 @@ class PurchaseOrderLine {
       previousUnitCost: previousUnitCost,
       unitCostChange: unitCostChange,
       unitCostChangePercent: unitCostChangePercent,
+      landedCostAllocation: landedCostAllocation,
+      landedUnitCost: landedUnitCost,
+      effectiveUnitCost: effectiveUnitCost,
+      landedLineTotal: landedLineTotal,
     );
   }
 }
@@ -650,6 +738,7 @@ class PurchaseOrderAdjustment {
     required this.type,
     required this.amount,
     required this.lines,
+    required this.replacementLines,
     required this.credits,
     this.reason = '',
     this.settlementMethod,
@@ -666,6 +755,7 @@ class PurchaseOrderAdjustment {
   final String? refundMethod;
   final String? createdByUsername;
   final List<PurchaseOrderAdjustmentLine> lines;
+  final List<PurchaseOrderReplacementLine> replacementLines;
   final List<SupplierCredit> credits;
   final DateTime? createdAt;
 
@@ -691,6 +781,15 @@ class PurchaseOrderAdjustment {
           .whereType<Map<String, Object?>>()
           .map(PurchaseOrderAdjustmentLine.fromJson)
           .toList(growable: false),
+      replacementLines:
+          _listFromJson(
+                json['replacement_lines'] ??
+                    json['replacements'] ??
+                    json['inbound_lines'],
+              )
+              .whereType<Map<String, Object?>>()
+              .map(PurchaseOrderReplacementLine.fromJson)
+              .toList(growable: false),
       credits: credits
           .whereType<Map<String, Object?>>()
           .map(SupplierCredit.fromJson)
@@ -759,16 +858,53 @@ class PurchaseOrderAdjustmentLine {
   }
 }
 
+class PurchaseOrderReplacementLine {
+  const PurchaseOrderReplacementLine({
+    required this.productId,
+    required this.quantity,
+    required this.unitCost,
+    required this.total,
+    this.productName,
+  });
+
+  final int productId;
+  final String? productName;
+  final int quantity;
+  final double unitCost;
+  final double total;
+
+  factory PurchaseOrderReplacementLine.fromJson(Map<String, Object?> json) {
+    return PurchaseOrderReplacementLine(
+      productId: _intFromJson(json['product']),
+      productName: json['product_name']?.toString(),
+      quantity: _intFromJson(json['quantity']),
+      unitCost: _moneyFromJson(json['unit_cost']),
+      total: _moneyFromJson(
+        json['line_total'] ?? json['total'] ?? json['amount'],
+      ),
+    );
+  }
+}
+
 class PurchaseAdjustmentDraft {
-  const PurchaseAdjustmentDraft({required this.lines, this.reason = ''});
+  const PurchaseAdjustmentDraft({
+    required this.lines,
+    this.replacementLines = const [],
+    this.reason = '',
+  });
 
   final List<PurchaseAdjustmentLineDraft> lines;
+  final List<PurchaseReplacementLineDraft> replacementLines;
   final String reason;
 
   Map<String, Object?> toJson() {
     return {
       'reason': reason,
       'lines': lines.map((line) => line.toJson()).toList(growable: false),
+      if (replacementLines.isNotEmpty)
+        'replacement_lines': replacementLines
+            .map((line) => line.toJson())
+            .toList(growable: false),
     };
   }
 }
@@ -784,6 +920,26 @@ class PurchaseAdjustmentLineDraft {
 
   Map<String, Object?> toJson() {
     return {'line': lineId, 'quantity': quantity};
+  }
+}
+
+class PurchaseReplacementLineDraft {
+  const PurchaseReplacementLineDraft({
+    required this.productId,
+    required this.quantity,
+    required this.unitCost,
+  });
+
+  final int productId;
+  final int quantity;
+  final double unitCost;
+
+  Map<String, Object?> toJson() {
+    return {
+      'product': productId,
+      'quantity': quantity,
+      'unit_cost': unitCost.toStringAsFixed(2),
+    };
   }
 }
 
