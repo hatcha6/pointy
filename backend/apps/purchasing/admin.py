@@ -5,6 +5,7 @@ from .models import (
     PurchaseOrder,
     PurchaseOrderAdjustment,
     PurchaseOrderAdjustmentReplacementLine,
+    PurchaseOrderAuditEvent,
     PurchaseReceipt,
     PurchaseReceiptLine,
     Supplier,
@@ -28,6 +29,20 @@ class PurchaseLineInline(admin.TabularInline):
         "landed_unit_cost",
         "effective_unit_cost",
     )
+
+
+class PurchaseOrderAuditEventInline(admin.TabularInline):
+    model = PurchaseOrderAuditEvent
+    extra = 0
+    readonly_fields = (
+        "order_number",
+        "action",
+        "message",
+        "details",
+        "created_by",
+        "created_at",
+    )
+    can_delete = False
 
 
 class PurchaseReceiptLineInline(admin.TabularInline):
@@ -73,7 +88,24 @@ class PurchaseOrderAdmin(admin.ModelAdmin):
     )
     list_filter = ("status", "supplier")
     search_fields = ("order_number", "supplier__name", "supplier_invoice_number")
-    inlines = [PurchaseLineInline]
+    inlines = [PurchaseLineInline, PurchaseOrderAuditEventInline]
+
+
+@admin.register(PurchaseOrderAuditEvent)
+class PurchaseOrderAuditEventAdmin(admin.ModelAdmin):
+    list_display = ("order_number", "action", "created_by", "created_at")
+    list_filter = ("action", "created_by")
+    search_fields = ("order_number", "message")
+    readonly_fields = (
+        "purchase_order",
+        "order_number",
+        "action",
+        "message",
+        "details",
+        "created_by",
+        "created_at",
+        "updated_at",
+    )
 
 
 @admin.register(PurchaseReceipt)

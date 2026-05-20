@@ -194,6 +194,8 @@ class SupplierContact {
     this.payableBalance = 0,
     this.creditBalance = 0,
     this.netBalance = 0,
+    this.totalBought = 0,
+    this.purchaseCount = 0,
   });
 
   final int id;
@@ -207,6 +209,8 @@ class SupplierContact {
   final double payableBalance;
   final double creditBalance;
   final double netBalance;
+  final double totalBought;
+  final int purchaseCount;
 
   factory SupplierContact.fromJson(Map<String, Object?> json) {
     return SupplierContact(
@@ -221,6 +225,14 @@ class SupplierContact {
       payableBalance: _moneyFromJson(json['payable_balance']),
       creditBalance: _moneyFromJson(json['credit_balance']),
       netBalance: _moneyFromJson(json['net_balance']),
+      totalBought: _moneyFromJson(
+        json['total_bought'] ??
+            json['total_purchased'] ??
+            json['purchase_total'],
+      ),
+      purchaseCount: _intFromJson(
+        json['purchase_count'] ?? json['purchase_order_count'],
+      ),
     );
   }
 }

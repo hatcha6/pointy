@@ -54,6 +54,76 @@ class PurchaseRepository {
     }
   }
 
+  Future<Result<PurchaseOrderPage>> loadOutstandingReceivedNotPaid() async {
+    try {
+      return Ok(await _service.fetchOutstandingReceivedNotPaidPurchases());
+    } on Exception catch (exception) {
+      return Error(exception);
+    }
+  }
+
+  Future<Result<PurchaseOrderPage>> loadSupplierPurchaseHistory({
+    required int supplierId,
+    int page = 1,
+  }) async {
+    try {
+      return Ok(
+        await _service.fetchSupplierPurchaseHistory(
+          supplierId: supplierId,
+          page: page,
+        ),
+      );
+    } on Exception catch (exception) {
+      return Error(exception);
+    }
+  }
+
+  Future<Result<ProductCostHistoryPage>> loadProductCostHistory({
+    required int productId,
+    int page = 1,
+  }) async {
+    try {
+      return Ok(
+        await _service.fetchProductCostHistory(
+          productId: productId,
+          page: page,
+        ),
+      );
+    } on Exception catch (exception) {
+      return Error(exception);
+    }
+  }
+
+  Future<Result<ProductMarginImpact?>> loadProductMarginImpact(
+    int productId,
+  ) async {
+    try {
+      return Ok(await _service.fetchProductMarginImpact(productId));
+    } on Exception catch (exception) {
+      return Error(exception);
+    }
+  }
+
+  Future<Result<PurchaseAdjustmentHistoryPage>> loadPurchaseAdjustmentHistory({
+    PurchaseAdjustmentType? adjustmentType,
+    int? supplierId,
+    int? productId,
+    int page = 1,
+  }) async {
+    try {
+      return Ok(
+        await _service.fetchPurchaseAdjustmentHistory(
+          adjustmentType: adjustmentType,
+          supplierId: supplierId,
+          productId: productId,
+          page: page,
+        ),
+      );
+    } on Exception catch (exception) {
+      return Error(exception);
+    }
+  }
+
   Future<Result<double?>> loadLastProductCost(int productId) async {
     try {
       return Ok(await _service.fetchLastProductCost(productId));

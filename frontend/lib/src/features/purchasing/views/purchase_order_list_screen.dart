@@ -141,6 +141,11 @@ class _PurchaseOrderListBody extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          _OutstandingPurchasesSection(
+            viewModel: viewModel,
+            onOpenPurchaseOrder: onOpenPurchaseOrder,
+          ),
+          const SizedBox(height: 12),
           PurchaseOrderQueryControls(
             query: viewModel.query,
             contactRepository: contactRepository,
@@ -171,6 +176,101 @@ class _PurchaseOrderListBody extends StatelessWidget {
                   ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _OutstandingPurchasesSection extends StatelessWidget {
+  const _OutstandingPurchasesSection({
+    required this.viewModel,
+    required this.onOpenPurchaseOrder,
+  });
+
+  final PurchaseOrderListViewModel viewModel;
+  final ValueChanged<PurchaseOrder> onOpenPurchaseOrder;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final orders = viewModel.outstandingReceivedNotPaid;
+
+    if (viewModel.isLoadingOutstanding) {
+      return const LinearProgressIndicator();
+    }
+    if (viewModel.hasOutstandingError) {
+      return Text(
+        l10n.outstandingPurchasesLoadError,
+        style: TextStyle(color: Theme.of(context).colorScheme.error),
+      );
+    }
+    if (orders.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    final totalBalance = orders.fold<double>(
+      0,
+      (total, order) => total + order.balanceDue,
+    );
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.account_balance_wallet_outlined),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    l10n.outstandingPurchasesTitle,
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                ),
+                Text(
+                  l10n.outstandingPurchasesSummary(
+                    orders.length,
+                    formatMoney(totalBalance),
+                  ),
+                  style: Theme.of(context).textTheme.labelLarge,
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            for (final order in orders.take(3))
+              ListTile(
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                title: Text(
+                  order.orderNumber.isEmpty
+                      ? l10n.purchaseOrderFallbackTitle(order.id)
+                      : order.orderNumber,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                subtitle: Text(
+                  [
+                    if (order.supplierName != null &&
+                        order.supplierName!.isNotEmpty)
+                      order.supplierName!,
+                    if (order.receivedAt != null)
+                      formatDateTime(order.receivedAt!),
+                  ].join(' • '),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                trailing: Text(formatMoney(order.balanceDue)),
+                onTap: () => onOpenPurchaseOrder(order),
+              ),
+          ],
+        ),
       ),
     );
   }

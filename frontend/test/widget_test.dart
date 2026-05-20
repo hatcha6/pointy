@@ -15,10 +15,12 @@ import 'package:pointy_frontend/src/data/models/pos_user.dart';
 import 'package:pointy_frontend/src/data/models/print_job.dart';
 import 'package:pointy_frontend/src/data/models/printer_config.dart';
 import 'package:pointy_frontend/src/data/models/product.dart';
+import 'package:pointy_frontend/src/data/models/purchase_submission.dart';
 import 'package:pointy_frontend/src/data/models/register_cash_movement.dart';
 import 'package:pointy_frontend/src/app.dart';
 import 'package:pointy_frontend/src/data/repositories/printing_repository.dart';
 import 'package:pointy_frontend/src/data/repositories/inventory_repository.dart';
+import 'package:pointy_frontend/src/data/repositories/purchase_repository.dart';
 import 'package:pointy_frontend/src/data/repositories/user_repository.dart';
 import 'package:pointy_frontend/src/data/services/esc_pos_barcode_label_encoder.dart';
 import 'package:pointy_frontend/src/data/services/esc_pos_receipt_encoder.dart';
@@ -26,6 +28,7 @@ import 'package:pointy_frontend/src/data/services/pos_api_service.dart';
 import 'package:pointy_frontend/src/data/services/print_transport.dart';
 import 'package:pointy_frontend/src/features/catalog/views/product_details_screen.dart';
 import 'package:pointy_frontend/src/features/catalog/view_models/product_stock_view_model.dart';
+import 'package:pointy_frontend/src/features/purchasing/views/purchase_order_details_screen.dart';
 import 'package:pointy_frontend/src/features/pos/views/register_cash_movement_sheet.dart';
 import 'package:pointy_frontend/src/features/pos/views/register_session_close_sheet.dart';
 import 'package:pointy_frontend/src/features/users/view_models/user_management_view_model.dart';
@@ -64,6 +67,32 @@ void main() {
       );
     },
   );
+
+  test('purchasing permissions expose workflow capabilities', () {
+    final cashier = PosUser.fromJson(
+      _userJson(
+        role: 'cashier',
+        permissions: const [
+          'purchasing.view_purchaseorder',
+          'purchasing.edit_draft_purchaseorder',
+          'purchasing.receive_purchaseorder',
+          'purchasing.adjust_received_purchaseorder',
+          'purchasing.cancel_purchaseorder',
+          'purchasing.delete_purchaseorder',
+        ],
+      ),
+    );
+
+    final capabilities = AuthorizationCapabilities.forUser(cashier);
+
+    expect(capabilities.canAccessPurchasing, isTrue);
+    expect(capabilities.canEditDraftPurchaseOrder, isTrue);
+    expect(capabilities.canReceivePurchaseOrder, isTrue);
+    expect(capabilities.canAdjustPurchaseOrder, isTrue);
+    expect(capabilities.canCancelPurchaseOrder, isTrue);
+    expect(capabilities.canDeletePurchaseOrder, isTrue);
+    expect(capabilities.canCreatePurchaseOrder, isFalse);
+  });
 
   test('ESC/POS encoder generates non-empty receipt bytes', () async {
     final job = PrintJob.fromJson({
@@ -1186,6 +1215,182 @@ void main() {
     },
   );
 
+  testWidgets('purchase exchange dialog posts outbound and replacement lines', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(520, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    Map<String, Object?>? exchangeBody;
+    final repository = PurchaseRepository(
+      _mockApiService(
+        onPurchaseOrderExchange: (request) {
+          exchangeBody = jsonDecode(request.body) as Map<String, Object?>;
+        },
+      ),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        locale: const Locale('ar'),
+        localizationsDelegates: const [
+          AppLocalizations.delegate,
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: PurchaseOrderDetailsScreen(
+          purchaseRepository: repository,
+          initialOrder: PurchaseOrder.fromJson(
+            _purchaseOrderJson(
+              status: 'received',
+              submittedAt: '2026-05-15T10:00:00Z',
+              receivedAt: '2026-05-15T10:10:00Z',
+              receivedQuantity: 2,
+              openQuantity: 0,
+              canAdjust: true,
+            ),
+          ),
+          capabilities: AuthorizationCapabilities.forUser(
+            PosUser.fromJson(_userJson(role: 'manager')),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('استبدال'));
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(find.text('العناصر الصادرة'), findsOneWidget);
+    expect(find.text('العناصر البديلة'), findsOneWidget);
+
+    await tester.tap(find.byIcon(Icons.add).first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('تأكيد'));
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+
+    expect(exchangeBody?['lines'], [
+      {'line': 1, 'quantity': 1},
+    ]);
+    expect(exchangeBody?['replacement_lines'], [
+      {'product': 1, 'quantity': 1, 'unit_cost': '3.75'},
+    ]);
+  });
+
+  testWidgets(
+    'purchase details hide guarded workflow actions without permission',
+    (WidgetTester tester) async {
+      final repository = PurchaseRepository(
+        _mockApiService(
+          purchaseOrderDetailStatus: 'received',
+          purchaseOrderDetailCanAdjust: true,
+        ),
+      );
+      final cashier = PosUser.fromJson(
+        _userJson(
+          role: 'cashier',
+          permissions: const ['purchasing.view_purchaseorder'],
+        ),
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          locale: const Locale('ar'),
+          localizationsDelegates: const [
+            AppLocalizations.delegate,
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: PurchaseOrderDetailsScreen(
+            purchaseRepository: repository,
+            initialOrder: PurchaseOrder.fromJson(
+              _purchaseOrderJson(
+                status: 'received',
+                submittedAt: '2026-05-15T10:00:00Z',
+                receivedAt: '2026-05-15T10:10:00Z',
+                receivedQuantity: 2,
+                openQuantity: 0,
+                canAdjust: true,
+              ),
+            ),
+            capabilities: AuthorizationCapabilities.forUser(cashier),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('إرسال'), findsNothing);
+      expect(find.text('استلام كميات'), findsNothing);
+      expect(find.text('إلغاء'), findsNothing);
+      expect(find.text('إرجاع'), findsNothing);
+      expect(find.text('استرداد'), findsNothing);
+      expect(find.text('استبدال'), findsNothing);
+    },
+  );
+
+  testWidgets('purchase adjustment stock failure shows clear Arabic message', (
+    WidgetTester tester,
+  ) async {
+    final repository = PurchaseRepository(
+      _mockApiService(
+        purchaseOrderDetailStatus: 'received',
+        purchaseOrderDetailCanAdjust: true,
+        purchaseReturnStatusCode: 409,
+      ),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        locale: const Locale('ar'),
+        localizationsDelegates: const [
+          AppLocalizations.delegate,
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: PurchaseOrderDetailsScreen(
+          purchaseRepository: repository,
+          initialOrder: PurchaseOrder.fromJson(
+            _purchaseOrderJson(
+              status: 'received',
+              submittedAt: '2026-05-15T10:00:00Z',
+              receivedAt: '2026-05-15T10:10:00Z',
+              receivedQuantity: 2,
+              openQuantity: 0,
+              canAdjust: true,
+            ),
+          ),
+          capabilities: AuthorizationCapabilities.forUser(
+            PosUser.fromJson(_userJson(role: 'manager')),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('إرجاع'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byIcon(Icons.add).last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('تأكيد'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text(
+        'لا يمكن تعديل أمر الشراء لأن الكمية المستلمة بيعت أو لم تعد متوفرة في المخزون.',
+      ),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('login screen authenticates before showing POS', (
     WidgetTester tester,
   ) async {
@@ -1702,6 +1907,7 @@ void main() {
         home: ProductDetailsScreen(
           viewModel: ProductStockViewModel(
             InventoryRepository(apiService),
+            PurchaseRepository(apiService),
             product,
           ),
           printingRepository: PrintingRepository(apiService),
@@ -1766,6 +1972,7 @@ void main() {
         home: ProductDetailsScreen(
           viewModel: ProductStockViewModel(
             InventoryRepository(apiService),
+            PurchaseRepository(apiService),
             product,
           ),
           printingRepository: PrintingRepository(
@@ -2013,12 +2220,16 @@ PosApiService _mockApiService({
   bool isAuthenticated = true,
   bool hasOpenSession = false,
   int checkoutStatusCode = 200,
+  int purchaseReturnStatusCode = 200,
+  String purchaseOrderDetailStatus = 'draft',
+  bool purchaseOrderDetailCanAdjust = true,
   String currentUserRole = 'manager',
   String currentUserDisplayName = 'مدير النظام',
   List<String> currentUserPermissions = const [],
   void Function(http.Request request)? onCheckout,
   void Function(http.Request request)? onPurchaseOrderCreate,
   void Function(http.Request request)? onPurchaseOrderReceive,
+  void Function(http.Request request)? onPurchaseOrderExchange,
   void Function(http.Request request)? onSupplierPaymentCreate,
   void Function(http.Request request)? onCashMovement,
   void Function(http.Request request)? onReprint,
@@ -2413,6 +2624,18 @@ PosApiService _mockApiService({
       }
 
       if (path.endsWith('/purchase-orders/200/return-items/')) {
+        if (purchaseReturnStatusCode != 200) {
+          return http.Response.bytes(
+            utf8.encode(
+              jsonEncode({
+                'code': 'received_stock_unavailable',
+                'detail': 'received stock already sold',
+              }),
+            ),
+            purchaseReturnStatusCode,
+            headers: const {'Content-Type': 'application/json; charset=utf-8'},
+          );
+        }
         return _jsonResponse(
           _purchaseOrderJson(
             status: 'received',
@@ -2422,6 +2645,22 @@ PosApiService _mockApiService({
             adjustableQuantity: 1,
             canAdjust: true,
             adjustments: [_purchaseAdjustmentJson()],
+          ),
+        );
+      }
+
+      if (path.endsWith('/purchase-orders/200/exchange-items/')) {
+        onPurchaseOrderExchange?.call(request);
+        final body = jsonDecode(request.body) as Map<String, Object?>;
+        return _jsonResponse(
+          _purchaseOrderJson(
+            status: 'received',
+            submittedAt: '2026-05-15T10:00:00Z',
+            receivedAt: '2026-05-15T10:10:00Z',
+            receivedQuantity: 2,
+            openQuantity: 0,
+            canAdjust: true,
+            adjustments: [_purchaseExchangeAdjustmentJson(body)],
           ),
         );
       }
@@ -2444,10 +2683,55 @@ PosApiService _mockApiService({
         });
       }
 
+      if (path.endsWith('/purchase-orders/product-cost-history/')) {
+        return _jsonResponse({
+          'count': 1,
+          'next': null,
+          'previous': null,
+          'results': [
+            {
+              'product': int.tryParse(
+                request.url.queryParameters['product'] ?? '0',
+              ),
+              'purchase_order': 200,
+              'purchase_order_number': 'PO-200',
+              'supplier': 10,
+              'supplier_name': 'مورد القهوة',
+              'quantity': 2,
+              'unit_cost': '3.75',
+              'line_total': '7.50',
+              'created_at': '2026-05-15T10:00:00Z',
+            },
+          ],
+        });
+      }
+
+      if (path.endsWith('/purchase-orders/product-margin-impact/')) {
+        return _jsonResponse({
+          'product': int.tryParse(
+            request.url.queryParameters['product'] ?? '0',
+          ),
+          'unit_price': '5.50',
+          'latest_unit_cost': '3.75',
+          'gross_profit': '1.75',
+          'margin_percent': '31.82',
+          'cost_change': '0.50',
+        });
+      }
+
       if (path.endsWith('/purchase-orders/200/')) {
         return _jsonResponse(
           _purchaseOrderJson(
-            canAdjust: true,
+            status: purchaseOrderDetailStatus,
+            submittedAt: purchaseOrderDetailStatus == 'draft'
+                ? null
+                : '2026-05-15T10:00:00Z',
+            receivedAt: purchaseOrderDetailStatus == 'received'
+                ? '2026-05-15T10:10:00Z'
+                : null,
+            receivedQuantity: purchaseOrderDetailStatus == 'received' ? 2 : 0,
+            openQuantity: purchaseOrderDetailStatus == 'received' ? 0 : 2,
+            canAdjust: purchaseOrderDetailCanAdjust,
             paidTotal: supplierPaidTotal.toStringAsFixed(2),
             balanceDue: (7.5 - supplierPaidTotal).toStringAsFixed(2),
             paymentStatus: supplierPaidTotal <= 0
@@ -2766,6 +3050,55 @@ Map<String, Object?> _purchaseAdjustmentJson() {
         'unit_cost': '3.75',
         'line_total': '3.75',
       },
+    ],
+    'created_at': '2026-05-15T10:20:00Z',
+    'updated_at': '2026-05-15T10:20:00Z',
+  };
+}
+
+Map<String, Object?> _purchaseExchangeAdjustmentJson(
+  Map<String, Object?> body,
+) {
+  final lines = body['lines'] is List<Object?>
+      ? body['lines'] as List<Object?>
+      : const <Object?>[];
+  final replacementLines = body['replacement_lines'] is List<Object?>
+      ? body['replacement_lines'] as List<Object?>
+      : const <Object?>[];
+  return {
+    'id': 301,
+    'adjustment_type': 'exchange',
+    'amount': '3.75',
+    'outbound_amount': '3.75',
+    'replacement_amount': '3.75',
+    'net_amount': '0.00',
+    'reason': body['reason'] ?? '',
+    'settlement_method': '',
+    'created_by': 1,
+    'created_by_username': 'manager',
+    'credits': const [],
+    'lines': [
+      for (final line in lines.whereType<Map<String, Object?>>())
+        {
+          'id': 302,
+          'purchase_line': line['line'],
+          'product': 1,
+          'product_name': 'قهوة البيت',
+          'quantity': line['quantity'],
+          'unit_cost': '3.75',
+          'line_total': '3.75',
+        },
+    ],
+    'replacement_lines': [
+      for (final line in replacementLines.whereType<Map<String, Object?>>())
+        {
+          'id': 303,
+          'product': line['product'],
+          'product_name': 'قهوة البيت',
+          'quantity': line['quantity'],
+          'unit_cost': line['unit_cost'],
+          'line_total': line['unit_cost'],
+        },
     ],
     'created_at': '2026-05-15T10:20:00Z',
     'updated_at': '2026-05-15T10:20:00Z',

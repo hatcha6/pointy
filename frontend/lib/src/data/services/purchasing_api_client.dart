@@ -30,6 +30,14 @@ class PurchasingApiClient {
     );
   }
 
+  Future<SupplierContact> fetchSupplier(int supplierId) async {
+    final response = await _session.get('suppliers/$supplierId/');
+    _session.throwApiException(response, 'Supplier detail failed with status');
+    return SupplierContact.fromJson(
+      _session.decodedBody(response) as Map<String, Object?>,
+    );
+  }
+
   Future<PurchaseOrderPage> fetchPurchaseOrders({
     required PurchaseOrderQuery query,
     int page = 1,
@@ -43,11 +51,88 @@ class PurchasingApiClient {
       'Purchase order list failed with status',
     );
 
+    return PurchaseOrderPage.fromAny(_session.decodedBody(response));
+  }
+
+  Future<PurchaseOrderPage> fetchOutstandingReceivedNotPaidPurchases() async {
+    final response = await _session.get(
+      'purchase-orders/outstanding-received-not-paid/',
+    );
+    _session.throwApiException(
+      response,
+      'Outstanding purchase order list failed with status',
+    );
+    return PurchaseOrderPage.fromAny(_session.decodedBody(response));
+  }
+
+  Future<PurchaseOrderPage> fetchSupplierPurchaseHistory({
+    required int supplierId,
+    int page = 1,
+  }) async {
+    final response = await _session.get(
+      'suppliers/$supplierId/purchase-history/',
+      query: {'page': '$page'},
+    );
+    _session.throwApiException(
+      response,
+      'Supplier purchase history failed with status',
+    );
+    return PurchaseOrderPage.fromAny(_session.decodedBody(response));
+  }
+
+  Future<ProductCostHistoryPage> fetchProductCostHistory({
+    required int productId,
+    int page = 1,
+  }) async {
+    final response = await _session.get(
+      'purchase-orders/product-cost-history/',
+      query: {'product': '$productId', 'page': '$page'},
+    );
+    _session.throwApiException(
+      response,
+      'Product cost history failed with status',
+    );
+    return ProductCostHistoryPage.fromAny(_session.decodedBody(response));
+  }
+
+  Future<ProductMarginImpact?> fetchProductMarginImpact(int productId) async {
+    final response = await _session.get(
+      'purchase-orders/product-margin-impact/',
+      query: {'product': '$productId'},
+    );
+    _session.throwApiException(
+      response,
+      'Product margin impact failed with status',
+    );
     final decoded = _session.decodedBody(response);
-    if (decoded is Map<String, Object?>) {
-      return PurchaseOrderPage.fromJson(decoded);
+    if (decoded is! Map<String, Object?>) {
+      return null;
     }
-    return const PurchaseOrderPage(orders: [], hasMore: false);
+    return ProductMarginImpact.fromJson(decoded);
+  }
+
+  Future<PurchaseAdjustmentHistoryPage> fetchPurchaseAdjustmentHistory({
+    PurchaseAdjustmentType? adjustmentType,
+    int? supplierId,
+    int? productId,
+    int page = 1,
+  }) async {
+    final response = await _session.get(
+      'purchase-orders/adjustment-history/',
+      query: {
+        'page': '$page',
+        if (adjustmentType != null) 'adjustment_type': adjustmentType.apiValue,
+        if (supplierId != null) 'supplier': '$supplierId',
+        if (productId != null) 'product': '$productId',
+      },
+    );
+    _session.throwApiException(
+      response,
+      'Purchase adjustment history failed with status',
+    );
+    return PurchaseAdjustmentHistoryPage.fromAny(
+      _session.decodedBody(response),
+    );
   }
 
   Future<PurchaseOrder> createPurchaseOrder(PurchaseOrderDraft draft) async {

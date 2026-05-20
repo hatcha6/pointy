@@ -6,6 +6,7 @@ import '../../../data/models/product.dart';
 import '../../../data/models/pos_user.dart';
 import '../../../data/repositories/inventory_repository.dart';
 import '../../../data/repositories/printing_repository.dart';
+import '../../../data/repositories/purchase_repository.dart';
 import '../../../shared/app_navigation_drawer.dart';
 import '../../../shared/authorization_guards.dart';
 import '../../../shared/barcode/camera_barcode_scanner_sheet.dart';
@@ -20,6 +21,7 @@ class CatalogScreen extends StatelessWidget {
     required this.viewModel,
     required this.inventoryRepository,
     required this.printingRepository,
+    required this.purchaseRepository,
     required this.currentUser,
     required this.capabilities,
     required this.onOpenPos,
@@ -35,6 +37,7 @@ class CatalogScreen extends StatelessWidget {
   final CatalogViewModel viewModel;
   final InventoryRepository inventoryRepository;
   final PrintingRepository printingRepository;
+  final PurchaseRepository purchaseRepository;
   final PosUser currentUser;
   final AuthorizationCapabilities capabilities;
   final VoidCallback onOpenPos;
@@ -102,6 +105,7 @@ class CatalogScreen extends StatelessWidget {
                   viewModel: viewModel,
                   inventoryRepository: inventoryRepository,
                   printingRepository: printingRepository,
+                  purchaseRepository: purchaseRepository,
                   capabilities: capabilities,
                   onBarcodeSubmitted: (barcode) {
                     return _openProductForBarcode(context, barcode);
@@ -147,6 +151,7 @@ class CatalogScreen extends StatelessWidget {
           product: outcome.product!,
           inventoryRepository: inventoryRepository,
           printingRepository: printingRepository,
+          purchaseRepository: purchaseRepository,
           capabilities: capabilities,
         );
         return true;
@@ -175,6 +180,7 @@ class CatalogScreen extends StatelessWidget {
       product: entries.first.product,
       inventoryRepository: inventoryRepository,
       printingRepository: printingRepository,
+      purchaseRepository: purchaseRepository,
       capabilities: capabilities,
     );
   }

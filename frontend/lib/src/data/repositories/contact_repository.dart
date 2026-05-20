@@ -29,6 +29,14 @@ class ContactRepository {
     }
   }
 
+  Future<Result<SupplierContact>> loadSupplier(int supplierId) async {
+    try {
+      return Ok(await _service.fetchSupplier(supplierId));
+    } on Exception catch (exception) {
+      return Error(exception);
+    }
+  }
+
   Future<Result<Customer>> createCustomer(CustomerDraft draft) async {
     try {
       return Ok(await _service.createCustomer(draft));

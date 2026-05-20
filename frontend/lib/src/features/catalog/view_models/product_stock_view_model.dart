@@ -2,42 +2,58 @@ import 'package:flutter/foundation.dart';
 
 import '../../../core/result.dart';
 import '../../../data/models/product.dart';
+import '../../../data/models/purchase_submission.dart';
 import '../../../data/models/stock_item.dart';
 import '../../../data/models/stock_movement.dart';
 import '../../../data/models/stock_movement_page.dart';
 import '../../../data/repositories/inventory_repository.dart';
+import '../../../data/repositories/purchase_repository.dart';
 
 class ProductStockViewModel extends ChangeNotifier {
-  ProductStockViewModel(this._inventoryRepository, this.product) {
+  ProductStockViewModel(
+    this._inventoryRepository,
+    this._purchaseRepository,
+    this.product,
+  ) {
     load();
   }
 
   final InventoryRepository _inventoryRepository;
+  final PurchaseRepository _purchaseRepository;
   final Product product;
 
   StockItem? _stockItem;
   List<StockMovement> _movements = [];
+  List<ProductCostHistoryEntry> _costHistory = [];
+  ProductMarginImpact? _marginImpact;
   bool _isLoadingStock = false;
   bool _isLoadingMovements = false;
+  bool _isLoadingCostInsights = false;
   bool _isLoadingMoreMovements = false;
   bool _isSavingMovement = false;
   bool _hasMoreMovements = true;
   int _nextMovementPage = 1;
   String? _errorMessage;
+  bool _hasCostInsightsError = false;
 
   StockItem? get stockItem => _stockItem;
   List<StockMovement> get movements => List.unmodifiable(_movements);
+  List<ProductCostHistoryEntry> get costHistory =>
+      List.unmodifiable(_costHistory);
+  ProductMarginImpact? get marginImpact => _marginImpact;
   bool get isLoadingStock => _isLoadingStock;
   bool get isLoadingMovements => _isLoadingMovements;
+  bool get isLoadingCostInsights => _isLoadingCostInsights;
   bool get isLoadingMoreMovements => _isLoadingMoreMovements;
   bool get isSavingMovement => _isSavingMovement;
   bool get hasMoreMovements => _hasMoreMovements;
   String? get errorMessage => _errorMessage;
+  bool get hasCostInsightsError => _hasCostInsightsError;
 
   int get quantityOnHand => _stockItem?.quantityOnHand ?? 0;
 
   Future<void> load() async {
-    await Future.wait([loadStock(), loadMovements()]);
+    await Future.wait([loadStock(), loadMovements(), loadCostInsights()]);
   }
 
   Future<void> loadStock() async {
@@ -81,6 +97,39 @@ class ProductStockViewModel extends ChangeNotifier {
     }
 
     _isLoadingMovements = false;
+    notifyListeners();
+  }
+
+  Future<void> loadCostInsights() async {
+    _isLoadingCostInsights = true;
+    _hasCostInsightsError = false;
+    notifyListeners();
+
+    final historyFuture = _purchaseRepository.loadProductCostHistory(
+      productId: product.id,
+    );
+    final marginFuture = _purchaseRepository.loadProductMarginImpact(
+      product.id,
+    );
+    final historyResult = await historyFuture;
+    final marginResult = await marginFuture;
+
+    switch (historyResult) {
+      case Ok<ProductCostHistoryPage>():
+        _costHistory = historyResult.value.entries;
+      case Error<ProductCostHistoryPage>():
+        _costHistory = [];
+        _hasCostInsightsError = true;
+    }
+    switch (marginResult) {
+      case Ok<ProductMarginImpact?>():
+        _marginImpact = marginResult.value;
+      case Error<ProductMarginImpact?>():
+        _marginImpact = null;
+        _hasCostInsightsError = true;
+    }
+
+    _isLoadingCostInsights = false;
     notifyListeners();
   }
 

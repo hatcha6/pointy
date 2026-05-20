@@ -7,6 +7,11 @@ enum AppCapability {
   accessPos,
   accessPurchasing,
   createPurchaseOrder,
+  editDraftPurchaseOrder,
+  receivePurchaseOrder,
+  adjustPurchaseOrder,
+  cancelPurchaseOrder,
+  deletePurchaseOrder,
   manageContacts,
   checkoutSale,
   startRegisterSession,
@@ -87,6 +92,46 @@ class AuthorizationCapabilities {
         capabilities
           ..add(AppCapability.accessPurchasing)
           ..add(AppCapability.createPurchaseOrder);
+      }
+      if (_hasAny(user, const [
+        'edit_draft_purchaseorder',
+        'purchasing.edit_draft_purchaseorder',
+      ])) {
+        capabilities
+          ..add(AppCapability.accessPurchasing)
+          ..add(AppCapability.editDraftPurchaseOrder);
+      }
+      if (_hasAny(user, const [
+        'receive_purchaseorder',
+        'purchasing.receive_purchaseorder',
+      ])) {
+        capabilities
+          ..add(AppCapability.accessPurchasing)
+          ..add(AppCapability.receivePurchaseOrder);
+      }
+      if (_hasAny(user, const [
+        'adjust_received_purchaseorder',
+        'purchasing.adjust_received_purchaseorder',
+      ])) {
+        capabilities
+          ..add(AppCapability.accessPurchasing)
+          ..add(AppCapability.adjustPurchaseOrder);
+      }
+      if (_hasAny(user, const [
+        'cancel_purchaseorder',
+        'purchasing.cancel_purchaseorder',
+      ])) {
+        capabilities
+          ..add(AppCapability.accessPurchasing)
+          ..add(AppCapability.cancelPurchaseOrder);
+      }
+      if (_hasAny(user, const [
+        'delete_purchaseorder',
+        'purchasing.delete_purchaseorder',
+      ])) {
+        capabilities
+          ..add(AppCapability.accessPurchasing)
+          ..add(AppCapability.deletePurchaseOrder);
       }
       if (_hasAny(user, const [
         'view_customer',
@@ -179,6 +224,13 @@ class AuthorizationCapabilities {
   bool get canAccessPos => allows(AppCapability.accessPos);
   bool get canAccessPurchasing => allows(AppCapability.accessPurchasing);
   bool get canCreatePurchaseOrder => allows(AppCapability.createPurchaseOrder);
+  bool get canEditDraftPurchaseOrder =>
+      allows(AppCapability.editDraftPurchaseOrder);
+  bool get canReceivePurchaseOrder =>
+      allows(AppCapability.receivePurchaseOrder);
+  bool get canAdjustPurchaseOrder => allows(AppCapability.adjustPurchaseOrder);
+  bool get canCancelPurchaseOrder => allows(AppCapability.cancelPurchaseOrder);
+  bool get canDeletePurchaseOrder => allows(AppCapability.deletePurchaseOrder);
   bool get canManageContacts => allows(AppCapability.manageContacts);
   bool get canCheckoutSale => allows(AppCapability.checkoutSale);
   bool get canStartRegisterSession =>

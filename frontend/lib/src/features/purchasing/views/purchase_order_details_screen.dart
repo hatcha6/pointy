@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
+import '../../../core/authorization.dart';
 import '../../../data/models/purchase_submission.dart';
 import '../../../data/repositories/purchase_repository.dart';
 import '../../../shared/date_formatters.dart';
@@ -14,10 +15,12 @@ class PurchaseOrderDetailsScreen extends StatefulWidget {
     super.key,
     required this.purchaseRepository,
     required this.initialOrder,
+    required this.capabilities,
   });
 
   final PurchaseRepository purchaseRepository;
   final PurchaseOrder initialOrder;
+  final AuthorizationCapabilities capabilities;
 
   @override
   State<PurchaseOrderDetailsScreen> createState() =>
@@ -30,6 +33,7 @@ class _PurchaseOrderDetailsScreenState
       PurchaseOrderDetailsViewModel(
         widget.purchaseRepository,
         initialOrder: widget.initialOrder,
+        capabilities: widget.capabilities,
       );
 
   @override
@@ -229,14 +233,14 @@ class _PurchaseOrderActions extends StatelessWidget {
         children: [
           if (viewModel.hasStatusError) ...[
             Text(
-              l10n.purchaseOrderStatusChangeError,
+              _statusErrorMessage(l10n, viewModel.statusError),
               style: TextStyle(color: Theme.of(context).colorScheme.error),
             ),
             const SizedBox(height: 8),
           ],
           if (viewModel.hasAdjustmentError) ...[
             Text(
-              l10n.purchaseOrderAdjustmentError,
+              _adjustmentErrorMessage(l10n, viewModel.adjustmentError),
               style: TextStyle(color: Theme.of(context).colorScheme.error),
             ),
             const SizedBox(height: 8),
@@ -333,6 +337,37 @@ class _PurchaseOrderActions extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  String _statusErrorMessage(
+    AppLocalizations l10n,
+    PurchaseOrderActionError? error,
+  ) {
+    return switch (error) {
+      PurchaseOrderActionError.permissionDenied =>
+        l10n.purchaseOrderPermissionError,
+      PurchaseOrderActionError.validationFailed =>
+        l10n.purchaseOrderValidationError,
+      PurchaseOrderActionError.receivedStockUnavailable ||
+      PurchaseOrderActionError.generic ||
+      null => l10n.purchaseOrderStatusChangeError,
+    };
+  }
+
+  String _adjustmentErrorMessage(
+    AppLocalizations l10n,
+    PurchaseOrderActionError? error,
+  ) {
+    return switch (error) {
+      PurchaseOrderActionError.receivedStockUnavailable =>
+        l10n.purchaseOrderAdjustmentStockUnavailableError,
+      PurchaseOrderActionError.permissionDenied =>
+        l10n.purchaseOrderPermissionError,
+      PurchaseOrderActionError.validationFailed =>
+        l10n.purchaseOrderValidationError,
+      PurchaseOrderActionError.generic ||
+      null => l10n.purchaseOrderAdjustmentError,
+    };
   }
 
   Future<void> _showSupplierPaymentDialog(BuildContext context) async {
@@ -906,12 +941,15 @@ class _PurchaseExchangeDialogState extends State<_PurchaseExchangeDialog> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    final screenWidth = MediaQuery.sizeOf(context).width;
+    final dialogWidth = (screenWidth - 48).clamp(280.0, 640.0).toDouble();
+    final isCompact = dialogWidth < 520;
 
     return AlertDialog(
       icon: const Icon(Icons.swap_horiz_outlined),
       title: Text(l10n.purchaseExchangeTitle),
-      content: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 640),
+      content: SizedBox(
+        width: dialogWidth,
         child: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -971,6 +1009,7 @@ class _PurchaseExchangeDialogState extends State<_PurchaseExchangeDialog> {
                   _PurchaseReplacementLineInput(
                     editor: editor,
                     options: _productOptions,
+                    isCompact: isCompact,
                     canRemove: _replacementEditors.length > 1,
                     onRemove: () {
                       setState(() {
@@ -1056,6 +1095,7 @@ class _PurchaseReplacementLineInput extends StatelessWidget {
   const _PurchaseReplacementLineInput({
     required this.editor,
     required this.options,
+    required this.isCompact,
     required this.canRemove,
     required this.onRemove,
     required this.onChanged,
@@ -1063,6 +1103,7 @@ class _PurchaseReplacementLineInput extends StatelessWidget {
 
   final _ReplacementLineEditor editor;
   final List<_PurchaseReplacementOption> options;
+  final bool isCompact;
   final bool canRemove;
   final VoidCallback onRemove;
   final VoidCallback onChanged;
@@ -1132,10 +1173,8 @@ class _PurchaseReplacementLineInput extends StatelessWidget {
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          if (constraints.maxWidth < 520) {
-            return Column(
+      child: isCompact
+          ? Column(
               children: [
                 productField,
                 const SizedBox(height: 8),
@@ -1149,21 +1188,18 @@ class _PurchaseReplacementLineInput extends StatelessWidget {
                   ],
                 ),
               ],
-            );
-          }
-          return Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(flex: 3, child: productField),
-              const SizedBox(width: 8),
-              Expanded(child: quantityField),
-              const SizedBox(width: 8),
-              Expanded(child: unitCostField),
-              removeButton,
-            ],
-          );
-        },
-      ),
+            )
+          : Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(flex: 3, child: productField),
+                const SizedBox(width: 8),
+                Expanded(child: quantityField),
+                const SizedBox(width: 8),
+                Expanded(child: unitCostField),
+                removeButton,
+              ],
+            ),
     );
   }
 }

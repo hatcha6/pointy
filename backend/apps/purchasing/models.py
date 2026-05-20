@@ -107,6 +107,12 @@ class PurchaseOrder(TimeStampedModel):
 
     class Meta:
         ordering = ["-created_at"]
+        permissions = [
+            ("edit_draft_purchaseorder", "Can edit draft purchase order"),
+            ("receive_purchaseorder", "Can receive purchase order"),
+            ("adjust_received_purchaseorder", "Can adjust received purchase order"),
+            ("cancel_purchaseorder", "Can cancel purchase order"),
+        ]
         constraints = [
             models.UniqueConstraint(
                 fields=["supplier", "supplier_invoice_number"],
@@ -364,6 +370,42 @@ class PurchaseLine(TimeStampedModel):
     @property
     def adjustable_quantity(self) -> int:
         return max(self.accepted_quantity - self.adjusted_quantity, 0)
+
+
+class PurchaseOrderAuditEvent(TimeStampedModel):
+    class Action(models.TextChoices):
+        CREATED = "created", "Created"
+        UPDATED = "updated", "Updated"
+        SUBMITTED = "submitted", "Submitted"
+        RECEIVED = "received", "Received"
+        ADJUSTED = "adjusted", "Adjusted"
+        CANCELLED = "cancelled", "Cancelled"
+        DELETED = "deleted", "Deleted"
+
+    purchase_order = models.ForeignKey(
+        PurchaseOrder,
+        on_delete=models.SET_NULL,
+        related_name="audit_events",
+        blank=True,
+        null=True,
+    )
+    order_number = models.CharField(max_length=32)
+    action = models.CharField(max_length=24, choices=Action.choices)
+    message = models.TextField(blank=True)
+    details = models.JSONField(default=dict, blank=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="purchase_order_audit_events",
+        blank=True,
+        null=True,
+    )
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+
+    def __str__(self) -> str:
+        return f"{self.action} {self.order_number}"
 
 
 class PurchaseReceipt(TimeStampedModel):

@@ -111,12 +111,205 @@ class PurchaseOrderPage {
   final bool hasMore;
 
   factory PurchaseOrderPage.fromJson(Map<String, Object?> json) {
-    final results = (json['results'] as List<Object?>? ?? const [])
+    final results = _listFromJson(json['results'])
         .whereType<Map<String, Object?>>()
         .map(PurchaseOrder.fromJson)
         .toList(growable: false);
 
     return PurchaseOrderPage(orders: results, hasMore: json['next'] != null);
+  }
+
+  factory PurchaseOrderPage.fromAny(Object? json) {
+    if (json is List<Object?>) {
+      return PurchaseOrderPage(
+        orders: json
+            .whereType<Map<String, Object?>>()
+            .map(PurchaseOrder.fromJson)
+            .toList(growable: false),
+        hasMore: false,
+      );
+    }
+    if (json is Map<String, Object?>) {
+      if (json['results'] is List<Object?>) {
+        return PurchaseOrderPage.fromJson(json);
+      }
+      final orders = _listFromJson(
+        json['orders'] ?? json['purchase_orders'] ?? json['history'],
+      );
+      return PurchaseOrderPage(
+        orders: orders
+            .whereType<Map<String, Object?>>()
+            .map(PurchaseOrder.fromJson)
+            .toList(growable: false),
+        hasMore: json['next'] != null,
+      );
+    }
+    return const PurchaseOrderPage(orders: [], hasMore: false);
+  }
+}
+
+class ProductCostHistoryEntry {
+  const ProductCostHistoryEntry({
+    required this.productId,
+    required this.unitCost,
+    required this.quantity,
+    required this.total,
+    this.purchaseOrderId,
+    this.purchaseOrderNumber,
+    this.supplierId,
+    this.supplierName,
+    this.effectiveUnitCost,
+    this.landedUnitCost,
+    this.recordedAt,
+  });
+
+  final int productId;
+  final int? purchaseOrderId;
+  final String? purchaseOrderNumber;
+  final int? supplierId;
+  final String? supplierName;
+  final int quantity;
+  final double unitCost;
+  final double? effectiveUnitCost;
+  final double? landedUnitCost;
+  final double total;
+  final DateTime? recordedAt;
+
+  factory ProductCostHistoryEntry.fromJson(Map<String, Object?> json) {
+    final unitCost = _moneyFromJson(
+      json['unit_cost'] ?? json['latest_unit_cost'] ?? json['cost'],
+    );
+    final effectiveUnitCost = _nullableMoneyFromJson(
+      json['effective_unit_cost'] ??
+          json['landed_unit_cost'] ??
+          json['unit_cost_with_landed_cost'],
+    );
+    final quantity = _intFromJson(
+      json['quantity'] ?? json['received_quantity'],
+    );
+    return ProductCostHistoryEntry(
+      productId: _intFromJson(json['product'] ?? json['product_id']),
+      purchaseOrderId: _nullableIntFromJson(
+        json['purchase_order'] ?? json['purchase_order_id'] ?? json['order'],
+      ),
+      purchaseOrderNumber:
+          json['purchase_order_number']?.toString() ??
+          json['order_number']?.toString(),
+      supplierId: _nullableIntFromJson(json['supplier'] ?? json['supplier_id']),
+      supplierName: json['supplier_name']?.toString(),
+      quantity: quantity,
+      unitCost: unitCost,
+      effectiveUnitCost: effectiveUnitCost,
+      landedUnitCost: _nullableMoneyFromJson(json['landed_unit_cost']),
+      total:
+          _nullableMoneyFromJson(json['total'] ?? json['line_total']) ??
+          unitCost * quantity,
+      recordedAt: _dateTimeFromJson(
+        json['received_at'] ??
+            json['supplier_invoice_date'] ??
+            json['created_at'] ??
+            json['date'],
+      ),
+    );
+  }
+}
+
+class ProductCostHistoryPage {
+  const ProductCostHistoryPage({required this.entries, required this.hasMore});
+
+  final List<ProductCostHistoryEntry> entries;
+  final bool hasMore;
+
+  factory ProductCostHistoryPage.fromAny(Object? json) {
+    if (json is List<Object?>) {
+      return ProductCostHistoryPage(
+        entries: json
+            .whereType<Map<String, Object?>>()
+            .map(ProductCostHistoryEntry.fromJson)
+            .toList(growable: false),
+        hasMore: false,
+      );
+    }
+    if (json is Map<String, Object?>) {
+      final rawEntries = _listFromJson(
+        json['results'] ?? json['history'] ?? json['entries'],
+      );
+      return ProductCostHistoryPage(
+        entries: rawEntries
+            .whereType<Map<String, Object?>>()
+            .map(ProductCostHistoryEntry.fromJson)
+            .toList(growable: false),
+        hasMore: json['next'] != null,
+      );
+    }
+    return const ProductCostHistoryPage(entries: [], hasMore: false);
+  }
+}
+
+class ProductMarginImpact {
+  const ProductMarginImpact({
+    required this.productId,
+    required this.unitPrice,
+    this.latestUnitCost,
+    this.latestEffectiveUnitCost,
+    this.grossProfit,
+    this.marginPercent,
+    this.previousUnitCost,
+    this.costChange,
+    this.marginChangePercent,
+  });
+
+  final int productId;
+  final double unitPrice;
+  final double? latestUnitCost;
+  final double? latestEffectiveUnitCost;
+  final double? grossProfit;
+  final double? marginPercent;
+  final double? previousUnitCost;
+  final double? costChange;
+  final double? marginChangePercent;
+
+  factory ProductMarginImpact.fromJson(Map<String, Object?> json) {
+    return ProductMarginImpact(
+      productId: _intFromJson(json['product'] ?? json['product_id']),
+      unitPrice: _moneyFromJson(json['unit_price'] ?? json['price']),
+      latestUnitCost: _nullableMoneyFromJson(
+        json['latest_unit_cost'] ?? json['unit_cost'] ?? json['latest_cost'],
+      ),
+      latestEffectiveUnitCost: _nullableMoneyFromJson(
+        json['latest_effective_unit_cost'] ??
+            json['effective_unit_cost'] ??
+            json['landed_unit_cost'] ??
+            json['unit_cost_with_landed_cost'],
+      ),
+      grossProfit: _nullableMoneyFromJson(
+        json['gross_profit'] ??
+            json['profit'] ??
+            json['margin_amount'] ??
+            json['latest_margin_amount'],
+      ),
+      marginPercent: _nullableMoneyFromJson(
+        json['margin_percent'] ??
+            json['gross_margin_percent'] ??
+            json['margin_percentage'] ??
+            json['latest_margin_percent'],
+      ),
+      previousUnitCost: _nullableMoneyFromJson(
+        json['previous_unit_cost'] ?? json['previous_cost'],
+      ),
+      costChange: _nullableMoneyFromJson(
+        json['cost_change'] ??
+            json['unit_cost_change'] ??
+            json['cost_delta'] ??
+            json['unit_cost_delta'] ??
+            json['effective_unit_cost_delta'],
+      ),
+      marginChangePercent: _nullableMoneyFromJson(
+        json['margin_change_percent'] ??
+            json['margin_delta_percent'] ??
+            json['margin_percent_delta'],
+      ),
+    );
   }
 }
 
@@ -796,6 +989,105 @@ class PurchaseOrderAdjustment {
           .toList(growable: false),
       createdAt: _dateTimeFromJson(json['created_at']),
     );
+  }
+}
+
+class PurchaseAdjustmentHistoryEntry {
+  const PurchaseAdjustmentHistoryEntry({
+    required this.id,
+    required this.type,
+    required this.amount,
+    required this.lines,
+    required this.replacementLines,
+    this.purchaseOrderId,
+    this.purchaseOrderNumber,
+    this.supplierId,
+    this.supplierName,
+    this.reason = '',
+    this.settlementMethod,
+    this.refundMethod,
+    this.createdAt,
+  });
+
+  final int id;
+  final PurchaseAdjustmentType type;
+  final int? purchaseOrderId;
+  final String? purchaseOrderNumber;
+  final int? supplierId;
+  final String? supplierName;
+  final double amount;
+  final String reason;
+  final String? settlementMethod;
+  final String? refundMethod;
+  final List<PurchaseOrderAdjustmentLine> lines;
+  final List<PurchaseOrderReplacementLine> replacementLines;
+  final DateTime? createdAt;
+
+  factory PurchaseAdjustmentHistoryEntry.fromJson(Map<String, Object?> json) {
+    final nestedLines = _listFromJson(json['lines']);
+    final hasFlatLine =
+        nestedLines.isEmpty &&
+        (json.containsKey('purchase_line') || json.containsKey('product'));
+    final adjustment = PurchaseOrderAdjustment.fromJson({
+      ...json,
+      'id': json['adjustment'] ?? json['adjustment_id'] ?? json['id'],
+      'amount': json['amount'] ?? json['adjustment_amount'],
+      if (hasFlatLine) 'lines': [json],
+    });
+    return PurchaseAdjustmentHistoryEntry(
+      id: adjustment.id,
+      type: adjustment.type,
+      purchaseOrderId: _nullableIntFromJson(
+        json['purchase_order'] ?? json['purchase_order_id'] ?? json['order'],
+      ),
+      purchaseOrderNumber:
+          json['purchase_order_number']?.toString() ??
+          json['order_number']?.toString(),
+      supplierId: _nullableIntFromJson(json['supplier'] ?? json['supplier_id']),
+      supplierName: json['supplier_name']?.toString(),
+      amount: adjustment.amount,
+      reason: adjustment.reason,
+      settlementMethod: adjustment.settlementMethod,
+      refundMethod: adjustment.refundMethod,
+      lines: adjustment.lines,
+      replacementLines: adjustment.replacementLines,
+      createdAt: adjustment.createdAt,
+    );
+  }
+}
+
+class PurchaseAdjustmentHistoryPage {
+  const PurchaseAdjustmentHistoryPage({
+    required this.entries,
+    required this.hasMore,
+  });
+
+  final List<PurchaseAdjustmentHistoryEntry> entries;
+  final bool hasMore;
+
+  factory PurchaseAdjustmentHistoryPage.fromAny(Object? json) {
+    if (json is List<Object?>) {
+      return PurchaseAdjustmentHistoryPage(
+        entries: json
+            .whereType<Map<String, Object?>>()
+            .map(PurchaseAdjustmentHistoryEntry.fromJson)
+            .toList(growable: false),
+        hasMore: false,
+      );
+    }
+    if (json is Map<String, Object?>) {
+      final rawEntries = _listFromJson(
+        json['results'] ?? json['adjustments'] ?? json['history'],
+      );
+      return PurchaseAdjustmentHistoryPage(
+        entries: rawEntries
+            .whereType<Map<String, Object?>>()
+            .map(PurchaseAdjustmentHistoryEntry.fromJson)
+            .toList(growable: false),
+        hasMore: json['next'] != null,
+      );
+    }
+    return const PurchaseAdjustmentHistoryPage(entries: [], hasMore: false);
   }
 }
 

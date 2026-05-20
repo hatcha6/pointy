@@ -1,18 +1,30 @@
 import 'package:flutter/foundation.dart';
 
+import '../../../core/authorization.dart';
 import '../../../core/result.dart';
 import '../../../data/models/purchase_submission.dart';
 import '../../../data/repositories/purchase_repository.dart';
+import '../../../data/services/api_session.dart';
+
+enum PurchaseOrderActionError {
+  generic,
+  permissionDenied,
+  validationFailed,
+  receivedStockUnavailable,
+}
 
 class PurchaseOrderDetailsViewModel extends ChangeNotifier {
   PurchaseOrderDetailsViewModel(
     this._purchaseRepository, {
     required PurchaseOrder initialOrder,
-  }) : _order = initialOrder {
+    required AuthorizationCapabilities capabilities,
+  }) : _order = initialOrder,
+       _capabilities = capabilities {
     loadOrder();
   }
 
   final PurchaseRepository _purchaseRepository;
+  final AuthorizationCapabilities _capabilities;
 
   PurchaseOrder _order;
   bool _isLoading = false;
@@ -23,6 +35,8 @@ class PurchaseOrderDetailsViewModel extends ChangeNotifier {
   bool _hasStatusError = false;
   bool _hasAdjustmentError = false;
   bool _hasPaymentError = false;
+  PurchaseOrderActionError? _statusError;
+  PurchaseOrderActionError? _adjustmentError;
 
   PurchaseOrder get order => _order;
   bool get isLoading => _isLoading;
@@ -33,18 +47,26 @@ class PurchaseOrderDetailsViewModel extends ChangeNotifier {
   bool get hasStatusError => _hasStatusError;
   bool get hasAdjustmentError => _hasAdjustmentError;
   bool get hasPaymentError => _hasPaymentError;
+  PurchaseOrderActionError? get statusError => _statusError;
+  PurchaseOrderActionError? get adjustmentError => _adjustmentError;
 
-  bool get canSubmit => _order.status == 'draft';
+  bool get canSubmit =>
+      _capabilities.canEditDraftPurchaseOrder && _order.status == 'draft';
   bool get canReceive =>
+      _capabilities.canReceivePurchaseOrder &&
       (_order.status == 'submitted' ||
           _order.status == 'partial' ||
           _order.status == 'partially_received') &&
       _order.hasOpenReceiving;
   bool get canCancel =>
-      _order.status == 'draft' || _order.status == 'submitted';
-  bool get canReturn => _order.canReturn;
-  bool get canRefund => _order.canRefund;
-  bool get canExchange => _order.canExchange;
+      _capabilities.canCancelPurchaseOrder &&
+      (_order.status == 'draft' || _order.status == 'submitted');
+  bool get canReturn =>
+      _capabilities.canAdjustPurchaseOrder && _order.canReturn;
+  bool get canRefund =>
+      _capabilities.canAdjustPurchaseOrder && _order.canRefund;
+  bool get canExchange =>
+      _capabilities.canAdjustPurchaseOrder && _order.canExchange;
   bool get canRecordPayment =>
       _order.supplierId != null && _order.balanceDue > 0.005;
 
@@ -184,6 +206,7 @@ class PurchaseOrderDetailsViewModel extends ChangeNotifier {
 
     _isChangingStatus = true;
     _hasStatusError = false;
+    _statusError = null;
     notifyListeners();
 
     final result = await action;
@@ -196,6 +219,7 @@ class PurchaseOrderDetailsViewModel extends ChangeNotifier {
         _order = result.value;
       case Error<PurchaseOrder>():
         _hasStatusError = true;
+        _statusError = _actionErrorFromException(result.exception);
     }
 
     _isChangingStatus = false;
@@ -210,6 +234,7 @@ class PurchaseOrderDetailsViewModel extends ChangeNotifier {
 
     _isAdjusting = true;
     _hasAdjustmentError = false;
+    _adjustmentError = null;
     notifyListeners();
 
     final result = await action;
@@ -222,10 +247,66 @@ class PurchaseOrderDetailsViewModel extends ChangeNotifier {
         _order = result.value;
       case Error<PurchaseOrder>():
         _hasAdjustmentError = true;
+        _adjustmentError = _actionErrorFromException(result.exception);
     }
 
     _isAdjusting = false;
     notifyListeners();
     return didAdjust;
+  }
+
+  PurchaseOrderActionError _actionErrorFromException(Exception exception) {
+    if (exception is PosApiException) {
+      if (exception.statusCode == 403) {
+        return PurchaseOrderActionError.permissionDenied;
+      }
+      if (_isReceivedStockUnavailable(exception)) {
+        return PurchaseOrderActionError.receivedStockUnavailable;
+      }
+      if (exception.statusCode == 400 || exception.statusCode == 409) {
+        return PurchaseOrderActionError.validationFailed;
+      }
+    }
+    return PurchaseOrderActionError.generic;
+  }
+
+  bool _isReceivedStockUnavailable(PosApiException exception) {
+    final decoded = exception.decodedBody;
+    final values = _flattenErrorValues(decoded).map((value) {
+      return value.toLowerCase().replaceAll('-', '_').replaceAll(' ', '_');
+    });
+    return values.any((value) {
+      return value.contains('received_stock_unavailable') ||
+          value.contains('stock_unavailable') ||
+          value.contains('stock_not_available') ||
+          value.contains('insufficient_stock') ||
+          value.contains('already_sold') ||
+          (value.contains('sold') && value.contains('stock')) ||
+          (value.contains('available') &&
+              value.contains('stock') &&
+              (value.contains('not') || value.contains('insufficient')));
+    });
+  }
+
+  Iterable<String> _flattenErrorValues(Object? value) sync* {
+    if (value == null) {
+      return;
+    }
+    if (value is String || value is num || value is bool) {
+      yield value.toString();
+      return;
+    }
+    if (value is List<Object?>) {
+      for (final item in value) {
+        yield* _flattenErrorValues(item);
+      }
+      return;
+    }
+    if (value is Map<Object?, Object?>) {
+      for (final entry in value.entries) {
+        yield entry.key.toString();
+        yield* _flattenErrorValues(entry.value);
+      }
+    }
   }
 }

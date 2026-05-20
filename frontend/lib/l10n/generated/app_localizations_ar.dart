@@ -506,6 +506,37 @@ class AppLocalizationsAr extends AppLocalizations {
   String get productPriceTitle => 'السعر';
 
   @override
+  String get productCostHistoryTitle => 'تكلفة الشراء والهامش';
+
+  @override
+  String get productCostHistoryLoadError =>
+      'تعذر تحميل تاريخ تكلفة الشراء لهذا المنتج.';
+
+  @override
+  String get productCostHistoryEmpty =>
+      'لا توجد مشتريات مسجلة لهذا المنتج بعد.';
+
+  @override
+  String get productLatestCostLabel => 'آخر تكلفة';
+
+  @override
+  String get productGrossProfitLabel => 'ربح القطعة';
+
+  @override
+  String get productMarginPercentLabel => 'هامش الربح';
+
+  @override
+  String productMarginPercentValue(String percent) {
+    return '$percent%';
+  }
+
+  @override
+  String get productCostChangeLabel => 'تغير التكلفة';
+
+  @override
+  String get productMarginChangeLabel => 'تغير الهامش';
+
+  @override
   String get productIdentifierTitle => 'بيانات التعريف';
 
   @override
@@ -770,6 +801,31 @@ class AppLocalizationsAr extends AppLocalizations {
   String get purchaseOrderDetailsLoadError => 'تعذر تحميل تفاصيل أمر الشراء.';
 
   @override
+  String get outstandingPurchasesTitle => 'مستلم وغير مدفوع';
+
+  @override
+  String get outstandingPurchasesLoadError =>
+      'تعذر تحميل المشتريات المستلمة غير المدفوعة.';
+
+  @override
+  String outstandingPurchasesSummary(num count, String amount) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count فواتير • $amount',
+      two: 'فاتورتان • $amount',
+      one: 'فاتورة واحدة • $amount',
+      zero: 'لا توجد فواتير',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String purchaseOutstandingAmountValue(String amount) {
+    return 'متبقي $amount';
+  }
+
+  @override
   String get emptyPurchaseOrders => 'لا توجد فواتير مشتريات بعد.';
 
   @override
@@ -913,6 +969,18 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get purchaseOrderAdjustmentError =>
       'تعذر تسجيل تعديل المشتريات. راجع الكميات والمخزون وحاول مرة أخرى.';
+
+  @override
+  String get purchaseOrderAdjustmentStockUnavailableError =>
+      'لا يمكن تعديل أمر الشراء لأن الكمية المستلمة بيعت أو لم تعد متوفرة في المخزون.';
+
+  @override
+  String get purchaseOrderPermissionError =>
+      'لا يملك هذا المستخدم صلاحية تنفيذ هذا الإجراء على أمر الشراء.';
+
+  @override
+  String get purchaseOrderValidationError =>
+      'تعذر تنفيذ الإجراء. راجع حالة أمر الشراء والكميات ثم حاول مرة أخرى.';
 
   @override
   String get purchaseOrderPaymentError =>
@@ -1426,6 +1494,61 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get supplierContactLabel => 'جهة التواصل';
+
+  @override
+  String supplierContactValue(String name) {
+    return 'جهة التواصل $name';
+  }
+
+  @override
+  String get refreshSupplierDetailsTooltip => 'تحديث تفاصيل المورد';
+
+  @override
+  String get supplierDetailsLoadError => 'تعذر تحميل ملخص المورد.';
+
+  @override
+  String get supplierPurchaseSummaryTitle => 'ملخص الشراء من المورد';
+
+  @override
+  String get supplierTotalBoughtLabel => 'إجمالي المشتريات';
+
+  @override
+  String get supplierPurchaseCountLabel => 'عدد أوامر الشراء';
+
+  @override
+  String supplierPurchaseCountValue(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count أوامر',
+      two: 'أمران',
+      one: 'أمر واحد',
+      zero: 'لا توجد أوامر',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get supplierPurchaseHistoryTitle => 'سجل مشتريات المورد';
+
+  @override
+  String get supplierPurchaseHistoryLoadError =>
+      'تعذر تحميل سجل مشتريات المورد.';
+
+  @override
+  String get supplierPurchaseHistoryEmpty =>
+      'لا توجد مشتريات مسجلة لهذا المورد.';
+
+  @override
+  String get supplierReturnRefundHistoryTitle => 'سجل الإرجاع والاسترداد';
+
+  @override
+  String get supplierReturnRefundHistoryLoadError =>
+      'تعذر تحميل سجل الإرجاع والاسترداد.';
+
+  @override
+  String get supplierReturnRefundHistoryEmpty =>
+      'لا توجد عمليات إرجاع أو استرداد لهذا المورد.';
 
   @override
   String supplierPayableBalanceValue(String amount) {

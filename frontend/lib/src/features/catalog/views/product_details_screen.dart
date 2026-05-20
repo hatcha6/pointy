@@ -5,9 +5,11 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 import '../../../core/authorization.dart';
 import '../../../data/models/barcode_label.dart';
 import '../../../data/models/product.dart';
+import '../../../data/models/purchase_submission.dart';
 import '../../../data/repositories/printing_repository.dart';
 import '../../../shared/authorization_guards.dart';
 import '../../../shared/detail_section.dart';
+import '../../../shared/formatters.dart';
 import '../../../shared/product_status_pill.dart';
 import '../view_models/product_stock_view_model.dart';
 import 'product_details_hero.dart';
@@ -108,6 +110,12 @@ class ProductDetailsScreen extends StatelessWidget {
                         : product.description,
                   ),
                 ),
+                const SizedBox(height: 12),
+                DetailSection(
+                  title: l10n.productCostHistoryTitle,
+                  icon: Icons.trending_up_outlined,
+                  child: _ProductCostHistorySection(viewModel: viewModel),
+                ),
               ],
             ),
           ),
@@ -154,6 +162,171 @@ class ProductDetailsScreen extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+class _ProductCostHistorySection extends StatelessWidget {
+  const _ProductCostHistorySection({required this.viewModel});
+
+  final ProductStockViewModel viewModel;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+
+    if (viewModel.isLoadingCostInsights) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (viewModel.hasCostInsightsError) {
+      return Text(
+        l10n.productCostHistoryLoadError,
+        style: TextStyle(color: Theme.of(context).colorScheme.error),
+      );
+    }
+
+    final impact = viewModel.marginImpact;
+    final entries = viewModel.costHistory;
+    if (impact == null && entries.isEmpty) {
+      return Text(l10n.productCostHistoryEmpty);
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (impact != null) ...[
+          _MarginImpactGrid(
+            impact: impact,
+            fallbackPrice: viewModel.product.unitPrice,
+          ),
+          if (entries.isNotEmpty) const Divider(height: 24),
+        ],
+        for (final (index, entry) in entries.take(6).indexed) ...[
+          if (index > 0) const Divider(height: 1),
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            dense: true,
+            leading: const Icon(Icons.inventory_2_outlined),
+            title: Text(
+              entry.supplierName?.isNotEmpty == true
+                  ? entry.supplierName!
+                  : l10n.noSupplierSelectedLabel,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            subtitle: Text(
+              [
+                if (entry.purchaseOrderNumber != null &&
+                    entry.purchaseOrderNumber!.isNotEmpty)
+                  l10n.purchaseOrderNumberValue(entry.purchaseOrderNumber!),
+                l10n.purchaseOrderLineQuantity(entry.quantity),
+                if (entry.recordedAt != null) _formatDate(entry.recordedAt!),
+              ].join(' • '),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+            trailing: Text(
+              formatMoney(entry.effectiveUnitCost ?? entry.unitCost),
+              style: Theme.of(context).textTheme.titleSmall,
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _MarginImpactGrid extends StatelessWidget {
+  const _MarginImpactGrid({required this.impact, required this.fallbackPrice});
+
+  final ProductMarginImpact impact;
+  final double fallbackPrice;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final unitPrice = impact.unitPrice > 0 ? impact.unitPrice : fallbackPrice;
+    final latestCost = impact.latestEffectiveUnitCost ?? impact.latestUnitCost;
+    final grossProfit =
+        impact.grossProfit ??
+        (latestCost == null ? null : unitPrice - latestCost);
+    final marginPercent =
+        impact.marginPercent ??
+        (grossProfit == null || unitPrice <= 0
+            ? null
+            : (grossProfit / unitPrice) * 100);
+
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        _MetricChip(
+          label: l10n.productLatestCostLabel,
+          value: latestCost == null
+              ? l10n.shopSettingsEmptyValue
+              : formatMoney(latestCost),
+        ),
+        _MetricChip(label: l10n.unitPriceLabel, value: formatMoney(unitPrice)),
+        _MetricChip(
+          label: l10n.productGrossProfitLabel,
+          value: grossProfit == null
+              ? l10n.shopSettingsEmptyValue
+              : formatMoney(grossProfit),
+        ),
+        _MetricChip(
+          label: l10n.productMarginPercentLabel,
+          value: marginPercent == null
+              ? l10n.shopSettingsEmptyValue
+              : l10n.productMarginPercentValue(
+                  _formatSignedPercent(
+                    marginPercent,
+                    includePositiveSign: false,
+                  ),
+                ),
+        ),
+        if (impact.costChange != null)
+          _MetricChip(
+            label: l10n.productCostChangeLabel,
+            value: _formatSignedMoney(impact.costChange!),
+          ),
+        if (impact.marginChangePercent != null)
+          _MetricChip(
+            label: l10n.productMarginChangeLabel,
+            value: l10n.productMarginPercentValue(
+              _formatSignedPercent(impact.marginChangePercent!),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _MetricChip extends StatelessWidget {
+  const _MetricChip({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        border: Border.all(color: colorScheme.outlineVariant),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(label, style: Theme.of(context).textTheme.labelSmall),
+            const SizedBox(height: 2),
+            Text(value, style: Theme.of(context).textTheme.titleSmall),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -436,4 +609,33 @@ class _StockOnHandPanel extends StatelessWidget {
       ),
     );
   }
+}
+
+String _formatDate(DateTime dateTime) {
+  final date = dateTime.toLocal();
+  final month = date.month.toString().padLeft(2, '0');
+  final day = date.day.toString().padLeft(2, '0');
+  return '${date.year}/$month/$day';
+}
+
+String _formatSignedMoney(double value) {
+  final amount = formatMoney(value.abs());
+  if (value > 0) {
+    return '+$amount';
+  }
+  if (value < 0) {
+    return '-$amount';
+  }
+  return amount;
+}
+
+String _formatSignedPercent(double value, {bool includePositiveSign = true}) {
+  final amount = value.abs().toStringAsFixed(2);
+  if (value > 0 && includePositiveSign) {
+    return '+$amount';
+  }
+  if (value < 0) {
+    return '-$amount';
+  }
+  return amount;
 }

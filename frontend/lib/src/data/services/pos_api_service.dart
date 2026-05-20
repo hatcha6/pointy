@@ -232,6 +232,48 @@ class PosApiService {
     return _purchasing.createSupplierPayment(draft);
   }
 
+  Future<PurchaseOrderPage> fetchOutstandingReceivedNotPaidPurchases() {
+    return _purchasing.fetchOutstandingReceivedNotPaidPurchases();
+  }
+
+  Future<PurchaseOrderPage> fetchSupplierPurchaseHistory({
+    required int supplierId,
+    int page = 1,
+  }) {
+    return _purchasing.fetchSupplierPurchaseHistory(
+      supplierId: supplierId,
+      page: page,
+    );
+  }
+
+  Future<ProductCostHistoryPage> fetchProductCostHistory({
+    required int productId,
+    int page = 1,
+  }) {
+    return _purchasing.fetchProductCostHistory(
+      productId: productId,
+      page: page,
+    );
+  }
+
+  Future<ProductMarginImpact?> fetchProductMarginImpact(int productId) {
+    return _purchasing.fetchProductMarginImpact(productId);
+  }
+
+  Future<PurchaseAdjustmentHistoryPage> fetchPurchaseAdjustmentHistory({
+    PurchaseAdjustmentType? adjustmentType,
+    int? supplierId,
+    int? productId,
+    int page = 1,
+  }) {
+    return _purchasing.fetchPurchaseAdjustmentHistory(
+      adjustmentType: adjustmentType,
+      supplierId: supplierId,
+      productId: productId,
+      page: page,
+    );
+  }
+
   Future<double?> fetchLastProductCost(int productId) {
     return _purchasing.fetchLastProductCost(productId);
   }
@@ -293,6 +335,10 @@ class PosApiService {
     int page = 1,
   }) {
     return _purchasing.fetchSuppliers(query: query, page: page);
+  }
+
+  Future<SupplierContact> fetchSupplier(int supplierId) {
+    return _purchasing.fetchSupplier(supplierId);
   }
 
   Future<SupplierContact> createSupplier(SupplierDraft draft) {

@@ -1,5 +1,6 @@
 from decimal import Decimal
 
+from django.db.models import Sum
 from rest_framework import serializers
 
 from apps.catalog.models import Product
@@ -9,6 +10,7 @@ from .models import (
     PurchaseOrderAdjustment,
     PurchaseOrderAdjustmentLine,
     PurchaseOrderAdjustmentReplacementLine,
+    PurchaseOrderAuditEvent,
     PurchaseReceipt,
     PurchaseReceiptLine,
     Supplier,
@@ -40,6 +42,8 @@ class SupplierSerializer(serializers.ModelSerializer):
         decimal_places=2,
         read_only=True,
     )
+    total_bought = serializers.SerializerMethodField()
+    purchase_count = serializers.SerializerMethodField()
 
     class Meta:
         model = Supplier
@@ -55,6 +59,8 @@ class SupplierSerializer(serializers.ModelSerializer):
             "payable_balance",
             "credit_balance",
             "net_balance",
+            "total_bought",
+            "purchase_count",
             "created_at",
             "updated_at",
         ]
@@ -63,9 +69,22 @@ class SupplierSerializer(serializers.ModelSerializer):
             "payable_balance",
             "credit_balance",
             "net_balance",
+            "total_bought",
+            "purchase_count",
             "created_at",
             "updated_at",
         )
+
+    def get_total_bought(self, supplier):
+        total = supplier.purchase_orders.exclude(
+            status=PurchaseOrder.Status.CANCELLED,
+        ).aggregate(total=Sum("total"))["total"]
+        return money_string(total or Decimal("0.00"))
+
+    def get_purchase_count(self, supplier):
+        return supplier.purchase_orders.exclude(
+            status=PurchaseOrder.Status.CANCELLED,
+        ).count()
 
 
 class PurchaseLineSerializer(serializers.ModelSerializer):
@@ -278,6 +297,147 @@ class PurchaseOrderAdjustmentLineSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 
+class ProductCostHistorySerializer(serializers.ModelSerializer):
+    product = serializers.IntegerField(
+        source="product_id",
+        read_only=True,
+    )
+    purchase_order = serializers.IntegerField(
+        source="purchase_order_id",
+        read_only=True,
+    )
+    order_number = serializers.CharField(
+        source="purchase_order.order_number",
+        read_only=True,
+    )
+    supplier = serializers.IntegerField(
+        source="purchase_order.supplier_id",
+        read_only=True,
+    )
+    supplier_name = serializers.CharField(
+        source="purchase_order.supplier.name",
+        read_only=True,
+    )
+    received_at = serializers.DateTimeField(
+        source="purchase_order.received_at",
+        read_only=True,
+    )
+    submitted_at = serializers.DateTimeField(
+        source="purchase_order.submitted_at",
+        read_only=True,
+    )
+
+    class Meta:
+        model = PurchaseLine
+        fields = [
+            "id",
+            "product",
+            "purchase_order",
+            "order_number",
+            "supplier",
+            "supplier_name",
+            "quantity",
+            "unit_cost",
+            "effective_unit_cost",
+            "landed_unit_cost",
+            "received_at",
+            "submitted_at",
+            "created_at",
+        ]
+        read_only_fields = fields
+
+
+class PurchaseAdjustmentHistorySerializer(serializers.ModelSerializer):
+    adjustment = serializers.IntegerField(source="adjustment_id", read_only=True)
+    adjustment_type = serializers.CharField(
+        source="adjustment.adjustment_type",
+        read_only=True,
+    )
+    settlement_method = serializers.CharField(
+        source="adjustment.settlement_method",
+        read_only=True,
+    )
+    reason = serializers.CharField(source="adjustment.reason", read_only=True)
+    adjustment_amount = serializers.DecimalField(
+        source="adjustment.amount",
+        max_digits=10,
+        decimal_places=2,
+        read_only=True,
+    )
+    outbound_amount = serializers.DecimalField(
+        source="adjustment.outbound_amount",
+        max_digits=10,
+        decimal_places=2,
+        read_only=True,
+    )
+    replacement_amount = serializers.DecimalField(
+        source="adjustment.replacement_amount",
+        max_digits=10,
+        decimal_places=2,
+        read_only=True,
+    )
+    net_amount = serializers.DecimalField(
+        source="adjustment.net_amount",
+        max_digits=10,
+        decimal_places=2,
+        read_only=True,
+    )
+    purchase_order = serializers.IntegerField(
+        source="adjustment.purchase_order_id",
+        read_only=True,
+    )
+    order_number = serializers.CharField(
+        source="adjustment.purchase_order.order_number",
+        read_only=True,
+    )
+    supplier = serializers.IntegerField(
+        source="adjustment.purchase_order.supplier_id",
+        read_only=True,
+    )
+    supplier_name = serializers.CharField(
+        source="adjustment.purchase_order.supplier.name",
+        read_only=True,
+    )
+    product_name = serializers.CharField(source="product.name", read_only=True)
+    product_sku = serializers.CharField(source="product.sku", read_only=True)
+    line_total = serializers.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        read_only=True,
+    )
+    created_at = serializers.DateTimeField(
+        source="adjustment.created_at",
+        read_only=True,
+    )
+
+    class Meta:
+        model = PurchaseOrderAdjustmentLine
+        fields = [
+            "id",
+            "adjustment",
+            "adjustment_type",
+            "settlement_method",
+            "reason",
+            "adjustment_amount",
+            "outbound_amount",
+            "replacement_amount",
+            "net_amount",
+            "purchase_order",
+            "order_number",
+            "supplier",
+            "supplier_name",
+            "purchase_line",
+            "product",
+            "product_name",
+            "product_sku",
+            "quantity",
+            "unit_cost",
+            "line_total",
+            "created_at",
+        ]
+        read_only_fields = fields
+
+
 class PurchaseOrderAdjustmentReplacementLineSerializer(serializers.ModelSerializer):
     product_name = serializers.CharField(source="product.name", read_only=True)
     line_total = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
@@ -354,10 +514,33 @@ class PurchaseOrderAdjustmentSerializer(serializers.ModelSerializer):
         return [SupplierCreditSerializer(credit).data]
 
 
+class PurchaseOrderAuditEventSerializer(serializers.ModelSerializer):
+    created_by_username = serializers.CharField(
+        source="created_by.username",
+        read_only=True,
+    )
+
+    class Meta:
+        model = PurchaseOrderAuditEvent
+        fields = [
+            "id",
+            "purchase_order",
+            "order_number",
+            "action",
+            "message",
+            "details",
+            "created_by",
+            "created_by_username",
+            "created_at",
+        ]
+        read_only_fields = fields
+
+
 class PurchaseOrderSerializer(serializers.ModelSerializer):
     lines = PurchaseLineSerializer(many=True, allow_empty=False)
     receipts = PurchaseReceiptSerializer(many=True, read_only=True)
     adjustments = PurchaseOrderAdjustmentSerializer(many=True, read_only=True)
+    audit_events = PurchaseOrderAuditEventSerializer(many=True, read_only=True)
     supplier_name = serializers.CharField(source="supplier.name", read_only=True)
     landed_cost_total = serializers.DecimalField(
         max_digits=10,
@@ -408,6 +591,7 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
             "lines",
             "receipts",
             "adjustments",
+            "audit_events",
             "subtotal",
             "shipping_amount",
             "customs_amount",
@@ -435,6 +619,7 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
             "supplier_name",
             "status",
             "adjustments",
+            "audit_events",
             "receipts",
             "subtotal",
             "landed_cost_total",
@@ -573,6 +758,7 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
         lines_data = validated_data.pop("lines", [])
         return save_purchase_order_with_lines(
             lines_data=lines_data,
+            request=self.context.get("request"),
             **validated_data,
         )
 
@@ -581,6 +767,7 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
         return save_purchase_order_with_lines(
             purchase_order=instance,
             lines_data=lines_data,
+            request=self.context.get("request"),
             **validated_data,
         )
 

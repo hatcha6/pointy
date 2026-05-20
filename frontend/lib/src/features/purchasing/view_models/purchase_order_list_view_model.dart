@@ -12,31 +12,43 @@ class PurchaseOrderListViewModel extends ChangeNotifier {
   final PurchaseRepository _purchaseRepository;
 
   List<PurchaseOrder> _orders = [];
+  List<PurchaseOrder> _outstandingReceivedNotPaid = [];
   bool _isLoading = false;
   bool _isLoadingMore = false;
+  bool _isLoadingOutstanding = false;
   bool _hasMoreOrders = true;
   bool _hasLoadError = false;
+  bool _hasOutstandingError = false;
   int _nextPage = 1;
   PurchaseOrderQuery _query = const PurchaseOrderQuery();
 
   List<PurchaseOrder> get orders => List.unmodifiable(_orders);
+  List<PurchaseOrder> get outstandingReceivedNotPaid =>
+      List.unmodifiable(_outstandingReceivedNotPaid);
   bool get isLoading => _isLoading;
   bool get isLoadingMore => _isLoadingMore;
+  bool get isLoadingOutstanding => _isLoadingOutstanding;
   bool get hasMoreOrders => _hasMoreOrders;
   bool get hasLoadError => _hasLoadError;
+  bool get hasOutstandingError => _hasOutstandingError;
   PurchaseOrderQuery get query => _query;
 
   Future<void> loadOrders() async {
     _isLoading = true;
+    _isLoadingOutstanding = true;
     _hasLoadError = false;
+    _hasOutstandingError = false;
     _hasMoreOrders = true;
     _nextPage = 1;
     notifyListeners();
 
+    final outstandingResultFuture = _purchaseRepository
+        .loadOutstandingReceivedNotPaid();
     final result = await _purchaseRepository.loadPurchaseOrders(
       query: _query,
       page: _nextPage,
     );
+    final outstandingResult = await outstandingResultFuture;
     switch (result) {
       case Ok<PurchaseOrderPage>():
         _orders = result.value.orders;
@@ -47,8 +59,16 @@ class PurchaseOrderListViewModel extends ChangeNotifier {
         _hasLoadError = true;
         _hasMoreOrders = false;
     }
+    switch (outstandingResult) {
+      case Ok<PurchaseOrderPage>():
+        _outstandingReceivedNotPaid = outstandingResult.value.orders;
+      case Error<PurchaseOrderPage>():
+        _outstandingReceivedNotPaid = [];
+        _hasOutstandingError = true;
+    }
 
     _isLoading = false;
+    _isLoadingOutstanding = false;
     notifyListeners();
   }
 

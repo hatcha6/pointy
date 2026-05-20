@@ -1,7 +1,7 @@
 from decimal import Decimal
 
 from django.contrib.auth import get_user_model
-from django.contrib.auth.models import Group
+from django.contrib.auth.models import Group, Permission
 from django.test import TestCase
 from django.urls import reverse
 from rest_framework import status
@@ -13,6 +13,8 @@ from apps.inventory.models import StockItem, StockMovement
 from .models import (
     PurchaseOrder,
     PurchaseOrderAdjustment,
+    PurchaseOrderAdjustmentLine,
+    PurchaseOrderAuditEvent,
     PurchaseReceipt,
     Supplier,
     SupplierCredit,
@@ -105,6 +107,24 @@ class PurchaseOrderApiTests(TestCase):
         }
         payload.update(overrides)
         return payload
+
+    def authenticate_with_permissions(self, username, *permission_codes):
+        user = get_user_model().objects.create_user(
+            username=username,
+            password="pass",
+        )
+        permissions = []
+        for permission_code in permission_codes:
+            app_label, codename = permission_code.split(".", 1)
+            permissions.append(
+                Permission.objects.get(
+                    content_type__app_label=app_label,
+                    codename=codename,
+                )
+            )
+        user.user_permissions.add(*permissions)
+        self.client.force_authenticate(user=user)
+        return user
 
     def test_create_purchase_order_with_lines_calculates_totals(self):
         response = self.client.post(
@@ -458,6 +478,199 @@ class PurchaseOrderApiTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("detail", response.data)
 
+    def test_purchase_order_workflow_actions_require_specific_permissions(self):
+        draft_order = PurchaseOrder.objects.create(supplier=self.supplier)
+        self.authenticate_with_permissions(
+            "legacy-change-only",
+            "purchasing.change_purchaseorder",
+        )
+        edit_response = self.client.patch(
+            reverse("purchaseorder-detail", args=[draft_order.pk]),
+            {"notes": "Requires draft edit permission"},
+            format="json",
+        )
+        self.assertEqual(edit_response.status_code, status.HTTP_403_FORBIDDEN)
+
+        submitted_order = PurchaseOrder.objects.create(
+            supplier=self.supplier,
+            status=PurchaseOrder.Status.SUBMITTED,
+        )
+        submitted_order.lines.create(
+            product=self.product,
+            quantity=1,
+            unit_cost=Decimal("1.00"),
+        )
+        self.authenticate_with_permissions(
+            "receive-without-stock",
+            "purchasing.receive_purchaseorder",
+        )
+        receive_without_stock_response = self.client.post(
+            reverse("purchaseorder-receive", args=[submitted_order.pk]),
+            format="json",
+        )
+        self.assertEqual(
+            receive_without_stock_response.status_code,
+            status.HTTP_403_FORBIDDEN,
+        )
+
+        self.authenticate_with_permissions(
+            "legacy-receive-only",
+            "purchasing.change_purchaseorder",
+            "inventory.add_stockmovement",
+        )
+        receive_response = self.client.post(
+            reverse("purchaseorder-receive", args=[submitted_order.pk]),
+            format="json",
+        )
+        self.assertEqual(receive_response.status_code, status.HTTP_403_FORBIDDEN)
+
+        received_order = PurchaseOrder.objects.create(
+            supplier=self.supplier,
+            status=PurchaseOrder.Status.RECEIVED,
+        )
+        received_line = received_order.lines.create(
+            product=self.product,
+            quantity=1,
+            unit_cost=Decimal("1.00"),
+        )
+        StockItem.objects.create(product=self.product, quantity_on_hand=1)
+        self.authenticate_with_permissions(
+            "legacy-adjust-only",
+            "purchasing.change_purchaseorder",
+            "inventory.add_stockmovement",
+        )
+        adjust_response = self.client.post(
+            reverse("purchaseorder-return-items", args=[received_order.pk]),
+            {"lines": [{"line": received_line.pk, "quantity": 1}]},
+            format="json",
+        )
+        self.assertEqual(adjust_response.status_code, status.HTTP_403_FORBIDDEN)
+
+        self.authenticate_with_permissions(
+            "legacy-cancel-only",
+            "purchasing.change_purchaseorder",
+        )
+        cancel_response = self.client.post(
+            reverse("purchaseorder-cancel", args=[draft_order.pk]),
+            format="json",
+        )
+        self.assertEqual(cancel_response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_purchase_order_audit_events_are_recorded_for_workflow_actions(self):
+        create_response = self.client.post(
+            reverse("purchaseorder-list"),
+            self.purchase_order_payload(),
+            format="json",
+        )
+        self.assertEqual(create_response.status_code, status.HTTP_201_CREATED)
+        order = PurchaseOrder.objects.get(pk=create_response.data["id"])
+        self.assertEqual(create_response.data["audit_events"][0]["action"], "created")
+
+        update_response = self.client.patch(
+            reverse("purchaseorder-detail", args=[order.pk]),
+            {"notes": "Checked by manager"},
+            format="json",
+        )
+        self.assertEqual(update_response.status_code, status.HTTP_200_OK)
+
+        submit_response = self.client.post(
+            reverse("purchaseorder-submit", args=[order.pk]),
+            format="json",
+        )
+        self.assertEqual(submit_response.status_code, status.HTTP_200_OK)
+
+        receive_response = self.client.post(
+            reverse("purchaseorder-receive", args=[order.pk]),
+            format="json",
+        )
+        self.assertEqual(receive_response.status_code, status.HTTP_200_OK)
+
+        line = order.lines.get()
+        adjust_response = self.client.post(
+            reverse("purchaseorder-return-items", args=[order.pk]),
+            {"lines": [{"line": line.pk, "quantity": 1}]},
+            format="json",
+        )
+        self.assertEqual(adjust_response.status_code, status.HTTP_200_OK)
+
+        actions = set(
+            PurchaseOrderAuditEvent.objects.filter(purchase_order=order).values_list(
+                "action",
+                flat=True,
+            )
+        )
+        self.assertEqual(
+            actions,
+            {
+                PurchaseOrderAuditEvent.Action.CREATED,
+                PurchaseOrderAuditEvent.Action.UPDATED,
+                PurchaseOrderAuditEvent.Action.SUBMITTED,
+                PurchaseOrderAuditEvent.Action.RECEIVED,
+                PurchaseOrderAuditEvent.Action.ADJUSTED,
+            },
+        )
+        self.assertTrue(
+            PurchaseOrderAuditEvent.objects.filter(created_by=self.user).exists()
+        )
+
+        cancel_response = self.client.post(
+            reverse("purchaseorder-list"),
+            self.purchase_order_payload(),
+            format="json",
+        )
+        cancel_order = PurchaseOrder.objects.get(pk=cancel_response.data["id"])
+        response = self.client.post(
+            reverse("purchaseorder-cancel", args=[cancel_order.pk]),
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(
+            PurchaseOrderAuditEvent.objects.filter(
+                purchase_order=cancel_order,
+                action=PurchaseOrderAuditEvent.Action.CANCELLED,
+                created_by=self.user,
+            ).exists()
+        )
+
+        delete_response = self.client.post(
+            reverse("purchaseorder-list"),
+            self.purchase_order_payload(),
+            format="json",
+        )
+        delete_order = PurchaseOrder.objects.get(pk=delete_response.data["id"])
+        delete_order_number = delete_order.order_number
+        response = self.client.delete(
+            reverse("purchaseorder-detail", args=[delete_order.pk]),
+        )
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertFalse(PurchaseOrder.objects.filter(pk=delete_order.pk).exists())
+        self.assertTrue(
+            PurchaseOrderAuditEvent.objects.filter(
+                purchase_order__isnull=True,
+                order_number=delete_order_number,
+                action=PurchaseOrderAuditEvent.Action.DELETED,
+                created_by=self.user,
+            ).exists()
+        )
+
+    def test_non_draft_purchase_order_delete_is_blocked(self):
+        order = PurchaseOrder.objects.create(
+            supplier=self.supplier,
+            status=PurchaseOrder.Status.SUBMITTED,
+        )
+
+        response = self.client.delete(reverse("purchaseorder-detail", args=[order.pk]))
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("detail", response.data)
+        self.assertTrue(PurchaseOrder.objects.filter(pk=order.pk).exists())
+        self.assertFalse(
+            PurchaseOrderAuditEvent.objects.filter(
+                purchase_order=order,
+                action=PurchaseOrderAuditEvent.Action.DELETED,
+            ).exists()
+        )
+
     def test_purchase_order_list_filters_by_supplier(self):
         other_supplier = Supplier.objects.create(name="Other supplier")
         first_order = PurchaseOrder.objects.create(supplier=self.supplier)
@@ -809,7 +1022,17 @@ class PurchaseOrderApiTests(TestCase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.data["code"], "purchase_stock_already_sold")
+        self.assertEqual(
+            response.data["detail"],
+            (
+                "لا يمكن تعديل أمر الشراء لأن الكمية المستلمة بيعت أو لم تعد "
+                "متوفرة في المخزون."
+            ),
+        )
         self.assertIn("stock", response.data)
+        self.assertEqual(response.data["stock"][0]["requested"], "2")
+        self.assertEqual(response.data["stock"][0]["available"], "1")
         self.assertEqual(StockItem.objects.get(product=self.product).quantity_on_hand, 1)
 
     def test_exchange_records_outbound_and_replacement_lines_with_new_cost(self):
@@ -1144,6 +1367,231 @@ class PurchaseOrderApiTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["unit_cost"], Decimal("2.75"))
 
+    def test_product_cost_history_returns_purchase_lines_for_product(self):
+        cancelled = PurchaseOrder.objects.create(
+            supplier=self.supplier,
+            status=PurchaseOrder.Status.CANCELLED,
+        )
+        cancelled.lines.create(
+            product=self.product,
+            quantity=1,
+            unit_cost=Decimal("9.99"),
+        )
+        other_supplier = Supplier.objects.create(name="History supplier")
+        first = PurchaseOrder.objects.create(
+            supplier=self.supplier,
+            status=PurchaseOrder.Status.RECEIVED,
+        )
+        first.lines.create(
+            product=self.product,
+            quantity=2,
+            unit_cost=Decimal("1.25"),
+        )
+        latest = PurchaseOrder.objects.create(
+            supplier=other_supplier,
+            status=PurchaseOrder.Status.RECEIVED,
+            submitted_at="2026-05-19T10:00:00Z",
+            received_at="2026-05-20T10:00:00Z",
+        )
+        latest_line = latest.lines.create(
+            product=self.product,
+            quantity=3,
+            unit_cost=Decimal("2.50"),
+            landed_unit_cost=Decimal("0.25"),
+            effective_unit_cost=Decimal("2.75"),
+        )
+        latest.lines.create(
+            product=self.other_product,
+            quantity=1,
+            unit_cost=Decimal("3.00"),
+        )
+
+        response = self.client.get(
+            reverse("purchaseorder-product-cost-history"),
+            {"product": self.product.pk},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["count"], 2)
+        row = response.data["results"][0]
+        self.assertEqual(row["id"], latest_line.pk)
+        self.assertEqual(row["purchase_order"], latest.pk)
+        self.assertEqual(row["order_number"], latest.order_number)
+        self.assertEqual(row["supplier"], other_supplier.pk)
+        self.assertEqual(row["supplier_name"], other_supplier.name)
+        self.assertEqual(row["quantity"], 3)
+        self.assertEqual(row["unit_cost"], "2.50")
+        self.assertEqual(row["landed_unit_cost"], "0.25")
+        self.assertEqual(row["effective_unit_cost"], "2.75")
+
+    def test_product_margin_impact_compares_latest_and_previous_costs(self):
+        previous = PurchaseOrder.objects.create(
+            supplier=self.supplier,
+            status=PurchaseOrder.Status.RECEIVED,
+        )
+        previous.lines.create(
+            product=self.product,
+            quantity=1,
+            unit_cost=Decimal("1.00"),
+        )
+        latest = PurchaseOrder.objects.create(
+            supplier=self.supplier,
+            status=PurchaseOrder.Status.RECEIVED,
+        )
+        latest_line = latest.lines.create(
+            product=self.product,
+            quantity=1,
+            unit_cost=Decimal("2.50"),
+        )
+
+        response = self.client.get(
+            reverse("purchaseorder-product-margin-impact"),
+            {"product": self.product.pk},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["product"], self.product.pk)
+        self.assertEqual(response.data["product_name"], self.product.name)
+        self.assertEqual(response.data["unit_price"], "4.00")
+        self.assertEqual(response.data["latest_purchase_line"], latest_line.pk)
+        self.assertEqual(response.data["latest_unit_cost"], "2.50")
+        self.assertEqual(response.data["latest_effective_unit_cost"], "2.50")
+        self.assertEqual(response.data["latest_margin_amount"], "1.50")
+        self.assertEqual(response.data["latest_margin_percent"], "37.50")
+        self.assertEqual(response.data["previous_unit_cost"], "1.00")
+        self.assertEqual(response.data["previous_effective_unit_cost"], "1.00")
+        self.assertEqual(response.data["previous_margin_amount"], "3.00")
+        self.assertEqual(response.data["previous_margin_percent"], "75.00")
+        self.assertEqual(response.data["unit_cost_delta"], "1.50")
+        self.assertEqual(response.data["effective_unit_cost_delta"], "1.50")
+        self.assertEqual(response.data["margin_amount_delta"], "-1.50")
+        self.assertEqual(response.data["margin_percent_delta"], "-37.50")
+
+    def test_outstanding_received_not_paid_returns_unpaid_received_orders(self):
+        due_order = PurchaseOrder.objects.create(
+            supplier=self.supplier,
+            status=PurchaseOrder.Status.RECEIVED,
+            due_date="2026-05-18",
+            subtotal=Decimal("10.00"),
+            total=Decimal("10.00"),
+        )
+        later_due_order = PurchaseOrder.objects.create(
+            supplier=self.supplier,
+            status=PurchaseOrder.Status.RECEIVED,
+            due_date="2026-05-25",
+            subtotal=Decimal("8.00"),
+            total=Decimal("8.00"),
+        )
+        paid_order = PurchaseOrder.objects.create(
+            supplier=self.supplier,
+            status=PurchaseOrder.Status.RECEIVED,
+            subtotal=Decimal("6.00"),
+            total=Decimal("6.00"),
+        )
+        SupplierPayment.objects.create(
+            supplier=self.supplier,
+            purchase_order=paid_order,
+            amount=Decimal("6.00"),
+            method=SupplierPayment.Method.CASH,
+        )
+        PurchaseOrder.objects.create(
+            supplier=self.supplier,
+            status=PurchaseOrder.Status.SUBMITTED,
+            subtotal=Decimal("4.00"),
+            total=Decimal("4.00"),
+        )
+
+        response = self.client.get(
+            reverse("purchaseorder-outstanding-received-not-paid"),
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            [row["id"] for row in response.data["results"]],
+            [due_order.pk, later_due_order.pk],
+        )
+        self.assertEqual(response.data["results"][0]["balance_due"], "10.00")
+        self.assertEqual(response.data["results"][0]["payment_status"], "unpaid")
+
+    def test_adjustment_history_filters_return_and_refund_rows(self):
+        other_supplier = Supplier.objects.create(name="Adjustment supplier")
+        order = PurchaseOrder.objects.create(
+            supplier=self.supplier,
+            status=PurchaseOrder.Status.RECEIVED,
+        )
+        line = order.lines.create(
+            product=self.product,
+            quantity=4,
+            unit_cost=Decimal("1.25"),
+        )
+        refund_order = PurchaseOrder.objects.create(
+            supplier=other_supplier,
+            status=PurchaseOrder.Status.RECEIVED,
+        )
+        refund_line = refund_order.lines.create(
+            product=self.other_product,
+            quantity=2,
+            unit_cost=Decimal("3.00"),
+        )
+        return_adjustment = PurchaseOrderAdjustment.objects.create(
+            purchase_order=order,
+            adjustment_type=PurchaseOrderAdjustment.AdjustmentType.RETURN,
+            amount=Decimal("2.50"),
+            outbound_amount=Decimal("2.50"),
+            net_amount=Decimal("-2.50"),
+            settlement_method=(
+                PurchaseOrderAdjustment.SettlementMethod.SUPPLIER_CREDIT
+            ),
+            reason="Damaged",
+        )
+        PurchaseOrderAdjustmentLine.objects.create(
+            adjustment=return_adjustment,
+            purchase_line=line,
+            product=self.product,
+            quantity=2,
+            unit_cost=Decimal("1.25"),
+        )
+        refund_adjustment = PurchaseOrderAdjustment.objects.create(
+            purchase_order=refund_order,
+            adjustment_type=PurchaseOrderAdjustment.AdjustmentType.REFUND,
+            amount=Decimal("3.00"),
+            outbound_amount=Decimal("3.00"),
+            net_amount=Decimal("-3.00"),
+            settlement_method=PurchaseOrderAdjustment.SettlementMethod.CASH,
+            reason="Over supplied",
+        )
+        PurchaseOrderAdjustmentLine.objects.create(
+            adjustment=refund_adjustment,
+            purchase_line=refund_line,
+            product=self.other_product,
+            quantity=1,
+            unit_cost=Decimal("3.00"),
+        )
+
+        response = self.client.get(
+            reverse("purchaseorder-adjustment-history"),
+            {
+                "adjustment_type": PurchaseOrderAdjustment.AdjustmentType.RETURN,
+                "supplier": self.supplier.pk,
+                "product": self.product.pk,
+            },
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["count"], 1)
+        row = response.data["results"][0]
+        self.assertEqual(row["adjustment"], return_adjustment.pk)
+        self.assertEqual(row["adjustment_type"], "return")
+        self.assertEqual(row["purchase_order"], order.pk)
+        self.assertEqual(row["order_number"], order.order_number)
+        self.assertEqual(row["supplier"], self.supplier.pk)
+        self.assertEqual(row["supplier_name"], self.supplier.name)
+        self.assertEqual(row["product"], self.product.pk)
+        self.assertEqual(row["product_name"], self.product.name)
+        self.assertEqual(row["quantity"], 2)
+        self.assertEqual(row["unit_cost"], "1.25")
+        self.assertEqual(row["line_total"], "2.50")
+
 
 class SupplierApiTests(TestCase):
     def setUp(self):
@@ -1224,6 +1672,65 @@ class SupplierApiTests(TestCase):
         self.assertEqual(row["payable_balance"], "7.00")
         self.assertEqual(row["credit_balance"], "2.00")
         self.assertEqual(row["net_balance"], "5.00")
+
+    def test_supplier_serialization_exposes_purchase_totals(self):
+        supplier = Supplier.objects.create(name="Totals supplier")
+        PurchaseOrder.objects.create(
+            supplier=supplier,
+            status=PurchaseOrder.Status.RECEIVED,
+            subtotal=Decimal("10.00"),
+            total=Decimal("10.00"),
+        )
+        PurchaseOrder.objects.create(
+            supplier=supplier,
+            status=PurchaseOrder.Status.SUBMITTED,
+            subtotal=Decimal("5.00"),
+            total=Decimal("5.00"),
+        )
+        PurchaseOrder.objects.create(
+            supplier=supplier,
+            status=PurchaseOrder.Status.CANCELLED,
+            subtotal=Decimal("7.00"),
+            total=Decimal("7.00"),
+        )
+
+        response = self.client.get(reverse("supplier-detail", args=[supplier.pk]))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["total_bought"], "15.00")
+        self.assertEqual(response.data["purchase_count"], 2)
+
+    def test_supplier_purchase_history_returns_supplier_orders_newest_first(self):
+        supplier = Supplier.objects.create(name="History supplier")
+        older_order = PurchaseOrder.objects.create(
+            supplier=supplier,
+            status=PurchaseOrder.Status.RECEIVED,
+            subtotal=Decimal("10.00"),
+            total=Decimal("10.00"),
+        )
+        latest_order = PurchaseOrder.objects.create(
+            supplier=supplier,
+            status=PurchaseOrder.Status.SUBMITTED,
+            subtotal=Decimal("5.00"),
+            total=Decimal("5.00"),
+        )
+        PurchaseOrder.objects.create(
+            supplier=Supplier.objects.create(name="Other supplier"),
+            status=PurchaseOrder.Status.RECEIVED,
+            subtotal=Decimal("7.00"),
+            total=Decimal("7.00"),
+        )
+
+        response = self.client.get(
+            reverse("supplier-purchase-history", args=[supplier.pk]),
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["count"], 2)
+        self.assertEqual(
+            [row["id"] for row in response.data["results"]],
+            [latest_order.pk, older_order.pk],
+        )
 
 
 class SupplierPaymentApiTests(TestCase):

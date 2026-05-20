@@ -11,6 +11,7 @@ from .models import (
     PurchaseOrderAdjustment,
     PurchaseOrderAdjustmentLine,
     PurchaseOrderAdjustmentReplacementLine,
+    PurchaseOrderAuditEvent,
     PurchaseReceipt,
     PurchaseReceiptLine,
     Supplier,
@@ -39,6 +40,27 @@ def purchase_created_by(request):
     if request is not None and request.user.is_authenticated:
         return request.user
     return None
+
+
+def record_purchase_order_audit_event(
+    purchase_order,
+    action,
+    *,
+    request=None,
+    created_by=None,
+    message="",
+    details=None,
+):
+    if created_by is None:
+        created_by = purchase_created_by(request)
+    return PurchaseOrderAuditEvent.objects.create(
+        purchase_order=purchase_order,
+        order_number=purchase_order.order_number,
+        action=action,
+        message=message,
+        details=details or {},
+        created_by=created_by,
+    )
 
 
 def stock_snapshot(stock_item):
@@ -95,7 +117,14 @@ def decrement_expected(stock_item, quantity):
 
 
 @transaction.atomic
-def save_purchase_order_with_lines(*, purchase_order=None, lines_data=None, **order_fields):
+def save_purchase_order_with_lines(
+    *,
+    purchase_order=None,
+    lines_data=None,
+    request=None,
+    **order_fields,
+):
+    is_create = purchase_order is None
     if purchase_order is None:
         purchase_order = PurchaseOrder.objects.create(**order_fields)
     else:
@@ -115,6 +144,15 @@ def save_purchase_order_with_lines(*, purchase_order=None, lines_data=None, **or
 
     purchase_order.recalculate()
     purchase_order.save(update_fields=["subtotal", "total", "updated_at"])
+    record_purchase_order_audit_event(
+        purchase_order,
+        (
+            PurchaseOrderAuditEvent.Action.CREATED
+            if is_create
+            else PurchaseOrderAuditEvent.Action.UPDATED
+        ),
+        request=request,
+    )
     return purchase_order
 
 
@@ -155,6 +193,11 @@ def submit_purchase_order(purchase_order, *, request=None):
     locked_order.status = PurchaseOrder.Status.SUBMITTED
     locked_order.submitted_at = timezone.now()
     locked_order.save(update_fields=["status", "submitted_at", "updated_at"])
+    record_purchase_order_audit_event(
+        locked_order,
+        PurchaseOrderAuditEvent.Action.SUBMITTED,
+        created_by=created_by,
+    )
     return locked_order
 
 
@@ -372,6 +415,12 @@ def receive_purchase_order(purchase_order, *, request=None, lines_data=None, not
         locked_order.save(update_fields=["status", "received_at", "updated_at"])
     else:
         locked_order.save(update_fields=["status", "updated_at"])
+    record_purchase_order_audit_event(
+        locked_order,
+        PurchaseOrderAuditEvent.Action.RECEIVED,
+        created_by=created_by,
+        details={"receipt": receipt.pk, "status": locked_order.status},
+    )
     return locked_order
 
 
@@ -437,7 +486,11 @@ def validate_purchase_stock_available(lines):
     if shortages:
         raise serializers.ValidationError(
             {
-                "detail": "Insufficient stock for purchase adjustment.",
+                "code": "purchase_stock_already_sold",
+                "detail": (
+                    "لا يمكن تعديل أمر الشراء لأن الكمية المستلمة بيعت أو لم تعد "
+                    "متوفرة في المخزون."
+                ),
                 "stock": shortages,
             }
         )
@@ -584,6 +637,18 @@ def create_purchase_order_adjustment(
         created_by=created_by,
     )
     settle_purchase_order_adjustment(adjustment, created_by=created_by)
+    record_purchase_order_audit_event(
+        purchase_order,
+        PurchaseOrderAuditEvent.Action.ADJUSTED,
+        created_by=created_by,
+        details={
+            "adjustment": adjustment.pk,
+            "adjustment_type": adjustment.adjustment_type,
+            "outbound_amount": str(adjustment.outbound_amount),
+            "replacement_amount": str(adjustment.replacement_amount),
+            "net_amount": str(adjustment.net_amount),
+        },
+    )
     return adjustment
 
 
@@ -767,4 +832,9 @@ def cancel_purchase_order(purchase_order, *, request=None):
 
     locked_order.status = PurchaseOrder.Status.CANCELLED
     locked_order.save(update_fields=["status", "updated_at"])
+    record_purchase_order_audit_event(
+        locked_order,
+        PurchaseOrderAuditEvent.Action.CANCELLED,
+        created_by=created_by,
+    )
     return locked_order

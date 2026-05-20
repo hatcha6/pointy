@@ -228,6 +228,23 @@
   "productDetailsTitle": "تفاصيل المنتج",
   "productSummaryTitle": "ملخص المنتج",
   "productPriceTitle": "السعر",
+  "productCostHistoryTitle": "تكلفة الشراء والهامش",
+  "productCostHistoryLoadError": "تعذر تحميل تاريخ تكلفة الشراء لهذا المنتج.",
+  "productCostHistoryEmpty": "لا توجد مشتريات مسجلة لهذا المنتج بعد.",
+  "productLatestCostLabel": "آخر تكلفة",
+  "productGrossProfitLabel": "ربح القطعة",
+  "productMarginPercentLabel": "هامش الربح",
+  "productMarginPercentValue": "{percent}%",
+  "@productMarginPercentValue": {
+    "description": "Product margin percent value.",
+    "placeholders": {
+      "percent": {
+        "type": "String"
+      }
+    }
+  },
+  "productCostChangeLabel": "تغير التكلفة",
+  "productMarginChangeLabel": "تغير الهامش",
   "productIdentifierTitle": "بيانات التعريف",
   "productDescriptionTitle": "الوصف",
   "productAvailabilityTitle": "حالة البيع",
@@ -356,6 +373,29 @@
   "purchaseOrderOrderingNumber": "رقم أمر الشراء",
   "purchaseOrdersLoadError": "تعذر تحميل فواتير المشتريات.",
   "purchaseOrderDetailsLoadError": "تعذر تحميل تفاصيل أمر الشراء.",
+  "outstandingPurchasesTitle": "مستلم وغير مدفوع",
+  "outstandingPurchasesLoadError": "تعذر تحميل المشتريات المستلمة غير المدفوعة.",
+  "outstandingPurchasesSummary": "{count, plural, =0{لا توجد فواتير} =1{فاتورة واحدة • {amount}} =2{فاتورتان • {amount}} other{{count} فواتير • {amount}}}",
+  "@outstandingPurchasesSummary": {
+    "description": "Summary for received but unpaid purchase orders.",
+    "placeholders": {
+      "count": {
+        "type": "num"
+      },
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "purchaseOutstandingAmountValue": "متبقي {amount}",
+  "@purchaseOutstandingAmountValue": {
+    "description": "Outstanding balance amount for a purchase order.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
   "emptyPurchaseOrders": "لا توجد فواتير مشتريات بعد.",
   "purchaseOrderFallbackTitle": "أمر شراء #{id}",
   "@purchaseOrderFallbackTitle": {
@@ -445,6 +485,9 @@
   "exchangePurchaseItemsAction": "استبدال",
   "purchaseOrderStatusChangeError": "تعذر تغيير حالة أمر الشراء. حاول مرة أخرى.",
   "purchaseOrderAdjustmentError": "تعذر تسجيل تعديل المشتريات. راجع الكميات والمخزون وحاول مرة أخرى.",
+  "purchaseOrderAdjustmentStockUnavailableError": "لا يمكن تعديل أمر الشراء لأن الكمية المستلمة بيعت أو لم تعد متوفرة في المخزون.",
+  "purchaseOrderPermissionError": "لا يملك هذا المستخدم صلاحية تنفيذ هذا الإجراء على أمر الشراء.",
+  "purchaseOrderValidationError": "تعذر تنفيذ الإجراء. راجع حالة أمر الشراء والكميات ثم حاول مرة أخرى.",
   "purchaseOrderPaymentError": "تعذر تسجيل دفعة المورد. راجع المبلغ وطريقة الدفع وحاول مرة أخرى.",
   "recordSupplierPaymentAction": "تسجيل دفعة",
   "supplierPaymentTitle": "دفعة للمورد",
@@ -860,6 +903,35 @@
   "marketingAllowedLabel": "يسمح بالتسويق",
   "inactiveContactLabel": "غير نشط",
   "supplierContactLabel": "جهة التواصل",
+  "supplierContactValue": "جهة التواصل {name}",
+  "@supplierContactValue": {
+    "description": "Supplier contact person value.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "refreshSupplierDetailsTooltip": "تحديث تفاصيل المورد",
+  "supplierDetailsLoadError": "تعذر تحميل ملخص المورد.",
+  "supplierPurchaseSummaryTitle": "ملخص الشراء من المورد",
+  "supplierTotalBoughtLabel": "إجمالي المشتريات",
+  "supplierPurchaseCountLabel": "عدد أوامر الشراء",
+  "supplierPurchaseCountValue": "{count, plural, =0{لا توجد أوامر} =1{أمر واحد} =2{أمران} other{{count} أوامر}}",
+  "@supplierPurchaseCountValue": {
+    "description": "Supplier purchase order count value.",
+    "placeholders": {
+      "count": {
+        "type": "num"
+      }
+    }
+  },
+  "supplierPurchaseHistoryTitle": "سجل مشتريات المورد",
+  "supplierPurchaseHistoryLoadError": "تعذر تحميل سجل مشتريات المورد.",
+  "supplierPurchaseHistoryEmpty": "لا توجد مشتريات مسجلة لهذا المورد.",
+  "supplierReturnRefundHistoryTitle": "سجل الإرجاع والاسترداد",
+  "supplierReturnRefundHistoryLoadError": "تعذر تحميل سجل الإرجاع والاسترداد.",
+  "supplierReturnRefundHistoryEmpty": "لا توجد عمليات إرجاع أو استرداد لهذا المورد.",
   "supplierPayableBalanceValue": "مستحق {amount}",
   "@supplierPayableBalanceValue": {
     "description": "Supplier payable balance shown in contacts.",

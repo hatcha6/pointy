@@ -1,0 +1,357 @@
+import 'package:flutter/material.dart';
+import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
+
+import '../../../core/authorization.dart';
+import '../../../data/models/contact.dart';
+import '../../../data/models/purchase_submission.dart';
+import '../../../data/repositories/contact_repository.dart';
+import '../../../data/repositories/purchase_repository.dart';
+import '../../../shared/date_formatters.dart';
+import '../../../shared/detail_section.dart';
+import '../../../shared/formatters.dart';
+import '../../purchasing/views/purchase_order_details_screen.dart';
+import '../../purchasing/views/purchase_order_filter_sheet.dart';
+import '../view_models/supplier_details_view_model.dart';
+
+class SupplierDetailsScreen extends StatefulWidget {
+  const SupplierDetailsScreen({
+    super.key,
+    required this.supplier,
+    required this.contactRepository,
+    required this.purchaseRepository,
+    required this.capabilities,
+  });
+
+  final SupplierContact supplier;
+  final ContactRepository contactRepository;
+  final PurchaseRepository purchaseRepository;
+  final AuthorizationCapabilities capabilities;
+
+  @override
+  State<SupplierDetailsScreen> createState() => _SupplierDetailsScreenState();
+}
+
+class _SupplierDetailsScreenState extends State<SupplierDetailsScreen> {
+  late final SupplierDetailsViewModel _viewModel = SupplierDetailsViewModel(
+    contactRepository: widget.contactRepository,
+    purchaseRepository: widget.purchaseRepository,
+    initialSupplier: widget.supplier,
+  );
+
+  @override
+  void dispose() {
+    _viewModel.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+
+    return ListenableBuilder(
+      listenable: _viewModel,
+      builder: (context, _) {
+        final supplier = _viewModel.supplier;
+        return Scaffold(
+          appBar: AppBar(
+            title: Text(supplier.name),
+            actions: [
+              IconButton(
+                tooltip: l10n.refreshSupplierDetailsTooltip,
+                onPressed: _viewModel.load,
+                icon: const Icon(Icons.sync),
+              ),
+            ],
+          ),
+          body: SafeArea(
+            child: ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                _SupplierHeader(supplier: supplier),
+                const SizedBox(height: 12),
+                DetailSection(
+                  title: l10n.supplierPurchaseSummaryTitle,
+                  icon: Icons.summarize_outlined,
+                  child: _SupplierTotals(viewModel: _viewModel),
+                ),
+                const SizedBox(height: 12),
+                DetailSection(
+                  title: l10n.supplierPurchaseHistoryTitle,
+                  icon: Icons.receipt_long_outlined,
+                  child: _SupplierPurchaseHistory(
+                    viewModel: _viewModel,
+                    onOpenPurchaseOrder: _openPurchaseOrder,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                DetailSection(
+                  title: l10n.supplierReturnRefundHistoryTitle,
+                  icon: Icons.keyboard_return_outlined,
+                  child: _SupplierAdjustmentHistory(viewModel: _viewModel),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _openPurchaseOrder(PurchaseOrder order) {
+    return Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => PurchaseOrderDetailsScreen(
+          purchaseRepository: widget.purchaseRepository,
+          initialOrder: order,
+          capabilities: widget.capabilities,
+        ),
+      ),
+    );
+  }
+}
+
+class _SupplierHeader extends StatelessWidget {
+  const _SupplierHeader({required this.supplier});
+
+  final SupplierContact supplier;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: colorScheme.primary,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  Icons.local_shipping_outlined,
+                  color: colorScheme.onPrimary,
+                  size: 34,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    supplier.name,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                      color: colorScheme.onPrimary,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Text(
+              [
+                if (supplier.contactName.isNotEmpty)
+                  l10n.supplierContactValue(supplier.contactName),
+                if (supplier.phone.isNotEmpty) supplier.phone,
+                if (supplier.email.isNotEmpty) supplier.email,
+                if (!supplier.isActive) l10n.inactiveContactLabel,
+              ].join(' • '),
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(color: colorScheme.onPrimary),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SupplierTotals extends StatelessWidget {
+  const _SupplierTotals({required this.viewModel});
+
+  final SupplierDetailsViewModel viewModel;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final supplier = viewModel.supplier;
+
+    return Column(
+      children: [
+        if (viewModel.hasSupplierError)
+          _ErrorText(text: l10n.supplierDetailsLoadError),
+        DetailRow(
+          label: l10n.supplierTotalBoughtLabel,
+          value: formatMoney(supplier.totalBought),
+        ),
+        const Divider(height: 20),
+        DetailRow(
+          label: l10n.supplierPurchaseCountLabel,
+          value: l10n.supplierPurchaseCountValue(supplier.purchaseCount),
+        ),
+        const Divider(height: 20),
+        DetailRow(
+          label: l10n.purchaseOrderBalanceDueLabel,
+          value: formatMoney(supplier.payableBalance),
+        ),
+        if (supplier.creditBalance > 0) ...[
+          const Divider(height: 20),
+          DetailRow(
+            label: l10n.purchaseOrderCreditAppliedLabel,
+            value: formatMoney(supplier.creditBalance),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _SupplierPurchaseHistory extends StatelessWidget {
+  const _SupplierPurchaseHistory({
+    required this.viewModel,
+    required this.onOpenPurchaseOrder,
+  });
+
+  final SupplierDetailsViewModel viewModel;
+  final ValueChanged<PurchaseOrder> onOpenPurchaseOrder;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+
+    if (viewModel.isLoadingHistory) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (viewModel.hasHistoryError) {
+      return _ErrorText(text: l10n.supplierPurchaseHistoryLoadError);
+    }
+    if (viewModel.purchaseHistory.isEmpty) {
+      return Text(l10n.supplierPurchaseHistoryEmpty);
+    }
+
+    return Column(
+      children: [
+        for (final (index, order) in viewModel.purchaseHistory.indexed) ...[
+          if (index > 0) const Divider(height: 1),
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.receipt_long_outlined),
+            title: Text(
+              order.orderNumber.isEmpty
+                  ? l10n.purchaseOrderFallbackTitle(order.id)
+                  : order.orderNumber,
+            ),
+            subtitle: Text(
+              [
+                purchaseOrderStatusLabel(l10n, order.status),
+                l10n.purchaseOrderLineCount(order.lineCount),
+                if (order.receivedAt != null) formatDateTime(order.receivedAt!),
+                if (order.balanceDue > 0)
+                  l10n.purchaseOutstandingAmountValue(
+                    formatMoney(order.balanceDue),
+                  ),
+              ].join(' • '),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+            trailing: Text(formatMoney(order.total)),
+            onTap: () => onOpenPurchaseOrder(order),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _SupplierAdjustmentHistory extends StatelessWidget {
+  const _SupplierAdjustmentHistory({required this.viewModel});
+
+  final SupplierDetailsViewModel viewModel;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+
+    if (viewModel.isLoadingAdjustments) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (viewModel.hasAdjustmentError) {
+      return _ErrorText(text: l10n.supplierReturnRefundHistoryLoadError);
+    }
+    if (viewModel.adjustmentHistory.isEmpty) {
+      return Text(l10n.supplierReturnRefundHistoryEmpty);
+    }
+
+    return Column(
+      children: [
+        for (final (index, adjustment)
+            in viewModel.adjustmentHistory.indexed) ...[
+          if (index > 0) const Divider(height: 1),
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: Icon(_adjustmentIcon(adjustment.type)),
+            title: Text(_adjustmentTypeLabel(l10n, adjustment.type)),
+            subtitle: Text(
+              [
+                if (adjustment.purchaseOrderNumber != null &&
+                    adjustment.purchaseOrderNumber!.isNotEmpty)
+                  l10n.purchaseOrderNumberValue(
+                    adjustment.purchaseOrderNumber!,
+                  ),
+                if (adjustment.createdAt != null)
+                  formatDateTime(adjustment.createdAt!),
+                l10n.purchaseAdjustmentHistoryLineCount(
+                  adjustment.lines.length,
+                ),
+                if (adjustment.reason.isNotEmpty) adjustment.reason,
+              ].join(' • '),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+            trailing: Text(formatMoney(adjustment.amount)),
+          ),
+        ],
+      ],
+    );
+  }
+
+  IconData _adjustmentIcon(PurchaseAdjustmentType type) {
+    return switch (type) {
+      PurchaseAdjustmentType.returnItems => Icons.keyboard_return_outlined,
+      PurchaseAdjustmentType.refund => Icons.payments_outlined,
+      PurchaseAdjustmentType.exchange => Icons.swap_horiz_outlined,
+    };
+  }
+
+  String _adjustmentTypeLabel(
+    AppLocalizations l10n,
+    PurchaseAdjustmentType type,
+  ) {
+    return switch (type) {
+      PurchaseAdjustmentType.returnItems => l10n.purchaseAdjustmentTypeReturn,
+      PurchaseAdjustmentType.refund => l10n.purchaseAdjustmentTypeRefund,
+      PurchaseAdjustmentType.exchange => l10n.purchaseAdjustmentTypeExchange,
+    };
+  }
+}
+
+class _ErrorText extends StatelessWidget {
+  const _ErrorText({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Text(
+        text,
+        style: TextStyle(color: Theme.of(context).colorScheme.error),
+      ),
+    );
+  }
+}

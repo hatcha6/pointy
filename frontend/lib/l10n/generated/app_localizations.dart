@@ -1022,6 +1022,60 @@ abstract class AppLocalizations {
   /// **'السعر'**
   String get productPriceTitle;
 
+  /// No description provided for @productCostHistoryTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'تكلفة الشراء والهامش'**
+  String get productCostHistoryTitle;
+
+  /// No description provided for @productCostHistoryLoadError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر تحميل تاريخ تكلفة الشراء لهذا المنتج.'**
+  String get productCostHistoryLoadError;
+
+  /// No description provided for @productCostHistoryEmpty.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد مشتريات مسجلة لهذا المنتج بعد.'**
+  String get productCostHistoryEmpty;
+
+  /// No description provided for @productLatestCostLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'آخر تكلفة'**
+  String get productLatestCostLabel;
+
+  /// No description provided for @productGrossProfitLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'ربح القطعة'**
+  String get productGrossProfitLabel;
+
+  /// No description provided for @productMarginPercentLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'هامش الربح'**
+  String get productMarginPercentLabel;
+
+  /// Product margin percent value.
+  ///
+  /// In ar, this message translates to:
+  /// **'{percent}%'**
+  String productMarginPercentValue(String percent);
+
+  /// No description provided for @productCostChangeLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'تغير التكلفة'**
+  String get productCostChangeLabel;
+
+  /// No description provided for @productMarginChangeLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'تغير الهامش'**
+  String get productMarginChangeLabel;
+
   /// No description provided for @productIdentifierTitle.
   ///
   /// In ar, this message translates to:
@@ -1502,6 +1556,30 @@ abstract class AppLocalizations {
   /// **'تعذر تحميل تفاصيل أمر الشراء.'**
   String get purchaseOrderDetailsLoadError;
 
+  /// No description provided for @outstandingPurchasesTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'مستلم وغير مدفوع'**
+  String get outstandingPurchasesTitle;
+
+  /// No description provided for @outstandingPurchasesLoadError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر تحميل المشتريات المستلمة غير المدفوعة.'**
+  String get outstandingPurchasesLoadError;
+
+  /// Summary for received but unpaid purchase orders.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, =0{لا توجد فواتير} =1{فاتورة واحدة • {amount}} =2{فاتورتان • {amount}} other{{count} فواتير • {amount}}}'**
+  String outstandingPurchasesSummary(num count, String amount);
+
+  /// Outstanding balance amount for a purchase order.
+  ///
+  /// In ar, this message translates to:
+  /// **'متبقي {amount}'**
+  String purchaseOutstandingAmountValue(String amount);
+
   /// No description provided for @emptyPurchaseOrders.
   ///
   /// In ar, this message translates to:
@@ -1747,6 +1825,24 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'تعذر تسجيل تعديل المشتريات. راجع الكميات والمخزون وحاول مرة أخرى.'**
   String get purchaseOrderAdjustmentError;
+
+  /// No description provided for @purchaseOrderAdjustmentStockUnavailableError.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا يمكن تعديل أمر الشراء لأن الكمية المستلمة بيعت أو لم تعد متوفرة في المخزون.'**
+  String get purchaseOrderAdjustmentStockUnavailableError;
+
+  /// No description provided for @purchaseOrderPermissionError.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا يملك هذا المستخدم صلاحية تنفيذ هذا الإجراء على أمر الشراء.'**
+  String get purchaseOrderPermissionError;
+
+  /// No description provided for @purchaseOrderValidationError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر تنفيذ الإجراء. راجع حالة أمر الشراء والكميات ثم حاول مرة أخرى.'**
+  String get purchaseOrderValidationError;
 
   /// No description provided for @purchaseOrderPaymentError.
   ///
@@ -2555,6 +2651,84 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'جهة التواصل'**
   String get supplierContactLabel;
+
+  /// Supplier contact person value.
+  ///
+  /// In ar, this message translates to:
+  /// **'جهة التواصل {name}'**
+  String supplierContactValue(String name);
+
+  /// No description provided for @refreshSupplierDetailsTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحديث تفاصيل المورد'**
+  String get refreshSupplierDetailsTooltip;
+
+  /// No description provided for @supplierDetailsLoadError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر تحميل ملخص المورد.'**
+  String get supplierDetailsLoadError;
+
+  /// No description provided for @supplierPurchaseSummaryTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'ملخص الشراء من المورد'**
+  String get supplierPurchaseSummaryTitle;
+
+  /// No description provided for @supplierTotalBoughtLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'إجمالي المشتريات'**
+  String get supplierTotalBoughtLabel;
+
+  /// No description provided for @supplierPurchaseCountLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'عدد أوامر الشراء'**
+  String get supplierPurchaseCountLabel;
+
+  /// Supplier purchase order count value.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, =0{لا توجد أوامر} =1{أمر واحد} =2{أمران} other{{count} أوامر}}'**
+  String supplierPurchaseCountValue(num count);
+
+  /// No description provided for @supplierPurchaseHistoryTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'سجل مشتريات المورد'**
+  String get supplierPurchaseHistoryTitle;
+
+  /// No description provided for @supplierPurchaseHistoryLoadError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر تحميل سجل مشتريات المورد.'**
+  String get supplierPurchaseHistoryLoadError;
+
+  /// No description provided for @supplierPurchaseHistoryEmpty.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد مشتريات مسجلة لهذا المورد.'**
+  String get supplierPurchaseHistoryEmpty;
+
+  /// No description provided for @supplierReturnRefundHistoryTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'سجل الإرجاع والاسترداد'**
+  String get supplierReturnRefundHistoryTitle;
+
+  /// No description provided for @supplierReturnRefundHistoryLoadError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر تحميل سجل الإرجاع والاسترداد.'**
+  String get supplierReturnRefundHistoryLoadError;
+
+  /// No description provided for @supplierReturnRefundHistoryEmpty.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد عمليات إرجاع أو استرداد لهذا المورد.'**
+  String get supplierReturnRefundHistoryEmpty;
 
   /// Supplier payable balance shown in contacts.
   ///

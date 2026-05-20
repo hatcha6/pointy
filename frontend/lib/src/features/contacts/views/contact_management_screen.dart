@@ -3,16 +3,19 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../core/authorization.dart';
 import '../../../data/models/pos_user.dart';
+import '../../../data/repositories/purchase_repository.dart';
 import '../../../shared/app_navigation_drawer.dart';
 import '../../../shared/authorization_guards.dart';
 import '../../../shared/contact_picker_sheet.dart';
 import '../../../shared/formatters.dart';
 import '../view_models/contact_management_view_model.dart';
+import 'supplier_details_screen.dart';
 
 class ContactManagementScreen extends StatelessWidget {
   const ContactManagementScreen({
     super.key,
     required this.viewModel,
+    required this.purchaseRepository,
     required this.currentUser,
     required this.capabilities,
     required this.onOpenPos,
@@ -26,6 +29,7 @@ class ContactManagementScreen extends StatelessWidget {
   });
 
   final ContactManagementViewModel viewModel;
+  final PurchaseRepository purchaseRepository;
   final PosUser currentUser;
   final AuthorizationCapabilities capabilities;
   final VoidCallback onOpenPos;
@@ -95,7 +99,11 @@ class ContactManagementScreen extends StatelessWidget {
               child: AuthorizationGuard(
                 capabilities: capabilities,
                 capability: AppCapability.manageContacts,
-                child: _ContactManagementBody(viewModel: viewModel),
+                child: _ContactManagementBody(
+                  viewModel: viewModel,
+                  purchaseRepository: purchaseRepository,
+                  capabilities: capabilities,
+                ),
               ),
             ),
             floatingActionButton: AuthorizationGuard(
@@ -112,9 +120,15 @@ class ContactManagementScreen extends StatelessWidget {
 }
 
 class _ContactManagementBody extends StatelessWidget {
-  const _ContactManagementBody({required this.viewModel});
+  const _ContactManagementBody({
+    required this.viewModel,
+    required this.purchaseRepository,
+    required this.capabilities,
+  });
 
   final ContactManagementViewModel viewModel;
+  final PurchaseRepository purchaseRepository;
+  final AuthorizationCapabilities capabilities;
 
   @override
   Widget build(BuildContext context) {
@@ -148,7 +162,11 @@ class _ContactManagementBody extends StatelessWidget {
               : TabBarView(
                   children: [
                     _CustomerList(viewModel: viewModel),
-                    _SupplierList(viewModel: viewModel),
+                    _SupplierList(
+                      viewModel: viewModel,
+                      purchaseRepository: purchaseRepository,
+                      capabilities: capabilities,
+                    ),
                   ],
                 ),
         ),
@@ -261,9 +279,15 @@ class _CustomerList extends StatelessWidget {
 }
 
 class _SupplierList extends StatelessWidget {
-  const _SupplierList({required this.viewModel});
+  const _SupplierList({
+    required this.viewModel,
+    required this.purchaseRepository,
+    required this.capabilities,
+  });
 
   final ContactManagementViewModel viewModel;
+  final PurchaseRepository purchaseRepository;
+  final AuthorizationCapabilities capabilities;
 
   @override
   Widget build(BuildContext context) {
@@ -310,6 +334,17 @@ class _SupplierList extends StatelessWidget {
               ].join(' • '),
               maxLines: 3,
               overflow: TextOverflow.ellipsis,
+            ),
+            trailing: const Icon(Icons.chevron_left),
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => SupplierDetailsScreen(
+                  supplier: supplier,
+                  contactRepository: viewModel.repository,
+                  purchaseRepository: purchaseRepository,
+                  capabilities: capabilities,
+                ),
+              ),
             ),
           ),
         );

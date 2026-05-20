@@ -108,6 +108,7 @@ class _AuthenticatedRoutes {
       viewModel: CatalogViewModel(dependencies.catalogRepository),
       inventoryRepository: dependencies.inventoryRepository,
       printingRepository: dependencies.printingRepository,
+      purchaseRepository: dependencies.purchaseRepository,
       currentUser: currentUser,
       capabilities: capabilities,
       onOpenPos: guardedAction(
@@ -297,6 +298,7 @@ class _AuthenticatedRoutes {
   Widget contactsRouteBuilder(BuildContext routeContext) {
     return ContactManagementScreen(
       viewModel: dependencies.contactManagementViewModel,
+      purchaseRepository: dependencies.purchaseRepository,
       currentUser: currentUser,
       capabilities: capabilities,
       onOpenPos: guardedAction(
@@ -353,6 +355,7 @@ class _AuthenticatedRoutes {
             (context) => PurchaseOrderDetailsScreen(
               purchaseRepository: dependencies.purchaseRepository,
               initialOrder: order,
+              capabilities: capabilities,
             ),
           );
           await dependencies.purchaseOrderListViewModel.loadOrders();
