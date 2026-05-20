@@ -95,6 +95,8 @@ class _SaleOrderDetailsSheetState extends State<_SaleOrderDetailsSheet> {
                     ),
                     if (line.profit != null)
                       l10n.invoiceProfitValue(formatMoney(line.profit!)),
+                    if (line.discountTotal > 0)
+                      l10n.discountLineValue(formatMoney(line.discountTotal)),
                     if (line.returnedQuantity > 0)
                       l10n.saleLineReturnedQuantity(
                         line.returnedQuantity,
@@ -107,6 +109,48 @@ class _SaleOrderDetailsSheetState extends State<_SaleOrderDetailsSheet> {
             },
           ),
           const Divider(),
+          if (order.discountTotal > 0) ...[
+            Row(
+              children: [
+                Text(l10n.subtotal),
+                const Spacer(),
+                Text(formatMoney(order.subtotal)),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                Text(l10n.discountTotalLabel),
+                const Spacer(),
+                Text('-${formatMoney(order.discountTotal)}'),
+              ],
+            ),
+            if (order.appliedDiscounts.isNotEmpty) ...[
+              const SizedBox(height: 6),
+              for (final discount in order.appliedDiscounts)
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        discount.couponCode.isEmpty
+                            ? discount.ruleName
+                            : l10n.discountCouponAppliedLabel(
+                                discount.couponCode,
+                              ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ),
+                    Text(
+                      '-${formatMoney(discount.discountAmount)}',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ],
+                ),
+            ],
+            const SizedBox(height: 6),
+          ],
           Row(
             children: [
               Text(l10n.total, style: Theme.of(context).textTheme.titleMedium),

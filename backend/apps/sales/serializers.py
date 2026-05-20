@@ -1,11 +1,13 @@
 from decimal import Decimal
 
+from django.contrib.contenttypes.models import ContentType
 from rest_framework import serializers
 
 from apps.catalog.models import Product
 from apps.core.models import ShopSettings
 from apps.core.roles import user_is_manager
 from apps.customers.models import Customer
+from apps.discounts.models import AppliedDiscount
 from .models import (
     Order,
     OrderLine,
@@ -15,9 +17,11 @@ from .models import (
 from .services import (
     cashier_window_expired,
     can_adjust_order,
+    calculate_sales_discounts,
     checkout_order,
     create_order_with_lines,
     return_order_items,
+    unapplied_coupon_codes,
     validate_order_adjustment_allowed,
     void_order,
 )
@@ -199,6 +203,11 @@ class RegisterCashMovementCreateSerializer(serializers.Serializer):
 
 class OrderLineSerializer(serializers.ModelSerializer):
     product_name = serializers.CharField(source="product.name", read_only=True)
+    line_subtotal = serializers.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        read_only=True,
+    )
     line_total = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
     line_cost = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
     line_profit = serializers.DecimalField(
@@ -220,11 +229,13 @@ class OrderLineSerializer(serializers.ModelSerializer):
             "returnable_quantity",
             "unit_price",
             "unit_cost",
+            "line_subtotal",
+            "discount_total",
             "line_total",
             "line_cost",
             "line_profit",
         ]
-        read_only_fields = ("unit_price", "unit_cost")
+        read_only_fields = ("unit_price", "unit_cost", "discount_total")
 
     def validate_quantity(self, value):
         if value < 1:
@@ -261,6 +272,7 @@ class OrderSerializer(serializers.ModelSerializer):
     can_void = serializers.SerializerMethodField()
     can_return = serializers.SerializerMethodField()
     requires_manager_adjustment = serializers.SerializerMethodField()
+    applied_discounts = serializers.SerializerMethodField()
     total_cost = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
     total_profit = serializers.DecimalField(
         max_digits=10,
@@ -281,7 +293,9 @@ class OrderSerializer(serializers.ModelSerializer):
             "lines",
             "payments",
             "subtotal",
+            "discount_total",
             "total",
+            "applied_discounts",
             "total_cost",
             "total_profit",
             "can_void",
@@ -296,7 +310,9 @@ class OrderSerializer(serializers.ModelSerializer):
             "register_session_number",
             "customer_name",
             "subtotal",
+            "discount_total",
             "total",
+            "applied_discounts",
             "total_cost",
             "total_profit",
             "can_void",
@@ -318,6 +334,30 @@ class OrderSerializer(serializers.ModelSerializer):
     def _can_adjust_order(self, order):
         request = self.context.get("request")
         return can_adjust_order(order, request.user if request is not None else None)
+
+    def get_applied_discounts(self, order):
+        document_content_type = ContentType.objects.get_for_model(
+            order,
+            for_concrete_model=False,
+        )
+        discounts = AppliedDiscount.objects.filter(
+            document_content_type=document_content_type,
+            document_object_id=order.pk,
+        )
+        return [
+            {
+                "id": discount.pk,
+                "rule_name": discount.rule_name,
+                "coupon_code": discount.coupon_code,
+                "source": discount.source,
+                "scope": discount.scope,
+                "value_type": discount.value_type,
+                "value": f"{discount.value:.4f}",
+                "discount_amount": f"{discount.discount_amount:.2f}",
+                "allocations": discount.allocations,
+            }
+            for discount in discounts
+        ]
 
     def create(self, validated_data):
         lines_data = validated_data.pop("lines", [])
@@ -363,6 +403,18 @@ class CheckoutSerializer(serializers.Serializer):
         min_value=Decimal("0.00"),
         required=False,
     )
+    coupon_code = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        trim_whitespace=True,
+        write_only=True,
+    )
+    coupon_codes = serializers.ListField(
+        child=serializers.CharField(allow_blank=False, trim_whitespace=True),
+        required=False,
+        allow_empty=True,
+        write_only=True,
+    )
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -373,10 +425,18 @@ class CheckoutSerializer(serializers.Serializer):
 
     def validate(self, attrs):
         settings = ShopSettings.load()
-        total = Decimal("0.00")
-        for line in attrs["lines"]:
-            total += line["product"].unit_price * line["quantity"]
-        total = total.quantize(Decimal("0.01"))
+        coupon_codes = normalized_checkout_coupon_codes(attrs)
+        discount_result = calculate_sales_discounts(
+            lines_data=attrs["lines"],
+            customer=attrs.get("customer"),
+            coupon_codes=coupon_codes,
+        )
+        missing_coupon_codes = unapplied_coupon_codes(discount_result, coupon_codes)
+        if missing_coupon_codes:
+            raise serializers.ValidationError(
+                {"coupon_codes": "Coupon code is invalid or unavailable."}
+            )
+        total = discount_result.total
 
         payments = attrs.get("payments")
         if payments is None:
@@ -418,6 +478,8 @@ class CheckoutSerializer(serializers.Serializer):
             )
 
         attrs["computed_total"] = total
+        attrs["discount_result"] = discount_result
+        attrs["coupon_codes"] = coupon_codes
         attrs["payments"] = payments
         return attrs
 
@@ -427,8 +489,78 @@ class CheckoutSerializer(serializers.Serializer):
             lines_data=validated_data["lines"],
             payments_data=validated_data["payments"],
             customer=validated_data.get("customer"),
+            coupon_codes=validated_data.get("coupon_codes", ()),
+            discount_result=validated_data.get("discount_result"),
             request=self.context.get("request"),
         )
+
+
+def normalized_checkout_coupon_codes(attrs):
+    coupon_codes = list(attrs.get("coupon_codes") or [])
+    single_code = attrs.get("coupon_code")
+    if single_code:
+        coupon_codes.append(single_code)
+    return tuple(coupon_codes)
+
+
+class DiscountPreviewSerializer(serializers.Serializer):
+    lines = CheckoutLineSerializer(many=True, allow_empty=False)
+    customer = serializers.PrimaryKeyRelatedField(
+        queryset=Customer.objects.all(),
+        required=False,
+        allow_null=True,
+    )
+    coupon_code = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        trim_whitespace=True,
+        write_only=True,
+    )
+    coupon_codes = serializers.ListField(
+        child=serializers.CharField(allow_blank=False, trim_whitespace=True),
+        required=False,
+        allow_empty=True,
+        write_only=True,
+    )
+
+    def validate(self, attrs):
+        coupon_codes = normalized_checkout_coupon_codes(attrs)
+        discount_result = calculate_sales_discounts(
+            lines_data=attrs["lines"],
+            customer=attrs.get("customer"),
+            coupon_codes=coupon_codes,
+        )
+        attrs["coupon_codes"] = coupon_codes
+        attrs["discount_result"] = discount_result
+        return attrs
+
+    @property
+    def preview_data(self):
+        discount_result = self.validated_data["discount_result"]
+        coupon_codes = self.validated_data.get("coupon_codes", ())
+        return {
+            "subtotal": f"{discount_result.subtotal:.2f}",
+            "discount_total": f"{discount_result.discount_total:.2f}",
+            "total": f"{discount_result.total:.2f}",
+            "applied_discounts": [
+                {
+                    "rule_id": application.rule_id,
+                    "rule_name": application.rule_name,
+                    "coupon_code": application.coupon_code,
+                    "source": application.source,
+                    "scope": application.scope,
+                    "value_type": application.value_type,
+                    "value": f"{application.value:.4f}",
+                    "discount_amount": f"{application.amount:.2f}",
+                    "allocations": application.allocation_dicts(),
+                }
+                for application in discount_result.applications
+            ],
+            "unapplied_coupon_codes": unapplied_coupon_codes(
+                discount_result,
+                coupon_codes,
+            ),
+        }
 
 
 class OrderAdjustmentLineInputSerializer(serializers.Serializer):

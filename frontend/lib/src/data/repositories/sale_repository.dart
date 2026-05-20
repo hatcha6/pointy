@@ -41,6 +41,16 @@ class SaleRepository {
     }
   }
 
+  Future<Result<SaleDiscountPreview>> previewDiscounts(
+    SaleDiscountPreviewDraft draft,
+  ) async {
+    try {
+      return Ok(await _service.previewSaleDiscounts(draft));
+    } on Exception catch (exception) {
+      return Error(exception);
+    }
+  }
+
   Future<Result<SaleOrderPage>> loadOrdersForSession(
     int sessionId, {
     SaleOrderQuery query = const SaleOrderQuery(),

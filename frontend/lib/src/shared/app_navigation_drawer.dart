@@ -10,6 +10,7 @@ enum AppNavigationDestination {
   contacts,
   catalog,
   registerSessions,
+  discounts,
   deviceSettings,
   users,
   settings,
@@ -28,6 +29,7 @@ class AppNavigationDrawer extends StatelessWidget {
     required this.onOpenRegisterSessions,
     required this.onOpenDeviceSettings,
     required this.onLogout,
+    this.onOpenDiscounts,
     this.onOpenUsers,
     this.onOpenShopSettings,
   });
@@ -41,6 +43,7 @@ class AppNavigationDrawer extends StatelessWidget {
   final VoidCallback onOpenCatalog;
   final VoidCallback onOpenRegisterSessions;
   final VoidCallback onOpenDeviceSettings;
+  final VoidCallback? onOpenDiscounts;
   final VoidCallback? onOpenUsers;
   final VoidCallback? onOpenShopSettings;
   final VoidCallback onLogout;
@@ -88,6 +91,14 @@ class AppNavigationDrawer extends StatelessWidget {
         selectedIcon: const Icon(Icons.manage_history),
         label: l10n.registerSessionsDrawerLabel,
         onTap: onOpenRegisterSessions,
+      ),
+      _DrawerDestination(
+        destination: AppNavigationDestination.discounts,
+        capability: AppCapability.viewDiscountRules,
+        icon: const Icon(Icons.local_offer_outlined),
+        selectedIcon: const Icon(Icons.local_offer),
+        label: l10n.discountsDrawerLabel,
+        onTap: onOpenDiscounts,
       ),
       _DrawerDestination(
         destination: AppNavigationDestination.deviceSettings,

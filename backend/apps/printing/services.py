@@ -6,6 +6,7 @@ from django.db.models import Max
 from django.utils import timezone
 
 from apps.core.models import ShopSettings
+from apps.discounts.models import AppliedDiscount
 from apps.sales.models import Order
 from .models import (
     PrintAgent,
@@ -94,6 +95,7 @@ def build_receipt_payload(order):
         .prefetch_related("lines__product")
         .get(pk=order.pk)
     )
+    applied_discounts = order_applied_discounts(order)
     return {
         "shop": {
             "name": shop_settings.shop_name,
@@ -105,7 +107,9 @@ def build_receipt_payload(order):
             "receipt_number": order.receipt_number,
             "status": order.status,
             "subtotal": money(order.subtotal),
+            "discount_total": money(order.discount_total),
             "total": money(order.total),
+            "applied_discounts": applied_discounts,
             "created_at": order.created_at.isoformat(),
             "register_session": (
                 {
@@ -123,12 +127,37 @@ def build_receipt_payload(order):
                     "name": line.product.name,
                     "quantity": line.quantity,
                     "unit_price": money(line.unit_price),
+                    "line_subtotal": money(line.line_subtotal),
+                    "discount_total": money(line.discount_total),
                     "line_total": money(line.line_total),
                 }
                 for line in order.lines.all()
             ],
         },
     }
+
+
+def order_applied_discounts(order):
+    from django.contrib.contenttypes.models import ContentType
+
+    document_content_type = ContentType.objects.get_for_model(
+        order,
+        for_concrete_model=False,
+    )
+    return [
+        {
+            "rule_name": discount.rule_name,
+            "coupon_code": discount.coupon_code,
+            "source": discount.source,
+            "scope": discount.scope,
+            "discount_amount": money(discount.discount_amount),
+            "allocations": discount.allocations,
+        }
+        for discount in AppliedDiscount.objects.filter(
+            document_content_type=document_content_type,
+            document_object_id=order.pk,
+        )
+    ]
 
 
 def create_job_event(job, event_type, *, user=None, agent=None, message="", metadata=None):

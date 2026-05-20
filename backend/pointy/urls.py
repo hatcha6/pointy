@@ -5,6 +5,7 @@ from rest_framework.routers import DefaultRouter
 
 from apps.catalog.views import ProductViewSet
 from apps.customers.views import CustomerViewSet
+from apps.discounts.views import DiscountRuleViewSet
 from apps.core.views import (
     PosUserViewSet,
     ShopSettingsView,
@@ -35,6 +36,7 @@ router.register("stock", StockItemViewSet)
 router.register("stock-movements", StockMovementViewSet)
 router.register("orders", OrderViewSet)
 router.register("customers", CustomerViewSet)
+router.register("discount-rules", DiscountRuleViewSet)
 router.register("suppliers", SupplierViewSet)
 router.register("supplier-payments", SupplierPaymentViewSet)
 router.register("purchase-orders", PurchaseOrderViewSet)

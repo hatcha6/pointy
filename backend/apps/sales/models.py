@@ -181,6 +181,7 @@ class Order(TimeStampedModel):
     receipt_number = models.CharField(max_length=32, unique=True, blank=True)
     status = models.CharField(max_length=16, choices=Status.choices, default=Status.OPEN)
     subtotal = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    discount_total = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     total = models.DecimalField(max_digits=10, decimal_places=2, default=0)
 
     class Meta:
@@ -188,11 +189,16 @@ class Order(TimeStampedModel):
 
     def recalculate(self) -> None:
         subtotal = Decimal("0.00")
+        discount_total = Decimal("0.00")
         for line in self.lines.select_related("product"):
-            line_subtotal = line.unit_price * line.quantity
-            subtotal += line_subtotal
+            subtotal += line.line_subtotal
+            discount_total += line.discount_total
         self.subtotal = subtotal.quantize(Decimal("0.01"))
-        self.total = self.subtotal
+        self.discount_total = min(
+            discount_total.quantize(Decimal("0.01")),
+            self.subtotal,
+        )
+        self.total = (self.subtotal - self.discount_total).quantize(Decimal("0.01"))
 
     @property
     def total_cost(self):
@@ -222,13 +228,18 @@ class OrderLine(TimeStampedModel):
     quantity = models.PositiveIntegerField(default=1)
     unit_price = models.DecimalField(max_digits=10, decimal_places=2)
     unit_cost = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    discount_total = models.DecimalField(max_digits=10, decimal_places=2, default=0)
 
     class Meta:
         ordering = ["created_at"]
 
     @property
-    def line_total(self):
+    def line_subtotal(self):
         return (self.unit_price * self.quantity).quantize(Decimal("0.01"))
+
+    @property
+    def line_total(self):
+        return (self.line_subtotal - self.discount_total).quantize(Decimal("0.01"))
 
     @property
     def line_cost(self):
@@ -246,6 +257,11 @@ class OrderLine(TimeStampedModel):
     @property
     def returnable_quantity(self) -> int:
         return max(self.quantity - self.returned_quantity, 0)
+
+    @property
+    def returned_discount_total(self) -> Decimal:
+        total = self.adjustment_lines.aggregate(total=Sum("discount_total"))["total"]
+        return (total or Decimal("0.00")).quantize(Decimal("0.01"))
 
 
 class OrderAdjustment(TimeStampedModel):
@@ -296,10 +312,12 @@ class OrderAdjustmentLine(TimeStampedModel):
     product = models.ForeignKey(Product, on_delete=models.PROTECT)
     quantity = models.PositiveIntegerField()
     unit_price = models.DecimalField(max_digits=10, decimal_places=2)
+    discount_total = models.DecimalField(max_digits=10, decimal_places=2, default=0)
 
     class Meta:
         ordering = ["created_at"]
 
     @property
     def line_total(self):
-        return (self.unit_price * self.quantity).quantize(Decimal("0.01"))
+        gross_total = self.unit_price * self.quantity
+        return (gross_total - self.discount_total).quantize(Decimal("0.01"))

@@ -73,6 +73,15 @@ class PosApiSession {
     return response;
   }
 
+  Future<http.Response> delete(String path) async {
+    final response = await client.delete(
+      uri(path),
+      headers: headers(includeCsrf: true),
+    );
+    captureResponseState(response);
+    return response;
+  }
+
   Map<String, String> headers({bool includeCsrf = false}) {
     return {
       'Content-Type': 'application/json',

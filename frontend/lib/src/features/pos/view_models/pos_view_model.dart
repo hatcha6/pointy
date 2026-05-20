@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 
 import '../../../core/result.dart';
@@ -67,6 +69,10 @@ class PosViewModel extends ChangeNotifier {
   bool _hasMoreProducts = true;
   int _nextProductPage = 1;
   String? _errorMessage;
+  String _couponCode = '';
+  SaleDiscountPreview? _discountPreview;
+  bool _isLoadingDiscountPreview = false;
+  bool _hasDiscountPreviewError = false;
   String? _lastScannedBarcode;
   String? _lastScannedProductName;
   bool _hasRegisterSessionError = false;
@@ -74,6 +80,7 @@ class PosViewModel extends ChangeNotifier {
   RegisterSession? _availableRegisterSession;
   RegisterSession? _activeRegisterSession;
   int _catalogRequestVersion = 0;
+  int _discountPreviewRequestVersion = 0;
   Future<void>? _catalogLoadFuture;
   ProductQuery? _catalogLoadFutureQuery;
   Future<void>? _checkoutSettingsLoadFuture;
@@ -99,6 +106,15 @@ class PosViewModel extends ChangeNotifier {
   Customer? get selectedCustomer => _selectedCustomer;
   bool get hasMoreProducts => _hasMoreProducts;
   String? get errorMessage => _errorMessage;
+  String get couponCode => _couponCode;
+  SaleDiscountPreview? get discountPreview => _discountPreview;
+  bool get isLoadingDiscountPreview => _isLoadingDiscountPreview;
+  bool get hasDiscountPreviewError => _hasDiscountPreviewError;
+  double get discountTotal => _discountPreview?.discountTotal ?? 0;
+  List<AppliedDiscountInfo> get appliedDiscounts =>
+      _discountPreview?.appliedDiscounts ?? const [];
+  List<String> get unappliedCouponCodes =>
+      _discountPreview?.unappliedCouponCodes ?? const [];
   String? get lastScannedBarcode => _lastScannedBarcode;
   String? get lastScannedProductName => _lastScannedProductName;
   bool get hasRegisterSessionError => _hasRegisterSessionError;
@@ -116,7 +132,7 @@ class PosViewModel extends ChangeNotifier {
       _checkoutSettings?.enableTransferPayments ?? true;
 
   double get subtotal => _cart.fold(0, (sum, line) => sum + line.subtotal);
-  double get total => subtotal;
+  double get total => _discountPreview?.total ?? subtotal;
   RegisterSessionGateStatus get registerSessionGateStatus {
     if (_activeRegisterSession != null) {
       return RegisterSessionGateStatus.active;
@@ -188,5 +204,15 @@ class PosViewModel extends ChangeNotifier {
     }
     _selectedCustomer = customer;
     _notifyChanged();
+    unawaited(refreshDiscountPreview());
+  }
+
+  void updateCouponCode(String value) {
+    if (_isCheckingOut || value == _couponCode) {
+      return;
+    }
+    _couponCode = value;
+    _notifyChanged();
+    unawaited(refreshDiscountPreview());
   }
 }

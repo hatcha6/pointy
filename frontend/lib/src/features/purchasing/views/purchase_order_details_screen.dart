@@ -116,6 +116,16 @@ class _PurchaseOrderTotals extends StatelessWidget {
     return Column(
       children: [
         TotalRow(label: l10n.subtotal, value: order.subtotal),
+        if (order.discountTotal > 0)
+          TotalRow(label: l10n.discountTotalLabel, value: -order.discountTotal),
+        if (order.appliedDiscounts.isNotEmpty)
+          for (final discount in order.appliedDiscounts)
+            TotalRow(
+              label: discount.couponCode.isEmpty
+                  ? discount.ruleName
+                  : l10n.discountCouponAppliedLabel(discount.couponCode),
+              value: -discount.discountAmount,
+            ),
         if (order.landedCostTotal > 0)
           TotalRow(
             label: l10n.purchaseLandedCostTotalLabel,
@@ -165,6 +175,11 @@ class _PurchaseOrderSummary extends StatelessWidget {
             label: l10n.purchaseOrderLineCountLabel,
             value: l10n.purchaseOrderLineCount(order.lineCount),
           ),
+          if (order.discountCodes.isNotEmpty)
+            _DetailRow(
+              label: l10n.discountCouponCodeLabel,
+              value: order.discountCodes.join('، '),
+            ),
           if (order.createdAt != null)
             _DetailRow(
               label: l10n.purchaseOrderCreatedAtLabel,
@@ -574,6 +589,12 @@ class _PurchaseOrderLines extends StatelessWidget {
                     _formatSignedQuantity(line.varianceQuantity),
                   ),
                   l10n.unitPriceEach(formatMoney(line.unitCost)),
+                  if (line.discountAmount > 0)
+                    l10n.discountLineValue(formatMoney(line.discountAmount)),
+                  if (line.netUnitCost != null && line.discountAmount > 0)
+                    l10n.purchaseLineNetCostValue(
+                      formatMoney(line.netUnitCost!),
+                    ),
                   if (_costChangeText(l10n, line) != null)
                     _costChangeText(l10n, line)!,
                   if (line.landedCostAllocation != null &&

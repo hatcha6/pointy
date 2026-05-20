@@ -10,6 +10,7 @@ from apps.core.roles import user_is_manager
 from .models import Order, RegisterCashMovement, RegisterSession
 from .serializers import (
     CheckoutSerializer,
+    DiscountPreviewSerializer,
     OrderSerializer,
     OrderReturnSerializer,
     OrderVoidSerializer,
@@ -29,6 +30,7 @@ class OrderViewSet(viewsets.ModelViewSet):
         "retrieve": ("sales.view_order",),
         "create": ("sales.add_order",),
         "checkout": ("sales.add_order",),
+        "discount_preview": ("sales.add_order",),
         "return_items": ("sales.add_order",),
         "void": ("sales.add_order",),
         "reprint": ("sales.view_order", "printing.add_printjob"),
@@ -100,6 +102,12 @@ class OrderViewSet(viewsets.ModelViewSet):
             response_data["print_job"] = PrintJobSerializer(claimed_print_job).data
 
         return Response(response_data, status=status.HTTP_201_CREATED)
+
+    @action(detail=False, methods=["post"], url_path="discount-preview")
+    def discount_preview(self, request):
+        serializer = DiscountPreviewSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        return Response(serializer.preview_data)
 
     @action(detail=True, methods=["post"])
     def reprint(self, request, pk=None):

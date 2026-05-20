@@ -1,9 +1,17 @@
 from decimal import Decimal
 
+from django.contrib.contenttypes.models import ContentType
 from django.db.models import Sum
 from rest_framework import serializers
 
 from apps.catalog.models import Product
+from apps.discounts.models import AppliedDiscount, DiscountRule, normalize_coupon_code
+from apps.discounts.services import (
+    DiscountContext,
+    DiscountEngine,
+    DiscountLineInput,
+    allocate_discount_amount,
+)
 from .models import (
     PurchaseLine,
     PurchaseOrder,
@@ -21,6 +29,7 @@ from .services import (
     adjust_purchase_order_items,
     create_supplier_payment,
     latest_purchase_line_for_product,
+    purchase_adjustment_line_amount,
     save_purchase_order_with_lines,
     validate_purchase_order_adjustment_allowed,
 )
@@ -91,6 +100,21 @@ class PurchaseLineSerializer(serializers.ModelSerializer):
     product_name = serializers.CharField(source="product.name", read_only=True)
     product_sku = serializers.CharField(source="product.sku", read_only=True)
     line_total = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
+    discount_amount = serializers.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        read_only=True,
+    )
+    net_line_total = serializers.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        read_only=True,
+    )
+    net_unit_cost = serializers.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        read_only=True,
+    )
     effective_line_total = serializers.DecimalField(
         max_digits=10,
         decimal_places=2,
@@ -143,6 +167,8 @@ class PurchaseLineSerializer(serializers.ModelSerializer):
             "backordered_quantity",
             "over_received_quantity",
             "unit_cost",
+            "discount_amount",
+            "net_unit_cost",
             "previous_unit_cost",
             "unit_cost_change",
             "unit_cost_change_percent",
@@ -151,6 +177,7 @@ class PurchaseLineSerializer(serializers.ModelSerializer):
             "landed_unit_cost",
             "effective_unit_cost",
             "effective_line_total",
+            "net_line_total",
             "line_total",
         ]
         read_only_fields = (
@@ -161,10 +188,13 @@ class PurchaseLineSerializer(serializers.ModelSerializer):
             "unit_cost_change",
             "unit_cost_change_percent",
             "unit_cost_changed",
+            "discount_amount",
+            "net_unit_cost",
             "allocated_landed_cost",
             "landed_unit_cost",
             "effective_unit_cost",
             "effective_line_total",
+            "net_line_total",
             "adjusted_quantity",
             "accepted_quantity",
             "damaged_quantity",
@@ -514,6 +544,224 @@ class PurchaseOrderAdjustmentSerializer(serializers.ModelSerializer):
         return [SupplierCreditSerializer(credit).data]
 
 
+class PurchaseDiscountPreviewLineSerializer(serializers.Serializer):
+    product = serializers.PrimaryKeyRelatedField(queryset=Product.objects.all())
+    quantity = serializers.IntegerField(min_value=1)
+    unit_cost = serializers.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        min_value=Decimal("0.00"),
+    )
+
+
+class PurchaseDiscountPreviewSerializer(serializers.Serializer):
+    supplier = serializers.PrimaryKeyRelatedField(queryset=Supplier.objects.all())
+    lines = PurchaseDiscountPreviewLineSerializer(many=True, allow_empty=False)
+    discount_code = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        trim_whitespace=True,
+        write_only=True,
+    )
+    discount_codes = serializers.ListField(
+        child=serializers.CharField(allow_blank=False, trim_whitespace=True),
+        required=False,
+        allow_empty=True,
+        write_only=True,
+    )
+    shipping_amount = serializers.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        min_value=Decimal("0.00"),
+        required=False,
+        default=Decimal("0.00"),
+    )
+    customs_amount = serializers.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        min_value=Decimal("0.00"),
+        required=False,
+        default=Decimal("0.00"),
+    )
+    handling_amount = serializers.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        min_value=Decimal("0.00"),
+        required=False,
+        default=Decimal("0.00"),
+    )
+    landed_cost_allocation_method = serializers.ChoiceField(
+        choices=PurchaseOrder.LandedCostAllocationMethod.choices,
+        required=False,
+        default=PurchaseOrder.LandedCostAllocationMethod.LINE_VALUE,
+    )
+
+    def validate(self, attrs):
+        coupon_codes = normalized_purchase_discount_codes(attrs)
+        discount_lines = tuple(
+            DiscountLineInput(
+                key=str(index),
+                product_id=line["product"].pk,
+                quantity=line["quantity"],
+                unit_amount=line["unit_cost"],
+            )
+            for index, line in enumerate(attrs["lines"])
+        )
+        discount_result = DiscountEngine().calculate(
+            DiscountContext(
+                channel=DiscountRule.Channel.PURCHASING,
+                supplier_id=attrs["supplier"].pk,
+                coupon_codes=coupon_codes,
+                lines=discount_lines,
+            )
+        )
+        attrs["coupon_codes"] = coupon_codes
+        attrs["discount_result"] = discount_result
+        return attrs
+
+    @property
+    def preview_data(self):
+        discount_result = self.validated_data["discount_result"]
+        landed_cost_total = (
+            self.validated_data["shipping_amount"]
+            + self.validated_data["customs_amount"]
+            + self.validated_data["handling_amount"]
+        ).quantize(Decimal("0.01"))
+        coupon_codes = self.validated_data.get("coupon_codes", ())
+        return {
+            "subtotal": f"{discount_result.subtotal:.2f}",
+            "discount_total": f"{discount_result.discount_total:.2f}",
+            "landed_cost_total": f"{landed_cost_total:.2f}",
+            "total": f"{(discount_result.total + landed_cost_total):.2f}",
+            "lines": purchase_preview_line_payloads(
+                lines=self.validated_data["lines"],
+                discount_result=discount_result,
+                landed_cost_total=landed_cost_total,
+                landed_cost_allocation_method=self.validated_data[
+                    "landed_cost_allocation_method"
+                ],
+            ),
+            "applied_discounts": [
+                {
+                    "rule_id": application.rule_id,
+                    "rule_name": application.rule_name,
+                    "coupon_code": application.coupon_code,
+                    "source": application.source,
+                    "scope": application.scope,
+                    "value_type": application.value_type,
+                    "value": f"{application.value:.4f}",
+                    "discount_amount": f"{application.amount:.2f}",
+                    "allocations": application.allocation_dicts(),
+                }
+                for application in discount_result.applications
+            ],
+            "unapplied_discount_codes": unapplied_purchase_discount_codes(
+                discount_result,
+                coupon_codes,
+            ),
+        }
+
+
+def normalized_purchase_discount_codes(attrs):
+    discount_codes = list(attrs.get("discount_codes") or [])
+    single_code = attrs.get("discount_code")
+    if single_code:
+        discount_codes.append(single_code)
+    normalized_codes = []
+    for code in discount_codes:
+        normalized = normalize_coupon_code(code)
+        if normalized and normalized not in normalized_codes:
+            normalized_codes.append(normalized)
+    return tuple(normalized_codes)
+
+
+def unapplied_purchase_discount_codes(discount_result, discount_codes):
+    requested_codes = {
+        normalize_coupon_code(code)
+        for code in discount_codes or ()
+        if normalize_coupon_code(code)
+    }
+    applied_codes = {
+        normalize_coupon_code(application.coupon_code)
+        for application in discount_result.applications
+        if application.source == DiscountRule.ApplicationType.COUPON_CODE
+    }
+    return sorted(requested_codes - applied_codes)
+
+
+def purchase_preview_line_payloads(
+    *,
+    lines,
+    discount_result,
+    landed_cost_total,
+    landed_cost_allocation_method,
+):
+    discounts_by_key = {str(index): Decimal("0.00") for index in range(len(lines))}
+    for application in discount_result.applications:
+        for allocation in application.allocations:
+            discounts_by_key[allocation.line_key] = (
+                discounts_by_key[allocation.line_key] + allocation.amount
+            ).quantize(Decimal("0.01"))
+
+    net_totals_by_key = {}
+    quantities_by_key = {}
+    for index, line in enumerate(lines):
+        key = str(index)
+        line_total = (line["unit_cost"] * Decimal(line["quantity"])).quantize(
+            Decimal("0.01")
+        )
+        net_totals_by_key[key] = (line_total - discounts_by_key[key]).quantize(
+            Decimal("0.01")
+        )
+        quantities_by_key[key] = Decimal(line["quantity"])
+
+    if landed_cost_allocation_method == PurchaseOrder.LandedCostAllocationMethod.QUANTITY:
+        weights = quantities_by_key
+    else:
+        weights = net_totals_by_key
+        if sum(weights.values(), Decimal("0.00")) == Decimal("0.00"):
+            weights = quantities_by_key
+    landed_allocations = {
+        allocation.line_key: allocation.amount
+        for allocation in allocate_discount_amount(landed_cost_total, weights)
+    }
+
+    payloads = []
+    for index, line in enumerate(lines):
+        key = str(index)
+        product = line["product"]
+        quantity = Decimal(line["quantity"])
+        line_total = (line["unit_cost"] * quantity).quantize(Decimal("0.01"))
+        discount_amount = discounts_by_key[key]
+        net_line_total = net_totals_by_key[key]
+        allocated_landed_cost = landed_allocations.get(key, Decimal("0.00"))
+        net_unit_cost = (net_line_total / quantity).quantize(Decimal("0.01"))
+        landed_unit_cost = (allocated_landed_cost / quantity).quantize(Decimal("0.01"))
+        effective_unit_cost = (net_unit_cost + landed_unit_cost).quantize(
+            Decimal("0.01")
+        )
+        payloads.append(
+            {
+                "product": product.pk,
+                "product_name": product.name,
+                "product_sku": product.sku,
+                "quantity": int(quantity),
+                "unit_cost": f"{line['unit_cost']:.2f}",
+                "line_total": f"{line_total:.2f}",
+                "discount_amount": f"{discount_amount:.2f}",
+                "net_line_total": f"{net_line_total:.2f}",
+                "net_unit_cost": f"{net_unit_cost:.2f}",
+                "allocated_landed_cost": f"{allocated_landed_cost:.2f}",
+                "landed_unit_cost": f"{landed_unit_cost:.2f}",
+                "effective_unit_cost": f"{effective_unit_cost:.2f}",
+                "effective_line_total": (
+                    f"{(net_line_total + allocated_landed_cost):.2f}"
+                ),
+            }
+        )
+    return payloads
+
+
 class PurchaseOrderAuditEventSerializer(serializers.ModelSerializer):
     created_by_username = serializers.CharField(
         source="created_by.username",
@@ -547,6 +795,12 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
         decimal_places=2,
         read_only=True,
     )
+    discount_codes = serializers.ListField(
+        child=serializers.CharField(allow_blank=False, trim_whitespace=True),
+        required=False,
+        allow_empty=True,
+    )
+    applied_discounts = serializers.SerializerMethodField()
     supplier_reference = serializers.CharField(
         source="supplier_invoice_number",
         required=False,
@@ -593,6 +847,9 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
             "adjustments",
             "audit_events",
             "subtotal",
+            "discount_codes",
+            "discount_total",
+            "applied_discounts",
             "shipping_amount",
             "customs_amount",
             "handling_amount",
@@ -622,6 +879,8 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
             "audit_events",
             "receipts",
             "subtotal",
+            "discount_total",
+            "applied_discounts",
             "landed_cost_total",
             "total",
             "paid_total",
@@ -707,6 +966,30 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
     def get_can_return(self, purchase_order):
         return self._can_adjust(purchase_order)
 
+    def get_applied_discounts(self, purchase_order):
+        document_content_type = ContentType.objects.get_for_model(
+            purchase_order,
+            for_concrete_model=False,
+        )
+        discounts = AppliedDiscount.objects.filter(
+            document_content_type=document_content_type,
+            document_object_id=purchase_order.pk,
+        )
+        return [
+            {
+                "id": discount.pk,
+                "rule_name": discount.rule_name,
+                "coupon_code": discount.coupon_code,
+                "source": discount.source,
+                "scope": discount.scope,
+                "value_type": discount.value_type,
+                "value": f"{discount.value:.4f}",
+                "discount_amount": f"{discount.discount_amount:.2f}",
+                "allocations": discount.allocations,
+            }
+            for discount in discounts
+        ]
+
     def get_can_refund(self, purchase_order):
         return self._can_adjust(purchase_order)
 
@@ -727,6 +1010,14 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
                 "Each product can appear only once per purchase order."
             )
         return value
+
+    def validate_discount_codes(self, value):
+        normalized_codes = []
+        for code in value:
+            normalized = code.strip().upper()
+            if normalized and normalized not in normalized_codes:
+                normalized_codes.append(normalized)
+        return normalized_codes
 
     def validate(self, attrs):
         supplier = attrs.get(
@@ -1059,7 +1350,10 @@ class PurchaseOrderExchangeSerializer(PurchaseOrderAdjustmentInputSerializer):
                 {
                     "product": line.product,
                     "quantity": quantity,
-                    "unit_cost": line.unit_cost,
+                    "unit_cost": (
+                        purchase_adjustment_line_amount(line, quantity)
+                        / Decimal(quantity)
+                    ).quantize(Decimal("0.01")),
                 }
                 for line, quantity in attrs["validated_lines"]
             ]

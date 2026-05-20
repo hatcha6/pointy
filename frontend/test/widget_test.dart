@@ -94,6 +94,27 @@ void main() {
     expect(capabilities.canCreatePurchaseOrder, isFalse);
   });
 
+  test('discount permissions expose management capabilities', () {
+    final cashier = PosUser.fromJson(
+      _userJson(
+        role: 'cashier',
+        permissions: const [
+          'discounts.view_discountrule',
+          'discounts.add_discountrule',
+          'discounts.change_discountrule',
+          'discounts.delete_discountrule',
+        ],
+      ),
+    );
+
+    final capabilities = AuthorizationCapabilities.forUser(cashier);
+
+    expect(capabilities.canViewDiscountRules, isTrue);
+    expect(capabilities.canCreateDiscountRule, isTrue);
+    expect(capabilities.canChangeDiscountRule, isTrue);
+    expect(capabilities.canDeleteDiscountRule, isTrue);
+  });
+
   test('ESC/POS encoder generates non-empty receipt bytes', () async {
     final job = PrintJob.fromJson({
       'id': 1,
@@ -878,9 +899,12 @@ void main() {
     expect(find.text('الجهات'), findsOneWidget);
     expect(find.text('المنتجات'), findsWidgets);
     expect(find.text('جلسات الدرج'), findsOneWidget);
+    expect(find.text('الخصومات'), findsOneWidget);
     expect(find.text('المستخدمون'), findsOneWidget);
     expect(find.text('إعدادات الجهاز'), findsOneWidget);
     expect(find.text('إعدادات المتجر'), findsOneWidget);
+    await tester.drag(find.byType(NavigationDrawer), const Offset(0, -240));
+    await tester.pumpAndSettle();
     expect(find.text('تسجيل الخروج'), findsOneWidget);
   });
 
@@ -1424,6 +1448,96 @@ void main() {
     expect(find.text('إضافة مستخدم'), findsOneWidget);
   });
 
+  testWidgets('manager can open and create discount rules', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(1200, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    Map<String, Object?>? discountBody;
+
+    await tester.pumpWidget(
+      PointyApp(
+        apiService: _mockApiService(
+          onDiscountRuleCreate: (request) {
+            discountBody = jsonDecode(request.body) as Map<String, Object?>;
+          },
+        ),
+      ),
+    );
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+
+    await tester.tap(find.byIcon(Icons.menu));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('الخصومات'));
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+
+    expect(find.text('إدارة الخصومات'), findsOneWidget);
+    expect(find.text('خصم القهوة'), findsOneWidget);
+    expect(find.text('خصم جديد'), findsOneWidget);
+
+    await tester.tap(find.text('خصم جديد'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'اسم الخصم'),
+      'خصم الافتتاح',
+    );
+    await tester.ensureVisible(
+      find.widgetWithText(TextFormField, 'قيمة الخصم'),
+    );
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'قيمة الخصم'),
+      '10',
+    );
+    final productPicker = find.byKey(
+      const ValueKey('discount_product_picker_field'),
+    );
+    await tester.dragUntilVisible(
+      productPicker,
+      find.byKey(const ValueKey('discount_rule_form_scroll')),
+      const Offset(0, -300),
+    );
+    await tester.tap(productPicker);
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+    await tester.enterText(
+      find.byKey(const ValueKey('discount_constraint_search_field')),
+      'قهوة',
+    );
+    await tester.pumpAndSettle(const Duration(milliseconds: 400));
+    await tester.tap(
+      find.byKey(const ValueKey('discount_constraint_option_1')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('discount_constraint_apply_button')),
+    );
+    await tester.pumpAndSettle();
+
+    final saveButton = find.byKey(const ValueKey('discount_rule_save_button'));
+    await tester.dragUntilVisible(
+      saveButton,
+      find.byKey(const ValueKey('discount_rule_form_scroll')),
+      const Offset(0, -400),
+    );
+    await tester.drag(
+      find.byKey(const ValueKey('discount_rule_form_scroll')),
+      const Offset(0, -160),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(saveButton);
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+
+    expect(discountBody?['name'], 'خصم الافتتاح');
+    expect(discountBody?['channel'], 'sales');
+    expect(discountBody?['application_type'], 'automatic');
+    expect(discountBody?['scope'], 'document');
+    expect(discountBody?['value_type'], 'percentage');
+    expect(discountBody?['value'], '10');
+    expect(discountBody?['products'], [1]);
+  });
+
   testWidgets('manager can open and save shop settings', (
     WidgetTester tester,
   ) async {
@@ -1548,6 +1662,7 @@ void main() {
     expect(find.text('جلسات الدرج'), findsOneWidget);
     expect(find.text('إعدادات الجهاز'), findsOneWidget);
     expect(find.text('المنتجات'), findsNothing);
+    expect(find.text('الخصومات'), findsNothing);
     expect(find.text('المستخدمون'), findsNothing);
     expect(find.text('إعدادات المتجر'), findsNothing);
   });
@@ -2239,6 +2354,7 @@ PosApiService _mockApiService({
   void Function(http.Request request)? onStockMovement,
   void Function(int page)? onOrderPage,
   void Function(http.Request request)? onShopSettingsUpdate,
+  void Function(http.Request request)? onDiscountRuleCreate,
   bool shopSettingsAutoPrint = false,
   bool shopSettingsRequireOpeningCash = true,
   bool shopSettingsAllowOverselling = false,
@@ -2529,6 +2645,48 @@ PosApiService _mockApiService({
         });
       }
 
+      if (path.endsWith('/discount-rules/')) {
+        if (request.method == 'POST') {
+          onDiscountRuleCreate?.call(request);
+          final body = jsonDecode(request.body) as Map<String, Object?>;
+          return _jsonResponse({..._discountRuleJson(id: 3), ...body});
+        }
+        return _jsonResponse({
+          'count': 1,
+          'next': null,
+          'previous': null,
+          'results': [_discountRuleJson()],
+        });
+      }
+
+      if (path.endsWith('/discount-rules/1/enable/')) {
+        return _jsonResponse(_discountRuleJson(isActive: true));
+      }
+
+      if (path.endsWith('/discount-rules/1/disable/')) {
+        return _jsonResponse(_discountRuleJson(isActive: false));
+      }
+
+      if (path.endsWith('/discount-rules/1/')) {
+        if (request.method == 'PATCH') {
+          final body = jsonDecode(request.body) as Map<String, Object?>;
+          return _jsonResponse({..._discountRuleJson(), ...body});
+        }
+        if (request.method == 'DELETE') {
+          return _jsonResponse(
+            _discountRuleJson(
+              isActive: false,
+              metadata: {'archived_at': '2026-05-20T10:00:00Z'},
+            ),
+          );
+        }
+      }
+
+      if (path.endsWith('/purchase-orders/discount-preview/')) {
+        final body = jsonDecode(request.body) as Map<String, Object?>;
+        return _jsonResponse(_purchaseDiscountPreviewJson(body));
+      }
+
       if (path.endsWith('/purchase-orders/')) {
         if (request.method == 'POST') {
           onPurchaseOrderCreate?.call(request);
@@ -2779,6 +2937,11 @@ PosApiService _mockApiService({
         });
       }
 
+      if (path.endsWith('/orders/discount-preview/')) {
+        final body = jsonDecode(request.body) as Map<String, Object?>;
+        return _jsonResponse(_saleDiscountPreviewJson(body));
+      }
+
       if (path.endsWith('/orders/100/reprint/')) {
         onReprint?.call(request);
         return _jsonResponse(_printJobJson());
@@ -2944,6 +3107,64 @@ Map<String, Object?> _stockItemJson() {
     'reorder_level': 5,
     'created_at': '2026-05-15T09:00:00Z',
     'updated_at': '2026-05-15T09:00:00Z',
+  };
+}
+
+Map<String, Object?> _discountRuleJson({
+  int id = 1,
+  String name = 'خصم القهوة',
+  String description = 'خصم تلقائي على مبيعات القهوة',
+  String channel = 'sales',
+  String applicationType = 'automatic',
+  String couponCode = '',
+  String scope = 'document',
+  String valueType = 'percentage',
+  String value = '10.0000',
+  String? maxDiscountAmount,
+  String minOrderSubtotal = '0.00',
+  int? minLineQuantity,
+  int priority = 100,
+  bool exclusive = true,
+  bool isActive = true,
+  String? startsAt,
+  String? endsAt,
+  int? usageLimit,
+  int? perCustomerUsageLimit,
+  int? perSupplierUsageLimit,
+  List<int> products = const [],
+  List<int> customers = const [],
+  List<int> suppliers = const [],
+  Map<String, Object?> metadata = const {},
+}) {
+  return {
+    'id': id,
+    'name': name,
+    'description': description,
+    'channel': channel,
+    'application_type': applicationType,
+    'coupon_code': couponCode,
+    'scope': scope,
+    'value_type': valueType,
+    'value': value,
+    'max_discount_amount': maxDiscountAmount,
+    'min_order_subtotal': minOrderSubtotal,
+    'min_line_quantity': minLineQuantity,
+    'priority': priority,
+    'exclusive': exclusive,
+    'is_active': isActive,
+    'starts_at': startsAt,
+    'ends_at': endsAt,
+    'usage_limit': usageLimit,
+    'per_customer_usage_limit': perCustomerUsageLimit,
+    'per_supplier_usage_limit': perSupplierUsageLimit,
+    'products': products,
+    'customers': customers,
+    'suppliers': suppliers,
+    'metadata': metadata,
+    'redemption_count': 2,
+    'applied_count': 5,
+    'created_at': '2026-05-15T09:00:00Z',
+    'updated_at': '2026-05-16T09:30:00Z',
   };
 }
 
@@ -3266,6 +3487,77 @@ Map<String, Object?> _orderJson({
     'requires_manager_adjustment': requiresManagerAdjustment,
     'created_at': createdAt,
     'updated_at': createdAt,
+  };
+}
+
+Map<String, Object?> _saleDiscountPreviewJson(Map<String, Object?> body) {
+  final lines = body['lines'] is List<Object?>
+      ? body['lines'] as List<Object?>
+      : const <Object?>[];
+  var subtotal = 0.0;
+  for (final line in lines.whereType<Map<String, Object?>>()) {
+    final productId = int.tryParse('${line['product']}') ?? 0;
+    final quantity = int.tryParse('${line['quantity']}') ?? 0;
+    final unitPrice = productId == 1 ? 3.50 : 0.0;
+    subtotal += unitPrice * quantity;
+  }
+  final normalizedCouponCode = body['coupon_code']?.toString().trim() ?? '';
+  return {
+    'subtotal': subtotal.toStringAsFixed(2),
+    'discount_total': '0.00',
+    'total': subtotal.toStringAsFixed(2),
+    'applied_discounts': const [],
+    'unapplied_coupon_codes': normalizedCouponCode.isEmpty
+        ? const []
+        : [normalizedCouponCode],
+  };
+}
+
+Map<String, Object?> _purchaseDiscountPreviewJson(Map<String, Object?> body) {
+  var subtotal = 0.0;
+  final rawLines = body['lines'] is List<Object?>
+      ? body['lines'] as List<Object?>
+      : const <Object?>[];
+  for (final line in rawLines.whereType<Map<String, Object?>>()) {
+    final quantity = int.tryParse('${line['quantity']}') ?? 0;
+    final unitCost = double.tryParse('${line['unit_cost']}') ?? 0;
+    subtotal += unitCost * quantity;
+  }
+  final landedCostTotal =
+      (double.tryParse('${body['shipping_amount'] ?? '0'}') ?? 0) +
+      (double.tryParse('${body['customs_amount'] ?? '0'}') ?? 0) +
+      (double.tryParse('${body['handling_amount'] ?? '0'}') ?? 0);
+  final codes = body['discount_codes'] is List<Object?>
+      ? body['discount_codes'] as List<Object?>
+      : const <Object?>[];
+  final normalizedCode = codes.isEmpty ? '' : codes.first.toString().trim();
+  final hasValidCode = normalizedCode.toUpperCase() == 'SUPSAVE';
+  final discountTotal = hasValidCode ? 1.0 : 0.0;
+
+  return {
+    'subtotal': subtotal.toStringAsFixed(2),
+    'discount_total': discountTotal.toStringAsFixed(2),
+    'landed_cost_total': landedCostTotal.toStringAsFixed(2),
+    'total': (subtotal - discountTotal + landedCostTotal).toStringAsFixed(2),
+    'lines': const [],
+    'applied_discounts': hasValidCode
+        ? [
+            {
+              'rule_id': 10,
+              'rule_name': 'خصم مورد',
+              'coupon_code': 'SUPSAVE',
+              'source': 'coupon_code',
+              'scope': 'document',
+              'value_type': 'fixed_amount',
+              'value': '1.0000',
+              'discount_amount': '1.00',
+              'allocations': const [],
+            },
+          ]
+        : const [],
+    'unapplied_discount_codes': normalizedCode.isEmpty || hasValidCode
+        ? const []
+        : [normalizedCode],
   };
 }
 

@@ -149,6 +149,22 @@ class PurchasingApiClient {
     );
   }
 
+  Future<PurchaseDiscountPreview> previewDiscounts(
+    PurchaseDiscountPreviewDraft draft,
+  ) async {
+    final response = await _session.post(
+      'purchase-orders/discount-preview/',
+      body: draft.toJson(),
+    );
+    _session.throwApiException(
+      response,
+      'Purchase discount preview failed with status',
+    );
+    return PurchaseDiscountPreview.fromJson(
+      _session.decodedBody(response) as Map<String, Object?>,
+    );
+  }
+
   Future<PurchaseOrder> fetchPurchaseOrder(int purchaseOrderId) async {
     final response = await _session.get('purchase-orders/$purchaseOrderId/');
     _session.throwApiException(

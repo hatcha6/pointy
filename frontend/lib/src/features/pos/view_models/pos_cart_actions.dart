@@ -4,6 +4,7 @@ extension PosCartActions on PosViewModel {
   void addProduct(Product product, {int quantity = 1}) {
     if (_addProductToCart(product, quantity: quantity)) {
       _notifyChanged();
+      unawaited(refreshDiscountPreview());
     }
   }
 
@@ -24,6 +25,7 @@ extension PosCartActions on PosViewModel {
       _cart[index] = line.copyWith(quantity: line.quantity - 1);
     }
     _notifyChanged();
+    unawaited(refreshDiscountPreview());
   }
 
   void clearCart() {
@@ -31,6 +33,9 @@ extension PosCartActions on PosViewModel {
       return;
     }
     _cart.clear();
+    _couponCode = '';
+    _discountPreview = null;
+    _hasDiscountPreviewError = false;
     _notifyChanged();
   }
 

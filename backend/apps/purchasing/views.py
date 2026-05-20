@@ -19,6 +19,7 @@ from .models import (
 from .serializers import (
     ProductCostHistorySerializer,
     PurchaseAdjustmentHistorySerializer,
+    PurchaseDiscountPreviewSerializer,
     PurchaseOrderExchangeSerializer,
     PurchaseOrderRefundSerializer,
     PurchaseReceiptInputSerializer,
@@ -29,6 +30,7 @@ from .serializers import (
 )
 from .services import (
     cancel_purchase_order,
+    clear_purchase_order_applied_discounts,
     latest_purchase_line_for_product,
     receive_purchase_order,
     record_purchase_order_audit_event,
@@ -106,6 +108,7 @@ class PurchaseOrderViewSet(viewsets.ModelViewSet):
         "list": ("purchasing.view_purchaseorder",),
         "retrieve": ("purchasing.view_purchaseorder",),
         "last_cost": ("purchasing.view_purchaseorder",),
+        "discount_preview": ("purchasing.add_purchaseorder",),
         "product_cost_history": ("purchasing.view_purchaseorder",),
         "product_margin_impact": ("purchasing.view_purchaseorder",),
         "outstanding_received_not_paid": ("purchasing.view_purchaseorder",),
@@ -175,6 +178,12 @@ class PurchaseOrderViewSet(viewsets.ModelViewSet):
                 "unit_cost": None if line is None else line.unit_cost,
             }
         )
+
+    @action(detail=False, methods=["post"], url_path="discount-preview")
+    def discount_preview(self, request):
+        serializer = PurchaseDiscountPreviewSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        return Response(serializer.preview_data)
 
     @action(detail=False, methods=["get"], url_path="product-cost-history")
     def product_cost_history(self, request):
@@ -354,6 +363,7 @@ class PurchaseOrderViewSet(viewsets.ModelViewSet):
             "deleted",
             request=request,
         )
+        clear_purchase_order_applied_discounts(purchase_order)
         purchase_order.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 

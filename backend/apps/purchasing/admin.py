@@ -25,6 +25,9 @@ class PurchaseLineInline(admin.TabularInline):
     model = PurchaseLine
     extra = 0
     readonly_fields = (
+        "discount_amount",
+        "net_line_total",
+        "net_unit_cost",
         "allocated_landed_cost",
         "landed_unit_cost",
         "effective_unit_cost",
@@ -80,6 +83,7 @@ class PurchaseOrderAdmin(admin.ModelAdmin):
         "supplier_invoice_date",
         "status",
         "subtotal",
+        "discount_total",
         "landed_cost_total",
         "total",
         "due_date",

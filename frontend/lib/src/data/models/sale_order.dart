@@ -8,18 +8,21 @@ class SaleCheckoutDraft {
     required this.payments,
     this.invoicePrinterConfig,
     this.customerId,
+    this.couponCode = '',
   });
 
   final List<SaleCheckoutLineDraft> lines;
   final List<SaleCheckoutPaymentDraft> payments;
   final PrinterConfig? invoicePrinterConfig;
   final int? customerId;
+  final String couponCode;
 
   factory SaleCheckoutDraft.fromCart({
     required List<CartLine> cart,
     required List<SaleCheckoutPaymentDraft> payments,
     PrinterConfig? invoicePrinterConfig,
     int? customerId,
+    String couponCode = '',
   }) {
     return SaleCheckoutDraft(
       lines: cart
@@ -33,13 +36,16 @@ class SaleCheckoutDraft {
       payments: payments,
       invoicePrinterConfig: invoicePrinterConfig,
       customerId: customerId,
+      couponCode: couponCode,
     );
   }
 
   Map<String, Object?> toJson() {
+    final normalizedCouponCode = couponCode.trim();
     return {
       'lines': lines.map((line) => line.toJson()).toList(growable: false),
       if (customerId != null) 'customer': customerId,
+      if (normalizedCouponCode.isNotEmpty) 'coupon_code': normalizedCouponCode,
       'payments': payments.map((payment) => payment.toJson()).toList(),
       if (invoicePrinterConfig != null)
         'print_invoice': {
@@ -47,6 +53,106 @@ class SaleCheckoutDraft {
           'printer_endpoint': invoicePrinterConfig!.endpoint.toJson(),
         },
     };
+  }
+}
+
+class SaleDiscountPreviewDraft {
+  const SaleDiscountPreviewDraft({
+    required this.lines,
+    this.customerId,
+    this.couponCode = '',
+  });
+
+  final List<SaleCheckoutLineDraft> lines;
+  final int? customerId;
+  final String couponCode;
+
+  factory SaleDiscountPreviewDraft.fromCart({
+    required List<CartLine> cart,
+    int? customerId,
+    String couponCode = '',
+  }) {
+    return SaleDiscountPreviewDraft(
+      lines: cart
+          .map(
+            (line) => SaleCheckoutLineDraft(
+              productId: line.product.id,
+              quantity: line.quantity,
+            ),
+          )
+          .toList(growable: false),
+      customerId: customerId,
+      couponCode: couponCode,
+    );
+  }
+
+  Map<String, Object?> toJson() {
+    final normalizedCouponCode = couponCode.trim();
+    return {
+      'lines': lines.map((line) => line.toJson()).toList(growable: false),
+      if (customerId != null) 'customer': customerId,
+      if (normalizedCouponCode.isNotEmpty) 'coupon_code': normalizedCouponCode,
+    };
+  }
+}
+
+class SaleDiscountPreview {
+  const SaleDiscountPreview({
+    required this.subtotal,
+    required this.discountTotal,
+    required this.total,
+    this.appliedDiscounts = const [],
+    this.unappliedCouponCodes = const [],
+  });
+
+  final double subtotal;
+  final double discountTotal;
+  final double total;
+  final List<AppliedDiscountInfo> appliedDiscounts;
+  final List<String> unappliedCouponCodes;
+
+  factory SaleDiscountPreview.fromJson(Map<String, Object?> json) {
+    return SaleDiscountPreview(
+      subtotal: _moneyFromJson(json['subtotal']),
+      discountTotal: _moneyFromJson(json['discount_total']),
+      total: _moneyFromJson(json['total']),
+      appliedDiscounts: _listFromJson(json['applied_discounts'])
+          .whereType<Map<String, Object?>>()
+          .map(AppliedDiscountInfo.fromJson)
+          .toList(growable: false),
+      unappliedCouponCodes: _listFromJson(
+        json['unapplied_coupon_codes'],
+      ).map((code) => code.toString()).toList(growable: false),
+    );
+  }
+}
+
+class AppliedDiscountInfo {
+  const AppliedDiscountInfo({
+    required this.ruleName,
+    required this.source,
+    required this.scope,
+    required this.valueType,
+    required this.discountAmount,
+    this.couponCode = '',
+  });
+
+  final String ruleName;
+  final String couponCode;
+  final String source;
+  final String scope;
+  final String valueType;
+  final double discountAmount;
+
+  factory AppliedDiscountInfo.fromJson(Map<String, Object?> json) {
+    return AppliedDiscountInfo(
+      ruleName: json['rule_name']?.toString() ?? '',
+      couponCode: json['coupon_code']?.toString() ?? '',
+      source: json['source']?.toString() ?? '',
+      scope: json['scope']?.toString() ?? '',
+      valueType: json['value_type']?.toString() ?? '',
+      discountAmount: _moneyFromJson(json['discount_amount']),
+    );
   }
 }
 
@@ -94,6 +200,8 @@ class SaleOrder {
     this.canVoid = false,
     this.canReturn = false,
     this.requiresManagerAdjustment = false,
+    this.discountTotal = 0,
+    this.appliedDiscounts = const [],
     this.createdAt,
     this.updatedAt,
   });
@@ -114,7 +222,9 @@ class SaleOrder {
   final List<SaleOrderLine> lines;
   final List<SalePayment> payments;
   final double subtotal;
+  final double discountTotal;
   final double total;
+  final List<AppliedDiscountInfo> appliedDiscounts;
   final DateTime? createdAt;
   final DateTime? updatedAt;
 
@@ -153,7 +263,12 @@ class SaleOrder {
           .map(SalePayment.fromJson)
           .toList(growable: false),
       subtotal: _moneyFromJson(json['subtotal']),
+      discountTotal: _moneyFromJson(json['discount_total']),
       total: _moneyFromJson(json['total']),
+      appliedDiscounts: _listFromJson(json['applied_discounts'])
+          .whereType<Map<String, Object?>>()
+          .map(AppliedDiscountInfo.fromJson)
+          .toList(growable: false),
       createdAt: _dateTimeFromJson(json['created_at']),
       updatedAt: _dateTimeFromJson(json['updated_at']),
     );
@@ -221,6 +336,8 @@ class SaleOrderLine {
     required this.total,
     this.productName,
     this.profit,
+    this.subtotal = 0,
+    this.discountTotal = 0,
   });
 
   final int id;
@@ -230,6 +347,8 @@ class SaleOrderLine {
   final int returnedQuantity;
   final int returnableQuantity;
   final double unitPrice;
+  final double subtotal;
+  final double discountTotal;
   final double total;
   final double? profit;
 
@@ -242,6 +361,8 @@ class SaleOrderLine {
       returnedQuantity: _intFromJson(json['returned_quantity']),
       returnableQuantity: _intFromJson(json['returnable_quantity']),
       unitPrice: _moneyFromJson(json['unit_price']),
+      subtotal: _moneyFromJson(json['line_subtotal']),
+      discountTotal: _moneyFromJson(json['discount_total']),
       total: _moneyFromJson(json['line_total'] ?? json['total']),
       profit: _nullableMoneyFromJson(
         json['profit'] ?? json['line_profit'] ?? json['gross_profit'],
@@ -338,6 +459,13 @@ double? _nullableMoneyFromJson(Object? value) {
     return value.toDouble();
   }
   return double.tryParse(value.toString());
+}
+
+List<Object?> _listFromJson(Object? value) {
+  if (value is List<Object?>) {
+    return value;
+  }
+  return const [];
 }
 
 bool _boolFromJson(Object? value) {

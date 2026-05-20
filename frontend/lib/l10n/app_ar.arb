@@ -1258,5 +1258,300 @@
   },
   "saleReturnNoItemsSelected": "اختر كمية واحدة على الأقل للإرجاع.",
   "saleNoReturnableItems": "لا توجد كميات متاحة للإرجاع.",
+  "discountCouponCodeLabel": "كود الخصم",
+  "discountCouponCodeHint": "أدخل كود الكوبون",
+  "purchaseDiscountCodeHint": "أدخل كود خصم المورد",
+  "clearCouponCodeTooltip": "مسح كود الخصم",
+  "refreshDiscountPreviewTooltip": "تحديث الخصومات",
+  "discountPreviewUnavailable": "تعذر تحديث الخصومات الآن.",
+  "discountCouponUnavailable": "الكود غير متاح: {code}",
+  "@discountCouponUnavailable": {
+    "description": "Shown when a coupon code was not applied.",
+    "placeholders": {
+      "code": {
+        "type": "String"
+      }
+    }
+  },
+  "discountTotalLabel": "الخصم",
+  "discountCouponAppliedLabel": "كوبون {code}",
+  "@discountCouponAppliedLabel": {
+    "description": "Applied coupon discount label.",
+    "placeholders": {
+      "code": {
+        "type": "String"
+      }
+    }
+  },
+  "discountLineValue": "خصم {amount}",
+  "@discountLineValue": {
+    "description": "Line-level discount value.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "purchaseLineNetCostValue": "صافي التكلفة {amount}",
+  "@purchaseLineNetCostValue": {
+    "description": "Purchase line net unit cost after discounts.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "discountsDrawerLabel": "الخصومات",
+  "discountManagementTitle": "إدارة الخصومات",
+  "refreshDiscountsTooltip": "تحديث الخصومات",
+  "discountCreateButton": "خصم جديد",
+  "discountCreateTitle": "إضافة خصم",
+  "discountEditTitle": "تعديل خصم",
+  "discountLoadError": "تعذر تحميل الخصومات.",
+  "discountSaveError": "تعذر حفظ الخصم. راجع البيانات وحاول مرة أخرى.",
+  "discountEmptyRules": "لا توجد خصومات مطابقة.",
+  "discountSearchHint": "ابحث باسم الخصم أو الكود",
+  "discountStatusFilterLabel": "الحالة",
+  "discountFilterAll": "الكل",
+  "discountStatusActive": "نشط",
+  "discountStatusInactive": "متوقف",
+  "discountArchivedLabel": "مؤرشف",
+  "discountOrderingLabel": "الترتيب",
+  "discountOrderingPriority": "الأولوية",
+  "discountOrderingName": "الاسم",
+  "discountOrderingNewest": "الأحدث",
+  "discountOrderingUpdated": "آخر تعديل",
+  "discountNameLabel": "اسم الخصم",
+  "discountDescriptionLabel": "وصف داخلي",
+  "discountBasicsSection": "الإعدادات الأساسية",
+  "discountConditionsSection": "الشروط",
+  "discountUsageSection": "حدود الاستخدام",
+  "discountChannelLabel": "نطاق الخصم",
+  "discountChannelSales": "المبيعات",
+  "discountChannelPurchasing": "المشتريات",
+  "discountChannelBoth": "المبيعات والمشتريات",
+  "discountApplicationTypeLabel": "طريقة التطبيق",
+  "discountApplicationAutomatic": "تلقائي",
+  "discountApplicationCoupon": "كود",
+  "discountScopeLabel": "مستوى التطبيق",
+  "discountScopeDocument": "الفاتورة",
+  "discountScopeLine": "السطر",
+  "discountValueTypeLabel": "نوع الخصم",
+  "discountValueTypePercentage": "نسبة مئوية",
+  "discountValueTypeFixedAmount": "مبلغ ثابت",
+  "discountValueTypeFixedUnitAmount": "مبلغ ثابت لكل وحدة",
+  "discountValueTypeFixedPrice": "سعر ثابت",
+  "discountValueLabel": "قيمة الخصم",
+  "discountMaxAmountLabel": "أقصى خصم",
+  "discountPriorityLabel": "الأولوية",
+  "discountExclusiveLabel": "يمنع الخصومات الأقل أولوية",
+  "discountExclusiveHelper": "عند تفعيله لا تطبق القواعد التالية بعد هذا الخصم.",
+  "discountExclusiveShort": "حصري",
+  "discountActiveLabel": "الخصم نشط",
+  "discountMinSubtotalLabel": "أقل إجمالي",
+  "discountMinLineQuantityLabel": "أقل كمية في السطر",
+  "discountStartsAtLabel": "تاريخ البداية",
+  "discountEndsAtLabel": "تاريخ النهاية",
+  "discountNoDateSelected": "بدون تاريخ",
+  "discountPickDateTooltip": "اختيار تاريخ",
+  "clearButton": "مسح",
+  "discountProductIdsLabel": "المنتجات",
+  "discountCustomerIdsLabel": "العملاء",
+  "discountSupplierIdsLabel": "الموردون",
+  "discountPickerHelper": "اختر من القائمة",
+  "discountNoConstraintsSelected": "كل العناصر",
+  "discountOpenPickerTooltip": "فتح قائمة الاختيار",
+  "discountPickerLoadError": "تعذر تحميل القائمة.",
+  "discountConstraintId": "معرّف {id}",
+  "@discountConstraintId": {
+    "description": "Fallback label for an already selected constraint id.",
+    "placeholders": {
+      "id": {
+        "type": "int"
+      }
+    }
+  },
+  "discountProductPickerTitle": "اختيار المنتجات",
+  "discountProductPickerSearchHint": "ابحث باسم المنتج أو الرمز",
+  "discountProductPickerEmpty": "لا توجد منتجات مطابقة.",
+  "discountCustomerPickerTitle": "اختيار العملاء",
+  "discountCustomerPickerSearchHint": "ابحث باسم العميل أو الهاتف",
+  "discountCustomerPickerEmpty": "لا يوجد عملاء مطابقون.",
+  "discountSupplierPickerTitle": "اختيار الموردين",
+  "discountSupplierPickerSearchHint": "ابحث باسم المورد أو الهاتف",
+  "discountSupplierPickerEmpty": "لا يوجد موردون مطابقون.",
+  "discountUsageLimitLabel": "حد الاستخدام الكلي",
+  "discountPerCustomerLimitLabel": "حد الاستخدام لكل عميل",
+  "discountPerSupplierLimitLabel": "حد الاستخدام لكل مورد",
+  "discountSaveButton": "حفظ الخصم",
+  "discountEditTooltip": "تعديل الخصم",
+  "discountEnableTooltip": "تفعيل الخصم",
+  "discountDisableTooltip": "إيقاف الخصم",
+  "discountArchiveTooltip": "أرشفة الخصم",
+  "discountEnabledMessage": "تم تفعيل الخصم.",
+  "discountDisabledMessage": "تم إيقاف الخصم.",
+  "discountArchivedMessage": "تمت أرشفة الخصم.",
+  "discountArchiveTitle": "أرشفة الخصم",
+  "discountArchiveMessage": "سيتم إيقاف {name} وإخفاؤه من التطبيق التلقائي.",
+  "@discountArchiveMessage": {
+    "description": "Confirmation message before archiving a discount.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "discountArchiveConfirmButton": "أرشف الخصم",
+  "requiredFieldError": "هذا الحقل مطلوب.",
+  "positiveNumberError": "أدخل رقما أكبر من صفر.",
+  "nonNegativeNumberError": "أدخل رقما لا يقل عن صفر.",
+  "positiveIntegerError": "أدخل عددا صحيحا أكبر من صفر.",
+  "discountPercentError": "النسبة لا يمكن أن تتجاوز 100%.",
+  "discountLineOnlyValueTypeError": "هذا النوع يعمل على مستوى السطر فقط.",
+  "discountIdListError": "أدخل معرفات صحيحة مفصولة بفواصل.",
+  "discountCustomerChannelError": "شروط العملاء متاحة للمبيعات أو لكلا النطاقين فقط.",
+  "discountSupplierChannelError": "شروط الموردين متاحة للمشتريات أو لكلا النطاقين فقط.",
+  "discountDateRangeError": "تاريخ النهاية يجب أن يكون بعد تاريخ البداية.",
+  "discountValueSummary": "{type}: {value}",
+  "@discountValueSummary": {
+    "description": "Discount rule value summary.",
+    "placeholders": {
+      "type": {
+        "type": "String"
+      },
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "discountPercentageValue": "{value}%",
+  "@discountPercentageValue": {
+    "description": "Percentage discount value.",
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "discountPrioritySummary": "الأولوية {priority}",
+  "@discountPrioritySummary": {
+    "description": "Discount priority summary.",
+    "placeholders": {
+      "priority": {
+        "type": "int"
+      }
+    }
+  },
+  "discountCouponSummary": "الكود {code}",
+  "@discountCouponSummary": {
+    "description": "Discount coupon summary.",
+    "placeholders": {
+      "code": {
+        "type": "String"
+      }
+    }
+  },
+  "discountMinSubtotalSummary": "أقل إجمالي {amount}",
+  "@discountMinSubtotalSummary": {
+    "description": "Minimum subtotal summary.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "discountMinLineQuantitySummary": "أقل كمية {quantity}",
+  "@discountMinLineQuantitySummary": {
+    "description": "Minimum line quantity summary.",
+    "placeholders": {
+      "quantity": {
+        "type": "int"
+      }
+    }
+  },
+  "discountMaxAmountSummary": "أقصى خصم {amount}",
+  "@discountMaxAmountSummary": {
+    "description": "Maximum discount amount summary.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "discountUsageSummary": "الاستخدام {used}/{limit}",
+  "@discountUsageSummary": {
+    "description": "Usage count with a limit.",
+    "placeholders": {
+      "used": {
+        "type": "int"
+      },
+      "limit": {
+        "type": "int"
+      }
+    }
+  },
+  "discountUsageCountSummary": "الاستخدام {used}",
+  "@discountUsageCountSummary": {
+    "description": "Usage count without a limit.",
+    "placeholders": {
+      "used": {
+        "type": "int"
+      }
+    }
+  },
+  "discountAppliedCountSummary": "التطبيقات {count}",
+  "@discountAppliedCountSummary": {
+    "description": "Applied discount count.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "discountStartsAtSummary": "يبدأ {date}",
+  "@discountStartsAtSummary": {
+    "description": "Start date summary.",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "discountEndsAtSummary": "ينتهي {date}",
+  "@discountEndsAtSummary": {
+    "description": "End date summary.",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "discountProductConstraintSummary": "{count} منتجات",
+  "@discountProductConstraintSummary": {
+    "description": "Product constraint count.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "discountCustomerConstraintSummary": "{count} عملاء",
+  "@discountCustomerConstraintSummary": {
+    "description": "Customer constraint count.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "discountSupplierConstraintSummary": "{count} موردين",
+  "@discountSupplierConstraintSummary": {
+    "description": "Supplier constraint count.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "confirmButton": "تأكيد"
 }

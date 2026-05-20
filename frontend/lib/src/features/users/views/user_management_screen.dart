@@ -20,6 +20,7 @@ class UserManagementScreen extends StatelessWidget {
     required this.onOpenRegisterSessions,
     required this.onOpenDeviceSettings,
     required this.onLogout,
+    this.onOpenDiscounts,
     this.onOpenShopSettings,
   });
 
@@ -32,6 +33,7 @@ class UserManagementScreen extends StatelessWidget {
   final VoidCallback onOpenContacts;
   final VoidCallback onOpenRegisterSessions;
   final VoidCallback onOpenDeviceSettings;
+  final VoidCallback? onOpenDiscounts;
   final VoidCallback? onOpenShopSettings;
   final VoidCallback onLogout;
 
@@ -53,6 +55,7 @@ class UserManagementScreen extends StatelessWidget {
             onOpenCatalog: onOpenCatalog,
             onOpenRegisterSessions: onOpenRegisterSessions,
             onOpenDeviceSettings: onOpenDeviceSettings,
+            onOpenDiscounts: onOpenDiscounts,
             onOpenUsers: () {},
             onOpenShopSettings: onOpenShopSettings,
             onLogout: onLogout,

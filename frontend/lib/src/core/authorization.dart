@@ -25,6 +25,10 @@ enum AppCapability {
   manageDeviceSettings,
   manageUsers,
   manageShopSettings,
+  viewDiscountRules,
+  createDiscountRule,
+  changeDiscountRule,
+  deleteDiscountRule,
   viewStock,
   createStockMovement,
 }
@@ -212,6 +216,36 @@ class AuthorizationCapabilities {
       ])) {
         capabilities.add(AppCapability.manageShopSettings);
       }
+      if (_hasAny(user, const [
+        'view_discountrule',
+        'discounts.view_discountrule',
+      ])) {
+        capabilities.add(AppCapability.viewDiscountRules);
+      }
+      if (_hasAny(user, const [
+        'add_discountrule',
+        'discounts.add_discountrule',
+      ])) {
+        capabilities
+          ..add(AppCapability.viewDiscountRules)
+          ..add(AppCapability.createDiscountRule);
+      }
+      if (_hasAny(user, const [
+        'change_discountrule',
+        'discounts.change_discountrule',
+      ])) {
+        capabilities
+          ..add(AppCapability.viewDiscountRules)
+          ..add(AppCapability.changeDiscountRule);
+      }
+      if (_hasAny(user, const [
+        'delete_discountrule',
+        'discounts.delete_discountrule',
+      ])) {
+        capabilities
+          ..add(AppCapability.viewDiscountRules)
+          ..add(AppCapability.deleteDiscountRule);
+      }
     }
 
     return AuthorizationCapabilities._(capabilities);
@@ -252,6 +286,10 @@ class AuthorizationCapabilities {
       allows(AppCapability.manageDeviceSettings);
   bool get canManageUsers => allows(AppCapability.manageUsers);
   bool get canManageShopSettings => allows(AppCapability.manageShopSettings);
+  bool get canViewDiscountRules => allows(AppCapability.viewDiscountRules);
+  bool get canCreateDiscountRule => allows(AppCapability.createDiscountRule);
+  bool get canChangeDiscountRule => allows(AppCapability.changeDiscountRule);
+  bool get canDeleteDiscountRule => allows(AppCapability.deleteDiscountRule);
   bool get canViewStock => allows(AppCapability.viewStock);
   bool get canCreateStockMovement => allows(AppCapability.createStockMovement);
 

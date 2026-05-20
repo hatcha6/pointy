@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 
 import '../../../core/result.dart';
@@ -33,9 +35,14 @@ class PurchaseViewModel extends ChangeNotifier {
   double _shippingCost = 0;
   double _customsCost = 0;
   double _handlingCost = 0;
+  String _discountCode = '';
+  PurchaseDiscountPreview? _discountPreview;
+  bool _isLoadingDiscountPreview = false;
+  bool _hasDiscountPreviewError = false;
   LandedCostAllocationMethod _landedCostAllocationMethod =
       LandedCostAllocationMethod.byLineValue;
   String? _errorMessage;
+  int _discountPreviewRequestVersion = 0;
   ProductQuery _query = const ProductQuery(
     availability: ProductAvailabilityFilter.active,
   );
@@ -54,6 +61,15 @@ class PurchaseViewModel extends ChangeNotifier {
   double get shippingCost => _shippingCost;
   double get customsCost => _customsCost;
   double get handlingCost => _handlingCost;
+  String get discountCode => _discountCode;
+  PurchaseDiscountPreview? get discountPreview => _discountPreview;
+  bool get isLoadingDiscountPreview => _isLoadingDiscountPreview;
+  bool get hasDiscountPreviewError => _hasDiscountPreviewError;
+  double get discountTotal => _discountPreview?.discountTotal ?? 0;
+  List<AppliedPurchaseDiscount> get appliedDiscounts =>
+      _discountPreview?.appliedDiscounts ?? const [];
+  List<String> get unappliedDiscountCodes =>
+      _discountPreview?.unappliedDiscountCodes ?? const [];
   LandedCostAllocationMethod get landedCostAllocationMethod =>
       _landedCostAllocationMethod;
   DateTime? get supplierInvoiceDate =>
@@ -66,7 +82,7 @@ class PurchaseViewModel extends ChangeNotifier {
 
   double get subtotal => _draft.fold(0, (sum, line) => sum + line.subtotal);
   double get landedCostTotal => _shippingCost + _customsCost + _handlingCost;
-  double get total => subtotal + landedCostTotal;
+  double get total => _discountPreview?.total ?? subtotal + landedCostTotal;
   bool get canSubmitDraft =>
       _draft.isNotEmpty &&
       _selectedSupplier != null &&
@@ -208,6 +224,7 @@ class PurchaseViewModel extends ChangeNotifier {
       );
     }
     notifyListeners();
+    unawaited(refreshDiscountPreview());
   }
 
   void decrementProduct(Product product) {
@@ -227,6 +244,7 @@ class PurchaseViewModel extends ChangeNotifier {
       _draft[index] = line.copyWith(quantity: line.quantity - 1);
     }
     notifyListeners();
+    unawaited(refreshDiscountPreview());
   }
 
   void updateLineCost(Product product, double unitCost) {
@@ -240,6 +258,7 @@ class PurchaseViewModel extends ChangeNotifier {
     _lastCostByProductId[product.id] = unitCost;
     _draft[index] = _draft[index].copyWith(unitCost: unitCost);
     notifyListeners();
+    unawaited(refreshDiscountPreview());
   }
 
   void clearDraft() {
@@ -251,6 +270,7 @@ class PurchaseViewModel extends ChangeNotifier {
     _supplierInvoiceNumber = '';
     _supplierInvoiceDateInput = '';
     _resetLandedCosts();
+    _clearDiscountPreview();
     notifyListeners();
   }
 
@@ -260,6 +280,7 @@ class PurchaseViewModel extends ChangeNotifier {
     }
     _selectedSupplier = supplier;
     notifyListeners();
+    unawaited(refreshDiscountPreview());
   }
 
   void updateReceiveImmediately(bool value) {
@@ -298,11 +319,63 @@ class PurchaseViewModel extends ChangeNotifier {
     _updateLandedCost(value, (cost) => _handlingCost = cost);
   }
 
+  void updateDiscountCode(String value) {
+    if (_isSubmitting) {
+      return;
+    }
+    _discountCode = value;
+    notifyListeners();
+    unawaited(refreshDiscountPreview());
+  }
+
   void updateLandedCostAllocationMethod(LandedCostAllocationMethod method) {
     if (_isSubmitting) {
       return;
     }
     _landedCostAllocationMethod = method;
+    notifyListeners();
+    unawaited(refreshDiscountPreview());
+  }
+
+  Future<void> refreshDiscountPreview() async {
+    final requestVersion = ++_discountPreviewRequestVersion;
+    final supplier = _selectedSupplier;
+    if (_draft.isEmpty || supplier == null) {
+      _discountPreview = null;
+      _hasDiscountPreviewError = false;
+      _isLoadingDiscountPreview = false;
+      notifyListeners();
+      return;
+    }
+
+    _isLoadingDiscountPreview = true;
+    _hasDiscountPreviewError = false;
+    notifyListeners();
+
+    final result = await _purchaseRepository.previewDiscounts(
+      PurchaseDiscountPreviewDraft.fromDraftLines(
+        List<PurchaseDraftLine>.of(_draft),
+        supplierId: supplier.id,
+        shippingCost: _shippingCost,
+        customsCost: _customsCost,
+        handlingCost: _handlingCost,
+        landedCostAllocationMethod: _landedCostAllocationMethod,
+        discountCode: _discountCode,
+      ),
+    );
+    if (requestVersion != _discountPreviewRequestVersion) {
+      return;
+    }
+
+    switch (result) {
+      case Ok<PurchaseDiscountPreview>():
+        _discountPreview = result.value;
+        _hasDiscountPreviewError = false;
+      case Error<PurchaseDiscountPreview>():
+        _discountPreview = null;
+        _hasDiscountPreviewError = true;
+    }
+    _isLoadingDiscountPreview = false;
     notifyListeners();
   }
 
@@ -325,6 +398,7 @@ class PurchaseViewModel extends ChangeNotifier {
       customsCost: _customsCost,
       handlingCost: _handlingCost,
       landedCostAllocationMethod: _landedCostAllocationMethod,
+      discountCode: _discountCode,
     );
     switch (result) {
       case Ok<PurchaseSubmission>():
@@ -332,7 +406,9 @@ class PurchaseViewModel extends ChangeNotifier {
         _selectedSupplier = null;
         _supplierInvoiceNumber = '';
         _supplierInvoiceDateInput = '';
+        _discountCode = '';
         _resetLandedCosts();
+        _clearDiscountPreview();
       case Error<PurchaseSubmission>():
         break;
     }
@@ -370,13 +446,22 @@ class PurchaseViewModel extends ChangeNotifier {
     }
     assign(value);
     notifyListeners();
+    unawaited(refreshDiscountPreview());
   }
 
   void _resetLandedCosts() {
     _shippingCost = 0;
     _customsCost = 0;
     _handlingCost = 0;
+    _discountCode = '';
     _landedCostAllocationMethod = LandedCostAllocationMethod.byLineValue;
+  }
+
+  void _clearDiscountPreview() {
+    _discountPreviewRequestVersion += 1;
+    _discountPreview = null;
+    _hasDiscountPreviewError = false;
+    _isLoadingDiscountPreview = false;
   }
 
   DateTime? _parseSupplierInvoiceDate(String input) {

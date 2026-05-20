@@ -406,6 +406,29 @@ class ShopSettingsGuard extends StatelessWidget {
   }
 }
 
+class DiscountRulesGuard extends StatelessWidget {
+  const DiscountRulesGuard({
+    super.key,
+    required this.capabilities,
+    required this.child,
+    this.fallback = const AuthorizationDeniedView(),
+  });
+
+  final AuthorizationCapabilities capabilities;
+  final Widget child;
+  final Widget fallback;
+
+  @override
+  Widget build(BuildContext context) {
+    return AuthorizationGuard(
+      capabilities: capabilities,
+      capability: AppCapability.viewDiscountRules,
+      fallback: fallback,
+      child: child,
+    );
+  }
+}
+
 class _PaymentUnauthorizedMessage extends StatelessWidget {
   const _PaymentUnauthorizedMessage();
 

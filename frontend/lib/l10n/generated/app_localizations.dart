@@ -3588,6 +3588,732 @@ abstract class AppLocalizations {
   /// **'لا توجد كميات متاحة للإرجاع.'**
   String get saleNoReturnableItems;
 
+  /// No description provided for @discountCouponCodeLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'كود الخصم'**
+  String get discountCouponCodeLabel;
+
+  /// No description provided for @discountCouponCodeHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'أدخل كود الكوبون'**
+  String get discountCouponCodeHint;
+
+  /// No description provided for @purchaseDiscountCodeHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'أدخل كود خصم المورد'**
+  String get purchaseDiscountCodeHint;
+
+  /// No description provided for @clearCouponCodeTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'مسح كود الخصم'**
+  String get clearCouponCodeTooltip;
+
+  /// No description provided for @refreshDiscountPreviewTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحديث الخصومات'**
+  String get refreshDiscountPreviewTooltip;
+
+  /// No description provided for @discountPreviewUnavailable.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر تحديث الخصومات الآن.'**
+  String get discountPreviewUnavailable;
+
+  /// Shown when a coupon code was not applied.
+  ///
+  /// In ar, this message translates to:
+  /// **'الكود غير متاح: {code}'**
+  String discountCouponUnavailable(String code);
+
+  /// No description provided for @discountTotalLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الخصم'**
+  String get discountTotalLabel;
+
+  /// Applied coupon discount label.
+  ///
+  /// In ar, this message translates to:
+  /// **'كوبون {code}'**
+  String discountCouponAppliedLabel(String code);
+
+  /// Line-level discount value.
+  ///
+  /// In ar, this message translates to:
+  /// **'خصم {amount}'**
+  String discountLineValue(String amount);
+
+  /// Purchase line net unit cost after discounts.
+  ///
+  /// In ar, this message translates to:
+  /// **'صافي التكلفة {amount}'**
+  String purchaseLineNetCostValue(String amount);
+
+  /// No description provided for @discountsDrawerLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الخصومات'**
+  String get discountsDrawerLabel;
+
+  /// No description provided for @discountManagementTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'إدارة الخصومات'**
+  String get discountManagementTitle;
+
+  /// No description provided for @refreshDiscountsTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحديث الخصومات'**
+  String get refreshDiscountsTooltip;
+
+  /// No description provided for @discountCreateButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'خصم جديد'**
+  String get discountCreateButton;
+
+  /// No description provided for @discountCreateTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'إضافة خصم'**
+  String get discountCreateTitle;
+
+  /// No description provided for @discountEditTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعديل خصم'**
+  String get discountEditTitle;
+
+  /// No description provided for @discountLoadError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر تحميل الخصومات.'**
+  String get discountLoadError;
+
+  /// No description provided for @discountSaveError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر حفظ الخصم. راجع البيانات وحاول مرة أخرى.'**
+  String get discountSaveError;
+
+  /// No description provided for @discountEmptyRules.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد خصومات مطابقة.'**
+  String get discountEmptyRules;
+
+  /// No description provided for @discountSearchHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'ابحث باسم الخصم أو الكود'**
+  String get discountSearchHint;
+
+  /// No description provided for @discountStatusFilterLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الحالة'**
+  String get discountStatusFilterLabel;
+
+  /// No description provided for @discountFilterAll.
+  ///
+  /// In ar, this message translates to:
+  /// **'الكل'**
+  String get discountFilterAll;
+
+  /// No description provided for @discountStatusActive.
+  ///
+  /// In ar, this message translates to:
+  /// **'نشط'**
+  String get discountStatusActive;
+
+  /// No description provided for @discountStatusInactive.
+  ///
+  /// In ar, this message translates to:
+  /// **'متوقف'**
+  String get discountStatusInactive;
+
+  /// No description provided for @discountArchivedLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'مؤرشف'**
+  String get discountArchivedLabel;
+
+  /// No description provided for @discountOrderingLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الترتيب'**
+  String get discountOrderingLabel;
+
+  /// No description provided for @discountOrderingPriority.
+  ///
+  /// In ar, this message translates to:
+  /// **'الأولوية'**
+  String get discountOrderingPriority;
+
+  /// No description provided for @discountOrderingName.
+  ///
+  /// In ar, this message translates to:
+  /// **'الاسم'**
+  String get discountOrderingName;
+
+  /// No description provided for @discountOrderingNewest.
+  ///
+  /// In ar, this message translates to:
+  /// **'الأحدث'**
+  String get discountOrderingNewest;
+
+  /// No description provided for @discountOrderingUpdated.
+  ///
+  /// In ar, this message translates to:
+  /// **'آخر تعديل'**
+  String get discountOrderingUpdated;
+
+  /// No description provided for @discountNameLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'اسم الخصم'**
+  String get discountNameLabel;
+
+  /// No description provided for @discountDescriptionLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'وصف داخلي'**
+  String get discountDescriptionLabel;
+
+  /// No description provided for @discountBasicsSection.
+  ///
+  /// In ar, this message translates to:
+  /// **'الإعدادات الأساسية'**
+  String get discountBasicsSection;
+
+  /// No description provided for @discountConditionsSection.
+  ///
+  /// In ar, this message translates to:
+  /// **'الشروط'**
+  String get discountConditionsSection;
+
+  /// No description provided for @discountUsageSection.
+  ///
+  /// In ar, this message translates to:
+  /// **'حدود الاستخدام'**
+  String get discountUsageSection;
+
+  /// No description provided for @discountChannelLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'نطاق الخصم'**
+  String get discountChannelLabel;
+
+  /// No description provided for @discountChannelSales.
+  ///
+  /// In ar, this message translates to:
+  /// **'المبيعات'**
+  String get discountChannelSales;
+
+  /// No description provided for @discountChannelPurchasing.
+  ///
+  /// In ar, this message translates to:
+  /// **'المشتريات'**
+  String get discountChannelPurchasing;
+
+  /// No description provided for @discountChannelBoth.
+  ///
+  /// In ar, this message translates to:
+  /// **'المبيعات والمشتريات'**
+  String get discountChannelBoth;
+
+  /// No description provided for @discountApplicationTypeLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'طريقة التطبيق'**
+  String get discountApplicationTypeLabel;
+
+  /// No description provided for @discountApplicationAutomatic.
+  ///
+  /// In ar, this message translates to:
+  /// **'تلقائي'**
+  String get discountApplicationAutomatic;
+
+  /// No description provided for @discountApplicationCoupon.
+  ///
+  /// In ar, this message translates to:
+  /// **'كود'**
+  String get discountApplicationCoupon;
+
+  /// No description provided for @discountScopeLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'مستوى التطبيق'**
+  String get discountScopeLabel;
+
+  /// No description provided for @discountScopeDocument.
+  ///
+  /// In ar, this message translates to:
+  /// **'الفاتورة'**
+  String get discountScopeDocument;
+
+  /// No description provided for @discountScopeLine.
+  ///
+  /// In ar, this message translates to:
+  /// **'السطر'**
+  String get discountScopeLine;
+
+  /// No description provided for @discountValueTypeLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'نوع الخصم'**
+  String get discountValueTypeLabel;
+
+  /// No description provided for @discountValueTypePercentage.
+  ///
+  /// In ar, this message translates to:
+  /// **'نسبة مئوية'**
+  String get discountValueTypePercentage;
+
+  /// No description provided for @discountValueTypeFixedAmount.
+  ///
+  /// In ar, this message translates to:
+  /// **'مبلغ ثابت'**
+  String get discountValueTypeFixedAmount;
+
+  /// No description provided for @discountValueTypeFixedUnitAmount.
+  ///
+  /// In ar, this message translates to:
+  /// **'مبلغ ثابت لكل وحدة'**
+  String get discountValueTypeFixedUnitAmount;
+
+  /// No description provided for @discountValueTypeFixedPrice.
+  ///
+  /// In ar, this message translates to:
+  /// **'سعر ثابت'**
+  String get discountValueTypeFixedPrice;
+
+  /// No description provided for @discountValueLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'قيمة الخصم'**
+  String get discountValueLabel;
+
+  /// No description provided for @discountMaxAmountLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'أقصى خصم'**
+  String get discountMaxAmountLabel;
+
+  /// No description provided for @discountPriorityLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الأولوية'**
+  String get discountPriorityLabel;
+
+  /// No description provided for @discountExclusiveLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'يمنع الخصومات الأقل أولوية'**
+  String get discountExclusiveLabel;
+
+  /// No description provided for @discountExclusiveHelper.
+  ///
+  /// In ar, this message translates to:
+  /// **'عند تفعيله لا تطبق القواعد التالية بعد هذا الخصم.'**
+  String get discountExclusiveHelper;
+
+  /// No description provided for @discountExclusiveShort.
+  ///
+  /// In ar, this message translates to:
+  /// **'حصري'**
+  String get discountExclusiveShort;
+
+  /// No description provided for @discountActiveLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الخصم نشط'**
+  String get discountActiveLabel;
+
+  /// No description provided for @discountMinSubtotalLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'أقل إجمالي'**
+  String get discountMinSubtotalLabel;
+
+  /// No description provided for @discountMinLineQuantityLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'أقل كمية في السطر'**
+  String get discountMinLineQuantityLabel;
+
+  /// No description provided for @discountStartsAtLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'تاريخ البداية'**
+  String get discountStartsAtLabel;
+
+  /// No description provided for @discountEndsAtLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'تاريخ النهاية'**
+  String get discountEndsAtLabel;
+
+  /// No description provided for @discountNoDateSelected.
+  ///
+  /// In ar, this message translates to:
+  /// **'بدون تاريخ'**
+  String get discountNoDateSelected;
+
+  /// No description provided for @discountPickDateTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختيار تاريخ'**
+  String get discountPickDateTooltip;
+
+  /// No description provided for @clearButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'مسح'**
+  String get clearButton;
+
+  /// No description provided for @discountProductIdsLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'المنتجات'**
+  String get discountProductIdsLabel;
+
+  /// No description provided for @discountCustomerIdsLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'العملاء'**
+  String get discountCustomerIdsLabel;
+
+  /// No description provided for @discountSupplierIdsLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الموردون'**
+  String get discountSupplierIdsLabel;
+
+  /// No description provided for @discountPickerHelper.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر من القائمة'**
+  String get discountPickerHelper;
+
+  /// No description provided for @discountNoConstraintsSelected.
+  ///
+  /// In ar, this message translates to:
+  /// **'كل العناصر'**
+  String get discountNoConstraintsSelected;
+
+  /// No description provided for @discountOpenPickerTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'فتح قائمة الاختيار'**
+  String get discountOpenPickerTooltip;
+
+  /// No description provided for @discountPickerLoadError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر تحميل القائمة.'**
+  String get discountPickerLoadError;
+
+  /// Fallback label for an already selected constraint id.
+  ///
+  /// In ar, this message translates to:
+  /// **'معرّف {id}'**
+  String discountConstraintId(int id);
+
+  /// No description provided for @discountProductPickerTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختيار المنتجات'**
+  String get discountProductPickerTitle;
+
+  /// No description provided for @discountProductPickerSearchHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'ابحث باسم المنتج أو الرمز'**
+  String get discountProductPickerSearchHint;
+
+  /// No description provided for @discountProductPickerEmpty.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد منتجات مطابقة.'**
+  String get discountProductPickerEmpty;
+
+  /// No description provided for @discountCustomerPickerTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختيار العملاء'**
+  String get discountCustomerPickerTitle;
+
+  /// No description provided for @discountCustomerPickerSearchHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'ابحث باسم العميل أو الهاتف'**
+  String get discountCustomerPickerSearchHint;
+
+  /// No description provided for @discountCustomerPickerEmpty.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا يوجد عملاء مطابقون.'**
+  String get discountCustomerPickerEmpty;
+
+  /// No description provided for @discountSupplierPickerTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختيار الموردين'**
+  String get discountSupplierPickerTitle;
+
+  /// No description provided for @discountSupplierPickerSearchHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'ابحث باسم المورد أو الهاتف'**
+  String get discountSupplierPickerSearchHint;
+
+  /// No description provided for @discountSupplierPickerEmpty.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا يوجد موردون مطابقون.'**
+  String get discountSupplierPickerEmpty;
+
+  /// No description provided for @discountUsageLimitLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'حد الاستخدام الكلي'**
+  String get discountUsageLimitLabel;
+
+  /// No description provided for @discountPerCustomerLimitLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'حد الاستخدام لكل عميل'**
+  String get discountPerCustomerLimitLabel;
+
+  /// No description provided for @discountPerSupplierLimitLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'حد الاستخدام لكل مورد'**
+  String get discountPerSupplierLimitLabel;
+
+  /// No description provided for @discountSaveButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'حفظ الخصم'**
+  String get discountSaveButton;
+
+  /// No description provided for @discountEditTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعديل الخصم'**
+  String get discountEditTooltip;
+
+  /// No description provided for @discountEnableTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'تفعيل الخصم'**
+  String get discountEnableTooltip;
+
+  /// No description provided for @discountDisableTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'إيقاف الخصم'**
+  String get discountDisableTooltip;
+
+  /// No description provided for @discountArchiveTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'أرشفة الخصم'**
+  String get discountArchiveTooltip;
+
+  /// No description provided for @discountEnabledMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم تفعيل الخصم.'**
+  String get discountEnabledMessage;
+
+  /// No description provided for @discountDisabledMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم إيقاف الخصم.'**
+  String get discountDisabledMessage;
+
+  /// No description provided for @discountArchivedMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'تمت أرشفة الخصم.'**
+  String get discountArchivedMessage;
+
+  /// No description provided for @discountArchiveTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'أرشفة الخصم'**
+  String get discountArchiveTitle;
+
+  /// Confirmation message before archiving a discount.
+  ///
+  /// In ar, this message translates to:
+  /// **'سيتم إيقاف {name} وإخفاؤه من التطبيق التلقائي.'**
+  String discountArchiveMessage(String name);
+
+  /// No description provided for @discountArchiveConfirmButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'أرشف الخصم'**
+  String get discountArchiveConfirmButton;
+
+  /// No description provided for @requiredFieldError.
+  ///
+  /// In ar, this message translates to:
+  /// **'هذا الحقل مطلوب.'**
+  String get requiredFieldError;
+
+  /// No description provided for @positiveNumberError.
+  ///
+  /// In ar, this message translates to:
+  /// **'أدخل رقما أكبر من صفر.'**
+  String get positiveNumberError;
+
+  /// No description provided for @nonNegativeNumberError.
+  ///
+  /// In ar, this message translates to:
+  /// **'أدخل رقما لا يقل عن صفر.'**
+  String get nonNegativeNumberError;
+
+  /// No description provided for @positiveIntegerError.
+  ///
+  /// In ar, this message translates to:
+  /// **'أدخل عددا صحيحا أكبر من صفر.'**
+  String get positiveIntegerError;
+
+  /// No description provided for @discountPercentError.
+  ///
+  /// In ar, this message translates to:
+  /// **'النسبة لا يمكن أن تتجاوز 100%.'**
+  String get discountPercentError;
+
+  /// No description provided for @discountLineOnlyValueTypeError.
+  ///
+  /// In ar, this message translates to:
+  /// **'هذا النوع يعمل على مستوى السطر فقط.'**
+  String get discountLineOnlyValueTypeError;
+
+  /// No description provided for @discountIdListError.
+  ///
+  /// In ar, this message translates to:
+  /// **'أدخل معرفات صحيحة مفصولة بفواصل.'**
+  String get discountIdListError;
+
+  /// No description provided for @discountCustomerChannelError.
+  ///
+  /// In ar, this message translates to:
+  /// **'شروط العملاء متاحة للمبيعات أو لكلا النطاقين فقط.'**
+  String get discountCustomerChannelError;
+
+  /// No description provided for @discountSupplierChannelError.
+  ///
+  /// In ar, this message translates to:
+  /// **'شروط الموردين متاحة للمشتريات أو لكلا النطاقين فقط.'**
+  String get discountSupplierChannelError;
+
+  /// No description provided for @discountDateRangeError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تاريخ النهاية يجب أن يكون بعد تاريخ البداية.'**
+  String get discountDateRangeError;
+
+  /// Discount rule value summary.
+  ///
+  /// In ar, this message translates to:
+  /// **'{type}: {value}'**
+  String discountValueSummary(String type, String value);
+
+  /// Percentage discount value.
+  ///
+  /// In ar, this message translates to:
+  /// **'{value}%'**
+  String discountPercentageValue(String value);
+
+  /// Discount priority summary.
+  ///
+  /// In ar, this message translates to:
+  /// **'الأولوية {priority}'**
+  String discountPrioritySummary(int priority);
+
+  /// Discount coupon summary.
+  ///
+  /// In ar, this message translates to:
+  /// **'الكود {code}'**
+  String discountCouponSummary(String code);
+
+  /// Minimum subtotal summary.
+  ///
+  /// In ar, this message translates to:
+  /// **'أقل إجمالي {amount}'**
+  String discountMinSubtotalSummary(String amount);
+
+  /// Minimum line quantity summary.
+  ///
+  /// In ar, this message translates to:
+  /// **'أقل كمية {quantity}'**
+  String discountMinLineQuantitySummary(int quantity);
+
+  /// Maximum discount amount summary.
+  ///
+  /// In ar, this message translates to:
+  /// **'أقصى خصم {amount}'**
+  String discountMaxAmountSummary(String amount);
+
+  /// Usage count with a limit.
+  ///
+  /// In ar, this message translates to:
+  /// **'الاستخدام {used}/{limit}'**
+  String discountUsageSummary(int used, int limit);
+
+  /// Usage count without a limit.
+  ///
+  /// In ar, this message translates to:
+  /// **'الاستخدام {used}'**
+  String discountUsageCountSummary(int used);
+
+  /// Applied discount count.
+  ///
+  /// In ar, this message translates to:
+  /// **'التطبيقات {count}'**
+  String discountAppliedCountSummary(int count);
+
+  /// Start date summary.
+  ///
+  /// In ar, this message translates to:
+  /// **'يبدأ {date}'**
+  String discountStartsAtSummary(String date);
+
+  /// End date summary.
+  ///
+  /// In ar, this message translates to:
+  /// **'ينتهي {date}'**
+  String discountEndsAtSummary(String date);
+
+  /// Product constraint count.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count} منتجات'**
+  String discountProductConstraintSummary(int count);
+
+  /// Customer constraint count.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count} عملاء'**
+  String discountCustomerConstraintSummary(int count);
+
+  /// Supplier constraint count.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count} موردين'**
+  String discountSupplierConstraintSummary(int count);
+
   /// No description provided for @confirmButton.
   ///
   /// In ar, this message translates to:

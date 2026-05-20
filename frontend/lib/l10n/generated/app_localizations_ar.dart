@@ -2044,5 +2044,416 @@ class AppLocalizationsAr extends AppLocalizations {
   String get saleNoReturnableItems => 'لا توجد كميات متاحة للإرجاع.';
 
   @override
+  String get discountCouponCodeLabel => 'كود الخصم';
+
+  @override
+  String get discountCouponCodeHint => 'أدخل كود الكوبون';
+
+  @override
+  String get purchaseDiscountCodeHint => 'أدخل كود خصم المورد';
+
+  @override
+  String get clearCouponCodeTooltip => 'مسح كود الخصم';
+
+  @override
+  String get refreshDiscountPreviewTooltip => 'تحديث الخصومات';
+
+  @override
+  String get discountPreviewUnavailable => 'تعذر تحديث الخصومات الآن.';
+
+  @override
+  String discountCouponUnavailable(String code) {
+    return 'الكود غير متاح: $code';
+  }
+
+  @override
+  String get discountTotalLabel => 'الخصم';
+
+  @override
+  String discountCouponAppliedLabel(String code) {
+    return 'كوبون $code';
+  }
+
+  @override
+  String discountLineValue(String amount) {
+    return 'خصم $amount';
+  }
+
+  @override
+  String purchaseLineNetCostValue(String amount) {
+    return 'صافي التكلفة $amount';
+  }
+
+  @override
+  String get discountsDrawerLabel => 'الخصومات';
+
+  @override
+  String get discountManagementTitle => 'إدارة الخصومات';
+
+  @override
+  String get refreshDiscountsTooltip => 'تحديث الخصومات';
+
+  @override
+  String get discountCreateButton => 'خصم جديد';
+
+  @override
+  String get discountCreateTitle => 'إضافة خصم';
+
+  @override
+  String get discountEditTitle => 'تعديل خصم';
+
+  @override
+  String get discountLoadError => 'تعذر تحميل الخصومات.';
+
+  @override
+  String get discountSaveError =>
+      'تعذر حفظ الخصم. راجع البيانات وحاول مرة أخرى.';
+
+  @override
+  String get discountEmptyRules => 'لا توجد خصومات مطابقة.';
+
+  @override
+  String get discountSearchHint => 'ابحث باسم الخصم أو الكود';
+
+  @override
+  String get discountStatusFilterLabel => 'الحالة';
+
+  @override
+  String get discountFilterAll => 'الكل';
+
+  @override
+  String get discountStatusActive => 'نشط';
+
+  @override
+  String get discountStatusInactive => 'متوقف';
+
+  @override
+  String get discountArchivedLabel => 'مؤرشف';
+
+  @override
+  String get discountOrderingLabel => 'الترتيب';
+
+  @override
+  String get discountOrderingPriority => 'الأولوية';
+
+  @override
+  String get discountOrderingName => 'الاسم';
+
+  @override
+  String get discountOrderingNewest => 'الأحدث';
+
+  @override
+  String get discountOrderingUpdated => 'آخر تعديل';
+
+  @override
+  String get discountNameLabel => 'اسم الخصم';
+
+  @override
+  String get discountDescriptionLabel => 'وصف داخلي';
+
+  @override
+  String get discountBasicsSection => 'الإعدادات الأساسية';
+
+  @override
+  String get discountConditionsSection => 'الشروط';
+
+  @override
+  String get discountUsageSection => 'حدود الاستخدام';
+
+  @override
+  String get discountChannelLabel => 'نطاق الخصم';
+
+  @override
+  String get discountChannelSales => 'المبيعات';
+
+  @override
+  String get discountChannelPurchasing => 'المشتريات';
+
+  @override
+  String get discountChannelBoth => 'المبيعات والمشتريات';
+
+  @override
+  String get discountApplicationTypeLabel => 'طريقة التطبيق';
+
+  @override
+  String get discountApplicationAutomatic => 'تلقائي';
+
+  @override
+  String get discountApplicationCoupon => 'كود';
+
+  @override
+  String get discountScopeLabel => 'مستوى التطبيق';
+
+  @override
+  String get discountScopeDocument => 'الفاتورة';
+
+  @override
+  String get discountScopeLine => 'السطر';
+
+  @override
+  String get discountValueTypeLabel => 'نوع الخصم';
+
+  @override
+  String get discountValueTypePercentage => 'نسبة مئوية';
+
+  @override
+  String get discountValueTypeFixedAmount => 'مبلغ ثابت';
+
+  @override
+  String get discountValueTypeFixedUnitAmount => 'مبلغ ثابت لكل وحدة';
+
+  @override
+  String get discountValueTypeFixedPrice => 'سعر ثابت';
+
+  @override
+  String get discountValueLabel => 'قيمة الخصم';
+
+  @override
+  String get discountMaxAmountLabel => 'أقصى خصم';
+
+  @override
+  String get discountPriorityLabel => 'الأولوية';
+
+  @override
+  String get discountExclusiveLabel => 'يمنع الخصومات الأقل أولوية';
+
+  @override
+  String get discountExclusiveHelper =>
+      'عند تفعيله لا تطبق القواعد التالية بعد هذا الخصم.';
+
+  @override
+  String get discountExclusiveShort => 'حصري';
+
+  @override
+  String get discountActiveLabel => 'الخصم نشط';
+
+  @override
+  String get discountMinSubtotalLabel => 'أقل إجمالي';
+
+  @override
+  String get discountMinLineQuantityLabel => 'أقل كمية في السطر';
+
+  @override
+  String get discountStartsAtLabel => 'تاريخ البداية';
+
+  @override
+  String get discountEndsAtLabel => 'تاريخ النهاية';
+
+  @override
+  String get discountNoDateSelected => 'بدون تاريخ';
+
+  @override
+  String get discountPickDateTooltip => 'اختيار تاريخ';
+
+  @override
+  String get clearButton => 'مسح';
+
+  @override
+  String get discountProductIdsLabel => 'المنتجات';
+
+  @override
+  String get discountCustomerIdsLabel => 'العملاء';
+
+  @override
+  String get discountSupplierIdsLabel => 'الموردون';
+
+  @override
+  String get discountPickerHelper => 'اختر من القائمة';
+
+  @override
+  String get discountNoConstraintsSelected => 'كل العناصر';
+
+  @override
+  String get discountOpenPickerTooltip => 'فتح قائمة الاختيار';
+
+  @override
+  String get discountPickerLoadError => 'تعذر تحميل القائمة.';
+
+  @override
+  String discountConstraintId(int id) {
+    return 'معرّف $id';
+  }
+
+  @override
+  String get discountProductPickerTitle => 'اختيار المنتجات';
+
+  @override
+  String get discountProductPickerSearchHint => 'ابحث باسم المنتج أو الرمز';
+
+  @override
+  String get discountProductPickerEmpty => 'لا توجد منتجات مطابقة.';
+
+  @override
+  String get discountCustomerPickerTitle => 'اختيار العملاء';
+
+  @override
+  String get discountCustomerPickerSearchHint => 'ابحث باسم العميل أو الهاتف';
+
+  @override
+  String get discountCustomerPickerEmpty => 'لا يوجد عملاء مطابقون.';
+
+  @override
+  String get discountSupplierPickerTitle => 'اختيار الموردين';
+
+  @override
+  String get discountSupplierPickerSearchHint => 'ابحث باسم المورد أو الهاتف';
+
+  @override
+  String get discountSupplierPickerEmpty => 'لا يوجد موردون مطابقون.';
+
+  @override
+  String get discountUsageLimitLabel => 'حد الاستخدام الكلي';
+
+  @override
+  String get discountPerCustomerLimitLabel => 'حد الاستخدام لكل عميل';
+
+  @override
+  String get discountPerSupplierLimitLabel => 'حد الاستخدام لكل مورد';
+
+  @override
+  String get discountSaveButton => 'حفظ الخصم';
+
+  @override
+  String get discountEditTooltip => 'تعديل الخصم';
+
+  @override
+  String get discountEnableTooltip => 'تفعيل الخصم';
+
+  @override
+  String get discountDisableTooltip => 'إيقاف الخصم';
+
+  @override
+  String get discountArchiveTooltip => 'أرشفة الخصم';
+
+  @override
+  String get discountEnabledMessage => 'تم تفعيل الخصم.';
+
+  @override
+  String get discountDisabledMessage => 'تم إيقاف الخصم.';
+
+  @override
+  String get discountArchivedMessage => 'تمت أرشفة الخصم.';
+
+  @override
+  String get discountArchiveTitle => 'أرشفة الخصم';
+
+  @override
+  String discountArchiveMessage(String name) {
+    return 'سيتم إيقاف $name وإخفاؤه من التطبيق التلقائي.';
+  }
+
+  @override
+  String get discountArchiveConfirmButton => 'أرشف الخصم';
+
+  @override
+  String get requiredFieldError => 'هذا الحقل مطلوب.';
+
+  @override
+  String get positiveNumberError => 'أدخل رقما أكبر من صفر.';
+
+  @override
+  String get nonNegativeNumberError => 'أدخل رقما لا يقل عن صفر.';
+
+  @override
+  String get positiveIntegerError => 'أدخل عددا صحيحا أكبر من صفر.';
+
+  @override
+  String get discountPercentError => 'النسبة لا يمكن أن تتجاوز 100%.';
+
+  @override
+  String get discountLineOnlyValueTypeError =>
+      'هذا النوع يعمل على مستوى السطر فقط.';
+
+  @override
+  String get discountIdListError => 'أدخل معرفات صحيحة مفصولة بفواصل.';
+
+  @override
+  String get discountCustomerChannelError =>
+      'شروط العملاء متاحة للمبيعات أو لكلا النطاقين فقط.';
+
+  @override
+  String get discountSupplierChannelError =>
+      'شروط الموردين متاحة للمشتريات أو لكلا النطاقين فقط.';
+
+  @override
+  String get discountDateRangeError =>
+      'تاريخ النهاية يجب أن يكون بعد تاريخ البداية.';
+
+  @override
+  String discountValueSummary(String type, String value) {
+    return '$type: $value';
+  }
+
+  @override
+  String discountPercentageValue(String value) {
+    return '$value%';
+  }
+
+  @override
+  String discountPrioritySummary(int priority) {
+    return 'الأولوية $priority';
+  }
+
+  @override
+  String discountCouponSummary(String code) {
+    return 'الكود $code';
+  }
+
+  @override
+  String discountMinSubtotalSummary(String amount) {
+    return 'أقل إجمالي $amount';
+  }
+
+  @override
+  String discountMinLineQuantitySummary(int quantity) {
+    return 'أقل كمية $quantity';
+  }
+
+  @override
+  String discountMaxAmountSummary(String amount) {
+    return 'أقصى خصم $amount';
+  }
+
+  @override
+  String discountUsageSummary(int used, int limit) {
+    return 'الاستخدام $used/$limit';
+  }
+
+  @override
+  String discountUsageCountSummary(int used) {
+    return 'الاستخدام $used';
+  }
+
+  @override
+  String discountAppliedCountSummary(int count) {
+    return 'التطبيقات $count';
+  }
+
+  @override
+  String discountStartsAtSummary(String date) {
+    return 'يبدأ $date';
+  }
+
+  @override
+  String discountEndsAtSummary(String date) {
+    return 'ينتهي $date';
+  }
+
+  @override
+  String discountProductConstraintSummary(int count) {
+    return '$count منتجات';
+  }
+
+  @override
+  String discountCustomerConstraintSummary(int count) {
+    return '$count عملاء';
+  }
+
+  @override
+  String discountSupplierConstraintSummary(int count) {
+    return '$count موردين';
+  }
+
+  @override
   String get confirmButton => 'تأكيد';
 }

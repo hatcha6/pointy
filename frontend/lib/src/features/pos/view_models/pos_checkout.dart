@@ -1,6 +1,43 @@
 part of 'pos_view_model.dart';
 
 extension PosCheckoutActions on PosViewModel {
+  Future<void> refreshDiscountPreview() async {
+    final requestVersion = ++_discountPreviewRequestVersion;
+    if (_cart.isEmpty) {
+      _discountPreview = null;
+      _hasDiscountPreviewError = false;
+      _isLoadingDiscountPreview = false;
+      _notifyChanged();
+      return;
+    }
+
+    _isLoadingDiscountPreview = true;
+    _hasDiscountPreviewError = false;
+    _notifyChanged();
+
+    final result = await _saleRepository.previewDiscounts(
+      SaleDiscountPreviewDraft.fromCart(
+        cart: List<CartLine>.of(_cart),
+        customerId: _selectedCustomer?.id,
+        couponCode: _couponCode,
+      ),
+    );
+    if (requestVersion != _discountPreviewRequestVersion) {
+      return;
+    }
+
+    switch (result) {
+      case Ok<SaleDiscountPreview>():
+        _discountPreview = result.value;
+        _hasDiscountPreviewError = false;
+      case Error<SaleDiscountPreview>():
+        _discountPreview = null;
+        _hasDiscountPreviewError = true;
+    }
+    _isLoadingDiscountPreview = false;
+    _notifyChanged();
+  }
+
   List<SaleStockShortage> checkoutStockShortages() {
     final shortages = <SaleStockShortage>[];
     for (final line in _cart) {
@@ -51,6 +88,7 @@ extension PosCheckoutActions on PosViewModel {
         payments: payments,
         invoicePrinterConfig: invoicePrinterConfig,
         customerId: _selectedCustomer?.id,
+        couponCode: _couponCode,
       ),
     );
 
@@ -62,6 +100,9 @@ extension PosCheckoutActions on PosViewModel {
         _applySoldQuantities(cartSnapshot);
         _cart.clear();
         _selectedCustomer = null;
+        _couponCode = '';
+        _discountPreview = null;
+        _hasDiscountPreviewError = false;
         _printInvoiceAfterPayment = false;
         _isCheckingOut = false;
         _notifyChanged();

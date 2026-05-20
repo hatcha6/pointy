@@ -18,6 +18,22 @@ class SalesApiClient {
     );
   }
 
+  Future<SaleDiscountPreview> previewDiscounts(
+    SaleDiscountPreviewDraft draft,
+  ) async {
+    final response = await _session.post(
+      'orders/discount-preview/',
+      body: draft.toJson(),
+    );
+    _session.throwApiException(
+      response,
+      'Sale discount preview failed with status',
+    );
+    return SaleDiscountPreview.fromJson(
+      _session.decodedBody(response) as Map<String, Object?>,
+    );
+  }
+
   Future<PrintJob> requestSaleReprint(int saleOrderId) async {
     final response = await _session.post('orders/$saleOrderId/reprint/');
     _session.ensureSuccess(response, 'Sale reprint request failed with status');

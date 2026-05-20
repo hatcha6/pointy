@@ -1,9 +1,16 @@
 from decimal import Decimal
 
+from django.contrib.contenttypes.models import ContentType
 from django.db import models, transaction
 from django.utils import timezone
 from rest_framework import serializers
 
+from apps.discounts.models import (
+    AppliedDiscount,
+    DiscountRedemption,
+    normalize_coupon_code,
+)
+from apps.discounts.services import DiscountUsageLimitExceeded, persist_applied_discounts
 from apps.inventory.models import StockItem, StockMovement
 from .models import (
     PurchaseLine,
@@ -142,8 +149,13 @@ def save_purchase_order_with_lines(
         for line_data in lines_data:
             PurchaseLine.objects.create(purchase_order=purchase_order, **line_data)
 
-    purchase_order.recalculate()
-    purchase_order.save(update_fields=["subtotal", "total", "updated_at"])
+    clear_purchase_order_applied_discounts(purchase_order)
+    discount_result = purchase_order.recalculate()
+    validate_requested_purchase_discount_codes(purchase_order, discount_result)
+    purchase_order.save(
+        update_fields=["subtotal", "discount_total", "total", "updated_at"]
+    )
+    persist_purchase_order_applied_discounts(purchase_order, discount_result)
     record_purchase_order_audit_event(
         purchase_order,
         (
@@ -154,6 +166,79 @@ def save_purchase_order_with_lines(
         request=request,
     )
     return purchase_order
+
+
+def purchase_order_content_type():
+    return ContentType.objects.get_for_model(PurchaseOrder, for_concrete_model=False)
+
+
+def clear_purchase_order_applied_discounts(purchase_order):
+    document_content_type = purchase_order_content_type()
+    applied_discounts = AppliedDiscount.objects.filter(
+        document_content_type=document_content_type,
+        document_object_id=purchase_order.pk,
+    )
+    DiscountRedemption.objects.filter(applied_discount__in=applied_discounts).delete()
+    applied_discounts.delete()
+
+
+def validate_requested_purchase_discount_codes(purchase_order, discount_result):
+    requested_codes = [
+        normalize_coupon_code(code)
+        for code in (purchase_order.discount_codes or [])
+        if normalize_coupon_code(code)
+    ]
+    if not requested_codes:
+        return
+
+    applied_codes = {
+        normalize_coupon_code(application.coupon_code)
+        for application in discount_result.applications
+        if application.coupon_code
+    }
+    missing_codes = [
+        code for code in dict.fromkeys(requested_codes) if code not in applied_codes
+    ]
+    if missing_codes:
+        raise serializers.ValidationError(
+            {
+                "discount_codes": (
+                    "Discount code is invalid, disabled, expired, or unavailable: "
+                    + ", ".join(missing_codes)
+                )
+            }
+        )
+
+
+def persist_purchase_order_applied_discounts(purchase_order, discount_result):
+    lines_by_key = {
+        str(line.pk): line
+        for line in purchase_order.lines.select_related("product").order_by(
+            "created_at",
+            "id",
+        )
+    }
+    try:
+        return persist_applied_discounts(
+            document=purchase_order,
+            result=discount_result,
+            line_objects_by_key=lines_by_key,
+        )
+    except DiscountUsageLimitExceeded as exc:
+        raise serializers.ValidationError(
+            discount_usage_limit_error_payload(exc, "discount_codes")
+        )
+
+
+def discount_usage_limit_error_payload(exc, field_name):
+    if exc.coupon_codes:
+        return {
+            field_name: (
+                "Discount code is invalid, disabled, expired, or unavailable: "
+                + ", ".join(exc.coupon_codes)
+            )
+        }
+    return {"detail": "A discount is no longer available."}
 
 
 @transaction.atomic
@@ -424,9 +509,25 @@ def receive_purchase_order(purchase_order, *, request=None, lines_data=None, not
     return locked_order
 
 
+def purchase_adjustment_line_amount(line, quantity):
+    prior_amount = line.adjustment_lines.aggregate(total=models.Sum("line_amount"))[
+        "total"
+    ] or Decimal("0.00")
+    if quantity >= line.adjustable_quantity:
+        return (line.net_line_total - prior_amount).quantize(Decimal("0.01"))
+    return (
+        line.net_line_total * Decimal(quantity) / Decimal(line.quantity)
+    ).quantize(Decimal("0.01"))
+
+
+def purchase_adjustment_line_unit_cost(line, quantity):
+    amount = purchase_adjustment_line_amount(line, quantity)
+    return (amount / Decimal(quantity)).quantize(Decimal("0.01"))
+
+
 def purchase_adjustment_amount(lines):
     amount = sum(
-        (line.unit_cost * quantity for line, quantity in lines),
+        (purchase_adjustment_line_amount(line, quantity) for line, quantity in lines),
         Decimal("0.00"),
     ).quantize(Decimal("0.01"))
     if amount <= 0:
@@ -609,12 +710,14 @@ def create_purchase_order_adjustment(
         created_by=created_by,
     )
     for line, quantity in lines:
+        line_amount = purchase_adjustment_line_amount(line, quantity)
         PurchaseOrderAdjustmentLine.objects.create(
             adjustment=adjustment,
             purchase_line=line,
             product=line.product,
             quantity=quantity,
-            unit_cost=line.unit_cost,
+            unit_cost=purchase_adjustment_line_unit_cost(line, quantity),
+            line_amount=line_amount,
         )
     for product, quantity, unit_cost in replacement_lines:
         PurchaseOrderAdjustmentReplacementLine.objects.create(
@@ -662,8 +765,8 @@ def settle_purchase_order_adjustment(adjustment, *, created_by=None):
             supplier=supplier,
             purchase_order=adjustment.purchase_order,
             adjustment=adjustment,
-            amount=adjustment.amount,
-            remaining_amount=adjustment.amount,
+            amount=adjustment.outbound_amount,
+            remaining_amount=adjustment.outbound_amount,
             reason=adjustment.reason,
         )
         return
@@ -671,7 +774,7 @@ def settle_purchase_order_adjustment(adjustment, *, created_by=None):
     SupplierPayment.objects.create(
         supplier=supplier,
         purchase_order=adjustment.purchase_order,
-        amount=adjustment.amount,
+        amount=adjustment.outbound_amount,
         method=adjustment.settlement_method,
         notes=adjustment.reason,
         created_by=created_by,

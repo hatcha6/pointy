@@ -1,4 +1,4 @@
-from decimal import Decimal, ROUND_DOWN
+from decimal import Decimal, ROUND_DOWN, ROUND_HALF_UP
 
 from django.core.validators import MinValueValidator
 from django.conf import settings
@@ -76,7 +76,14 @@ class PurchaseOrder(TimeStampedModel):
     supplier_invoice_number = models.CharField(max_length=120, blank=True)
     supplier_invoice_date = models.DateField(blank=True, null=True)
     notes = models.TextField(blank=True)
+    discount_codes = models.JSONField(default=list, blank=True)
     subtotal = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    discount_total = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=0,
+        validators=[MinValueValidator(Decimal("0.00"))],
+    )
     shipping_amount = models.DecimalField(
         max_digits=10,
         decimal_places=2,
@@ -121,15 +128,72 @@ class PurchaseOrder(TimeStampedModel):
             ),
         ]
 
-    def recalculate(self) -> None:
-        subtotal = Decimal("0.00")
+    def recalculate(self):
         lines = list(self.lines.select_related("product").order_by("created_at", "id"))
-        for line in lines:
-            subtotal += line.line_total
-        self.subtotal = subtotal.quantize(self.MONEY_PLACES)
+        discount_result = self.apply_discounts(lines)
         landed_cost_total = self.landed_cost_total
-        self.total = (self.subtotal + landed_cost_total).quantize(self.MONEY_PLACES)
+        self.total = (
+            self.subtotal - self.discount_total + landed_cost_total
+        ).quantize(self.MONEY_PLACES)
         self.allocate_landed_costs(lines, landed_cost_total)
+        self._discount_result = discount_result
+        return discount_result
+
+    def apply_discounts(self, lines):
+        from apps.discounts.models import DiscountRule
+        from apps.discounts.services import (
+            DiscountContext,
+            DiscountEngine,
+            DiscountLineInput,
+        )
+
+        context = DiscountContext(
+            channel=DiscountRule.Channel.PURCHASING,
+            supplier_id=self.supplier_id,
+            coupon_codes=tuple(self.discount_codes or ()),
+            lines=tuple(
+                DiscountLineInput(
+                    key=str(line.pk),
+                    product_id=line.product_id,
+                    quantity=line.quantity,
+                    unit_amount=line.unit_cost,
+                )
+                for line in lines
+            ),
+        )
+        result = DiscountEngine().calculate(context)
+        allocations = {line.pk: Decimal("0.00") for line in lines}
+        for application in result.applications:
+            for allocation in application.allocations:
+                allocations[int(allocation.line_key)] = (
+                    allocations[int(allocation.line_key)] + allocation.amount
+                ).quantize(self.MONEY_PLACES)
+
+        self.subtotal = result.subtotal
+        self.discount_total = result.discount_total
+        for line in lines:
+            discount_amount = allocations[line.pk]
+            net_line_total = (line.line_total - discount_amount).quantize(
+                self.MONEY_PLACES
+            )
+            net_unit_cost = Decimal("0.00")
+            if line.quantity > 0:
+                net_unit_cost = (net_line_total / Decimal(line.quantity)).quantize(
+                    self.MONEY_PLACES,
+                    rounding=ROUND_HALF_UP,
+                )
+            line.discount_amount = discount_amount
+            line.net_line_total = net_line_total
+            line.net_unit_cost = net_unit_cost
+            line.save(
+                update_fields=[
+                    "discount_amount",
+                    "net_line_total",
+                    "net_unit_cost",
+                    "updated_at",
+                ],
+            )
+        return result
 
     @property
     def landed_cost_total(self):
@@ -154,7 +218,7 @@ class PurchaseOrder(TimeStampedModel):
             line.allocated_landed_cost = allocated_landed_cost
             line.landed_unit_cost = landed_unit_cost
             line.effective_unit_cost = (
-                line.unit_cost + landed_unit_cost
+                line.net_unit_cost + landed_unit_cost
             ).quantize(self.MONEY_PLACES)
             line.save(
                 update_fields=[
@@ -199,9 +263,16 @@ class PurchaseOrder(TimeStampedModel):
             == self.LandedCostAllocationMethod.QUANTITY
         ):
             return {line.pk: Decimal(line.quantity) for line in lines}
-        return {line.pk: line.line_total for line in lines}
+        return {line.pk: line.net_line_total for line in lines}
 
     def save(self, *args, **kwargs):
+        from apps.discounts.models import normalize_coupon_code
+
+        self.discount_codes = [
+            normalize_coupon_code(code)
+            for code in (self.discount_codes or [])
+            if normalize_coupon_code(code)
+        ]
         if not self.order_number:
             with transaction.atomic():
                 super().save(*args, **kwargs)
@@ -280,6 +351,24 @@ class PurchaseLine(TimeStampedModel):
         decimal_places=2,
         validators=[MinValueValidator(Decimal("0.00"))],
     )
+    discount_amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=0,
+        validators=[MinValueValidator(Decimal("0.00"))],
+    )
+    net_line_total = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=0,
+        validators=[MinValueValidator(Decimal("0.00"))],
+    )
+    net_unit_cost = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=0,
+        validators=[MinValueValidator(Decimal("0.00"))],
+    )
     allocated_landed_cost = models.DecimalField(
         max_digits=10,
         decimal_places=2,
@@ -309,17 +398,32 @@ class PurchaseLine(TimeStampedModel):
     @property
     def effective_line_total(self):
         return (
-            self.unit_cost * self.quantity + self.allocated_landed_cost
+            self.net_line_total + self.allocated_landed_cost
         ).quantize(Decimal("0.01"))
 
     def save(self, *args, **kwargs):
+        if self.discount_amount == Decimal("0.00"):
+            self.net_line_total = self.line_total
+            self.net_unit_cost = self.unit_cost
+            update_fields = kwargs.get("update_fields")
+            if update_fields is not None and (
+                "unit_cost" in update_fields or "quantity" in update_fields
+            ):
+                kwargs["update_fields"] = set(update_fields) | {
+                    "net_line_total",
+                    "net_unit_cost",
+                }
         if (
             self.allocated_landed_cost == Decimal("0.00")
             and self.landed_unit_cost == Decimal("0.00")
         ):
-            self.effective_unit_cost = self.unit_cost
+            self.effective_unit_cost = self.net_unit_cost
             update_fields = kwargs.get("update_fields")
-            if update_fields is not None and "unit_cost" in update_fields:
+            if update_fields is not None and (
+                "unit_cost" in update_fields
+                or "net_unit_cost" in update_fields
+                or "discount_amount" in update_fields
+            ):
                 kwargs["update_fields"] = set(update_fields) | {"effective_unit_cost"}
         return super().save(*args, **kwargs)
 
@@ -613,13 +717,24 @@ class PurchaseOrderAdjustmentLine(TimeStampedModel):
     product = models.ForeignKey(Product, on_delete=models.PROTECT)
     quantity = models.PositiveIntegerField()
     unit_cost = models.DecimalField(max_digits=10, decimal_places=2)
+    line_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
 
     class Meta:
         ordering = ["created_at"]
 
     @property
     def line_total(self):
-        return (self.unit_cost * self.quantity).quantize(Decimal("0.01"))
+        return self.line_amount.quantize(Decimal("0.01"))
+
+    def save(self, *args, **kwargs):
+        if self.line_amount == Decimal("0.00"):
+            self.line_amount = (self.unit_cost * self.quantity).quantize(Decimal("0.01"))
+            update_fields = kwargs.get("update_fields")
+            if update_fields is not None and (
+                "unit_cost" in update_fields or "quantity" in update_fields
+            ):
+                kwargs["update_fields"] = set(update_fields) | {"line_amount"}
+        return super().save(*args, **kwargs)
 
 
 class PurchaseOrderAdjustmentReplacementLine(TimeStampedModel):

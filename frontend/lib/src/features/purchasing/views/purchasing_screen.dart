@@ -29,6 +29,7 @@ class PurchasingScreen extends StatelessWidget {
     required this.onOpenDeviceSettings,
     required this.onLogout,
     this.showBackButton = false,
+    this.onOpenDiscounts,
     this.onOpenUsers,
     this.onOpenShopSettings,
   });
@@ -43,6 +44,7 @@ class PurchasingScreen extends StatelessWidget {
   final VoidCallback onOpenRegisterSessions;
   final VoidCallback onOpenDeviceSettings;
   final bool showBackButton;
+  final VoidCallback? onOpenDiscounts;
   final VoidCallback? onOpenUsers;
   final VoidCallback? onOpenShopSettings;
   final VoidCallback onLogout;
@@ -65,6 +67,7 @@ class PurchasingScreen extends StatelessWidget {
             onOpenCatalog: onOpenCatalog,
             onOpenRegisterSessions: onOpenRegisterSessions,
             onOpenDeviceSettings: onOpenDeviceSettings,
+            onOpenDiscounts: onOpenDiscounts,
             onOpenUsers: onOpenUsers,
             onOpenShopSettings: onOpenShopSettings,
             onLogout: onLogout,

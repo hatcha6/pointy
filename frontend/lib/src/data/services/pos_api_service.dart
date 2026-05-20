@@ -6,6 +6,7 @@ import '../models/printer_config.dart';
 import '../models/product.dart';
 import '../models/product_page.dart';
 import '../models/contact.dart';
+import '../models/discount_rule.dart';
 import '../models/purchase_submission.dart';
 import '../models/query.dart';
 import '../models/register_cash_movement.dart';
@@ -22,6 +23,7 @@ import 'api_session.dart';
 import 'auth_api_client.dart';
 import 'catalog_api_client.dart';
 import 'customer_api_client.dart';
+import 'discount_api_client.dart';
 import 'inventory_api_client.dart';
 import 'pos_http_client.dart';
 import 'printing_api_client.dart';
@@ -47,6 +49,7 @@ class PosApiService {
     _shopSettings = ShopSettingsApiClient(session);
     _catalog = CatalogApiClient(session);
     _customers = CustomerApiClient(session);
+    _discounts = DiscountApiClient(session);
     _inventory = InventoryApiClient(session);
     _registerSessions = RegisterSessionApiClient(session);
     _sales = SalesApiClient(session);
@@ -61,6 +64,7 @@ class PosApiService {
   late final ShopSettingsApiClient _shopSettings;
   late final CatalogApiClient _catalog;
   late final CustomerApiClient _customers;
+  late final DiscountApiClient _discounts;
   late final InventoryApiClient _inventory;
   late final RegisterSessionApiClient _registerSessions;
   late final SalesApiClient _sales;
@@ -113,6 +117,36 @@ class PosApiService {
 
   Future<Customer> createCustomer(CustomerDraft draft) {
     return _customers.createCustomer(draft);
+  }
+
+  Future<DiscountRulePage> fetchDiscountRules({
+    required DiscountRuleQuery query,
+    int page = 1,
+  }) {
+    return _discounts.fetchDiscountRules(query: query, page: page);
+  }
+
+  Future<DiscountRule> createDiscountRule(DiscountRuleDraft draft) {
+    return _discounts.createDiscountRule(draft);
+  }
+
+  Future<DiscountRule> updateDiscountRule({
+    required int id,
+    required DiscountRuleDraft draft,
+  }) {
+    return _discounts.updateDiscountRule(id: id, draft: draft);
+  }
+
+  Future<DiscountRule> enableDiscountRule(int id) {
+    return _discounts.enableDiscountRule(id);
+  }
+
+  Future<DiscountRule> disableDiscountRule(int id) {
+    return _discounts.disableDiscountRule(id);
+  }
+
+  Future<DiscountRule> archiveDiscountRule(int id) {
+    return _discounts.archiveDiscountRule(id);
   }
 
   Future<StockItem?> fetchStockForProduct(int productId) {
@@ -190,6 +224,12 @@ class PosApiService {
     return _sales.checkout(draft);
   }
 
+  Future<SaleDiscountPreview> previewSaleDiscounts(
+    SaleDiscountPreviewDraft draft,
+  ) {
+    return _sales.previewDiscounts(draft);
+  }
+
   Future<PrintJob> requestSaleReprint(int saleOrderId) {
     return _sales.requestSaleReprint(saleOrderId);
   }
@@ -210,6 +250,12 @@ class PosApiService {
 
   Future<PurchaseOrder> createPurchaseOrder(PurchaseOrderDraft draft) {
     return _purchasing.createPurchaseOrder(draft);
+  }
+
+  Future<PurchaseDiscountPreview> previewPurchaseDiscounts(
+    PurchaseDiscountPreviewDraft draft,
+  ) {
+    return _purchasing.previewDiscounts(draft);
   }
 
   Future<PurchaseOrder> fetchPurchaseOrder(int purchaseOrderId) {

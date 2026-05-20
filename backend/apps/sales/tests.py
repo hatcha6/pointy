@@ -13,6 +13,7 @@ from apps.catalog.models import Product
 from apps.core.models import ShopSettings
 from apps.core.roles import CASHIER_GROUP, MANAGER_GROUP, ensure_role_groups
 from apps.customers.models import Customer
+from apps.discounts.models import AppliedDiscount, DiscountRedemption, DiscountRule
 from apps.inventory.models import StockItem, StockMovement
 from apps.payments.models import Payment
 from apps.purchasing.models import PurchaseOrder, Supplier
@@ -604,12 +605,17 @@ class OrderCheckoutApiTests(TestCase):
         self.assertEqual(response.data["customer"], customer.pk)
         self.assertEqual(response.data["customer_name"], "Layla Ahmed")
         self.assertEqual(response.data["subtotal"], "7.00")
+        self.assertEqual(response.data["discount_total"], "0.00")
         self.assertEqual(response.data["total"], "7.00")
+        self.assertEqual(response.data["applied_discounts"], [])
+        self.assertNotIn("tax_total", response.data)
+        self.assertNotIn("tax_rate", response.data["lines"][0])
 
         order = Order.objects.get(pk=response.data["id"])
         self.assertEqual(order.register_session_id, session["id"])
         self.assertEqual(order.customer_id, customer.pk)
         self.assertEqual(order.lines.get().unit_price, Decimal("3.50"))
+        self.assertEqual(order.lines.get().discount_total, Decimal("0.00"))
 
     def test_checkout_exposes_cost_and_profit_snapshot(self):
         self.start_session()
@@ -679,6 +685,268 @@ class OrderCheckoutApiTests(TestCase):
         self.assertEqual(payment.commission_percent, Decimal("0.00"))
         self.assertEqual(payment.commission_amount, Decimal("0.00"))
         self.assertEqual(response.data["payments"][0]["method"], Payment.Method.CASH)
+
+    def test_checkout_applies_automatic_document_percentage_discount(self):
+        DiscountRule.objects.create(
+            name="Ten percent sale",
+            channel=DiscountRule.Channel.SALES,
+            value_type=DiscountRule.ValueType.PERCENTAGE,
+            value=Decimal("10.00"),
+        )
+        self.start_session()
+
+        response = self.client.post(
+            reverse("order-checkout"),
+            self.checkout_payload(amount_received="6.30"),
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["subtotal"], "7.00")
+        self.assertEqual(response.data["discount_total"], "0.70")
+        self.assertEqual(response.data["total"], "6.30")
+        self.assertEqual(response.data["lines"][0]["line_subtotal"], "7.00")
+        self.assertEqual(response.data["lines"][0]["discount_total"], "0.70")
+        self.assertEqual(response.data["lines"][0]["line_total"], "6.30")
+        self.assertEqual(response.data["total_profit"], "6.30")
+
+        order = Order.objects.get(pk=response.data["id"])
+        self.assertEqual(order.discount_total, Decimal("0.70"))
+        self.assertEqual(order.lines.get().discount_total, Decimal("0.70"))
+        self.assertEqual(Payment.objects.get(order=order).amount, Decimal("6.30"))
+        snapshot = AppliedDiscount.objects.get()
+        redemption = DiscountRedemption.objects.get()
+        self.assertEqual(snapshot.document, order)
+        self.assertEqual(snapshot.discount_amount, Decimal("0.70"))
+        self.assertEqual(snapshot.allocations[0]["line_object_id"], order.lines.get().pk)
+        self.assertEqual(redemption.applied_discount, snapshot)
+
+    def test_checkout_applies_coupon_discount(self):
+        DiscountRule.objects.create(
+            name="Coupon one dinar",
+            channel=DiscountRule.Channel.SALES,
+            application_type=DiscountRule.ApplicationType.COUPON_CODE,
+            coupon_code="save1",
+            value_type=DiscountRule.ValueType.FIXED_AMOUNT,
+            value=Decimal("1.00"),
+        )
+        self.start_session()
+
+        response = self.client.post(
+            reverse("order-checkout"),
+            self.checkout_payload(coupon_code=" SAVE1 ", amount_received="6.00"),
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["discount_total"], "1.00")
+        self.assertEqual(response.data["total"], "6.00")
+        self.assertEqual(response.data["applied_discounts"][0]["coupon_code"], "SAVE1")
+        self.assertEqual(AppliedDiscount.objects.get().coupon_code, "SAVE1")
+
+    def test_checkout_rejects_invalid_disabled_and_expired_coupon_codes(self):
+        DiscountRule.objects.create(
+            name="Disabled coupon",
+            channel=DiscountRule.Channel.SALES,
+            application_type=DiscountRule.ApplicationType.COUPON_CODE,
+            coupon_code="OFF",
+            value_type=DiscountRule.ValueType.FIXED_AMOUNT,
+            value=Decimal("1.00"),
+            is_active=False,
+        )
+        DiscountRule.objects.create(
+            name="Expired coupon",
+            channel=DiscountRule.Channel.SALES,
+            application_type=DiscountRule.ApplicationType.COUPON_CODE,
+            coupon_code="OLD",
+            value_type=DiscountRule.ValueType.FIXED_AMOUNT,
+            value=Decimal("1.00"),
+            ends_at=timezone.now() - timedelta(days=1),
+        )
+        self.start_session()
+
+        for coupon_code in ("MISSING", "OFF", "OLD"):
+            with self.subTest(coupon_code=coupon_code):
+                response = self.client.post(
+                    reverse("order-checkout"),
+                    self.checkout_payload(coupon_code=coupon_code),
+                    format="json",
+                )
+
+                self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+                self.assertIn("coupon_codes", response.data)
+
+        self.assertEqual(Order.objects.count(), 0)
+        self.assertEqual(AppliedDiscount.objects.count(), 0)
+
+    def test_checkout_applies_line_and_document_discounts_when_stackable(self):
+        line_rule = DiscountRule.objects.create(
+            name="Line unit off",
+            channel=DiscountRule.Channel.SALES,
+            scope=DiscountRule.Scope.LINE,
+            value_type=DiscountRule.ValueType.FIXED_UNIT_AMOUNT,
+            value=Decimal("1.00"),
+            priority=1,
+            exclusive=False,
+        )
+        line_rule.products.add(self.product)
+        DiscountRule.objects.create(
+            name="Document half off",
+            channel=DiscountRule.Channel.SALES,
+            value_type=DiscountRule.ValueType.FIXED_AMOUNT,
+            value=Decimal("0.50"),
+            priority=2,
+            exclusive=False,
+        )
+        self.start_session()
+
+        response = self.client.post(
+            reverse("order-checkout"),
+            self.checkout_payload(amount_received="4.50"),
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["subtotal"], "7.00")
+        self.assertEqual(response.data["discount_total"], "2.50")
+        self.assertEqual(response.data["total"], "4.50")
+        self.assertEqual(response.data["lines"][0]["discount_total"], "2.50")
+        self.assertEqual(
+            [discount["rule_name"] for discount in response.data["applied_discounts"]],
+            ["Line unit off", "Document half off"],
+        )
+
+    def test_checkout_respects_non_stacking_priority(self):
+        DiscountRule.objects.create(
+            name="First exclusive",
+            channel=DiscountRule.Channel.SALES,
+            value_type=DiscountRule.ValueType.FIXED_AMOUNT,
+            value=Decimal("1.00"),
+            priority=1,
+        )
+        DiscountRule.objects.create(
+            name="Skipped later",
+            channel=DiscountRule.Channel.SALES,
+            value_type=DiscountRule.ValueType.FIXED_AMOUNT,
+            value=Decimal("5.00"),
+            priority=2,
+        )
+        self.start_session()
+
+        response = self.client.post(
+            reverse("order-checkout"),
+            self.checkout_payload(amount_received="6.00"),
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["discount_total"], "1.00")
+        self.assertEqual(response.data["total"], "6.00")
+        self.assertEqual(
+            [discount["rule_name"] for discount in response.data["applied_discounts"]],
+            ["First exclusive"],
+        )
+
+    def test_checkout_respects_coupon_usage_limit_after_redemption(self):
+        DiscountRule.objects.create(
+            name="Single use coupon",
+            channel=DiscountRule.Channel.SALES,
+            application_type=DiscountRule.ApplicationType.COUPON_CODE,
+            coupon_code="ONCE",
+            value_type=DiscountRule.ValueType.FIXED_AMOUNT,
+            value=Decimal("1.00"),
+            usage_limit=1,
+        )
+        self.start_session()
+
+        first_response = self.client.post(
+            reverse("order-checkout"),
+            self.checkout_payload(coupon_code="once", amount_received="6.00"),
+            format="json",
+        )
+        second_response = self.client.post(
+            reverse("order-checkout"),
+            self.checkout_payload(coupon_code="once", amount_received="6.00"),
+            format="json",
+        )
+
+        self.assertEqual(first_response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(first_response.data["discount_total"], "1.00")
+        self.assertEqual(second_response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("coupon_codes", second_response.data)
+        self.assertEqual(Order.objects.count(), 1)
+        self.assertEqual(DiscountRedemption.objects.count(), 1)
+
+    def test_checkout_applies_customer_product_and_minimum_subtotal_restrictions(self):
+        customer = Customer.objects.create(full_name="Eligible buyer")
+        other_customer = Customer.objects.create(full_name="Other buyer")
+        other_product = Product.objects.create(
+            sku="MUFFIN",
+            barcode="",
+            name="Muffin",
+            unit_price=Decimal("5.00"),
+        )
+        StockItem.objects.create(product=other_product, quantity_on_hand=5)
+        rule = DiscountRule.objects.create(
+            name="Coffee buyer coupon",
+            channel=DiscountRule.Channel.SALES,
+            application_type=DiscountRule.ApplicationType.COUPON_CODE,
+            coupon_code="BUYER",
+            scope=DiscountRule.Scope.LINE,
+            value_type=DiscountRule.ValueType.PERCENTAGE,
+            value=Decimal("10.00"),
+            min_order_subtotal=Decimal("10.00"),
+        )
+        rule.products.add(self.product)
+        rule.customers.add(customer)
+        self.start_session()
+
+        wrong_customer_response = self.client.post(
+            reverse("order-checkout"),
+            self.checkout_payload(
+                customer=other_customer.pk,
+                coupon_code="BUYER",
+                amount_received="7.00",
+            ),
+            format="json",
+        )
+        below_minimum_response = self.client.post(
+            reverse("order-checkout"),
+            {
+                "lines": [{"product": self.product.pk, "quantity": 2}],
+                "customer": customer.pk,
+                "coupon_code": "BUYER",
+                "payment_method": "cash",
+                "amount_received": "7.00",
+            },
+            format="json",
+        )
+        eligible_response = self.client.post(
+            reverse("order-checkout"),
+            {
+                "lines": [
+                    {"product": self.product.pk, "quantity": 2},
+                    {"product": other_product.pk, "quantity": 1},
+                ],
+                "customer": customer.pk,
+                "coupon_code": "BUYER",
+                "payment_method": "cash",
+                "amount_received": "11.30",
+            },
+            format="json",
+        )
+
+        self.assertEqual(wrong_customer_response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("coupon_codes", wrong_customer_response.data)
+        self.assertEqual(below_minimum_response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("coupon_codes", below_minimum_response.data)
+        self.assertEqual(eligible_response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(eligible_response.data["subtotal"], "12.00")
+        self.assertEqual(eligible_response.data["discount_total"], "0.70")
+        self.assertEqual(eligible_response.data["total"], "11.30")
+        lines = sorted(eligible_response.data["lines"], key=lambda line: line["product"])
+        self.assertEqual(lines[0]["discount_total"], "0.70")
+        self.assertEqual(lines[1]["discount_total"], "0.00")
 
     def test_order_list_filters_by_customer(self):
         self.start_session()
@@ -927,6 +1195,75 @@ class OrderCheckoutApiTests(TestCase):
         self.assertEqual(
             list(StockMovement.objects.order_by("created_at").values_list("movement_type", flat=True)),
             [StockMovement.Type.DECREASE, StockMovement.Type.INCREASE],
+        )
+
+    def test_partial_return_refunds_discounted_net_amount(self):
+        DiscountRule.objects.create(
+            name="Ten percent return",
+            channel=DiscountRule.Channel.SALES,
+            value_type=DiscountRule.ValueType.PERCENTAGE,
+            value=Decimal("10.00"),
+        )
+        self.start_session()
+        checkout_response = self.client.post(
+            reverse("order-checkout"),
+            self.checkout_payload(amount_received="6.30"),
+            format="json",
+        )
+        line_id = checkout_response.data["lines"][0]["id"]
+
+        response = self.client.post(
+            reverse("order-return-items", args=[checkout_response.data["id"]]),
+            {"lines": [{"line": line_id, "quantity": 1}]},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        adjustment = OrderAdjustment.objects.get()
+        self.assertEqual(adjustment.amount, Decimal("3.15"))
+        adjustment_line = adjustment.lines.get()
+        self.assertEqual(adjustment_line.unit_price, Decimal("3.50"))
+        self.assertEqual(adjustment_line.discount_total, Decimal("0.35"))
+        self.assertEqual(adjustment_line.line_total, Decimal("3.15"))
+        self.assertEqual(
+            Payment.objects.order_by("amount").first().amount,
+            Decimal("-3.15"),
+        )
+
+    def test_void_refunds_discounted_remaining_amount_after_partial_return(self):
+        DiscountRule.objects.create(
+            name="Ten percent void",
+            channel=DiscountRule.Channel.SALES,
+            value_type=DiscountRule.ValueType.PERCENTAGE,
+            value=Decimal("10.00"),
+        )
+        self.start_session()
+        checkout_response = self.client.post(
+            reverse("order-checkout"),
+            self.checkout_payload(amount_received="6.30"),
+            format="json",
+        )
+        line_id = checkout_response.data["lines"][0]["id"]
+        self.client.post(
+            reverse("order-return-items", args=[checkout_response.data["id"]]),
+            {"lines": [{"line": line_id, "quantity": 1}]},
+            format="json",
+        )
+
+        response = self.client.post(
+            reverse("order-void", args=[checkout_response.data["id"]]),
+            {"reason": "Void remainder"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["status"], Order.Status.VOID)
+        adjustments = list(OrderAdjustment.objects.order_by("created_at"))
+        self.assertEqual(adjustments[0].amount, Decimal("3.15"))
+        self.assertEqual(adjustments[1].amount, Decimal("3.15"))
+        self.assertEqual(
+            list(Payment.objects.filter(amount__lt=0).order_by("created_at").values_list("amount", flat=True)),
+            [Decimal("-3.15"), Decimal("-3.15")],
         )
 
     def test_void_order_refunds_remaining_quantities_and_marks_void(self):

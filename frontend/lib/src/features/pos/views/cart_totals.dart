@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
+import '../../../data/models/sale_order.dart';
 import '../../../shared/formatters.dart';
 import '../view_models/pos_view_model.dart';
 
@@ -19,11 +20,42 @@ class CartTotals extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           _TotalLine(label: l10n.subtotal, value: viewModel.subtotal),
+          if (viewModel.discountTotal > 0)
+            _TotalLine(
+              label: l10n.discountTotalLabel,
+              value: -viewModel.discountTotal,
+            ),
+          if (viewModel.appliedDiscounts.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: Column(
+                children: [
+                  for (final discount in viewModel.appliedDiscounts)
+                    _DiscountLine(discount: discount),
+                ],
+              ),
+            ),
           const Divider(height: 12),
           _TotalLine(label: l10n.total, value: viewModel.total, isStrong: true),
         ],
       ),
     );
+  }
+}
+
+class _DiscountLine extends StatelessWidget {
+  const _DiscountLine({required this.discount});
+
+  final AppliedDiscountInfo discount;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final label = discount.couponCode.isEmpty
+        ? discount.ruleName
+        : l10n.discountCouponAppliedLabel(discount.couponCode);
+
+    return _TotalLine(label: label, value: -discount.discountAmount);
   }
 }
 

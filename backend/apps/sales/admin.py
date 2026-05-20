@@ -48,6 +48,7 @@ class OrderAdmin(admin.ModelAdmin):
         "status",
         "register_session",
         "subtotal",
+        "discount_total",
         "total",
         "created_at",
     )

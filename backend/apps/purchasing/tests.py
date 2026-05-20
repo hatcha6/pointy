@@ -4,11 +4,13 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group, Permission
 from django.test import TestCase
 from django.urls import reverse
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APIClient
 
 from apps.catalog.models import Product
 from apps.core.roles import MANAGER_GROUP, ensure_role_groups
+from apps.discounts.models import AppliedDiscount, DiscountRedemption, DiscountRule
 from apps.inventory.models import StockItem, StockMovement
 from .models import (
     PurchaseOrder,
@@ -136,11 +138,14 @@ class PurchaseOrderApiTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(response.data["status"], PurchaseOrder.Status.DRAFT)
         self.assertEqual(response.data["subtotal"], "7.50")
+        self.assertEqual(response.data["discount_total"], "0.00")
         self.assertEqual(response.data["total"], "7.50")
         self.assertTrue(response.data["order_number"].startswith("P"))
         self.assertEqual(response.data["supplier_invoice_number"], "INV-100")
         self.assertEqual(response.data["supplier_reference"], "INV-100")
         self.assertEqual(len(response.data["lines"]), 1)
+        self.assertNotIn("tax_total", response.data)
+        self.assertNotIn("tax_rate", response.data["lines"][0])
 
         order = PurchaseOrder.objects.get(pk=response.data["id"])
         self.assertEqual(order.lines.count(), 1)
@@ -259,6 +264,318 @@ class PurchaseOrderApiTests(TestCase):
         self.assertEqual(line["allocated_landed_cost"], "0.00")
         self.assertEqual(line["landed_unit_cost"], "0.00")
         self.assertEqual(line["effective_unit_cost"], "2.50")
+
+    def test_automatic_purchase_discount_reduces_payable_balance(self):
+        DiscountRule.objects.create(
+            name="Supplier ten percent",
+            channel=DiscountRule.Channel.PURCHASING,
+            value_type=DiscountRule.ValueType.PERCENTAGE,
+            value=Decimal("10.00"),
+        )
+
+        response = self.client.post(
+            reverse("purchaseorder-list"),
+            self.purchase_order_payload(),
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["subtotal"], "7.50")
+        self.assertEqual(response.data["discount_total"], "0.75")
+        self.assertEqual(response.data["total"], "6.75")
+        self.assertEqual(response.data["balance_due"], "6.75")
+        line = response.data["lines"][0]
+        self.assertEqual(line["line_total"], "7.50")
+        self.assertEqual(line["discount_amount"], "0.75")
+        self.assertEqual(line["net_line_total"], "6.75")
+        self.assertEqual(line["net_unit_cost"], "2.25")
+        self.assertEqual(line["effective_unit_cost"], "2.25")
+
+        supplier_response = self.client.get(reverse("supplier-detail", args=[self.supplier.pk]))
+        self.assertEqual(supplier_response.data["payable_balance"], "6.75")
+        self.assertEqual(supplier_response.data["total_bought"], "6.75")
+
+    def test_purchase_coupon_discount_is_normalized_and_persisted_as_snapshot(self):
+        DiscountRule.objects.create(
+            name="Invoice coupon",
+            channel=DiscountRule.Channel.PURCHASING,
+            application_type=DiscountRule.ApplicationType.COUPON_CODE,
+            coupon_code=" save2 ",
+            value_type=DiscountRule.ValueType.FIXED_AMOUNT,
+            value=Decimal("2.00"),
+        )
+
+        response = self.client.post(
+            reverse("purchaseorder-list"),
+            self.purchase_order_payload(discount_codes=[" save2 "]),
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["discount_codes"], ["SAVE2"])
+        self.assertEqual(response.data["discount_total"], "2.00")
+        self.assertEqual(response.data["total"], "5.50")
+
+        order = PurchaseOrder.objects.get(pk=response.data["id"])
+        snapshot = AppliedDiscount.objects.get(document_object_id=order.pk)
+        redemption = DiscountRedemption.objects.get(applied_discount=snapshot)
+        line = order.lines.get()
+        self.assertEqual(snapshot.document, order)
+        self.assertEqual(snapshot.coupon_code, "SAVE2")
+        self.assertEqual(snapshot.discount_amount, Decimal("2.00"))
+        self.assertEqual(snapshot.allocations[0]["line_object_id"], line.pk)
+        self.assertEqual(snapshot.allocations[0]["product_id"], self.product.pk)
+        self.assertEqual(redemption.supplier, self.supplier)
+
+    def test_purchase_discount_preview_reports_draft_backend_totals(self):
+        DiscountRule.objects.create(
+            name="Supplier automatic preview",
+            channel=DiscountRule.Channel.PURCHASING,
+            value_type=DiscountRule.ValueType.PERCENTAGE,
+            value=Decimal("10.00"),
+            priority=1,
+            exclusive=False,
+        )
+        DiscountRule.objects.create(
+            name="Supplier coupon preview",
+            channel=DiscountRule.Channel.PURCHASING,
+            application_type=DiscountRule.ApplicationType.COUPON_CODE,
+            coupon_code="SUPSAVE",
+            value_type=DiscountRule.ValueType.FIXED_AMOUNT,
+            value=Decimal("1.00"),
+            priority=2,
+            exclusive=False,
+        )
+
+        response = self.client.post(
+            reverse("purchaseorder-discount-preview"),
+            {
+                "supplier": self.supplier.pk,
+                "discount_codes": [" supsave "],
+                "shipping_amount": "0.50",
+                "lines": [
+                    {
+                        "product": self.product.pk,
+                        "quantity": 2,
+                        "unit_cost": "5.00",
+                    }
+                ],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.assertEqual(response.data["subtotal"], "10.00")
+        self.assertEqual(response.data["discount_total"], "2.00")
+        self.assertEqual(response.data["landed_cost_total"], "0.50")
+        self.assertEqual(response.data["total"], "8.50")
+        self.assertEqual(response.data["unapplied_discount_codes"], [])
+        self.assertEqual(
+            [discount["rule_name"] for discount in response.data["applied_discounts"]],
+            ["Supplier automatic preview", "Supplier coupon preview"],
+        )
+        self.assertEqual(response.data["lines"][0]["discount_amount"], "2.00")
+        self.assertEqual(response.data["lines"][0]["net_unit_cost"], "4.00")
+        self.assertEqual(response.data["lines"][0]["effective_unit_cost"], "4.25")
+        self.assertEqual(PurchaseOrder.objects.count(), 0)
+        self.assertEqual(DiscountRedemption.objects.count(), 0)
+
+    def test_purchase_discount_preview_reports_unapplied_code(self):
+        response = self.client.post(
+            reverse("purchaseorder-discount-preview"),
+            {
+                "supplier": self.supplier.pk,
+                "discount_code": "missing",
+                "lines": [
+                    {
+                        "product": self.product.pk,
+                        "quantity": 1,
+                        "unit_cost": "2.50",
+                    }
+                ],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.assertEqual(response.data["discount_total"], "0.00")
+        self.assertEqual(response.data["unapplied_discount_codes"], ["MISSING"])
+
+    def test_purchase_discount_update_replaces_snapshots_and_redemptions(self):
+        DiscountRule.objects.create(
+            name="Draft coupon",
+            channel=DiscountRule.Channel.PURCHASING,
+            application_type=DiscountRule.ApplicationType.COUPON_CODE,
+            coupon_code="DRAFT",
+            value_type=DiscountRule.ValueType.FIXED_AMOUNT,
+            value=Decimal("2.00"),
+        )
+        create_response = self.client.post(
+            reverse("purchaseorder-list"),
+            self.purchase_order_payload(discount_codes=["draft"]),
+            format="json",
+        )
+        order_id = create_response.data["id"]
+
+        update_response = self.client.patch(
+            reverse("purchaseorder-detail", args=[order_id]),
+            {"discount_codes": []},
+            format="json",
+        )
+
+        self.assertEqual(create_response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(create_response.data["discount_total"], "2.00")
+        self.assertEqual(update_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(update_response.data["discount_codes"], [])
+        self.assertEqual(update_response.data["discount_total"], "0.00")
+        self.assertEqual(update_response.data["total"], "7.50")
+        self.assertEqual(update_response.data["applied_discounts"], [])
+        self.assertEqual(AppliedDiscount.objects.count(), 0)
+        self.assertEqual(DiscountRedemption.objects.count(), 0)
+
+    def test_deleting_draft_purchase_clears_discount_audit_rows(self):
+        DiscountRule.objects.create(
+            name="Delete coupon",
+            channel=DiscountRule.Channel.PURCHASING,
+            application_type=DiscountRule.ApplicationType.COUPON_CODE,
+            coupon_code="DELETE",
+            value_type=DiscountRule.ValueType.FIXED_AMOUNT,
+            value=Decimal("1.00"),
+        )
+        create_response = self.client.post(
+            reverse("purchaseorder-list"),
+            self.purchase_order_payload(discount_codes=["delete"]),
+            format="json",
+        )
+
+        delete_response = self.client.delete(
+            reverse("purchaseorder-detail", args=[create_response.data["id"]]),
+        )
+
+        self.assertEqual(create_response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(delete_response.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertEqual(PurchaseOrder.objects.count(), 0)
+        self.assertEqual(AppliedDiscount.objects.count(), 0)
+        self.assertEqual(DiscountRedemption.objects.count(), 0)
+
+    def test_line_and_document_purchase_discounts_feed_landed_cost_weights(self):
+        line_rule = DiscountRule.objects.create(
+            name="Unit supplier rebate",
+            channel=DiscountRule.Channel.PURCHASING,
+            scope=DiscountRule.Scope.LINE,
+            value_type=DiscountRule.ValueType.FIXED_UNIT_AMOUNT,
+            value=Decimal("1.00"),
+            priority=1,
+            exclusive=False,
+        )
+        line_rule.products.add(self.product)
+        DiscountRule.objects.create(
+            name="Document supplier rebate",
+            channel=DiscountRule.Channel.PURCHASING,
+            value_type=DiscountRule.ValueType.PERCENTAGE,
+            value=Decimal("10.00"),
+            priority=2,
+            exclusive=False,
+        )
+
+        response = self.client.post(
+            reverse("purchaseorder-list"),
+            self.purchase_order_payload(
+                shipping_amount="3.42",
+                landed_cost_allocation_method=(
+                    PurchaseOrder.LandedCostAllocationMethod.LINE_VALUE
+                ),
+                lines=[
+                    {
+                        "product": self.product.pk,
+                        "quantity": 2,
+                        "unit_cost": "10.00",
+                    },
+                    {
+                        "product": self.other_product.pk,
+                        "quantity": 1,
+                        "unit_cost": "20.00",
+                    },
+                ],
+            ),
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["subtotal"], "40.00")
+        self.assertEqual(response.data["discount_total"], "5.80")
+        self.assertEqual(response.data["landed_cost_total"], "3.42")
+        self.assertEqual(response.data["total"], "37.62")
+        lines = sorted(response.data["lines"], key=lambda line: line["product"])
+        self.assertEqual(lines[0]["discount_amount"], "3.80")
+        self.assertEqual(lines[0]["net_line_total"], "16.20")
+        self.assertEqual(lines[0]["allocated_landed_cost"], "1.62")
+        self.assertEqual(lines[0]["effective_line_total"], "17.82")
+        self.assertEqual(lines[1]["discount_amount"], "2.00")
+        self.assertEqual(lines[1]["net_line_total"], "18.00")
+        self.assertEqual(lines[1]["allocated_landed_cost"], "1.80")
+        self.assertEqual(lines[1]["effective_line_total"], "19.80")
+
+    def test_invalid_disabled_or_expired_purchase_coupon_is_rejected(self):
+        DiscountRule.objects.create(
+            name="Disabled coupon",
+            channel=DiscountRule.Channel.PURCHASING,
+            application_type=DiscountRule.ApplicationType.COUPON_CODE,
+            coupon_code="OFF",
+            value_type=DiscountRule.ValueType.FIXED_AMOUNT,
+            value=Decimal("1.00"),
+            is_active=False,
+        )
+        DiscountRule.objects.create(
+            name="Expired coupon",
+            channel=DiscountRule.Channel.PURCHASING,
+            application_type=DiscountRule.ApplicationType.COUPON_CODE,
+            coupon_code="OLD",
+            value_type=DiscountRule.ValueType.FIXED_AMOUNT,
+            value=Decimal("1.00"),
+            ends_at=timezone.now() - timezone.timedelta(days=1),
+        )
+
+        for code in ("MISSING", "OFF", "OLD"):
+            with self.subTest(code=code):
+                response = self.client.post(
+                    reverse("purchaseorder-list"),
+                    self.purchase_order_payload(discount_codes=[code]),
+                    format="json",
+                )
+
+                self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+                self.assertIn("discount_codes", response.data)
+                self.assertEqual(PurchaseOrder.objects.count(), 0)
+
+    def test_purchase_coupon_respects_supplier_usage_limit(self):
+        DiscountRule.objects.create(
+            name="Supplier once",
+            channel=DiscountRule.Channel.PURCHASING,
+            application_type=DiscountRule.ApplicationType.COUPON_CODE,
+            coupon_code="SUPONCE",
+            value_type=DiscountRule.ValueType.FIXED_AMOUNT,
+            value=Decimal("1.00"),
+            per_supplier_usage_limit=1,
+        )
+
+        first_response = self.client.post(
+            reverse("purchaseorder-list"),
+            self.purchase_order_payload(discount_codes=["suponce"]),
+            format="json",
+        )
+        second_response = self.client.post(
+            reverse("purchaseorder-list"),
+            self.purchase_order_payload(discount_codes=["suponce"]),
+            format="json",
+        )
+
+        self.assertEqual(first_response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(first_response.data["discount_total"], "1.00")
+        self.assertEqual(second_response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("discount_codes", second_response.data)
+        self.assertEqual(PurchaseOrder.objects.count(), 1)
+        self.assertEqual(DiscountRedemption.objects.count(), 1)
 
     def test_negative_landed_cost_is_rejected(self):
         response = self.client.post(
@@ -975,6 +1292,137 @@ class PurchaseOrderApiTests(TestCase):
         self.assertEqual(movement.on_hand_before, 5)
         self.assertEqual(movement.on_hand_after, 3)
         self.assertEqual(movement.created_by, self.user)
+
+    def test_purchase_return_uses_discounted_net_amount_for_supplier_credit(self):
+        DiscountRule.objects.create(
+            name="Quarter off",
+            channel=DiscountRule.Channel.PURCHASING,
+            value_type=DiscountRule.ValueType.PERCENTAGE,
+            value=Decimal("25.00"),
+        )
+        StockItem.objects.create(product=self.product, quantity_on_hand=0)
+        create_response = self.client.post(
+            reverse("purchaseorder-list"),
+            {
+                "supplier": self.supplier.pk,
+                "lines": [
+                    {
+                        "product": self.product.pk,
+                        "quantity": 4,
+                        "unit_cost": "10.00",
+                    }
+                ],
+            },
+            format="json",
+        )
+        order_id = create_response.data["id"]
+        self.client.post(reverse("purchaseorder-submit", args=[order_id]), format="json")
+        self.client.post(reverse("purchaseorder-receive", args=[order_id]), format="json")
+        line = PurchaseOrder.objects.get(pk=order_id).lines.get()
+
+        response = self.client.post(
+            reverse("purchaseorder-return-items", args=[order_id]),
+            {"lines": [{"line": line.pk, "quantity": 2}]},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        adjustment = response.data["adjustments"][0]
+        self.assertEqual(adjustment["amount"], "15.00")
+        self.assertEqual(adjustment["outbound_amount"], "15.00")
+        self.assertEqual(adjustment["net_amount"], "-15.00")
+        self.assertEqual(adjustment["lines"][0]["unit_cost"], "7.50")
+        self.assertEqual(adjustment["lines"][0]["line_total"], "15.00")
+        self.assertEqual(adjustment["supplier_credit"]["amount"], "15.00")
+
+    def test_purchase_refund_and_exchange_use_discounted_net_amounts(self):
+        DiscountRule.objects.create(
+            name="Quarter off adjustments",
+            channel=DiscountRule.Channel.PURCHASING,
+            value_type=DiscountRule.ValueType.PERCENTAGE,
+            value=Decimal("25.00"),
+        )
+        StockItem.objects.create(product=self.product, quantity_on_hand=0)
+        refund_create_response = self.client.post(
+            reverse("purchaseorder-list"),
+            {
+                "supplier": self.supplier.pk,
+                "lines": [
+                    {
+                        "product": self.product.pk,
+                        "quantity": 4,
+                        "unit_cost": "10.00",
+                    }
+                ],
+            },
+            format="json",
+        )
+        refund_order_id = refund_create_response.data["id"]
+        self.client.post(
+            reverse("purchaseorder-submit", args=[refund_order_id]),
+            format="json",
+        )
+        self.client.post(
+            reverse("purchaseorder-receive", args=[refund_order_id]),
+            format="json",
+        )
+        refund_line = PurchaseOrder.objects.get(pk=refund_order_id).lines.get()
+
+        refund_response = self.client.post(
+            reverse("purchaseorder-refund-items", args=[refund_order_id]),
+            {"lines": [{"line": refund_line.pk, "quantity": 2}]},
+            format="json",
+        )
+
+        exchange_create_response = self.client.post(
+            reverse("purchaseorder-list"),
+            {
+                "supplier": self.supplier.pk,
+                "lines": [
+                    {
+                        "product": self.product.pk,
+                        "quantity": 4,
+                        "unit_cost": "10.00",
+                    }
+                ],
+            },
+            format="json",
+        )
+        exchange_order_id = exchange_create_response.data["id"]
+        self.client.post(
+            reverse("purchaseorder-submit", args=[exchange_order_id]),
+            format="json",
+        )
+        self.client.post(
+            reverse("purchaseorder-receive", args=[exchange_order_id]),
+            format="json",
+        )
+        exchange_line = PurchaseOrder.objects.get(pk=exchange_order_id).lines.get()
+
+        exchange_response = self.client.post(
+            reverse("purchaseorder-exchange-items", args=[exchange_order_id]),
+            {"lines": [{"line": exchange_line.pk, "quantity": 2}]},
+            format="json",
+        )
+
+        self.assertEqual(refund_response.status_code, status.HTTP_200_OK)
+        refund_adjustment = refund_response.data["adjustments"][0]
+        self.assertEqual(refund_adjustment["amount"], "15.00")
+        self.assertEqual(refund_adjustment["settlement_method"], "refund")
+        self.assertEqual(refund_adjustment["lines"][0]["unit_cost"], "7.50")
+        self.assertEqual(SupplierPayment.objects.get().amount, Decimal("15.00"))
+        self.assertEqual(SupplierPayment.objects.get().method, SupplierPayment.Method.REFUND)
+
+        self.assertEqual(exchange_response.status_code, status.HTTP_200_OK)
+        exchange_adjustment = exchange_response.data["adjustments"][0]
+        self.assertEqual(exchange_adjustment["outbound_amount"], "15.00")
+        self.assertEqual(exchange_adjustment["replacement_amount"], "15.00")
+        self.assertEqual(exchange_adjustment["net_amount"], "0.00")
+        self.assertEqual(exchange_adjustment["lines"][0]["unit_cost"], "7.50")
+        self.assertEqual(
+            exchange_adjustment["replacement_lines"][0]["unit_cost"],
+            "7.50",
+        )
 
     def test_refund_rejects_more_than_remaining_purchase_quantity(self):
         order = PurchaseOrder.objects.create(

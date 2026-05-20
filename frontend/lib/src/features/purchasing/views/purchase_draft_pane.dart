@@ -40,11 +40,14 @@ class _PurchaseDraftPaneState extends State<PurchaseDraftPane> {
       TextEditingController(
         text: _costInputText(widget.viewModel.handlingCost),
       );
+  late final TextEditingController _discountCodeController =
+      TextEditingController(text: widget.viewModel.discountCode);
   final FocusNode _supplierInvoiceNumberFocusNode = FocusNode();
   final FocusNode _supplierInvoiceDateFocusNode = FocusNode();
   final FocusNode _shippingCostFocusNode = FocusNode();
   final FocusNode _customsCostFocusNode = FocusNode();
   final FocusNode _handlingCostFocusNode = FocusNode();
+  final FocusNode _discountCodeFocusNode = FocusNode();
 
   PurchaseViewModel get viewModel => widget.viewModel;
 
@@ -79,6 +82,11 @@ class _PurchaseDraftPaneState extends State<PurchaseDraftPane> {
       value: _costInputText(widget.viewModel.handlingCost),
       syncEmptyWhileFocused: false,
     );
+    _syncController(
+      controller: _discountCodeController,
+      focusNode: _discountCodeFocusNode,
+      value: widget.viewModel.discountCode,
+    );
   }
 
   @override
@@ -88,11 +96,13 @@ class _PurchaseDraftPaneState extends State<PurchaseDraftPane> {
     _shippingCostController.dispose();
     _customsCostController.dispose();
     _handlingCostController.dispose();
+    _discountCodeController.dispose();
     _supplierInvoiceNumberFocusNode.dispose();
     _supplierInvoiceDateFocusNode.dispose();
     _shippingCostFocusNode.dispose();
     _customsCostFocusNode.dispose();
     _handlingCostFocusNode.dispose();
+    _discountCodeFocusNode.dispose();
     super.dispose();
   }
 
@@ -103,7 +113,7 @@ class _PurchaseDraftPaneState extends State<PurchaseDraftPane> {
     return ColoredBox(
       color: Colors.white,
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -123,7 +133,7 @@ class _PurchaseDraftPaneState extends State<PurchaseDraftPane> {
                 ),
               ],
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 4),
             ContactSelectionTile(
               label: l10n.selectedSupplierLabel,
               value: viewModel.selectedSupplier?.name ?? '',
@@ -141,7 +151,7 @@ class _PurchaseDraftPaneState extends State<PurchaseDraftPane> {
                 style: TextStyle(color: Theme.of(context).colorScheme.error),
               ),
             ],
-            const SizedBox(height: 8),
+            const SizedBox(height: 4),
             Row(
               children: [
                 Expanded(
@@ -189,9 +199,65 @@ class _PurchaseDraftPaneState extends State<PurchaseDraftPane> {
                 ),
               ],
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 4),
             _buildLandedCostSection(l10n),
-            const SizedBox(height: 8),
+            const SizedBox(height: 4),
+            TextField(
+              key: const ValueKey('purchase_discount_code_field'),
+              controller: _discountCodeController,
+              focusNode: _discountCodeFocusNode,
+              enabled: !viewModel.isSubmitting,
+              textCapitalization: TextCapitalization.characters,
+              decoration: InputDecoration(
+                labelText: l10n.discountCouponCodeLabel,
+                hintText: l10n.purchaseDiscountCodeHint,
+                isDense: true,
+                prefixIcon: const Icon(Icons.confirmation_number_outlined),
+                suffixIcon: viewModel.isLoadingDiscountPreview
+                    ? const Padding(
+                        padding: EdgeInsets.all(12),
+                        child: SizedBox.square(
+                          dimension: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      )
+                    : IconButton(
+                        tooltip: _discountCodeController.text.trim().isEmpty
+                            ? l10n.refreshDiscountPreviewTooltip
+                            : l10n.clearCouponCodeTooltip,
+                        onPressed: viewModel.isSubmitting
+                            ? null
+                            : () {
+                                if (_discountCodeController.text
+                                    .trim()
+                                    .isEmpty) {
+                                  viewModel.refreshDiscountPreview();
+                                } else {
+                                  _discountCodeController.clear();
+                                  viewModel.updateDiscountCode('');
+                                }
+                              },
+                        icon: Icon(
+                          _discountCodeController.text.trim().isEmpty
+                              ? Icons.sync
+                              : Icons.close,
+                        ),
+                      ),
+                errorText: viewModel.unappliedDiscountCodes.isNotEmpty
+                    ? l10n.discountCouponUnavailable(
+                        viewModel.unappliedDiscountCodes.join('، '),
+                      )
+                    : viewModel.hasDiscountPreviewError
+                    ? l10n.discountPreviewUnavailable
+                    : null,
+              ),
+              onChanged: (value) {
+                setState(() {});
+                viewModel.updateDiscountCode(value);
+              },
+              onSubmitted: (_) => viewModel.refreshDiscountPreview(),
+            ),
+            const SizedBox(height: 4),
             Expanded(
               child: viewModel.draft.isEmpty
                   ? Center(child: Text(l10n.emptyPurchaseDraft))
@@ -216,6 +282,18 @@ class _PurchaseDraftPaneState extends State<PurchaseDraftPane> {
             Column(
               children: [
                 TotalRow(label: l10n.subtotal, value: viewModel.subtotal),
+                if (viewModel.discountTotal > 0)
+                  TotalRow(
+                    label: l10n.discountTotalLabel,
+                    value: -viewModel.discountTotal,
+                  ),
+                for (final discount in viewModel.appliedDiscounts)
+                  TotalRow(
+                    label: discount.couponCode.isEmpty
+                        ? discount.ruleName
+                        : l10n.discountCouponAppliedLabel(discount.couponCode),
+                    value: -discount.discountAmount,
+                  ),
                 if (viewModel.landedCostTotal > 0)
                   TotalRow(
                     label: l10n.purchaseLandedCostTotalLabel,
@@ -229,7 +307,7 @@ class _PurchaseDraftPaneState extends State<PurchaseDraftPane> {
                 ),
               ],
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 4),
             CheckboxListTile(
               value: viewModel.receiveImmediately,
               onChanged: viewModel.isSubmitting
@@ -241,7 +319,7 @@ class _PurchaseDraftPaneState extends State<PurchaseDraftPane> {
               controlAffinity: ListTileControlAffinity.leading,
               title: Text(l10n.receivePurchaseImmediatelyLabel),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 6),
             FilledButton.icon(
               onPressed: viewModel.canSubmitDraft
                   ? () => _submitDraft(context)
@@ -355,6 +433,32 @@ class _PurchaseDraftPaneState extends State<PurchaseDraftPane> {
   Future<void> _submitDraft(BuildContext context) async {
     final l10n = AppLocalizations.of(context)!;
     final messenger = ScaffoldMessenger.of(context);
+    await viewModel.refreshDiscountPreview();
+    if (!context.mounted) {
+      return;
+    }
+    if (viewModel.hasDiscountPreviewError) {
+      messenger
+        ..clearSnackBars()
+        ..showSnackBar(
+          SnackBar(content: Text(l10n.discountPreviewUnavailable)),
+        );
+      return;
+    }
+    if (viewModel.unappliedDiscountCodes.isNotEmpty) {
+      messenger
+        ..clearSnackBars()
+        ..showSnackBar(
+          SnackBar(
+            content: Text(
+              l10n.discountCouponUnavailable(
+                viewModel.unappliedDiscountCodes.join('، '),
+              ),
+            ),
+          ),
+        );
+      return;
+    }
     final result = await viewModel.submitDraft();
     if (!context.mounted) {
       return;

@@ -340,6 +340,7 @@ class PurchaseOrderDraft {
     this.customsCost = 0,
     this.handlingCost = 0,
     this.landedCostAllocationMethod = LandedCostAllocationMethod.byLineValue,
+    this.discountCode = '',
   });
 
   final List<PurchaseOrderLineDraft> lines;
@@ -351,6 +352,7 @@ class PurchaseOrderDraft {
   final double customsCost;
   final double handlingCost;
   final LandedCostAllocationMethod landedCostAllocationMethod;
+  final String discountCode;
 
   factory PurchaseOrderDraft.fromDraftLines(
     List<PurchaseDraftLine> lines, {
@@ -362,6 +364,7 @@ class PurchaseOrderDraft {
     double handlingCost = 0,
     LandedCostAllocationMethod landedCostAllocationMethod =
         LandedCostAllocationMethod.byLineValue,
+    String discountCode = '',
   }) {
     return PurchaseOrderDraft(
       supplierId: supplierId,
@@ -371,6 +374,7 @@ class PurchaseOrderDraft {
       customsCost: customsCost,
       handlingCost: handlingCost,
       landedCostAllocationMethod: landedCostAllocationMethod,
+      discountCode: discountCode,
       lines: lines
           .map(
             (line) => PurchaseOrderLineDraft(
@@ -385,6 +389,7 @@ class PurchaseOrderDraft {
 
   Map<String, Object?> toJson() {
     final invoiceNumber = supplierInvoiceNumber.trim();
+    final normalizedDiscountCode = discountCode.trim();
     return {
       'supplier': supplierId,
       if (dueDate != null)
@@ -399,8 +404,107 @@ class PurchaseOrderDraft {
       'customs_amount': customsCost.toStringAsFixed(2),
       'handling_amount': handlingCost.toStringAsFixed(2),
       'landed_cost_allocation_method': landedCostAllocationMethod.apiValue,
+      if (normalizedDiscountCode.isNotEmpty)
+        'discount_codes': [normalizedDiscountCode],
       'lines': lines.map((line) => line.toJson()).toList(),
     };
+  }
+}
+
+class PurchaseDiscountPreviewDraft {
+  const PurchaseDiscountPreviewDraft({
+    required this.lines,
+    required this.supplierId,
+    this.shippingCost = 0,
+    this.customsCost = 0,
+    this.handlingCost = 0,
+    this.landedCostAllocationMethod = LandedCostAllocationMethod.byLineValue,
+    this.discountCode = '',
+  });
+
+  final List<PurchaseOrderLineDraft> lines;
+  final int supplierId;
+  final double shippingCost;
+  final double customsCost;
+  final double handlingCost;
+  final LandedCostAllocationMethod landedCostAllocationMethod;
+  final String discountCode;
+
+  factory PurchaseDiscountPreviewDraft.fromDraftLines(
+    List<PurchaseDraftLine> lines, {
+    required int supplierId,
+    double shippingCost = 0,
+    double customsCost = 0,
+    double handlingCost = 0,
+    LandedCostAllocationMethod landedCostAllocationMethod =
+        LandedCostAllocationMethod.byLineValue,
+    String discountCode = '',
+  }) {
+    return PurchaseDiscountPreviewDraft(
+      supplierId: supplierId,
+      shippingCost: shippingCost,
+      customsCost: customsCost,
+      handlingCost: handlingCost,
+      landedCostAllocationMethod: landedCostAllocationMethod,
+      discountCode: discountCode,
+      lines: lines
+          .map(
+            (line) => PurchaseOrderLineDraft(
+              productId: line.product.id,
+              quantity: line.quantity,
+              unitCost: line.unitCost,
+            ),
+          )
+          .toList(growable: false),
+    );
+  }
+
+  Map<String, Object?> toJson() {
+    final normalizedDiscountCode = discountCode.trim();
+    return {
+      'supplier': supplierId,
+      'shipping_amount': shippingCost.toStringAsFixed(2),
+      'customs_amount': customsCost.toStringAsFixed(2),
+      'handling_amount': handlingCost.toStringAsFixed(2),
+      'landed_cost_allocation_method': landedCostAllocationMethod.apiValue,
+      if (normalizedDiscountCode.isNotEmpty)
+        'discount_codes': [normalizedDiscountCode],
+      'lines': lines.map((line) => line.toJson()).toList(),
+    };
+  }
+}
+
+class PurchaseDiscountPreview {
+  const PurchaseDiscountPreview({
+    required this.subtotal,
+    required this.discountTotal,
+    required this.landedCostTotal,
+    required this.total,
+    this.appliedDiscounts = const [],
+    this.unappliedDiscountCodes = const [],
+  });
+
+  final double subtotal;
+  final double discountTotal;
+  final double landedCostTotal;
+  final double total;
+  final List<AppliedPurchaseDiscount> appliedDiscounts;
+  final List<String> unappliedDiscountCodes;
+
+  factory PurchaseDiscountPreview.fromJson(Map<String, Object?> json) {
+    return PurchaseDiscountPreview(
+      subtotal: _moneyFromJson(json['subtotal']),
+      discountTotal: _moneyFromJson(json['discount_total']),
+      landedCostTotal: _moneyFromJson(json['landed_cost_total']),
+      total: _moneyFromJson(json['total']),
+      appliedDiscounts: _listFromJson(json['applied_discounts'])
+          .whereType<Map<String, Object?>>()
+          .map(AppliedPurchaseDiscount.fromJson)
+          .toList(growable: false),
+      unappliedDiscountCodes: _listFromJson(
+        json['unapplied_discount_codes'],
+      ).map((code) => code.toString()).toList(growable: false),
+    );
   }
 }
 
@@ -462,6 +566,9 @@ class PurchaseOrder {
     required this.canReturn,
     required this.canRefund,
     required this.canExchange,
+    this.discountTotal = 0,
+    this.discountCodes = const [],
+    this.appliedDiscounts = const [],
     this.shippingCost = 0,
     this.customsCost = 0,
     this.handlingCost = 0,
@@ -491,6 +598,9 @@ class PurchaseOrder {
   final List<PurchaseOrderAdjustment> adjustments;
   final List<PurchaseReceipt> receipts;
   final double subtotal;
+  final double discountTotal;
+  final List<String> discountCodes;
+  final List<AppliedPurchaseDiscount> appliedDiscounts;
   final double total;
   final double shippingCost;
   final double customsCost;
@@ -571,6 +681,14 @@ class PurchaseOrder {
           .map(PurchaseReceipt.fromJson)
           .toList(growable: false),
       subtotal: _moneyFromJson(json['subtotal']),
+      discountTotal: _moneyFromJson(json['discount_total']),
+      discountCodes: _listFromJson(
+        json['discount_codes'],
+      ).map((code) => code.toString()).toList(growable: false),
+      appliedDiscounts: _listFromJson(json['applied_discounts'])
+          .whereType<Map<String, Object?>>()
+          .map(AppliedPurchaseDiscount.fromJson)
+          .toList(growable: false),
       total: _moneyFromJson(json['total']),
       shippingCost: _moneyFromJson(
         json['shipping_amount'] ?? json['shipping_cost'],
@@ -613,6 +731,35 @@ class PurchaseOrder {
   }
 }
 
+class AppliedPurchaseDiscount {
+  const AppliedPurchaseDiscount({
+    required this.ruleName,
+    required this.source,
+    required this.scope,
+    required this.valueType,
+    required this.discountAmount,
+    this.couponCode = '',
+  });
+
+  final String ruleName;
+  final String couponCode;
+  final String source;
+  final String scope;
+  final String valueType;
+  final double discountAmount;
+
+  factory AppliedPurchaseDiscount.fromJson(Map<String, Object?> json) {
+    return AppliedPurchaseDiscount(
+      ruleName: json['rule_name']?.toString() ?? '',
+      couponCode: json['coupon_code']?.toString() ?? '',
+      source: json['source']?.toString() ?? '',
+      scope: json['scope']?.toString() ?? '',
+      valueType: json['value_type']?.toString() ?? '',
+      discountAmount: _moneyFromJson(json['discount_amount']),
+    );
+  }
+}
+
 class PurchaseOrderLine {
   const PurchaseOrderLine({
     required this.id,
@@ -626,6 +773,9 @@ class PurchaseOrderLine {
     required this.openQuantity,
     required this.hasReceivingTotals,
     required this.unitCost,
+    this.discountAmount = 0,
+    this.netLineTotal,
+    this.netUnitCost,
     required this.total,
     this.productName,
     this.productSku,
@@ -651,6 +801,9 @@ class PurchaseOrderLine {
   final int openQuantity;
   final bool hasReceivingTotals;
   final double unitCost;
+  final double discountAmount;
+  final double? netLineTotal;
+  final double? netUnitCost;
   final double total;
   final double? previousUnitCost;
   final double? unitCostChange;
@@ -737,6 +890,9 @@ class PurchaseOrderLine {
           rejectedQuantity != null ||
           openQuantity != null,
       unitCost: _moneyFromJson(json['unit_cost']),
+      discountAmount: _moneyFromJson(json['discount_amount']),
+      netLineTotal: _nullableMoneyFromJson(json['net_line_total']),
+      netUnitCost: _nullableMoneyFromJson(json['net_unit_cost']),
       total: _moneyFromJson(json['line_total']),
       previousUnitCost: previousUnitCost,
       unitCostChange: _nullableMoneyFromJson(
@@ -788,6 +944,9 @@ class PurchaseOrderLine {
       openQuantity: openQuantity ?? this.openQuantity,
       hasReceivingTotals: hasReceivingTotals ?? this.hasReceivingTotals,
       unitCost: unitCost,
+      discountAmount: discountAmount,
+      netLineTotal: netLineTotal,
+      netUnitCost: netUnitCost,
       total: total,
       previousUnitCost: previousUnitCost,
       unitCostChange: unitCostChange,

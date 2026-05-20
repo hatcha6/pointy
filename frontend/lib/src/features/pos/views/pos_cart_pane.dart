@@ -74,6 +74,8 @@ class PosCartPane extends StatelessWidget {
                     onClear: () => viewModel.selectCustomer(null),
                   ),
                   const SizedBox(height: 8),
+                  _CouponCodeField(viewModel: viewModel),
+                  const SizedBox(height: 8),
                   Expanded(
                     child: viewModel.cart.isEmpty
                         ? Center(
@@ -133,6 +135,33 @@ class PosCartPane extends StatelessWidget {
       if (!context.mounted) {
         return;
       }
+    }
+
+    await viewModel.refreshDiscountPreview();
+    if (!context.mounted) {
+      return;
+    }
+    if (viewModel.hasDiscountPreviewError) {
+      messenger
+        ..clearSnackBars()
+        ..showSnackBar(
+          SnackBar(content: Text(l10n.discountPreviewUnavailable)),
+        );
+      return;
+    }
+    if (viewModel.unappliedCouponCodes.isNotEmpty) {
+      messenger
+        ..clearSnackBars()
+        ..showSnackBar(
+          SnackBar(
+            content: Text(
+              l10n.discountCouponUnavailable(
+                viewModel.unappliedCouponCodes.join('، '),
+              ),
+            ),
+          ),
+        );
+      return;
     }
 
     final payment = await _showPaymentDialog(context);
@@ -246,6 +275,92 @@ class PosCartPane extends StatelessWidget {
     return showDialog<_PaymentInput>(
       context: context,
       builder: (context) => _PaymentDialog(viewModel: viewModel),
+    );
+  }
+}
+
+class _CouponCodeField extends StatefulWidget {
+  const _CouponCodeField({required this.viewModel});
+
+  final PosViewModel viewModel;
+
+  @override
+  State<_CouponCodeField> createState() => _CouponCodeFieldState();
+}
+
+class _CouponCodeFieldState extends State<_CouponCodeField> {
+  late final TextEditingController _controller = TextEditingController(
+    text: widget.viewModel.couponCode,
+  );
+  final FocusNode _focusNode = FocusNode();
+
+  @override
+  void didUpdateWidget(covariant _CouponCodeField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!_focusNode.hasFocus &&
+        _controller.text != widget.viewModel.couponCode) {
+      _controller.text = widget.viewModel.couponCode;
+    }
+  }
+
+  @override
+  void dispose() {
+    _focusNode.dispose();
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final viewModel = widget.viewModel;
+    final hasCoupon = _controller.text.trim().isNotEmpty;
+    final hasInvalidCoupon = viewModel.unappliedCouponCodes.isNotEmpty;
+
+    return TextField(
+      controller: _controller,
+      focusNode: _focusNode,
+      enabled: !viewModel.isCheckingOut,
+      textCapitalization: TextCapitalization.characters,
+      decoration: InputDecoration(
+        labelText: l10n.discountCouponCodeLabel,
+        hintText: l10n.discountCouponCodeHint,
+        isDense: true,
+        prefixIcon: const Icon(Icons.confirmation_number_outlined),
+        suffixIcon: viewModel.isLoadingDiscountPreview
+            ? const Padding(
+                padding: EdgeInsets.all(12),
+                child: SizedBox.square(
+                  dimension: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              )
+            : IconButton(
+                tooltip: hasCoupon
+                    ? l10n.clearCouponCodeTooltip
+                    : l10n.refreshDiscountPreviewTooltip,
+                onPressed: viewModel.isCheckingOut
+                    ? null
+                    : () {
+                        if (hasCoupon) {
+                          _controller.clear();
+                          viewModel.updateCouponCode('');
+                        } else {
+                          viewModel.refreshDiscountPreview();
+                        }
+                      },
+                icon: Icon(hasCoupon ? Icons.close : Icons.sync),
+              ),
+        errorText: hasInvalidCoupon
+            ? l10n.discountCouponUnavailable(
+                viewModel.unappliedCouponCodes.join('، '),
+              )
+            : viewModel.hasDiscountPreviewError
+            ? l10n.discountPreviewUnavailable
+            : null,
+      ),
+      onChanged: viewModel.updateCouponCode,
+      onSubmitted: (_) => viewModel.refreshDiscountPreview(),
     );
   }
 }

@@ -10,6 +10,7 @@ from rest_framework.test import APIClient
 from apps.catalog.models import Product
 from apps.core.models import ShopSettings
 from apps.core.roles import CASHIER_GROUP, MANAGER_GROUP, ensure_role_groups
+from apps.discounts.models import DiscountRule
 from apps.inventory.models import StockItem
 from apps.payments.models import Payment
 from apps.sales.models import Order
@@ -148,6 +149,29 @@ class ReceiptAutoPrintTests(PrintingTestMixin, TestCase):
         self.assertEqual(job.payload["order"]["total"], "8.50")
         self.assertEqual(job.payload["order"]["lines"][0]["name"], "قهوة مختصة")
         self.assertEqual(job.payload["order"]["lines"][0]["unit_price"], "4.25")
+
+    def test_receipt_job_payload_includes_discount_values(self):
+        DiscountRule.objects.create(
+            name="Receipt discount",
+            channel=DiscountRule.Channel.SALES,
+            value_type=DiscountRule.ValueType.PERCENTAGE,
+            value=Decimal("10.00"),
+        )
+
+        response = self.checkout({"amount_received": "7.65"})
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        job = PrintJob.objects.get(order_id=response.data["id"])
+        self.assertEqual(job.payload["order"]["subtotal"], "8.50")
+        self.assertEqual(job.payload["order"]["discount_total"], "0.85")
+        self.assertEqual(job.payload["order"]["total"], "7.65")
+        self.assertEqual(
+            job.payload["order"]["applied_discounts"][0]["rule_name"],
+            "Receipt discount",
+        )
+        self.assertEqual(job.payload["order"]["lines"][0]["line_subtotal"], "8.50")
+        self.assertEqual(job.payload["order"]["lines"][0]["discount_total"], "0.85")
+        self.assertEqual(job.payload["order"]["lines"][0]["line_total"], "7.65")
 
     def test_checkout_can_return_claimed_auto_print_job(self):
         response = self.checkout(self.print_invoice_payload())

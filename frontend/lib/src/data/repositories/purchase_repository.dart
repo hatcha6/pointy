@@ -26,6 +26,16 @@ class PurchaseRepository {
     }
   }
 
+  Future<Result<PurchaseDiscountPreview>> previewDiscounts(
+    PurchaseDiscountPreviewDraft draft,
+  ) async {
+    try {
+      return Ok(await _service.previewPurchaseDiscounts(draft));
+    } on Exception catch (exception) {
+      return Error(exception);
+    }
+  }
+
   Future<Result<SupplierPaymentPage>> loadSupplierPayments({
     int? supplierId,
     int? purchaseOrderId,
@@ -143,6 +153,7 @@ class PurchaseRepository {
     double handlingCost = 0,
     LandedCostAllocationMethod landedCostAllocationMethod =
         LandedCostAllocationMethod.byLineValue,
+    String discountCode = '',
   }) async {
     if (lines.isEmpty) {
       return Error(Exception('purchase draft is empty'));
@@ -158,6 +169,7 @@ class PurchaseRepository {
         customsCost: customsCost,
         handlingCost: handlingCost,
         landedCostAllocationMethod: landedCostAllocationMethod,
+        discountCode: discountCode,
       );
       final order = await _service.createPurchaseOrder(draft);
       final submittedOrder = await _service.submitPurchaseOrder(order.id);

@@ -28,6 +28,7 @@ extension PosBarcodeActions on PosViewModel {
           _addProductToCart(value, quantity: quantity);
           _lastScannedProductName = value.name;
           _barcodeScanStatus = BarcodeScanStatus.found;
+          unawaited(refreshDiscountPreview());
         }
       case Error<Product?>():
         _barcodeScanStatus = BarcodeScanStatus.error;

@@ -7,8 +7,23 @@ from rest_framework import serializers
 
 from apps.core.models import ShopSettings
 from apps.core.roles import user_is_manager
+from apps.discounts.models import DiscountRule, normalize_coupon_code
+from apps.discounts.services import (
+    DiscountContext,
+    DiscountEngine,
+    DiscountLineInput,
+    DiscountUsageLimitExceeded,
+    persist_applied_discounts,
+)
 from apps.inventory.models import StockItem, StockMovement
 from .models import Order, OrderAdjustment, OrderAdjustmentLine, OrderLine
+
+
+MONEY_PLACES = Decimal("0.01")
+
+
+def money(value):
+    return Decimal(value).quantize(MONEY_PLACES)
 
 
 def cashier_window_expired(order):
@@ -38,20 +53,123 @@ def adjustment_created_by(request):
 
 
 @transaction.atomic
-def create_order_with_lines(*, lines_data, **order_fields):
+def create_order_with_lines(
+    *,
+    lines_data,
+    coupon_codes=(),
+    discount_result=None,
+    **order_fields,
+):
+    customer = order_fields.get("customer")
+    if discount_result is None:
+        discount_result = calculate_sales_discounts(
+            lines_data=lines_data,
+            customer=customer,
+            coupon_codes=coupon_codes,
+        )
+    discount_by_line_key = discount_allocations_by_line_key(discount_result)
+
     order = Order.objects.create(**order_fields)
+    line_objects_by_key = {}
     for line_data in lines_data:
         product = line_data["product"]
-        OrderLine.objects.create(
+        line_key = checkout_line_key(line_data)
+        line = OrderLine.objects.create(
             order=order,
             product=product,
             quantity=line_data["quantity"],
             unit_price=product.unit_price,
             unit_cost=latest_sale_unit_cost(product),
+            discount_total=discount_by_line_key.get(line_key, Decimal("0.00")),
         )
+        line_objects_by_key[line_key] = line
     order.recalculate()
-    order.save(update_fields=["subtotal", "total", "updated_at"])
+    order.save(update_fields=["subtotal", "discount_total", "total", "updated_at"])
+    try:
+        persist_applied_discounts(
+            document=order,
+            result=discount_result,
+            line_objects_by_key=line_objects_by_key,
+        )
+    except DiscountUsageLimitExceeded as exc:
+        raise serializers.ValidationError(
+            discount_usage_limit_error_payload(exc, "coupon_codes")
+        )
     return order
+
+
+def checkout_line_key(line_data):
+    return str(line_data.get("_discount_line_key", "0"))
+
+
+def prepare_discount_lines(lines_data):
+    prepared_lines = []
+    for index, line_data in enumerate(lines_data):
+        line_data["_discount_line_key"] = str(index)
+        product = line_data["product"]
+        prepared_lines.append(
+            DiscountLineInput(
+                key=str(index),
+                product_id=product.pk,
+                quantity=line_data["quantity"],
+                unit_amount=product.unit_price,
+            )
+        )
+    return tuple(prepared_lines)
+
+
+def sales_discount_context(*, lines_data, customer=None, coupon_codes=()):
+    return DiscountContext(
+        channel=DiscountRule.Channel.SALES,
+        customer_id=customer.pk if customer is not None else None,
+        coupon_codes=tuple(coupon_codes or ()),
+        lines=prepare_discount_lines(lines_data),
+    )
+
+
+def calculate_sales_discounts(*, lines_data, customer=None, coupon_codes=()):
+    return DiscountEngine().calculate(
+        sales_discount_context(
+            lines_data=lines_data,
+            customer=customer,
+            coupon_codes=coupon_codes,
+        )
+    )
+
+
+def discount_allocations_by_line_key(discount_result):
+    allocations = {}
+    for application in discount_result.applications:
+        for allocation in application.allocations:
+            allocations[allocation.line_key] = money(
+                allocations.get(allocation.line_key, Decimal("0.00")) + allocation.amount
+            )
+    return allocations
+
+
+def unapplied_coupon_codes(discount_result, coupon_codes):
+    requested_codes = {
+        normalize_coupon_code(code)
+        for code in coupon_codes or ()
+        if normalize_coupon_code(code)
+    }
+    applied_codes = {
+        normalize_coupon_code(application.coupon_code)
+        for application in discount_result.applications
+        if application.source == DiscountRule.ApplicationType.COUPON_CODE
+    }
+    return sorted(requested_codes - applied_codes)
+
+
+def discount_usage_limit_error_payload(exc, field_name):
+    if exc.coupon_codes:
+        return {
+            field_name: (
+                "Coupon code is invalid, disabled, expired, or unavailable: "
+                + ", ".join(exc.coupon_codes)
+            )
+        }
+    return {"detail": "A discount is no longer available."}
 
 
 def latest_sale_unit_cost(product):
@@ -67,6 +185,8 @@ def checkout_order(
     lines_data,
     payments_data,
     customer=None,
+    coupon_codes=(),
+    discount_result=None,
     request=None,
 ):
     from apps.payments.serializers import PaymentSerializer
@@ -76,6 +196,8 @@ def checkout_order(
         register_session=register_session,
         customer=customer,
         lines_data=lines_data,
+        coupon_codes=coupon_codes,
+        discount_result=discount_result,
     )
     record_sale_stock_movements(order, stock_adjustments, request=request)
 
@@ -188,12 +310,31 @@ def adjustment_register_session(order, context_session):
 
 def adjustment_amount(lines):
     amount = sum(
-        (line.unit_price * quantity for line, quantity in lines),
+        (line_refund_amount(line, quantity) for line, quantity in lines),
         Decimal("0.00"),
-    ).quantize(Decimal("0.01"))
+    ).quantize(MONEY_PLACES)
     if amount <= 0:
         raise serializers.ValidationError({"detail": "Adjustment amount must be positive."})
     return amount
+
+
+def line_refund_discount(line, quantity):
+    if line.discount_total <= 0:
+        return Decimal("0.00")
+
+    remaining_discount = money(line.discount_total - line.returned_discount_total)
+    if quantity >= line.returnable_quantity:
+        return max(remaining_discount, Decimal("0.00"))
+
+    proportional_discount = money(
+        line.discount_total * Decimal(quantity) / Decimal(line.quantity)
+    )
+    return min(proportional_discount, max(remaining_discount, Decimal("0.00")))
+
+
+def line_refund_amount(line, quantity):
+    gross_amount = money(line.unit_price * Decimal(quantity))
+    return money(gross_amount - line_refund_discount(line, quantity))
 
 
 def create_order_adjustment(
@@ -227,12 +368,14 @@ def create_order_adjustment(
     )
 
     for line, quantity in lines:
+        discount_total = line_refund_discount(line, quantity)
         OrderAdjustmentLine.objects.create(
             adjustment=adjustment,
             order_line=line,
             product=line.product,
             quantity=quantity,
             unit_price=line.unit_price,
+            discount_total=discount_total,
         )
         record_return_stock_movement(
             order=order,

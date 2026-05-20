@@ -29,6 +29,7 @@ class PurchaseOrderListScreen extends StatelessWidget {
     required this.onOpenRegisterSessions,
     required this.onOpenDeviceSettings,
     required this.onLogout,
+    this.onOpenDiscounts,
     this.onOpenUsers,
     this.onOpenShopSettings,
   });
@@ -44,6 +45,7 @@ class PurchaseOrderListScreen extends StatelessWidget {
   final VoidCallback onOpenContacts;
   final VoidCallback onOpenRegisterSessions;
   final VoidCallback onOpenDeviceSettings;
+  final VoidCallback? onOpenDiscounts;
   final VoidCallback? onOpenUsers;
   final VoidCallback? onOpenShopSettings;
   final VoidCallback onLogout;
@@ -66,6 +68,7 @@ class PurchaseOrderListScreen extends StatelessWidget {
             onOpenCatalog: onOpenCatalog,
             onOpenRegisterSessions: onOpenRegisterSessions,
             onOpenDeviceSettings: onOpenDeviceSettings,
+            onOpenDiscounts: onOpenDiscounts,
             onOpenUsers: onOpenUsers,
             onOpenShopSettings: onOpenShopSettings,
             onLogout: onLogout,
