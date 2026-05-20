@@ -1,8 +1,8 @@
 part of 'pos_view_model.dart';
 
 extension PosCartActions on PosViewModel {
-  void addProduct(Product product) {
-    if (_addProductToCart(product)) {
+  void addProduct(Product product, {int quantity = 1}) {
+    if (_addProductToCart(product, quantity: quantity)) {
       _notifyChanged();
     }
   }
@@ -27,7 +27,7 @@ extension PosCartActions on PosViewModel {
   }
 
   void clearCart() {
-    if (_isCheckingOut) {
+    if (_isCheckingOut || _cart.isEmpty) {
       return;
     }
     _cart.clear();

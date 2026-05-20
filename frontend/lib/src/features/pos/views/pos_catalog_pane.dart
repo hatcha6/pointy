@@ -11,6 +11,12 @@ import '../../../shared/product_query_controls.dart';
 import '../../../shared/product_tile.dart';
 import '../view_models/pos_view_model.dart';
 
+const _catalogGridSpacing = 12.0;
+const _catalogTileMinWidth = 156.0;
+const _catalogTileMainExtent = 156.0;
+const _catalogLoadMoreExtent = 720.0;
+const _catalogMaxColumnCount = 5;
+
 class PosCatalogPane extends StatelessWidget {
   const PosCatalogPane({
     super.key,
@@ -65,35 +71,113 @@ class PosCatalogPane extends StatelessWidget {
           ],
           const SizedBox(height: 12),
           Expanded(
-            child: InfiniteScrollGrid(
-              items: viewModel.products,
+            child: _PosCatalogGrid(
+              viewModel: viewModel,
+              capabilities: capabilities,
+              emptyMessage: l10n.emptyCatalog,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PosCatalogGrid extends StatelessWidget {
+  const _PosCatalogGrid({
+    required this.viewModel,
+    required this.capabilities,
+    required this.emptyMessage,
+  });
+
+  final PosViewModel viewModel;
+  final AuthorizationCapabilities capabilities;
+  final String emptyMessage;
+
+  @override
+  Widget build(BuildContext context) {
+    final products = viewModel.products;
+
+    return CheckoutCapabilityBuilder(
+      capabilities: capabilities,
+      builder: (context, canCheckout) {
+        return LayoutBuilder(
+          builder: (context, constraints) {
+            return InfiniteScrollGrid<Product>(
+              items: products,
               onLoadMore: viewModel.loadMoreCatalog,
               hasMore: viewModel.hasMoreProducts,
               isLoadingInitial: viewModel.isLoading,
               isLoadingMore: viewModel.isLoadingMore,
-              emptyBuilder: (context) => Center(child: Text(l10n.emptyCatalog)),
-              gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                maxCrossAxisExtent: 220,
-                mainAxisExtent: 156,
-                crossAxisSpacing: 12,
-                mainAxisSpacing: 12,
+              loadMoreExtent: _catalogLoadMoreExtent,
+              emptyBuilder: (context) =>
+                  _PosCatalogEmptyState(message: emptyMessage),
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: _catalogColumnCountFor(constraints.maxWidth),
+                mainAxisExtent: _catalogTileMainExtent,
+                crossAxisSpacing: _catalogGridSpacing,
+                mainAxisSpacing: _catalogGridSpacing,
               ),
               itemBuilder: (context, product) {
-                return CheckoutCapabilityBuilder(
-                  capabilities: capabilities,
-                  builder: (context, canCheckout) {
-                    return ProductTile(
-                      product: product,
-                      onTap: canCheckout
-                          ? () => viewModel.addProduct(product)
-                          : null,
-                    );
-                  },
+                return ProductTile(
+                  key: ValueKey(product.id),
+                  product: product,
+                  onTap: canCheckout
+                      ? () => viewModel.addProduct(product)
+                      : null,
                 );
               },
+            );
+          },
+        );
+      },
+    );
+  }
+
+  int _catalogColumnCountFor(double width) {
+    if (!width.isFinite || width <= 0) {
+      return 1;
+    }
+
+    final count =
+        ((width + _catalogGridSpacing) /
+                (_catalogTileMinWidth + _catalogGridSpacing))
+            .floor();
+    return count.clamp(1, _catalogMaxColumnCount);
+  }
+}
+
+class _PosCatalogEmptyState extends StatelessWidget {
+  const _PosCatalogEmptyState({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.inventory_2_outlined,
+              color: colorScheme.onSurfaceVariant,
+              size: 32,
             ),
-          ),
-        ],
+            const SizedBox(height: 10),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: textTheme.bodyMedium?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -157,9 +241,7 @@ class _PosProductLookupControls extends StatelessWidget {
       if (viewModel.isCheckingOut) {
         return;
       }
-      for (var count = 0; count < entry.quantity; count += 1) {
-        viewModel.addProduct(entry.product);
-      }
+      viewModel.addProduct(entry.product, quantity: entry.quantity);
     }
   }
 

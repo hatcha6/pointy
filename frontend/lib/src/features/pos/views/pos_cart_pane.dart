@@ -30,114 +30,90 @@ class PosCartPane extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
 
-    return ColoredBox(
-      color: Colors.white,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              children: [
-                Text(
-                  l10n.currentSaleTitle,
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
-                const Spacer(),
-                CheckoutCapabilityBuilder(
-                  capabilities: capabilities,
-                  builder: (context, canCheckout) {
-                    return IconButton(
-                      tooltip: l10n.clearCartTooltip,
-                      onPressed:
-                          viewModel.cart.isEmpty ||
-                              viewModel.isCheckingOut ||
-                              !canCheckout
-                          ? null
-                          : viewModel.clearCart,
-                      icon: const Icon(Icons.delete_outline),
-                    );
-                  },
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            ContactSelectionTile(
-              label: l10n.selectedCustomerLabel,
-              value: viewModel.selectedCustomer?.fullName ?? '',
-              placeholder: l10n.walkInCustomerLabel,
-              icon: Icons.person_outline,
-              enabled: !viewModel.isCheckingOut,
-              onSelect: () => _selectCustomer(context),
-              onClear: () => viewModel.selectCustomer(null),
-            ),
-            const SizedBox(height: 8),
-            Expanded(
-              child: viewModel.cart.isEmpty
-                  ? Center(child: Text(l10n.emptyCart))
-                  : ListView.separated(
-                      itemCount: viewModel.cart.length,
-                      separatorBuilder: (_, _) => const Divider(height: 1),
-                      itemBuilder: (context, index) {
-                        final line = viewModel.cart[index];
-                        return CheckoutCapabilityBuilder(
-                          capabilities: capabilities,
-                          builder: (context, canCheckout) {
-                            return CartLineTile(
-                              line: line,
-                              onAdd: viewModel.isCheckingOut || !canCheckout
-                                  ? null
-                                  : () => viewModel.addProduct(line.product),
-                              onRemove: viewModel.isCheckingOut || !canCheckout
-                                  ? null
-                                  : () => viewModel.decrementProduct(
-                                      line.product,
-                                    ),
-                            );
-                          },
-                        );
-                      },
-                    ),
-            ),
-            CartTotals(viewModel: viewModel),
-            if (viewModel.shouldShowPrintInvoiceCheckbox) ...[
-              const SizedBox(height: 8),
-              CheckboxListTile(
-                value: viewModel.printInvoiceAfterPayment,
-                onChanged: viewModel.isCheckingOut
-                    ? null
-                    : (value) => viewModel.updatePrintInvoiceAfterPayment(
-                        value ?? false,
+    return CheckoutCapabilityBuilder(
+      capabilities: capabilities,
+      builder: (context, canCheckout) {
+        final isCartLocked = viewModel.isCheckingOut || !canCheckout;
+
+        return ColoredBox(
+          color: Colors.white,
+          child: SafeArea(
+            top: false,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          l10n.currentSaleTitle,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.titleLarge,
+                        ),
                       ),
-                dense: true,
-                contentPadding: EdgeInsets.zero,
-                controlAffinity: ListTileControlAffinity.leading,
-                title: Text(l10n.printInvoiceAfterPaymentLabel),
-              ),
-            ],
-            const SizedBox(height: 12),
-            CheckoutGuard(
-              capabilities: capabilities,
-              child: FilledButton.icon(
-                onPressed: viewModel.cart.isEmpty || viewModel.isCheckingOut
-                    ? null
-                    : () => _checkout(context),
-                icon: viewModel.isCheckingOut
-                    ? const SizedBox.square(
-                        dimension: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.payments_outlined),
-                label: Text(
-                  viewModel.isCheckingOut
-                      ? l10n.checkoutInProgressButton
-                      : l10n.payAmount(formatMoney(viewModel.total)),
-                ),
+                      IconButton(
+                        tooltip: l10n.clearCartTooltip,
+                        visualDensity: VisualDensity.compact,
+                        onPressed: viewModel.cart.isEmpty || isCartLocked
+                            ? null
+                            : viewModel.clearCart,
+                        icon: const Icon(Icons.delete_outline),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  _CartContactTile(
+                    label: l10n.selectedCustomerLabel,
+                    value: viewModel.selectedCustomer?.fullName ?? '',
+                    placeholder: l10n.walkInCustomerLabel,
+                    enabled: !viewModel.isCheckingOut,
+                    onSelect: () => _selectCustomer(context),
+                    onClear: () => viewModel.selectCustomer(null),
+                  ),
+                  const SizedBox(height: 8),
+                  Expanded(
+                    child: viewModel.cart.isEmpty
+                        ? Center(
+                            child: Text(
+                              l10n.emptyCart,
+                              textAlign: TextAlign.center,
+                            ),
+                          )
+                        : ListView.separated(
+                            padding: EdgeInsets.zero,
+                            itemCount: viewModel.cart.length,
+                            separatorBuilder: (_, _) =>
+                                const Divider(height: 1),
+                            itemBuilder: (context, index) {
+                              final line = viewModel.cart[index];
+                              return CartLineTile(
+                                line: line,
+                                onAdd: isCartLocked
+                                    ? null
+                                    : () => viewModel.addProduct(line.product),
+                                onRemove: isCartLocked
+                                    ? null
+                                    : () => viewModel.decrementProduct(
+                                        line.product,
+                                      ),
+                              );
+                            },
+                          ),
+                  ),
+                  _CheckoutFooter(
+                    viewModel: viewModel,
+                    capabilities: capabilities,
+                    onCheckout: () => _checkout(context),
+                  ),
+                ],
               ),
             ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 
@@ -270,6 +246,162 @@ class PosCartPane extends StatelessWidget {
     return showDialog<_PaymentInput>(
       context: context,
       builder: (context) => _PaymentDialog(viewModel: viewModel),
+    );
+  }
+}
+
+class _CartContactTile extends StatelessWidget {
+  const _CartContactTile({
+    required this.label,
+    required this.value,
+    required this.placeholder,
+    required this.enabled,
+    required this.onSelect,
+    required this.onClear,
+  });
+
+  final String label;
+  final String value;
+  final String placeholder;
+  final bool enabled;
+  final VoidCallback onSelect;
+  final VoidCallback onClear;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final colorScheme = Theme.of(context).colorScheme;
+    final hasValue = value.trim().isNotEmpty;
+    final iconColor = enabled
+        ? colorScheme.onSurfaceVariant
+        : colorScheme.onSurface.withValues(alpha: 0.38);
+
+    return Material(
+      color: colorScheme.surface,
+      borderRadius: BorderRadius.circular(8),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: enabled ? onSelect : null,
+        child: Container(
+          padding: const EdgeInsetsDirectional.fromSTEB(10, 8, 6, 8),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: colorScheme.outlineVariant),
+          ),
+          child: Row(
+            children: [
+              Icon(Icons.person_outline, size: 20, color: iconColor),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.labelMedium,
+                    ),
+                    Text(
+                      hasValue ? value : placeholder,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                  ],
+                ),
+              ),
+              IconButton(
+                tooltip: hasValue
+                    ? l10n.clearContactTooltip
+                    : l10n.changeContactAction,
+                visualDensity: VisualDensity.compact,
+                onPressed: enabled ? (hasValue ? onClear : onSelect) : null,
+                icon: Icon(hasValue ? Icons.close : Icons.edit_outlined),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CheckoutFooter extends StatelessWidget {
+  const _CheckoutFooter({
+    required this.viewModel,
+    required this.capabilities,
+    required this.onCheckout,
+  });
+
+  final PosViewModel viewModel;
+  final AuthorizationCapabilities capabilities;
+  final VoidCallback onCheckout;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final canSubmit = viewModel.cart.isNotEmpty && !viewModel.isCheckingOut;
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        border: Border(
+          top: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.only(top: 8),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            CartTotals(viewModel: viewModel),
+            if (viewModel.shouldShowPrintInvoiceCheckbox)
+              CheckboxListTile(
+                value: viewModel.printInvoiceAfterPayment,
+                onChanged: viewModel.isCheckingOut
+                    ? null
+                    : (value) => viewModel.updatePrintInvoiceAfterPayment(
+                        value ?? false,
+                      ),
+                dense: true,
+                visualDensity: VisualDensity.compact,
+                contentPadding: EdgeInsets.zero,
+                controlAffinity: ListTileControlAffinity.leading,
+                title: Text(
+                  l10n.printInvoiceAfterPaymentLabel,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            const SizedBox(height: 8),
+            CheckoutGuard(
+              capabilities: capabilities,
+              child: FilledButton.icon(
+                style: FilledButton.styleFrom(
+                  minimumSize: const Size.fromHeight(44),
+                ),
+                onPressed: canSubmit ? onCheckout : null,
+                icon: viewModel.isCheckingOut
+                    ? const SizedBox.square(
+                        dimension: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.payments_outlined),
+                label: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    viewModel.isCheckingOut
+                        ? l10n.checkoutInProgressButton
+                        : l10n.payAmount(formatMoney(viewModel.total)),
+                    maxLines: 1,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

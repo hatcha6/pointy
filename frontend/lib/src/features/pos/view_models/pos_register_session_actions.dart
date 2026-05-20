@@ -1,7 +1,23 @@
 part of 'pos_view_model.dart';
 
 extension PosRegisterSessionActions on PosViewModel {
-  Future<void> loadCurrentRegisterSession() async {
+  Future<void> loadCurrentRegisterSession() {
+    final inFlight = _registerSessionLoadFuture;
+    if (inFlight != null) {
+      return inFlight;
+    }
+
+    late final Future<void> future;
+    future = _loadCurrentRegisterSession().whenComplete(() {
+      if (identical(_registerSessionLoadFuture, future)) {
+        _registerSessionLoadFuture = null;
+      }
+    });
+    _registerSessionLoadFuture = future;
+    return future;
+  }
+
+  Future<void> _loadCurrentRegisterSession() async {
     _isLoadingRegisterSession = true;
     _hasRegisterSessionError = false;
     _notifyChanged();

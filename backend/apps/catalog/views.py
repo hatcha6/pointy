@@ -1,4 +1,6 @@
 from django.core.cache import cache
+from django.db.models import Value
+from django.db.models.functions import Coalesce
 from rest_framework import viewsets
 from rest_framework.permissions import IsAuthenticated
 
@@ -19,21 +21,35 @@ class ProductViewSet(viewsets.ModelViewSet):
         "partial_update": ("catalog.change_product",),
         "destroy": ("catalog.delete_product",),
     }
-    queryset = Product.objects.select_related("stock")
+    queryset = Product.objects.all()
     filterset_fields = ("is_active", "barcode")
     search_fields = ("sku", "barcode", "name")
     ordering_fields = ("name", "unit_price", "created_at", "updated_at")
 
     def get_queryset(self):
+        queryset = self._with_stock_quantity(super().get_queryset())
         if self.request.query_params.get("is_active") == "true":
+            if self._has_selective_list_filter():
+                return queryset.filter(is_active=True)
             product_ids = self._get_active_product_ids()
             if product_ids is None:
                 product_ids = list(
                     Product.objects.filter(is_active=True).values_list("id", flat=True)
                 )
                 self._set_active_product_ids(product_ids)
-            return Product.objects.select_related("stock").filter(id__in=product_ids)
-        return super().get_queryset()
+            return queryset.filter(id__in=product_ids)
+        return queryset
+
+    def _with_stock_quantity(self, queryset):
+        return queryset.annotate(
+            stock_quantity_on_hand=Coalesce("stock__quantity_on_hand", Value(0)),
+        )
+
+    def _has_selective_list_filter(self):
+        return bool(
+            self.request.query_params.get("barcode")
+            or self.request.query_params.get("search")
+        )
 
     def perform_create(self, serializer):
         product = serializer.save()

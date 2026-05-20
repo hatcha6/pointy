@@ -1,4 +1,5 @@
 from decimal import Decimal
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
@@ -8,7 +9,9 @@ from rest_framework import status
 from rest_framework.test import APIClient
 
 from apps.core.roles import CASHIER_GROUP, MANAGER_GROUP, ensure_role_groups
+from apps.inventory.models import StockItem
 from .models import Product
+from .views import ProductViewSet
 
 
 class ProductApiTests(TestCase):
@@ -111,6 +114,64 @@ class ProductApiTests(TestCase):
             [product["sku"] for product in response.data["results"]],
             ["MATCH"],
         )
+
+    def test_active_barcode_lookup_bypasses_active_id_cache(self):
+        match = Product.objects.create(
+            sku="MATCH",
+            barcode="123456789",
+            name="قهوة مطابقة",
+            unit_price=Decimal("5.50"),
+            is_active=True,
+        )
+        Product.objects.create(
+            sku="INACTIVE",
+            barcode="123456789",
+            name="قهوة متوقفة",
+            unit_price=Decimal("4.50"),
+            is_active=False,
+        )
+
+        with patch.object(
+            ProductViewSet,
+            "_get_active_product_ids",
+            side_effect=AssertionError("barcode lookup should not load all active ids"),
+        ):
+            response = self.client.get(
+                reverse("product-list"),
+                {"barcode": "123456789", "is_active": "true"},
+            )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            [product["id"] for product in response.data["results"]],
+            [match.id],
+        )
+
+    def test_product_list_reads_stock_quantity_from_queryset_annotation(self):
+        product = Product.objects.create(
+            sku="STOCKED",
+            barcode="987654321",
+            name="منتج مخزن",
+            unit_price=Decimal("3.00"),
+            is_active=True,
+        )
+        StockItem.objects.create(product=product, quantity_on_hand=7)
+        Product.objects.create(
+            sku="NO-STOCK",
+            name="بدون مخزون",
+            unit_price=Decimal("2.00"),
+            is_active=True,
+        )
+
+        response = self.client.get(reverse("product-list"), {"is_active": "true"})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        quantities_by_sku = {
+            product["sku"]: product["quantity_on_hand"]
+            for product in response.data["results"]
+        }
+        self.assertEqual(quantities_by_sku["STOCKED"], 7)
+        self.assertEqual(quantities_by_sku["NO-STOCK"], 0)
 
     def test_can_order_products_by_newest(self):
         first = Product.objects.create(

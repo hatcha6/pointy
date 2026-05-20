@@ -31,6 +31,9 @@ class ProductSerializer(serializers.ModelSerializer):
         return value.strip().upper()
 
     def get_quantity_on_hand(self, product):
+        annotated_quantity = getattr(product, "stock_quantity_on_hand", None)
+        if annotated_quantity is not None:
+            return annotated_quantity
         try:
             return product.stock.quantity_on_hand
         except Product.stock.RelatedObjectDoesNotExist:

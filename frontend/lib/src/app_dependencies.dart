@@ -37,13 +37,6 @@ class PointyAppDependencies {
       shopSettingsRepository,
       printingRepository,
     );
-    printingSettingsViewModel = PrintingSettingsViewModel(printingRepository);
-    contactManagementViewModel = ContactManagementViewModel(contactRepository);
-    purchaseViewModel = PurchaseViewModel(
-      catalogRepository,
-      purchaseRepository,
-    );
-    purchaseOrderListViewModel = PurchaseOrderListViewModel(purchaseRepository);
   }
 
   final PosApiService service;
@@ -59,12 +52,30 @@ class PointyAppDependencies {
   late final UserRepository userRepository;
   late final AuthViewModel authViewModel;
   late final PosViewModel posViewModel;
-  late final PrintingSettingsViewModel printingSettingsViewModel;
-  late final ContactManagementViewModel contactManagementViewModel;
-  late final PurchaseViewModel purchaseViewModel;
-  late final PurchaseOrderListViewModel purchaseOrderListViewModel;
+  PrintingSettingsViewModel? _printingSettingsViewModel;
+  ContactManagementViewModel? _contactManagementViewModel;
+  PurchaseViewModel? _purchaseViewModel;
+  PurchaseOrderListViewModel? _purchaseOrderListViewModel;
 
   int? _lastAuthenticatedUserId;
+
+  PrintingSettingsViewModel get printingSettingsViewModel =>
+      _printingSettingsViewModel ??= PrintingSettingsViewModel(
+        printingRepository,
+      );
+
+  ContactManagementViewModel get contactManagementViewModel =>
+      _contactManagementViewModel ??= ContactManagementViewModel(
+        contactRepository,
+      );
+
+  PurchaseViewModel get purchaseViewModel => _purchaseViewModel ??=
+      PurchaseViewModel(catalogRepository, purchaseRepository);
+
+  PurchaseOrderListViewModel get purchaseOrderListViewModel =>
+      _purchaseOrderListViewModel ??= PurchaseOrderListViewModel(
+        purchaseRepository,
+      );
 
   void handleAuthChanged() {
     final currentUser = authViewModel.currentUser;
@@ -74,22 +85,31 @@ class PointyAppDependencies {
       _lastAuthenticatedUserId = currentUser.id;
       posViewModel.loadCurrentRegisterSession();
       posViewModel.loadCheckoutSettings();
-      purchaseViewModel.loadCatalog();
-      purchaseOrderListViewModel.loadOrders();
-      contactManagementViewModel.loadContacts();
+      _purchaseViewModel?.loadCatalog();
+      _purchaseOrderListViewModel?.loadOrders();
+      _contactManagementViewModel?.loadContacts();
     }
 
     if (authViewModel.status == AuthStatus.unauthenticated) {
       _lastAuthenticatedUserId = null;
+      _disposeSessionViewModels();
     }
   }
 
   void dispose() {
     authViewModel.dispose();
     posViewModel.dispose();
-    printingSettingsViewModel.dispose();
-    contactManagementViewModel.dispose();
-    purchaseViewModel.dispose();
-    purchaseOrderListViewModel.dispose();
+    _disposeSessionViewModels();
+  }
+
+  void _disposeSessionViewModels() {
+    _printingSettingsViewModel?.dispose();
+    _printingSettingsViewModel = null;
+    _contactManagementViewModel?.dispose();
+    _contactManagementViewModel = null;
+    _purchaseViewModel?.dispose();
+    _purchaseViewModel = null;
+    _purchaseOrderListViewModel?.dispose();
+    _purchaseOrderListViewModel = null;
   }
 }

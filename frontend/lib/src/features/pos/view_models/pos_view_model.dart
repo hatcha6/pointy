@@ -40,10 +40,7 @@ class PosViewModel extends ChangeNotifier {
     this._saleRepository,
     this._shopSettingsRepository,
     this._printingRepository,
-  ) {
-    loadCurrentRegisterSession();
-    loadCheckoutSettings();
-  }
+  );
 
   final CatalogRepository _catalogRepository;
   final RegisterSessionRepository _registerSessionRepository;
@@ -76,6 +73,11 @@ class PosViewModel extends ChangeNotifier {
   bool _hasCheckoutSettingsError = false;
   RegisterSession? _availableRegisterSession;
   RegisterSession? _activeRegisterSession;
+  int _catalogRequestVersion = 0;
+  Future<void>? _catalogLoadFuture;
+  ProductQuery? _catalogLoadFutureQuery;
+  Future<void>? _checkoutSettingsLoadFuture;
+  Future<void>? _registerSessionLoadFuture;
   ProductQuery _query = const ProductQuery(
     availability: ProductAvailabilityFilter.active,
   );
@@ -132,7 +134,23 @@ class PosViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> loadCheckoutSettings() async {
+  Future<void> loadCheckoutSettings() {
+    final inFlight = _checkoutSettingsLoadFuture;
+    if (inFlight != null) {
+      return inFlight;
+    }
+
+    late final Future<void> future;
+    future = _loadCheckoutSettings().whenComplete(() {
+      if (identical(_checkoutSettingsLoadFuture, future)) {
+        _checkoutSettingsLoadFuture = null;
+      }
+    });
+    _checkoutSettingsLoadFuture = future;
+    return future;
+  }
+
+  Future<void> _loadCheckoutSettings() async {
     _isLoadingCheckoutSettings = true;
     _hasCheckoutSettingsError = false;
     _notifyChanged();
@@ -155,7 +173,9 @@ class PosViewModel extends ChangeNotifier {
   }
 
   void updatePrintInvoiceAfterPayment(bool value) {
-    if (!shouldShowPrintInvoiceCheckbox || _isCheckingOut) {
+    if (!shouldShowPrintInvoiceCheckbox ||
+        _isCheckingOut ||
+        value == _printInvoiceAfterPayment) {
       return;
     }
     _printInvoiceAfterPayment = value;
@@ -163,7 +183,7 @@ class PosViewModel extends ChangeNotifier {
   }
 
   void selectCustomer(Customer? customer) {
-    if (_isCheckingOut) {
+    if (_isCheckingOut || customer == _selectedCustomer) {
       return;
     }
     _selectedCustomer = customer;

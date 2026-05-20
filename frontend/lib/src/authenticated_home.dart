@@ -77,7 +77,6 @@ class _AuthenticatedRoutes {
         AppCapability.viewRegisterSessions,
         () async {
           await push(context, registerSessionsRouteBuilder);
-          await dependencies.posViewModel.loadCatalog();
         },
       ),
       onOpenDeviceSettings: guardedAction(
@@ -88,14 +87,12 @@ class _AuthenticatedRoutes {
         AppCapability.manageUsers,
         () async {
           await push(context, usersRouteBuilder);
-          await dependencies.posViewModel.loadCatalog();
         },
       ),
       onOpenShopSettings: capabilities.asyncActionFor(
         AppCapability.manageShopSettings,
         () async {
           await push(context, shopSettingsRouteBuilder);
-          await dependencies.posViewModel.loadCatalog();
           await dependencies.posViewModel.loadCheckoutSettings();
         },
       ),

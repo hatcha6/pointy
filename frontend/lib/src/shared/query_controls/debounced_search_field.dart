@@ -33,6 +33,7 @@ class DebouncedSearchField extends StatefulWidget {
 class _DebouncedSearchFieldState extends State<DebouncedSearchField> {
   late final TextEditingController _controller;
   Timer? _debounce;
+  int _inputRevision = 0;
 
   @override
   void initState() {
@@ -43,8 +44,12 @@ class _DebouncedSearchFieldState extends State<DebouncedSearchField> {
   @override
   void didUpdateWidget(covariant DebouncedSearchField oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.value != _controller.text) {
-      _controller.text = widget.value;
+    if (widget.value != oldWidget.value) {
+      _inputRevision++;
+      _debounce?.cancel();
+      if (widget.value != _controller.text) {
+        _setControllerText(widget.value);
+      }
     }
   }
 
@@ -74,16 +79,34 @@ class _DebouncedSearchFieldState extends State<DebouncedSearchField> {
           filled: true,
           fillColor: Colors.transparent,
           prefixIcon: Icon(Icons.search, color: colorScheme.primary),
-          suffixIcon: _controller.text.isEmpty
-              ? null
-              : IconButton(
-                  tooltip: widget.clearTooltip,
-                  onPressed: () {
-                    _controller.clear();
-                    _emitNow('');
-                  },
-                  icon: const Icon(Icons.close),
-                ),
+          prefixIconConstraints: const BoxConstraints.tightFor(
+            width: 48,
+            height: 48,
+          ),
+          suffixIcon: ValueListenableBuilder<TextEditingValue>(
+            valueListenable: _controller,
+            builder: (context, value, child) {
+              if (value.text.isEmpty) {
+                return const SizedBox.shrink();
+              }
+
+              return IconButton(
+                tooltip: widget.clearTooltip,
+                onPressed: widget.enabled
+                    ? () {
+                        _setControllerText('');
+                        _emitNow('');
+                      }
+                    : null,
+                icon: child!,
+              );
+            },
+            child: const Icon(Icons.close),
+          ),
+          suffixIconConstraints: const BoxConstraints.tightFor(
+            width: 48,
+            height: 48,
+          ),
           border: _fieldBorder(colorScheme.outlineVariant),
           enabledBorder: _fieldBorder(colorScheme.outlineVariant),
           focusedBorder: _fieldBorder(colorScheme.primary, width: 1.4),
@@ -98,6 +121,13 @@ class _DebouncedSearchFieldState extends State<DebouncedSearchField> {
     );
   }
 
+  void _setControllerText(String value) {
+    _controller.value = TextEditingValue(
+      text: value,
+      selection: TextSelection.collapsed(offset: value.length),
+    );
+  }
+
   OutlineInputBorder _fieldBorder(Color color, {double width = 1}) {
     return OutlineInputBorder(
       borderRadius: BorderRadius.circular(8),
@@ -106,38 +136,45 @@ class _DebouncedSearchFieldState extends State<DebouncedSearchField> {
   }
 
   void _emitDebounced(String value) {
-    setState(() {});
+    final revision = ++_inputRevision;
+    final nextValue = value.trim();
     _debounce?.cancel();
     _debounce = Timer(widget.debounceDuration, () {
-      widget.onChanged(value.trim());
+      if (revision == _inputRevision) {
+        widget.onChanged(nextValue);
+      }
     });
   }
 
   void _emitNow(String value) {
-    setState(() {});
+    _inputRevision++;
     _debounce?.cancel();
     widget.onChanged(value.trim());
   }
 
   Future<void> _emitSubmitted(String value) async {
     final submittedValue = value.trim();
+    final revision = ++_inputRevision;
     _debounce?.cancel();
+    if (submittedValue != value) {
+      _setControllerText(submittedValue);
+    }
 
     final onSubmitted = widget.onSubmitted;
     if (onSubmitted == null || submittedValue.isEmpty) {
-      _emitNow(submittedValue);
+      widget.onChanged(submittedValue);
       return;
     }
 
     final shouldClear = await onSubmitted(submittedValue);
-    if (!mounted) {
+    if (!mounted || revision != _inputRevision) {
       return;
     }
     if (shouldClear) {
-      _controller.clear();
-      _emitNow('');
+      _setControllerText('');
+      widget.onChanged('');
     } else {
-      _emitNow(submittedValue);
+      widget.onChanged(submittedValue);
     }
   }
 }

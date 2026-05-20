@@ -41,40 +41,48 @@ class QueryControlBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: DebouncedSearchField(
-            value: searchValue,
-            hintText: searchHint,
-            clearTooltip: clearSearchTooltip,
-            onChanged: onSearchChanged,
-            onSubmitted: onSearchSubmitted,
-            enabled: enabled,
-            autofocus: autofocus,
-            fieldKey: searchFieldKey,
-          ),
-        ),
-        const SizedBox(width: 8),
-        if (onOpenCameraScanner != null) ...[
-          Tooltip(
-            message: openCameraScannerTooltip ?? '',
-            child: IconButton.filledTonal(
-              onPressed: enabled ? onOpenCameraScanner : null,
-              icon: const Icon(Icons.photo_camera_outlined),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final hasScanner = onOpenCameraScanner != null;
+        final useCompactActions =
+            constraints.maxWidth < (hasScanner ? 390 : 330);
+
+        return Row(
+          children: [
+            Expanded(
+              child: DebouncedSearchField(
+                value: searchValue,
+                hintText: searchHint,
+                clearTooltip: clearSearchTooltip,
+                onChanged: onSearchChanged,
+                onSubmitted: onSearchSubmitted,
+                enabled: enabled,
+                autofocus: autofocus,
+                fieldKey: searchFieldKey,
+              ),
             ),
-          ),
-          const SizedBox(width: 8),
-        ],
-        Tooltip(
-          message: openFiltersTooltip,
-          child: QueryFilterButton(
-            label: filterLabel,
-            activeCount: activeFilterCount,
-            onPressed: enabled ? onOpenFilters : null,
-          ),
-        ),
-      ],
+            const SizedBox(width: 8),
+            if (hasScanner) ...[
+              SizedBox.square(
+                dimension: 56,
+                child: IconButton.filledTonal(
+                  tooltip: openCameraScannerTooltip,
+                  onPressed: enabled ? onOpenCameraScanner : null,
+                  icon: const Icon(Icons.photo_camera_outlined),
+                ),
+              ),
+              const SizedBox(width: 8),
+            ],
+            QueryFilterButton(
+              label: filterLabel,
+              tooltip: openFiltersTooltip,
+              activeCount: activeFilterCount,
+              onPressed: enabled ? onOpenFilters : null,
+              showLabel: !useCompactActions,
+            ),
+          ],
+        );
+      },
     );
   }
 }
