@@ -8,29 +8,17 @@ class UserRepository {
   final PosApiService _service;
 
   Future<Result<List<PosUser>>> loadUsers() async {
-    try {
-      return Ok(await _service.fetchUsers());
-    } on Exception catch (exception) {
-      return Error(exception);
-    }
+    return Result.guard(_service.fetchUsers);
   }
 
   Future<Result<PosUser>> createUser(UserCreateDraft draft) async {
-    try {
-      return Ok(await _service.createUser(draft));
-    } on Exception catch (exception) {
-      return Error(exception);
-    }
+    return Result.guard(() => _service.createUser(draft));
   }
 
   Future<Result<PosUser>> updateUser({
     required int id,
     required UserUpdateDraft draft,
   }) async {
-    try {
-      return Ok(await _service.updateUser(id: id, draft: draft));
-    } on Exception catch (exception) {
-      return Error(exception);
-    }
+    return Result.guard(() => _service.updateUser(id: id, draft: draft));
   }
 }

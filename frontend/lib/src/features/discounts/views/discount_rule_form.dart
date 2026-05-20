@@ -8,9 +8,8 @@ import '../../../data/models/discount_rule.dart';
 import '../../../data/models/product_query.dart';
 import '../../../data/repositories/catalog_repository.dart';
 import '../../../data/repositories/contact_repository.dart';
+import '../../../shared/async_selection/async_selection.dart';
 import '../../../shared/decimal_text_input_formatter.dart';
-import '../../../shared/infinite_scroll_grid.dart';
-import '../../../shared/query_controls/debounced_search_field.dart';
 import '../view_models/discount_management_view_model.dart';
 
 class DiscountRuleForm extends StatefulWidget {
@@ -53,9 +52,9 @@ class _DiscountRuleFormState extends State<DiscountRuleForm> {
   late DiscountValueType _valueType;
   late bool _exclusive;
   late bool _isActive;
-  late List<_DiscountConstraintSelection> _selectedProducts;
-  late List<_DiscountConstraintSelection> _selectedCustomers;
-  late List<_DiscountConstraintSelection> _selectedSuppliers;
+  late List<AsyncSelectionOption<int>> _selectedProducts;
+  late List<AsyncSelectionOption<int>> _selectedCustomers;
+  late List<AsyncSelectionOption<int>> _selectedSuppliers;
   DateTime? _startsAt;
   DateTime? _endsAt;
 
@@ -344,42 +343,48 @@ class _DiscountRuleFormState extends State<DiscountRuleForm> {
           const SizedBox(height: 12),
           _ResponsiveFields(
             children: [
-              _ConstraintPickerField(
+              AsyncSelectionField<int>(
                 key: ValueKey(
                   'products_${_selectedProducts.map((item) => item.id).join('_')}',
                 ),
                 fieldKey: const ValueKey('discount_product_picker_field'),
-                label: l10n.discountProductIdsLabel,
+                strings: _constraintFieldStrings(
+                  l10n,
+                  label: l10n.discountProductIdsLabel,
+                ),
                 selected: _selectedProducts,
-                emptyText: l10n.discountNoConstraintsSelected,
                 onPick: () => _pickProducts(context),
                 onClear: _selectedProducts.isEmpty
                     ? null
                     : () => setState(() => _selectedProducts = []),
                 validator: (_) => null,
               ),
-              _ConstraintPickerField(
+              AsyncSelectionField<int>(
                 key: ValueKey(
                   'customers_${_selectedCustomers.map((item) => item.id).join('_')}',
                 ),
                 fieldKey: const ValueKey('discount_customer_picker_field'),
-                label: l10n.discountCustomerIdsLabel,
+                strings: _constraintFieldStrings(
+                  l10n,
+                  label: l10n.discountCustomerIdsLabel,
+                ),
                 selected: _selectedCustomers,
-                emptyText: l10n.discountNoConstraintsSelected,
                 onPick: () => _pickCustomers(context),
                 onClear: _selectedCustomers.isEmpty
                     ? null
                     : () => setState(() => _selectedCustomers = []),
                 validator: (_) => _validateCustomerSelection(),
               ),
-              _ConstraintPickerField(
+              AsyncSelectionField<int>(
                 key: ValueKey(
                   'suppliers_${_selectedSuppliers.map((item) => item.id).join('_')}',
                 ),
                 fieldKey: const ValueKey('discount_supplier_picker_field'),
-                label: l10n.discountSupplierIdsLabel,
+                strings: _constraintFieldStrings(
+                  l10n,
+                  label: l10n.discountSupplierIdsLabel,
+                ),
                 selected: _selectedSuppliers,
-                emptyText: l10n.discountNoConstraintsSelected,
                 onPick: () => _pickSuppliers(context),
                 onClear: _selectedSuppliers.isEmpty
                     ? null
@@ -611,14 +616,52 @@ class _DiscountRuleFormState extends State<DiscountRuleForm> {
     return null;
   }
 
+  AsyncSelectionFieldStrings<int> _constraintFieldStrings(
+    AppLocalizations l10n, {
+    required String label,
+  }) {
+    return AsyncSelectionFieldStrings<int>(
+      label: label,
+      emptyText: l10n.discountNoConstraintsSelected,
+      helperText: l10n.discountPickerHelper,
+      clearTooltip: l10n.clearButton,
+      openPickerTooltip: l10n.discountOpenPickerTooltip,
+      fallbackLabelForId: l10n.discountConstraintId,
+    );
+  }
+
+  AsyncSelectionPickerStrings<int> _constraintPickerStrings(
+    AppLocalizations l10n, {
+    required String title,
+    required String searchHint,
+    required String emptyText,
+  }) {
+    return AsyncSelectionPickerStrings<int>(
+      title: title,
+      searchHint: searchHint,
+      emptyText: emptyText,
+      clearText: l10n.clearButton,
+      clearSearchTooltip: l10n.clearSearchTooltip,
+      loadErrorText: l10n.discountPickerLoadError,
+      confirmText: l10n.confirmButton,
+      fallbackLabelForId: l10n.discountConstraintId,
+    );
+  }
+
   Future<void> _pickProducts(BuildContext context) async {
     final l10n = AppLocalizations.of(context)!;
-    final picked = await _showDiscountConstraintPicker(
+    final picked = await showAsyncMultiSelectPicker<int>(
       context: context,
-      title: l10n.discountProductPickerTitle,
-      searchHint: l10n.discountProductPickerSearchHint,
-      emptyText: l10n.discountProductPickerEmpty,
+      strings: _constraintPickerStrings(
+        l10n,
+        title: l10n.discountProductPickerTitle,
+        searchHint: l10n.discountProductPickerSearchHint,
+        emptyText: l10n.discountProductPickerEmpty,
+      ),
       selected: _selectedProducts,
+      searchFieldKey: const ValueKey('discount_constraint_search_field'),
+      applyButtonKey: const ValueKey('discount_constraint_apply_button'),
+      optionKeyForId: (id) => ValueKey('discount_constraint_option_$id'),
       loadPage: (search, page) async {
         final result = await widget.catalogRepository.loadProducts(
           query: ProductQuery(
@@ -628,10 +671,10 @@ class _DiscountRuleFormState extends State<DiscountRuleForm> {
           page: page,
         );
         return switch (result) {
-          Ok(value: final page) => _ConstraintPickerPage(
+          Ok(value: final page) => AsyncSelectionPage<int>(
             options: [
               for (final product in page.products)
-                _DiscountConstraintSelection(
+                AsyncSelectionOption<int>(
                   id: product.id,
                   label: product.name,
                   subtitle: [
@@ -654,22 +697,28 @@ class _DiscountRuleFormState extends State<DiscountRuleForm> {
 
   Future<void> _pickCustomers(BuildContext context) async {
     final l10n = AppLocalizations.of(context)!;
-    final picked = await _showDiscountConstraintPicker(
+    final picked = await showAsyncMultiSelectPicker<int>(
       context: context,
-      title: l10n.discountCustomerPickerTitle,
-      searchHint: l10n.discountCustomerPickerSearchHint,
-      emptyText: l10n.discountCustomerPickerEmpty,
+      strings: _constraintPickerStrings(
+        l10n,
+        title: l10n.discountCustomerPickerTitle,
+        searchHint: l10n.discountCustomerPickerSearchHint,
+        emptyText: l10n.discountCustomerPickerEmpty,
+      ),
       selected: _selectedCustomers,
+      searchFieldKey: const ValueKey('discount_constraint_search_field'),
+      applyButtonKey: const ValueKey('discount_constraint_apply_button'),
+      optionKeyForId: (id) => ValueKey('discount_constraint_option_$id'),
       loadPage: (search, page) async {
         final result = await widget.contactRepository.loadCustomers(
           query: ContactQuery(search: search),
           page: page,
         );
         return switch (result) {
-          Ok(value: final page) => _ConstraintPickerPage(
+          Ok(value: final page) => AsyncSelectionPage<int>(
             options: [
               for (final customer in page.customers)
-                _DiscountConstraintSelection(
+                AsyncSelectionOption<int>(
                   id: customer.id,
                   label: customer.fullName,
                   subtitle: [
@@ -692,22 +741,28 @@ class _DiscountRuleFormState extends State<DiscountRuleForm> {
 
   Future<void> _pickSuppliers(BuildContext context) async {
     final l10n = AppLocalizations.of(context)!;
-    final picked = await _showDiscountConstraintPicker(
+    final picked = await showAsyncMultiSelectPicker<int>(
       context: context,
-      title: l10n.discountSupplierPickerTitle,
-      searchHint: l10n.discountSupplierPickerSearchHint,
-      emptyText: l10n.discountSupplierPickerEmpty,
+      strings: _constraintPickerStrings(
+        l10n,
+        title: l10n.discountSupplierPickerTitle,
+        searchHint: l10n.discountSupplierPickerSearchHint,
+        emptyText: l10n.discountSupplierPickerEmpty,
+      ),
       selected: _selectedSuppliers,
+      searchFieldKey: const ValueKey('discount_constraint_search_field'),
+      applyButtonKey: const ValueKey('discount_constraint_apply_button'),
+      optionKeyForId: (id) => ValueKey('discount_constraint_option_$id'),
       loadPage: (search, page) async {
         final result = await widget.contactRepository.loadSuppliers(
           query: ContactQuery(search: search),
           page: page,
         );
         return switch (result) {
-          Ok(value: final page) => _ConstraintPickerPage(
+          Ok(value: final page) => AsyncSelectionPage<int>(
             options: [
               for (final supplier in page.suppliers)
-                _DiscountConstraintSelection(
+                AsyncSelectionOption<int>(
                   id: supplier.id,
                   label: supplier.name,
                   subtitle: [
@@ -728,10 +783,10 @@ class _DiscountRuleFormState extends State<DiscountRuleForm> {
     setState(() => _selectedSuppliers = picked);
   }
 
-  List<_DiscountConstraintSelection> _selectionsFromIds(List<int> ids) {
+  List<AsyncSelectionOption<int>> _selectionsFromIds(List<int> ids) {
     return [
       for (final id in ids)
-        _DiscountConstraintSelection(id: id, label: '', subtitle: ''),
+        AsyncSelectionOption<int>(id: id, label: '', subtitle: ''),
     ];
   }
 
@@ -891,354 +946,6 @@ class _DateField extends StatelessWidget {
             ),
         ],
       ),
-    );
-  }
-}
-
-typedef _ConstraintPageLoader =
-    Future<_ConstraintPickerPage> Function(String search, int page);
-
-Future<List<_DiscountConstraintSelection>?> _showDiscountConstraintPicker({
-  required BuildContext context,
-  required String title,
-  required String searchHint,
-  required String emptyText,
-  required List<_DiscountConstraintSelection> selected,
-  required _ConstraintPageLoader loadPage,
-}) {
-  return showModalBottomSheet<List<_DiscountConstraintSelection>>(
-    context: context,
-    isScrollControlled: true,
-    useSafeArea: true,
-    showDragHandle: true,
-    builder: (context) {
-      return FractionallySizedBox(
-        heightFactor: 0.82,
-        child: _ConstraintPickerSheet(
-          title: title,
-          searchHint: searchHint,
-          emptyText: emptyText,
-          selected: selected,
-          loadPage: loadPage,
-        ),
-      );
-    },
-  );
-}
-
-class _ConstraintPickerPage {
-  const _ConstraintPickerPage({required this.options, required this.hasMore});
-
-  final List<_DiscountConstraintSelection> options;
-  final bool hasMore;
-}
-
-class _DiscountConstraintSelection {
-  const _DiscountConstraintSelection({
-    required this.id,
-    required this.label,
-    required this.subtitle,
-  });
-
-  final int id;
-  final String label;
-  final String subtitle;
-
-  String displayLabel(AppLocalizations l10n) {
-    return label.isEmpty ? l10n.discountConstraintId(id) : label;
-  }
-}
-
-class _ConstraintPickerSheet extends StatefulWidget {
-  const _ConstraintPickerSheet({
-    required this.title,
-    required this.searchHint,
-    required this.emptyText,
-    required this.selected,
-    required this.loadPage,
-  });
-
-  final String title;
-  final String searchHint;
-  final String emptyText;
-  final List<_DiscountConstraintSelection> selected;
-  final _ConstraintPageLoader loadPage;
-
-  @override
-  State<_ConstraintPickerSheet> createState() => _ConstraintPickerSheetState();
-}
-
-class _ConstraintPickerSheetState extends State<_ConstraintPickerSheet> {
-  var _search = '';
-  var _options = <_DiscountConstraintSelection>[];
-  var _selected = <int, _DiscountConstraintSelection>{};
-  var _isLoading = false;
-  var _isLoadingMore = false;
-  var _hasMore = true;
-  var _hasError = false;
-  var _nextPage = 1;
-
-  @override
-  void initState() {
-    super.initState();
-    _selected = {for (final item in widget.selected) item.id: item};
-    _load(reset: true);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  widget.title,
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
-              ),
-              TextButton(
-                onPressed: _selected.isEmpty
-                    ? null
-                    : () => setState(() => _selected = {}),
-                child: Text(l10n.clearButton),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          DebouncedSearchField(
-            value: _search,
-            hintText: widget.searchHint,
-            clearTooltip: l10n.clearSearchTooltip,
-            fieldKey: const ValueKey('discount_constraint_search_field'),
-            enabled: !_isLoading,
-            onChanged: (value) {
-              _search = value;
-              _load(reset: true);
-            },
-          ),
-          if (_selected.isNotEmpty) ...[
-            const SizedBox(height: 10),
-            Wrap(
-              spacing: 6,
-              runSpacing: 6,
-              children: [
-                for (final item in _selected.values)
-                  InputChip(
-                    label: Text(item.displayLabel(l10n)),
-                    onDeleted: () {
-                      setState(() {
-                        _selected.remove(item.id);
-                      });
-                    },
-                  ),
-              ],
-            ),
-          ],
-          if (_hasError)
-            Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child: Text(
-                l10n.discountPickerLoadError,
-                style: TextStyle(color: Theme.of(context).colorScheme.error),
-              ),
-            ),
-          const SizedBox(height: 8),
-          Expanded(
-            child: InfiniteScrollList<_DiscountConstraintSelection>(
-              items: _options,
-              onLoadMore: () => _load(reset: false),
-              hasMore: _hasMore,
-              isLoadingInitial: _isLoading,
-              isLoadingMore: _isLoadingMore,
-              emptyBuilder: (context) => Center(child: Text(widget.emptyText)),
-              separatorBuilder: (_, _) => const Divider(height: 1),
-              itemBuilder: (context, option) {
-                final isSelected = _selected.containsKey(option.id);
-                return CheckboxListTile(
-                  key: ValueKey('discount_constraint_option_${option.id}'),
-                  value: isSelected,
-                  controlAffinity: ListTileControlAffinity.leading,
-                  title: Text(
-                    option.displayLabel(l10n),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  subtitle: option.subtitle.isEmpty
-                      ? null
-                      : Text(
-                          option.subtitle,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                  onChanged: (_) => _toggle(option),
-                );
-              },
-            ),
-          ),
-          const SizedBox(height: 12),
-          FilledButton.icon(
-            key: const ValueKey('discount_constraint_apply_button'),
-            onPressed: () {
-              Navigator.of(context).pop(_selected.values.toList());
-            },
-            icon: const Icon(Icons.check),
-            label: Text(l10n.confirmButton),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _load({required bool reset}) async {
-    if (reset) {
-      setState(() {
-        _isLoading = true;
-        _hasError = false;
-        _hasMore = true;
-        _nextPage = 1;
-      });
-    } else {
-      if (_isLoading || _isLoadingMore || !_hasMore) {
-        return;
-      }
-      setState(() => _isLoadingMore = true);
-    }
-
-    try {
-      final page = await widget.loadPage(_search, _nextPage);
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        for (final option in page.options) {
-          final selected = _selected[option.id];
-          if (selected != null && selected.label.isEmpty) {
-            _selected[option.id] = option;
-          }
-        }
-        _options = reset ? page.options : [..._options, ...page.options];
-        _hasMore = page.hasMore;
-        _nextPage += 1;
-        _isLoading = false;
-        _isLoadingMore = false;
-      });
-    } on Exception {
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        if (reset) {
-          _options = [];
-        }
-        _hasError = true;
-        _hasMore = false;
-        _isLoading = false;
-        _isLoadingMore = false;
-      });
-    }
-  }
-
-  void _toggle(_DiscountConstraintSelection option) {
-    setState(() {
-      if (_selected.containsKey(option.id)) {
-        _selected.remove(option.id);
-      } else {
-        _selected[option.id] = option;
-      }
-    });
-  }
-}
-
-class _ConstraintPickerField extends StatelessWidget {
-  const _ConstraintPickerField({
-    super.key,
-    required this.fieldKey,
-    required this.label,
-    required this.selected,
-    required this.emptyText,
-    required this.onPick,
-    required this.onClear,
-    required this.validator,
-  });
-
-  final Key fieldKey;
-  final String label;
-  final List<_DiscountConstraintSelection> selected;
-  final String emptyText;
-  final VoidCallback onPick;
-  final VoidCallback? onClear;
-  final String? Function(List<_DiscountConstraintSelection> selected) validator;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
-    return FormField<List<_DiscountConstraintSelection>>(
-      initialValue: selected,
-      validator: (_) => validator(selected),
-      builder: (field) {
-        return Material(
-          color: Theme.of(context).colorScheme.surface,
-          borderRadius: BorderRadius.circular(8),
-          clipBehavior: Clip.antiAlias,
-          child: InkWell(
-            key: fieldKey,
-            onTap: onPick,
-            child: InputDecorator(
-              decoration: InputDecoration(
-                labelText: label,
-                helperText: l10n.discountPickerHelper,
-                errorText: field.errorText,
-                border: const OutlineInputBorder(),
-                enabledBorder: const OutlineInputBorder(),
-                isDense: true,
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: selected.isEmpty
-                        ? Text(
-                            emptyText,
-                            style: TextStyle(
-                              color: Theme.of(
-                                context,
-                              ).colorScheme.onSurfaceVariant,
-                            ),
-                          )
-                        : Wrap(
-                            spacing: 6,
-                            runSpacing: 6,
-                            children: [
-                              for (final item in selected)
-                                Chip(
-                                  visualDensity: VisualDensity.compact,
-                                  label: Text(item.displayLabel(l10n)),
-                                ),
-                            ],
-                          ),
-                  ),
-                  if (onClear != null)
-                    IconButton(
-                      tooltip: l10n.clearButton,
-                      onPressed: onClear,
-                      icon: const Icon(Icons.close),
-                    ),
-                  IconButton(
-                    tooltip: l10n.discountOpenPickerTooltip,
-                    onPressed: onPick,
-                    icon: const Icon(Icons.arrow_drop_down),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
     );
   }
 }

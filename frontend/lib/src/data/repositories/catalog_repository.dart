@@ -13,19 +13,11 @@ class CatalogRepository {
     required ProductQuery query,
     int page = 1,
   }) async {
-    try {
-      return Ok(await _service.fetchProducts(query: query, page: page));
-    } on Exception catch (exception) {
-      return Error(exception);
-    }
+    return Result.guard(() => _service.fetchProducts(query: query, page: page));
   }
 
   Future<Result<Product>> createProduct(ProductDraft draft) async {
-    try {
-      return Ok(await _service.createProduct(draft));
-    } on Exception catch (exception) {
-      return Error(exception);
-    }
+    return Result.guard(() => _service.createProduct(draft));
   }
 
   Future<Result<Product?>> findProductByBarcode(
@@ -44,17 +36,15 @@ class CatalogRepository {
           : ProductAvailabilityFilter.all,
     );
 
-    try {
+    return Result.guard(() async {
       final page = await _service.fetchProducts(query: query, page: 1);
       for (final product in page.products) {
         if (product.barcode.trim() == normalizedBarcode) {
-          return Ok(product);
+          return product;
         }
       }
-      return const Ok(null);
-    } on Exception catch (exception) {
-      return Error(exception);
-    }
+      return null;
+    });
   }
 
   List<Product> sampleProducts(ProductQuery query) {

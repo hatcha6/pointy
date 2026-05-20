@@ -10,31 +10,19 @@ class InventoryRepository {
   final PosApiService _service;
 
   Future<Result<StockItem?>> loadStockForProduct(int productId) async {
-    try {
-      return Ok(await _service.fetchStockForProduct(productId));
-    } on Exception catch (exception) {
-      return Error(exception);
-    }
+    return Result.guard(() => _service.fetchStockForProduct(productId));
   }
 
   Future<Result<StockMovementPage>> loadMovementsForProduct(
     int productId, {
     int page = 1,
   }) async {
-    try {
-      return Ok(
-        await _service.fetchStockMovementsForProduct(productId, page: page),
-      );
-    } on Exception catch (exception) {
-      return Error(exception);
-    }
+    return Result.guard(
+      () => _service.fetchStockMovementsForProduct(productId, page: page),
+    );
   }
 
   Future<Result<StockMovement>> createMovement(StockMovementDraft draft) async {
-    try {
-      return Ok(await _service.createStockMovement(draft));
-    } on Exception catch (exception) {
-      return Error(exception);
-    }
+    return Result.guard(() => _service.createStockMovement(draft));
   }
 }

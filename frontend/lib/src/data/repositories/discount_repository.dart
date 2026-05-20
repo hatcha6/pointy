@@ -11,55 +11,35 @@ class DiscountRepository {
     required DiscountRuleQuery query,
     int page = 1,
   }) async {
-    try {
-      return Ok(await _service.fetchDiscountRules(query: query, page: page));
-    } on Exception catch (exception) {
-      return Error(exception);
-    }
+    return Result.guard(
+      () => _service.fetchDiscountRules(query: query, page: page),
+    );
   }
 
   Future<Result<DiscountRule>> createDiscountRule(
     DiscountRuleDraft draft,
   ) async {
-    try {
-      return Ok(await _service.createDiscountRule(draft));
-    } on Exception catch (exception) {
-      return Error(exception);
-    }
+    return Result.guard(() => _service.createDiscountRule(draft));
   }
 
   Future<Result<DiscountRule>> updateDiscountRule({
     required int id,
     required DiscountRuleDraft draft,
   }) async {
-    try {
-      return Ok(await _service.updateDiscountRule(id: id, draft: draft));
-    } on Exception catch (exception) {
-      return Error(exception);
-    }
+    return Result.guard(
+      () => _service.updateDiscountRule(id: id, draft: draft),
+    );
   }
 
   Future<Result<DiscountRule>> enableDiscountRule(int id) async {
-    try {
-      return Ok(await _service.enableDiscountRule(id));
-    } on Exception catch (exception) {
-      return Error(exception);
-    }
+    return Result.guard(() => _service.enableDiscountRule(id));
   }
 
   Future<Result<DiscountRule>> disableDiscountRule(int id) async {
-    try {
-      return Ok(await _service.disableDiscountRule(id));
-    } on Exception catch (exception) {
-      return Error(exception);
-    }
+    return Result.guard(() => _service.disableDiscountRule(id));
   }
 
   Future<Result<DiscountRule>> archiveDiscountRule(int id) async {
-    try {
-      return Ok(await _service.archiveDiscountRule(id));
-    } on Exception catch (exception) {
-      return Error(exception);
-    }
+    return Result.guard(() => _service.archiveDiscountRule(id));
   }
 }

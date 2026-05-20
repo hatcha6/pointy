@@ -11,55 +11,37 @@ class RegisterSessionRepository {
   final PosApiService _service;
 
   Future<Result<RegisterSession?>> loadCurrentSession() async {
-    try {
-      return Ok(await _service.fetchCurrentRegisterSession());
-    } on Exception catch (exception) {
-      return Error(exception);
-    }
+    return Result.guard(_service.fetchCurrentRegisterSession);
   }
 
   Future<Result<RegisterSessionPage>> loadSessionHistory({int page = 1}) async {
-    try {
-      return Ok(await _service.fetchRegisterSessionHistory(page: page));
-    } on Exception catch (exception) {
-      return Error(exception);
-    }
+    return Result.guard(() => _service.fetchRegisterSessionHistory(page: page));
   }
 
   Future<Result<RegisterCashMovementPage>> loadCashMovementsForSession(
     int sessionId, {
     int page = 1,
   }) async {
-    try {
-      return Ok(
-        await _service.fetchRegisterSessionCashMovements(sessionId, page: page),
-      );
-    } on Exception catch (exception) {
-      return Error(exception);
-    }
+    return Result.guard(
+      () => _service.fetchRegisterSessionCashMovements(sessionId, page: page),
+    );
   }
 
   Future<Result<RegisterSession>> startSession({
     required double openingCash,
   }) async {
-    try {
-      return Ok(await _service.startRegisterSession(openingCash: openingCash));
-    } on Exception catch (exception) {
-      return Error(exception);
-    }
+    return Result.guard(
+      () => _service.startRegisterSession(openingCash: openingCash),
+    );
   }
 
   Future<Result<RegisterSession>> closeSession({
     required int sessionId,
     required RegisterSessionCloseDraft draft,
   }) async {
-    try {
-      return Ok(
-        await _service.closeRegisterSession(sessionId: sessionId, draft: draft),
-      );
-    } on Exception catch (exception) {
-      return Error(exception);
-    }
+    return Result.guard(
+      () => _service.closeRegisterSession(sessionId: sessionId, draft: draft),
+    );
   }
 
   Future<Result<RegisterCashMovement>> createCashMovement({
@@ -67,16 +49,12 @@ class RegisterSessionRepository {
     required RegisterCashMovementType movementType,
     required RegisterCashMovementDraft draft,
   }) async {
-    try {
-      return Ok(
-        await _service.createRegisterCashMovement(
-          sessionId: sessionId,
-          movementType: movementType,
-          draft: draft,
-        ),
-      );
-    } on Exception catch (exception) {
-      return Error(exception);
-    }
+    return Result.guard(
+      () => _service.createRegisterCashMovement(
+        sessionId: sessionId,
+        movementType: movementType,
+        draft: draft,
+      ),
+    );
   }
 }

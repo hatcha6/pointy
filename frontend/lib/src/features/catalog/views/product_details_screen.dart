@@ -8,6 +8,7 @@ import '../../../data/models/product.dart';
 import '../../../data/models/purchase_submission.dart';
 import '../../../data/repositories/printing_repository.dart';
 import '../../../shared/authorization_guards.dart';
+import '../../../shared/date_formatters.dart';
 import '../../../shared/detail_section.dart';
 import '../../../shared/formatters.dart';
 import '../../../shared/product_status_pill.dart';
@@ -220,7 +221,7 @@ class _ProductCostHistorySection extends StatelessWidget {
                     entry.purchaseOrderNumber!.isNotEmpty)
                   l10n.purchaseOrderNumberValue(entry.purchaseOrderNumber!),
                 l10n.purchaseOrderLineQuantity(entry.quantity),
-                if (entry.recordedAt != null) _formatDate(entry.recordedAt!),
+                if (entry.recordedAt != null) formatDate(entry.recordedAt!),
               ].join(' • '),
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
@@ -609,13 +610,6 @@ class _StockOnHandPanel extends StatelessWidget {
       ),
     );
   }
-}
-
-String _formatDate(DateTime dateTime) {
-  final date = dateTime.toLocal();
-  final month = date.month.toString().padLeft(2, '0');
-  final day = date.day.toString().padLeft(2, '0');
-  return '${date.year}/$month/$day';
 }
 
 String _formatSignedMoney(double value) {

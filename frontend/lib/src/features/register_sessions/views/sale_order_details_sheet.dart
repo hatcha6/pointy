@@ -3,6 +3,7 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../data/models/sale_order.dart';
 import '../../../shared/formatters.dart';
+import '../../../shared/payment_labels.dart';
 
 Future<void> showSaleOrderDetailsSheet(
   BuildContext context,
@@ -202,8 +203,8 @@ class _SaleOrderDetailsSheetState extends State<_SaleOrderDetailsSheet> {
               ListTile(
                 dense: true,
                 contentPadding: EdgeInsets.zero,
-                leading: Icon(_paymentIcon(payment.method)),
-                title: Text(_paymentMethodLabel(l10n, payment.method)),
+                leading: Icon(paymentMethodIcon(payment.method)),
+                title: Text(paymentMethodLabel(l10n, payment.method)),
                 subtitle: payment.commissionAmount == 0
                     ? null
                     : Text(
@@ -262,22 +263,6 @@ class _SaleOrderDetailsSheetState extends State<_SaleOrderDetailsSheet> {
         ],
       ),
     );
-  }
-
-  IconData _paymentIcon(PaymentMethod method) {
-    return switch (method) {
-      PaymentMethod.cash => Icons.payments_outlined,
-      PaymentMethod.card => Icons.credit_card_outlined,
-      PaymentMethod.transfer => Icons.account_balance_outlined,
-    };
-  }
-
-  String _paymentMethodLabel(AppLocalizations l10n, PaymentMethod method) {
-    return switch (method) {
-      PaymentMethod.cash => l10n.paymentMethodCash,
-      PaymentMethod.card => l10n.paymentMethodCard,
-      PaymentMethod.transfer => l10n.paymentMethodTransfer,
-    };
   }
 
   bool get _isBusy => _isReprinting || _isAdjusting;

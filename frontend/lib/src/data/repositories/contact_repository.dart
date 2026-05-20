@@ -11,45 +11,29 @@ class ContactRepository {
     required ContactQuery query,
     int page = 1,
   }) async {
-    try {
-      return Ok(await _service.fetchCustomers(query: query, page: page));
-    } on Exception catch (exception) {
-      return Error(exception);
-    }
+    return Result.guard(
+      () => _service.fetchCustomers(query: query, page: page),
+    );
   }
 
   Future<Result<SupplierPage>> loadSuppliers({
     required ContactQuery query,
     int page = 1,
   }) async {
-    try {
-      return Ok(await _service.fetchSuppliers(query: query, page: page));
-    } on Exception catch (exception) {
-      return Error(exception);
-    }
+    return Result.guard(
+      () => _service.fetchSuppliers(query: query, page: page),
+    );
   }
 
   Future<Result<SupplierContact>> loadSupplier(int supplierId) async {
-    try {
-      return Ok(await _service.fetchSupplier(supplierId));
-    } on Exception catch (exception) {
-      return Error(exception);
-    }
+    return Result.guard(() => _service.fetchSupplier(supplierId));
   }
 
   Future<Result<Customer>> createCustomer(CustomerDraft draft) async {
-    try {
-      return Ok(await _service.createCustomer(draft));
-    } on Exception catch (exception) {
-      return Error(exception);
-    }
+    return Result.guard(() => _service.createCustomer(draft));
   }
 
   Future<Result<SupplierContact>> createSupplier(SupplierDraft draft) async {
-    try {
-      return Ok(await _service.createSupplier(draft));
-    } on Exception catch (exception) {
-      return Error(exception);
-    }
+    return Result.guard(() => _service.createSupplier(draft));
   }
 }

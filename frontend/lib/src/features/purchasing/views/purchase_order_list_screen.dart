@@ -316,14 +316,14 @@ class PurchaseOrderTile extends StatelessWidget {
               l10n.supplierInvoiceNumberValue(order.supplierInvoiceNumber),
             if (order.supplierInvoiceDate != null)
               l10n.supplierInvoiceDateValue(
-                _formatDate(order.supplierInvoiceDate!),
+                formatDate(order.supplierInvoiceDate!),
               ),
             if (order.paymentStatus.isNotEmpty)
               _paymentStatusLabel(l10n, order.paymentStatus),
             l10n.purchaseOrderLineCount(order.lineCount),
             if (date != null) formatDateTime(date),
             if (order.dueDate != null)
-              l10n.purchaseOrderDueDateValue(_formatDate(order.dueDate!)),
+              l10n.purchaseOrderDueDateValue(formatDate(order.dueDate!)),
             if (order.supplierName != null && order.supplierName!.isNotEmpty)
               order.supplierName!,
           ].join(' • '),
@@ -359,11 +359,4 @@ String _paymentStatusLabel(AppLocalizations l10n, String status) {
     'credit' => l10n.purchasePaymentStatusCredit,
     _ => l10n.purchasePaymentStatusUnpaid,
   };
-}
-
-String _formatDate(DateTime dateTime) {
-  final date = dateTime.toLocal();
-  final month = date.month.toString().padLeft(2, '0');
-  final day = date.day.toString().padLeft(2, '0');
-  return '${date.year}/$month/$day';
 }

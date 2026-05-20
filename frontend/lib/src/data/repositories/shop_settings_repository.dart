@@ -8,18 +8,10 @@ class ShopSettingsRepository {
   final PosApiService _service;
 
   Future<Result<ShopSettings>> loadSettings() async {
-    try {
-      return Ok(await _service.fetchShopSettings());
-    } on Exception catch (exception) {
-      return Error(exception);
-    }
+    return Result.guard(_service.fetchShopSettings);
   }
 
   Future<Result<ShopSettings>> updateSettings(ShopSettingsDraft draft) async {
-    try {
-      return Ok(await _service.updateShopSettings(draft));
-    } on Exception catch (exception) {
-      return Error(exception);
-    }
+    return Result.guard(() => _service.updateShopSettings(draft));
   }
 }

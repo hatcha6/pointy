@@ -38,52 +38,40 @@ class PrintingRepository {
     PrintJobStatus? status,
     int page = 1,
   }) async {
-    try {
-      return Ok(await _service.fetchPrintJobs(status: status, page: page));
-    } on Exception catch (exception) {
-      return Error(exception);
-    }
+    return Result.guard(
+      () => _service.fetchPrintJobs(status: status, page: page),
+    );
   }
 
   Future<Result<PrintJob>> claimPrintJob({
     required int jobId,
     required PrinterConfig config,
   }) async {
-    try {
-      return Ok(
-        await _service.claimPrintJob(
-          jobId: jobId,
-          agentId: config.agentId,
-          endpoint: config.endpoint,
-        ),
-      );
-    } on Exception catch (exception) {
-      return Error(exception);
-    }
+    return Result.guard(
+      () => _service.claimPrintJob(
+        jobId: jobId,
+        agentId: config.agentId,
+        endpoint: config.endpoint,
+      ),
+    );
   }
 
   Future<Result<PrintJob?>> claimNextPrintJob(PrinterConfig config) async {
-    try {
-      return Ok(
-        await _service.claimNextPrintJob(
-          agentId: config.agentId,
-          endpoint: config.endpoint,
-        ),
-      );
-    } on Exception catch (exception) {
-      return Error(exception);
-    }
+    return Result.guard(
+      () => _service.claimNextPrintJob(
+        agentId: config.agentId,
+        endpoint: config.endpoint,
+      ),
+    );
   }
 
   Future<Result<PrintJob>> reportPrintJob({
     required int jobId,
     required PrintJobReportDraft report,
   }) async {
-    try {
-      return Ok(await _service.reportPrintJob(jobId: jobId, report: report));
-    } on Exception catch (exception) {
-      return Error(exception);
-    }
+    return Result.guard(
+      () => _service.reportPrintJob(jobId: jobId, report: report),
+    );
   }
 
   Future<Result<PrintJob>> printAndReportJob({
@@ -106,15 +94,11 @@ class PrintingRepository {
   }
 
   Future<Result<PrintJob>> requestSaleReprint(int saleOrderId) async {
-    try {
-      return Ok(await _service.requestSaleReprint(saleOrderId));
-    } on Exception catch (exception) {
-      return Error(exception);
-    }
+    return Result.guard(() => _service.requestSaleReprint(saleOrderId));
   }
 
   Future<Result<List<PrinterEndpoint>>> discoverPrinters() async {
-    try {
+    return Result.guard(() async {
       final discovered = <String, PrinterEndpoint>{};
       for (final transport in [
         _serialTransport,
@@ -126,32 +110,23 @@ class PrintingRepository {
           discovered[_endpointKey(endpoint)] = endpoint;
         }
       }
-      return Ok(discovered.values.toList(growable: false));
-    } on Exception catch (exception) {
-      return Error(exception);
-    }
+      return discovered.values.toList(growable: false);
+    });
   }
 
   Future<Result<PrinterConfig>> loadDefaultPrinterConfig() async {
-    try {
+    return Result.guard(() async {
       final config = await _storageService.loadDefaultPrinterConfig();
-      return Ok(
-        _devicePrintableConfig(config ?? PrinterConfig.defaultConfig()),
-      );
-    } on Exception catch (exception) {
-      return Error(exception);
-    }
+      return _devicePrintableConfig(config ?? PrinterConfig.defaultConfig());
+    });
   }
 
   Future<Result<void>> saveDefaultPrinterConfig(PrinterConfig config) async {
-    try {
+    return Result.guard(() async {
       await _storageService.saveDefaultPrinterConfig(
         _devicePrintableConfig(config),
       );
-      return const Ok(null);
-    } on Exception catch (exception) {
-      return Error(exception);
-    }
+    });
   }
 
   Future<PrintTransportResult> testPrinter(PrinterConfig config) {

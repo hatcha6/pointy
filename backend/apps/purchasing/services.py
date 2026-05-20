@@ -11,7 +11,13 @@ from apps.discounts.models import (
     normalize_coupon_code,
 )
 from apps.discounts.services import DiscountUsageLimitExceeded, persist_applied_discounts
-from apps.inventory.models import StockItem, StockMovement
+from apps.inventory.models import StockMovement
+from apps.inventory.services import (
+    create_stock_movement,
+    lock_stock_item,
+    save_stock_item_quantities,
+    stock_snapshot,
+)
 from .models import (
     PurchaseLine,
     PurchaseOrder,
@@ -67,53 +73,6 @@ def record_purchase_order_audit_event(
         message=message,
         details=details or {},
         created_by=created_by,
-    )
-
-
-def stock_snapshot(stock_item):
-    return {
-        "on_hand": stock_item.quantity_on_hand,
-        "committed": stock_item.quantity_committed,
-        "expected": stock_item.quantity_expected,
-    }
-
-
-def save_stock_item_quantities(stock_item):
-    stock_item.save(
-        update_fields=[
-            "quantity_on_hand",
-            "quantity_committed",
-            "quantity_expected",
-            "updated_at",
-        ],
-    )
-
-
-def create_stock_movement(
-    *,
-    stock_item,
-    product,
-    movement_type,
-    quantity,
-    note,
-    created_by,
-    before,
-):
-    if quantity <= 0:
-        return None
-    return StockMovement.objects.create(
-        product=product,
-        stock_item=stock_item,
-        movement_type=movement_type,
-        quantity=quantity,
-        note=note,
-        created_by=created_by,
-        on_hand_before=before["on_hand"],
-        on_hand_after=stock_item.quantity_on_hand,
-        committed_before=before["committed"],
-        committed_after=stock_item.quantity_committed,
-        expected_before=before["expected"],
-        expected_after=stock_item.quantity_expected,
     )
 
 
@@ -259,9 +218,7 @@ def submit_purchase_order(purchase_order, *, request=None):
 
     created_by = purchase_created_by(request)
     for line in locked_order.lines.select_related("product").order_by("product_id"):
-        stock_item, _ = StockItem.objects.select_for_update().get_or_create(
-            product=line.product,
-        )
+        stock_item = lock_stock_item(line.product)
         before = stock_snapshot(stock_item)
         stock_item.quantity_expected += line.quantity
         save_stock_item_quantities(stock_item)
@@ -349,9 +306,7 @@ def apply_receipt_stock_changes(
     expected_quantities,
     created_by,
 ):
-    stock_item, _ = StockItem.objects.select_for_update().get_or_create(
-        product=line.product,
-    )
+    stock_item = lock_stock_item(line.product)
 
     accepted_expected = expected_quantities["accepted_expected"]
     accepted_overage = accepted_quantity - accepted_expected
@@ -570,9 +525,7 @@ def validate_purchase_stock_available(lines):
     for product_id in sorted(requested_by_product):
         product = products_by_id[product_id]
         quantity = requested_by_product[product_id]
-        stock_item, _ = StockItem.objects.select_for_update().get_or_create(
-            product=product,
-        )
+        stock_item = lock_stock_item(product)
         stock_items[product_id] = stock_item
         if stock_item.quantity_on_hand < quantity:
             shortages.append(
@@ -624,19 +577,14 @@ def record_purchase_adjustment_stock_movements(
         before = stock_snapshot(stock_item)
         stock_item.quantity_on_hand -= quantity
         save_stock_item_quantities(stock_item)
-        StockMovement.objects.create(
+        create_stock_movement(
             product=line.product,
             stock_item=stock_item,
             movement_type=StockMovement.Type.DECREASE,
             quantity=quantity,
             note=purchase_adjustment_note(adjustment_type, purchase_order.order_number),
             created_by=created_by,
-            on_hand_before=before["on_hand"],
-            on_hand_after=stock_item.quantity_on_hand,
-            committed_before=before["committed"],
-            committed_after=stock_item.quantity_committed,
-            expected_before=before["expected"],
-            expected_after=stock_item.quantity_expected,
+            before=before,
         )
 
 
@@ -646,9 +594,7 @@ def lock_replacement_stock_items(lines, stock_items=None):
     for product_id in sorted(products_by_id):
         if product_id in stock_items:
             continue
-        stock_item, _ = StockItem.objects.select_for_update().get_or_create(
-            product=products_by_id[product_id],
-        )
+        stock_item = lock_stock_item(products_by_id[product_id])
         stock_items[product_id] = stock_item
     return stock_items
 
@@ -665,19 +611,14 @@ def record_purchase_replacement_stock_movements(
         before = stock_snapshot(stock_item)
         stock_item.quantity_on_hand += quantity
         save_stock_item_quantities(stock_item)
-        StockMovement.objects.create(
+        create_stock_movement(
             product=product,
             stock_item=stock_item,
             movement_type=StockMovement.Type.INCREASE,
             quantity=quantity,
             note=purchase_replacement_note(purchase_order.order_number),
             created_by=created_by,
-            on_hand_before=before["on_hand"],
-            on_hand_after=stock_item.quantity_on_hand,
-            committed_before=before["committed"],
-            committed_after=stock_item.quantity_committed,
-            expected_before=before["expected"],
-            expected_after=stock_item.quantity_expected,
+            before=before,
         )
 
 
@@ -915,9 +856,7 @@ def cancel_purchase_order(purchase_order, *, request=None):
             outstanding_quantity = line.outstanding_quantity
             if outstanding_quantity <= 0:
                 continue
-            stock_item, _ = StockItem.objects.select_for_update().get_or_create(
-                product=line.product,
-            )
+            stock_item = lock_stock_item(line.product)
             before = stock_snapshot(stock_item)
             expected_reduction = decrement_expected(stock_item, outstanding_quantity)
             if expected_reduction <= 0:

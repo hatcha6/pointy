@@ -15,7 +15,13 @@ from apps.discounts.services import (
     DiscountUsageLimitExceeded,
     persist_applied_discounts,
 )
-from apps.inventory.models import StockItem, StockMovement
+from apps.inventory.models import StockMovement
+from apps.inventory.services import (
+    create_stock_movement,
+    lock_stock_item,
+    save_stock_item_quantities,
+    stock_snapshot,
+)
 from .models import Order, OrderAdjustment, OrderAdjustmentLine, OrderLine
 
 
@@ -231,9 +237,7 @@ def prepare_sale_stock_adjustments(lines_data):
     for product_id in sorted(quantities_by_product):
         product = products_by_id[product_id]
         quantity = quantities_by_product[product_id]
-        stock_item, _ = StockItem.objects.select_for_update().get_or_create(
-            product=product,
-        )
+        stock_item = lock_stock_item(product)
         if not settings.allow_overselling and stock_item.quantity_on_hand < quantity:
             shortages.append(
                 {
@@ -262,19 +266,14 @@ def record_sale_stock_movements(order, stock_adjustments, *, request=None):
         before = stock_snapshot(stock_item)
         stock_item.quantity_on_hand -= quantity
         save_stock_item_quantities(stock_item)
-        StockMovement.objects.create(
+        create_stock_movement(
             product=product,
             stock_item=stock_item,
             movement_type=StockMovement.Type.DECREASE,
             quantity=quantity,
             note=f"بيع {order.receipt_number}",
             created_by=created_by,
-            on_hand_before=before["on_hand"],
-            on_hand_after=stock_item.quantity_on_hand,
-            committed_before=before["committed"],
-            committed_after=stock_item.quantity_committed,
-            expected_before=before["expected"],
-            expected_after=stock_item.quantity_expected,
+            before=before,
         )
 
 
@@ -447,42 +446,16 @@ def return_order_items(*, order, lines, reason, request=None, register_session=N
 
 
 def record_return_stock_movement(*, order, product, quantity, created_by):
-    stock_item, _ = StockItem.objects.select_for_update().get_or_create(
-        product=product,
-    )
+    stock_item = lock_stock_item(product)
     before = stock_snapshot(stock_item)
     stock_item.quantity_on_hand += quantity
     save_stock_item_quantities(stock_item)
-    StockMovement.objects.create(
+    create_stock_movement(
         product=product,
         stock_item=stock_item,
         movement_type=StockMovement.Type.INCREASE,
         quantity=quantity,
         note=f"مرتجع {order.receipt_number}",
         created_by=created_by,
-        on_hand_before=before["on_hand"],
-        on_hand_after=stock_item.quantity_on_hand,
-        committed_before=before["committed"],
-        committed_after=stock_item.quantity_committed,
-        expected_before=before["expected"],
-        expected_after=stock_item.quantity_expected,
-    )
-
-
-def stock_snapshot(stock_item):
-    return {
-        "on_hand": stock_item.quantity_on_hand,
-        "committed": stock_item.quantity_committed,
-        "expected": stock_item.quantity_expected,
-    }
-
-
-def save_stock_item_quantities(stock_item):
-    stock_item.save(
-        update_fields=[
-            "quantity_on_hand",
-            "quantity_committed",
-            "quantity_expected",
-            "updated_at",
-        ],
+        before=before,
     )

@@ -16,6 +16,12 @@ class ContactSelectionTile extends StatelessWidget {
     required this.onSelect,
     required this.onClear,
     this.allowClear = true,
+    this.padding = const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+    this.iconSize,
+    this.iconSpacing = 10,
+    this.actionVisualDensity,
+    this.selectActionIcon,
+    this.clearActionIcon = Icons.close,
   });
 
   final String label;
@@ -26,35 +32,48 @@ class ContactSelectionTile extends StatelessWidget {
   final VoidCallback onSelect;
   final VoidCallback onClear;
   final bool allowClear;
+  final EdgeInsetsGeometry padding;
+  final double? iconSize;
+  final double iconSpacing;
+  final VisualDensity? actionVisualDensity;
+  final IconData? selectActionIcon;
+  final IconData clearActionIcon;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    final colorScheme = Theme.of(context).colorScheme;
     final hasValue = value.trim().isNotEmpty;
+    final iconColor = enabled
+        ? colorScheme.onSurfaceVariant
+        : colorScheme.onSurface.withValues(alpha: 0.38);
 
     return Material(
-      color: Theme.of(context).colorScheme.surface,
+      color: colorScheme.surface,
       borderRadius: BorderRadius.circular(8),
       child: InkWell(
         borderRadius: BorderRadius.circular(8),
         onTap: enabled ? onSelect : null,
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          padding: padding,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(8),
-            border: Border.all(
-              color: Theme.of(context).colorScheme.outlineVariant,
-            ),
+            border: Border.all(color: colorScheme.outlineVariant),
           ),
           child: Row(
             children: [
-              Icon(icon),
-              const SizedBox(width: 10),
+              Icon(icon, size: iconSize, color: iconColor),
+              SizedBox(width: iconSpacing),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(label, style: Theme.of(context).textTheme.labelMedium),
+                    Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.labelMedium,
+                    ),
                     Text(
                       hasValue ? value : placeholder,
                       maxLines: 1,
@@ -67,8 +86,16 @@ class ContactSelectionTile extends StatelessWidget {
               if (hasValue && allowClear)
                 IconButton(
                   tooltip: l10n.clearContactTooltip,
+                  visualDensity: actionVisualDensity,
                   onPressed: enabled ? onClear : null,
-                  icon: const Icon(Icons.close),
+                  icon: Icon(clearActionIcon),
+                )
+              else if (selectActionIcon != null)
+                IconButton(
+                  tooltip: l10n.changeContactAction,
+                  visualDensity: actionVisualDensity,
+                  onPressed: enabled ? onSelect : null,
+                  icon: Icon(selectActionIcon),
                 )
               else
                 TextButton(

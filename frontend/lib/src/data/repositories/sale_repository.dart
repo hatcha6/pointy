@@ -44,11 +44,7 @@ class SaleRepository {
   Future<Result<SaleDiscountPreview>> previewDiscounts(
     SaleDiscountPreviewDraft draft,
   ) async {
-    try {
-      return Ok(await _service.previewSaleDiscounts(draft));
-    } on Exception catch (exception) {
-      return Error(exception);
-    }
+    return Result.guard(() => _service.previewSaleDiscounts(draft));
   }
 
   Future<Result<SaleOrderPage>> loadOrdersForSession(
@@ -56,54 +52,36 @@ class SaleRepository {
     SaleOrderQuery query = const SaleOrderQuery(),
     int page = 1,
   }) async {
-    try {
-      return Ok(
-        await _service.fetchRegisterSessionOrders(
-          sessionId,
-          query: query,
-          page: page,
-        ),
-      );
-    } on Exception catch (exception) {
-      return Error(exception);
-    }
+    return Result.guard(
+      () => _service.fetchRegisterSessionOrders(
+        sessionId,
+        query: query,
+        page: page,
+      ),
+    );
   }
 
   Future<Result<PrintJob>> requestReprint(int saleOrderId) async {
-    try {
-      return Ok(await _service.requestSaleReprint(saleOrderId));
-    } on Exception catch (exception) {
-      return Error(exception);
-    }
+    return Result.guard(() => _service.requestSaleReprint(saleOrderId));
   }
 
   Future<Result<SaleOrder>> voidOrder({
     required int saleOrderId,
     required SaleVoidDraft draft,
   }) async {
-    try {
-      return Ok(
-        await _service.voidSaleOrder(saleOrderId: saleOrderId, draft: draft),
-      );
-    } on Exception catch (exception) {
-      return Error(exception);
-    }
+    return Result.guard(
+      () => _service.voidSaleOrder(saleOrderId: saleOrderId, draft: draft),
+    );
   }
 
   Future<Result<SaleOrder>> returnItems({
     required int saleOrderId,
     required SaleReturnDraft draft,
   }) async {
-    try {
-      return Ok(
-        await _service.returnSaleOrderItems(
-          saleOrderId: saleOrderId,
-          draft: draft,
-        ),
-      );
-    } on Exception catch (exception) {
-      return Error(exception);
-    }
+    return Result.guard(
+      () =>
+          _service.returnSaleOrderItems(saleOrderId: saleOrderId, draft: draft),
+    );
   }
 
   List<SaleStockShortage> _stockShortagesFromException(

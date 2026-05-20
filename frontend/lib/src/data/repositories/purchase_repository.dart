@@ -11,29 +11,19 @@ class PurchaseRepository {
     required PurchaseOrderQuery query,
     int page = 1,
   }) async {
-    try {
-      return Ok(await _service.fetchPurchaseOrders(query: query, page: page));
-    } on Exception catch (exception) {
-      return Error(exception);
-    }
+    return Result.guard(
+      () => _service.fetchPurchaseOrders(query: query, page: page),
+    );
   }
 
   Future<Result<PurchaseOrder>> loadPurchaseOrder(int purchaseOrderId) async {
-    try {
-      return Ok(await _service.fetchPurchaseOrder(purchaseOrderId));
-    } on Exception catch (exception) {
-      return Error(exception);
-    }
+    return Result.guard(() => _service.fetchPurchaseOrder(purchaseOrderId));
   }
 
   Future<Result<PurchaseDiscountPreview>> previewDiscounts(
     PurchaseDiscountPreviewDraft draft,
   ) async {
-    try {
-      return Ok(await _service.previewPurchaseDiscounts(draft));
-    } on Exception catch (exception) {
-      return Error(exception);
-    }
+    return Result.guard(() => _service.previewPurchaseDiscounts(draft));
   }
 
   Future<Result<SupplierPaymentPage>> loadSupplierPayments({
@@ -41,77 +31,50 @@ class PurchaseRepository {
     int? purchaseOrderId,
     int page = 1,
   }) async {
-    try {
-      return Ok(
-        await _service.fetchSupplierPayments(
-          supplierId: supplierId,
-          purchaseOrderId: purchaseOrderId,
-          page: page,
-        ),
-      );
-    } on Exception catch (exception) {
-      return Error(exception);
-    }
+    return Result.guard(
+      () => _service.fetchSupplierPayments(
+        supplierId: supplierId,
+        purchaseOrderId: purchaseOrderId,
+        page: page,
+      ),
+    );
   }
 
   Future<Result<SupplierPayment>> createSupplierPayment(
     SupplierPaymentDraft draft,
   ) async {
-    try {
-      return Ok(await _service.createSupplierPayment(draft));
-    } on Exception catch (exception) {
-      return Error(exception);
-    }
+    return Result.guard(() => _service.createSupplierPayment(draft));
   }
 
   Future<Result<PurchaseOrderPage>> loadOutstandingReceivedNotPaid() async {
-    try {
-      return Ok(await _service.fetchOutstandingReceivedNotPaidPurchases());
-    } on Exception catch (exception) {
-      return Error(exception);
-    }
+    return Result.guard(_service.fetchOutstandingReceivedNotPaidPurchases);
   }
 
   Future<Result<PurchaseOrderPage>> loadSupplierPurchaseHistory({
     required int supplierId,
     int page = 1,
   }) async {
-    try {
-      return Ok(
-        await _service.fetchSupplierPurchaseHistory(
-          supplierId: supplierId,
-          page: page,
-        ),
-      );
-    } on Exception catch (exception) {
-      return Error(exception);
-    }
+    return Result.guard(
+      () => _service.fetchSupplierPurchaseHistory(
+        supplierId: supplierId,
+        page: page,
+      ),
+    );
   }
 
   Future<Result<ProductCostHistoryPage>> loadProductCostHistory({
     required int productId,
     int page = 1,
   }) async {
-    try {
-      return Ok(
-        await _service.fetchProductCostHistory(
-          productId: productId,
-          page: page,
-        ),
-      );
-    } on Exception catch (exception) {
-      return Error(exception);
-    }
+    return Result.guard(
+      () => _service.fetchProductCostHistory(productId: productId, page: page),
+    );
   }
 
   Future<Result<ProductMarginImpact?>> loadProductMarginImpact(
     int productId,
   ) async {
-    try {
-      return Ok(await _service.fetchProductMarginImpact(productId));
-    } on Exception catch (exception) {
-      return Error(exception);
-    }
+    return Result.guard(() => _service.fetchProductMarginImpact(productId));
   }
 
   Future<Result<PurchaseAdjustmentHistoryPage>> loadPurchaseAdjustmentHistory({
@@ -120,26 +83,18 @@ class PurchaseRepository {
     int? productId,
     int page = 1,
   }) async {
-    try {
-      return Ok(
-        await _service.fetchPurchaseAdjustmentHistory(
-          adjustmentType: adjustmentType,
-          supplierId: supplierId,
-          productId: productId,
-          page: page,
-        ),
-      );
-    } on Exception catch (exception) {
-      return Error(exception);
-    }
+    return Result.guard(
+      () => _service.fetchPurchaseAdjustmentHistory(
+        adjustmentType: adjustmentType,
+        supplierId: supplierId,
+        productId: productId,
+        page: page,
+      ),
+    );
   }
 
   Future<Result<double?>> loadLastProductCost(int productId) async {
-    try {
-      return Ok(await _service.fetchLastProductCost(productId));
-    } on Exception catch (exception) {
-      return Error(exception);
-    }
+    return Result.guard(() => _service.fetchLastProductCost(productId));
   }
 
   Future<Result<PurchaseSubmission>> submitDraft(
@@ -159,7 +114,7 @@ class PurchaseRepository {
       return Error(Exception('purchase draft is empty'));
     }
 
-    try {
+    return Result.guard(() async {
       final draft = PurchaseOrderDraft.fromDraftLines(
         lines,
         supplierId: supplierId,
@@ -174,97 +129,67 @@ class PurchaseRepository {
       final order = await _service.createPurchaseOrder(draft);
       final submittedOrder = await _service.submitPurchaseOrder(order.id);
       if (!receiveImmediately) {
-        return Ok(submittedOrder.toSubmission());
+        return submittedOrder.toSubmission();
       }
       final receivedOrder = await _service.receivePurchaseOrder(order.id);
-      return Ok(receivedOrder.toSubmission());
-    } on Exception catch (error) {
-      return Error(error);
-    }
+      return receivedOrder.toSubmission();
+    });
   }
 
   Future<Result<PurchaseOrder>> submitOrder(int purchaseOrderId) async {
-    try {
-      return Ok(await _service.submitPurchaseOrder(purchaseOrderId));
-    } on Exception catch (exception) {
-      return Error(exception);
-    }
+    return Result.guard(() => _service.submitPurchaseOrder(purchaseOrderId));
   }
 
   Future<Result<PurchaseOrder>> receiveOrder(int purchaseOrderId) async {
-    try {
-      return Ok(await _service.receivePurchaseOrder(purchaseOrderId));
-    } on Exception catch (exception) {
-      return Error(exception);
-    }
+    return Result.guard(() => _service.receivePurchaseOrder(purchaseOrderId));
   }
 
   Future<Result<PurchaseOrder>> receiveLines({
     required int purchaseOrderId,
     required PurchaseReceiveDraft draft,
   }) async {
-    try {
-      return Ok(
-        await _service.receivePurchaseOrder(purchaseOrderId, draft: draft),
-      );
-    } on Exception catch (exception) {
-      return Error(exception);
-    }
+    return Result.guard(
+      () => _service.receivePurchaseOrder(purchaseOrderId, draft: draft),
+    );
   }
 
   Future<Result<PurchaseOrder>> cancelOrder(int purchaseOrderId) async {
-    try {
-      return Ok(await _service.cancelPurchaseOrder(purchaseOrderId));
-    } on Exception catch (exception) {
-      return Error(exception);
-    }
+    return Result.guard(() => _service.cancelPurchaseOrder(purchaseOrderId));
   }
 
   Future<Result<PurchaseOrder>> returnItems({
     required int purchaseOrderId,
     required PurchaseAdjustmentDraft draft,
   }) async {
-    try {
-      return Ok(
-        await _service.returnPurchaseOrderItems(
-          purchaseOrderId: purchaseOrderId,
-          draft: draft,
-        ),
-      );
-    } on Exception catch (exception) {
-      return Error(exception);
-    }
+    return Result.guard(
+      () => _service.returnPurchaseOrderItems(
+        purchaseOrderId: purchaseOrderId,
+        draft: draft,
+      ),
+    );
   }
 
   Future<Result<PurchaseOrder>> refundItems({
     required int purchaseOrderId,
     required PurchaseAdjustmentDraft draft,
   }) async {
-    try {
-      return Ok(
-        await _service.refundPurchaseOrderItems(
-          purchaseOrderId: purchaseOrderId,
-          draft: draft,
-        ),
-      );
-    } on Exception catch (exception) {
-      return Error(exception);
-    }
+    return Result.guard(
+      () => _service.refundPurchaseOrderItems(
+        purchaseOrderId: purchaseOrderId,
+        draft: draft,
+      ),
+    );
   }
 
   Future<Result<PurchaseOrder>> exchangeItems({
     required int purchaseOrderId,
     required PurchaseAdjustmentDraft draft,
   }) async {
-    try {
-      return Ok(
-        await _service.exchangePurchaseOrderItems(
-          purchaseOrderId: purchaseOrderId,
-          draft: draft,
-        ),
-      );
-    } on Exception catch (exception) {
-      return Error(exception);
-    }
+    return Result.guard(
+      () => _service.exchangePurchaseOrderItems(
+        purchaseOrderId: purchaseOrderId,
+        draft: draft,
+      ),
+    );
   }
 }

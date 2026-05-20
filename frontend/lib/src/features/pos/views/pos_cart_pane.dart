@@ -10,6 +10,8 @@ import '../../../shared/contact_picker_sheet.dart';
 import '../../../shared/decimal_text_input_formatter.dart';
 import '../../../shared/formatters.dart';
 import '../../../shared/order_totals.dart';
+import '../../../shared/payment_labels.dart';
+import '../models/split_tender_payment.dart';
 import '../view_models/pos_view_model.dart';
 import 'cart_line_tile.dart';
 import 'cart_totals.dart';
@@ -65,13 +67,19 @@ class PosCartPane extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(height: 6),
-                  _CartContactTile(
+                  ContactSelectionTile(
                     label: l10n.selectedCustomerLabel,
                     value: viewModel.selectedCustomer?.fullName ?? '',
                     placeholder: l10n.walkInCustomerLabel,
+                    icon: Icons.person_outline,
+                    iconSize: 20,
+                    iconSpacing: 8,
                     enabled: !viewModel.isCheckingOut,
                     onSelect: () => _selectCustomer(context),
                     onClear: () => viewModel.selectCustomer(null),
+                    padding: const EdgeInsetsDirectional.fromSTEB(10, 8, 6, 8),
+                    actionVisualDensity: VisualDensity.compact,
+                    selectActionIcon: Icons.edit_outlined,
                   ),
                   const SizedBox(height: 8),
                   _CouponCodeField(viewModel: viewModel),
@@ -365,83 +373,6 @@ class _CouponCodeFieldState extends State<_CouponCodeField> {
   }
 }
 
-class _CartContactTile extends StatelessWidget {
-  const _CartContactTile({
-    required this.label,
-    required this.value,
-    required this.placeholder,
-    required this.enabled,
-    required this.onSelect,
-    required this.onClear,
-  });
-
-  final String label;
-  final String value;
-  final String placeholder;
-  final bool enabled;
-  final VoidCallback onSelect;
-  final VoidCallback onClear;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
-    final colorScheme = Theme.of(context).colorScheme;
-    final hasValue = value.trim().isNotEmpty;
-    final iconColor = enabled
-        ? colorScheme.onSurfaceVariant
-        : colorScheme.onSurface.withValues(alpha: 0.38);
-
-    return Material(
-      color: colorScheme.surface,
-      borderRadius: BorderRadius.circular(8),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(8),
-        onTap: enabled ? onSelect : null,
-        child: Container(
-          padding: const EdgeInsetsDirectional.fromSTEB(10, 8, 6, 8),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: colorScheme.outlineVariant),
-          ),
-          child: Row(
-            children: [
-              Icon(Icons.person_outline, size: 20, color: iconColor),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.labelMedium,
-                    ),
-                    Text(
-                      hasValue ? value : placeholder,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.bodyMedium,
-                    ),
-                  ],
-                ),
-              ),
-              IconButton(
-                tooltip: hasValue
-                    ? l10n.clearContactTooltip
-                    : l10n.changeContactAction,
-                visualDensity: VisualDensity.compact,
-                onPressed: enabled ? (hasValue ? onClear : onSelect) : null,
-                icon: Icon(hasValue ? Icons.close : Icons.edit_outlined),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 class _CheckoutFooter extends StatelessWidget {
   const _CheckoutFooter({
     required this.viewModel,
@@ -531,6 +462,8 @@ class _PaymentDialog extends StatefulWidget {
 }
 
 class _PaymentDialogState extends State<_PaymentDialog> {
+  static const _paymentCalculator = SplitTenderPaymentCalculator();
+
   late final List<_TenderLineInput> _tenders = [
     _TenderLineInput(
       method: _initialMethod,
@@ -562,9 +495,10 @@ class _PaymentDialogState extends State<_PaymentDialog> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final total = widget.viewModel.total;
-    final paid = _paidTotal;
-    final remaining = (total - paid).clamp(0, double.infinity).toDouble();
-    final change = _changeDue(total);
+    final summary = _paymentCalculator.summary(
+      total: total,
+      tenders: _tenderInputs,
+    );
 
     return AlertDialog(
       icon: const Icon(Icons.payments_outlined),
@@ -586,7 +520,7 @@ class _PaymentDialogState extends State<_PaymentDialog> {
                     tender: _tenders[index],
                     enabledMethods: _enabledMethods,
                     canRemove: _tenders.length > 1,
-                    methodLabel: (method) => _paymentMethodLabel(l10n, method),
+                    methodLabel: (method) => paymentMethodLabel(l10n, method),
                     onAmountChanged: () => _rebalanceFromTender(index),
                     onMethodChanged: () =>
                         setState(() => _showPaymentError = false),
@@ -602,10 +536,13 @@ class _PaymentDialogState extends State<_PaymentDialog> {
               ],
               const SizedBox(height: 16),
               TotalRow(label: l10n.total, value: total, isStrong: true),
-              TotalRow(label: l10n.paidAmountLabel, value: paid),
-              TotalRow(label: l10n.remainingAmountLabel, value: remaining),
-              if (change > 0)
-                TotalRow(label: l10n.changeDueLabel, value: change),
+              TotalRow(label: l10n.paidAmountLabel, value: summary.paid),
+              TotalRow(
+                label: l10n.remainingAmountLabel,
+                value: summary.remaining,
+              ),
+              if (summary.changeDue > 0)
+                TotalRow(label: l10n.changeDueLabel, value: summary.changeDue),
               if (_showPaymentError) ...[
                 const SizedBox(height: 8),
                 Text(
@@ -641,14 +578,17 @@ class _PaymentDialogState extends State<_PaymentDialog> {
   }
 
   void _addTender() {
-    final remaining = (widget.viewModel.total - _paidTotal)
-        .clamp(0, double.infinity)
-        .toDouble();
+    final summary = _paymentCalculator.summary(
+      total: widget.viewModel.total,
+      tenders: _tenderInputs,
+    );
     setState(() {
       _tenders.add(
         _TenderLineInput(
           method: _nextTenderMethod,
-          amount: remaining > 0 ? remaining.toStringAsFixed(2) : '',
+          amount: summary.remaining > 0
+              ? summary.remaining.toStringAsFixed(2)
+              : '',
         ),
       );
       _showPaymentError = false;
@@ -669,15 +609,11 @@ class _PaymentDialogState extends State<_PaymentDialog> {
     }
 
     final balanceIndex = _tenders.length - 1;
-    final totalWithoutBalance = _tenders.indexed
-        .where((entry) => entry.$1 != balanceIndex)
-        .fold<double>(
-          0,
-          (sum, entry) => sum + _parseMoney(entry.$2.amountController.text),
-        );
-    final balanceAmount = (widget.viewModel.total - totalWithoutBalance)
-        .clamp(0, double.infinity)
-        .toDouble();
+    final balanceAmount = _paymentCalculator.balanceTenderAmount(
+      total: widget.viewModel.total,
+      tenders: _tenderInputs,
+      balanceIndex: balanceIndex,
+    );
     _setTenderAmount(_tenders[balanceIndex], balanceAmount);
   }
 
@@ -691,26 +627,18 @@ class _PaymentDialogState extends State<_PaymentDialog> {
     }
 
     _isBalancingTender = true;
-    final balanceIndex = _balanceTenderIndex(editedIndex);
-    final totalWithoutBalance = _tenders.indexed
-        .where((entry) => entry.$1 != balanceIndex)
-        .fold<double>(
-          0,
-          (sum, entry) => sum + _parseMoney(entry.$2.amountController.text),
-        );
-    final balanceAmount = (widget.viewModel.total - totalWithoutBalance)
-        .clamp(0, double.infinity)
-        .toDouble();
+    final balanceIndex = _paymentCalculator.balanceTenderIndex(
+      editedIndex: editedIndex,
+      tenderCount: _tenders.length,
+    );
+    final balanceAmount = _paymentCalculator.balanceTenderAmount(
+      total: widget.viewModel.total,
+      tenders: _tenderInputs,
+      balanceIndex: balanceIndex,
+    );
     _setTenderAmount(_tenders[balanceIndex], balanceAmount);
     _isBalancingTender = false;
     setState(() => _showPaymentError = false);
-  }
-
-  int _balanceTenderIndex(int editedIndex) {
-    if (editedIndex < _tenders.length - 1) {
-      return editedIndex + 1;
-    }
-    return editedIndex - 1;
   }
 
   void _setTenderAmount(_TenderLineInput tender, double amount) {
@@ -725,64 +653,20 @@ class _PaymentDialogState extends State<_PaymentDialog> {
   }
 
   List<SaleCheckoutPaymentDraft>? _appliedPayments(double total) {
-    final parsed = [
-      for (final tender in _tenders)
-        _ParsedTender(tender.method, _parseMoney(tender.amountController.text)),
-    ].where((tender) => tender.amount > 0).toList(growable: false);
-    final paid = parsed.fold<double>(0, (sum, tender) => sum + tender.amount);
-    if (parsed.isEmpty || paid < total) {
-      return null;
-    }
-
-    var overage = paid - total;
-    if (overage > 0) {
-      final cashTotal = parsed
-          .where((tender) => tender.method == PaymentMethod.cash)
-          .fold<double>(0, (sum, tender) => sum + tender.amount);
-      if (cashTotal < overage) {
-        return null;
-      }
-    }
-
-    final payments = <SaleCheckoutPaymentDraft>[];
-    for (final tender in parsed.reversed) {
-      var appliedAmount = tender.amount;
-      if (overage > 0 && tender.method == PaymentMethod.cash) {
-        final reduction = appliedAmount < overage ? appliedAmount : overage;
-        appliedAmount -= reduction;
-        overage -= reduction;
-      }
-      if (appliedAmount > 0) {
-        payments.add(
-          SaleCheckoutPaymentDraft(
-            method: tender.method,
-            amount: appliedAmount,
-          ),
-        );
-      }
-    }
-    return payments.reversed.toList(growable: false);
-  }
-
-  double _changeDue(double total) {
-    final paid = _paidTotal;
-    final overage = paid - total;
-    if (overage <= 0 ||
-        !_tenders.any((tender) => tender.method == PaymentMethod.cash)) {
-      return 0;
-    }
-    return overage;
-  }
-
-  double get _paidTotal {
-    return _tenders.fold<double>(
-      0,
-      (sum, tender) => sum + _parseMoney(tender.amountController.text),
+    return _paymentCalculator.appliedPayments(
+      total: total,
+      tenders: _tenderInputs,
     );
   }
 
-  double _parseMoney(String value) {
-    return double.tryParse(value.replaceAll(',', '.')) ?? 0;
+  List<SplitTenderInput> get _tenderInputs {
+    return [
+      for (final tender in _tenders)
+        SplitTenderInput(
+          method: tender.method,
+          amount: _paymentCalculator.parseAmount(tender.amountController.text),
+        ),
+    ];
   }
 
   bool get _hasAnyPaymentMethod {
@@ -808,14 +692,6 @@ class _PaymentDialogState extends State<_PaymentDialog> {
     }
     return _initialMethod;
   }
-
-  String _paymentMethodLabel(AppLocalizations l10n, PaymentMethod method) {
-    return switch (method) {
-      PaymentMethod.cash => l10n.paymentMethodCash,
-      PaymentMethod.card => l10n.paymentMethodCard,
-      PaymentMethod.transfer => l10n.paymentMethodTransfer,
-    };
-  }
 }
 
 class _PaymentInput {
@@ -834,13 +710,6 @@ class _TenderLineInput {
   void dispose() {
     amountController.dispose();
   }
-}
-
-class _ParsedTender {
-  const _ParsedTender(this.method, this.amount);
-
-  final PaymentMethod method;
-  final double amount;
 }
 
 class _TenderLineEditor extends StatelessWidget {
