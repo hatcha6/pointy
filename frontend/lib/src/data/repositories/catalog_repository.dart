@@ -9,6 +9,12 @@ import '../models/product_update_draft.dart';
 import '../models/product_variant.dart';
 import '../models/product_variant_draft.dart';
 import '../models/product_variant_page.dart';
+import '../models/variant_option.dart';
+import '../models/variant_option_draft.dart';
+import '../models/variant_option_page.dart';
+import '../models/variant_option_query.dart';
+import '../models/variant_option_value.dart';
+import '../models/variant_option_value_draft.dart';
 import '../models/variant_option_value_page.dart';
 import '../models/variant_option_value_query.dart';
 import '../services/pos_api_service.dart';
@@ -108,6 +114,47 @@ class CatalogRepository {
     return Result.guard(
       () => _service.fetchVariantOptionValues(query: query, page: page),
     );
+  }
+
+  Future<Result<VariantOptionValue>> createVariantOptionValue(
+    VariantOptionValueDraft draft,
+  ) async {
+    return Result.guard(() => _service.createVariantOptionValue(draft));
+  }
+
+  Future<Result<VariantOptionPage>> loadVariantOptions({
+    VariantOptionQuery query = const VariantOptionQuery(),
+    int page = 1,
+  }) async {
+    return Result.guard(
+      () => _service.fetchVariantOptions(query: query, page: page),
+    );
+  }
+
+  Future<Result<VariantOption>> createVariantOption(
+    VariantOptionDraft draft,
+  ) async {
+    return Result.guard(() => _service.createVariantOption(draft));
+  }
+
+  Future<Result<List<VariantOption>>> loadAllActiveVariantOptions() async {
+    return Result.guard(() async {
+      final options = <VariantOption>[];
+      var page = 1;
+      var hasMore = true;
+      while (hasMore) {
+        final result = await _service.fetchVariantOptions(
+          query: const VariantOptionQuery(
+            availability: VariantOptionAvailabilityFilter.active,
+          ),
+          page: page,
+        );
+        options.addAll(result.options);
+        hasMore = result.hasMore;
+        page += 1;
+      }
+      return options;
+    });
   }
 
   Future<Result<ProductVariant?>> findProductVariantByBarcode(

@@ -23,6 +23,18 @@ DEFAULT_VARIANT_OPTIONS = [
         ],
     },
     {
+        "code": "storage",
+        "name": "السعة",
+        "display_order": 25,
+        "values": [
+            ("64gb", "64GB", 10),
+            ("128gb", "128GB", 20),
+            ("256gb", "256GB", 30),
+            ("512gb", "512GB", 40),
+            ("1tb", "1TB", 50),
+        ],
+    },
+    {
         "code": "flavor",
         "name": "النكهة",
         "display_order": 30,

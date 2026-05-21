@@ -2983,6 +2983,42 @@ PosApiService _mockApiService({
         });
       }
 
+      if (path.endsWith('/variant-options/')) {
+        return _jsonResponse({
+          'count': 2,
+          'next': null,
+          'previous': null,
+          'results': [
+            _variantOptionJson(),
+            _variantOptionJson(
+              id: 2,
+              code: 'color',
+              name: 'اللون',
+              values: const [
+                {
+                  'id': 2,
+                  'option': 2,
+                  'option_name': 'اللون',
+                  'code': 'red',
+                  'name': 'أحمر',
+                  'display_order': 1,
+                  'is_active': true,
+                },
+                {
+                  'id': 3,
+                  'option': 2,
+                  'option_name': 'اللون',
+                  'code': 'blue',
+                  'name': 'أزرق',
+                  'display_order': 2,
+                  'is_active': true,
+                },
+              ],
+            ),
+          ],
+        });
+      }
+
       if (path.endsWith('/customers/')) {
         if (request.method == 'POST') {
           final body = jsonDecode(request.body) as Map<String, Object?>;
@@ -3507,6 +3543,8 @@ Map<String, Object?> _productJson({
     'is_active': true,
     'categories': const [],
     'category_details': const [],
+    'variant_options': const [],
+    'variant_option_details': const [],
     'quantity_on_hand': quantityOnHand,
     'default_variant': _productVariantJson(
       quantityOnHand: quantityOnHand,
@@ -3535,6 +3573,8 @@ Map<String, Object?> _productVariantJson({
       'is_active': true,
       'categories': const [],
       'category_details': const [],
+      'variant_options': const [],
+      'variant_option_details': const [],
     },
     'name': '',
     'display_name': 'قهوة البيت',
@@ -3547,6 +3587,32 @@ Map<String, Object?> _productVariantJson({
     'option_values': const [],
     'option_value_details': const [],
     'quantity_on_hand': quantityOnHand,
+  };
+}
+
+Map<String, Object?> _variantOptionJson({
+  int id = 1,
+  String code = 'size',
+  String name = 'الحجم',
+  List<Map<String, Object?>> values = const [
+    {
+      'id': 1,
+      'option': 1,
+      'option_name': 'الحجم',
+      'code': 'large',
+      'name': 'كبير',
+      'display_order': 1,
+      'is_active': true,
+    },
+  ],
+}) {
+  return {
+    'id': id,
+    'code': code,
+    'name': name,
+    'display_order': id,
+    'is_active': true,
+    'values': values,
   };
 }
 

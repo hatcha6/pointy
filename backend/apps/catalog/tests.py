@@ -215,6 +215,233 @@ class ProductApiTests(TestCase):
         self.assertNotIn("barcode", response.data)
         self.assertNotIn("unit_price", response.data)
 
+    def test_create_product_with_generated_variant_combinations(self):
+        color = VariantOption.objects.create(code="phone-color", name="اللون")
+        storage = VariantOption.objects.create(code="phone-storage", name="السعة")
+        white = VariantOptionValue.objects.create(
+            option=color,
+            code="white",
+            name="أبيض",
+        )
+        black = VariantOptionValue.objects.create(
+            option=color,
+            code="black",
+            name="أسود",
+        )
+        storage_128 = VariantOptionValue.objects.create(
+            option=storage,
+            code="128gb",
+            name="128GB",
+        )
+        storage_256 = VariantOptionValue.objects.create(
+            option=storage,
+            code="256gb",
+            name="256GB",
+        )
+
+        response = self.client.post(
+            reverse("product-list"),
+            {
+                "name": "iPhone",
+                "description": "",
+                "is_active": True,
+                "variant_options": [color.id, storage.id],
+                "variants": [
+                    {
+                        "name": "أبيض 128GB",
+                        "sku": "IPHONE-WHITE-128GB",
+                        "unit_price": "1000.00",
+                        "is_default": True,
+                        "option_values": [white.id, storage_128.id],
+                    },
+                    {
+                        "name": "أبيض 256GB",
+                        "sku": "IPHONE-WHITE-256GB",
+                        "unit_price": "1100.00",
+                        "option_values": [white.id, storage_256.id],
+                    },
+                    {
+                        "name": "أسود 128GB",
+                        "sku": "IPHONE-BLACK-128GB",
+                        "unit_price": "1000.00",
+                        "option_values": [black.id, storage_128.id],
+                    },
+                    {
+                        "name": "أسود 256GB",
+                        "sku": "IPHONE-BLACK-256GB",
+                        "unit_price": "1100.00",
+                        "option_values": [black.id, storage_256.id],
+                    },
+                ],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        product = Product.objects.get(name="iPhone")
+        self.assertEqual(product.variants.count(), 4)
+        self.assertEqual(
+            set(product.variant_options.values_list("id", flat=True)),
+            {color.id, storage.id},
+        )
+        self.assertEqual(product.default_variant.name, "أبيض 128GB")
+        self.assertEqual(
+            set(
+                product.variants.values_list(
+                    "option_values__name",
+                    flat=True,
+                )
+            ),
+            {"أبيض", "أسود", "128GB", "256GB"},
+        )
+        self.assertEqual(len(response.data["variants"]), 4)
+        self.assertEqual(
+            {option["id"] for option in response.data["variant_option_details"]},
+            {color.id, storage.id},
+        )
+
+    def test_create_product_rejects_duplicate_generated_combinations(self):
+        color = VariantOption.objects.create(code="dupe-color", name="اللون")
+        white = VariantOptionValue.objects.create(
+            option=color,
+            code="white",
+            name="أبيض",
+        )
+
+        response = self.client.post(
+            reverse("product-list"),
+            {
+                "name": "منتج مكرر",
+                "variant_options": [color.id],
+                "variants": [
+                    {
+                        "name": "أبيض",
+                        "sku": "DUP-1",
+                        "unit_price": "1.00",
+                        "option_values": [white.id],
+                    },
+                    {
+                        "name": "أبيض آخر",
+                        "sku": "DUP-2",
+                        "unit_price": "1.00",
+                        "option_values": [white.id],
+                    },
+                ],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("variants", response.data)
+
+    def test_update_product_can_upsert_generated_variants(self):
+        product = create_product_with_default_variant(
+            sku="IPHONE",
+            name="iPhone",
+            unit_price=Decimal("900.00"),
+        )
+        color = VariantOption.objects.create(code="upsert-color", name="اللون")
+        storage = VariantOption.objects.create(code="upsert-storage", name="السعة")
+        black = VariantOptionValue.objects.create(
+            option=color,
+            code="black",
+            name="أسود",
+        )
+        white = VariantOptionValue.objects.create(
+            option=color,
+            code="white",
+            name="أبيض",
+        )
+        storage_128 = VariantOptionValue.objects.create(
+            option=storage,
+            code="128gb",
+            name="128GB",
+        )
+
+        response = self.client.patch(
+            reverse("product-detail", args=[product.pk]),
+            {
+                "name": "iPhone",
+                "description": "",
+                "is_active": True,
+                "categories": [],
+                "variant_options": [color.id, storage.id],
+                "variants": [
+                    {
+                        "id": product.default_variant.pk,
+                        "name": "أسود 128GB",
+                        "sku": "IPHONE-BLACK-128GB",
+                        "unit_price": "950.00",
+                        "is_default": True,
+                        "option_values": [black.id, storage_128.id],
+                    },
+                    {
+                        "name": "أبيض 128GB",
+                        "sku": "IPHONE-WHITE-128GB",
+                        "unit_price": "950.00",
+                        "option_values": [white.id, storage_128.id],
+                    },
+                ],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        product.refresh_from_db()
+        self.assertEqual(product.variants.count(), 2)
+        self.assertEqual(product.default_variant.sku, "IPHONE-BLACK-128GB")
+        self.assertEqual(
+            set(product.variants.values_list("sku", flat=True)),
+            {"IPHONE-BLACK-128GB", "IPHONE-WHITE-128GB"},
+        )
+
+    def test_update_product_generated_variants_preserves_existing_default(self):
+        product = create_product_with_default_variant(
+            sku="TEE",
+            name="قميص",
+            unit_price=Decimal("20.00"),
+        )
+        size = VariantOption.objects.create(code="tee-size", name="المقاس")
+        small = VariantOptionValue.objects.create(
+            option=size,
+            code="small",
+            name="صغير",
+        )
+        medium = VariantOptionValue.objects.create(
+            option=size,
+            code="medium",
+            name="وسط",
+        )
+        product.variant_options.add(size)
+        default_variant = product.default_variant
+        default_variant.option_values.set([small])
+
+        response = self.client.patch(
+            reverse("product-detail", args=[product.pk]),
+            {
+                "variant_options": [size.id],
+                "variants": [
+                    {
+                        "name": "وسط",
+                        "sku": "TEE-MEDIUM",
+                        "barcode": "TEE-MEDIUM-BARCODE",
+                        "unit_price": "22.00",
+                        "option_values": [medium.id],
+                    },
+                ],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        product.refresh_from_db()
+        default_variant.refresh_from_db()
+        self.assertTrue(default_variant.is_default)
+        self.assertEqual(product.default_variant.pk, default_variant.pk)
+        created_variant = product.variants.get(sku="TEE-MEDIUM")
+        self.assertFalse(created_variant.is_default)
+        self.assertEqual(created_variant.barcode, "TEE-MEDIUM-BARCODE")
+
     def test_reject_negative_price(self):
         response = self.client.post(
             reverse("product-list"),

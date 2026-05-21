@@ -856,6 +856,143 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
+  String get variantOptionsLabel => 'قوالب الخيارات';
+
+  @override
+  String get variantOptionsHelper =>
+      'اختر الخيارات التي تميز المنتج مثل اللون أو السعة. سيتم استخدام قيمها لتوليد الخيارات تلقائيًا.';
+
+  @override
+  String get variantOptionsEmpty => 'لا توجد قوالب خيارات جاهزة.';
+
+  @override
+  String get variantOptionsLoadError => 'تعذر تحميل قوالب الخيارات.';
+
+  @override
+  String get addVariantOptionButton => 'إضافة قالب';
+
+  @override
+  String get newVariantOptionTitle => 'قالب خيار جديد';
+
+  @override
+  String get variantOptionNameLabel => 'اسم القالب';
+
+  @override
+  String get variantOptionNameHint => 'مثال: اللون';
+
+  @override
+  String get variantOptionCodeLabel => 'رمز القالب';
+
+  @override
+  String get variantOptionCodeHint => 'مثال: color';
+
+  @override
+  String get createVariantOptionButton => 'حفظ القالب';
+
+  @override
+  String get variantOptionCreateError => 'تعذر إنشاء قالب الخيار.';
+
+  @override
+  String get variantValuesNoOptions =>
+      'اختر قالب خيار واحدًا على الأقل لتحديد القيم.';
+
+  @override
+  String get variantOptionNoValues => 'لا توجد قيم جاهزة لهذا الخيار.';
+
+  @override
+  String get variantOptionValueRequired => 'اختر قيمة واحدة على الأقل.';
+
+  @override
+  String get addVariantOptionValueButton => 'إضافة قيمة';
+
+  @override
+  String get newVariantOptionValueTitle => 'قيمة خيار جديدة';
+
+  @override
+  String get variantOptionValueNameLabel => 'اسم القيمة';
+
+  @override
+  String get variantOptionValueNameHint => 'مثال: أحمر';
+
+  @override
+  String get variantOptionValueCodeLabel => 'رمز القيمة';
+
+  @override
+  String get variantOptionValueCodeHint => 'مثال: red';
+
+  @override
+  String get createVariantOptionValueButton => 'حفظ القيمة';
+
+  @override
+  String get variantOptionValueCreateError => 'تعذر إنشاء قيمة الخيار.';
+
+  @override
+  String get skuPrefixLabel => 'بادئة الرمز';
+
+  @override
+  String get skuPrefixHint => 'مثال: IPHONE';
+
+  @override
+  String get generatedVariantPriceLabel => 'سعر الخيارات المولدة';
+
+  @override
+  String get generatedVariantsEmpty => 'اختر قيم الخيارات لعرض كل التركيبات.';
+
+  @override
+  String generatedVariantsCount(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count خيارات مولدة',
+      two: 'خياران مولدان',
+      one: 'خيار واحد مولد',
+      zero: 'لا توجد خيارات مولدة',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get generatedVariantNameLabel => 'اسم الخيار';
+
+  @override
+  String get generatedVariantsMissingValues =>
+      'اختر قيمة واحدة على الأقل لكل قالب خيار.';
+
+  @override
+  String get generatedVariantsDuplicateSku =>
+      'رموز الخيارات المولدة يجب أن تكون غير مكررة.';
+
+  @override
+  String get generatedVariantsTooMany =>
+      'عدد الخيارات المولدة كبير جدًا. قلل القيم المحددة.';
+
+  @override
+  String get generatedVariantsNoMissing =>
+      'كل التركيبات المحددة موجودة بالفعل.';
+
+  @override
+  String get generateVariantsTitle => 'توليد الخيارات';
+
+  @override
+  String get generateVariantsButton => 'توليد الخيارات';
+
+  @override
+  String get variantsGeneratedMessage => 'تم حفظ الخيارات المولدة';
+
+  @override
+  String get variantGenerateError =>
+      'تعذر توليد الخيارات. راجع البيانات وحاول مرة أخرى.';
+
+  @override
+  String get productVariantOptionsTitle => 'خيارات المنتج';
+
+  @override
+  String get productVariantOptionsEmpty => 'لا توجد خيارات مرتبطة بهذا المنتج.';
+
+  @override
+  String get reloadButton => 'إعادة التحميل';
+
+  @override
   String get categoryFilterTitle => 'التصنيف';
 
   @override

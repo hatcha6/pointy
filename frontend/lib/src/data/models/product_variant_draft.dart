@@ -3,6 +3,7 @@ class ProductVariantDraft {
     required this.productId,
     required this.sku,
     required this.unitPrice,
+    this.id,
     this.name = '',
     this.barcode = '',
     this.isActive = true,
@@ -10,6 +11,7 @@ class ProductVariantDraft {
     this.optionValueIds = const [],
   });
 
+  final int? id;
   final int productId;
   final String name;
   final String sku;
@@ -21,6 +23,7 @@ class ProductVariantDraft {
 
   Map<String, Object?> toJson({bool includeProduct = true}) {
     return {
+      if (id != null) 'id': id,
       if (includeProduct) 'product': productId,
       'name': name,
       'sku': sku,

@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
+import '../../../core/result.dart';
 import '../../../data/models/product_update_draft.dart';
+import '../../../data/models/variant_option.dart';
 import '../../../shared/async_selection/async_multi_select_picker.dart';
 import '../../../shared/product_category_picker.dart';
 import '../view_models/product_details_view_model.dart';
 import 'product_form_fields.dart';
+import 'variant_option_creation_dialogs.dart';
+import 'variant_generation_fields.dart';
 
 class ProductParentEditSheet extends StatefulWidget {
   const ProductParentEditSheet({
@@ -26,7 +30,22 @@ class _ProductParentEditSheetState extends State<ProductParentEditSheet> {
   late final TextEditingController _nameController;
   late final TextEditingController _descriptionController;
   late List<AsyncSelectionOption<int>> _selectedCategories;
+  List<VariantOption> _availableVariantOptions = [];
+  late Set<int> _selectedVariantOptionIds;
+  var _isLoadingVariantOptions = false;
+  var _variantOptionsLoadFailed = false;
   late bool _isActive;
+
+  List<VariantOption> get _selectedVariantOptions {
+    return [
+      for (final option in _availableVariantOptions)
+        if (_selectedVariantOptionIds.contains(option.id)) option,
+      for (final option in widget.viewModel.product.variantOptions)
+        if (_selectedVariantOptionIds.contains(option.id) &&
+            !_availableVariantOptions.any((item) => item.id == option.id))
+          option,
+    ];
+  }
 
   @override
   void initState() {
@@ -38,7 +57,11 @@ class _ProductParentEditSheetState extends State<ProductParentEditSheet> {
       for (final category in product.categories)
         productCategoryOption(category),
     ];
+    _selectedVariantOptionIds = {
+      for (final option in product.variantOptions) option.id,
+    };
     _isActive = product.isActive;
+    _loadVariantOptions();
   }
 
   @override
@@ -92,6 +115,16 @@ class _ProductParentEditSheetState extends State<ProductParentEditSheet> {
                         setState(() => _isActive = value),
                     requiredValidator: (value) =>
                         _requiredValidator(context, value),
+                  ),
+                  const SizedBox(height: 12),
+                  VariantOptionTemplateField(
+                    availableOptions: _availableVariantOptions,
+                    selectedOptions: _selectedVariantOptions,
+                    isLoading: _isLoadingVariantOptions,
+                    hasError: _variantOptionsLoadFailed,
+                    onReload: _loadVariantOptions,
+                    onToggleOption: _toggleVariantOption,
+                    onCreateOption: _createVariantOption,
                   ),
                   if (widget.viewModel.errorMessage ==
                       'product_update_error') ...[
@@ -149,6 +182,9 @@ class _ProductParentEditSheetState extends State<ProductParentEditSheet> {
         description: _descriptionController.text.trim(),
         isActive: _isActive,
         categoryIds: [for (final category in _selectedCategories) category.id],
+        variantOptionIds: [
+          for (final optionId in _selectedVariantOptionIds) optionId,
+        ],
       ),
     );
     if (!mounted) {
@@ -181,5 +217,58 @@ class _ProductParentEditSheetState extends State<ProductParentEditSheet> {
       return;
     }
     setState(() => _selectedCategories = picked);
+  }
+
+  Future<void> _loadVariantOptions() async {
+    setState(() {
+      _isLoadingVariantOptions = true;
+      _variantOptionsLoadFailed = false;
+    });
+
+    final result = await widget.viewModel.catalogRepository
+        .loadAllActiveVariantOptions();
+    if (!mounted) {
+      return;
+    }
+    switch (result) {
+      case Ok<List<VariantOption>>():
+        setState(() {
+          _availableVariantOptions = result.value;
+          _isLoadingVariantOptions = false;
+          _variantOptionsLoadFailed = false;
+        });
+      case Error<List<VariantOption>>():
+        setState(() {
+          _isLoadingVariantOptions = false;
+          _variantOptionsLoadFailed = true;
+        });
+    }
+  }
+
+  void _toggleVariantOption(VariantOption option) {
+    setState(() {
+      if (!_selectedVariantOptionIds.remove(option.id)) {
+        _selectedVariantOptionIds.add(option.id);
+      }
+    });
+  }
+
+  Future<void> _createVariantOption() async {
+    final created = await showCreateVariantOptionDialog(
+      context: context,
+      catalogRepository: widget.viewModel.catalogRepository,
+      existingOptions: _availableVariantOptions,
+    );
+    if (!mounted || created == null) {
+      return;
+    }
+    setState(() {
+      _availableVariantOptions = [..._availableVariantOptions, created]
+        ..sort((a, b) {
+          final order = a.displayOrder.compareTo(b.displayOrder);
+          return order == 0 ? a.displayLabel.compareTo(b.displayLabel) : order;
+        });
+      _selectedVariantOptionIds.add(created.id);
+    });
   }
 }

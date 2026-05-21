@@ -26,6 +26,12 @@ import '../models/shop_settings.dart';
 import '../models/stock_item.dart';
 import '../models/stock_movement.dart';
 import '../models/stock_movement_page.dart';
+import '../models/variant_option_page.dart';
+import '../models/variant_option_query.dart';
+import '../models/variant_option.dart';
+import '../models/variant_option_draft.dart';
+import '../models/variant_option_value.dart';
+import '../models/variant_option_value_draft.dart';
 import '../models/variant_option_value_page.dart';
 import 'api_session.dart';
 import 'auth_api_client.dart';
@@ -184,6 +190,23 @@ class PosApiService {
     int page = 1,
   }) {
     return _catalog.fetchVariantOptionValues(query: query, page: page);
+  }
+
+  Future<VariantOptionValue> createVariantOptionValue(
+    VariantOptionValueDraft draft,
+  ) {
+    return _catalog.createVariantOptionValue(draft);
+  }
+
+  Future<VariantOptionPage> fetchVariantOptions({
+    required VariantOptionQuery query,
+    int page = 1,
+  }) {
+    return _catalog.fetchVariantOptions(query: query, page: page);
+  }
+
+  Future<VariantOption> createVariantOption(VariantOptionDraft draft) {
+    return _catalog.createVariantOption(draft);
   }
 
   Future<CustomerPage> fetchCustomers({

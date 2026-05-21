@@ -3,10 +3,11 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../data/models/product_variant.dart';
 import '../../../data/models/product_variant_draft.dart';
-import '../../../shared/async_selection/async_multi_select_picker.dart';
-import '../../../shared/variant_option_value_picker.dart';
+import '../../../data/models/variant_option.dart';
 import '../view_models/product_details_view_model.dart';
 import 'product_form_fields.dart';
+import 'variant_option_creation_dialogs.dart';
+import 'variant_generation_fields.dart';
 
 class ProductVariantFormSheet extends StatefulWidget {
   const ProductVariantFormSheet({
@@ -31,7 +32,9 @@ class _ProductVariantFormSheetState extends State<ProductVariantFormSheet> {
   late final TextEditingController _skuController;
   late final TextEditingController _barcodeController;
   late final TextEditingController _priceController;
-  late List<AsyncSelectionOption<int>> _selectedOptionValues;
+  late Map<int, Set<int>> _selectedValueIdsByOption;
+  late List<VariantOption> _variantOptions;
+  Set<int> _valueErrorOptionIds = {};
   late bool _isActive;
   late bool _isDefault;
 
@@ -47,7 +50,8 @@ class _ProductVariantFormSheetState extends State<ProductVariantFormSheet> {
     _priceController = TextEditingController(
       text: variant == null ? '' : variant.unitPrice.toStringAsFixed(2),
     );
-    _selectedOptionValues = _initialOptionValues(variant);
+    _selectedValueIdsByOption = _initialValueIdsByOption(variant);
+    _variantOptions = widget.viewModel.product.variantOptions;
     _isActive = variant?.isActive ?? true;
     _isDefault = variant?.isDefault ?? false;
   }
@@ -100,12 +104,11 @@ class _ProductVariantFormSheetState extends State<ProductVariantFormSheet> {
                     skuController: _skuController,
                     barcodeController: _barcodeController,
                     priceController: _priceController,
-                    selectedOptionValues: _selectedOptionValues,
+                    selectedOptionValues: const [],
                     isActive: _isActive,
                     isDefault: _isDefault,
-                    onPickOptionValues: _pickOptionValues,
-                    onClearOptionValues: () =>
-                        setState(() => _selectedOptionValues = []),
+                    onPickOptionValues: () {},
+                    onClearOptionValues: null,
                     onActiveChanged: (value) =>
                         setState(() => _isActive = value),
                     onDefaultChanged: (value) =>
@@ -114,7 +117,19 @@ class _ProductVariantFormSheetState extends State<ProductVariantFormSheet> {
                         _requiredValidator(context, value),
                     numberValidator: (value) =>
                         _numberValidator(context, value),
+                    showOptionValues: false,
                   ),
+                  if (_variantOptions.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    VariantOptionValuesField(
+                      options: _variantOptions,
+                      selectedValueIdsByOption: _selectedValueIdsByOption,
+                      errorOptionIds: _valueErrorOptionIds,
+                      onToggleValue: _toggleOptionValue,
+                      onCreateValue: _createVariantOptionValue,
+                      showInactiveSelectedValues: true,
+                    ),
+                  ],
                   if (_saveErrorKey != null) ...[
                     const SizedBox(height: 8),
                     Text(
@@ -163,22 +178,12 @@ class _ProductVariantFormSheetState extends State<ProductVariantFormSheet> {
     return null;
   }
 
-  List<AsyncSelectionOption<int>> _initialOptionValues(
-    ProductVariant? variant,
-  ) {
-    if (variant == null) {
-      return [];
+  Map<int, Set<int>> _initialValueIdsByOption(ProductVariant? variant) {
+    final selected = <int, Set<int>>{};
+    for (final optionValue in variant?.optionValues ?? const []) {
+      selected.putIfAbsent(optionValue.optionId, () => {}).add(optionValue.id);
     }
-    if (variant.optionValues.isNotEmpty) {
-      return [
-        for (final optionValue in variant.optionValues)
-          variantOptionValueOption(optionValue),
-      ];
-    }
-    return [
-      for (final id in variant.optionValueIds)
-        AsyncSelectionOption<int>(id: id, label: '', subtitle: ''),
-    ];
+    return selected;
   }
 
   String? _requiredValidator(BuildContext context, String? value) {
@@ -209,6 +214,9 @@ class _ProductVariantFormSheetState extends State<ProductVariantFormSheet> {
     if (!isValid) {
       return;
     }
+    if (!_validateOptionValues()) {
+      return;
+    }
 
     final draft = ProductVariantDraft(
       productId: widget.viewModel.product.id,
@@ -218,9 +226,7 @@ class _ProductVariantFormSheetState extends State<ProductVariantFormSheet> {
       unitPrice: _parseNumber(_priceController.text)!,
       isActive: _isActive,
       isDefault: _isDefault,
-      optionValueIds: [
-        for (final optionValue in _selectedOptionValues) optionValue.id,
-      ],
+      optionValueIds: _selectedOptionValueIds,
     );
 
     final variant = widget.variant;
@@ -246,24 +252,67 @@ class _ProductVariantFormSheetState extends State<ProductVariantFormSheet> {
     }
   }
 
-  Future<void> _pickOptionValues() async {
-    final l10n = AppLocalizations.of(context)!;
-    final picked = await showAsyncMultiSelectPicker<int>(
+  List<int> get _selectedOptionValueIds {
+    return [
+      for (final option in _variantOptions)
+        ...(_selectedValueIdsByOption[option.id] ?? const <int>{}),
+    ];
+  }
+
+  void _toggleOptionValue(VariantOption option, int valueId) {
+    setState(() {
+      final selected = {
+        ...(_selectedValueIdsByOption[option.id] ?? const <int>{}),
+      };
+      if (selected.contains(valueId)) {
+        selected.clear();
+      } else {
+        selected
+          ..clear()
+          ..add(valueId);
+      }
+      _selectedValueIdsByOption[option.id] = selected;
+      _valueErrorOptionIds = {..._valueErrorOptionIds}..remove(option.id);
+    });
+  }
+
+  bool _validateOptionValues() {
+    final options = _variantOptions;
+    if (options.isEmpty) {
+      return true;
+    }
+    final missing = {
+      for (final option in options)
+        if ((_selectedValueIdsByOption[option.id] ?? const {}).isEmpty)
+          option.id,
+    };
+    setState(() => _valueErrorOptionIds = missing);
+    return missing.isEmpty;
+  }
+
+  Future<void> _createVariantOptionValue(VariantOption option) async {
+    final created = await showCreateVariantOptionValueDialog(
       context: context,
-      strings: variantOptionValuePickerStrings(l10n),
-      selected: _selectedOptionValues,
-      searchFieldKey: const ValueKey('variant_form_option_value_search_field'),
-      applyButtonKey: const ValueKey('variant_form_option_value_apply_button'),
-      optionKeyForId: (id) => ValueKey('variant_form_option_value_$id'),
-      loadPage: (search, page) => loadVariantOptionValueSelectionPage(
-        catalogRepository: widget.viewModel.catalogRepository,
-        search: search,
-        page: page,
-      ),
+      catalogRepository: widget.viewModel.catalogRepository,
+      option: option,
     );
-    if (!mounted || picked == null) {
+    if (!mounted || created == null) {
       return;
     }
-    setState(() => _selectedOptionValues = picked);
+    setState(() {
+      _variantOptions = [
+        for (final current in _variantOptions)
+          if (current.id == option.id)
+            current.copyWith(values: [...current.values, created])
+          else
+            current,
+      ];
+      _selectedValueIdsByOption.update(
+        option.id,
+        (ids) => {created.id},
+        ifAbsent: () => {created.id},
+      );
+      _valueErrorOptionIds = {..._valueErrorOptionIds}..remove(option.id);
+    });
   }
 }

@@ -93,6 +93,7 @@ class ProductVariantFormFields extends StatelessWidget {
     required this.requiredValidator,
     required this.numberValidator,
     this.showDefaultToggle = true,
+    this.showOptionValues = true,
   });
 
   final TextEditingController variantNameController;
@@ -109,6 +110,7 @@ class ProductVariantFormFields extends StatelessWidget {
   final FormFieldValidator<String> requiredValidator;
   final FormFieldValidator<String> numberValidator;
   final bool showDefaultToggle;
+  final bool showOptionValues;
 
   @override
   Widget build(BuildContext context) {
@@ -160,15 +162,17 @@ class ProductVariantFormFields extends StatelessWidget {
           validator: numberValidator,
         ),
         const SizedBox(height: 12),
-        AsyncSelectionField<int>(
-          fieldKey: const ValueKey('product_variant_option_values_field'),
-          strings: variantOptionValueFieldStrings(l10n),
-          selected: selectedOptionValues,
-          onPick: onPickOptionValues,
-          onClear: selectedOptionValues.isEmpty ? null : onClearOptionValues,
-          validator: (_) => null,
-        ),
-        const SizedBox(height: 8),
+        if (showOptionValues) ...[
+          AsyncSelectionField<int>(
+            fieldKey: const ValueKey('product_variant_option_values_field'),
+            strings: variantOptionValueFieldStrings(l10n),
+            selected: selectedOptionValues,
+            onPick: onPickOptionValues,
+            onClear: selectedOptionValues.isEmpty ? null : onClearOptionValues,
+            validator: (_) => null,
+          ),
+          const SizedBox(height: 8),
+        ],
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
           title: Text(l10n.activeVariantLabel),

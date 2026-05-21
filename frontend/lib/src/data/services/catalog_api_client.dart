@@ -7,6 +7,12 @@ import '../models/product_variant.dart';
 import '../models/product_variant_draft.dart';
 import '../models/product_variant_page.dart';
 import '../models/query.dart';
+import '../models/variant_option.dart';
+import '../models/variant_option_draft.dart';
+import '../models/variant_option_page.dart';
+import '../models/variant_option_query.dart';
+import '../models/variant_option_value.dart';
+import '../models/variant_option_value_draft.dart';
 import '../models/variant_option_value_page.dart';
 import 'api_session.dart';
 
@@ -198,6 +204,53 @@ class CatalogApiClient {
       'Variant option value request failed with status',
     );
     return VariantOptionValuePage.fromJson(
+      _session.decodedBody(response) as Map<String, Object?>,
+    );
+  }
+
+  Future<VariantOptionValue> createVariantOptionValue(
+    VariantOptionValueDraft draft,
+  ) async {
+    final response = await _session.post(
+      'variant-option-values/',
+      body: draft.toJson(),
+    );
+    _session.ensureSuccess(
+      response,
+      'Variant option value create failed with status',
+    );
+    return VariantOptionValue.fromJson(
+      _session.decodedBody(response) as Map<String, Object?>,
+    );
+  }
+
+  Future<VariantOptionPage> fetchVariantOptions({
+    required VariantOptionQuery query,
+    int page = 1,
+  }) async {
+    final response = await _session.get(
+      'variant-options/',
+      query: query.toQueryParameters(page: page),
+    );
+    _session.ensureSuccess(
+      response,
+      'Variant option request failed with status',
+    );
+    return VariantOptionPage.fromJson(
+      _session.decodedBody(response) as Map<String, Object?>,
+    );
+  }
+
+  Future<VariantOption> createVariantOption(VariantOptionDraft draft) async {
+    final response = await _session.post(
+      'variant-options/',
+      body: draft.toJson(),
+    );
+    _session.ensureSuccess(
+      response,
+      'Variant option create failed with status',
+    );
+    return VariantOption.fromJson(
       _session.decodedBody(response) as Map<String, Object?>,
     );
   }

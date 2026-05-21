@@ -1,5 +1,6 @@
 import 'product_category.dart';
 import 'product_variant.dart';
+import 'variant_option.dart';
 
 class Product {
   const Product({
@@ -9,6 +10,7 @@ class Product {
     this.description = '',
     this.isActive = true,
     this.categories = const [],
+    this.variantOptions = const [],
     this.defaultVariant,
     this.variants = const [],
   });
@@ -19,6 +21,7 @@ class Product {
   final String description;
   final bool isActive;
   final List<ProductCategory> categories;
+  final List<VariantOption> variantOptions;
   final ProductVariant? defaultVariant;
   final List<ProductVariant> variants;
 
@@ -82,6 +85,7 @@ class Product {
       description: (json['description'] as String?) ?? '',
       isActive: (json['is_active'] as bool?) ?? true,
       categories: _categoriesFromJson(json),
+      variantOptions: _variantOptionsFromJson(json),
       defaultVariant: defaultVariant,
       variants: variants,
     );
@@ -98,6 +102,7 @@ class Product {
       description: detail?.description ?? '',
       isActive: variant.isSellable,
       categories: detail?.categories ?? const [],
+      variantOptions: detail?.variantOptions ?? const [],
       defaultVariant: variant,
     );
   }
@@ -119,6 +124,7 @@ class Product {
       description: description,
       isActive: isActive,
       categories: categories,
+      variantOptions: variantOptions,
       defaultVariant: nextDefaultVariant,
       variants: variants ?? this.variants,
     );
@@ -149,6 +155,26 @@ class Product {
           .whereType<Map<String, Object?>>()
           .map(ProductVariant.fromJson)
           .toList(growable: false);
+    }
+    return const [];
+  }
+
+  static List<VariantOption> _variantOptionsFromJson(
+    Map<String, Object?> json,
+  ) {
+    final details = json['variant_option_details'];
+    if (details is List<Object?>) {
+      return details
+          .whereType<Map<String, Object?>>()
+          .map(VariantOption.fromJson)
+          .toList(growable: false);
+    }
+    final optionIds = json['variant_options'];
+    if (optionIds is List<Object?>) {
+      return [
+        for (final id in optionIds)
+          if (id is num) VariantOption(id: id.toInt(), code: '', name: ''),
+      ];
     }
     return const [];
   }

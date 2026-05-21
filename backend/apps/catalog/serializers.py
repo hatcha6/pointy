@@ -8,6 +8,7 @@ from .models import (
     ProductVariant,
     VariantOption,
     VariantOptionValue,
+    variant_option_signature,
     validate_variant_option_values,
 )
 
@@ -85,6 +86,12 @@ class VariantOptionValueSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ("created_at", "updated_at")
 
+    def validate_code(self, value):
+        return value.strip().lower()
+
+    def validate_name(self, value):
+        return value.strip()
+
 
 class VariantOptionSerializer(serializers.ModelSerializer):
     values = VariantOptionValueSerializer(many=True, read_only=True)
@@ -102,6 +109,12 @@ class VariantOptionSerializer(serializers.ModelSerializer):
             "updated_at",
         ]
         read_only_fields = ("created_at", "updated_at")
+
+    def validate_code(self, value):
+        return value.strip().lower()
+
+    def validate_name(self, value):
+        return value.strip()
 
 
 class ProductCatalogSummarySerializer(serializers.ModelSerializer):
@@ -135,12 +148,18 @@ class ProductCatalogSummarySerializer(serializers.ModelSerializer):
 
 
 class DefaultProductVariantInputSerializer(serializers.Serializer):
-    name = serializers.CharField(required=False, allow_blank=True, trim_whitespace=True)
+    name = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        trim_whitespace=True,
+        default="",
+    )
     sku = serializers.CharField(required=False, allow_blank=False, trim_whitespace=True)
     barcode = serializers.CharField(
         required=False,
         allow_blank=True,
         trim_whitespace=True,
+        default="",
     )
     unit_price = serializers.DecimalField(
         max_digits=10,
@@ -264,6 +283,11 @@ class ProductVariantSerializer(serializers.ModelSerializer):
         option_values = validated_data.pop("option_values", [])
         try:
             with transaction.atomic():
+                if validated_data.get("is_default"):
+                    ProductVariant.objects.filter(
+                        product=validated_data["product"],
+                        is_default=True,
+                    ).update(is_default=False)
                 variant = ProductVariant.objects.create(**validated_data)
                 if option_values:
                     variant.option_values.set(option_values)
@@ -276,6 +300,11 @@ class ProductVariantSerializer(serializers.ModelSerializer):
         option_values = validated_data.pop("option_values", None)
         try:
             with transaction.atomic():
+                if validated_data.get("is_default") is True:
+                    ProductVariant.objects.filter(
+                        product=instance.product,
+                        is_default=True,
+                    ).exclude(pk=instance.pk).update(is_default=False)
                 for field, value in validated_data.items():
                     setattr(instance, field, value)
                 instance.save()
@@ -287,9 +316,66 @@ class ProductVariantSerializer(serializers.ModelSerializer):
             raise_serializer_validation(error)
 
 
+class ProductVariantInputSerializer(serializers.Serializer):
+    id = serializers.IntegerField(required=False)
+    name = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        trim_whitespace=True,
+        default="",
+    )
+    sku = serializers.CharField(required=True, allow_blank=False, trim_whitespace=True)
+    barcode = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        trim_whitespace=True,
+        default="",
+    )
+    unit_price = serializers.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        required=True,
+        min_value=0,
+    )
+    is_active = serializers.BooleanField(required=False, default=True)
+    is_default = serializers.BooleanField(required=False, default=False)
+    option_values = serializers.PrimaryKeyRelatedField(
+        queryset=VariantOptionValue.objects.select_related("option"),
+        many=True,
+        required=False,
+    )
+
+    def validate_sku(self, value):
+        return value.strip().upper()
+
+    def validate_barcode(self, value):
+        return value.strip()
+
+
+class ProductVariantListField(serializers.Field):
+    def to_representation(self, value):
+        queryset = value.all() if hasattr(value, "all") else value
+        return ProductVariantSerializer(
+            queryset,
+            many=True,
+            context=self.context,
+        ).data
+
+    def to_internal_value(self, data):
+        if not isinstance(data, list):
+            raise serializers.ValidationError("Expected a list.")
+        serializer = ProductVariantInputSerializer(
+            data=data,
+            many=True,
+            context=self.context,
+        )
+        serializer.is_valid(raise_exception=True)
+        return serializer.validated_data
+
+
 class ProductCatalogSerializer(serializers.ModelSerializer):
     quantity_on_hand = serializers.SerializerMethodField()
-    variants = ProductVariantSerializer(many=True, read_only=True)
+    variants = ProductVariantListField(required=False)
     default_variant = DefaultProductVariantField(required=False)
     categories = serializers.PrimaryKeyRelatedField(
         queryset=ProductCategory.objects.all(),
@@ -340,7 +426,13 @@ class ProductCatalogSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         categories = validated_data.pop("categories", [])
         variant_options = validated_data.pop("variant_options", None)
+        variants_data = validated_data.pop("variants", None)
         default_variant_data = validated_data.pop("default_variant", None)
+        variant_options = self._variant_options_for_payload(
+            variant_options,
+            variants_data,
+            default_variant_data,
+        )
         try:
             with transaction.atomic():
                 product = Product.objects.create(**validated_data)
@@ -348,7 +440,10 @@ class ProductCatalogSerializer(serializers.ModelSerializer):
                     product.categories.set(categories)
                 if variant_options is not None:
                     product.variant_options.set(variant_options)
-                self._apply_default_variant_data(product, default_variant_data)
+                if variants_data is not None:
+                    self._apply_variants_data(product, variants_data)
+                else:
+                    self._apply_default_variant_data(product, default_variant_data)
                 return product
         except DjangoValidationError as error:
             raise_serializer_validation(error)
@@ -356,7 +451,13 @@ class ProductCatalogSerializer(serializers.ModelSerializer):
     def update(self, instance, validated_data):
         categories = validated_data.pop("categories", None)
         variant_options = validated_data.pop("variant_options", None)
+        variants_data = validated_data.pop("variants", None)
         default_variant_data = validated_data.pop("default_variant", None)
+        variant_options = self._variant_options_for_payload(
+            variant_options,
+            variants_data,
+            default_variant_data,
+        )
         try:
             with transaction.atomic():
                 for field, value in validated_data.items():
@@ -366,10 +467,38 @@ class ProductCatalogSerializer(serializers.ModelSerializer):
                     instance.categories.set(categories)
                 if variant_options is not None:
                     instance.variant_options.set(variant_options)
-                self._apply_default_variant_data(instance, default_variant_data)
+                if variants_data is not None:
+                    self._apply_variants_data(instance, variants_data)
+                else:
+                    self._apply_default_variant_data(instance, default_variant_data)
                 return instance
         except DjangoValidationError as error:
             raise_serializer_validation(error)
+
+    def _variant_options_for_payload(
+        self,
+        variant_options,
+        variants_data,
+        default_variant_data,
+    ):
+        if variant_options is not None:
+            return variant_options
+
+        option_ids = []
+        for variant_data in variants_data or []:
+            for option_value in variant_data.get("option_values", []):
+                option_ids.append(option_value.option_id)
+        for option_value in (default_variant_data or {}).get("option_values", []):
+            option_ids.append(option_value.option_id)
+
+        if not option_ids:
+            return None
+        return list(
+            VariantOption.objects.filter(pk__in=option_ids).order_by(
+                "display_order",
+                "name",
+            )
+        )
 
     def _apply_default_variant_data(self, product, default_variant_data):
         if default_variant_data is None:
@@ -380,3 +509,71 @@ class ProductCatalogSerializer(serializers.ModelSerializer):
         if option_values is not None:
             validate_variant_option_values(product, option_values, variant=variant)
             variant.option_values.set(option_values)
+
+    def _apply_variants_data(self, product, variants_data):
+        if not variants_data:
+            return
+        default_count = sum(1 for data in variants_data if data.get("is_default"))
+        if default_count > 1:
+            raise serializers.ValidationError(
+                {"variants": "Only one variant can be marked as default."}
+            )
+        if default_count == 0 and not product.variants.filter(is_default=True).exists():
+            variants_data[0]["is_default"] = True
+
+        self._validate_variant_payload_combinations(variants_data)
+
+        for variant_data in variants_data:
+            self._upsert_product_variant(product, variant_data)
+
+    def _validate_variant_payload_combinations(self, variants_data):
+        signatures = set()
+        for variant_data in variants_data:
+            signature = variant_option_signature(
+                variant_data.get("option_values", [])
+            )
+            if not signature:
+                continue
+            if signature in signatures:
+                raise serializers.ValidationError(
+                    {
+                        "variants": (
+                            "Generated variants cannot contain duplicate "
+                            "option value combinations."
+                        )
+                    }
+                )
+            signatures.add(signature)
+
+    def _upsert_product_variant(self, product, variant_data):
+        data = dict(variant_data)
+        variant_id = data.pop("id", None)
+        option_values = data.pop("option_values", [])
+
+        if variant_id is None:
+            variant = None
+        else:
+            try:
+                variant = product.variants.get(pk=variant_id)
+            except ProductVariant.DoesNotExist as error:
+                raise serializers.ValidationError(
+                    {"variants": "Variant does not belong to the selected product."}
+                ) from error
+
+        validate_variant_option_values(product, option_values, variant=variant)
+        if data.get("is_default") is True:
+            queryset = ProductVariant.objects.filter(
+                product=product,
+                is_default=True,
+            )
+            if variant is not None:
+                queryset = queryset.exclude(pk=variant.pk)
+            queryset.update(is_default=False)
+
+        if variant is None:
+            variant = ProductVariant.objects.create(product=product, **data)
+        else:
+            for field, value in data.items():
+                setattr(variant, field, value)
+            variant.save()
+        variant.option_values.set(option_values)

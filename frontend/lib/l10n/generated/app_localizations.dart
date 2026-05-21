@@ -1646,6 +1646,246 @@ abstract class AppLocalizations {
   /// **'قيمة خيار #{id}'**
   String variantOptionValueFallbackLabel(int id);
 
+  /// No description provided for @variantOptionsLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'قوالب الخيارات'**
+  String get variantOptionsLabel;
+
+  /// No description provided for @variantOptionsHelper.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر الخيارات التي تميز المنتج مثل اللون أو السعة. سيتم استخدام قيمها لتوليد الخيارات تلقائيًا.'**
+  String get variantOptionsHelper;
+
+  /// No description provided for @variantOptionsEmpty.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد قوالب خيارات جاهزة.'**
+  String get variantOptionsEmpty;
+
+  /// No description provided for @variantOptionsLoadError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر تحميل قوالب الخيارات.'**
+  String get variantOptionsLoadError;
+
+  /// No description provided for @addVariantOptionButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'إضافة قالب'**
+  String get addVariantOptionButton;
+
+  /// No description provided for @newVariantOptionTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'قالب خيار جديد'**
+  String get newVariantOptionTitle;
+
+  /// No description provided for @variantOptionNameLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'اسم القالب'**
+  String get variantOptionNameLabel;
+
+  /// No description provided for @variantOptionNameHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'مثال: اللون'**
+  String get variantOptionNameHint;
+
+  /// No description provided for @variantOptionCodeLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'رمز القالب'**
+  String get variantOptionCodeLabel;
+
+  /// No description provided for @variantOptionCodeHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'مثال: color'**
+  String get variantOptionCodeHint;
+
+  /// No description provided for @createVariantOptionButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'حفظ القالب'**
+  String get createVariantOptionButton;
+
+  /// No description provided for @variantOptionCreateError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر إنشاء قالب الخيار.'**
+  String get variantOptionCreateError;
+
+  /// No description provided for @variantValuesNoOptions.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر قالب خيار واحدًا على الأقل لتحديد القيم.'**
+  String get variantValuesNoOptions;
+
+  /// No description provided for @variantOptionNoValues.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد قيم جاهزة لهذا الخيار.'**
+  String get variantOptionNoValues;
+
+  /// No description provided for @variantOptionValueRequired.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر قيمة واحدة على الأقل.'**
+  String get variantOptionValueRequired;
+
+  /// No description provided for @addVariantOptionValueButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'إضافة قيمة'**
+  String get addVariantOptionValueButton;
+
+  /// No description provided for @newVariantOptionValueTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'قيمة خيار جديدة'**
+  String get newVariantOptionValueTitle;
+
+  /// No description provided for @variantOptionValueNameLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'اسم القيمة'**
+  String get variantOptionValueNameLabel;
+
+  /// No description provided for @variantOptionValueNameHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'مثال: أحمر'**
+  String get variantOptionValueNameHint;
+
+  /// No description provided for @variantOptionValueCodeLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'رمز القيمة'**
+  String get variantOptionValueCodeLabel;
+
+  /// No description provided for @variantOptionValueCodeHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'مثال: red'**
+  String get variantOptionValueCodeHint;
+
+  /// No description provided for @createVariantOptionValueButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'حفظ القيمة'**
+  String get createVariantOptionValueButton;
+
+  /// No description provided for @variantOptionValueCreateError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر إنشاء قيمة الخيار.'**
+  String get variantOptionValueCreateError;
+
+  /// No description provided for @skuPrefixLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'بادئة الرمز'**
+  String get skuPrefixLabel;
+
+  /// No description provided for @skuPrefixHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'مثال: IPHONE'**
+  String get skuPrefixHint;
+
+  /// No description provided for @generatedVariantPriceLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'سعر الخيارات المولدة'**
+  String get generatedVariantPriceLabel;
+
+  /// No description provided for @generatedVariantsEmpty.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر قيم الخيارات لعرض كل التركيبات.'**
+  String get generatedVariantsEmpty;
+
+  /// Number of generated product variants.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, =0{لا توجد خيارات مولدة} =1{خيار واحد مولد} =2{خياران مولدان} other{{count} خيارات مولدة}}'**
+  String generatedVariantsCount(num count);
+
+  /// No description provided for @generatedVariantNameLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'اسم الخيار'**
+  String get generatedVariantNameLabel;
+
+  /// No description provided for @generatedVariantsMissingValues.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر قيمة واحدة على الأقل لكل قالب خيار.'**
+  String get generatedVariantsMissingValues;
+
+  /// No description provided for @generatedVariantsDuplicateSku.
+  ///
+  /// In ar, this message translates to:
+  /// **'رموز الخيارات المولدة يجب أن تكون غير مكررة.'**
+  String get generatedVariantsDuplicateSku;
+
+  /// No description provided for @generatedVariantsTooMany.
+  ///
+  /// In ar, this message translates to:
+  /// **'عدد الخيارات المولدة كبير جدًا. قلل القيم المحددة.'**
+  String get generatedVariantsTooMany;
+
+  /// No description provided for @generatedVariantsNoMissing.
+  ///
+  /// In ar, this message translates to:
+  /// **'كل التركيبات المحددة موجودة بالفعل.'**
+  String get generatedVariantsNoMissing;
+
+  /// No description provided for @generateVariantsTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'توليد الخيارات'**
+  String get generateVariantsTitle;
+
+  /// No description provided for @generateVariantsButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'توليد الخيارات'**
+  String get generateVariantsButton;
+
+  /// No description provided for @variantsGeneratedMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم حفظ الخيارات المولدة'**
+  String get variantsGeneratedMessage;
+
+  /// No description provided for @variantGenerateError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر توليد الخيارات. راجع البيانات وحاول مرة أخرى.'**
+  String get variantGenerateError;
+
+  /// No description provided for @productVariantOptionsTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'خيارات المنتج'**
+  String get productVariantOptionsTitle;
+
+  /// No description provided for @productVariantOptionsEmpty.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد خيارات مرتبطة بهذا المنتج.'**
+  String get productVariantOptionsEmpty;
+
+  /// No description provided for @reloadButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'إعادة التحميل'**
+  String get reloadButton;
+
   /// No description provided for @categoryFilterTitle.
   ///
   /// In ar, this message translates to:

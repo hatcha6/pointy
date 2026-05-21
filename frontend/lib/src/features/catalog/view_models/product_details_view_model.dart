@@ -112,6 +112,43 @@ class ProductDetailsViewModel extends ChangeNotifier {
     }
   }
 
+  Future<bool> saveGeneratedVariants({
+    required List<int> variantOptionIds,
+    required List<ProductVariantDraft> variants,
+  }) async {
+    if (_isSavingVariant) {
+      return false;
+    }
+
+    _isSavingVariant = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    final result = await _catalogRepository.updateProduct(
+      id: _product.id,
+      draft: ProductUpdateDraft(
+        name: _product.name,
+        description: _product.description,
+        isActive: _product.isActive,
+        categoryIds: [for (final category in _product.categories) category.id],
+        variantOptionIds: variantOptionIds,
+        variants: variants,
+      ),
+    );
+    switch (result) {
+      case Ok<Product>():
+        _product = result.value;
+        _isSavingVariant = false;
+        notifyListeners();
+        return true;
+      case Error<Product>():
+        _errorMessage = 'variant_generate_error';
+        _isSavingVariant = false;
+        notifyListeners();
+        return false;
+    }
+  }
+
   Future<bool> updateVariant({
     required int id,
     required ProductVariantDraft draft,

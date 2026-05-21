@@ -16,6 +16,7 @@ import '../view_models/product_stock_view_model.dart';
 import 'product_parent_edit_sheet.dart';
 import 'product_variant_details_screen.dart';
 import 'product_variant_form_sheet.dart';
+import 'product_variant_generation_sheet.dart';
 
 class ProductDetailsScreen extends StatelessWidget {
   const ProductDetailsScreen({
@@ -85,6 +86,7 @@ class ProductDetailsScreen extends StatelessWidget {
                   variants: viewModel.variants,
                   capabilities: capabilities,
                   onAddVariant: () => _showVariantEditor(context),
+                  onGenerateVariants: () => _showVariantGenerator(context),
                   onEditVariant: (variant) =>
                       _showVariantEditor(context, variant: variant),
                   onOpenVariant: (variant) =>
@@ -151,6 +153,37 @@ class ProductDetailsScreen extends StatelessWidget {
                 child: ProductVariantFormSheet(
                   viewModel: viewModel,
                   variant: variant,
+                  onSaved: () {
+                    onChanged?.call();
+                    Navigator.of(sheetContext).pop();
+                  },
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _showVariantGenerator(BuildContext context) {
+    return showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      showDragHandle: true,
+      builder: (sheetContext) {
+        return Padding(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.viewInsetsOf(sheetContext).bottom,
+          ),
+          child: FractionallySizedBox(
+            heightFactor: 0.9,
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 720),
+                child: ProductVariantGenerationSheet(
+                  viewModel: viewModel,
                   onSaved: () {
                     onChanged?.call();
                     Navigator.of(sheetContext).pop();
@@ -313,6 +346,22 @@ class _ParentSummaryCard extends StatelessWidget {
                         Chip(label: Text(category.displayPath)),
                     ],
                   ),
+            const SizedBox(height: 14),
+            Text(
+              l10n.productVariantOptionsTitle,
+              style: Theme.of(context).textTheme.titleSmall,
+            ),
+            const SizedBox(height: 8),
+            product.variantOptions.isEmpty
+                ? Text(l10n.productVariantOptionsEmpty)
+                : Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: [
+                      for (final option in product.variantOptions)
+                        Chip(label: Text(option.displayLabel)),
+                    ],
+                  ),
           ],
         ),
       ),
@@ -361,6 +410,7 @@ class _VariantsSection extends StatelessWidget {
     required this.variants,
     required this.capabilities,
     required this.onAddVariant,
+    required this.onGenerateVariants,
     required this.onEditVariant,
     required this.onOpenVariant,
   });
@@ -368,6 +418,7 @@ class _VariantsSection extends StatelessWidget {
   final List<ProductVariant> variants;
   final AuthorizationCapabilities capabilities;
   final VoidCallback onAddVariant;
+  final VoidCallback onGenerateVariants;
   final ValueChanged<ProductVariant> onEditVariant;
   final ValueChanged<ProductVariant> onOpenVariant;
 
@@ -385,10 +436,21 @@ class _VariantsSection extends StatelessWidget {
             alignment: AlignmentDirectional.centerStart,
             child: ProductVariantCreateGuard(
               capabilities: capabilities,
-              child: FilledButton.icon(
-                onPressed: onAddVariant,
-                icon: const Icon(Icons.add),
-                label: Text(l10n.addVariantButton),
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  FilledButton.icon(
+                    onPressed: onGenerateVariants,
+                    icon: const Icon(Icons.auto_awesome_motion_outlined),
+                    label: Text(l10n.generateVariantsButton),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: onAddVariant,
+                    icon: const Icon(Icons.add),
+                    label: Text(l10n.addVariantButton),
+                  ),
+                ],
               ),
             ),
           ),

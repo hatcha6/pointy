@@ -1,60 +1,62 @@
-class VariantOptionValue {
-  const VariantOptionValue({
+import 'variant_option_value.dart';
+
+class VariantOption {
+  const VariantOption({
     required this.id,
-    required this.optionId,
+    required this.code,
     required this.name,
-    this.optionName = '',
-    this.code = '',
     this.displayOrder = 0,
     this.isActive = true,
+    this.values = const [],
   });
 
   final int id;
-  final int optionId;
-  final String optionName;
   final String code;
   final String name;
   final int displayOrder;
   final bool isActive;
+  final List<VariantOptionValue> values;
 
-  String get displayLabel {
-    if (optionName.trim().isEmpty) {
-      return name;
-    }
-    return '$optionName: $name';
-  }
+  String get displayLabel => name.trim().isEmpty ? code : name;
 
-  VariantOptionValue copyWith({
+  VariantOption copyWith({
     int? id,
-    int? optionId,
-    String? optionName,
     String? code,
     String? name,
     int? displayOrder,
     bool? isActive,
+    List<VariantOptionValue>? values,
   }) {
-    return VariantOptionValue(
+    return VariantOption(
       id: id ?? this.id,
-      optionId: optionId ?? this.optionId,
-      optionName: optionName ?? this.optionName,
       code: code ?? this.code,
       name: name ?? this.name,
       displayOrder: displayOrder ?? this.displayOrder,
       isActive: isActive ?? this.isActive,
+      values: values ?? this.values,
     );
   }
 
-  factory VariantOptionValue.fromJson(Map<String, Object?> json) {
-    return VariantOptionValue(
+  factory VariantOption.fromJson(Map<String, Object?> json) {
+    return VariantOption(
       id: _intFromJson(json['id']),
-      optionId: _intFromJson(json['option']),
-      optionName: json['option_name']?.toString() ?? '',
       code: json['code']?.toString() ?? '',
       name: json['name']?.toString() ?? '',
       displayOrder: _intFromJson(json['display_order']),
       isActive: (json['is_active'] as bool?) ?? true,
+      values: _valuesFromJson(json['values']),
     );
   }
+}
+
+List<VariantOptionValue> _valuesFromJson(Object? value) {
+  if (value is List<Object?>) {
+    return value
+        .whereType<Map<String, Object?>>()
+        .map(VariantOptionValue.fromJson)
+        .toList(growable: false);
+  }
+  return const [];
 }
 
 int _intFromJson(Object? value) {
