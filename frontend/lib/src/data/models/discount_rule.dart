@@ -215,6 +215,7 @@ class DiscountRule {
     required this.perCustomerUsageLimit,
     required this.perSupplierUsageLimit,
     required this.products,
+    required this.variants,
     required this.productCategories,
     required this.customers,
     required this.suppliers,
@@ -246,6 +247,7 @@ class DiscountRule {
   final int? perCustomerUsageLimit;
   final int? perSupplierUsageLimit;
   final List<int> products;
+  final List<int> variants;
   final List<int> productCategories;
   final List<int> customers;
   final List<int> suppliers;
@@ -286,6 +288,7 @@ class DiscountRule {
         json['per_supplier_usage_limit'],
       ),
       products: _intListFromJson(json['products']),
+      variants: _intListFromJson(json['variants'] ?? json['product_variants']),
       productCategories: _intListFromJson(json['product_categories']),
       customers: _intListFromJson(json['customers']),
       suppliers: _intListFromJson(json['suppliers']),
@@ -324,6 +327,7 @@ class DiscountRuleDraft {
     required this.perCustomerUsageLimit,
     required this.perSupplierUsageLimit,
     required this.products,
+    required this.variants,
     required this.productCategories,
     required this.customers,
     required this.suppliers,
@@ -350,6 +354,7 @@ class DiscountRuleDraft {
   final String perCustomerUsageLimit;
   final String perSupplierUsageLimit;
   final List<int> products;
+  final List<int> variants;
   final List<int> productCategories;
   final List<int> customers;
   final List<int> suppliers;
@@ -382,6 +387,7 @@ class DiscountRuleDraft {
       'per_customer_usage_limit': _nullableInt(perCustomerUsageLimit),
       'per_supplier_usage_limit': _nullableInt(perSupplierUsageLimit),
       'products': products,
+      'variants': variants,
       'product_categories': productCategories,
       'customers': customers,
       'suppliers': suppliers,

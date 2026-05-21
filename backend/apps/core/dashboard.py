@@ -125,6 +125,7 @@ def _sales_section(request, period):
         "trend": trend,
         "hourly_sales": _hourly_sales(current_orders),
         "top_products": _top_products(current_orders),
+        "reports": _sales_reports(current_orders),
         "top_categories": _top_categories(current_orders),
         "recent_orders": _recent_orders(current_orders),
         "registers": _register_summary(request, period),
@@ -231,6 +232,14 @@ def _inventory_section(period):
                 "variant__product__name",
                 "variant__name",
             )[:8]
+        ],
+        "low_stock_variants": [
+            _stock_item_row(item)
+            for item in low_stock.order_by(
+                "quantity_on_hand",
+                "variant__product__name",
+                "variant__name",
+            )[:24]
         ],
         "dusty_items": [_stock_item_row(item) for item in dusty_items],
         "movement_mix": [
@@ -590,6 +599,64 @@ def _hourly_sales(orders):
 
 
 def _top_products(orders):
+    return _product_sales_report(orders, order_by="-revenue", limit=8)
+
+
+def _sales_reports(orders):
+    return {
+        "products": {
+            "top_sold": _product_sales_report(orders, order_by="-quantity", limit=24),
+            "revenue": _product_sales_report(orders, order_by="-revenue", limit=24),
+            "profit": _product_sales_report(orders, order_by="-profit", limit=24),
+        },
+        "variants": {
+            "top_sold": _variant_sales_report(orders, order_by="-quantity", limit=24),
+            "revenue": _variant_sales_report(orders, order_by="-revenue", limit=24),
+            "profit": _variant_sales_report(orders, order_by="-profit", limit=24),
+        },
+    }
+
+
+def _product_sales_report(orders, *, order_by, limit):
+    revenue_expr = F("quantity") * F("unit_price") - F("discount_total")
+    profit_expr = F("quantity") * (F("unit_price") - F("unit_cost")) - F("discount_total")
+    rows = (
+        OrderLine.objects.filter(order__in=orders)
+        .values(
+            "variant__product_id",
+            "variant__product__name",
+        )
+        .annotate(
+            units_sold=Coalesce(Sum("quantity"), Value(0)),
+            revenue=Coalesce(
+                Sum(revenue_expr, output_field=MONEY_FIELD),
+                Value(Decimal("0.00")),
+                output_field=MONEY_FIELD,
+            ),
+            profit=Coalesce(
+                Sum(profit_expr, output_field=MONEY_FIELD),
+                Value(Decimal("0.00")),
+                output_field=MONEY_FIELD,
+            ),
+            variant_count=Count("variant_id", distinct=True),
+        )
+        .order_by(_sales_report_ordering(order_by), "variant__product__name")[:limit]
+    )
+    return [
+        {
+            "product_id": row["variant__product_id"],
+            "product_name": row["variant__product__name"],
+            "sku": "",
+            "quantity": row["units_sold"],
+            "revenue": _money(row["revenue"]),
+            "profit": _money(row["profit"]),
+            "variant_count": row["variant_count"],
+        }
+        for row in rows
+    ]
+
+
+def _variant_sales_report(orders, *, order_by, limit):
     revenue_expr = F("quantity") * F("unit_price") - F("discount_total")
     profit_expr = F("quantity") * (F("unit_price") - F("unit_cost")) - F("discount_total")
     rows = (
@@ -598,8 +665,9 @@ def _top_products(orders):
             "variant__product_id",
             "variant_id",
             "variant__product__name",
-            "variant__sku",
             "variant__name",
+            "variant__sku",
+            "variant__barcode",
         )
         .annotate(
             units_sold=Coalesce(Sum("quantity"), Value(0)),
@@ -614,21 +682,41 @@ def _top_products(orders):
                 output_field=MONEY_FIELD,
             ),
         )
-        .order_by("-revenue", "variant__product__name")[:8]
+        .order_by(
+            _sales_report_ordering(order_by),
+            "variant__product__name",
+            "variant__name",
+        )[:limit]
     )
     return [
         {
             "product_id": row["variant__product_id"],
             "variant_id": row["variant_id"],
-            "product_name": row["variant__product__name"],
+            "product_name": _variant_full_name(
+                row["variant__product__name"],
+                row["variant__name"],
+            ),
+            "parent_product_name": row["variant__product__name"],
             "variant_name": row["variant__name"] or row["variant__product__name"],
             "sku": row["variant__sku"],
+            "barcode": row["variant__barcode"],
             "quantity": row["units_sold"],
             "revenue": _money(row["revenue"]),
             "profit": _money(row["profit"]),
         }
         for row in rows
     ]
+
+
+def _variant_full_name(product_name, variant_name):
+    variant_name = (variant_name or "").strip()
+    if not variant_name:
+        return product_name
+    return f"{product_name} - {variant_name}"
+
+
+def _sales_report_ordering(order_by):
+    return order_by.replace("quantity", "units_sold")
 
 
 def _top_categories(orders):

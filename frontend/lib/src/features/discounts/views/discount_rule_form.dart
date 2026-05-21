@@ -54,6 +54,7 @@ class _DiscountRuleFormState extends State<DiscountRuleForm> {
   late bool _exclusive;
   late bool _isActive;
   late List<AsyncSelectionOption<int>> _selectedProducts;
+  late List<AsyncSelectionOption<int>> _selectedVariants;
   late List<AsyncSelectionOption<int>> _selectedProductCategories;
   late List<AsyncSelectionOption<int>> _selectedCustomers;
   late List<AsyncSelectionOption<int>> _selectedSuppliers;
@@ -103,6 +104,7 @@ class _DiscountRuleFormState extends State<DiscountRuleForm> {
     _exclusive = rule?.exclusive ?? true;
     _isActive = rule?.isActive ?? true;
     _selectedProducts = _selectionsFromIds(rule?.products ?? const []);
+    _selectedVariants = _selectionsFromIds(rule?.variants ?? const []);
     _selectedProductCategories = _selectionsFromIds(
       rule?.productCategories ?? const [],
     );
@@ -384,6 +386,22 @@ class _DiscountRuleFormState extends State<DiscountRuleForm> {
               ),
               AsyncSelectionField<int>(
                 key: ValueKey(
+                  'variants_${_selectedVariants.map((item) => item.id).join('_')}',
+                ),
+                fieldKey: const ValueKey('discount_variant_picker_field'),
+                strings: _constraintFieldStrings(
+                  l10n,
+                  label: l10n.discountVariantIdsLabel,
+                ),
+                selected: _selectedVariants,
+                onPick: () => _pickVariants(context),
+                onClear: _selectedVariants.isEmpty
+                    ? null
+                    : () => setState(() => _selectedVariants = []),
+                validator: (_) => null,
+              ),
+              AsyncSelectionField<int>(
+                key: ValueKey(
                   'customers_${_selectedCustomers.map((item) => item.id).join('_')}',
                 ),
                 fieldKey: const ValueKey('discount_customer_picker_field'),
@@ -525,6 +543,7 @@ class _DiscountRuleFormState extends State<DiscountRuleForm> {
       perCustomerUsageLimit: _perCustomerLimitController.text,
       perSupplierUsageLimit: _perSupplierLimitController.text,
       products: _selectedProducts.map((item) => item.id).toList(),
+      variants: _selectedVariants.map((item) => item.id).toList(),
       productCategories: _selectedProductCategories
           .map((item) => item.id)
           .toList(),
@@ -719,6 +738,53 @@ class _DiscountRuleFormState extends State<DiscountRuleForm> {
       return;
     }
     setState(() => _selectedProducts = picked);
+  }
+
+  Future<void> _pickVariants(BuildContext context) async {
+    final l10n = AppLocalizations.of(context)!;
+    final picked = await showAsyncMultiSelectPicker<int>(
+      context: context,
+      strings: _constraintPickerStrings(
+        l10n,
+        title: l10n.discountVariantPickerTitle,
+        searchHint: l10n.discountVariantPickerSearchHint,
+        emptyText: l10n.discountVariantPickerEmpty,
+      ),
+      selected: _selectedVariants,
+      searchFieldKey: const ValueKey('discount_constraint_search_field'),
+      applyButtonKey: const ValueKey('discount_constraint_apply_button'),
+      optionKeyForId: (id) => ValueKey('discount_constraint_option_$id'),
+      loadPage: (search, page) async {
+        final result = await widget.catalogRepository.loadProductVariants(
+          query: ProductQuery(
+            search: search,
+            availability: ProductAvailabilityFilter.all,
+          ),
+          page: page,
+        );
+        return switch (result) {
+          Ok(value: final page) => AsyncSelectionPage<int>(
+            options: [
+              for (final variant in page.variants)
+                AsyncSelectionOption<int>(
+                  id: variant.id,
+                  label: variant.displayLabel,
+                  subtitle: [
+                    if (variant.sku.isNotEmpty) variant.sku,
+                    if (variant.barcode.isNotEmpty) variant.barcode,
+                  ].join(' • '),
+                ),
+            ],
+            hasMore: page.hasMore,
+          ),
+          Error() => throw Exception('variant picker failed'),
+        };
+      },
+    );
+    if (!mounted || picked == null) {
+      return;
+    }
+    setState(() => _selectedVariants = picked);
   }
 
   Future<void> _pickProductCategories(BuildContext context) async {

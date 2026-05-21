@@ -1677,7 +1677,8 @@
   "discountNoDateSelected": "بدون تاريخ",
   "discountPickDateTooltip": "اختيار تاريخ",
   "clearButton": "مسح",
-  "discountProductIdsLabel": "المنتجات",
+  "discountProductIdsLabel": "المنتجات الرئيسية",
+  "discountVariantIdsLabel": "الخيارات / الرموز الدقيقة",
   "discountProductCategoryIdsLabel": "التصنيفات",
   "discountCustomerIdsLabel": "العملاء",
   "discountSupplierIdsLabel": "الموردون",
@@ -1697,6 +1698,9 @@
   "discountProductPickerTitle": "اختيار المنتجات",
   "discountProductPickerSearchHint": "ابحث باسم المنتج أو الرمز",
   "discountProductPickerEmpty": "لا توجد منتجات مطابقة.",
+  "discountVariantPickerTitle": "اختيار خيارات المنتجات",
+  "discountVariantPickerSearchHint": "ابحث باسم المنتج أو رمز SKU أو الباركود",
+  "discountVariantPickerEmpty": "لا توجد خيارات مطابقة.",
   "discountProductCategoryPickerTitle": "اختيار التصنيفات",
   "discountProductCategoryPickerSearchHint": "ابحث باسم التصنيف",
   "discountProductCategoryPickerEmpty": "لا توجد تصنيفات مطابقة.",
@@ -1855,6 +1859,15 @@
   "discountProductConstraintSummary": "{count} منتجات",
   "@discountProductConstraintSummary": {
     "description": "Product constraint count.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "discountVariantConstraintSummary": "{count} خيارات دقيقة",
+  "@discountVariantConstraintSummary": {
+    "description": "Variant constraint count.",
     "placeholders": {
       "count": {
         "type": "int"

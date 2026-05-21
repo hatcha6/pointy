@@ -5085,8 +5085,14 @@ abstract class AppLocalizations {
   /// No description provided for @discountProductIdsLabel.
   ///
   /// In ar, this message translates to:
-  /// **'المنتجات'**
+  /// **'المنتجات الرئيسية'**
   String get discountProductIdsLabel;
+
+  /// No description provided for @discountVariantIdsLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الخيارات / الرموز الدقيقة'**
+  String get discountVariantIdsLabel;
 
   /// No description provided for @discountProductCategoryIdsLabel.
   ///
@@ -5153,6 +5159,24 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'لا توجد منتجات مطابقة.'**
   String get discountProductPickerEmpty;
+
+  /// No description provided for @discountVariantPickerTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختيار خيارات المنتجات'**
+  String get discountVariantPickerTitle;
+
+  /// No description provided for @discountVariantPickerSearchHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'ابحث باسم المنتج أو رمز SKU أو الباركود'**
+  String get discountVariantPickerSearchHint;
+
+  /// No description provided for @discountVariantPickerEmpty.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد خيارات مطابقة.'**
+  String get discountVariantPickerEmpty;
 
   /// No description provided for @discountProductCategoryPickerTitle.
   ///
@@ -5429,6 +5453,12 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'{count} منتجات'**
   String discountProductConstraintSummary(int count);
+
+  /// Variant constraint count.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count} خيارات دقيقة'**
+  String discountVariantConstraintSummary(int count);
 
   /// Product category constraint count.
   ///

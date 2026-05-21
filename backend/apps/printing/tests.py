@@ -7,7 +7,7 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient
 
-from apps.catalog.models import Product
+from apps.catalog.models import Product, ProductVariant
 from apps.core.models import ShopSettings
 from apps.core.roles import CASHIER_GROUP, MANAGER_GROUP, ensure_role_groups
 from apps.discounts.models import DiscountRule
@@ -149,6 +149,35 @@ class ReceiptAutoPrintTests(PrintingTestMixin, TestCase):
         self.assertEqual(job.payload["order"]["total"], "8.50")
         self.assertEqual(job.payload["order"]["lines"][0]["name"], "قهوة مختصة")
         self.assertEqual(job.payload["order"]["lines"][0]["unit_price"], "4.25")
+
+    def test_receipt_job_payload_includes_variant_line_fields(self):
+        variant = ProductVariant.objects.create(
+            product=self.product,
+            name="كبير",
+            sku="AUTO-PRINT-L",
+            barcode="998877",
+            unit_price=Decimal("5.25"),
+        )
+        StockItem.objects.create(variant=variant, quantity_on_hand=10)
+
+        response = self.checkout(
+            {
+                "lines": [{"variant": variant.pk, "quantity": 1}],
+                "amount_received": "5.25",
+            }
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        job = PrintJob.objects.get(order_id=response.data["id"])
+        line = job.payload["order"]["lines"][0]
+        self.assertEqual(line["product_id"], self.product.pk)
+        self.assertEqual(line["variant_id"], variant.pk)
+        self.assertEqual(line["product_name"], "قهوة مختصة - كبير")
+        self.assertEqual(line["parent_product_name"], "قهوة مختصة")
+        self.assertEqual(line["variant_name"], "كبير")
+        self.assertEqual(line["sku"], "AUTO-PRINT-L")
+        self.assertEqual(line["barcode"], "998877")
+        self.assertEqual(line["unit_price"], "5.25")
 
     def test_receipt_job_payload_includes_discount_values(self):
         DiscountRule.objects.create(

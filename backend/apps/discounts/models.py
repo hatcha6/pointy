@@ -88,7 +88,7 @@ class DiscountRule(TimeStampedModel):
         blank=True,
         related_name="discount_rules",
     )
-    product_variants = models.ManyToManyField(
+    variants = models.ManyToManyField(
         "catalog.ProductVariant",
         blank=True,
         related_name="discount_rules",

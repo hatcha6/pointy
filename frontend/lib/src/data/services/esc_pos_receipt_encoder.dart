@@ -100,7 +100,10 @@ class EscPosReceiptEncoder {
 
     for (final rawLine in lines) {
       final line = _map(rawLine);
-      final name = _string(line['name'], fallback: 'منتج');
+      final name = _string(
+        line['product_name'],
+        fallback: _string(line['name'], fallback: 'منتج'),
+      );
       final quantity = _string(line['quantity'], fallback: '1');
       final total = _money(line['line_total']);
       for (final wrappedName in _wrap(

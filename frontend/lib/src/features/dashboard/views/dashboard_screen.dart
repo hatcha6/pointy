@@ -1252,10 +1252,9 @@ class _TopProductsList extends StatelessWidget {
         for (final product in products)
           _InsightRowData(
             title: product.productName,
-            subtitle: l10n.dashboardQuantityWithSku(
-              product.quantity,
-              product.sku,
-            ),
+            subtitle: product.sku.isEmpty
+                ? l10n.dashboardQuantityOnly(product.quantity)
+                : l10n.dashboardQuantityWithSku(product.quantity, product.sku),
             trailing: formatMoney(product.revenue),
           ),
       ],

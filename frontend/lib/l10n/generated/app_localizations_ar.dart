@@ -2873,7 +2873,10 @@ class AppLocalizationsAr extends AppLocalizations {
   String get clearButton => 'مسح';
 
   @override
-  String get discountProductIdsLabel => 'المنتجات';
+  String get discountProductIdsLabel => 'المنتجات الرئيسية';
+
+  @override
+  String get discountVariantIdsLabel => 'الخيارات / الرموز الدقيقة';
 
   @override
   String get discountProductCategoryIdsLabel => 'التصنيفات';
@@ -2909,6 +2912,16 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get discountProductPickerEmpty => 'لا توجد منتجات مطابقة.';
+
+  @override
+  String get discountVariantPickerTitle => 'اختيار خيارات المنتجات';
+
+  @override
+  String get discountVariantPickerSearchHint =>
+      'ابحث باسم المنتج أو رمز SKU أو الباركود';
+
+  @override
+  String get discountVariantPickerEmpty => 'لا توجد خيارات مطابقة.';
 
   @override
   String get discountProductCategoryPickerTitle => 'اختيار التصنيفات';
@@ -3078,6 +3091,11 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String discountProductConstraintSummary(int count) {
     return '$count منتجات';
+  }
+
+  @override
+  String discountVariantConstraintSummary(int count) {
+    return '$count خيارات دقيقة';
   }
 
   @override

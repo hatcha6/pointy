@@ -172,6 +172,7 @@ void main() {
       lines: const [
         BarcodeLabelPrintLine(
           label: BarcodeLabelDraft(
+            displayName: 'قهوة عربية',
             productName: 'قهوة عربية',
             sku: 'COF-100',
             barcode: '123456789012',

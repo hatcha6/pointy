@@ -438,8 +438,11 @@ class _BarcodeLabelPrintSectionState extends State<_BarcodeLabelPrintSection> {
 
     setState(() => _isPrinting = true);
 
+    final variant = widget.product.defaultVariant;
     final result = await widget.printingRepository.printBarcodeLabels([
-      BarcodeLabelPrintLine.product(widget.product, copies: copies),
+      variant == null
+          ? BarcodeLabelPrintLine.product(widget.product, copies: copies)
+          : BarcodeLabelPrintLine.variant(variant, copies: copies),
     ]);
 
     if (!mounted) {

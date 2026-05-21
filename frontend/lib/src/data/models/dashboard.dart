@@ -122,6 +122,7 @@ class DashboardSalesSection {
     this.trend = const [],
     this.hourlySales = const [],
     this.topProducts = const [],
+    this.reports = const SalesReports(),
     this.topCategories = const [],
     this.recentOrders = const [],
   });
@@ -131,6 +132,7 @@ class DashboardSalesSection {
   final List<SalesTrendPoint> trend;
   final List<HourlySalesPoint> hourlySales;
   final List<TopProductInsight> topProducts;
+  final SalesReports reports;
   final List<TopCategoryInsight> topCategories;
   final List<RecentOrderInsight> recentOrders;
 
@@ -152,6 +154,7 @@ class DashboardSalesSection {
           .whereType<Map<String, Object?>>()
           .map(TopProductInsight.fromJson)
           .toList(growable: false),
+      reports: SalesReports.fromJson(_mapFromJson(json['reports'])),
       topCategories: _listFromJson(json['top_categories'])
           .whereType<Map<String, Object?>>()
           .map(TopCategoryInsight.fromJson)
@@ -273,6 +276,51 @@ class HourlySalesPoint {
   }
 }
 
+class SalesReports {
+  const SalesReports({
+    this.productTopSold = const [],
+    this.productRevenue = const [],
+    this.productProfit = const [],
+    this.variantTopSold = const [],
+    this.variantRevenue = const [],
+    this.variantProfit = const [],
+  });
+
+  final List<TopProductInsight> productTopSold;
+  final List<TopProductInsight> productRevenue;
+  final List<TopProductInsight> productProfit;
+  final List<TopVariantInsight> variantTopSold;
+  final List<TopVariantInsight> variantRevenue;
+  final List<TopVariantInsight> variantProfit;
+
+  factory SalesReports.fromJson(Map<String, Object?> json) {
+    final products = _mapFromJson(json['products']);
+    final variants = _mapFromJson(json['variants']);
+    return SalesReports(
+      productTopSold: _productInsights(products['top_sold']),
+      productRevenue: _productInsights(products['revenue']),
+      productProfit: _productInsights(products['profit']),
+      variantTopSold: _variantInsights(variants['top_sold']),
+      variantRevenue: _variantInsights(variants['revenue']),
+      variantProfit: _variantInsights(variants['profit']),
+    );
+  }
+
+  static List<TopProductInsight> _productInsights(Object? value) {
+    return _listFromJson(value)
+        .whereType<Map<String, Object?>>()
+        .map(TopProductInsight.fromJson)
+        .toList(growable: false);
+  }
+
+  static List<TopVariantInsight> _variantInsights(Object? value) {
+    return _listFromJson(value)
+        .whereType<Map<String, Object?>>()
+        .map(TopVariantInsight.fromJson)
+        .toList(growable: false);
+  }
+}
+
 class TopProductInsight {
   const TopProductInsight({
     required this.productId,
@@ -281,6 +329,7 @@ class TopProductInsight {
     required this.quantity,
     required this.revenue,
     required this.profit,
+    this.variantCount = 0,
   });
 
   final int productId;
@@ -289,12 +338,55 @@ class TopProductInsight {
   final int quantity;
   final double revenue;
   final double profit;
+  final int variantCount;
 
   factory TopProductInsight.fromJson(Map<String, Object?> json) {
     return TopProductInsight(
       productId: _intFromJson(json['product_id']),
       productName: json['product_name']?.toString() ?? '',
       sku: json['sku']?.toString() ?? '',
+      quantity: _intFromJson(json['quantity']),
+      revenue: _moneyFromJson(json['revenue']),
+      profit: _moneyFromJson(json['profit']),
+      variantCount: _intFromJson(json['variant_count']),
+    );
+  }
+}
+
+class TopVariantInsight {
+  const TopVariantInsight({
+    required this.productId,
+    required this.variantId,
+    required this.productName,
+    required this.parentProductName,
+    required this.variantName,
+    required this.sku,
+    required this.barcode,
+    required this.quantity,
+    required this.revenue,
+    required this.profit,
+  });
+
+  final int productId;
+  final int variantId;
+  final String productName;
+  final String parentProductName;
+  final String variantName;
+  final String sku;
+  final String barcode;
+  final int quantity;
+  final double revenue;
+  final double profit;
+
+  factory TopVariantInsight.fromJson(Map<String, Object?> json) {
+    return TopVariantInsight(
+      productId: _intFromJson(json['product_id']),
+      variantId: _intFromJson(json['variant_id']),
+      productName: json['product_name']?.toString() ?? '',
+      parentProductName: json['parent_product_name']?.toString() ?? '',
+      variantName: json['variant_name']?.toString() ?? '',
+      sku: json['sku']?.toString() ?? '',
+      barcode: json['barcode']?.toString() ?? '',
       quantity: _intFromJson(json['quantity']),
       revenue: _moneyFromJson(json['revenue']),
       profit: _moneyFromJson(json['profit']),
@@ -415,6 +507,7 @@ class DashboardInventorySection {
   const DashboardInventorySection({
     required this.summary,
     this.lowStockItems = const [],
+    this.lowStockVariants = const [],
     this.dustyItems = const [],
     this.movementMix = const [],
     this.recentMovements = const [],
@@ -422,23 +515,23 @@ class DashboardInventorySection {
 
   final InventoryDashboardSummary summary;
   final List<StockItemInsight> lowStockItems;
+  final List<StockItemInsight> lowStockVariants;
   final List<StockItemInsight> dustyItems;
   final List<StockMovementMixInsight> movementMix;
   final List<RecentStockMovementInsight> recentMovements;
 
   factory DashboardInventorySection.fromJson(Map<String, Object?> json) {
+    final lowStockItems = _stockItemInsights(json['low_stock_items']);
+    final lowStockVariants = _stockItemInsights(json['low_stock_variants']);
     return DashboardInventorySection(
       summary: InventoryDashboardSummary.fromJson(
         _mapFromJson(json['summary']),
       ),
-      lowStockItems: _listFromJson(json['low_stock_items'])
-          .whereType<Map<String, Object?>>()
-          .map(StockItemInsight.fromJson)
-          .toList(growable: false),
-      dustyItems: _listFromJson(json['dusty_items'])
-          .whereType<Map<String, Object?>>()
-          .map(StockItemInsight.fromJson)
-          .toList(growable: false),
+      lowStockItems: lowStockItems,
+      lowStockVariants: lowStockVariants.isEmpty
+          ? lowStockItems
+          : lowStockVariants,
+      dustyItems: _stockItemInsights(json['dusty_items']),
       movementMix: _listFromJson(json['movement_mix'])
           .whereType<Map<String, Object?>>()
           .map(StockMovementMixInsight.fromJson)
@@ -448,6 +541,13 @@ class DashboardInventorySection {
           .map(RecentStockMovementInsight.fromJson)
           .toList(growable: false),
     );
+  }
+
+  static List<StockItemInsight> _stockItemInsights(Object? value) {
+    return _listFromJson(value)
+        .whereType<Map<String, Object?>>()
+        .map(StockItemInsight.fromJson)
+        .toList(growable: false);
   }
 }
 
@@ -489,7 +589,9 @@ class InventoryDashboardSummary {
 class StockItemInsight {
   const StockItemInsight({
     required this.productId,
+    required this.variantId,
     required this.productName,
+    required this.variantName,
     required this.sku,
     required this.quantityOnHand,
     required this.quantityExpected,
@@ -498,7 +600,9 @@ class StockItemInsight {
   });
 
   final int productId;
+  final int variantId;
   final String productName;
+  final String variantName;
   final String sku;
   final int quantityOnHand;
   final int quantityExpected;
@@ -508,7 +612,9 @@ class StockItemInsight {
   factory StockItemInsight.fromJson(Map<String, Object?> json) {
     return StockItemInsight(
       productId: _intFromJson(json['product_id']),
+      variantId: _intFromJson(json['variant_id']),
       productName: json['product_name']?.toString() ?? '',
+      variantName: json['variant_name']?.toString() ?? '',
       sku: json['sku']?.toString() ?? '',
       quantityOnHand: _intFromJson(json['quantity_on_hand']),
       quantityExpected: _intFromJson(json['quantity_expected']),

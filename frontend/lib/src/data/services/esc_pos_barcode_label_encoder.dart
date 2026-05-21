@@ -46,7 +46,7 @@ class EscPosBarcodeLabelEncoder {
     final bytes = <int>[];
     bytes.addAll(generator.feed(1));
     for (final nameLine in _wrap(
-      label.productName,
+      label.displayName,
       _charsPerLine(endpoint.paperWidthMm),
     )) {
       bytes.addAll(

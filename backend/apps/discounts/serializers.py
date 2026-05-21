@@ -13,11 +13,12 @@ class DiscountRuleSerializer(serializers.ModelSerializer):
         queryset=Product.objects.all(),
         required=False,
     )
-    product_variants = serializers.PrimaryKeyRelatedField(
+    variants = serializers.PrimaryKeyRelatedField(
         many=True,
         queryset=ProductVariant.objects.all(),
         required=False,
     )
+    product_variants = serializers.SerializerMethodField()
     product_categories = serializers.PrimaryKeyRelatedField(
         many=True,
         queryset=ProductCategory.objects.all(),
@@ -60,6 +61,7 @@ class DiscountRuleSerializer(serializers.ModelSerializer):
             "per_customer_usage_limit",
             "per_supplier_usage_limit",
             "products",
+            "variants",
             "product_variants",
             "product_categories",
             "customers",
@@ -72,11 +74,24 @@ class DiscountRuleSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = (
             "id",
+            "product_variants",
             "redemption_count",
             "applied_count",
             "created_at",
             "updated_at",
         )
+
+    def to_internal_value(self, data):
+        if (
+            isinstance(data, dict)
+            and "product_variants" in data
+            and "variants" not in data
+        ):
+            data = {**data, "variants": data["product_variants"]}
+        return super().to_internal_value(data)
+
+    def get_product_variants(self, rule):
+        return [variant.pk for variant in rule.variants.all()]
 
     def validate_coupon_code(self, value):
         return normalize_coupon_code(value)
@@ -87,7 +102,7 @@ class DiscountRuleSerializer(serializers.ModelSerializer):
         m2m_values = {}
         for field in (
             "products",
-            "product_variants",
+            "variants",
             "product_categories",
             "customers",
             "suppliers",
@@ -159,7 +174,7 @@ class DiscountRuleSerializer(serializers.ModelSerializer):
             field: data.pop(field)
             for field in (
                 "products",
-                "product_variants",
+                "variants",
                 "product_categories",
                 "customers",
                 "suppliers",

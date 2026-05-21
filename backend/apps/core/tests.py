@@ -9,7 +9,7 @@ from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APIClient
 
-from apps.catalog.models import Product
+from apps.catalog.models import Product, ProductVariant
 from apps.inventory.models import StockItem, StockMovement
 from apps.payments.models import Payment
 from apps.purchasing.models import PurchaseOrder, Supplier, SupplierPayment
@@ -327,11 +327,77 @@ class DashboardApiTests(TestCase):
         self.assertEqual(sections["purchasing"]["summary"]["due_total"], "100.00")
         self.assertEqual(sections["purchasing"]["summary"]["overdue_order_count"], 1)
 
-    def _create_paid_order(self, *, user, receipt_number, total):
-        session = RegisterSession.objects.create(
-            owner=user,
+    def test_dashboard_reports_parent_products_and_variant_breakdown(self):
+        large_variant = ProductVariant.objects.create(
+            product=self.product,
+            name="كبير",
+            sku="DASH-COF-L",
+            unit_price=Decimal("7.00"),
+        )
+        StockItem.objects.create(
+            variant=large_variant,
+            quantity_on_hand=1,
+            reorder_level=2,
+        )
+        self._create_paid_order(
+            user=self.cashier,
+            receipt_number="R-DASH-3",
+            total=Decimal("14.00"),
+            variant=large_variant,
+            quantity=2,
+            unit_price=Decimal("7.00"),
+            unit_cost=Decimal("3.00"),
+        )
+        client = APIClient()
+        client.force_authenticate(user=self.manager)
+
+        response = client.get(reverse("dashboard"))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        sales = response.data["sections"]["sales"]
+        top_product = sales["top_products"][0]
+        self.assertEqual(top_product["product_id"], self.product.pk)
+        self.assertEqual(top_product["product_name"], "قهوة لوحة التحكم")
+        self.assertEqual(top_product["quantity"], 12)
+        self.assertEqual(top_product["revenue"], "64.00")
+        self.assertEqual(top_product["profit"], "38.00")
+        self.assertEqual(top_product["variant_count"], 2)
+        self.assertNotIn("variant_id", top_product)
+
+        variant_revenue = sales["reports"]["variants"]["revenue"]
+        self.assertEqual(variant_revenue[0]["product_name"], "قهوة لوحة التحكم")
+        self.assertEqual(variant_revenue[0]["sku"], "DASH-COF")
+        self.assertEqual(variant_revenue[1]["product_name"], "قهوة لوحة التحكم - كبير")
+        self.assertEqual(variant_revenue[1]["variant_id"], large_variant.pk)
+        self.assertEqual(variant_revenue[1]["sku"], "DASH-COF-L")
+
+        low_stock_variant_ids = {
+            item["variant_id"]
+            for item in response.data["sections"]["inventory"]["low_stock_variants"]
+        }
+        self.assertIn(large_variant.pk, low_stock_variant_ids)
+
+    def _create_paid_order(
+        self,
+        *,
+        user,
+        receipt_number,
+        total,
+        variant=None,
+        quantity=None,
+        unit_price=None,
+        unit_cost=Decimal("2.00"),
+    ):
+        variant = variant or self.product.default_variant
+        unit_price = unit_price or variant.unit_price
+        quantity = quantity or int(total / unit_price)
+        session, _ = RegisterSession.objects.get_or_create(
             owner_key=f"user:{user.pk}",
-            opening_cash=Decimal("0.00"),
+            status=RegisterSession.Status.OPEN,
+            defaults={
+                "owner": user,
+                "opening_cash": Decimal("0.00"),
+            },
         )
         order = Order.objects.create(
             register_session=session,
@@ -342,10 +408,10 @@ class DashboardApiTests(TestCase):
         )
         OrderLine.objects.create(
             order=order,
-            product=self.product,
-            quantity=int(total / Decimal("5.00")),
-            unit_price=Decimal("5.00"),
-            unit_cost=Decimal("2.00"),
+            variant=variant,
+            quantity=quantity,
+            unit_price=unit_price,
+            unit_cost=unit_cost,
         )
         Payment.objects.create(
             order=order,

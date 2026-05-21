@@ -18,6 +18,7 @@ from .services import (
     cashier_window_expired,
     can_adjust_order,
     calculate_sales_discounts,
+    checkout_line_key,
     checkout_order,
     create_order_with_lines,
     return_order_items,
@@ -586,6 +587,10 @@ class DiscountPreviewSerializer(serializers.Serializer):
     def preview_data(self):
         discount_result = self.validated_data["discount_result"]
         coupon_codes = self.validated_data.get("coupon_codes", ())
+        lines_by_key = {
+            checkout_line_key(line_data): line_data
+            for line_data in self.validated_data["lines"]
+        }
         return {
             "subtotal": f"{discount_result.subtotal:.2f}",
             "discount_total": f"{discount_result.discount_total:.2f}",
@@ -600,7 +605,10 @@ class DiscountPreviewSerializer(serializers.Serializer):
                     "value_type": application.value_type,
                     "value": f"{application.value:.4f}",
                     "discount_amount": f"{application.amount:.2f}",
-                    "allocations": application.allocation_dicts(),
+                    "allocations": preview_allocation_dicts(
+                        application,
+                        lines_by_key,
+                    ),
                 }
                 for application in discount_result.applications
             ],
@@ -609,6 +617,28 @@ class DiscountPreviewSerializer(serializers.Serializer):
                 coupon_codes,
             ),
         }
+
+
+def preview_allocation_dicts(application, lines_by_key):
+    allocations = []
+    for allocation in application.allocations:
+        data = allocation.as_dict()
+        line_data = lines_by_key.get(allocation.line_key)
+        if line_data is not None:
+            variant = line_data["variant"]
+            data.update(
+                {
+                    "product_id": variant.product_id,
+                    "variant_id": variant.pk,
+                    "product_name": variant.full_name,
+                    "parent_product_name": variant.product.name,
+                    "variant_name": variant.name.strip() or variant.display_name,
+                    "sku": variant.sku,
+                    "barcode": variant.barcode,
+                }
+            )
+        allocations.append(data)
+    return allocations
 
 
 class OrderAdjustmentLineInputSerializer(serializers.Serializer):

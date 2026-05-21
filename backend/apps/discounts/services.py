@@ -190,7 +190,7 @@ class DiscountEngine:
             .filter(application_filter)
             .prefetch_related(
                 "products",
-                "product_variants",
+                "variants",
                 "product_categories",
                 "customers",
                 "suppliers",
@@ -225,7 +225,7 @@ class DiscountEngine:
         lines: Iterable[DiscountLineInput],
     ) -> list[DiscountLineInput]:
         allowed_product_ids = {product.pk for product in rule.products.all()}
-        allowed_variant_ids = {variant.pk for variant in rule.product_variants.all()}
+        allowed_variant_ids = {variant.pk for variant in rule.variants.all()}
         allowed_category_ids = self._category_ids_with_descendants(
             category.pk for category in rule.product_categories.all()
         )

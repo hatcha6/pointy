@@ -92,7 +92,10 @@ def build_receipt_payload(order):
     shop_settings = ShopSettings.load()
     order = (
         Order.objects.select_related("register_session")
-        .prefetch_related("lines__variant__product")
+        .prefetch_related(
+            "lines__variant__product",
+            "lines__variant__option_values__option",
+        )
         .get(pk=order.pk)
     )
     applied_discounts = order_applied_discounts(order)
@@ -120,21 +123,42 @@ def build_receipt_payload(order):
                 if order.register_session_id
                 else None
             ),
-            "lines": [
-                {
-                    "product_id": line.variant.product_id,
-                    "variant_id": line.variant_id,
-                    "sku": line.variant.sku,
-                    "name": line.variant.full_name,
-                    "quantity": line.quantity,
-                    "unit_price": money(line.unit_price),
-                    "line_subtotal": money(line.line_subtotal),
-                    "discount_total": money(line.discount_total),
-                    "line_total": money(line.line_total),
-                }
-                for line in order.lines.all()
-            ],
+            "lines": [receipt_line_payload(line) for line in order.lines.all()],
         },
+    }
+
+
+def receipt_line_payload(line):
+    variant = line.variant
+    product = variant.product
+    full_name = variant.full_name
+    variant_name = variant.name.strip() or variant.display_name
+    return {
+        "id": line.pk,
+        "product_id": product.pk,
+        "variant_id": line.variant_id,
+        "product_name": full_name,
+        "parent_product_name": product.name,
+        "variant_name": variant_name,
+        "variant_display_name": variant.display_name,
+        "sku": variant.sku,
+        "barcode": variant.barcode,
+        "name": full_name,
+        "quantity": line.quantity,
+        "unit_price": money(line.unit_price),
+        "line_subtotal": money(line.line_subtotal),
+        "discount_total": money(line.discount_total),
+        "line_total": money(line.line_total),
+        "option_values": [
+            {
+                "option_id": option_value.option_id,
+                "option_name": option_value.option.name,
+                "value_id": option_value.pk,
+                "value_name": option_value.name,
+                "value_code": option_value.code,
+            }
+            for option_value in variant.option_values.all()
+        ],
     }
 
 

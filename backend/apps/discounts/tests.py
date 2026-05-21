@@ -170,7 +170,7 @@ class DiscountEngineTests(TestCase):
             value_type=DiscountRule.ValueType.FIXED_AMOUNT,
             value=Decimal("2.00"),
         )
-        rule.product_variants.add(variant)
+        rule.variants.add(variant)
 
         result = self.engine.calculate(
             self.context(
@@ -504,7 +504,7 @@ class DiscountRuleApiTests(TestCase):
                 "priority": 10,
                 "exclusive": False,
                 "products": [self.product.pk],
-                "product_variants": [self.variant.pk],
+                "variants": [self.variant.pk],
                 "product_categories": [self.category.pk],
             },
             format="json",
@@ -515,6 +515,7 @@ class DiscountRuleApiTests(TestCase):
         self.assertEqual(response.data["coupon_code"], "SAVE10")
         self.assertTrue(response.data["is_active"])
         self.assertEqual(response.data["products"], [self.product.pk])
+        self.assertEqual(response.data["variants"], [self.variant.pk])
         self.assertEqual(response.data["product_variants"], [self.variant.pk])
         self.assertEqual(response.data["product_categories"], [self.category.pk])
 
@@ -541,6 +542,25 @@ class DiscountRuleApiTests(TestCase):
         self.assertFalse(delete_response.data["is_active"])
         self.assertIn("archived_at", delete_response.data["metadata"])
         self.assertTrue(DiscountRule.objects.filter(pk=rule_id).exists())
+
+    def test_discount_rule_accepts_legacy_product_variants_alias(self):
+        response = self.client.post(
+            "/api/discount-rules/",
+            {
+                "name": "Legacy variant alias",
+                "channel": DiscountRule.Channel.SALES,
+                "application_type": DiscountRule.ApplicationType.AUTOMATIC,
+                "scope": DiscountRule.Scope.LINE,
+                "value_type": DiscountRule.ValueType.FIXED_AMOUNT,
+                "value": "1.0000",
+                "product_variants": [self.variant.pk],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 201, response.data)
+        self.assertEqual(response.data["variants"], [self.variant.pk])
+        self.assertEqual(response.data["product_variants"], [self.variant.pk])
 
     def test_api_rejects_ambiguous_or_unsafe_discount_configurations(self):
         invalid_cases = [
