@@ -1271,6 +1271,12 @@ class PurchaseReceiptInputSerializer(serializers.Serializer):
                     "accepted_quantity": accepted_quantity,
                     "damaged_quantity": damaged_quantity,
                     "cancelled_quantity": cancelled_quantity,
+                    "allowed_over_receipt_quantity": max(
+                        accepted_quantity
+                        + damaged_quantity
+                        - line.outstanding_quantity,
+                        0,
+                    ),
                     "notes": line_data.get("notes", ""),
                 }
             )

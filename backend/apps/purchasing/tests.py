@@ -6,7 +6,7 @@ from django.core.exceptions import FieldError
 from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
-from rest_framework import status
+from rest_framework import serializers, status
 from rest_framework.test import APIClient
 
 from apps.catalog.models import ProductVariant
@@ -24,6 +24,11 @@ from .models import (
     Supplier,
     SupplierCredit,
     SupplierPayment,
+)
+from .services import (
+    adjust_purchase_order_items,
+    receive_purchase_order,
+    submit_purchase_order,
 )
 
 
@@ -1146,6 +1151,47 @@ class PurchaseOrderApiTests(TestCase):
         self.assertEqual(stock_item.quantity_on_hand, 13)
         self.assertEqual(stock_item.quantity_expected, 0)
 
+    def test_receive_revalidates_stale_line_quantity_before_stocking(self):
+        stock_item = StockItem.objects.create(variant=self.variant, quantity_on_hand=0)
+        order = PurchaseOrder.objects.create(supplier=self.supplier)
+        line = order.lines.create(
+            variant=self.variant,
+            quantity=4,
+            unit_cost=Decimal("1.25"),
+        )
+        order.recalculate()
+        order.save(update_fields=["subtotal", "total", "updated_at"])
+        submit_purchase_order(order)
+        stale_lines = [
+            {
+                "line": line,
+                "accepted_quantity": 4,
+                "damaged_quantity": 0,
+                "cancelled_quantity": 0,
+                "allowed_over_receipt_quantity": 0,
+            }
+        ]
+
+        receive_purchase_order(
+            order,
+            lines_data=[
+                {
+                    "line": line,
+                    "accepted_quantity": 2,
+                    "damaged_quantity": 0,
+                    "cancelled_quantity": 0,
+                    "allowed_over_receipt_quantity": 0,
+                }
+            ],
+        )
+
+        with self.assertRaises(serializers.ValidationError):
+            receive_purchase_order(order, lines_data=stale_lines)
+
+        stock_item.refresh_from_db()
+        self.assertEqual(stock_item.quantity_on_hand, 2)
+        self.assertEqual(PurchaseReceipt.objects.count(), 1)
+
     def test_over_receipt_records_variance_and_stock_overage(self):
         StockItem.objects.create(variant=self.variant, quantity_on_hand=0)
         order = PurchaseOrder.objects.create(supplier=self.supplier)
@@ -1474,6 +1520,37 @@ class PurchaseOrderApiTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("lines", response.data)
         self.assertEqual(StockItem.objects.get(variant=self.variant).quantity_on_hand, 4)
+
+    def test_adjustment_revalidates_stale_line_quantity_before_stock_change(self):
+        order = PurchaseOrder.objects.create(
+            supplier=self.supplier,
+            status=PurchaseOrder.Status.RECEIVED,
+        )
+        line = order.lines.create(
+            variant=self.variant,
+            quantity=2,
+            unit_cost=Decimal("1.25"),
+        )
+        stock_item = StockItem.objects.create(variant=self.variant, quantity_on_hand=5)
+
+        adjust_purchase_order_items(
+            purchase_order=order,
+            adjustment_type=PurchaseOrderAdjustment.AdjustmentType.RETURN,
+            lines=[(line, 1)],
+            reason="First adjustment",
+        )
+
+        with self.assertRaises(serializers.ValidationError):
+            adjust_purchase_order_items(
+                purchase_order=order,
+                adjustment_type=PurchaseOrderAdjustment.AdjustmentType.RETURN,
+                lines=[(line, 2)],
+                reason="Stale adjustment",
+            )
+
+        stock_item.refresh_from_db()
+        self.assertEqual(stock_item.quantity_on_hand, 4)
+        self.assertEqual(PurchaseOrderAdjustment.objects.count(), 1)
 
     def test_exchange_rejects_when_stock_is_not_available(self):
         order = PurchaseOrder.objects.create(
@@ -1882,6 +1959,13 @@ class PurchaseOrderApiTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["unit_cost"], Decimal("2.75"))
 
+        alias_response = self.client.get(
+            reverse("purchaseorder-variant-last-cost"),
+            {"variant": self.variant.pk},
+        )
+        self.assertEqual(alias_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(alias_response.data["unit_cost"], Decimal("2.75"))
+
     def test_last_cost_requires_variant(self):
         response = self.client.get(
             reverse("purchaseorder-last-cost"),
@@ -2029,9 +2113,15 @@ class PurchaseOrderApiTests(TestCase):
             reverse("purchaseorder-product-cost-history"),
             {"product": self.product.pk},
         )
+        variant_response = self.client.get(
+            reverse("purchaseorder-variant-cost-history"),
+            {"variant": self.variant.pk},
+        )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(variant_response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["count"], 2)
+        self.assertEqual(variant_response.data["count"], 2)
         row = response.data["results"][0]
         self.assertEqual(row["id"], latest_line.pk)
         self.assertEqual(row["purchase_order"], latest.pk)
@@ -2067,9 +2157,15 @@ class PurchaseOrderApiTests(TestCase):
             reverse("purchaseorder-product-margin-impact"),
             {"product": self.product.pk, "variant": self.variant.pk},
         )
+        alias_response = self.client.get(
+            reverse("purchaseorder-variant-margin-impact"),
+            {"variant": self.variant.pk},
+        )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(alias_response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["product"], self.product.pk)
+        self.assertEqual(alias_response.data["variant"], self.variant.pk)
         self.assertEqual(response.data["product_name"], self.product.name)
         self.assertEqual(response.data["unit_price"], "4.00")
         self.assertEqual(response.data["latest_purchase_line"], latest_line.pk)

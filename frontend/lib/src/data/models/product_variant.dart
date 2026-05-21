@@ -37,36 +37,53 @@ class ProductVariant {
   final List<VariantOptionValue> optionValues;
 
   String get displayLabel {
-    if (fullName.isNotEmpty) {
-      return fullName;
+    final parent = productLabel;
+    final variant = variantLabel;
+    final full = fullName.trim();
+
+    if (parent.isNotEmpty &&
+        variant.isNotEmpty &&
+        _labelWithoutParent(full, parent) == variant) {
+      return full;
     }
-    if (displayName.isNotEmpty) {
-      return displayName;
+    if (parent.isNotEmpty && variant.isNotEmpty && variant != parent) {
+      return '$parent - $variant';
     }
-    if (name.isNotEmpty && productName.isNotEmpty) {
-      return '$productName - $name';
+    if (parent.isNotEmpty) {
+      return parent;
     }
-    if (name.isNotEmpty) {
-      return name;
+    if (variant.isNotEmpty) {
+      return variant;
     }
-    return productName;
+    if (full.isNotEmpty) {
+      return full;
+    }
+    return displayName.trim();
   }
 
   String get productLabel {
-    if (productName.isNotEmpty) {
-      return productName;
+    final explicitProductName = productName.trim();
+    if (explicitProductName.isNotEmpty) {
+      return explicitProductName;
     }
-    final detailName = productDetail?.name ?? '';
+    final detailName = productDetail?.name.trim() ?? '';
     if (detailName.isNotEmpty) {
       return detailName;
     }
-    if (fullName.isNotEmpty && name.isNotEmpty) {
-      final suffix = ' - $name';
-      if (fullName.endsWith(suffix)) {
-        return fullName.substring(0, fullName.length - suffix.length);
-      }
+    final full = fullName.trim();
+    final parentFromFull = _stripTrailingVariant(full, _variantSuffixes);
+    if (parentFromFull.isNotEmpty && parentFromFull != full) {
+      return parentFromFull;
     }
-    return displayLabel;
+    final display = displayName.trim();
+    final parentFromDisplay = _stripTrailingVariant(display, _variantSuffixes);
+    if (parentFromDisplay.isNotEmpty && parentFromDisplay != display) {
+      return parentFromDisplay;
+    }
+    if (full.isNotEmpty) {
+      return full;
+    }
+    return display;
   }
 
   String get variantLabel {
@@ -75,13 +92,17 @@ class ProductVariant {
     if (explicitName.isNotEmpty) {
       return explicitName;
     }
-    final display = displayName.trim();
-    if (display.isNotEmpty && display != parent) {
+    final options = _optionValuesLabel;
+    if (options.isNotEmpty) {
+      return options;
+    }
+    final display = _labelWithoutParent(displayName.trim(), parent);
+    if (display.isNotEmpty) {
       return display;
     }
-    final full = fullName.trim();
-    if (parent.isNotEmpty && full.startsWith('$parent - ')) {
-      return full.substring(parent.length + 3).trim();
+    final full = _labelWithoutParent(fullName.trim(), parent);
+    if (full.isNotEmpty) {
+      return full;
     }
     return '';
   }
@@ -92,6 +113,22 @@ class ProductVariant {
   }
 
   bool get isSellable => isActive && (productDetail?.isActive ?? true);
+
+  String get _optionValuesLabel {
+    final labels = [
+      for (final value in optionValues)
+        if (value.displayLabel.trim().isNotEmpty) value.displayLabel.trim(),
+    ];
+    return labels.join(' / ');
+  }
+
+  List<String> get _variantSuffixes {
+    return [
+      name.trim(),
+      _optionValuesLabel,
+      displayName.trim(),
+    ].where((label) => label.isNotEmpty).toList(growable: false);
+  }
 
   factory ProductVariant.fromJson(Map<String, Object?> json) {
     final productDetailJson = json['product_detail'];
@@ -154,6 +191,33 @@ class ProductVariant {
       optionValues: optionValues,
     );
   }
+}
+
+String _labelWithoutParent(String label, String parent) {
+  if (label.isEmpty) {
+    return '';
+  }
+  if (parent.isEmpty) {
+    return label;
+  }
+  if (label == parent) {
+    return '';
+  }
+  final prefix = '$parent - ';
+  if (label.startsWith(prefix)) {
+    return label.substring(prefix.length).trim();
+  }
+  return label;
+}
+
+String _stripTrailingVariant(String label, List<String> variants) {
+  for (final variant in variants) {
+    final suffix = ' - $variant';
+    if (label.endsWith(suffix)) {
+      return label.substring(0, label.length - suffix.length).trim();
+    }
+  }
+  return label;
 }
 
 int? _productIdFromJson(Object? value) {

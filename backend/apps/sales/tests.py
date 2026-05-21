@@ -7,7 +7,7 @@ from django.core.exceptions import FieldError
 from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
-from rest_framework import status
+from rest_framework import serializers, status
 from rest_framework.test import APIClient
 
 from apps.catalog.models import ProductVariant
@@ -26,6 +26,7 @@ from .models import (
     RegisterCashMovement,
     RegisterSession,
 )
+from .services import return_order_items
 
 
 class RegisterSessionApiTests(TestCase):
@@ -1315,6 +1316,33 @@ class OrderCheckoutApiTests(TestCase):
             list(StockMovement.objects.order_by("created_at").values_list("movement_type", flat=True)),
             [StockMovement.Type.DECREASE, StockMovement.Type.INCREASE],
         )
+
+    def test_return_revalidates_stale_line_quantity_before_restocking(self):
+        self.start_session()
+        checkout_response = self.client.post(
+            reverse("order-checkout"),
+            self.checkout_payload(),
+            format="json",
+        )
+        order = Order.objects.get(pk=checkout_response.data["id"])
+        stale_line = order.lines.get()
+
+        return_order_items(
+            order=order,
+            lines=[(stale_line, 1)],
+            reason="First return",
+        )
+
+        with self.assertRaises(serializers.ValidationError):
+            return_order_items(
+                order=order,
+                lines=[(stale_line, 2)],
+                reason="Stale return",
+            )
+
+        self.stock_item.refresh_from_db()
+        self.assertEqual(self.stock_item.quantity_on_hand, 9)
+        self.assertEqual(OrderAdjustment.objects.count(), 1)
 
     def test_partial_return_refunds_discounted_net_amount(self):
         DiscountRule.objects.create(

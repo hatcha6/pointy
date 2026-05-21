@@ -1,3 +1,5 @@
+from django.core.exceptions import ValidationError as DjangoValidationError
+from django.db import transaction
 from rest_framework import serializers
 
 from .models import (
@@ -6,7 +8,14 @@ from .models import (
     ProductVariant,
     VariantOption,
     VariantOptionValue,
+    validate_variant_option_values,
 )
+
+
+def raise_serializer_validation(error):
+    if hasattr(error, "message_dict"):
+        raise serializers.ValidationError(error.message_dict)
+    raise serializers.ValidationError(error.messages)
 
 
 class ProductCategorySerializer(serializers.ModelSerializer):
@@ -96,6 +105,12 @@ class VariantOptionSerializer(serializers.ModelSerializer):
 
 
 class ProductCatalogSummarySerializer(serializers.ModelSerializer):
+    variant_options = serializers.PrimaryKeyRelatedField(many=True, read_only=True)
+    variant_option_details = VariantOptionSerializer(
+        source="variant_options",
+        many=True,
+        read_only=True,
+    )
     category_details = ProductCategorySerializer(
         source="categories",
         many=True,
@@ -111,6 +126,8 @@ class ProductCatalogSummarySerializer(serializers.ModelSerializer):
             "is_active",
             "categories",
             "category_details",
+            "variant_options",
+            "variant_option_details",
             "created_at",
             "updated_at",
         ]
@@ -229,7 +246,45 @@ class ProductVariantSerializer(serializers.ModelSerializer):
         if product is None:
             raise serializers.ValidationError({"product": "Product is required."})
         attrs["product"] = product
+
+        if "option_values" in attrs:
+            option_values = attrs["option_values"]
+        elif self.instance is not None:
+            option_values = list(self.instance.option_values.select_related("option"))
+        else:
+            option_values = []
+
+        try:
+            validate_variant_option_values(product, option_values, variant=self.instance)
+        except DjangoValidationError as error:
+            raise_serializer_validation(error)
         return attrs
+
+    def create(self, validated_data):
+        option_values = validated_data.pop("option_values", [])
+        try:
+            with transaction.atomic():
+                variant = ProductVariant.objects.create(**validated_data)
+                if option_values:
+                    variant.option_values.set(option_values)
+                    variant.refresh_from_db(fields=["option_signature"])
+                return variant
+        except DjangoValidationError as error:
+            raise_serializer_validation(error)
+
+    def update(self, instance, validated_data):
+        option_values = validated_data.pop("option_values", None)
+        try:
+            with transaction.atomic():
+                for field, value in validated_data.items():
+                    setattr(instance, field, value)
+                instance.save()
+                if option_values is not None:
+                    instance.option_values.set(option_values)
+                    instance.refresh_from_db(fields=["option_signature"])
+                return instance
+        except DjangoValidationError as error:
+            raise_serializer_validation(error)
 
 
 class ProductCatalogSerializer(serializers.ModelSerializer):
@@ -246,6 +301,16 @@ class ProductCatalogSerializer(serializers.ModelSerializer):
         many=True,
         read_only=True,
     )
+    variant_options = serializers.PrimaryKeyRelatedField(
+        queryset=VariantOption.objects.all(),
+        many=True,
+        required=False,
+    )
+    variant_option_details = VariantOptionSerializer(
+        source="variant_options",
+        many=True,
+        read_only=True,
+    )
 
     class Meta:
         model = Product
@@ -258,6 +323,8 @@ class ProductCatalogSerializer(serializers.ModelSerializer):
             "variants",
             "categories",
             "category_details",
+            "variant_options",
+            "variant_option_details",
             "quantity_on_hand",
             "created_at",
             "updated_at",
@@ -272,23 +339,37 @@ class ProductCatalogSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         categories = validated_data.pop("categories", [])
+        variant_options = validated_data.pop("variant_options", None)
         default_variant_data = validated_data.pop("default_variant", None)
-        product = Product.objects.create(**validated_data)
-        if categories:
-            product.categories.set(categories)
-        self._apply_default_variant_data(product, default_variant_data)
-        return product
+        try:
+            with transaction.atomic():
+                product = Product.objects.create(**validated_data)
+                if categories:
+                    product.categories.set(categories)
+                if variant_options is not None:
+                    product.variant_options.set(variant_options)
+                self._apply_default_variant_data(product, default_variant_data)
+                return product
+        except DjangoValidationError as error:
+            raise_serializer_validation(error)
 
     def update(self, instance, validated_data):
         categories = validated_data.pop("categories", None)
+        variant_options = validated_data.pop("variant_options", None)
         default_variant_data = validated_data.pop("default_variant", None)
-        for field, value in validated_data.items():
-            setattr(instance, field, value)
-        instance.save()
-        if categories is not None:
-            instance.categories.set(categories)
-        self._apply_default_variant_data(instance, default_variant_data)
-        return instance
+        try:
+            with transaction.atomic():
+                for field, value in validated_data.items():
+                    setattr(instance, field, value)
+                instance.save()
+                if categories is not None:
+                    instance.categories.set(categories)
+                if variant_options is not None:
+                    instance.variant_options.set(variant_options)
+                self._apply_default_variant_data(instance, default_variant_data)
+                return instance
+        except DjangoValidationError as error:
+            raise_serializer_validation(error)
 
     def _apply_default_variant_data(self, product, default_variant_data):
         if default_variant_data is None:
@@ -297,4 +378,5 @@ class ProductCatalogSerializer(serializers.ModelSerializer):
         option_values = variant_data.pop("option_values", None)
         variant = product.ensure_default_variant(**variant_data)
         if option_values is not None:
+            validate_variant_option_values(product, option_values, variant=variant)
             variant.option_values.set(option_values)

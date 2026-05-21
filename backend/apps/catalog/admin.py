@@ -48,7 +48,7 @@ class ProductAdmin(admin.ModelAdmin):
     )
     list_filter = ("is_active", "categories")
     search_fields = ("variants__sku", "variants__barcode", "name")
-    filter_horizontal = ("categories",)
+    filter_horizontal = ("categories", "variant_options")
     inlines = (ProductVariantInline,)
 
     @admin.display(description="Default variant SKU", ordering="variants__sku")

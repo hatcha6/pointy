@@ -47,6 +47,29 @@ Run a Celery worker:
 celery -A pointy worker -l info
 ```
 
+## Variant API Notes
+
+Catalog products expose variants as the sellable stock unit. Create product option
+schemas on the product, then assign one value per option to each variant:
+
+```json
+{
+  "name": "قميص",
+  "variant_options": [1, 2],
+  "default_variant": {
+    "sku": "SHIRT-RED-L",
+    "unit_price": "12.00",
+    "option_values": [10, 24]
+  }
+}
+```
+
+Variant option combinations are unique per product. Purchase cost lookups are
+variant-first; use `GET /api/purchase-orders/variant-last-cost/?variant=42`,
+`GET /api/purchase-orders/variant-cost-history/?variant=42`, and
+`GET /api/purchase-orders/variant-margin-impact/?variant=42`. The older
+product-named cost URLs remain as compatibility aliases.
+
 ## Frontend Quick Start
 
 With Make:

@@ -22,7 +22,7 @@ class Product {
   final ProductVariant? defaultVariant;
   final List<ProductVariant> variants;
 
-  int get variantId => defaultVariant?.id ?? id;
+  int? get variantId => defaultVariant?.id;
 
   String get sellableName {
     final variantName = defaultVariant?.displayLabel;

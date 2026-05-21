@@ -216,7 +216,11 @@ def checkout_order(
                 "order": order.pk,
                 "method": payment_data["method"],
                 "amount": payment_data["amount"],
-            }
+            },
+            context={
+                "request": request,
+                "stock_already_recorded": True,
+            },
         )
         payment_serializer.is_valid(raise_exception=True)
         payment_serializer.save()
@@ -266,6 +270,23 @@ def prepare_sale_stock_adjustments(lines_data):
     return stock_adjustments
 
 
+def prepare_sale_stock_adjustments_for_order(order):
+    lines = lock_order_lines_for_update(order)
+    if not lines:
+        raise serializers.ValidationError(
+            {"lines": "Order must include at least one line before payment."}
+        )
+    return prepare_sale_stock_adjustments(
+        [
+            {
+                "variant": line.variant,
+                "quantity": line.quantity,
+            }
+            for line in lines
+        ]
+    )
+
+
 def record_sale_stock_movements(order, stock_adjustments, *, request=None):
     created_by = adjustment_created_by(request)
 
@@ -282,6 +303,42 @@ def record_sale_stock_movements(order, stock_adjustments, *, request=None):
             created_by=created_by,
             before=before,
         )
+
+
+def enqueue_receipt_print_on_commit(order_id):
+    def enqueue_receipt():
+        from apps.printing.services import enqueue_receipt_print_job
+
+        enqueue_receipt_print_job(order_id)
+
+    transaction.on_commit(enqueue_receipt)
+
+
+def mark_order_paid(order, *, request=None, stock_already_recorded=False):
+    locked_order = (
+        Order.objects.select_for_update()
+        .select_related("register_session")
+        .get(pk=order.pk)
+    )
+    if locked_order.status == Order.Status.PAID:
+        return locked_order
+    if locked_order.status != Order.Status.OPEN:
+        raise serializers.ValidationError(
+            {"order": "Only open orders can be marked paid."}
+        )
+
+    if not stock_already_recorded:
+        stock_adjustments = prepare_sale_stock_adjustments_for_order(locked_order)
+        record_sale_stock_movements(
+            locked_order,
+            stock_adjustments,
+            request=request,
+        )
+
+    locked_order.status = Order.Status.PAID
+    locked_order.save(update_fields=["status", "updated_at"])
+    enqueue_receipt_print_on_commit(locked_order.pk)
+    return locked_order
 
 
 def validate_order_adjustment_allowed(order, *, request=None):
@@ -401,17 +458,73 @@ def create_order_adjustment(
     return adjustment
 
 
+def lock_order_lines_for_update(order, *, line_ids=None):
+    queryset = (
+        OrderLine.objects.select_for_update()
+        .filter(order=order)
+        .select_related("variant", "variant__product")
+        .order_by("pk")
+    )
+    if line_ids is not None:
+        queryset = queryset.filter(pk__in=line_ids)
+    lines = list(queryset)
+    if lines:
+        list(
+            OrderAdjustmentLine.objects.select_for_update()
+            .filter(order_line_id__in=[line.pk for line in lines])
+            .order_by("pk")
+        )
+    return lines
+
+
+def fresh_order_adjustment_lines(locked_order, lines, *, locked_lines=None):
+    requested_by_line = {}
+    for line, quantity in lines:
+        requested_by_line[line.pk] = requested_by_line.get(line.pk, 0) + quantity
+
+    if not requested_by_line:
+        return []
+
+    if locked_lines is None:
+        locked_lines = lock_order_lines_for_update(
+            locked_order,
+            line_ids=requested_by_line,
+        )
+    lines_by_id = {line.pk: line for line in locked_lines}
+    if set(requested_by_line) - set(lines_by_id):
+        raise serializers.ValidationError(
+            {"lines": "Return line does not belong to this order."}
+        )
+
+    fresh_lines = []
+    for line_id, quantity in requested_by_line.items():
+        line = lines_by_id[line_id]
+        returnable_quantity = line.returnable_quantity
+        if quantity > returnable_quantity:
+            raise serializers.ValidationError(
+                {
+                    "lines": (
+                        f"Cannot return more than {returnable_quantity} "
+                        "remaining items."
+                    )
+                }
+            )
+        fresh_lines.append((line, quantity))
+    return fresh_lines
+
+
 @transaction.atomic
 def void_order(*, order, reason, request=None, register_session=None):
     locked_order = (
         Order.objects.select_for_update()
         .select_related("register_session")
-        .prefetch_related("lines__variant__product")
         .get(pk=order.pk)
     )
+    validate_order_adjustment_allowed(locked_order, request=request)
+    locked_lines = lock_order_lines_for_update(locked_order)
     lines = [
         (line, line.returnable_quantity)
-        for line in locked_order.lines.select_related("variant", "variant__product")
+        for line in locked_lines
         if line.returnable_quantity > 0
     ]
     if not lines:
@@ -437,6 +550,13 @@ def return_order_items(*, order, lines, reason, request=None, register_session=N
         .select_related("register_session")
         .get(pk=order.pk)
     )
+    validate_order_adjustment_allowed(locked_order, request=request)
+    locked_lines = lock_order_lines_for_update(locked_order)
+    lines = fresh_order_adjustment_lines(
+        locked_order,
+        lines,
+        locked_lines=locked_lines,
+    )
     adjustment = create_order_adjustment(
         order=locked_order,
         adjustment_type=OrderAdjustment.AdjustmentType.RETURN,
@@ -446,7 +566,7 @@ def return_order_items(*, order, lines, reason, request=None, register_session=N
         register_session=register_session,
     )
 
-    if all(line.returnable_quantity == 0 for line in locked_order.lines.all()):
+    if all(line.returnable_quantity == 0 for line in locked_lines):
         locked_order.status = Order.Status.VOID
         locked_order.save(update_fields=["status", "updated_at"])
     return adjustment

@@ -7,9 +7,13 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient
 
+from apps.catalog.testing import create_product_with_default_variant
 from apps.core.roles import CASHIER_GROUP, MANAGER_GROUP, ensure_role_groups
+from apps.inventory.models import StockItem, StockMovement
 from apps.sales.models import Order, RegisterSession
+from apps.sales.services import create_order_with_lines
 from .models import Payment
+from .serializers import PaymentSerializer
 
 
 class PaymentAuthorizationTests(TestCase):
@@ -102,3 +106,38 @@ class PaymentAuthorizationTests(TestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.data["results"]), 2)
+
+
+class PaymentStockMovementTests(TestCase):
+    def test_fully_paid_open_order_decrements_persisted_line_stock(self):
+        product = create_product_with_default_variant(
+            sku="PAY-STOCK",
+            barcode="",
+            name="Payment stock item",
+            unit_price=Decimal("3.50"),
+        )
+        variant = product.default_variant
+        stock_item = StockItem.objects.create(variant=variant, quantity_on_hand=5)
+        session = RegisterSession.objects.create(owner_key="user:payment-stock")
+        order = create_order_with_lines(
+            register_session=session,
+            lines_data=[{"variant": variant, "quantity": 2}],
+        )
+
+        serializer = PaymentSerializer(
+            data={
+                "order": order.pk,
+                "method": Payment.Method.CASH,
+                "amount": "7.00",
+            }
+        )
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+
+        order.refresh_from_db()
+        stock_item.refresh_from_db()
+        self.assertEqual(order.status, Order.Status.PAID)
+        self.assertEqual(stock_item.quantity_on_hand, 3)
+        movement = StockMovement.objects.get()
+        self.assertEqual(movement.movement_type, StockMovement.Type.DECREASE)
+        self.assertEqual(movement.quantity, 2)

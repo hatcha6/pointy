@@ -66,9 +66,10 @@ class ProductStockViewModel extends ChangeNotifier {
     _errorMessage = null;
     notifyListeners();
 
-    final result = await _inventoryRepository.loadStockForVariant(
-      product.variantId,
-    );
+    final variantId = product.variantId;
+    final result = variantId == null
+        ? await _inventoryRepository.loadStockForProduct(product.id)
+        : await _inventoryRepository.loadStockForVariant(variantId);
     switch (result) {
       case Ok<StockItem?>():
         _stockItem = result.value;
@@ -88,10 +89,16 @@ class ProductStockViewModel extends ChangeNotifier {
     _errorMessage = null;
     notifyListeners();
 
-    final result = await _inventoryRepository.loadMovementsForVariant(
-      product.variantId,
-      page: _nextMovementPage,
-    );
+    final variantId = product.variantId;
+    final result = variantId == null
+        ? await _inventoryRepository.loadMovementsForProduct(
+            product.id,
+            page: _nextMovementPage,
+          )
+        : await _inventoryRepository.loadMovementsForVariant(
+            variantId,
+            page: _nextMovementPage,
+          );
     switch (result) {
       case Ok<StockMovementPage>():
         _movements = result.value.movements;
@@ -114,15 +121,18 @@ class ProductStockViewModel extends ChangeNotifier {
     _nextCostHistoryPage = 1;
     notifyListeners();
 
+    final variantId = product.variantId;
     final historyFuture = _purchaseRepository.loadProductCostHistory(
       productId: product.id,
-      variantId: product.variantId,
+      variantId: variantId,
       page: _nextCostHistoryPage,
     );
-    final marginFuture = _purchaseRepository.loadProductMarginImpact(
-      product.id,
-      variantId: product.variantId,
-    );
+    final marginFuture = variantId == null
+        ? null
+        : _purchaseRepository.loadProductMarginImpact(
+            product.id,
+            variantId: variantId,
+          );
     final historyResult = await historyFuture;
     final marginResult = await marginFuture;
 
@@ -136,12 +146,16 @@ class ProductStockViewModel extends ChangeNotifier {
         _hasMoreCostHistory = false;
         _hasCostInsightsError = true;
     }
-    switch (marginResult) {
-      case Ok<ProductMarginImpact?>():
-        _marginImpact = marginResult.value;
-      case Error<ProductMarginImpact?>():
-        _marginImpact = null;
-        _hasCostInsightsError = true;
+    if (marginResult == null) {
+      _marginImpact = null;
+    } else {
+      switch (marginResult) {
+        case Ok<ProductMarginImpact?>():
+          _marginImpact = marginResult.value;
+        case Error<ProductMarginImpact?>():
+          _marginImpact = null;
+          _hasCostInsightsError = true;
+      }
     }
 
     _isLoadingCostInsights = false;
@@ -185,10 +199,16 @@ class ProductStockViewModel extends ChangeNotifier {
     _isLoadingMoreMovements = true;
     notifyListeners();
 
-    final result = await _inventoryRepository.loadMovementsForVariant(
-      product.variantId,
-      page: _nextMovementPage,
-    );
+    final variantId = product.variantId;
+    final result = variantId == null
+        ? await _inventoryRepository.loadMovementsForProduct(
+            product.id,
+            page: _nextMovementPage,
+          )
+        : await _inventoryRepository.loadMovementsForVariant(
+            variantId,
+            page: _nextMovementPage,
+          );
     switch (result) {
       case Ok<StockMovementPage>():
         _movements = [..._movements, ...result.value.movements];
@@ -210,6 +230,12 @@ class ProductStockViewModel extends ChangeNotifier {
     if (_isSavingMovement) {
       return false;
     }
+    final variantId = product.variantId;
+    if (variantId == null) {
+      _errorMessage = 'stock_movement_create_error';
+      notifyListeners();
+      return false;
+    }
 
     _isSavingMovement = true;
     _errorMessage = null;
@@ -217,7 +243,7 @@ class ProductStockViewModel extends ChangeNotifier {
 
     final result = await _inventoryRepository.createMovement(
       StockMovementDraft(
-        variant: product.variantId,
+        variant: variantId,
         movementType: movementType,
         quantity: quantity,
         note: note.trim(),

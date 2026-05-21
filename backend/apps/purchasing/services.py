@@ -268,19 +268,43 @@ def submit_purchase_order(purchase_order, *, request=None):
     return locked_order
 
 
-def default_receipt_lines(locked_order):
+def lock_purchase_lines_for_update(purchase_order, *, line_ids=None):
+    queryset = (
+        PurchaseLine.objects.select_for_update()
+        .filter(purchase_order=purchase_order)
+        .select_related("variant", "variant__product")
+        .order_by("pk")
+    )
+    if line_ids is not None:
+        queryset = queryset.filter(pk__in=line_ids)
+    lines = list(queryset)
+    if lines:
+        line_ids = [line.pk for line in lines]
+        list(
+            PurchaseReceiptLine.objects.select_for_update()
+            .filter(purchase_line_id__in=line_ids)
+            .order_by("pk")
+        )
+        list(
+            PurchaseOrderAdjustmentLine.objects.select_for_update()
+            .filter(purchase_line_id__in=line_ids)
+            .order_by("pk")
+        )
+    return lines
+
+
+def default_receipt_lines(locked_order, lines=None):
+    lines = lock_purchase_lines_for_update(locked_order) if lines is None else lines
     return [
         {
             "line": line,
             "accepted_quantity": line.outstanding_quantity,
             "damaged_quantity": 0,
             "cancelled_quantity": 0,
+            "allowed_over_receipt_quantity": 0,
             "notes": "",
         }
-        for line in locked_order.lines.select_related(
-            "variant",
-            "variant__product",
-        ).order_by("variant_id")
+        for line in lines
         if line.outstanding_quantity > 0
     ]
 
@@ -306,13 +330,25 @@ def receipt_line_expected_quantities(line, accepted_quantity, damaged_quantity, 
     }
 
 
-def validate_receipt_line_quantities(line, accepted_quantity, damaged_quantity, cancelled_quantity):
+def validate_receipt_line_quantities(
+    line,
+    accepted_quantity,
+    damaged_quantity,
+    cancelled_quantity,
+    *,
+    allowed_over_receipt_quantity=0,
+):
     if accepted_quantity + damaged_quantity + cancelled_quantity <= 0:
         raise serializers.ValidationError(
             {"lines": "At least one received, damaged, or cancelled quantity is required."}
         )
+    outstanding_before = line.outstanding_quantity
+    received_quantity = accepted_quantity + damaged_quantity
+    if received_quantity > outstanding_before + allowed_over_receipt_quantity:
+        raise serializers.ValidationError(
+            {"lines": "Received quantity exceeds the remaining outstanding quantity."}
+        )
     if cancelled_quantity > 0:
-        outstanding_before = line.outstanding_quantity
         if accepted_quantity + damaged_quantity + cancelled_quantity > outstanding_before:
             raise serializers.ValidationError(
                 {
@@ -322,6 +358,55 @@ def validate_receipt_line_quantities(line, accepted_quantity, damaged_quantity, 
                     )
                 }
             )
+
+
+def fresh_purchase_receipt_lines(locked_order, lines_data, *, locked_lines):
+    requested_by_line = {}
+    for line_data in lines_data:
+        line = line_data["line"]
+        if line.purchase_order_id != locked_order.pk:
+            raise serializers.ValidationError(
+                {"lines": "Receipt line does not belong to this purchase order."}
+            )
+        if line.pk in requested_by_line:
+            raise serializers.ValidationError(
+                {"lines": "Each purchase line can be received only once per receipt."}
+            )
+        requested_by_line[line.pk] = line_data
+
+    lines_by_id = {line.pk: line for line in locked_lines}
+    if set(requested_by_line) - set(lines_by_id):
+        raise serializers.ValidationError(
+            {"lines": "Receipt line does not belong to this purchase order."}
+        )
+
+    fresh_lines = []
+    for line_id, line_data in requested_by_line.items():
+        line = lines_by_id[line_id]
+        accepted_quantity = line_data.get("accepted_quantity", 0)
+        damaged_quantity = line_data.get("damaged_quantity", 0)
+        cancelled_quantity = line_data.get("cancelled_quantity", 0)
+        allowed_over_receipt_quantity = line_data.get("allowed_over_receipt_quantity")
+        if allowed_over_receipt_quantity is None:
+            allowed_over_receipt_quantity = 0
+        validate_receipt_line_quantities(
+            line,
+            accepted_quantity,
+            damaged_quantity,
+            cancelled_quantity,
+            allowed_over_receipt_quantity=allowed_over_receipt_quantity,
+        )
+        fresh_lines.append(
+            {
+                "line": line,
+                "accepted_quantity": accepted_quantity,
+                "damaged_quantity": damaged_quantity,
+                "cancelled_quantity": cancelled_quantity,
+                "allowed_over_receipt_quantity": allowed_over_receipt_quantity,
+                "notes": line_data.get("notes", ""),
+            }
+        )
+    return fresh_lines
 
 
 def apply_receipt_stock_changes(
@@ -402,7 +487,6 @@ def apply_receipt_stock_changes(
 def receive_purchase_order(purchase_order, *, request=None, lines_data=None, notes=""):
     locked_order = (
         PurchaseOrder.objects.select_for_update()
-        .prefetch_related("lines__variant__product", "lines__receipt_lines")
         .get(pk=purchase_order.pk)
     )
     if locked_order.status not in (
@@ -414,8 +498,15 @@ def receive_purchase_order(purchase_order, *, request=None, lines_data=None, not
         )
 
     created_by = purchase_created_by(request)
+    locked_lines = lock_purchase_lines_for_update(locked_order)
     if lines_data is None:
-        lines_data = default_receipt_lines(locked_order)
+        lines_data = default_receipt_lines(locked_order, locked_lines)
+    else:
+        lines_data = fresh_purchase_receipt_lines(
+            locked_order,
+            lines_data,
+            locked_lines=locked_lines,
+        )
     if not lines_data:
         raise serializers.ValidationError(
             {"lines": "No outstanding purchase lines can be received."}
@@ -437,6 +528,10 @@ def receive_purchase_order(purchase_order, *, request=None, lines_data=None, not
             accepted_quantity,
             damaged_quantity,
             cancelled_quantity,
+            allowed_over_receipt_quantity=line_data.get(
+                "allowed_over_receipt_quantity",
+                0,
+            ),
         )
         expected_quantities = receipt_line_expected_quantities(
             line,
@@ -468,10 +563,8 @@ def receive_purchase_order(purchase_order, *, request=None, lines_data=None, not
             notes=line_data.get("notes", ""),
         )
 
-    locked_order.refresh_from_db()
     has_outstanding = any(
-        line.outstanding_quantity > 0
-        for line in locked_order.lines.prefetch_related("receipt_lines")
+        line.outstanding_quantity > 0 for line in locked_lines
     )
     locked_order.status = (
         PurchaseOrder.Status.PARTIALLY_RECEIVED
@@ -525,7 +618,7 @@ def purchase_replacement_amount(lines):
     ).quantize(Decimal("0.01"))
 
 
-def validate_purchase_order_adjustment_allowed(purchase_order):
+def validate_purchase_order_adjustment_allowed(purchase_order, *, lines=None):
     if purchase_order.status not in (
         PurchaseOrder.Status.PARTIALLY_RECEIVED,
         PurchaseOrder.Status.RECEIVED,
@@ -533,7 +626,8 @@ def validate_purchase_order_adjustment_allowed(purchase_order):
         raise serializers.ValidationError(
             {"detail": "Only received purchase orders can be adjusted."}
         )
-    if not any(line.adjustable_quantity > 0 for line in purchase_order.lines.all()):
+    order_lines = purchase_order.lines.all() if lines is None else lines
+    if not any(line.adjustable_quantity > 0 for line in order_lines):
         raise serializers.ValidationError(
             {"detail": "No remaining purchase lines can be adjusted."}
         )
@@ -755,6 +849,38 @@ def settle_purchase_order_adjustment(adjustment, *, created_by=None):
     )
 
 
+def fresh_purchase_adjustment_lines(locked_order, lines, *, locked_lines):
+    requested_by_line = {}
+    for line, quantity in lines:
+        if line.purchase_order_id != locked_order.pk:
+            raise serializers.ValidationError(
+                {"lines": "Adjustment line does not belong to this purchase order."}
+            )
+        requested_by_line[line.pk] = requested_by_line.get(line.pk, 0) + quantity
+
+    lines_by_id = {line.pk: line for line in locked_lines}
+    if set(requested_by_line) - set(lines_by_id):
+        raise serializers.ValidationError(
+            {"lines": "Adjustment line does not belong to this purchase order."}
+        )
+
+    fresh_lines = []
+    for line_id, quantity in requested_by_line.items():
+        line = lines_by_id[line_id]
+        adjustable_quantity = line.adjustable_quantity
+        if quantity > adjustable_quantity:
+            raise serializers.ValidationError(
+                {
+                    "lines": (
+                        f"Cannot adjust more than {adjustable_quantity} "
+                        "remaining items."
+                    )
+                }
+            )
+        fresh_lines.append((line, quantity))
+    return fresh_lines
+
+
 @transaction.atomic
 def adjust_purchase_order_items(
     *,
@@ -768,10 +894,15 @@ def adjust_purchase_order_items(
 ):
     locked_order = (
         PurchaseOrder.objects.select_for_update()
-        .prefetch_related("lines__variant__product")
         .get(pk=purchase_order.pk)
     )
-    validate_purchase_order_adjustment_allowed(locked_order)
+    locked_lines = lock_purchase_lines_for_update(locked_order)
+    validate_purchase_order_adjustment_allowed(locked_order, lines=locked_lines)
+    lines = fresh_purchase_adjustment_lines(
+        locked_order,
+        lines,
+        locked_lines=locked_lines,
+    )
     return create_purchase_order_adjustment(
         purchase_order=locked_order,
         adjustment_type=adjustment_type,

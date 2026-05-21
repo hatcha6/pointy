@@ -11,7 +11,13 @@ from rest_framework.test import APIClient
 
 from apps.core.roles import CASHIER_GROUP, MANAGER_GROUP, ensure_role_groups
 from apps.inventory.models import StockItem
-from .models import Product, ProductCategory, ProductVariant
+from .models import (
+    Product,
+    ProductCategory,
+    ProductVariant,
+    VariantOption,
+    VariantOptionValue,
+)
 from .testing import create_product_with_default_variant
 from .views import ProductViewSet
 
@@ -34,10 +40,13 @@ class ProductVariantModelTests(TestCase):
         self.assertEqual(variant.unit_price, Decimal("5.50"))
         self.assertFalse(variant.is_active)
 
-    def test_product_without_variant_fields_gets_default_variant(self):
+    def test_default_variant_read_does_not_create_variant(self):
         product = Product.objects.create(name="منتج عام")
 
-        variant = product.default_variant
+        self.assertIsNone(product.default_variant)
+        self.assertEqual(product.variants.count(), 0)
+
+        variant = product.ensure_default_variant()
         self.assertEqual(product.variants.count(), 1)
         self.assertEqual(variant.sku, f"P{product.pk:06d}")
         self.assertEqual(variant.unit_price, Decimal("0.00"))
@@ -59,6 +68,38 @@ class ProductVariantModelTests(TestCase):
         self.assertEqual(product.default_variant.full_name, "قهوة عربية")
         self.assertEqual(named_variant.display_name, "كبير")
         self.assertEqual(named_variant.full_name, "قهوة عربية - كبير")
+
+    def test_variant_display_names_include_option_values_when_name_is_blank(self):
+        product = create_product_with_default_variant(
+            sku="SHIRT",
+            name="قميص",
+            unit_price=Decimal("20.00"),
+        )
+        color = VariantOption.objects.create(code="display-color", name="اللون")
+        size = VariantOption.objects.create(code="display-size", name="المقاس")
+        red = VariantOptionValue.objects.create(
+            option=color,
+            code="red",
+            name="أحمر",
+        )
+        large = VariantOptionValue.objects.create(
+            option=size,
+            code="large",
+            name="كبير",
+        )
+        product.variant_options.add(color, size)
+        variant = ProductVariant.objects.create(
+            product=product,
+            sku="SHIRT-RED-L",
+            unit_price=Decimal("22.00"),
+        )
+        variant.option_values.set([red, large])
+
+        self.assertEqual(variant.display_name, "اللون: أحمر / المقاس: كبير")
+        self.assertEqual(
+            variant.full_name,
+            "قميص - اللون: أحمر / المقاس: كبير",
+        )
 
     def test_variant_sku_and_non_blank_barcode_are_unique(self):
         product = create_product_with_default_variant(
@@ -629,3 +670,109 @@ class ProductApiTests(TestCase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_product_variant_rejects_duplicate_values_for_same_option(self):
+        product = create_product_with_default_variant(
+            sku="COF-100",
+            name="قهوة عربية",
+            unit_price=Decimal("5.50"),
+        )
+        size = VariantOption.objects.create(code="size-test", name="الحجم")
+        small = VariantOptionValue.objects.create(
+            option=size,
+            code="small",
+            name="صغير",
+        )
+        large = VariantOptionValue.objects.create(
+            option=size,
+            code="large",
+            name="كبير",
+        )
+        product.variant_options.add(size)
+
+        response = self.client.post(
+            reverse("product-variant-list"),
+            {
+                "product": product.pk,
+                "name": "اختيار مكرر",
+                "sku": "COF-100-BAD",
+                "unit_price": "6.00",
+                "option_values": [small.pk, large.pk],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("option_values", response.data)
+
+    def test_product_variant_rejects_duplicate_option_combination(self):
+        product = create_product_with_default_variant(
+            sku="COF-100",
+            name="قهوة عربية",
+            unit_price=Decimal("5.50"),
+        )
+        size = VariantOption.objects.create(code="size-combo", name="الحجم")
+        color = VariantOption.objects.create(code="color-combo", name="اللون")
+        small = VariantOptionValue.objects.create(
+            option=size,
+            code="small",
+            name="صغير",
+        )
+        red = VariantOptionValue.objects.create(
+            option=color,
+            code="red",
+            name="أحمر",
+        )
+        product.variant_options.add(size, color)
+        existing_variant = ProductVariant.objects.create(
+            product=product,
+            name="صغير أحمر",
+            sku="COF-100-S-RED",
+            unit_price=Decimal("6.00"),
+        )
+        existing_variant.option_values.set([small, red])
+
+        response = self.client.post(
+            reverse("product-variant-list"),
+            {
+                "product": product.pk,
+                "name": "مكرر",
+                "sku": "COF-100-S-RED-2",
+                "unit_price": "6.50",
+                "option_values": [red.pk, small.pk],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("option_values", response.data)
+
+    def test_product_variant_rejects_values_outside_product_schema(self):
+        product = create_product_with_default_variant(
+            sku="COF-100",
+            name="قهوة عربية",
+            unit_price=Decimal("5.50"),
+        )
+        size = VariantOption.objects.create(code="size-schema", name="الحجم")
+        flavor = VariantOption.objects.create(code="flavor-schema", name="النكهة")
+        mint = VariantOptionValue.objects.create(
+            option=flavor,
+            code="mint",
+            name="نعناع",
+        )
+        product.variant_options.add(size)
+
+        response = self.client.post(
+            reverse("product-variant-list"),
+            {
+                "product": product.pk,
+                "name": "خارج المخطط",
+                "sku": "COF-100-MINT",
+                "unit_price": "6.00",
+                "option_values": [mint.pk],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("option_values", response.data)

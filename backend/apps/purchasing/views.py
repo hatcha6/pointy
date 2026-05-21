@@ -108,9 +108,12 @@ class PurchaseOrderViewSet(viewsets.ModelViewSet):
         "list": ("purchasing.view_purchaseorder",),
         "retrieve": ("purchasing.view_purchaseorder",),
         "last_cost": ("purchasing.view_purchaseorder",),
+        "variant_last_cost": ("purchasing.view_purchaseorder",),
         "discount_preview": ("purchasing.add_purchaseorder",),
         "product_cost_history": ("purchasing.view_purchaseorder",),
+        "variant_cost_history": ("purchasing.view_purchaseorder",),
         "product_margin_impact": ("purchasing.view_purchaseorder",),
+        "variant_margin_impact": ("purchasing.view_purchaseorder",),
         "outstanding_received_not_paid": ("purchasing.view_purchaseorder",),
         "adjustment_history": ("purchasing.view_purchaseorder",),
         "create": ("purchasing.add_purchaseorder",),
@@ -168,6 +171,13 @@ class PurchaseOrderViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=["get"], url_path="last-cost")
     def last_cost(self, request):
+        return self._last_cost_response(request)
+
+    @action(detail=False, methods=["get"], url_path="variant-last-cost")
+    def variant_last_cost(self, request):
+        return self._last_cost_response(request)
+
+    def _last_cost_response(self, request):
         product_id = request.query_params.get("product")
         variant_id = request.query_params.get("variant")
         if not variant_id:
@@ -197,6 +207,15 @@ class PurchaseOrderViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=["get"], url_path="product-cost-history")
     def product_cost_history(self, request):
+        return self._cost_history_response()
+
+    @action(detail=False, methods=["get"], url_path="variant-cost-history")
+    def variant_cost_history(self, request):
+        if not self.request.query_params.get("variant"):
+            raise serializers.ValidationError({"variant": "Variant is required."})
+        return self._cost_history_response()
+
+    def _cost_history_response(self):
         variant = self._get_optional_variant()
         product = variant.product if variant is not None else self._get_required_product()
         queryset = (
@@ -219,6 +238,13 @@ class PurchaseOrderViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=["get"], url_path="product-margin-impact")
     def product_margin_impact(self, request):
+        return self._margin_impact_response()
+
+    @action(detail=False, methods=["get"], url_path="variant-margin-impact")
+    def variant_margin_impact(self, request):
+        return self._margin_impact_response()
+
+    def _margin_impact_response(self):
         variant = self._get_optional_variant()
         if variant is None:
             raise serializers.ValidationError({"variant": "Variant is required."})

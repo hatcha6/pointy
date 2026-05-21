@@ -122,6 +122,8 @@ class ProductViewSet(viewsets.ModelViewSet):
         "categories",
         "variants",
         "variants__option_values",
+        "variants__option_values__option",
+        "variant_options",
     )
     filterset_fields = ("is_active",)
     search_fields = (

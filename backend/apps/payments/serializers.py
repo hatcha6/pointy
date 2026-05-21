@@ -72,25 +72,34 @@ class PaymentSerializer(serializers.ModelSerializer):
 
     @transaction.atomic
     def create(self, validated_data):
+        order = Order.objects.select_for_update().get(pk=validated_data["order"].pk)
+        validated_data["order"] = order
+        amount = validated_data["amount"]
+        if amount > 0:
+            paid_total = sum(order.payments.values_list("amount", flat=True))
+            if paid_total + amount > order.total:
+                raise serializers.ValidationError(
+                    {"amount": "Payment total cannot exceed the order total."}
+                )
+
         percent, commission = payment_commission_values(
             validated_data["method"],
-            validated_data["amount"],
+            amount,
         )
         validated_data["commission_percent"] = percent
         validated_data["commission_amount"] = commission
         payment = super().create(validated_data)
-        order = payment.order
-        was_paid = order.status == Order.Status.PAID
-        paid_total = sum(order.payments.values_list("amount", flat=True))
-        if paid_total >= order.total and not was_paid:
-            order.status = Order.Status.PAID
-            order.save(update_fields=["status", "updated_at"])
-            order_id = order.pk
+        if amount > 0 and order.status != Order.Status.PAID:
+            paid_total = (paid_total + amount).quantize(Decimal("0.01"))
+            if paid_total >= order.total:
+                from apps.sales.services import mark_order_paid
 
-            def enqueue_receipt():
-                from apps.printing.services import enqueue_receipt_print_job
-
-                enqueue_receipt_print_job(order_id)
-
-            transaction.on_commit(enqueue_receipt)
+                mark_order_paid(
+                    order,
+                    request=self.context.get("request"),
+                    stock_already_recorded=self.context.get(
+                        "stock_already_recorded",
+                        False,
+                    ),
+                )
         return payment

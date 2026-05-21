@@ -1,9 +1,12 @@
 from decimal import Decimal
 
+from django.core.exceptions import ValidationError
 from django.core.validators import MinValueValidator
 from django.db import models
 from django.db.models import Q, Sum
 from django.db.models.functions import Coalesce
+from django.db.models.signals import m2m_changed
+from django.dispatch import receiver
 
 from apps.core.models import TimeStampedModel
 
@@ -16,12 +19,27 @@ def normalize_barcode(value: str | None) -> str:
     return "" if value is None else value.strip()
 
 
+def variant_option_signature(option_values):
+    value_ids = sorted(
+        {
+            getattr(option_value, "pk", option_value)
+            for option_value in option_values
+        }
+    )
+    return "|".join(str(value_id) for value_id in value_ids)
+
+
 class Product(TimeStampedModel):
     name = models.CharField(max_length=255)
     description = models.TextField(blank=True)
     is_active = models.BooleanField(default=True)
     categories = models.ManyToManyField(
         "ProductCategory",
+        blank=True,
+        related_name="products",
+    )
+    variant_options = models.ManyToManyField(
+        "VariantOption",
         blank=True,
         related_name="products",
     )
@@ -33,13 +51,7 @@ class Product(TimeStampedModel):
     def default_variant(self):
         if self.pk is None:
             return None
-        variant = self.variants.filter(is_default=True).order_by("id").first()
-        if variant is not None:
-            return variant
-        variant = self.variants.order_by("id").first()
-        if variant is not None:
-            return variant
-        return self.ensure_default_variant()
+        return self.variants.filter(is_default=True).order_by("id").first()
 
     @property
     def quantity_on_hand(self):
@@ -208,6 +220,12 @@ class ProductVariant(TimeStampedModel):
     )
     is_active = models.BooleanField(default=True)
     is_default = models.BooleanField(default=False)
+    option_signature = models.CharField(
+        max_length=1024,
+        blank=True,
+        db_index=True,
+        editable=False,
+    )
     option_values = models.ManyToManyField(
         VariantOptionValue,
         blank=True,
@@ -233,18 +251,32 @@ class ProductVariant(TimeStampedModel):
                 condition=Q(unit_price__gte=0),
                 name="product_variant_unit_price_non_negative",
             ),
+            models.UniqueConstraint(
+                fields=["product", "option_signature"],
+                condition=~Q(option_signature=""),
+                name="unique_product_variant_option_signature",
+            ),
         ]
 
     @property
     def display_name(self):
-        return self.name.strip() or self.product.name
+        return self.name.strip() or self.option_values_label or self.product.name
 
     @property
     def full_name(self):
-        name = self.name.strip()
-        if not name:
+        name = self.name.strip() or self.option_values_label
+        if not name or name == self.product.name:
             return self.product.name
         return f"{self.product.name} - {name}"
+
+    @property
+    def option_values_label(self):
+        labels = [
+            str(option_value).strip()
+            for option_value in self.option_values.select_related("option").all()
+            if str(option_value).strip()
+        ]
+        return " / ".join(labels)
 
     @property
     def quantity_on_hand(self):
@@ -261,3 +293,173 @@ class ProductVariant(TimeStampedModel):
 
     def __str__(self) -> str:
         return f"{self.sku} - {self.full_name}"
+
+
+def validate_variant_option_values(product, option_values, *, variant=None):
+    option_values = list(option_values)
+    selected_options = {}
+    duplicate_option_ids = set()
+    duplicate_option_names = []
+    for option_value in option_values:
+        option_id = option_value.option_id
+        if option_id in selected_options and option_id not in duplicate_option_ids:
+            duplicate_option_ids.add(option_id)
+            duplicate_option_names.append(option_value.option.name)
+        selected_options[option_id] = option_value
+
+    if duplicate_option_names:
+        raise ValidationError(
+            {
+                "option_values": (
+                    "A variant can select at most one value for each option."
+                )
+            }
+        )
+
+    signature = variant_option_signature(option_values)
+    if not signature:
+        return signature
+
+    allowed_option_ids = set(product.variant_options.values_list("id", flat=True))
+    selected_option_ids = set(selected_options)
+    if selected_option_ids - allowed_option_ids:
+        raise ValidationError(
+            {
+                "option_values": (
+                    "Option values must belong to the product variant option schema."
+                )
+            }
+        )
+
+    queryset = ProductVariant.objects.filter(product=product)
+    if variant is not None and variant.pk is not None:
+        queryset = queryset.exclude(pk=variant.pk)
+    if queryset.filter(option_signature=signature).exists():
+        raise ValidationError(
+            {
+                "option_values": (
+                    "A variant with this option value combination already exists."
+                )
+            }
+        )
+
+    for other_variant in queryset.prefetch_related("option_values"):
+        if other_variant.option_signature and other_variant.option_signature != signature:
+            continue
+        if variant_option_signature(other_variant.option_values.all()) == signature:
+            raise ValidationError(
+                {
+                    "option_values": (
+                        "A variant with this option value combination already exists."
+                    )
+                }
+            )
+    return signature
+
+
+def refresh_variant_option_signature(variant):
+    signature = variant_option_signature(variant.option_values.all())
+    if variant.option_signature == signature:
+        return
+    ProductVariant.objects.filter(pk=variant.pk).update(option_signature=signature)
+    variant.option_signature = signature
+
+
+@receiver(m2m_changed, sender=ProductVariant.option_values.through)
+def validate_product_variant_option_values(
+    sender,
+    instance,
+    action,
+    reverse,
+    pk_set,
+    **kwargs,
+):
+    if action == "pre_add":
+        if reverse:
+            variants = ProductVariant.objects.filter(pk__in=pk_set).select_related(
+                "product"
+            )
+            for variant in variants:
+                value_ids = set(variant.option_values.values_list("pk", flat=True))
+                value_ids.add(instance.pk)
+                option_values = VariantOptionValue.objects.select_related(
+                    "option"
+                ).filter(pk__in=value_ids)
+                validate_variant_option_values(
+                    variant.product,
+                    option_values,
+                    variant=variant,
+                )
+            return
+
+        value_ids = set(instance.option_values.values_list("pk", flat=True))
+        value_ids.update(pk_set)
+        option_values = VariantOptionValue.objects.select_related("option").filter(
+            pk__in=value_ids
+        )
+        validate_variant_option_values(instance.product, option_values, variant=instance)
+        return
+
+    if reverse and action == "pre_clear":
+        instance._cleared_product_variant_ids = list(
+            instance.product_variants.values_list("pk", flat=True)
+        )
+        return
+
+    if action not in {"post_add", "post_remove", "post_clear"}:
+        return
+
+    if reverse:
+        variant_ids = (
+            pk_set
+            if pk_set is not None
+            else getattr(instance, "_cleared_product_variant_ids", [])
+        )
+        variants = ProductVariant.objects.filter(pk__in=variant_ids)
+        for variant in variants:
+            refresh_variant_option_signature(variant)
+        return
+
+    refresh_variant_option_signature(instance)
+
+
+@receiver(m2m_changed, sender=Product.variant_options.through)
+def validate_product_variant_option_schema(
+    sender,
+    instance,
+    action,
+    reverse,
+    pk_set,
+    **kwargs,
+):
+    if action not in {"pre_remove", "pre_clear"}:
+        return
+
+    if reverse:
+        product_ids = (
+            pk_set
+            if pk_set is not None
+            else list(instance.products.values_list("pk", flat=True))
+        )
+        option_ids = [instance.pk]
+    else:
+        product_ids = [instance.pk]
+        if action == "pre_clear":
+            option_ids = list(instance.variant_options.values_list("pk", flat=True))
+        else:
+            option_ids = pk_set or []
+
+    if not product_ids or not option_ids:
+        return
+
+    if ProductVariant.objects.filter(
+        product_id__in=product_ids,
+        option_values__option_id__in=option_ids,
+    ).exists():
+        raise ValidationError(
+            {
+                "variant_options": (
+                    "Product variant options cannot remove options used by variants."
+                )
+            }
+        )
