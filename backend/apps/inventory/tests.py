@@ -2,6 +2,7 @@ from decimal import Decimal
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
+from django.core.exceptions import FieldError
 from django.test import TestCase
 from django.urls import reverse
 from rest_framework import status
@@ -61,6 +62,30 @@ class StockItemAuthorizationTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.stock_item.refresh_from_db()
         self.assertEqual(self.stock_item.quantity_on_hand, 9)
+
+    def test_stock_models_reject_product_aliases(self):
+        with self.assertRaises(TypeError):
+            StockItem.objects.create(
+                product=self.product,
+                quantity_on_hand=1,
+            )
+
+        with self.assertRaises(TypeError):
+            StockMovement.objects.create(
+                product=self.product,
+                stock_item=self.stock_item,
+                movement_type=StockMovement.Type.INCREASE,
+                quantity=1,
+                on_hand_before=5,
+                on_hand_after=6,
+                committed_before=1,
+                committed_after=1,
+                expected_before=3,
+                expected_after=3,
+            )
+
+        with self.assertRaises(FieldError):
+            list(StockItem.objects.filter(product=self.product))
 
     def test_manager_can_create_stock_movement_and_update_summary(self):
         manager = get_user_model().objects.create_user(

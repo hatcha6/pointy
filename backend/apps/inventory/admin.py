@@ -7,7 +7,7 @@ from .models import StockItem, StockMovement
 class StockItemAdmin(admin.ModelAdmin):
     list_display = (
         "variant",
-        "product",
+        "parent_product",
         "quantity_on_hand",
         "quantity_committed",
         "quantity_expected",
@@ -21,12 +21,16 @@ class StockItemAdmin(admin.ModelAdmin):
         "variant__product__name",
     )
 
+    @admin.display(ordering="variant__product__name", description="Product")
+    def parent_product(self, stock_item):
+        return stock_item.variant.product
+
 
 @admin.register(StockMovement)
 class StockMovementAdmin(admin.ModelAdmin):
     list_display = (
         "variant",
-        "product",
+        "parent_product",
         "movement_type",
         "quantity",
         "on_hand_after",
@@ -42,3 +46,7 @@ class StockMovementAdmin(admin.ModelAdmin):
         "variant__product__name",
         "note",
     )
+
+    @admin.display(ordering="variant__product__name", description="Product")
+    def parent_product(self, movement):
+        return movement.variant.product

@@ -3,6 +3,7 @@ from decimal import Decimal
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
+from django.core.exceptions import FieldError
 from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
@@ -18,7 +19,13 @@ from apps.discounts.models import AppliedDiscount, DiscountRedemption, DiscountR
 from apps.inventory.models import StockItem, StockMovement
 from apps.payments.models import Payment
 from apps.purchasing.models import PurchaseOrder, Supplier
-from .models import Order, OrderAdjustment, RegisterCashMovement, RegisterSession
+from .models import (
+    Order,
+    OrderAdjustment,
+    OrderLine,
+    RegisterCashMovement,
+    RegisterSession,
+)
 
 
 class RegisterSessionApiTests(TestCase):
@@ -576,6 +583,21 @@ class OrderCheckoutApiTests(TestCase):
             {"opening_cash": "0.00"},
             format="json",
         ).data
+
+    def test_order_lines_reject_product_aliases(self):
+        order = Order.objects.create()
+
+        with self.assertRaises(TypeError):
+            OrderLine.objects.create(
+                order=order,
+                product=self.product,
+                quantity=1,
+                unit_price=Decimal("3.50"),
+                unit_cost=Decimal("0.00"),
+            )
+
+        with self.assertRaises(FieldError):
+            list(OrderLine.objects.filter(product=self.product))
 
     def test_checkout_requires_open_session(self):
         response = self.client.post(
@@ -1213,7 +1235,7 @@ class OrderCheckoutApiTests(TestCase):
         self.assertEqual(self.stock_item.quantity_on_hand, 8)
 
         movement = StockMovement.objects.get()
-        self.assertEqual(movement.product, self.product)
+        self.assertEqual(movement.variant.product, self.product)
         self.assertEqual(movement.movement_type, StockMovement.Type.DECREASE)
         self.assertEqual(movement.quantity, 2)
         self.assertEqual(movement.on_hand_before, 10)

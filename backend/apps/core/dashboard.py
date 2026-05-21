@@ -252,13 +252,12 @@ def _inventory_section(period):
         ],
         "recent_movements": [
             {
-                    "product_name": movement.variant.full_name,
-                    "movement_type": movement.movement_type,
-                    "quantity": movement.quantity,
-                    "created_at": movement.created_at.isoformat(),
-                }
+                "product_name": movement.variant.full_name,
+                "movement_type": movement.movement_type,
+                "quantity": movement.quantity,
+                "created_at": movement.created_at.isoformat(),
+            }
             for movement in StockMovement.objects.select_related(
-                "product",
                 "variant",
                 "variant__product",
             ).order_by("-created_at")[:6]

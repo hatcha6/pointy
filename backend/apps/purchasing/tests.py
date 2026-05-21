@@ -2,6 +2,7 @@ from decimal import Decimal
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group, Permission
+from django.core.exceptions import FieldError
 from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
@@ -14,6 +15,7 @@ from apps.core.roles import MANAGER_GROUP, ensure_role_groups
 from apps.discounts.models import AppliedDiscount, DiscountRedemption, DiscountRule
 from apps.inventory.models import StockItem, StockMovement
 from .models import (
+    PurchaseLine,
     PurchaseOrder,
     PurchaseOrderAdjustment,
     PurchaseOrderAdjustmentLine,
@@ -130,6 +132,20 @@ class PurchaseOrderApiTests(TestCase):
         user.user_permissions.add(*permissions)
         self.client.force_authenticate(user=user)
         return user
+
+    def test_purchase_lines_reject_product_aliases(self):
+        order = PurchaseOrder.objects.create(supplier=self.supplier)
+
+        with self.assertRaises(TypeError):
+            PurchaseLine.objects.create(
+                purchase_order=order,
+                product=self.product,
+                quantity=1,
+                unit_cost=Decimal("2.50"),
+            )
+
+        with self.assertRaises(FieldError):
+            list(PurchaseLine.objects.filter(product=self.product))
 
     def test_create_purchase_order_with_lines_calculates_totals(self):
         response = self.client.post(
@@ -1860,11 +1876,20 @@ class PurchaseOrderApiTests(TestCase):
 
         response = self.client.get(
             reverse("purchaseorder-last-cost"),
-            {"product": self.product.pk},
+            {"product": self.product.pk, "variant": self.variant.pk},
         )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["unit_cost"], Decimal("2.75"))
+
+    def test_last_cost_requires_variant(self):
+        response = self.client.get(
+            reverse("purchaseorder-last-cost"),
+            {"product": self.product.pk},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("variant", response.data)
 
     def test_last_cost_can_target_a_specific_variant(self):
         variant = ProductVariant.objects.create(
@@ -1898,7 +1923,7 @@ class PurchaseOrderApiTests(TestCase):
         )
         default_response = self.client.get(
             reverse("purchaseorder-last-cost"),
-            {"product": self.product.pk},
+            {"product": self.product.pk, "variant": self.variant.pk},
         )
 
         self.assertEqual(variant_response.status_code, status.HTTP_200_OK)
@@ -2040,7 +2065,7 @@ class PurchaseOrderApiTests(TestCase):
 
         response = self.client.get(
             reverse("purchaseorder-product-margin-impact"),
-            {"product": self.product.pk},
+            {"product": self.product.pk, "variant": self.variant.pk},
         )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
@@ -2060,6 +2085,15 @@ class PurchaseOrderApiTests(TestCase):
         self.assertEqual(response.data["effective_unit_cost_delta"], "1.50")
         self.assertEqual(response.data["margin_amount_delta"], "-1.50")
         self.assertEqual(response.data["margin_percent_delta"], "-37.50")
+
+    def test_product_margin_impact_requires_variant(self):
+        response = self.client.get(
+            reverse("purchaseorder-product-margin-impact"),
+            {"product": self.product.pk},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("variant", response.data)
 
     def test_outstanding_received_not_paid_returns_unpaid_received_orders(self):
         due_order = PurchaseOrder.objects.create(

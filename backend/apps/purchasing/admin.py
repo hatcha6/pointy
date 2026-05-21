@@ -53,7 +53,7 @@ class PurchaseReceiptLineInline(admin.TabularInline):
     extra = 0
     readonly_fields = (
         "purchase_line",
-        "product",
+        "parent_product",
         "ordered_quantity",
         "outstanding_before",
         "accepted_quantity",
@@ -66,12 +66,20 @@ class PurchaseReceiptLineInline(admin.TabularInline):
     )
     can_delete = False
 
+    @admin.display(description="Product")
+    def parent_product(self, receipt_line):
+        return receipt_line.variant.product
+
 
 class PurchaseOrderAdjustmentReplacementLineInline(admin.TabularInline):
     model = PurchaseOrderAdjustmentReplacementLine
     extra = 0
-    readonly_fields = ("adjustment", "product", "quantity", "unit_cost")
+    readonly_fields = ("adjustment", "parent_product", "quantity", "unit_cost")
     can_delete = False
+
+    @admin.display(description="Product")
+    def parent_product(self, replacement_line):
+        return replacement_line.variant.product
 
 
 @admin.register(PurchaseOrder)

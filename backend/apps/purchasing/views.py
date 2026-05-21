@@ -170,17 +170,14 @@ class PurchaseOrderViewSet(viewsets.ModelViewSet):
     def last_cost(self, request):
         product_id = request.query_params.get("product")
         variant_id = request.query_params.get("variant")
-        if not product_id and not variant_id:
-            raise serializers.ValidationError({"product": "Product or variant is required."})
+        if not variant_id:
+            raise serializers.ValidationError({"variant": "Variant is required."})
 
-        if variant_id:
-            variant = self._get_variant(variant_id)
-            if product_id and str(variant.product_id) != str(product_id):
-                raise serializers.ValidationError(
-                    {"variant": "Variant does not belong to the selected product."}
-                )
-        else:
-            variant = self._get_product(product_id).default_variant
+        variant = self._get_variant(variant_id)
+        if product_id and str(variant.product_id) != str(product_id):
+            raise serializers.ValidationError(
+                {"variant": "Variant does not belong to the selected product."}
+            )
         line = latest_purchase_line_for_variant(variant.pk)
         return Response(
             {
@@ -223,8 +220,9 @@ class PurchaseOrderViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=["get"], url_path="product-margin-impact")
     def product_margin_impact(self, request):
         variant = self._get_optional_variant()
-        product = variant.product if variant is not None else self._get_required_product()
-        variant = variant or product.default_variant
+        if variant is None:
+            raise serializers.ValidationError({"variant": "Variant is required."})
+        product = variant.product
         latest_line = latest_purchase_line_for_variant(variant.pk)
         previous_line = (
             None
