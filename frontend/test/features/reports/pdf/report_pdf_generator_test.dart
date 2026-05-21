@@ -96,6 +96,97 @@ void main() {
     expect(String.fromCharCodes(bytes.take(5)), '%PDF-');
   });
 
+  test(
+    'allows long archive reports to exceed the default MultiPage cap',
+    () async {
+      const generator = ReportPdfGenerator(labels: testLabels);
+      final report = BusinessReportPdfDocument(
+        type: BusinessReportType.inventorySnapshot,
+        title: 'Inventory Snapshot',
+        businessName: 'Pointy Store',
+        generatedAt: generatedAt,
+        tables: [
+          ReportPdfTable(
+            title: 'Inventory',
+            columns: const ['Product', 'SKU', 'Qty', 'Value'],
+            rows: [
+              for (var index = 0; index < 520; index += 1)
+                ['Product $index', 'SKU-$index', '$index', '${index * 3}.00'],
+            ],
+          ),
+        ],
+      );
+
+      final bytes = await generator.generate(
+        report,
+        fonts: ReportPdfFonts.type1ForTests(),
+      );
+
+      expect(bytes, isNotEmpty);
+      expect(String.fromCharCodes(bytes.take(5)), '%PDF-');
+    },
+  );
+
+  test('paginates long detail tables inside report sections', () async {
+    const generator = ReportPdfGenerator(labels: testLabels);
+    final report = BusinessReportPdfDocument(
+      type: BusinessReportType.stockMovementArchive,
+      title: 'Stock Movement Archive',
+      businessName: 'Pointy Store',
+      generatedAt: generatedAt,
+      sections: [
+        ReportPdfSection(
+          heading: 'Stock movements',
+          tables: [
+            ReportPdfTable(
+              columns: const ['Product', 'Movement', 'Before', 'After'],
+              rows: [
+                for (var index = 0; index < 520; index += 1)
+                  ['Product $index', 'Adjustment', '$index', '${index + 3}'],
+              ],
+            ),
+          ],
+        ),
+      ],
+    );
+
+    final bytes = await generator.generate(
+      report,
+      fonts: ReportPdfFonts.type1ForTests(),
+    );
+
+    expect(bytes, isNotEmpty);
+    expect(String.fromCharCodes(bytes.take(5)), '%PDF-');
+  });
+
+  test('keeps unusually long table cells printable', () async {
+    const generator = ReportPdfGenerator(labels: testLabels);
+    final longNote = List.filled(120, 'very long imported note').join(' ');
+    final report = BusinessReportPdfDocument(
+      type: BusinessReportType.auditTrail,
+      title: 'Audit Trail',
+      businessName: 'Pointy Store',
+      generatedAt: generatedAt,
+      tables: [
+        ReportPdfTable(
+          title: 'Audit events',
+          columns: const ['Action', 'Note'],
+          rows: [
+            ['Imported', longNote],
+          ],
+        ),
+      ],
+    );
+
+    final bytes = await generator.generate(
+      report,
+      fonts: ReportPdfFonts.type1ForTests(),
+    );
+
+    expect(bytes, isNotEmpty);
+    expect(String.fromCharCodes(bytes.take(5)), '%PDF-');
+  });
+
   test('suggests stable report file names', () {
     final report = buildReport();
 

@@ -145,10 +145,22 @@ String _stringValue(Object? value) {
       return '$date $time';
     }
   }
-  return value.toString();
+  return _compactCellValue(value.toString());
 }
 
 String _two(int value) => value.toString().padLeft(2, '0');
+
+String _compactCellValue(String value) {
+  const maxCellCharacters = 140;
+  final normalized = value.replaceAll(RegExp(r'\s+'), ' ').trim();
+  if (normalized.isEmpty) {
+    return '-';
+  }
+  if (normalized.length <= maxCellCharacters) {
+    return normalized;
+  }
+  return '${normalized.substring(0, maxCellCharacters - 3)}...';
+}
 
 String _labelFor(String key) {
   return _arabicLabels[key] ?? key.replaceAll('_', ' ');

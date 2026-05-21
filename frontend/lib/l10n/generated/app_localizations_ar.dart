@@ -278,6 +278,16 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
+  String reportActionInProgress(String action) {
+    return 'جارٍ تنفيذ $action...';
+  }
+
+  @override
+  String reportActionError(String action) {
+    return 'تعذر تنفيذ $action. حاول مرة أخرى.';
+  }
+
+  @override
   String get reportGenerationError => 'تعذر إنشاء التقرير.';
 
   @override

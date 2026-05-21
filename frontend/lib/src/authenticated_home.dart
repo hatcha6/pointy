@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
@@ -880,7 +882,7 @@ class _AuthenticatedRoutes {
     if (document == null || !context.mounted) {
       return;
     }
-    await push(context, (_) => ReportPdfPreviewScreen(document: document));
+    unawaited(push(context, (_) => ReportPdfPreviewScreen(document: document)));
   }
 
   Future<void> printReport(BuildContext context, ReportRequest request) async {

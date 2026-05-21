@@ -122,12 +122,14 @@ class ReportPdfOptions {
     this.orientation = ReportPdfOrientation.portrait,
     this.includeAuditTrail = true,
     this.useRequestedPrinterFormat = false,
+    this.maxPages = 200,
   });
 
   final PdfPageFormat pageFormat;
   final ReportPdfOrientation orientation;
   final bool includeAuditTrail;
   final bool useRequestedPrinterFormat;
+  final int maxPages;
 
   PdfPageFormat resolvedPageFormat([PdfPageFormat? requestedFormat]) {
     final format = useRequestedPrinterFormat && requestedFormat != null

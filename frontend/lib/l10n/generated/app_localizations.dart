@@ -598,6 +598,18 @@ abstract class AppLocalizations {
   /// **'{action} غير موصول بعد لتقرير {report}.'**
   String reportActionPlaceholder(String action, String report);
 
+  /// Shown while a report output action is running.
+  ///
+  /// In ar, this message translates to:
+  /// **'جارٍ تنفيذ {action}...'**
+  String reportActionInProgress(String action);
+
+  /// Shown when a report output action fails.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر تنفيذ {action}. حاول مرة أخرى.'**
+  String reportActionError(String action);
+
   /// No description provided for @reportGenerationError.
   ///
   /// In ar, this message translates to:

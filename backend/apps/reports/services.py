@@ -14,12 +14,33 @@ from apps.core.roles import user_is_manager
 from apps.inventory.models import StockItem, StockMovement
 from apps.payments.models import Payment
 from apps.purchasing.models import PurchaseOrder, Supplier, SupplierPayment
-from apps.sales.models import Order, OrderAdjustment, OrderLine, RegisterSession
+from apps.sales.models import (
+    Order,
+    OrderAdjustment,
+    OrderLine,
+    RegisterCashMovement,
+    RegisterSession,
+)
 
 from .models import ReportRun
 
 MONEY_PLACES = Decimal("0.01")
 MONEY_FIELD = DecimalField(max_digits=12, decimal_places=2)
+DEFAULT_DETAIL_ROW_LIMIT = 120
+SHORT_DETAIL_ROW_LIMIT = 24
+CHOICE_DETAIL_ROW_LIMIT = 32
+
+REPORT_SECTION_ROW_LIMITS = {
+    "top_products": SHORT_DETAIL_ROW_LIMIT,
+    "recent_orders": SHORT_DETAIL_ROW_LIMIT,
+    "payment_methods": CHOICE_DETAIL_ROW_LIMIT,
+    "register_sessions": DEFAULT_DETAIL_ROW_LIMIT,
+    "inventory_items": DEFAULT_DETAIL_ROW_LIMIT,
+    "movement_mix": CHOICE_DETAIL_ROW_LIMIT,
+    "stock_movements": DEFAULT_DETAIL_ROW_LIMIT,
+    "purchase_orders": DEFAULT_DETAIL_ROW_LIMIT,
+    "supplier_balances": DEFAULT_DETAIL_ROW_LIMIT,
+}
 
 
 class ReportValidationError(ValueError):
@@ -41,6 +62,13 @@ class ReportDefinition:
         if user_is_manager(user):
             return True
         return all(user.has_perm(permission) for permission in self.permissions)
+
+
+@dataclass(frozen=True)
+class BoundedRows:
+    rows: list
+    total_count: int
+    limit: int | None = None
 
 
 REPORT_DEFINITIONS = {
@@ -144,6 +172,7 @@ def generate_report_payload(*, report_type, params, user):
             "generated_at": timezone.now().isoformat(),
         }
     )
+    payload["audit"] = _payload_audit(payload)
     return payload
 
 
@@ -206,6 +235,10 @@ def _sales_summary_report(user, period):
     net_sales = order_values["order_total"] - adjustment_values["refund_total"]
     profit = line_values["profit"] - adjustment_values["refund_total"]
     top_products = _product_sales_rows(orders)
+    recent_orders = _bounded_queryset(
+        orders.order_by("-created_at"),
+        limit=_section_row_limit("recent_orders"),
+    )
     return {
         "summary": {
             "gross_sales": _money(order_values["gross_sales"]),
@@ -234,24 +267,28 @@ def _sales_summary_report(user, period):
                     ("items_sold", line_values["items_sold"] or 0),
                 ]
             ),
-            {
-                "key": "top_products",
-                "columns": ["product_name", "quantity", "revenue", "profit"],
-                "rows": top_products,
-            },
-            {
-                "key": "recent_orders",
-                "columns": ["receipt_number", "status", "total", "created_at"],
-                "rows": [
+            _report_section(
+                "top_products",
+                ["product_name", "quantity", "revenue", "profit"],
+                top_products.rows,
+                total_count=top_products.total_count,
+                limit=top_products.limit,
+            ),
+            _report_section(
+                "recent_orders",
+                ["receipt_number", "status", "total", "created_at"],
+                [
                     {
                         "receipt_number": order.receipt_number,
                         "status": order.status,
                         "total": _money(order.total),
                         "created_at": order.created_at.isoformat(),
                     }
-                    for order in orders.order_by("-created_at")[:24]
+                    for order in recent_orders.rows
                 ],
-            },
+                total_count=recent_orders.total_count,
+                limit=recent_orders.limit,
+            ),
         ],
     }
 
@@ -261,14 +298,8 @@ def _payment_methods_report(user, period):
         created_at__gte=period["start"],
         created_at__lt=period["end"],
     )
-    rows = [
-        {
-            "method": row["method"],
-            "total": _money(row["total"]),
-            "commission": _money(row["commission"]),
-            "count": row["count"],
-        }
-        for row in payments.values("method")
+    method_rows = _bounded_queryset(
+        payments.values("method")
         .annotate(
             total=Coalesce(
                 Sum("amount"),
@@ -282,7 +313,17 @@ def _payment_methods_report(user, period):
             ),
             count=Count("id"),
         )
-        .order_by("-total", "method")
+        .order_by("-total", "method"),
+        limit=_section_row_limit("payment_methods"),
+    )
+    rows = [
+        {
+            "method": row["method"],
+            "total": _money(row["total"]),
+            "commission": _money(row["commission"]),
+            "count": row["count"],
+        }
+        for row in method_rows.rows
     ]
     total = sum((_decimal_from(row["total"]) for row in rows), Decimal("0.00"))
     commission = sum(
@@ -303,11 +344,13 @@ def _payment_methods_report(user, period):
                     ("payment_count", payments.count()),
                 ]
             ),
-            {
-                "key": "payment_methods",
-                "columns": ["method", "total", "commission", "count"],
-                "rows": rows,
-            },
+            _report_section(
+                "payment_methods",
+                ["method", "total", "commission", "count"],
+                rows,
+                total_count=method_rows.total_count,
+                limit=method_rows.limit,
+            ),
         ],
     }
 
@@ -317,49 +360,39 @@ def _register_closure_report(user, period):
         created_at__gte=period["start"],
         created_at__lt=period["end"],
     )
-    rows = [
-        {
-            "session_number": session.session_number,
-            "status": session.status,
-            "opened_at": session.opened_at.isoformat(),
-            "closed_at": session.closed_at.isoformat() if session.closed_at else "",
-            "opening_cash": _money(session.opening_cash),
-            "closing_cash": _money(session.closing_cash),
-            "expected_cash": _money(session.expected_cash),
-            "cash_variance": _money(session.cash_variance),
-            "pay_in_total": _money(session.pay_in_total),
-            "pay_out_total": _money(session.pay_out_total),
-        }
-        for session in sessions.order_by("-opened_at")[:200]
-    ]
-    variance_total = sum(
-        (_decimal_from(row["cash_variance"]) for row in rows),
-        Decimal("0.00"),
+    session_count = sessions.count()
+    open_count = sessions.filter(status=RegisterSession.Status.OPEN).count()
+    closed_sessions = sessions.filter(status=RegisterSession.Status.CLOSED)
+    closed_count = closed_sessions.count()
+    cash_totals = _register_session_cash_totals(sessions)
+    session_rows = _bounded_queryset(
+        sessions.order_by("-opened_at"),
+        limit=_section_row_limit("register_sessions"),
     )
+    rows = [
+        _register_session_row(session, cash_totals.get(session.pk, {}))
+        for session in session_rows.rows
+    ]
+    variance_total = _register_variance_total(closed_sessions, cash_totals)
     return {
         "summary": {
-            "open_count": sessions.filter(status=RegisterSession.Status.OPEN).count(),
-            "closed_count": sessions.filter(
-                status=RegisterSession.Status.CLOSED,
-            ).count(),
+            "open_count": open_count,
+            "closed_count": closed_count,
             "variance_total": _money(variance_total),
-            "session_count": sessions.count(),
+            "session_count": session_count,
         },
         "sections": [
             _metric_section(
                 [
-                    ("session_count", sessions.count()),
-                    ("open_count", sessions.filter(status=RegisterSession.Status.OPEN).count()),
-                    (
-                        "closed_count",
-                        sessions.filter(status=RegisterSession.Status.CLOSED).count(),
-                    ),
+                    ("session_count", session_count),
+                    ("open_count", open_count),
+                    ("closed_count", closed_count),
                     ("variance_total", _money(variance_total)),
                 ]
             ),
-            {
-                "key": "register_sessions",
-                "columns": [
+            _report_section(
+                "register_sessions",
+                [
                     "session_number",
                     "status",
                     "opening_cash",
@@ -369,10 +402,124 @@ def _register_closure_report(user, period):
                     "opened_at",
                     "closed_at",
                 ],
-                "rows": rows,
-            },
+                rows,
+                total_count=session_rows.total_count,
+                limit=session_rows.limit,
+            ),
         ],
     }
+
+
+def _register_session_cash_totals(sessions):
+    session_ids = sessions.values_list("pk", flat=True)
+    totals = {}
+
+    cash_sales = (
+        Payment.objects.filter(
+            order__register_session_id__in=session_ids,
+            order__status__in=(Order.Status.PAID, Order.Status.VOID),
+            method=Payment.Method.CASH,
+            amount__gt=0,
+        )
+        .values("order__register_session_id")
+        .annotate(
+            total=Coalesce(
+                Sum("amount"),
+                Value(Decimal("0.00")),
+                output_field=MONEY_FIELD,
+            )
+        )
+    )
+    for row in cash_sales:
+        totals.setdefault(row["order__register_session_id"], {})["cash_sales_total"] = (
+            row["total"]
+        )
+
+    cash_refunds = (
+        OrderAdjustment.objects.filter(
+            register_session_id__in=session_ids,
+            refund_method=Payment.Method.CASH,
+        )
+        .values("register_session_id")
+        .annotate(
+            total=Coalesce(
+                Sum("amount"),
+                Value(Decimal("0.00")),
+                output_field=MONEY_FIELD,
+            )
+        )
+    )
+    for row in cash_refunds:
+        totals.setdefault(row["register_session_id"], {})["cash_refund_total"] = row[
+            "total"
+        ]
+
+    cash_movements = (
+        RegisterCashMovement.objects.filter(register_session_id__in=session_ids)
+        .values("register_session_id", "movement_type")
+        .annotate(
+            total=Coalesce(
+                Sum("amount"),
+                Value(Decimal("0.00")),
+                output_field=MONEY_FIELD,
+            )
+        )
+    )
+    for row in cash_movements:
+        key = (
+            "pay_in_total"
+            if row["movement_type"] == RegisterCashMovement.MovementType.PAY_IN
+            else "pay_out_total"
+        )
+        totals.setdefault(row["register_session_id"], {})[key] = row["total"]
+
+    return totals
+
+
+def _register_session_row(session, totals):
+    expected_cash = _register_expected_cash(session, totals)
+    cash_variance = _register_cash_variance(session, expected_cash)
+    return {
+        "session_number": session.session_number,
+        "status": session.status,
+        "opened_at": session.opened_at.isoformat(),
+        "closed_at": session.closed_at.isoformat() if session.closed_at else "",
+        "opening_cash": _money(session.opening_cash),
+        "closing_cash": _money(session.closing_cash),
+        "expected_cash": _money(expected_cash),
+        "cash_variance": _money(cash_variance),
+        "pay_in_total": _money(totals.get("pay_in_total")),
+        "pay_out_total": _money(totals.get("pay_out_total")),
+    }
+
+
+def _register_variance_total(sessions, cash_totals):
+    total = Decimal("0.00")
+    for session in sessions.only("id", "opening_cash", "closing_cash"):
+        expected_cash = _register_expected_cash(
+            session,
+            cash_totals.get(session.pk, {}),
+        )
+        cash_variance = _register_cash_variance(session, expected_cash)
+        total += _decimal_from(cash_variance)
+    return total
+
+
+def _register_expected_cash(session, totals):
+    total = (
+        _decimal_from(session.opening_cash)
+        + _decimal_from(totals.get("cash_sales_total"))
+        + _decimal_from(totals.get("pay_in_total"))
+    )
+    total -= _decimal_from(totals.get("pay_out_total"))
+    total -= _decimal_from(totals.get("cash_refund_total"))
+    return total.quantize(MONEY_PLACES)
+
+
+def _register_cash_variance(session, expected_cash):
+    if session.closing_cash is None:
+        return None
+    return (_decimal_from(session.closing_cash) - expected_cash).quantize(MONEY_PLACES)
 
 
 def _inventory_status_report(user, period):
@@ -386,6 +533,14 @@ def _inventory_status_report(user, period):
         )
     )["total"]
     low_stock = stock.filter(quantity_on_hand__lte=F("reorder_level"))
+    stock_rows = _bounded_queryset(
+        stock.order_by(
+            "quantity_on_hand",
+            "variant__product__name",
+            "variant__name",
+        ),
+        limit=_section_row_limit("inventory_items"),
+    )
     rows = [
         {
             "product_name": item.variant.full_name,
@@ -396,11 +551,7 @@ def _inventory_status_report(user, period):
             "reorder_level": item.reorder_level,
             "retail_value": _money(item.quantity_on_hand * item.variant.unit_price),
         }
-        for item in stock.order_by(
-            "quantity_on_hand",
-            "variant__product__name",
-            "variant__name",
-        )[:250]
+        for item in stock_rows.rows
     ]
     return {
         "summary": {
@@ -416,13 +567,16 @@ def _inventory_status_report(user, period):
                     ("product_count", Product.objects.count()),
                     ("stock_item_count", stock.count()),
                     ("low_stock_count", low_stock.count()),
-                    ("out_of_stock_count", stock.filter(quantity_on_hand__lte=0).count()),
+                    (
+                        "out_of_stock_count",
+                        stock.filter(quantity_on_hand__lte=0).count(),
+                    ),
                     ("retail_stock_value", _money(retail_value)),
                 ]
             ),
-            {
-                "key": "inventory_items",
-                "columns": [
+            _report_section(
+                "inventory_items",
+                [
                     "product_name",
                     "sku",
                     "quantity_on_hand",
@@ -431,8 +585,10 @@ def _inventory_status_report(user, period):
                     "reorder_level",
                     "retail_value",
                 ],
-                "rows": rows,
-            },
+                rows,
+                total_count=stock_rows.total_count,
+                limit=stock_rows.limit,
+            ),
         ],
     }
 
@@ -446,6 +602,10 @@ def _stock_movements_report(user, period):
         created_at__gte=period["start"],
         created_at__lt=period["end"],
     )
+    movement_rows = _bounded_queryset(
+        movements.order_by("-created_at", "-id"),
+        limit=_section_row_limit("stock_movements"),
+    )
     rows = [
         {
             "created_at": movement.created_at.isoformat(),
@@ -455,41 +615,52 @@ def _stock_movements_report(user, period):
             "quantity": movement.quantity,
             "on_hand_before": movement.on_hand_before,
             "on_hand_after": movement.on_hand_after,
-            "created_by": movement.created_by.username if movement.created_by_id else "",
+            "created_by": (
+                movement.created_by.username if movement.created_by_id else ""
+            ),
             "note": movement.note,
         }
-        for movement in movements.order_by("-created_at", "-id")[:300]
+        for movement in movement_rows.rows
     ]
+    mix_row_values = _bounded_queryset(
+        movements.values("movement_type")
+        .annotate(quantity=Coalesce(Sum("quantity"), Value(0)), count=Count("id"))
+        .order_by("movement_type"),
+        limit=_section_row_limit("movement_mix"),
+    )
     mix_rows = [
         {
             "movement_type": row["movement_type"],
             "quantity": row["quantity"],
             "count": row["count"],
         }
-        for row in movements.values("movement_type")
-        .annotate(quantity=Coalesce(Sum("quantity"), Value(0)), count=Count("id"))
-        .order_by("movement_type")
+        for row in mix_row_values.rows
     ]
+    quantity_moved = movements.aggregate(
+        quantity=Coalesce(Sum("quantity"), Value(0)),
+    )["quantity"]
     return {
         "summary": {
             "movement_count": movements.count(),
-            "quantity_moved": sum((row["quantity"] for row in mix_rows), 0),
+            "quantity_moved": quantity_moved,
         },
         "sections": [
             _metric_section(
                 [
                     ("movement_count", movements.count()),
-                    ("quantity_moved", sum((row["quantity"] for row in mix_rows), 0)),
+                    ("quantity_moved", quantity_moved),
                 ]
             ),
-            {
-                "key": "movement_mix",
-                "columns": ["movement_type", "quantity", "count"],
-                "rows": mix_rows,
-            },
-            {
-                "key": "stock_movements",
-                "columns": [
+            _report_section(
+                "movement_mix",
+                ["movement_type", "quantity", "count"],
+                mix_rows,
+                total_count=mix_row_values.total_count,
+                limit=mix_row_values.limit,
+            ),
+            _report_section(
+                "stock_movements",
+                [
                     "created_at",
                     "product_name",
                     "sku",
@@ -500,8 +671,10 @@ def _stock_movements_report(user, period):
                     "created_by",
                     "note",
                 ],
-                "rows": rows,
-            },
+                rows,
+                total_count=movement_rows.total_count,
+                limit=movement_rows.limit,
+            ),
         ],
     }
 
@@ -521,6 +694,10 @@ def _purchasing_summary_report(user, period):
             output_field=MONEY_FIELD,
         )
     )["total"]
+    purchase_rows = _bounded_queryset(
+        period_orders.order_by("-created_at"),
+        limit=_section_row_limit("purchase_orders"),
+    )
     rows = [
         {
             "order_number": order.order_number,
@@ -531,8 +708,12 @@ def _purchasing_summary_report(user, period):
             "created_at": order.created_at.isoformat(),
             "due_date": order.due_date.isoformat() if order.due_date else "",
         }
-        for order in period_orders.order_by("-created_at")[:200]
+        for order in purchase_rows.rows
     ]
+    supplier_row_values = _bounded_queryset(
+        Supplier.objects.filter(is_active=True).order_by("name"),
+        limit=_section_row_limit("supplier_balances"),
+    )
     supplier_rows = [
         {
             "supplier_name": supplier.name,
@@ -540,7 +721,7 @@ def _purchasing_summary_report(user, period):
             "credit_balance": _money(supplier.credit_balance),
             "net_balance": _money(supplier.net_balance),
         }
-        for supplier in Supplier.objects.filter(is_active=True).order_by("name")[:100]
+        for supplier in supplier_row_values.rows
     ]
     return {
         "summary": {
@@ -563,9 +744,9 @@ def _purchasing_summary_report(user, period):
                     ("supplier_count", Supplier.objects.filter(is_active=True).count()),
                 ]
             ),
-            {
-                "key": "purchase_orders",
-                "columns": [
+            _report_section(
+                "purchase_orders",
+                [
                     "order_number",
                     "supplier_name",
                     "status",
@@ -574,27 +755,83 @@ def _purchasing_summary_report(user, period):
                     "created_at",
                     "due_date",
                 ],
-                "rows": rows,
-            },
-            {
-                "key": "supplier_balances",
-                "columns": [
+                rows,
+                total_count=purchase_rows.total_count,
+                limit=purchase_rows.limit,
+            ),
+            _report_section(
+                "supplier_balances",
+                [
                     "supplier_name",
                     "payable_balance",
                     "credit_balance",
                     "net_balance",
                 ],
-                "rows": supplier_rows,
-            },
+                supplier_rows,
+                total_count=supplier_row_values.total_count,
+                limit=supplier_row_values.limit,
+            ),
         ],
     }
 
 
 def _metric_section(metrics):
+    rows = [{"metric": metric, "value": value} for metric, value in metrics]
+    return _report_section("summary", ["metric", "value"], rows)
+
+
+def _report_section(key, columns, rows, *, total_count=None, limit=None):
+    returned_count = len(rows)
+    total_count = returned_count if total_count is None else total_count
+    omitted_count = max(total_count - returned_count, 0)
+    metadata = {
+        "returned_count": returned_count,
+        "total_count": total_count,
+        "omitted_count": omitted_count,
+        "truncated": omitted_count > 0,
+    }
+    if limit is not None:
+        metadata["limit"] = limit
     return {
-        "key": "summary",
-        "columns": ["metric", "value"],
-        "rows": [{"metric": metric, "value": value} for metric, value in metrics],
+        "key": key,
+        "columns": columns,
+        "rows": rows,
+        "metadata": metadata,
+    }
+
+
+def _bounded_queryset(queryset, *, limit):
+    return BoundedRows(
+        rows=list(queryset[:limit]),
+        total_count=queryset.count(),
+        limit=limit,
+    )
+
+
+def _section_row_limit(key):
+    return REPORT_SECTION_ROW_LIMITS.get(key, DEFAULT_DETAIL_ROW_LIMIT)
+
+
+def _payload_audit(payload):
+    sections = []
+    for section in payload.get("sections", []):
+        rows = section.get("rows", [])
+        metadata = section.get("metadata", {})
+        section_audit = {
+            "key": section.get("key", ""),
+            "returned_count": metadata.get("returned_count", len(rows)),
+            "total_count": metadata.get("total_count", len(rows)),
+            "omitted_count": metadata.get("omitted_count", 0),
+            "truncated": metadata.get("truncated", False),
+        }
+        if "limit" in metadata:
+            section_audit["limit"] = metadata["limit"]
+        sections.append(section_audit)
+
+    return {
+        "row_count": _row_count(payload),
+        "truncated": any(section["truncated"] for section in sections),
+        "sections": sections,
     }
 
 
@@ -603,7 +840,7 @@ def _product_sales_rows(orders):
     profit_expr = F("quantity") * (F("unit_price") - F("unit_cost")) - F(
         "discount_total"
     )
-    rows = (
+    row_values = (
         OrderLine.objects.filter(order__in=orders)
         .values("variant__product__name")
         .annotate(
@@ -619,17 +856,25 @@ def _product_sales_rows(orders):
                 output_field=MONEY_FIELD,
             ),
         )
-        .order_by("-revenue", "variant__product__name")[:24]
+        .order_by("-revenue", "variant__product__name")
     )
-    return [
-        {
-            "product_name": row["variant__product__name"],
-            "quantity": row["units_sold"],
-            "revenue": _money(row["revenue"]),
-            "profit": _money(row["profit"]),
-        }
-        for row in rows
-    ]
+    bounded_rows = _bounded_queryset(
+        row_values,
+        limit=_section_row_limit("top_products"),
+    )
+    return BoundedRows(
+        rows=[
+            {
+                "product_name": row["variant__product__name"],
+                "quantity": row["units_sold"],
+                "revenue": _money(row["revenue"]),
+                "profit": _money(row["profit"]),
+            }
+            for row in bounded_rows.rows
+        ],
+        total_count=bounded_rows.total_count,
+        limit=bounded_rows.limit,
+    )
 
 
 def _settled_orders(user):
@@ -719,4 +964,8 @@ def _percent(numerator, denominator):
     denominator = _decimal_from(denominator)
     if denominator == 0:
         return "0.00"
-    return str(((_decimal_from(numerator) / denominator) * Decimal("100")).quantize(MONEY_PLACES))
+    return str(
+        ((_decimal_from(numerator) / denominator) * Decimal("100")).quantize(
+            MONEY_PLACES
+        )
+    )

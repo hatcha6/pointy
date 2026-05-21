@@ -36,6 +36,7 @@ class ReportPdfGenerator {
 
     pdf.addPage(
       pw.MultiPage(
+        maxPages: options.maxPages,
         pageTheme: pw.PageTheme(
           pageFormat: pageFormat.applyMargin(
             left: 16 * PdfPageFormat.mm,
@@ -60,15 +61,15 @@ class ReportPdfGenerator {
           ],
           for (final table in report.tables) ...[
             pw.SizedBox(height: 12),
-            _ReportTable(table: table),
+            ..._reportTableWidgets(table),
           ],
           for (final section in report.sections) ...[
             pw.SizedBox(height: 12),
-            _ReportSection(section: section),
+            ..._reportSectionWidgets(section),
           ],
           if (options.includeAuditTrail && report.auditTrail.isNotEmpty) ...[
             pw.SizedBox(height: 16),
-            _AuditTrail(entries: report.auditTrail, labels: labels),
+            ..._reportTableWidgets(_auditTrailTable(report.auditTrail, labels)),
           ],
         ],
       ),
@@ -84,6 +85,133 @@ class _ReportColors {
   static const border = PdfColor.fromInt(0xffdadce0);
   static const fill = PdfColor.fromInt(0xfff8f9fa);
   static const accent = PdfColor.fromInt(0xff0b57d0);
+}
+
+const _rowsPerTableChunk = 18;
+
+List<pw.Widget> _reportSectionWidgets(ReportPdfSection section) {
+  return [
+    _SectionTitle(section.heading),
+    for (final paragraph in section.paragraphs) ...[
+      pw.SizedBox(height: 6),
+      pw.Text(
+        paragraph,
+        style: const pw.TextStyle(
+          color: _ReportColors.ink,
+          fontSize: 10,
+          lineSpacing: 3,
+        ),
+      ),
+    ],
+    if (section.fields.isNotEmpty) ...[
+      pw.SizedBox(height: 8),
+      _FieldWrap(fields: section.fields),
+    ],
+    for (final table in section.tables) ...[
+      pw.SizedBox(height: 10),
+      ..._reportTableWidgets(table),
+    ],
+  ];
+}
+
+List<pw.Widget> _reportTableWidgets(ReportPdfTable table) {
+  final widths = _columnWidths(table);
+  final rowChunks = _chunkRows(table.rows);
+
+  return [
+    if (table.title != null) ...[
+      _SectionTitle(table.title!, fontSize: 11),
+      pw.SizedBox(height: 6),
+    ],
+    for (var index = 0; index < rowChunks.length; index += 1) ...[
+      if (index > 0) pw.SizedBox(height: 8),
+      _buildTableChunk(table: table, widths: widths, rows: rowChunks[index]),
+    ],
+  ];
+}
+
+Map<int, pw.TableColumnWidth> _columnWidths(ReportPdfTable table) {
+  final widths = <int, pw.TableColumnWidth>{};
+  for (var index = 0; index < table.columnFlex.length; index += 1) {
+    widths[index] = pw.FlexColumnWidth(table.columnFlex[index]);
+  }
+  return widths;
+}
+
+pw.Widget _buildTableChunk({
+  required ReportPdfTable table,
+  required Map<int, pw.TableColumnWidth> widths,
+  required List<List<String>> rows,
+}) {
+  return pw.TableHelper.fromTextArray(
+    headers: table.columns.map(_pdfTableValue).toList(growable: false),
+    data: [
+      for (final row in rows) row.map(_pdfTableValue).toList(growable: false),
+    ],
+    border: pw.TableBorder.all(color: _ReportColors.border, width: 0.5),
+    headerDecoration: const pw.BoxDecoration(color: _ReportColors.fill),
+    headerStyle: pw.TextStyle(
+      color: _ReportColors.ink,
+      fontSize: 9,
+      fontWeight: pw.FontWeight.bold,
+    ),
+    cellStyle: const pw.TextStyle(color: _ReportColors.ink, fontSize: 9),
+    cellPadding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5),
+    headerPadding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+    cellAlignment: pw.Alignment.centerRight,
+    headerAlignment: pw.Alignment.centerRight,
+    columnWidths: widths.isEmpty ? null : widths,
+    tableDirection: pw.TextDirection.rtl,
+    headerDirection: pw.TextDirection.rtl,
+  );
+}
+
+String _pdfTableValue(String value) {
+  const maxCellCharacters = 140;
+  final normalized = value.replaceAll(RegExp(r'\s+'), ' ').trim();
+  if (normalized.isEmpty) {
+    return '-';
+  }
+  if (normalized.length <= maxCellCharacters) {
+    return normalized;
+  }
+  return '${normalized.substring(0, maxCellCharacters - 3)}...';
+}
+
+List<List<List<String>>> _chunkRows(List<List<String>> rows) {
+  if (rows.isEmpty) {
+    return const [[]];
+  }
+
+  return [
+    for (var start = 0; start < rows.length; start += _rowsPerTableChunk)
+      rows.sublist(start, (start + _rowsPerTableChunk).clamp(0, rows.length)),
+  ];
+}
+
+ReportPdfTable _auditTrailTable(
+  List<ReportPdfAuditEntry> entries,
+  ReportPdfLabels labels,
+) {
+  return ReportPdfTable(
+    title: labels.auditTrail,
+    columns: [
+      labels.auditTime,
+      labels.auditAction,
+      labels.auditActor,
+      labels.auditNote,
+    ],
+    rows: [
+      for (final entry in entries)
+        [
+          _formatDateTime(entry.occurredAt),
+          entry.action,
+          entry.actor,
+          entry.note ?? labels.emptyValue,
+        ],
+    ],
+    columnFlex: const [1.2, 1.2, 1, 1.6],
+  );
 }
 
 class _Header extends pw.StatelessWidget {
@@ -317,122 +445,6 @@ class _FieldWrap extends pw.StatelessWidget {
             ),
           ),
       ],
-    );
-  }
-}
-
-class _ReportSection extends pw.StatelessWidget {
-  _ReportSection({required this.section});
-
-  final ReportPdfSection section;
-
-  @override
-  pw.Widget build(pw.Context context) {
-    return pw.Column(
-      crossAxisAlignment: pw.CrossAxisAlignment.start,
-      children: [
-        _SectionTitle(section.heading),
-        for (final paragraph in section.paragraphs) ...[
-          pw.SizedBox(height: 6),
-          pw.Text(
-            paragraph,
-            style: const pw.TextStyle(
-              color: _ReportColors.ink,
-              fontSize: 10,
-              lineSpacing: 3,
-            ),
-          ),
-        ],
-        if (section.fields.isNotEmpty) ...[
-          pw.SizedBox(height: 8),
-          _FieldWrap(fields: section.fields),
-        ],
-        for (final table in section.tables) ...[
-          pw.SizedBox(height: 10),
-          _ReportTable(table: table),
-        ],
-      ],
-    );
-  }
-}
-
-class _ReportTable extends pw.StatelessWidget {
-  _ReportTable({required this.table});
-
-  final ReportPdfTable table;
-
-  @override
-  pw.Widget build(pw.Context context) {
-    final widths = <int, pw.TableColumnWidth>{};
-    for (var index = 0; index < table.columnFlex.length; index += 1) {
-      widths[index] = pw.FlexColumnWidth(table.columnFlex[index]);
-    }
-
-    return pw.Column(
-      crossAxisAlignment: pw.CrossAxisAlignment.start,
-      children: [
-        if (table.title != null) ...[
-          _SectionTitle(table.title!, fontSize: 11),
-          pw.SizedBox(height: 6),
-        ],
-        pw.TableHelper.fromTextArray(
-          headers: table.columns,
-          data: table.rows,
-          border: pw.TableBorder.all(color: _ReportColors.border, width: 0.5),
-          headerDecoration: const pw.BoxDecoration(color: _ReportColors.fill),
-          headerStyle: pw.TextStyle(
-            color: _ReportColors.ink,
-            fontSize: 9,
-            fontWeight: pw.FontWeight.bold,
-          ),
-          cellStyle: const pw.TextStyle(color: _ReportColors.ink, fontSize: 9),
-          cellPadding: const pw.EdgeInsets.symmetric(
-            horizontal: 6,
-            vertical: 5,
-          ),
-          headerPadding: const pw.EdgeInsets.symmetric(
-            horizontal: 6,
-            vertical: 6,
-          ),
-          cellAlignment: pw.Alignment.centerRight,
-          headerAlignment: pw.Alignment.centerRight,
-          columnWidths: widths.isEmpty ? null : widths,
-          tableDirection: pw.TextDirection.rtl,
-          headerDirection: pw.TextDirection.rtl,
-        ),
-      ],
-    );
-  }
-}
-
-class _AuditTrail extends pw.StatelessWidget {
-  _AuditTrail({required this.entries, required this.labels});
-
-  final List<ReportPdfAuditEntry> entries;
-  final ReportPdfLabels labels;
-
-  @override
-  pw.Widget build(pw.Context context) {
-    return _ReportTable(
-      table: ReportPdfTable(
-        title: labels.auditTrail,
-        columns: [
-          labels.auditTime,
-          labels.auditAction,
-          labels.auditActor,
-          labels.auditNote,
-        ],
-        rows: [
-          for (final entry in entries)
-            [
-              _formatDateTime(entry.occurredAt),
-              entry.action,
-              entry.actor,
-              entry.note ?? labels.emptyValue,
-            ],
-        ],
-        columnFlex: const [1.2, 1.2, 1, 1.6],
-      ),
     );
   }
 }

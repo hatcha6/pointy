@@ -136,6 +136,24 @@
       }
     }
   },
+  "reportActionInProgress": "جارٍ تنفيذ {action}...",
+  "@reportActionInProgress": {
+    "description": "Shown while a report output action is running.",
+    "placeholders": {
+      "action": {
+        "type": "String"
+      }
+    }
+  },
+  "reportActionError": "تعذر تنفيذ {action}. حاول مرة أخرى.",
+  "@reportActionError": {
+    "description": "Shown when a report output action fails.",
+    "placeholders": {
+      "action": {
+        "type": "String"
+      }
+    }
+  },
   "reportGenerationError": "تعذر إنشاء التقرير.",
   "reportPrintQueuedMessage": "تم إرسال التقرير للطباعة.",
   "reportArchiveSharedMessage": "تم تجهيز نسخة الأرشيف.",

@@ -91,7 +91,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
   late DateTimeRange _dateRange = _rangeForPreset(_selectedPreset);
   bool _includeAuditTrail = true;
   bool _includePreparedBy = true;
-  bool _isRunningAction = false;
+  _ReportOutputAction? _runningAction;
 
   @override
   Widget build(BuildContext context) {
@@ -140,7 +140,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
             granularity: _granularity,
             includeAuditTrail: _includeAuditTrail,
             includePreparedBy: _includePreparedBy,
-            isRunningAction: _isRunningAction,
+            runningAction: _runningAction,
             onSelectType: (type) {
               setState(() {
                 _selectedType = type;
@@ -208,6 +208,10 @@ class _ReportsScreenState extends State<ReportsScreen> {
   }
 
   Future<void> _runAction(_ReportOutputAction action) async {
+    if (_runningAction != null) {
+      return;
+    }
+
     final request = ReportRequest(
       type: _effectiveSelectedType(),
       periodPreset: _selectedPreset,
@@ -235,14 +239,21 @@ class _ReportsScreenState extends State<ReportsScreen> {
     }
 
     setState(() {
-      _isRunningAction = true;
+      _runningAction = action;
     });
     try {
       await callback(request);
+    } catch (_) {
+      if (mounted) {
+        final l10n = AppLocalizations.of(context)!;
+        _showActionMessage(
+          l10n.reportActionError(_outputActionLabel(l10n, action)),
+        );
+      }
     } finally {
       if (mounted) {
         setState(() {
-          _isRunningAction = false;
+          _runningAction = null;
         });
       }
     }
@@ -274,6 +285,12 @@ class _ReportsScreenState extends State<ReportsScreen> {
         ? _selectedType
         : availableReports.first.type;
   }
+
+  void _showActionMessage(String message) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
+  }
 }
 
 class _ReportsWorkspace extends StatelessWidget {
@@ -285,7 +302,7 @@ class _ReportsWorkspace extends StatelessWidget {
     required this.granularity,
     required this.includeAuditTrail,
     required this.includePreparedBy,
-    required this.isRunningAction,
+    required this.runningAction,
     required this.onSelectType,
     required this.onSelectPreset,
     required this.onSelectStartDate,
@@ -303,7 +320,7 @@ class _ReportsWorkspace extends StatelessWidget {
   final ReportGranularity granularity;
   final bool includeAuditTrail;
   final bool includePreparedBy;
-  final bool isRunningAction;
+  final _ReportOutputAction? runningAction;
   final ValueChanged<ReportType> onSelectType;
   final ValueChanged<ReportPeriodPreset> onSelectPreset;
   final VoidCallback onSelectStartDate;
@@ -338,7 +355,7 @@ class _ReportsWorkspace extends StatelessWidget {
                   granularity: granularity,
                   includeAuditTrail: includeAuditTrail,
                   includePreparedBy: includePreparedBy,
-                  isRunningAction: isRunningAction,
+                  runningAction: runningAction,
                   onSelectPreset: onSelectPreset,
                   onSelectStartDate: onSelectStartDate,
                   onSelectEndDate: onSelectEndDate,
@@ -369,7 +386,7 @@ class _ReportsWorkspace extends StatelessWidget {
               granularity: granularity,
               includeAuditTrail: includeAuditTrail,
               includePreparedBy: includePreparedBy,
-              isRunningAction: isRunningAction,
+              runningAction: runningAction,
               onSelectPreset: onSelectPreset,
               onSelectStartDate: onSelectStartDate,
               onSelectEndDate: onSelectEndDate,
@@ -529,7 +546,7 @@ class _ReportConfiguration extends StatelessWidget {
     required this.granularity,
     required this.includeAuditTrail,
     required this.includePreparedBy,
-    required this.isRunningAction,
+    required this.runningAction,
     required this.onSelectPreset,
     required this.onSelectStartDate,
     required this.onSelectEndDate,
@@ -546,7 +563,7 @@ class _ReportConfiguration extends StatelessWidget {
   final ReportGranularity granularity;
   final bool includeAuditTrail;
   final bool includePreparedBy;
-  final bool isRunningAction;
+  final _ReportOutputAction? runningAction;
   final ValueChanged<ReportPeriodPreset> onSelectPreset;
   final VoidCallback onSelectStartDate;
   final VoidCallback onSelectEndDate;
@@ -589,7 +606,7 @@ class _ReportConfiguration extends StatelessWidget {
             selectedType: selectedType,
             dateRange: dateRange,
             granularity: granularity,
-            isRunningAction: isRunningAction,
+            runningAction: runningAction,
             onRunAction: onRunAction,
           ),
         ],
@@ -806,14 +823,14 @@ class _OutputActionsPanel extends StatelessWidget {
     required this.selectedType,
     required this.dateRange,
     required this.granularity,
-    required this.isRunningAction,
+    required this.runningAction,
     required this.onRunAction,
   });
 
   final ReportType selectedType;
   final DateTimeRange dateRange;
   final ReportGranularity granularity;
-  final bool isRunningAction;
+  final _ReportOutputAction? runningAction;
   final ValueChanged<_ReportOutputAction> onRunAction;
 
   @override
@@ -824,6 +841,9 @@ class _OutputActionsPanel extends StatelessWidget {
       formatDate(dateRange.end),
     );
     final granularityLabel = _granularityLabel(l10n, granularity);
+    final runningLabel = runningAction == null
+        ? null
+        : _outputActionLabel(l10n, runningAction!);
 
     return _SettingsSection(
       title: l10n.reportOutputTitle,
@@ -832,35 +852,91 @@ class _OutputActionsPanel extends StatelessWidget {
         children: [
           Text(l10n.reportSelectedSummary(range, granularityLabel)),
           const SizedBox(height: 12),
+          if (runningLabel != null) ...[
+            _ReportActionProgress(
+              label: l10n.reportActionInProgress(runningLabel),
+            ),
+            const SizedBox(height: 12),
+          ],
           Wrap(
             spacing: 8,
             runSpacing: 8,
             children: [
               FilledButton.icon(
-                onPressed: isRunningAction
+                onPressed: runningAction != null
                     ? null
                     : () => onRunAction(_ReportOutputAction.previewPdf),
-                icon: const Icon(Icons.picture_as_pdf_outlined),
+                icon: _ReportActionIcon(
+                  icon: Icons.picture_as_pdf_outlined,
+                  isRunning: runningAction == _ReportOutputAction.previewPdf,
+                ),
                 label: Text(l10n.reportPreviewPdfAction),
               ),
               FilledButton.tonalIcon(
-                onPressed: isRunningAction
+                onPressed: runningAction != null
                     ? null
                     : () => onRunAction(_ReportOutputAction.printReport),
-                icon: const Icon(Icons.print_outlined),
+                icon: _ReportActionIcon(
+                  icon: Icons.print_outlined,
+                  isRunning: runningAction == _ReportOutputAction.printReport,
+                ),
                 label: Text(l10n.reportPrintAction),
               ),
               OutlinedButton.icon(
-                onPressed: isRunningAction
+                onPressed: runningAction != null
                     ? null
                     : () => onRunAction(_ReportOutputAction.exportArchive),
-                icon: const Icon(Icons.archive_outlined),
+                icon: _ReportActionIcon(
+                  icon: Icons.archive_outlined,
+                  isRunning: runningAction == _ReportOutputAction.exportArchive,
+                ),
                 label: Text(l10n.reportExportArchiveAction),
               ),
             ],
           ),
         ],
       ),
+    );
+  }
+}
+
+class _ReportActionProgress extends StatelessWidget {
+  const _ReportActionProgress({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const SizedBox.square(
+          dimension: 18,
+          child: CircularProgressIndicator(strokeWidth: 2.5),
+        ),
+        const SizedBox(width: 8),
+        Flexible(
+          child: Text(label, style: Theme.of(context).textTheme.bodySmall),
+        ),
+      ],
+    );
+  }
+}
+
+class _ReportActionIcon extends StatelessWidget {
+  const _ReportActionIcon({required this.icon, required this.isRunning});
+
+  final IconData icon;
+  final bool isRunning;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!isRunning) {
+      return Icon(icon);
+    }
+    return const SizedBox.square(
+      dimension: 18,
+      child: CircularProgressIndicator(strokeWidth: 2.5),
     );
   }
 }
