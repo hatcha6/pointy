@@ -78,14 +78,14 @@ def create_order_with_lines(
     order = Order.objects.create(**order_fields)
     line_objects_by_key = {}
     for line_data in lines_data:
-        product = line_data["product"]
+        variant = line_data["variant"]
         line_key = checkout_line_key(line_data)
         line = OrderLine.objects.create(
             order=order,
-            product=product,
+            variant=variant,
             quantity=line_data["quantity"],
-            unit_price=product.unit_price,
-            unit_cost=latest_sale_unit_cost(product),
+            unit_price=variant.unit_price,
+            unit_cost=latest_sale_unit_cost(variant),
             discount_total=discount_by_line_key.get(line_key, Decimal("0.00")),
         )
         line_objects_by_key[line_key] = line
@@ -112,13 +112,15 @@ def prepare_discount_lines(lines_data):
     prepared_lines = []
     for index, line_data in enumerate(lines_data):
         line_data["_discount_line_key"] = str(index)
-        product = line_data["product"]
+        variant = line_data["variant"]
+        product = variant.product
         prepared_lines.append(
             DiscountLineInput(
                 key=str(index),
                 product_id=product.pk,
+                variant_id=variant.pk,
                 quantity=line_data["quantity"],
-                unit_amount=product.unit_price,
+                unit_amount=variant.unit_price,
                 category_ids=tuple(product.categories.values_list("id", flat=True)),
             )
         )
@@ -179,10 +181,10 @@ def discount_usage_limit_error_payload(exc, field_name):
     return {"detail": "A discount is no longer available."}
 
 
-def latest_sale_unit_cost(product):
-    from apps.purchasing.services import latest_product_unit_cost
+def latest_sale_unit_cost(variant):
+    from apps.purchasing.services import latest_variant_unit_cost
 
-    return latest_product_unit_cost(product.pk) or Decimal("0.00")
+    return latest_variant_unit_cost(variant.pk) or Decimal("0.00")
 
 
 @transaction.atomic
@@ -224,31 +226,35 @@ def checkout_order(
 
 def prepare_sale_stock_adjustments(lines_data):
     settings = ShopSettings.load()
-    quantities_by_product = {}
-    products_by_id = {}
+    quantities_by_variant = {}
+    variants_by_id = {}
     for line_data in lines_data:
-        product = line_data["product"]
-        products_by_id[product.pk] = product
-        quantities_by_product[product.pk] = (
-            quantities_by_product.get(product.pk, 0) + line_data["quantity"]
+        variant = line_data["variant"]
+        variants_by_id[variant.pk] = variant
+        quantities_by_variant[variant.pk] = (
+            quantities_by_variant.get(variant.pk, 0) + line_data["quantity"]
         )
 
     stock_adjustments = []
     shortages = []
-    for product_id in sorted(quantities_by_product):
-        product = products_by_id[product_id]
-        quantity = quantities_by_product[product_id]
-        stock_item = lock_stock_item(product)
+    for variant_id in sorted(quantities_by_variant):
+        variant = variants_by_id[variant_id]
+        quantity = quantities_by_variant[variant_id]
+        stock_item = lock_stock_item(variant=variant)
         if not settings.allow_overselling and stock_item.quantity_on_hand < quantity:
             shortages.append(
                 {
-                    "product": product.pk,
-                    "product_name": product.name,
+                    "product": variant.product_id,
+                    "product_id": variant.product_id,
+                    "variant": variant.pk,
+                    "variant_id": variant.pk,
+                    "product_name": variant.product.name,
+                    "variant_name": variant.full_name,
                     "requested": quantity,
                     "available": stock_item.quantity_on_hand,
                 }
             )
-        stock_adjustments.append((product, stock_item, quantity))
+        stock_adjustments.append((variant, stock_item, quantity))
 
     if shortages:
         raise serializers.ValidationError(
@@ -263,12 +269,12 @@ def prepare_sale_stock_adjustments(lines_data):
 def record_sale_stock_movements(order, stock_adjustments, *, request=None):
     created_by = adjustment_created_by(request)
 
-    for product, stock_item, quantity in stock_adjustments:
+    for variant, stock_item, quantity in stock_adjustments:
         before = stock_snapshot(stock_item)
         stock_item.quantity_on_hand -= quantity
         save_stock_item_quantities(stock_item)
         create_stock_movement(
-            product=product,
+            variant=variant,
             stock_item=stock_item,
             movement_type=StockMovement.Type.DECREASE,
             quantity=quantity,
@@ -372,14 +378,14 @@ def create_order_adjustment(
         OrderAdjustmentLine.objects.create(
             adjustment=adjustment,
             order_line=line,
-            product=line.product,
+            variant=line.variant,
             quantity=quantity,
             unit_price=line.unit_price,
             discount_total=discount_total,
         )
         record_return_stock_movement(
             order=order,
-            product=line.product,
+            variant=line.variant,
             quantity=quantity,
             created_by=created_by,
         )
@@ -400,12 +406,12 @@ def void_order(*, order, reason, request=None, register_session=None):
     locked_order = (
         Order.objects.select_for_update()
         .select_related("register_session")
-        .prefetch_related("lines__product")
+        .prefetch_related("lines__variant__product")
         .get(pk=order.pk)
     )
     lines = [
         (line, line.returnable_quantity)
-        for line in locked_order.lines.select_related("product")
+        for line in locked_order.lines.select_related("variant", "variant__product")
         if line.returnable_quantity > 0
     ]
     if not lines:
@@ -446,13 +452,13 @@ def return_order_items(*, order, lines, reason, request=None, register_session=N
     return adjustment
 
 
-def record_return_stock_movement(*, order, product, quantity, created_by):
-    stock_item = lock_stock_item(product)
+def record_return_stock_movement(*, order, variant, quantity, created_by):
+    stock_item = lock_stock_item(variant=variant)
     before = stock_snapshot(stock_item)
     stock_item.quantity_on_hand += quantity
     save_stock_item_quantities(stock_item)
     create_stock_movement(
-        product=product,
+        variant=variant,
         stock_item=stock_item,
         movement_type=StockMovement.Type.INCREASE,
         quantity=quantity,

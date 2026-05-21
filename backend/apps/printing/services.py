@@ -92,7 +92,7 @@ def build_receipt_payload(order):
     shop_settings = ShopSettings.load()
     order = (
         Order.objects.select_related("register_session")
-        .prefetch_related("lines__product")
+        .prefetch_related("lines__variant__product")
         .get(pk=order.pk)
     )
     applied_discounts = order_applied_discounts(order)
@@ -122,9 +122,10 @@ def build_receipt_payload(order):
             ),
             "lines": [
                 {
-                    "product_id": line.product_id,
-                    "sku": line.product.sku,
-                    "name": line.product.name,
+                    "product_id": line.variant.product_id,
+                    "variant_id": line.variant_id,
+                    "sku": line.variant.sku,
+                    "name": line.variant.full_name,
                     "quantity": line.quantity,
                     "unit_price": money(line.unit_price),
                     "line_subtotal": money(line.line_subtotal),

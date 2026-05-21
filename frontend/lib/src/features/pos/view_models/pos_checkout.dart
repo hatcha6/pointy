@@ -137,17 +137,17 @@ extension PosCheckoutActions on PosViewModel {
   }
 
   void _applySoldQuantities(List<CartLine> soldLines) {
-    final soldByProduct = <int, int>{};
+    final soldByVariant = <int, int>{};
     for (final line in soldLines) {
-      soldByProduct[line.product.id] =
-          (soldByProduct[line.product.id] ?? 0) + line.quantity;
+      soldByVariant[line.product.sellableId] =
+          (soldByVariant[line.product.sellableId] ?? 0) + line.quantity;
     }
-    if (soldByProduct.isEmpty) {
+    if (soldByVariant.isEmpty) {
       return;
     }
     _products = [
       for (final product in _products)
-        if (soldByProduct[product.id] case final soldQuantity?)
+        if (soldByVariant[product.sellableId] case final soldQuantity?)
           product.copyWith(
             quantityOnHand: product.quantityOnHand - soldQuantity,
           )

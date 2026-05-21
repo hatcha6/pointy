@@ -7,7 +7,7 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient
 
-from apps.catalog.models import Product
+from apps.catalog.models import Product, ProductVariant
 from apps.core.roles import CASHIER_GROUP, MANAGER_GROUP, ensure_role_groups
 from .models import StockItem, StockMovement
 
@@ -86,6 +86,41 @@ class StockItemAuthorizationTests(TestCase):
         self.assertEqual(response.data["on_hand_before"], 5)
         self.assertEqual(response.data["on_hand_after"], 9)
         self.assertEqual(response.data["created_by"], manager.pk)
+
+    def test_stock_movement_records_and_displays_exact_variant(self):
+        variant = ProductVariant.objects.create(
+            product=self.product,
+            name="Large",
+            sku="AUTH-STOCK-L",
+            unit_price=Decimal("1.50"),
+        )
+        stock_item = StockItem.objects.create(variant=variant, quantity_on_hand=2)
+        manager = get_user_model().objects.create_user(
+            username="variant-movement-manager",
+            password="pass",
+        )
+        manager.groups.add(Group.objects.get(name=MANAGER_GROUP))
+        client = APIClient()
+        client.force_authenticate(user=manager)
+
+        response = client.post(
+            reverse("stockmovement-list"),
+            {
+                "variant": variant.pk,
+                "movement_type": StockMovement.Type.INCREASE,
+                "quantity": 3,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        stock_item.refresh_from_db()
+        self.assertEqual(stock_item.quantity_on_hand, 5)
+        self.assertEqual(self.stock_item.quantity_on_hand, 5)
+        self.assertEqual(response.data["variant"], variant.pk)
+        self.assertEqual(response.data["variant_sku"], "AUTH-STOCK-L")
+        self.assertEqual(response.data["variant_name"], "Large")
+        self.assertEqual(response.data["variant_full_name"], "مخزون - Large")
 
     def test_stock_movement_cannot_make_stock_negative(self):
         manager = get_user_model().objects.create_user(

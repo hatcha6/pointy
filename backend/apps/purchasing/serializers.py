@@ -4,7 +4,7 @@ from django.contrib.contenttypes.models import ContentType
 from django.db.models import Sum
 from rest_framework import serializers
 
-from apps.catalog.models import Product
+from apps.catalog.models import Product, ProductVariant
 from apps.discounts.models import AppliedDiscount, DiscountRule, normalize_coupon_code
 from apps.discounts.services import (
     DiscountContext,
@@ -28,7 +28,7 @@ from .models import (
 from .services import (
     adjust_purchase_order_items,
     create_supplier_payment,
-    latest_purchase_line_for_product,
+    latest_purchase_line_for_variant,
     purchase_adjustment_line_amount,
     save_purchase_order_with_lines,
     validate_purchase_order_adjustment_allowed,
@@ -97,8 +97,17 @@ class SupplierSerializer(serializers.ModelSerializer):
 
 
 class PurchaseLineSerializer(serializers.ModelSerializer):
-    product_name = serializers.CharField(source="product.name", read_only=True)
-    product_sku = serializers.CharField(source="product.sku", read_only=True)
+    product = serializers.PrimaryKeyRelatedField(
+        queryset=Product.objects.all(),
+        required=False,
+    )
+    variant = serializers.PrimaryKeyRelatedField(
+        queryset=ProductVariant.objects.all(),
+        required=False,
+    )
+    product_name = serializers.CharField(source="variant.product.name", read_only=True)
+    product_sku = serializers.CharField(source="variant.sku", read_only=True)
+    variant_name = serializers.CharField(source="variant.display_name", read_only=True)
     line_total = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
     discount_amount = serializers.DecimalField(
         max_digits=10,
@@ -154,8 +163,10 @@ class PurchaseLineSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "product",
+            "variant",
             "product_name",
             "product_sku",
+            "variant_name",
             "quantity",
             "adjusted_quantity",
             "accepted_quantity",
@@ -232,8 +243,8 @@ class PurchaseLineSerializer(serializers.ModelSerializer):
         if not hasattr(self, "_previous_unit_cost_cache"):
             self._previous_unit_cost_cache = {}
         if line.pk not in self._previous_unit_cost_cache:
-            previous_line = latest_purchase_line_for_product(
-                line.product_id,
+            previous_line = latest_purchase_line_for_variant(
+                line.variant_id,
                 before_line=line,
             )
             self._previous_unit_cost_cache[line.pk] = (
@@ -251,14 +262,31 @@ class PurchaseLineSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Unit cost cannot be negative.")
         return value
 
+    def validate(self, attrs):
+        product = attrs.get("product")
+        variant = attrs.get("variant")
+        if variant is None and product is not None:
+            variant = product.default_variant
+        if variant is None:
+            raise serializers.ValidationError({"variant": "Variant is required."})
+        if product is not None and variant.product_id != product.pk:
+            raise serializers.ValidationError(
+                {"variant": "Variant does not belong to the selected product."}
+            )
+        attrs["variant"] = variant
+        attrs.pop("product", None)
+        return attrs
+
 
 def money_string(value):
     return str(value.quantize(Decimal("0.01")))
 
 
 class PurchaseReceiptLineSerializer(serializers.ModelSerializer):
-    product_name = serializers.CharField(source="product.name", read_only=True)
-    product_sku = serializers.CharField(source="product.sku", read_only=True)
+    product = serializers.IntegerField(source="variant.product_id", read_only=True)
+    product_name = serializers.CharField(source="variant.product.name", read_only=True)
+    product_sku = serializers.CharField(source="variant.sku", read_only=True)
+    variant_name = serializers.CharField(source="variant.display_name", read_only=True)
     received_quantity = serializers.IntegerField(read_only=True)
     backordered_quantity = serializers.IntegerField(read_only=True)
 
@@ -268,8 +296,10 @@ class PurchaseReceiptLineSerializer(serializers.ModelSerializer):
             "id",
             "purchase_line",
             "product",
+            "variant",
             "product_name",
             "product_sku",
+            "variant_name",
             "ordered_quantity",
             "outstanding_before",
             "accepted_quantity",
@@ -310,7 +340,9 @@ class PurchaseReceiptSerializer(serializers.ModelSerializer):
 
 
 class PurchaseOrderAdjustmentLineSerializer(serializers.ModelSerializer):
-    product_name = serializers.CharField(source="product.name", read_only=True)
+    product = serializers.IntegerField(source="variant.product_id", read_only=True)
+    product_name = serializers.CharField(source="variant.product.name", read_only=True)
+    variant_name = serializers.CharField(source="variant.display_name", read_only=True)
     line_total = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
 
     class Meta:
@@ -319,7 +351,9 @@ class PurchaseOrderAdjustmentLineSerializer(serializers.ModelSerializer):
             "id",
             "purchase_line",
             "product",
+            "variant",
             "product_name",
+            "variant_name",
             "quantity",
             "unit_cost",
             "line_total",
@@ -329,9 +363,14 @@ class PurchaseOrderAdjustmentLineSerializer(serializers.ModelSerializer):
 
 class ProductCostHistorySerializer(serializers.ModelSerializer):
     product = serializers.IntegerField(
-        source="product_id",
+        source="variant.product_id",
         read_only=True,
     )
+    variant = serializers.IntegerField(
+        source="variant_id",
+        read_only=True,
+    )
+    variant_name = serializers.CharField(source="variant.display_name", read_only=True)
     purchase_order = serializers.IntegerField(
         source="purchase_order_id",
         read_only=True,
@@ -362,6 +401,8 @@ class ProductCostHistorySerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "product",
+            "variant",
+            "variant_name",
             "purchase_order",
             "order_number",
             "supplier",
@@ -428,8 +469,10 @@ class PurchaseAdjustmentHistorySerializer(serializers.ModelSerializer):
         source="adjustment.purchase_order.supplier.name",
         read_only=True,
     )
-    product_name = serializers.CharField(source="product.name", read_only=True)
-    product_sku = serializers.CharField(source="product.sku", read_only=True)
+    product = serializers.IntegerField(source="variant.product_id", read_only=True)
+    product_name = serializers.CharField(source="variant.product.name", read_only=True)
+    product_sku = serializers.CharField(source="variant.sku", read_only=True)
+    variant_name = serializers.CharField(source="variant.display_name", read_only=True)
     line_total = serializers.DecimalField(
         max_digits=10,
         decimal_places=2,
@@ -460,6 +503,8 @@ class PurchaseAdjustmentHistorySerializer(serializers.ModelSerializer):
             "product",
             "product_name",
             "product_sku",
+            "variant",
+            "variant_name",
             "quantity",
             "unit_cost",
             "line_total",
@@ -469,7 +514,9 @@ class PurchaseAdjustmentHistorySerializer(serializers.ModelSerializer):
 
 
 class PurchaseOrderAdjustmentReplacementLineSerializer(serializers.ModelSerializer):
-    product_name = serializers.CharField(source="product.name", read_only=True)
+    product = serializers.IntegerField(source="variant.product_id", read_only=True)
+    product_name = serializers.CharField(source="variant.product.name", read_only=True)
+    variant_name = serializers.CharField(source="variant.display_name", read_only=True)
     line_total = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
 
     class Meta:
@@ -477,7 +524,9 @@ class PurchaseOrderAdjustmentReplacementLineSerializer(serializers.ModelSerializ
         fields = [
             "id",
             "product",
+            "variant",
             "product_name",
+            "variant_name",
             "quantity",
             "unit_cost",
             "line_total",
@@ -545,13 +594,35 @@ class PurchaseOrderAdjustmentSerializer(serializers.ModelSerializer):
 
 
 class PurchaseDiscountPreviewLineSerializer(serializers.Serializer):
-    product = serializers.PrimaryKeyRelatedField(queryset=Product.objects.all())
+    product = serializers.PrimaryKeyRelatedField(
+        queryset=Product.objects.all(),
+        required=False,
+    )
+    variant = serializers.PrimaryKeyRelatedField(
+        queryset=ProductVariant.objects.all(),
+        required=False,
+    )
     quantity = serializers.IntegerField(min_value=1)
     unit_cost = serializers.DecimalField(
         max_digits=10,
         decimal_places=2,
         min_value=Decimal("0.00"),
     )
+
+    def validate(self, attrs):
+        product = attrs.get("product")
+        variant = attrs.get("variant")
+        if variant is None and product is not None:
+            variant = product.default_variant
+        if variant is None:
+            raise serializers.ValidationError({"variant": "Variant is required."})
+        if product is not None and variant.product_id != product.pk:
+            raise serializers.ValidationError(
+                {"variant": "Variant does not belong to the selected product."}
+            )
+        attrs["variant"] = variant
+        attrs.pop("product", None)
+        return attrs
 
 
 class PurchaseDiscountPreviewSerializer(serializers.Serializer):
@@ -601,10 +672,13 @@ class PurchaseDiscountPreviewSerializer(serializers.Serializer):
         discount_lines = tuple(
             DiscountLineInput(
                 key=str(index),
-                product_id=line["product"].pk,
+                product_id=line["variant"].product_id,
+                variant_id=line["variant"].pk,
                 quantity=line["quantity"],
                 unit_amount=line["unit_cost"],
-                category_ids=tuple(line["product"].categories.values_list("id", flat=True)),
+                category_ids=tuple(
+                    line["variant"].product.categories.values_list("id", flat=True)
+                ),
             )
             for index, line in enumerate(attrs["lines"])
         )
@@ -730,7 +804,8 @@ def purchase_preview_line_payloads(
     payloads = []
     for index, line in enumerate(lines):
         key = str(index)
-        product = line["product"]
+        variant = line["variant"]
+        product = variant.product
         quantity = Decimal(line["quantity"])
         line_total = (line["unit_cost"] * quantity).quantize(Decimal("0.01"))
         discount_amount = discounts_by_key[key]
@@ -744,8 +819,10 @@ def purchase_preview_line_payloads(
         payloads.append(
             {
                 "product": product.pk,
+                "variant": variant.pk,
                 "product_name": product.name,
-                "product_sku": product.sku,
+                "product_sku": variant.sku,
+                "variant_name": variant.display_name,
                 "quantity": int(quantity),
                 "unit_cost": f"{line['unit_cost']:.2f}",
                 "line_total": f"{line_total:.2f}",
@@ -1005,10 +1082,10 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
         return True
 
     def validate_lines(self, value):
-        product_ids = [line["product"].pk for line in value]
-        if len(product_ids) != len(set(product_ids)):
+        variant_ids = [line["variant"].pk for line in value]
+        if len(variant_ids) != len(set(variant_ids)):
             raise serializers.ValidationError(
-                "Each product can appear only once per purchase order."
+                "Each variant can appear only once per purchase order."
             )
         return value
 
@@ -1180,7 +1257,7 @@ class PurchaseReceiptInputSerializer(serializers.Serializer):
                 pk__in=requested_by_line,
                 purchase_order=purchase_order,
             )
-            .select_related("product")
+            .select_related("variant", "variant__product")
             .prefetch_related("receipt_lines")
         }
         for line_id, line_data in requested_by_line.items():
@@ -1229,13 +1306,35 @@ class PurchaseOrderAdjustmentLineInputSerializer(serializers.Serializer):
 
 
 class PurchaseOrderReplacementLineInputSerializer(serializers.Serializer):
-    product = serializers.PrimaryKeyRelatedField(queryset=Product.objects.all())
+    product = serializers.PrimaryKeyRelatedField(
+        queryset=Product.objects.all(),
+        required=False,
+    )
+    variant = serializers.PrimaryKeyRelatedField(
+        queryset=ProductVariant.objects.all(),
+        required=False,
+    )
     quantity = serializers.IntegerField(min_value=1)
     unit_cost = serializers.DecimalField(
         max_digits=10,
         decimal_places=2,
         min_value=Decimal("0.00"),
     )
+
+    def validate(self, attrs):
+        product = attrs.get("product")
+        variant = attrs.get("variant")
+        if variant is None and product is not None:
+            variant = product.default_variant
+        if variant is None:
+            raise serializers.ValidationError({"variant": "Variant is required."})
+        if product is not None and variant.product_id != product.pk:
+            raise serializers.ValidationError(
+                {"variant": "Variant does not belong to the selected product."}
+            )
+        attrs["variant"] = variant
+        attrs.pop("product", None)
+        return attrs
 
 
 class PurchaseOrderAdjustmentInputSerializer(serializers.Serializer):
@@ -1268,7 +1367,7 @@ class PurchaseOrderAdjustmentInputSerializer(serializers.Serializer):
             for line in PurchaseLine.objects.filter(
                 pk__in=requested_by_line,
                 purchase_order=purchase_order,
-            ).select_related("product")
+            ).select_related("variant", "variant__product")
         }
         validated_lines = []
         for line_id, quantity in requested_by_line.items():
@@ -1349,7 +1448,7 @@ class PurchaseOrderExchangeSerializer(PurchaseOrderAdjustmentInputSerializer):
         if replacement_lines is None:
             replacement_lines = [
                 {
-                    "product": line.product,
+                    "variant": line.variant,
                     "quantity": quantity,
                     "unit_cost": (
                         purchase_adjustment_line_amount(line, quantity)
@@ -1360,7 +1459,7 @@ class PurchaseOrderExchangeSerializer(PurchaseOrderAdjustmentInputSerializer):
             ]
         attrs["validated_replacement_lines"] = [
             (
-                line_data["product"],
+                line_data["variant"],
                 line_data["quantity"],
                 line_data["unit_cost"],
             )

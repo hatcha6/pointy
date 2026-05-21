@@ -13,7 +13,9 @@ extension PosCartActions on PosViewModel {
       return;
     }
 
-    final index = _cart.indexWhere((line) => line.product.id == product.id);
+    final index = _cart.indexWhere(
+      (line) => line.product.sellableId == product.sellableId,
+    );
     if (index == -1) {
       return;
     }
@@ -44,7 +46,9 @@ extension PosCartActions on PosViewModel {
       return false;
     }
 
-    final index = _cart.indexWhere((line) => line.product.id == product.id);
+    final index = _cart.indexWhere(
+      (line) => line.product.sellableId == product.sellableId,
+    );
     if (index == -1) {
       _cart.add(CartLine(product: product, quantity: quantity));
     } else {

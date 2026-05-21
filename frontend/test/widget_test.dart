@@ -296,7 +296,7 @@ void main() {
       {'method': 'cash', 'amount': '7.00'},
     ]);
     expect(checkoutBody?['lines'], [
-      {'product': 1, 'quantity': 2},
+      {'variant': 1, 'quantity': 2},
     ]);
     expect(find.text('لا توجد عناصر في السلة'), findsOneWidget);
     expect(find.text('تم تسجيل البيع. رقم الإيصال: R-100'), findsOneWidget);
@@ -2243,7 +2243,7 @@ void main() {
     await tester.tap(find.text('حفظ الحركة'));
     await tester.pumpAndSettle(const Duration(seconds: 1));
 
-    expect(movementBody?['product'], 1);
+    expect(movementBody?['variant'], 1);
     expect(movementBody?['movement_type'], 'increase');
     expect(movementBody?['quantity'], 5);
     expect(movementBody?['note'], 'جرد الرف');
@@ -2696,17 +2696,25 @@ PosApiService _mockApiService({
       if (path.endsWith('/products/')) {
         if (request.method == 'POST') {
           final body = jsonDecode(request.body) as Map<String, Object?>;
+          final defaultVariant =
+              body['default_variant'] as Map<String, Object?>? ??
+              const <String, Object?>{};
           return _jsonResponse({
             'id': 9,
             'quantity_on_hand': 0,
             'description': '',
             'is_active': true,
             ...body,
+            'default_variant': {
+              'id': 9,
+              'product': 9,
+              'product_name': body['name'] ?? '',
+              'display_name': body['name'] ?? '',
+              'full_name': body['name'] ?? '',
+              'quantity_on_hand': 0,
+              ...defaultVariant,
+            },
           });
-        }
-        final requestedBarcode = request.url.queryParameters['barcode'];
-        if (requestedBarcode != null && requestedBarcode != productBarcode) {
-          return _jsonResponse({'next': null, 'results': []});
         }
         return _jsonResponse(
           _productPageJson(
@@ -2714,6 +2722,24 @@ PosApiService _mockApiService({
             barcode: productBarcode,
           ),
         );
+      }
+
+      if (path.endsWith('/product-variants/')) {
+        final requestedBarcode = request.url.queryParameters['barcode'];
+        if (requestedBarcode != null && requestedBarcode != productBarcode) {
+          return _jsonResponse({'next': null, 'results': []});
+        }
+        return _jsonResponse({
+          'count': 1,
+          'next': null,
+          'previous': null,
+          'results': [
+            _productVariantJson(
+              quantityOnHand: productQuantityOnHand,
+              barcode: productBarcode,
+            ),
+          ],
+        });
       }
 
       if (path.endsWith('/product-categories/')) {
@@ -2861,7 +2887,28 @@ PosApiService _mockApiService({
         if (request.method == 'POST') {
           onPurchaseOrderCreate?.call(request);
           final body = jsonDecode(request.body) as Map<String, Object?>;
-          return _jsonResponse({..._purchaseOrderJson(), ...body});
+          final lines = body['lines'] is List<Object?>
+              ? body['lines'] as List<Object?>
+              : const <Object?>[];
+          return _jsonResponse({
+            ..._purchaseOrderJson(),
+            ...body,
+            'lines': [
+              for (final line in lines.whereType<Map<String, Object?>>())
+                {
+                  'id': 1,
+                  'product': 1,
+                  'variant': line['variant'],
+                  'product_name': 'قهوة البيت',
+                  'product_sku': 'COF-001',
+                  'quantity': line['quantity'],
+                  'adjusted_quantity': 0,
+                  'adjustable_quantity': 2,
+                  'unit_cost': line['unit_cost'],
+                  'line_total': line['unit_cost'],
+                },
+            ],
+          });
         }
         return _jsonResponse({
           'count': 1,
@@ -3269,15 +3316,50 @@ Map<String, Object?> _productPageJson({
     'results': [
       {
         'id': 1,
-        'sku': 'COF-001',
         'name': 'قهوة البيت',
-        'unit_price': '3.50',
-        'barcode': barcode,
         'description': '',
         'is_active': true,
         'quantity_on_hand': quantityOnHand,
+        'default_variant': _productVariantJson(
+          quantityOnHand: quantityOnHand,
+          barcode: barcode,
+        ),
+        'variants': [
+          _productVariantJson(quantityOnHand: quantityOnHand, barcode: barcode),
+        ],
       },
     ],
+  };
+}
+
+Map<String, Object?> _productVariantJson({
+  int id = 1,
+  int productId = 1,
+  int quantityOnHand = 12,
+  String barcode = '',
+}) {
+  return {
+    'id': id,
+    'product': productId,
+    'product_name': 'قهوة البيت',
+    'product_detail': {
+      'id': productId,
+      'name': 'قهوة البيت',
+      'description': '',
+      'is_active': true,
+      'categories': const [],
+      'category_details': const [],
+    },
+    'name': '',
+    'display_name': 'قهوة البيت',
+    'full_name': 'قهوة البيت',
+    'sku': 'COF-001',
+    'barcode': barcode,
+    'unit_price': '3.50',
+    'is_active': true,
+    'is_default': true,
+    'option_values': const [],
+    'quantity_on_hand': quantityOnHand,
   };
 }
 
@@ -3518,7 +3600,7 @@ Map<String, Object?> _purchaseExchangeAdjustmentJson(
       for (final line in replacementLines.whereType<Map<String, Object?>>())
         {
           'id': 303,
-          'product': line['product'],
+          'product': line['product'] ?? line['variant'],
           'product_name': 'قهوة البيت',
           'quantity': line['quantity'],
           'unit_cost': line['unit_cost'],
@@ -3700,7 +3782,8 @@ Map<String, Object?> _saleDiscountPreviewJson(Map<String, Object?> body) {
       : const <Object?>[];
   var subtotal = 0.0;
   for (final line in lines.whereType<Map<String, Object?>>()) {
-    final productId = int.tryParse('${line['product']}') ?? 0;
+    final productId =
+        int.tryParse('${line['variant'] ?? line['product']}') ?? 0;
     final quantity = int.tryParse('${line['quantity']}') ?? 0;
     final unitPrice = productId == 1 ? 3.50 : 0.0;
     subtotal += unitPrice * quantity;

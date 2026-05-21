@@ -33,6 +33,8 @@ packages = [
   "apps.core.management",
   "apps.core.management.commands",
   "apps.catalog",
+  "apps.catalog.management",
+  "apps.catalog.management.commands",
   "apps.catalog.migrations",
   "apps.inventory",
   "apps.inventory.migrations",

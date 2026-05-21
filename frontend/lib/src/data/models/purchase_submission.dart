@@ -378,7 +378,7 @@ class PurchaseOrderDraft {
       lines: lines
           .map(
             (line) => PurchaseOrderLineDraft(
-              productId: line.product.id,
+              productId: line.product.variantId,
               quantity: line.quantity,
               unitCost: line.unitCost,
             ),
@@ -450,7 +450,7 @@ class PurchaseDiscountPreviewDraft {
       lines: lines
           .map(
             (line) => PurchaseOrderLineDraft(
-              productId: line.product.id,
+              productId: line.product.variantId,
               quantity: line.quantity,
               unitCost: line.unitCost,
             ),
@@ -534,18 +534,20 @@ class PurchaseDraftLine {
 
 class PurchaseOrderLineDraft {
   const PurchaseOrderLineDraft({
-    required this.productId,
+    required int productId,
     required this.quantity,
     required this.unitCost,
-  });
+  }) : variantId = productId;
 
-  final int productId;
+  final int variantId;
   final int quantity;
   final double unitCost;
 
+  int get productId => variantId;
+
   Map<String, Object?> toJson() {
     return {
-      'product': productId,
+      'variant': variantId,
       'quantity': quantity,
       'unit_cost': unitCost.toStringAsFixed(2),
     };

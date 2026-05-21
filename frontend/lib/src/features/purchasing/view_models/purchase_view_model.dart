@@ -23,7 +23,7 @@ class PurchaseViewModel extends ChangeNotifier {
 
   List<Product> _products = [];
   final List<PurchaseDraftLine> _draft = [];
-  final Map<int, double> _lastCostByProductId = {};
+  final Map<int, double> _lastCostByVariantId = {};
   SupplierContact? _selectedSupplier;
   bool _isLoading = false;
   bool _isLoadingMore = false;
@@ -205,9 +205,11 @@ class PurchaseViewModel extends ChangeNotifier {
       return;
     }
 
-    final index = _draft.indexWhere((line) => line.product.id == product.id);
+    final index = _draft.indexWhere(
+      (line) => line.product.sellableId == product.sellableId,
+    );
     if (index == -1) {
-      final cost = unitCost ?? await _lastCostForProduct(product.id);
+      final cost = unitCost ?? await _lastCostForProduct(product);
       if (_isSubmitting) {
         return;
       }
@@ -234,7 +236,9 @@ class PurchaseViewModel extends ChangeNotifier {
       return;
     }
 
-    final index = _draft.indexWhere((line) => line.product.id == product.id);
+    final index = _draft.indexWhere(
+      (line) => line.product.sellableId == product.sellableId,
+    );
     if (index == -1) {
       return;
     }
@@ -253,11 +257,13 @@ class PurchaseViewModel extends ChangeNotifier {
     if (_isSubmitting || unitCost < 0) {
       return;
     }
-    final index = _draft.indexWhere((line) => line.product.id == product.id);
+    final index = _draft.indexWhere(
+      (line) => line.product.sellableId == product.sellableId,
+    );
     if (index == -1) {
       return;
     }
-    _lastCostByProductId[product.id] = unitCost;
+    _lastCostByVariantId[product.sellableId] = unitCost;
     _draft[index] = _draft[index].copyWith(unitCost: unitCost);
     notifyListeners();
     unawaited(refreshDiscountPreview());
@@ -424,21 +430,25 @@ class PurchaseViewModel extends ChangeNotifier {
     if (unitCost < 0) {
       return;
     }
-    _lastCostByProductId[product.id] = unitCost;
+    _lastCostByVariantId[product.sellableId] = unitCost;
   }
 
-  Future<double> _lastCostForProduct(int productId) async {
-    final cached = _lastCostByProductId[productId];
+  Future<double> _lastCostForProduct(Product product) async {
+    final variantId = product.sellableId;
+    final cached = _lastCostByVariantId[variantId];
     if (cached != null) {
       return cached;
     }
 
-    final result = await _purchaseRepository.loadLastProductCost(productId);
+    final result = await _purchaseRepository.loadLastProductCost(
+      product.id,
+      variantId: variantId,
+    );
     final cost = switch (result) {
       Ok<double?>(:final value) => value ?? 0,
       Error<double?>() => 0.0,
     };
-    _lastCostByProductId[productId] = cost;
+    _lastCostByVariantId[variantId] = cost;
     return cost;
   }
 

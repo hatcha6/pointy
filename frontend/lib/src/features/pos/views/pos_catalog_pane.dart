@@ -120,7 +120,7 @@ class _PosCatalogGrid extends StatelessWidget {
               ),
               itemBuilder: (context, product) {
                 return ProductTile(
-                  key: ValueKey(product.id),
+                  key: ValueKey(product.sellableId),
                   product: product,
                   onTap: canCheckout
                       ? () => viewModel.addProduct(product)

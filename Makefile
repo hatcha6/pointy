@@ -14,7 +14,8 @@ API_HOST ?= 127.0.0.1
 API_PORT ?= 8000
 
 .PHONY: help setup install docker-check redis redis-local redis-stop redis-logs redis-ping \
-	backend-venv backend-install backend-env backend-migrate backend-migrations backend-run \
+		backend-venv backend-install backend-env backend-migrate backend-migrations backend-run \
+		backend-seed-variants \
 	backend-shell backend-superuser backend-test backend-check backend-celery \
 	frontend-install frontend-l10n frontend-run frontend-web frontend-test frontend-analyze frontend-format \
 	format check test dev dev-local dev-no-redis clean
@@ -84,6 +85,9 @@ backend-shell: backend-env backend-install ## Open the Django shell.
 
 backend-superuser: backend-env backend-install ## Create a Django superuser.
 	$(MANAGE) createsuperuser
+
+backend-seed-variants: backend-env backend-install ## Seed common product variant options.
+	$(MANAGE) seed_variant_options
 
 backend-test: backend-env backend-install ## Run backend tests.
 	$(MANAGE) test apps

@@ -33,7 +33,7 @@ class ProductTile extends StatelessWidget {
                 children: [
                   Expanded(
                     child: Text(
-                      product.sku,
+                      product.effectiveSku,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.labelMedium,
@@ -45,7 +45,7 @@ class ProductTile extends StatelessWidget {
               const SizedBox(height: 10),
               Expanded(
                 child: Text(
-                  product.name,
+                  product.sellableName,
                   style: Theme.of(context).textTheme.titleMedium,
                   maxLines: 3,
                   overflow: TextOverflow.ellipsis,
@@ -54,7 +54,7 @@ class ProductTile extends StatelessWidget {
               if (showPrice) ...[
                 const SizedBox(height: 10),
                 Text(
-                  formatMoney(product.unitPrice),
+                  formatMoney(product.effectiveUnitPrice),
                   style: Theme.of(context).textTheme.titleSmall,
                 ),
               ],

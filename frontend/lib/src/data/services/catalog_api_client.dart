@@ -23,11 +23,112 @@ class CatalogApiClient {
     );
   }
 
+  Future<Product> fetchProduct(int id) async {
+    final response = await _session.get('products/$id/');
+    _session.ensureSuccess(
+      response,
+      'Product detail request failed with status',
+    );
+    return Product.fromJson(
+      _session.decodedBody(response) as Map<String, Object?>,
+    );
+  }
+
   Future<Product> createProduct(ProductDraft draft) async {
     final response = await _session.post('products/', body: draft.toJson());
     _session.ensureSuccess(response, 'Product create failed with status');
     return Product.fromJson(
       _session.decodedBody(response) as Map<String, Object?>,
+    );
+  }
+
+  Future<ProductVariantPage> fetchProductVariants({
+    required ModelQuery query,
+    int page = 1,
+  }) async {
+    final response = await _session.get(
+      'product-variants/',
+      query: query.toQueryParameters(page: page),
+    );
+    _session.ensureSuccess(
+      response,
+      'Product variant request failed with status',
+    );
+    return ProductVariantPage.fromJson(
+      _session.decodedBody(response) as Map<String, Object?>,
+    );
+  }
+
+  Future<ProductVariantPage> fetchVariantsForProduct(
+    int productId, {
+    int page = 1,
+  }) async {
+    final response = await _session.get(
+      'products/$productId/variants/',
+      query: {'page': '$page'},
+    );
+    _session.ensureSuccess(
+      response,
+      'Product variant request failed with status',
+    );
+    return ProductVariantPage.fromJson(
+      _session.decodedBody(response) as Map<String, Object?>,
+    );
+  }
+
+  Future<ProductVariant> createProductVariant(ProductVariantDraft draft) async {
+    final response = await _session.post(
+      'product-variants/',
+      body: draft.toJson(),
+    );
+    _session.ensureSuccess(
+      response,
+      'Product variant create failed with status',
+    );
+    return ProductVariant.fromJson(
+      _session.decodedBody(response) as Map<String, Object?>,
+    );
+  }
+
+  Future<ProductVariant> createVariantForProduct(
+    int productId,
+    ProductVariantDraft draft,
+  ) async {
+    final response = await _session.post(
+      'products/$productId/variants/',
+      body: draft.toJson(includeProduct: false),
+    );
+    _session.ensureSuccess(
+      response,
+      'Product variant create failed with status',
+    );
+    return ProductVariant.fromJson(
+      _session.decodedBody(response) as Map<String, Object?>,
+    );
+  }
+
+  Future<ProductVariant> updateProductVariant({
+    required int id,
+    required ProductVariantDraft draft,
+  }) async {
+    final response = await _session.patch(
+      'product-variants/$id/',
+      body: draft.toJson(),
+    );
+    _session.ensureSuccess(
+      response,
+      'Product variant update failed with status',
+    );
+    return ProductVariant.fromJson(
+      _session.decodedBody(response) as Map<String, Object?>,
+    );
+  }
+
+  Future<void> deleteProductVariant(int id) async {
+    final response = await _session.delete('product-variants/$id/');
+    _session.ensureSuccess(
+      response,
+      'Product variant delete failed with status',
     );
   }
 

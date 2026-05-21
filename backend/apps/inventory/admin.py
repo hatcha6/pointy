@@ -6,6 +6,7 @@ from .models import StockItem, StockMovement
 @admin.register(StockItem)
 class StockItemAdmin(admin.ModelAdmin):
     list_display = (
+        "variant",
         "product",
         "quantity_on_hand",
         "quantity_committed",
@@ -13,12 +14,18 @@ class StockItemAdmin(admin.ModelAdmin):
         "reorder_level",
         "updated_at",
     )
-    search_fields = ("product__sku", "product__barcode", "product__name")
+    search_fields = (
+        "variant__sku",
+        "variant__barcode",
+        "variant__name",
+        "variant__product__name",
+    )
 
 
 @admin.register(StockMovement)
 class StockMovementAdmin(admin.ModelAdmin):
     list_display = (
+        "variant",
         "product",
         "movement_type",
         "quantity",
@@ -28,4 +35,10 @@ class StockMovementAdmin(admin.ModelAdmin):
         "created_at",
     )
     list_filter = ("movement_type",)
-    search_fields = ("product__sku", "product__barcode", "product__name", "note")
+    search_fields = (
+        "variant__sku",
+        "variant__barcode",
+        "variant__name",
+        "variant__product__name",
+        "note",
+    )

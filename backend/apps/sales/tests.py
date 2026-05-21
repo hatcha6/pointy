@@ -9,7 +9,7 @@ from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APIClient
 
-from apps.catalog.models import Product
+from apps.catalog.models import Product, ProductVariant
 from apps.core.models import ShopSettings
 from apps.core.roles import CASHIER_GROUP, MANAGER_GROUP, ensure_role_groups
 from apps.customers.models import Customer
@@ -662,6 +662,97 @@ class OrderCheckoutApiTests(TestCase):
 
         order_line = Order.objects.get(pk=response.data["id"]).lines.get()
         self.assertEqual(order_line.unit_cost, Decimal("2.00"))
+
+    def test_checkout_prices_costs_and_stocks_the_exact_variant(self):
+        variant = ProductVariant.objects.create(
+            product=self.product,
+            name="Large",
+            sku="COFFEE-L",
+            unit_price=Decimal("5.75"),
+        )
+        variant_stock = StockItem.objects.create(
+            variant=variant,
+            quantity_on_hand=6,
+        )
+        supplier = Supplier.objects.create(name="Variant cost supplier")
+        default_purchase = PurchaseOrder.objects.create(
+            supplier=supplier,
+            status=PurchaseOrder.Status.RECEIVED,
+        )
+        default_purchase.lines.create(
+            product=self.product,
+            quantity=10,
+            unit_cost=Decimal("2.00"),
+        )
+        variant_purchase = PurchaseOrder.objects.create(
+            supplier=supplier,
+            status=PurchaseOrder.Status.RECEIVED,
+        )
+        variant_purchase.lines.create(
+            variant=variant,
+            quantity=10,
+            unit_cost=Decimal("4.25"),
+        )
+        self.start_session()
+
+        response = self.client.post(
+            reverse("order-checkout"),
+            {
+                "lines": [{"variant": variant.pk, "quantity": 2}],
+                "payment_method": "cash",
+                "amount_received": "11.50",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        line = response.data["lines"][0]
+        self.assertEqual(line["product"], self.product.pk)
+        self.assertEqual(line["variant"], variant.pk)
+        self.assertEqual(line["unit_price"], "5.75")
+        self.assertEqual(line["unit_cost"], "4.25")
+        self.assertEqual(line["line_cost"], "8.50")
+        self.assertEqual(line["line_profit"], "3.00")
+        self.stock_item.refresh_from_db()
+        variant_stock.refresh_from_db()
+        self.assertEqual(self.stock_item.quantity_on_hand, 10)
+        self.assertEqual(variant_stock.quantity_on_hand, 4)
+
+        order_line = Order.objects.get(pk=response.data["id"]).lines.get()
+        self.assertEqual(order_line.variant_id, variant.pk)
+        self.assertEqual(order_line.unit_cost, Decimal("4.25"))
+
+    def test_checkout_shortages_are_grouped_by_variant(self):
+        variant = ProductVariant.objects.create(
+            product=self.product,
+            name="Small",
+            sku="COFFEE-S",
+            unit_price=Decimal("3.50"),
+        )
+        StockItem.objects.create(variant=variant, quantity_on_hand=4)
+        self.start_session()
+
+        response = self.client.post(
+            reverse("order-checkout"),
+            {
+                "lines": [
+                    {"variant": variant.pk, "quantity": 2},
+                    {"variant": variant.pk, "quantity": 3},
+                ],
+                "payment_method": "cash",
+                "amount_received": "17.50",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(len(response.data["stock"]), 1)
+        shortage = response.data["stock"][0]
+        self.assertEqual(int(shortage["product_id"]), self.product.pk)
+        self.assertEqual(int(shortage["variant_id"]), variant.pk)
+        self.assertEqual(shortage["variant_name"], "Coffee - Small")
+        self.assertEqual(int(shortage["requested"]), 5)
+        self.assertEqual(int(shortage["available"]), 4)
 
     def test_checkout_creates_paid_order_and_payment(self):
         self.start_session()

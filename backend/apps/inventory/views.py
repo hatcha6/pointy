@@ -1,3 +1,4 @@
+import django_filters
 from django.db import transaction
 from rest_framework import mixins, serializers, viewsets
 from rest_framework.permissions import IsAuthenticated
@@ -5,6 +6,14 @@ from rest_framework.permissions import IsAuthenticated
 from apps.core.permissions import HasPointyPermission
 from .models import StockItem, StockMovement
 from .serializers import StockItemSerializer, StockMovementSerializer
+
+
+class StockItemFilter(django_filters.FilterSet):
+    product = django_filters.NumberFilter(field_name="variant__product_id")
+
+    class Meta:
+        model = StockItem
+        fields = ("product", "variant")
 
 
 class StockItemViewSet(viewsets.ModelViewSet):
@@ -18,10 +27,23 @@ class StockItemViewSet(viewsets.ModelViewSet):
         "partial_update": ("inventory.change_stockitem",),
         "destroy": ("inventory.delete_stockitem",),
     }
-    queryset = StockItem.objects.select_related("product")
-    filterset_fields = ("product",)
-    search_fields = ("product__sku", "product__barcode", "product__name")
+    queryset = StockItem.objects.select_related("variant", "variant__product")
+    filterset_class = StockItemFilter
+    search_fields = (
+        "variant__sku",
+        "variant__barcode",
+        "variant__name",
+        "variant__product__name",
+    )
     ordering_fields = ("quantity_on_hand", "updated_at")
+
+
+class StockMovementFilter(django_filters.FilterSet):
+    product = django_filters.NumberFilter(field_name="variant__product_id")
+
+    class Meta:
+        model = StockMovement
+        fields = ("product", "variant", "movement_type")
 
 
 class StockMovementViewSet(
@@ -37,19 +59,30 @@ class StockMovementViewSet(
         "retrieve": ("inventory.view_stockmovement",),
         "create": ("inventory.add_stockmovement",),
     }
-    queryset = StockMovement.objects.select_related("product", "stock_item", "created_by")
-    filterset_fields = ("product", "movement_type")
-    search_fields = ("product__sku", "product__barcode", "product__name", "note")
+    queryset = StockMovement.objects.select_related(
+        "variant",
+        "variant__product",
+        "stock_item",
+        "created_by",
+    )
+    filterset_class = StockMovementFilter
+    search_fields = (
+        "variant__sku",
+        "variant__barcode",
+        "variant__name",
+        "variant__product__name",
+        "note",
+    )
     ordering_fields = ("created_at", "quantity", "movement_type")
 
     def perform_create(self, serializer):
-        product = serializer.validated_data["product"]
+        variant = serializer.validated_data["variant"]
         quantity = serializer.validated_data["quantity"]
         movement_type = serializer.validated_data["movement_type"]
 
         with transaction.atomic():
             stock_item, _ = StockItem.objects.select_for_update().get_or_create(
-                product=product,
+                variant=variant,
             )
             before = {
                 "on_hand": stock_item.quantity_on_hand,
@@ -67,6 +100,7 @@ class StockMovementViewSet(
             )
             serializer.save(
                 stock_item=stock_item,
+                variant=variant,
                 created_by=self.request.user,
                 on_hand_before=before["on_hand"],
                 on_hand_after=after["on_hand"],

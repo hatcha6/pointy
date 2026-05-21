@@ -3,7 +3,7 @@ from decimal import Decimal
 from django.contrib.contenttypes.models import ContentType
 from rest_framework import serializers
 
-from apps.catalog.models import Product
+from apps.catalog.models import Product, ProductVariant
 from apps.core.models import ShopSettings
 from apps.core.roles import user_is_manager
 from apps.customers.models import Customer
@@ -202,7 +202,16 @@ class RegisterCashMovementCreateSerializer(serializers.Serializer):
 
 
 class OrderLineSerializer(serializers.ModelSerializer):
-    product_name = serializers.CharField(source="product.name", read_only=True)
+    product = serializers.PrimaryKeyRelatedField(
+        queryset=Product.objects.all(),
+        required=False,
+    )
+    variant = serializers.PrimaryKeyRelatedField(
+        queryset=ProductVariant.objects.active(),
+        required=False,
+    )
+    product_name = serializers.CharField(source="variant.product.name", read_only=True)
+    variant_name = serializers.CharField(source="variant.display_name", read_only=True)
     line_subtotal = serializers.DecimalField(
         max_digits=10,
         decimal_places=2,
@@ -223,7 +232,9 @@ class OrderLineSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "product",
+            "variant",
             "product_name",
+            "variant_name",
             "quantity",
             "returned_quantity",
             "returnable_quantity",
@@ -241,6 +252,21 @@ class OrderLineSerializer(serializers.ModelSerializer):
         if value < 1:
             raise serializers.ValidationError("Quantity must be positive.")
         return value
+
+    def validate(self, attrs):
+        product = attrs.get("product")
+        variant = attrs.get("variant")
+        if variant is None and product is not None:
+            variant = product.default_variant
+        if variant is None:
+            raise serializers.ValidationError({"variant": "Variant is required."})
+        if product is not None and variant.product_id != product.pk:
+            raise serializers.ValidationError(
+                {"variant": "Variant does not belong to the selected product."}
+            )
+        attrs["variant"] = variant
+        attrs.pop("product", None)
+        return attrs
 
 
 class OrderPaymentSerializer(serializers.Serializer):
@@ -365,8 +391,30 @@ class OrderSerializer(serializers.ModelSerializer):
 
 
 class CheckoutLineSerializer(serializers.Serializer):
-    product = serializers.PrimaryKeyRelatedField(queryset=Product.objects.all())
+    product = serializers.PrimaryKeyRelatedField(
+        queryset=Product.objects.all(),
+        required=False,
+    )
+    variant = serializers.PrimaryKeyRelatedField(
+        queryset=ProductVariant.objects.active(),
+        required=False,
+    )
     quantity = serializers.IntegerField(min_value=1)
+
+    def validate(self, attrs):
+        product = attrs.get("product")
+        variant = attrs.get("variant")
+        if variant is None and product is not None:
+            variant = product.default_variant
+        if variant is None:
+            raise serializers.ValidationError({"variant": "Variant is required."})
+        if product is not None and variant.product_id != product.pk:
+            raise serializers.ValidationError(
+                {"variant": "Variant does not belong to the selected product."}
+            )
+        attrs["variant"] = variant
+        attrs.pop("product", None)
+        return attrs
 
 
 class CheckoutPaymentSerializer(serializers.Serializer):
@@ -612,7 +660,7 @@ class OrderReturnSerializer(OrderAdjustmentSerializer):
             for line in OrderLine.objects.filter(
                 pk__in=requested_by_line,
                 order=order,
-            ).select_related("product")
+            ).select_related("variant", "variant__product")
         }
         validated_lines = []
         for line_id, quantity in requested_by_line.items():

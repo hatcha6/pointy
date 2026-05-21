@@ -6,7 +6,7 @@ from django.db import models, transaction
 from django.db.models import Q, Sum
 from django.utils import timezone
 
-from apps.catalog.models import Product
+from apps.catalog.models import Product, ProductVariant
 from apps.core.models import TimeStampedModel
 
 
@@ -129,7 +129,12 @@ class PurchaseOrder(TimeStampedModel):
         ]
 
     def recalculate(self):
-        lines = list(self.lines.select_related("product").order_by("created_at", "id"))
+        lines = list(
+            self.lines.select_related("variant", "variant__product").order_by(
+                "created_at",
+                "id",
+            )
+        )
         discount_result = self.apply_discounts(lines)
         landed_cost_total = self.landed_cost_total
         self.total = (
@@ -154,10 +159,13 @@ class PurchaseOrder(TimeStampedModel):
             lines=tuple(
                 DiscountLineInput(
                     key=str(line.pk),
-                    product_id=line.product_id,
+                    product_id=line.variant.product_id,
+                    variant_id=line.variant_id,
                     quantity=line.quantity,
                     unit_amount=line.unit_cost,
-                    category_ids=tuple(line.product.categories.values_list("id", flat=True)),
+                    category_ids=tuple(
+                        line.variant.product.categories.values_list("id", flat=True)
+                    ),
                 )
                 for line in lines
             ),
@@ -339,13 +347,113 @@ class PurchaseOrder(TimeStampedModel):
         )
 
 
-class PurchaseLine(TimeStampedModel):
+def resolve_line_variant(product=None, variant=None):
+    if variant is not None:
+        return variant
+    if isinstance(product, ProductVariant):
+        return product
+    if isinstance(product, Product):
+        return product.default_variant
+    return None
+
+
+class VariantBackedLineQuerySet(models.QuerySet):
+    @staticmethod
+    def _variant_lookup_key(key):
+        if not isinstance(key, str):
+            return key
+        if key == "product":
+            return "variant__product"
+        if key.startswith("product__"):
+            return f"variant__{key}"
+        if key == "product_id":
+            return "variant__product_id"
+        if key.startswith("product_id__"):
+            return f"variant__product_id__{key.split('__', 1)[1]}"
+        return key
+
+    def _variant_lookup_kwargs(self, kwargs):
+        return {
+            self._variant_lookup_key(key): value
+            for key, value in kwargs.items()
+        }
+
+    def filter(self, *args, **kwargs):
+        return super().filter(*args, **self._variant_lookup_kwargs(kwargs))
+
+    def exclude(self, *args, **kwargs):
+        return super().exclude(*args, **self._variant_lookup_kwargs(kwargs))
+
+    def get(self, *args, **kwargs):
+        return super().get(*args, **self._variant_lookup_kwargs(kwargs))
+
+    def order_by(self, *field_names):
+        translated = []
+        for field_name in field_names:
+            descending = field_name.startswith("-")
+            bare_name = field_name[1:] if descending else field_name
+            bare_name = self._variant_lookup_key(bare_name)
+            translated.append(f"-{bare_name}" if descending else bare_name)
+        return super().order_by(*translated)
+
+    def select_related(self, *fields):
+        if not fields:
+            return super().select_related(*fields)
+        return super().select_related(
+            *(self._variant_lookup_key(field) for field in fields)
+        )
+
+
+class VariantBackedLineManager(models.Manager.from_queryset(VariantBackedLineQuerySet)):
+    def _variant_kwargs(self, kwargs):
+        kwargs = dict(kwargs)
+        product = kwargs.pop("product", None)
+        if "variant" not in kwargs and product is not None:
+            kwargs["variant"] = resolve_line_variant(product=product)
+        return kwargs
+
+    def create(self, **kwargs):
+        return super().create(**self._variant_kwargs(kwargs))
+
+
+class VariantProductCompatibilityMixin:
+    @property
+    def product(self):
+        if self.variant_id:
+            return self.variant.product
+        return getattr(self, "_compat_product", None)
+
+    @product.setter
+    def product(self, value):
+        self._compat_product = value
+        if self.variant_id is None:
+            variant = resolve_line_variant(product=value)
+            if variant is not None:
+                self.variant = variant
+
+    @property
+    def product_id(self):
+        if self.variant_id:
+            return self.variant.product_id
+        product = getattr(self, "_compat_product", None)
+        return getattr(product, "pk", product)
+
+    @product_id.setter
+    def product_id(self, value):
+        self._compat_product = value
+
+
+class PurchaseLine(VariantProductCompatibilityMixin, TimeStampedModel):
     purchase_order = models.ForeignKey(
         PurchaseOrder,
         on_delete=models.CASCADE,
         related_name="lines",
     )
-    product = models.ForeignKey(Product, on_delete=models.PROTECT)
+    variant = models.ForeignKey(
+        ProductVariant,
+        on_delete=models.PROTECT,
+        related_name="purchase_lines",
+    )
     quantity = models.PositiveIntegerField(default=1)
     unit_cost = models.DecimalField(
         max_digits=10,
@@ -391,6 +499,8 @@ class PurchaseLine(TimeStampedModel):
 
     class Meta:
         ordering = ["created_at"]
+
+    objects = VariantBackedLineManager()
 
     @property
     def line_total(self):
@@ -536,7 +646,7 @@ class PurchaseReceipt(TimeStampedModel):
         return f"Receipt {self.pk} for {self.purchase_order_id}"
 
 
-class PurchaseReceiptLine(TimeStampedModel):
+class PurchaseReceiptLine(VariantProductCompatibilityMixin, TimeStampedModel):
     receipt = models.ForeignKey(
         PurchaseReceipt,
         on_delete=models.CASCADE,
@@ -547,7 +657,11 @@ class PurchaseReceiptLine(TimeStampedModel):
         on_delete=models.PROTECT,
         related_name="receipt_lines",
     )
-    product = models.ForeignKey(Product, on_delete=models.PROTECT)
+    variant = models.ForeignKey(
+        ProductVariant,
+        on_delete=models.PROTECT,
+        related_name="purchase_receipt_lines",
+    )
     ordered_quantity = models.PositiveIntegerField()
     outstanding_before = models.PositiveIntegerField()
     accepted_quantity = models.PositiveIntegerField(default=0)
@@ -560,6 +674,8 @@ class PurchaseReceiptLine(TimeStampedModel):
 
     class Meta:
         ordering = ["created_at", "id"]
+
+    objects = VariantBackedLineManager()
 
     @property
     def received_quantity(self) -> int:
@@ -704,7 +820,7 @@ class SupplierCredit(TimeStampedModel):
         return f"{self.remaining_amount} credit for supplier {self.supplier_id}"
 
 
-class PurchaseOrderAdjustmentLine(TimeStampedModel):
+class PurchaseOrderAdjustmentLine(VariantProductCompatibilityMixin, TimeStampedModel):
     adjustment = models.ForeignKey(
         PurchaseOrderAdjustment,
         on_delete=models.CASCADE,
@@ -715,13 +831,19 @@ class PurchaseOrderAdjustmentLine(TimeStampedModel):
         on_delete=models.PROTECT,
         related_name="adjustment_lines",
     )
-    product = models.ForeignKey(Product, on_delete=models.PROTECT)
+    variant = models.ForeignKey(
+        ProductVariant,
+        on_delete=models.PROTECT,
+        related_name="purchase_adjustment_lines",
+    )
     quantity = models.PositiveIntegerField()
     unit_cost = models.DecimalField(max_digits=10, decimal_places=2)
     line_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
 
     class Meta:
         ordering = ["created_at"]
+
+    objects = VariantBackedLineManager()
 
     @property
     def line_total(self):
@@ -738,15 +860,24 @@ class PurchaseOrderAdjustmentLine(TimeStampedModel):
         return super().save(*args, **kwargs)
 
 
-class PurchaseOrderAdjustmentReplacementLine(TimeStampedModel):
+class PurchaseOrderAdjustmentReplacementLine(
+    VariantProductCompatibilityMixin,
+    TimeStampedModel,
+):
     adjustment = models.ForeignKey(
         PurchaseOrderAdjustment,
         on_delete=models.CASCADE,
         related_name="replacement_lines",
     )
-    product = models.ForeignKey(Product, on_delete=models.PROTECT)
+    variant = models.ForeignKey(
+        ProductVariant,
+        on_delete=models.PROTECT,
+        related_name="purchase_adjustment_replacement_lines",
+    )
     quantity = models.PositiveIntegerField()
     unit_cost = models.DecimalField(max_digits=10, decimal_places=2)
+
+    objects = VariantBackedLineManager()
 
     class Meta:
         ordering = ["created_at"]

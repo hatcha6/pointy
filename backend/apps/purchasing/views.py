@@ -6,7 +6,7 @@ from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from apps.catalog.models import Product
+from apps.catalog.models import Product, ProductVariant
 from apps.core.permissions import HasPointyPermission
 from .models import (
     PurchaseLine,
@@ -31,7 +31,7 @@ from .serializers import (
 from .services import (
     cancel_purchase_order,
     clear_purchase_order_applied_discounts,
-    latest_purchase_line_for_product,
+    latest_purchase_line_for_variant,
     receive_purchase_order,
     record_purchase_order_audit_event,
     submit_purchase_order,
@@ -137,12 +137,12 @@ class PurchaseOrderViewSet(viewsets.ModelViewSet):
         "destroy": ("purchasing.delete_purchaseorder",),
     }
     queryset = PurchaseOrder.objects.select_related("supplier").prefetch_related(
-        "lines__product",
+        "lines__variant__product",
         "lines__receipt_lines",
-        "receipts__lines__product",
+        "receipts__lines__variant__product",
         "receipts__created_by",
-        "adjustments__lines__product",
-        "adjustments__replacement_lines__product",
+        "adjustments__lines__variant__product",
+        "adjustments__replacement_lines__variant__product",
         "adjustments__created_by",
         "adjustments__supplier_credit",
         "audit_events__created_by",
@@ -154,8 +154,9 @@ class PurchaseOrderViewSet(viewsets.ModelViewSet):
         "order_number",
         "supplier__name",
         "supplier_invoice_number",
-        "lines__product__name",
-        "lines__product__sku",
+        "lines__variant__product__name",
+        "lines__variant__sku",
+        "lines__variant__barcode",
     )
     ordering_fields = (
         "created_at",
@@ -168,13 +169,25 @@ class PurchaseOrderViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=["get"], url_path="last-cost")
     def last_cost(self, request):
         product_id = request.query_params.get("product")
-        if not product_id:
-            raise serializers.ValidationError({"product": "Product is required."})
+        variant_id = request.query_params.get("variant")
+        if not product_id and not variant_id:
+            raise serializers.ValidationError({"product": "Product or variant is required."})
 
-        line = latest_purchase_line_for_product(product_id)
+        if variant_id:
+            variant = self._get_variant(variant_id)
+            if product_id and str(variant.product_id) != str(product_id):
+                raise serializers.ValidationError(
+                    {"variant": "Variant does not belong to the selected product."}
+                )
+        else:
+            variant = self._get_product(product_id).default_variant
+        line = latest_purchase_line_for_variant(variant.pk)
         return Response(
             {
-                "product": int(product_id),
+                "product": variant.product_id,
+                "product_id": variant.product_id,
+                "variant": variant.pk,
+                "variant_id": variant.pk,
                 "unit_cost": None if line is None else line.unit_cost,
             }
         )
@@ -187,13 +200,16 @@ class PurchaseOrderViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=["get"], url_path="product-cost-history")
     def product_cost_history(self, request):
-        product = self._get_required_product()
+        variant = self._get_optional_variant()
+        product = variant.product if variant is not None else self._get_required_product()
         queryset = (
-            PurchaseLine.objects.filter(product=product)
+            PurchaseLine.objects.filter(variant__product=product)
             .exclude(purchase_order__status=PurchaseOrder.Status.CANCELLED)
-            .select_related("purchase_order__supplier")
+            .select_related("purchase_order__supplier", "variant", "variant__product")
             .order_by("-created_at", "-id")
         )
+        if variant is not None:
+            queryset = queryset.filter(variant=variant)
         page = self.paginate_queryset(queryset)
         serializer = ProductCostHistorySerializer(
             page if page is not None else queryset,
@@ -206,16 +222,19 @@ class PurchaseOrderViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=["get"], url_path="product-margin-impact")
     def product_margin_impact(self, request):
-        product = self._get_required_product()
-        latest_line = latest_purchase_line_for_product(product.pk)
+        variant = self._get_optional_variant()
+        product = variant.product if variant is not None else self._get_required_product()
+        variant = variant or product.default_variant
+        latest_line = latest_purchase_line_for_variant(variant.pk)
         previous_line = (
             None
             if latest_line is None
-            else latest_purchase_line_for_product(product.pk, before_line=latest_line)
+            else latest_purchase_line_for_variant(variant.pk, before_line=latest_line)
         )
         return Response(
             product_margin_impact_payload(
                 product=product,
+                variant=variant,
                 latest_line=latest_line,
                 previous_line=previous_line,
             )
@@ -246,7 +265,8 @@ class PurchaseOrderViewSet(viewsets.ModelViewSet):
             PurchaseOrderAdjustmentLine.objects.select_related(
                 "adjustment__purchase_order__supplier",
                 "purchase_line",
-                "product",
+                "variant",
+                "variant__product",
             )
             .filter(
                 adjustment__adjustment_type__in=(
@@ -270,9 +290,19 @@ class PurchaseOrderViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(
                 adjustment__purchase_order__supplier_id=supplier_id,
             )
-        product_id = request.query_params.get("product")
-        if product_id:
-            queryset = queryset.filter(product_id=product_id)
+        variant_id = request.query_params.get("variant")
+        if variant_id:
+            variant = self._get_variant(variant_id)
+            product_id = request.query_params.get("product")
+            if product_id and str(variant.product_id) != str(product_id):
+                raise serializers.ValidationError(
+                    {"variant": "Variant does not belong to the selected product."}
+                )
+            queryset = queryset.filter(variant=variant)
+        else:
+            product_id = request.query_params.get("product")
+            if product_id:
+                queryset = queryset.filter(variant__product_id=product_id)
 
         page = self.paginate_queryset(queryset)
         serializer = PurchaseAdjustmentHistorySerializer(
@@ -288,10 +318,31 @@ class PurchaseOrderViewSet(viewsets.ModelViewSet):
         product_id = self.request.query_params.get("product")
         if not product_id:
             raise serializers.ValidationError({"product": "Product is required."})
+        return self._get_product(product_id)
+
+    def _get_product(self, product_id):
         try:
             return Product.objects.get(pk=product_id)
         except (Product.DoesNotExist, ValueError):
             raise serializers.ValidationError({"product": "Product does not exist."})
+
+    def _get_variant(self, variant_id):
+        try:
+            return ProductVariant.objects.select_related("product").get(pk=variant_id)
+        except (ProductVariant.DoesNotExist, ValueError):
+            raise serializers.ValidationError({"variant": "Variant does not exist."})
+
+    def _get_optional_variant(self):
+        variant_id = self.request.query_params.get("variant")
+        if not variant_id:
+            return None
+        variant = self._get_variant(variant_id)
+        product_id = self.request.query_params.get("product")
+        if product_id and str(variant.product_id) != str(product_id):
+            raise serializers.ValidationError(
+                {"variant": "Variant does not belong to the selected product."}
+            )
+        return variant
 
     @action(detail=True, methods=["post"])
     def submit(self, request, pk=None):
@@ -372,17 +423,17 @@ def money_string(value):
     return None if value is None else str(value.quantize(Decimal("0.01")))
 
 
-def margin_amount(product, line):
+def margin_amount(variant, line):
     if line is None:
         return None
-    return (product.unit_price - line.effective_unit_cost).quantize(Decimal("0.01"))
+    return (variant.unit_price - line.effective_unit_cost).quantize(Decimal("0.01"))
 
 
-def margin_percent(product, line):
-    amount = margin_amount(product, line)
-    if amount is None or product.unit_price == Decimal("0.00"):
+def margin_percent(variant, line):
+    amount = margin_amount(variant, line)
+    if amount is None or variant.unit_price == Decimal("0.00"):
         return None
-    return (amount / product.unit_price * Decimal("100")).quantize(Decimal("0.01"))
+    return (amount / variant.unit_price * Decimal("100")).quantize(Decimal("0.01"))
 
 
 def decimal_delta(latest, previous):
@@ -391,11 +442,11 @@ def decimal_delta(latest, previous):
     return (latest - previous).quantize(Decimal("0.01"))
 
 
-def product_margin_impact_payload(*, product, latest_line, previous_line):
-    latest_margin_amount = margin_amount(product, latest_line)
-    previous_margin_amount = margin_amount(product, previous_line)
-    latest_margin_percent = margin_percent(product, latest_line)
-    previous_margin_percent = margin_percent(product, previous_line)
+def product_margin_impact_payload(*, product, variant, latest_line, previous_line):
+    latest_margin_amount = margin_amount(variant, latest_line)
+    previous_margin_amount = margin_amount(variant, previous_line)
+    latest_margin_percent = margin_percent(variant, latest_line)
+    previous_margin_percent = margin_percent(variant, previous_line)
     latest_effective_cost = (
         None if latest_line is None else latest_line.effective_unit_cost
     )
@@ -406,8 +457,10 @@ def product_margin_impact_payload(*, product, latest_line, previous_line):
     previous_unit_cost = None if previous_line is None else previous_line.unit_cost
     return {
         "product": product.pk,
+        "variant": variant.pk,
         "product_name": product.name,
-        "unit_price": money_string(product.unit_price),
+        "variant_name": variant.display_name,
+        "unit_price": money_string(variant.unit_price),
         "latest_purchase_line": None if latest_line is None else latest_line.pk,
         "latest_unit_cost": money_string(latest_unit_cost),
         "effective_unit_cost": money_string(latest_effective_cost),

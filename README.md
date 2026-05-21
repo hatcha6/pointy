@@ -15,6 +15,7 @@ With Make:
 make setup
 make redis
 make backend-migrate
+make backend-seed-variants
 make backend-run
 ```
 
@@ -27,6 +28,7 @@ source .venv/bin/activate
 pip install -e .
 cp .env.example .env
 python manage.py migrate
+python manage.py seed_variant_options
 python manage.py createsuperuser
 python manage.py runserver
 ```

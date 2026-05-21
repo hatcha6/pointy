@@ -173,10 +173,10 @@ def _payments_section(request, period):
 
 
 def _inventory_section(period):
-    stock = StockItem.objects.select_related("product")
+    stock = StockItem.objects.select_related("variant", "variant__product")
     low_stock = stock.filter(quantity_on_hand__lte=F("reorder_level"))
     out_of_stock = stock.filter(quantity_on_hand__lte=0)
-    value_expr = F("quantity_on_hand") * F("product__unit_price")
+    value_expr = F("quantity_on_hand") * F("variant__unit_price")
     retail_value = stock.aggregate(
         total=Coalesce(
             Sum(value_expr, output_field=MONEY_FIELD),
@@ -185,15 +185,15 @@ def _inventory_section(period):
         )
     )["total"]
 
-    sold_product_ids = OrderLine.objects.filter(
+    sold_variant_ids = OrderLine.objects.filter(
         order__status__in=(Order.Status.PAID, Order.Status.VOID),
         order__created_at__gte=period["start"],
         order__created_at__lt=period["end"],
-    ).values("product_id")
+    ).values("variant_id")
     dusty_items = (
         stock.filter(quantity_on_hand__gt=0)
-        .exclude(product_id__in=sold_product_ids)
-        .order_by("-quantity_on_hand", "product__name")[:8]
+        .exclude(variant_id__in=sold_variant_ids)
+        .order_by("-quantity_on_hand", "variant__product__name", "variant__name")[:8]
     )
 
     movement_rows = (
@@ -225,7 +225,12 @@ def _inventory_section(period):
             "retail_stock_value": _money(retail_value),
         },
         "low_stock_items": [
-            _stock_item_row(item) for item in low_stock.order_by("quantity_on_hand", "product__name")[:8]
+            _stock_item_row(item)
+            for item in low_stock.order_by(
+                "quantity_on_hand",
+                "variant__product__name",
+                "variant__name",
+            )[:8]
         ],
         "dusty_items": [_stock_item_row(item) for item in dusty_items],
         "movement_mix": [
@@ -238,14 +243,16 @@ def _inventory_section(period):
         ],
         "recent_movements": [
             {
-                "product_name": movement.product.name,
-                "movement_type": movement.movement_type,
-                "quantity": movement.quantity,
-                "created_at": movement.created_at.isoformat(),
-            }
-            for movement in StockMovement.objects.select_related("product").order_by("-created_at")[
-                :6
-            ]
+                    "product_name": movement.variant.full_name,
+                    "movement_type": movement.movement_type,
+                    "quantity": movement.quantity,
+                    "created_at": movement.created_at.isoformat(),
+                }
+            for movement in StockMovement.objects.select_related(
+                "product",
+                "variant",
+                "variant__product",
+            ).order_by("-created_at")[:6]
         ],
     }
 
@@ -587,7 +594,13 @@ def _top_products(orders):
     profit_expr = F("quantity") * (F("unit_price") - F("unit_cost")) - F("discount_total")
     rows = (
         OrderLine.objects.filter(order__in=orders)
-        .values("product_id", "product__name", "product__sku")
+        .values(
+            "variant__product_id",
+            "variant_id",
+            "variant__product__name",
+            "variant__sku",
+            "variant__name",
+        )
         .annotate(
             units_sold=Coalesce(Sum("quantity"), Value(0)),
             revenue=Coalesce(
@@ -601,13 +614,15 @@ def _top_products(orders):
                 output_field=MONEY_FIELD,
             ),
         )
-        .order_by("-revenue", "product__name")[:8]
+        .order_by("-revenue", "variant__product__name")[:8]
     )
     return [
         {
-            "product_id": row["product_id"],
-            "product_name": row["product__name"],
-            "sku": row["product__sku"],
+            "product_id": row["variant__product_id"],
+            "variant_id": row["variant_id"],
+            "product_name": row["variant__product__name"],
+            "variant_name": row["variant__name"] or row["variant__product__name"],
+            "sku": row["variant__sku"],
             "quantity": row["units_sold"],
             "revenue": _money(row["revenue"]),
             "profit": _money(row["profit"]),
@@ -620,7 +635,7 @@ def _top_categories(orders):
     revenue_expr = F("quantity") * F("unit_price") - F("discount_total")
     rows = (
         OrderLine.objects.filter(order__in=orders)
-        .values("product__categories__name")
+        .values("variant__product__categories__name")
         .annotate(
             revenue=Coalesce(
                 Sum(revenue_expr, output_field=MONEY_FIELD),
@@ -633,7 +648,7 @@ def _top_categories(orders):
     )
     return [
         {
-            "category_name": row["product__categories__name"] or "",
+            "category_name": row["variant__product__categories__name"] or "",
             "quantity": row["units_sold"],
             "revenue": _money(row["revenue"]),
         }
@@ -695,9 +710,11 @@ def _top_supplier_balances():
 
 def _stock_item_row(item):
     return {
-        "product_id": item.product_id,
-        "product_name": item.product.name,
-        "sku": item.product.sku,
+        "product_id": item.variant.product_id,
+        "variant_id": item.variant_id,
+        "product_name": item.variant.product.name,
+        "variant_name": item.variant.display_name,
+        "sku": item.variant.sku,
         "quantity_on_hand": item.quantity_on_hand,
         "quantity_expected": item.quantity_expected,
         "quantity_committed": item.quantity_committed,

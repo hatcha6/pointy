@@ -68,20 +68,20 @@ class StockMovement {
 
 class StockMovementDraft {
   const StockMovementDraft({
-    required this.product,
+    required this.variant,
     required this.movementType,
     required this.quantity,
     this.note = '',
   });
 
-  final int product;
+  final int variant;
   final StockMovementType movementType;
   final int quantity;
   final String note;
 
   Map<String, Object?> toJson() {
     return {
-      'product': product,
+      'variant': variant,
       'movement_type': movementType.apiValue,
       'quantity': quantity,
       'note': note,

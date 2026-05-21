@@ -115,6 +115,24 @@ class PosApiService {
     return _catalog.createProduct(draft);
   }
 
+  Future<ProductVariantPage> fetchProductVariants({
+    required ModelQuery query,
+    int page = 1,
+  }) {
+    return _catalog.fetchProductVariants(query: query, page: page);
+  }
+
+  Future<ProductVariantPage> fetchVariantsForProduct(
+    int productId, {
+    int page = 1,
+  }) {
+    return _catalog.fetchVariantsForProduct(productId, page: page);
+  }
+
+  Future<ProductVariant> createProductVariant(ProductVariantDraft draft) {
+    return _catalog.createProductVariant(draft);
+  }
+
   Future<ProductCategoryPage> fetchProductCategories({
     required ModelQuery query,
     int page = 1,
@@ -175,11 +193,22 @@ class PosApiService {
     return _inventory.fetchStockForProduct(productId);
   }
 
+  Future<StockItem?> fetchStockForVariant(int variantId) {
+    return _inventory.fetchStockForVariant(variantId);
+  }
+
   Future<StockMovementPage> fetchStockMovementsForProduct(
     int productId, {
     int page = 1,
   }) {
     return _inventory.fetchStockMovementsForProduct(productId, page: page);
+  }
+
+  Future<StockMovementPage> fetchStockMovementsForVariant(
+    int variantId, {
+    int page = 1,
+  }) {
+    return _inventory.fetchStockMovementsForVariant(variantId, page: page);
   }
 
   Future<StockMovement> createStockMovement(StockMovementDraft draft) {
@@ -318,16 +347,24 @@ class PosApiService {
 
   Future<ProductCostHistoryPage> fetchProductCostHistory({
     required int productId,
+    int? variantId,
     int page = 1,
   }) {
     return _purchasing.fetchProductCostHistory(
       productId: productId,
+      variantId: variantId,
       page: page,
     );
   }
 
-  Future<ProductMarginImpact?> fetchProductMarginImpact(int productId) {
-    return _purchasing.fetchProductMarginImpact(productId);
+  Future<ProductMarginImpact?> fetchProductMarginImpact(
+    int productId, {
+    int? variantId,
+  }) {
+    return _purchasing.fetchProductMarginImpact(
+      productId,
+      variantId: variantId,
+    );
   }
 
   Future<PurchaseAdjustmentHistoryPage> fetchPurchaseAdjustmentHistory({
@@ -344,8 +381,8 @@ class PosApiService {
     );
   }
 
-  Future<double?> fetchLastProductCost(int productId) {
-    return _purchasing.fetchLastProductCost(productId);
+  Future<double?> fetchLastProductCost(int productId, {int? variantId}) {
+    return _purchasing.fetchLastProductCost(productId, variantId: variantId);
   }
 
   Future<PurchaseOrderPage> fetchPurchaseOrders({

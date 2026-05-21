@@ -3,6 +3,7 @@ from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
+from django.db import IntegrityError, transaction
 from django.test import TestCase
 from django.urls import reverse
 from rest_framework import status
@@ -10,8 +11,125 @@ from rest_framework.test import APIClient
 
 from apps.core.roles import CASHIER_GROUP, MANAGER_GROUP, ensure_role_groups
 from apps.inventory.models import StockItem
-from .models import Product, ProductCategory
+from .models import Product, ProductCategory, ProductVariant
 from .views import ProductViewSet
+
+
+class ProductVariantModelTests(TestCase):
+    def test_product_create_builds_default_variant_from_legacy_fields(self):
+        product = Product.objects.create(
+            sku=" cof-100 ",
+            barcode=" 123456789 ",
+            name="قهوة عربية",
+            unit_price=Decimal("5.50"),
+            is_active=False,
+        )
+
+        variant = product.default_variant
+        self.assertEqual(product.variants.count(), 1)
+        self.assertTrue(variant.is_default)
+        self.assertEqual(variant.sku, "COF-100")
+        self.assertEqual(variant.barcode, "123456789")
+        self.assertEqual(variant.unit_price, Decimal("5.50"))
+        self.assertFalse(variant.is_active)
+
+    def test_product_without_variant_fields_gets_default_variant(self):
+        product = Product.objects.create(name="منتج عام")
+
+        variant = product.default_variant
+        self.assertEqual(product.variants.count(), 1)
+        self.assertEqual(variant.sku, f"P{product.pk:06d}")
+        self.assertEqual(variant.unit_price, Decimal("0.00"))
+        self.assertEqual(product.sku, variant.sku)
+
+    def test_variant_display_names_fallback_to_product_name(self):
+        product = Product.objects.create(
+            sku="COF-100",
+            name="قهوة عربية",
+            unit_price=Decimal("5.50"),
+        )
+        named_variant = ProductVariant.objects.create(
+            product=product,
+            name="كبير",
+            sku="COF-100-L",
+            unit_price=Decimal("7.00"),
+        )
+
+        self.assertEqual(product.default_variant.display_name, "قهوة عربية")
+        self.assertEqual(product.default_variant.full_name, "قهوة عربية")
+        self.assertEqual(named_variant.display_name, "كبير")
+        self.assertEqual(named_variant.full_name, "قهوة عربية - كبير")
+
+    def test_variant_sku_and_non_blank_barcode_are_unique(self):
+        product = Product.objects.create(
+            sku="COF-100",
+            barcode="123456789",
+            name="قهوة عربية",
+            unit_price=Decimal("5.50"),
+        )
+        other = Product.objects.create(
+            sku="TEA-100",
+            name="شاي",
+            unit_price=Decimal("2.00"),
+        )
+
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            ProductVariant.objects.create(
+                product=product,
+                name="مكرر",
+                sku="COF-100",
+                unit_price=Decimal("6.00"),
+            )
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            ProductVariant.objects.create(
+                product=other,
+                name="باركود مكرر",
+                sku="TEA-101",
+                barcode="123456789",
+                unit_price=Decimal("3.00"),
+            )
+        ProductVariant.objects.create(
+            product=product,
+            name="بدون باركود 1",
+            sku="COF-101",
+            barcode="",
+            unit_price=Decimal("6.00"),
+        )
+        ProductVariant.objects.create(
+            product=product,
+            name="بدون باركود 2",
+            sku="COF-102",
+            barcode="",
+            unit_price=Decimal("6.50"),
+        )
+
+    def test_active_variant_queryset_requires_active_product_and_variant(self):
+        active_product = Product.objects.create(
+            sku="ACTIVE",
+            name="نشط",
+            unit_price=Decimal("1.00"),
+            is_active=True,
+        )
+        inactive_variant_product = Product.objects.create(
+            sku="INACTIVE-VARIANT",
+            name="متغير متوقف",
+            unit_price=Decimal("1.00"),
+            is_active=True,
+        )
+        inactive_variant = inactive_variant_product.default_variant
+        inactive_variant.is_active = False
+        inactive_variant.save(update_fields=["is_active", "updated_at"])
+        Product.objects.create(
+            sku="INACTIVE-PRODUCT",
+            name="منتج متوقف",
+            unit_price=Decimal("1.00"),
+            is_active=False,
+        )
+
+        self.assertEqual(
+            list(ProductVariant.objects.active().values_list("sku", flat=True)),
+            [active_product.default_variant.sku],
+        )
 
 
 class ProductApiTests(TestCase):
@@ -30,13 +148,15 @@ class ProductApiTests(TestCase):
         response = self.client.post(
             reverse("product-list"),
             {
-                "sku": " cof-100 ",
-                "barcode": "123456789",
                 "name": "قهوة عربية",
                 "description": "حبوب مطحونة",
-                "unit_price": "5.50",
                 "is_active": True,
                 "categories": [category.id],
+                "default_variant": {
+                    "sku": " cof-100 ",
+                    "barcode": "123456789",
+                    "unit_price": "5.50",
+                },
             },
             format="json",
         )
@@ -48,15 +168,21 @@ class ProductApiTests(TestCase):
         self.assertEqual(product.unit_price, Decimal("5.50"))
         self.assertEqual(list(product.categories.values_list("id", flat=True)), [category.id])
         self.assertEqual(response.data["categories"], [category.id])
+        self.assertEqual(response.data["default_variant"]["sku"], "COF-100")
+        self.assertNotIn("sku", response.data)
+        self.assertNotIn("barcode", response.data)
+        self.assertNotIn("unit_price", response.data)
 
     def test_reject_negative_price(self):
         response = self.client.post(
             reverse("product-list"),
             {
-                "sku": "BAD-001",
                 "name": "منتج غير صالح",
-                "unit_price": "-1.00",
                 "is_active": True,
+                "default_variant": {
+                    "sku": "BAD-001",
+                    "unit_price": "-1.00",
+                },
             },
             format="json",
         )
@@ -93,7 +219,10 @@ class ProductApiTests(TestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         results = response.data["results"]
-        self.assertEqual([product["sku"] for product in results], ["TEA-100", "COF-100"])
+        self.assertEqual(
+            [product["default_variant"]["sku"] for product in results],
+            ["TEA-100", "COF-100"],
+        )
 
     def test_create_nested_product_category(self):
         parent = ProductCategory.objects.create(name="المشروبات")
@@ -170,7 +299,7 @@ class ProductApiTests(TestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(
-            [product["sku"] for product in response.data["results"]],
+            [product["default_variant"]["sku"] for product in response.data["results"]],
             ["LATTE"],
         )
 
@@ -221,7 +350,7 @@ class ProductApiTests(TestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(
-            [product["sku"] for product in response.data["results"]],
+            [product["default_variant"]["sku"] for product in response.data["results"]],
             ["MATCH"],
         )
 
@@ -235,7 +364,7 @@ class ProductApiTests(TestCase):
         )
         Product.objects.create(
             sku="INACTIVE",
-            barcode="123456789",
+            barcode="987654321",
             name="قهوة متوقفة",
             unit_price=Decimal("4.50"),
             is_active=False,
@@ -265,7 +394,14 @@ class ProductApiTests(TestCase):
             unit_price=Decimal("3.00"),
             is_active=True,
         )
-        StockItem.objects.create(product=product, quantity_on_hand=7)
+        StockItem.objects.create(variant=product.default_variant, quantity_on_hand=7)
+        variant = ProductVariant.objects.create(
+            product=product,
+            name="كبير",
+            sku="STOCKED-L",
+            unit_price=Decimal("4.00"),
+        )
+        StockItem.objects.create(variant=variant, quantity_on_hand=3)
         Product.objects.create(
             sku="NO-STOCK",
             name="بدون مخزون",
@@ -277,10 +413,10 @@ class ProductApiTests(TestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         quantities_by_sku = {
-            product["sku"]: product["quantity_on_hand"]
+            product["default_variant"]["sku"]: product["quantity_on_hand"]
             for product in response.data["results"]
         }
-        self.assertEqual(quantities_by_sku["STOCKED"], 7)
+        self.assertEqual(quantities_by_sku["STOCKED"], 10)
         self.assertEqual(quantities_by_sku["NO-STOCK"], 0)
 
     def test_can_order_products_by_newest(self):
@@ -319,10 +455,116 @@ class ProductApiTests(TestCase):
         category_response = client.get(reverse("productcategory-list"))
         create_response = client.post(
             reverse("product-list"),
-            {"sku": "NEW", "name": "جديد", "unit_price": "1.00"},
+            {
+                "name": "جديد",
+                "default_variant": {"sku": "NEW", "unit_price": "1.00"},
+            },
             format="json",
         )
 
         self.assertEqual(list_response.status_code, status.HTTP_200_OK)
         self.assertEqual(category_response.status_code, status.HTTP_200_OK)
         self.assertEqual(create_response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_top_level_product_variant_endpoint_creates_variant(self):
+        product = Product.objects.create(
+            sku="COF-100",
+            name="قهوة عربية",
+            unit_price=Decimal("5.50"),
+        )
+
+        response = self.client.post(
+            reverse("product-variant-list"),
+            {
+                "product": product.pk,
+                "name": "كبير",
+                "sku": " cof-100-l ",
+                "barcode": "987654321",
+                "unit_price": "7.00",
+                "is_active": True,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        variant = ProductVariant.objects.get(sku="COF-100-L")
+        self.assertEqual(variant.product, product)
+        self.assertEqual(response.data["product"], product.pk)
+        self.assertEqual(response.data["product_detail"]["id"], product.pk)
+
+    def test_nested_product_variants_returns_only_selected_product_variants(self):
+        product = Product.objects.create(
+            sku="COF-100",
+            name="قهوة عربية",
+            unit_price=Decimal("5.50"),
+        )
+        other = Product.objects.create(
+            sku="TEA-100",
+            name="شاي",
+            unit_price=Decimal("2.00"),
+        )
+        ProductVariant.objects.create(
+            product=product,
+            name="كبير",
+            sku="COF-100-L",
+            unit_price=Decimal("7.00"),
+        )
+
+        response = self.client.get(reverse("product-variants", args=[product.pk]))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            [variant["sku"] for variant in response.data["results"]],
+            ["COF-100", "COF-100-L"],
+        )
+        self.assertNotIn(
+            other.default_variant.pk,
+            [variant["id"] for variant in response.data["results"]],
+        )
+
+    def test_nested_product_variants_force_url_product(self):
+        product = Product.objects.create(
+            sku="COF-100",
+            name="قهوة عربية",
+            unit_price=Decimal("5.50"),
+        )
+
+        response = self.client.post(
+            reverse("product-variants", args=[product.pk]),
+            {
+                "name": "كبير",
+                "sku": "COF-100-L",
+                "unit_price": "7.00",
+                "is_active": True,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        variant = ProductVariant.objects.get(sku="COF-100-L")
+        self.assertEqual(variant.product, product)
+
+    def test_nested_product_variants_reject_mismatched_product(self):
+        product = Product.objects.create(
+            sku="COF-100",
+            name="قهوة عربية",
+            unit_price=Decimal("5.50"),
+        )
+        other = Product.objects.create(
+            sku="TEA-100",
+            name="شاي",
+            unit_price=Decimal("2.00"),
+        )
+
+        response = self.client.post(
+            reverse("product-variants", args=[product.pk]),
+            {
+                "product": other.pk,
+                "name": "كبير",
+                "sku": "COF-100-L",
+                "unit_price": "7.00",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)

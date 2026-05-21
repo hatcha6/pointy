@@ -48,6 +48,7 @@ class DiscountRuleViewSet(viewsets.ModelViewSet):
             .get_queryset()
             .prefetch_related(
                 "products",
+                "product_variants",
                 "product_categories",
                 "customers",
                 "suppliers",

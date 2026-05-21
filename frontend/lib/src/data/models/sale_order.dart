@@ -28,7 +28,7 @@ class SaleCheckoutDraft {
       lines: cart
           .map(
             (line) => SaleCheckoutLineDraft(
-              productId: line.product.id,
+              productId: line.product.variantId,
               quantity: line.quantity,
             ),
           )
@@ -76,7 +76,7 @@ class SaleDiscountPreviewDraft {
       lines: cart
           .map(
             (line) => SaleCheckoutLineDraft(
-              productId: line.product.id,
+              productId: line.product.variantId,
               quantity: line.quantity,
             ),
           )
@@ -168,16 +168,16 @@ class SaleCheckoutPaymentDraft {
 }
 
 class SaleCheckoutLineDraft {
-  const SaleCheckoutLineDraft({
-    required this.productId,
-    required this.quantity,
-  });
+  const SaleCheckoutLineDraft({required int productId, required this.quantity})
+    : variantId = productId;
 
-  final int productId;
+  final int variantId;
   final int quantity;
 
+  int get productId => variantId;
+
   Map<String, Object?> toJson() {
-    return {'product': productId, 'quantity': quantity};
+    return {'variant': variantId, 'quantity': quantity};
   }
 }
 

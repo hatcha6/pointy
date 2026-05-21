@@ -82,13 +82,16 @@ class ProductDetailsScreen extends StatelessWidget {
                   icon: Icons.qr_code_2,
                   child: Column(
                     children: [
-                      DetailRow(label: l10n.skuLabel, value: product.sku),
+                      DetailRow(
+                        label: l10n.skuLabel,
+                        value: product.effectiveSku,
+                      ),
                       const Divider(height: 20),
                       DetailRow(
                         label: l10n.barcodeLabel,
-                        value: product.barcode.isEmpty
+                        value: product.effectiveBarcode.isEmpty
                             ? l10n.noBarcode
-                            : product.barcode,
+                            : product.effectiveBarcode,
                       ),
                     ],
                   ),
@@ -200,7 +203,7 @@ class _ProductCostHistorySection extends StatelessWidget {
         if (impact != null) ...[
           _MarginImpactGrid(
             impact: impact,
-            fallbackPrice: viewModel.product.unitPrice,
+            fallbackPrice: viewModel.product.effectiveUnitPrice,
           ),
           if (entries.isNotEmpty) const Divider(height: 24),
         ],
@@ -389,7 +392,7 @@ class _BarcodeLabelPrintSectionState extends State<_BarcodeLabelPrintSection> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final colorScheme = Theme.of(context).colorScheme;
-    final hasBarcode = widget.product.barcode.trim().isNotEmpty;
+    final hasBarcode = widget.product.effectiveBarcode.trim().isNotEmpty;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,

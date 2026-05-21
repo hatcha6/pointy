@@ -5,7 +5,7 @@ from django.core.validators import MinValueValidator
 from django.db import models, transaction
 from django.db.models import Q, Sum
 
-from apps.catalog.models import Product
+from apps.catalog.models import Product, ProductVariant
 from apps.core.models import TimeStampedModel
 from apps.customers.models import Customer
 
@@ -190,7 +190,7 @@ class Order(TimeStampedModel):
     def recalculate(self) -> None:
         subtotal = Decimal("0.00")
         discount_total = Decimal("0.00")
-        for line in self.lines.select_related("product"):
+        for line in self.lines.select_related("variant", "variant__product"):
             subtotal += line.line_subtotal
             discount_total += line.discount_total
         self.subtotal = subtotal.quantize(Decimal("0.01"))
@@ -222,13 +222,115 @@ class Order(TimeStampedModel):
         return self.receipt_number or f"Order {self.pk}"
 
 
-class OrderLine(TimeStampedModel):
+def resolve_line_variant(product=None, variant=None):
+    if variant is not None:
+        return variant
+    if isinstance(product, ProductVariant):
+        return product
+    if isinstance(product, Product):
+        return product.default_variant
+    return None
+
+
+class VariantBackedLineQuerySet(models.QuerySet):
+    @staticmethod
+    def _variant_lookup_key(key):
+        if not isinstance(key, str):
+            return key
+        if key == "product":
+            return "variant__product"
+        if key.startswith("product__"):
+            return f"variant__{key}"
+        if key == "product_id":
+            return "variant__product_id"
+        if key.startswith("product_id__"):
+            return f"variant__product_id__{key.split('__', 1)[1]}"
+        return key
+
+    def _variant_lookup_kwargs(self, kwargs):
+        return {
+            self._variant_lookup_key(key): value
+            for key, value in kwargs.items()
+        }
+
+    def filter(self, *args, **kwargs):
+        return super().filter(*args, **self._variant_lookup_kwargs(kwargs))
+
+    def exclude(self, *args, **kwargs):
+        return super().exclude(*args, **self._variant_lookup_kwargs(kwargs))
+
+    def get(self, *args, **kwargs):
+        return super().get(*args, **self._variant_lookup_kwargs(kwargs))
+
+    def order_by(self, *field_names):
+        translated = []
+        for field_name in field_names:
+            descending = field_name.startswith("-")
+            bare_name = field_name[1:] if descending else field_name
+            bare_name = self._variant_lookup_key(bare_name)
+            translated.append(f"-{bare_name}" if descending else bare_name)
+        return super().order_by(*translated)
+
+    def select_related(self, *fields):
+        if not fields:
+            return super().select_related(*fields)
+        return super().select_related(
+            *(self._variant_lookup_key(field) for field in fields)
+        )
+
+
+class VariantBackedLineManager(models.Manager.from_queryset(VariantBackedLineQuerySet)):
+    def _variant_kwargs(self, kwargs):
+        kwargs = dict(kwargs)
+        product = kwargs.pop("product", None)
+        if "variant" not in kwargs and product is not None:
+            kwargs["variant"] = resolve_line_variant(product=product)
+        return kwargs
+
+    def create(self, **kwargs):
+        return super().create(**self._variant_kwargs(kwargs))
+
+
+class VariantProductCompatibilityMixin:
+    @property
+    def product(self):
+        if self.variant_id:
+            return self.variant.product
+        return getattr(self, "_compat_product", None)
+
+    @product.setter
+    def product(self, value):
+        self._compat_product = value
+        if self.variant_id is None:
+            variant = resolve_line_variant(product=value)
+            if variant is not None:
+                self.variant = variant
+
+    @property
+    def product_id(self):
+        if self.variant_id:
+            return self.variant.product_id
+        product = getattr(self, "_compat_product", None)
+        return getattr(product, "pk", product)
+
+    @product_id.setter
+    def product_id(self, value):
+        self._compat_product = value
+
+
+class OrderLine(VariantProductCompatibilityMixin, TimeStampedModel):
     order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name="lines")
-    product = models.ForeignKey(Product, on_delete=models.PROTECT)
+    variant = models.ForeignKey(
+        ProductVariant,
+        on_delete=models.PROTECT,
+        related_name="order_lines",
+    )
     quantity = models.PositiveIntegerField(default=1)
     unit_price = models.DecimalField(max_digits=10, decimal_places=2)
     unit_cost = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     discount_total = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+
+    objects = VariantBackedLineManager()
 
     class Meta:
         ordering = ["created_at"]
@@ -298,7 +400,7 @@ class OrderAdjustment(TimeStampedModel):
         return f"{self.adjustment_type} {self.amount} for {self.order_id}"
 
 
-class OrderAdjustmentLine(TimeStampedModel):
+class OrderAdjustmentLine(VariantProductCompatibilityMixin, TimeStampedModel):
     adjustment = models.ForeignKey(
         OrderAdjustment,
         on_delete=models.CASCADE,
@@ -309,10 +411,16 @@ class OrderAdjustmentLine(TimeStampedModel):
         on_delete=models.PROTECT,
         related_name="adjustment_lines",
     )
-    product = models.ForeignKey(Product, on_delete=models.PROTECT)
+    variant = models.ForeignKey(
+        ProductVariant,
+        on_delete=models.PROTECT,
+        related_name="order_adjustment_lines",
+    )
     quantity = models.PositiveIntegerField()
     unit_price = models.DecimalField(max_digits=10, decimal_places=2)
     discount_total = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+
+    objects = VariantBackedLineManager()
 
     class Meta:
         ordering = ["created_at"]

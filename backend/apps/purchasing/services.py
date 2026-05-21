@@ -33,8 +33,8 @@ from .models import (
 )
 
 
-def latest_purchase_line_for_product(product_id, *, before_line=None):
-    lines = PurchaseLine.objects.filter(product_id=product_id).exclude(
+def latest_purchase_line_for_variant(variant_id, *, before_line=None):
+    lines = PurchaseLine.objects.filter(variant_id=variant_id).exclude(
         purchase_order__status=PurchaseOrder.Status.CANCELLED,
     )
     if before_line is not None:
@@ -44,7 +44,29 @@ def latest_purchase_line_for_product(product_id, *, before_line=None):
     return lines.order_by("-created_at", "-id").first()
 
 
-def latest_product_unit_cost(product_id):
+def latest_purchase_line_for_product(product_id, *, variant_id=None, before_line=None):
+    if variant_id is not None:
+        return latest_purchase_line_for_variant(variant_id, before_line=before_line)
+
+    lines = PurchaseLine.objects.filter(variant__product_id=product_id).exclude(
+        purchase_order__status=PurchaseOrder.Status.CANCELLED,
+    )
+    if before_line is not None:
+        lines = lines.exclude(pk=before_line.pk)
+        if before_line.created_at is not None:
+            lines = lines.filter(created_at__lt=before_line.created_at)
+    return lines.order_by("-created_at", "-id").first()
+
+
+def latest_variant_unit_cost(variant_id):
+    line = latest_purchase_line_for_variant(variant_id)
+    return None if line is None else line.unit_cost
+
+
+def latest_product_unit_cost(product_id, *, variant_id=None):
+    if variant_id is not None:
+        return latest_variant_unit_cost(variant_id)
+
     line = latest_purchase_line_for_product(product_id)
     return None if line is None else line.unit_cost
 
@@ -172,10 +194,10 @@ def validate_requested_purchase_discount_codes(purchase_order, discount_result):
 def persist_purchase_order_applied_discounts(purchase_order, discount_result):
     lines_by_key = {
         str(line.pk): line
-        for line in purchase_order.lines.select_related("product").order_by(
-            "created_at",
-            "id",
-        )
+        for line in purchase_order.lines.select_related(
+            "variant",
+            "variant__product",
+        ).order_by("created_at", "id")
     }
     try:
         return persist_applied_discounts(
@@ -204,7 +226,7 @@ def discount_usage_limit_error_payload(exc, field_name):
 def submit_purchase_order(purchase_order, *, request=None):
     locked_order = (
         PurchaseOrder.objects.select_for_update()
-        .prefetch_related("lines__product")
+        .prefetch_related("lines__variant__product")
         .get(pk=purchase_order.pk)
     )
     if locked_order.status != PurchaseOrder.Status.DRAFT:
@@ -217,14 +239,17 @@ def submit_purchase_order(purchase_order, *, request=None):
         )
 
     created_by = purchase_created_by(request)
-    for line in locked_order.lines.select_related("product").order_by("product_id"):
-        stock_item = lock_stock_item(line.product)
+    for line in locked_order.lines.select_related(
+        "variant",
+        "variant__product",
+    ).order_by("variant_id"):
+        stock_item = lock_stock_item(variant=line.variant)
         before = stock_snapshot(stock_item)
         stock_item.quantity_expected += line.quantity
         save_stock_item_quantities(stock_item)
         create_stock_movement(
             stock_item=stock_item,
-            product=line.product,
+            variant=line.variant,
             movement_type=StockMovement.Type.EXPECTED,
             quantity=line.quantity,
             note=f"شراء متوقع {locked_order.order_number}",
@@ -252,7 +277,10 @@ def default_receipt_lines(locked_order):
             "cancelled_quantity": 0,
             "notes": "",
         }
-        for line in locked_order.lines.select_related("product").order_by("product_id")
+        for line in locked_order.lines.select_related(
+            "variant",
+            "variant__product",
+        ).order_by("variant_id")
         if line.outstanding_quantity > 0
     ]
 
@@ -306,7 +334,7 @@ def apply_receipt_stock_changes(
     expected_quantities,
     created_by,
 ):
-    stock_item = lock_stock_item(line.product)
+    stock_item = lock_stock_item(variant=line.variant)
 
     accepted_expected = expected_quantities["accepted_expected"]
     accepted_overage = accepted_quantity - accepted_expected
@@ -317,7 +345,7 @@ def apply_receipt_stock_changes(
         save_stock_item_quantities(stock_item)
         create_stock_movement(
             stock_item=stock_item,
-            product=line.product,
+            variant=line.variant,
             movement_type=StockMovement.Type.RECEIVE_EXPECTED,
             quantity=accepted_expected,
             note=f"استلام مشتريات {locked_order.order_number}",
@@ -331,7 +359,7 @@ def apply_receipt_stock_changes(
         save_stock_item_quantities(stock_item)
         create_stock_movement(
             stock_item=stock_item,
-            product=line.product,
+            variant=line.variant,
             movement_type=StockMovement.Type.INCREASE,
             quantity=accepted_overage,
             note=f"زيادة توريد {locked_order.order_number}",
@@ -346,7 +374,7 @@ def apply_receipt_stock_changes(
         save_stock_item_quantities(stock_item)
         create_stock_movement(
             stock_item=stock_item,
-            product=line.product,
+            variant=line.variant,
             movement_type=StockMovement.Type.RECEIVE_DAMAGED,
             quantity=damaged_expected,
             note=f"تالف عند الاستلام {locked_order.order_number}",
@@ -361,7 +389,7 @@ def apply_receipt_stock_changes(
         save_stock_item_quantities(stock_item)
         create_stock_movement(
             stock_item=stock_item,
-            product=line.product,
+            variant=line.variant,
             movement_type=StockMovement.Type.CANCEL_EXPECTED,
             quantity=cancelled_expected,
             note=f"إلغاء توريد {locked_order.order_number}",
@@ -374,7 +402,7 @@ def apply_receipt_stock_changes(
 def receive_purchase_order(purchase_order, *, request=None, lines_data=None, notes=""):
     locked_order = (
         PurchaseOrder.objects.select_for_update()
-        .prefetch_related("lines__product", "lines__receipt_lines")
+        .prefetch_related("lines__variant__product", "lines__receipt_lines")
         .get(pk=purchase_order.pk)
     )
     if locked_order.status not in (
@@ -428,7 +456,7 @@ def receive_purchase_order(purchase_order, *, request=None, lines_data=None, not
         PurchaseReceiptLine.objects.create(
             receipt=receipt,
             purchase_line=line,
-            product=line.product,
+            variant=line.variant,
             ordered_quantity=line.quantity,
             outstanding_before=expected_quantities["outstanding_before"],
             accepted_quantity=accepted_quantity,
@@ -512,26 +540,30 @@ def validate_purchase_order_adjustment_allowed(purchase_order):
 
 
 def validate_purchase_stock_available(lines):
-    requested_by_product = {}
-    products_by_id = {}
+    requested_by_variant = {}
+    variants_by_id = {}
     for line, quantity in lines:
-        products_by_id[line.product_id] = line.product
-        requested_by_product[line.product_id] = (
-            requested_by_product.get(line.product_id, 0) + quantity
+        variants_by_id[line.variant_id] = line.variant
+        requested_by_variant[line.variant_id] = (
+            requested_by_variant.get(line.variant_id, 0) + quantity
         )
 
     stock_items = {}
     shortages = []
-    for product_id in sorted(requested_by_product):
-        product = products_by_id[product_id]
-        quantity = requested_by_product[product_id]
-        stock_item = lock_stock_item(product)
-        stock_items[product_id] = stock_item
+    for variant_id in sorted(requested_by_variant):
+        variant = variants_by_id[variant_id]
+        quantity = requested_by_variant[variant_id]
+        stock_item = lock_stock_item(variant=variant)
+        stock_items[variant_id] = stock_item
         if stock_item.quantity_on_hand < quantity:
             shortages.append(
                 {
-                    "product": product.pk,
-                    "product_name": product.name,
+                    "product": variant.product_id,
+                    "product_id": variant.product_id,
+                    "variant": variant.pk,
+                    "variant_id": variant.pk,
+                    "product_name": variant.product.name,
+                    "variant_name": variant.full_name,
                     "requested": quantity,
                     "available": stock_item.quantity_on_hand,
                 }
@@ -573,12 +605,12 @@ def record_purchase_adjustment_stock_movements(
     created_by,
 ):
     for line, quantity in lines:
-        stock_item = stock_items[line.product_id]
+        stock_item = stock_items[line.variant_id]
         before = stock_snapshot(stock_item)
         stock_item.quantity_on_hand -= quantity
         save_stock_item_quantities(stock_item)
         create_stock_movement(
-            product=line.product,
+            variant=line.variant,
             stock_item=stock_item,
             movement_type=StockMovement.Type.DECREASE,
             quantity=quantity,
@@ -590,12 +622,13 @@ def record_purchase_adjustment_stock_movements(
 
 def lock_replacement_stock_items(lines, stock_items=None):
     stock_items = {} if stock_items is None else dict(stock_items)
-    products_by_id = {product.pk: product for product, _, _ in lines}
-    for product_id in sorted(products_by_id):
-        if product_id in stock_items:
+    variants_by_id = {variant.pk: variant for variant, _, _ in lines}
+    for variant_id in sorted(variants_by_id):
+        if variant_id in stock_items:
             continue
-        stock_item = lock_stock_item(products_by_id[product_id])
-        stock_items[product_id] = stock_item
+        variant = variants_by_id[variant_id]
+        stock_item = lock_stock_item(variant=variant)
+        stock_items[variant_id] = stock_item
     return stock_items
 
 
@@ -606,13 +639,13 @@ def record_purchase_replacement_stock_movements(
     stock_items,
     created_by,
 ):
-    for product, quantity, _ in lines:
-        stock_item = stock_items[product.pk]
+    for variant, quantity, _ in lines:
+        stock_item = stock_items[variant.pk]
         before = stock_snapshot(stock_item)
         stock_item.quantity_on_hand += quantity
         save_stock_item_quantities(stock_item)
         create_stock_movement(
-            product=product,
+            variant=variant,
             stock_item=stock_item,
             movement_type=StockMovement.Type.INCREASE,
             quantity=quantity,
@@ -655,15 +688,15 @@ def create_purchase_order_adjustment(
         PurchaseOrderAdjustmentLine.objects.create(
             adjustment=adjustment,
             purchase_line=line,
-            product=line.product,
+            variant=line.variant,
             quantity=quantity,
             unit_cost=purchase_adjustment_line_unit_cost(line, quantity),
             line_amount=line_amount,
         )
-    for product, quantity, unit_cost in replacement_lines:
+    for variant, quantity, unit_cost in replacement_lines:
         PurchaseOrderAdjustmentReplacementLine.objects.create(
             adjustment=adjustment,
-            product=product,
+            variant=variant,
             quantity=quantity,
             unit_cost=unit_cost,
         )
@@ -735,7 +768,7 @@ def adjust_purchase_order_items(
 ):
     locked_order = (
         PurchaseOrder.objects.select_for_update()
-        .prefetch_related("lines__product")
+        .prefetch_related("lines__variant__product")
         .get(pk=purchase_order.pk)
     )
     validate_purchase_order_adjustment_allowed(locked_order)
@@ -839,7 +872,7 @@ def create_supplier_payment(*, created_by=None, **payment_fields):
 def cancel_purchase_order(purchase_order, *, request=None):
     locked_order = (
         PurchaseOrder.objects.select_for_update()
-        .prefetch_related("lines__product", "lines__receipt_lines")
+        .prefetch_related("lines__variant__product", "lines__receipt_lines")
         .get(pk=purchase_order.pk)
     )
     if locked_order.status not in (
@@ -852,11 +885,14 @@ def cancel_purchase_order(purchase_order, *, request=None):
 
     created_by = purchase_created_by(request)
     if locked_order.status == PurchaseOrder.Status.SUBMITTED:
-        for line in locked_order.lines.select_related("product").order_by("product_id"):
+        for line in locked_order.lines.select_related(
+            "variant",
+            "variant__product",
+        ).order_by("variant_id"):
             outstanding_quantity = line.outstanding_quantity
             if outstanding_quantity <= 0:
                 continue
-            stock_item = lock_stock_item(line.product)
+            stock_item = lock_stock_item(variant=line.variant)
             before = stock_snapshot(stock_item)
             expected_reduction = decrement_expected(stock_item, outstanding_quantity)
             if expected_reduction <= 0:
@@ -864,7 +900,7 @@ def cancel_purchase_order(purchase_order, *, request=None):
             save_stock_item_quantities(stock_item)
             create_stock_movement(
                 stock_item=stock_item,
-                product=line.product,
+                variant=line.variant,
                 movement_type=StockMovement.Type.CANCEL_EXPECTED,
                 quantity=expected_reduction,
                 note=f"إلغاء أمر شراء {locked_order.order_number}",

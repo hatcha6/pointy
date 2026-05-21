@@ -27,6 +27,7 @@ class DiscountLineInput:
     product_id: int | None
     quantity: int
     unit_amount: Decimal
+    variant_id: int | None = None
     category_ids: tuple[int | str, ...] = ()
     metadata: dict = field(default_factory=dict)
 
@@ -187,7 +188,13 @@ class DiscountEngine:
             .filter(Q(starts_at__isnull=True) | Q(starts_at__lte=now))
             .filter(Q(ends_at__isnull=True) | Q(ends_at__gt=now))
             .filter(application_filter)
-            .prefetch_related("products", "product_categories", "customers", "suppliers")
+            .prefetch_related(
+                "products",
+                "product_variants",
+                "product_categories",
+                "customers",
+                "suppliers",
+            )
             .order_by("priority", "id")
         )
         return [rule for rule in rules if self._context_matches_rule(rule, context)]
@@ -218,16 +225,22 @@ class DiscountEngine:
         lines: Iterable[DiscountLineInput],
     ) -> list[DiscountLineInput]:
         allowed_product_ids = {product.pk for product in rule.products.all()}
+        allowed_variant_ids = {variant.pk for variant in rule.product_variants.all()}
         allowed_category_ids = self._category_ids_with_descendants(
             category.pk for category in rule.product_categories.all()
         )
-        has_line_constraints = bool(allowed_product_ids or allowed_category_ids)
+        has_line_constraints = bool(
+            allowed_product_ids or allowed_variant_ids or allowed_category_ids
+        )
         matching = []
         for line in lines:
             line_category_ids = self._normalized_category_ids(line.category_ids)
             matches_product = line.product_id in allowed_product_ids
+            matches_variant = line.variant_id in allowed_variant_ids
             matches_category = bool(allowed_category_ids & line_category_ids)
-            if has_line_constraints and not (matches_product or matches_category):
+            if has_line_constraints and not (
+                matches_product or matches_variant or matches_category
+            ):
                 continue
             if rule.min_line_quantity is not None and line.quantity < rule.min_line_quantity:
                 continue
@@ -495,8 +508,16 @@ def allocation_dicts(
         line = line_objects_by_key.get(allocation.line_key)
         if line is not None:
             data["line_object_id"] = line.pk
+            variant = getattr(line, "variant", None)
             product_id = getattr(line, "product_id", None)
+            if product_id is None and variant is not None:
+                product_id = variant.product_id
             if product_id is not None:
                 data["product_id"] = product_id
+            variant_id = getattr(line, "variant_id", None)
+            if variant_id is None and variant is not None:
+                variant_id = variant.pk
+            if variant_id is not None:
+                data["variant_id"] = variant_id
         allocations.append(data)
     return allocations

@@ -49,7 +49,7 @@ class ProductDetailsHero extends StatelessWidget {
                       ),
                       const SizedBox(height: 6),
                       Text(
-                        product.sku,
+                        product.effectiveSku,
                         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                           color: colorScheme.onPrimary,
                         ),
@@ -82,7 +82,7 @@ class ProductDetailsHero extends StatelessWidget {
                     ),
                     const Spacer(),
                     Text(
-                      formatMoney(product.unitPrice),
+                      formatMoney(product.effectiveUnitPrice),
                       style: Theme.of(context).textTheme.titleLarge?.copyWith(
                         color: colorScheme.onPrimary,
                       ),

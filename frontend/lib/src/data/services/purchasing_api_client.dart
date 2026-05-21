@@ -85,11 +85,16 @@ class PurchasingApiClient {
 
   Future<ProductCostHistoryPage> fetchProductCostHistory({
     required int productId,
+    int? variantId,
     int page = 1,
   }) async {
     final response = await _session.get(
       'purchase-orders/product-cost-history/',
-      query: {'product': '$productId', 'page': '$page'},
+      query: {
+        'product': '$productId',
+        if (variantId != null) 'variant': '$variantId',
+        'page': '$page',
+      },
     );
     _session.throwApiException(
       response,
@@ -98,10 +103,16 @@ class PurchasingApiClient {
     return ProductCostHistoryPage.fromAny(_session.decodedBody(response));
   }
 
-  Future<ProductMarginImpact?> fetchProductMarginImpact(int productId) async {
+  Future<ProductMarginImpact?> fetchProductMarginImpact(
+    int productId, {
+    int? variantId,
+  }) async {
     final response = await _session.get(
       'purchase-orders/product-margin-impact/',
-      query: {'product': '$productId'},
+      query: {
+        'product': '$productId',
+        if (variantId != null) 'variant': '$variantId',
+      },
     );
     _session.throwApiException(
       response,
@@ -219,10 +230,13 @@ class PurchasingApiClient {
     );
   }
 
-  Future<double?> fetchLastProductCost(int productId) async {
+  Future<double?> fetchLastProductCost(int productId, {int? variantId}) async {
     final response = await _session.get(
       'purchase-orders/last-cost/',
-      query: {'product': '$productId'},
+      query: {
+        'product': '$productId',
+        if (variantId != null) 'variant': '$variantId',
+      },
     );
     _session.throwApiException(
       response,

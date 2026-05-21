@@ -13,12 +13,25 @@ class InventoryRepository {
     return Result.guard(() => _service.fetchStockForProduct(productId));
   }
 
+  Future<Result<StockItem?>> loadStockForVariant(int variantId) async {
+    return Result.guard(() => _service.fetchStockForVariant(variantId));
+  }
+
   Future<Result<StockMovementPage>> loadMovementsForProduct(
     int productId, {
     int page = 1,
   }) async {
     return Result.guard(
       () => _service.fetchStockMovementsForProduct(productId, page: page),
+    );
+  }
+
+  Future<Result<StockMovementPage>> loadMovementsForVariant(
+    int variantId, {
+    int page = 1,
+  }) async {
+    return Result.guard(
+      () => _service.fetchStockMovementsForVariant(variantId, page: page),
     );
   }
 

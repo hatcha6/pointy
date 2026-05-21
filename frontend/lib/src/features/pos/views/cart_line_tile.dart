@@ -95,7 +95,7 @@ class _ProductSummary extends StatelessWidget {
         ),
         const SizedBox(height: 2),
         Text(
-          l10n.unitPriceEach(formatMoney(line.product.unitPrice)),
+          l10n.unitPriceEach(formatMoney(line.product.effectiveUnitPrice)),
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: textTheme.bodySmall,

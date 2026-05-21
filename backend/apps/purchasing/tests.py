@@ -8,7 +8,7 @@ from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APIClient
 
-from apps.catalog.models import Product
+from apps.catalog.models import Product, ProductVariant
 from apps.core.roles import MANAGER_GROUP, ensure_role_groups
 from apps.discounts.models import AppliedDiscount, DiscountRedemption, DiscountRule
 from apps.inventory.models import StockItem, StockMovement
@@ -1814,6 +1814,101 @@ class PurchaseOrderApiTests(TestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["unit_cost"], Decimal("2.75"))
+
+    def test_last_cost_can_target_a_specific_variant(self):
+        variant = ProductVariant.objects.create(
+            product=self.product,
+            name="Large",
+            sku="PUR-COFFEE-L",
+            unit_price=Decimal("5.00"),
+        )
+        default_order = PurchaseOrder.objects.create(
+            supplier=self.supplier,
+            status=PurchaseOrder.Status.RECEIVED,
+        )
+        default_order.lines.create(
+            product=self.product,
+            quantity=1,
+            unit_cost=Decimal("1.25"),
+        )
+        variant_order = PurchaseOrder.objects.create(
+            supplier=self.supplier,
+            status=PurchaseOrder.Status.RECEIVED,
+        )
+        variant_order.lines.create(
+            variant=variant,
+            quantity=1,
+            unit_cost=Decimal("6.50"),
+        )
+
+        variant_response = self.client.get(
+            reverse("purchaseorder-last-cost"),
+            {"variant": variant.pk},
+        )
+        default_response = self.client.get(
+            reverse("purchaseorder-last-cost"),
+            {"product": self.product.pk},
+        )
+
+        self.assertEqual(variant_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(variant_response.data["product_id"], self.product.pk)
+        self.assertEqual(variant_response.data["variant_id"], variant.pk)
+        self.assertEqual(variant_response.data["unit_cost"], Decimal("6.50"))
+        self.assertEqual(default_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            default_response.data["variant_id"],
+            self.product.default_variant.pk,
+        )
+        self.assertEqual(default_response.data["unit_cost"], Decimal("1.25"))
+
+    def test_receive_purchase_order_increases_exact_variant_stock(self):
+        variant = ProductVariant.objects.create(
+            product=self.product,
+            name="Medium",
+            sku="PUR-COFFEE-M",
+            unit_price=Decimal("4.50"),
+        )
+        order = PurchaseOrder.objects.create(
+            supplier=self.supplier,
+            status=PurchaseOrder.Status.SUBMITTED,
+        )
+        line = order.lines.create(
+            variant=variant,
+            quantity=2,
+            unit_cost=Decimal("2.10"),
+        )
+        StockItem.objects.create(product=self.product, quantity_on_hand=5)
+        variant_stock = StockItem.objects.create(
+            variant=variant,
+            quantity_expected=2,
+        )
+
+        response = self.client.post(
+            reverse("purchaseorder-receive", args=[order.pk]),
+            {
+                "lines": [
+                    {
+                        "line": line.pk,
+                        "accepted_quantity": 2,
+                    }
+                ]
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        variant_stock.refresh_from_db()
+        self.assertEqual(variant_stock.quantity_on_hand, 2)
+        self.assertEqual(variant_stock.quantity_expected, 0)
+        self.assertEqual(
+            StockItem.objects.get(variant=self.product.default_variant).quantity_on_hand,
+            5,
+        )
+        movement = StockMovement.objects.get(
+            variant=variant,
+            movement_type=StockMovement.Type.RECEIVE_EXPECTED,
+        )
+        self.assertEqual(movement.on_hand_after, 2)
 
     def test_product_cost_history_returns_purchase_lines_for_product(self):
         cancelled = PurchaseOrder.objects.create(

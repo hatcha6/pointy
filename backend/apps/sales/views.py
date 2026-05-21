@@ -39,7 +39,7 @@ class OrderViewSet(viewsets.ModelViewSet):
         "destroy": ("sales.delete_order",),
     }
     queryset = Order.objects.select_related("customer", "register_session").prefetch_related(
-        "lines__product",
+        "lines__variant__product",
         "payments",
     )
     filterset_fields = (
@@ -48,7 +48,12 @@ class OrderViewSet(viewsets.ModelViewSet):
         "register_session",
         "register_session__status",
     )
-    search_fields = ("receipt_number", "lines__product__name", "lines__product__sku")
+    search_fields = (
+        "receipt_number",
+        "lines__variant__product__name",
+        "lines__variant__sku",
+        "lines__variant__barcode",
+    )
     ordering_fields = ("created_at", "updated_at", "total", "receipt_number")
 
     def get_queryset(self):
@@ -273,7 +278,7 @@ class RegisterSessionViewSet(
         session = self.get_object()
         orders = (
             session.orders.select_related("customer", "register_session")
-            .prefetch_related("lines__product", "payments")
+            .prefetch_related("lines__variant__product", "payments")
             .order_by("-created_at")
         )
         customer_id = request.query_params.get("customer")

@@ -312,7 +312,7 @@ class _CameraBarcodeScannerSheetState extends State<CameraBarcodeScannerSheet> {
 
     setState(() {
       final index = _entries.indexWhere(
-        (entry) => entry.product.id == product.id,
+        (entry) => entry.product.sellableId == product.sellableId,
       );
       if (index == -1) {
         _entries.add(
@@ -333,7 +333,7 @@ class _CameraBarcodeScannerSheetState extends State<CameraBarcodeScannerSheet> {
   void _updateEntryQuantity(int productId, int quantity) {
     setState(() {
       final index = _entries.indexWhere(
-        (entry) => entry.product.id == productId,
+        (entry) => entry.product.sellableId == productId,
       );
       if (index == -1) {
         return;
@@ -346,7 +346,7 @@ class _CameraBarcodeScannerSheetState extends State<CameraBarcodeScannerSheet> {
 
   void _removeEntry(int productId) {
     setState(() {
-      _entries.removeWhere((entry) => entry.product.id == productId);
+      _entries.removeWhere((entry) => entry.product.sellableId == productId);
     });
   }
 
@@ -407,7 +407,7 @@ class _ScannedEntriesList extends StatelessWidget {
                             overflow: TextOverflow.ellipsis,
                           ),
                           Text(
-                            '${entry.product.sku} · ${formatMoney(entry.product.unitPrice)}',
+                            '${entry.product.effectiveSku} · ${formatMoney(entry.product.effectiveUnitPrice)}',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: Theme.of(context).textTheme.bodySmall,
@@ -423,12 +423,12 @@ class _ScannedEntriesList extends StatelessWidget {
                       _CompactQuantityStepper(
                         value: entry.quantity,
                         onChanged: (value) {
-                          onQuantityChanged(entry.product.id, value);
+                          onQuantityChanged(entry.product.sellableId, value);
                         },
                       ),
                     IconButton(
                       tooltip: l10n.removeScannedCodeTooltip,
-                      onPressed: () => onRemove(entry.product.id),
+                      onPressed: () => onRemove(entry.product.sellableId),
                       icon: const Icon(Icons.close),
                       visualDensity: VisualDensity.compact,
                     ),

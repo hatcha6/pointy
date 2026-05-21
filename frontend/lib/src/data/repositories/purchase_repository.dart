@@ -68,17 +68,25 @@ class PurchaseRepository {
 
   Future<Result<ProductCostHistoryPage>> loadProductCostHistory({
     required int productId,
+    int? variantId,
     int page = 1,
   }) async {
     return Result.guard(
-      () => _service.fetchProductCostHistory(productId: productId, page: page),
+      () => _service.fetchProductCostHistory(
+        productId: productId,
+        variantId: variantId,
+        page: page,
+      ),
     );
   }
 
   Future<Result<ProductMarginImpact?>> loadProductMarginImpact(
-    int productId,
-  ) async {
-    return Result.guard(() => _service.fetchProductMarginImpact(productId));
+    int productId, {
+    int? variantId,
+  }) async {
+    return Result.guard(
+      () => _service.fetchProductMarginImpact(productId, variantId: variantId),
+    );
   }
 
   Future<Result<PurchaseAdjustmentHistoryPage>> loadPurchaseAdjustmentHistory({
@@ -97,8 +105,13 @@ class PurchaseRepository {
     );
   }
 
-  Future<Result<double?>> loadLastProductCost(int productId) async {
-    return Result.guard(() => _service.fetchLastProductCost(productId));
+  Future<Result<double?>> loadLastProductCost(
+    int productId, {
+    int? variantId,
+  }) async {
+    return Result.guard(
+      () => _service.fetchLastProductCost(productId, variantId: variantId),
+    );
   }
 
   Future<Result<PurchaseSubmission>> submitDraft(

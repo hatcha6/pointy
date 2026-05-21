@@ -1,9 +1,13 @@
+from rest_framework import serializers
+
 from .models import StockItem, StockMovement
 
 
-def lock_stock_item(product):
+def lock_stock_item(*, variant):
+    if variant is None:
+        raise serializers.ValidationError({"variant": "Variant is required."})
     stock_item, _ = StockItem.objects.select_for_update().get_or_create(
-        product=product,
+        variant=variant,
     )
     return stock_item
 
@@ -35,12 +39,19 @@ def create_stock_movement(
     note,
     created_by,
     before,
-    product=None,
+    variant=None,
 ):
+    variant = variant or stock_item.variant
+    if variant is None:
+        raise serializers.ValidationError({"variant": "Variant is required."})
+    if stock_item.variant_id != variant.pk:
+        raise serializers.ValidationError(
+            {"variant": "Variant must match the locked stock item."}
+        )
     if quantity <= 0:
         return None
     return StockMovement.objects.create(
-        product=product or stock_item.product,
+        variant=variant,
         stock_item=stock_item,
         movement_type=movement_type,
         quantity=quantity,

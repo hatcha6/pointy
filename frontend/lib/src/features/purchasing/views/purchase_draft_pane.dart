@@ -655,9 +655,9 @@ class _PurchaseDraftLineTileState extends State<PurchaseDraftLineTile> {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
-                if (line.product.sku.isNotEmpty)
+                if (line.product.effectiveSku.isNotEmpty)
                   Text(
-                    line.product.sku,
+                    line.product.effectiveSku,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: Theme.of(context).textTheme.bodySmall,

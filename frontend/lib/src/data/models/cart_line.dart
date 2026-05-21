@@ -6,7 +6,7 @@ class CartLine {
   final Product product;
   final int quantity;
 
-  double get subtotal => product.unitPrice * quantity;
+  double get subtotal => product.effectiveUnitPrice * quantity;
 
   double get total => subtotal;
 

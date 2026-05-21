@@ -6,7 +6,7 @@ from django.test import TestCase
 from django.utils import timezone
 from rest_framework.test import APIClient
 
-from apps.catalog.models import Product, ProductCategory
+from apps.catalog.models import Product, ProductCategory, ProductVariant
 from apps.customers.models import Customer
 from apps.purchasing.models import Supplier
 from apps.sales.models import Order
@@ -154,6 +154,48 @@ class DiscountEngineTests(TestCase):
         self.assertEqual(result.discount_total, Decimal("3.00"))
         self.assertEqual(result.applications[0].allocation_dicts(), [
             {"line_key": "line-1", "amount": "3.00"},
+        ])
+
+    def test_line_discount_can_target_a_specific_variant(self):
+        variant = ProductVariant.objects.create(
+            product=self.product,
+            name="Large",
+            sku="SKU-1-L",
+            unit_price=Decimal("12.00"),
+        )
+        rule = DiscountRule.objects.create(
+            name="Variant discount",
+            channel=DiscountRule.Channel.SALES,
+            scope=DiscountRule.Scope.LINE,
+            value_type=DiscountRule.ValueType.FIXED_AMOUNT,
+            value=Decimal("2.00"),
+        )
+        rule.product_variants.add(variant)
+
+        result = self.engine.calculate(
+            self.context(
+                lines=(
+                    DiscountLineInput(
+                        key="default",
+                        product_id=self.product.pk,
+                        variant_id=self.product.default_variant.pk,
+                        quantity=1,
+                        unit_amount=Decimal("10.00"),
+                    ),
+                    DiscountLineInput(
+                        key="large",
+                        product_id=self.product.pk,
+                        variant_id=variant.pk,
+                        quantity=1,
+                        unit_amount=Decimal("12.00"),
+                    ),
+                )
+            )
+        )
+
+        self.assertEqual(result.discount_total, Decimal("2.00"))
+        self.assertEqual(result.applications[0].allocation_dicts(), [
+            {"line_key": "large", "amount": "2.00"},
         ])
 
     def test_line_discount_can_target_categories_with_descendants(self):
@@ -439,6 +481,12 @@ class DiscountRuleApiTests(TestCase):
         self.supplier = Supplier.objects.create(name="API supplier")
         self.category = ProductCategory.objects.create(name="API category")
         self.product.categories.add(self.category)
+        self.variant = ProductVariant.objects.create(
+            product=self.product,
+            name="API variant",
+            sku="API-1-V",
+            unit_price=Decimal("14.00"),
+        )
 
     def test_create_update_disable_and_archive_discount_rule(self):
         response = self.client.post(
@@ -456,6 +504,7 @@ class DiscountRuleApiTests(TestCase):
                 "priority": 10,
                 "exclusive": False,
                 "products": [self.product.pk],
+                "product_variants": [self.variant.pk],
                 "product_categories": [self.category.pk],
             },
             format="json",
@@ -466,6 +515,7 @@ class DiscountRuleApiTests(TestCase):
         self.assertEqual(response.data["coupon_code"], "SAVE10")
         self.assertTrue(response.data["is_active"])
         self.assertEqual(response.data["products"], [self.product.pk])
+        self.assertEqual(response.data["product_variants"], [self.variant.pk])
         self.assertEqual(response.data["product_categories"], [self.category.pk])
 
         patch_response = self.client.patch(

@@ -15,10 +15,10 @@ class BarcodeLabelDraft {
 
   factory BarcodeLabelDraft.fromProduct(Product product) {
     return BarcodeLabelDraft(
-      productName: product.name,
-      sku: product.sku,
-      barcode: product.barcode,
-      unitPrice: product.unitPrice,
+      productName: product.sellableName,
+      sku: product.effectiveSku,
+      barcode: product.effectiveBarcode,
+      unitPrice: product.effectiveUnitPrice,
     );
   }
 }

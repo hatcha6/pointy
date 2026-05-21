@@ -22,6 +22,30 @@ class CatalogRepository {
     return Result.guard(() => _service.createProduct(draft));
   }
 
+  Future<Result<ProductVariantPage>> loadProductVariants({
+    required ProductQuery query,
+    int page = 1,
+  }) async {
+    return Result.guard(
+      () => _service.fetchProductVariants(query: query, page: page),
+    );
+  }
+
+  Future<Result<ProductVariantPage>> loadVariantsForProduct(
+    int productId, {
+    int page = 1,
+  }) async {
+    return Result.guard(
+      () => _service.fetchVariantsForProduct(productId, page: page),
+    );
+  }
+
+  Future<Result<ProductVariant>> createProductVariant(
+    ProductVariantDraft draft,
+  ) async {
+    return Result.guard(() => _service.createProductVariant(draft));
+  }
+
   Future<Result<ProductCategoryPage>> loadProductCategories({
     ProductCategoryQuery query = const ProductCategoryQuery(),
     int page = 1,
@@ -54,10 +78,10 @@ class CatalogRepository {
     );
 
     return Result.guard(() async {
-      final page = await _service.fetchProducts(query: query, page: 1);
-      for (final product in page.products) {
-        if (product.barcode.trim() == normalizedBarcode) {
-          return product;
+      final page = await _service.fetchProductVariants(query: query, page: 1);
+      for (final variant in page.variants) {
+        if (variant.barcode.trim() == normalizedBarcode) {
+          return Product.fromVariant(variant);
         }
       }
       return null;
