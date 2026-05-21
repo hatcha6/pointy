@@ -286,6 +286,336 @@ abstract class AppLocalizations {
   /// **'لوحة التحكم'**
   String get dashboardDrawerLabel;
 
+  /// No description provided for @reportsDrawerLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'التقارير'**
+  String get reportsDrawerLabel;
+
+  /// No description provided for @reportsTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'التقارير'**
+  String get reportsTitle;
+
+  /// No description provided for @reportsCatalogTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'أنواع التقارير'**
+  String get reportsCatalogTitle;
+
+  /// No description provided for @reportsSetupTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'إعداد التقرير'**
+  String get reportsSetupTitle;
+
+  /// No description provided for @reportCategorySales.
+  ///
+  /// In ar, this message translates to:
+  /// **'المبيعات'**
+  String get reportCategorySales;
+
+  /// No description provided for @reportCategoryCash.
+  ///
+  /// In ar, this message translates to:
+  /// **'النقدية'**
+  String get reportCategoryCash;
+
+  /// No description provided for @reportCategoryPayments.
+  ///
+  /// In ar, this message translates to:
+  /// **'المدفوعات'**
+  String get reportCategoryPayments;
+
+  /// No description provided for @reportCategoryInventory.
+  ///
+  /// In ar, this message translates to:
+  /// **'المخزون'**
+  String get reportCategoryInventory;
+
+  /// No description provided for @reportCategoryPurchasing.
+  ///
+  /// In ar, this message translates to:
+  /// **'المشتريات'**
+  String get reportCategoryPurchasing;
+
+  /// No description provided for @reportCategoryContacts.
+  ///
+  /// In ar, this message translates to:
+  /// **'الجهات'**
+  String get reportCategoryContacts;
+
+  /// No description provided for @reportCategoryDiscounts.
+  ///
+  /// In ar, this message translates to:
+  /// **'الخصومات'**
+  String get reportCategoryDiscounts;
+
+  /// No description provided for @reportSalesSummaryTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'ملخص المبيعات'**
+  String get reportSalesSummaryTitle;
+
+  /// No description provided for @reportSalesSummarySubtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'إجماليات الطلبات والمرتجعات والخصومات حسب الفترة.'**
+  String get reportSalesSummarySubtitle;
+
+  /// No description provided for @reportRegisterSessionsTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'جلسات الدرج'**
+  String get reportRegisterSessionsTitle;
+
+  /// No description provided for @reportRegisterSessionsSubtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'افتتاح وإغلاق الجلسات والفروقات النقدية لكل وردية.'**
+  String get reportRegisterSessionsSubtitle;
+
+  /// No description provided for @reportPaymentsTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'المدفوعات'**
+  String get reportPaymentsTitle;
+
+  /// No description provided for @reportPaymentsSubtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'طرق الدفع والعمولات والتسويات خلال الفترة.'**
+  String get reportPaymentsSubtitle;
+
+  /// No description provided for @reportInventoryValueTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'قيمة المخزون'**
+  String get reportInventoryValueTitle;
+
+  /// No description provided for @reportInventoryValueSubtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'الكميات الحالية وقيمة البيع والتكلفة عند توفرها.'**
+  String get reportInventoryValueSubtitle;
+
+  /// No description provided for @reportStockMovementTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'حركات المخزون'**
+  String get reportStockMovementTitle;
+
+  /// No description provided for @reportStockMovementSubtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'الاستلام والتعديل والبيع لكل منتج.'**
+  String get reportStockMovementSubtitle;
+
+  /// No description provided for @reportPurchasesTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'المشتريات والموردون'**
+  String get reportPurchasesTitle;
+
+  /// No description provided for @reportPurchasesSubtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'أوامر الشراء والاستلام والمستحقات.'**
+  String get reportPurchasesSubtitle;
+
+  /// No description provided for @reportContactsTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'أرصدة الجهات'**
+  String get reportContactsTitle;
+
+  /// No description provided for @reportContactsSubtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'نشاط العملاء والموردين والأرصدة المرتبطة بهم.'**
+  String get reportContactsSubtitle;
+
+  /// No description provided for @reportDiscountsTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'سجل الخصومات'**
+  String get reportDiscountsTitle;
+
+  /// No description provided for @reportDiscountsSubtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'الخصومات النشطة والاستخدامات خلال الفترة.'**
+  String get reportDiscountsSubtitle;
+
+  /// No description provided for @reportA4Chip.
+  ///
+  /// In ar, this message translates to:
+  /// **'A4'**
+  String get reportA4Chip;
+
+  /// No description provided for @reportArchiveChip.
+  ///
+  /// In ar, this message translates to:
+  /// **'أرشفة'**
+  String get reportArchiveChip;
+
+  /// No description provided for @reportAuditableChip.
+  ///
+  /// In ar, this message translates to:
+  /// **'قابل للتدقيق'**
+  String get reportAuditableChip;
+
+  /// No description provided for @reportPeriodTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'الفترة'**
+  String get reportPeriodTitle;
+
+  /// No description provided for @reportPeriodToday.
+  ///
+  /// In ar, this message translates to:
+  /// **'اليوم'**
+  String get reportPeriodToday;
+
+  /// No description provided for @reportPeriodWeek.
+  ///
+  /// In ar, this message translates to:
+  /// **'الأسبوع'**
+  String get reportPeriodWeek;
+
+  /// No description provided for @reportPeriodMonth.
+  ///
+  /// In ar, this message translates to:
+  /// **'الشهر'**
+  String get reportPeriodMonth;
+
+  /// No description provided for @reportPeriodCustom.
+  ///
+  /// In ar, this message translates to:
+  /// **'مخصص'**
+  String get reportPeriodCustom;
+
+  /// Start date selector label.
+  ///
+  /// In ar, this message translates to:
+  /// **'من {date}'**
+  String reportFromDateValue(String date);
+
+  /// End date selector label.
+  ///
+  /// In ar, this message translates to:
+  /// **'إلى {date}'**
+  String reportToDateValue(String date);
+
+  /// Selected report date range.
+  ///
+  /// In ar, this message translates to:
+  /// **'{start} - {end}'**
+  String reportDateRangeValue(String start, String end);
+
+  /// No description provided for @reportGranularityTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'التفصيل'**
+  String get reportGranularityTitle;
+
+  /// No description provided for @reportGranularitySummary.
+  ///
+  /// In ar, this message translates to:
+  /// **'ملخص'**
+  String get reportGranularitySummary;
+
+  /// No description provided for @reportGranularityDaily.
+  ///
+  /// In ar, this message translates to:
+  /// **'يومي'**
+  String get reportGranularityDaily;
+
+  /// No description provided for @reportGranularityDetailed.
+  ///
+  /// In ar, this message translates to:
+  /// **'تفصيلي'**
+  String get reportGranularityDetailed;
+
+  /// No description provided for @reportArchiveOptionsTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'الأرشفة'**
+  String get reportArchiveOptionsTitle;
+
+  /// No description provided for @reportIncludeAuditTrailLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'إضافة سجل التدقيق'**
+  String get reportIncludeAuditTrailLabel;
+
+  /// No description provided for @reportIncludePreparedByLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'إظهار معد التقرير والتاريخ'**
+  String get reportIncludePreparedByLabel;
+
+  /// No description provided for @reportOutputTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'الإخراج'**
+  String get reportOutputTitle;
+
+  /// No description provided for @reportPreviewPdfAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'معاينة PDF'**
+  String get reportPreviewPdfAction;
+
+  /// No description provided for @reportPdfPreviewTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'معاينة التقرير'**
+  String get reportPdfPreviewTitle;
+
+  /// No description provided for @reportPrintAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'طباعة'**
+  String get reportPrintAction;
+
+  /// No description provided for @reportExportArchiveAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'حفظ للأرشيف'**
+  String get reportExportArchiveAction;
+
+  /// Selected report output summary.
+  ///
+  /// In ar, this message translates to:
+  /// **'الفترة: {range}، التفصيل: {granularity}'**
+  String reportSelectedSummary(String range, String granularity);
+
+  /// Placeholder message for report actions until services are wired.
+  ///
+  /// In ar, this message translates to:
+  /// **'{action} غير موصول بعد لتقرير {report}.'**
+  String reportActionPlaceholder(String action, String report);
+
+  /// No description provided for @reportGenerationError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر إنشاء التقرير.'**
+  String get reportGenerationError;
+
+  /// No description provided for @reportPrintQueuedMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم إرسال التقرير للطباعة.'**
+  String get reportPrintQueuedMessage;
+
+  /// No description provided for @reportArchiveSharedMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم تجهيز نسخة الأرشيف.'**
+  String get reportArchiveSharedMessage;
+
   /// No description provided for @dashboardTitle.
   ///
   /// In ar, this message translates to:

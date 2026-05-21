@@ -34,6 +34,7 @@ from apps.purchasing.views import (
     SupplierPaymentViewSet,
     SupplierViewSet,
 )
+from apps.reports.views import ReportRunViewSet
 from apps.sales.views import OrderViewSet, RegisterSessionViewSet
 
 router = DefaultRouter()
@@ -62,6 +63,7 @@ router.register("print-template-versions", PrintTemplateVersionViewSet)
 router.register("printer-profiles", PrinterProfileViewSet)
 router.register("print-agents", PrintAgentViewSet)
 router.register("print-jobs", PrintJobViewSet)
+router.register("reports", ReportRunViewSet, basename="report")
 
 urlpatterns = [
     path("admin/", admin.site.urls),

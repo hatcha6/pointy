@@ -12,6 +12,7 @@ enum AppCapability {
   viewCustomerDashboard,
   viewDiscountDashboard,
   viewPrintingDashboard,
+  viewReports,
   accessPos,
   accessPurchasing,
   createPurchaseOrder,
@@ -293,6 +294,8 @@ class AuthorizationCapabilities {
       if (_hasAny(user, const [
         'view_discountrule',
         'discounts.view_discountrule',
+        'view_reportrun',
+        'reports.view_reportrun',
       ])) {
         capabilities
           ..add(AppCapability.viewDashboard)
@@ -323,6 +326,30 @@ class AuthorizationCapabilities {
           ..add(AppCapability.viewDiscountRules)
           ..add(AppCapability.deleteDiscountRule);
       }
+      if (_hasAny(user, const [
+        'view_reportrun',
+        'reports.view_reportrun',
+        'view_order',
+        'sales.view_order',
+        'view_registersession',
+        'sales.view_registersession',
+        'view_payment',
+        'payments.view_payment',
+        'view_stockitem',
+        'inventory.view_stockitem',
+        'view_stockmovement',
+        'inventory.view_stockmovement',
+        'view_purchaseorder',
+        'purchasing.view_purchaseorder',
+        'view_customer',
+        'customers.view_customer',
+        'view_supplier',
+        'purchasing.view_supplier',
+        'view_discountrule',
+        'discounts.view_discountrule',
+      ])) {
+        capabilities.add(AppCapability.viewReports);
+      }
     }
 
     return AuthorizationCapabilities._(capabilities);
@@ -346,6 +373,7 @@ class AuthorizationCapabilities {
       allows(AppCapability.viewDiscountDashboard);
   bool get canViewPrintingDashboard =>
       allows(AppCapability.viewPrintingDashboard);
+  bool get canViewReports => allows(AppCapability.viewReports);
   bool get canAccessPos => allows(AppCapability.accessPos);
   bool get canAccessPurchasing => allows(AppCapability.accessPurchasing);
   bool get canCreatePurchaseOrder => allows(AppCapability.createPurchaseOrder);

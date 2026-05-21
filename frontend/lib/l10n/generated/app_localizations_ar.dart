@@ -105,6 +105,188 @@ class AppLocalizationsAr extends AppLocalizations {
   String get dashboardDrawerLabel => 'لوحة التحكم';
 
   @override
+  String get reportsDrawerLabel => 'التقارير';
+
+  @override
+  String get reportsTitle => 'التقارير';
+
+  @override
+  String get reportsCatalogTitle => 'أنواع التقارير';
+
+  @override
+  String get reportsSetupTitle => 'إعداد التقرير';
+
+  @override
+  String get reportCategorySales => 'المبيعات';
+
+  @override
+  String get reportCategoryCash => 'النقدية';
+
+  @override
+  String get reportCategoryPayments => 'المدفوعات';
+
+  @override
+  String get reportCategoryInventory => 'المخزون';
+
+  @override
+  String get reportCategoryPurchasing => 'المشتريات';
+
+  @override
+  String get reportCategoryContacts => 'الجهات';
+
+  @override
+  String get reportCategoryDiscounts => 'الخصومات';
+
+  @override
+  String get reportSalesSummaryTitle => 'ملخص المبيعات';
+
+  @override
+  String get reportSalesSummarySubtitle =>
+      'إجماليات الطلبات والمرتجعات والخصومات حسب الفترة.';
+
+  @override
+  String get reportRegisterSessionsTitle => 'جلسات الدرج';
+
+  @override
+  String get reportRegisterSessionsSubtitle =>
+      'افتتاح وإغلاق الجلسات والفروقات النقدية لكل وردية.';
+
+  @override
+  String get reportPaymentsTitle => 'المدفوعات';
+
+  @override
+  String get reportPaymentsSubtitle =>
+      'طرق الدفع والعمولات والتسويات خلال الفترة.';
+
+  @override
+  String get reportInventoryValueTitle => 'قيمة المخزون';
+
+  @override
+  String get reportInventoryValueSubtitle =>
+      'الكميات الحالية وقيمة البيع والتكلفة عند توفرها.';
+
+  @override
+  String get reportStockMovementTitle => 'حركات المخزون';
+
+  @override
+  String get reportStockMovementSubtitle =>
+      'الاستلام والتعديل والبيع لكل منتج.';
+
+  @override
+  String get reportPurchasesTitle => 'المشتريات والموردون';
+
+  @override
+  String get reportPurchasesSubtitle => 'أوامر الشراء والاستلام والمستحقات.';
+
+  @override
+  String get reportContactsTitle => 'أرصدة الجهات';
+
+  @override
+  String get reportContactsSubtitle =>
+      'نشاط العملاء والموردين والأرصدة المرتبطة بهم.';
+
+  @override
+  String get reportDiscountsTitle => 'سجل الخصومات';
+
+  @override
+  String get reportDiscountsSubtitle =>
+      'الخصومات النشطة والاستخدامات خلال الفترة.';
+
+  @override
+  String get reportA4Chip => 'A4';
+
+  @override
+  String get reportArchiveChip => 'أرشفة';
+
+  @override
+  String get reportAuditableChip => 'قابل للتدقيق';
+
+  @override
+  String get reportPeriodTitle => 'الفترة';
+
+  @override
+  String get reportPeriodToday => 'اليوم';
+
+  @override
+  String get reportPeriodWeek => 'الأسبوع';
+
+  @override
+  String get reportPeriodMonth => 'الشهر';
+
+  @override
+  String get reportPeriodCustom => 'مخصص';
+
+  @override
+  String reportFromDateValue(String date) {
+    return 'من $date';
+  }
+
+  @override
+  String reportToDateValue(String date) {
+    return 'إلى $date';
+  }
+
+  @override
+  String reportDateRangeValue(String start, String end) {
+    return '$start - $end';
+  }
+
+  @override
+  String get reportGranularityTitle => 'التفصيل';
+
+  @override
+  String get reportGranularitySummary => 'ملخص';
+
+  @override
+  String get reportGranularityDaily => 'يومي';
+
+  @override
+  String get reportGranularityDetailed => 'تفصيلي';
+
+  @override
+  String get reportArchiveOptionsTitle => 'الأرشفة';
+
+  @override
+  String get reportIncludeAuditTrailLabel => 'إضافة سجل التدقيق';
+
+  @override
+  String get reportIncludePreparedByLabel => 'إظهار معد التقرير والتاريخ';
+
+  @override
+  String get reportOutputTitle => 'الإخراج';
+
+  @override
+  String get reportPreviewPdfAction => 'معاينة PDF';
+
+  @override
+  String get reportPdfPreviewTitle => 'معاينة التقرير';
+
+  @override
+  String get reportPrintAction => 'طباعة';
+
+  @override
+  String get reportExportArchiveAction => 'حفظ للأرشيف';
+
+  @override
+  String reportSelectedSummary(String range, String granularity) {
+    return 'الفترة: $range، التفصيل: $granularity';
+  }
+
+  @override
+  String reportActionPlaceholder(String action, String report) {
+    return '$action غير موصول بعد لتقرير $report.';
+  }
+
+  @override
+  String get reportGenerationError => 'تعذر إنشاء التقرير.';
+
+  @override
+  String get reportPrintQueuedMessage => 'تم إرسال التقرير للطباعة.';
+
+  @override
+  String get reportArchiveSharedMessage => 'تم تجهيز نسخة الأرشيف.';
+
+  @override
   String get dashboardTitle => 'لوحة التحكم';
 
   @override

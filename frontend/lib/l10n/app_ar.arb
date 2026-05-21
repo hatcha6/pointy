@@ -35,6 +35,110 @@
   "usersDrawerLabel": "المستخدمون",
   "settingsDrawerLabel": "إعدادات المتجر",
   "dashboardDrawerLabel": "لوحة التحكم",
+  "reportsDrawerLabel": "التقارير",
+  "reportsTitle": "التقارير",
+  "reportsCatalogTitle": "أنواع التقارير",
+  "reportsSetupTitle": "إعداد التقرير",
+  "reportCategorySales": "المبيعات",
+  "reportCategoryCash": "النقدية",
+  "reportCategoryPayments": "المدفوعات",
+  "reportCategoryInventory": "المخزون",
+  "reportCategoryPurchasing": "المشتريات",
+  "reportCategoryContacts": "الجهات",
+  "reportCategoryDiscounts": "الخصومات",
+  "reportSalesSummaryTitle": "ملخص المبيعات",
+  "reportSalesSummarySubtitle": "إجماليات الطلبات والمرتجعات والخصومات حسب الفترة.",
+  "reportRegisterSessionsTitle": "جلسات الدرج",
+  "reportRegisterSessionsSubtitle": "افتتاح وإغلاق الجلسات والفروقات النقدية لكل وردية.",
+  "reportPaymentsTitle": "المدفوعات",
+  "reportPaymentsSubtitle": "طرق الدفع والعمولات والتسويات خلال الفترة.",
+  "reportInventoryValueTitle": "قيمة المخزون",
+  "reportInventoryValueSubtitle": "الكميات الحالية وقيمة البيع والتكلفة عند توفرها.",
+  "reportStockMovementTitle": "حركات المخزون",
+  "reportStockMovementSubtitle": "الاستلام والتعديل والبيع لكل منتج.",
+  "reportPurchasesTitle": "المشتريات والموردون",
+  "reportPurchasesSubtitle": "أوامر الشراء والاستلام والمستحقات.",
+  "reportContactsTitle": "أرصدة الجهات",
+  "reportContactsSubtitle": "نشاط العملاء والموردين والأرصدة المرتبطة بهم.",
+  "reportDiscountsTitle": "سجل الخصومات",
+  "reportDiscountsSubtitle": "الخصومات النشطة والاستخدامات خلال الفترة.",
+  "reportA4Chip": "A4",
+  "reportArchiveChip": "أرشفة",
+  "reportAuditableChip": "قابل للتدقيق",
+  "reportPeriodTitle": "الفترة",
+  "reportPeriodToday": "اليوم",
+  "reportPeriodWeek": "الأسبوع",
+  "reportPeriodMonth": "الشهر",
+  "reportPeriodCustom": "مخصص",
+  "reportFromDateValue": "من {date}",
+  "@reportFromDateValue": {
+    "description": "Start date selector label.",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "reportToDateValue": "إلى {date}",
+  "@reportToDateValue": {
+    "description": "End date selector label.",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "reportDateRangeValue": "{start} - {end}",
+  "@reportDateRangeValue": {
+    "description": "Selected report date range.",
+    "placeholders": {
+      "start": {
+        "type": "String"
+      },
+      "end": {
+        "type": "String"
+      }
+    }
+  },
+  "reportGranularityTitle": "التفصيل",
+  "reportGranularitySummary": "ملخص",
+  "reportGranularityDaily": "يومي",
+  "reportGranularityDetailed": "تفصيلي",
+  "reportArchiveOptionsTitle": "الأرشفة",
+  "reportIncludeAuditTrailLabel": "إضافة سجل التدقيق",
+  "reportIncludePreparedByLabel": "إظهار معد التقرير والتاريخ",
+  "reportOutputTitle": "الإخراج",
+  "reportPreviewPdfAction": "معاينة PDF",
+  "reportPdfPreviewTitle": "معاينة التقرير",
+  "reportPrintAction": "طباعة",
+  "reportExportArchiveAction": "حفظ للأرشيف",
+  "reportSelectedSummary": "الفترة: {range}، التفصيل: {granularity}",
+  "@reportSelectedSummary": {
+    "description": "Selected report output summary.",
+    "placeholders": {
+      "range": {
+        "type": "String"
+      },
+      "granularity": {
+        "type": "String"
+      }
+    }
+  },
+  "reportActionPlaceholder": "{action} غير موصول بعد لتقرير {report}.",
+  "@reportActionPlaceholder": {
+    "description": "Placeholder message for report actions until services are wired.",
+    "placeholders": {
+      "action": {
+        "type": "String"
+      },
+      "report": {
+        "type": "String"
+      }
+    }
+  },
+  "reportGenerationError": "تعذر إنشاء التقرير.",
+  "reportPrintQueuedMessage": "تم إرسال التقرير للطباعة.",
+  "reportArchiveSharedMessage": "تم تجهيز نسخة الأرشيف.",
   "dashboardTitle": "لوحة التحكم",
   "dashboardOverviewTitle": "نظرة تشغيلية",
   "refreshDashboardTooltip": "تحديث لوحة التحكم",

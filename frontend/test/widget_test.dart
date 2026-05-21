@@ -1056,11 +1056,12 @@ void main() {
     expect(find.text('المنتجات'), findsWidgets);
     expect(find.text('جلسات الدرج'), findsOneWidget);
     expect(find.text('الخصومات'), findsOneWidget);
+    expect(find.text('التقارير'), findsOneWidget);
     expect(find.text('المستخدمون'), findsOneWidget);
     expect(find.text('إعدادات الجهاز'), findsOneWidget);
-    expect(find.text('إعدادات المتجر'), findsOneWidget);
     await tester.drag(find.byType(NavigationDrawer), const Offset(0, -240));
     await tester.pumpAndSettle();
+    expect(find.text('إعدادات المتجر'), findsOneWidget);
     expect(find.text('تسجيل الخروج'), findsOneWidget);
   });
 
@@ -1633,6 +1634,17 @@ void main() {
     expect(find.text('إدارة الخصومات'), findsOneWidget);
     expect(find.text('خصم القهوة'), findsOneWidget);
     expect(find.text('خصم جديد'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('الفلاتر والترتيب'));
+    await tester.pumpAndSettle();
+    expect(find.text('الفلاتر والترتيب'), findsOneWidget);
+    expect(find.text('الحالة'), findsOneWidget);
+    expect(find.text('نطاق الخصم'), findsOneWidget);
+    await tester.drag(find.byType(ListView).last, const Offset(0, -700));
+    await tester.pumpAndSettle();
+    expect(find.text('طريقة التطبيق'), findsOneWidget);
+    await tester.tap(find.text('تطبيق'));
+    await tester.pumpAndSettle(const Duration(seconds: 1));
 
     await tester.tap(find.text('خصم جديد'));
     await tester.pumpAndSettle();

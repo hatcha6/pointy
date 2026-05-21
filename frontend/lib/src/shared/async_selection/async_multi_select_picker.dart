@@ -338,7 +338,6 @@ class AsyncSelectionField<T extends Object> extends StatelessWidget {
         return Material(
           color: Theme.of(context).colorScheme.surface,
           borderRadius: BorderRadius.circular(8),
-          clipBehavior: Clip.antiAlias,
           child: InkWell(
             key: fieldKey,
             onTap: onPick,

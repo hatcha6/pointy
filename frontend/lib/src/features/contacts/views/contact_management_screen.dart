@@ -29,6 +29,7 @@ class ContactManagementScreen extends StatelessWidget {
     required this.onLogout,
     this.onOpenDashboard,
     this.onOpenDiscounts,
+    this.onOpenReports,
     this.onOpenUsers,
     this.onOpenShopSettings,
   });
@@ -45,6 +46,7 @@ class ContactManagementScreen extends StatelessWidget {
   final VoidCallback onOpenDeviceSettings;
   final VoidCallback? onOpenDashboard;
   final VoidCallback? onOpenDiscounts;
+  final VoidCallback? onOpenReports;
   final VoidCallback? onOpenUsers;
   final VoidCallback? onOpenShopSettings;
   final VoidCallback onLogout;
@@ -72,6 +74,7 @@ class ContactManagementScreen extends StatelessWidget {
               onOpenRegisterSessions: onOpenRegisterSessions,
               onOpenDeviceSettings: onOpenDeviceSettings,
               onOpenDiscounts: onOpenDiscounts,
+              onOpenReports: onOpenReports,
               onOpenUsers: onOpenUsers,
               onOpenShopSettings: onOpenShopSettings,
               onLogout: onLogout,

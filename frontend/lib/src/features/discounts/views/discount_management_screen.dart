@@ -11,8 +11,8 @@ import '../../../shared/authorization_guards.dart';
 import '../../../shared/date_formatters.dart';
 import '../../../shared/formatters.dart';
 import '../../../shared/infinite_scroll_grid.dart';
-import '../../../shared/query_controls/debounced_search_field.dart';
 import '../view_models/discount_management_view_model.dart';
+import 'discount_rule_query_controls.dart';
 import 'discount_rule_form.dart';
 
 class DiscountManagementScreen extends StatelessWidget {
@@ -32,6 +32,7 @@ class DiscountManagementScreen extends StatelessWidget {
     required this.onOpenDeviceSettings,
     required this.onLogout,
     this.onOpenDashboard,
+    this.onOpenReports,
     this.onOpenUsers,
     this.onOpenShopSettings,
   });
@@ -49,6 +50,7 @@ class DiscountManagementScreen extends StatelessWidget {
   final VoidCallback onOpenRegisterSessions;
   final VoidCallback onOpenDeviceSettings;
   final VoidCallback? onOpenDashboard;
+  final VoidCallback? onOpenReports;
   final VoidCallback? onOpenUsers;
   final VoidCallback? onOpenShopSettings;
   final VoidCallback onLogout;
@@ -74,6 +76,7 @@ class DiscountManagementScreen extends StatelessWidget {
             onOpenRegisterSessions: onOpenRegisterSessions,
             onOpenDeviceSettings: onOpenDeviceSettings,
             onOpenDiscounts: () {},
+            onOpenReports: onOpenReports,
             onOpenUsers: onOpenUsers,
             onOpenShopSettings: onOpenShopSettings,
             onLogout: onLogout,
@@ -185,7 +188,12 @@ class _DiscountManagementBody extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _DiscountFilterBar(viewModel: viewModel),
+          DiscountRuleQueryControls(
+            query: viewModel.query,
+            onSearchChanged: viewModel.updateSearch,
+            onQueryChanged: viewModel.applyQuery,
+            enabled: !viewModel.isLoading,
+          ),
           const SizedBox(height: 12),
           if (viewModel.hasSaveError)
             Padding(
@@ -250,178 +258,6 @@ class _DiscountManagementBody extends StatelessWidget {
             ),
           ),
         );
-      },
-    );
-  }
-}
-
-class _DiscountFilterBar extends StatelessWidget {
-  const _DiscountFilterBar({required this.viewModel});
-
-  final DiscountManagementViewModel viewModel;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
-    final query = viewModel.query;
-
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final fieldWidth = constraints.maxWidth >= 900
-            ? (constraints.maxWidth - 36) / 4
-            : constraints.maxWidth >= 560
-            ? (constraints.maxWidth - 12) / 2
-            : constraints.maxWidth;
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            DebouncedSearchField(
-              value: query.search,
-              hintText: l10n.discountSearchHint,
-              clearTooltip: l10n.clearSearchTooltip,
-              enabled: !viewModel.isLoading,
-              onChanged: viewModel.updateSearch,
-            ),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 12,
-              runSpacing: 8,
-              children: [
-                SizedBox(
-                  width: fieldWidth,
-                  child: _FilterDropdown<DiscountRuleStatusFilter>(
-                    label: l10n.discountStatusFilterLabel,
-                    value: query.status,
-                    values: DiscountRuleStatusFilter.values,
-                    labelFor: (value) => _statusFilterLabel(l10n, value),
-                    onChanged: (value) {
-                      viewModel.applyQuery(query.copyWith(status: value));
-                    },
-                  ),
-                ),
-                SizedBox(
-                  width: fieldWidth,
-                  child: _FilterDropdown<DiscountRuleChannelFilter>(
-                    label: l10n.discountChannelLabel,
-                    value: query.channel,
-                    values: DiscountRuleChannelFilter.values,
-                    labelFor: (value) => _channelFilterLabel(l10n, value),
-                    onChanged: (value) {
-                      viewModel.applyQuery(query.copyWith(channel: value));
-                    },
-                  ),
-                ),
-                SizedBox(
-                  width: fieldWidth,
-                  child: _FilterDropdown<DiscountRuleApplicationFilter>(
-                    label: l10n.discountApplicationTypeLabel,
-                    value: query.application,
-                    values: DiscountRuleApplicationFilter.values,
-                    labelFor: (value) => _applicationFilterLabel(l10n, value),
-                    onChanged: (value) {
-                      viewModel.applyQuery(query.copyWith(application: value));
-                    },
-                  ),
-                ),
-                SizedBox(
-                  width: fieldWidth,
-                  child: _FilterDropdown<DiscountRuleOrdering>(
-                    label: l10n.discountOrderingLabel,
-                    value: query.ordering,
-                    values: DiscountRuleOrdering.values,
-                    labelFor: (value) => _orderingLabel(l10n, value),
-                    onChanged: (value) {
-                      viewModel.applyQuery(query.copyWith(ordering: value));
-                    },
-                  ),
-                ),
-              ],
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  String _statusFilterLabel(
-    AppLocalizations l10n,
-    DiscountRuleStatusFilter value,
-  ) {
-    return switch (value) {
-      DiscountRuleStatusFilter.all => l10n.discountFilterAll,
-      DiscountRuleStatusFilter.active => l10n.discountStatusActive,
-      DiscountRuleStatusFilter.inactive => l10n.discountStatusInactive,
-    };
-  }
-
-  String _channelFilterLabel(
-    AppLocalizations l10n,
-    DiscountRuleChannelFilter value,
-  ) {
-    return switch (value) {
-      DiscountRuleChannelFilter.all => l10n.discountFilterAll,
-      DiscountRuleChannelFilter.sales => l10n.discountChannelSales,
-      DiscountRuleChannelFilter.purchasing => l10n.discountChannelPurchasing,
-      DiscountRuleChannelFilter.both => l10n.discountChannelBoth,
-    };
-  }
-
-  String _applicationFilterLabel(
-    AppLocalizations l10n,
-    DiscountRuleApplicationFilter value,
-  ) {
-    return switch (value) {
-      DiscountRuleApplicationFilter.all => l10n.discountFilterAll,
-      DiscountRuleApplicationFilter.automatic =>
-        l10n.discountApplicationAutomatic,
-      DiscountRuleApplicationFilter.couponCode =>
-        l10n.discountApplicationCoupon,
-    };
-  }
-
-  String _orderingLabel(AppLocalizations l10n, DiscountRuleOrdering value) {
-    return switch (value) {
-      DiscountRuleOrdering.priority => l10n.discountOrderingPriority,
-      DiscountRuleOrdering.name => l10n.discountOrderingName,
-      DiscountRuleOrdering.newest => l10n.discountOrderingNewest,
-      DiscountRuleOrdering.updated => l10n.discountOrderingUpdated,
-    };
-  }
-}
-
-class _FilterDropdown<T> extends StatelessWidget {
-  const _FilterDropdown({
-    required this.label,
-    required this.value,
-    required this.values,
-    required this.labelFor,
-    required this.onChanged,
-  });
-
-  final String label;
-  final T value;
-  final List<T> values;
-  final String Function(T value) labelFor;
-  final ValueChanged<T> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return DropdownButtonFormField<T>(
-      initialValue: value,
-      isExpanded: true,
-      decoration: InputDecoration(
-        labelText: label,
-        border: const OutlineInputBorder(),
-        isDense: true,
-      ),
-      items: [
-        for (final value in values)
-          DropdownMenuItem(value: value, child: Text(labelFor(value))),
-      ],
-      onChanged: (value) {
-        if (value != null) {
-          onChanged(value);
-        }
       },
     );
   }

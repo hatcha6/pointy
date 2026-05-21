@@ -20,6 +20,7 @@ import '../models/register_cash_movement.dart';
 import '../models/register_cash_movement_page.dart';
 import '../models/register_session.dart';
 import '../models/register_session_page.dart';
+import '../models/report_run.dart';
 import '../models/sale_order.dart';
 import '../models/sale_order_page.dart';
 import '../models/shop_settings.dart';
@@ -44,6 +45,7 @@ import 'pos_http_client.dart';
 import 'printing_api_client.dart';
 import 'purchasing_api_client.dart';
 import 'register_session_api_client.dart';
+import 'reports_api_client.dart';
 import 'sales_api_client.dart';
 import 'shop_settings_api_client.dart';
 import 'user_api_client.dart';
@@ -68,6 +70,7 @@ class PosApiService {
     _discounts = DiscountApiClient(session);
     _inventory = InventoryApiClient(session);
     _registerSessions = RegisterSessionApiClient(session);
+    _reports = ReportsApiClient(session);
     _sales = SalesApiClient(session);
     _purchasing = PurchasingApiClient(session);
     _printing = PrintingApiClient(session);
@@ -84,6 +87,7 @@ class PosApiService {
   late final DiscountApiClient _discounts;
   late final InventoryApiClient _inventory;
   late final RegisterSessionApiClient _registerSessions;
+  late final ReportsApiClient _reports;
   late final SalesApiClient _sales;
   late final PurchasingApiClient _purchasing;
   late final PrintingApiClient _printing;
@@ -218,6 +222,10 @@ class PosApiService {
 
   Future<Customer> createCustomer(CustomerDraft draft) {
     return _customers.createCustomer(draft);
+  }
+
+  Future<ReportRun> createReportRun(ReportRunDraft draft) {
+    return _reports.createReportRun(draft);
   }
 
   Future<DashboardSnapshot> fetchDashboard({required int days}) {

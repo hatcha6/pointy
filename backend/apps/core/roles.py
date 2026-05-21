@@ -17,6 +17,7 @@ MANAGER_PERMISSION_DOMAINS = (
     "purchasing",
     "payments",
     "printing",
+    "reports",
 )
 USER_PERMISSION_CODES = (
     "auth.add_user",

@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import 'app_dependencies.dart';
+import 'core/result.dart';
 import 'core/authorization.dart';
 import 'data/models/pos_user.dart';
 import 'data/models/purchase_submission.dart';
+import 'data/models/report_run.dart';
 import 'features/catalog/view_models/catalog_view_model.dart';
 import 'features/catalog/view_models/category_management_view_model.dart';
 import 'features/catalog/views/category_management_screen.dart';
@@ -19,6 +22,10 @@ import 'features/purchasing/views/purchase_order_list_screen.dart';
 import 'features/purchasing/views/purchasing_screen.dart';
 import 'features/register_sessions/view_models/register_session_history_view_model.dart';
 import 'features/register_sessions/views/register_session_history_screen.dart';
+import 'features/reports/pdf/report_document_builder.dart';
+import 'features/reports/pdf/report_pdf.dart';
+import 'features/reports/views/report_pdf_preview_screen.dart';
+import 'features/reports/views/reports_screen.dart';
 import 'features/settings/view_models/shop_settings_view_model.dart';
 import 'features/settings/views/shop_settings_screen.dart';
 import 'features/users/view_models/user_management_view_model.dart';
@@ -104,6 +111,10 @@ class _AuthenticatedRoutes {
           await push(context, discountsRouteBuilder);
         },
       ),
+      onOpenReports: guardedAction(
+        AppCapability.viewReports,
+        () => push(context, reportsRouteBuilder),
+      ),
       onOpenDeviceSettings: guardedAction(
         AppCapability.manageDeviceSettings,
         () => push(context, deviceSettingsRouteBuilder),
@@ -157,6 +168,10 @@ class _AuthenticatedRoutes {
       onOpenDiscounts: guardedAction(
         AppCapability.viewDiscountRules,
         () => replace(routeContext, discountsRouteBuilder),
+      ),
+      onOpenReports: guardedAction(
+        AppCapability.viewReports,
+        () => replace(routeContext, reportsRouteBuilder),
       ),
       onOpenDeviceSettings: guardedAction(
         AppCapability.manageDeviceSettings,
@@ -214,6 +229,10 @@ class _AuthenticatedRoutes {
         AppCapability.viewDiscountRules,
         () => replace(routeContext, discountsRouteBuilder),
       ),
+      onOpenReports: guardedAction(
+        AppCapability.viewReports,
+        () => replace(routeContext, reportsRouteBuilder),
+      ),
       onOpenDeviceSettings: guardedAction(
         AppCapability.manageDeviceSettings,
         () => replace(routeContext, deviceSettingsRouteBuilder),
@@ -262,6 +281,10 @@ class _AuthenticatedRoutes {
       onOpenDiscounts: guardedAction(
         AppCapability.viewDiscountRules,
         () => replace(routeContext, discountsRouteBuilder),
+      ),
+      onOpenReports: guardedAction(
+        AppCapability.viewReports,
+        () => replace(routeContext, reportsRouteBuilder),
       ),
       onOpenDeviceSettings: guardedAction(
         AppCapability.manageDeviceSettings,
@@ -316,6 +339,10 @@ class _AuthenticatedRoutes {
         AppCapability.viewDiscountRules,
         () => replace(routeContext, discountsRouteBuilder),
       ),
+      onOpenReports: guardedAction(
+        AppCapability.viewReports,
+        () => replace(routeContext, reportsRouteBuilder),
+      ),
       onOpenDeviceSettings: guardedAction(
         AppCapability.manageDeviceSettings,
         () => replace(routeContext, deviceSettingsRouteBuilder),
@@ -369,6 +396,10 @@ class _AuthenticatedRoutes {
         AppCapability.viewDiscountRules,
         () => replace(routeContext, discountsRouteBuilder),
       ),
+      onOpenReports: guardedAction(
+        AppCapability.viewReports,
+        () => replace(routeContext, reportsRouteBuilder),
+      ),
       onOpenDeviceSettings: guardedAction(
         AppCapability.manageDeviceSettings,
         () => replace(routeContext, deviceSettingsRouteBuilder),
@@ -418,6 +449,10 @@ class _AuthenticatedRoutes {
         AppCapability.viewDiscountRules,
         () => replace(routeContext, discountsRouteBuilder),
       ),
+      onOpenReports: guardedAction(
+        AppCapability.viewReports,
+        () => replace(routeContext, reportsRouteBuilder),
+      ),
       onOpenDeviceSettings: guardedAction(
         AppCapability.manageDeviceSettings,
         () => replace(routeContext, deviceSettingsRouteBuilder),
@@ -465,6 +500,10 @@ class _AuthenticatedRoutes {
         AppCapability.viewRegisterSessions,
         () => replace(routeContext, registerSessionsRouteBuilder),
       ),
+      onOpenReports: guardedAction(
+        AppCapability.viewReports,
+        () => replace(routeContext, reportsRouteBuilder),
+      ),
       onOpenDeviceSettings: guardedAction(
         AppCapability.manageDeviceSettings,
         () => replace(routeContext, deviceSettingsRouteBuilder),
@@ -477,6 +516,61 @@ class _AuthenticatedRoutes {
         AppCapability.manageShopSettings,
         () => replace(routeContext, shopSettingsRouteBuilder),
       ),
+      onLogout: () => logout(routeContext),
+    );
+  }
+
+  Widget reportsRouteBuilder(BuildContext routeContext) {
+    return ReportsScreen(
+      currentUser: currentUser,
+      capabilities: capabilities,
+      onOpenDashboard: guardedAction(
+        AppCapability.viewDashboard,
+        () => openDashboard(routeContext),
+      ),
+      onOpenPos: guardedAction(
+        AppCapability.accessPos,
+        () => openPos(routeContext),
+      ),
+      onOpenCatalog: guardedAction(
+        AppCapability.viewCatalogManagement,
+        () => replace(routeContext, catalogRouteBuilder),
+      ),
+      onOpenCategories: guardedAction(
+        AppCapability.manageCategories,
+        () => replace(routeContext, categoryRouteBuilder),
+      ),
+      onOpenPurchasing: guardedAction(
+        AppCapability.accessPurchasing,
+        () => replace(routeContext, purchasingRouteBuilder),
+      ),
+      onOpenContacts: guardedAction(
+        AppCapability.manageContacts,
+        () => replace(routeContext, contactsRouteBuilder),
+      ),
+      onOpenRegisterSessions: guardedAction(
+        AppCapability.viewRegisterSessions,
+        () => replace(routeContext, registerSessionsRouteBuilder),
+      ),
+      onOpenDiscounts: guardedAction(
+        AppCapability.viewDiscountRules,
+        () => replace(routeContext, discountsRouteBuilder),
+      ),
+      onOpenDeviceSettings: guardedAction(
+        AppCapability.manageDeviceSettings,
+        () => replace(routeContext, deviceSettingsRouteBuilder),
+      ),
+      onOpenUsers: capabilities.actionFor(
+        AppCapability.manageUsers,
+        () => replace(routeContext, usersRouteBuilder),
+      ),
+      onOpenShopSettings: capabilities.actionFor(
+        AppCapability.manageShopSettings,
+        () => replace(routeContext, shopSettingsRouteBuilder),
+      ),
+      onPreviewPdf: (request) => previewReport(routeContext, request),
+      onPrintReport: (request) => printReport(routeContext, request),
+      onExportArchive: (request) => shareReport(routeContext, request),
       onLogout: () => logout(routeContext),
     );
   }
@@ -517,6 +611,10 @@ class _AuthenticatedRoutes {
       onOpenDiscounts: guardedAction(
         AppCapability.viewDiscountRules,
         () => replace(routeContext, discountsRouteBuilder),
+      ),
+      onOpenReports: guardedAction(
+        AppCapability.viewReports,
+        () => replace(routeContext, reportsRouteBuilder),
       ),
       onOpenUsers: capabilities.actionFor(
         AppCapability.manageUsers,
@@ -563,6 +661,10 @@ class _AuthenticatedRoutes {
       onOpenDiscounts: guardedAction(
         AppCapability.viewDiscountRules,
         () => replace(routeContext, discountsRouteBuilder),
+      ),
+      onOpenReports: guardedAction(
+        AppCapability.viewReports,
+        () => replace(routeContext, reportsRouteBuilder),
       ),
       onOpenDeviceSettings: guardedAction(
         AppCapability.manageDeviceSettings,
@@ -636,6 +738,10 @@ class _AuthenticatedRoutes {
         AppCapability.viewDiscountRules,
         () => replace(routeContext, discountsRouteBuilder),
       ),
+      onOpenReports: guardedAction(
+        AppCapability.viewReports,
+        () => replace(routeContext, reportsRouteBuilder),
+      ),
       onOpenDeviceSettings: guardedAction(
         AppCapability.manageDeviceSettings,
         () => replace(routeContext, deviceSettingsRouteBuilder),
@@ -686,6 +792,10 @@ class _AuthenticatedRoutes {
       onOpenDiscounts: guardedAction(
         AppCapability.viewDiscountRules,
         () => replace(routeContext, discountsRouteBuilder),
+      ),
+      onOpenReports: guardedAction(
+        AppCapability.viewReports,
+        () => replace(routeContext, reportsRouteBuilder),
       ),
       onOpenDeviceSettings: guardedAction(
         AppCapability.manageDeviceSettings,
@@ -760,5 +870,113 @@ class _AuthenticatedRoutes {
   void logout(BuildContext context) {
     Navigator.of(context).popUntil((route) => route.isFirst);
     dependencies.authViewModel.logout();
+  }
+
+  Future<void> previewReport(
+    BuildContext context,
+    ReportRequest request,
+  ) async {
+    final document = await buildReportDocument(context, request);
+    if (document == null || !context.mounted) {
+      return;
+    }
+    await push(context, (_) => ReportPdfPreviewScreen(document: document));
+  }
+
+  Future<void> printReport(BuildContext context, ReportRequest request) async {
+    final document = await buildReportDocument(context, request);
+    if (document == null || !context.mounted) {
+      return;
+    }
+    final printed = await const ReportPrintingService().print(document);
+    if (printed && context.mounted) {
+      _showReportMessage(
+        context,
+        AppLocalizations.of(context)!.reportPrintQueuedMessage,
+      );
+    }
+  }
+
+  Future<void> shareReport(BuildContext context, ReportRequest request) async {
+    final document = await buildReportDocument(context, request);
+    if (document == null || !context.mounted) {
+      return;
+    }
+    final shared = await const ReportPrintingService().share(document);
+    if (shared && context.mounted) {
+      _showReportMessage(
+        context,
+        AppLocalizations.of(context)!.reportArchiveSharedMessage,
+      );
+    }
+  }
+
+  Future<BusinessReportPdfDocument?> buildReportDocument(
+    BuildContext context,
+    ReportRequest request,
+  ) async {
+    final result = await dependencies.reportRepository.createReportRun(
+      ReportRunDraft(
+        reportType: _reportRunTypeForRequest(request.type),
+        outputFormat: ReportOutputFormat.pdf,
+        params: {
+          "start_date": _apiDate(request.dateRange.start),
+          "end_date": _apiDate(request.dateRange.end),
+          "granularity": request.granularity.name,
+        },
+      ),
+    );
+    if (!context.mounted) {
+      return null;
+    }
+
+    switch (result) {
+      case Ok<ReportRun>(value: final run):
+        if (run.status == ReportRunStatus.failed) {
+          _showReportMessage(
+            context,
+            run.errorMessage.isEmpty
+                ? AppLocalizations.of(context)!.reportGenerationError
+                : run.errorMessage,
+          );
+          return null;
+        }
+        return buildBusinessReportPdfDocument(
+          run: run,
+          l10n: AppLocalizations.of(context)!,
+          currentUser: currentUser,
+          includeAuditTrail: request.includeAuditTrail,
+          includePreparedBy: request.includePreparedBy,
+        );
+      case Error<ReportRun>():
+        _showReportMessage(
+          context,
+          AppLocalizations.of(context)!.reportGenerationError,
+        );
+        return null;
+    }
+  }
+
+  ReportRunType _reportRunTypeForRequest(ReportType type) {
+    return switch (type) {
+      ReportType.salesSummary => ReportRunType.salesSummary,
+      ReportType.registerSessions => ReportRunType.registerClosure,
+      ReportType.payments => ReportRunType.paymentMethods,
+      ReportType.inventoryValue => ReportRunType.inventoryStatus,
+      ReportType.stockMovement => ReportRunType.stockMovements,
+      ReportType.purchases => ReportRunType.purchasingSummary,
+    };
+  }
+
+  String _apiDate(DateTime date) {
+    return '${date.year.toString().padLeft(4, '0')}-'
+        '${date.month.toString().padLeft(2, '0')}-'
+        '${date.day.toString().padLeft(2, '0')}';
+  }
+
+  void _showReportMessage(BuildContext context, String message) {
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 }
