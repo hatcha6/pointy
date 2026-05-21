@@ -1,4 +1,5 @@
 import 'product.dart';
+import 'variant_option_value.dart';
 
 class ProductVariant {
   const ProductVariant({
@@ -16,6 +17,7 @@ class ProductVariant {
     this.isDefault = false,
     this.quantityOnHand = 0,
     this.optionValueIds = const [],
+    this.optionValues = const [],
   });
 
   final int id;
@@ -32,6 +34,7 @@ class ProductVariant {
   final bool isDefault;
   final int quantityOnHand;
   final List<int> optionValueIds;
+  final List<VariantOptionValue> optionValues;
 
   String get displayLabel {
     if (fullName.isNotEmpty) {
@@ -56,6 +59,7 @@ class ProductVariant {
     final productDetail = productDetailJson is Map<String, Object?>
         ? Product.fromJson(productDetailJson)
         : null;
+    final optionValues = _optionValuesFromJson(json['option_value_details']);
     return ProductVariant(
       id: _intFromJson(json['id']),
       productId: _productIdFromJson(json['product']) ?? productDetail?.id ?? 0,
@@ -71,7 +75,11 @@ class ProductVariant {
       isActive: _boolFromJson(json['is_active'], fallback: true),
       isDefault: _boolFromJson(json['is_default']),
       quantityOnHand: _intFromJson(json['quantity_on_hand']),
-      optionValueIds: _intListFromJson(json['option_values']),
+      optionValueIds: _optionValueIdsFromJson(
+        json['option_values'],
+        optionValues,
+      ),
+      optionValues: optionValues,
     );
   }
 
@@ -104,6 +112,7 @@ class ProductVariant {
       isDefault: isDefault,
       quantityOnHand: quantityOnHand ?? this.quantityOnHand,
       optionValueIds: optionValueIds,
+      optionValues: optionValues,
     );
   }
 }
@@ -158,6 +167,30 @@ List<int> _intListFromJson(Object? value) {
       }
     }
     return ids;
+  }
+  return const [];
+}
+
+List<VariantOptionValue> _optionValuesFromJson(Object? value) {
+  if (value is List<Object?>) {
+    return value
+        .whereType<Map<String, Object?>>()
+        .map(VariantOptionValue.fromJson)
+        .toList(growable: false);
+  }
+  return const [];
+}
+
+List<int> _optionValueIdsFromJson(
+  Object? value,
+  List<VariantOptionValue> details,
+) {
+  final ids = _intListFromJson(value);
+  if (ids.isNotEmpty) {
+    return ids;
+  }
+  if (details.isNotEmpty) {
+    return details.map((optionValue) => optionValue.id).toList(growable: false);
   }
   return const [];
 }

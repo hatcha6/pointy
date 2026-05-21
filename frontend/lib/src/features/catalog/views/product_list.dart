@@ -5,6 +5,7 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../core/authorization.dart';
 import '../../../data/models/product.dart';
+import '../../../data/repositories/catalog_repository.dart';
 import '../../../data/repositories/inventory_repository.dart';
 import '../../../data/repositories/printing_repository.dart';
 import '../../../data/repositories/purchase_repository.dart';
@@ -12,7 +13,7 @@ import '../../../shared/infinite_scroll_grid.dart';
 import '../../../shared/product_tile.dart';
 import '../../../shared/product_query_controls.dart';
 import '../view_models/catalog_view_model.dart';
-import '../view_models/product_stock_view_model.dart';
+import '../view_models/product_details_view_model.dart';
 import 'product_details_screen.dart';
 
 class ProductList extends StatelessWidget {
@@ -96,10 +97,12 @@ class ProductList extends StatelessWidget {
                   onTap: () => openProductDetails(
                     context,
                     product: product,
+                    catalogRepository: viewModel.catalogRepository,
                     inventoryRepository: inventoryRepository,
                     printingRepository: printingRepository,
                     purchaseRepository: purchaseRepository,
                     capabilities: capabilities,
+                    onChanged: viewModel.loadProducts,
                   ),
                 );
               },
@@ -114,21 +117,22 @@ class ProductList extends StatelessWidget {
 Future<void> openProductDetails(
   BuildContext context, {
   required Product product,
+  required CatalogRepository catalogRepository,
   required InventoryRepository inventoryRepository,
   required PrintingRepository printingRepository,
   required PurchaseRepository purchaseRepository,
   required AuthorizationCapabilities capabilities,
+  VoidCallback? onChanged,
 }) {
   return Navigator.of(context).push(
     MaterialPageRoute<void>(
       builder: (_) => ProductDetailsScreen(
-        viewModel: ProductStockViewModel(
-          inventoryRepository,
-          purchaseRepository,
-          product,
-        ),
+        viewModel: ProductDetailsViewModel(catalogRepository, product),
+        inventoryRepository: inventoryRepository,
         printingRepository: printingRepository,
+        purchaseRepository: purchaseRepository,
         capabilities: capabilities,
+        onChanged: onChanged,
       ),
     ),
   );

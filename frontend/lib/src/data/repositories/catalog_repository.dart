@@ -5,9 +5,12 @@ import '../models/product_category_query.dart';
 import '../models/product_draft.dart';
 import '../models/product_page.dart';
 import '../models/product_query.dart';
+import '../models/product_update_draft.dart';
 import '../models/product_variant.dart';
 import '../models/product_variant_draft.dart';
 import '../models/product_variant_page.dart';
+import '../models/variant_option_value_page.dart';
+import '../models/variant_option_value_query.dart';
 import '../services/pos_api_service.dart';
 
 class CatalogRepository {
@@ -24,6 +27,13 @@ class CatalogRepository {
 
   Future<Result<Product>> createProduct(ProductDraft draft) async {
     return Result.guard(() => _service.createProduct(draft));
+  }
+
+  Future<Result<Product>> updateProduct({
+    required int id,
+    required ProductUpdateDraft draft,
+  }) async {
+    return Result.guard(() => _service.updateProduct(id: id, draft: draft));
   }
 
   Future<Result<Product>> loadProduct(int id) async {
@@ -89,6 +99,15 @@ class CatalogRepository {
     ProductCategoryDraft draft,
   ) async {
     return Result.guard(() => _service.createProductCategory(draft));
+  }
+
+  Future<Result<VariantOptionValuePage>> loadVariantOptionValues({
+    VariantOptionValueQuery query = const VariantOptionValueQuery(),
+    int page = 1,
+  }) async {
+    return Result.guard(
+      () => _service.fetchVariantOptionValues(query: query, page: page),
+    );
   }
 
   Future<Result<ProductVariant?>> findProductVariantByBarcode(

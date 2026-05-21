@@ -1592,6 +1592,60 @@ abstract class AppLocalizations {
   /// **'تصنيف #{id}'**
   String productCategoryFallbackLabel(int id);
 
+  /// No description provided for @variantOptionValuesLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'قيم الخيارات'**
+  String get variantOptionValuesLabel;
+
+  /// No description provided for @variantOptionValuesEmpty.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد قيم خيارات محددة'**
+  String get variantOptionValuesEmpty;
+
+  /// No description provided for @variantOptionValuesHelper.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختياري'**
+  String get variantOptionValuesHelper;
+
+  /// No description provided for @variantOptionValuesOpenPickerTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختيار قيم الخيارات'**
+  String get variantOptionValuesOpenPickerTooltip;
+
+  /// No description provided for @variantOptionValuePickerTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختيار قيم الخيارات'**
+  String get variantOptionValuePickerTitle;
+
+  /// No description provided for @variantOptionValuePickerSearchHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'ابحث باسم الخيار أو القيمة'**
+  String get variantOptionValuePickerSearchHint;
+
+  /// No description provided for @variantOptionValuePickerEmpty.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد قيم خيارات مطابقة'**
+  String get variantOptionValuePickerEmpty;
+
+  /// No description provided for @variantOptionValuePickerLoadError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر تحميل قيم الخيارات.'**
+  String get variantOptionValuePickerLoadError;
+
+  /// Fallback option value label when the option value name is unavailable.
+  ///
+  /// In ar, this message translates to:
+  /// **'قيمة خيار #{id}'**
+  String variantOptionValueFallbackLabel(int id);
+
   /// No description provided for @categoryFilterTitle.
   ///
   /// In ar, this message translates to:
@@ -1736,6 +1790,60 @@ abstract class AppLocalizations {
   /// **'متاح للبيع'**
   String get activeProductLabel;
 
+  /// No description provided for @activeVariantLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'متاح للبيع'**
+  String get activeVariantLabel;
+
+  /// No description provided for @defaultVariantLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الخيار الافتراضي'**
+  String get defaultVariantLabel;
+
+  /// No description provided for @variantNameLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'اسم الخيار'**
+  String get variantNameLabel;
+
+  /// No description provided for @variantNameHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'مثال: كبير أو أحمر'**
+  String get variantNameHint;
+
+  /// No description provided for @parentProductStepTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'بيانات المنتج'**
+  String get parentProductStepTitle;
+
+  /// No description provided for @defaultVariantStepTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'الخيار الافتراضي'**
+  String get defaultVariantStepTitle;
+
+  /// Current product creation wizard step.
+  ///
+  /// In ar, this message translates to:
+  /// **'{step} من {total}'**
+  String productWizardStepLabel(int step, int total);
+
+  /// No description provided for @backButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'السابق'**
+  String get backButton;
+
+  /// No description provided for @nextButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'التالي'**
+  String get nextButton;
+
   /// No description provided for @createProductButton.
   ///
   /// In ar, this message translates to:
@@ -1747,6 +1855,24 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'جار الإنشاء...'**
   String get creatingProductButton;
+
+  /// No description provided for @saveProductButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'حفظ المنتج'**
+  String get saveProductButton;
+
+  /// No description provided for @savingProductButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'جار الحفظ...'**
+  String get savingProductButton;
+
+  /// No description provided for @editProductButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعديل المنتج'**
+  String get editProductButton;
 
   /// No description provided for @requiredField.
   ///
@@ -1772,11 +1898,23 @@ abstract class AppLocalizations {
   /// **'تم إنشاء المنتج'**
   String get productCreatedMessage;
 
+  /// No description provided for @productUpdatedMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم حفظ المنتج'**
+  String get productUpdatedMessage;
+
   /// No description provided for @productCreateError.
   ///
   /// In ar, this message translates to:
   /// **'تعذر إنشاء المنتج. راجع البيانات وحاول مرة أخرى.'**
   String get productCreateError;
+
+  /// No description provided for @productUpdateError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر حفظ المنتج. راجع البيانات وحاول مرة أخرى.'**
+  String get productUpdateError;
 
   /// No description provided for @catalogLoadError.
   ///
@@ -1802,6 +1940,18 @@ abstract class AppLocalizations {
   /// **'تفاصيل المنتج'**
   String get productDetailsTitle;
 
+  /// No description provided for @variantDetailsTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'تفاصيل الخيار'**
+  String get variantDetailsTitle;
+
+  /// No description provided for @productDetailLoadError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر تحميل تفاصيل المنتج.'**
+  String get productDetailLoadError;
+
   /// No description provided for @productSummaryTitle.
   ///
   /// In ar, this message translates to:
@@ -1813,6 +1963,144 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'السعر'**
   String get productPriceTitle;
+
+  /// No description provided for @productTotalStockLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'إجمالي المخزون'**
+  String get productTotalStockLabel;
+
+  /// No description provided for @productNoCategories.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد تصنيفات'**
+  String get productNoCategories;
+
+  /// No description provided for @productVariantsTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'الخيارات'**
+  String get productVariantsTitle;
+
+  /// No description provided for @addVariantButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'إضافة خيار'**
+  String get addVariantButton;
+
+  /// No description provided for @noVariants.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد خيارات لهذا المنتج.'**
+  String get noVariants;
+
+  /// No description provided for @newVariantTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'خيار جديد'**
+  String get newVariantTitle;
+
+  /// No description provided for @editVariantTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعديل الخيار'**
+  String get editVariantTitle;
+
+  /// No description provided for @createVariantButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'إنشاء الخيار'**
+  String get createVariantButton;
+
+  /// No description provided for @saveVariantButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'حفظ الخيار'**
+  String get saveVariantButton;
+
+  /// No description provided for @savingVariantButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'جار الحفظ...'**
+  String get savingVariantButton;
+
+  /// No description provided for @variantCreatedMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم إنشاء الخيار'**
+  String get variantCreatedMessage;
+
+  /// No description provided for @variantUpdatedMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم حفظ الخيار'**
+  String get variantUpdatedMessage;
+
+  /// No description provided for @variantCreateError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر إنشاء الخيار. راجع البيانات وحاول مرة أخرى.'**
+  String get variantCreateError;
+
+  /// No description provided for @variantUpdateError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر حفظ الخيار. راجع البيانات وحاول مرة أخرى.'**
+  String get variantUpdateError;
+
+  /// No description provided for @variantNameColumn.
+  ///
+  /// In ar, this message translates to:
+  /// **'الخيار'**
+  String get variantNameColumn;
+
+  /// No description provided for @variantStockColumn.
+  ///
+  /// In ar, this message translates to:
+  /// **'المخزون'**
+  String get variantStockColumn;
+
+  /// No description provided for @variantPriceColumn.
+  ///
+  /// In ar, this message translates to:
+  /// **'السعر'**
+  String get variantPriceColumn;
+
+  /// No description provided for @variantSkuColumn.
+  ///
+  /// In ar, this message translates to:
+  /// **'الرمز'**
+  String get variantSkuColumn;
+
+  /// No description provided for @variantBarcodeColumn.
+  ///
+  /// In ar, this message translates to:
+  /// **'الباركود'**
+  String get variantBarcodeColumn;
+
+  /// No description provided for @variantStatusColumn.
+  ///
+  /// In ar, this message translates to:
+  /// **'الحالة'**
+  String get variantStatusColumn;
+
+  /// No description provided for @actionsColumn.
+  ///
+  /// In ar, this message translates to:
+  /// **'إجراءات'**
+  String get actionsColumn;
+
+  /// No description provided for @openVariantDetailsTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'فتح تفاصيل الخيار'**
+  String get openVariantDetailsTooltip;
+
+  /// No description provided for @defaultVariantBadge.
+  ///
+  /// In ar, this message translates to:
+  /// **'افتراضي'**
+  String get defaultVariantBadge;
 
   /// No description provided for @productCostHistoryTitle.
   ///

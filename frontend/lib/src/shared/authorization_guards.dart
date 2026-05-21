@@ -293,6 +293,75 @@ class ProductCreateGuard extends StatelessWidget {
   }
 }
 
+class ProductChangeGuard extends StatelessWidget {
+  const ProductChangeGuard({
+    super.key,
+    required this.capabilities,
+    required this.child,
+    this.fallback = const SizedBox.shrink(),
+  });
+
+  final AuthorizationCapabilities capabilities;
+  final Widget child;
+  final Widget fallback;
+
+  @override
+  Widget build(BuildContext context) {
+    return AuthorizationGuard(
+      capabilities: capabilities,
+      capability: AppCapability.changeProduct,
+      fallback: fallback,
+      child: child,
+    );
+  }
+}
+
+class ProductVariantCreateGuard extends StatelessWidget {
+  const ProductVariantCreateGuard({
+    super.key,
+    required this.capabilities,
+    required this.child,
+    this.fallback = const SizedBox.shrink(),
+  });
+
+  final AuthorizationCapabilities capabilities;
+  final Widget child;
+  final Widget fallback;
+
+  @override
+  Widget build(BuildContext context) {
+    return AuthorizationGuard(
+      capabilities: capabilities,
+      capability: AppCapability.createProductVariant,
+      fallback: fallback,
+      child: child,
+    );
+  }
+}
+
+class ProductVariantChangeGuard extends StatelessWidget {
+  const ProductVariantChangeGuard({
+    super.key,
+    required this.capabilities,
+    required this.child,
+    this.fallback = const SizedBox.shrink(),
+  });
+
+  final AuthorizationCapabilities capabilities;
+  final Widget child;
+  final Widget fallback;
+
+  @override
+  Widget build(BuildContext context) {
+    return AuthorizationGuard(
+      capabilities: capabilities,
+      capability: AppCapability.changeProductVariant,
+      fallback: fallback,
+      child: child,
+    );
+  }
+}
+
 class StockViewGuard extends StatelessWidget {
   const StockViewGuard({
     super.key,

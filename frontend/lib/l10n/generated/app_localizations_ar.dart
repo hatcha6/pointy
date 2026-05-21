@@ -827,6 +827,35 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
+  String get variantOptionValuesLabel => 'قيم الخيارات';
+
+  @override
+  String get variantOptionValuesEmpty => 'لا توجد قيم خيارات محددة';
+
+  @override
+  String get variantOptionValuesHelper => 'اختياري';
+
+  @override
+  String get variantOptionValuesOpenPickerTooltip => 'اختيار قيم الخيارات';
+
+  @override
+  String get variantOptionValuePickerTitle => 'اختيار قيم الخيارات';
+
+  @override
+  String get variantOptionValuePickerSearchHint => 'ابحث باسم الخيار أو القيمة';
+
+  @override
+  String get variantOptionValuePickerEmpty => 'لا توجد قيم خيارات مطابقة';
+
+  @override
+  String get variantOptionValuePickerLoadError => 'تعذر تحميل قيم الخيارات.';
+
+  @override
+  String variantOptionValueFallbackLabel(int id) {
+    return 'قيمة خيار #$id';
+  }
+
+  @override
   String get categoryFilterTitle => 'التصنيف';
 
   @override
@@ -912,10 +941,48 @@ class AppLocalizationsAr extends AppLocalizations {
   String get activeProductLabel => 'متاح للبيع';
 
   @override
+  String get activeVariantLabel => 'متاح للبيع';
+
+  @override
+  String get defaultVariantLabel => 'الخيار الافتراضي';
+
+  @override
+  String get variantNameLabel => 'اسم الخيار';
+
+  @override
+  String get variantNameHint => 'مثال: كبير أو أحمر';
+
+  @override
+  String get parentProductStepTitle => 'بيانات المنتج';
+
+  @override
+  String get defaultVariantStepTitle => 'الخيار الافتراضي';
+
+  @override
+  String productWizardStepLabel(int step, int total) {
+    return '$step من $total';
+  }
+
+  @override
+  String get backButton => 'السابق';
+
+  @override
+  String get nextButton => 'التالي';
+
+  @override
   String get createProductButton => 'إنشاء المنتج';
 
   @override
   String get creatingProductButton => 'جار الإنشاء...';
+
+  @override
+  String get saveProductButton => 'حفظ المنتج';
+
+  @override
+  String get savingProductButton => 'جار الحفظ...';
+
+  @override
+  String get editProductButton => 'تعديل المنتج';
 
   @override
   String get requiredField => 'هذا الحقل مطلوب';
@@ -930,8 +997,15 @@ class AppLocalizationsAr extends AppLocalizations {
   String get productCreatedMessage => 'تم إنشاء المنتج';
 
   @override
+  String get productUpdatedMessage => 'تم حفظ المنتج';
+
+  @override
   String get productCreateError =>
       'تعذر إنشاء المنتج. راجع البيانات وحاول مرة أخرى.';
+
+  @override
+  String get productUpdateError =>
+      'تعذر حفظ المنتج. راجع البيانات وحاول مرة أخرى.';
 
   @override
   String get catalogLoadError => 'تعذر تحميل المنتجات من الخادم.';
@@ -946,10 +1020,87 @@ class AppLocalizationsAr extends AppLocalizations {
   String get productDetailsTitle => 'تفاصيل المنتج';
 
   @override
+  String get variantDetailsTitle => 'تفاصيل الخيار';
+
+  @override
+  String get productDetailLoadError => 'تعذر تحميل تفاصيل المنتج.';
+
+  @override
   String get productSummaryTitle => 'ملخص المنتج';
 
   @override
   String get productPriceTitle => 'السعر';
+
+  @override
+  String get productTotalStockLabel => 'إجمالي المخزون';
+
+  @override
+  String get productNoCategories => 'لا توجد تصنيفات';
+
+  @override
+  String get productVariantsTitle => 'الخيارات';
+
+  @override
+  String get addVariantButton => 'إضافة خيار';
+
+  @override
+  String get noVariants => 'لا توجد خيارات لهذا المنتج.';
+
+  @override
+  String get newVariantTitle => 'خيار جديد';
+
+  @override
+  String get editVariantTitle => 'تعديل الخيار';
+
+  @override
+  String get createVariantButton => 'إنشاء الخيار';
+
+  @override
+  String get saveVariantButton => 'حفظ الخيار';
+
+  @override
+  String get savingVariantButton => 'جار الحفظ...';
+
+  @override
+  String get variantCreatedMessage => 'تم إنشاء الخيار';
+
+  @override
+  String get variantUpdatedMessage => 'تم حفظ الخيار';
+
+  @override
+  String get variantCreateError =>
+      'تعذر إنشاء الخيار. راجع البيانات وحاول مرة أخرى.';
+
+  @override
+  String get variantUpdateError =>
+      'تعذر حفظ الخيار. راجع البيانات وحاول مرة أخرى.';
+
+  @override
+  String get variantNameColumn => 'الخيار';
+
+  @override
+  String get variantStockColumn => 'المخزون';
+
+  @override
+  String get variantPriceColumn => 'السعر';
+
+  @override
+  String get variantSkuColumn => 'الرمز';
+
+  @override
+  String get variantBarcodeColumn => 'الباركود';
+
+  @override
+  String get variantStatusColumn => 'الحالة';
+
+  @override
+  String get actionsColumn => 'إجراءات';
+
+  @override
+  String get openVariantDetailsTooltip => 'فتح تفاصيل الخيار';
+
+  @override
+  String get defaultVariantBadge => 'افتراضي';
 
   @override
   String get productCostHistoryTitle => 'تكلفة الشراء والهامش';

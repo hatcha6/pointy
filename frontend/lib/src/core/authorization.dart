@@ -29,6 +29,9 @@ enum AppCapability {
   viewCatalogManagement,
   manageCategories,
   createProduct,
+  changeProduct,
+  createProductVariant,
+  changeProductVariant,
   viewRegisterSessions,
   viewRegisterSessionOrders,
   manageDeviceSettings,
@@ -71,6 +74,14 @@ class AuthorizationCapabilities {
           ..add(AppCapability.createProduct);
       }
       if (_hasAny(user, const [
+        'add_productvariant',
+        'catalog.add_productvariant',
+      ])) {
+        capabilities
+          ..add(AppCapability.viewCatalogManagement)
+          ..add(AppCapability.createProductVariant);
+      }
+      if (_hasAny(user, const [
         'add_productcategory',
         'change_productcategory',
         'delete_productcategory',
@@ -86,7 +97,19 @@ class AuthorizationCapabilities {
         'catalog.change_product',
         'catalog.delete_product',
       ])) {
-        capabilities.add(AppCapability.viewCatalogManagement);
+        capabilities
+          ..add(AppCapability.viewCatalogManagement)
+          ..add(AppCapability.changeProduct);
+      }
+      if (_hasAny(user, const [
+        'change_productvariant',
+        'delete_productvariant',
+        'catalog.change_productvariant',
+        'catalog.delete_productvariant',
+      ])) {
+        capabilities
+          ..add(AppCapability.viewCatalogManagement)
+          ..add(AppCapability.changeProductVariant);
       }
       if (_hasAny(user, const [
         'view_stockitem',
@@ -347,6 +370,11 @@ class AuthorizationCapabilities {
       allows(AppCapability.viewCatalogManagement);
   bool get canManageCategories => allows(AppCapability.manageCategories);
   bool get canCreateProduct => allows(AppCapability.createProduct);
+  bool get canChangeProduct => allows(AppCapability.changeProduct);
+  bool get canCreateProductVariant =>
+      allows(AppCapability.createProductVariant);
+  bool get canChangeProductVariant =>
+      allows(AppCapability.changeProductVariant);
   bool get canViewRegisterSessions =>
       allows(AppCapability.viewRegisterSessions);
   bool get canViewRegisterSessionOrders =>

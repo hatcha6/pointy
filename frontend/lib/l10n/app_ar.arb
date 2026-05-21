@@ -399,6 +399,23 @@
       }
     }
   },
+  "variantOptionValuesLabel": "قيم الخيارات",
+  "variantOptionValuesEmpty": "لا توجد قيم خيارات محددة",
+  "variantOptionValuesHelper": "اختياري",
+  "variantOptionValuesOpenPickerTooltip": "اختيار قيم الخيارات",
+  "variantOptionValuePickerTitle": "اختيار قيم الخيارات",
+  "variantOptionValuePickerSearchHint": "ابحث باسم الخيار أو القيمة",
+  "variantOptionValuePickerEmpty": "لا توجد قيم خيارات مطابقة",
+  "variantOptionValuePickerLoadError": "تعذر تحميل قيم الخيارات.",
+  "variantOptionValueFallbackLabel": "قيمة خيار #{id}",
+  "@variantOptionValueFallbackLabel": {
+    "description": "Fallback option value label when the option value name is unavailable.",
+    "placeholders": {
+      "id": {
+        "type": "int"
+      }
+    }
+  },
   "categoryFilterTitle": "التصنيف",
   "categoryManagementTitle": "إدارة التصنيفات",
   "addCategoryButton": "إضافة تصنيف",
@@ -439,19 +456,69 @@
     }
   },
   "activeProductLabel": "متاح للبيع",
+  "activeVariantLabel": "متاح للبيع",
+  "defaultVariantLabel": "الخيار الافتراضي",
+  "variantNameLabel": "اسم الخيار",
+  "variantNameHint": "مثال: كبير أو أحمر",
+  "parentProductStepTitle": "بيانات المنتج",
+  "defaultVariantStepTitle": "الخيار الافتراضي",
+  "productWizardStepLabel": "{step} من {total}",
+  "@productWizardStepLabel": {
+    "description": "Current product creation wizard step.",
+    "placeholders": {
+      "step": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "backButton": "السابق",
+  "nextButton": "التالي",
   "createProductButton": "إنشاء المنتج",
   "creatingProductButton": "جار الإنشاء...",
+  "saveProductButton": "حفظ المنتج",
+  "savingProductButton": "جار الحفظ...",
+  "editProductButton": "تعديل المنتج",
   "requiredField": "هذا الحقل مطلوب",
   "invalidNumber": "أدخل رقمًا صحيحًا",
   "invalidDate": "أدخل تاريخًا صحيحًا",
   "productCreatedMessage": "تم إنشاء المنتج",
+  "productUpdatedMessage": "تم حفظ المنتج",
   "productCreateError": "تعذر إنشاء المنتج. راجع البيانات وحاول مرة أخرى.",
+  "productUpdateError": "تعذر حفظ المنتج. راجع البيانات وحاول مرة أخرى.",
   "catalogLoadError": "تعذر تحميل المنتجات من الخادم.",
   "activeStatus": "متاح",
   "inactiveStatus": "متوقف",
   "productDetailsTitle": "تفاصيل المنتج",
+  "variantDetailsTitle": "تفاصيل الخيار",
+  "productDetailLoadError": "تعذر تحميل تفاصيل المنتج.",
   "productSummaryTitle": "ملخص المنتج",
   "productPriceTitle": "السعر",
+  "productTotalStockLabel": "إجمالي المخزون",
+  "productNoCategories": "لا توجد تصنيفات",
+  "productVariantsTitle": "الخيارات",
+  "addVariantButton": "إضافة خيار",
+  "noVariants": "لا توجد خيارات لهذا المنتج.",
+  "newVariantTitle": "خيار جديد",
+  "editVariantTitle": "تعديل الخيار",
+  "createVariantButton": "إنشاء الخيار",
+  "saveVariantButton": "حفظ الخيار",
+  "savingVariantButton": "جار الحفظ...",
+  "variantCreatedMessage": "تم إنشاء الخيار",
+  "variantUpdatedMessage": "تم حفظ الخيار",
+  "variantCreateError": "تعذر إنشاء الخيار. راجع البيانات وحاول مرة أخرى.",
+  "variantUpdateError": "تعذر حفظ الخيار. راجع البيانات وحاول مرة أخرى.",
+  "variantNameColumn": "الخيار",
+  "variantStockColumn": "المخزون",
+  "variantPriceColumn": "السعر",
+  "variantSkuColumn": "الرمز",
+  "variantBarcodeColumn": "الباركود",
+  "variantStatusColumn": "الحالة",
+  "actionsColumn": "إجراءات",
+  "openVariantDetailsTooltip": "فتح تفاصيل الخيار",
+  "defaultVariantBadge": "افتراضي",
   "productCostHistoryTitle": "تكلفة الشراء والهامش",
   "productCostHistoryLoadError": "تعذر تحميل تاريخ تكلفة الشراء لهذا المنتج.",
   "productCostHistoryEmpty": "لا توجد مشتريات مسجلة لهذا المنتج بعد.",

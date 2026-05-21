@@ -7,6 +7,7 @@ import '../models/product.dart';
 import '../models/product_category.dart';
 import '../models/product_draft.dart';
 import '../models/product_page.dart';
+import '../models/product_update_draft.dart';
 import '../models/product_variant.dart';
 import '../models/product_variant_draft.dart';
 import '../models/product_variant_page.dart';
@@ -25,6 +26,7 @@ import '../models/shop_settings.dart';
 import '../models/stock_item.dart';
 import '../models/stock_movement.dart';
 import '../models/stock_movement_page.dart';
+import '../models/variant_option_value_page.dart';
 import 'api_session.dart';
 import 'auth_api_client.dart';
 import 'catalog_api_client.dart';
@@ -119,6 +121,13 @@ class PosApiService {
     return _catalog.createProduct(draft);
   }
 
+  Future<Product> updateProduct({
+    required int id,
+    required ProductUpdateDraft draft,
+  }) {
+    return _catalog.updateProduct(id: id, draft: draft);
+  }
+
   Future<Product> fetchProduct(int id) {
     return _catalog.fetchProduct(id);
   }
@@ -168,6 +177,13 @@ class PosApiService {
 
   Future<ProductCategory> createProductCategory(ProductCategoryDraft draft) {
     return _catalog.createProductCategory(draft);
+  }
+
+  Future<VariantOptionValuePage> fetchVariantOptionValues({
+    required ModelQuery query,
+    int page = 1,
+  }) {
+    return _catalog.fetchVariantOptionValues(query: query, page: page);
   }
 
   Future<CustomerPage> fetchCustomers({

@@ -1,136 +1,104 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../core/authorization.dart';
-import '../../../data/models/barcode_label.dart';
 import '../../../data/models/product.dart';
-import '../../../data/models/purchase_submission.dart';
+import '../../../data/models/product_variant.dart';
+import '../../../data/repositories/inventory_repository.dart';
 import '../../../data/repositories/printing_repository.dart';
+import '../../../data/repositories/purchase_repository.dart';
 import '../../../shared/authorization_guards.dart';
-import '../../../shared/date_formatters.dart';
 import '../../../shared/detail_section.dart';
 import '../../../shared/formatters.dart';
-import '../../../shared/infinite_scroll_grid.dart';
 import '../../../shared/product_status_pill.dart';
+import '../view_models/product_details_view_model.dart';
 import '../view_models/product_stock_view_model.dart';
-import 'product_details_hero.dart';
-import 'stock_movement_form.dart';
-import 'stock_movements_sheet.dart';
+import 'product_parent_edit_sheet.dart';
+import 'product_variant_details_screen.dart';
+import 'product_variant_form_sheet.dart';
 
 class ProductDetailsScreen extends StatelessWidget {
   const ProductDetailsScreen({
     super.key,
     required this.viewModel,
+    required this.inventoryRepository,
     required this.printingRepository,
+    required this.purchaseRepository,
     required this.capabilities,
+    this.onChanged,
   });
 
-  final ProductStockViewModel viewModel;
+  final ProductDetailsViewModel viewModel;
+  final InventoryRepository inventoryRepository;
   final PrintingRepository printingRepository;
+  final PurchaseRepository purchaseRepository;
   final AuthorizationCapabilities capabilities;
+  final VoidCallback? onChanged;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final colorScheme = Theme.of(context).colorScheme;
-    final product = viewModel.product;
 
     return ListenableBuilder(
       listenable: viewModel,
       builder: (context, _) {
+        final product = viewModel.product;
         return Scaffold(
-          appBar: AppBar(title: Text(l10n.productDetailsTitle)),
+          appBar: AppBar(
+            title: Text(l10n.productDetailsTitle),
+            actions: [
+              ProductChangeGuard(
+                capabilities: capabilities,
+                child: IconButton(
+                  tooltip: l10n.editProductButton,
+                  onPressed: () => _showProductEditor(context),
+                  icon: const Icon(Icons.edit_outlined),
+                ),
+              ),
+            ],
+          ),
           body: SafeArea(
             child: ListView(
               padding: const EdgeInsets.all(16),
               children: [
-                ProductDetailsHero(product: product),
-                const SizedBox(height: 16),
-                StockViewGuard(
+                if (viewModel.isLoading) ...[
+                  const LinearProgressIndicator(),
+                  const SizedBox(height: 12),
+                ],
+                if (viewModel.errorMessage == 'product_detail_load_error') ...[
+                  Text(
+                    l10n.productDetailLoadError,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                ],
+                _ParentSummaryCard(
+                  product: product,
+                  variantCount: viewModel.variants.length,
                   capabilities: capabilities,
-                  child: _StockSummarySection(
-                    viewModel: viewModel,
-                    capabilities: capabilities,
-                    onCreateMovement: () => _showMovementForm(context),
-                    onOpenMovements: () => _openMovements(context),
-                  ),
-                ),
-                if (capabilities.canViewStock) const SizedBox(height: 12),
-                DetailSection(
-                  title: l10n.productAvailabilityTitle,
-                  icon: product.isActive
-                      ? Icons.check_circle_outline
-                      : Icons.pause_circle_outline,
-                  child: Row(
-                    children: [
-                      ProductStatusPill(isActive: product.isActive),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          product.isActive
-                              ? l10n.productAvailableForSale
-                              : l10n.productUnavailableForSale,
-                        ),
-                      ),
-                    ],
-                  ),
+                  onEdit: () => _showProductEditor(context),
                 ),
                 const SizedBox(height: 12),
-                DetailSection(
-                  title: l10n.productIdentifierTitle,
-                  icon: Icons.qr_code_2,
-                  child: Column(
-                    children: [
-                      DetailRow(
-                        label: l10n.skuLabel,
-                        value: product.effectiveSku,
-                      ),
-                      const Divider(height: 20),
-                      DetailRow(
-                        label: l10n.barcodeLabel,
-                        value: product.effectiveBarcode.isEmpty
-                            ? l10n.noBarcode
-                            : product.effectiveBarcode,
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 12),
-                DetailSection(
-                  title: l10n.barcodeLabelPrintTitle,
-                  icon: Icons.print_outlined,
-                  child: _BarcodeLabelPrintSection(
-                    product: product,
-                    printingRepository: printingRepository,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                DetailSection(
-                  title: l10n.productDescriptionTitle,
-                  icon: Icons.notes_outlined,
-                  child: Text(
-                    product.description.isEmpty
-                        ? l10n.noDescription
-                        : product.description,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                DetailSection(
-                  title: l10n.productCostHistoryTitle,
-                  icon: Icons.trending_up_outlined,
-                  child: _ProductCostHistorySection(viewModel: viewModel),
+                _VariantsSection(
+                  variants: viewModel.variants,
+                  capabilities: capabilities,
+                  onAddVariant: () => _showVariantEditor(context),
+                  onEditVariant: (variant) =>
+                      _showVariantEditor(context, variant: variant),
+                  onOpenVariant: (variant) =>
+                      _openVariantDetails(context, product, variant),
                 ),
               ],
             ),
           ),
-          backgroundColor: colorScheme.surface,
         );
       },
     );
   }
 
-  Future<void> _showMovementForm(BuildContext context) {
+  Future<void> _showProductEditor(BuildContext context) {
     return showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -141,209 +109,225 @@ class ProductDetailsScreen extends StatelessWidget {
           padding: EdgeInsets.only(
             bottom: MediaQuery.viewInsetsOf(sheetContext).bottom,
           ),
-          child: StockMovementForm(
-            viewModel: viewModel,
-            onSaved: () => Navigator.of(sheetContext).pop(),
+          child: FractionallySizedBox(
+            heightFactor: 0.78,
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 640),
+                child: ProductParentEditSheet(
+                  viewModel: viewModel,
+                  onSaved: () {
+                    onChanged?.call();
+                    Navigator.of(sheetContext).pop();
+                  },
+                ),
+              ),
+            ),
           ),
         );
       },
     );
   }
 
-  Future<void> _openMovements(BuildContext context) {
+  Future<void> _showVariantEditor(
+    BuildContext context, {
+    ProductVariant? variant,
+  }) {
     return showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
       showDragHandle: true,
       builder: (sheetContext) {
-        return FractionallySizedBox(
-          heightFactor: 0.9,
-          child: StockMovementsSheet(
-            viewModel: viewModel,
-            capabilities: capabilities,
-            onCreateMovement: () => _showMovementForm(sheetContext),
-            onClose: () => Navigator.of(sheetContext).pop(),
+        return Padding(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.viewInsetsOf(sheetContext).bottom,
+          ),
+          child: FractionallySizedBox(
+            heightFactor: 0.86,
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 640),
+                child: ProductVariantFormSheet(
+                  viewModel: viewModel,
+                  variant: variant,
+                  onSaved: () {
+                    onChanged?.call();
+                    Navigator.of(sheetContext).pop();
+                  },
+                ),
+              ),
+            ),
           ),
         );
       },
     );
   }
-}
 
-class _ProductCostHistorySection extends StatelessWidget {
-  const _ProductCostHistorySection({required this.viewModel});
-
-  final ProductStockViewModel viewModel;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
-
-    final impact = viewModel.marginImpact;
-    final entries = viewModel.costHistory;
-
-    if (viewModel.isLoadingCostInsights && impact == null && entries.isEmpty) {
-      return const Center(child: CircularProgressIndicator());
-    }
-    if (viewModel.hasCostInsightsError && impact == null && entries.isEmpty) {
-      return Text(
-        l10n.productCostHistoryLoadError,
-        style: TextStyle(color: Theme.of(context).colorScheme.error),
-      );
-    }
-
-    if (impact == null && entries.isEmpty) {
-      return Text(l10n.productCostHistoryEmpty);
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        if (impact != null) ...[
-          _MarginImpactGrid(
-            impact: impact,
-            fallbackPrice: viewModel.product.effectiveUnitPrice,
+  Future<void> _openVariantDetails(
+    BuildContext context,
+    Product product,
+    ProductVariant variant,
+  ) {
+    final detailProduct = Product.fromVariant(
+      _variantWithParentFallback(product, variant),
+    );
+    return Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => ProductVariantDetailsScreen(
+          viewModel: ProductStockViewModel(
+            inventoryRepository,
+            purchaseRepository,
+            detailProduct,
           ),
-          if (entries.isNotEmpty) const Divider(height: 24),
-        ],
-        if (entries.isNotEmpty)
-          SizedBox(
-            height: _costHistoryListHeight(
-              entries.length,
-              viewModel.hasMoreCostHistory,
-            ),
-            child: InfiniteScrollList<ProductCostHistoryEntry>(
-              items: entries,
-              onLoadMore: viewModel.loadMoreCostHistory,
-              hasMore: viewModel.hasMoreCostHistory,
-              isLoadingInitial: viewModel.isLoadingCostInsights,
-              isLoadingMore: viewModel.isLoadingMoreCostHistory,
-              emptyBuilder: (context) => Text(l10n.productCostHistoryEmpty),
-              separatorBuilder: (_, _) => const Divider(height: 1),
-              itemBuilder: (context, entry) {
-                return ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  dense: true,
-                  leading: const Icon(Icons.inventory_2_outlined),
-                  title: Text(
-                    entry.supplierName?.isNotEmpty == true
-                        ? entry.supplierName!
-                        : l10n.noSupplierSelectedLabel,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  subtitle: Text(
-                    [
-                      if (entry.purchaseOrderNumber != null &&
-                          entry.purchaseOrderNumber!.isNotEmpty)
-                        l10n.purchaseOrderNumberValue(
-                          entry.purchaseOrderNumber!,
-                        ),
-                      l10n.purchaseOrderLineQuantity(entry.quantity),
-                      if (entry.recordedAt != null)
-                        formatDate(entry.recordedAt!),
-                    ].join(' • '),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  trailing: Text(
-                    formatMoney(entry.effectiveUnitCost ?? entry.unitCost),
-                    style: Theme.of(context).textTheme.titleSmall,
-                  ),
-                );
-              },
-            ),
-          ),
-      ],
+          printingRepository: printingRepository,
+          capabilities: capabilities,
+        ),
+      ),
+    );
+  }
+
+  ProductVariant _variantWithParentFallback(
+    Product product,
+    ProductVariant variant,
+  ) {
+    if (variant.productDetail != null && variant.productName.isNotEmpty) {
+      return variant;
+    }
+    return ProductVariant(
+      id: variant.id,
+      productId: product.id,
+      productName: product.name,
+      productDetail: product,
+      name: variant.name,
+      displayName: variant.displayName,
+      fullName: variant.fullName,
+      sku: variant.sku,
+      barcode: variant.barcode,
+      unitPrice: variant.unitPrice,
+      isActive: variant.isActive,
+      isDefault: variant.isDefault,
+      quantityOnHand: variant.quantityOnHand,
+      optionValueIds: variant.optionValueIds,
+      optionValues: variant.optionValues,
     );
   }
 }
 
-double _costHistoryListHeight(int itemCount, bool hasMore) {
-  if (hasMore || itemCount > 4) {
-    return 288;
-  }
-  if (itemCount == 1) {
-    return 72;
-  }
-  if (itemCount == 2) {
-    return 144;
-  }
-  if (itemCount == 3) {
-    return 216;
-  }
-  return 288;
-}
+class _ParentSummaryCard extends StatelessWidget {
+  const _ParentSummaryCard({
+    required this.product,
+    required this.variantCount,
+    required this.capabilities,
+    required this.onEdit,
+  });
 
-class _MarginImpactGrid extends StatelessWidget {
-  const _MarginImpactGrid({required this.impact, required this.fallbackPrice});
-
-  final ProductMarginImpact impact;
-  final double fallbackPrice;
+  final Product product;
+  final int variantCount;
+  final AuthorizationCapabilities capabilities;
+  final VoidCallback onEdit;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final unitPrice = impact.unitPrice > 0 ? impact.unitPrice : fallbackPrice;
-    final latestCost = impact.latestEffectiveUnitCost ?? impact.latestUnitCost;
-    final grossProfit =
-        impact.grossProfit ??
-        (latestCost == null ? null : unitPrice - latestCost);
-    final marginPercent =
-        impact.marginPercent ??
-        (grossProfit == null || unitPrice <= 0
-            ? null
-            : (grossProfit / unitPrice) * 100);
+    final colorScheme = Theme.of(context).colorScheme;
 
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      children: [
-        _MetricChip(
-          label: l10n.productLatestCostLabel,
-          value: latestCost == null
-              ? l10n.shopSettingsEmptyValue
-              : formatMoney(latestCost),
-        ),
-        _MetricChip(label: l10n.unitPriceLabel, value: formatMoney(unitPrice)),
-        _MetricChip(
-          label: l10n.productGrossProfitLabel,
-          value: grossProfit == null
-              ? l10n.shopSettingsEmptyValue
-              : formatMoney(grossProfit),
-        ),
-        _MetricChip(
-          label: l10n.productMarginPercentLabel,
-          value: marginPercent == null
-              ? l10n.shopSettingsEmptyValue
-              : l10n.productMarginPercentValue(
-                  _formatSignedPercent(
-                    marginPercent,
-                    includePositiveSign: false,
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(8),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                CircleAvatar(
+                  radius: 28,
+                  backgroundColor: colorScheme.primaryContainer,
+                  foregroundColor: colorScheme.onPrimaryContainer,
+                  child: Text(product.name.characters.first),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        product.name,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
+                      const SizedBox(height: 6),
+                      ProductStatusPill(isActive: product.isActive),
+                    ],
                   ),
                 ),
-        ),
-        if (impact.costChange != null)
-          _MetricChip(
-            label: l10n.productCostChangeLabel,
-            value: _formatSignedMoney(impact.costChange!),
-          ),
-        if (impact.marginChangePercent != null)
-          _MetricChip(
-            label: l10n.productMarginChangeLabel,
-            value: l10n.productMarginPercentValue(
-              _formatSignedPercent(impact.marginChangePercent!),
+                ProductChangeGuard(
+                  capabilities: capabilities,
+                  child: IconButton(
+                    tooltip: l10n.editProductButton,
+                    onPressed: onEdit,
+                    icon: const Icon(Icons.edit_outlined),
+                  ),
+                ),
+              ],
             ),
-          ),
-      ],
+            const SizedBox(height: 14),
+            Text(
+              product.description.isEmpty
+                  ? l10n.noDescription
+                  : product.description,
+            ),
+            const SizedBox(height: 14),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                _SummaryChip(
+                  icon: Icons.inventory_2_outlined,
+                  label: l10n.productTotalStockLabel,
+                  value: '${product.quantityOnHand}',
+                ),
+                _SummaryChip(
+                  icon: Icons.tune_outlined,
+                  label: l10n.productVariantsTitle,
+                  value: '$variantCount',
+                ),
+                _SummaryChip(
+                  icon: Icons.sell_outlined,
+                  label: l10n.productPriceTitle,
+                  value: formatMoney(product.effectiveUnitPrice),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            product.categories.isEmpty
+                ? Text(l10n.productNoCategories)
+                : Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: [
+                      for (final category in product.categories)
+                        Chip(label: Text(category.displayPath)),
+                    ],
+                  ),
+          ],
+        ),
+      ),
     );
   }
 }
 
-class _MetricChip extends StatelessWidget {
-  const _MetricChip({required this.label, required this.value});
+class _SummaryChip extends StatelessWidget {
+  const _SummaryChip({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
 
+  final IconData icon;
   final String label;
   final String value;
 
@@ -357,12 +341,13 @@ class _MetricChip extends StatelessWidget {
       ),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
+            Icon(icon, size: 18, color: colorScheme.primary),
+            const SizedBox(width: 6),
             Text(label, style: Theme.of(context).textTheme.labelSmall),
-            const SizedBox(height: 2),
+            const SizedBox(width: 8),
             Text(value, style: Theme.of(context).textTheme.titleSmall),
           ],
         ),
@@ -371,304 +356,231 @@ class _MetricChip extends StatelessWidget {
   }
 }
 
-class _BarcodeLabelPrintSection extends StatefulWidget {
-  const _BarcodeLabelPrintSection({
-    required this.product,
-    required this.printingRepository,
-  });
-
-  final Product product;
-  final PrintingRepository printingRepository;
-
-  @override
-  State<_BarcodeLabelPrintSection> createState() =>
-      _BarcodeLabelPrintSectionState();
-}
-
-class _BarcodeLabelPrintSectionState extends State<_BarcodeLabelPrintSection> {
-  bool _isPrinting = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
-    final colorScheme = Theme.of(context).colorScheme;
-    final hasBarcode = widget.product.effectiveBarcode.trim().isNotEmpty;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        if (!hasBarcode) ...[
-          Text(
-            l10n.barcodeLabelPrintNoBarcode,
-            style: TextStyle(color: colorScheme.error),
-          ),
-          const SizedBox(height: 12),
-        ],
-        Align(
-          alignment: AlignmentDirectional.centerStart,
-          child: SizedBox(
-            width: 240,
-            child: FilledButton.icon(
-              onPressed: hasBarcode && !_isPrinting ? _printLabel : null,
-              icon: _isPrinting
-                  ? const SizedBox.square(
-                      dimension: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.print_outlined),
-              label: Text(
-                _isPrinting
-                    ? l10n.barcodeLabelPrintInProgressButton
-                    : l10n.barcodeLabelPrintButton,
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Future<void> _printLabel() async {
-    final l10n = AppLocalizations.of(context)!;
-    final messenger = ScaffoldMessenger.of(context);
-    final copies = await _askLabelCopies();
-    if (copies == null) {
-      return;
-    }
-
-    setState(() => _isPrinting = true);
-
-    final result = await widget.printingRepository.printBarcodeLabels([
-      BarcodeLabelPrintLine.product(widget.product, copies: copies),
-    ]);
-
-    if (!mounted) {
-      return;
-    }
-    setState(() => _isPrinting = false);
-    messenger.showSnackBar(
-      SnackBar(
-        content: Text(
-          result.isSuccess
-              ? l10n.barcodeLabelPrintSuccess(copies)
-              : l10n.barcodeLabelPrintError,
-        ),
-      ),
-    );
-  }
-
-  Future<int?> _askLabelCopies() {
-    return showDialog<int>(
-      context: context,
-      builder: (dialogContext) {
-        return const _BarcodeLabelCopiesDialog();
-      },
-    );
-  }
-}
-
-class _BarcodeLabelCopiesDialog extends StatefulWidget {
-  const _BarcodeLabelCopiesDialog();
-
-  @override
-  State<_BarcodeLabelCopiesDialog> createState() =>
-      _BarcodeLabelCopiesDialogState();
-}
-
-class _BarcodeLabelCopiesDialogState extends State<_BarcodeLabelCopiesDialog> {
-  final _formKey = GlobalKey<FormState>();
-  final _copiesController = TextEditingController(text: '1');
-
-  @override
-  void dispose() {
-    _copiesController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
-
-    return AlertDialog(
-      title: Text(l10n.barcodeLabelCopiesDialogTitle),
-      content: Form(
-        key: _formKey,
-        child: TextFormField(
-          controller: _copiesController,
-          autofocus: true,
-          keyboardType: TextInputType.number,
-          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-          decoration: InputDecoration(
-            labelText: l10n.barcodeLabelCopiesLabel,
-            hintText: l10n.barcodeLabelCopiesHint,
-          ),
-          validator: (value) {
-            final copies = int.tryParse(value ?? '');
-            if (copies == null || copies <= 0) {
-              return l10n.invalidNumber;
-            }
-            return null;
-          },
-          onFieldSubmitted: (_) => _submit(),
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: Text(l10n.cancelButton),
-        ),
-        FilledButton.icon(
-          onPressed: _submit,
-          icon: const Icon(Icons.print_outlined),
-          label: Text(l10n.barcodeLabelCopiesPrintButton),
-        ),
-      ],
-    );
-  }
-
-  void _submit() {
-    if (!_formKey.currentState!.validate()) {
-      return;
-    }
-    Navigator.of(context).pop(int.parse(_copiesController.text));
-  }
-}
-
-class _StockSummarySection extends StatelessWidget {
-  const _StockSummarySection({
-    required this.viewModel,
+class _VariantsSection extends StatelessWidget {
+  const _VariantsSection({
+    required this.variants,
     required this.capabilities,
-    required this.onCreateMovement,
-    required this.onOpenMovements,
+    required this.onAddVariant,
+    required this.onEditVariant,
+    required this.onOpenVariant,
   });
 
-  final ProductStockViewModel viewModel;
+  final List<ProductVariant> variants;
   final AuthorizationCapabilities capabilities;
-  final VoidCallback onCreateMovement;
-  final VoidCallback onOpenMovements;
+  final VoidCallback onAddVariant;
+  final ValueChanged<ProductVariant> onEditVariant;
+  final ValueChanged<ProductVariant> onOpenVariant;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
 
     return DetailSection(
-      title: l10n.stockSummaryTitle,
-      icon: Icons.inventory_2_outlined,
+      title: l10n.productVariantsTitle,
+      icon: Icons.view_list_outlined,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          if (viewModel.isLoadingStock)
-            const LinearProgressIndicator()
-          else if (viewModel.errorMessage == 'stock_load_error')
-            Align(
-              alignment: AlignmentDirectional.centerStart,
-              child: Text(
-                l10n.stockLoadError,
-                style: TextStyle(color: Theme.of(context).colorScheme.error),
+          Align(
+            alignment: AlignmentDirectional.centerStart,
+            child: ProductVariantCreateGuard(
+              capabilities: capabilities,
+              child: FilledButton.icon(
+                onPressed: onAddVariant,
+                icon: const Icon(Icons.add),
+                label: Text(l10n.addVariantButton),
               ),
-            )
-          else
-            _StockOnHandPanel(
-              label: l10n.stockOnHandLabel,
-              value: viewModel.quantityOnHand,
             ),
-          const SizedBox(height: 14),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              StockMovementCreateGuard(
-                capabilities: capabilities,
-                child: SizedBox(
-                  width: 220,
-                  child: FilledButton.icon(
-                    onPressed: onCreateMovement,
-                    icon: const Icon(Icons.add_chart_outlined),
-                    label: Text(l10n.newStockMovementButton),
-                  ),
-                ),
-              ),
-              SizedBox(
-                width: 220,
-                child: OutlinedButton.icon(
-                  onPressed: onOpenMovements,
-                  icon: const Icon(Icons.list_alt_outlined),
-                  label: Text(l10n.stockMovementsButton),
-                ),
-              ),
-            ],
           ),
+          const SizedBox(height: 12),
+          if (variants.isEmpty)
+            Text(l10n.noVariants)
+          else
+            LayoutBuilder(
+              builder: (context, constraints) {
+                if (constraints.maxWidth >= 720) {
+                  return _VariantDataTable(
+                    variants: variants,
+                    capabilities: capabilities,
+                    onEditVariant: onEditVariant,
+                    onOpenVariant: onOpenVariant,
+                  );
+                }
+                return Column(
+                  children: [
+                    for (final variant in variants) ...[
+                      _VariantListTile(
+                        variant: variant,
+                        capabilities: capabilities,
+                        onEdit: () => onEditVariant(variant),
+                        onOpen: () => onOpenVariant(variant),
+                      ),
+                      if (variant != variants.last) const Divider(height: 1),
+                    ],
+                  ],
+                );
+              },
+            ),
         ],
       ),
     );
   }
 }
 
-class _StockOnHandPanel extends StatelessWidget {
-  const _StockOnHandPanel({required this.label, required this.value});
+class _VariantDataTable extends StatelessWidget {
+  const _VariantDataTable({
+    required this.variants,
+    required this.capabilities,
+    required this.onEditVariant,
+    required this.onOpenVariant,
+  });
 
-  final String label;
-  final int value;
+  final List<ProductVariant> variants;
+  final AuthorizationCapabilities capabilities;
+  final ValueChanged<ProductVariant> onEditVariant;
+  final ValueChanged<ProductVariant> onOpenVariant;
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
+    final l10n = AppLocalizations.of(context)!;
 
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: colorScheme.outlineVariant),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        child: Row(
-          children: [
-            CircleAvatar(
-              radius: 24,
-              backgroundColor: colorScheme.primaryContainer,
-              foregroundColor: colorScheme.onPrimaryContainer,
-              child: const Icon(Icons.inventory_outlined),
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: DataTable(
+        columnSpacing: 20,
+        columns: [
+          DataColumn(label: Text(l10n.variantNameColumn)),
+          DataColumn(label: Text(l10n.variantStockColumn), numeric: true),
+          DataColumn(label: Text(l10n.variantPriceColumn)),
+          DataColumn(label: Text(l10n.variantSkuColumn)),
+          DataColumn(label: Text(l10n.variantBarcodeColumn)),
+          DataColumn(label: Text(l10n.variantStatusColumn)),
+          DataColumn(label: Text(l10n.actionsColumn)),
+        ],
+        rows: [
+          for (final variant in variants)
+            DataRow(
+              onSelectChanged: (_) => onOpenVariant(variant),
+              cells: [
+                DataCell(_VariantNameLabel(variant: variant)),
+                DataCell(Text('${variant.quantityOnHand}')),
+                DataCell(Text(formatMoney(variant.unitPrice))),
+                DataCell(Text(variant.sku)),
+                DataCell(
+                  Text(
+                    variant.barcode.isEmpty ? l10n.noBarcode : variant.barcode,
+                  ),
+                ),
+                DataCell(ProductStatusPill(isActive: variant.isSellable)),
+                DataCell(
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        tooltip: l10n.openVariantDetailsTooltip,
+                        onPressed: () => onOpenVariant(variant),
+                        icon: const Icon(Icons.open_in_new),
+                      ),
+                      ProductVariantChangeGuard(
+                        capabilities: capabilities,
+                        child: IconButton(
+                          tooltip: l10n.editVariantTitle,
+                          onPressed: () => onEditVariant(variant),
+                          icon: const Icon(Icons.edit_outlined),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Text(
-                label,
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
-            ),
-            Text(
-              '$value',
-              style: Theme.of(context).textTheme.displaySmall?.copyWith(
-                color: colorScheme.primary,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ],
-        ),
+        ],
       ),
     );
   }
 }
 
-String _formatSignedMoney(double value) {
-  final amount = formatMoney(value.abs());
-  if (value > 0) {
-    return '+$amount';
+class _VariantListTile extends StatelessWidget {
+  const _VariantListTile({
+    required this.variant,
+    required this.capabilities,
+    required this.onEdit,
+    required this.onOpen,
+  });
+
+  final ProductVariant variant;
+  final AuthorizationCapabilities capabilities;
+  final VoidCallback onEdit;
+  final VoidCallback onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      title: _VariantNameLabel(variant: variant),
+      subtitle: Text(
+        [
+          variant.sku,
+          formatMoney(variant.unitPrice),
+          l10n.stockMovementQuantityValue(variant.quantityOnHand),
+          if (variant.barcode.isNotEmpty) variant.barcode,
+        ].join(' / '),
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
+      ),
+      trailing: Wrap(
+        spacing: 4,
+        children: [
+          IconButton(
+            tooltip: l10n.openVariantDetailsTooltip,
+            onPressed: onOpen,
+            icon: const Icon(Icons.open_in_new),
+          ),
+          ProductVariantChangeGuard(
+            capabilities: capabilities,
+            child: IconButton(
+              tooltip: l10n.editVariantTitle,
+              onPressed: onEdit,
+              icon: const Icon(Icons.edit_outlined),
+            ),
+          ),
+        ],
+      ),
+      onTap: onOpen,
+    );
   }
-  if (value < 0) {
-    return '-$amount';
-  }
-  return amount;
 }
 
-String _formatSignedPercent(double value, {bool includePositiveSign = true}) {
-  final amount = value.abs().toStringAsFixed(2);
-  if (value > 0 && includePositiveSign) {
-    return '+$amount';
+class _VariantNameLabel extends StatelessWidget {
+  const _VariantNameLabel({required this.variant});
+
+  final ProductVariant variant;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 220),
+          child: Text(
+            variant.displayLabel,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+        if (variant.isDefault) ...[
+          const SizedBox(width: 6),
+          Chip(
+            visualDensity: VisualDensity.compact,
+            label: Text(l10n.defaultVariantBadge),
+          ),
+        ],
+      ],
+    );
   }
-  if (value < 0) {
-    return '-$amount';
-  }
-  return amount;
 }

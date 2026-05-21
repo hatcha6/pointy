@@ -59,11 +59,14 @@ class ProductCategorySerializer(serializers.ModelSerializer):
 
 
 class VariantOptionValueSerializer(serializers.ModelSerializer):
+    option_name = serializers.CharField(source="option.name", read_only=True)
+
     class Meta:
         model = VariantOptionValue
         fields = [
             "id",
             "option",
+            "option_name",
             "code",
             "name",
             "display_order",
@@ -174,6 +177,11 @@ class ProductVariantSerializer(serializers.ModelSerializer):
         many=True,
         required=False,
     )
+    option_value_details = VariantOptionValueSerializer(
+        source="option_values",
+        many=True,
+        read_only=True,
+    )
 
     class Meta:
         model = ProductVariant
@@ -191,6 +199,7 @@ class ProductVariantSerializer(serializers.ModelSerializer):
             "is_active",
             "is_default",
             "option_values",
+            "option_value_details",
             "quantity_on_hand",
             "created_at",
             "updated_at",

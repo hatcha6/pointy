@@ -2,10 +2,12 @@ import '../models/product.dart';
 import '../models/product_category.dart';
 import '../models/product_draft.dart';
 import '../models/product_page.dart';
+import '../models/product_update_draft.dart';
 import '../models/product_variant.dart';
 import '../models/product_variant_draft.dart';
 import '../models/product_variant_page.dart';
 import '../models/query.dart';
+import '../models/variant_option_value_page.dart';
 import 'api_session.dart';
 
 class CatalogApiClient {
@@ -41,6 +43,20 @@ class CatalogApiClient {
   Future<Product> createProduct(ProductDraft draft) async {
     final response = await _session.post('products/', body: draft.toJson());
     _session.ensureSuccess(response, 'Product create failed with status');
+    return Product.fromJson(
+      _session.decodedBody(response) as Map<String, Object?>,
+    );
+  }
+
+  Future<Product> updateProduct({
+    required int id,
+    required ProductUpdateDraft draft,
+  }) async {
+    final response = await _session.patch(
+      'products/$id/',
+      body: draft.toJson(),
+    );
+    _session.ensureSuccess(response, 'Product update failed with status');
     return Product.fromJson(
       _session.decodedBody(response) as Map<String, Object?>,
     );
@@ -165,6 +181,23 @@ class CatalogApiClient {
       'Product category create failed with status',
     );
     return ProductCategory.fromJson(
+      _session.decodedBody(response) as Map<String, Object?>,
+    );
+  }
+
+  Future<VariantOptionValuePage> fetchVariantOptionValues({
+    required ModelQuery query,
+    int page = 1,
+  }) async {
+    final response = await _session.get(
+      'variant-option-values/',
+      query: query.toQueryParameters(page: page),
+    );
+    _session.ensureSuccess(
+      response,
+      'Variant option value request failed with status',
+    );
+    return VariantOptionValuePage.fromJson(
       _session.decodedBody(response) as Map<String, Object?>,
     );
   }

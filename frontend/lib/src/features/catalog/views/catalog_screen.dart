@@ -159,10 +159,12 @@ class CatalogScreen extends StatelessWidget {
         await openProductDetails(
           context,
           product: outcome.product!,
+          catalogRepository: viewModel.catalogRepository,
           inventoryRepository: inventoryRepository,
           printingRepository: printingRepository,
           purchaseRepository: purchaseRepository,
           capabilities: capabilities,
+          onChanged: viewModel.loadProducts,
         );
         return true;
       case CatalogBarcodeLookupStatus.notFound:
@@ -188,10 +190,12 @@ class CatalogScreen extends StatelessWidget {
     await openProductDetails(
       context,
       product: Product.fromVariant(entries.first.variant),
+      catalogRepository: viewModel.catalogRepository,
       inventoryRepository: inventoryRepository,
       printingRepository: printingRepository,
       purchaseRepository: purchaseRepository,
       capabilities: capabilities,
+      onChanged: viewModel.loadProducts,
     );
   }
 

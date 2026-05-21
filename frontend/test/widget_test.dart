@@ -28,9 +28,9 @@ import 'package:pointy_frontend/src/data/services/esc_pos_receipt_encoder.dart';
 import 'package:pointy_frontend/src/data/services/pos_api_service.dart';
 import 'package:pointy_frontend/src/data/services/print_transport.dart';
 import 'package:pointy_frontend/src/features/catalog/view_models/category_management_view_model.dart';
-import 'package:pointy_frontend/src/features/catalog/views/product_details_screen.dart';
 import 'package:pointy_frontend/src/features/catalog/view_models/product_stock_view_model.dart';
 import 'package:pointy_frontend/src/features/catalog/views/category_management_screen.dart';
+import 'package:pointy_frontend/src/features/catalog/views/product_variant_details_screen.dart';
 import 'package:pointy_frontend/src/features/purchasing/views/purchase_order_details_screen.dart';
 import 'package:pointy_frontend/src/features/pos/views/register_cash_movement_sheet.dart';
 import 'package:pointy_frontend/src/features/pos/views/register_session_close_sheet.dart';
@@ -743,6 +743,14 @@ void main() {
 
     expect(find.text('منتج جديد'), findsOneWidget);
     expect(find.text('اسم المنتج'), findsOneWidget);
+    expect(find.text('بيانات المنتج'), findsOneWidget);
+    expect(find.text('التالي'), findsOneWidget);
+
+    await tester.enterText(find.byType(TextFormField).first, 'قهوة عربية');
+    await tester.tap(find.text('التالي'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('الخيار الافتراضي'), findsOneWidget);
     expect(find.text('رمز المنتج'), findsOneWidget);
     expect(find.text('إنشاء المنتج'), findsOneWidget);
   });
@@ -947,7 +955,7 @@ void main() {
     await tester.pumpAndSettle(const Duration(seconds: 1));
 
     expect(find.text('تفاصيل المنتج'), findsOneWidget);
-    expect(find.text('قهوة البيت'), findsOneWidget);
+    expect(find.text('قهوة البيت'), findsWidgets);
   });
 
   testWidgets(
@@ -969,9 +977,62 @@ void main() {
       await tester.pumpAndSettle(const Duration(seconds: 1));
 
       expect(find.text('تفاصيل المنتج'), findsOneWidget);
-      expect(find.text('قهوة البيت'), findsOneWidget);
+      expect(find.text('قهوة البيت'), findsWidgets);
     },
   );
+
+  testWidgets('catalog details can edit parent product and variant', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(520, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    Map<String, Object?>? productBody;
+    Map<String, Object?>? variantBody;
+
+    await tester.pumpWidget(
+      PointyApp(
+        apiService: _mockApiService(
+          onProductUpdate: (request) {
+            productBody = jsonDecode(request.body) as Map<String, Object?>;
+          },
+          onProductVariantUpdate: (request) {
+            variantBody = jsonDecode(request.body) as Map<String, Object?>;
+          },
+        ),
+      ),
+    );
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+
+    await tester.tap(find.byIcon(Icons.menu));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('المنتجات').last);
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+
+    await tester.tap(find.byType(ProductTile).first);
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+
+    await tester.tap(find.byTooltip('تعديل المنتج').first);
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextFormField).first, 'قهوة مطورة');
+    await tester.tap(find.text('حفظ المنتج'));
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+
+    expect(productBody?['name'], 'قهوة مطورة');
+    expect(productBody?['is_active'], isTrue);
+
+    await tester.tap(find.byTooltip('تعديل الخيار').first);
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextFormField).at(3), '4.25');
+    await tester.tap(find.text('حفظ الخيار'));
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+
+    expect(variantBody?['product'], 1);
+    expect(variantBody?['unit_price'], '4.25');
+    expect(variantBody?['is_active'], isTrue);
+  });
 
   testWidgets('navigation drawer exposes primary destinations', (
     WidgetTester tester,
@@ -2110,7 +2171,7 @@ void main() {
           GlobalWidgetsLocalizations.delegate,
           GlobalCupertinoLocalizations.delegate,
         ],
-        home: ProductDetailsScreen(
+        home: ProductVariantDetailsScreen(
           viewModel: ProductStockViewModel(
             InventoryRepository(apiService),
             PurchaseRepository(apiService),
@@ -2125,7 +2186,7 @@ void main() {
     );
     await tester.pumpAndSettle(const Duration(seconds: 1));
 
-    expect(find.text('تفاصيل المنتج'), findsOneWidget);
+    expect(find.text('تفاصيل الخيار'), findsOneWidget);
     expect(find.text('قهوة عربية'), findsOneWidget);
     expect(find.text('5.50 د.ل'), findsOneWidget);
     expect(find.text('المتاح'), findsOneWidget);
@@ -2175,7 +2236,7 @@ void main() {
           GlobalWidgetsLocalizations.delegate,
           GlobalCupertinoLocalizations.delegate,
         ],
-        home: ProductDetailsScreen(
+        home: ProductVariantDetailsScreen(
           viewModel: ProductStockViewModel(
             InventoryRepository(apiService),
             PurchaseRepository(apiService),
@@ -2231,6 +2292,10 @@ void main() {
     await tester.pumpAndSettle(const Duration(seconds: 1));
 
     await tester.tap(find.byType(ProductTile).first);
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+
+    expect(find.text('الخيارات'), findsWidgets);
+    await tester.tap(find.text('COF-001').last);
     await tester.pumpAndSettle(const Duration(seconds: 1));
 
     expect(find.text('المتاح'), findsOneWidget);
@@ -2459,6 +2524,8 @@ PosApiService _mockApiService({
   void Function(http.Request request)? onShopSettingsUpdate,
   void Function(http.Request request)? onDiscountRuleCreate,
   void Function(http.Request request)? onProductCategoryRequest,
+  void Function(http.Request request)? onProductUpdate,
+  void Function(http.Request request)? onProductVariantUpdate,
   bool shopSettingsAutoPrint = false,
   bool shopSettingsRequireOpeningCash = true,
   bool shopSettingsAllowOverselling = false,
@@ -2724,6 +2791,56 @@ PosApiService _mockApiService({
         );
       }
 
+      if (path.endsWith('/products/1/')) {
+        if (request.method == 'PATCH') {
+          onProductUpdate?.call(request);
+          final body = jsonDecode(request.body) as Map<String, Object?>;
+          return _jsonResponse({
+            ..._productJson(
+              quantityOnHand: productQuantityOnHand,
+              barcode: productBarcode,
+            ),
+            ...body,
+            'category_details': const [],
+          });
+        }
+        return _jsonResponse(
+          _productJson(
+            quantityOnHand: productQuantityOnHand,
+            barcode: productBarcode,
+          ),
+        );
+      }
+
+      if (path.endsWith('/products/1/variants/')) {
+        if (request.method == 'POST') {
+          final body = jsonDecode(request.body) as Map<String, Object?>;
+          return _jsonResponse({
+            ..._productVariantJson(
+              id: 2,
+              quantityOnHand: 0,
+              barcode: body['barcode']?.toString() ?? '',
+            ),
+            ...body,
+            'id': 2,
+            'product': 1,
+            'product_name': 'قهوة البيت',
+            'quantity_on_hand': 0,
+          });
+        }
+        return _jsonResponse({
+          'count': 1,
+          'next': null,
+          'previous': null,
+          'results': [
+            _productVariantJson(
+              quantityOnHand: productQuantityOnHand,
+              barcode: productBarcode,
+            ),
+          ],
+        });
+      }
+
       if (path.endsWith('/product-variants/')) {
         final requestedBarcode = request.url.queryParameters['barcode'];
         if (requestedBarcode != null && requestedBarcode != productBarcode) {
@@ -2740,6 +2857,26 @@ PosApiService _mockApiService({
             ),
           ],
         });
+      }
+
+      if (path.endsWith('/product-variants/1/')) {
+        if (request.method == 'PATCH') {
+          onProductVariantUpdate?.call(request);
+          final body = jsonDecode(request.body) as Map<String, Object?>;
+          return _jsonResponse({
+            ..._productVariantJson(
+              quantityOnHand: productQuantityOnHand,
+              barcode: productBarcode,
+            ),
+            ...body,
+          });
+        }
+        return _jsonResponse(
+          _productVariantJson(
+            quantityOnHand: productQuantityOnHand,
+            barcode: productBarcode,
+          ),
+        );
       }
 
       if (path.endsWith('/product-categories/')) {
@@ -2800,6 +2937,34 @@ PosApiService _mockApiService({
           'previous': null,
           'results': [
             _productCategoryJson(id: 1, name: 'مشروبات', childrenCount: 2),
+          ],
+        });
+      }
+
+      if (path.endsWith('/variant-option-values/')) {
+        return _jsonResponse({
+          'count': 2,
+          'next': null,
+          'previous': null,
+          'results': [
+            {
+              'id': 1,
+              'option': 1,
+              'option_name': 'الحجم',
+              'code': 'large',
+              'name': 'كبير',
+              'display_order': 1,
+              'is_active': true,
+            },
+            {
+              'id': 2,
+              'option': 2,
+              'option_name': 'اللون',
+              'code': 'red',
+              'name': 'أحمر',
+              'display_order': 2,
+              'is_active': true,
+            },
           ],
         });
       }
@@ -3313,21 +3478,28 @@ Map<String, Object?> _productPageJson({
 }) {
   return {
     'next': null,
-    'results': [
-      {
-        'id': 1,
-        'name': 'قهوة البيت',
-        'description': '',
-        'is_active': true,
-        'quantity_on_hand': quantityOnHand,
-        'default_variant': _productVariantJson(
-          quantityOnHand: quantityOnHand,
-          barcode: barcode,
-        ),
-        'variants': [
-          _productVariantJson(quantityOnHand: quantityOnHand, barcode: barcode),
-        ],
-      },
+    'results': [_productJson(quantityOnHand: quantityOnHand, barcode: barcode)],
+  };
+}
+
+Map<String, Object?> _productJson({
+  int quantityOnHand = 12,
+  String barcode = '',
+}) {
+  return {
+    'id': 1,
+    'name': 'قهوة البيت',
+    'description': '',
+    'is_active': true,
+    'categories': const [],
+    'category_details': const [],
+    'quantity_on_hand': quantityOnHand,
+    'default_variant': _productVariantJson(
+      quantityOnHand: quantityOnHand,
+      barcode: barcode,
+    ),
+    'variants': [
+      _productVariantJson(quantityOnHand: quantityOnHand, barcode: barcode),
     ],
   };
 }
@@ -3359,6 +3531,7 @@ Map<String, Object?> _productVariantJson({
     'is_active': true,
     'is_default': true,
     'option_values': const [],
+    'option_value_details': const [],
     'quantity_on_hand': quantityOnHand,
   };
 }
