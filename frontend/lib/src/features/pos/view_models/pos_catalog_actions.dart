@@ -48,8 +48,8 @@ extension PosCatalogActions on PosViewModel {
       _errorMessage = null;
       changed = true;
     }
-    if (_nextProductPage != 1) {
-      _nextProductPage = 1;
+    if (_nextVariantPage != 1) {
+      _nextVariantPage = 1;
       changed = true;
     }
     if (!_hasMoreProducts) {
@@ -60,7 +60,7 @@ extension PosCatalogActions on PosViewModel {
       _notifyChanged();
     }
 
-    final result = await _catalogRepository.loadProducts(
+    final result = await _catalogRepository.loadProductVariants(
       query: querySnapshot,
       page: 1,
     );
@@ -69,12 +69,12 @@ extension PosCatalogActions on PosViewModel {
     }
 
     switch (result) {
-      case Ok<ProductPage>():
-        _products = result.value.products;
+      case Ok<ProductVariantPage>():
+        _variants = result.value.variants;
         _hasMoreProducts = result.value.hasMore;
-        _nextProductPage = 2;
-      case Error<ProductPage>():
-        _products = _catalogRepository.sampleProducts(querySnapshot);
+        _nextVariantPage = 2;
+      case Error<ProductVariantPage>():
+        _variants = _catalogRepository.sampleProductVariants(querySnapshot);
         _hasMoreProducts = false;
         _errorMessage = 'sample_catalog_notice';
     }
@@ -93,15 +93,15 @@ extension PosCatalogActions on PosViewModel {
 
     final requestVersion = _catalogRequestVersion;
     final querySnapshot = _query;
-    final page = _nextProductPage;
-    final result = await _catalogRepository.loadProducts(
+    final page = _nextVariantPage;
+    final result = await _catalogRepository.loadProductVariants(
       query: querySnapshot,
       page: page,
     );
     final isCurrentPage =
         requestVersion == _catalogRequestVersion &&
         querySnapshot == _query &&
-        page == _nextProductPage;
+        page == _nextVariantPage;
     if (!isCurrentPage) {
       if (_isLoadingMore) {
         _isLoadingMore = false;
@@ -111,11 +111,11 @@ extension PosCatalogActions on PosViewModel {
     }
 
     switch (result) {
-      case Ok<ProductPage>():
-        _products = [..._products, ...result.value.products];
+      case Ok<ProductVariantPage>():
+        _variants = [..._variants, ...result.value.variants];
         _hasMoreProducts = result.value.hasMore;
-        _nextProductPage += 1;
-      case Error<ProductPage>():
+        _nextVariantPage += 1;
+      case Error<ProductVariantPage>():
         _errorMessage = 'sample_catalog_notice';
     }
 

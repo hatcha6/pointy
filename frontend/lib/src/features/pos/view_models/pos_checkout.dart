@@ -41,12 +41,12 @@ extension PosCheckoutActions on PosViewModel {
   List<SaleStockShortage> checkoutStockShortages() {
     final shortages = <SaleStockShortage>[];
     for (final line in _cart) {
-      if (line.quantity > line.product.quantityOnHand) {
+      if (line.quantity > line.variant.quantityOnHand) {
         shortages.add(
           SaleStockShortage(
-            productName: line.product.name,
+            productName: line.variant.displayLabel,
             requested: line.quantity,
-            available: line.product.quantityOnHand,
+            available: line.variant.quantityOnHand,
           ),
         );
       }
@@ -139,20 +139,20 @@ extension PosCheckoutActions on PosViewModel {
   void _applySoldQuantities(List<CartLine> soldLines) {
     final soldByVariant = <int, int>{};
     for (final line in soldLines) {
-      soldByVariant[line.product.sellableId] =
-          (soldByVariant[line.product.sellableId] ?? 0) + line.quantity;
+      soldByVariant[line.variant.id] =
+          (soldByVariant[line.variant.id] ?? 0) + line.quantity;
     }
     if (soldByVariant.isEmpty) {
       return;
     }
-    _products = [
-      for (final product in _products)
-        if (soldByVariant[product.sellableId] case final soldQuantity?)
-          product.copyWith(
-            quantityOnHand: product.quantityOnHand - soldQuantity,
+    _variants = [
+      for (final variant in _variants)
+        if (soldByVariant[variant.id] case final soldQuantity?)
+          variant.copyWith(
+            quantityOnHand: variant.quantityOnHand - soldQuantity,
           )
         else
-          product,
+          variant,
     ];
   }
 }

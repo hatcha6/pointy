@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
-import '../../../data/models/product.dart';
+import '../../../data/models/product_variant.dart';
 import '../../../shared/barcode/camera_barcode_scanner_sheet.dart';
 import '../../../shared/infinite_scroll_grid.dart';
 import '../../../shared/product_query_controls.dart';
@@ -69,7 +69,7 @@ class PurchaseCatalogPane extends StatelessWidget {
           const SizedBox(height: 12),
           Expanded(
             child: InfiniteScrollGrid(
-              items: viewModel.products,
+              items: viewModel.variants,
               onLoadMore: viewModel.loadMoreCatalog,
               hasMore: viewModel.hasMoreProducts,
               isLoadingInitial: viewModel.isLoading,
@@ -81,13 +81,13 @@ class PurchaseCatalogPane extends StatelessWidget {
                 crossAxisSpacing: 12,
                 mainAxisSpacing: 12,
               ),
-              itemBuilder: (context, product) {
-                return ProductTile(
-                  product: product,
+              itemBuilder: (context, variant) {
+                return ProductTile.variant(
+                  variant: variant,
                   showPrice: false,
                   onTap: viewModel.isSubmitting
                       ? null
-                      : () => unawaited(viewModel.addProduct(product)),
+                      : () => unawaited(viewModel.addVariant(variant)),
                 );
               },
             ),
@@ -100,9 +100,9 @@ class PurchaseCatalogPane extends StatelessWidget {
   Future<bool> _addBarcode(BuildContext context, String barcode) async {
     final messenger = ScaffoldMessenger.of(context);
     final l10n = AppLocalizations.of(context)!;
-    Product? product;
+    ProductVariant? variant;
     try {
-      product = await resolveOrCreatePurchaseProduct(
+      variant = await resolveOrCreatePurchaseVariant(
         context,
         viewModel: viewModel,
         barcode: barcode,
@@ -116,10 +116,10 @@ class PurchaseCatalogPane extends StatelessWidget {
         ..showSnackBar(SnackBar(content: Text(l10n.barcodeScanError)));
       return false;
     }
-    if (product == null) {
+    if (variant == null) {
       return false;
     }
-    await viewModel.addProduct(product);
+    await viewModel.addVariant(variant);
     return true;
   }
 
@@ -127,7 +127,7 @@ class PurchaseCatalogPane extends StatelessWidget {
     final entries = await showCameraBarcodeScannerSheet(
       context,
       mode: CameraBarcodeScannerMode.multiple,
-      lookupProduct: viewModel.findProductByBarcode,
+      lookupProduct: viewModel.findVariantByBarcode,
       createMissingProduct: (barcode) {
         return showPurchaseQuickProductSheet(
           context,
@@ -141,7 +141,7 @@ class PurchaseCatalogPane extends StatelessWidget {
       return;
     }
     for (final entry in entries) {
-      await viewModel.addProduct(entry.product, quantity: entry.quantity);
+      await viewModel.addVariant(entry.variant, quantity: entry.quantity);
     }
   }
 }

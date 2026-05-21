@@ -1,6 +1,10 @@
 import '../models/product.dart';
 import '../models/product_category.dart';
+import '../models/product_draft.dart';
 import '../models/product_page.dart';
+import '../models/product_variant.dart';
+import '../models/product_variant_draft.dart';
+import '../models/product_variant_page.dart';
 import '../models/query.dart';
 import 'api_session.dart';
 

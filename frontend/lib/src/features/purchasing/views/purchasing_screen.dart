@@ -5,7 +5,7 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../core/authorization.dart';
 import '../../../data/models/pos_user.dart';
-import '../../../data/models/product.dart';
+import '../../../data/models/product_variant.dart';
 import '../../../data/repositories/contact_repository.dart';
 import '../../../shared/app_navigation_drawer.dart';
 import '../../../shared/authorization_guards.dart';
@@ -171,9 +171,9 @@ class _PurchasingWorkspace extends StatelessWidget {
   Future<void> _addBarcode(BuildContext context, String barcode) async {
     final messenger = ScaffoldMessenger.of(context);
     final l10n = AppLocalizations.of(context)!;
-    Product? product;
+    ProductVariant? variant;
     try {
-      product = await resolveOrCreatePurchaseProduct(
+      variant = await resolveOrCreatePurchaseVariant(
         context,
         viewModel: viewModel,
         barcode: barcode,
@@ -187,9 +187,9 @@ class _PurchasingWorkspace extends StatelessWidget {
         ..showSnackBar(SnackBar(content: Text(l10n.barcodeScanError)));
       return;
     }
-    if (product == null) {
+    if (variant == null) {
       return;
     }
-    await viewModel.addProduct(product);
+    await viewModel.addVariant(variant);
   }
 }

@@ -8,7 +8,13 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from apps.core.permissions import HasPointyPermission
-from .models import Product, ProductCategory, ProductVariant, VariantOption, VariantOptionValue
+from .models import (
+    Product,
+    ProductCategory,
+    ProductVariant,
+    VariantOption,
+    VariantOptionValue,
+)
 from .serializers import (
     ProductCategorySerializer,
     ProductSerializer,
@@ -27,6 +33,52 @@ class ProductCategoryFilter(django_filters.FilterSet):
 
     def filter_root(self, queryset, name, value):
         return queryset.filter(parent__isnull=bool(value))
+
+
+def requested_category_ids(query_params):
+    raw_values = []
+    raw_values.extend(query_params.getlist("category"))
+    raw_values.extend(query_params.getlist("categories"))
+    category_ids = []
+    for raw_value in raw_values:
+        for value in raw_value.split(","):
+            value = value.strip()
+            if value.isdigit():
+                category_ids.append(int(value))
+    return category_ids
+
+
+def category_ids_with_descendants(category_ids):
+    category_ids = set(category_ids)
+    pending_ids = set(category_ids)
+    while pending_ids:
+        child_ids = set(
+            ProductCategory.objects.filter(parent_id__in=pending_ids).values_list(
+                "id",
+                flat=True,
+            )
+        )
+        pending_ids = child_ids - category_ids
+        category_ids.update(child_ids)
+    return category_ids
+
+
+class ProductVariantFilter(django_filters.FilterSet):
+    category = django_filters.CharFilter(method="filter_category")
+    categories = django_filters.CharFilter(method="filter_category")
+
+    class Meta:
+        model = ProductVariant
+        fields = ("product", "is_active", "is_default", "barcode", "sku")
+
+    def filter_category(self, queryset, name, value):
+        category_ids = requested_category_ids(self.request.query_params)
+        if not category_ids:
+            return queryset
+        category_ids = category_ids_with_descendants(category_ids)
+        return queryset.filter(
+            product__categories__id__in=category_ids,
+        ).distinct()
 
 
 class ProductCategoryViewSet(viewsets.ModelViewSet):
@@ -121,30 +173,10 @@ class ProductViewSet(viewsets.ModelViewSet):
         return queryset.filter(variants__barcode=barcode).distinct()
 
     def _requested_category_ids(self):
-        raw_values = []
-        raw_values.extend(self.request.query_params.getlist("category"))
-        raw_values.extend(self.request.query_params.getlist("categories"))
-        category_ids = []
-        for raw_value in raw_values:
-            for value in raw_value.split(","):
-                value = value.strip()
-                if value.isdigit():
-                    category_ids.append(int(value))
-        return category_ids
+        return requested_category_ids(self.request.query_params)
 
     def _category_ids_with_descendants(self, category_ids):
-        category_ids = set(category_ids)
-        pending_ids = set(category_ids)
-        while pending_ids:
-            child_ids = set(
-                ProductCategory.objects.filter(parent_id__in=pending_ids).values_list(
-                    "id",
-                    flat=True,
-                )
-            )
-            pending_ids = child_ids - category_ids
-            category_ids.update(child_ids)
-        return category_ids
+        return category_ids_with_descendants(category_ids)
 
     def _with_variant_rollups(self, queryset):
         return queryset.annotate(
@@ -258,7 +290,7 @@ class ProductVariantViewSet(viewsets.ModelViewSet):
         "option_values",
         "option_values__option",
     )
-    filterset_fields = ("product", "is_active", "is_default", "barcode", "sku")
+    filterset_class = ProductVariantFilter
     search_fields = ("sku", "barcode", "name", "product__name")
     ordering_fields = ("product__name", "name", "sku", "unit_price", "created_at")
 

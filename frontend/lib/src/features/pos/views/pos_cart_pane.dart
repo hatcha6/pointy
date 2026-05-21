@@ -103,11 +103,11 @@ class PosCartPane extends StatelessWidget {
                                 line: line,
                                 onAdd: isCartLocked
                                     ? null
-                                    : () => viewModel.addProduct(line.product),
+                                    : () => viewModel.addVariant(line.variant),
                                 onRemove: isCartLocked
                                     ? null
-                                    : () => viewModel.decrementProduct(
-                                        line.product,
+                                    : () => viewModel.decrementVariant(
+                                        line.variant,
                                       ),
                               );
                             },

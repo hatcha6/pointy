@@ -4,37 +4,38 @@ import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
-import '../../data/models/product.dart';
+import '../../data/models/product_variant.dart';
 import '../formatters.dart';
 
 enum CameraBarcodeScannerMode { single, multiple }
 
-class CameraProductScanEntry {
-  const CameraProductScanEntry({required this.product, required this.quantity});
+class CameraVariantScanEntry {
+  const CameraVariantScanEntry({required this.variant, required this.quantity});
 
-  final Product product;
+  final ProductVariant variant;
   final int quantity;
 
-  CameraProductScanEntry copyWith({int? quantity}) {
-    return CameraProductScanEntry(
-      product: product,
+  CameraVariantScanEntry copyWith({int? quantity}) {
+    return CameraVariantScanEntry(
+      variant: variant,
       quantity: quantity ?? this.quantity,
     );
   }
 }
 
-typedef CameraProductLookup = Future<Product?> Function(String barcode);
-typedef CameraMissingProductCreator = Future<Product?> Function(String barcode);
+typedef CameraVariantLookup = Future<ProductVariant?> Function(String barcode);
+typedef CameraMissingVariantCreator =
+    Future<ProductVariant?> Function(String barcode);
 
-Future<List<CameraProductScanEntry>?> showCameraBarcodeScannerSheet(
+Future<List<CameraVariantScanEntry>?> showCameraBarcodeScannerSheet(
   BuildContext context, {
   required CameraBarcodeScannerMode mode,
-  required CameraProductLookup lookupProduct,
-  CameraMissingProductCreator? createMissingProduct,
+  required CameraVariantLookup lookupProduct,
+  CameraMissingVariantCreator? createMissingProduct,
   bool enableQuantity = false,
   int initialQuantity = 1,
 }) {
-  return showModalBottomSheet<List<CameraProductScanEntry>>(
+  return showModalBottomSheet<List<CameraVariantScanEntry>>(
     context: context,
     isScrollControlled: true,
     showDragHandle: true,
@@ -65,8 +66,8 @@ class CameraBarcodeScannerSheet extends StatefulWidget {
   });
 
   final CameraBarcodeScannerMode mode;
-  final CameraProductLookup lookupProduct;
-  final CameraMissingProductCreator? createMissingProduct;
+  final CameraVariantLookup lookupProduct;
+  final CameraMissingVariantCreator? createMissingProduct;
   final bool enableQuantity;
   final int initialQuantity;
 
@@ -77,7 +78,7 @@ class CameraBarcodeScannerSheet extends StatefulWidget {
 
 class _CameraBarcodeScannerSheetState extends State<CameraBarcodeScannerSheet> {
   late final MobileScannerController _controller;
-  final List<CameraProductScanEntry> _entries = [];
+  final List<CameraVariantScanEntry> _entries = [];
   late int _scanQuantity;
   bool _isClosing = false;
   bool _isResolving = false;
@@ -247,9 +248,9 @@ class _CameraBarcodeScannerSheetState extends State<CameraBarcodeScannerSheet> {
       _statusMessage = l10n.cameraScannerResolvingProduct(code);
     });
 
-    Product? product;
+    ProductVariant? variant;
     try {
-      product = await widget.lookupProduct(code);
+      variant = await widget.lookupProduct(code);
     } on Exception {
       if (!mounted) {
         return;
@@ -266,7 +267,7 @@ class _CameraBarcodeScannerSheetState extends State<CameraBarcodeScannerSheet> {
       return;
     }
 
-    if (product == null) {
+    if (variant == null) {
       final createMissingProduct = widget.createMissingProduct;
       if (createMissingProduct != null) {
         setState(() {
@@ -275,12 +276,12 @@ class _CameraBarcodeScannerSheetState extends State<CameraBarcodeScannerSheet> {
           _statusMessage = l10n.barcodeScanNotFound(code);
         });
 
-        final createdProduct = await createMissingProduct(code);
+        final createdVariant = await createMissingProduct(code);
         if (!mounted) {
           return;
         }
-        if (createdProduct != null) {
-          _recordProduct(createdProduct);
+        if (createdVariant != null) {
+          _recordVariant(createdVariant);
           return;
         }
       }
@@ -293,10 +294,10 @@ class _CameraBarcodeScannerSheetState extends State<CameraBarcodeScannerSheet> {
       return;
     }
 
-    _recordProduct(product);
+    _recordVariant(variant);
   }
 
-  void _recordProduct(Product product) {
+  void _recordVariant(ProductVariant variant) {
     final l10n = AppLocalizations.of(context)!;
     final quantity = widget.enableQuantity ? _scanQuantity : 1;
     if (widget.mode == CameraBarcodeScannerMode.single) {
@@ -306,17 +307,17 @@ class _CameraBarcodeScannerSheetState extends State<CameraBarcodeScannerSheet> {
       _isClosing = true;
       Navigator.of(
         context,
-      ).pop([CameraProductScanEntry(product: product, quantity: quantity)]);
+      ).pop([CameraVariantScanEntry(variant: variant, quantity: quantity)]);
       return;
     }
 
     setState(() {
       final index = _entries.indexWhere(
-        (entry) => entry.product.sellableId == product.sellableId,
+        (entry) => entry.variant.id == variant.id,
       );
       if (index == -1) {
         _entries.add(
-          CameraProductScanEntry(product: product, quantity: quantity),
+          CameraVariantScanEntry(variant: variant, quantity: quantity),
         );
       } else {
         final entry = _entries[index];
@@ -326,14 +327,14 @@ class _CameraBarcodeScannerSheetState extends State<CameraBarcodeScannerSheet> {
       }
       _isResolving = false;
       _isStatusError = false;
-      _statusMessage = l10n.barcodeScanAdded(product.name);
+      _statusMessage = l10n.barcodeScanAdded(variant.displayLabel);
     });
   }
 
-  void _updateEntryQuantity(int productId, int quantity) {
+  void _updateEntryQuantity(int variantId, int quantity) {
     setState(() {
       final index = _entries.indexWhere(
-        (entry) => entry.product.sellableId == productId,
+        (entry) => entry.variant.id == variantId,
       );
       if (index == -1) {
         return;
@@ -344,9 +345,9 @@ class _CameraBarcodeScannerSheetState extends State<CameraBarcodeScannerSheet> {
     });
   }
 
-  void _removeEntry(int productId) {
+  void _removeEntry(int variantId) {
     setState(() {
-      _entries.removeWhere((entry) => entry.product.sellableId == productId);
+      _entries.removeWhere((entry) => entry.variant.id == variantId);
     });
   }
 
@@ -363,9 +364,9 @@ class _ScannedEntriesList extends StatelessWidget {
     required this.onRemove,
   });
 
-  final List<CameraProductScanEntry> entries;
+  final List<CameraVariantScanEntry> entries;
   final bool enableQuantity;
-  final void Function(int productId, int quantity) onQuantityChanged;
+  final void Function(int variantId, int quantity) onQuantityChanged;
   final ValueChanged<int> onRemove;
 
   @override
@@ -402,12 +403,12 @@ class _ScannedEntriesList extends StatelessWidget {
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           Text(
-                            entry.product.name,
+                            entry.variant.displayLabel,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
                           Text(
-                            '${entry.product.effectiveSku} · ${formatMoney(entry.product.effectiveUnitPrice)}',
+                            '${entry.variant.sku} · ${formatMoney(entry.variant.unitPrice)}',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: Theme.of(context).textTheme.bodySmall,
@@ -423,12 +424,12 @@ class _ScannedEntriesList extends StatelessWidget {
                       _CompactQuantityStepper(
                         value: entry.quantity,
                         onChanged: (value) {
-                          onQuantityChanged(entry.product.sellableId, value);
+                          onQuantityChanged(entry.variant.id, value);
                         },
                       ),
                     IconButton(
                       tooltip: l10n.removeScannedCodeTooltip,
-                      onPressed: () => onRemove(entry.product.sellableId),
+                      onPressed: () => onRemove(entry.variant.id),
                       icon: const Icon(Icons.close),
                       visualDensity: VisualDensity.compact,
                     ),

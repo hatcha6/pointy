@@ -104,7 +104,7 @@ extension PosRegisterSessionActions on PosViewModel {
         _activeRegisterSession = null;
         _availableRegisterSession = null;
         _cart.clear();
-        _products = [];
+        _variants = [];
         _isClosingRegisterSession = false;
         _notifyChanged();
         await loadCurrentRegisterSession();

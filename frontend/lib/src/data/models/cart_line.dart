@@ -1,16 +1,16 @@
-import 'product.dart';
+import 'product_variant.dart';
 
 class CartLine {
-  const CartLine({required this.product, required this.quantity});
+  const CartLine({required this.variant, required this.quantity});
 
-  final Product product;
+  final ProductVariant variant;
   final int quantity;
 
-  double get subtotal => product.effectiveUnitPrice * quantity;
+  double get subtotal => variant.unitPrice * quantity;
 
   double get total => subtotal;
 
   CartLine copyWith({int? quantity}) {
-    return CartLine(product: product, quantity: quantity ?? this.quantity);
+    return CartLine(variant: variant, quantity: quantity ?? this.quantity);
   }
 }

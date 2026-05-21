@@ -492,6 +492,33 @@ class ProductApiTests(TestCase):
         self.assertEqual(response.data["product"], product.pk)
         self.assertEqual(response.data["product_detail"]["id"], product.pk)
 
+    def test_product_variant_endpoint_filters_by_category_descendants(self):
+        parent = ProductCategory.objects.create(name="مشروبات")
+        child = ProductCategory.objects.create(name="قهوة", parent=parent)
+        coffee = Product.objects.create(
+            sku="COF-100",
+            name="قهوة عربية",
+            unit_price=Decimal("5.50"),
+        )
+        tea = Product.objects.create(
+            sku="TEA-100",
+            name="شاي",
+            unit_price=Decimal("2.00"),
+        )
+        coffee.categories.add(child)
+        tea.categories.add(ProductCategory.objects.create(name="شاي"))
+
+        response = self.client.get(
+            reverse("product-variant-list"),
+            {"category": parent.pk},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            [variant["id"] for variant in response.data["results"]],
+            [coffee.default_variant.pk],
+        )
+
     def test_nested_product_variants_returns_only_selected_product_variants(self):
         product = Product.objects.create(
             sku="COF-100",

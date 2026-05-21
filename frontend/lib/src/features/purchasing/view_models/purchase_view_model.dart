@@ -5,8 +5,10 @@ import 'package:flutter/foundation.dart';
 import '../../../core/result.dart';
 import '../../../data/models/contact.dart';
 import '../../../data/models/product.dart';
-import '../../../data/models/product_page.dart';
+import '../../../data/models/product_draft.dart';
 import '../../../data/models/product_query.dart';
+import '../../../data/models/product_variant.dart';
+import '../../../data/models/product_variant_page.dart';
 import '../../../data/models/purchase_submission.dart';
 import '../../../data/repositories/catalog_repository.dart';
 import '../../../data/repositories/purchase_repository.dart';
@@ -21,7 +23,7 @@ class PurchaseViewModel extends ChangeNotifier {
 
   CatalogRepository get catalogRepository => _catalogRepository;
 
-  List<Product> _products = [];
+  List<ProductVariant> _variants = [];
   final List<PurchaseDraftLine> _draft = [];
   final Map<int, double> _lastCostByVariantId = {};
   SupplierContact? _selectedSupplier;
@@ -31,7 +33,7 @@ class PurchaseViewModel extends ChangeNotifier {
   bool _isCreatingProduct = false;
   bool _receiveImmediately = true;
   bool _hasMoreProducts = true;
-  int _nextProductPage = 1;
+  int _nextVariantPage = 1;
   String _supplierInvoiceNumber = '';
   String _supplierInvoiceDateInput = '';
   double _shippingCost = 0;
@@ -49,7 +51,7 @@ class PurchaseViewModel extends ChangeNotifier {
     availability: ProductAvailabilityFilter.active,
   );
 
-  List<Product> get products => List.unmodifiable(_products);
+  List<ProductVariant> get variants => List.unmodifiable(_variants);
   List<PurchaseDraftLine> get draft => List.unmodifiable(_draft);
   SupplierContact? get selectedSupplier => _selectedSupplier;
   bool get isLoading => _isLoading;
@@ -94,21 +96,21 @@ class PurchaseViewModel extends ChangeNotifier {
   Future<void> loadCatalog() async {
     _isLoading = true;
     _errorMessage = null;
-    _nextProductPage = 1;
+    _nextVariantPage = 1;
     _hasMoreProducts = true;
     notifyListeners();
 
-    final result = await _catalogRepository.loadProducts(
+    final result = await _catalogRepository.loadProductVariants(
       query: _query,
-      page: _nextProductPage,
+      page: _nextVariantPage,
     );
     switch (result) {
-      case Ok<ProductPage>():
-        _products = result.value.products;
+      case Ok<ProductVariantPage>():
+        _variants = result.value.variants;
         _hasMoreProducts = result.value.hasMore;
-        _nextProductPage = 2;
-      case Error<ProductPage>():
-        _products = _catalogRepository.sampleProducts(_query);
+        _nextVariantPage = 2;
+      case Error<ProductVariantPage>():
+        _variants = _catalogRepository.sampleProductVariants(_query);
         _hasMoreProducts = false;
         _errorMessage = 'sample_catalog_notice';
     }
@@ -125,16 +127,16 @@ class PurchaseViewModel extends ChangeNotifier {
     _isLoadingMore = true;
     notifyListeners();
 
-    final result = await _catalogRepository.loadProducts(
+    final result = await _catalogRepository.loadProductVariants(
       query: _query,
-      page: _nextProductPage,
+      page: _nextVariantPage,
     );
     switch (result) {
-      case Ok<ProductPage>():
-        _products = [..._products, ...result.value.products];
+      case Ok<ProductVariantPage>():
+        _variants = [..._variants, ...result.value.variants];
         _hasMoreProducts = result.value.hasMore;
-        _nextProductPage += 1;
-      case Error<ProductPage>():
+        _nextVariantPage += 1;
+      case Error<ProductVariantPage>():
         _errorMessage = 'sample_catalog_notice';
     }
 
@@ -158,23 +160,23 @@ class PurchaseViewModel extends ChangeNotifier {
     await loadCatalog();
   }
 
-  Future<Product?> findProductByBarcode(String barcode) async {
+  Future<ProductVariant?> findVariantByBarcode(String barcode) async {
     final normalizedBarcode = barcode.trim();
     if (normalizedBarcode.isEmpty) {
       return null;
     }
 
-    final result = await _catalogRepository.findProductByBarcode(
+    final result = await _catalogRepository.findProductVariantByBarcode(
       normalizedBarcode,
       activeOnly: true,
     );
     return switch (result) {
-      Ok<Product?>(:final value) => value,
-      Error<Product?>() => throw Exception('barcode lookup failed'),
+      Ok<ProductVariant?>(:final value) => value,
+      Error<ProductVariant?>() => throw Exception('barcode lookup failed'),
     };
   }
 
-  Future<Product?> createQuickProduct(ProductDraft draft) async {
+  Future<ProductVariant?> createQuickProduct(ProductDraft draft) async {
     if (_isCreatingProduct || _isSubmitting) {
       return null;
     }
@@ -188,7 +190,7 @@ class PurchaseViewModel extends ChangeNotifier {
         await loadCatalog();
         _isCreatingProduct = false;
         notifyListeners();
-        return result.value;
+        return result.value.defaultVariant;
       case Error<Product>():
         _isCreatingProduct = false;
         notifyListeners();
@@ -196,8 +198,8 @@ class PurchaseViewModel extends ChangeNotifier {
     }
   }
 
-  Future<void> addProduct(
-    Product product, {
+  Future<void> addVariant(
+    ProductVariant variant, {
     int quantity = 1,
     double? unitCost,
   }) async {
@@ -205,17 +207,15 @@ class PurchaseViewModel extends ChangeNotifier {
       return;
     }
 
-    final index = _draft.indexWhere(
-      (line) => line.product.sellableId == product.sellableId,
-    );
+    final index = _draft.indexWhere((line) => line.variant.id == variant.id);
     if (index == -1) {
-      final cost = unitCost ?? await _lastCostForProduct(product);
+      final cost = unitCost ?? await _lastCostForVariant(variant);
       if (_isSubmitting) {
         return;
       }
       _draft.add(
         PurchaseDraftLine(
-          product: product,
+          variant: variant,
           quantity: quantity.clamp(1, 999),
           unitCost: cost,
         ),
@@ -231,14 +231,12 @@ class PurchaseViewModel extends ChangeNotifier {
     unawaited(refreshDiscountPreview());
   }
 
-  void decrementProduct(Product product) {
+  void decrementVariant(ProductVariant variant) {
     if (_isSubmitting) {
       return;
     }
 
-    final index = _draft.indexWhere(
-      (line) => line.product.sellableId == product.sellableId,
-    );
+    final index = _draft.indexWhere((line) => line.variant.id == variant.id);
     if (index == -1) {
       return;
     }
@@ -253,17 +251,15 @@ class PurchaseViewModel extends ChangeNotifier {
     unawaited(refreshDiscountPreview());
   }
 
-  void updateLineCost(Product product, double unitCost) {
+  void updateLineCost(ProductVariant variant, double unitCost) {
     if (_isSubmitting || unitCost < 0) {
       return;
     }
-    final index = _draft.indexWhere(
-      (line) => line.product.sellableId == product.sellableId,
-    );
+    final index = _draft.indexWhere((line) => line.variant.id == variant.id);
     if (index == -1) {
       return;
     }
-    _lastCostByVariantId[product.sellableId] = unitCost;
+    _lastCostByVariantId[variant.id] = unitCost;
     _draft[index] = _draft[index].copyWith(unitCost: unitCost);
     notifyListeners();
     unawaited(refreshDiscountPreview());
@@ -426,22 +422,22 @@ class PurchaseViewModel extends ChangeNotifier {
     return result;
   }
 
-  void rememberProductCost(Product product, double unitCost) {
+  void rememberVariantCost(ProductVariant variant, double unitCost) {
     if (unitCost < 0) {
       return;
     }
-    _lastCostByVariantId[product.sellableId] = unitCost;
+    _lastCostByVariantId[variant.id] = unitCost;
   }
 
-  Future<double> _lastCostForProduct(Product product) async {
-    final variantId = product.sellableId;
+  Future<double> _lastCostForVariant(ProductVariant variant) async {
+    final variantId = variant.id;
     final cached = _lastCostByVariantId[variantId];
     if (cached != null) {
       return cached;
     }
 
     final result = await _purchaseRepository.loadLastProductCost(
-      product.id,
+      variant.productId,
       variantId: variantId,
     );
     final cost = switch (result) {

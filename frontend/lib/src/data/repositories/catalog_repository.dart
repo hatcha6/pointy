@@ -2,8 +2,12 @@ import '../../core/result.dart';
 import '../models/product.dart';
 import '../models/product_category.dart';
 import '../models/product_category_query.dart';
+import '../models/product_draft.dart';
 import '../models/product_page.dart';
 import '../models/product_query.dart';
+import '../models/product_variant.dart';
+import '../models/product_variant_draft.dart';
+import '../models/product_variant_page.dart';
 import '../services/pos_api_service.dart';
 
 class CatalogRepository {
@@ -20,6 +24,10 @@ class CatalogRepository {
 
   Future<Result<Product>> createProduct(ProductDraft draft) async {
     return Result.guard(() => _service.createProduct(draft));
+  }
+
+  Future<Result<Product>> loadProduct(int id) async {
+    return Result.guard(() => _service.fetchProduct(id));
   }
 
   Future<Result<ProductVariantPage>> loadProductVariants({
@@ -46,6 +54,28 @@ class CatalogRepository {
     return Result.guard(() => _service.createProductVariant(draft));
   }
 
+  Future<Result<ProductVariant>> createVariantForProduct(
+    int productId,
+    ProductVariantDraft draft,
+  ) async {
+    return Result.guard(
+      () => _service.createVariantForProduct(productId, draft),
+    );
+  }
+
+  Future<Result<ProductVariant>> updateProductVariant({
+    required int id,
+    required ProductVariantDraft draft,
+  }) async {
+    return Result.guard(
+      () => _service.updateProductVariant(id: id, draft: draft),
+    );
+  }
+
+  Future<Result<void>> deleteProductVariant(int id) async {
+    return Result.guard(() => _service.deleteProductVariant(id));
+  }
+
   Future<Result<ProductCategoryPage>> loadProductCategories({
     ProductCategoryQuery query = const ProductCategoryQuery(),
     int page = 1,
@@ -61,7 +91,7 @@ class CatalogRepository {
     return Result.guard(() => _service.createProductCategory(draft));
   }
 
-  Future<Result<Product?>> findProductByBarcode(
+  Future<Result<ProductVariant?>> findProductVariantByBarcode(
     String barcode, {
     bool activeOnly = true,
   }) async {
@@ -81,11 +111,114 @@ class CatalogRepository {
       final page = await _service.fetchProductVariants(query: query, page: 1);
       for (final variant in page.variants) {
         if (variant.barcode.trim() == normalizedBarcode) {
-          return Product.fromVariant(variant);
+          return variant;
         }
       }
       return null;
     });
+  }
+
+  List<ProductVariant> sampleProductVariants(ProductQuery query) {
+    final variants = const [
+      ProductVariant(
+        id: 1,
+        productId: 1,
+        productName: 'قهوة البيت',
+        displayName: 'قهوة البيت',
+        fullName: 'قهوة البيت',
+        sku: 'COF-001',
+        unitPrice: 3.50,
+        barcode: '1000001',
+        quantityOnHand: 12,
+        isDefault: true,
+      ),
+      ProductVariant(
+        id: 2,
+        productId: 2,
+        productName: 'شاي بالنعناع',
+        displayName: 'شاي بالنعناع',
+        fullName: 'شاي بالنعناع',
+        sku: 'TEA-001',
+        unitPrice: 2.75,
+        barcode: '1000002',
+        quantityOnHand: 12,
+        isDefault: true,
+      ),
+      ProductVariant(
+        id: 3,
+        productId: 3,
+        productName: 'لوح تمر',
+        displayName: 'لوح تمر',
+        fullName: 'لوح تمر',
+        sku: 'SNK-012',
+        unitPrice: 1.95,
+        barcode: '1000003',
+        quantityOnHand: 12,
+        isDefault: true,
+      ),
+      ProductVariant(
+        id: 4,
+        productId: 4,
+        productName: 'كرواسون زعتر',
+        displayName: 'كرواسون زعتر',
+        fullName: 'كرواسون زعتر',
+        sku: 'BKR-044',
+        unitPrice: 4.25,
+        barcode: '1000004',
+        quantityOnHand: 12,
+        isDefault: true,
+      ),
+      ProductVariant(
+        id: 5,
+        productId: 5,
+        productName: 'عصير برتقال',
+        displayName: 'عصير برتقال',
+        fullName: 'عصير برتقال',
+        sku: 'JCE-002',
+        unitPrice: 3.25,
+        barcode: '1000005',
+        quantityOnHand: 12,
+        isDefault: true,
+      ),
+      ProductVariant(
+        id: 6,
+        productId: 6,
+        productName: 'ساندويتش حلومي',
+        displayName: 'ساندويتش حلومي',
+        fullName: 'ساندويتش حلومي',
+        sku: 'SND-019',
+        unitPrice: 6.80,
+        barcode: '1000006',
+        quantityOnHand: 12,
+        isDefault: true,
+      ),
+    ];
+
+    final search = query.search.trim().toLowerCase();
+    final barcode = query.barcode.trim();
+    final filtered = variants
+        .where((variant) {
+          final matchesSearch =
+              search.isEmpty ||
+              variant.displayLabel.toLowerCase().contains(search) ||
+              variant.productName.toLowerCase().contains(search) ||
+              variant.sku.toLowerCase().contains(search) ||
+              variant.barcode.toLowerCase().contains(search);
+          final matchesBarcode = barcode.isEmpty || variant.barcode == barcode;
+          return matchesSearch && matchesBarcode;
+        })
+        .toList(growable: false);
+
+    final sorted = [...filtered];
+    sorted.sort((a, b) {
+      return switch (query.ordering) {
+        ProductOrdering.name => a.displayLabel.compareTo(b.displayLabel),
+        ProductOrdering.priceAsc => a.unitPrice.compareTo(b.unitPrice),
+        ProductOrdering.priceDesc => b.unitPrice.compareTo(a.unitPrice),
+        ProductOrdering.newest => b.id.compareTo(a.id),
+      };
+    });
+    return sorted;
   }
 
   List<Product> sampleProducts(ProductQuery query) {

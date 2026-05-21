@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
-import '../../../data/models/product.dart';
+import '../../../data/models/product_draft.dart';
 import '../../../shared/async_selection/async_multi_select_picker.dart';
 import '../../../shared/product_category_picker.dart';
 import '../view_models/catalog_view_model.dart';

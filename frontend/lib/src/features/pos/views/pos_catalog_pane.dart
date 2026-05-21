@@ -3,7 +3,7 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../core/authorization.dart';
 import '../../../core/result.dart';
-import '../../../data/models/product.dart';
+import '../../../data/models/product_variant.dart';
 import '../../../shared/authorization_guards.dart';
 import '../../../shared/barcode/camera_barcode_scanner_sheet.dart';
 import '../../../shared/infinite_scroll_grid.dart';
@@ -96,15 +96,15 @@ class _PosCatalogGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final products = viewModel.products;
+    final variants = viewModel.variants;
 
     return CheckoutCapabilityBuilder(
       capabilities: capabilities,
       builder: (context, canCheckout) {
         return LayoutBuilder(
           builder: (context, constraints) {
-            return InfiniteScrollGrid<Product>(
-              items: products,
+            return InfiniteScrollGrid<ProductVariant>(
+              items: variants,
               onLoadMore: viewModel.loadMoreCatalog,
               hasMore: viewModel.hasMoreProducts,
               isLoadingInitial: viewModel.isLoading,
@@ -118,12 +118,12 @@ class _PosCatalogGrid extends StatelessWidget {
                 crossAxisSpacing: _catalogGridSpacing,
                 mainAxisSpacing: _catalogGridSpacing,
               ),
-              itemBuilder: (context, product) {
-                return ProductTile(
-                  key: ValueKey(product.sellableId),
-                  product: product,
+              itemBuilder: (context, variant) {
+                return ProductTile.variant(
+                  key: ValueKey(variant.id),
+                  variant: variant,
                   onTap: canCheckout
-                      ? () => viewModel.addProduct(product)
+                      ? () => viewModel.addVariant(variant)
                       : null,
                 );
               },
@@ -242,18 +242,16 @@ class _PosProductLookupControls extends StatelessWidget {
       if (viewModel.isCheckingOut) {
         return;
       }
-      viewModel.addProduct(entry.product, quantity: entry.quantity);
+      viewModel.addVariant(entry.variant, quantity: entry.quantity);
     }
   }
 
-  Future<Product?> _lookupProductByBarcode(String barcode) async {
-    final result = await viewModel.catalogRepository.findProductByBarcode(
-      barcode,
-      activeOnly: true,
-    );
+  Future<ProductVariant?> _lookupProductByBarcode(String barcode) async {
+    final result = await viewModel.catalogRepository
+        .findProductVariantByBarcode(barcode, activeOnly: true);
     return switch (result) {
-      Ok<Product?>(:final value) => value,
-      Error<Product?>() => throw Exception('barcode lookup failed'),
+      Ok<ProductVariant?>(:final value) => value,
+      Error<ProductVariant?>() => throw Exception('barcode lookup failed'),
     };
   }
 }

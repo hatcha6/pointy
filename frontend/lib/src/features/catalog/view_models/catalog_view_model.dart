@@ -2,17 +2,19 @@ import 'package:flutter/foundation.dart';
 
 import '../../../core/result.dart';
 import '../../../data/models/product.dart';
+import '../../../data/models/product_draft.dart';
 import '../../../data/models/product_page.dart';
 import '../../../data/models/product_query.dart';
+import '../../../data/models/product_variant.dart';
 import '../../../data/repositories/catalog_repository.dart';
 
 enum CatalogBarcodeLookupStatus { found, notFound, error }
 
 class CatalogBarcodeLookupOutcome {
-  const CatalogBarcodeLookupOutcome._({required this.status, this.product});
+  const CatalogBarcodeLookupOutcome._({required this.status, this.variant});
 
-  const CatalogBarcodeLookupOutcome.found(Product product)
-    : this._(status: CatalogBarcodeLookupStatus.found, product: product);
+  const CatalogBarcodeLookupOutcome.found(ProductVariant variant)
+    : this._(status: CatalogBarcodeLookupStatus.found, variant: variant);
 
   const CatalogBarcodeLookupOutcome.notFound()
     : this._(status: CatalogBarcodeLookupStatus.notFound);
@@ -21,7 +23,12 @@ class CatalogBarcodeLookupOutcome {
     : this._(status: CatalogBarcodeLookupStatus.error);
 
   final CatalogBarcodeLookupStatus status;
-  final Product? product;
+  final ProductVariant? variant;
+
+  Product? get product {
+    final value = variant;
+    return value == null ? null : Product.fromVariant(value);
+  }
 }
 
 class CatalogViewModel extends ChangeNotifier {
@@ -114,7 +121,7 @@ class CatalogViewModel extends ChangeNotifier {
     await loadProducts();
   }
 
-  Future<CatalogBarcodeLookupOutcome> findProductByBarcode(
+  Future<CatalogBarcodeLookupOutcome> findVariantByBarcode(
     String barcode,
   ) async {
     final normalizedBarcode = barcode.trim();
@@ -122,16 +129,16 @@ class CatalogViewModel extends ChangeNotifier {
       return const CatalogBarcodeLookupOutcome.notFound();
     }
 
-    final result = await _catalogRepository.findProductByBarcode(
+    final result = await _catalogRepository.findProductVariantByBarcode(
       normalizedBarcode,
       activeOnly: false,
     );
     switch (result) {
-      case Ok<Product?>(:final value):
+      case Ok<ProductVariant?>(:final value):
         return value == null
             ? const CatalogBarcodeLookupOutcome.notFound()
             : CatalogBarcodeLookupOutcome.found(value);
-      case Error<Product?>():
+      case Error<ProductVariant?>():
         return const CatalogBarcodeLookupOutcome.error();
     }
   }

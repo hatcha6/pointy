@@ -1,20 +1,37 @@
 import 'package:flutter/material.dart';
 
 import '../data/models/product.dart';
+import '../data/models/product_variant.dart';
 import 'formatters.dart';
 import 'product_status_pill.dart';
 
 class ProductTile extends StatelessWidget {
-  const ProductTile({
+  ProductTile({
     super.key,
-    required this.product,
+    required Product product,
     required this.onTap,
     this.showPrice = true,
-  });
+  }) : title = product.sellableName,
+       sku = product.effectiveSku,
+       unitPrice = product.effectiveUnitPrice,
+       isActive = product.isActive;
 
-  final Product product;
+  ProductTile.variant({
+    super.key,
+    required ProductVariant variant,
+    required this.onTap,
+    this.showPrice = true,
+  }) : title = variant.displayLabel,
+       sku = variant.sku,
+       unitPrice = variant.unitPrice,
+       isActive = variant.isSellable;
+
   final VoidCallback? onTap;
   final bool showPrice;
+  final String title;
+  final String sku;
+  final double unitPrice;
+  final bool isActive;
 
   @override
   Widget build(BuildContext context) {
@@ -33,19 +50,19 @@ class ProductTile extends StatelessWidget {
                 children: [
                   Expanded(
                     child: Text(
-                      product.effectiveSku,
+                      sku,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.labelMedium,
                     ),
                   ),
-                  ProductStatusPill(isActive: product.isActive, compact: true),
+                  ProductStatusPill(isActive: isActive, compact: true),
                 ],
               ),
               const SizedBox(height: 10),
               Expanded(
                 child: Text(
-                  product.sellableName,
+                  title,
                   style: Theme.of(context).textTheme.titleMedium,
                   maxLines: 3,
                   overflow: TextOverflow.ellipsis,
@@ -54,7 +71,7 @@ class ProductTile extends StatelessWidget {
               if (showPrice) ...[
                 const SizedBox(height: 10),
                 Text(
-                  formatMoney(product.effectiveUnitPrice),
+                  formatMoney(unitPrice),
                   style: Theme.of(context).textTheme.titleSmall,
                 ),
               ],

@@ -5,7 +5,11 @@ import '../models/print_job.dart';
 import '../models/printer_config.dart';
 import '../models/product.dart';
 import '../models/product_category.dart';
+import '../models/product_draft.dart';
 import '../models/product_page.dart';
+import '../models/product_variant.dart';
+import '../models/product_variant_draft.dart';
+import '../models/product_variant_page.dart';
 import '../models/contact.dart';
 import '../models/dashboard.dart';
 import '../models/discount_rule.dart';
@@ -115,6 +119,10 @@ class PosApiService {
     return _catalog.createProduct(draft);
   }
 
+  Future<Product> fetchProduct(int id) {
+    return _catalog.fetchProduct(id);
+  }
+
   Future<ProductVariantPage> fetchProductVariants({
     required ModelQuery query,
     int page = 1,
@@ -131,6 +139,24 @@ class PosApiService {
 
   Future<ProductVariant> createProductVariant(ProductVariantDraft draft) {
     return _catalog.createProductVariant(draft);
+  }
+
+  Future<ProductVariant> createVariantForProduct(
+    int productId,
+    ProductVariantDraft draft,
+  ) {
+    return _catalog.createVariantForProduct(productId, draft);
+  }
+
+  Future<ProductVariant> updateProductVariant({
+    required int id,
+    required ProductVariantDraft draft,
+  }) {
+    return _catalog.updateProductVariant(id: id, draft: draft);
+  }
+
+  Future<void> deleteProductVariant(int id) {
+    return _catalog.deleteProductVariant(id);
   }
 
   Future<ProductCategoryPage> fetchProductCategories({

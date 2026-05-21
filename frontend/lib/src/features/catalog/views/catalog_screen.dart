@@ -4,6 +4,7 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 import '../../../core/authorization.dart';
 import '../../../data/models/product.dart';
 import '../../../data/models/pos_user.dart';
+import '../../../data/models/product_variant.dart';
 import '../../../data/repositories/inventory_repository.dart';
 import '../../../data/repositories/printing_repository.dart';
 import '../../../data/repositories/purchase_repository.dart';
@@ -148,7 +149,7 @@ class CatalogScreen extends StatelessWidget {
       return false;
     }
 
-    final outcome = await viewModel.findProductByBarcode(normalizedBarcode);
+    final outcome = await viewModel.findVariantByBarcode(normalizedBarcode);
     if (!context.mounted) {
       return false;
     }
@@ -186,7 +187,7 @@ class CatalogScreen extends StatelessWidget {
     }
     await openProductDetails(
       context,
-      product: entries.first.product,
+      product: Product.fromVariant(entries.first.variant),
       inventoryRepository: inventoryRepository,
       printingRepository: printingRepository,
       purchaseRepository: purchaseRepository,
@@ -194,10 +195,10 @@ class CatalogScreen extends StatelessWidget {
     );
   }
 
-  Future<Product?> _lookupProductByBarcode(String barcode) async {
-    final outcome = await viewModel.findProductByBarcode(barcode);
+  Future<ProductVariant?> _lookupProductByBarcode(String barcode) async {
+    final outcome = await viewModel.findVariantByBarcode(barcode);
     return switch (outcome.status) {
-      CatalogBarcodeLookupStatus.found => outcome.product,
+      CatalogBarcodeLookupStatus.found => outcome.variant,
       CatalogBarcodeLookupStatus.notFound => null,
       CatalogBarcodeLookupStatus.error => throw Exception(
         'barcode lookup failed',

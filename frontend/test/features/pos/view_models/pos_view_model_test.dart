@@ -5,9 +5,10 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:pointy_frontend/src/data/models/print_job.dart';
 import 'package:pointy_frontend/src/data/models/printer_config.dart';
-import 'package:pointy_frontend/src/data/models/product.dart';
 import 'package:pointy_frontend/src/data/models/product_page.dart';
 import 'package:pointy_frontend/src/data/models/product_query.dart';
+import 'package:pointy_frontend/src/data/models/product_variant.dart';
+import 'package:pointy_frontend/src/data/models/product_variant_page.dart';
 import 'package:pointy_frontend/src/data/models/query.dart';
 import 'package:pointy_frontend/src/data/models/register_session.dart';
 import 'package:pointy_frontend/src/data/models/sale_order.dart';
@@ -29,7 +30,7 @@ void main() {
       final apiService = _FakePosApiService(
         checkoutCompleter: checkoutCompleter,
         catalogPages: const {
-          1: [_coffee, _tea],
+          1: [_coffeeVariant, _teaVariant],
         },
       );
       final viewModel = _viewModel(apiService);
@@ -40,8 +41,8 @@ void main() {
       await viewModel.resumeRegisterSession();
       expect(viewModel.activeRegisterSession, isNotNull);
 
-      viewModel.addProduct(_coffee);
-      viewModel.addProduct(_coffee);
+      viewModel.addVariant(_coffeeVariant);
+      viewModel.addVariant(_coffeeVariant);
 
       expect(viewModel.cart, hasLength(1));
       expect(viewModel.cart.single.quantity, 2);
@@ -56,16 +57,16 @@ void main() {
       await _settle();
 
       expect(viewModel.isCheckingOut, isTrue);
-      expect(apiService.capturedCheckoutDraft?.lines.single.productId, 1);
+      expect(apiService.capturedCheckoutDraft?.lines.single.variantId, 101);
       expect(apiService.capturedCheckoutDraft?.lines.single.quantity, 2);
       expect(apiService.capturedCheckoutDraft?.payments.single.amount, 7);
 
-      viewModel.addProduct(_tea);
-      viewModel.decrementProduct(_coffee);
+      viewModel.addVariant(_teaVariant);
+      viewModel.decrementVariant(_coffeeVariant);
       viewModel.clearCart();
 
       expect(viewModel.cart, hasLength(1));
-      expect(viewModel.cart.single.product.id, 1);
+      expect(viewModel.cart.single.variant.id, 101);
       expect(viewModel.cart.single.quantity, 2);
 
       checkoutCompleter.complete(
@@ -74,7 +75,7 @@ void main() {
           lines: const [
             SaleOrderLine(
               id: 10,
-              productId: 1,
+              productId: 101,
               productName: 'قهوة البيت',
               quantity: 2,
               returnedQuantity: 0,
@@ -91,7 +92,7 @@ void main() {
       expect(outcome.isSuccess, isTrue);
       expect(viewModel.isCheckingOut, isFalse);
       expect(viewModel.cart, isEmpty);
-      expect(viewModel.products.first.quantityOnHand, 10);
+      expect(viewModel.variants.first.quantityOnHand, 10);
     },
   );
 
@@ -99,14 +100,23 @@ void main() {
     'search resets catalog pagination and load more appends results',
     () async {
       final apiService = _FakePosApiService(
-        onFetchProducts: (query, page) {
+        onFetchProductVariants: (query, page) {
           if (query.search == 'قهوة' && page == 1) {
-            return const ProductPage(products: [_coffee], hasMore: true);
+            return const ProductVariantPage(
+              variants: [_coffeeVariant],
+              hasMore: true,
+            );
           }
           if (query.search == 'قهوة' && page == 2) {
-            return const ProductPage(products: [_coffeeBeans], hasMore: false);
+            return const ProductVariantPage(
+              variants: [_coffeeBeansVariant],
+              hasMore: false,
+            );
           }
-          return const ProductPage(products: [_tea], hasMore: false);
+          return const ProductVariantPage(
+            variants: [_teaVariant],
+            hasMore: false,
+          );
         },
       );
       final viewModel = _viewModel(apiService);
@@ -119,7 +129,7 @@ void main() {
       await viewModel.updateSearch('قهوة');
 
       expect(viewModel.query.search, 'قهوة');
-      expect(viewModel.products.map((product) => product.id), [1]);
+      expect(viewModel.variants.map((variant) => variant.id), [101]);
       expect(apiService.catalogRequests.last.page, 1);
       expect(
         apiService.catalogRequests.last.query.availability,
@@ -128,7 +138,7 @@ void main() {
 
       await viewModel.loadMoreCatalog();
 
-      expect(viewModel.products.map((product) => product.id), [1, 3]);
+      expect(viewModel.variants.map((variant) => variant.id), [101, 103]);
       expect(apiService.catalogRequests.last.page, 2);
       expect(viewModel.hasMoreProducts, isFalse);
 
@@ -184,31 +194,43 @@ SaleOrder _saleOrder({
   );
 }
 
-const _coffee = Product(
-  id: 1,
+const _coffeeVariant = ProductVariant(
+  id: 101,
+  productId: 1,
+  productName: 'قهوة البيت',
+  displayName: 'قهوة البيت',
+  fullName: 'قهوة البيت',
   sku: 'COF-001',
-  name: 'قهوة البيت',
   unitPrice: 3.5,
   quantityOnHand: 12,
   barcode: '1000001',
+  isDefault: true,
 );
 
-const _tea = Product(
-  id: 2,
+const _teaVariant = ProductVariant(
+  id: 102,
+  productId: 2,
+  productName: 'شاي بالنعناع',
+  displayName: 'شاي بالنعناع',
+  fullName: 'شاي بالنعناع',
   sku: 'TEA-001',
-  name: 'شاي بالنعناع',
   unitPrice: 2.75,
   quantityOnHand: 8,
   barcode: '1000002',
+  isDefault: true,
 );
 
-const _coffeeBeans = Product(
-  id: 3,
+const _coffeeBeansVariant = ProductVariant(
+  id: 103,
+  productId: 3,
+  productName: 'حبوب قهوة',
+  displayName: 'حبوب قهوة',
+  fullName: 'حبوب قهوة',
   sku: 'COF-002',
-  name: 'حبوب قهوة',
   unitPrice: 9,
   quantityOnHand: 5,
   barcode: '1000003',
+  isDefault: true,
 );
 
 const _openSession = RegisterSession(
@@ -244,7 +266,7 @@ class _CatalogRequest {
 class _FakePosApiService extends PosApiService {
   _FakePosApiService({
     this.checkoutCompleter,
-    this.onFetchProducts,
+    this.onFetchProductVariants,
     this.catalogPages = const {},
   }) : super(
          client: MockClient((_) async => http.Response('{}', 500)),
@@ -252,8 +274,9 @@ class _FakePosApiService extends PosApiService {
        );
 
   final Completer<SaleOrder>? checkoutCompleter;
-  final ProductPage Function(ProductQuery query, int page)? onFetchProducts;
-  final Map<int, List<Product>> catalogPages;
+  final ProductVariantPage Function(ProductQuery query, int page)?
+  onFetchProductVariants;
+  final Map<int, List<ProductVariant>> catalogPages;
   final List<_CatalogRequest> catalogRequests = [];
   SaleCheckoutDraft? capturedCheckoutDraft;
 
@@ -272,14 +295,22 @@ class _FakePosApiService extends PosApiService {
     required ModelQuery query,
     int page = 1,
   }) async {
+    return const ProductPage(products: [], hasMore: false);
+  }
+
+  @override
+  Future<ProductVariantPage> fetchProductVariants({
+    required ModelQuery query,
+    int page = 1,
+  }) async {
     final productQuery = query as ProductQuery;
     catalogRequests.add(_CatalogRequest(query: productQuery, page: page));
-    final customPage = onFetchProducts?.call(productQuery, page);
+    final customPage = onFetchProductVariants?.call(productQuery, page);
     if (customPage != null) {
       return customPage;
     }
-    return ProductPage(
-      products: catalogPages[page] ?? const [],
+    return ProductVariantPage(
+      variants: catalogPages[page] ?? const [],
       hasMore: catalogPages.containsKey(page + 1),
     );
   }

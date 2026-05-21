@@ -1,4 +1,4 @@
-import 'product.dart';
+import 'product_variant.dart';
 import 'query.dart';
 
 class PurchaseSubmission {
@@ -378,7 +378,7 @@ class PurchaseOrderDraft {
       lines: lines
           .map(
             (line) => PurchaseOrderLineDraft(
-              productId: line.product.variantId,
+              variantId: line.variant.id,
               quantity: line.quantity,
               unitCost: line.unitCost,
             ),
@@ -450,7 +450,7 @@ class PurchaseDiscountPreviewDraft {
       lines: lines
           .map(
             (line) => PurchaseOrderLineDraft(
-              productId: line.product.variantId,
+              variantId: line.variant.id,
               quantity: line.quantity,
               unitCost: line.unitCost,
             ),
@@ -510,12 +510,12 @@ class PurchaseDiscountPreview {
 
 class PurchaseDraftLine {
   const PurchaseDraftLine({
-    required this.product,
+    required this.variant,
     required this.quantity,
     required this.unitCost,
   });
 
-  final Product product;
+  final ProductVariant variant;
   final int quantity;
   final double unitCost;
 
@@ -525,7 +525,7 @@ class PurchaseDraftLine {
 
   PurchaseDraftLine copyWith({int? quantity, double? unitCost}) {
     return PurchaseDraftLine(
-      product: product,
+      variant: variant,
       quantity: quantity ?? this.quantity,
       unitCost: unitCost ?? this.unitCost,
     );
@@ -534,16 +534,14 @@ class PurchaseDraftLine {
 
 class PurchaseOrderLineDraft {
   const PurchaseOrderLineDraft({
-    required int productId,
+    required this.variantId,
     required this.quantity,
     required this.unitCost,
-  }) : variantId = productId;
+  });
 
   final int variantId;
   final int quantity;
   final double unitCost;
-
-  int get productId => variantId;
 
   Map<String, Object?> toJson() {
     return {

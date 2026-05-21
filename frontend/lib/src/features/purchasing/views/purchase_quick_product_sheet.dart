@@ -1,20 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
-import '../../../data/models/product.dart';
+import '../../../data/models/product_draft.dart';
+import '../../../data/models/product_variant.dart';
 import '../../../shared/async_selection/async_multi_select_picker.dart';
 import '../../../shared/decimal_text_input_formatter.dart';
 import '../../../shared/product_category_picker.dart';
 import '../view_models/purchase_view_model.dart';
 
-Future<Product?> resolveOrCreatePurchaseProduct(
+Future<ProductVariant?> resolveOrCreatePurchaseVariant(
   BuildContext context, {
   required PurchaseViewModel viewModel,
   required String barcode,
 }) async {
-  final product = await viewModel.findProductByBarcode(barcode);
-  if (product != null) {
-    return product;
+  final variant = await viewModel.findVariantByBarcode(barcode);
+  if (variant != null) {
+    return variant;
   }
   if (!context.mounted) {
     return null;
@@ -26,12 +27,12 @@ Future<Product?> resolveOrCreatePurchaseProduct(
   );
 }
 
-Future<Product?> showPurchaseQuickProductSheet(
+Future<ProductVariant?> showPurchaseQuickProductSheet(
   BuildContext context, {
   required String barcode,
   required PurchaseViewModel viewModel,
 }) {
-  return showModalBottomSheet<Product?>(
+  return showModalBottomSheet<ProductVariant?>(
     context: context,
     isScrollControlled: true,
     showDragHandle: true,
@@ -41,11 +42,11 @@ Future<Product?> showPurchaseQuickProductSheet(
         barcode: barcode,
         viewModel: viewModel,
         onCreate: (draft, unitCost) async {
-          final product = await viewModel.createQuickProduct(draft);
-          if (product != null) {
-            viewModel.rememberProductCost(product, unitCost);
+          final variant = await viewModel.createQuickProduct(draft);
+          if (variant != null) {
+            viewModel.rememberVariantCost(variant, unitCost);
           }
-          return product;
+          return variant;
         },
       );
     },
@@ -62,7 +63,8 @@ class PurchaseQuickProductSheet extends StatefulWidget {
 
   final String barcode;
   final PurchaseViewModel viewModel;
-  final Future<Product?> Function(ProductDraft draft, double unitCost) onCreate;
+  final Future<ProductVariant?> Function(ProductDraft draft, double unitCost)
+  onCreate;
 
   @override
   State<PurchaseQuickProductSheet> createState() =>
@@ -195,7 +197,8 @@ class _PurchaseQuickProductSheetState extends State<PurchaseQuickProductSheet> {
                   child: OutlinedButton(
                     onPressed: _isSaving
                         ? null
-                        : () => Navigator.of(context).pop<Product?>(null),
+                        : () =>
+                              Navigator.of(context).pop<ProductVariant?>(null),
                     child: Text(l10n.cancelButton),
                   ),
                 ),

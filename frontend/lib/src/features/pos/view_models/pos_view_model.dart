@@ -7,9 +7,9 @@ import '../../../data/models/cart_line.dart';
 import '../../../data/models/contact.dart';
 import '../../../data/models/print_job.dart';
 import '../../../data/models/printer_config.dart';
-import '../../../data/models/product.dart';
-import '../../../data/models/product_page.dart';
 import '../../../data/models/product_query.dart';
+import '../../../data/models/product_variant.dart';
+import '../../../data/models/product_variant_page.dart';
 import '../../../data/models/register_cash_movement.dart';
 import '../../../data/models/register_session.dart';
 import '../../../data/models/sale_order.dart';
@@ -52,7 +52,7 @@ class PosViewModel extends ChangeNotifier {
 
   CatalogRepository get catalogRepository => _catalogRepository;
 
-  List<Product> _products = [];
+  List<ProductVariant> _variants = [];
   final List<CartLine> _cart = [];
   ShopSettings? _checkoutSettings;
   bool _isLoading = false;
@@ -67,7 +67,7 @@ class PosViewModel extends ChangeNotifier {
   bool _printInvoiceAfterPayment = false;
   Customer? _selectedCustomer;
   bool _hasMoreProducts = true;
-  int _nextProductPage = 1;
+  int _nextVariantPage = 1;
   String? _errorMessage;
   String _couponCode = '';
   SaleDiscountPreview? _discountPreview;
@@ -89,7 +89,7 @@ class PosViewModel extends ChangeNotifier {
     availability: ProductAvailabilityFilter.active,
   );
 
-  List<Product> get products => List.unmodifiable(_products);
+  List<ProductVariant> get variants => List.unmodifiable(_variants);
   List<CartLine> get cart => List.unmodifiable(_cart);
   bool get isLoading => _isLoading;
   bool get isLoadingMore => _isLoadingMore;

@@ -269,11 +269,11 @@ class _PurchaseDraftPaneState extends State<PurchaseDraftPane> {
                         return PurchaseDraftLineTile(
                           line: line,
                           enabled: !viewModel.isSubmitting,
-                          onAdd: () => viewModel.addProduct(line.product),
+                          onAdd: () => viewModel.addVariant(line.variant),
                           onRemove: () =>
-                              viewModel.decrementProduct(line.product),
+                              viewModel.decrementVariant(line.variant),
                           onCostChanged: (unitCost) {
-                            viewModel.updateLineCost(line.product, unitCost);
+                            viewModel.updateLineCost(line.variant, unitCost);
                           },
                         );
                       },
@@ -651,13 +651,13 @@ class _PurchaseDraftLineTileState extends State<PurchaseDraftLineTile> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  line.product.name,
+                  line.variant.displayLabel,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
-                if (line.product.effectiveSku.isNotEmpty)
+                if (line.variant.sku.isNotEmpty)
                   Text(
-                    line.product.effectiveSku,
+                    line.variant.sku,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: Theme.of(context).textTheme.bodySmall,

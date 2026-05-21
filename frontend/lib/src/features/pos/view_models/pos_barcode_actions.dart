@@ -15,22 +15,22 @@ extension PosBarcodeActions on PosViewModel {
     _barcodeScanStatus = BarcodeScanStatus.resolving;
     _notifyChanged();
 
-    final result = await _catalogRepository.findProductByBarcode(
+    final result = await _catalogRepository.findProductVariantByBarcode(
       normalizedBarcode,
       activeOnly: true,
     );
 
     switch (result) {
-      case Ok<Product?>(:final value):
+      case Ok<ProductVariant?>(:final value):
         if (value == null) {
           _barcodeScanStatus = BarcodeScanStatus.notFound;
         } else {
-          _addProductToCart(value, quantity: quantity);
-          _lastScannedProductName = value.name;
+          _addVariantToCart(value, quantity: quantity);
+          _lastScannedProductName = value.displayLabel;
           _barcodeScanStatus = BarcodeScanStatus.found;
           unawaited(refreshDiscountPreview());
         }
-      case Error<Product?>():
+      case Error<ProductVariant?>():
         _barcodeScanStatus = BarcodeScanStatus.error;
     }
 
