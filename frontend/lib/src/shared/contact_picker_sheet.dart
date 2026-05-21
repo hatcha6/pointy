@@ -4,6 +4,7 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 import '../core/result.dart';
 import '../data/models/contact.dart';
 import '../data/repositories/contact_repository.dart';
+import 'infinite_scroll_grid.dart';
 
 class ContactSelectionTile extends StatelessWidget {
   const ContactSelectionTile({
@@ -195,12 +196,15 @@ class _CustomerPickerState extends State<_CustomerPicker> {
   var _query = const ContactQuery();
   var _customers = <Customer>[];
   var _isLoading = true;
+  var _isLoadingMore = false;
+  var _hasMore = true;
   var _hasError = false;
+  var _nextPage = 1;
 
   @override
   void initState() {
     super.initState();
-    _load();
+    _load(reset: true);
   }
 
   @override
@@ -217,7 +221,7 @@ class _CustomerPickerState extends State<_CustomerPicker> {
       emptyText: l10n.emptyCustomers,
       onSearchChanged: (search) {
         _query = _query.copyWith(search: search);
-        _load();
+        _load(reset: true);
       },
       onCreate: () async {
         final created = await showCreateCustomerSheet(
@@ -229,12 +233,15 @@ class _CustomerPickerState extends State<_CustomerPicker> {
         }
         Navigator.of(context).pop(created);
       },
-      child: ListView.separated(
-        shrinkWrap: true,
-        itemCount: _customers.length,
+      child: InfiniteScrollList<Customer>(
+        items: _customers,
+        onLoadMore: () => _load(reset: false),
+        hasMore: _hasMore,
+        isLoadingInitial: _isLoading,
+        isLoadingMore: _isLoadingMore,
+        emptyBuilder: (context) => Center(child: Text(l10n.emptyCustomers)),
         separatorBuilder: (_, _) => const Divider(height: 1),
-        itemBuilder: (context, index) {
-          final customer = _customers[index];
+        itemBuilder: (context, customer) {
           return ListTile(
             leading: const Icon(Icons.person_outline),
             title: Text(customer.fullName),
@@ -251,25 +258,47 @@ class _CustomerPickerState extends State<_CustomerPicker> {
     );
   }
 
-  Future<void> _load() async {
-    setState(() {
-      _isLoading = true;
-      _hasError = false;
-    });
-    final result = await widget.repository.loadCustomers(query: _query);
+  Future<void> _load({required bool reset}) async {
+    if (reset) {
+      setState(() {
+        _isLoading = true;
+        _hasError = false;
+        _hasMore = true;
+        _nextPage = 1;
+      });
+    } else {
+      if (_isLoading || _isLoadingMore || !_hasMore) {
+        return;
+      }
+      setState(() => _isLoadingMore = true);
+    }
+
+    final result = await widget.repository.loadCustomers(
+      query: _query,
+      page: _nextPage,
+    );
     if (!mounted) {
       return;
     }
     switch (result) {
       case Ok<CustomerPage>():
         setState(() {
-          _customers = result.value.customers;
+          _customers = reset
+              ? result.value.customers
+              : [..._customers, ...result.value.customers];
+          _hasMore = result.value.hasMore;
+          _nextPage += 1;
           _isLoading = false;
+          _isLoadingMore = false;
         });
       case Error<CustomerPage>():
         setState(() {
-          _customers = [];
+          if (reset) {
+            _customers = [];
+          }
           _isLoading = false;
+          _isLoadingMore = false;
+          _hasMore = false;
           _hasError = true;
         });
     }
@@ -289,12 +318,15 @@ class _SupplierPickerState extends State<_SupplierPicker> {
   var _query = const ContactQuery();
   var _suppliers = <SupplierContact>[];
   var _isLoading = true;
+  var _isLoadingMore = false;
+  var _hasMore = true;
   var _hasError = false;
+  var _nextPage = 1;
 
   @override
   void initState() {
     super.initState();
-    _load();
+    _load(reset: true);
   }
 
   @override
@@ -311,7 +343,7 @@ class _SupplierPickerState extends State<_SupplierPicker> {
       emptyText: l10n.emptySuppliers,
       onSearchChanged: (search) {
         _query = _query.copyWith(search: search);
-        _load();
+        _load(reset: true);
       },
       onCreate: () async {
         final created = await showCreateSupplierSheet(
@@ -323,12 +355,15 @@ class _SupplierPickerState extends State<_SupplierPicker> {
         }
         Navigator.of(context).pop(created);
       },
-      child: ListView.separated(
-        shrinkWrap: true,
-        itemCount: _suppliers.length,
+      child: InfiniteScrollList<SupplierContact>(
+        items: _suppliers,
+        onLoadMore: () => _load(reset: false),
+        hasMore: _hasMore,
+        isLoadingInitial: _isLoading,
+        isLoadingMore: _isLoadingMore,
+        emptyBuilder: (context) => Center(child: Text(l10n.emptySuppliers)),
         separatorBuilder: (_, _) => const Divider(height: 1),
-        itemBuilder: (context, index) {
-          final supplier = _suppliers[index];
+        itemBuilder: (context, supplier) {
           return ListTile(
             leading: const Icon(Icons.local_shipping_outlined),
             title: Text(supplier.name),
@@ -346,25 +381,47 @@ class _SupplierPickerState extends State<_SupplierPicker> {
     );
   }
 
-  Future<void> _load() async {
-    setState(() {
-      _isLoading = true;
-      _hasError = false;
-    });
-    final result = await widget.repository.loadSuppliers(query: _query);
+  Future<void> _load({required bool reset}) async {
+    if (reset) {
+      setState(() {
+        _isLoading = true;
+        _hasError = false;
+        _hasMore = true;
+        _nextPage = 1;
+      });
+    } else {
+      if (_isLoading || _isLoadingMore || !_hasMore) {
+        return;
+      }
+      setState(() => _isLoadingMore = true);
+    }
+
+    final result = await widget.repository.loadSuppliers(
+      query: _query,
+      page: _nextPage,
+    );
     if (!mounted) {
       return;
     }
     switch (result) {
       case Ok<SupplierPage>():
         setState(() {
-          _suppliers = result.value.suppliers;
+          _suppliers = reset
+              ? result.value.suppliers
+              : [..._suppliers, ...result.value.suppliers];
+          _hasMore = result.value.hasMore;
+          _nextPage += 1;
           _isLoading = false;
+          _isLoadingMore = false;
         });
       case Error<SupplierPage>():
         setState(() {
-          _suppliers = [];
+          if (reset) {
+            _suppliers = [];
+          }
           _isLoading = false;
+          _isLoadingMore = false;
+          _hasMore = false;
           _hasError = true;
         });
     }

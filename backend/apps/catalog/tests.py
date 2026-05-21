@@ -114,6 +114,25 @@ class ProductApiTests(TestCase):
         self.assertEqual(category.parent, parent)
         self.assertEqual(response.data["parent_name"], "المشروبات")
 
+    def test_filter_product_categories_by_root_and_parent(self):
+        drinks = ProductCategory.objects.create(name="A Root")
+        coffee = ProductCategory.objects.create(name="A Child", parent=drinks)
+        snacks = ProductCategory.objects.create(name="B Root")
+
+        root_response = self.client.get(reverse("productcategory-list"), {"root": "true"})
+        child_response = self.client.get(reverse("productcategory-list"), {"parent": drinks.id})
+
+        self.assertEqual(root_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(child_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            [category["id"] for category in root_response.data["results"]],
+            [drinks.id, snacks.id],
+        )
+        self.assertEqual(
+            [category["id"] for category in child_response.data["results"]],
+            [coffee.id],
+        )
+
     def test_reject_category_parent_cycle(self):
         parent = ProductCategory.objects.create(name="الأصل")
         child = ProductCategory.objects.create(name="الفرع", parent=parent)

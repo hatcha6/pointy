@@ -46,8 +46,12 @@ class PurchaseRepository {
     return Result.guard(() => _service.createSupplierPayment(draft));
   }
 
-  Future<Result<PurchaseOrderPage>> loadOutstandingReceivedNotPaid() async {
-    return Result.guard(_service.fetchOutstandingReceivedNotPaidPurchases);
+  Future<Result<PurchaseOrderPage>> loadOutstandingReceivedNotPaid({
+    int page = 1,
+  }) async {
+    return Result.guard(
+      () => _service.fetchOutstandingReceivedNotPaidPurchases(page: page),
+    );
   }
 
   Future<Result<PurchaseOrderPage>> loadSupplierPurchaseHistory({

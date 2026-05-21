@@ -6,10 +6,10 @@ class UserApiClient {
 
   final PosApiSession _session;
 
-  Future<List<PosUser>> fetchUsers() async {
-    final response = await _session.get('users/');
+  Future<PosUserPage> fetchUsers({int page = 1}) async {
+    final response = await _session.get('users/', query: {'page': '$page'});
     _session.ensureSuccess(response, 'Users request failed with status');
-    return decodeListResponse(_session.decodedBody(response), PosUser.fromJson);
+    return PosUserPage.fromAny(_session.decodedBody(response));
   }
 
   Future<PosUser> createUser(UserCreateDraft draft) async {

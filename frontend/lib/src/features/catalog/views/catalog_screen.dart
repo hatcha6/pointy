@@ -30,6 +30,7 @@ class CatalogScreen extends StatelessWidget {
     required this.onOpenRegisterSessions,
     required this.onOpenDeviceSettings,
     required this.onLogout,
+    this.onOpenDashboard,
     this.onOpenCategories,
     this.onOpenDiscounts,
     this.onOpenUsers,
@@ -47,6 +48,7 @@ class CatalogScreen extends StatelessWidget {
   final VoidCallback onOpenContacts;
   final VoidCallback onOpenRegisterSessions;
   final VoidCallback onOpenDeviceSettings;
+  final VoidCallback? onOpenDashboard;
   final VoidCallback? onOpenCategories;
   final VoidCallback? onOpenDiscounts;
   final VoidCallback? onOpenUsers;
@@ -65,6 +67,7 @@ class CatalogScreen extends StatelessWidget {
             selectedDestination: AppNavigationDestination.catalog,
             currentUser: currentUser,
             capabilities: capabilities,
+            onOpenDashboard: onOpenDashboard,
             onOpenPos: onOpenPos,
             onOpenPurchasing: onOpenPurchasing,
             onOpenContacts: onOpenContacts,

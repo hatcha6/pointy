@@ -4,6 +4,14 @@ typedef AuthorizedAction = void Function();
 typedef AuthorizedAsyncAction = Future<void> Function();
 
 enum AppCapability {
+  viewDashboard,
+  viewSalesDashboard,
+  viewPaymentDashboard,
+  viewInventoryDashboard,
+  viewPurchasingDashboard,
+  viewCustomerDashboard,
+  viewDiscountDashboard,
+  viewPrintingDashboard,
   accessPos,
   accessPurchasing,
   createPurchaseOrder,
@@ -44,6 +52,10 @@ class AuthorizationCapabilities {
 
     final capabilities = <AppCapability>{
       AppCapability.accessPos,
+      AppCapability.viewDashboard,
+      AppCapability.viewSalesDashboard,
+      AppCapability.viewPaymentDashboard,
+      AppCapability.viewPrintingDashboard,
       AppCapability.checkoutSale,
       AppCapability.startRegisterSession,
       AppCapability.resumeRegisterSession,
@@ -82,13 +94,18 @@ class AuthorizationCapabilities {
         'inventory.view_stockitem',
         'inventory.view_stockmovement',
       ])) {
-        capabilities.add(AppCapability.viewStock);
+        capabilities
+          ..add(AppCapability.viewDashboard)
+          ..add(AppCapability.viewInventoryDashboard)
+          ..add(AppCapability.viewStock);
       }
       if (_hasAny(user, const [
         'add_stockmovement',
         'inventory.add_stockmovement',
       ])) {
         capabilities
+          ..add(AppCapability.viewDashboard)
+          ..add(AppCapability.viewInventoryDashboard)
           ..add(AppCapability.viewStock)
           ..add(AppCapability.createStockMovement);
       }
@@ -98,13 +115,18 @@ class AuthorizationCapabilities {
         'purchasing.view_purchaseorder',
         'purchasing.change_purchaseorder',
       ])) {
-        capabilities.add(AppCapability.accessPurchasing);
+        capabilities
+          ..add(AppCapability.viewDashboard)
+          ..add(AppCapability.viewPurchasingDashboard)
+          ..add(AppCapability.accessPurchasing);
       }
       if (_hasAny(user, const [
         'add_purchaseorder',
         'purchasing.add_purchaseorder',
       ])) {
         capabilities
+          ..add(AppCapability.viewDashboard)
+          ..add(AppCapability.viewPurchasingDashboard)
           ..add(AppCapability.accessPurchasing)
           ..add(AppCapability.createPurchaseOrder);
       }
@@ -166,16 +188,24 @@ class AuthorizationCapabilities {
         'purchasing.change_supplier',
         'purchasing.delete_supplier',
       ])) {
-        capabilities.add(AppCapability.manageContacts);
+        capabilities
+          ..add(AppCapability.viewDashboard)
+          ..add(AppCapability.viewCustomerDashboard)
+          ..add(AppCapability.manageContacts);
       }
       if (_hasAny(user, const [
         'view_registersession',
         'sales.view_registersession',
       ])) {
-        capabilities.add(AppCapability.viewRegisterSessions);
+        capabilities
+          ..add(AppCapability.viewDashboard)
+          ..add(AppCapability.viewSalesDashboard)
+          ..add(AppCapability.viewRegisterSessions);
       }
       if (_hasAny(user, const ['view_order', 'sales.view_order'])) {
         capabilities
+          ..add(AppCapability.viewDashboard)
+          ..add(AppCapability.viewSalesDashboard)
           ..add(AppCapability.viewRegisterSessions)
           ..add(AppCapability.viewRegisterSessionOrders);
       }
@@ -209,6 +239,16 @@ class AuthorizationCapabilities {
           ..add(AppCapability.accessPos)
           ..add(AppCapability.createRegisterCashMovement);
       }
+      if (_hasAny(user, const ['view_payment', 'payments.view_payment'])) {
+        capabilities
+          ..add(AppCapability.viewDashboard)
+          ..add(AppCapability.viewPaymentDashboard);
+      }
+      if (_hasAny(user, const ['view_printjob', 'printing.view_printjob'])) {
+        capabilities
+          ..add(AppCapability.viewDashboard)
+          ..add(AppCapability.viewPrintingDashboard);
+      }
       if (_hasAny(user, const [
         'add_user',
         'change_user',
@@ -231,7 +271,10 @@ class AuthorizationCapabilities {
         'view_discountrule',
         'discounts.view_discountrule',
       ])) {
-        capabilities.add(AppCapability.viewDiscountRules);
+        capabilities
+          ..add(AppCapability.viewDashboard)
+          ..add(AppCapability.viewDiscountDashboard)
+          ..add(AppCapability.viewDiscountRules);
       }
       if (_hasAny(user, const [
         'add_discountrule',
@@ -266,6 +309,20 @@ class AuthorizationCapabilities {
 
   bool allows(AppCapability capability) => _capabilities.contains(capability);
 
+  bool get canViewDashboard => allows(AppCapability.viewDashboard);
+  bool get canViewSalesDashboard => allows(AppCapability.viewSalesDashboard);
+  bool get canViewPaymentDashboard =>
+      allows(AppCapability.viewPaymentDashboard);
+  bool get canViewInventoryDashboard =>
+      allows(AppCapability.viewInventoryDashboard);
+  bool get canViewPurchasingDashboard =>
+      allows(AppCapability.viewPurchasingDashboard);
+  bool get canViewCustomerDashboard =>
+      allows(AppCapability.viewCustomerDashboard);
+  bool get canViewDiscountDashboard =>
+      allows(AppCapability.viewDiscountDashboard);
+  bool get canViewPrintingDashboard =>
+      allows(AppCapability.viewPrintingDashboard);
   bool get canAccessPos => allows(AppCapability.accessPos);
   bool get canAccessPurchasing => allows(AppCapability.accessPurchasing);
   bool get canCreatePurchaseOrder => allows(AppCapability.createPurchaseOrder);

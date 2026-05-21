@@ -6,6 +6,7 @@ import '../../../data/models/pos_user.dart';
 import '../../../data/models/product_category.dart';
 import '../../../shared/app_navigation_drawer.dart';
 import '../../../shared/async_selection/async_multi_select_picker.dart';
+import '../../../shared/infinite_scroll_grid.dart';
 import '../../../shared/product_category_picker.dart';
 import '../view_models/category_management_view_model.dart';
 
@@ -22,6 +23,7 @@ class CategoryManagementScreen extends StatelessWidget {
     required this.onOpenRegisterSessions,
     required this.onOpenDeviceSettings,
     required this.onLogout,
+    this.onOpenDashboard,
     this.onOpenDiscounts,
     this.onOpenUsers,
     this.onOpenShopSettings,
@@ -36,6 +38,7 @@ class CategoryManagementScreen extends StatelessWidget {
   final VoidCallback onOpenCatalog;
   final VoidCallback onOpenRegisterSessions;
   final VoidCallback onOpenDeviceSettings;
+  final VoidCallback? onOpenDashboard;
   final VoidCallback? onOpenDiscounts;
   final VoidCallback? onOpenUsers;
   final VoidCallback? onOpenShopSettings;
@@ -53,6 +56,7 @@ class CategoryManagementScreen extends StatelessWidget {
             selectedDestination: AppNavigationDestination.categories,
             currentUser: currentUser,
             capabilities: capabilities,
+            onOpenDashboard: onOpenDashboard,
             onOpenPos: onOpenPos,
             onOpenPurchasing: onOpenPurchasing,
             onOpenContacts: onOpenContacts,
@@ -130,36 +134,144 @@ class _CategoryList extends StatelessWidget {
     if (viewModel.isLoading && viewModel.categories.isEmpty) {
       return const Center(child: CircularProgressIndicator());
     }
-    if (viewModel.errorMessage == 'category_load_error') {
+    if (viewModel.errorMessage == 'category_load_error' &&
+        viewModel.categories.isEmpty) {
       return Center(child: Text(l10n.categoryLoadError));
     }
-    if (viewModel.categories.isEmpty) {
-      return Center(child: Text(l10n.categoryEmptyState));
-    }
-
-    return ListView.separated(
+    return InfiniteScrollList<CategoryTreeItem>(
+      items: viewModel.visibleItems,
+      onLoadMore: viewModel.loadMoreCategories,
+      hasMore: viewModel.hasMoreCategories,
+      isLoadingInitial: viewModel.isLoading,
+      isLoadingMore: viewModel.isLoadingMore,
+      emptyBuilder: (context) => Center(child: Text(l10n.categoryEmptyState)),
       padding: const EdgeInsets.all(16),
-      itemCount: viewModel.categories.length,
       separatorBuilder: (_, _) => const Divider(height: 1),
-      itemBuilder: (context, index) {
-        final category = viewModel.categories[index];
-        return ListTile(
-          leading: const Icon(Icons.category_outlined),
-          title: Text(category.name),
-          subtitle: Text(
-            category.parentName.isEmpty
-                ? l10n.rootCategoryLabel
-                : l10n.categoryParentValue(category.parentName),
+      itemBuilder: (context, item) {
+        return switch (item.type) {
+          CategoryTreeItemType.category => _CategoryTreeCategoryTile(
+            category: item.category!,
+            depth: item.depth,
+            isExpanded: viewModel.isExpanded(item.category!),
+            isLoadingChildren: viewModel.isLoadingChildren(item.category!),
+            onToggleExpanded: () => viewModel.toggleExpanded(item.category!),
           ),
-          trailing: category.childrenCount == 0
-              ? null
-              : Chip(
-                  label: Text(
-                    l10n.categoryChildrenCount(category.childrenCount),
-                  ),
+          CategoryTreeItemType.childrenLoading => _CategoryTreeStatusRow(
+            depth: item.depth,
+            child: Row(
+              children: [
+                const SizedBox.square(
+                  dimension: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
                 ),
-        );
+                const SizedBox(width: 10),
+                Text(l10n.categoryLoadingChildren),
+              ],
+            ),
+          ),
+          CategoryTreeItemType.childrenLoadError => _CategoryTreeStatusRow(
+            depth: item.depth,
+            child: Wrap(
+              spacing: 8,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                Text(
+                  l10n.categoryChildrenLoadError,
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                ),
+                TextButton.icon(
+                  onPressed: () => viewModel.retryLoadChildren(item.parent!.id),
+                  icon: const Icon(Icons.refresh),
+                  label: Text(l10n.categoryRetryChildrenButton),
+                ),
+              ],
+            ),
+          ),
+          CategoryTreeItemType.loadMoreChildren => _CategoryTreeStatusRow(
+            depth: item.depth,
+            child: Align(
+              alignment: AlignmentDirectional.centerStart,
+              child: TextButton.icon(
+                onPressed: () => viewModel.loadMoreChildren(item.parent!.id),
+                icon: const Icon(Icons.expand_more),
+                label: Text(l10n.categoryLoadMoreChildrenButton),
+              ),
+            ),
+          ),
+        };
       },
+    );
+  }
+}
+
+class _CategoryTreeCategoryTile extends StatelessWidget {
+  const _CategoryTreeCategoryTile({
+    required this.category,
+    required this.depth,
+    required this.isExpanded,
+    required this.isLoadingChildren,
+    required this.onToggleExpanded,
+  });
+
+  final ProductCategory category;
+  final int depth;
+  final bool isExpanded;
+  final bool isLoadingChildren;
+  final VoidCallback onToggleExpanded;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final hasChildren = category.childrenCount > 0;
+    final iconColor = Theme.of(context).colorScheme.primary;
+
+    return ListTile(
+      contentPadding: EdgeInsetsDirectional.only(
+        start: 16 + depth * 24,
+        end: 16,
+      ),
+      leading: hasChildren
+          ? IconButton(
+              tooltip: isExpanded
+                  ? l10n.categoryCollapseTooltip
+                  : l10n.categoryExpandTooltip,
+              onPressed: isLoadingChildren ? null : onToggleExpanded,
+              icon: Icon(isExpanded ? Icons.expand_more : Icons.chevron_left),
+            )
+          : Icon(Icons.category_outlined, color: iconColor),
+      title: Text(category.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+      subtitle: Text(
+        category.parentName.isEmpty
+            ? l10n.rootCategoryLabel
+            : l10n.categoryParentValue(category.parentName),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      ),
+      trailing: hasChildren
+          ? Chip(
+              label: Text(l10n.categoryChildrenCount(category.childrenCount)),
+            )
+          : null,
+    );
+  }
+}
+
+class _CategoryTreeStatusRow extends StatelessWidget {
+  const _CategoryTreeStatusRow({required this.depth, required this.child});
+
+  final int depth;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsetsDirectional.only(
+        start: 64 + depth * 24,
+        end: 16,
+        top: 8,
+        bottom: 8,
+      ),
+      child: child,
     );
   }
 }

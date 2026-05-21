@@ -100,6 +100,36 @@ class PosUser {
   }
 }
 
+class PosUserPage {
+  const PosUserPage({required this.users, required this.hasMore});
+
+  final List<PosUser> users;
+  final bool hasMore;
+
+  factory PosUserPage.fromAny(Object? decoded) {
+    if (decoded is Map<String, Object?>) {
+      final results = decoded['results'];
+      final users = results is List<Object?>
+          ? results
+                .whereType<Map<String, Object?>>()
+                .map(PosUser.fromJson)
+                .toList(growable: false)
+          : const <PosUser>[];
+      return PosUserPage(users: users, hasMore: decoded['next'] != null);
+    }
+    if (decoded is List<Object?>) {
+      return PosUserPage(
+        users: decoded
+            .whereType<Map<String, Object?>>()
+            .map(PosUser.fromJson)
+            .toList(growable: false),
+        hasMore: false,
+      );
+    }
+    return const PosUserPage(users: [], hasMore: false);
+  }
+}
+
 class UserCreateDraft {
   const UserCreateDraft({
     required this.username,

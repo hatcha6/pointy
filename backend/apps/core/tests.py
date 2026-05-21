@@ -1,11 +1,19 @@
+from decimal import Decimal
+
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.core.management import call_command
 from django.test import TestCase
 from django.urls import reverse
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APIClient
 
+from apps.catalog.models import Product
+from apps.inventory.models import StockItem, StockMovement
+from apps.payments.models import Payment
+from apps.purchasing.models import PurchaseOrder, Supplier, SupplierPayment
+from apps.sales.models import Order, OrderLine, RegisterSession
 from .roles import CASHIER_GROUP, MANAGER_GROUP, bootstrap_admin_user, ensure_role_groups
 
 
@@ -218,6 +226,133 @@ class ShopSettingsApiTests(TestCase):
         self.assertEqual(read_response.status_code, status.HTTP_200_OK)
         self.assertIn("auto_print_receipts", read_response.data)
         self.assertEqual(update_response.status_code, status.HTTP_403_FORBIDDEN)
+
+
+class DashboardApiTests(TestCase):
+    def setUp(self):
+        ensure_role_groups()
+        User = get_user_model()
+        self.manager = User.objects.create_user(username="dashboard-manager", password="pass")
+        self.manager.groups.add(Group.objects.get(name=MANAGER_GROUP))
+        self.cashier = User.objects.create_user(username="dashboard-cashier", password="pass")
+        self.cashier.groups.add(Group.objects.get(name=CASHIER_GROUP))
+        self.other_cashier = User.objects.create_user(
+            username="dashboard-other-cashier",
+            password="pass",
+        )
+        self.other_cashier.groups.add(Group.objects.get(name=CASHIER_GROUP))
+
+        self.product = Product.objects.create(
+            sku="DASH-COF",
+            name="قهوة لوحة التحكم",
+            unit_price=Decimal("5.00"),
+        )
+        self.stock_item = StockItem.objects.create(
+            product=self.product,
+            quantity_on_hand=2,
+            reorder_level=3,
+        )
+        StockMovement.objects.create(
+            product=self.product,
+            stock_item=self.stock_item,
+            movement_type=StockMovement.Type.INCREASE,
+            quantity=4,
+            on_hand_before=0,
+            on_hand_after=4,
+            committed_before=0,
+            committed_after=0,
+            expected_before=0,
+            expected_after=0,
+        )
+        self._create_paid_order(
+            user=self.cashier,
+            receipt_number="R-DASH-1",
+            total=Decimal("10.00"),
+        )
+        self._create_paid_order(
+            user=self.other_cashier,
+            receipt_number="R-DASH-2",
+            total=Decimal("40.00"),
+        )
+        self.supplier = Supplier.objects.create(name="مورد لوحة التحكم")
+        self.purchase_order = PurchaseOrder.objects.create(
+            supplier=self.supplier,
+            status=PurchaseOrder.Status.SUBMITTED,
+            subtotal=Decimal("120.00"),
+            total=Decimal("120.00"),
+            due_date=timezone.localdate() - timezone.timedelta(days=1),
+        )
+        SupplierPayment.objects.create(
+            supplier=self.supplier,
+            purchase_order=self.purchase_order,
+            method=SupplierPayment.Method.CASH,
+            amount=Decimal("20.00"),
+            created_by=self.manager,
+        )
+
+    def test_dashboard_scopes_cashier_sales_and_sections(self):
+        client = APIClient()
+        client.force_authenticate(user=self.cashier)
+
+        response = client.get(reverse("dashboard"))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn("sales", response.data["sections"])
+        self.assertIn("payments", response.data["sections"])
+        self.assertIn("printing", response.data["sections"])
+        self.assertNotIn("inventory", response.data["sections"])
+        self.assertNotIn("purchasing", response.data["sections"])
+        self.assertEqual(response.data["sections"]["sales"]["summary"]["net_sales"], "10.00")
+        self.assertEqual(response.data["sections"]["payments"]["summary"]["total"], "10.00")
+
+    def test_manager_dashboard_includes_admin_sections_and_all_sales(self):
+        client = APIClient()
+        client.force_authenticate(user=self.manager)
+
+        response = client.get(reverse("dashboard"))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        sections = response.data["sections"]
+        self.assertIn("inventory", sections)
+        self.assertIn("purchasing", sections)
+        self.assertIn("customers", sections)
+        self.assertIn("discounts", sections)
+        self.assertEqual(sections["sales"]["summary"]["net_sales"], "50.00")
+        self.assertEqual(sections["inventory"]["summary"]["low_stock_count"], 1)
+        self.assertEqual(
+            sections["inventory"]["movement_mix"][0]["movement_type"],
+            StockMovement.Type.INCREASE,
+        )
+        self.assertEqual(sections["inventory"]["movement_mix"][0]["quantity"], 4)
+        self.assertEqual(sections["purchasing"]["summary"]["due_total"], "100.00")
+        self.assertEqual(sections["purchasing"]["summary"]["overdue_order_count"], 1)
+
+    def _create_paid_order(self, *, user, receipt_number, total):
+        session = RegisterSession.objects.create(
+            owner=user,
+            owner_key=f"user:{user.pk}",
+            opening_cash=Decimal("0.00"),
+        )
+        order = Order.objects.create(
+            register_session=session,
+            receipt_number=receipt_number,
+            status=Order.Status.PAID,
+            subtotal=total,
+            total=total,
+        )
+        OrderLine.objects.create(
+            order=order,
+            product=self.product,
+            quantity=int(total / Decimal("5.00")),
+            unit_price=Decimal("5.00"),
+            unit_cost=Decimal("2.00"),
+        )
+        Payment.objects.create(
+            order=order,
+            method=Payment.Method.CASH,
+            amount=total,
+        )
+        return order
 
 
 class RolePermissionBootstrapTests(TestCase):

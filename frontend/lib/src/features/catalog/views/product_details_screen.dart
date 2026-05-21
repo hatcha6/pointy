@@ -11,6 +11,7 @@ import '../../../shared/authorization_guards.dart';
 import '../../../shared/date_formatters.dart';
 import '../../../shared/detail_section.dart';
 import '../../../shared/formatters.dart';
+import '../../../shared/infinite_scroll_grid.dart';
 import '../../../shared/product_status_pill.dart';
 import '../view_models/product_stock_view_model.dart';
 import 'product_details_hero.dart';
@@ -176,18 +177,19 @@ class _ProductCostHistorySection extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
 
-    if (viewModel.isLoadingCostInsights) {
+    final impact = viewModel.marginImpact;
+    final entries = viewModel.costHistory;
+
+    if (viewModel.isLoadingCostInsights && impact == null && entries.isEmpty) {
       return const Center(child: CircularProgressIndicator());
     }
-    if (viewModel.hasCostInsightsError) {
+    if (viewModel.hasCostInsightsError && impact == null && entries.isEmpty) {
       return Text(
         l10n.productCostHistoryLoadError,
         style: TextStyle(color: Theme.of(context).colorScheme.error),
       );
     }
 
-    final impact = viewModel.marginImpact;
-    final entries = viewModel.costHistory;
     if (impact == null && entries.isEmpty) {
       return Text(l10n.productCostHistoryEmpty);
     }
@@ -202,39 +204,73 @@ class _ProductCostHistorySection extends StatelessWidget {
           ),
           if (entries.isNotEmpty) const Divider(height: 24),
         ],
-        for (final (index, entry) in entries.take(6).indexed) ...[
-          if (index > 0) const Divider(height: 1),
-          ListTile(
-            contentPadding: EdgeInsets.zero,
-            dense: true,
-            leading: const Icon(Icons.inventory_2_outlined),
-            title: Text(
-              entry.supplierName?.isNotEmpty == true
-                  ? entry.supplierName!
-                  : l10n.noSupplierSelectedLabel,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
+        if (entries.isNotEmpty)
+          SizedBox(
+            height: _costHistoryListHeight(
+              entries.length,
+              viewModel.hasMoreCostHistory,
             ),
-            subtitle: Text(
-              [
-                if (entry.purchaseOrderNumber != null &&
-                    entry.purchaseOrderNumber!.isNotEmpty)
-                  l10n.purchaseOrderNumberValue(entry.purchaseOrderNumber!),
-                l10n.purchaseOrderLineQuantity(entry.quantity),
-                if (entry.recordedAt != null) formatDate(entry.recordedAt!),
-              ].join(' • '),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
-            trailing: Text(
-              formatMoney(entry.effectiveUnitCost ?? entry.unitCost),
-              style: Theme.of(context).textTheme.titleSmall,
+            child: InfiniteScrollList<ProductCostHistoryEntry>(
+              items: entries,
+              onLoadMore: viewModel.loadMoreCostHistory,
+              hasMore: viewModel.hasMoreCostHistory,
+              isLoadingInitial: viewModel.isLoadingCostInsights,
+              isLoadingMore: viewModel.isLoadingMoreCostHistory,
+              emptyBuilder: (context) => Text(l10n.productCostHistoryEmpty),
+              separatorBuilder: (_, _) => const Divider(height: 1),
+              itemBuilder: (context, entry) {
+                return ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  dense: true,
+                  leading: const Icon(Icons.inventory_2_outlined),
+                  title: Text(
+                    entry.supplierName?.isNotEmpty == true
+                        ? entry.supplierName!
+                        : l10n.noSupplierSelectedLabel,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  subtitle: Text(
+                    [
+                      if (entry.purchaseOrderNumber != null &&
+                          entry.purchaseOrderNumber!.isNotEmpty)
+                        l10n.purchaseOrderNumberValue(
+                          entry.purchaseOrderNumber!,
+                        ),
+                      l10n.purchaseOrderLineQuantity(entry.quantity),
+                      if (entry.recordedAt != null)
+                        formatDate(entry.recordedAt!),
+                    ].join(' • '),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  trailing: Text(
+                    formatMoney(entry.effectiveUnitCost ?? entry.unitCost),
+                    style: Theme.of(context).textTheme.titleSmall,
+                  ),
+                );
+              },
             ),
           ),
-        ],
       ],
     );
   }
+}
+
+double _costHistoryListHeight(int itemCount, bool hasMore) {
+  if (hasMore || itemCount > 4) {
+    return 288;
+  }
+  if (itemCount == 1) {
+    return 72;
+  }
+  if (itemCount == 2) {
+    return 144;
+  }
+  if (itemCount == 3) {
+    return 216;
+  }
+  return 288;
 }
 
 class _MarginImpactGrid extends StatelessWidget {

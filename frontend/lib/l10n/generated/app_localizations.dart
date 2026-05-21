@@ -280,6 +280,600 @@ abstract class AppLocalizations {
   /// **'إعدادات المتجر'**
   String get settingsDrawerLabel;
 
+  /// No description provided for @dashboardDrawerLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'لوحة التحكم'**
+  String get dashboardDrawerLabel;
+
+  /// No description provided for @dashboardTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'لوحة التحكم'**
+  String get dashboardTitle;
+
+  /// No description provided for @dashboardOverviewTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'نظرة تشغيلية'**
+  String get dashboardOverviewTitle;
+
+  /// No description provided for @refreshDashboardTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحديث لوحة التحكم'**
+  String get refreshDashboardTooltip;
+
+  /// No description provided for @dashboardLoadError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر تحميل لوحة التحكم.'**
+  String get dashboardLoadError;
+
+  /// No description provided for @dashboardEmptyState.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد مؤشرات متاحة لهذا المستخدم.'**
+  String get dashboardEmptyState;
+
+  /// No description provided for @dashboardNoWidgetData.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد بيانات لهذا المؤشر.'**
+  String get dashboardNoWidgetData;
+
+  /// Shows dashboard last refresh time.
+  ///
+  /// In ar, this message translates to:
+  /// **'آخر تحديث: {value}'**
+  String dashboardLastUpdated(String value);
+
+  /// No description provided for @dashboardLastUpdatedUnknown.
+  ///
+  /// In ar, this message translates to:
+  /// **'آخر تحديث غير معروف'**
+  String get dashboardLastUpdatedUnknown;
+
+  /// No description provided for @dashboardRange7Days.
+  ///
+  /// In ar, this message translates to:
+  /// **'٧ أيام'**
+  String get dashboardRange7Days;
+
+  /// No description provided for @dashboardRange30Days.
+  ///
+  /// In ar, this message translates to:
+  /// **'٣٠ يومًا'**
+  String get dashboardRange30Days;
+
+  /// No description provided for @dashboardRange90Days.
+  ///
+  /// In ar, this message translates to:
+  /// **'٩٠ يومًا'**
+  String get dashboardRange90Days;
+
+  /// No description provided for @dashboardSalesSectionTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'المبيعات'**
+  String get dashboardSalesSectionTitle;
+
+  /// No description provided for @dashboardPaymentsSectionTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'المدفوعات'**
+  String get dashboardPaymentsSectionTitle;
+
+  /// No description provided for @dashboardInventorySectionTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'المخزون'**
+  String get dashboardInventorySectionTitle;
+
+  /// No description provided for @dashboardPurchasingSectionTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'المشتريات'**
+  String get dashboardPurchasingSectionTitle;
+
+  /// No description provided for @dashboardCustomersSectionTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'العملاء'**
+  String get dashboardCustomersSectionTitle;
+
+  /// No description provided for @dashboardDiscountsSectionTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'الخصومات'**
+  String get dashboardDiscountsSectionTitle;
+
+  /// No description provided for @dashboardPrintingSectionTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'الطباعة'**
+  String get dashboardPrintingSectionTitle;
+
+  /// No description provided for @dashboardNetSalesMetric.
+  ///
+  /// In ar, this message translates to:
+  /// **'صافي المبيعات'**
+  String get dashboardNetSalesMetric;
+
+  /// No description provided for @dashboardGrossProfitMetric.
+  ///
+  /// In ar, this message translates to:
+  /// **'الربح الإجمالي'**
+  String get dashboardGrossProfitMetric;
+
+  /// No description provided for @dashboardProfitMarginMetric.
+  ///
+  /// In ar, this message translates to:
+  /// **'هامش الربح'**
+  String get dashboardProfitMarginMetric;
+
+  /// No description provided for @dashboardOrdersMetric.
+  ///
+  /// In ar, this message translates to:
+  /// **'الطلبات'**
+  String get dashboardOrdersMetric;
+
+  /// No description provided for @dashboardAverageOrderMetric.
+  ///
+  /// In ar, this message translates to:
+  /// **'متوسط الطلب'**
+  String get dashboardAverageOrderMetric;
+
+  /// No description provided for @dashboardItemsSoldMetric.
+  ///
+  /// In ar, this message translates to:
+  /// **'القطع المباعة'**
+  String get dashboardItemsSoldMetric;
+
+  /// No description provided for @dashboardDiscountsMetric.
+  ///
+  /// In ar, this message translates to:
+  /// **'الخصومات'**
+  String get dashboardDiscountsMetric;
+
+  /// No description provided for @dashboardRefundsMetric.
+  ///
+  /// In ar, this message translates to:
+  /// **'المرتجعات'**
+  String get dashboardRefundsMetric;
+
+  /// Void and return counts for sales adjustments.
+  ///
+  /// In ar, this message translates to:
+  /// **'إلغاء {voids}، إرجاع {returns}'**
+  String dashboardAdjustmentsDetail(int voids, int returns);
+
+  /// No description provided for @dashboardSalesTrendTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'اتجاه صافي المبيعات'**
+  String get dashboardSalesTrendTitle;
+
+  /// No description provided for @dashboardHourlySalesTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'المبيعات حسب الساعة'**
+  String get dashboardHourlySalesTitle;
+
+  /// No description provided for @dashboardTopProductsTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'أفضل المنتجات'**
+  String get dashboardTopProductsTitle;
+
+  /// No description provided for @dashboardTopCategoriesTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'أفضل التصنيفات'**
+  String get dashboardTopCategoriesTitle;
+
+  /// No description provided for @dashboardRecentOrdersTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'آخر الطلبات'**
+  String get dashboardRecentOrdersTitle;
+
+  /// No description provided for @dashboardRegistersTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'جلسات الدرج'**
+  String get dashboardRegistersTitle;
+
+  /// No description provided for @dashboardOpenRegistersLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'جلسات مفتوحة'**
+  String get dashboardOpenRegistersLabel;
+
+  /// No description provided for @dashboardClosedRegistersLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'جلسات مغلقة'**
+  String get dashboardClosedRegistersLabel;
+
+  /// No description provided for @dashboardVarianceRegistersLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'فروقات نقدية'**
+  String get dashboardVarianceRegistersLabel;
+
+  /// No description provided for @dashboardPaymentsTotalMetric.
+  ///
+  /// In ar, this message translates to:
+  /// **'إجمالي المدفوعات'**
+  String get dashboardPaymentsTotalMetric;
+
+  /// No description provided for @dashboardPaymentCountMetric.
+  ///
+  /// In ar, this message translates to:
+  /// **'عدد المدفوعات'**
+  String get dashboardPaymentCountMetric;
+
+  /// No description provided for @dashboardCommissionMetric.
+  ///
+  /// In ar, this message translates to:
+  /// **'العمولات'**
+  String get dashboardCommissionMetric;
+
+  /// No description provided for @dashboardPaymentMixTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'توزيع طرق الدفع'**
+  String get dashboardPaymentMixTitle;
+
+  /// No description provided for @dashboardPaymentMethodsTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'طرق الدفع'**
+  String get dashboardPaymentMethodsTitle;
+
+  /// Payment count for a payment method.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, =0{لا مدفوعات} =1{دفعة واحدة} =2{دفعتان} other{{count} دفعات}}'**
+  String dashboardPaymentMethodCount(int count);
+
+  /// No description provided for @dashboardProductsMetric.
+  ///
+  /// In ar, this message translates to:
+  /// **'المنتجات'**
+  String get dashboardProductsMetric;
+
+  /// No description provided for @dashboardLowStockMetric.
+  ///
+  /// In ar, this message translates to:
+  /// **'مخزون منخفض'**
+  String get dashboardLowStockMetric;
+
+  /// No description provided for @dashboardOutOfStockMetric.
+  ///
+  /// In ar, this message translates to:
+  /// **'نافد'**
+  String get dashboardOutOfStockMetric;
+
+  /// No description provided for @dashboardRetailStockValueMetric.
+  ///
+  /// In ar, this message translates to:
+  /// **'قيمة المخزون بسعر البيع'**
+  String get dashboardRetailStockValueMetric;
+
+  /// No description provided for @dashboardCommittedUnitsMetric.
+  ///
+  /// In ar, this message translates to:
+  /// **'محجوز'**
+  String get dashboardCommittedUnitsMetric;
+
+  /// No description provided for @dashboardExpectedUnitsMetric.
+  ///
+  /// In ar, this message translates to:
+  /// **'متوقع'**
+  String get dashboardExpectedUnitsMetric;
+
+  /// No description provided for @dashboardLowStockTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'تنبيهات المخزون المنخفض'**
+  String get dashboardLowStockTitle;
+
+  /// No description provided for @dashboardDustyInventoryTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'مخزون راكد'**
+  String get dashboardDustyInventoryTitle;
+
+  /// No description provided for @dashboardStockMovementMixTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'حركات المخزون'**
+  String get dashboardStockMovementMixTitle;
+
+  /// No description provided for @dashboardRecentStockMovementsTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'آخر حركات المخزون'**
+  String get dashboardRecentStockMovementsTitle;
+
+  /// Stock item secondary information.
+  ///
+  /// In ar, this message translates to:
+  /// **'{sku}، حد الطلب {reorderLevel}، المتوقع {expected}'**
+  String dashboardStockItemSubtitle(String sku, int reorderLevel, int expected);
+
+  /// No description provided for @dashboardPurchasesMetric.
+  ///
+  /// In ar, this message translates to:
+  /// **'قيمة المشتريات'**
+  String get dashboardPurchasesMetric;
+
+  /// No description provided for @dashboardDueToSuppliersMetric.
+  ///
+  /// In ar, this message translates to:
+  /// **'مستحق للموردين'**
+  String get dashboardDueToSuppliersMetric;
+
+  /// No description provided for @dashboardOpenPurchasesMetric.
+  ///
+  /// In ar, this message translates to:
+  /// **'أوامر مفتوحة'**
+  String get dashboardOpenPurchasesMetric;
+
+  /// No description provided for @dashboardOverduePurchasesMetric.
+  ///
+  /// In ar, this message translates to:
+  /// **'متأخرة'**
+  String get dashboardOverduePurchasesMetric;
+
+  /// No description provided for @dashboardPurchaseStatusTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'حالات أوامر الشراء'**
+  String get dashboardPurchaseStatusTitle;
+
+  /// No description provided for @dashboardOverduePurchasesTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'مشتريات متأخرة'**
+  String get dashboardOverduePurchasesTitle;
+
+  /// No description provided for @dashboardSupplierBalancesTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'أرصدة الموردين'**
+  String get dashboardSupplierBalancesTitle;
+
+  /// No description provided for @dashboardActiveCustomersMetric.
+  ///
+  /// In ar, this message translates to:
+  /// **'عملاء نشطون'**
+  String get dashboardActiveCustomersMetric;
+
+  /// No description provided for @dashboardNewCustomersMetric.
+  ///
+  /// In ar, this message translates to:
+  /// **'عملاء جدد'**
+  String get dashboardNewCustomersMetric;
+
+  /// No description provided for @dashboardCustomersWithSalesMetric.
+  ///
+  /// In ar, this message translates to:
+  /// **'عملاء اشتروا'**
+  String get dashboardCustomersWithSalesMetric;
+
+  /// No description provided for @dashboardRepeatCustomersMetric.
+  ///
+  /// In ar, this message translates to:
+  /// **'عملاء متكررون'**
+  String get dashboardRepeatCustomersMetric;
+
+  /// No description provided for @dashboardMarketingConsentMetric.
+  ///
+  /// In ar, this message translates to:
+  /// **'موافقات تسويقية'**
+  String get dashboardMarketingConsentMetric;
+
+  /// No description provided for @dashboardTopCustomersTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'أفضل العملاء'**
+  String get dashboardTopCustomersTitle;
+
+  /// No description provided for @dashboardRecentCustomersTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'عملاء مضافون حديثًا'**
+  String get dashboardRecentCustomersTitle;
+
+  /// No description provided for @dashboardActiveDiscountsMetric.
+  ///
+  /// In ar, this message translates to:
+  /// **'خصومات نشطة'**
+  String get dashboardActiveDiscountsMetric;
+
+  /// No description provided for @dashboardCouponDiscountsMetric.
+  ///
+  /// In ar, this message translates to:
+  /// **'كوبونات'**
+  String get dashboardCouponDiscountsMetric;
+
+  /// No description provided for @dashboardRedemptionsMetric.
+  ///
+  /// In ar, this message translates to:
+  /// **'استخدامات الخصم'**
+  String get dashboardRedemptionsMetric;
+
+  /// No description provided for @dashboardSalesDiscountMetric.
+  ///
+  /// In ar, this message translates to:
+  /// **'خصومات المبيعات'**
+  String get dashboardSalesDiscountMetric;
+
+  /// No description provided for @dashboardPurchaseDiscountMetric.
+  ///
+  /// In ar, this message translates to:
+  /// **'خصومات المشتريات'**
+  String get dashboardPurchaseDiscountMetric;
+
+  /// No description provided for @dashboardTopDiscountsTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'أكثر الخصومات استخدامًا'**
+  String get dashboardTopDiscountsTitle;
+
+  /// No description provided for @dashboardExpiringDiscountsTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'خصومات تنتهي قريبًا'**
+  String get dashboardExpiringDiscountsTitle;
+
+  /// No description provided for @dashboardQueuedPrintJobsMetric.
+  ///
+  /// In ar, this message translates to:
+  /// **'طباعة في الانتظار'**
+  String get dashboardQueuedPrintJobsMetric;
+
+  /// No description provided for @dashboardClaimedPrintJobsMetric.
+  ///
+  /// In ar, this message translates to:
+  /// **'طباعة قيد التنفيذ'**
+  String get dashboardClaimedPrintJobsMetric;
+
+  /// No description provided for @dashboardFailedPrintJobsMetric.
+  ///
+  /// In ar, this message translates to:
+  /// **'فشل الطباعة'**
+  String get dashboardFailedPrintJobsMetric;
+
+  /// No description provided for @dashboardActivePrintAgentsMetric.
+  ///
+  /// In ar, this message translates to:
+  /// **'وكلاء نشطون'**
+  String get dashboardActivePrintAgentsMetric;
+
+  /// No description provided for @dashboardStalePrintAgentsMetric.
+  ///
+  /// In ar, this message translates to:
+  /// **'وكلاء غير متصلين'**
+  String get dashboardStalePrintAgentsMetric;
+
+  /// No description provided for @dashboardPrintStatusTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'حالات الطباعة'**
+  String get dashboardPrintStatusTitle;
+
+  /// No description provided for @dashboardPrintFailuresTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'أخطاء الطباعة'**
+  String get dashboardPrintFailuresTitle;
+
+  /// No description provided for @dashboardPrintStatusQueued.
+  ///
+  /// In ar, this message translates to:
+  /// **'بالانتظار'**
+  String get dashboardPrintStatusQueued;
+
+  /// No description provided for @dashboardPrintStatusClaimed.
+  ///
+  /// In ar, this message translates to:
+  /// **'قيد التنفيذ'**
+  String get dashboardPrintStatusClaimed;
+
+  /// No description provided for @dashboardPrintStatusPrinted.
+  ///
+  /// In ar, this message translates to:
+  /// **'مطبوعة'**
+  String get dashboardPrintStatusPrinted;
+
+  /// No description provided for @dashboardPrintStatusFailed.
+  ///
+  /// In ar, this message translates to:
+  /// **'فاشلة'**
+  String get dashboardPrintStatusFailed;
+
+  /// No description provided for @dashboardPrintStatusCanceled.
+  ///
+  /// In ar, this message translates to:
+  /// **'ملغاة'**
+  String get dashboardPrintStatusCanceled;
+
+  /// No description provided for @dashboardOrderStatusOpen.
+  ///
+  /// In ar, this message translates to:
+  /// **'مفتوح'**
+  String get dashboardOrderStatusOpen;
+
+  /// No description provided for @dashboardOrderStatusPaid.
+  ///
+  /// In ar, this message translates to:
+  /// **'مدفوع'**
+  String get dashboardOrderStatusPaid;
+
+  /// No description provided for @dashboardOrderStatusVoid.
+  ///
+  /// In ar, this message translates to:
+  /// **'ملغى'**
+  String get dashboardOrderStatusVoid;
+
+  /// No description provided for @dashboardUncategorizedLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'غير مصنف'**
+  String get dashboardUncategorizedLabel;
+
+  /// No description provided for @dashboardAnonymousCustomerLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'عميل غير محدد'**
+  String get dashboardAnonymousCustomerLabel;
+
+  /// Quantity and SKU label.
+  ///
+  /// In ar, this message translates to:
+  /// **'{quantity} قطعة، {sku}'**
+  String dashboardQuantityWithSku(int quantity, String sku);
+
+  /// Quantity-only dashboard label.
+  ///
+  /// In ar, this message translates to:
+  /// **'{quantity} قطعة'**
+  String dashboardQuantityOnly(int quantity);
+
+  /// Order count label.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, =0{لا طلبات} =1{طلب واحد} =2{طلبان} other{{count} طلبات}}'**
+  String dashboardOrderCount(int count);
+
+  /// No description provided for @stockMovementExpected.
+  ///
+  /// In ar, this message translates to:
+  /// **'متوقع'**
+  String get stockMovementExpected;
+
+  /// No description provided for @stockMovementReceiveExpected.
+  ///
+  /// In ar, this message translates to:
+  /// **'استلام المتوقع'**
+  String get stockMovementReceiveExpected;
+
+  /// No description provided for @stockMovementReceiveDamaged.
+  ///
+  /// In ar, this message translates to:
+  /// **'استلام تالف'**
+  String get stockMovementReceiveDamaged;
+
+  /// No description provided for @stockMovementCancelExpected.
+  ///
+  /// In ar, this message translates to:
+  /// **'إلغاء المتوقع'**
+  String get stockMovementCancelExpected;
+
   /// No description provided for @logoutButton.
   ///
   /// In ar, this message translates to:
@@ -1088,6 +1682,42 @@ abstract class AppLocalizations {
   /// **'تصنيف رئيسي'**
   String get rootCategoryLabel;
 
+  /// No description provided for @categoryExpandTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'عرض الفروع'**
+  String get categoryExpandTooltip;
+
+  /// No description provided for @categoryCollapseTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'إخفاء الفروع'**
+  String get categoryCollapseTooltip;
+
+  /// No description provided for @categoryLoadingChildren.
+  ///
+  /// In ar, this message translates to:
+  /// **'جار تحميل الفروع...'**
+  String get categoryLoadingChildren;
+
+  /// No description provided for @categoryChildrenLoadError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر تحميل الفروع.'**
+  String get categoryChildrenLoadError;
+
+  /// No description provided for @categoryRetryChildrenButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'إعادة المحاولة'**
+  String get categoryRetryChildrenButton;
+
+  /// No description provided for @categoryLoadMoreChildrenButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحميل فروع إضافية'**
+  String get categoryLoadMoreChildrenButton;
+
   /// Shows the parent category name.
   ///
   /// In ar, this message translates to:
@@ -1735,6 +2365,12 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'{count, plural, =0{لا توجد فواتير} =1{فاتورة واحدة • {amount}} =2{فاتورتان • {amount}} other{{count} فواتير • {amount}}}'**
   String outstandingPurchasesSummary(num count, String amount);
+
+  /// Partial loaded summary for received but unpaid purchase orders while more pages are available.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, =0{لم يتم تحميل فواتير} =1{المحمّل: فاتورة واحدة • {amount}} =2{المحمّل: فاتورتان • {amount}} other{المحمّل: {count} فواتير • {amount}}}'**
+  String outstandingPurchasesLoadedSummary(num count, String amount);
 
   /// Outstanding balance amount for a purchase order.
   ///

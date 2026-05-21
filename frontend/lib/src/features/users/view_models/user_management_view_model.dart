@@ -13,30 +13,63 @@ class UserManagementViewModel extends ChangeNotifier {
 
   List<PosUser> _users = [];
   bool _isLoading = false;
+  bool _isLoadingMore = false;
   bool _isSaving = false;
   bool _hasError = false;
   bool _hasSaveError = false;
+  bool _hasMoreUsers = true;
+  int _nextPage = 1;
 
   List<PosUser> get users => List.unmodifiable(_users);
   bool get isLoading => _isLoading;
+  bool get isLoadingMore => _isLoadingMore;
   bool get isSaving => _isSaving;
   bool get hasError => _hasError;
   bool get hasSaveError => _hasSaveError;
+  bool get hasMoreUsers => _hasMoreUsers;
 
   Future<void> loadUsers() async {
     _isLoading = true;
     _hasError = false;
+    _hasMoreUsers = true;
+    _nextPage = 1;
     notifyListeners();
 
-    final result = await _userRepository.loadUsers();
+    final result = await _userRepository.loadUsers(page: _nextPage);
     switch (result) {
-      case Ok<List<PosUser>>(value: final users):
-        _users = users;
-      case Error<List<PosUser>>(exception: _):
+      case Ok<PosUserPage>(value: final page):
+        _users = page.users;
+        _hasMoreUsers = page.hasMore;
+        _nextPage = 2;
+      case Error<PosUserPage>(exception: _):
         _hasError = true;
+        _hasMoreUsers = false;
     }
 
     _isLoading = false;
+    notifyListeners();
+  }
+
+  Future<void> loadMoreUsers() async {
+    if (_isLoading || _isLoadingMore || !_hasMoreUsers) {
+      return;
+    }
+
+    _isLoadingMore = true;
+    notifyListeners();
+
+    final result = await _userRepository.loadUsers(page: _nextPage);
+    switch (result) {
+      case Ok<PosUserPage>(value: final page):
+        _users = [..._users, ...page.users];
+        _hasMoreUsers = page.hasMore;
+        _nextPage += 1;
+      case Error<PosUserPage>(exception: _):
+        _hasError = true;
+        _hasMoreUsers = false;
+    }
+
+    _isLoadingMore = false;
     notifyListeners();
   }
 

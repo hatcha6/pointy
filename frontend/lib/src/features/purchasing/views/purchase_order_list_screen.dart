@@ -30,6 +30,7 @@ class PurchaseOrderListScreen extends StatelessWidget {
     required this.onOpenRegisterSessions,
     required this.onOpenDeviceSettings,
     required this.onLogout,
+    this.onOpenDashboard,
     this.onOpenDiscounts,
     this.onOpenUsers,
     this.onOpenShopSettings,
@@ -47,6 +48,7 @@ class PurchaseOrderListScreen extends StatelessWidget {
   final VoidCallback onOpenContacts;
   final VoidCallback onOpenRegisterSessions;
   final VoidCallback onOpenDeviceSettings;
+  final VoidCallback? onOpenDashboard;
   final VoidCallback? onOpenDiscounts;
   final VoidCallback? onOpenUsers;
   final VoidCallback? onOpenShopSettings;
@@ -64,6 +66,7 @@ class PurchaseOrderListScreen extends StatelessWidget {
             selectedDestination: AppNavigationDestination.purchasing,
             currentUser: currentUser,
             capabilities: capabilities,
+            onOpenDashboard: onOpenDashboard,
             onOpenPos: onOpenPos,
             onOpenPurchasing: () {},
             onOpenContacts: onOpenContacts,
@@ -204,7 +207,7 @@ class _OutstandingPurchasesSection extends StatelessWidget {
     if (viewModel.isLoadingOutstanding) {
       return const LinearProgressIndicator();
     }
-    if (viewModel.hasOutstandingError) {
+    if (viewModel.hasOutstandingError && orders.isEmpty) {
       return Text(
         l10n.outstandingPurchasesLoadError,
         style: TextStyle(color: Theme.of(context).colorScheme.error),
@@ -241,44 +244,78 @@ class _OutstandingPurchasesSection extends StatelessWidget {
                   ),
                 ),
                 Text(
-                  l10n.outstandingPurchasesSummary(
-                    orders.length,
-                    formatMoney(totalBalance),
-                  ),
+                  viewModel.hasMoreOutstanding
+                      ? l10n.outstandingPurchasesLoadedSummary(
+                          orders.length,
+                          formatMoney(totalBalance),
+                        )
+                      : l10n.outstandingPurchasesSummary(
+                          orders.length,
+                          formatMoney(totalBalance),
+                        ),
                   style: Theme.of(context).textTheme.labelLarge,
                 ),
               ],
             ),
             const SizedBox(height: 8),
-            for (final order in orders.take(3))
-              ListTile(
-                dense: true,
-                contentPadding: EdgeInsets.zero,
-                title: Text(
-                  order.orderNumber.isEmpty
-                      ? l10n.purchaseOrderFallbackTitle(order.id)
-                      : order.orderNumber,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                subtitle: Text(
-                  [
-                    if (order.supplierName != null &&
-                        order.supplierName!.isNotEmpty)
-                      order.supplierName!,
-                    if (order.receivedAt != null)
-                      formatDateTime(order.receivedAt!),
-                  ].join(' • '),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                trailing: Text(formatMoney(order.balanceDue)),
-                onTap: () => onOpenPurchaseOrder(order),
+            SizedBox(
+              height: _outstandingListHeight(
+                orders.length,
+                viewModel.hasMoreOutstanding,
               ),
+              child: InfiniteScrollList<PurchaseOrder>(
+                items: orders,
+                onLoadMore: viewModel.loadMoreOutstandingReceivedNotPaid,
+                hasMore: viewModel.hasMoreOutstanding,
+                isLoadingInitial: viewModel.isLoadingOutstanding,
+                isLoadingMore: viewModel.isLoadingMoreOutstanding,
+                emptyBuilder: (context) => const SizedBox.shrink(),
+                separatorBuilder: (_, _) => const Divider(height: 1),
+                itemBuilder: (context, order) {
+                  return ListTile(
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(
+                      order.orderNumber.isEmpty
+                          ? l10n.purchaseOrderFallbackTitle(order.id)
+                          : order.orderNumber,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    subtitle: Text(
+                      [
+                        if (order.supplierName != null &&
+                            order.supplierName!.isNotEmpty)
+                          order.supplierName!,
+                        if (order.receivedAt != null)
+                          formatDateTime(order.receivedAt!),
+                      ].join(' • '),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    trailing: Text(formatMoney(order.balanceDue)),
+                    onTap: () => onOpenPurchaseOrder(order),
+                  );
+                },
+              ),
+            ),
           ],
         ),
       ),
     );
+  }
+
+  double _outstandingListHeight(int orderCount, bool hasMore) {
+    if (hasMore || orderCount > 3) {
+      return 216;
+    }
+    if (orderCount == 1) {
+      return 64;
+    }
+    if (orderCount == 2) {
+      return 128;
+    }
+    return 192;
   }
 }
 

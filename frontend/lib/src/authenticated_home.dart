@@ -9,6 +9,7 @@ import 'features/catalog/view_models/category_management_view_model.dart';
 import 'features/catalog/views/category_management_screen.dart';
 import 'features/catalog/views/catalog_screen.dart';
 import 'features/contacts/views/contact_management_screen.dart';
+import 'features/dashboard/views/dashboard_screen.dart';
 import 'features/device_settings/views/device_settings_screen.dart';
 import 'features/discounts/views/discount_management_screen.dart';
 import 'features/pos/view_models/pos_view_model.dart';
@@ -40,6 +41,9 @@ class AuthenticatedHome extends StatelessWidget {
       currentUser: currentUser,
       capabilities: AuthorizationCapabilities.forUser(currentUser),
     );
+    if (routes.capabilities.canViewDashboard) {
+      return routes.buildDashboardScreen(context);
+    }
     return routes.buildPosScreen(context);
   }
 }
@@ -54,6 +58,10 @@ class _AuthenticatedRoutes {
   final PointyAppDependencies dependencies;
   final PosUser currentUser;
   final AuthorizationCapabilities capabilities;
+
+  Widget buildDashboardScreen(BuildContext context) {
+    return dashboardRouteBuilder(context);
+  }
 
   Widget buildPosScreen(BuildContext context) {
     return PosScreen(
@@ -71,6 +79,10 @@ class _AuthenticatedRoutes {
       onOpenCategories: guardedAction(
         AppCapability.manageCategories,
         () => push(context, categoryRouteBuilder),
+      ),
+      onOpenDashboard: guardedAction(
+        AppCapability.viewDashboard,
+        () => openDashboard(context),
       ),
       onOpenPurchasing: guardedAction(
         AppCapability.accessPurchasing,
@@ -113,6 +125,59 @@ class _AuthenticatedRoutes {
     );
   }
 
+  Widget dashboardRouteBuilder(BuildContext routeContext) {
+    return DashboardScreen(
+      viewModel: dependencies.dashboardViewModel,
+      currentUser: currentUser,
+      capabilities: capabilities,
+      onOpenPos: guardedAction(
+        AppCapability.accessPos,
+        () => openPos(routeContext),
+      ),
+      onOpenCatalog: guardedAction(
+        AppCapability.viewCatalogManagement,
+        () => replace(routeContext, catalogRouteBuilder),
+      ),
+      onOpenCategories: guardedAction(
+        AppCapability.manageCategories,
+        () => replace(routeContext, categoryRouteBuilder),
+      ),
+      onOpenPurchasing: guardedAction(
+        AppCapability.accessPurchasing,
+        () => replace(routeContext, purchasingRouteBuilder),
+      ),
+      onOpenContacts: guardedAction(
+        AppCapability.manageContacts,
+        () => replace(routeContext, contactsRouteBuilder),
+      ),
+      onOpenRegisterSessions: guardedAction(
+        AppCapability.viewRegisterSessions,
+        () => replace(routeContext, registerSessionsRouteBuilder),
+      ),
+      onOpenDiscounts: guardedAction(
+        AppCapability.viewDiscountRules,
+        () => replace(routeContext, discountsRouteBuilder),
+      ),
+      onOpenDeviceSettings: guardedAction(
+        AppCapability.manageDeviceSettings,
+        () => replace(routeContext, deviceSettingsRouteBuilder),
+      ),
+      onOpenUsers: capabilities.actionFor(
+        AppCapability.manageUsers,
+        () => replace(routeContext, usersRouteBuilder),
+      ),
+      onOpenShopSettings: capabilities.actionFor(
+        AppCapability.manageShopSettings,
+        () => replace(routeContext, shopSettingsRouteBuilder),
+      ),
+      onLogout: () => logout(routeContext),
+    );
+  }
+
+  Widget posRouteBuilder(BuildContext routeContext) {
+    return buildPosScreen(routeContext);
+  }
+
   Widget catalogRouteBuilder(BuildContext routeContext) {
     return CatalogScreen(
       viewModel: CatalogViewModel(dependencies.catalogRepository),
@@ -121,6 +186,10 @@ class _AuthenticatedRoutes {
       purchaseRepository: dependencies.purchaseRepository,
       currentUser: currentUser,
       capabilities: capabilities,
+      onOpenDashboard: guardedAction(
+        AppCapability.viewDashboard,
+        () => openDashboard(routeContext),
+      ),
       onOpenPos: guardedAction(
         AppCapability.accessPos,
         () => openPos(routeContext),
@@ -166,6 +235,10 @@ class _AuthenticatedRoutes {
       viewModel: CategoryManagementViewModel(dependencies.catalogRepository),
       currentUser: currentUser,
       capabilities: capabilities,
+      onOpenDashboard: guardedAction(
+        AppCapability.viewDashboard,
+        () => openDashboard(routeContext),
+      ),
       onOpenPos: guardedAction(
         AppCapability.accessPos,
         () => openPos(routeContext),
@@ -215,6 +288,10 @@ class _AuthenticatedRoutes {
       contactRepository: dependencies.contactRepository,
       currentUser: currentUser,
       capabilities: capabilities,
+      onOpenDashboard: guardedAction(
+        AppCapability.viewDashboard,
+        () => openDashboard(routeContext),
+      ),
       onOpenPos: guardedAction(
         AppCapability.accessPos,
         () => openPos(routeContext),
@@ -260,6 +337,10 @@ class _AuthenticatedRoutes {
       viewModel: UserManagementViewModel(dependencies.userRepository),
       currentUser: currentUser,
       capabilities: capabilities,
+      onOpenDashboard: guardedAction(
+        AppCapability.viewDashboard,
+        () => openDashboard(routeContext),
+      ),
       onOpenPos: guardedAction(
         AppCapability.accessPos,
         () => openPos(routeContext),
@@ -305,6 +386,10 @@ class _AuthenticatedRoutes {
       viewModel: ShopSettingsViewModel(dependencies.shopSettingsRepository),
       currentUser: currentUser,
       capabilities: capabilities,
+      onOpenDashboard: guardedAction(
+        AppCapability.viewDashboard,
+        () => openDashboard(routeContext),
+      ),
       onOpenPos: guardedAction(
         AppCapability.accessPos,
         () => openPos(routeContext),
@@ -352,6 +437,10 @@ class _AuthenticatedRoutes {
       contactRepository: dependencies.contactRepository,
       currentUser: currentUser,
       capabilities: capabilities,
+      onOpenDashboard: guardedAction(
+        AppCapability.viewDashboard,
+        () => openDashboard(routeContext),
+      ),
       onOpenPos: guardedAction(
         AppCapability.accessPos,
         () => openPos(routeContext),
@@ -397,6 +486,10 @@ class _AuthenticatedRoutes {
       viewModel: dependencies.printingSettingsViewModel,
       currentUser: currentUser,
       capabilities: capabilities,
+      onOpenDashboard: guardedAction(
+        AppCapability.viewDashboard,
+        () => openDashboard(routeContext),
+      ),
       onOpenPos: guardedAction(
         AppCapability.accessPos,
         () => openPos(routeContext),
@@ -443,6 +536,10 @@ class _AuthenticatedRoutes {
       purchaseRepository: dependencies.purchaseRepository,
       currentUser: currentUser,
       capabilities: capabilities,
+      onOpenDashboard: guardedAction(
+        AppCapability.viewDashboard,
+        () => openDashboard(routeContext),
+      ),
       onOpenPos: guardedAction(
         AppCapability.accessPos,
         () => openPos(routeContext),
@@ -489,6 +586,10 @@ class _AuthenticatedRoutes {
       contactRepository: dependencies.contactRepository,
       currentUser: currentUser,
       capabilities: capabilities,
+      onOpenDashboard: guardedAction(
+        AppCapability.viewDashboard,
+        () => openDashboard(routeContext),
+      ),
       onCreatePurchaseOrder: guardedAction(
         AppCapability.createPurchaseOrder,
         () async {
@@ -558,6 +659,10 @@ class _AuthenticatedRoutes {
       currentUser: currentUser,
       capabilities: capabilities,
       showBackButton: true,
+      onOpenDashboard: guardedAction(
+        AppCapability.viewDashboard,
+        () => openDashboard(routeContext),
+      ),
       onOpenPos: guardedAction(
         AppCapability.accessPos,
         () => openPos(routeContext),
@@ -635,8 +740,21 @@ class _AuthenticatedRoutes {
     ).pushReplacement(MaterialPageRoute<void>(builder: builder));
   }
 
-  void openPos(BuildContext context) {
+  void openDashboard(BuildContext context) {
     Navigator.of(context).popUntil((route) => route.isFirst);
+  }
+
+  void openPos(BuildContext context) {
+    if (!capabilities.canViewDashboard) {
+      Navigator.of(context).popUntil((route) => route.isFirst);
+      return;
+    }
+    final route = ModalRoute.of(context);
+    if (route?.isFirst ?? false) {
+      push(context, posRouteBuilder);
+      return;
+    }
+    replace(context, posRouteBuilder);
   }
 
   void logout(BuildContext context) {

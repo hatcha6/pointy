@@ -16,10 +16,13 @@ class PurchaseOrderListViewModel extends ChangeNotifier {
   bool _isLoading = false;
   bool _isLoadingMore = false;
   bool _isLoadingOutstanding = false;
+  bool _isLoadingMoreOutstanding = false;
   bool _hasMoreOrders = true;
+  bool _hasMoreOutstanding = true;
   bool _hasLoadError = false;
   bool _hasOutstandingError = false;
   int _nextPage = 1;
+  int _nextOutstandingPage = 1;
   PurchaseOrderQuery _query = const PurchaseOrderQuery();
 
   List<PurchaseOrder> get orders => List.unmodifiable(_orders);
@@ -28,7 +31,9 @@ class PurchaseOrderListViewModel extends ChangeNotifier {
   bool get isLoading => _isLoading;
   bool get isLoadingMore => _isLoadingMore;
   bool get isLoadingOutstanding => _isLoadingOutstanding;
+  bool get isLoadingMoreOutstanding => _isLoadingMoreOutstanding;
   bool get hasMoreOrders => _hasMoreOrders;
+  bool get hasMoreOutstanding => _hasMoreOutstanding;
   bool get hasLoadError => _hasLoadError;
   bool get hasOutstandingError => _hasOutstandingError;
   PurchaseOrderQuery get query => _query;
@@ -39,11 +44,13 @@ class PurchaseOrderListViewModel extends ChangeNotifier {
     _hasLoadError = false;
     _hasOutstandingError = false;
     _hasMoreOrders = true;
+    _hasMoreOutstanding = true;
     _nextPage = 1;
+    _nextOutstandingPage = 1;
     notifyListeners();
 
     final outstandingResultFuture = _purchaseRepository
-        .loadOutstandingReceivedNotPaid();
+        .loadOutstandingReceivedNotPaid(page: _nextOutstandingPage);
     final result = await _purchaseRepository.loadPurchaseOrders(
       query: _query,
       page: _nextPage,
@@ -62,8 +69,11 @@ class PurchaseOrderListViewModel extends ChangeNotifier {
     switch (outstandingResult) {
       case Ok<PurchaseOrderPage>():
         _outstandingReceivedNotPaid = outstandingResult.value.orders;
+        _hasMoreOutstanding = outstandingResult.value.hasMore;
+        _nextOutstandingPage = 2;
       case Error<PurchaseOrderPage>():
         _outstandingReceivedNotPaid = [];
+        _hasMoreOutstanding = false;
         _hasOutstandingError = true;
     }
 
@@ -95,6 +105,36 @@ class PurchaseOrderListViewModel extends ChangeNotifier {
     }
 
     _isLoadingMore = false;
+    notifyListeners();
+  }
+
+  Future<void> loadMoreOutstandingReceivedNotPaid() async {
+    if (_isLoadingOutstanding ||
+        _isLoadingMoreOutstanding ||
+        !_hasMoreOutstanding) {
+      return;
+    }
+
+    _isLoadingMoreOutstanding = true;
+    notifyListeners();
+
+    final result = await _purchaseRepository.loadOutstandingReceivedNotPaid(
+      page: _nextOutstandingPage,
+    );
+    switch (result) {
+      case Ok<PurchaseOrderPage>():
+        _outstandingReceivedNotPaid = [
+          ..._outstandingReceivedNotPaid,
+          ...result.value.orders,
+        ];
+        _hasMoreOutstanding = result.value.hasMore;
+        _nextOutstandingPage += 1;
+      case Error<PurchaseOrderPage>():
+        _hasOutstandingError = true;
+        _hasMoreOutstanding = false;
+    }
+
+    _isLoadingMoreOutstanding = false;
     notifyListeners();
   }
 

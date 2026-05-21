@@ -7,6 +7,7 @@ import '../models/product.dart';
 import '../models/product_category.dart';
 import '../models/product_page.dart';
 import '../models/contact.dart';
+import '../models/dashboard.dart';
 import '../models/discount_rule.dart';
 import '../models/purchase_submission.dart';
 import '../models/query.dart';
@@ -24,6 +25,7 @@ import 'api_session.dart';
 import 'auth_api_client.dart';
 import 'catalog_api_client.dart';
 import 'customer_api_client.dart';
+import 'dashboard_api_client.dart';
 import 'discount_api_client.dart';
 import 'inventory_api_client.dart';
 import 'pos_http_client.dart';
@@ -50,6 +52,7 @@ class PosApiService {
     _shopSettings = ShopSettingsApiClient(session);
     _catalog = CatalogApiClient(session);
     _customers = CustomerApiClient(session);
+    _dashboard = DashboardApiClient(session);
     _discounts = DiscountApiClient(session);
     _inventory = InventoryApiClient(session);
     _registerSessions = RegisterSessionApiClient(session);
@@ -65,6 +68,7 @@ class PosApiService {
   late final ShopSettingsApiClient _shopSettings;
   late final CatalogApiClient _catalog;
   late final CustomerApiClient _customers;
+  late final DashboardApiClient _dashboard;
   late final DiscountApiClient _discounts;
   late final InventoryApiClient _inventory;
   late final RegisterSessionApiClient _registerSessions;
@@ -80,7 +84,9 @@ class PosApiService {
 
   Future<PosUser?> fetchCurrentUser() => _auth.fetchCurrentUser();
 
-  Future<List<PosUser>> fetchUsers() => _users.fetchUsers();
+  Future<PosUserPage> fetchUsers({int page = 1}) {
+    return _users.fetchUsers(page: page);
+  }
 
   Future<PosUser> createUser(UserCreateDraft draft) {
     return _users.createUser(draft);
@@ -129,6 +135,10 @@ class PosApiService {
 
   Future<Customer> createCustomer(CustomerDraft draft) {
     return _customers.createCustomer(draft);
+  }
+
+  Future<DashboardSnapshot> fetchDashboard({required int days}) {
+    return _dashboard.fetchDashboard(days: days);
   }
 
   Future<DiscountRulePage> fetchDiscountRules({
@@ -290,8 +300,10 @@ class PosApiService {
     return _purchasing.createSupplierPayment(draft);
   }
 
-  Future<PurchaseOrderPage> fetchOutstandingReceivedNotPaidPurchases() {
-    return _purchasing.fetchOutstandingReceivedNotPaidPurchases();
+  Future<PurchaseOrderPage> fetchOutstandingReceivedNotPaidPurchases({
+    int page = 1,
+  }) {
+    return _purchasing.fetchOutstandingReceivedNotPaidPurchases(page: page);
   }
 
   Future<PurchaseOrderPage> fetchSupplierPurchaseHistory({

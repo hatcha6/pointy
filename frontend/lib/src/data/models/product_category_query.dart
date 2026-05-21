@@ -31,6 +31,8 @@ class ProductCategoryQuery extends ModelQuery {
     this.search = '',
     this.availability = ProductCategoryAvailabilityFilter.all,
     this.ordering = ProductCategoryOrdering.name,
+    this.parentId,
+    this.rootOnly = false,
   });
 
   @override
@@ -38,7 +40,15 @@ class ProductCategoryQuery extends ModelQuery {
   final ProductCategoryAvailabilityFilter availability;
   @override
   final ProductCategoryOrdering ordering;
+  final int? parentId;
+  final bool rootOnly;
 
   @override
-  Iterable<QueryFilter> get filters => availability.filters;
+  Iterable<QueryFilter> get filters => [
+    ...availability.filters,
+    if (parentId != null)
+      QueryFilter(parameter: 'parent', value: '$parentId')
+    else if (rootOnly)
+      const QueryFilter(parameter: 'root', value: 'true'),
+  ];
 }

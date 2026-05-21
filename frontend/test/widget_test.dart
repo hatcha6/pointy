@@ -18,6 +18,7 @@ import 'package:pointy_frontend/src/data/models/product.dart';
 import 'package:pointy_frontend/src/data/models/purchase_submission.dart';
 import 'package:pointy_frontend/src/data/models/register_cash_movement.dart';
 import 'package:pointy_frontend/src/app.dart';
+import 'package:pointy_frontend/src/data/repositories/catalog_repository.dart';
 import 'package:pointy_frontend/src/data/repositories/printing_repository.dart';
 import 'package:pointy_frontend/src/data/repositories/inventory_repository.dart';
 import 'package:pointy_frontend/src/data/repositories/purchase_repository.dart';
@@ -26,8 +27,10 @@ import 'package:pointy_frontend/src/data/services/esc_pos_barcode_label_encoder.
 import 'package:pointy_frontend/src/data/services/esc_pos_receipt_encoder.dart';
 import 'package:pointy_frontend/src/data/services/pos_api_service.dart';
 import 'package:pointy_frontend/src/data/services/print_transport.dart';
+import 'package:pointy_frontend/src/features/catalog/view_models/category_management_view_model.dart';
 import 'package:pointy_frontend/src/features/catalog/views/product_details_screen.dart';
 import 'package:pointy_frontend/src/features/catalog/view_models/product_stock_view_model.dart';
+import 'package:pointy_frontend/src/features/catalog/views/category_management_screen.dart';
 import 'package:pointy_frontend/src/features/purchasing/views/purchase_order_details_screen.dart';
 import 'package:pointy_frontend/src/features/pos/views/register_cash_movement_sheet.dart';
 import 'package:pointy_frontend/src/features/pos/views/register_session_close_sheet.dart';
@@ -627,6 +630,8 @@ void main() {
     await tester.pumpWidget(PointyApp(apiService: _mockApiService()));
     await tester.pumpAndSettle(const Duration(seconds: 1));
 
+    expect(find.text('لوحة التحكم'), findsOneWidget);
+    await _openPosFromDashboard(tester);
     expect(find.text('نقطة البيع'), findsOneWidget);
     expect(find.text('جلسة الدرج'), findsOneWidget);
     expect(find.text('نقدية الافتتاح'), findsOneWidget);
@@ -710,6 +715,7 @@ void main() {
     );
     await tester.pumpAndSettle(const Duration(seconds: 1));
 
+    await _openPosFromDashboard(tester);
     await tester.tap(find.text('بدء الجلسة'));
     await tester.pumpAndSettle(const Duration(seconds: 1));
 
@@ -739,6 +745,89 @@ void main() {
     expect(find.text('اسم المنتج'), findsOneWidget);
     expect(find.text('رمز المنتج'), findsOneWidget);
     expect(find.text('إنشاء المنتج'), findsOneWidget);
+  });
+
+  testWidgets('category tree lazily pages roots and children', (
+    WidgetTester tester,
+  ) async {
+    final categoryRequests = <Uri>[];
+    final apiService = _mockApiService(
+      onProductCategoryRequest: (request) {
+        categoryRequests.add(request.url);
+      },
+    );
+    final manager = PosUser.fromJson(_userJson(role: 'manager'));
+
+    await tester.pumpWidget(
+      MaterialApp(
+        locale: const Locale('ar'),
+        supportedLocales: AppLocalizations.supportedLocales,
+        localizationsDelegates: const [
+          AppLocalizations.delegate,
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
+        home: CategoryManagementScreen(
+          viewModel: CategoryManagementViewModel(CatalogRepository(apiService)),
+          currentUser: manager,
+          capabilities: AuthorizationCapabilities.forUser(manager),
+          onOpenPos: () {},
+          onOpenPurchasing: () {},
+          onOpenContacts: () {},
+          onOpenCatalog: () {},
+          onOpenRegisterSessions: () {},
+          onOpenDeviceSettings: () {},
+          onLogout: () {},
+        ),
+      ),
+    );
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+
+    expect(find.text('مشروبات'), findsOneWidget);
+    expect(
+      categoryRequests.any(
+        (uri) =>
+            uri.queryParameters['root'] == 'true' &&
+            uri.queryParameters['page'] == '1',
+      ),
+      isTrue,
+    );
+    expect(
+      categoryRequests.any(
+        (uri) =>
+            uri.queryParameters['root'] == 'true' &&
+            uri.queryParameters['page'] == '2',
+      ),
+      isTrue,
+    );
+
+    await tester.tap(find.byTooltip('عرض الفروع'));
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+
+    expect(find.text('قهوة'), findsOneWidget);
+    expect(find.text('تحميل فروع إضافية'), findsOneWidget);
+    expect(
+      categoryRequests.any(
+        (uri) =>
+            uri.queryParameters['parent'] == '1' &&
+            uri.queryParameters['page'] == '1',
+      ),
+      isTrue,
+    );
+
+    await tester.tap(find.text('تحميل فروع إضافية'));
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+
+    expect(find.text('شاي'), findsOneWidget);
+    expect(
+      categoryRequests.any(
+        (uri) =>
+            uri.queryParameters['parent'] == '1' &&
+            uri.queryParameters['page'] == '2',
+      ),
+      isTrue,
+    );
   });
 
   testWidgets('POS screen exposes reusable search and ordering controls', (
@@ -1415,7 +1504,7 @@ void main() {
     );
   });
 
-  testWidgets('login screen authenticates before showing POS', (
+  testWidgets('login screen authenticates before showing dashboard', (
     WidgetTester tester,
   ) async {
     await tester.pumpWidget(
@@ -1430,8 +1519,8 @@ void main() {
     await tester.tap(find.text('دخول'));
     await tester.pumpAndSettle(const Duration(seconds: 1));
 
-    expect(find.text('جلسة الدرج'), findsOneWidget);
-    expect(find.text('نقدية الافتتاح'), findsOneWidget);
+    expect(find.text('لوحة التحكم'), findsOneWidget);
+    expect(find.text('نقدية الافتتاح'), findsNothing);
   });
 
   testWidgets('manager can open user management', (WidgetTester tester) async {
@@ -1944,6 +2033,7 @@ void main() {
     );
     await tester.pumpAndSettle(const Duration(seconds: 1));
 
+    await _openPosFromDashboard(tester);
     expect(find.text('جلسة RS-1'), findsOneWidget);
     expect(find.text('نقدية الافتتاح: 12.00 د.ل'), findsOneWidget);
 
@@ -2224,8 +2314,20 @@ void main() {
 }
 
 Future<void> _startRegisterSession(WidgetTester tester) async {
+  await _openPosFromDashboard(tester);
   await tester.enterText(find.byType(TextField), '12.00');
   await tester.tap(find.text('بدء الجلسة'));
+  await tester.pumpAndSettle(const Duration(seconds: 1));
+}
+
+Future<void> _openPosFromDashboard(WidgetTester tester) async {
+  if (find.text('نقطة البيع').evaluate().isNotEmpty ||
+      find.text('البيع الحالي').evaluate().isNotEmpty) {
+    return;
+  }
+  await tester.tap(find.byIcon(Icons.menu));
+  await tester.pumpAndSettle();
+  await tester.tap(find.text('شاشة البيع'));
   await tester.pumpAndSettle(const Duration(seconds: 1));
 }
 
@@ -2356,6 +2458,7 @@ PosApiService _mockApiService({
   void Function(int page)? onOrderPage,
   void Function(http.Request request)? onShopSettingsUpdate,
   void Function(http.Request request)? onDiscountRuleCreate,
+  void Function(http.Request request)? onProductCategoryRequest,
   bool shopSettingsAutoPrint = false,
   bool shopSettingsRequireOpeningCash = true,
   bool shopSettingsAllowOverselling = false,
@@ -2402,6 +2505,10 @@ PosApiService _mockApiService({
       if (path.endsWith('/auth/logout/')) {
         authenticated = false;
         return http.Response('', 204);
+      }
+
+      if (path.endsWith('/dashboard/')) {
+        return _jsonResponse(_dashboardJson());
       }
 
       if (path.endsWith('/users/')) {
@@ -2607,6 +2714,68 @@ PosApiService _mockApiService({
             barcode: productBarcode,
           ),
         );
+      }
+
+      if (path.endsWith('/product-categories/')) {
+        onProductCategoryRequest?.call(request);
+        if (request.method == 'POST') {
+          final body = jsonDecode(request.body) as Map<String, Object?>;
+          return _jsonResponse({..._productCategoryJson(id: 9), ...body});
+        }
+
+        final page =
+            int.tryParse(request.url.queryParameters['page'] ?? '1') ?? 1;
+        final parent = request.url.queryParameters['parent'];
+
+        if (parent == '1') {
+          if (page == 2) {
+            return _jsonResponse({
+              'count': 2,
+              'next': null,
+              'previous':
+                  'http://localhost/api/product-categories/?parent=1&page=1',
+              'results': [
+                _productCategoryJson(
+                  id: 4,
+                  name: 'شاي',
+                  parent: 1,
+                  parentName: 'مشروبات',
+                ),
+              ],
+            });
+          }
+          return _jsonResponse({
+            'count': 2,
+            'next': 'http://localhost/api/product-categories/?parent=1&page=2',
+            'previous': null,
+            'results': [
+              _productCategoryJson(
+                id: 2,
+                name: 'قهوة',
+                parent: 1,
+                parentName: 'مشروبات',
+              ),
+            ],
+          });
+        }
+
+        if (page == 2) {
+          return _jsonResponse({
+            'count': 3,
+            'next': null,
+            'previous':
+                'http://localhost/api/product-categories/?root=true&page=1',
+            'results': [_productCategoryJson(id: 3, name: 'وجبات')],
+          });
+        }
+        return _jsonResponse({
+          'count': 3,
+          'next': 'http://localhost/api/product-categories/?root=true&page=2',
+          'previous': null,
+          'results': [
+            _productCategoryJson(id: 1, name: 'مشروبات', childrenCount: 2),
+          ],
+        });
       }
 
       if (path.endsWith('/customers/')) {
@@ -3010,6 +3179,20 @@ Map<String, Object?> _userJson({
   };
 }
 
+Map<String, Object?> _dashboardJson() {
+  return {
+    'generated_at': '2026-05-21T09:00:00Z',
+    'period': {
+      'days': 30,
+      'start': '2026-04-21T00:00:00Z',
+      'end': '2026-05-21T00:00:00Z',
+      'previous_start': '2026-03-22T00:00:00Z',
+      'previous_end': '2026-04-21T00:00:00Z',
+    },
+    'sections': <String, Object?>{},
+  };
+}
+
 Map<String, Object?> _sessionJson({
   int id = 1,
   String sessionNumber = 'RS-1',
@@ -3095,6 +3278,26 @@ Map<String, Object?> _productPageJson({
         'quantity_on_hand': quantityOnHand,
       },
     ],
+  };
+}
+
+Map<String, Object?> _productCategoryJson({
+  int id = 1,
+  String name = 'مشروبات',
+  String description = '',
+  int? parent,
+  String parentName = '',
+  int childrenCount = 0,
+  bool isActive = true,
+}) {
+  return {
+    'id': id,
+    'name': name,
+    'description': description,
+    'parent': parent,
+    'parent_name': parentName,
+    'children_count': childrenCount,
+    'is_active': isActive,
   };
 }
 

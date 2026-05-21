@@ -13,6 +13,7 @@ from apps.core.views import (
     logout_view,
     me_view,
 )
+from apps.core.dashboard import DashboardView
 from apps.inventory.views import StockItemViewSet, StockMovementViewSet
 from apps.payments.views import PaymentViewSet
 from apps.printing.views import (
@@ -54,6 +55,7 @@ urlpatterns = [
     path("api/auth/login/", login_view, name="auth-login"),
     path("api/auth/logout/", logout_view, name="auth-logout"),
     path("api/auth/me/", me_view, name="auth-me"),
+    path("api/dashboard/", DashboardView.as_view(), name="dashboard"),
     path("api/shop-settings/", ShopSettingsView.as_view(), name="shop-settings"),
     path("api/", include(router.urls)),
     path("api/schema/", SpectacularAPIView.as_view(), name="schema"),

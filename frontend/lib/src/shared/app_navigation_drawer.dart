@@ -5,6 +5,7 @@ import '../core/authorization.dart';
 import '../data/models/pos_user.dart';
 
 enum AppNavigationDestination {
+  dashboard,
   pos,
   purchasing,
   contacts,
@@ -30,6 +31,7 @@ class AppNavigationDrawer extends StatelessWidget {
     required this.onOpenRegisterSessions,
     required this.onOpenDeviceSettings,
     required this.onLogout,
+    this.onOpenDashboard,
     this.onOpenDiscounts,
     this.onOpenCategories,
     this.onOpenUsers,
@@ -45,6 +47,7 @@ class AppNavigationDrawer extends StatelessWidget {
   final VoidCallback onOpenCatalog;
   final VoidCallback onOpenRegisterSessions;
   final VoidCallback onOpenDeviceSettings;
+  final VoidCallback? onOpenDashboard;
   final VoidCallback? onOpenDiscounts;
   final VoidCallback? onOpenCategories;
   final VoidCallback? onOpenUsers;
@@ -126,6 +129,14 @@ class AppNavigationDrawer extends StatelessWidget {
         selectedIcon: const Icon(Icons.settings),
         label: l10n.settingsDrawerLabel,
         onTap: onOpenShopSettings,
+      ),
+      _DrawerDestination(
+        destination: AppNavigationDestination.dashboard,
+        capability: AppCapability.viewDashboard,
+        icon: const Icon(Icons.dashboard_outlined),
+        selectedIcon: const Icon(Icons.dashboard),
+        label: l10n.dashboardDrawerLabel,
+        onTap: onOpenDashboard,
       ),
       _DrawerDestination(
         destination: AppNavigationDestination.categories,

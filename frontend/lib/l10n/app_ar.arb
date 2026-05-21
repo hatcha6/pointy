@@ -34,6 +34,173 @@
   "deviceSettingsDrawerLabel": "إعدادات الجهاز",
   "usersDrawerLabel": "المستخدمون",
   "settingsDrawerLabel": "إعدادات المتجر",
+  "dashboardDrawerLabel": "لوحة التحكم",
+  "dashboardTitle": "لوحة التحكم",
+  "dashboardOverviewTitle": "نظرة تشغيلية",
+  "refreshDashboardTooltip": "تحديث لوحة التحكم",
+  "dashboardLoadError": "تعذر تحميل لوحة التحكم.",
+  "dashboardEmptyState": "لا توجد مؤشرات متاحة لهذا المستخدم.",
+  "dashboardNoWidgetData": "لا توجد بيانات لهذا المؤشر.",
+  "dashboardLastUpdated": "آخر تحديث: {value}",
+  "@dashboardLastUpdated": {
+    "description": "Shows dashboard last refresh time.",
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "dashboardLastUpdatedUnknown": "آخر تحديث غير معروف",
+  "dashboardRange7Days": "٧ أيام",
+  "dashboardRange30Days": "٣٠ يومًا",
+  "dashboardRange90Days": "٩٠ يومًا",
+  "dashboardSalesSectionTitle": "المبيعات",
+  "dashboardPaymentsSectionTitle": "المدفوعات",
+  "dashboardInventorySectionTitle": "المخزون",
+  "dashboardPurchasingSectionTitle": "المشتريات",
+  "dashboardCustomersSectionTitle": "العملاء",
+  "dashboardDiscountsSectionTitle": "الخصومات",
+  "dashboardPrintingSectionTitle": "الطباعة",
+  "dashboardNetSalesMetric": "صافي المبيعات",
+  "dashboardGrossProfitMetric": "الربح الإجمالي",
+  "dashboardProfitMarginMetric": "هامش الربح",
+  "dashboardOrdersMetric": "الطلبات",
+  "dashboardAverageOrderMetric": "متوسط الطلب",
+  "dashboardItemsSoldMetric": "القطع المباعة",
+  "dashboardDiscountsMetric": "الخصومات",
+  "dashboardRefundsMetric": "المرتجعات",
+  "dashboardAdjustmentsDetail": "إلغاء {voids}، إرجاع {returns}",
+  "@dashboardAdjustmentsDetail": {
+    "description": "Void and return counts for sales adjustments.",
+    "placeholders": {
+      "voids": {
+        "type": "int"
+      },
+      "returns": {
+        "type": "int"
+      }
+    }
+  },
+  "dashboardSalesTrendTitle": "اتجاه صافي المبيعات",
+  "dashboardHourlySalesTitle": "المبيعات حسب الساعة",
+  "dashboardTopProductsTitle": "أفضل المنتجات",
+  "dashboardTopCategoriesTitle": "أفضل التصنيفات",
+  "dashboardRecentOrdersTitle": "آخر الطلبات",
+  "dashboardRegistersTitle": "جلسات الدرج",
+  "dashboardOpenRegistersLabel": "جلسات مفتوحة",
+  "dashboardClosedRegistersLabel": "جلسات مغلقة",
+  "dashboardVarianceRegistersLabel": "فروقات نقدية",
+  "dashboardPaymentsTotalMetric": "إجمالي المدفوعات",
+  "dashboardPaymentCountMetric": "عدد المدفوعات",
+  "dashboardCommissionMetric": "العمولات",
+  "dashboardPaymentMixTitle": "توزيع طرق الدفع",
+  "dashboardPaymentMethodsTitle": "طرق الدفع",
+  "dashboardPaymentMethodCount": "{count, plural, =0{لا مدفوعات} =1{دفعة واحدة} =2{دفعتان} other{{count} دفعات}}",
+  "@dashboardPaymentMethodCount": {
+    "description": "Payment count for a payment method.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "dashboardProductsMetric": "المنتجات",
+  "dashboardLowStockMetric": "مخزون منخفض",
+  "dashboardOutOfStockMetric": "نافد",
+  "dashboardRetailStockValueMetric": "قيمة المخزون بسعر البيع",
+  "dashboardCommittedUnitsMetric": "محجوز",
+  "dashboardExpectedUnitsMetric": "متوقع",
+  "dashboardLowStockTitle": "تنبيهات المخزون المنخفض",
+  "dashboardDustyInventoryTitle": "مخزون راكد",
+  "dashboardStockMovementMixTitle": "حركات المخزون",
+  "dashboardRecentStockMovementsTitle": "آخر حركات المخزون",
+  "dashboardStockItemSubtitle": "{sku}، حد الطلب {reorderLevel}، المتوقع {expected}",
+  "@dashboardStockItemSubtitle": {
+    "description": "Stock item secondary information.",
+    "placeholders": {
+      "sku": {
+        "type": "String"
+      },
+      "reorderLevel": {
+        "type": "int"
+      },
+      "expected": {
+        "type": "int"
+      }
+    }
+  },
+  "dashboardPurchasesMetric": "قيمة المشتريات",
+  "dashboardDueToSuppliersMetric": "مستحق للموردين",
+  "dashboardOpenPurchasesMetric": "أوامر مفتوحة",
+  "dashboardOverduePurchasesMetric": "متأخرة",
+  "dashboardPurchaseStatusTitle": "حالات أوامر الشراء",
+  "dashboardOverduePurchasesTitle": "مشتريات متأخرة",
+  "dashboardSupplierBalancesTitle": "أرصدة الموردين",
+  "dashboardActiveCustomersMetric": "عملاء نشطون",
+  "dashboardNewCustomersMetric": "عملاء جدد",
+  "dashboardCustomersWithSalesMetric": "عملاء اشتروا",
+  "dashboardRepeatCustomersMetric": "عملاء متكررون",
+  "dashboardMarketingConsentMetric": "موافقات تسويقية",
+  "dashboardTopCustomersTitle": "أفضل العملاء",
+  "dashboardRecentCustomersTitle": "عملاء مضافون حديثًا",
+  "dashboardActiveDiscountsMetric": "خصومات نشطة",
+  "dashboardCouponDiscountsMetric": "كوبونات",
+  "dashboardRedemptionsMetric": "استخدامات الخصم",
+  "dashboardSalesDiscountMetric": "خصومات المبيعات",
+  "dashboardPurchaseDiscountMetric": "خصومات المشتريات",
+  "dashboardTopDiscountsTitle": "أكثر الخصومات استخدامًا",
+  "dashboardExpiringDiscountsTitle": "خصومات تنتهي قريبًا",
+  "dashboardQueuedPrintJobsMetric": "طباعة في الانتظار",
+  "dashboardClaimedPrintJobsMetric": "طباعة قيد التنفيذ",
+  "dashboardFailedPrintJobsMetric": "فشل الطباعة",
+  "dashboardActivePrintAgentsMetric": "وكلاء نشطون",
+  "dashboardStalePrintAgentsMetric": "وكلاء غير متصلين",
+  "dashboardPrintStatusTitle": "حالات الطباعة",
+  "dashboardPrintFailuresTitle": "أخطاء الطباعة",
+  "dashboardPrintStatusQueued": "بالانتظار",
+  "dashboardPrintStatusClaimed": "قيد التنفيذ",
+  "dashboardPrintStatusPrinted": "مطبوعة",
+  "dashboardPrintStatusFailed": "فاشلة",
+  "dashboardPrintStatusCanceled": "ملغاة",
+  "dashboardOrderStatusOpen": "مفتوح",
+  "dashboardOrderStatusPaid": "مدفوع",
+  "dashboardOrderStatusVoid": "ملغى",
+  "dashboardUncategorizedLabel": "غير مصنف",
+  "dashboardAnonymousCustomerLabel": "عميل غير محدد",
+  "dashboardQuantityWithSku": "{quantity} قطعة، {sku}",
+  "@dashboardQuantityWithSku": {
+    "description": "Quantity and SKU label.",
+    "placeholders": {
+      "quantity": {
+        "type": "int"
+      },
+      "sku": {
+        "type": "String"
+      }
+    }
+  },
+  "dashboardQuantityOnly": "{quantity} قطعة",
+  "@dashboardQuantityOnly": {
+    "description": "Quantity-only dashboard label.",
+    "placeholders": {
+      "quantity": {
+        "type": "int"
+      }
+    }
+  },
+  "dashboardOrderCount": "{count, plural, =0{لا طلبات} =1{طلب واحد} =2{طلبان} other{{count} طلبات}}",
+  "@dashboardOrderCount": {
+    "description": "Order count label.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "stockMovementExpected": "متوقع",
+  "stockMovementReceiveExpected": "استلام المتوقع",
+  "stockMovementReceiveDamaged": "استلام تالف",
+  "stockMovementCancelExpected": "إلغاء المتوقع",
   "logoutButton": "تسجيل الخروج",
   "unauthorizedTitle": "غير مصرح",
   "unauthorizedMessage": "لا يملك هذا المستخدم صلاحية الوصول إلى هذه الشاشة.",
@@ -247,6 +414,12 @@
   "categoryCreateError": "تعذر إنشاء التصنيف. راجع البيانات وحاول مرة أخرى.",
   "categoryEmptyState": "لا توجد تصنيفات بعد.",
   "rootCategoryLabel": "تصنيف رئيسي",
+  "categoryExpandTooltip": "عرض الفروع",
+  "categoryCollapseTooltip": "إخفاء الفروع",
+  "categoryLoadingChildren": "جار تحميل الفروع...",
+  "categoryChildrenLoadError": "تعذر تحميل الفروع.",
+  "categoryRetryChildrenButton": "إعادة المحاولة",
+  "categoryLoadMoreChildrenButton": "تحميل فروع إضافية",
   "categoryParentValue": "ضمن {parent}",
   "@categoryParentValue": {
     "description": "Shows the parent category name.",
@@ -429,6 +602,18 @@
   "outstandingPurchasesSummary": "{count, plural, =0{لا توجد فواتير} =1{فاتورة واحدة • {amount}} =2{فاتورتان • {amount}} other{{count} فواتير • {amount}}}",
   "@outstandingPurchasesSummary": {
     "description": "Summary for received but unpaid purchase orders.",
+    "placeholders": {
+      "count": {
+        "type": "num"
+      },
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "outstandingPurchasesLoadedSummary": "{count, plural, =0{لم يتم تحميل فواتير} =1{المحمّل: فاتورة واحدة • {amount}} =2{المحمّل: فاتورتان • {amount}} other{المحمّل: {count} فواتير • {amount}}}",
+  "@outstandingPurchasesLoadedSummary": {
+    "description": "Partial loaded summary for received but unpaid purchase orders while more pages are available.",
     "placeholders": {
       "count": {
         "type": "num"

@@ -7,8 +7,8 @@ class UserRepository {
 
   final PosApiService _service;
 
-  Future<Result<List<PosUser>>> loadUsers() async {
-    return Result.guard(_service.fetchUsers);
+  Future<Result<PosUserPage>> loadUsers({int page = 1}) async {
+    return Result.guard(() => _service.fetchUsers(page: page));
   }
 
   Future<Result<PosUser>> createUser(UserCreateDraft draft) async {

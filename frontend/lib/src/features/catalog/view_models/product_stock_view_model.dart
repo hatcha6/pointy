@@ -30,9 +30,12 @@ class ProductStockViewModel extends ChangeNotifier {
   bool _isLoadingMovements = false;
   bool _isLoadingCostInsights = false;
   bool _isLoadingMoreMovements = false;
+  bool _isLoadingMoreCostHistory = false;
   bool _isSavingMovement = false;
   bool _hasMoreMovements = true;
+  bool _hasMoreCostHistory = true;
   int _nextMovementPage = 1;
+  int _nextCostHistoryPage = 1;
   String? _errorMessage;
   bool _hasCostInsightsError = false;
 
@@ -45,8 +48,10 @@ class ProductStockViewModel extends ChangeNotifier {
   bool get isLoadingMovements => _isLoadingMovements;
   bool get isLoadingCostInsights => _isLoadingCostInsights;
   bool get isLoadingMoreMovements => _isLoadingMoreMovements;
+  bool get isLoadingMoreCostHistory => _isLoadingMoreCostHistory;
   bool get isSavingMovement => _isSavingMovement;
   bool get hasMoreMovements => _hasMoreMovements;
+  bool get hasMoreCostHistory => _hasMoreCostHistory;
   String? get errorMessage => _errorMessage;
   bool get hasCostInsightsError => _hasCostInsightsError;
 
@@ -103,10 +108,13 @@ class ProductStockViewModel extends ChangeNotifier {
   Future<void> loadCostInsights() async {
     _isLoadingCostInsights = true;
     _hasCostInsightsError = false;
+    _hasMoreCostHistory = true;
+    _nextCostHistoryPage = 1;
     notifyListeners();
 
     final historyFuture = _purchaseRepository.loadProductCostHistory(
       productId: product.id,
+      page: _nextCostHistoryPage,
     );
     final marginFuture = _purchaseRepository.loadProductMarginImpact(
       product.id,
@@ -117,8 +125,11 @@ class ProductStockViewModel extends ChangeNotifier {
     switch (historyResult) {
       case Ok<ProductCostHistoryPage>():
         _costHistory = historyResult.value.entries;
+        _hasMoreCostHistory = historyResult.value.hasMore;
+        _nextCostHistoryPage = 2;
       case Error<ProductCostHistoryPage>():
         _costHistory = [];
+        _hasMoreCostHistory = false;
         _hasCostInsightsError = true;
     }
     switch (marginResult) {
@@ -130,6 +141,34 @@ class ProductStockViewModel extends ChangeNotifier {
     }
 
     _isLoadingCostInsights = false;
+    notifyListeners();
+  }
+
+  Future<void> loadMoreCostHistory() async {
+    if (_isLoadingCostInsights ||
+        _isLoadingMoreCostHistory ||
+        !_hasMoreCostHistory) {
+      return;
+    }
+
+    _isLoadingMoreCostHistory = true;
+    notifyListeners();
+
+    final result = await _purchaseRepository.loadProductCostHistory(
+      productId: product.id,
+      page: _nextCostHistoryPage,
+    );
+    switch (result) {
+      case Ok<ProductCostHistoryPage>():
+        _costHistory = [..._costHistory, ...result.value.entries];
+        _hasMoreCostHistory = result.value.hasMore;
+        _nextCostHistoryPage += 1;
+      case Error<ProductCostHistoryPage>():
+        _hasMoreCostHistory = false;
+        _hasCostInsightsError = true;
+    }
+
+    _isLoadingMoreCostHistory = false;
     notifyListeners();
   }
 

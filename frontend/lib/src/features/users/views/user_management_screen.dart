@@ -5,6 +5,7 @@ import '../../../core/authorization.dart';
 import '../../../data/models/pos_user.dart';
 import '../../../shared/app_navigation_drawer.dart';
 import '../../../shared/authorization_guards.dart';
+import '../../../shared/infinite_scroll_grid.dart';
 import '../view_models/user_management_view_model.dart';
 
 class UserManagementScreen extends StatelessWidget {
@@ -21,6 +22,7 @@ class UserManagementScreen extends StatelessWidget {
     required this.onOpenRegisterSessions,
     required this.onOpenDeviceSettings,
     required this.onLogout,
+    this.onOpenDashboard,
     this.onOpenDiscounts,
     this.onOpenShopSettings,
   });
@@ -35,6 +37,7 @@ class UserManagementScreen extends StatelessWidget {
   final VoidCallback onOpenContacts;
   final VoidCallback onOpenRegisterSessions;
   final VoidCallback onOpenDeviceSettings;
+  final VoidCallback? onOpenDashboard;
   final VoidCallback? onOpenDiscounts;
   final VoidCallback? onOpenShopSettings;
   final VoidCallback onLogout;
@@ -51,6 +54,7 @@ class UserManagementScreen extends StatelessWidget {
             selectedDestination: AppNavigationDestination.users,
             currentUser: currentUser,
             capabilities: capabilities,
+            onOpenDashboard: onOpenDashboard,
             onOpenPos: onOpenPos,
             onOpenPurchasing: onOpenPurchasing,
             onOpenContacts: onOpenContacts,
@@ -149,7 +153,7 @@ class _UserManagementBody extends StatelessWidget {
       return const Center(child: CircularProgressIndicator());
     }
 
-    if (viewModel.hasError) {
+    if (viewModel.hasError && viewModel.users.isEmpty) {
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(24),
@@ -167,12 +171,23 @@ class _UserManagementBody extends StatelessWidget {
       );
     }
 
-    return ListView.separated(
+    return InfiniteScrollList<PosUser>(
+      items: viewModel.users,
+      onLoadMore: viewModel.loadMoreUsers,
+      hasMore: viewModel.hasMoreUsers,
+      isLoadingInitial: viewModel.isLoading,
+      isLoadingMore: viewModel.isLoadingMore,
+      emptyBuilder: (context) {
+        return Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Text(l10n.emptyUsers, textAlign: TextAlign.center),
+          ),
+        );
+      },
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
-      itemCount: viewModel.users.length,
       separatorBuilder: (_, _) => const SizedBox(height: 8),
-      itemBuilder: (context, index) {
-        final user = viewModel.users[index];
+      itemBuilder: (context, user) {
         final isCurrentUser = user.id == currentUser.id;
         final controls = _UserControls(
           user: user,

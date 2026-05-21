@@ -54,9 +54,12 @@ class PurchasingApiClient {
     return PurchaseOrderPage.fromAny(_session.decodedBody(response));
   }
 
-  Future<PurchaseOrderPage> fetchOutstandingReceivedNotPaidPurchases() async {
+  Future<PurchaseOrderPage> fetchOutstandingReceivedNotPaidPurchases({
+    int page = 1,
+  }) async {
     final response = await _session.get(
       'purchase-orders/outstanding-received-not-paid/',
+      query: {'page': '$page'},
     );
     _session.throwApiException(
       response,

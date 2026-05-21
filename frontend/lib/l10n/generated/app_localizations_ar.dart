@@ -102,6 +102,337 @@ class AppLocalizationsAr extends AppLocalizations {
   String get settingsDrawerLabel => 'إعدادات المتجر';
 
   @override
+  String get dashboardDrawerLabel => 'لوحة التحكم';
+
+  @override
+  String get dashboardTitle => 'لوحة التحكم';
+
+  @override
+  String get dashboardOverviewTitle => 'نظرة تشغيلية';
+
+  @override
+  String get refreshDashboardTooltip => 'تحديث لوحة التحكم';
+
+  @override
+  String get dashboardLoadError => 'تعذر تحميل لوحة التحكم.';
+
+  @override
+  String get dashboardEmptyState => 'لا توجد مؤشرات متاحة لهذا المستخدم.';
+
+  @override
+  String get dashboardNoWidgetData => 'لا توجد بيانات لهذا المؤشر.';
+
+  @override
+  String dashboardLastUpdated(String value) {
+    return 'آخر تحديث: $value';
+  }
+
+  @override
+  String get dashboardLastUpdatedUnknown => 'آخر تحديث غير معروف';
+
+  @override
+  String get dashboardRange7Days => '٧ أيام';
+
+  @override
+  String get dashboardRange30Days => '٣٠ يومًا';
+
+  @override
+  String get dashboardRange90Days => '٩٠ يومًا';
+
+  @override
+  String get dashboardSalesSectionTitle => 'المبيعات';
+
+  @override
+  String get dashboardPaymentsSectionTitle => 'المدفوعات';
+
+  @override
+  String get dashboardInventorySectionTitle => 'المخزون';
+
+  @override
+  String get dashboardPurchasingSectionTitle => 'المشتريات';
+
+  @override
+  String get dashboardCustomersSectionTitle => 'العملاء';
+
+  @override
+  String get dashboardDiscountsSectionTitle => 'الخصومات';
+
+  @override
+  String get dashboardPrintingSectionTitle => 'الطباعة';
+
+  @override
+  String get dashboardNetSalesMetric => 'صافي المبيعات';
+
+  @override
+  String get dashboardGrossProfitMetric => 'الربح الإجمالي';
+
+  @override
+  String get dashboardProfitMarginMetric => 'هامش الربح';
+
+  @override
+  String get dashboardOrdersMetric => 'الطلبات';
+
+  @override
+  String get dashboardAverageOrderMetric => 'متوسط الطلب';
+
+  @override
+  String get dashboardItemsSoldMetric => 'القطع المباعة';
+
+  @override
+  String get dashboardDiscountsMetric => 'الخصومات';
+
+  @override
+  String get dashboardRefundsMetric => 'المرتجعات';
+
+  @override
+  String dashboardAdjustmentsDetail(int voids, int returns) {
+    return 'إلغاء $voids، إرجاع $returns';
+  }
+
+  @override
+  String get dashboardSalesTrendTitle => 'اتجاه صافي المبيعات';
+
+  @override
+  String get dashboardHourlySalesTitle => 'المبيعات حسب الساعة';
+
+  @override
+  String get dashboardTopProductsTitle => 'أفضل المنتجات';
+
+  @override
+  String get dashboardTopCategoriesTitle => 'أفضل التصنيفات';
+
+  @override
+  String get dashboardRecentOrdersTitle => 'آخر الطلبات';
+
+  @override
+  String get dashboardRegistersTitle => 'جلسات الدرج';
+
+  @override
+  String get dashboardOpenRegistersLabel => 'جلسات مفتوحة';
+
+  @override
+  String get dashboardClosedRegistersLabel => 'جلسات مغلقة';
+
+  @override
+  String get dashboardVarianceRegistersLabel => 'فروقات نقدية';
+
+  @override
+  String get dashboardPaymentsTotalMetric => 'إجمالي المدفوعات';
+
+  @override
+  String get dashboardPaymentCountMetric => 'عدد المدفوعات';
+
+  @override
+  String get dashboardCommissionMetric => 'العمولات';
+
+  @override
+  String get dashboardPaymentMixTitle => 'توزيع طرق الدفع';
+
+  @override
+  String get dashboardPaymentMethodsTitle => 'طرق الدفع';
+
+  @override
+  String dashboardPaymentMethodCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count دفعات',
+      two: 'دفعتان',
+      one: 'دفعة واحدة',
+      zero: 'لا مدفوعات',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get dashboardProductsMetric => 'المنتجات';
+
+  @override
+  String get dashboardLowStockMetric => 'مخزون منخفض';
+
+  @override
+  String get dashboardOutOfStockMetric => 'نافد';
+
+  @override
+  String get dashboardRetailStockValueMetric => 'قيمة المخزون بسعر البيع';
+
+  @override
+  String get dashboardCommittedUnitsMetric => 'محجوز';
+
+  @override
+  String get dashboardExpectedUnitsMetric => 'متوقع';
+
+  @override
+  String get dashboardLowStockTitle => 'تنبيهات المخزون المنخفض';
+
+  @override
+  String get dashboardDustyInventoryTitle => 'مخزون راكد';
+
+  @override
+  String get dashboardStockMovementMixTitle => 'حركات المخزون';
+
+  @override
+  String get dashboardRecentStockMovementsTitle => 'آخر حركات المخزون';
+
+  @override
+  String dashboardStockItemSubtitle(
+    String sku,
+    int reorderLevel,
+    int expected,
+  ) {
+    return '$sku، حد الطلب $reorderLevel، المتوقع $expected';
+  }
+
+  @override
+  String get dashboardPurchasesMetric => 'قيمة المشتريات';
+
+  @override
+  String get dashboardDueToSuppliersMetric => 'مستحق للموردين';
+
+  @override
+  String get dashboardOpenPurchasesMetric => 'أوامر مفتوحة';
+
+  @override
+  String get dashboardOverduePurchasesMetric => 'متأخرة';
+
+  @override
+  String get dashboardPurchaseStatusTitle => 'حالات أوامر الشراء';
+
+  @override
+  String get dashboardOverduePurchasesTitle => 'مشتريات متأخرة';
+
+  @override
+  String get dashboardSupplierBalancesTitle => 'أرصدة الموردين';
+
+  @override
+  String get dashboardActiveCustomersMetric => 'عملاء نشطون';
+
+  @override
+  String get dashboardNewCustomersMetric => 'عملاء جدد';
+
+  @override
+  String get dashboardCustomersWithSalesMetric => 'عملاء اشتروا';
+
+  @override
+  String get dashboardRepeatCustomersMetric => 'عملاء متكررون';
+
+  @override
+  String get dashboardMarketingConsentMetric => 'موافقات تسويقية';
+
+  @override
+  String get dashboardTopCustomersTitle => 'أفضل العملاء';
+
+  @override
+  String get dashboardRecentCustomersTitle => 'عملاء مضافون حديثًا';
+
+  @override
+  String get dashboardActiveDiscountsMetric => 'خصومات نشطة';
+
+  @override
+  String get dashboardCouponDiscountsMetric => 'كوبونات';
+
+  @override
+  String get dashboardRedemptionsMetric => 'استخدامات الخصم';
+
+  @override
+  String get dashboardSalesDiscountMetric => 'خصومات المبيعات';
+
+  @override
+  String get dashboardPurchaseDiscountMetric => 'خصومات المشتريات';
+
+  @override
+  String get dashboardTopDiscountsTitle => 'أكثر الخصومات استخدامًا';
+
+  @override
+  String get dashboardExpiringDiscountsTitle => 'خصومات تنتهي قريبًا';
+
+  @override
+  String get dashboardQueuedPrintJobsMetric => 'طباعة في الانتظار';
+
+  @override
+  String get dashboardClaimedPrintJobsMetric => 'طباعة قيد التنفيذ';
+
+  @override
+  String get dashboardFailedPrintJobsMetric => 'فشل الطباعة';
+
+  @override
+  String get dashboardActivePrintAgentsMetric => 'وكلاء نشطون';
+
+  @override
+  String get dashboardStalePrintAgentsMetric => 'وكلاء غير متصلين';
+
+  @override
+  String get dashboardPrintStatusTitle => 'حالات الطباعة';
+
+  @override
+  String get dashboardPrintFailuresTitle => 'أخطاء الطباعة';
+
+  @override
+  String get dashboardPrintStatusQueued => 'بالانتظار';
+
+  @override
+  String get dashboardPrintStatusClaimed => 'قيد التنفيذ';
+
+  @override
+  String get dashboardPrintStatusPrinted => 'مطبوعة';
+
+  @override
+  String get dashboardPrintStatusFailed => 'فاشلة';
+
+  @override
+  String get dashboardPrintStatusCanceled => 'ملغاة';
+
+  @override
+  String get dashboardOrderStatusOpen => 'مفتوح';
+
+  @override
+  String get dashboardOrderStatusPaid => 'مدفوع';
+
+  @override
+  String get dashboardOrderStatusVoid => 'ملغى';
+
+  @override
+  String get dashboardUncategorizedLabel => 'غير مصنف';
+
+  @override
+  String get dashboardAnonymousCustomerLabel => 'عميل غير محدد';
+
+  @override
+  String dashboardQuantityWithSku(int quantity, String sku) {
+    return '$quantity قطعة، $sku';
+  }
+
+  @override
+  String dashboardQuantityOnly(int quantity) {
+    return '$quantity قطعة';
+  }
+
+  @override
+  String dashboardOrderCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count طلبات',
+      two: 'طلبان',
+      one: 'طلب واحد',
+      zero: 'لا طلبات',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get stockMovementExpected => 'متوقع';
+
+  @override
+  String get stockMovementReceiveExpected => 'استلام المتوقع';
+
+  @override
+  String get stockMovementReceiveDamaged => 'استلام تالف';
+
+  @override
+  String get stockMovementCancelExpected => 'إلغاء المتوقع';
+
+  @override
   String get logoutButton => 'تسجيل الخروج';
 
   @override
@@ -542,6 +873,24 @@ class AppLocalizationsAr extends AppLocalizations {
   String get rootCategoryLabel => 'تصنيف رئيسي';
 
   @override
+  String get categoryExpandTooltip => 'عرض الفروع';
+
+  @override
+  String get categoryCollapseTooltip => 'إخفاء الفروع';
+
+  @override
+  String get categoryLoadingChildren => 'جار تحميل الفروع...';
+
+  @override
+  String get categoryChildrenLoadError => 'تعذر تحميل الفروع.';
+
+  @override
+  String get categoryRetryChildrenButton => 'إعادة المحاولة';
+
+  @override
+  String get categoryLoadMoreChildrenButton => 'تحميل فروع إضافية';
+
+  @override
   String categoryParentValue(String parent) {
     return 'ضمن $parent';
   }
@@ -913,6 +1262,19 @@ class AppLocalizationsAr extends AppLocalizations {
       two: 'فاتورتان • $amount',
       one: 'فاتورة واحدة • $amount',
       zero: 'لا توجد فواتير',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String outstandingPurchasesLoadedSummary(num count, String amount) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'المحمّل: $count فواتير • $amount',
+      two: 'المحمّل: فاتورتان • $amount',
+      one: 'المحمّل: فاتورة واحدة • $amount',
+      zero: 'لم يتم تحميل فواتير',
     );
     return '$_temp0';
   }

@@ -67,6 +67,51 @@ class PosAccessGuard extends StatelessWidget {
   }
 }
 
+class DashboardGuard extends StatelessWidget {
+  const DashboardGuard({
+    super.key,
+    required this.capabilities,
+    required this.child,
+    this.fallback = const AuthorizationDeniedView(),
+  });
+
+  final AuthorizationCapabilities capabilities;
+  final Widget child;
+  final Widget fallback;
+
+  @override
+  Widget build(BuildContext context) {
+    return AuthorizationGuard(
+      capabilities: capabilities,
+      capability: AppCapability.viewDashboard,
+      fallback: fallback,
+      child: child,
+    );
+  }
+}
+
+class DashboardWidgetGuard extends StatelessWidget {
+  const DashboardWidgetGuard({
+    super.key,
+    required this.capabilities,
+    required this.capability,
+    required this.child,
+  });
+
+  final AuthorizationCapabilities capabilities;
+  final AppCapability capability;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return AuthorizationGuard(
+      capabilities: capabilities,
+      capability: capability,
+      child: child,
+    );
+  }
+}
+
 class CheckoutGuard extends StatelessWidget {
   const CheckoutGuard({
     super.key,

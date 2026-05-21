@@ -31,6 +31,7 @@ class DiscountManagementScreen extends StatelessWidget {
     required this.onOpenRegisterSessions,
     required this.onOpenDeviceSettings,
     required this.onLogout,
+    this.onOpenDashboard,
     this.onOpenUsers,
     this.onOpenShopSettings,
   });
@@ -47,6 +48,7 @@ class DiscountManagementScreen extends StatelessWidget {
   final VoidCallback onOpenContacts;
   final VoidCallback onOpenRegisterSessions;
   final VoidCallback onOpenDeviceSettings;
+  final VoidCallback? onOpenDashboard;
   final VoidCallback? onOpenUsers;
   final VoidCallback? onOpenShopSettings;
   final VoidCallback onLogout;
@@ -63,6 +65,7 @@ class DiscountManagementScreen extends StatelessWidget {
             selectedDestination: AppNavigationDestination.discounts,
             currentUser: currentUser,
             capabilities: capabilities,
+            onOpenDashboard: onOpenDashboard,
             onOpenPos: onOpenPos,
             onOpenPurchasing: onOpenPurchasing,
             onOpenContacts: onOpenContacts,

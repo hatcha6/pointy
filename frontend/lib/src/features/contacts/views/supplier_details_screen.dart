@@ -9,6 +9,7 @@ import '../../../data/repositories/purchase_repository.dart';
 import '../../../shared/date_formatters.dart';
 import '../../../shared/detail_section.dart';
 import '../../../shared/formatters.dart';
+import '../../../shared/infinite_scroll_grid.dart';
 import '../../purchasing/views/purchase_order_details_screen.dart';
 import '../../purchasing/views/purchase_order_filter_sheet.dart';
 import '../view_models/supplier_details_view_model.dart';
@@ -223,21 +224,31 @@ class _SupplierPurchaseHistory extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
 
-    if (viewModel.isLoadingHistory) {
+    if (viewModel.isLoadingHistory && viewModel.purchaseHistory.isEmpty) {
       return const Center(child: CircularProgressIndicator());
     }
-    if (viewModel.hasHistoryError) {
+    if (viewModel.hasHistoryError && viewModel.purchaseHistory.isEmpty) {
       return _ErrorText(text: l10n.supplierPurchaseHistoryLoadError);
     }
     if (viewModel.purchaseHistory.isEmpty) {
       return Text(l10n.supplierPurchaseHistoryEmpty);
     }
 
-    return Column(
-      children: [
-        for (final (index, order) in viewModel.purchaseHistory.indexed) ...[
-          if (index > 0) const Divider(height: 1),
-          ListTile(
+    return SizedBox(
+      height: _historyListHeight(
+        viewModel.purchaseHistory.length,
+        viewModel.hasMorePurchaseHistory,
+      ),
+      child: InfiniteScrollList<PurchaseOrder>(
+        items: viewModel.purchaseHistory,
+        onLoadMore: viewModel.loadMorePurchaseHistory,
+        hasMore: viewModel.hasMorePurchaseHistory,
+        isLoadingInitial: viewModel.isLoadingHistory,
+        isLoadingMore: viewModel.isLoadingMoreHistory,
+        emptyBuilder: (context) => Text(l10n.supplierPurchaseHistoryEmpty),
+        separatorBuilder: (_, _) => const Divider(height: 1),
+        itemBuilder: (context, order) {
+          return ListTile(
             contentPadding: EdgeInsets.zero,
             leading: const Icon(Icons.receipt_long_outlined),
             title: Text(
@@ -260,9 +271,9 @@ class _SupplierPurchaseHistory extends StatelessWidget {
             ),
             trailing: Text(formatMoney(order.total)),
             onTap: () => onOpenPurchaseOrder(order),
-          ),
-        ],
-      ],
+          );
+        },
+      ),
     );
   }
 }
@@ -276,22 +287,31 @@ class _SupplierAdjustmentHistory extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
 
-    if (viewModel.isLoadingAdjustments) {
+    if (viewModel.isLoadingAdjustments && viewModel.adjustmentHistory.isEmpty) {
       return const Center(child: CircularProgressIndicator());
     }
-    if (viewModel.hasAdjustmentError) {
+    if (viewModel.hasAdjustmentError && viewModel.adjustmentHistory.isEmpty) {
       return _ErrorText(text: l10n.supplierReturnRefundHistoryLoadError);
     }
     if (viewModel.adjustmentHistory.isEmpty) {
       return Text(l10n.supplierReturnRefundHistoryEmpty);
     }
 
-    return Column(
-      children: [
-        for (final (index, adjustment)
-            in viewModel.adjustmentHistory.indexed) ...[
-          if (index > 0) const Divider(height: 1),
-          ListTile(
+    return SizedBox(
+      height: _historyListHeight(
+        viewModel.adjustmentHistory.length,
+        viewModel.hasMoreAdjustments,
+      ),
+      child: InfiniteScrollList<PurchaseAdjustmentHistoryEntry>(
+        items: viewModel.adjustmentHistory,
+        onLoadMore: viewModel.loadMoreAdjustments,
+        hasMore: viewModel.hasMoreAdjustments,
+        isLoadingInitial: viewModel.isLoadingAdjustments,
+        isLoadingMore: viewModel.isLoadingMoreAdjustments,
+        emptyBuilder: (context) => Text(l10n.supplierReturnRefundHistoryEmpty),
+        separatorBuilder: (_, _) => const Divider(height: 1),
+        itemBuilder: (context, adjustment) {
+          return ListTile(
             contentPadding: EdgeInsets.zero,
             leading: Icon(_adjustmentIcon(adjustment.type)),
             title: Text(_adjustmentTypeLabel(l10n, adjustment.type)),
@@ -313,9 +333,9 @@ class _SupplierAdjustmentHistory extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
             ),
             trailing: Text(formatMoney(adjustment.amount)),
-          ),
-        ],
-      ],
+          );
+        },
+      ),
     );
   }
 
@@ -337,6 +357,19 @@ class _SupplierAdjustmentHistory extends StatelessWidget {
       PurchaseAdjustmentType.exchange => l10n.purchaseAdjustmentTypeExchange,
     };
   }
+}
+
+double _historyListHeight(int itemCount, bool hasMore) {
+  if (hasMore || itemCount > 3) {
+    return 248;
+  }
+  if (itemCount == 1) {
+    return 80;
+  }
+  if (itemCount == 2) {
+    return 160;
+  }
+  return 240;
 }
 
 class _ErrorText extends StatelessWidget {

@@ -1,3 +1,4 @@
+import django_filters
 from django.core.cache import cache
 from django.db.models import Count, Value
 from django.db.models.functions import Coalesce
@@ -7,6 +8,17 @@ from rest_framework.permissions import IsAuthenticated
 from apps.core.permissions import HasPointyPermission
 from .models import Product, ProductCategory
 from .serializers import ProductCategorySerializer, ProductSerializer
+
+
+class ProductCategoryFilter(django_filters.FilterSet):
+    root = django_filters.BooleanFilter(method="filter_root")
+
+    class Meta:
+        model = ProductCategory
+        fields = ("is_active", "parent", "root")
+
+    def filter_root(self, queryset, name, value):
+        return queryset.filter(parent__isnull=bool(value))
 
 
 class ProductCategoryViewSet(viewsets.ModelViewSet):
@@ -21,7 +33,7 @@ class ProductCategoryViewSet(viewsets.ModelViewSet):
         "destroy": ("catalog.delete_productcategory",),
     }
     queryset = ProductCategory.objects.all()
-    filterset_fields = ("is_active", "parent")
+    filterset_class = ProductCategoryFilter
     search_fields = ("name", "description")
     ordering_fields = ("name", "created_at", "updated_at")
 

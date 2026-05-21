@@ -2,12 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../core/authorization.dart';
+import '../../../data/models/contact.dart';
 import '../../../data/models/pos_user.dart';
 import '../../../data/repositories/purchase_repository.dart';
 import '../../../shared/app_navigation_drawer.dart';
 import '../../../shared/authorization_guards.dart';
 import '../../../shared/contact_picker_sheet.dart';
 import '../../../shared/formatters.dart';
+import '../../../shared/infinite_scroll_grid.dart';
 import '../view_models/contact_management_view_model.dart';
 import 'supplier_details_screen.dart';
 
@@ -25,6 +27,7 @@ class ContactManagementScreen extends StatelessWidget {
     required this.onOpenRegisterSessions,
     required this.onOpenDeviceSettings,
     required this.onLogout,
+    this.onOpenDashboard,
     this.onOpenDiscounts,
     this.onOpenUsers,
     this.onOpenShopSettings,
@@ -40,6 +43,7 @@ class ContactManagementScreen extends StatelessWidget {
   final VoidCallback onOpenCategories;
   final VoidCallback onOpenRegisterSessions;
   final VoidCallback onOpenDeviceSettings;
+  final VoidCallback? onOpenDashboard;
   final VoidCallback? onOpenDiscounts;
   final VoidCallback? onOpenUsers;
   final VoidCallback? onOpenShopSettings;
@@ -59,6 +63,7 @@ class ContactManagementScreen extends StatelessWidget {
               selectedDestination: AppNavigationDestination.contacts,
               currentUser: currentUser,
               capabilities: capabilities,
+              onOpenDashboard: onOpenDashboard,
               onOpenPos: onOpenPos,
               onOpenPurchasing: onOpenPurchasing,
               onOpenContacts: () {},
@@ -240,19 +245,21 @@ class _CustomerList extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
 
-    return ListView.separated(
+    return InfiniteScrollList<Customer>(
+      items: viewModel.customers,
+      onLoadMore: viewModel.loadMoreCustomers,
+      hasMore: viewModel.hasMoreCustomers,
+      isLoadingInitial: viewModel.isLoading,
+      isLoadingMore: viewModel.isLoadingMoreCustomers,
+      emptyBuilder: (context) {
+        return Padding(
+          padding: const EdgeInsets.all(24),
+          child: Center(child: Text(l10n.emptyCustomers)),
+        );
+      },
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
-      itemCount: viewModel.customers.isEmpty ? 1 : viewModel.customers.length,
       separatorBuilder: (_, _) => const SizedBox(height: 8),
-      itemBuilder: (context, index) {
-        if (viewModel.customers.isEmpty) {
-          return Padding(
-            padding: const EdgeInsets.all(24),
-            child: Center(child: Text(l10n.emptyCustomers)),
-          );
-        }
-
-        final customer = viewModel.customers[index];
+      itemBuilder: (context, customer) {
         return Card(
           margin: EdgeInsets.zero,
           child: ListTile(
@@ -299,19 +306,21 @@ class _SupplierList extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
 
-    return ListView.separated(
+    return InfiniteScrollList<SupplierContact>(
+      items: viewModel.suppliers,
+      onLoadMore: viewModel.loadMoreSuppliers,
+      hasMore: viewModel.hasMoreSuppliers,
+      isLoadingInitial: viewModel.isLoading,
+      isLoadingMore: viewModel.isLoadingMoreSuppliers,
+      emptyBuilder: (context) {
+        return Padding(
+          padding: const EdgeInsets.all(24),
+          child: Center(child: Text(l10n.emptySuppliers)),
+        );
+      },
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
-      itemCount: viewModel.suppliers.isEmpty ? 1 : viewModel.suppliers.length,
       separatorBuilder: (_, _) => const SizedBox(height: 8),
-      itemBuilder: (context, index) {
-        if (viewModel.suppliers.isEmpty) {
-          return Padding(
-            padding: const EdgeInsets.all(24),
-            child: Center(child: Text(l10n.emptySuppliers)),
-          );
-        }
-
-        final supplier = viewModel.suppliers[index];
+      itemBuilder: (context, supplier) {
         return Card(
           margin: EdgeInsets.zero,
           child: ListTile(
