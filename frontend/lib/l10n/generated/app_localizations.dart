@@ -4146,6 +4146,12 @@ abstract class AppLocalizations {
   /// **'المنتجات'**
   String get discountProductIdsLabel;
 
+  /// No description provided for @discountProductCategoryIdsLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'التصنيفات'**
+  String get discountProductCategoryIdsLabel;
+
   /// No description provided for @discountCustomerIdsLabel.
   ///
   /// In ar, this message translates to:
@@ -4205,6 +4211,24 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'لا توجد منتجات مطابقة.'**
   String get discountProductPickerEmpty;
+
+  /// No description provided for @discountProductCategoryPickerTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختيار التصنيفات'**
+  String get discountProductCategoryPickerTitle;
+
+  /// No description provided for @discountProductCategoryPickerSearchHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'ابحث باسم التصنيف'**
+  String get discountProductCategoryPickerSearchHint;
+
+  /// No description provided for @discountProductCategoryPickerEmpty.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد تصنيفات مطابقة.'**
+  String get discountProductCategoryPickerEmpty;
 
   /// No description provided for @discountCustomerPickerTitle.
   ///
@@ -4463,6 +4487,12 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'{count} منتجات'**
   String discountProductConstraintSummary(int count);
+
+  /// Product category constraint count.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count} تصنيفات'**
+  String discountProductCategoryConstraintSummary(int count);
 
   /// Customer constraint count.
   ///

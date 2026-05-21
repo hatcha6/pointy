@@ -690,6 +690,10 @@ class _RuleFacts extends StatelessWidget {
         l10n.discountEndsAtSummary(formatDateTime(rule.endsAt!)),
       if (rule.products.isNotEmpty)
         l10n.discountProductConstraintSummary(rule.products.length),
+      if (rule.productCategories.isNotEmpty)
+        l10n.discountProductCategoryConstraintSummary(
+          rule.productCategories.length,
+        ),
       if (rule.customers.isNotEmpty)
         l10n.discountCustomerConstraintSummary(rule.customers.length),
       if (rule.suppliers.isNotEmpty)

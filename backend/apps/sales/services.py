@@ -119,6 +119,7 @@ def prepare_discount_lines(lines_data):
                 product_id=product.pk,
                 quantity=line_data["quantity"],
                 unit_amount=product.unit_price,
+                category_ids=tuple(product.categories.values_list("id", flat=True)),
             )
         )
     return tuple(prepared_lines)

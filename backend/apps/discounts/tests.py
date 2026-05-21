@@ -6,7 +6,7 @@ from django.test import TestCase
 from django.utils import timezone
 from rest_framework.test import APIClient
 
-from apps.catalog.models import Product
+from apps.catalog.models import Product, ProductCategory
 from apps.customers.models import Customer
 from apps.purchasing.models import Supplier
 from apps.sales.models import Order
@@ -34,6 +34,12 @@ class DiscountEngineTests(TestCase):
             name="Product two",
             unit_price=Decimal("20.00"),
         )
+        self.parent_category = ProductCategory.objects.create(name="Category parent")
+        self.child_category = ProductCategory.objects.create(
+            name="Category child",
+            parent=self.parent_category,
+        )
+        self.product.categories.add(self.child_category)
 
     def context(self, **overrides):
         data = {
@@ -148,6 +154,41 @@ class DiscountEngineTests(TestCase):
         self.assertEqual(result.discount_total, Decimal("3.00"))
         self.assertEqual(result.applications[0].allocation_dicts(), [
             {"line_key": "line-1", "amount": "3.00"},
+        ])
+
+    def test_line_discount_can_target_categories_with_descendants(self):
+        rule = DiscountRule.objects.create(
+            name="Category discount",
+            channel=DiscountRule.Channel.SALES,
+            scope=DiscountRule.Scope.LINE,
+            value_type=DiscountRule.ValueType.PERCENTAGE,
+            value=Decimal("10.00"),
+        )
+        rule.product_categories.add(self.parent_category)
+
+        result = self.engine.calculate(
+            self.context(
+                lines=(
+                    DiscountLineInput(
+                        key="line-1",
+                        product_id=self.product.pk,
+                        quantity=2,
+                        unit_amount=Decimal("10.00"),
+                        category_ids=(self.child_category.pk,),
+                    ),
+                    DiscountLineInput(
+                        key="line-2",
+                        product_id=self.other_product.pk,
+                        quantity=1,
+                        unit_amount=Decimal("20.00"),
+                    ),
+                )
+            )
+        )
+
+        self.assertEqual(result.discount_total, Decimal("2.00"))
+        self.assertEqual(result.applications[0].allocation_dicts(), [
+            {"line_key": "line-1", "amount": "2.00"},
         ])
 
     def test_priority_and_exclusivity_are_deterministic(self):
@@ -396,6 +437,8 @@ class DiscountRuleApiTests(TestCase):
         )
         self.customer = Customer.objects.create(full_name="API customer")
         self.supplier = Supplier.objects.create(name="API supplier")
+        self.category = ProductCategory.objects.create(name="API category")
+        self.product.categories.add(self.category)
 
     def test_create_update_disable_and_archive_discount_rule(self):
         response = self.client.post(
@@ -413,6 +456,7 @@ class DiscountRuleApiTests(TestCase):
                 "priority": 10,
                 "exclusive": False,
                 "products": [self.product.pk],
+                "product_categories": [self.category.pk],
             },
             format="json",
         )
@@ -422,6 +466,7 @@ class DiscountRuleApiTests(TestCase):
         self.assertEqual(response.data["coupon_code"], "SAVE10")
         self.assertTrue(response.data["is_active"])
         self.assertEqual(response.data["products"], [self.product.pk])
+        self.assertEqual(response.data["product_categories"], [self.category.pk])
 
         patch_response = self.client.patch(
             f"/api/discount-rules/{rule_id}/",
@@ -611,3 +656,28 @@ class DiscountRuleApiTests(TestCase):
         self.assertEqual(response.status_code, 200, response.data)
         self.assertEqual(response.data["discount_total"], "0.00")
         self.assertEqual(response.data["unapplied_coupon_codes"], ["MISSING"])
+
+    def test_sales_discount_preview_applies_category_constraints(self):
+        rule = DiscountRule.objects.create(
+            name="Category sales",
+            channel=DiscountRule.Channel.SALES,
+            scope=DiscountRule.Scope.LINE,
+            value_type=DiscountRule.ValueType.PERCENTAGE,
+            value=Decimal("10.00"),
+        )
+        rule.product_categories.add(self.category)
+
+        response = self.client.post(
+            "/api/orders/discount-preview/",
+            {
+                "lines": [{"product": self.product.pk, "quantity": 2}],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(response.data["discount_total"], "2.40")
+        self.assertEqual(
+            [discount["rule_name"] for discount in response.data["applied_discounts"]],
+            ["Category sales"],
+        )

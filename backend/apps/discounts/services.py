@@ -10,6 +10,7 @@ from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
 
+from apps.catalog.models import ProductCategory
 from .models import AppliedDiscount, DiscountRedemption, DiscountRule, normalize_coupon_code
 
 
@@ -186,7 +187,7 @@ class DiscountEngine:
             .filter(Q(starts_at__isnull=True) | Q(starts_at__lte=now))
             .filter(Q(ends_at__isnull=True) | Q(ends_at__gt=now))
             .filter(application_filter)
-            .prefetch_related("products", "customers", "suppliers")
+            .prefetch_related("products", "product_categories", "customers", "suppliers")
             .order_by("priority", "id")
         )
         return [rule for rule in rules if self._context_matches_rule(rule, context)]
@@ -217,14 +218,44 @@ class DiscountEngine:
         lines: Iterable[DiscountLineInput],
     ) -> list[DiscountLineInput]:
         allowed_product_ids = {product.pk for product in rule.products.all()}
+        allowed_category_ids = self._category_ids_with_descendants(
+            category.pk for category in rule.product_categories.all()
+        )
+        has_line_constraints = bool(allowed_product_ids or allowed_category_ids)
         matching = []
         for line in lines:
-            if allowed_product_ids and line.product_id not in allowed_product_ids:
+            line_category_ids = self._normalized_category_ids(line.category_ids)
+            matches_product = line.product_id in allowed_product_ids
+            matches_category = bool(allowed_category_ids & line_category_ids)
+            if has_line_constraints and not (matches_product or matches_category):
                 continue
             if rule.min_line_quantity is not None and line.quantity < rule.min_line_quantity:
                 continue
             matching.append(line)
         return matching
+
+    def _normalized_category_ids(self, category_ids: Iterable[int | str]) -> set[int]:
+        normalized_ids = set()
+        for category_id in category_ids:
+            try:
+                normalized_ids.add(int(category_id))
+            except (TypeError, ValueError):
+                continue
+        return normalized_ids
+
+    def _category_ids_with_descendants(self, category_ids: Iterable[int]) -> set[int]:
+        all_category_ids = set(category_ids)
+        pending_ids = set(all_category_ids)
+        while pending_ids:
+            child_ids = set(
+                ProductCategory.objects.filter(parent_id__in=pending_ids).values_list(
+                    "id",
+                    flat=True,
+                )
+            )
+            pending_ids = child_ids - all_category_ids
+            all_category_ids.update(child_ids)
+        return all_category_ids
 
     def _calculate_rule_application(
         self,

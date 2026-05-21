@@ -2349,6 +2349,9 @@ class AppLocalizationsAr extends AppLocalizations {
   String get discountProductIdsLabel => 'المنتجات';
 
   @override
+  String get discountProductCategoryIdsLabel => 'التصنيفات';
+
+  @override
   String get discountCustomerIdsLabel => 'العملاء';
 
   @override
@@ -2379,6 +2382,15 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get discountProductPickerEmpty => 'لا توجد منتجات مطابقة.';
+
+  @override
+  String get discountProductCategoryPickerTitle => 'اختيار التصنيفات';
+
+  @override
+  String get discountProductCategoryPickerSearchHint => 'ابحث باسم التصنيف';
+
+  @override
+  String get discountProductCategoryPickerEmpty => 'لا توجد تصنيفات مطابقة.';
 
   @override
   String get discountCustomerPickerTitle => 'اختيار العملاء';
@@ -2539,6 +2551,11 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String discountProductConstraintSummary(int count) {
     return '$count منتجات';
+  }
+
+  @override
+  String discountProductCategoryConstraintSummary(int count) {
+    return '$count تصنيفات';
   }
 
   @override

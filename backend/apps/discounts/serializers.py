@@ -1,7 +1,7 @@
 from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import serializers
 
-from apps.catalog.models import Product
+from apps.catalog.models import Product, ProductCategory
 from apps.customers.models import Customer
 from apps.purchasing.models import Supplier
 from .models import DiscountRule, normalize_coupon_code
@@ -11,6 +11,11 @@ class DiscountRuleSerializer(serializers.ModelSerializer):
     products = serializers.PrimaryKeyRelatedField(
         many=True,
         queryset=Product.objects.all(),
+        required=False,
+    )
+    product_categories = serializers.PrimaryKeyRelatedField(
+        many=True,
+        queryset=ProductCategory.objects.all(),
         required=False,
     )
     customers = serializers.PrimaryKeyRelatedField(
@@ -50,6 +55,7 @@ class DiscountRuleSerializer(serializers.ModelSerializer):
             "per_customer_usage_limit",
             "per_supplier_usage_limit",
             "products",
+            "product_categories",
             "customers",
             "suppliers",
             "metadata",
@@ -73,7 +79,7 @@ class DiscountRuleSerializer(serializers.ModelSerializer):
         attrs = super().validate(attrs)
         instance = self.instance or DiscountRule()
         m2m_values = {}
-        for field in ("products", "customers", "suppliers"):
+        for field in ("products", "product_categories", "customers", "suppliers"):
             if field in attrs:
                 m2m_values[field] = attrs.pop(field)
 
@@ -139,7 +145,7 @@ class DiscountRuleSerializer(serializers.ModelSerializer):
     def _pop_m2m_values(self, data):
         return {
             field: data.pop(field)
-            for field in ("products", "customers", "suppliers")
+            for field in ("products", "product_categories", "customers", "suppliers")
             if field in data
         }
 

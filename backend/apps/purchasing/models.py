@@ -157,6 +157,7 @@ class PurchaseOrder(TimeStampedModel):
                     product_id=line.product_id,
                     quantity=line.quantity,
                     unit_amount=line.unit_cost,
+                    category_ids=tuple(line.product.categories.values_list("id", flat=True)),
                 )
                 for line in lines
             ),

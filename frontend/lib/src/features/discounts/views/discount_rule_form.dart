@@ -10,6 +10,7 @@ import '../../../data/repositories/catalog_repository.dart';
 import '../../../data/repositories/contact_repository.dart';
 import '../../../shared/async_selection/async_selection.dart';
 import '../../../shared/decimal_text_input_formatter.dart';
+import '../../../shared/product_category_picker.dart';
 import '../view_models/discount_management_view_model.dart';
 
 class DiscountRuleForm extends StatefulWidget {
@@ -53,6 +54,7 @@ class _DiscountRuleFormState extends State<DiscountRuleForm> {
   late bool _exclusive;
   late bool _isActive;
   late List<AsyncSelectionOption<int>> _selectedProducts;
+  late List<AsyncSelectionOption<int>> _selectedProductCategories;
   late List<AsyncSelectionOption<int>> _selectedCustomers;
   late List<AsyncSelectionOption<int>> _selectedSuppliers;
   DateTime? _startsAt;
@@ -101,6 +103,9 @@ class _DiscountRuleFormState extends State<DiscountRuleForm> {
     _exclusive = rule?.exclusive ?? true;
     _isActive = rule?.isActive ?? true;
     _selectedProducts = _selectionsFromIds(rule?.products ?? const []);
+    _selectedProductCategories = _selectionsFromIds(
+      rule?.productCategories ?? const [],
+    );
     _selectedCustomers = _selectionsFromIds(rule?.customers ?? const []);
     _selectedSuppliers = _selectionsFromIds(rule?.suppliers ?? const []);
     _startsAt = rule?.startsAt;
@@ -345,6 +350,24 @@ class _DiscountRuleFormState extends State<DiscountRuleForm> {
             children: [
               AsyncSelectionField<int>(
                 key: ValueKey(
+                  'product_categories_${_selectedProductCategories.map((item) => item.id).join('_')}',
+                ),
+                fieldKey: const ValueKey(
+                  'discount_product_category_picker_field',
+                ),
+                strings: _constraintFieldStrings(
+                  l10n,
+                  label: l10n.discountProductCategoryIdsLabel,
+                ),
+                selected: _selectedProductCategories,
+                onPick: () => _pickProductCategories(context),
+                onClear: _selectedProductCategories.isEmpty
+                    ? null
+                    : () => setState(() => _selectedProductCategories = []),
+                validator: (_) => null,
+              ),
+              AsyncSelectionField<int>(
+                key: ValueKey(
                   'products_${_selectedProducts.map((item) => item.id).join('_')}',
                 ),
                 fieldKey: const ValueKey('discount_product_picker_field'),
@@ -502,6 +525,9 @@ class _DiscountRuleFormState extends State<DiscountRuleForm> {
       perCustomerUsageLimit: _perCustomerLimitController.text,
       perSupplierUsageLimit: _perSupplierLimitController.text,
       products: _selectedProducts.map((item) => item.id).toList(),
+      productCategories: _selectedProductCategories
+          .map((item) => item.id)
+          .toList(),
       customers: _selectedCustomers.map((item) => item.id).toList(),
       suppliers: _selectedSuppliers.map((item) => item.id).toList(),
       metadata: widget.rule?.metadata ?? const {},
@@ -693,6 +719,32 @@ class _DiscountRuleFormState extends State<DiscountRuleForm> {
       return;
     }
     setState(() => _selectedProducts = picked);
+  }
+
+  Future<void> _pickProductCategories(BuildContext context) async {
+    final l10n = AppLocalizations.of(context)!;
+    final picked = await showAsyncMultiSelectPicker<int>(
+      context: context,
+      strings: _constraintPickerStrings(
+        l10n,
+        title: l10n.discountProductCategoryPickerTitle,
+        searchHint: l10n.discountProductCategoryPickerSearchHint,
+        emptyText: l10n.discountProductCategoryPickerEmpty,
+      ),
+      selected: _selectedProductCategories,
+      searchFieldKey: const ValueKey('discount_constraint_search_field'),
+      applyButtonKey: const ValueKey('discount_constraint_apply_button'),
+      optionKeyForId: (id) => ValueKey('discount_constraint_option_$id'),
+      loadPage: (search, page) => loadProductCategorySelectionPage(
+        catalogRepository: widget.catalogRepository,
+        search: search,
+        page: page,
+      ),
+    );
+    if (!mounted || picked == null) {
+      return;
+    }
+    setState(() => _selectedProductCategories = picked);
   }
 
   Future<void> _pickCustomers(BuildContext context) async {

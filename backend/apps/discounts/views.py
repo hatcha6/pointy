@@ -46,7 +46,12 @@ class DiscountRuleViewSet(viewsets.ModelViewSet):
         return (
             super()
             .get_queryset()
-            .prefetch_related("products", "customers", "suppliers")
+            .prefetch_related(
+                "products",
+                "product_categories",
+                "customers",
+                "suppliers",
+            )
             .annotate(
                 redemption_count=Count("redemptions", distinct=True),
                 applied_count=Count("applied_discounts", distinct=True),

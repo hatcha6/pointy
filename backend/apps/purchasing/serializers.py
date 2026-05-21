@@ -604,6 +604,7 @@ class PurchaseDiscountPreviewSerializer(serializers.Serializer):
                 product_id=line["product"].pk,
                 quantity=line["quantity"],
                 unit_amount=line["unit_cost"],
+                category_ids=tuple(line["product"].categories.values_list("id", flat=True)),
             )
             for index, line in enumerate(attrs["lines"])
         )

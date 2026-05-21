@@ -28,7 +28,12 @@ class DiscountRuleAdmin(admin.ModelAdmin):
         "is_active",
     )
     search_fields = ("name", "coupon_code", "description")
-    filter_horizontal = ("products", "customers", "suppliers")
+    filter_horizontal = (
+        "products",
+        "product_categories",
+        "customers",
+        "suppliers",
+    )
 
 
 @admin.register(AppliedDiscount)
