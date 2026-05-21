@@ -7,6 +7,8 @@ import '../../../data/models/cart_line.dart';
 import '../../../data/models/contact.dart';
 import '../../../data/models/print_job.dart';
 import '../../../data/models/printer_config.dart';
+import '../../../data/models/product.dart';
+import '../../../data/models/product_page.dart';
 import '../../../data/models/product_query.dart';
 import '../../../data/models/product_variant.dart';
 import '../../../data/models/product_variant_page.dart';
@@ -35,6 +37,33 @@ enum RegisterSessionGateStatus {
 
 enum BarcodeScanStatus { idle, resolving, found, notFound, error }
 
+enum PosProductSelectionStatus { added, chooseVariant, unavailable, error }
+
+class PosProductSelectionResult {
+  const PosProductSelectionResult._({
+    required this.status,
+    this.variants = const [],
+  });
+
+  const PosProductSelectionResult.added()
+    : this._(status: PosProductSelectionStatus.added);
+
+  const PosProductSelectionResult.chooseVariant(List<ProductVariant> variants)
+    : this._(
+        status: PosProductSelectionStatus.chooseVariant,
+        variants: variants,
+      );
+
+  const PosProductSelectionResult.unavailable()
+    : this._(status: PosProductSelectionStatus.unavailable);
+
+  const PosProductSelectionResult.error()
+    : this._(status: PosProductSelectionStatus.error);
+
+  final PosProductSelectionStatus status;
+  final List<ProductVariant> variants;
+}
+
 class PosViewModel extends ChangeNotifier {
   PosViewModel(
     this._catalogRepository,
@@ -52,7 +81,7 @@ class PosViewModel extends ChangeNotifier {
 
   CatalogRepository get catalogRepository => _catalogRepository;
 
-  List<ProductVariant> _variants = [];
+  List<Product> _products = [];
   final List<CartLine> _cart = [];
   ShopSettings? _checkoutSettings;
   bool _isLoading = false;
@@ -67,7 +96,7 @@ class PosViewModel extends ChangeNotifier {
   bool _printInvoiceAfterPayment = false;
   Customer? _selectedCustomer;
   bool _hasMoreProducts = true;
-  int _nextVariantPage = 1;
+  int _nextProductPage = 1;
   String? _errorMessage;
   String _couponCode = '';
   SaleDiscountPreview? _discountPreview;
@@ -89,7 +118,7 @@ class PosViewModel extends ChangeNotifier {
     availability: ProductAvailabilityFilter.active,
   );
 
-  List<ProductVariant> get variants => List.unmodifiable(_variants);
+  List<Product> get products => List.unmodifiable(_products);
   List<CartLine> get cart => List.unmodifiable(_cart);
   bool get isLoading => _isLoading;
   bool get isLoadingMore => _isLoadingMore;

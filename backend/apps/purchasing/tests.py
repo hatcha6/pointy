@@ -144,6 +144,11 @@ class PurchaseOrderApiTests(TestCase):
         self.assertEqual(response.data["supplier_invoice_number"], "INV-100")
         self.assertEqual(response.data["supplier_reference"], "INV-100")
         self.assertEqual(len(response.data["lines"]), 1)
+        self.assertEqual(
+            response.data["lines"][0]["variant"],
+            self.product.default_variant.pk,
+        )
+        self.assertEqual(response.data["lines"][0]["variant_name"], self.product.name)
         self.assertNotIn("tax_total", response.data)
         self.assertNotIn("tax_rate", response.data["lines"][0])
 
@@ -1555,6 +1560,49 @@ class PurchaseOrderApiTests(TestCase):
         self.assertEqual(replacement_movement.on_hand_after, 4)
         self.assertIn("استلام بديل مشتريات", replacement_movement.note)
         self.assertEqual(replacement_movement.created_by, self.user)
+
+    def test_exchange_replacement_can_target_specific_variant(self):
+        replacement_variant = ProductVariant.objects.create(
+            product=self.other_product,
+            name="Large",
+            sku="PUR-TEA-L",
+            unit_price=Decimal("3.50"),
+        )
+        order = PurchaseOrder.objects.create(
+            supplier=self.supplier,
+            status=PurchaseOrder.Status.RECEIVED,
+        )
+        line = order.lines.create(
+            product=self.product,
+            quantity=2,
+            unit_cost=Decimal("1.25"),
+        )
+        StockItem.objects.create(product=self.product, quantity_on_hand=2)
+
+        response = self.client.post(
+            reverse("purchaseorder-exchange-items", args=[order.pk]),
+            {
+                "lines": [{"line": line.pk, "quantity": 1}],
+                "replacement_lines": [
+                    {
+                        "variant": replacement_variant.pk,
+                        "quantity": 1,
+                        "unit_cost": "3.00",
+                    }
+                ],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        replacement_line = response.data["adjustments"][0]["replacement_lines"][0]
+        self.assertEqual(replacement_line["variant"], replacement_variant.pk)
+        self.assertEqual(replacement_line["product"], self.other_product.pk)
+        self.assertEqual(replacement_line["variant_name"], "Large")
+        self.assertEqual(
+            StockItem.objects.get(variant=replacement_variant).quantity_on_hand,
+            1,
+        )
 
     def test_exchange_replacement_lines_create_stock_item_when_missing(self):
         order = PurchaseOrder.objects.create(

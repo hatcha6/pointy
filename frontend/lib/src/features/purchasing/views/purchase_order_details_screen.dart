@@ -255,7 +255,9 @@ class _PurchaseOrderLines extends StatelessWidget {
             ListTile(
               contentPadding: EdgeInsets.zero,
               title: Text(
-                line.productName ?? l10n.purchaseOrderUnknownProduct,
+                line.displayName.isEmpty
+                    ? l10n.purchaseOrderUnknownProduct
+                    : line.displayName,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
@@ -386,8 +388,9 @@ class _PurchaseReceiptHistory extends StatelessWidget {
                         ),
                         for (final line in receipt.lines)
                           [
-                            line.productName ??
-                                l10n.purchaseOrderUnknownProduct,
+                            line.displayName.isEmpty
+                                ? l10n.purchaseOrderUnknownProduct
+                                : line.displayName,
                             l10n.purchaseLineReceivedQuantity(
                               line.quantityReceived,
                             ),
@@ -446,8 +449,9 @@ class _PurchaseOrderAdjustmentHistory extends StatelessWidget {
                           ),
                         for (final line in adjustment.replacementLines)
                           l10n.purchaseExchangeReplacementHistoryLine(
-                            line.productName ??
-                                l10n.purchaseOrderUnknownProduct,
+                            line.displayName.isEmpty
+                                ? l10n.purchaseOrderUnknownProduct
+                                : line.displayName,
                             line.quantity,
                             formatMoney(line.unitCost),
                           ),

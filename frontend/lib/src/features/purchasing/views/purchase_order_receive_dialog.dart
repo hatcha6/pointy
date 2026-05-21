@@ -177,7 +177,9 @@ class _PurchaseReceiveLineInput extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
-            line.productName ?? l10n.purchaseOrderUnknownProduct,
+            line.displayName.isEmpty
+                ? l10n.purchaseOrderUnknownProduct
+                : line.displayName,
             style: Theme.of(
               context,
             ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),

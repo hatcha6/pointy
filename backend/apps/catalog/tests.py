@@ -224,6 +224,39 @@ class ProductApiTests(TestCase):
             ["TEA-100", "COF-100"],
         )
 
+    def test_product_search_matches_variant_name(self):
+        product = Product.objects.create(
+            sku="SHIRT",
+            barcode="",
+            name="قميص",
+            unit_price=Decimal("20.00"),
+            is_active=True,
+        )
+        ProductVariant.objects.create(
+            product=product,
+            name="أحمر / L",
+            sku="SHIRT-RED-L",
+            unit_price=Decimal("22.00"),
+        )
+        Product.objects.create(
+            sku="PANTS",
+            barcode="",
+            name="بنطال",
+            unit_price=Decimal("18.00"),
+            is_active=True,
+        )
+
+        response = self.client.get(
+            reverse("product-list"),
+            {"search": "أحمر", "is_active": "true"},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            [product["id"] for product in response.data["results"]],
+            [product.id],
+        )
+
     def test_create_nested_product_category(self):
         parent = ProductCategory.objects.create(name="المشروبات")
 

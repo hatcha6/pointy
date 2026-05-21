@@ -47,6 +47,32 @@ class Product {
   int get effectiveQuantityOnHand =>
       defaultVariant?.quantityOnHand ?? quantityOnHand;
 
+  List<ProductVariant> get activeVariants {
+    if (!isActive) {
+      return const [];
+    }
+    final active = <ProductVariant>[];
+    final seen = <int>{};
+    for (final variant in variants) {
+      if (variant.isActive && seen.add(variant.id)) {
+        active.add(variant);
+      }
+    }
+    final defaultVariant = this.defaultVariant;
+    if (defaultVariant != null &&
+        defaultVariant.isActive &&
+        seen.add(defaultVariant.id)) {
+      active.insert(0, defaultVariant);
+    }
+    active.sort((a, b) {
+      if (a.isDefault != b.isDefault) {
+        return a.isDefault ? -1 : 1;
+      }
+      return a.pickerLabel.compareTo(b.pickerLabel);
+    });
+    return active;
+  }
+
   factory Product.fromJson(Map<String, Object?> json) {
     final defaultVariantJson = json['default_variant'];
     final defaultVariant = defaultVariantJson is Map<String, Object?>
@@ -90,7 +116,16 @@ class Product {
     );
   }
 
-  Product copyWith({int? quantityOnHand}) {
+  Product copyWith({
+    int? quantityOnHand,
+    ProductVariant? defaultVariant,
+    List<ProductVariant>? variants,
+  }) {
+    final nextDefaultVariant =
+        defaultVariant ??
+        (quantityOnHand == null
+            ? this.defaultVariant
+            : this.defaultVariant?.copyWith(quantityOnHand: quantityOnHand));
     return Product(
       id: id,
       sku: sku,
@@ -101,10 +136,8 @@ class Product {
       description: description,
       isActive: isActive,
       categories: categories,
-      defaultVariant: quantityOnHand == null
-          ? defaultVariant
-          : defaultVariant?.copyWith(quantityOnHand: quantityOnHand),
-      variants: variants,
+      defaultVariant: nextDefaultVariant,
+      variants: variants ?? this.variants,
     );
   }
 

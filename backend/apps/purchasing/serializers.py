@@ -342,6 +342,7 @@ class PurchaseReceiptSerializer(serializers.ModelSerializer):
 class PurchaseOrderAdjustmentLineSerializer(serializers.ModelSerializer):
     product = serializers.IntegerField(source="variant.product_id", read_only=True)
     product_name = serializers.CharField(source="variant.product.name", read_only=True)
+    product_sku = serializers.CharField(source="variant.sku", read_only=True)
     variant_name = serializers.CharField(source="variant.display_name", read_only=True)
     line_total = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
 
@@ -353,6 +354,7 @@ class PurchaseOrderAdjustmentLineSerializer(serializers.ModelSerializer):
             "product",
             "variant",
             "product_name",
+            "product_sku",
             "variant_name",
             "quantity",
             "unit_cost",
@@ -516,6 +518,7 @@ class PurchaseAdjustmentHistorySerializer(serializers.ModelSerializer):
 class PurchaseOrderAdjustmentReplacementLineSerializer(serializers.ModelSerializer):
     product = serializers.IntegerField(source="variant.product_id", read_only=True)
     product_name = serializers.CharField(source="variant.product.name", read_only=True)
+    product_sku = serializers.CharField(source="variant.sku", read_only=True)
     variant_name = serializers.CharField(source="variant.display_name", read_only=True)
     line_total = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
 
@@ -526,6 +529,7 @@ class PurchaseOrderAdjustmentReplacementLineSerializer(serializers.ModelSerializ
             "product",
             "variant",
             "product_name",
+            "product_sku",
             "variant_name",
             "quantity",
             "unit_cost",

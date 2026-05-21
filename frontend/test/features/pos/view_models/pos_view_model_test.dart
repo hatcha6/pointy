@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:pointy_frontend/src/data/models/print_job.dart';
 import 'package:pointy_frontend/src/data/models/printer_config.dart';
+import 'package:pointy_frontend/src/data/models/product.dart';
 import 'package:pointy_frontend/src/data/models/product_page.dart';
 import 'package:pointy_frontend/src/data/models/product_query.dart';
 import 'package:pointy_frontend/src/data/models/product_variant.dart';
@@ -92,7 +93,7 @@ void main() {
       expect(outcome.isSuccess, isTrue);
       expect(viewModel.isCheckingOut, isFalse);
       expect(viewModel.cart, isEmpty);
-      expect(viewModel.variants.first.quantityOnHand, 10);
+      expect(viewModel.products.first.effectiveQuantityOnHand, 10);
     },
   );
 
@@ -100,21 +101,21 @@ void main() {
     'search resets catalog pagination and load more appends results',
     () async {
       final apiService = _FakePosApiService(
-        onFetchProductVariants: (query, page) {
+        onFetchProducts: (query, page) {
           if (query.search == 'قهوة' && page == 1) {
-            return const ProductVariantPage(
-              variants: [_coffeeVariant],
+            return ProductPage(
+              products: [Product.fromVariant(_coffeeVariant)],
               hasMore: true,
             );
           }
           if (query.search == 'قهوة' && page == 2) {
-            return const ProductVariantPage(
-              variants: [_coffeeBeansVariant],
+            return ProductPage(
+              products: [Product.fromVariant(_coffeeBeansVariant)],
               hasMore: false,
             );
           }
-          return const ProductVariantPage(
-            variants: [_teaVariant],
+          return ProductPage(
+            products: [Product.fromVariant(_teaVariant)],
             hasMore: false,
           );
         },
@@ -129,7 +130,7 @@ void main() {
       await viewModel.updateSearch('قهوة');
 
       expect(viewModel.query.search, 'قهوة');
-      expect(viewModel.variants.map((variant) => variant.id), [101]);
+      expect(viewModel.products.map((product) => product.id), [1]);
       expect(apiService.catalogRequests.last.page, 1);
       expect(
         apiService.catalogRequests.last.query.availability,
@@ -138,13 +139,45 @@ void main() {
 
       await viewModel.loadMoreCatalog();
 
-      expect(viewModel.variants.map((variant) => variant.id), [101, 103]);
+      expect(viewModel.products.map((product) => product.id), [1, 3]);
       expect(apiService.catalogRequests.last.page, 2);
       expect(viewModel.hasMoreProducts, isFalse);
 
       await viewModel.updateSearch('قهوة');
 
       expect(apiService.catalogRequests.length, initialRequestCount + 2);
+    },
+  );
+
+  test(
+    'product selection adds a single variant or asks for a variant',
+    () async {
+      final apiService = _FakePosApiService();
+      final viewModel = _viewModel(apiService);
+      addTearDown(viewModel.dispose);
+
+      final singleResult = await viewModel.selectProductForSale(
+        Product.fromVariant(_coffeeVariant),
+      );
+
+      expect(singleResult.status, PosProductSelectionStatus.added);
+      expect(viewModel.cart.single.variant.id, _coffeeVariant.id);
+
+      final multiVariantProduct = Product(
+        id: 4,
+        name: 'قميص',
+        quantityOnHand: 7,
+        defaultVariant: _shirtRedLargeVariant,
+        variants: const [_shirtRedLargeVariant, _shirtBlueMediumVariant],
+      );
+
+      final multiResult = await viewModel.selectProductForSale(
+        multiVariantProduct,
+      );
+
+      expect(multiResult.status, PosProductSelectionStatus.chooseVariant);
+      expect(multiResult.variants.map((variant) => variant.id), [201, 202]);
+      expect(viewModel.cart, hasLength(1));
     },
   );
 }
@@ -233,6 +266,33 @@ const _coffeeBeansVariant = ProductVariant(
   isDefault: true,
 );
 
+const _shirtRedLargeVariant = ProductVariant(
+  id: 201,
+  productId: 4,
+  productName: 'قميص',
+  name: 'أحمر / L',
+  displayName: 'أحمر / L',
+  fullName: 'قميص - أحمر / L',
+  sku: 'SHIRT-RED-L',
+  unitPrice: 12,
+  quantityOnHand: 3,
+  barcode: '2000001',
+  isDefault: true,
+);
+
+const _shirtBlueMediumVariant = ProductVariant(
+  id: 202,
+  productId: 4,
+  productName: 'قميص',
+  name: 'أزرق / M',
+  displayName: 'أزرق / M',
+  fullName: 'قميص - أزرق / M',
+  sku: 'SHIRT-BLUE-M',
+  unitPrice: 11,
+  quantityOnHand: 4,
+  barcode: '2000002',
+);
+
 const _openSession = RegisterSession(
   id: 1,
   sessionNumber: 'RS-1',
@@ -266,7 +326,7 @@ class _CatalogRequest {
 class _FakePosApiService extends PosApiService {
   _FakePosApiService({
     this.checkoutCompleter,
-    this.onFetchProductVariants,
+    this.onFetchProducts,
     this.catalogPages = const {},
   }) : super(
          client: MockClient((_) async => http.Response('{}', 500)),
@@ -274,8 +334,7 @@ class _FakePosApiService extends PosApiService {
        );
 
   final Completer<SaleOrder>? checkoutCompleter;
-  final ProductVariantPage Function(ProductQuery query, int page)?
-  onFetchProductVariants;
+  final ProductPage Function(ProductQuery query, int page)? onFetchProducts;
   final Map<int, List<ProductVariant>> catalogPages;
   final List<_CatalogRequest> catalogRequests = [];
   SaleCheckoutDraft? capturedCheckoutDraft;
@@ -295,7 +354,18 @@ class _FakePosApiService extends PosApiService {
     required ModelQuery query,
     int page = 1,
   }) async {
-    return const ProductPage(products: [], hasMore: false);
+    final productQuery = query as ProductQuery;
+    catalogRequests.add(_CatalogRequest(query: productQuery, page: page));
+    final customPage = onFetchProducts?.call(productQuery, page);
+    if (customPage != null) {
+      return customPage;
+    }
+    return ProductPage(
+      products: (catalogPages[page] ?? const [])
+          .map(Product.fromVariant)
+          .toList(growable: false),
+      hasMore: catalogPages.containsKey(page + 1),
+    );
   }
 
   @override
@@ -303,16 +373,22 @@ class _FakePosApiService extends PosApiService {
     required ModelQuery query,
     int page = 1,
   }) async {
-    final productQuery = query as ProductQuery;
-    catalogRequests.add(_CatalogRequest(query: productQuery, page: page));
-    final customPage = onFetchProductVariants?.call(productQuery, page);
-    if (customPage != null) {
-      return customPage;
-    }
     return ProductVariantPage(
       variants: catalogPages[page] ?? const [],
       hasMore: catalogPages.containsKey(page + 1),
     );
+  }
+
+  @override
+  Future<ProductVariantPage> fetchVariantsForProduct(
+    int productId, {
+    int page = 1,
+  }) async {
+    final variants = catalogPages.values
+        .expand((variants) => variants)
+        .where((variant) => variant.productId == productId)
+        .toList(growable: false);
+    return ProductVariantPage(variants: variants, hasMore: false);
   }
 
   @override

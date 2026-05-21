@@ -3,6 +3,7 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../core/authorization.dart';
 import '../../../core/result.dart';
+import '../../../data/models/product.dart';
 import '../../../data/models/product_variant.dart';
 import '../../../shared/authorization_guards.dart';
 import '../../../shared/barcode/camera_barcode_scanner_sheet.dart';
@@ -10,6 +11,7 @@ import '../../../shared/infinite_scroll_grid.dart';
 import '../../../shared/product_query_controls.dart';
 import '../../../shared/product_tile.dart';
 import '../view_models/pos_view_model.dart';
+import 'pos_variant_picker_sheet.dart';
 
 const _catalogGridSpacing = 12.0;
 const _catalogTileMinWidth = 156.0;
@@ -96,15 +98,15 @@ class _PosCatalogGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final variants = viewModel.variants;
+    final products = viewModel.products;
 
     return CheckoutCapabilityBuilder(
       capabilities: capabilities,
       builder: (context, canCheckout) {
         return LayoutBuilder(
           builder: (context, constraints) {
-            return InfiniteScrollGrid<ProductVariant>(
-              items: variants,
+            return InfiniteScrollGrid<Product>(
+              items: products,
               onLoadMore: viewModel.loadMoreCatalog,
               hasMore: viewModel.hasMoreProducts,
               isLoadingInitial: viewModel.isLoading,
@@ -118,12 +120,12 @@ class _PosCatalogGrid extends StatelessWidget {
                 crossAxisSpacing: _catalogGridSpacing,
                 mainAxisSpacing: _catalogGridSpacing,
               ),
-              itemBuilder: (context, variant) {
-                return ProductTile.variant(
-                  key: ValueKey(variant.id),
-                  variant: variant,
+              itemBuilder: (context, product) {
+                return ProductTile(
+                  key: ValueKey(product.id),
+                  product: product,
                   onTap: canCheckout
-                      ? () => viewModel.addVariant(variant)
+                      ? () => _selectProduct(context, product)
                       : null,
                 );
               },
@@ -132,6 +134,38 @@ class _PosCatalogGrid extends StatelessWidget {
         );
       },
     );
+  }
+
+  Future<void> _selectProduct(BuildContext context, Product product) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final l10n = AppLocalizations.of(context)!;
+    final result = await viewModel.selectProductForSale(product);
+    if (!context.mounted) {
+      return;
+    }
+    switch (result.status) {
+      case PosProductSelectionStatus.added:
+        return;
+      case PosProductSelectionStatus.chooseVariant:
+        final variant = await showPosVariantPickerSheet(
+          context,
+          product: product,
+          variants: result.variants,
+        );
+        if (variant != null && context.mounted) {
+          viewModel.addVariant(variant);
+        }
+      case PosProductSelectionStatus.unavailable:
+        messenger
+          ..clearSnackBars()
+          ..showSnackBar(
+            SnackBar(content: Text(l10n.posProductHasNoActiveVariants)),
+          );
+      case PosProductSelectionStatus.error:
+        messenger
+          ..clearSnackBars()
+          ..showSnackBar(SnackBar(content: Text(l10n.catalogLoadError)));
+    }
   }
 
   int _catalogColumnCountFor(double width) {

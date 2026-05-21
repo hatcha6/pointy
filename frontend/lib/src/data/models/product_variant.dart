@@ -52,6 +52,45 @@ class ProductVariant {
     return productName;
   }
 
+  String get productLabel {
+    if (productName.isNotEmpty) {
+      return productName;
+    }
+    final detailName = productDetail?.name ?? '';
+    if (detailName.isNotEmpty) {
+      return detailName;
+    }
+    if (fullName.isNotEmpty && name.isNotEmpty) {
+      final suffix = ' - $name';
+      if (fullName.endsWith(suffix)) {
+        return fullName.substring(0, fullName.length - suffix.length);
+      }
+    }
+    return displayLabel;
+  }
+
+  String get variantLabel {
+    final parent = productLabel;
+    final explicitName = name.trim();
+    if (explicitName.isNotEmpty) {
+      return explicitName;
+    }
+    final display = displayName.trim();
+    if (display.isNotEmpty && display != parent) {
+      return display;
+    }
+    final full = fullName.trim();
+    if (parent.isNotEmpty && full.startsWith('$parent - ')) {
+      return full.substring(parent.length + 3).trim();
+    }
+    return '';
+  }
+
+  String get pickerLabel {
+    final label = variantLabel;
+    return label.isEmpty ? productLabel : label;
+  }
+
   bool get isSellable => isActive && (productDetail?.isActive ?? true);
 
   factory ProductVariant.fromJson(Map<String, Object?> json) {

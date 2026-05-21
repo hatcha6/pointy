@@ -1452,7 +1452,7 @@ void main() {
       {'line': 1, 'quantity': 1},
     ]);
     expect(exchangeBody?['replacement_lines'], [
-      {'product': 1, 'quantity': 1, 'unit_cost': '3.75'},
+      {'variant': 1, 'quantity': 1, 'unit_cost': '3.75'},
     ]);
   });
 

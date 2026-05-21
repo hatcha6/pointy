@@ -129,6 +129,7 @@ class PurchasingApiClient {
     PurchaseAdjustmentType? adjustmentType,
     int? supplierId,
     int? productId,
+    int? variantId,
     int page = 1,
   }) async {
     final response = await _session.get(
@@ -138,6 +139,7 @@ class PurchasingApiClient {
         if (adjustmentType != null) 'adjustment_type': adjustmentType.apiValue,
         if (supplierId != null) 'supplier': '$supplierId',
         if (productId != null) 'product': '$productId',
+        if (variantId != null) 'variant': '$variantId',
       },
     );
     _session.throwApiException(

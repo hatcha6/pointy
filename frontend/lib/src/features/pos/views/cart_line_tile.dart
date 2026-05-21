@@ -88,11 +88,29 @@ class _ProductSummary extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          line.variant.displayLabel,
+          line.variant.productLabel,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: textTheme.bodyMedium,
         ),
+        if (line.variant.variantLabel.isNotEmpty) ...[
+          const SizedBox(height: 2),
+          Text(
+            line.variant.variantLabel,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: textTheme.bodySmall,
+          ),
+        ],
+        if (line.variant.sku.isNotEmpty) ...[
+          const SizedBox(height: 2),
+          Text(
+            line.variant.sku,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: textTheme.bodySmall,
+          ),
+        ],
         const SizedBox(height: 2),
         Text(
           l10n.unitPriceEach(formatMoney(line.variant.unitPrice)),

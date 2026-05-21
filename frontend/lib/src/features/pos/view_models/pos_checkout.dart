@@ -145,15 +145,44 @@ extension PosCheckoutActions on PosViewModel {
     if (soldByVariant.isEmpty) {
       return;
     }
-    _variants = [
-      for (final variant in _variants)
-        if (soldByVariant[variant.id] case final soldQuantity?)
-          variant.copyWith(
-            quantityOnHand: variant.quantityOnHand - soldQuantity,
-          )
-        else
-          variant,
+    _products = [
+      for (final product in _products)
+        _productWithAdjustedStock(product, soldByVariant),
     ];
+  }
+
+  Product _productWithAdjustedStock(
+    Product product,
+    Map<int, int> soldByVariant,
+  ) {
+    ProductVariant adjustVariant(ProductVariant variant) {
+      final soldQuantity = soldByVariant[variant.id];
+      if (soldQuantity == null) {
+        return variant;
+      }
+      return variant.copyWith(
+        quantityOnHand: variant.quantityOnHand - soldQuantity,
+      );
+    }
+
+    final adjustedVariants = [
+      for (final variant in product.variants) adjustVariant(variant),
+    ];
+    final adjustedDefaultVariant = product.defaultVariant == null
+        ? null
+        : adjustVariant(product.defaultVariant!);
+    final soldForProduct = soldByVariant.entries
+        .where(
+          (entry) =>
+              product.variants.any((variant) => variant.id == entry.key) ||
+              product.defaultVariant?.id == entry.key,
+        )
+        .fold<int>(0, (sum, entry) => sum + entry.value);
+    return product.copyWith(
+      quantityOnHand: product.quantityOnHand - soldForProduct,
+      defaultVariant: adjustedDefaultVariant,
+      variants: adjustedVariants,
+    );
   }
 }
 

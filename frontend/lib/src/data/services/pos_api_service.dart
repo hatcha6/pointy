@@ -413,12 +413,14 @@ class PosApiService {
     PurchaseAdjustmentType? adjustmentType,
     int? supplierId,
     int? productId,
+    int? variantId,
     int page = 1,
   }) {
     return _purchasing.fetchPurchaseAdjustmentHistory(
       adjustmentType: adjustmentType,
       supplierId: supplierId,
       productId: productId,
+      variantId: variantId,
       page: page,
     );
   }

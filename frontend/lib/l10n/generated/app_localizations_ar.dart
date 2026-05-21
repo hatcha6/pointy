@@ -1259,6 +1259,20 @@ class AppLocalizationsAr extends AppLocalizations {
   String get posProductLookupHint => 'ابحث عن منتج أو امسح الباركود';
 
   @override
+  String posVariantPickerTitle(String productName) {
+    return 'اختيار خيار $productName';
+  }
+
+  @override
+  String posVariantPickerStock(int quantity) {
+    return 'المتاح $quantity';
+  }
+
+  @override
+  String get posProductHasNoActiveVariants =>
+      'لا توجد خيارات نشطة لهذا المنتج.';
+
+  @override
   String get clearBarcodeStatusTooltip => 'إخفاء حالة الباركود';
 
   @override

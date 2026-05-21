@@ -151,9 +151,11 @@ class PurchaseOrderPage {
 class ProductCostHistoryEntry {
   const ProductCostHistoryEntry({
     required this.productId,
+    required this.variantId,
     required this.unitCost,
     required this.quantity,
     required this.total,
+    this.variantName,
     this.purchaseOrderId,
     this.purchaseOrderNumber,
     this.supplierId,
@@ -164,6 +166,8 @@ class ProductCostHistoryEntry {
   });
 
   final int productId;
+  final int variantId;
+  final String? variantName;
   final int? purchaseOrderId;
   final String? purchaseOrderNumber;
   final int? supplierId;
@@ -189,6 +193,8 @@ class ProductCostHistoryEntry {
     );
     return ProductCostHistoryEntry(
       productId: _intFromJson(json['product'] ?? json['product_id']),
+      variantId: _intFromJson(json['variant'] ?? json['variant_id']),
+      variantName: json['variant_name']?.toString(),
       purchaseOrderId: _nullableIntFromJson(
         json['purchase_order'] ?? json['purchase_order_id'] ?? json['order'],
       ),
@@ -764,6 +770,7 @@ class PurchaseOrderLine {
   const PurchaseOrderLine({
     required this.id,
     required this.productId,
+    required this.variantId,
     required this.quantity,
     required this.adjustedQuantity,
     required this.adjustableQuantity,
@@ -778,6 +785,7 @@ class PurchaseOrderLine {
     this.netUnitCost,
     required this.total,
     this.productName,
+    this.variantName,
     this.productSku,
     this.previousUnitCost,
     this.unitCostChange,
@@ -790,7 +798,9 @@ class PurchaseOrderLine {
 
   final int id;
   final int productId;
+  final int variantId;
   final String? productName;
+  final String? variantName;
   final String? productSku;
   final int quantity;
   final int adjustedQuantity;
@@ -816,6 +826,8 @@ class PurchaseOrderLine {
   int get receivableQuantity => openQuantity < 0 ? 0 : openQuantity;
 
   int get varianceQuantity => receivedQuantity + damagedQuantity - quantity;
+
+  String get displayName => _variantDisplayName(productName, variantName);
 
   double? get effectiveUnitCostChange {
     final explicitChange = unitCostChange;
@@ -870,7 +882,11 @@ class PurchaseOrderLine {
     return PurchaseOrderLine(
       id: _intFromJson(json['id']),
       productId: _intFromJson(json['product']),
+      variantId: _intFromJson(
+        json['variant'] ?? json['variant_id'] ?? json['product'],
+      ),
       productName: json['product_name']?.toString(),
+      variantName: json['variant_name']?.toString(),
       productSku: json['product_sku']?.toString(),
       quantity: quantity,
       adjustedQuantity: _intFromJson(json['adjusted_quantity']),
@@ -933,7 +949,9 @@ class PurchaseOrderLine {
     return PurchaseOrderLine(
       id: id,
       productId: productId,
+      variantId: variantId,
       productName: productName,
+      variantName: variantName,
       productSku: productSku,
       quantity: quantity,
       adjustedQuantity: adjustedQuantity,
@@ -1031,21 +1049,35 @@ class PurchaseReceipt {
 class PurchaseReceiptLine {
   const PurchaseReceiptLine({
     required this.purchaseLineId,
+    required this.productId,
+    required this.variantId,
     required this.quantityReceived,
     required this.quantityDamaged,
     required this.quantityRejected,
     this.productName,
+    this.variantName,
+    this.productSku,
   });
 
   final int purchaseLineId;
+  final int productId;
+  final int variantId;
   final int quantityReceived;
   final int quantityDamaged;
   final int quantityRejected;
   final String? productName;
+  final String? variantName;
+  final String? productSku;
+
+  String get displayName => _variantDisplayName(productName, variantName);
 
   factory PurchaseReceiptLine.fromJson(Map<String, Object?> json) {
     return PurchaseReceiptLine(
       purchaseLineId: _intFromJson(json['purchase_line'] ?? json['line']),
+      productId: _intFromJson(json['product'] ?? json['product_id']),
+      variantId: _intFromJson(
+        json['variant'] ?? json['variant_id'] ?? json['product'],
+      ),
       quantityReceived: _intFromJson(
         json['accepted_quantity'] ??
             json['quantity_accepted'] ??
@@ -1062,6 +1094,8 @@ class PurchaseReceiptLine {
             json['quantity_cancelled'],
       ),
       productName: json['product_name']?.toString(),
+      variantName: json['variant_name']?.toString(),
+      productSku: json['product_sku']?.toString(),
     );
   }
 }
@@ -1282,26 +1316,39 @@ class PurchaseOrderAdjustmentLine {
     required this.id,
     required this.purchaseLineId,
     required this.productId,
+    required this.variantId,
     required this.quantity,
     required this.unitCost,
     required this.total,
     this.productName,
+    this.variantName,
+    this.productSku,
   });
 
   final int id;
   final int purchaseLineId;
   final int productId;
+  final int variantId;
   final String? productName;
+  final String? variantName;
+  final String? productSku;
   final int quantity;
   final double unitCost;
   final double total;
+
+  String get displayName => _variantDisplayName(productName, variantName);
 
   factory PurchaseOrderAdjustmentLine.fromJson(Map<String, Object?> json) {
     return PurchaseOrderAdjustmentLine(
       id: _intFromJson(json['id']),
       purchaseLineId: _intFromJson(json['purchase_line']),
       productId: _intFromJson(json['product']),
+      variantId: _intFromJson(
+        json['variant'] ?? json['variant_id'] ?? json['product'],
+      ),
       productName: json['product_name']?.toString(),
+      variantName: json['variant_name']?.toString(),
+      productSku: json['product_sku']?.toString(),
       quantity: _intFromJson(json['quantity']),
       unitCost: _moneyFromJson(json['unit_cost']),
       total: _moneyFromJson(json['line_total']),
@@ -1312,22 +1359,32 @@ class PurchaseOrderAdjustmentLine {
 class PurchaseOrderReplacementLine {
   const PurchaseOrderReplacementLine({
     required this.productId,
+    required this.variantId,
     required this.quantity,
     required this.unitCost,
     required this.total,
     this.productName,
+    this.variantName,
   });
 
   final int productId;
+  final int variantId;
   final String? productName;
+  final String? variantName;
   final int quantity;
   final double unitCost;
   final double total;
 
+  String get displayName => _variantDisplayName(productName, variantName);
+
   factory PurchaseOrderReplacementLine.fromJson(Map<String, Object?> json) {
     return PurchaseOrderReplacementLine(
       productId: _intFromJson(json['product']),
+      variantId: _intFromJson(
+        json['variant'] ?? json['variant_id'] ?? json['product'],
+      ),
       productName: json['product_name']?.toString(),
+      variantName: json['variant_name']?.toString(),
       quantity: _intFromJson(json['quantity']),
       unitCost: _moneyFromJson(json['unit_cost']),
       total: _moneyFromJson(
@@ -1376,18 +1433,18 @@ class PurchaseAdjustmentLineDraft {
 
 class PurchaseReplacementLineDraft {
   const PurchaseReplacementLineDraft({
-    required this.productId,
+    required this.variantId,
     required this.quantity,
     required this.unitCost,
   });
 
-  final int productId;
+  final int variantId;
   final int quantity;
   final double unitCost;
 
   Map<String, Object?> toJson() {
     return {
-      'product': productId,
+      'variant': variantId,
       'quantity': quantity,
       'unit_cost': unitCost.toStringAsFixed(2),
     };
@@ -1567,6 +1624,18 @@ List<Object?> _listFromJson(Object? value) {
     return value;
   }
   return const <Object?>[];
+}
+
+String _variantDisplayName(String? productName, String? variantName) {
+  final product = productName?.trim() ?? '';
+  final variant = variantName?.trim() ?? '';
+  if (product.isEmpty) {
+    return variant;
+  }
+  if (variant.isEmpty || variant == product) {
+    return product;
+  }
+  return '$product - $variant';
 }
 
 DateTime? _dateTimeFromJson(Object? value) {

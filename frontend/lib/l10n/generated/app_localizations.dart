@@ -2378,6 +2378,24 @@ abstract class AppLocalizations {
   /// **'ابحث عن منتج أو امسح الباركود'**
   String get posProductLookupHint;
 
+  /// Title for the POS variant picker shown after tapping a product with multiple active variants.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختيار خيار {productName}'**
+  String posVariantPickerTitle(String productName);
+
+  /// Stock quantity shown for a variant in the POS variant picker.
+  ///
+  /// In ar, this message translates to:
+  /// **'المتاح {quantity}'**
+  String posVariantPickerStock(int quantity);
+
+  /// No description provided for @posProductHasNoActiveVariants.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد خيارات نشطة لهذا المنتج.'**
+  String get posProductHasNoActiveVariants;
+
   /// No description provided for @clearBarcodeStatusTooltip.
   ///
   /// In ar, this message translates to:

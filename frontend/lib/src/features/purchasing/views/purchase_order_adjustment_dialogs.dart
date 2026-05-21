@@ -266,7 +266,7 @@ class _PurchaseExchangeDialogState extends State<_PurchaseExchangeDialog> {
       }
       replacementLines.add(
         PurchaseReplacementLineDraft(
-          productId: editor.option.productId,
+          variantId: editor.option.variantId,
           quantity: quantity,
           unitCost: unitCost,
         ),
@@ -307,7 +307,7 @@ class _PurchaseReplacementLineInput extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final productField = DropdownButtonFormField<int>(
-      initialValue: editor.option.productId,
+      initialValue: editor.option.variantId,
       decoration: InputDecoration(
         labelText: l10n.purchaseExchangeReplacementProductLabel,
         border: const OutlineInputBorder(),
@@ -316,7 +316,7 @@ class _PurchaseReplacementLineInput extends StatelessWidget {
       items: [
         for (final option in options)
           DropdownMenuItem<int>(
-            value: option.productId,
+            value: option.variantId,
             child: Text(
               option.label,
               maxLines: 1,
@@ -324,10 +324,10 @@ class _PurchaseReplacementLineInput extends StatelessWidget {
             ),
           ),
       ],
-      onChanged: (productId) {
+      onChanged: (variantId) {
         _PurchaseReplacementOption? selected;
         for (final option in options) {
-          if (option.productId == productId) {
+          if (option.variantId == variantId) {
             selected = option;
             break;
           }
@@ -401,12 +401,12 @@ class _PurchaseReplacementLineInput extends StatelessWidget {
 
 class _PurchaseReplacementOption {
   const _PurchaseReplacementOption({
-    required this.productId,
+    required this.variantId,
     required this.label,
     required this.unitCost,
   });
 
-  final int productId;
+  final int variantId;
   final String label;
   final double unitCost;
 }
@@ -431,23 +431,23 @@ class _ReplacementLineEditor {
 List<_PurchaseReplacementOption> _replacementOptionsFromOrderLines(
   List<PurchaseOrderLine> lines,
 ) {
-  final optionsByProduct = <int, _PurchaseReplacementOption>{};
+  final optionsByVariant = <int, _PurchaseReplacementOption>{};
   for (final line in lines) {
-    optionsByProduct.putIfAbsent(line.productId, () {
+    optionsByVariant.putIfAbsent(line.variantId, () {
       final sku = line.productSku;
-      final name = line.productName;
+      final name = line.displayName;
       final label = [
-        if (name != null && name.isNotEmpty) name,
+        if (name.isNotEmpty) name,
         if (sku != null && sku.isNotEmpty) sku,
       ].join(' • ');
       return _PurchaseReplacementOption(
-        productId: line.productId,
-        label: label.isEmpty ? '${line.productId}' : label,
+        variantId: line.variantId,
+        label: label.isEmpty ? '${line.variantId}' : label,
         unitCost: line.unitCost,
       );
     });
   }
-  return optionsByProduct.values.toList(growable: false);
+  return optionsByVariant.values.toList(growable: false);
 }
 
 class _PurchaseAdjustmentLineStepper extends StatelessWidget {
@@ -467,7 +467,11 @@ class _PurchaseAdjustmentLineStepper extends StatelessWidget {
 
     return ListTile(
       contentPadding: EdgeInsets.zero,
-      title: Text(line.productName ?? l10n.purchaseOrderUnknownProduct),
+      title: Text(
+        line.displayName.isEmpty
+            ? l10n.purchaseOrderUnknownProduct
+            : line.displayName,
+      ),
       subtitle: Text(
         [
           l10n.purchaseOrderLineQuantity(line.quantity),

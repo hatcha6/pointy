@@ -124,7 +124,12 @@ class ProductViewSet(viewsets.ModelViewSet):
         "variants__option_values",
     )
     filterset_fields = ("is_active",)
-    search_fields = ("variants__sku", "variants__barcode", "name")
+    search_fields = (
+        "variants__sku",
+        "variants__barcode",
+        "variants__name",
+        "name",
+    )
     ordering_fields = ("name", "unit_price", "created_at", "updated_at")
 
     def get_required_permissions(self, request):

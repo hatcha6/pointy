@@ -589,6 +589,25 @@
   "noBarcode": "لا يوجد باركود",
   "noDescription": "لا يوجد وصف لهذا المنتج",
   "posProductLookupHint": "ابحث عن منتج أو امسح الباركود",
+  "posVariantPickerTitle": "اختيار خيار {productName}",
+  "@posVariantPickerTitle": {
+    "description": "Title for the POS variant picker shown after tapping a product with multiple active variants.",
+    "placeholders": {
+      "productName": {
+        "type": "String"
+      }
+    }
+  },
+  "posVariantPickerStock": "المتاح {quantity}",
+  "@posVariantPickerStock": {
+    "description": "Stock quantity shown for a variant in the POS variant picker.",
+    "placeholders": {
+      "quantity": {
+        "type": "int"
+      }
+    }
+  },
+  "posProductHasNoActiveVariants": "لا توجد خيارات نشطة لهذا المنتج.",
   "clearBarcodeStatusTooltip": "إخفاء حالة الباركود",
   "barcodeScanResolving": "جار البحث عن الباركود...",
   "barcodeScanAdded": "تمت إضافة {productName}",

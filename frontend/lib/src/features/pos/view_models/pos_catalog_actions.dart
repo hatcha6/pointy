@@ -48,8 +48,8 @@ extension PosCatalogActions on PosViewModel {
       _errorMessage = null;
       changed = true;
     }
-    if (_nextVariantPage != 1) {
-      _nextVariantPage = 1;
+    if (_nextProductPage != 1) {
+      _nextProductPage = 1;
       changed = true;
     }
     if (!_hasMoreProducts) {
@@ -60,7 +60,7 @@ extension PosCatalogActions on PosViewModel {
       _notifyChanged();
     }
 
-    final result = await _catalogRepository.loadProductVariants(
+    final result = await _catalogRepository.loadProducts(
       query: querySnapshot,
       page: 1,
     );
@@ -69,12 +69,12 @@ extension PosCatalogActions on PosViewModel {
     }
 
     switch (result) {
-      case Ok<ProductVariantPage>():
-        _variants = result.value.variants;
+      case Ok<ProductPage>():
+        _products = result.value.products;
         _hasMoreProducts = result.value.hasMore;
-        _nextVariantPage = 2;
-      case Error<ProductVariantPage>():
-        _variants = _catalogRepository.sampleProductVariants(querySnapshot);
+        _nextProductPage = 2;
+      case Error<ProductPage>():
+        _products = _catalogRepository.sampleProducts(querySnapshot);
         _hasMoreProducts = false;
         _errorMessage = 'sample_catalog_notice';
     }
@@ -93,15 +93,15 @@ extension PosCatalogActions on PosViewModel {
 
     final requestVersion = _catalogRequestVersion;
     final querySnapshot = _query;
-    final page = _nextVariantPage;
-    final result = await _catalogRepository.loadProductVariants(
+    final page = _nextProductPage;
+    final result = await _catalogRepository.loadProducts(
       query: querySnapshot,
       page: page,
     );
     final isCurrentPage =
         requestVersion == _catalogRequestVersion &&
         querySnapshot == _query &&
-        page == _nextVariantPage;
+        page == _nextProductPage;
     if (!isCurrentPage) {
       if (_isLoadingMore) {
         _isLoadingMore = false;
@@ -111,11 +111,11 @@ extension PosCatalogActions on PosViewModel {
     }
 
     switch (result) {
-      case Ok<ProductVariantPage>():
-        _variants = [..._variants, ...result.value.variants];
+      case Ok<ProductPage>():
+        _products = [..._products, ...result.value.products];
         _hasMoreProducts = result.value.hasMore;
-        _nextVariantPage += 1;
-      case Error<ProductVariantPage>():
+        _nextProductPage += 1;
+      case Error<ProductPage>():
         _errorMessage = 'sample_catalog_notice';
     }
 
@@ -142,5 +142,50 @@ extension PosCatalogActions on PosViewModel {
     }
     _query = activeQuery;
     await _loadCatalogForCurrentQuery(queryChanged: true);
+  }
+
+  Future<PosProductSelectionResult> selectProductForSale(
+    Product product,
+  ) async {
+    if (_isCheckingOut) {
+      return const PosProductSelectionResult.unavailable();
+    }
+
+    final variantsResult = await _activeVariantsForProduct(product);
+    switch (variantsResult) {
+      case Ok<List<ProductVariant>>():
+        final variants = variantsResult.value;
+        if (variants.isEmpty) {
+          return const PosProductSelectionResult.unavailable();
+        }
+        if (variants.length == 1) {
+          addVariant(variants.single);
+          return const PosProductSelectionResult.added();
+        }
+        return PosProductSelectionResult.chooseVariant(variants);
+      case Error<List<ProductVariant>>():
+        return const PosProductSelectionResult.error();
+    }
+  }
+
+  Future<Result<List<ProductVariant>>> _activeVariantsForProduct(
+    Product product,
+  ) async {
+    final localVariants = product.activeVariants;
+    if (localVariants.isNotEmpty) {
+      return Ok(localVariants);
+    }
+
+    final result = await _catalogRepository.loadVariantsForProduct(product.id);
+    switch (result) {
+      case Ok<ProductVariantPage>():
+        return Ok(
+          result.value.variants
+              .where((variant) => variant.isSellable)
+              .toList(growable: false),
+        );
+      case Error<ProductVariantPage>(:final exception):
+        return Error(exception);
+    }
   }
 }

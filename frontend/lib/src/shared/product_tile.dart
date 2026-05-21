@@ -11,7 +11,7 @@ class ProductTile extends StatelessWidget {
     required Product product,
     required this.onTap,
     this.showPrice = true,
-  }) : title = product.sellableName,
+  }) : title = product.name,
        sku = product.effectiveSku,
        unitPrice = product.effectiveUnitPrice,
        isActive = product.isActive;

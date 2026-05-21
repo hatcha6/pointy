@@ -102,7 +102,10 @@ class SaleRepository {
         .whereType<Map<String, Object?>>()
         .map((item) {
           return SaleStockShortage(
-            productName: item['product_name']?.toString() ?? '',
+            productName:
+                item['variant_name']?.toString() ??
+                item['product_name']?.toString() ??
+                '',
             requested: _intFromJson(item['requested']),
             available: _intFromJson(item['available']),
           );

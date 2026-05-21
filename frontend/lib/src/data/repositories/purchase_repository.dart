@@ -93,6 +93,7 @@ class PurchaseRepository {
     PurchaseAdjustmentType? adjustmentType,
     int? supplierId,
     int? productId,
+    int? variantId,
     int page = 1,
   }) async {
     return Result.guard(
@@ -100,6 +101,7 @@ class PurchaseRepository {
         adjustmentType: adjustmentType,
         supplierId: supplierId,
         productId: productId,
+        variantId: variantId,
         page: page,
       ),
     );
