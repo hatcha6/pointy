@@ -263,8 +263,8 @@ class _PurchaseOrderLines extends StatelessWidget {
               ),
               subtitle: Text(
                 [
-                  if (line.productSku != null && line.productSku!.isNotEmpty)
-                    line.productSku!,
+                  if (line.variantSku != null && line.variantSku!.isNotEmpty)
+                    line.variantSku!,
                   l10n.purchaseOrderLineQuantity(line.quantity),
                   l10n.purchaseLineReceivedQuantity(line.receivedQuantity),
                   l10n.purchaseLineOpenQuantity(line.receivableQuantity),

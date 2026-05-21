@@ -7,7 +7,8 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient
 
-from apps.catalog.models import Product, ProductVariant
+from apps.catalog.models import ProductVariant
+from apps.catalog.testing import create_product_with_default_variant
 from apps.core.roles import CASHIER_GROUP, MANAGER_GROUP, ensure_role_groups
 from .models import StockItem, StockMovement
 
@@ -15,13 +16,14 @@ from .models import StockItem, StockMovement
 class StockItemAuthorizationTests(TestCase):
     def setUp(self):
         ensure_role_groups()
-        self.product = Product.objects.create(
+        self.product = create_product_with_default_variant(
             sku="AUTH-STOCK",
             name="مخزون",
             unit_price=Decimal("1.00"),
         )
+        self.variant = self.product.default_variant
         self.stock_item = StockItem.objects.create(
-            product=self.product,
+            variant=self.variant,
             quantity_on_hand=5,
             quantity_committed=1,
             quantity_expected=3,
@@ -72,7 +74,7 @@ class StockItemAuthorizationTests(TestCase):
         response = client.post(
             reverse("stockmovement-list"),
             {
-                "product": self.product.pk,
+                "variant": self.variant.pk,
                 "movement_type": StockMovement.Type.INCREASE,
                 "quantity": 4,
                 "note": "وردت من المورد",
@@ -134,7 +136,7 @@ class StockItemAuthorizationTests(TestCase):
         response = client.post(
             reverse("stockmovement-list"),
             {
-                "product": self.product.pk,
+                "variant": self.variant.pk,
                 "movement_type": StockMovement.Type.DECREASE,
                 "quantity": 6,
             },
@@ -157,7 +159,7 @@ class StockItemAuthorizationTests(TestCase):
         response = client.post(
             reverse("stockmovement-list"),
             {
-                "product": self.product.pk,
+                "variant": self.variant.pk,
                 "movement_type": StockMovement.Type.INCREASE,
                 "quantity": 1,
             },

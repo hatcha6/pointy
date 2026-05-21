@@ -1,22 +1,22 @@
 class ProductDraft {
   const ProductDraft({
-    required this.sku,
+    required this.variantSku,
     required this.name,
-    required this.unitPrice,
+    required this.variantUnitPrice,
     required this.isActive,
     this.variantName = '',
-    this.barcode = '',
+    this.variantBarcode = '',
     this.description = '',
     this.categoryIds = const [],
     this.optionValueIds = const [],
   });
 
-  final String sku;
+  final String variantSku;
   final String name;
   final String variantName;
-  final double unitPrice;
+  final double variantUnitPrice;
   final bool isActive;
-  final String barcode;
+  final String variantBarcode;
   final String description;
   final List<int> categoryIds;
   final List<int> optionValueIds;
@@ -29,9 +29,9 @@ class ProductDraft {
       'categories': categoryIds,
       'default_variant': {
         'name': variantName,
-        'sku': sku,
-        'barcode': barcode,
-        'unit_price': unitPrice.toStringAsFixed(2),
+        'sku': variantSku,
+        'barcode': variantBarcode,
+        'unit_price': variantUnitPrice.toStringAsFixed(2),
         'is_active': isActive,
         'option_values': optionValueIds,
       },

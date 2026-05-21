@@ -278,7 +278,7 @@ class ProductMarginImpact {
   factory ProductMarginImpact.fromJson(Map<String, Object?> json) {
     return ProductMarginImpact(
       productId: _intFromJson(json['product'] ?? json['product_id']),
-      unitPrice: _moneyFromJson(json['unit_price'] ?? json['price']),
+      unitPrice: _moneyFromJson(json['unit_price']),
       latestUnitCost: _nullableMoneyFromJson(
         json['latest_unit_cost'] ?? json['unit_cost'] ?? json['latest_cost'],
       ),
@@ -786,7 +786,7 @@ class PurchaseOrderLine {
     required this.total,
     this.productName,
     this.variantName,
-    this.productSku,
+    this.variantSku,
     this.previousUnitCost,
     this.unitCostChange,
     this.unitCostChangePercent,
@@ -801,7 +801,7 @@ class PurchaseOrderLine {
   final int variantId;
   final String? productName;
   final String? variantName;
-  final String? productSku;
+  final String? variantSku;
   final int quantity;
   final int adjustedQuantity;
   final int adjustableQuantity;
@@ -887,7 +887,7 @@ class PurchaseOrderLine {
       ),
       productName: json['product_name']?.toString(),
       variantName: json['variant_name']?.toString(),
-      productSku: json['product_sku']?.toString(),
+      variantSku: json['variant_sku']?.toString(),
       quantity: quantity,
       adjustedQuantity: _intFromJson(json['adjusted_quantity']),
       adjustableQuantity: _intFromJson(json['adjustable_quantity']),
@@ -952,7 +952,7 @@ class PurchaseOrderLine {
       variantId: variantId,
       productName: productName,
       variantName: variantName,
-      productSku: productSku,
+      variantSku: variantSku,
       quantity: quantity,
       adjustedQuantity: adjustedQuantity,
       adjustableQuantity: adjustableQuantity,
@@ -1056,7 +1056,7 @@ class PurchaseReceiptLine {
     required this.quantityRejected,
     this.productName,
     this.variantName,
-    this.productSku,
+    this.variantSku,
   });
 
   final int purchaseLineId;
@@ -1067,7 +1067,7 @@ class PurchaseReceiptLine {
   final int quantityRejected;
   final String? productName;
   final String? variantName;
-  final String? productSku;
+  final String? variantSku;
 
   String get displayName => _variantDisplayName(productName, variantName);
 
@@ -1095,7 +1095,7 @@ class PurchaseReceiptLine {
       ),
       productName: json['product_name']?.toString(),
       variantName: json['variant_name']?.toString(),
-      productSku: json['product_sku']?.toString(),
+      variantSku: json['variant_sku']?.toString(),
     );
   }
 }
@@ -1322,7 +1322,7 @@ class PurchaseOrderAdjustmentLine {
     required this.total,
     this.productName,
     this.variantName,
-    this.productSku,
+    this.variantSku,
   });
 
   final int id;
@@ -1331,7 +1331,7 @@ class PurchaseOrderAdjustmentLine {
   final int variantId;
   final String? productName;
   final String? variantName;
-  final String? productSku;
+  final String? variantSku;
   final int quantity;
   final double unitCost;
   final double total;
@@ -1348,7 +1348,7 @@ class PurchaseOrderAdjustmentLine {
       ),
       productName: json['product_name']?.toString(),
       variantName: json['variant_name']?.toString(),
-      productSku: json['product_sku']?.toString(),
+      variantSku: json['variant_sku']?.toString(),
       quantity: _intFromJson(json['quantity']),
       unitCost: _moneyFromJson(json['unit_cost']),
       total: _moneyFromJson(json['line_total']),

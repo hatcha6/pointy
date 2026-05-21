@@ -127,8 +127,8 @@ class PurchaseCatalogPane extends StatelessWidget {
     final entries = await showCameraBarcodeScannerSheet(
       context,
       mode: CameraBarcodeScannerMode.multiple,
-      lookupProduct: viewModel.findVariantByBarcode,
-      createMissingProduct: (barcode) {
+      lookupVariant: viewModel.findVariantByBarcode,
+      createMissingVariant: (barcode) {
         return showPurchaseQuickProductSheet(
           context,
           barcode: barcode,

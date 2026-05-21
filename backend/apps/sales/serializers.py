@@ -3,7 +3,7 @@ from decimal import Decimal
 from django.contrib.contenttypes.models import ContentType
 from rest_framework import serializers
 
-from apps.catalog.models import Product, ProductVariant
+from apps.catalog.models import ProductVariant
 from apps.core.models import ShopSettings
 from apps.core.roles import user_is_manager
 from apps.customers.models import Customer
@@ -203,13 +203,9 @@ class RegisterCashMovementCreateSerializer(serializers.Serializer):
 
 
 class OrderLineSerializer(serializers.ModelSerializer):
-    product = serializers.PrimaryKeyRelatedField(
-        queryset=Product.objects.all(),
-        required=False,
-    )
+    product = serializers.IntegerField(source="variant.product_id", read_only=True)
     variant = serializers.PrimaryKeyRelatedField(
         queryset=ProductVariant.objects.active(),
-        required=False,
     )
     product_name = serializers.CharField(source="variant.product.name", read_only=True)
     variant_name = serializers.CharField(source="variant.display_name", read_only=True)
@@ -255,18 +251,10 @@ class OrderLineSerializer(serializers.ModelSerializer):
         return value
 
     def validate(self, attrs):
-        product = attrs.get("product")
         variant = attrs.get("variant")
-        if variant is None and product is not None:
-            variant = product.default_variant
         if variant is None:
             raise serializers.ValidationError({"variant": "Variant is required."})
-        if product is not None and variant.product_id != product.pk:
-            raise serializers.ValidationError(
-                {"variant": "Variant does not belong to the selected product."}
-            )
         attrs["variant"] = variant
-        attrs.pop("product", None)
         return attrs
 
 
@@ -392,29 +380,16 @@ class OrderSerializer(serializers.ModelSerializer):
 
 
 class CheckoutLineSerializer(serializers.Serializer):
-    product = serializers.PrimaryKeyRelatedField(
-        queryset=Product.objects.all(),
-        required=False,
-    )
     variant = serializers.PrimaryKeyRelatedField(
         queryset=ProductVariant.objects.active(),
-        required=False,
     )
     quantity = serializers.IntegerField(min_value=1)
 
     def validate(self, attrs):
-        product = attrs.get("product")
         variant = attrs.get("variant")
-        if variant is None and product is not None:
-            variant = product.default_variant
         if variant is None:
             raise serializers.ValidationError({"variant": "Variant is required."})
-        if product is not None and variant.product_id != product.pk:
-            raise serializers.ValidationError(
-                {"variant": "Variant does not belong to the selected product."}
-            )
         attrs["variant"] = variant
-        attrs.pop("product", None)
         return attrs
 
 

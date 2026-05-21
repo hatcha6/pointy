@@ -722,10 +722,10 @@ class _DiscountRuleFormState extends State<DiscountRuleForm> {
                 AsyncSelectionOption<int>(
                   id: product.id,
                   label: product.name,
-                  subtitle: [
-                    if (product.sku.isNotEmpty) product.sku,
-                    if (product.barcode.isNotEmpty) product.barcode,
-                  ].join(' • '),
+                  subtitle: product.categories
+                      .where((category) => category.name.isNotEmpty)
+                      .map((category) => category.name)
+                      .join(' • '),
                 ),
             ],
             hasMore: page.hasMore,

@@ -15,6 +15,7 @@ import 'package:pointy_frontend/src/data/models/pos_user.dart';
 import 'package:pointy_frontend/src/data/models/print_job.dart';
 import 'package:pointy_frontend/src/data/models/printer_config.dart';
 import 'package:pointy_frontend/src/data/models/product.dart';
+import 'package:pointy_frontend/src/data/models/product_variant.dart';
 import 'package:pointy_frontend/src/data/models/purchase_submission.dart';
 import 'package:pointy_frontend/src/data/models/register_cash_movement.dart';
 import 'package:pointy_frontend/src/app.dart';
@@ -532,11 +533,15 @@ void main() {
       BarcodeLabelPrintLine.product(
         const Product(
           id: 1,
-          sku: 'COF-100',
           name: 'قهوة عربية',
-          unitPrice: 5.5,
           quantityOnHand: 10,
-          barcode: '123456789012',
+          defaultVariant: ProductVariant(
+            id: 1,
+            productId: 1,
+            sku: 'COF-100',
+            unitPrice: 5.5,
+            barcode: '123456789012',
+          ),
         ),
       ),
     ]);
@@ -2153,12 +2158,16 @@ void main() {
   ) async {
     final product = const Product(
       id: 42,
-      sku: 'COF-100',
       name: 'قهوة عربية',
-      unitPrice: 5.50,
       quantityOnHand: 8,
-      barcode: '123456',
       description: 'حبوب مطحونة بعناية',
+      defaultVariant: ProductVariant(
+        id: 42,
+        productId: 42,
+        sku: 'COF-100',
+        unitPrice: 5.50,
+        barcode: '123456',
+      ),
     );
     final apiService = _mockApiService();
 
@@ -2217,12 +2226,16 @@ void main() {
   ) async {
     final product = const Product(
       id: 42,
-      sku: 'COF-100',
       name: 'قهوة عربية',
-      unitPrice: 5.50,
       quantityOnHand: 8,
-      barcode: '123456789012',
       description: 'حبوب مطحونة بعناية',
+      defaultVariant: ProductVariant(
+        id: 42,
+        productId: 42,
+        sku: 'COF-100',
+        unitPrice: 5.50,
+        barcode: '123456789012',
+      ),
     );
     final apiService = _mockApiService();
     final transport = _CapturingPrintTransport();
@@ -3066,7 +3079,7 @@ PosApiService _mockApiService({
                   'product': 1,
                   'variant': line['variant'],
                   'product_name': 'قهوة البيت',
-                  'product_sku': 'COF-001',
+                  'variant_sku': 'COF-001',
                   'quantity': line['quantity'],
                   'adjusted_quantity': 0,
                   'adjustable_quantity': 2,
@@ -3671,7 +3684,7 @@ Map<String, Object?> _purchaseOrderJson({
         'id': 1,
         'product': 1,
         'product_name': 'قهوة البيت',
-        'product_sku': 'COF-001',
+        'variant_sku': 'COF-001',
         'quantity': 2,
         'received_quantity': receivedQuantity,
         'damaged_quantity': damagedQuantity,

@@ -244,9 +244,9 @@ class _ProductFormState extends State<ProductForm> {
       description: _descriptionController.text.trim(),
       isActive: _isProductActive,
       variantName: _variantNameController.text.trim(),
-      sku: _skuController.text.trim(),
-      barcode: _barcodeController.text.trim(),
-      unitPrice: _parseNumber(_priceController.text)!,
+      variantSku: _skuController.text.trim(),
+      variantBarcode: _barcodeController.text.trim(),
+      variantUnitPrice: _parseNumber(_priceController.text)!,
       optionValueIds: [
         for (final optionValue in _selectedOptionValues) optionValue.id,
       ],

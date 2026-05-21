@@ -262,10 +262,10 @@ class _PurchaseQuickProductSheetState extends State<PurchaseQuickProductSheet> {
     final unitCost = _parseNumber(_priceController.text)!;
     final created = await widget.onCreate(
       ProductDraft(
-        sku: _skuController.text.trim(),
-        barcode: widget.barcode,
+        variantSku: _skuController.text.trim(),
+        variantBarcode: widget.barcode,
         name: _nameController.text.trim(),
-        unitPrice: 0,
+        variantUnitPrice: 0,
         isActive: true,
         categoryIds: [for (final category in _selectedCategories) category.id],
       ),

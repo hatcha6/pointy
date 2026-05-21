@@ -187,8 +187,8 @@ class _PurchaseReceiveLineInput extends StatelessWidget {
           const SizedBox(height: 4),
           Text(
             [
-              if (line.productSku != null && line.productSku!.isNotEmpty)
-                line.productSku!,
+              if (line.variantSku != null && line.variantSku!.isNotEmpty)
+                line.variantSku!,
               l10n.purchaseReceiveExpectedValue(line.quantity),
               l10n.purchaseReceiveAlreadyValue(line.receivedQuantity),
               l10n.purchaseReceiveOpenValue(line.receivableQuantity),

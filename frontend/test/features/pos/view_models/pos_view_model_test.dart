@@ -77,6 +77,7 @@ void main() {
             SaleOrderLine(
               id: 10,
               productId: 101,
+              variantId: 101,
               productName: 'قهوة البيت',
               quantity: 2,
               returnedQuantity: 0,

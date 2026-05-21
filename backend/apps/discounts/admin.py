@@ -30,6 +30,7 @@ class DiscountRuleAdmin(admin.ModelAdmin):
     search_fields = ("name", "coupon_code", "description")
     filter_horizontal = (
         "products",
+        "variants",
         "product_categories",
         "customers",
         "suppliers",

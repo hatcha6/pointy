@@ -1,19 +1,15 @@
 from rest_framework import serializers
 
-from apps.catalog.models import Product, ProductVariant
-from apps.catalog.serializers import ProductSerializer
+from apps.catalog.models import ProductVariant
+from apps.catalog.serializers import ProductCatalogSerializer
 from .models import StockItem, StockMovement
 
 
 class StockItemSerializer(serializers.ModelSerializer):
-    product_detail = ProductSerializer(source="variant.product", read_only=True)
-    product = serializers.PrimaryKeyRelatedField(
-        queryset=Product.objects.all(),
-        required=False,
-    )
+    product_detail = ProductCatalogSerializer(source="variant.product", read_only=True)
+    product = serializers.IntegerField(source="variant.product_id", read_only=True)
     variant = serializers.PrimaryKeyRelatedField(
         queryset=ProductVariant.objects.all(),
-        required=False,
     )
     variant_sku = serializers.CharField(source="variant.sku", read_only=True)
     variant_name = serializers.CharField(source="variant.display_name", read_only=True)
@@ -54,30 +50,18 @@ class StockItemSerializer(serializers.ModelSerializer):
         return attrs
 
     def _with_variant(self, attrs):
-        product = attrs.get("product", getattr(self.instance, "product", None))
         variant = attrs.get("variant", getattr(self.instance, "variant", None))
-        if variant is None and product is not None:
-            variant = product.default_variant
         if variant is None:
             raise serializers.ValidationError({"variant": "Variant is required."})
-        if product is not None and variant.product_id != product.pk:
-            raise serializers.ValidationError(
-                {"variant": "Variant does not belong to the selected product."}
-            )
         attrs["variant"] = variant
-        attrs.pop("product", None)
         return attrs
 
 
 class StockMovementSerializer(serializers.ModelSerializer):
-    product_detail = ProductSerializer(source="variant.product", read_only=True)
-    product = serializers.PrimaryKeyRelatedField(
-        queryset=Product.objects.all(),
-        required=False,
-    )
+    product_detail = ProductCatalogSerializer(source="variant.product", read_only=True)
+    product = serializers.IntegerField(source="variant.product_id", read_only=True)
     variant = serializers.PrimaryKeyRelatedField(
         queryset=ProductVariant.objects.all(),
-        required=False,
     )
     variant_sku = serializers.CharField(source="variant.sku", read_only=True)
     variant_name = serializers.CharField(source="variant.display_name", read_only=True)
@@ -130,16 +114,8 @@ class StockMovementSerializer(serializers.ModelSerializer):
         return value
 
     def validate(self, attrs):
-        product = attrs.get("product")
         variant = attrs.get("variant")
-        if variant is None and product is not None:
-            variant = product.default_variant
         if variant is None:
             raise serializers.ValidationError({"variant": "Variant is required."})
-        if product is not None and variant.product_id != product.pk:
-            raise serializers.ValidationError(
-                {"variant": "Variant does not belong to the selected product."}
-            )
         attrs["variant"] = variant
-        attrs.pop("product", None)
         return attrs

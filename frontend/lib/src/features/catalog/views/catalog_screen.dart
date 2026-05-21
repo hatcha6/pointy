@@ -182,7 +182,7 @@ class CatalogScreen extends StatelessWidget {
     final entries = await showCameraBarcodeScannerSheet(
       context,
       mode: CameraBarcodeScannerMode.single,
-      lookupProduct: _lookupProductByBarcode,
+      lookupVariant: _lookupVariantByBarcode,
     );
     if (entries == null || entries.isEmpty || !context.mounted) {
       return;
@@ -199,7 +199,7 @@ class CatalogScreen extends StatelessWidget {
     );
   }
 
-  Future<ProductVariant?> _lookupProductByBarcode(String barcode) async {
+  Future<ProductVariant?> _lookupVariantByBarcode(String barcode) async {
     final outcome = await viewModel.findVariantByBarcode(barcode);
     return switch (outcome.status) {
       CatalogBarcodeLookupStatus.found => outcome.variant,

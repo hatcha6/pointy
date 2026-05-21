@@ -329,12 +329,14 @@ class SaleOrderLine {
   const SaleOrderLine({
     required this.id,
     required this.productId,
+    required this.variantId,
     required this.quantity,
     required this.returnedQuantity,
     required this.returnableQuantity,
     required this.unitPrice,
     required this.total,
     this.productName,
+    this.variantName,
     this.profit,
     this.subtotal = 0,
     this.discountTotal = 0,
@@ -342,7 +344,9 @@ class SaleOrderLine {
 
   final int id;
   final int productId;
+  final int variantId;
   final String? productName;
+  final String? variantName;
   final int quantity;
   final int returnedQuantity;
   final int returnableQuantity;
@@ -356,7 +360,9 @@ class SaleOrderLine {
     return SaleOrderLine(
       id: _intFromJson(json['id']),
       productId: _productIdFromJson(json['product']),
+      variantId: _productIdFromJson(json['variant']),
       productName: json['product_name']?.toString(),
+      variantName: json['variant_name']?.toString(),
       quantity: _intFromJson(json['quantity']),
       returnedQuantity: _intFromJson(json['returned_quantity']),
       returnableQuantity: _intFromJson(json['returnable_quantity']),

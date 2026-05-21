@@ -9,7 +9,8 @@ from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APIClient
 
-from apps.catalog.models import Product, ProductVariant
+from apps.catalog.models import ProductVariant
+from apps.catalog.testing import create_product_with_default_variant
 from apps.core.models import ShopSettings
 from apps.core.roles import CASHIER_GROUP, MANAGER_GROUP, ensure_role_groups
 from apps.customers.models import Customer
@@ -153,13 +154,14 @@ class RegisterSessionApiTests(TestCase):
         self.assertEqual(current_response.status_code, status.HTTP_204_NO_CONTENT)
 
     def test_closed_session_reports_expected_cash_and_variance(self):
-        product = Product.objects.create(
+        product = create_product_with_default_variant(
             sku="CASH-REC",
             barcode="",
             name="Cash reconciliation coffee",
             unit_price=Decimal("3.00"),
         )
-        StockItem.objects.create(product=product, quantity_on_hand=5)
+        variant = product.default_variant
+        StockItem.objects.create(variant=variant, quantity_on_hand=5)
         start_response = self.client.post(
             reverse("register-session-start"),
             {"opening_cash": "10.00"},
@@ -169,7 +171,7 @@ class RegisterSessionApiTests(TestCase):
 
         checkout_response = self.client.post(
             reverse("order-checkout"),
-            {"lines": [{"product": product.pk, "quantity": 2}]},
+            {"lines": [{"variant": variant.pk, "quantity": 2}]},
             format="json",
         )
         pay_in_response = self.client.post(
@@ -314,13 +316,14 @@ class RegisterSessionApiTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
 
     def test_orders_action_returns_sales_for_owned_session(self):
-        product = Product.objects.create(
+        product = create_product_with_default_variant(
             sku="TEA",
             barcode="",
             name="Tea",
             unit_price=Decimal("2.00"),
         )
-        StockItem.objects.create(product=product, quantity_on_hand=5)
+        variant = product.default_variant
+        StockItem.objects.create(variant=variant, quantity_on_hand=5)
         session = self.client.post(
             reverse("register-session-start"),
             {"opening_cash": "0.00"},
@@ -328,7 +331,7 @@ class RegisterSessionApiTests(TestCase):
         ).data
         checkout_response = self.client.post(
             reverse("order-checkout"),
-            {"lines": [{"product": Product.objects.get(sku="TEA").pk, "quantity": 3}]},
+            {"lines": [{"variant": variant.pk, "quantity": 3}]},
             format="json",
         )
 
@@ -368,13 +371,14 @@ class RegisterSessionApiTests(TestCase):
         cashier.groups.add(Group.objects.get(name=CASHIER_GROUP))
         manager.groups.add(Group.objects.get(name=MANAGER_GROUP))
 
-        product = Product.objects.create(
+        product = create_product_with_default_variant(
             sku="MGR-TEA",
             barcode="",
             name="Manager Tea",
             unit_price=Decimal("2.00"),
         )
-        StockItem.objects.create(product=product, quantity_on_hand=5)
+        variant = product.default_variant
+        StockItem.objects.create(variant=variant, quantity_on_hand=5)
         cashier_client = APIClient()
         cashier_client.force_authenticate(user=cashier)
         session = cashier_client.post(
@@ -384,7 +388,7 @@ class RegisterSessionApiTests(TestCase):
         ).data
         checkout_response = cashier_client.post(
             reverse("order-checkout"),
-            {"lines": [{"product": product.pk, "quantity": 2}]},
+            {"lines": [{"variant": variant.pk, "quantity": 2}]},
             format="json",
         )
 
@@ -544,20 +548,21 @@ class OrderCheckoutApiTests(TestCase):
         )
         self.user.groups.add(Group.objects.get(name=CASHIER_GROUP))
         self.client.force_authenticate(user=self.user)
-        self.product = Product.objects.create(
+        self.product = create_product_with_default_variant(
             sku="COFFEE",
             barcode="",
             name="Coffee",
             unit_price=Decimal("3.50"),
         )
+        self.variant = self.product.default_variant
         self.stock_item = StockItem.objects.create(
-            product=self.product,
+            variant=self.variant,
             quantity_on_hand=10,
         )
 
     def checkout_payload(self, **overrides):
         payload = {
-            "lines": [{"product": self.product.pk, "quantity": 2}],
+            "lines": [{"variant": self.variant.pk, "quantity": 2}],
             "payment_method": "cash",
             "amount_received": "7.00",
         }
@@ -625,7 +630,7 @@ class OrderCheckoutApiTests(TestCase):
             status=PurchaseOrder.Status.RECEIVED,
         )
         first_purchase.lines.create(
-            product=self.product,
+            variant=self.variant,
             quantity=10,
             unit_cost=Decimal("2.00"),
         )
@@ -641,7 +646,7 @@ class OrderCheckoutApiTests(TestCase):
             status=PurchaseOrder.Status.RECEIVED,
         )
         later_purchase.lines.create(
-            product=self.product,
+            variant=self.variant,
             quantity=10,
             unit_cost=Decimal("2.75"),
         )
@@ -680,7 +685,7 @@ class OrderCheckoutApiTests(TestCase):
             status=PurchaseOrder.Status.RECEIVED,
         )
         default_purchase.lines.create(
-            product=self.product,
+            variant=self.variant,
             quantity=10,
             unit_cost=Decimal("2.00"),
         )
@@ -760,7 +765,7 @@ class OrderCheckoutApiTests(TestCase):
         response = self.client.post(
             reverse("order-checkout"),
             {
-                "lines": [{"product": self.product.pk, "quantity": 2}],
+                "lines": [{"variant": self.variant.pk, "quantity": 2}],
             },
             format="json",
         )
@@ -971,13 +976,14 @@ class OrderCheckoutApiTests(TestCase):
     def test_checkout_applies_customer_product_and_minimum_subtotal_restrictions(self):
         customer = Customer.objects.create(full_name="Eligible buyer")
         other_customer = Customer.objects.create(full_name="Other buyer")
-        other_product = Product.objects.create(
+        other_product = create_product_with_default_variant(
             sku="MUFFIN",
             barcode="",
             name="Muffin",
             unit_price=Decimal("5.00"),
         )
-        StockItem.objects.create(product=other_product, quantity_on_hand=5)
+        other_variant = other_product.default_variant
+        StockItem.objects.create(variant=other_variant, quantity_on_hand=5)
         rule = DiscountRule.objects.create(
             name="Coffee buyer coupon",
             channel=DiscountRule.Channel.SALES,
@@ -1004,7 +1010,7 @@ class OrderCheckoutApiTests(TestCase):
         below_minimum_response = self.client.post(
             reverse("order-checkout"),
             {
-                "lines": [{"product": self.product.pk, "quantity": 2}],
+                "lines": [{"variant": self.variant.pk, "quantity": 2}],
                 "customer": customer.pk,
                 "coupon_code": "BUYER",
                 "payment_method": "cash",
@@ -1016,8 +1022,8 @@ class OrderCheckoutApiTests(TestCase):
             reverse("order-checkout"),
             {
                 "lines": [
-                    {"product": self.product.pk, "quantity": 2},
-                    {"product": other_product.pk, "quantity": 1},
+                    {"variant": self.variant.pk, "quantity": 2},
+                    {"variant": other_variant.pk, "quantity": 1},
                 ],
                 "customer": customer.pk,
                 "coupon_code": "BUYER",
@@ -1537,7 +1543,7 @@ class OrderCheckoutApiTests(TestCase):
         )
         quantity_response = self.client.post(
             reverse("order-checkout"),
-            self.checkout_payload(lines=[{"product": self.product.pk, "quantity": 0}]),
+            self.checkout_payload(lines=[{"variant": self.variant.pk, "quantity": 0}]),
             format="json",
         )
 

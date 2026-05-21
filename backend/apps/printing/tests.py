@@ -7,7 +7,8 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient
 
-from apps.catalog.models import Product, ProductVariant
+from apps.catalog.models import ProductVariant
+from apps.catalog.testing import create_product_with_default_variant
 from apps.core.models import ShopSettings
 from apps.core.roles import CASHIER_GROUP, MANAGER_GROUP, ensure_role_groups
 from apps.discounts.models import DiscountRule
@@ -64,12 +65,13 @@ class ReceiptAutoPrintTests(PrintingTestMixin, TestCase):
             receipt_footer="شكرا",
             auto_print_receipts=True,
         )
-        self.product = Product.objects.create(
+        self.product = create_product_with_default_variant(
             sku="AUTO-PRINT",
             name="قهوة مختصة",
             unit_price=Decimal("4.25"),
         )
-        StockItem.objects.create(product=self.product, quantity_on_hand=10)
+        self.variant = self.product.default_variant
+        StockItem.objects.create(variant=self.variant, quantity_on_hand=10)
         self.cashier_client.post(
             reverse("register-session-start"),
             {"opening_cash": "0.00"},
@@ -78,7 +80,7 @@ class ReceiptAutoPrintTests(PrintingTestMixin, TestCase):
 
     def checkout(self, extra=None):
         payload = {
-            "lines": [{"product": self.product.pk, "quantity": 2}],
+            "lines": [{"variant": self.variant.pk, "quantity": 2}],
             "payment_method": Payment.Method.CASH,
             "amount_received": "8.50",
         }
@@ -140,8 +142,9 @@ class ReceiptAutoPrintTests(PrintingTestMixin, TestCase):
         job = PrintJob.objects.get(order_id=response.data["id"])
 
         self.product.name = "اسم جديد"
-        self.product.unit_price = Decimal("99.00")
-        self.product.save(update_fields=["name", "unit_price", "updated_at"])
+        self.product.save(update_fields=["name", "updated_at"])
+        self.variant.unit_price = Decimal("99.00")
+        self.variant.save(update_fields=["unit_price", "updated_at"])
         ShopSettings.objects.filter(pk=1).update(shop_name="متجر جديد")
 
         self.assertEqual(job.payload["shop"]["name"], "متجر الاختبار")
@@ -380,12 +383,13 @@ class PrintJobAgentApiTests(PrintingTestMixin, TestCase):
 
     def test_order_reprint_endpoint_queues_manual_receipt_job(self):
         ShopSettings.load()
-        product = Product.objects.create(
+        product = create_product_with_default_variant(
             sku="REPRINT",
             name="قهوة",
             unit_price=Decimal("3.00"),
         )
-        StockItem.objects.create(product=product, quantity_on_hand=5)
+        variant = product.default_variant
+        StockItem.objects.create(variant=variant, quantity_on_hand=5)
         self.cashier_client.post(
             reverse("register-session-start"),
             {"opening_cash": "0.00"},
@@ -393,7 +397,7 @@ class PrintJobAgentApiTests(PrintingTestMixin, TestCase):
         )
         checkout_response = self.cashier_client.post(
             reverse("order-checkout"),
-            {"lines": [{"product": product.pk, "quantity": 1}]},
+            {"lines": [{"variant": variant.pk, "quantity": 1}]},
             format="json",
         )
 

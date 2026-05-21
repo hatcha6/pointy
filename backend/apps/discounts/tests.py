@@ -6,7 +6,8 @@ from django.test import TestCase
 from django.utils import timezone
 from rest_framework.test import APIClient
 
-from apps.catalog.models import Product, ProductCategory, ProductVariant
+from apps.catalog.models import ProductCategory, ProductVariant
+from apps.catalog.testing import create_product_with_default_variant
 from apps.customers.models import Customer
 from apps.purchasing.models import Supplier
 from apps.sales.models import Order
@@ -24,12 +25,12 @@ from .services import (
 class DiscountEngineTests(TestCase):
     def setUp(self):
         self.engine = DiscountEngine()
-        self.product = Product.objects.create(
+        self.product = create_product_with_default_variant(
             sku="SKU-1",
             name="Product one",
             unit_price=Decimal("10.00"),
         )
-        self.other_product = Product.objects.create(
+        self.other_product = create_product_with_default_variant(
             sku="SKU-2",
             name="Product two",
             unit_price=Decimal("20.00"),
@@ -472,7 +473,7 @@ class DiscountRuleApiTests(TestCase):
             )
         )
         self.client.force_authenticate(self.user)
-        self.product = Product.objects.create(
+        self.product = create_product_with_default_variant(
             sku="API-1",
             name="API product",
             unit_price=Decimal("12.00"),
@@ -697,7 +698,7 @@ class DiscountRuleApiTests(TestCase):
         response = self.client.post(
             "/api/orders/discount-preview/",
             {
-                "lines": [{"product": self.product.pk, "quantity": 2}],
+                "lines": [{"variant": self.product.default_variant.pk, "quantity": 2}],
                 "coupon_code": "save2",
             },
             format="json",
@@ -717,7 +718,7 @@ class DiscountRuleApiTests(TestCase):
         response = self.client.post(
             "/api/orders/discount-preview/",
             {
-                "lines": [{"product": self.product.pk, "quantity": 1}],
+                "lines": [{"variant": self.product.default_variant.pk, "quantity": 1}],
                 "coupon_code": "missing",
             },
             format="json",
@@ -740,7 +741,7 @@ class DiscountRuleApiTests(TestCase):
         response = self.client.post(
             "/api/orders/discount-preview/",
             {
-                "lines": [{"product": self.product.pk, "quantity": 2}],
+                "lines": [{"variant": self.product.default_variant.pk, "quantity": 2}],
             },
             format="json",
         )

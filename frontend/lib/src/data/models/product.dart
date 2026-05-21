@@ -6,9 +6,6 @@ class Product {
     required this.id,
     required this.name,
     required this.quantityOnHand,
-    this.sku = '',
-    this.unitPrice = 0,
-    this.barcode = '',
     this.description = '',
     this.isActive = true,
     this.categories = const [],
@@ -19,9 +16,6 @@ class Product {
   final int id;
   final String name;
   final int quantityOnHand;
-  final String sku;
-  final double unitPrice;
-  final String barcode;
   final String description;
   final bool isActive;
   final List<ProductCategory> categories;
@@ -38,11 +32,11 @@ class Product {
     return name;
   }
 
-  String get effectiveSku => defaultVariant?.sku ?? sku;
+  String get effectiveSku => defaultVariant?.sku ?? '';
 
-  String get effectiveBarcode => defaultVariant?.barcode ?? barcode;
+  String get effectiveBarcode => defaultVariant?.barcode ?? '';
 
-  double get effectiveUnitPrice => defaultVariant?.unitPrice ?? unitPrice;
+  double get effectiveUnitPrice => defaultVariant?.unitPrice ?? 0;
 
   int get effectiveQuantityOnHand =>
       defaultVariant?.quantityOnHand ?? quantityOnHand;
@@ -81,15 +75,10 @@ class Product {
     final variants = _variantsFromJson(json);
     return Product(
       id: _intFromJson(json['id']),
-      sku: json['sku']?.toString() ?? defaultVariant?.sku ?? '',
       name: json['name']?.toString() ?? '',
-      unitPrice: _moneyFromJson(
-        json['unit_price'] ?? defaultVariant?.unitPrice,
-      ),
       quantityOnHand: _intFromJson(
         json['quantity_on_hand'] ?? defaultVariant?.quantityOnHand,
       ),
-      barcode: json['barcode']?.toString() ?? defaultVariant?.barcode ?? '',
       description: (json['description'] as String?) ?? '',
       isActive: (json['is_active'] as bool?) ?? true,
       categories: _categoriesFromJson(json),
@@ -102,13 +91,10 @@ class Product {
     final detail = variant.productDetail;
     return Product(
       id: variant.productId,
-      sku: variant.sku,
       name: variant.displayLabel.isNotEmpty
           ? variant.displayLabel
           : detail?.name ?? variant.productName,
-      unitPrice: variant.unitPrice,
       quantityOnHand: variant.quantityOnHand,
-      barcode: variant.barcode,
       description: detail?.description ?? '',
       isActive: variant.isSellable,
       categories: detail?.categories ?? const [],
@@ -128,11 +114,8 @@ class Product {
             : this.defaultVariant?.copyWith(quantityOnHand: quantityOnHand));
     return Product(
       id: id,
-      sku: sku,
       name: name,
-      unitPrice: unitPrice,
       quantityOnHand: quantityOnHand ?? this.quantityOnHand,
-      barcode: barcode,
       description: description,
       isActive: isActive,
       categories: categories,
@@ -179,11 +162,4 @@ int _intFromJson(Object? value) {
     return value.toInt();
   }
   return int.tryParse((value ?? 0).toString()) ?? 0;
-}
-
-double _moneyFromJson(Object? value) {
-  if (value is num) {
-    return value.toDouble();
-  }
-  return double.tryParse((value ?? 0).toString()) ?? 0;
 }

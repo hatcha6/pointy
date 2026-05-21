@@ -95,7 +95,7 @@ class VariantOptionSerializer(serializers.ModelSerializer):
         read_only_fields = ("created_at", "updated_at")
 
 
-class ProductSummarySerializer(serializers.ModelSerializer):
+class ProductCatalogSummarySerializer(serializers.ModelSerializer):
     category_details = ProductCategorySerializer(
         source="categories",
         many=True,
@@ -168,7 +168,7 @@ class ProductVariantSerializer(serializers.ModelSerializer):
         required=False,
     )
     product_name = serializers.CharField(source="product.name", read_only=True)
-    product_detail = ProductSummarySerializer(source="product", read_only=True)
+    product_detail = ProductCatalogSummarySerializer(source="product", read_only=True)
     display_name = serializers.CharField(read_only=True)
     full_name = serializers.CharField(read_only=True)
     quantity_on_hand = serializers.IntegerField(read_only=True)
@@ -232,7 +232,7 @@ class ProductVariantSerializer(serializers.ModelSerializer):
         return attrs
 
 
-class ProductSerializer(serializers.ModelSerializer):
+class ProductCatalogSerializer(serializers.ModelSerializer):
     quantity_on_hand = serializers.SerializerMethodField()
     variants = ProductVariantSerializer(many=True, read_only=True)
     default_variant = DefaultProductVariantField(required=False)

@@ -8,52 +8,12 @@ from django.db.models.functions import Coalesce
 from apps.core.models import TimeStampedModel
 
 
-LEGACY_VARIANT_FIELDS = {"sku", "barcode", "unit_price"}
-
-
 def normalize_sku(value: str | None) -> str:
     return "" if value is None else value.strip().upper()
 
 
 def normalize_barcode(value: str | None) -> str:
     return "" if value is None else value.strip()
-
-
-class ProductQuerySet(models.QuerySet):
-    def _variant_lookup_kwargs(self, kwargs):
-        translated = {}
-        for key, value in kwargs.items():
-            lookup_parts = key.split("__", 1)
-            field = lookup_parts[0]
-            suffix = f"__{lookup_parts[1]}" if len(lookup_parts) == 2 else ""
-            if field in LEGACY_VARIANT_FIELDS:
-                translated[f"variants__{field}{suffix}"] = value
-            else:
-                translated[key] = value
-        return translated
-
-    def filter(self, *args, **kwargs):
-        return super().filter(*args, **self._variant_lookup_kwargs(kwargs))
-
-    def exclude(self, *args, **kwargs):
-        return super().exclude(*args, **self._variant_lookup_kwargs(kwargs))
-
-    def get(self, *args, **kwargs):
-        return super().get(*args, **self._variant_lookup_kwargs(kwargs))
-
-    def order_by(self, *field_names):
-        translated = []
-        for field_name in field_names:
-            descending = field_name.startswith("-")
-            bare_name = field_name[1:] if descending else field_name
-            if bare_name in LEGACY_VARIANT_FIELDS:
-                bare_name = f"variants__{bare_name}"
-            translated.append(f"-{bare_name}" if descending else bare_name)
-        return super().order_by(*translated)
-
-
-class ProductManager(models.Manager.from_queryset(ProductQuerySet)):
-    pass
 
 
 class Product(TimeStampedModel):
@@ -66,56 +26,8 @@ class Product(TimeStampedModel):
         related_name="products",
     )
 
-    objects = ProductManager()
-
     class Meta:
         ordering = ["name"]
-
-    def __init__(self, *args, **kwargs):
-        self._pending_default_variant_data = self._pop_default_variant_data(kwargs)
-        super().__init__(*args, **kwargs)
-
-    @staticmethod
-    def _pop_default_variant_data(kwargs):
-        data = {}
-        for field in LEGACY_VARIANT_FIELDS:
-            if field in kwargs:
-                data[field] = kwargs.pop(field)
-        if "is_active" in kwargs:
-            data.setdefault("is_active", kwargs["is_active"])
-        return data
-
-    def _set_pending_default_variant_value(self, field, value):
-        if not hasattr(self, "_pending_default_variant_data"):
-            self._pending_default_variant_data = {}
-        self._pending_default_variant_data[field] = value
-
-    @property
-    def sku(self):
-        variant = self.default_variant
-        return "" if variant is None else variant.sku
-
-    @sku.setter
-    def sku(self, value):
-        self._set_pending_default_variant_value("sku", value)
-
-    @property
-    def barcode(self):
-        variant = self.default_variant
-        return "" if variant is None else variant.barcode
-
-    @barcode.setter
-    def barcode(self, value):
-        self._set_pending_default_variant_value("barcode", value)
-
-    @property
-    def unit_price(self):
-        variant = self.default_variant
-        return Decimal("0.00") if variant is None else variant.unit_price
-
-    @unit_price.setter
-    def unit_price(self, value):
-        self._set_pending_default_variant_value("unit_price", value)
 
     @property
     def default_variant(self):
@@ -135,26 +47,6 @@ class Product(TimeStampedModel):
             quantity=Coalesce(Sum("stock__quantity_on_hand"), 0),
         )["quantity"]
 
-    def save(self, *args, **kwargs):
-        creating = self._state.adding
-        update_fields = kwargs.get("update_fields")
-        if update_fields is not None:
-            product_update_fields = [
-                field for field in update_fields if field not in LEGACY_VARIANT_FIELDS
-            ]
-            if product_update_fields:
-                kwargs["update_fields"] = product_update_fields
-                super().save(*args, **kwargs)
-            elif creating:
-                kwargs.pop("update_fields", None)
-                super().save(*args, **kwargs)
-        else:
-            super().save(*args, **kwargs)
-
-        if not kwargs.get("raw", False):
-            self.ensure_default_variant(**getattr(self, "_pending_default_variant_data", {}))
-            self._pending_default_variant_data = {}
-
     def ensure_default_variant(self, **variant_data):
         if self.pk is None:
             return None
@@ -173,13 +65,10 @@ class Product(TimeStampedModel):
         if not variant.is_default:
             variant.is_default = True
             update_fields.append("is_default")
-        for field in LEGACY_VARIANT_FIELDS:
+        for field in ("name", "sku", "barcode", "unit_price", "is_active"):
             if field in variant_data:
                 setattr(variant, field, defaults[field])
                 update_fields.append(field)
-        if "is_active" in variant_data:
-            variant.is_active = defaults["is_active"]
-            update_fields.append("is_active")
         if update_fields:
             variant.save(update_fields=[*set(update_fields), "updated_at"])
         return variant
@@ -188,7 +77,7 @@ class Product(TimeStampedModel):
         sku = normalize_sku(data.get("sku")) or self._generated_default_sku()
         unit_price = Decimal(data.get("unit_price", Decimal("0.00")))
         return {
-            "name": "",
+            "name": str(data.get("name", "")).strip(),
             "sku": sku,
             "barcode": normalize_barcode(data.get("barcode", "")),
             "unit_price": unit_price,
@@ -205,7 +94,7 @@ class Product(TimeStampedModel):
         return candidate
 
     def __str__(self) -> str:
-        return f"{self.sku} - {self.name}"
+        return self.name
 
 
 class ProductCategory(TimeStampedModel):

@@ -85,9 +85,7 @@ class _SaleOrderDetailsSheetState extends State<_SaleOrderDetailsSheet> {
               final line = order.lines[index];
               return ListTile(
                 contentPadding: EdgeInsets.zero,
-                title: Text(
-                  line.productName ?? l10n.saleProductFallback(line.productId),
-                ),
+                title: Text(_saleLineDisplayName(line, l10n)),
                 subtitle: Text(
                   [
                     l10n.saleLineQuantityAndPrice(
@@ -499,7 +497,7 @@ class _ReturnLineStepper extends StatelessWidget {
 
     return ListTile(
       contentPadding: EdgeInsets.zero,
-      title: Text(line.productName ?? l10n.saleProductFallback(line.productId)),
+      title: Text(_saleLineDisplayName(line, l10n)),
       subtitle: Text(
         [
           l10n.saleLineQuantityAndPrice(
@@ -537,6 +535,25 @@ class _ReturnLineStepper extends StatelessWidget {
       ),
     );
   }
+}
+
+String _saleLineDisplayName(SaleOrderLine line, AppLocalizations l10n) {
+  final productName = line.productName;
+  final variantName = line.variantName;
+  if (productName != null &&
+      productName.isNotEmpty &&
+      variantName != null &&
+      variantName.isNotEmpty &&
+      variantName != productName) {
+    return '$productName - $variantName';
+  }
+  if (productName != null && productName.isNotEmpty) {
+    return productName;
+  }
+  if (variantName != null && variantName.isNotEmpty) {
+    return variantName;
+  }
+  return l10n.saleProductFallback(line.productId);
 }
 
 class _ReturnDialogResult {

@@ -434,7 +434,7 @@ List<_PurchaseReplacementOption> _replacementOptionsFromOrderLines(
   final optionsByVariant = <int, _PurchaseReplacementOption>{};
   for (final line in lines) {
     optionsByVariant.putIfAbsent(line.variantId, () {
-      final sku = line.productSku;
+      final sku = line.variantSku;
       final name = line.displayName;
       final label = [
         if (name.isNotEmpty) name,

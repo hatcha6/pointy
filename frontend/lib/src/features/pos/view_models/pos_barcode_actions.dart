@@ -1,7 +1,7 @@
 part of 'pos_view_model.dart';
 
 extension PosBarcodeActions on PosViewModel {
-  Future<bool> addProductByBarcode(String barcode, {int quantity = 1}) async {
+  Future<bool> addVariantByBarcode(String barcode, {int quantity = 1}) async {
     final normalizedBarcode = barcode.trim();
     if (normalizedBarcode.isEmpty ||
         quantity <= 0 ||

@@ -1,6 +1,6 @@
 import django_filters
 from django.core.cache import cache
-from django.db.models import Count, Min, Q, Sum, Value
+from django.db.models import Count, Sum, Value
 from django.db.models.functions import Coalesce
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
@@ -17,7 +17,7 @@ from .models import (
 )
 from .serializers import (
     ProductCategorySerializer,
-    ProductSerializer,
+    ProductCatalogSerializer,
     ProductVariantSerializer,
     VariantOptionSerializer,
     VariantOptionValueSerializer,
@@ -108,7 +108,7 @@ class ProductCategoryViewSet(viewsets.ModelViewSet):
 
 class ProductViewSet(viewsets.ModelViewSet):
     active_cache_key = "catalog:active_product_ids"
-    serializer_class = ProductSerializer
+    serializer_class = ProductCatalogSerializer
     permission_classes = [IsAuthenticated, HasPointyPermission]
     permission_map = {
         "list": ("catalog.view_product",),
@@ -130,7 +130,7 @@ class ProductViewSet(viewsets.ModelViewSet):
         "variants__name",
         "name",
     )
-    ordering_fields = ("name", "unit_price", "created_at", "updated_at")
+    ordering_fields = ("name", "created_at", "updated_at")
 
     def get_required_permissions(self, request):
         if self.action == "variants":
@@ -188,10 +188,6 @@ class ProductViewSet(viewsets.ModelViewSet):
             stock_quantity_on_hand=Coalesce(
                 Sum("variants__stock__quantity_on_hand"),
                 Value(0),
-            ),
-            unit_price=Min(
-                "variants__unit_price",
-                filter=Q(variants__is_default=True),
             ),
         )
 

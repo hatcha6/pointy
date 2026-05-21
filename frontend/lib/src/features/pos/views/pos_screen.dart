@@ -260,7 +260,7 @@ class _PosWorkspace extends StatelessWidget {
           capabilities.canCheckoutSale &&
           !viewModel.isCheckingOut &&
           !viewModel.isResolvingBarcode,
-      onBarcodeScanned: viewModel.addProductByBarcode,
+      onBarcodeScanned: viewModel.addVariantByBarcode,
       child: LayoutBuilder(
         builder: (context, constraints) {
           final catalog = PosCatalogPane(

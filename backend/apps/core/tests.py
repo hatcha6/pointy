@@ -9,7 +9,8 @@ from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APIClient
 
-from apps.catalog.models import Product, ProductVariant
+from apps.catalog.models import ProductVariant
+from apps.catalog.testing import create_product_with_default_variant
 from apps.inventory.models import StockItem, StockMovement
 from apps.payments.models import Payment
 from apps.purchasing.models import PurchaseOrder, Supplier, SupplierPayment
@@ -242,18 +243,19 @@ class DashboardApiTests(TestCase):
         )
         self.other_cashier.groups.add(Group.objects.get(name=CASHIER_GROUP))
 
-        self.product = Product.objects.create(
+        self.product = create_product_with_default_variant(
             sku="DASH-COF",
             name="قهوة لوحة التحكم",
             unit_price=Decimal("5.00"),
         )
+        self.variant = self.product.default_variant
         self.stock_item = StockItem.objects.create(
-            product=self.product,
+            variant=self.variant,
             quantity_on_hand=2,
             reorder_level=3,
         )
         StockMovement.objects.create(
-            product=self.product,
+            variant=self.variant,
             stock_item=self.stock_item,
             movement_type=StockMovement.Type.INCREASE,
             quantity=4,

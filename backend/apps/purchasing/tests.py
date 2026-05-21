@@ -8,7 +8,8 @@ from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APIClient
 
-from apps.catalog.models import Product, ProductVariant
+from apps.catalog.models import ProductVariant
+from apps.catalog.testing import create_product_with_default_variant
 from apps.core.roles import MANAGER_GROUP, ensure_role_groups
 from apps.discounts.models import AppliedDiscount, DiscountRedemption, DiscountRule
 from apps.inventory.models import StockItem, StockMovement
@@ -28,7 +29,7 @@ class PurchaseOrderLandedCostModelTests(TestCase):
     def setUp(self):
         self.supplier = Supplier.objects.create(name="Model supplier")
         self.products = [
-            Product.objects.create(
+            create_product_with_default_variant(
                 sku=f"MODEL-PUR-{index}",
                 barcode="",
                 name=f"Model product {index}",
@@ -47,7 +48,7 @@ class PurchaseOrderLandedCostModelTests(TestCase):
         )
         for product in self.products:
             order.lines.create(
-                product=product,
+                variant=product.default_variant,
                 quantity=1,
                 unit_cost=Decimal("1.00"),
             )
@@ -82,18 +83,20 @@ class PurchaseOrderApiTests(TestCase):
         )
         self.user.groups.add(Group.objects.get(name=MANAGER_GROUP))
         self.client.force_authenticate(user=self.user)
-        self.product = Product.objects.create(
+        self.product = create_product_with_default_variant(
             sku="PUR-COFFEE",
             barcode="",
             name="Purchase coffee",
             unit_price=Decimal("4.00"),
         )
-        self.other_product = Product.objects.create(
+        self.variant = self.product.default_variant
+        self.other_product = create_product_with_default_variant(
             sku="PUR-TEA",
             barcode="",
             name="Purchase tea",
             unit_price=Decimal("3.00"),
         )
+        self.other_variant = self.other_product.default_variant
         self.supplier = Supplier.objects.create(name="Main supplier")
 
     def purchase_order_payload(self, **overrides):
@@ -101,7 +104,7 @@ class PurchaseOrderApiTests(TestCase):
             "supplier": self.supplier.pk,
             "lines": [
                 {
-                    "product": self.product.pk,
+                    "variant": self.variant.pk,
                     "quantity": 3,
                     "unit_cost": "2.50",
                 }
@@ -168,12 +171,12 @@ class PurchaseOrderApiTests(TestCase):
                 ),
                 lines=[
                     {
-                        "product": self.product.pk,
+                        "variant": self.variant.pk,
                         "quantity": 3,
                         "unit_cost": "2.50",
                     },
                     {
-                        "product": self.other_product.pk,
+                        "variant": self.other_variant.pk,
                         "quantity": 1,
                         "unit_cost": "2.50",
                     },
@@ -226,12 +229,12 @@ class PurchaseOrderApiTests(TestCase):
                 ),
                 lines=[
                     {
-                        "product": self.product.pk,
+                        "variant": self.variant.pk,
                         "quantity": 1,
                         "unit_cost": "1.00",
                     },
                     {
-                        "product": self.other_product.pk,
+                        "variant": self.other_variant.pk,
                         "quantity": 2,
                         "unit_cost": "1.00",
                     },
@@ -360,7 +363,7 @@ class PurchaseOrderApiTests(TestCase):
                 "shipping_amount": "0.50",
                 "lines": [
                     {
-                        "product": self.product.pk,
+                        "variant": self.variant.pk,
                         "quantity": 2,
                         "unit_cost": "5.00",
                     }
@@ -393,7 +396,7 @@ class PurchaseOrderApiTests(TestCase):
                 "discount_code": "missing",
                 "lines": [
                     {
-                        "product": self.product.pk,
+                        "variant": self.variant.pk,
                         "quantity": 1,
                         "unit_cost": "2.50",
                     }
@@ -492,12 +495,12 @@ class PurchaseOrderApiTests(TestCase):
                 ),
                 lines=[
                     {
-                        "product": self.product.pk,
+                        "variant": self.variant.pk,
                         "quantity": 2,
                         "unit_cost": "10.00",
                     },
                     {
-                        "product": self.other_product.pk,
+                        "variant": self.other_variant.pk,
                         "quantity": 1,
                         "unit_cost": "20.00",
                     },
@@ -610,7 +613,7 @@ class PurchaseOrderApiTests(TestCase):
                 "due_date": "2026-05-25",
                 "lines": [
                     {
-                        "product": self.product.pk,
+                        "variant": self.variant.pk,
                         "quantity": 3,
                         "unit_cost": "2.50",
                     }
@@ -736,7 +739,7 @@ class PurchaseOrderApiTests(TestCase):
             {
                 "lines": [
                     {
-                        "product": self.product.pk,
+                        "variant": self.variant.pk,
                         "quantity": 3,
                         "unit_cost": "2.50",
                     }
@@ -754,7 +757,7 @@ class PurchaseOrderApiTests(TestCase):
             status=PurchaseOrder.Status.RECEIVED,
         )
         previous.lines.create(
-            product=self.product,
+            variant=self.variant,
             quantity=1,
             unit_cost=Decimal("2.00"),
         )
@@ -764,7 +767,7 @@ class PurchaseOrderApiTests(TestCase):
                 "supplier": self.supplier.pk,
                 "lines": [
                     {
-                        "product": self.product.pk,
+                        "variant": self.variant.pk,
                         "quantity": 3,
                         "unit_cost": "2.50",
                     }
@@ -818,7 +821,7 @@ class PurchaseOrderApiTests(TestCase):
             status=PurchaseOrder.Status.SUBMITTED,
         )
         submitted_order.lines.create(
-            product=self.product,
+            variant=self.variant,
             quantity=1,
             unit_cost=Decimal("1.00"),
         )
@@ -851,11 +854,11 @@ class PurchaseOrderApiTests(TestCase):
             status=PurchaseOrder.Status.RECEIVED,
         )
         received_line = received_order.lines.create(
-            product=self.product,
+            variant=self.variant,
             quantity=1,
             unit_cost=Decimal("1.00"),
         )
-        StockItem.objects.create(product=self.product, quantity_on_hand=1)
+        StockItem.objects.create(variant=self.variant, quantity_on_hand=1)
         self.authenticate_with_permissions(
             "legacy-adjust-only",
             "purchasing.change_purchaseorder",
@@ -1009,14 +1012,14 @@ class PurchaseOrderApiTests(TestCase):
         self.assertNotEqual(response.data["results"][0]["id"], second_order.pk)
 
     def test_submit_then_receive_increases_stock_transactionally(self):
-        StockItem.objects.create(product=self.product, quantity_on_hand=5)
+        StockItem.objects.create(variant=self.variant, quantity_on_hand=5)
         create_response = self.client.post(
             reverse("purchaseorder-list"),
             {
                 "supplier": self.supplier.pk,
                 "lines": [
                     {
-                        "product": self.product.pk,
+                        "variant": self.variant.pk,
                         "quantity": 4,
                         "unit_cost": "1.25",
                     }
@@ -1036,7 +1039,7 @@ class PurchaseOrderApiTests(TestCase):
             submit_response.data["status"],
             PurchaseOrder.Status.SUBMITTED,
         )
-        stock_item = StockItem.objects.get(product=self.product)
+        stock_item = StockItem.objects.get(variant=self.variant)
         self.assertEqual(stock_item.quantity_expected, 4)
 
         receive_response = self.client.post(
@@ -1050,11 +1053,11 @@ class PurchaseOrderApiTests(TestCase):
         self.assertEqual(receive_response.data["lines"][0]["outstanding_quantity"], 0)
         self.assertEqual(len(receive_response.data["receipts"]), 1)
 
-        stock_item = StockItem.objects.get(product=self.product)
+        stock_item = StockItem.objects.get(variant=self.variant)
         self.assertEqual(stock_item.quantity_on_hand, 9)
         self.assertEqual(stock_item.quantity_expected, 0)
         movement = StockMovement.objects.get(
-            product=self.product,
+            variant=self.variant,
             movement_type=StockMovement.Type.RECEIVE_EXPECTED,
         )
         self.assertEqual(movement.quantity, 4)
@@ -1065,10 +1068,10 @@ class PurchaseOrderApiTests(TestCase):
         self.assertEqual(movement.created_by, self.user)
 
     def test_partial_receipt_leaves_outstanding_expected_stock_open(self):
-        StockItem.objects.create(product=self.product, quantity_on_hand=5)
+        StockItem.objects.create(variant=self.variant, quantity_on_hand=5)
         order = PurchaseOrder.objects.create(supplier=self.supplier)
         line = order.lines.create(
-            product=self.product,
+            variant=self.variant,
             quantity=10,
             unit_cost=Decimal("1.25"),
         )
@@ -1105,12 +1108,12 @@ class PurchaseOrderApiTests(TestCase):
         self.assertEqual(receipt_line["outstanding_after"], 4)
         self.assertEqual(receipt_line["backordered_quantity"], 4)
 
-        stock_item = StockItem.objects.get(product=self.product)
+        stock_item = StockItem.objects.get(variant=self.variant)
         self.assertEqual(stock_item.quantity_on_hand, 9)
         self.assertEqual(stock_item.quantity_expected, 4)
         self.assertTrue(
             StockMovement.objects.filter(
-                product=self.product,
+                variant=self.variant,
                 movement_type=StockMovement.Type.RECEIVE_DAMAGED,
                 quantity=2,
             ).exists()
@@ -1128,10 +1131,10 @@ class PurchaseOrderApiTests(TestCase):
         self.assertEqual(stock_item.quantity_expected, 0)
 
     def test_over_receipt_records_variance_and_stock_overage(self):
-        StockItem.objects.create(product=self.product, quantity_on_hand=0)
+        StockItem.objects.create(variant=self.variant, quantity_on_hand=0)
         order = PurchaseOrder.objects.create(supplier=self.supplier)
         line = order.lines.create(
-            product=self.product,
+            variant=self.variant,
             quantity=3,
             unit_cost=Decimal("1.25"),
         )
@@ -1151,22 +1154,22 @@ class PurchaseOrderApiTests(TestCase):
         self.assertEqual(response.data["lines"][0]["over_received_quantity"], 2)
         self.assertEqual(response.data["receipts"][0]["lines"][0]["over_received_quantity"], 2)
 
-        stock_item = StockItem.objects.get(product=self.product)
+        stock_item = StockItem.objects.get(variant=self.variant)
         self.assertEqual(stock_item.quantity_on_hand, 5)
         self.assertEqual(stock_item.quantity_expected, 0)
         self.assertTrue(
             StockMovement.objects.filter(
-                product=self.product,
+                variant=self.variant,
                 movement_type=StockMovement.Type.INCREASE,
                 quantity=2,
             ).exists()
         )
 
     def test_receipt_can_cancel_remaining_expected_quantity(self):
-        StockItem.objects.create(product=self.product, quantity_on_hand=0)
+        StockItem.objects.create(variant=self.variant, quantity_on_hand=0)
         order = PurchaseOrder.objects.create(supplier=self.supplier)
         line = order.lines.create(
-            product=self.product,
+            variant=self.variant,
             quantity=5,
             unit_cost=Decimal("1.25"),
         )
@@ -1191,22 +1194,22 @@ class PurchaseOrderApiTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["status"], PurchaseOrder.Status.RECEIVED)
         self.assertEqual(response.data["lines"][0]["cancelled_quantity"], 3)
-        stock_item = StockItem.objects.get(product=self.product)
+        stock_item = StockItem.objects.get(variant=self.variant)
         self.assertEqual(stock_item.quantity_on_hand, 2)
         self.assertEqual(stock_item.quantity_expected, 0)
         self.assertTrue(
             StockMovement.objects.filter(
-                product=self.product,
+                variant=self.variant,
                 movement_type=StockMovement.Type.CANCEL_EXPECTED,
                 quantity=3,
             ).exists()
         )
 
     def test_receipt_accepts_frontend_quantity_aliases(self):
-        StockItem.objects.create(product=self.product, quantity_on_hand=0)
+        StockItem.objects.create(variant=self.variant, quantity_on_hand=0)
         order = PurchaseOrder.objects.create(supplier=self.supplier)
         line = order.lines.create(
-            product=self.product,
+            variant=self.variant,
             quantity=5,
             unit_cost=Decimal("1.25"),
         )
@@ -1237,7 +1240,7 @@ class PurchaseOrderApiTests(TestCase):
         self.assertEqual(line_data["accepted_quantity"], 2)
         self.assertEqual(line_data["damaged_quantity"], 1)
         self.assertEqual(line_data["cancelled_quantity"], 2)
-        stock_item = StockItem.objects.get(product=self.product)
+        stock_item = StockItem.objects.get(variant=self.variant)
         self.assertEqual(stock_item.quantity_on_hand, 2)
         self.assertEqual(stock_item.quantity_expected, 0)
 
@@ -1247,11 +1250,11 @@ class PurchaseOrderApiTests(TestCase):
             status=PurchaseOrder.Status.RECEIVED,
         )
         line = order.lines.create(
-            product=self.product,
+            variant=self.variant,
             quantity=4,
             unit_cost=Decimal("1.25"),
         )
-        StockItem.objects.create(product=self.product, quantity_on_hand=5)
+        StockItem.objects.create(variant=self.variant, quantity_on_hand=5)
 
         response = self.client.post(
             reverse("purchaseorder-return-items", args=[order.pk]),
@@ -1289,9 +1292,9 @@ class PurchaseOrderApiTests(TestCase):
         )
         self.assertEqual(SupplierCredit.objects.count(), 1)
 
-        stock_item = StockItem.objects.get(product=self.product)
+        stock_item = StockItem.objects.get(variant=self.variant)
         self.assertEqual(stock_item.quantity_on_hand, 3)
-        movement = StockMovement.objects.get(product=self.product)
+        movement = StockMovement.objects.get(variant=self.variant)
         self.assertEqual(movement.movement_type, StockMovement.Type.DECREASE)
         self.assertEqual(movement.quantity, 2)
         self.assertEqual(movement.on_hand_before, 5)
@@ -1305,14 +1308,14 @@ class PurchaseOrderApiTests(TestCase):
             value_type=DiscountRule.ValueType.PERCENTAGE,
             value=Decimal("25.00"),
         )
-        StockItem.objects.create(product=self.product, quantity_on_hand=0)
+        StockItem.objects.create(variant=self.variant, quantity_on_hand=0)
         create_response = self.client.post(
             reverse("purchaseorder-list"),
             {
                 "supplier": self.supplier.pk,
                 "lines": [
                     {
-                        "product": self.product.pk,
+                        "variant": self.variant.pk,
                         "quantity": 4,
                         "unit_cost": "10.00",
                     }
@@ -1347,14 +1350,14 @@ class PurchaseOrderApiTests(TestCase):
             value_type=DiscountRule.ValueType.PERCENTAGE,
             value=Decimal("25.00"),
         )
-        StockItem.objects.create(product=self.product, quantity_on_hand=0)
+        StockItem.objects.create(variant=self.variant, quantity_on_hand=0)
         refund_create_response = self.client.post(
             reverse("purchaseorder-list"),
             {
                 "supplier": self.supplier.pk,
                 "lines": [
                     {
-                        "product": self.product.pk,
+                        "variant": self.variant.pk,
                         "quantity": 4,
                         "unit_cost": "10.00",
                     }
@@ -1385,7 +1388,7 @@ class PurchaseOrderApiTests(TestCase):
                 "supplier": self.supplier.pk,
                 "lines": [
                     {
-                        "product": self.product.pk,
+                        "variant": self.variant.pk,
                         "quantity": 4,
                         "unit_cost": "10.00",
                     }
@@ -1435,11 +1438,11 @@ class PurchaseOrderApiTests(TestCase):
             status=PurchaseOrder.Status.RECEIVED,
         )
         line = order.lines.create(
-            product=self.product,
+            variant=self.variant,
             quantity=2,
             unit_cost=Decimal("1.25"),
         )
-        StockItem.objects.create(product=self.product, quantity_on_hand=5)
+        StockItem.objects.create(variant=self.variant, quantity_on_hand=5)
         self.client.post(
             reverse("purchaseorder-refund-items", args=[order.pk]),
             {"lines": [{"line": line.pk, "quantity": 1}]},
@@ -1454,7 +1457,7 @@ class PurchaseOrderApiTests(TestCase):
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("lines", response.data)
-        self.assertEqual(StockItem.objects.get(product=self.product).quantity_on_hand, 4)
+        self.assertEqual(StockItem.objects.get(variant=self.variant).quantity_on_hand, 4)
 
     def test_exchange_rejects_when_stock_is_not_available(self):
         order = PurchaseOrder.objects.create(
@@ -1462,11 +1465,11 @@ class PurchaseOrderApiTests(TestCase):
             status=PurchaseOrder.Status.RECEIVED,
         )
         line = order.lines.create(
-            product=self.product,
+            variant=self.variant,
             quantity=3,
             unit_cost=Decimal("1.25"),
         )
-        StockItem.objects.create(product=self.product, quantity_on_hand=1)
+        StockItem.objects.create(variant=self.variant, quantity_on_hand=1)
 
         response = self.client.post(
             reverse("purchaseorder-exchange-items", args=[order.pk]),
@@ -1486,7 +1489,7 @@ class PurchaseOrderApiTests(TestCase):
         self.assertIn("stock", response.data)
         self.assertEqual(response.data["stock"][0]["requested"], "2")
         self.assertEqual(response.data["stock"][0]["available"], "1")
-        self.assertEqual(StockItem.objects.get(product=self.product).quantity_on_hand, 1)
+        self.assertEqual(StockItem.objects.get(variant=self.variant).quantity_on_hand, 1)
 
     def test_exchange_records_outbound_and_replacement_lines_with_new_cost(self):
         order = PurchaseOrder.objects.create(
@@ -1494,12 +1497,12 @@ class PurchaseOrderApiTests(TestCase):
             status=PurchaseOrder.Status.RECEIVED,
         )
         line = order.lines.create(
-            product=self.product,
+            variant=self.variant,
             quantity=4,
             unit_cost=Decimal("1.25"),
         )
-        StockItem.objects.create(product=self.product, quantity_on_hand=5)
-        StockItem.objects.create(product=self.other_product, quantity_on_hand=1)
+        StockItem.objects.create(variant=self.variant, quantity_on_hand=5)
+        StockItem.objects.create(variant=self.other_variant, quantity_on_hand=1)
 
         response = self.client.post(
             reverse("purchaseorder-exchange-items", args=[order.pk]),
@@ -1508,7 +1511,7 @@ class PurchaseOrderApiTests(TestCase):
                 "lines": [{"line": line.pk, "quantity": 2}],
                 "replacement_lines": [
                     {
-                        "product": self.other_product.pk,
+                        "variant": self.other_variant.pk,
                         "quantity": 3,
                         "unit_cost": "2.00",
                     }
@@ -1538,13 +1541,13 @@ class PurchaseOrderApiTests(TestCase):
         self.assertEqual(SupplierCredit.objects.count(), 0)
         self.assertEqual(SupplierPayment.objects.count(), 0)
 
-        self.assertEqual(StockItem.objects.get(product=self.product).quantity_on_hand, 3)
+        self.assertEqual(StockItem.objects.get(variant=self.variant).quantity_on_hand, 3)
         self.assertEqual(
-            StockItem.objects.get(product=self.other_product).quantity_on_hand,
+            StockItem.objects.get(variant=self.other_variant).quantity_on_hand,
             4,
         )
         returned_movement = StockMovement.objects.get(
-            product=self.product,
+            variant=self.variant,
             movement_type=StockMovement.Type.DECREASE,
         )
         self.assertEqual(returned_movement.quantity, 2)
@@ -1552,7 +1555,7 @@ class PurchaseOrderApiTests(TestCase):
         self.assertEqual(returned_movement.on_hand_after, 3)
         self.assertEqual(returned_movement.created_by, self.user)
         replacement_movement = StockMovement.objects.get(
-            product=self.other_product,
+            variant=self.other_variant,
             movement_type=StockMovement.Type.INCREASE,
         )
         self.assertEqual(replacement_movement.quantity, 3)
@@ -1573,11 +1576,11 @@ class PurchaseOrderApiTests(TestCase):
             status=PurchaseOrder.Status.RECEIVED,
         )
         line = order.lines.create(
-            product=self.product,
+            variant=self.variant,
             quantity=2,
             unit_cost=Decimal("1.25"),
         )
-        StockItem.objects.create(product=self.product, quantity_on_hand=2)
+        StockItem.objects.create(variant=self.variant, quantity_on_hand=2)
 
         response = self.client.post(
             reverse("purchaseorder-exchange-items", args=[order.pk]),
@@ -1610,11 +1613,11 @@ class PurchaseOrderApiTests(TestCase):
             status=PurchaseOrder.Status.RECEIVED,
         )
         line = order.lines.create(
-            product=self.product,
+            variant=self.variant,
             quantity=2,
             unit_cost=Decimal("1.25"),
         )
-        StockItem.objects.create(product=self.product, quantity_on_hand=2)
+        StockItem.objects.create(variant=self.variant, quantity_on_hand=2)
 
         response = self.client.post(
             reverse("purchaseorder-exchange-items", args=[order.pk]),
@@ -1622,7 +1625,7 @@ class PurchaseOrderApiTests(TestCase):
                 "lines": [{"line": line.pk, "quantity": 1}],
                 "replacement_items": [
                     {
-                        "product": self.other_product.pk,
+                        "variant": self.other_variant.pk,
                         "quantity": 2,
                         "unit_cost": "3.25",
                     }
@@ -1632,7 +1635,7 @@ class PurchaseOrderApiTests(TestCase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        replacement_stock = StockItem.objects.get(product=self.other_product)
+        replacement_stock = StockItem.objects.get(variant=self.other_variant)
         self.assertEqual(replacement_stock.quantity_on_hand, 2)
         self.assertEqual(
             response.data["adjustments"][0]["replacement_lines"][0]["unit_cost"],
@@ -1645,11 +1648,11 @@ class PurchaseOrderApiTests(TestCase):
             status=PurchaseOrder.Status.RECEIVED,
         )
         line = order.lines.create(
-            product=self.product,
+            variant=self.variant,
             quantity=2,
             unit_cost=Decimal("1.25"),
         )
-        StockItem.objects.create(product=self.product, quantity_on_hand=2)
+        StockItem.objects.create(variant=self.variant, quantity_on_hand=2)
 
         response = self.client.post(
             reverse("purchaseorder-exchange-items", args=[order.pk]),
@@ -1662,7 +1665,7 @@ class PurchaseOrderApiTests(TestCase):
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("replacement_lines", response.data)
-        self.assertEqual(StockItem.objects.get(product=self.product).quantity_on_hand, 2)
+        self.assertEqual(StockItem.objects.get(variant=self.variant).quantity_on_hand, 2)
         self.assertEqual(StockMovement.objects.count(), 0)
 
     def test_exchange_rejects_invalid_replacement_lines(self):
@@ -1671,11 +1674,11 @@ class PurchaseOrderApiTests(TestCase):
             status=PurchaseOrder.Status.RECEIVED,
         )
         line = order.lines.create(
-            product=self.product,
+            variant=self.variant,
             quantity=2,
             unit_cost=Decimal("1.25"),
         )
-        StockItem.objects.create(product=self.product, quantity_on_hand=2)
+        StockItem.objects.create(variant=self.variant, quantity_on_hand=2)
 
         response = self.client.post(
             reverse("purchaseorder-exchange-items", args=[order.pk]),
@@ -1693,7 +1696,7 @@ class PurchaseOrderApiTests(TestCase):
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("replacement_lines", response.data)
-        self.assertEqual(StockItem.objects.get(product=self.product).quantity_on_hand, 2)
+        self.assertEqual(StockItem.objects.get(variant=self.variant).quantity_on_hand, 2)
         self.assertEqual(StockMovement.objects.count(), 0)
 
     def test_exchange_legacy_payload_replaces_same_items_without_net_stock_change(self):
@@ -1702,11 +1705,11 @@ class PurchaseOrderApiTests(TestCase):
             status=PurchaseOrder.Status.RECEIVED,
         )
         line = order.lines.create(
-            product=self.product,
+            variant=self.variant,
             quantity=3,
             unit_cost=Decimal("1.25"),
         )
-        StockItem.objects.create(product=self.product, quantity_on_hand=5)
+        StockItem.objects.create(variant=self.variant, quantity_on_hand=5)
 
         response = self.client.post(
             reverse("purchaseorder-exchange-items", args=[order.pk]),
@@ -1722,9 +1725,9 @@ class PurchaseOrderApiTests(TestCase):
         self.assertEqual(adjustment["replacement_lines"][0]["product"], self.product.pk)
         self.assertEqual(adjustment["replacement_lines"][0]["quantity"], 2)
         self.assertEqual(adjustment["replacement_lines"][0]["unit_cost"], "1.25")
-        self.assertEqual(StockItem.objects.get(product=self.product).quantity_on_hand, 5)
+        self.assertEqual(StockItem.objects.get(variant=self.variant).quantity_on_hand, 5)
         self.assertEqual(
-            StockMovement.objects.filter(product=self.product).count(),
+            StockMovement.objects.filter(variant=self.variant).count(),
             2,
         )
 
@@ -1734,7 +1737,7 @@ class PurchaseOrderApiTests(TestCase):
             status=PurchaseOrder.Status.SUBMITTED,
         )
         line = order.lines.create(
-            product=self.product,
+            variant=self.variant,
             quantity=2,
             unit_cost=Decimal("1.25"),
         )
@@ -1751,11 +1754,11 @@ class PurchaseOrderApiTests(TestCase):
     def test_receive_rejects_draft_order_without_stock_change(self):
         order = PurchaseOrder.objects.create(supplier=self.supplier)
         order.lines.create(
-            product=self.product,
+            variant=self.variant,
             quantity=2,
             unit_cost=Decimal("1.00"),
         )
-        StockItem.objects.create(product=self.product, quantity_on_hand=1)
+        StockItem.objects.create(variant=self.variant, quantity_on_hand=1)
 
         response = self.client.post(
             reverse("purchaseorder-receive", args=[order.pk]),
@@ -1764,7 +1767,7 @@ class PurchaseOrderApiTests(TestCase):
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("detail", response.data)
-        self.assertEqual(StockItem.objects.get(product=self.product).quantity_on_hand, 1)
+        self.assertEqual(StockItem.objects.get(variant=self.variant).quantity_on_hand, 1)
         self.assertEqual(StockMovement.objects.count(), 0)
 
     def test_duplicate_products_are_rejected(self):
@@ -1774,12 +1777,12 @@ class PurchaseOrderApiTests(TestCase):
                 "supplier": self.supplier.pk,
                 "lines": [
                     {
-                        "product": self.product.pk,
+                        "variant": self.variant.pk,
                         "quantity": 1,
                         "unit_cost": "1.00",
                     },
                     {
-                        "product": self.product.pk,
+                        "variant": self.variant.pk,
                         "quantity": 2,
                         "unit_cost": "1.00",
                     },
@@ -1797,7 +1800,7 @@ class PurchaseOrderApiTests(TestCase):
             status=PurchaseOrder.Status.SUBMITTED,
         )
         order.lines.create(
-            product=self.product,
+            variant=self.variant,
             quantity=2,
             unit_cost=Decimal("1.00"),
         )
@@ -1832,7 +1835,7 @@ class PurchaseOrderApiTests(TestCase):
             status=PurchaseOrder.Status.CANCELLED,
         )
         cancelled.lines.create(
-            product=self.product,
+            variant=self.variant,
             quantity=1,
             unit_cost=Decimal("9.99"),
         )
@@ -1841,7 +1844,7 @@ class PurchaseOrderApiTests(TestCase):
             status=PurchaseOrder.Status.RECEIVED,
         )
         first.lines.create(
-            product=self.product,
+            variant=self.variant,
             quantity=1,
             unit_cost=Decimal("1.25"),
         )
@@ -1850,7 +1853,7 @@ class PurchaseOrderApiTests(TestCase):
             status=PurchaseOrder.Status.SUBMITTED,
         )
         latest.lines.create(
-            product=self.product,
+            variant=self.variant,
             quantity=1,
             unit_cost=Decimal("2.75"),
         )
@@ -1875,7 +1878,7 @@ class PurchaseOrderApiTests(TestCase):
             status=PurchaseOrder.Status.RECEIVED,
         )
         default_order.lines.create(
-            product=self.product,
+            variant=self.variant,
             quantity=1,
             unit_cost=Decimal("1.25"),
         )
@@ -1925,7 +1928,7 @@ class PurchaseOrderApiTests(TestCase):
             quantity=2,
             unit_cost=Decimal("2.10"),
         )
-        StockItem.objects.create(product=self.product, quantity_on_hand=5)
+        StockItem.objects.create(variant=self.variant, quantity_on_hand=5)
         variant_stock = StockItem.objects.create(
             variant=variant,
             quantity_expected=2,
@@ -1964,7 +1967,7 @@ class PurchaseOrderApiTests(TestCase):
             status=PurchaseOrder.Status.CANCELLED,
         )
         cancelled.lines.create(
-            product=self.product,
+            variant=self.variant,
             quantity=1,
             unit_cost=Decimal("9.99"),
         )
@@ -1974,7 +1977,7 @@ class PurchaseOrderApiTests(TestCase):
             status=PurchaseOrder.Status.RECEIVED,
         )
         first.lines.create(
-            product=self.product,
+            variant=self.variant,
             quantity=2,
             unit_cost=Decimal("1.25"),
         )
@@ -1985,14 +1988,14 @@ class PurchaseOrderApiTests(TestCase):
             received_at="2026-05-20T10:00:00Z",
         )
         latest_line = latest.lines.create(
-            product=self.product,
+            variant=self.variant,
             quantity=3,
             unit_cost=Decimal("2.50"),
             landed_unit_cost=Decimal("0.25"),
             effective_unit_cost=Decimal("2.75"),
         )
         latest.lines.create(
-            product=self.other_product,
+            variant=self.other_variant,
             quantity=1,
             unit_cost=Decimal("3.00"),
         )
@@ -2021,7 +2024,7 @@ class PurchaseOrderApiTests(TestCase):
             status=PurchaseOrder.Status.RECEIVED,
         )
         previous.lines.create(
-            product=self.product,
+            variant=self.variant,
             quantity=1,
             unit_cost=Decimal("1.00"),
         )
@@ -2030,7 +2033,7 @@ class PurchaseOrderApiTests(TestCase):
             status=PurchaseOrder.Status.RECEIVED,
         )
         latest_line = latest.lines.create(
-            product=self.product,
+            variant=self.variant,
             quantity=1,
             unit_cost=Decimal("2.50"),
         )
@@ -2111,7 +2114,7 @@ class PurchaseOrderApiTests(TestCase):
             status=PurchaseOrder.Status.RECEIVED,
         )
         line = order.lines.create(
-            product=self.product,
+            variant=self.variant,
             quantity=4,
             unit_cost=Decimal("1.25"),
         )
@@ -2120,7 +2123,7 @@ class PurchaseOrderApiTests(TestCase):
             status=PurchaseOrder.Status.RECEIVED,
         )
         refund_line = refund_order.lines.create(
-            product=self.other_product,
+            variant=self.other_variant,
             quantity=2,
             unit_cost=Decimal("3.00"),
         )
@@ -2138,7 +2141,7 @@ class PurchaseOrderApiTests(TestCase):
         PurchaseOrderAdjustmentLine.objects.create(
             adjustment=return_adjustment,
             purchase_line=line,
-            product=self.product,
+            variant=self.variant,
             quantity=2,
             unit_cost=Decimal("1.25"),
         )
@@ -2154,7 +2157,7 @@ class PurchaseOrderApiTests(TestCase):
         PurchaseOrderAdjustmentLine.objects.create(
             adjustment=refund_adjustment,
             purchase_line=refund_line,
-            product=self.other_product,
+            variant=self.other_variant,
             quantity=1,
             unit_cost=Decimal("3.00"),
         )
@@ -2334,12 +2337,13 @@ class SupplierPaymentApiTests(TestCase):
         )
         self.user.groups.add(Group.objects.get(name=MANAGER_GROUP))
         self.client.force_authenticate(user=self.user)
-        self.product = Product.objects.create(
+        self.product = create_product_with_default_variant(
             sku="PUR-PAY",
             barcode="",
             name="Payment product",
             unit_price=Decimal("4.00"),
         )
+        self.variant = self.product.default_variant
         self.supplier = Supplier.objects.create(name="Payment supplier")
 
     def create_order(self, total=Decimal("7.50")):
@@ -2348,7 +2352,7 @@ class SupplierPaymentApiTests(TestCase):
             status=PurchaseOrder.Status.RECEIVED,
         )
         order.lines.create(
-            product=self.product,
+            variant=self.variant,
             quantity=3,
             unit_cost=(total / Decimal("3")).quantize(Decimal("0.01")),
         )

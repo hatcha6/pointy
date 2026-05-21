@@ -30,8 +30,8 @@ typedef CameraMissingVariantCreator =
 Future<List<CameraVariantScanEntry>?> showCameraBarcodeScannerSheet(
   BuildContext context, {
   required CameraBarcodeScannerMode mode,
-  required CameraVariantLookup lookupProduct,
-  CameraMissingVariantCreator? createMissingProduct,
+  required CameraVariantLookup lookupVariant,
+  CameraMissingVariantCreator? createMissingVariant,
   bool enableQuantity = false,
   int initialQuantity = 1,
 }) {
@@ -45,8 +45,8 @@ Future<List<CameraVariantScanEntry>?> showCameraBarcodeScannerSheet(
         heightFactor: 0.58,
         child: CameraBarcodeScannerSheet(
           mode: mode,
-          lookupProduct: lookupProduct,
-          createMissingProduct: createMissingProduct,
+          lookupVariant: lookupVariant,
+          createMissingVariant: createMissingVariant,
           enableQuantity: enableQuantity,
           initialQuantity: initialQuantity,
         ),
@@ -59,15 +59,15 @@ class CameraBarcodeScannerSheet extends StatefulWidget {
   const CameraBarcodeScannerSheet({
     super.key,
     required this.mode,
-    required this.lookupProduct,
-    this.createMissingProduct,
+    required this.lookupVariant,
+    this.createMissingVariant,
     this.enableQuantity = false,
     this.initialQuantity = 1,
   });
 
   final CameraBarcodeScannerMode mode;
-  final CameraVariantLookup lookupProduct;
-  final CameraMissingVariantCreator? createMissingProduct;
+  final CameraVariantLookup lookupVariant;
+  final CameraMissingVariantCreator? createMissingVariant;
   final bool enableQuantity;
   final int initialQuantity;
 
@@ -250,7 +250,7 @@ class _CameraBarcodeScannerSheetState extends State<CameraBarcodeScannerSheet> {
 
     ProductVariant? variant;
     try {
-      variant = await widget.lookupProduct(code);
+      variant = await widget.lookupVariant(code);
     } on Exception {
       if (!mounted) {
         return;
@@ -268,15 +268,15 @@ class _CameraBarcodeScannerSheetState extends State<CameraBarcodeScannerSheet> {
     }
 
     if (variant == null) {
-      final createMissingProduct = widget.createMissingProduct;
-      if (createMissingProduct != null) {
+      final createMissingVariant = widget.createMissingVariant;
+      if (createMissingVariant != null) {
         setState(() {
           _isResolving = false;
           _isStatusError = true;
           _statusMessage = l10n.barcodeScanNotFound(code);
         });
 
-        final createdVariant = await createMissingProduct(code);
+        final createdVariant = await createMissingVariant(code);
         if (!mounted) {
           return;
         }

@@ -251,7 +251,7 @@ class _PosProductLookupControls extends StatelessWidget {
               canCheckout &&
                   !viewModel.isCheckingOut &&
                   !viewModel.isResolvingBarcode
-              ? viewModel.addProductByBarcode
+              ? viewModel.addVariantByBarcode
               : null,
           onQueryChanged: viewModel.applyQuery,
         );
@@ -263,7 +263,7 @@ class _PosProductLookupControls extends StatelessWidget {
     final entries = await showCameraBarcodeScannerSheet(
       context,
       mode: CameraBarcodeScannerMode.multiple,
-      lookupProduct: _lookupProductByBarcode,
+      lookupVariant: _lookupVariantByBarcode,
       enableQuantity: true,
     );
     if (entries == null || entries.isEmpty) {
@@ -280,7 +280,7 @@ class _PosProductLookupControls extends StatelessWidget {
     }
   }
 
-  Future<ProductVariant?> _lookupProductByBarcode(String barcode) async {
+  Future<ProductVariant?> _lookupVariantByBarcode(String barcode) async {
     final result = await viewModel.catalogRepository
         .findProductVariantByBarcode(barcode, activeOnly: true);
     return switch (result) {
