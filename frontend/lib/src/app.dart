@@ -8,6 +8,7 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import 'app_dependencies.dart';
 import 'authenticated_home.dart';
+import 'core/analytics_interaction_tracker.dart';
 import 'data/models/analytics_event.dart';
 import 'data/services/pos_api_service.dart';
 import 'features/auth/views/auth_gate.dart';
@@ -95,8 +96,13 @@ class _PointyAppState extends State<PointyApp> {
         scaffoldBackgroundColor: const Color(0xFFF6F7F9),
         useMaterial3: true,
       ),
+      builder: (context, child) => AnalyticsInteractionTracker(
+        analyticsEngine: _dependencies.analyticsEngine,
+        child: child ?? const SizedBox.shrink(),
+      ),
       home: AuthGate(
         viewModel: _dependencies.authViewModel,
+        analyticsEngine: _dependencies.analyticsEngine,
         authenticatedBuilder: _buildAuthenticatedHome,
       ),
     );
@@ -107,6 +113,7 @@ class _PointyAppState extends State<PointyApp> {
     if (currentUser == null) {
       return AuthGate(
         viewModel: _dependencies.authViewModel,
+        analyticsEngine: _dependencies.analyticsEngine,
         authenticatedBuilder: _buildAuthenticatedHome,
       );
     }

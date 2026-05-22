@@ -365,6 +365,7 @@
   "registerSessionSettingsSectionTitle": "جلسة الدرج",
   "paymentSettingsSectionTitle": "طرق الدفع",
   "inventorySettingsSectionTitle": "تنبيهات المخزون",
+  "analyticsExportSectionTitle": "تصدير التتبع",
   "shopSettingsEmptyValue": "غير محدد",
   "shopSettingsEnabledValue": "مفعل",
   "shopSettingsDisabledValue": "متوقف",
@@ -416,6 +417,55 @@
       }
     }
   },
+  "analyticsExportAllEventsSummary": "كل أحداث التتبع",
+  "analyticsExportDateRangeSummary": "من {from} إلى {to}",
+  "@analyticsExportDateRangeSummary": {
+    "description": "Summary for selected analytics export date range.",
+    "placeholders": {
+      "from": {
+        "type": "String"
+      },
+      "to": {
+        "type": "String"
+      }
+    }
+  },
+  "analyticsExportTitle": "تصدير التتبع",
+  "analyticsExportFiltersSectionTitle": "فلاتر التصدير",
+  "analyticsExportFormatLabel": "صيغة الملف",
+  "analyticsExportFormatCsv": "CSV",
+  "analyticsExportFormatJson": "JSON",
+  "analyticsExportFromDateLabel": "من تاريخ",
+  "analyticsExportToDateLabel": "إلى تاريخ",
+  "analyticsExportOpenDateValue": "مفتوح",
+  "analyticsExportClearDatesButton": "مسح التواريخ",
+  "analyticsExportEventTypeLabel": "نوع الحدث",
+  "analyticsExportSeverityLabel": "الحدة",
+  "analyticsExportSourceLabel": "المصدر",
+  "analyticsExportAnyValue": "الكل",
+  "analyticsExportSearchLabel": "بحث في الاسم أو الأثر",
+  "analyticsExportPlatformLabel": "المنصة",
+  "analyticsExportSessionLabel": "معرّف الجلسة",
+  "analyticsExportDeviceLabel": "معرّف الجهاز",
+  "analyticsExportDownloadButton": "تنزيل الملف",
+  "analyticsExportRunningButton": "جار التصدير...",
+  "analyticsExportStartedMessage": "بدأ تنزيل ملف التتبع.",
+  "analyticsExportFailedMessage": "تعذر تصدير التتبع. راجع الفلاتر وحاول مرة أخرى.",
+  "analyticsEventTypeUsage": "استخدام",
+  "analyticsEventTypeError": "خطأ",
+  "analyticsEventTypePerformance": "أداء",
+  "analyticsEventTypeSecurity": "أمان",
+  "analyticsEventTypeFraudSignal": "إشارة احتيال",
+  "analyticsEventTypeAudit": "تدقيق",
+  "analyticsSeverityDebug": "تصحيح",
+  "analyticsSeverityInfo": "معلومة",
+  "analyticsSeverityWarning": "تحذير",
+  "analyticsSeverityError": "خطأ",
+  "analyticsSeverityCritical": "حرج",
+  "analyticsSourceFrontend": "الواجهة",
+  "analyticsSourceBackend": "الخادم",
+  "analyticsSourcePrintAgent": "وكيل الطباعة",
+  "analyticsSourceIntegration": "تكامل",
   "shopNameLabel": "اسم المتجر",
   "receiptHeaderLabel": "ترويسة الإيصال",
   "receiptFooterLabel": "خاتمة الإيصال",

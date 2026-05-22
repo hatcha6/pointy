@@ -5,6 +5,8 @@ from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
+from apps.analytics.models import AnalyticsEvent
+from apps.analytics.services import record_domain_event
 from apps.core.permissions import HasPointyPermission
 from apps.core.roles import user_is_manager
 from .models import Order, RegisterCashMovement, RegisterSession
@@ -334,6 +336,7 @@ class RegisterSessionViewSet(
                     .filter(owner_key=owner_key, status=RegisterSession.Status.OPEN)
                     .first()
                 )
+                reused_existing_session = session is not None
                 if session is None:
                     session = RegisterSession.objects.create(owner_key=owner_key, **defaults)
         except IntegrityError:
@@ -341,6 +344,20 @@ class RegisterSessionViewSet(
                 owner_key=owner_key,
                 status=RegisterSession.Status.OPEN,
             )
+            reused_existing_session = True
+
+        record_domain_event(
+            name="sales.register_session.started",
+            event_type=AnalyticsEvent.EventType.AUDIT,
+            user=request.user,
+            entity_type="register_session",
+            entity_id=session.pk,
+            attributes={
+                "owner_key": owner_key,
+                "existing_open_session_reused": reused_existing_session,
+            },
+            metrics={"opening_cash": float(session.opening_cash)},
+        )
 
         return Response(self.get_serializer(session).data)
 
@@ -368,6 +385,24 @@ class RegisterSessionViewSet(
             amount=serializer.validated_data["amount"],
             reason=serializer.validated_data["reason"],
             created_by=register_session_owner(request),
+        )
+        record_domain_event(
+            name="sales.register_cash_movement.created",
+            event_type=AnalyticsEvent.EventType.AUDIT,
+            severity=(
+                AnalyticsEvent.Severity.WARNING
+                if movement_type == RegisterCashMovement.MovementType.PAY_OUT
+                else AnalyticsEvent.Severity.INFO
+            ),
+            user=request.user,
+            entity_type="register_session",
+            entity_id=session.pk,
+            attributes={
+                "cash_movement_id": movement.pk,
+                "movement_type": movement_type,
+                "reason_present": bool(movement.reason),
+            },
+            metrics={"amount": float(movement.amount)},
         )
         return Response(
             RegisterCashMovementSerializer(movement).data,
@@ -401,6 +436,29 @@ class RegisterSessionViewSet(
                 "closed_at",
                 "updated_at",
             ]
+        )
+        record_domain_event(
+            name="sales.register_session.closed",
+            event_type=AnalyticsEvent.EventType.AUDIT,
+            user=request.user,
+            entity_type="register_session",
+            entity_id=session.pk,
+            attributes={
+                "owner_key": session.owner_key,
+                "cash_counts_present": any(
+                    getattr(session, field) > 0
+                    for field in (
+                        "count_025",
+                        "count_050",
+                        "count_075",
+                        "count_100",
+                    )
+                ),
+            },
+            metrics={
+                "opening_cash": float(session.opening_cash),
+                "closing_cash": float(session.closing_cash),
+            },
         )
 
         return Response(self.get_serializer(session).data)

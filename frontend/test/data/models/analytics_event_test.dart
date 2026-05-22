@@ -36,4 +36,19 @@ void main() {
       ),
     );
   });
+
+  test('frontend interaction event name serializes for ingest', () {
+    final event = AnalyticsEventDraft.usage(
+      AnalyticsEventName.frontendInteraction,
+      severity: AnalyticsEventSeverity.debug,
+      attributes: const {'action': 'pointer_up', 'target': 'pointer'},
+    );
+
+    final json = event.toJson();
+    final restored = AnalyticsEventDraft.fromJson(json);
+
+    expect(json['name'], 'frontend.interaction');
+    expect(json['severity'], 'debug');
+    expect(restored.name, 'frontend.interaction');
+  });
 }

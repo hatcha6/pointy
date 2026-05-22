@@ -5,6 +5,8 @@ from django.db import transaction
 from django.utils import timezone
 from rest_framework import serializers
 
+from apps.analytics.models import AnalyticsEvent
+from apps.analytics.services import record_domain_event
 from apps.core.models import ShopSettings
 from apps.core.roles import user_is_manager
 from apps.discounts.models import DiscountRule, normalize_coupon_code
@@ -225,6 +227,30 @@ def checkout_order(
         payment_serializer.is_valid(raise_exception=True)
         payment_serializer.save()
     order.refresh_from_db()
+    record_domain_event(
+        name="sales.checkout.completed",
+        event_type=AnalyticsEvent.EventType.AUDIT,
+        user=getattr(request, "user", None),
+        entity_type="sale_order",
+        entity_id=order.pk,
+        attributes={
+            "receipt_number": order.receipt_number,
+            "register_session_id": order.register_session_id,
+            "customer_present": customer is not None,
+            "coupon_count": len(coupon_codes),
+            "line_count": len(lines_data),
+            "payment_methods": sorted(
+                {str(payment_data["method"]) for payment_data in payments_data}
+            ),
+            "stock_already_recorded": True,
+        },
+        metrics={
+            "total": float(order.total),
+            "discount_total": float(order.discount_total),
+            "payment_count": len(payments_data),
+            "item_count": sum(int(line_data["quantity"]) for line_data in lines_data),
+        },
+    )
     return order
 
 
@@ -338,6 +364,19 @@ def mark_order_paid(order, *, request=None, stock_already_recorded=False):
     locked_order.status = Order.Status.PAID
     locked_order.save(update_fields=["status", "updated_at"])
     enqueue_receipt_print_on_commit(locked_order.pk)
+    record_domain_event(
+        name="sales.order.paid",
+        event_type=AnalyticsEvent.EventType.AUDIT,
+        user=getattr(request, "user", None),
+        entity_type="sale_order",
+        entity_id=locked_order.pk,
+        attributes={
+            "receipt_number": locked_order.receipt_number,
+            "register_session_id": locked_order.register_session_id,
+            "stock_already_recorded": stock_already_recorded,
+        },
+        metrics={"total": float(locked_order.total)},
+    )
     return locked_order
 
 
@@ -540,6 +579,38 @@ def void_order(*, order, reason, request=None, register_session=None):
     )
     locked_order.status = Order.Status.VOID
     locked_order.save(update_fields=["status", "updated_at"])
+    expired = cashier_window_expired(locked_order)
+    record_domain_event(
+        name="sales.order.voided",
+        event_type=(
+            AnalyticsEvent.EventType.FRAUD_SIGNAL
+            if expired
+            else AnalyticsEvent.EventType.AUDIT
+        ),
+        severity=(
+            AnalyticsEvent.Severity.WARNING
+            if expired
+            else AnalyticsEvent.Severity.INFO
+        ),
+        user=getattr(request, "user", None),
+        entity_type="sale_order",
+        entity_id=locked_order.pk,
+        risk_score=70 if expired else None,
+        attributes={
+            "receipt_number": locked_order.receipt_number,
+            "register_session_id": locked_order.register_session_id,
+            "reason_present": bool(reason),
+            "manager_override": bool(
+                request is not None and user_is_manager(request.user)
+            ),
+            "cashier_window_expired": expired,
+            "line_count": len(lines),
+        },
+        metrics={
+            "amount": float(adjustment.amount),
+            "item_count": sum(quantity for _, quantity in lines),
+        },
+    )
     return adjustment
 
 
@@ -569,6 +640,41 @@ def return_order_items(*, order, lines, reason, request=None, register_session=N
     if all(line.returnable_quantity == 0 for line in locked_lines):
         locked_order.status = Order.Status.VOID
         locked_order.save(update_fields=["status", "updated_at"])
+    expired = cashier_window_expired(locked_order)
+    record_domain_event(
+        name="sales.order.returned",
+        event_type=(
+            AnalyticsEvent.EventType.FRAUD_SIGNAL
+            if expired
+            else AnalyticsEvent.EventType.AUDIT
+        ),
+        severity=(
+            AnalyticsEvent.Severity.WARNING
+            if expired
+            else AnalyticsEvent.Severity.INFO
+        ),
+        user=getattr(request, "user", None),
+        entity_type="sale_order",
+        entity_id=locked_order.pk,
+        risk_score=60 if expired else None,
+        attributes={
+            "receipt_number": locked_order.receipt_number,
+            "register_session_id": locked_order.register_session_id,
+            "adjustment_id": adjustment.pk,
+            "refund_method": adjustment.refund_method,
+            "reason_present": bool(reason),
+            "manager_override": bool(
+                request is not None and user_is_manager(request.user)
+            ),
+            "cashier_window_expired": expired,
+            "order_became_void": locked_order.status == Order.Status.VOID,
+            "line_count": len(lines),
+        },
+        metrics={
+            "amount": float(adjustment.amount),
+            "item_count": sum(quantity for _, quantity in lines),
+        },
+    )
     return adjustment
 
 

@@ -14,9 +14,9 @@ class AnalyticsEngine {
     this._sink, {
     AnalyticsQueueStorage? storage,
     DateTime Function()? clock,
-    this.flushInterval = const Duration(seconds: 30),
-    this.maxBatchSize = 25,
-    this.maxQueueSize = 500,
+    this.flushInterval = const Duration(seconds: 15),
+    this.maxBatchSize = 50,
+    this.maxQueueSize = 2000,
   }) : _storage = storage ?? const SharedPreferencesAnalyticsQueueStorage(),
        _clock = clock ?? (() => DateTime.now().toUtc());
 
@@ -33,6 +33,8 @@ class AnalyticsEngine {
   bool _isStarted = false;
   bool _isFlushing = false;
   String? _installationId;
+  String? _sessionId;
+  String? _currentScreen;
   int? _currentUserId;
 
   int get pendingEventCount => _queue.length;
@@ -57,6 +59,7 @@ class AnalyticsEngine {
       ..clear()
       ..addAll(await _storage.loadEvents());
     _installationId = await _loadOrCreateInstallationId();
+    _sessionId = generateAnalyticsEventId();
     _isStarted = true;
     _flushTimer = Timer.periodic(flushInterval, (_) {
       unawaited(flush());
@@ -66,6 +69,10 @@ class AnalyticsEngine {
 
   void setCurrentUser(int? userId) {
     _currentUserId = userId;
+  }
+
+  void setCurrentScreen(String? screenName) {
+    _currentScreen = screenName;
   }
 
   Future<void> trackUsage(
@@ -112,6 +119,23 @@ class AnalyticsEngine {
         entityId: entityId,
         occurredAt: _clock(),
       ),
+      flushImmediately: flushImmediately,
+    );
+  }
+
+  Future<void> trackInteraction({
+    required String action,
+    String target = 'app',
+    AnalyticsEventSeverity severity = AnalyticsEventSeverity.debug,
+    Map<String, Object?> attributes = const {},
+    Map<String, num> metrics = const {},
+    bool flushImmediately = false,
+  }) {
+    return trackUsage(
+      AnalyticsEventName.frontendInteraction,
+      severity: severity,
+      attributes: {'action': action, 'target': target, ...attributes},
+      metrics: metrics,
       flushImmediately: flushImmediately,
     );
   }
@@ -375,14 +399,17 @@ class AnalyticsEngine {
   }
 
   AnalyticsEventDraft _enrich(AnalyticsEventDraft event) {
-    final userAttributes = _currentUserId == null
-        ? const <String, Object?>{}
-        : <String, Object?>{'user_id': _currentUserId};
+    final contextAttributes = <String, Object?>{
+      if (_currentUserId != null) 'user_id': _currentUserId,
+      if (_currentScreen != null && _currentScreen!.isNotEmpty)
+        'screen': _currentScreen,
+    };
     return event.copyWith(
+      sessionId: event.sessionId ?? _sessionId,
       installationId: event.installationId ?? _installationId,
       deviceId: event.deviceId ?? _installationId,
       platform: event.platform ?? _platformName(),
-      attributes: {...userAttributes, ...event.attributes},
+      attributes: {...contextAttributes, ...event.attributes},
     );
   }
 

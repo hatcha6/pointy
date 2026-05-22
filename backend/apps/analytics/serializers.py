@@ -74,7 +74,9 @@ class AnalyticsEventCreateSerializer(serializers.Serializer):
     occurred_at = serializers.DateTimeField(default=timezone.now)
     session_id = serializers.CharField(max_length=96, required=False, allow_blank=True)
     device_id = serializers.CharField(max_length=96, required=False, allow_blank=True)
-    installation_id = serializers.CharField(max_length=96, required=False, allow_blank=True)
+    installation_id = serializers.CharField(
+        max_length=96, required=False, allow_blank=True
+    )
     app_version = serializers.CharField(max_length=40, required=False, allow_blank=True)
     platform = serializers.CharField(max_length=48, required=False, allow_blank=True)
     trace_id = serializers.CharField(max_length=96, required=False, allow_blank=True)
@@ -124,6 +126,76 @@ class AnalyticsEventBatchSerializer(serializers.Serializer):
                 "Each event in a batch must have a unique client_event_id."
             )
         return events
+
+
+class AnalyticsEventExportQuerySerializer(serializers.Serializer):
+    format = serializers.ChoiceField(
+        choices=("csv", "json"),
+        required=False,
+        default="csv",
+    )
+    event_type = serializers.ChoiceField(
+        choices=AnalyticsEvent.EventType.choices,
+        required=False,
+    )
+    source = serializers.ChoiceField(
+        choices=AnalyticsEvent.Source.choices,
+        required=False,
+    )
+    severity = serializers.ChoiceField(
+        choices=AnalyticsEvent.Severity.choices,
+        required=False,
+    )
+    name = serializers.CharField(max_length=120, required=False)
+    user = serializers.IntegerField(min_value=1, required=False)
+    received_by = serializers.IntegerField(min_value=1, required=False)
+    date_from = serializers.DateTimeField(required=False)
+    date_to = serializers.DateTimeField(required=False)
+    occurred_at_after = serializers.DateTimeField(required=False)
+    occurred_at_before = serializers.DateTimeField(required=False)
+    platform = serializers.CharField(max_length=48, required=False)
+    session_id = serializers.CharField(max_length=96, required=False)
+    device_id = serializers.CharField(max_length=96, required=False)
+    entity_type = serializers.CharField(max_length=64, required=False)
+    entity_id = serializers.CharField(max_length=96, required=False)
+    search = serializers.CharField(max_length=120, required=False)
+    risk_score_min = serializers.IntegerField(
+        min_value=0, max_value=100, required=False
+    )
+    risk_score_max = serializers.IntegerField(
+        min_value=0, max_value=100, required=False
+    )
+
+    def validate(self, attrs):
+        date_from = attrs.get("occurred_at_after") or attrs.get("date_from")
+        date_to = attrs.get("occurred_at_before") or attrs.get("date_to")
+        if date_from and date_to and date_from > date_to:
+            raise serializers.ValidationError(
+                "date_from/occurred_at_after must be before date_to/occurred_at_before."
+            )
+
+        risk_score_min = attrs.get("risk_score_min")
+        risk_score_max = attrs.get("risk_score_max")
+        if (
+            risk_score_min is not None
+            and risk_score_max is not None
+            and risk_score_min > risk_score_max
+        ):
+            raise serializers.ValidationError(
+                "risk_score_min must be less than or equal to risk_score_max."
+            )
+        return attrs
+
+    @property
+    def normalized_filters(self):
+        filters = dict(self.validated_data)
+        if "user" in filters and "received_by" not in filters:
+            filters["received_by"] = filters["user"]
+        if "date_from" in filters and "occurred_at_after" not in filters:
+            filters["occurred_at_after"] = filters["date_from"]
+        if "date_to" in filters and "occurred_at_before" not in filters:
+            filters["occurred_at_before"] = filters["date_to"]
+        return filters
 
 
 def _validate_json_object(value, field_name):

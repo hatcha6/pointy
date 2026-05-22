@@ -3,8 +3,10 @@ import 'package:flutter/services.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../core/authorization.dart';
+import '../../../data/models/analytics_export.dart';
 import '../../../data/models/pos_user.dart';
 import '../../../data/models/shop_settings.dart';
+import '../../../data/services/analytics_export_downloader.dart';
 import '../../../shared/app_navigation_drawer.dart';
 import '../../../shared/authorization_guards.dart';
 import '../../../shared/decimal_text_input_formatter.dart';
@@ -157,6 +159,10 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
   late final TextEditingController _lowStockThresholdController;
   late final TextEditingController _cardCommissionController;
   late final TextEditingController _transferCommissionController;
+  late final TextEditingController _analyticsSearchController;
+  late final TextEditingController _analyticsPlatformController;
+  late final TextEditingController _analyticsSessionController;
+  late final TextEditingController _analyticsDeviceController;
   late int _cashierReturnWindowHours;
   late bool _requireOpeningCash;
   late bool _autoPrintReceipts;
@@ -164,6 +170,12 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
   late bool _enableCashPayments;
   late bool _enableCardPayments;
   late bool _enableTransferPayments;
+  AnalyticsExportFormat _analyticsExportFormat = AnalyticsExportFormat.csv;
+  DateTime? _analyticsOccurredFrom;
+  DateTime? _analyticsOccurredTo;
+  String _analyticsEventType = '';
+  String _analyticsSeverity = '';
+  String _analyticsSource = '';
   bool _showValidationErrors = false;
 
   @override
@@ -215,6 +227,10 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
     _lowStockThresholdController.dispose();
     _cardCommissionController.dispose();
     _transferCommissionController.dispose();
+    _analyticsSearchController.dispose();
+    _analyticsPlatformController.dispose();
+    _analyticsSessionController.dispose();
+    _analyticsDeviceController.dispose();
     super.dispose();
   }
 
@@ -235,6 +251,10 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
     _transferCommissionController = TextEditingController(
       text: settings.transferCommissionPercent.toStringAsFixed(2),
     );
+    _analyticsSearchController = TextEditingController();
+    _analyticsPlatformController = TextEditingController();
+    _analyticsSessionController = TextEditingController();
+    _analyticsDeviceController = TextEditingController();
     _cashierReturnWindowHours = settings.cashierReturnWindowHours;
     _requireOpeningCash = settings.requireOpeningCash;
     _autoPrintReceipts = settings.autoPrintReceipts;
@@ -355,6 +375,15 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
                                       children: _buildInventoryFields,
                                     ),
                             ),
+                            _SettingsNavigationTile(
+                              icon: Icons.file_download_outlined,
+                              iconColor: Colors.purple,
+                              title: l10n.analyticsExportSectionTitle,
+                              subtitle: _analyticsExportSummary(l10n),
+                              onTap: widget.viewModel.isExportingAnalytics
+                                  ? null
+                                  : () => _openAnalyticsExport(context),
+                            ),
                           ],
                         ),
                         if (widget.viewModel.hasSaveError)
@@ -428,6 +457,28 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
       _cardCommissionController.text.trim(),
       _transferCommissionController.text.trim(),
     );
+  }
+
+  String _analyticsExportSummary(AppLocalizations l10n) {
+    final filters = [
+      if (_analyticsOccurredFrom != null || _analyticsOccurredTo != null)
+        l10n.analyticsExportDateRangeSummary(
+          _formatOptionalDate(_analyticsOccurredFrom, l10n),
+          _formatOptionalDate(_analyticsOccurredTo, l10n),
+        ),
+      if (_analyticsEventType.isNotEmpty)
+        _analyticsEventTypeLabel(l10n, _analyticsEventType),
+      if (_analyticsSeverity.isNotEmpty)
+        _analyticsSeverityLabel(l10n, _analyticsSeverity),
+      if (_analyticsSource.isNotEmpty)
+        _analyticsSourceLabel(l10n, _analyticsSource),
+      if (_analyticsSearchController.text.trim().isNotEmpty)
+        _analyticsSearchController.text.trim(),
+    ];
+    if (filters.isEmpty) {
+      return l10n.analyticsExportAllEventsSummary;
+    }
+    return filters.join('، ');
   }
 
   String? _shopNameError(AppLocalizations l10n) {
@@ -569,6 +620,64 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
         onThresholdChanged: () => _refreshSettingsGroup(refresh),
         onAllowOversellingChanged: (value) {
           setState(() => _allowOverselling = value);
+          refresh();
+        },
+      ),
+    ];
+  }
+
+  List<Widget> _buildAnalyticsExportFields(
+    BuildContext context,
+    AppLocalizations l10n,
+    VoidCallback refresh,
+  ) {
+    return [
+      _AnalyticsExportFields(
+        format: _analyticsExportFormat,
+        occurredFrom: _analyticsOccurredFrom,
+        occurredTo: _analyticsOccurredTo,
+        eventType: _analyticsEventType,
+        severity: _analyticsSeverity,
+        source: _analyticsSource,
+        searchController: _analyticsSearchController,
+        platformController: _analyticsPlatformController,
+        sessionController: _analyticsSessionController,
+        deviceController: _analyticsDeviceController,
+        enabled: !widget.viewModel.isExportingAnalytics,
+        onFormatChanged: (value) {
+          setState(() => _analyticsExportFormat = value);
+          refresh();
+        },
+        onEventTypeChanged: (value) {
+          setState(() => _analyticsEventType = value);
+          refresh();
+        },
+        onSeverityChanged: (value) {
+          setState(() => _analyticsSeverity = value);
+          refresh();
+        },
+        onSourceChanged: (value) {
+          setState(() => _analyticsSource = value);
+          refresh();
+        },
+        onTextFilterChanged: () => _refreshSettingsGroup(refresh),
+        onPickFrom: () => _pickAnalyticsDate(
+          context,
+          initialDate: _analyticsOccurredFrom,
+          onPicked: (date) => setState(() => _analyticsOccurredFrom = date),
+          refresh: refresh,
+        ),
+        onPickTo: () => _pickAnalyticsDate(
+          context,
+          initialDate: _analyticsOccurredTo,
+          onPicked: (date) => setState(() => _analyticsOccurredTo = date),
+          refresh: refresh,
+        ),
+        onClearDates: () {
+          setState(() {
+            _analyticsOccurredFrom = null;
+            _analyticsOccurredTo = null;
+          });
           refresh();
         },
       ),
@@ -762,6 +871,138 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
     );
   }
 
+  Future<void> _openAnalyticsExport(BuildContext context) {
+    return Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (routeContext) {
+          return StatefulBuilder(
+            builder: (context, setRouteState) {
+              void refreshRoute() => setRouteState(() {});
+
+              return ListenableBuilder(
+                listenable: widget.viewModel,
+                builder: (context, _) {
+                  final l10n = AppLocalizations.of(context)!;
+
+                  return Scaffold(
+                    appBar: AppBar(title: Text(l10n.analyticsExportTitle)),
+                    body: SafeArea(
+                      child: ColoredBox(
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.surfaceContainerLowest,
+                        child: Column(
+                          children: [
+                            Expanded(
+                              child: ListView(
+                                padding: const EdgeInsets.fromLTRB(
+                                  16,
+                                  12,
+                                  16,
+                                  20,
+                                ),
+                                children: [
+                                  Center(
+                                    child: ConstrainedBox(
+                                      constraints: const BoxConstraints(
+                                        maxWidth: 720,
+                                      ),
+                                      child: _SettingsDetailSection(
+                                        icon: Icons.file_download_outlined,
+                                        title: l10n
+                                            .analyticsExportFiltersSectionTitle,
+                                        children: _buildAnalyticsExportFields(
+                                          context,
+                                          l10n,
+                                          refreshRoute,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            _AnalyticsExportActionBar(
+                              isExporting:
+                                  widget.viewModel.isExportingAnalytics,
+                              hasExportError:
+                                  widget.viewModel.hasAnalyticsExportError,
+                              onSubmit: () {
+                                _submitAnalyticsExport();
+                                refreshRoute();
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              );
+            },
+          );
+        },
+      ),
+    );
+  }
+
+  Future<void> _pickAnalyticsDate(
+    BuildContext context, {
+    required DateTime? initialDate,
+    required ValueChanged<DateTime> onPicked,
+    required VoidCallback refresh,
+  }) async {
+    final now = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: initialDate ?? now,
+      firstDate: DateTime(now.year - 5),
+      lastDate: DateTime(now.year + 1),
+    );
+    if (picked == null) {
+      return;
+    }
+
+    onPicked(DateTime(picked.year, picked.month, picked.day));
+    refresh();
+  }
+
+  Future<void> _submitAnalyticsExport() async {
+    final l10n = AppLocalizations.of(context)!;
+    final messenger = ScaffoldMessenger.of(context);
+    final file = await widget.viewModel.exportAnalyticsEvents(
+      AnalyticsExportQuery(
+        format: _analyticsExportFormat,
+        occurredFrom: _analyticsOccurredFrom,
+        occurredTo: _analyticsOccurredTo?.add(const Duration(days: 1)),
+        eventType: _analyticsEventType,
+        severity: _analyticsSeverity,
+        source: _analyticsSource,
+        platform: _analyticsPlatformController.text,
+        sessionId: _analyticsSessionController.text,
+        deviceId: _analyticsDeviceController.text,
+        search: _analyticsSearchController.text,
+      ),
+    );
+
+    if (!mounted) {
+      return;
+    }
+
+    final downloaded = file != null && await downloadAnalyticsExportFile(file);
+    messenger
+      ..clearSnackBars()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(
+            downloaded
+                ? l10n.analyticsExportStartedMessage
+                : l10n.analyticsExportFailedMessage,
+          ),
+        ),
+      );
+  }
+
   Future<void> _submit() async {
     final l10n = AppLocalizations.of(context)!;
     setState(() => _showValidationErrors = true);
@@ -813,5 +1054,18 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
 
   double _parsePercent(String value) {
     return double.parse(value.trim().replaceAll(',', '.'));
+  }
+
+  String _formatOptionalDate(DateTime? date, AppLocalizations l10n) {
+    if (date == null) {
+      return l10n.analyticsExportOpenDateValue;
+    }
+    return _formatDate(date);
+  }
+
+  String _formatDate(DateTime date) {
+    final month = date.month.toString().padLeft(2, '0');
+    final day = date.day.toString().padLeft(2, '0');
+    return '${date.year}-$month-$day';
   }
 }

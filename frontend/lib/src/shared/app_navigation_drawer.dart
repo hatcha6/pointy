@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
+import '../core/analytics_interaction_tracker.dart';
 import '../core/authorization.dart';
 import '../data/models/pos_user.dart';
 
@@ -165,8 +168,21 @@ class AppNavigationDrawer extends StatelessWidget {
     return NavigationDrawer(
       selectedIndex: selectedIndex == -1 ? null : selectedIndex,
       onDestinationSelected: (index) {
+        final destination = destinations[index];
+        unawaited(
+          AnalyticsInteractionTracker.maybeOf(context)?.trackInteraction(
+                action: 'navigation_destination_selected',
+                target: 'navigation_drawer',
+                attributes: {
+                  'destination': destination.destination.name,
+                  'was_selected':
+                      destination.destination == selectedDestination,
+                },
+              ) ??
+              Future<void>.value(),
+        );
         Navigator.of(context).pop();
-        destinations[index].onTap?.call();
+        destination.onTap?.call();
       },
       children: [
         Padding(
@@ -212,6 +228,11 @@ class AppNavigationDrawer extends StatelessWidget {
           leading: const Icon(Icons.logout),
           title: Text(l10n.logoutButton),
           onTap: () {
+            AnalyticsInteractionTracker.track(
+              context,
+              action: 'logout_selected',
+              target: 'navigation_drawer',
+            );
             Navigator.of(context).pop();
             onLogout();
           },

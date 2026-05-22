@@ -755,6 +755,9 @@ class AppLocalizationsAr extends AppLocalizations {
   String get inventorySettingsSectionTitle => 'تنبيهات المخزون';
 
   @override
+  String get analyticsExportSectionTitle => 'تصدير التتبع';
+
+  @override
   String get shopSettingsEmptyValue => 'غير محدد';
 
   @override
@@ -794,6 +797,123 @@ class AppLocalizationsAr extends AppLocalizations {
     );
     return '$_temp0، بطاقة $cardCommission%، تحويل $transferCommission%';
   }
+
+  @override
+  String get analyticsExportAllEventsSummary => 'كل أحداث التتبع';
+
+  @override
+  String analyticsExportDateRangeSummary(String from, String to) {
+    return 'من $from إلى $to';
+  }
+
+  @override
+  String get analyticsExportTitle => 'تصدير التتبع';
+
+  @override
+  String get analyticsExportFiltersSectionTitle => 'فلاتر التصدير';
+
+  @override
+  String get analyticsExportFormatLabel => 'صيغة الملف';
+
+  @override
+  String get analyticsExportFormatCsv => 'CSV';
+
+  @override
+  String get analyticsExportFormatJson => 'JSON';
+
+  @override
+  String get analyticsExportFromDateLabel => 'من تاريخ';
+
+  @override
+  String get analyticsExportToDateLabel => 'إلى تاريخ';
+
+  @override
+  String get analyticsExportOpenDateValue => 'مفتوح';
+
+  @override
+  String get analyticsExportClearDatesButton => 'مسح التواريخ';
+
+  @override
+  String get analyticsExportEventTypeLabel => 'نوع الحدث';
+
+  @override
+  String get analyticsExportSeverityLabel => 'الحدة';
+
+  @override
+  String get analyticsExportSourceLabel => 'المصدر';
+
+  @override
+  String get analyticsExportAnyValue => 'الكل';
+
+  @override
+  String get analyticsExportSearchLabel => 'بحث في الاسم أو الأثر';
+
+  @override
+  String get analyticsExportPlatformLabel => 'المنصة';
+
+  @override
+  String get analyticsExportSessionLabel => 'معرّف الجلسة';
+
+  @override
+  String get analyticsExportDeviceLabel => 'معرّف الجهاز';
+
+  @override
+  String get analyticsExportDownloadButton => 'تنزيل الملف';
+
+  @override
+  String get analyticsExportRunningButton => 'جار التصدير...';
+
+  @override
+  String get analyticsExportStartedMessage => 'بدأ تنزيل ملف التتبع.';
+
+  @override
+  String get analyticsExportFailedMessage =>
+      'تعذر تصدير التتبع. راجع الفلاتر وحاول مرة أخرى.';
+
+  @override
+  String get analyticsEventTypeUsage => 'استخدام';
+
+  @override
+  String get analyticsEventTypeError => 'خطأ';
+
+  @override
+  String get analyticsEventTypePerformance => 'أداء';
+
+  @override
+  String get analyticsEventTypeSecurity => 'أمان';
+
+  @override
+  String get analyticsEventTypeFraudSignal => 'إشارة احتيال';
+
+  @override
+  String get analyticsEventTypeAudit => 'تدقيق';
+
+  @override
+  String get analyticsSeverityDebug => 'تصحيح';
+
+  @override
+  String get analyticsSeverityInfo => 'معلومة';
+
+  @override
+  String get analyticsSeverityWarning => 'تحذير';
+
+  @override
+  String get analyticsSeverityError => 'خطأ';
+
+  @override
+  String get analyticsSeverityCritical => 'حرج';
+
+  @override
+  String get analyticsSourceFrontend => 'الواجهة';
+
+  @override
+  String get analyticsSourceBackend => 'الخادم';
+
+  @override
+  String get analyticsSourcePrintAgent => 'وكيل الطباعة';
+
+  @override
+  String get analyticsSourceIntegration => 'تكامل';
 
   @override
   String get shopNameLabel => 'اسم المتجر';

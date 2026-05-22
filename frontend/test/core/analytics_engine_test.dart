@@ -67,6 +67,41 @@ void main() {
     },
   );
 
+  test('analytics engine records interactions with session context', () async {
+    final sink = _FakeAnalyticsSink();
+    final engine = AnalyticsEngine(
+      sink,
+      storage: MemoryAnalyticsQueueStorage(installationId: 'install-2b'),
+      flushInterval: const Duration(hours: 1),
+    );
+    await engine.start();
+    engine.setCurrentUser(11);
+    engine.setCurrentScreen('pos');
+
+    await engine.trackInteraction(
+      action: 'pointer_up',
+      target: 'button',
+      attributes: const {'kind': 'touch'},
+      metrics: const {'x': 18, 'y': 24},
+      flushImmediately: true,
+    );
+
+    final event = sink.acceptedEvents.last;
+    expect(event.eventType, AnalyticsEventType.usage);
+    expect(event.name, 'frontend.interaction');
+    expect(event.severity, AnalyticsEventSeverity.debug);
+    expect(event.sessionId, isNotEmpty);
+    expect(event.installationId, 'install-2b');
+    expect(event.attributes['user_id'], 11);
+    expect(event.attributes['screen'], 'pos');
+    expect(event.attributes['action'], 'pointer_up');
+    expect(event.attributes['target'], 'button');
+    expect(event.attributes['kind'], 'touch');
+    expect(event.metrics['x'], 18);
+    expect(event.metrics['y'], 24);
+    engine.dispose();
+  });
+
   test('analytics engine records API request performance', () async {
     final sink = _FakeAnalyticsSink();
     final engine = AnalyticsEngine(

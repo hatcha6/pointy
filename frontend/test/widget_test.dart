@@ -1769,6 +1769,73 @@ void main() {
     expect(find.text('تم حفظ إعدادات المتجر.'), findsOneWidget);
   });
 
+  testWidgets('manager can filter and download analytics export', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(1200, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    Uri? exportUri;
+
+    await tester.pumpWidget(
+      PointyApp(
+        apiService: _mockApiService(
+          onAnalyticsExport: (request) {
+            exportUri = request.url;
+          },
+        ),
+      ),
+    );
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+
+    await tester.tap(find.byIcon(Icons.menu));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('إعدادات المتجر'));
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+
+    expect(find.text('تصدير التتبع'), findsOneWidget);
+    await tester.tap(find.text('تصدير التتبع'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(const ValueKey('analytics_export_event_type_field')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('أداء').last);
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(const ValueKey('analytics_export_severity_field')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('تحذير').last);
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byKey(const ValueKey('analytics_export_search_field')),
+      'checkout',
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('analytics_export_platform_field')),
+      'flutter-web',
+    );
+
+    await tester.tap(
+      find.byKey(const ValueKey('analytics_export_download_button')),
+    );
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+
+    expect(exportUri?.path, endsWith('/analytics-events/export/'));
+    expect(exportUri?.queryParameters['format'], 'csv');
+    expect(exportUri?.queryParameters['event_type'], 'performance');
+    expect(exportUri?.queryParameters['severity'], 'warning');
+    expect(exportUri?.queryParameters['search'], 'checkout');
+    expect(exportUri?.queryParameters['platform'], 'flutter-web');
+    expect(find.text('بدأ تنزيل ملف التتبع.'), findsOneWidget);
+  });
+
   testWidgets('manager can configure and fake-test local printing', (
     WidgetTester tester,
   ) async {
@@ -2548,6 +2615,7 @@ PosApiService _mockApiService({
   void Function(http.Request request)? onStockMovement,
   void Function(int page)? onOrderPage,
   void Function(http.Request request)? onShopSettingsUpdate,
+  void Function(http.Request request)? onAnalyticsExport,
   void Function(http.Request request)? onDiscountRuleCreate,
   void Function(http.Request request)? onProductCategoryRequest,
   void Function(http.Request request)? onProductUpdate,
@@ -2658,6 +2726,18 @@ PosApiService _mockApiService({
             allowOverselling: shopSettingsAllowOverselling,
             cashierReturnWindowHours: shopSettingsCashierReturnWindowHours,
           ),
+        );
+      }
+
+      if (path.endsWith('/analytics-events/export/')) {
+        onAnalyticsExport?.call(request);
+        return http.Response.bytes(
+          utf8.encode('id,name\n1,frontend.operation\n'),
+          200,
+          headers: {
+            'content-type': 'text/csv; charset=utf-8',
+            'content-disposition': 'attachment; filename="analytics.csv"',
+          },
         );
       }
 

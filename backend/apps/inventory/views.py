@@ -3,6 +3,8 @@ from django.db import transaction
 from rest_framework import mixins, serializers, viewsets
 from rest_framework.permissions import IsAuthenticated
 
+from apps.analytics.models import AnalyticsEvent
+from apps.analytics.services import record_domain_event
 from apps.core.permissions import HasPointyPermission
 from .models import StockItem, StockMovement
 from .serializers import StockItemSerializer, StockMovementSerializer
@@ -98,7 +100,7 @@ class StockMovementViewSet(
                     "updated_at",
                 ],
             )
-            serializer.save(
+            movement = serializer.save(
                 stock_item=stock_item,
                 variant=variant,
                 created_by=self.request.user,
@@ -108,6 +110,32 @@ class StockMovementViewSet(
                 committed_after=after["committed"],
                 expected_before=before["expected"],
                 expected_after=after["expected"],
+            )
+            record_domain_event(
+                name="inventory.manual_movement.created",
+                event_type=AnalyticsEvent.EventType.AUDIT,
+                severity=(
+                    AnalyticsEvent.Severity.WARNING
+                    if movement_type
+                    in (StockMovement.Type.DECREASE, StockMovement.Type.DAMAGED)
+                    else AnalyticsEvent.Severity.INFO
+                ),
+                user=self.request.user,
+                entity_type="stock_movement",
+                entity_id=movement.pk,
+                attributes={
+                    "variant_id": variant.pk,
+                    "product_id": variant.product_id,
+                    "movement_type": movement_type,
+                    "note_present": bool(movement.note),
+                },
+                metrics={
+                    "quantity": quantity,
+                    "on_hand_before": before["on_hand"],
+                    "on_hand_after": after["on_hand"],
+                    "expected_before": before["expected"],
+                    "expected_after": after["expected"],
+                },
             )
 
     def _apply_movement(self, stock_item, movement_type, quantity):

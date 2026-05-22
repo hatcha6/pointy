@@ -1468,6 +1468,12 @@ abstract class AppLocalizations {
   /// **'تنبيهات المخزون'**
   String get inventorySettingsSectionTitle;
 
+  /// No description provided for @analyticsExportSectionTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'تصدير التتبع'**
+  String get analyticsExportSectionTitle;
+
   /// No description provided for @shopSettingsEmptyValue.
   ///
   /// In ar, this message translates to:
@@ -1513,6 +1519,234 @@ abstract class AppLocalizations {
     String cardCommission,
     String transferCommission,
   );
+
+  /// No description provided for @analyticsExportAllEventsSummary.
+  ///
+  /// In ar, this message translates to:
+  /// **'كل أحداث التتبع'**
+  String get analyticsExportAllEventsSummary;
+
+  /// Summary for selected analytics export date range.
+  ///
+  /// In ar, this message translates to:
+  /// **'من {from} إلى {to}'**
+  String analyticsExportDateRangeSummary(String from, String to);
+
+  /// No description provided for @analyticsExportTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'تصدير التتبع'**
+  String get analyticsExportTitle;
+
+  /// No description provided for @analyticsExportFiltersSectionTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'فلاتر التصدير'**
+  String get analyticsExportFiltersSectionTitle;
+
+  /// No description provided for @analyticsExportFormatLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'صيغة الملف'**
+  String get analyticsExportFormatLabel;
+
+  /// No description provided for @analyticsExportFormatCsv.
+  ///
+  /// In ar, this message translates to:
+  /// **'CSV'**
+  String get analyticsExportFormatCsv;
+
+  /// No description provided for @analyticsExportFormatJson.
+  ///
+  /// In ar, this message translates to:
+  /// **'JSON'**
+  String get analyticsExportFormatJson;
+
+  /// No description provided for @analyticsExportFromDateLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'من تاريخ'**
+  String get analyticsExportFromDateLabel;
+
+  /// No description provided for @analyticsExportToDateLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'إلى تاريخ'**
+  String get analyticsExportToDateLabel;
+
+  /// No description provided for @analyticsExportOpenDateValue.
+  ///
+  /// In ar, this message translates to:
+  /// **'مفتوح'**
+  String get analyticsExportOpenDateValue;
+
+  /// No description provided for @analyticsExportClearDatesButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'مسح التواريخ'**
+  String get analyticsExportClearDatesButton;
+
+  /// No description provided for @analyticsExportEventTypeLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'نوع الحدث'**
+  String get analyticsExportEventTypeLabel;
+
+  /// No description provided for @analyticsExportSeverityLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الحدة'**
+  String get analyticsExportSeverityLabel;
+
+  /// No description provided for @analyticsExportSourceLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'المصدر'**
+  String get analyticsExportSourceLabel;
+
+  /// No description provided for @analyticsExportAnyValue.
+  ///
+  /// In ar, this message translates to:
+  /// **'الكل'**
+  String get analyticsExportAnyValue;
+
+  /// No description provided for @analyticsExportSearchLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'بحث في الاسم أو الأثر'**
+  String get analyticsExportSearchLabel;
+
+  /// No description provided for @analyticsExportPlatformLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'المنصة'**
+  String get analyticsExportPlatformLabel;
+
+  /// No description provided for @analyticsExportSessionLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'معرّف الجلسة'**
+  String get analyticsExportSessionLabel;
+
+  /// No description provided for @analyticsExportDeviceLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'معرّف الجهاز'**
+  String get analyticsExportDeviceLabel;
+
+  /// No description provided for @analyticsExportDownloadButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'تنزيل الملف'**
+  String get analyticsExportDownloadButton;
+
+  /// No description provided for @analyticsExportRunningButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'جار التصدير...'**
+  String get analyticsExportRunningButton;
+
+  /// No description provided for @analyticsExportStartedMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'بدأ تنزيل ملف التتبع.'**
+  String get analyticsExportStartedMessage;
+
+  /// No description provided for @analyticsExportFailedMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر تصدير التتبع. راجع الفلاتر وحاول مرة أخرى.'**
+  String get analyticsExportFailedMessage;
+
+  /// No description provided for @analyticsEventTypeUsage.
+  ///
+  /// In ar, this message translates to:
+  /// **'استخدام'**
+  String get analyticsEventTypeUsage;
+
+  /// No description provided for @analyticsEventTypeError.
+  ///
+  /// In ar, this message translates to:
+  /// **'خطأ'**
+  String get analyticsEventTypeError;
+
+  /// No description provided for @analyticsEventTypePerformance.
+  ///
+  /// In ar, this message translates to:
+  /// **'أداء'**
+  String get analyticsEventTypePerformance;
+
+  /// No description provided for @analyticsEventTypeSecurity.
+  ///
+  /// In ar, this message translates to:
+  /// **'أمان'**
+  String get analyticsEventTypeSecurity;
+
+  /// No description provided for @analyticsEventTypeFraudSignal.
+  ///
+  /// In ar, this message translates to:
+  /// **'إشارة احتيال'**
+  String get analyticsEventTypeFraudSignal;
+
+  /// No description provided for @analyticsEventTypeAudit.
+  ///
+  /// In ar, this message translates to:
+  /// **'تدقيق'**
+  String get analyticsEventTypeAudit;
+
+  /// No description provided for @analyticsSeverityDebug.
+  ///
+  /// In ar, this message translates to:
+  /// **'تصحيح'**
+  String get analyticsSeverityDebug;
+
+  /// No description provided for @analyticsSeverityInfo.
+  ///
+  /// In ar, this message translates to:
+  /// **'معلومة'**
+  String get analyticsSeverityInfo;
+
+  /// No description provided for @analyticsSeverityWarning.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحذير'**
+  String get analyticsSeverityWarning;
+
+  /// No description provided for @analyticsSeverityError.
+  ///
+  /// In ar, this message translates to:
+  /// **'خطأ'**
+  String get analyticsSeverityError;
+
+  /// No description provided for @analyticsSeverityCritical.
+  ///
+  /// In ar, this message translates to:
+  /// **'حرج'**
+  String get analyticsSeverityCritical;
+
+  /// No description provided for @analyticsSourceFrontend.
+  ///
+  /// In ar, this message translates to:
+  /// **'الواجهة'**
+  String get analyticsSourceFrontend;
+
+  /// No description provided for @analyticsSourceBackend.
+  ///
+  /// In ar, this message translates to:
+  /// **'الخادم'**
+  String get analyticsSourceBackend;
+
+  /// No description provided for @analyticsSourcePrintAgent.
+  ///
+  /// In ar, this message translates to:
+  /// **'وكيل الطباعة'**
+  String get analyticsSourcePrintAgent;
+
+  /// No description provided for @analyticsSourceIntegration.
+  ///
+  /// In ar, this message translates to:
+  /// **'تكامل'**
+  String get analyticsSourceIntegration;
 
   /// No description provided for @shopNameLabel.
   ///

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
+import '../../../core/analytics_engine.dart';
 import '../view_models/auth_view_model.dart';
 import 'login_screen.dart';
 
@@ -9,23 +10,35 @@ class AuthGate extends StatelessWidget {
     super.key,
     required this.viewModel,
     required this.authenticatedBuilder,
+    this.analyticsEngine,
   });
 
   final AuthViewModel viewModel;
   final WidgetBuilder authenticatedBuilder;
+  final AnalyticsEngine? analyticsEngine;
 
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
       listenable: viewModel,
       builder: (context, _) {
-        return switch (viewModel.status) {
+        final status = viewModel.status;
+        analyticsEngine?.setCurrentScreen(_screenName(status));
+        return switch (status) {
           AuthStatus.checking => const _AuthCheckingScreen(),
           AuthStatus.unauthenticated => LoginScreen(viewModel: viewModel),
           AuthStatus.authenticated => authenticatedBuilder(context),
         };
       },
     );
+  }
+
+  String _screenName(AuthStatus status) {
+    return switch (status) {
+      AuthStatus.checking => 'auth_checking',
+      AuthStatus.unauthenticated => 'login',
+      AuthStatus.authenticated => 'authenticated',
+    };
   }
 }
 

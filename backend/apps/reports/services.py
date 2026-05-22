@@ -1,5 +1,6 @@
 import hashlib
 import json
+import time as monotonic_time
 from dataclasses import dataclass
 from datetime import datetime, time, timedelta
 from decimal import Decimal
@@ -9,6 +10,8 @@ from django.db.models.functions import Coalesce
 from django.utils import timezone
 from django.utils.dateparse import parse_date
 
+from apps.analytics.models import AnalyticsEvent
+from apps.analytics.services import record_domain_event
 from apps.catalog.models import Product
 from apps.core.roles import user_is_manager
 from apps.inventory.models import StockItem, StockMovement
@@ -119,6 +122,7 @@ def report_catalog_for_user(user):
 
 
 def create_report_run(*, user, report_type, params, output_format):
+    started_at = monotonic_time.perf_counter()
     run = ReportRun.objects.create(
         requested_by=user if user.is_authenticated else None,
         report_type=report_type,
@@ -133,6 +137,27 @@ def create_report_run(*, user, report_type, params, output_format):
         )
     except Exception as exc:
         run.mark_failed(exc)
+        record_domain_event(
+            name="reports.run.failed",
+            event_type=AnalyticsEvent.EventType.ERROR,
+            severity=AnalyticsEvent.Severity.ERROR,
+            user=user,
+            entity_type="report_run",
+            entity_id=run.pk,
+            attributes={
+                "report_type": report_type,
+                "output_format": output_format,
+                "params_keys": sorted((params or {}).keys()),
+                "error_type": exc.__class__.__name__,
+                "error_message": str(exc)[:512],
+            },
+            metrics={
+                "duration_ms": round(
+                    (monotonic_time.perf_counter() - started_at) * 1000,
+                    3,
+                )
+            },
+        )
         raise
 
     checksum = report_checksum(payload)
@@ -140,6 +165,27 @@ def create_report_run(*, user, report_type, params, output_format):
         payload=payload,
         row_count=_row_count(payload),
         checksum=checksum,
+    )
+    record_domain_event(
+        name="reports.run.completed",
+        event_type=AnalyticsEvent.EventType.AUDIT,
+        user=user,
+        entity_type="report_run",
+        entity_id=run.pk,
+        attributes={
+            "report_type": report_type,
+            "output_format": output_format,
+            "status": run.status,
+            "params_keys": sorted((params or {}).keys()),
+            "checksum": checksum,
+        },
+        metrics={
+            "row_count": run.row_count,
+            "duration_ms": round(
+                (monotonic_time.perf_counter() - started_at) * 1000,
+                3,
+            ),
+        },
     )
     return run
 

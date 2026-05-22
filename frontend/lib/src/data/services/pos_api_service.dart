@@ -1,6 +1,7 @@
 import 'package:http/http.dart' as http;
 
 import '../models/pos_user.dart';
+import '../models/analytics_export.dart';
 import '../models/analytics_event.dart';
 import '../models/print_job.dart';
 import '../models/printer_config.dart';
@@ -136,6 +137,12 @@ class PosApiService {
 
   Future<ShopSettings> updateShopSettings(ShopSettingsDraft draft) {
     return _shopSettings.updateShopSettings(draft);
+  }
+
+  Future<AnalyticsExportFile> exportAnalyticsEvents(
+    AnalyticsExportQuery query,
+  ) {
+    return _shopSettings.exportAnalyticsEvents(query);
   }
 
   Future<ProductPage> fetchProducts({required ModelQuery query, int page = 1}) {

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../core/analytics_interaction_tracker.dart';
 import '../data/models/product.dart';
 import '../data/models/product_variant.dart';
 import 'formatters.dart';
@@ -40,7 +41,7 @@ class ProductTile extends StatelessWidget {
       borderRadius: BorderRadius.circular(8),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
-        onTap: onTap,
+        onTap: onTap == null ? null : () => _handleTap(context),
         child: Padding(
           padding: const EdgeInsets.all(14),
           child: Column(
@@ -80,5 +81,16 @@ class ProductTile extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  void _handleTap(BuildContext context) {
+    AnalyticsInteractionTracker.track(
+      context,
+      action: 'product_tile_selected',
+      target: 'product_tile',
+      attributes: {if (sku.isNotEmpty) 'sku': sku, 'is_active': isActive},
+      metrics: {'unit_price': unitPrice},
+    );
+    onTap?.call();
   }
 }

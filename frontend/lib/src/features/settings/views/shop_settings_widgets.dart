@@ -269,6 +269,262 @@ class _InventorySettingsFields extends StatelessWidget {
   }
 }
 
+class _AnalyticsExportFields extends StatelessWidget {
+  const _AnalyticsExportFields({
+    required this.format,
+    required this.occurredFrom,
+    required this.occurredTo,
+    required this.eventType,
+    required this.severity,
+    required this.source,
+    required this.searchController,
+    required this.platformController,
+    required this.sessionController,
+    required this.deviceController,
+    required this.enabled,
+    required this.onFormatChanged,
+    required this.onEventTypeChanged,
+    required this.onSeverityChanged,
+    required this.onSourceChanged,
+    required this.onTextFilterChanged,
+    required this.onPickFrom,
+    required this.onPickTo,
+    required this.onClearDates,
+  });
+
+  final AnalyticsExportFormat format;
+  final DateTime? occurredFrom;
+  final DateTime? occurredTo;
+  final String eventType;
+  final String severity;
+  final String source;
+  final TextEditingController searchController;
+  final TextEditingController platformController;
+  final TextEditingController sessionController;
+  final TextEditingController deviceController;
+  final bool enabled;
+  final ValueChanged<AnalyticsExportFormat> onFormatChanged;
+  final ValueChanged<String> onEventTypeChanged;
+  final ValueChanged<String> onSeverityChanged;
+  final ValueChanged<String> onSourceChanged;
+  final VoidCallback onTextFilterChanged;
+  final VoidCallback onPickFrom;
+  final VoidCallback onPickTo;
+  final VoidCallback onClearDates;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+
+    return Column(
+      children: [
+        DropdownButtonFormField<AnalyticsExportFormat>(
+          key: const ValueKey('analytics_export_format_field'),
+          initialValue: format,
+          decoration: InputDecoration(
+            labelText: l10n.analyticsExportFormatLabel,
+            border: const OutlineInputBorder(),
+            prefixIcon: const Icon(Icons.table_chart_outlined),
+          ),
+          items: [
+            DropdownMenuItem(
+              value: AnalyticsExportFormat.csv,
+              child: Text(l10n.analyticsExportFormatCsv),
+            ),
+            DropdownMenuItem(
+              value: AnalyticsExportFormat.json,
+              child: Text(l10n.analyticsExportFormatJson),
+            ),
+          ],
+          onChanged: enabled
+              ? (value) {
+                  if (value != null) {
+                    onFormatChanged(value);
+                  }
+                }
+              : null,
+        ),
+        const SizedBox(height: 12),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final fromDate = _DateFilterTile(
+              key: const ValueKey('analytics_export_from_date'),
+              enabled: enabled,
+              label: l10n.analyticsExportFromDateLabel,
+              value: occurredFrom == null
+                  ? l10n.analyticsExportOpenDateValue
+                  : _formatAnalyticsDate(occurredFrom!),
+              onTap: onPickFrom,
+            );
+            final toDate = _DateFilterTile(
+              key: const ValueKey('analytics_export_to_date'),
+              enabled: enabled,
+              label: l10n.analyticsExportToDateLabel,
+              value: occurredTo == null
+                  ? l10n.analyticsExportOpenDateValue
+                  : _formatAnalyticsDate(occurredTo!),
+              onTap: onPickTo,
+            );
+
+            if (constraints.maxWidth < 520) {
+              return Column(
+                children: [fromDate, const SizedBox(height: 12), toDate],
+              );
+            }
+
+            return Row(
+              children: [
+                Expanded(child: fromDate),
+                const SizedBox(width: 12),
+                Expanded(child: toDate),
+              ],
+            );
+          },
+        ),
+        const SizedBox(height: 8),
+        Align(
+          alignment: AlignmentDirectional.centerStart,
+          child: TextButton.icon(
+            onPressed: enabled ? onClearDates : null,
+            icon: const Icon(Icons.clear_outlined),
+            label: Text(l10n.analyticsExportClearDatesButton),
+          ),
+        ),
+        const SizedBox(height: 12),
+        DropdownButtonFormField<String>(
+          key: const ValueKey('analytics_export_event_type_field'),
+          initialValue: eventType,
+          decoration: InputDecoration(
+            labelText: l10n.analyticsExportEventTypeLabel,
+            border: const OutlineInputBorder(),
+            prefixIcon: const Icon(Icons.category_outlined),
+          ),
+          items: [
+            _analyticsOption(l10n.analyticsExportAnyValue, ''),
+            for (final value in _analyticsEventTypes)
+              _analyticsOption(_analyticsEventTypeLabel(l10n, value), value),
+          ],
+          onChanged: enabled
+              ? (value) => onEventTypeChanged(value ?? '')
+              : null,
+        ),
+        const SizedBox(height: 12),
+        DropdownButtonFormField<String>(
+          key: const ValueKey('analytics_export_severity_field'),
+          initialValue: severity,
+          decoration: InputDecoration(
+            labelText: l10n.analyticsExportSeverityLabel,
+            border: const OutlineInputBorder(),
+            prefixIcon: const Icon(Icons.priority_high_outlined),
+          ),
+          items: [
+            _analyticsOption(l10n.analyticsExportAnyValue, ''),
+            for (final value in _analyticsSeverities)
+              _analyticsOption(_analyticsSeverityLabel(l10n, value), value),
+          ],
+          onChanged: enabled ? (value) => onSeverityChanged(value ?? '') : null,
+        ),
+        const SizedBox(height: 12),
+        DropdownButtonFormField<String>(
+          key: const ValueKey('analytics_export_source_field'),
+          initialValue: source,
+          decoration: InputDecoration(
+            labelText: l10n.analyticsExportSourceLabel,
+            border: const OutlineInputBorder(),
+            prefixIcon: const Icon(Icons.hub_outlined),
+          ),
+          items: [
+            _analyticsOption(l10n.analyticsExportAnyValue, ''),
+            for (final value in _analyticsSources)
+              _analyticsOption(_analyticsSourceLabel(l10n, value), value),
+          ],
+          onChanged: enabled ? (value) => onSourceChanged(value ?? '') : null,
+        ),
+        const SizedBox(height: 12),
+        TextFormField(
+          key: const ValueKey('analytics_export_search_field'),
+          controller: searchController,
+          enabled: enabled,
+          onChanged: (_) => onTextFilterChanged(),
+          decoration: InputDecoration(
+            labelText: l10n.analyticsExportSearchLabel,
+            border: const OutlineInputBorder(),
+            prefixIcon: const Icon(Icons.search_outlined),
+          ),
+        ),
+        const SizedBox(height: 12),
+        TextFormField(
+          key: const ValueKey('analytics_export_platform_field'),
+          controller: platformController,
+          enabled: enabled,
+          onChanged: (_) => onTextFilterChanged(),
+          decoration: InputDecoration(
+            labelText: l10n.analyticsExportPlatformLabel,
+            border: const OutlineInputBorder(),
+            prefixIcon: const Icon(Icons.devices_outlined),
+          ),
+        ),
+        const SizedBox(height: 12),
+        TextFormField(
+          key: const ValueKey('analytics_export_session_field'),
+          controller: sessionController,
+          enabled: enabled,
+          onChanged: (_) => onTextFilterChanged(),
+          decoration: InputDecoration(
+            labelText: l10n.analyticsExportSessionLabel,
+            border: const OutlineInputBorder(),
+            prefixIcon: const Icon(Icons.confirmation_number_outlined),
+          ),
+        ),
+        const SizedBox(height: 12),
+        TextFormField(
+          key: const ValueKey('analytics_export_device_field'),
+          controller: deviceController,
+          enabled: enabled,
+          onChanged: (_) => onTextFilterChanged(),
+          decoration: InputDecoration(
+            labelText: l10n.analyticsExportDeviceLabel,
+            border: const OutlineInputBorder(),
+            prefixIcon: const Icon(Icons.point_of_sale_outlined),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _DateFilterTile extends StatelessWidget {
+  const _DateFilterTile({
+    super.key,
+    required this.enabled,
+    required this.label,
+    required this.value,
+    required this.onTap,
+  });
+
+  final bool enabled;
+  final String label;
+  final String value;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: enabled ? onTap : null,
+      borderRadius: BorderRadius.circular(8),
+      child: InputDecorator(
+        decoration: InputDecoration(
+          labelText: label,
+          border: const OutlineInputBorder(),
+          prefixIcon: const Icon(Icons.calendar_today_outlined),
+          enabled: enabled,
+        ),
+        child: Text(value, style: Theme.of(context).textTheme.bodyLarge),
+      ),
+    );
+  }
+}
+
 class _SettingsListSection extends StatelessWidget {
   const _SettingsListSection({required this.children});
 
@@ -498,4 +754,122 @@ class _SettingsSaveBar extends StatelessWidget {
       ),
     );
   }
+}
+
+class _AnalyticsExportActionBar extends StatelessWidget {
+  const _AnalyticsExportActionBar({
+    required this.isExporting,
+    required this.hasExportError,
+    required this.onSubmit,
+  });
+
+  final bool isExporting;
+  final bool hasExportError;
+  final VoidCallback onSubmit;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Material(
+      color: colorScheme.surface,
+      elevation: 3,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 720),
+            child: Row(
+              children: [
+                if (hasExportError)
+                  Expanded(
+                    child: Text(
+                      l10n.analyticsExportFailedMessage,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(color: colorScheme.error),
+                    ),
+                  )
+                else
+                  const Spacer(),
+                const SizedBox(width: 12),
+                FilledButton.icon(
+                  key: const ValueKey('analytics_export_download_button'),
+                  onPressed: isExporting ? null : onSubmit,
+                  icon: isExporting
+                      ? const SizedBox.square(
+                          dimension: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.file_download_outlined),
+                  label: Text(
+                    isExporting
+                        ? l10n.analyticsExportRunningButton
+                        : l10n.analyticsExportDownloadButton,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+DropdownMenuItem<String> _analyticsOption(String label, String value) {
+  return DropdownMenuItem<String>(value: value, child: Text(label));
+}
+
+const _analyticsEventTypes = [
+  'usage',
+  'error',
+  'performance',
+  'security',
+  'fraud_signal',
+  'audit',
+];
+
+const _analyticsSeverities = ['debug', 'info', 'warning', 'error', 'critical'];
+
+const _analyticsSources = ['frontend', 'backend', 'print_agent', 'integration'];
+
+String _analyticsEventTypeLabel(AppLocalizations l10n, String value) {
+  return switch (value) {
+    'usage' => l10n.analyticsEventTypeUsage,
+    'error' => l10n.analyticsEventTypeError,
+    'performance' => l10n.analyticsEventTypePerformance,
+    'security' => l10n.analyticsEventTypeSecurity,
+    'fraud_signal' => l10n.analyticsEventTypeFraudSignal,
+    'audit' => l10n.analyticsEventTypeAudit,
+    _ => value,
+  };
+}
+
+String _analyticsSeverityLabel(AppLocalizations l10n, String value) {
+  return switch (value) {
+    'debug' => l10n.analyticsSeverityDebug,
+    'info' => l10n.analyticsSeverityInfo,
+    'warning' => l10n.analyticsSeverityWarning,
+    'error' => l10n.analyticsSeverityError,
+    'critical' => l10n.analyticsSeverityCritical,
+    _ => value,
+  };
+}
+
+String _analyticsSourceLabel(AppLocalizations l10n, String value) {
+  return switch (value) {
+    'frontend' => l10n.analyticsSourceFrontend,
+    'backend' => l10n.analyticsSourceBackend,
+    'print_agent' => l10n.analyticsSourcePrintAgent,
+    'integration' => l10n.analyticsSourceIntegration,
+    _ => value,
+  };
+}
+
+String _formatAnalyticsDate(DateTime date) {
+  final month = date.month.toString().padLeft(2, '0');
+  final day = date.day.toString().padLeft(2, '0');
+  return '${date.year}-$month-$day';
 }
