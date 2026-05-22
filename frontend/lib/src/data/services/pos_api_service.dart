@@ -1,6 +1,7 @@
 import 'package:http/http.dart' as http;
 
 import '../models/pos_user.dart';
+import '../models/analytics_event.dart';
 import '../models/print_job.dart';
 import '../models/printer_config.dart';
 import '../models/product.dart';
@@ -35,6 +36,7 @@ import '../models/variant_option_value.dart';
 import '../models/variant_option_value_draft.dart';
 import '../models/variant_option_value_page.dart';
 import 'api_session.dart';
+import 'analytics_api_client.dart';
 import 'auth_api_client.dart';
 import 'catalog_api_client.dart';
 import 'customer_api_client.dart';
@@ -57,28 +59,31 @@ class PosApiService {
     http.Client? client,
     this.baseUrl = 'http://127.0.0.1:8000/api',
   }) {
-    final session = PosApiSession(
+    _session = PosApiSession(
       client: client ?? createPosHttpClient(),
       baseUrl: baseUrl,
     );
-    _auth = AuthApiClient(session);
-    _users = UserApiClient(session);
-    _shopSettings = ShopSettingsApiClient(session);
-    _catalog = CatalogApiClient(session);
-    _customers = CustomerApiClient(session);
-    _dashboard = DashboardApiClient(session);
-    _discounts = DiscountApiClient(session);
-    _inventory = InventoryApiClient(session);
-    _registerSessions = RegisterSessionApiClient(session);
-    _reports = ReportsApiClient(session);
-    _sales = SalesApiClient(session);
-    _purchasing = PurchasingApiClient(session);
-    _printing = PrintingApiClient(session);
+    _analytics = AnalyticsApiClient(_session);
+    _auth = AuthApiClient(_session);
+    _users = UserApiClient(_session);
+    _shopSettings = ShopSettingsApiClient(_session);
+    _catalog = CatalogApiClient(_session);
+    _customers = CustomerApiClient(_session);
+    _dashboard = DashboardApiClient(_session);
+    _discounts = DiscountApiClient(_session);
+    _inventory = InventoryApiClient(_session);
+    _registerSessions = RegisterSessionApiClient(_session);
+    _reports = ReportsApiClient(_session);
+    _sales = SalesApiClient(_session);
+    _purchasing = PurchasingApiClient(_session);
+    _printing = PrintingApiClient(_session);
   }
 
   final String baseUrl;
 
+  late final PosApiSession _session;
   late final AuthApiClient _auth;
+  late final AnalyticsApiClient _analytics;
   late final UserApiClient _users;
   late final ShopSettingsApiClient _shopSettings;
   late final CatalogApiClient _catalog;
@@ -92,6 +97,10 @@ class PosApiService {
   late final PurchasingApiClient _purchasing;
   late final PrintingApiClient _printing;
 
+  set performanceRecorder(ApiPerformanceRecorder? recorder) {
+    _session.performanceRecorder = recorder;
+  }
+
   Future<PosUser> login({required String username, required String password}) {
     return _auth.login(username: username, password: password);
   }
@@ -99,6 +108,12 @@ class PosApiService {
   Future<void> logout() => _auth.logout();
 
   Future<PosUser?> fetchCurrentUser() => _auth.fetchCurrentUser();
+
+  Future<AnalyticsIngestResult> ingestAnalyticsEvents(
+    List<AnalyticsEventDraft> events,
+  ) {
+    return _analytics.ingestEvents(events);
+  }
 
   Future<PosUserPage> fetchUsers({int page = 1}) {
     return _users.fetchUsers(page: page);

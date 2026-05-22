@@ -67,7 +67,21 @@ extension PosCheckoutActions on PosViewModel {
     _isCheckingOut = true;
     _notifyChanged();
 
+    final checkoutStopwatch = Stopwatch()..start();
     final cartSnapshot = List<CartLine>.of(_cart);
+    unawaited(
+      _analyticsEngine?.trackUsage(
+            AnalyticsEventName.posCheckoutStarted,
+            attributes: {
+              'line_count': cartSnapshot.length,
+              'payment_count': payments.length,
+              'has_customer': _selectedCustomer != null,
+              'has_coupon': _couponCode.trim().isNotEmpty,
+            },
+            metrics: {'total': total},
+          ) ??
+          Future<void>.value(),
+    );
     final shouldPrintInvoice =
         _checkoutSettings?.autoPrintReceipts == true ||
         _printInvoiceAfterPayment;
@@ -106,13 +120,96 @@ extension PosCheckoutActions on PosViewModel {
         _printInvoiceAfterPayment = false;
         _isCheckingOut = false;
         _notifyChanged();
+        unawaited(
+          _analyticsEngine?.trackPerformance(
+                name: analyticsEventNameToJson(
+                  AnalyticsEventName.frontendOperation,
+                ),
+                duration: checkoutStopwatch.elapsed,
+                attributes: {'operation': 'pos.checkout', 'outcome': 'success'},
+                metrics: {
+                  'line_count': cartSnapshot.length,
+                  'total': result.value.total,
+                },
+                entityType: 'sale_order',
+                entityId: result.value.id.toString(),
+              ) ??
+              Future<void>.value(),
+        );
+        unawaited(
+          _analyticsEngine?.trackUsage(
+                AnalyticsEventName.posCheckoutCompleted,
+                attributes: {
+                  'line_count': cartSnapshot.length,
+                  'payment_count': payments.length,
+                  'print_status': printStatus.name,
+                  'receipt_number': result.value.receiptNumber,
+                },
+                metrics: {'total': result.value.total},
+                entityType: 'sale_order',
+                entityId: result.value.id.toString(),
+                flushImmediately: true,
+              ) ??
+              Future<void>.value(),
+        );
         return SaleCheckoutOutcome.success(result.value, printStatus);
       case Error<SaleOrder>(:final exception):
         _isCheckingOut = false;
         _notifyChanged();
         if (exception is SaleCheckoutStockException) {
+          unawaited(
+            _analyticsEngine?.trackPerformance(
+                  name: analyticsEventNameToJson(
+                    AnalyticsEventName.frontendOperation,
+                  ),
+                  duration: checkoutStopwatch.elapsed,
+                  severity: AnalyticsEventSeverity.warning,
+                  attributes: {
+                    'operation': 'pos.checkout',
+                    'outcome': 'stock_rejected',
+                  },
+                  metrics: {
+                    'shortage_count': exception.shortages.length,
+                    'total': total,
+                  },
+                  flushImmediately: true,
+                ) ??
+                Future<void>.value(),
+          );
+          unawaited(
+            _analyticsEngine?.trackUsage(
+                  AnalyticsEventName.posCheckoutStockRejected,
+                  severity: AnalyticsEventSeverity.warning,
+                  attributes: {'shortage_count': exception.shortages.length},
+                  metrics: {'total': total},
+                  flushImmediately: true,
+                ) ??
+                Future<void>.value(),
+          );
           return SaleCheckoutOutcome.stockRejected(exception.shortages);
         }
+        unawaited(
+          _analyticsEngine?.trackPerformance(
+                name: analyticsEventNameToJson(
+                  AnalyticsEventName.frontendOperation,
+                ),
+                duration: checkoutStopwatch.elapsed,
+                severity: AnalyticsEventSeverity.error,
+                attributes: {'operation': 'pos.checkout', 'outcome': 'failure'},
+                metrics: {'line_count': cartSnapshot.length, 'total': total},
+                flushImmediately: true,
+              ) ??
+              Future<void>.value(),
+        );
+        unawaited(
+          _analyticsEngine?.captureError(
+                exception,
+                StackTrace.current,
+                name: AnalyticsEventName.posCheckoutFailed,
+                attributes: {'line_count': cartSnapshot.length},
+              ) ??
+              Future<void>.value(),
+        );
         return const SaleCheckoutOutcome.failure();
     }
   }

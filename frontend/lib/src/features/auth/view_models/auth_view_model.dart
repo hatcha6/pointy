@@ -1,17 +1,23 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 
+import '../../../core/analytics_engine.dart';
 import '../../../core/result.dart';
+import '../../../data/models/analytics_event.dart';
 import '../../../data/models/pos_user.dart';
 import '../../../data/repositories/auth_repository.dart';
 
 enum AuthStatus { checking, unauthenticated, authenticated }
 
 class AuthViewModel extends ChangeNotifier {
-  AuthViewModel(this._authRepository) {
+  AuthViewModel(this._authRepository, {AnalyticsEngine? analyticsEngine})
+    : _analyticsEngine = analyticsEngine {
     loadCurrentUser();
   }
 
   final AuthRepository _authRepository;
+  final AnalyticsEngine? _analyticsEngine;
 
   AuthStatus _status = AuthStatus.checking;
   PosUser? _currentUser;
@@ -61,12 +67,29 @@ class AuthViewModel extends ChangeNotifier {
       case Ok<PosUser>(value: final user):
         _currentUser = user;
         _status = AuthStatus.authenticated;
+        _analyticsEngine?.setCurrentUser(user.id);
+        unawaited(
+          _analyticsEngine?.trackUsage(
+                AnalyticsEventName.authLoginSucceeded,
+                attributes: {'role': user.role.toJson()},
+                flushImmediately: true,
+              ) ??
+              Future<void>.value(),
+        );
         notifyListeners();
         return true;
       case Error<PosUser>(exception: _):
         _currentUser = null;
         _status = AuthStatus.unauthenticated;
         _hasError = true;
+        unawaited(
+          _analyticsEngine?.trackUsage(
+                AnalyticsEventName.authLoginFailed,
+                severity: AnalyticsEventSeverity.warning,
+                flushImmediately: true,
+              ) ??
+              Future<void>.value(),
+        );
         notifyListeners();
         return false;
     }
@@ -76,7 +99,15 @@ class AuthViewModel extends ChangeNotifier {
     _isSubmitting = true;
     notifyListeners();
 
+    unawaited(
+      _analyticsEngine?.trackUsage(
+            AnalyticsEventName.authLogout,
+            flushImmediately: true,
+          ) ??
+          Future<void>.value(),
+    );
     await _authRepository.logout();
+    _analyticsEngine?.setCurrentUser(null);
 
     _isSubmitting = false;
     _currentUser = null;

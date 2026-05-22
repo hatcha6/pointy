@@ -2,8 +2,10 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
+import '../../../core/analytics_engine.dart';
 import '../../../core/result.dart';
 import '../../../data/models/cart_line.dart';
+import '../../../data/models/analytics_event.dart';
 import '../../../data/models/contact.dart';
 import '../../../data/models/print_job.dart';
 import '../../../data/models/printer_config.dart';
@@ -70,14 +72,16 @@ class PosViewModel extends ChangeNotifier {
     this._registerSessionRepository,
     this._saleRepository,
     this._shopSettingsRepository,
-    this._printingRepository,
-  );
+    this._printingRepository, {
+    AnalyticsEngine? analyticsEngine,
+  }) : _analyticsEngine = analyticsEngine;
 
   final CatalogRepository _catalogRepository;
   final RegisterSessionRepository _registerSessionRepository;
   final SaleRepository _saleRepository;
   final ShopSettingsRepository _shopSettingsRepository;
   final PrintingRepository _printingRepository;
+  final AnalyticsEngine? _analyticsEngine;
 
   CatalogRepository get catalogRepository => _catalogRepository;
 

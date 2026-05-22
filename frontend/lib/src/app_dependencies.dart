@@ -1,3 +1,8 @@
+import 'dart:async';
+
+import 'core/analytics_engine.dart';
+import 'data/models/analytics_event.dart';
+import 'data/repositories/analytics_repository.dart';
 import 'data/repositories/auth_repository.dart';
 import 'data/repositories/catalog_repository.dart';
 import 'data/repositories/contact_repository.dart';
@@ -24,6 +29,9 @@ import 'features/purchasing/view_models/purchase_view_model.dart';
 class PointyAppDependencies {
   PointyAppDependencies({PosApiService? apiService})
     : service = apiService ?? PosApiService() {
+    analyticsRepository = AnalyticsRepository(service);
+    analyticsEngine = AnalyticsEngine(analyticsRepository);
+    service.performanceRecorder = analyticsEngine.recordApiRequest;
     authRepository = AuthRepository(service);
     catalogRepository = CatalogRepository(service);
     contactRepository = ContactRepository(service);
@@ -37,17 +45,23 @@ class PointyAppDependencies {
     printingRepository = PrintingRepository(service);
     purchaseRepository = PurchaseRepository(service);
     userRepository = UserRepository(service);
-    authViewModel = AuthViewModel(authRepository);
+    authViewModel = AuthViewModel(
+      authRepository,
+      analyticsEngine: analyticsEngine,
+    );
     posViewModel = PosViewModel(
       catalogRepository,
       registerSessionRepository,
       saleRepository,
       shopSettingsRepository,
       printingRepository,
+      analyticsEngine: analyticsEngine,
     );
   }
 
   final PosApiService service;
+  late final AnalyticsRepository analyticsRepository;
+  late final AnalyticsEngine analyticsEngine;
   late final AuthRepository authRepository;
   late final CatalogRepository catalogRepository;
   late final ContactRepository contactRepository;
@@ -104,6 +118,13 @@ class PointyAppDependencies {
         currentUser != null &&
         _lastAuthenticatedUserId != currentUser.id) {
       _lastAuthenticatedUserId = currentUser.id;
+      analyticsEngine.setCurrentUser(currentUser.id);
+      unawaited(
+        analyticsEngine.trackUsage(
+          AnalyticsEventName.authSessionStarted,
+          attributes: {'role': currentUser.role.toJson()},
+        ),
+      );
       posViewModel.loadCurrentRegisterSession();
       posViewModel.loadCheckoutSettings();
       _dashboardViewModel?.loadDashboard();
@@ -115,11 +136,13 @@ class PointyAppDependencies {
 
     if (authViewModel.status == AuthStatus.unauthenticated) {
       _lastAuthenticatedUserId = null;
+      analyticsEngine.setCurrentUser(null);
       _disposeSessionViewModels();
     }
   }
 
   void dispose() {
+    analyticsEngine.dispose();
     authViewModel.dispose();
     posViewModel.dispose();
     _disposeSessionViewModels();

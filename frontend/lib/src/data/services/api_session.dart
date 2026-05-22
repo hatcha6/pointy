@@ -2,6 +2,31 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+typedef ApiPerformanceRecorder =
+    void Function(ApiRequestPerformance performance);
+
+class ApiRequestPerformance {
+  const ApiRequestPerformance({
+    required this.method,
+    required this.path,
+    required this.duration,
+    this.statusCode,
+    this.requestSizeBytes = 0,
+    this.responseSizeBytes = 0,
+    this.errorMessage = '',
+  });
+
+  final String method;
+  final String path;
+  final Duration duration;
+  final int? statusCode;
+  final int requestSizeBytes;
+  final int responseSizeBytes;
+  final String errorMessage;
+
+  bool get failed => statusCode == null || statusCode! >= 400;
+}
+
 class PosApiException implements Exception {
   const PosApiException({
     required this.message,
@@ -30,6 +55,7 @@ class PosApiSession {
 
   final http.Client client;
   final String baseUrl;
+  ApiPerformanceRecorder? performanceRecorder;
   final Map<String, String> _cookies = {};
   String? _csrfToken;
 
@@ -41,12 +67,12 @@ class PosApiSession {
   }
 
   Future<http.Response> get(String path, {Map<String, String>? query}) async {
-    final response = await client.get(
-      uri(path, queryParameters: query),
-      headers: headers(),
+    return _send(
+      method: 'GET',
+      path: path,
+      request: () =>
+          client.get(uri(path, queryParameters: query), headers: headers()),
     );
-    captureResponseState(response);
-    return response;
   }
 
   Future<http.Response> post(
@@ -54,32 +80,40 @@ class PosApiSession {
     Object? body,
     bool includeCsrf = true,
   }) async {
-    final response = await client.post(
-      uri(path),
-      headers: headers(includeCsrf: includeCsrf),
-      body: body == null ? null : jsonEncode(body),
+    final encodedBody = body == null ? null : jsonEncode(body);
+    return _send(
+      method: 'POST',
+      path: path,
+      requestSizeBytes: _encodedSize(encodedBody),
+      request: () => client.post(
+        uri(path),
+        headers: headers(includeCsrf: includeCsrf),
+        body: encodedBody,
+      ),
     );
-    captureResponseState(response);
-    return response;
   }
 
   Future<http.Response> patch(String path, {required Object body}) async {
-    final response = await client.patch(
-      uri(path),
-      headers: headers(includeCsrf: true),
-      body: jsonEncode(body),
+    final encodedBody = jsonEncode(body);
+    return _send(
+      method: 'PATCH',
+      path: path,
+      requestSizeBytes: _encodedSize(encodedBody),
+      request: () => client.patch(
+        uri(path),
+        headers: headers(includeCsrf: true),
+        body: encodedBody,
+      ),
     );
-    captureResponseState(response);
-    return response;
   }
 
   Future<http.Response> delete(String path) async {
-    final response = await client.delete(
-      uri(path),
-      headers: headers(includeCsrf: true),
+    return _send(
+      method: 'DELETE',
+      path: path,
+      request: () =>
+          client.delete(uri(path), headers: headers(includeCsrf: true)),
     );
-    captureResponseState(response);
-    return response;
   }
 
   Map<String, String> headers({bool includeCsrf = false}) {
@@ -123,6 +157,71 @@ class PosApiSession {
   void clearAuthState() {
     _cookies.clear();
     _csrfToken = null;
+  }
+
+  Future<http.Response> _send({
+    required String method,
+    required String path,
+    required Future<http.Response> Function() request,
+    int requestSizeBytes = 0,
+  }) async {
+    final stopwatch = Stopwatch()..start();
+    try {
+      final response = await request();
+      stopwatch.stop();
+      captureResponseState(response);
+      _recordPerformance(
+        method: method,
+        path: path,
+        duration: stopwatch.elapsed,
+        statusCode: response.statusCode,
+        requestSizeBytes: requestSizeBytes,
+        responseSizeBytes: response.bodyBytes.length,
+      );
+      return response;
+    } on Exception catch (exception) {
+      stopwatch.stop();
+      _recordPerformance(
+        method: method,
+        path: path,
+        duration: stopwatch.elapsed,
+        requestSizeBytes: requestSizeBytes,
+        errorMessage: exception.toString(),
+      );
+      rethrow;
+    }
+  }
+
+  void _recordPerformance({
+    required String method,
+    required String path,
+    required Duration duration,
+    int? statusCode,
+    int requestSizeBytes = 0,
+    int responseSizeBytes = 0,
+    String errorMessage = '',
+  }) {
+    if (path.startsWith('analytics-events/')) {
+      return;
+    }
+    performanceRecorder?.call(
+      ApiRequestPerformance(
+        method: method,
+        path: path,
+        duration: duration,
+        statusCode: statusCode,
+        requestSizeBytes: requestSizeBytes,
+        responseSizeBytes: responseSizeBytes,
+        errorMessage: errorMessage,
+      ),
+    );
+  }
+
+  int _encodedSize(String? value) {
+    if (value == null) {
+      return 0;
+    }
+    return utf8.encode(value).length;
   }
 
   String body(http.Response response) => utf8.decode(response.bodyBytes);

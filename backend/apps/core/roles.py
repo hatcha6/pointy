@@ -9,6 +9,7 @@ ROLE_GROUPS = (MANAGER_GROUP, CASHIER_GROUP)
 
 MANAGER_PERMISSION_DOMAINS = (
     "catalog",
+    "analytics",
     "core",
     "inventory",
     "sales",
@@ -42,6 +43,7 @@ CASHIER_PERMISSION_CODES = (
     "printing.change_printjob",
     "printing.view_printjob",
     "printing.view_printjobevent",
+    "analytics.add_analyticsevent",
 )
 
 

@@ -3,6 +3,7 @@ from django.urls import include, path
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 from rest_framework.routers import DefaultRouter
 
+from apps.analytics.views import AnalyticsEventViewSet
 from apps.catalog.views import (
     ProductCategoryViewSet,
     ProductVariantViewSet,
@@ -38,6 +39,7 @@ from apps.reports.views import ReportRunViewSet
 from apps.sales.views import OrderViewSet, RegisterSessionViewSet
 
 router = DefaultRouter()
+router.register("analytics-events", AnalyticsEventViewSet, basename="analytics-event")
 router.register("users", PosUserViewSet, basename="pos-user")
 router.register("products", ProductViewSet)
 router.register(

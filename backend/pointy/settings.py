@@ -10,6 +10,8 @@ env = environ.Env(
     CORS_ALLOWED_ORIGINS=(list, []),
     CSRF_TRUSTED_ORIGINS=(list, ["http://localhost:8080", "http://127.0.0.1:8080"]),
     POINTY_BOOTSTRAP_ADMIN_ENABLED=(bool, True),
+    POINTY_ANALYTICS_BACKEND_PERFORMANCE_ENABLED=(bool, True),
+    POINTY_ANALYTICS_BACKEND_SLOW_REQUEST_MS=(int, 750),
 )
 environ.Env.read_env(BASE_DIR / ".env")
 
@@ -29,6 +31,7 @@ INSTALLED_APPS = [
     "drf_spectacular",
     "rest_framework",
     "apps.core",
+    "apps.analytics",
     "apps.catalog",
     "apps.inventory",
     "apps.sales",
@@ -47,6 +50,7 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "apps.analytics.middleware.BackendPerformanceAnalyticsMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
@@ -110,6 +114,11 @@ POINTY_BOOTSTRAP_ADMIN_ENABLED = env("POINTY_BOOTSTRAP_ADMIN_ENABLED")
 POINTY_BOOTSTRAP_ADMIN_USERNAME = env("POINTY_BOOTSTRAP_ADMIN_USERNAME", default="admin")
 POINTY_BOOTSTRAP_ADMIN_EMAIL = env("POINTY_BOOTSTRAP_ADMIN_EMAIL", default="")
 POINTY_BOOTSTRAP_ADMIN_PASSWORD = env("POINTY_BOOTSTRAP_ADMIN_PASSWORD", default=None)
+POINTY_ANALYTICS_BACKEND_PERFORMANCE_ENABLED = env(
+    "POINTY_ANALYTICS_BACKEND_PERFORMANCE_ENABLED"
+)
+POINTY_ANALYTICS_BACKEND_SLOW_REQUEST_MS = env("POINTY_ANALYTICS_BACKEND_SLOW_REQUEST_MS")
+POINTY_ANALYTICS_BACKEND_PERFORMANCE_PATHS = ("/api/",)
 
 REST_FRAMEWORK = {
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
