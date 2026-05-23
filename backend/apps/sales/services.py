@@ -341,11 +341,7 @@ def enqueue_receipt_print_on_commit(order_id):
 
 
 def mark_order_paid(order, *, request=None, stock_already_recorded=False):
-    locked_order = (
-        Order.objects.select_for_update()
-        .select_related("register_session")
-        .get(pk=order.pk)
-    )
+    locked_order = Order.objects.select_for_update().get(pk=order.pk)
     if locked_order.status == Order.Status.PAID:
         return locked_order
     if locked_order.status != Order.Status.OPEN:
@@ -554,11 +550,7 @@ def fresh_order_adjustment_lines(locked_order, lines, *, locked_lines=None):
 
 @transaction.atomic
 def void_order(*, order, reason, request=None, register_session=None):
-    locked_order = (
-        Order.objects.select_for_update()
-        .select_related("register_session")
-        .get(pk=order.pk)
-    )
+    locked_order = Order.objects.select_for_update().get(pk=order.pk)
     validate_order_adjustment_allowed(locked_order, request=request)
     locked_lines = lock_order_lines_for_update(locked_order)
     lines = [
@@ -616,11 +608,7 @@ def void_order(*, order, reason, request=None, register_session=None):
 
 @transaction.atomic
 def return_order_items(*, order, lines, reason, request=None, register_session=None):
-    locked_order = (
-        Order.objects.select_for_update()
-        .select_related("register_session")
-        .get(pk=order.pk)
-    )
+    locked_order = Order.objects.select_for_update().get(pk=order.pk)
     validate_order_adjustment_allowed(locked_order, request=request)
     locked_lines = lock_order_lines_for_update(locked_order)
     lines = fresh_order_adjustment_lines(

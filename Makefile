@@ -12,13 +12,21 @@ WEB_HOST ?= 127.0.0.1
 WEB_PORT ?= 8080
 API_HOST ?= 127.0.0.1
 API_PORT ?= 8000
+LOAD_BASE_URL ?= http://127.0.0.1:8000/api
+LOAD_DURATION ?= 60
+LOAD_WORKERS ?= 4
+LOAD_EXTRA ?=
+STRESS_DURATION ?= 300
+STRESS_WORKERS ?= 8
+ENDURANCE_DURATION ?= 3600
+ENDURANCE_WORKERS ?= 4
 
 .PHONY: help setup install docker-check redis redis-local redis-stop redis-logs redis-ping \
 		backend-venv backend-install backend-env backend-migrate backend-migrations backend-run \
-		backend-seed-variants \
+		backend-seed-variants backend-load-test backend-stress-test backend-endurance-test \
 	backend-shell backend-superuser backend-test backend-check backend-celery \
-	frontend-install frontend-l10n frontend-run frontend-web frontend-test frontend-analyze frontend-format \
-	format check test dev dev-local dev-no-redis clean
+	frontend-install frontend-l10n frontend-run frontend-web frontend-test frontend-e2e frontend-analyze frontend-format \
+	format check test e2e dev dev-local dev-no-redis clean
 
 help: ## Show available commands.
 	@awk 'BEGIN {FS = ":.*##"; printf "\nPointy POS commands\n\n"} /^[a-zA-Z0-9_-]+:.*##/ {printf "  %-22s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -89,6 +97,15 @@ backend-superuser: backend-env backend-install ## Create a Django superuser.
 backend-seed-variants: backend-env backend-install ## Seed common product variant options.
 	$(MANAGE) seed_variant_options
 
+backend-load-test: backend-env backend-install ## Run opt-in checkout load test against a running API server.
+	$(MANAGE) checkout_load --base-url "$(LOAD_BASE_URL)" --duration "$(LOAD_DURATION)" --workers "$(LOAD_WORKERS)" $(LOAD_EXTRA)
+
+backend-stress-test: backend-env backend-install ## Run a higher-concurrency checkout stress test against a running API server.
+	$(MANAGE) checkout_load --base-url "$(LOAD_BASE_URL)" --duration "$(STRESS_DURATION)" --workers "$(STRESS_WORKERS)" $(LOAD_EXTRA)
+
+backend-endurance-test: backend-env backend-install ## Run a long checkout endurance test against a running API server.
+	$(MANAGE) checkout_load --base-url "$(LOAD_BASE_URL)" --duration "$(ENDURANCE_DURATION)" --workers "$(ENDURANCE_WORKERS)" $(LOAD_EXTRA)
+
 backend-test: backend-env backend-install ## Run backend tests.
 	$(MANAGE) test apps
 
@@ -113,6 +130,9 @@ frontend-web: frontend-install ## Run the Flutter app as a local web server.
 frontend-test: frontend-install ## Run Flutter tests.
 	cd "$(FRONTEND_DIR)" && $(FLUTTER) test
 
+frontend-e2e: frontend-install ## Run Flutter end-to-end pilot flow tests.
+	cd "$(FRONTEND_DIR)" && $(FLUTTER) test test/e2e
+
 frontend-analyze: frontend-install ## Run Flutter analyzer.
 	cd "$(FRONTEND_DIR)" && $(FLUTTER) analyze
 
@@ -124,6 +144,8 @@ format: frontend-l10n frontend-format ## Format all currently scaffolded code.
 check: backend-check frontend-analyze ## Run non-mutating project checks.
 
 test: backend-test frontend-test ## Run backend and frontend tests.
+
+e2e: frontend-e2e ## Run opt-in end-to-end tests.
 
 dev: redis backend-migrate ## Run Redis, Django, and Flutter web together.
 	$(MAKE) -j2 backend-run frontend-web

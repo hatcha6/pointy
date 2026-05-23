@@ -1,16 +1,34 @@
-# frontend
+# Pointy Frontend
 
-A new Flutter project.
+Arabic-first Flutter POS client for cashier checkout, register sessions,
+catalog management, purchasing, reports, printing, and shop settings.
 
-## Getting Started
+## Common Commands
 
-This project is a starting point for a Flutter application.
+```sh
+flutter pub get
+flutter gen-l10n
+dart format lib test
+flutter analyze
+flutter test
+flutter test test/e2e
+```
 
-A few resources to get you started if this is your first Flutter project:
+From the repository root, prefer:
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+```sh
+make frontend-format
+make frontend-analyze
+make frontend-test
+make frontend-e2e
+```
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+## Test Shape
+
+- `test/` contains unit and widget coverage for models, view models, shared UI,
+  and main workflows.
+- `test/e2e/` contains opt-in full-app flow tests. These use deterministic fake
+  services so they can run without a live backend while still driving the real
+  Arabic UI.
+- Backend HTTP load, stress, and endurance runners live behind root Make targets
+  such as `make backend-load-test`.

@@ -16,6 +16,7 @@ dependencies = [
   "django-redis>=5.4,<6",
   "djangorestframework>=3.15,<4",
   "drf-spectacular>=0.27,<1",
+  "psycopg[binary]>=3.2,<4",
 ]
 
 [project.optional-dependencies]
@@ -41,6 +42,8 @@ packages = [
   "apps.inventory",
   "apps.inventory.migrations",
   "apps.sales",
+  "apps.sales.management",
+  "apps.sales.management.commands",
   "apps.sales.migrations",
   "apps.customers",
   "apps.customers.migrations",

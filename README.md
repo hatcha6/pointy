@@ -88,6 +88,78 @@ flutter run
 
 The Flutter app reads from the Django API. The POS catalog keeps a small Arabic sample fallback only for local development when the API is unavailable.
 
+## Quality Gates
+
+Fast checks stay on the normal targets:
+
+```sh
+make check
+make test
+```
+
+The pilot-day POS flow is automated as an opt-in Flutter E2E test. It runs the
+Arabic app shell with a deterministic fake API and covers opening a register,
+choosing a customer, split-tender checkout, fake receipt printing, a cash
+movement, closing the register, and opening reports:
+
+```sh
+make e2e
+```
+
+Checkout load, stress, and endurance tests are opt-in because they create
+load-test users/products/stock records and intentionally run for longer. Start
+the API first in another terminal:
+
+```sh
+make backend-run
+```
+
+Then run one of:
+
+```sh
+make backend-load-test
+make backend-stress-test
+make backend-endurance-test
+```
+
+Useful knobs:
+
+```sh
+make backend-load-test LOAD_DURATION=120 LOAD_WORKERS=6
+make backend-stress-test STRESS_DURATION=600 STRESS_WORKERS=12
+make backend-endurance-test ENDURANCE_DURATION=7200 ENDURANCE_WORKERS=4
+make backend-load-test LOAD_EXTRA="--json --fail-on-error"
+```
+
+These tests report throughput, success/failure counts, status codes, and
+latency min/avg/p50/p95/p99/max for the checkout path. Treat the numbers as
+limits for the current machine, database, server command, and settings rather
+than universal production capacity.
+
+The default local database is SQLite. Concurrent checkout stress on SQLite will
+usually find SQLite's single-writer ceiling first and may report
+`OperationalError: database is locked`. That is still a useful local signal, but
+it is not the production checkout limit. For a SQLite baseline, run:
+
+```sh
+make backend-load-test LOAD_WORKERS=1
+```
+
+For real stress/endurance capacity, run the backend against the same database
+engine and deployment shape you plan to use in production, then increase
+`LOAD_WORKERS`, `STRESS_WORKERS`, or `ENDURANCE_WORKERS` gradually until error
+rate or latency crosses your threshold.
+
+For a local PostgreSQL-backed run, point `backend/.env` at your local database
+and migrate before starting the API:
+
+```sh
+DATABASE_URL=postgres://postgres:postgres@127.0.0.1:5432/pointy
+make backend-migrate
+make backend-run
+make backend-load-test
+```
+
 Run the full local stack:
 
 ```sh
