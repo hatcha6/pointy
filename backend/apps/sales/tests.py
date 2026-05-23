@@ -4,7 +4,7 @@ from decimal import Decimal
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.core.exceptions import FieldError
-from django.test import TestCase
+from django.test import SimpleTestCase, TestCase
 from django.urls import reverse
 from django.utils import timezone
 from rest_framework import serializers, status
@@ -19,6 +19,7 @@ from apps.discounts.models import AppliedDiscount, DiscountRedemption, DiscountR
 from apps.inventory.models import StockItem, StockMovement
 from apps.payments.models import Payment
 from apps.purchasing.models import PurchaseOrder, Supplier
+from .load_testing import build_ramp_stages, capacity_summary, collapse_reasons
 from .models import (
     Order,
     OrderAdjustment,
@@ -27,6 +28,71 @@ from .models import (
     RegisterSession,
 )
 from .services import return_order_items
+
+
+class CheckoutLoadRampTests(SimpleTestCase):
+    def test_build_ramp_stages_caps_workers_and_fills_total_duration(self):
+        stages = build_ramp_stages(
+            total_duration=600,
+            step_duration=180,
+            start_workers=4,
+            max_workers=12,
+            step_workers=4,
+        )
+
+        self.assertEqual(
+            stages,
+            [
+                {"stage": 1, "workers": 4, "duration": 180},
+                {"stage": 2, "workers": 8, "duration": 180},
+                {"stage": 3, "workers": 12, "duration": 180},
+                {"stage": 4, "workers": 12, "duration": 60},
+            ],
+        )
+
+    def test_collapse_reasons_detect_failure_rate_and_p95_latency(self):
+        summary = {
+            "total_requests": 100,
+            "successes": 98,
+            "failures": 2,
+            "failure_rate": 0.02,
+            "latency_ms": {"p95": 2500},
+        }
+
+        reasons = collapse_reasons(
+            summary,
+            failure_rate_threshold=0.01,
+            p95_ms_threshold=2000,
+            min_requests=20,
+        )
+
+        self.assertEqual(len(reasons), 2)
+        self.assertIn("failure rate", reasons[0])
+        self.assertIn("p95 latency", reasons[1])
+
+    def test_capacity_summary_returns_highest_non_collapsed_stage(self):
+        stages = [
+            self._stage(stage=1, clients=4, success_rps=20, collapsed=False),
+            self._stage(stage=2, clients=8, success_rps=38, collapsed=False),
+            self._stage(stage=3, clients=12, success_rps=22, collapsed=True),
+        ]
+
+        capacity = capacity_summary(stages)
+
+        self.assertEqual(capacity["stage"], 2)
+        self.assertEqual(capacity["concurrent_clients"], 8)
+        self.assertEqual(capacity["success_rps"], 38)
+
+    def _stage(self, *, stage, clients, success_rps, collapsed):
+        return {
+            "stage": stage,
+            "concurrent_clients": clients,
+            "total_requests": 100,
+            "success_rps": success_rps,
+            "failure_rate": 0,
+            "latency_ms": {"p95": 120, "p99": 180},
+            "collapsed": collapsed,
+        }
 
 
 class RegisterSessionApiTests(TestCase):

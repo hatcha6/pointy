@@ -122,19 +122,35 @@ make backend-stress-test
 make backend-endurance-test
 ```
 
+`backend-load-test` runs a fixed number of checkout clients. `backend-stress-test`
+runs a 30-minute ramp by default: 4 concurrent checkout clients, then +4 every
+180 seconds, up to 64 clients or until collapse is detected. A ramp stage is
+marked collapsed when failures reach 1% or p95 checkout latency reaches 2000ms.
+The summary reports the highest passing concurrent-client count, checkout
+throughput, per-stage p95/p99 latency, failures, status codes, and top errors.
+Human-readable runs also print live progress every 10 seconds during each stage.
+JSON output disables progress lines so the output remains parseable.
+
 Useful knobs:
 
 ```sh
 make backend-load-test LOAD_DURATION=120 LOAD_WORKERS=6
-make backend-stress-test STRESS_DURATION=600 STRESS_WORKERS=12
+make backend-stress-test STRESS_DURATION=1800 STRESS_START_WORKERS=4 STRESS_WORKERS=64
+make backend-stress-test STRESS_STEP_DURATION=120 STRESS_STEP_WORKERS=8
+make backend-stress-test STRESS_COLLAPSE_FAILURE_RATE=0.005 STRESS_COLLAPSE_P95_MS=1500
 make backend-endurance-test ENDURANCE_DURATION=7200 ENDURANCE_WORKERS=4
 make backend-load-test LOAD_EXTRA="--json --fail-on-error"
+make backend-stress-test LOAD_EXTRA="--progress-interval 5"
+make backend-stress-test LOAD_EXTRA="--json --no-stop-on-collapse"
 ```
 
 These tests report throughput, success/failure counts, status codes, and
-latency min/avg/p50/p95/p99/max for the checkout path. Treat the numbers as
-limits for the current machine, database, server command, and settings rather
-than universal production capacity.
+latency min/avg/p50/p95/p99/max for the checkout path. Ramp stress also reports
+concurrent clients and the first collapsed stage. Treat the numbers as limits
+for the current machine, database, server command, and settings rather than
+universal production capacity. The concurrent-client count represents active
+load-test checkout clients and register sessions; database and web-server
+connection limits still depend on how the API server and database are deployed.
 
 The default local database is SQLite. Concurrent checkout stress on SQLite will
 usually find SQLite's single-writer ceiling first and may report
@@ -165,6 +181,9 @@ Run the full local stack:
 ```sh
 make dev
 ```
+
+The `dev`, `dev-local`, and `dev-no-redis` targets generate Django migrations
+and apply them before starting the API and Flutter web app.
 
 Useful variants:
 

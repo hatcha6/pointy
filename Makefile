@@ -16,13 +16,18 @@ LOAD_BASE_URL ?= http://127.0.0.1:8000/api
 LOAD_DURATION ?= 60
 LOAD_WORKERS ?= 4
 LOAD_EXTRA ?=
-STRESS_DURATION ?= 300
-STRESS_WORKERS ?= 8
+STRESS_DURATION ?= 1800
+STRESS_WORKERS ?= 16384
+STRESS_START_WORKERS ?= 8
+STRESS_STEP_WORKERS ?= 128
+STRESS_STEP_DURATION ?= 180
+STRESS_COLLAPSE_FAILURE_RATE ?= 0.01
+STRESS_COLLAPSE_P95_MS ?= 2000
 ENDURANCE_DURATION ?= 3600
 ENDURANCE_WORKERS ?= 4
 
 .PHONY: help setup install docker-check redis redis-local redis-stop redis-logs redis-ping \
-		backend-venv backend-install backend-env backend-migrate backend-migrations backend-run \
+		backend-venv backend-install backend-env backend-migrate backend-migrations backend-dev-migrate backend-run \
 		backend-seed-variants backend-load-test backend-stress-test backend-endurance-test \
 	backend-shell backend-superuser backend-test backend-check backend-celery \
 	frontend-install frontend-l10n frontend-run frontend-web frontend-test frontend-e2e frontend-analyze frontend-format \
@@ -85,6 +90,10 @@ backend-migrate: backend-env backend-install ## Apply Django migrations.
 backend-migrations: backend-env backend-install ## Generate Django migrations.
 	$(MANAGE) makemigrations
 
+backend-dev-migrate: backend-env backend-install
+	$(MANAGE) makemigrations
+	$(MANAGE) migrate
+
 backend-run: backend-env backend-install ## Run the Django API server.
 	$(MANAGE) runserver $(API_HOST):$(API_PORT)
 
@@ -100,8 +109,17 @@ backend-seed-variants: backend-env backend-install ## Seed common product varian
 backend-load-test: backend-env backend-install ## Run opt-in checkout load test against a running API server.
 	$(MANAGE) checkout_load --base-url "$(LOAD_BASE_URL)" --duration "$(LOAD_DURATION)" --workers "$(LOAD_WORKERS)" $(LOAD_EXTRA)
 
-backend-stress-test: backend-env backend-install ## Run a higher-concurrency checkout stress test against a running API server.
-	$(MANAGE) checkout_load --base-url "$(LOAD_BASE_URL)" --duration "$(STRESS_DURATION)" --workers "$(STRESS_WORKERS)" $(LOAD_EXTRA)
+backend-stress-test: backend-env backend-install ## Run an automatic ramping checkout stress test against a running API server.
+	$(MANAGE) checkout_load --ramp \
+		--base-url "$(LOAD_BASE_URL)" \
+		--duration "$(STRESS_DURATION)" \
+		--start-workers "$(STRESS_START_WORKERS)" \
+		--max-workers "$(STRESS_WORKERS)" \
+		--step-workers "$(STRESS_STEP_WORKERS)" \
+		--step-duration "$(STRESS_STEP_DURATION)" \
+		--collapse-failure-rate "$(STRESS_COLLAPSE_FAILURE_RATE)" \
+		--collapse-p95-ms "$(STRESS_COLLAPSE_P95_MS)" \
+		$(LOAD_EXTRA)
 
 backend-endurance-test: backend-env backend-install ## Run a long checkout endurance test against a running API server.
 	$(MANAGE) checkout_load --base-url "$(LOAD_BASE_URL)" --duration "$(ENDURANCE_DURATION)" --workers "$(ENDURANCE_WORKERS)" $(LOAD_EXTRA)
@@ -147,13 +165,13 @@ test: backend-test frontend-test ## Run backend and frontend tests.
 
 e2e: frontend-e2e ## Run opt-in end-to-end tests.
 
-dev: redis backend-migrate ## Run Redis, Django, and Flutter web together.
+dev: redis backend-dev-migrate ## Run Redis, Django, and Flutter web together.
 	$(MAKE) -j2 backend-run frontend-web
 
-dev-local: backend-migrate ## Run local Redis, Django, and Flutter web together without Docker.
+dev-local: backend-dev-migrate ## Run local Redis, Django, and Flutter web together without Docker.
 	$(MAKE) -j3 redis-local backend-run frontend-web
 
-dev-no-redis: backend-migrate ## Run Django and Flutter web without starting Redis.
+dev-no-redis: backend-dev-migrate ## Run Django and Flutter web without starting Redis.
 	$(MAKE) -j2 backend-run frontend-web
 
 clean: ## Remove generated local caches and build output.
