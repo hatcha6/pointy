@@ -1,11 +1,13 @@
 from datetime import date
 from decimal import Decimal
 
-from rest_framework import mixins, serializers, status, viewsets
+from rest_framework import mixins, parsers, serializers, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
+from apps.attachments.models import Attachment
+from apps.attachments.serializers import AttachmentSerializer, AttachmentSummarySerializer
 from apps.catalog.models import Product, ProductVariant
 from apps.core.permissions import HasPointyPermission
 from .models import (
@@ -116,6 +118,7 @@ class PurchaseOrderViewSet(viewsets.ModelViewSet):
         "variant_margin_impact": ("purchasing.view_purchaseorder",),
         "outstanding_received_not_paid": ("purchasing.view_purchaseorder",),
         "adjustment_history": ("purchasing.view_purchaseorder",),
+        "attachments": ("purchasing.view_purchaseorder", "attachments.view_attachment"),
         "create": ("purchasing.add_purchaseorder",),
         "submit": ("purchasing.edit_draft_purchaseorder",),
         "cancel": ("purchasing.cancel_purchaseorder",),
@@ -151,6 +154,7 @@ class PurchaseOrderViewSet(viewsets.ModelViewSet):
         "audit_events__created_by",
         "supplier_payments",
         "supplier_credits",
+        "attachments",
     )
     filterset_fields = ("status", "supplier")
     search_fields = (
@@ -172,6 +176,11 @@ class PurchaseOrderViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=["get"], url_path="last-cost")
     def last_cost(self, request):
         return self._last_cost_response(request)
+
+    def get_required_permissions(self, request):
+        if self.action == "attachments" and request.method == "POST":
+            return ("purchasing.view_purchaseorder", "attachments.add_attachment")
+        return self.permission_map.get(self.action)
 
     @action(detail=False, methods=["get"], url_path="variant-last-cost")
     def variant_last_cost(self, request):
@@ -337,6 +346,46 @@ class PurchaseOrderViewSet(viewsets.ModelViewSet):
         if page is not None:
             return self.get_paginated_response(serializer.data)
         return Response(serializer.data)
+
+    @action(
+        detail=True,
+        methods=["get", "post"],
+        url_path="attachments",
+        parser_classes=[parsers.MultiPartParser, parsers.FormParser, parsers.JSONParser],
+    )
+    def attachments(self, request, pk=None):
+        purchase_order = self.get_object()
+        if request.method.lower() == "post":
+            return self._create_attachment_for_purchase_order(request, purchase_order)
+
+        queryset = purchase_order.attachments.active().select_related(
+            "owner_content_type",
+            "storage_volume",
+            "created_by",
+        )
+        serializer = AttachmentSummarySerializer(
+            queryset,
+            many=True,
+            context=self.get_serializer_context(),
+        )
+        return Response(serializer.data)
+
+    def _create_attachment_for_purchase_order(self, request, purchase_order):
+        data = request.data.copy()
+        data.setdefault("role", Attachment.Role.SUPPLIER_INVOICE_SCAN)
+        serializer = AttachmentSerializer(
+            data=data,
+            context={**self.get_serializer_context(), "owner": purchase_order},
+        )
+        serializer.is_valid(raise_exception=True)
+        attachment = serializer.save()
+        return Response(
+            AttachmentSummarySerializer(
+                attachment,
+                context=self.get_serializer_context(),
+            ).data,
+            status=status.HTTP_201_CREATED,
+        )
 
     def _get_required_product(self):
         product_id = self.request.query_params.get("product")

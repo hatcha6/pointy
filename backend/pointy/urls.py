@@ -4,6 +4,7 @@ from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 from rest_framework.routers import DefaultRouter
 
 from apps.analytics.views import AnalyticsEventViewSet
+from apps.attachments.views import AttachmentViewSet, StorageVolumeViewSet
 from apps.catalog.views import (
     ProductCategoryViewSet,
     ProductVariantViewSet,
@@ -66,6 +67,12 @@ router.register("printer-profiles", PrinterProfileViewSet)
 router.register("print-agents", PrintAgentViewSet)
 router.register("print-jobs", PrintJobViewSet)
 router.register("reports", ReportRunViewSet, basename="report")
+router.register("attachments", AttachmentViewSet, basename="attachment")
+router.register(
+    "attachment-storage-volumes",
+    StorageVolumeViewSet,
+    basename="storagevolume",
+)
 
 urlpatterns = [
     path("admin/", admin.site.urls),

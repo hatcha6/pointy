@@ -2,11 +2,13 @@ import django_filters
 from django.core.cache import cache
 from django.db.models import Count, Sum, Value
 from django.db.models.functions import Coalesce
-from rest_framework import status, viewsets
+from rest_framework import parsers, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
+from apps.attachments.models import Attachment
+from apps.attachments.serializers import AttachmentSerializer, AttachmentSummarySerializer
 from apps.core.permissions import HasPointyPermission
 from .models import (
     Product,
@@ -119,8 +121,10 @@ class ProductViewSet(viewsets.ModelViewSet):
         "destroy": ("catalog.delete_product",),
     }
     queryset = Product.objects.prefetch_related(
+        "attachments",
         "categories",
         "variants",
+        "variants__attachments",
         "variants__option_values",
         "variants__option_values__option",
         "variant_options",
@@ -140,6 +144,10 @@ class ProductViewSet(viewsets.ModelViewSet):
             if request.method == "POST":
                 return ("catalog.add_productvariant",)
             return ("catalog.view_productvariant",)
+        if self.action == "attachments":
+            if request.method == "POST":
+                return ("catalog.change_product", "attachments.add_attachment")
+            return ("catalog.view_product", "attachments.view_attachment")
         return self.permission_map.get(self.action)
 
     def get_queryset(self):
@@ -224,7 +232,12 @@ class ProductViewSet(viewsets.ModelViewSet):
 
         queryset = (
             product.variants.select_related("product")
-            .prefetch_related("option_values", "option_values__option")
+            .prefetch_related(
+                "attachments",
+                "product__attachments",
+                "option_values",
+                "option_values__option",
+            )
             .order_by("-is_default", "name", "id")
         )
         page = self.paginate_queryset(queryset)
@@ -241,6 +254,53 @@ class ProductViewSet(viewsets.ModelViewSet):
             context=self.get_serializer_context(),
         )
         return Response(serializer.data)
+
+    @action(
+        detail=True,
+        methods=["get", "post"],
+        url_path="attachments",
+        parser_classes=[parsers.MultiPartParser, parsers.FormParser, parsers.JSONParser],
+    )
+    def attachments(self, request, pk=None):
+        product = self.get_object()
+        if request.method.lower() == "post":
+            return self._create_attachment_for_product(request, product)
+
+        queryset = product.attachments.active().select_related(
+            "owner_content_type",
+            "storage_volume",
+            "created_by",
+        )
+        serializer = AttachmentSummarySerializer(
+            queryset,
+            many=True,
+            context=self.get_serializer_context(),
+        )
+        return Response(serializer.data)
+
+    def _create_attachment_for_product(self, request, product):
+        data = request.data.copy()
+        data.setdefault("role", Attachment.Role.PRODUCT_IMAGE)
+        data.setdefault(
+            "is_primary",
+            not product.attachments.active()
+            .filter(role=Attachment.Role.PRODUCT_IMAGE)
+            .exists(),
+        )
+        serializer = AttachmentSerializer(
+            data=data,
+            context={**self.get_serializer_context(), "owner": product},
+        )
+        serializer.is_valid(raise_exception=True)
+        attachment = serializer.save()
+        self._clear_catalog_cache()
+        return Response(
+            AttachmentSummarySerializer(
+                attachment,
+                context=self.get_serializer_context(),
+            ).data,
+            status=status.HTTP_201_CREATED,
+        )
 
     def _create_variant_for_product(self, request, product):
         payload_product = request.data.get("product")
@@ -291,6 +351,8 @@ class ProductVariantViewSet(viewsets.ModelViewSet):
         "destroy": ("catalog.delete_productvariant",),
     }
     queryset = ProductVariant.objects.select_related("product").prefetch_related(
+        "attachments",
+        "product__attachments",
         "option_values",
         "option_values__option",
     )

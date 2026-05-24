@@ -1,5 +1,6 @@
 from decimal import Decimal
 
+from django.contrib.contenttypes.fields import GenericRelation
 from django.core.exceptions import ValidationError
 from django.core.validators import MinValueValidator
 from django.db import models
@@ -42,6 +43,12 @@ class Product(TimeStampedModel):
         "VariantOption",
         blank=True,
         related_name="products",
+    )
+    attachments = GenericRelation(
+        "attachments.Attachment",
+        content_type_field="owner_content_type",
+        object_id_field="owner_object_id",
+        related_query_name="products",
     )
 
     class Meta:
@@ -230,6 +237,12 @@ class ProductVariant(TimeStampedModel):
         VariantOptionValue,
         blank=True,
         related_name="product_variants",
+    )
+    attachments = GenericRelation(
+        "attachments.Attachment",
+        content_type_field="owner_content_type",
+        object_id_field="owner_object_id",
+        related_query_name="product_variants",
     )
 
     objects = ProductVariantQuerySet.as_manager()

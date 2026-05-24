@@ -57,6 +57,8 @@ packages = [
   "apps.printing.migrations",
   "apps.reports",
   "apps.reports.migrations",
+  "apps.attachments",
+  "apps.attachments.migrations",
 ]
 
 [tool.pytest.ini_options]

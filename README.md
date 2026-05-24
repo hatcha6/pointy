@@ -47,6 +47,40 @@ Run a Celery worker:
 celery -A pointy worker -l info
 ```
 
+## Attachment Storage
+
+Pointy stores uploads through one shared attachment API for product images,
+supplier invoice scans, and other supported records. Files are compressed on
+disk with gzip when that reduces size, while downloads return the original bytes
+and content type.
+
+By default, attachments use `backend/media` as a watched storage parent. Every
+direct child folder inside it is treated as a separate storage volume, so JPaaS
+extra storage instances can be mounted as folders there:
+
+```sh
+backend/media/storage-a
+backend/media/storage-b
+```
+
+The backend automatically records discovered folders as storage volumes, checks
+that active volumes are writable, and round-robins new uploads across them. If
+the parent folder is empty, Pointy creates `backend/media/default` for local
+development. To use a different parent folder, set:
+
+```sh
+POINTY_ATTACHMENT_STORAGE_ROOT=/mnt/pointy-media
+```
+
+Volumes can be inspected or paused through `/api/attachment-storage-volumes/`.
+
+Common upload entry points:
+
+- `POST /api/attachments/` with `owner_type`, `owner_id`, `role`, and `file`
+- `POST /api/products/{id}/attachments/` for product images
+- `POST /api/purchase-orders/{id}/attachments/` for supplier invoice scans
+- `GET /api/attachments/{id}/download/` for authenticated downloads
+
 ## Variant API Notes
 
 Catalog products expose variants as the sellable stock unit. Create product option

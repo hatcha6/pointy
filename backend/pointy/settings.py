@@ -12,6 +12,7 @@ env = environ.Env(
     POINTY_BOOTSTRAP_ADMIN_ENABLED=(bool, True),
     POINTY_ANALYTICS_BACKEND_PERFORMANCE_ENABLED=(bool, True),
     POINTY_ANALYTICS_BACKEND_SLOW_REQUEST_MS=(int, 750),
+    POINTY_ATTACHMENT_MAX_UPLOAD_BYTES=(int, 100 * 1024 * 1024),
 )
 environ.Env.read_env(BASE_DIR / ".env")
 
@@ -41,6 +42,7 @@ INSTALLED_APPS = [
     "apps.payments",
     "apps.printing",
     "apps.reports",
+    "apps.attachments",
 ]
 
 MIDDLEWARE = [
@@ -91,6 +93,8 @@ USE_I18N = True
 USE_TZ = True
 
 STATIC_URL = "static/"
+MEDIA_URL = "media/"
+MEDIA_ROOT = BASE_DIR / "media"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 REDIS_URL = env("REDIS_URL", default="redis://localhost:6379/0")
@@ -119,6 +123,30 @@ POINTY_ANALYTICS_BACKEND_PERFORMANCE_ENABLED = env(
 )
 POINTY_ANALYTICS_BACKEND_SLOW_REQUEST_MS = env("POINTY_ANALYTICS_BACKEND_SLOW_REQUEST_MS")
 POINTY_ANALYTICS_BACKEND_PERFORMANCE_PATHS = ("/api/",)
+POINTY_ATTACHMENT_STORAGE_ROOT = env(
+    "POINTY_ATTACHMENT_STORAGE_ROOT",
+    default=str(MEDIA_ROOT),
+)
+POINTY_ATTACHMENT_MAX_UPLOAD_BYTES = env("POINTY_ATTACHMENT_MAX_UPLOAD_BYTES")
+POINTY_ATTACHMENT_ALLOWED_CONTENT_TYPES = env.list(
+    "POINTY_ATTACHMENT_ALLOWED_CONTENT_TYPES",
+    default=[],
+)
+POINTY_ATTACHMENT_ALLOWED_TARGETS = env.list(
+    "POINTY_ATTACHMENT_ALLOWED_TARGETS",
+    default=[
+        "catalog.product",
+        "catalog.productvariant",
+        "purchasing.purchaseorder",
+        "purchasing.supplier",
+        "sales.order",
+        "customers.customer",
+        "payments.payment",
+        "inventory.stockitem",
+        "inventory.stockmovement",
+        "reports.reportrun",
+    ],
+)
 
 REST_FRAMEWORK = {
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",

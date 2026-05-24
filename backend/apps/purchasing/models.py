@@ -1,5 +1,6 @@
 from decimal import Decimal, ROUND_DOWN, ROUND_HALF_UP
 
+from django.contrib.contenttypes.fields import GenericRelation
 from django.core.validators import MinValueValidator
 from django.conf import settings
 from django.db import models, transaction
@@ -111,6 +112,12 @@ class PurchaseOrder(TimeStampedModel):
     due_date = models.DateField(blank=True, null=True)
     submitted_at = models.DateTimeField(blank=True, null=True)
     received_at = models.DateTimeField(blank=True, null=True)
+    attachments = GenericRelation(
+        "attachments.Attachment",
+        content_type_field="owner_content_type",
+        object_id_field="owner_object_id",
+        related_query_name="purchase_orders",
+    )
 
     class Meta:
         ordering = ["-created_at"]

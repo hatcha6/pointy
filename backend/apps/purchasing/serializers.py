@@ -4,6 +4,8 @@ from django.contrib.contenttypes.models import ContentType
 from django.db.models import Sum
 from rest_framework import serializers
 
+from apps.attachments.models import Attachment
+from apps.attachments.serializers import AttachmentSummarySerializer
 from apps.catalog.models import ProductVariant
 from apps.discounts.models import AppliedDiscount, DiscountRule, normalize_coupon_code
 from apps.discounts.services import (
@@ -885,6 +887,8 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
     )
     payment_status = serializers.CharField(read_only=True)
     is_overdue = serializers.BooleanField(read_only=True)
+    attachments = serializers.SerializerMethodField()
+    supplier_invoice_attachments = serializers.SerializerMethodField()
 
     class Meta:
         model = PurchaseOrder
@@ -919,6 +923,8 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
             "balance_due",
             "payment_status",
             "is_overdue",
+            "attachments",
+            "supplier_invoice_attachments",
             "can_return",
             "can_refund",
             "can_exchange",
@@ -946,6 +952,8 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
             "balance_due",
             "payment_status",
             "is_overdue",
+            "attachments",
+            "supplier_invoice_attachments",
             "can_return",
             "can_refund",
             "can_exchange",
@@ -1022,6 +1030,41 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
 
     def get_can_return(self, purchase_order):
         return self._can_adjust(purchase_order)
+
+    def get_attachments(self, purchase_order):
+        return self._attachment_summaries(purchase_order)
+
+    def get_supplier_invoice_attachments(self, purchase_order):
+        return self._attachment_summaries(
+            purchase_order,
+            role=Attachment.Role.SUPPLIER_INVOICE_SCAN,
+        )
+
+    def _attachment_summaries(self, purchase_order, role=None):
+        cached = getattr(purchase_order, "_prefetched_objects_cache", {}).get(
+            "attachments"
+        )
+        if cached is not None:
+            attachments = [
+                attachment
+                for attachment in cached
+                if attachment.status == Attachment.Status.ACTIVE
+                and (role is None or attachment.role == role)
+            ]
+        else:
+            queryset = purchase_order.attachments.active().select_related(
+                "owner_content_type",
+                "storage_volume",
+                "created_by",
+            )
+            if role is not None:
+                queryset = queryset.filter(role=role)
+            attachments = list(queryset)
+        return AttachmentSummarySerializer(
+            attachments,
+            many=True,
+            context=self.context,
+        ).data
 
     def get_applied_discounts(self, purchase_order):
         document_content_type = ContentType.objects.get_for_model(

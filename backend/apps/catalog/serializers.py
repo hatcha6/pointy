@@ -2,6 +2,8 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
 from rest_framework import serializers
 
+from apps.attachments.models import Attachment
+from apps.attachments.serializers import AttachmentSummarySerializer
 from .models import (
     Product,
     ProductCategory,
@@ -11,6 +13,47 @@ from .models import (
     variant_option_signature,
     validate_variant_option_values,
 )
+
+
+def attachment_summaries(owner, *, role, context):
+    attachments = owner_attachments(owner, role=role)
+    return AttachmentSummarySerializer(
+        attachments,
+        many=True,
+        context=context,
+    ).data
+
+
+def primary_attachment_summary(owner, *, role, context):
+    attachments = owner_attachments(owner, role=role)
+    primary = next((attachment for attachment in attachments if attachment.is_primary), None)
+    if primary is None and attachments:
+        primary = attachments[0]
+    if primary is None:
+        return None
+    return AttachmentSummarySerializer(primary, context=context).data
+
+
+def owner_attachments(owner, *, role):
+    manager = getattr(owner, "attachments", None)
+    cached = getattr(owner, "_prefetched_objects_cache", {}).get("attachments")
+    if cached is not None:
+        attachments = cached
+    elif manager is not None:
+        attachments = list(
+            manager.active()
+            .filter(role=role)
+            .select_related("owner_content_type", "storage_volume", "created_by")
+            .order_by("-is_primary", "-created_at", "-id")
+        )
+        return attachments
+    else:
+        return []
+    return [
+        attachment
+        for attachment in attachments
+        if attachment.role == role and attachment.status == Attachment.Status.ACTIVE
+    ]
 
 
 def raise_serializer_validation(error):
@@ -129,6 +172,8 @@ class ProductCatalogSummarySerializer(serializers.ModelSerializer):
         many=True,
         read_only=True,
     )
+    primary_image = serializers.SerializerMethodField()
+    image_attachments = serializers.SerializerMethodField()
 
     class Meta:
         model = Product
@@ -141,10 +186,26 @@ class ProductCatalogSummarySerializer(serializers.ModelSerializer):
             "category_details",
             "variant_options",
             "variant_option_details",
+            "primary_image",
+            "image_attachments",
             "created_at",
             "updated_at",
         ]
         read_only_fields = ("created_at", "updated_at")
+
+    def get_primary_image(self, product):
+        return primary_attachment_summary(
+            product,
+            role=Attachment.Role.PRODUCT_IMAGE,
+            context=self.context,
+        )
+
+    def get_image_attachments(self, product):
+        return attachment_summaries(
+            product,
+            role=Attachment.Role.PRODUCT_IMAGE,
+            context=self.context,
+        )
 
 
 class DefaultProductVariantInputSerializer(serializers.Serializer):
@@ -218,6 +279,8 @@ class ProductVariantSerializer(serializers.ModelSerializer):
         many=True,
         read_only=True,
     )
+    primary_image = serializers.SerializerMethodField()
+    image_attachments = serializers.SerializerMethodField()
 
     class Meta:
         model = ProductVariant
@@ -236,6 +299,8 @@ class ProductVariantSerializer(serializers.ModelSerializer):
             "is_default",
             "option_values",
             "option_value_details",
+            "primary_image",
+            "image_attachments",
             "quantity_on_hand",
             "created_at",
             "updated_at",
@@ -246,6 +311,20 @@ class ProductVariantSerializer(serializers.ModelSerializer):
         if value < 0:
             raise serializers.ValidationError("Unit price cannot be negative.")
         return value
+
+    def get_primary_image(self, variant):
+        return primary_attachment_summary(
+            variant,
+            role=Attachment.Role.PRODUCT_IMAGE,
+            context=self.context,
+        )
+
+    def get_image_attachments(self, variant):
+        return attachment_summaries(
+            variant,
+            role=Attachment.Role.PRODUCT_IMAGE,
+            context=self.context,
+        )
 
     def validate_sku(self, value):
         return value.strip().upper()
@@ -397,6 +476,8 @@ class ProductCatalogSerializer(serializers.ModelSerializer):
         many=True,
         read_only=True,
     )
+    primary_image = serializers.SerializerMethodField()
+    image_attachments = serializers.SerializerMethodField()
 
     class Meta:
         model = Product
@@ -411,6 +492,8 @@ class ProductCatalogSerializer(serializers.ModelSerializer):
             "category_details",
             "variant_options",
             "variant_option_details",
+            "primary_image",
+            "image_attachments",
             "quantity_on_hand",
             "created_at",
             "updated_at",
@@ -422,6 +505,20 @@ class ProductCatalogSerializer(serializers.ModelSerializer):
         if annotated_quantity is not None:
             return annotated_quantity
         return product.quantity_on_hand
+
+    def get_primary_image(self, product):
+        return primary_attachment_summary(
+            product,
+            role=Attachment.Role.PRODUCT_IMAGE,
+            context=self.context,
+        )
+
+    def get_image_attachments(self, product):
+        return attachment_summaries(
+            product,
+            role=Attachment.Role.PRODUCT_IMAGE,
+            context=self.context,
+        )
 
     def create(self, validated_data):
         categories = validated_data.pop("categories", [])
