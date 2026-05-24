@@ -4,6 +4,7 @@ import '../core/analytics_interaction_tracker.dart';
 import '../data/models/product.dart';
 import '../data/models/product_variant.dart';
 import 'formatters.dart';
+import 'product_image_thumbnail.dart';
 import 'product_status_pill.dart';
 
 class ProductTile extends StatelessWidget {
@@ -15,7 +16,8 @@ class ProductTile extends StatelessWidget {
   }) : title = product.name,
        sku = product.effectiveSku,
        unitPrice = product.effectiveUnitPrice,
-       isActive = product.isActive;
+       isActive = product.isActive,
+       imageUrl = product.primaryImage?.contentUrl;
 
   ProductTile.variant({
     super.key,
@@ -25,7 +27,10 @@ class ProductTile extends StatelessWidget {
   }) : title = variant.displayLabel,
        sku = variant.sku,
        unitPrice = variant.unitPrice,
-       isActive = variant.isSellable;
+       isActive = variant.isSellable,
+       imageUrl =
+           variant.primaryImage?.contentUrl ??
+           variant.productDetail?.primaryImage?.contentUrl;
 
   final VoidCallback? onTap;
   final bool showPrice;
@@ -33,6 +38,7 @@ class ProductTile extends StatelessWidget {
   final String sku;
   final double unitPrice;
   final bool isActive;
+  final String? imageUrl;
 
   @override
   Widget build(BuildContext context) {
@@ -48,16 +54,29 @@ class ProductTile extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  ProductImageThumbnail(
+                    imageUrl: imageUrl,
+                    fallbackText: title,
+                    size: 52,
+                  ),
+                  const SizedBox(width: 10),
                   Expanded(
-                    child: Text(
-                      sku,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.labelMedium,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          sku,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.labelMedium,
+                        ),
+                        const SizedBox(height: 8),
+                        ProductStatusPill(isActive: isActive, compact: true),
+                      ],
                     ),
                   ),
-                  ProductStatusPill(isActive: isActive, compact: true),
                 ],
               ),
               const SizedBox(height: 10),

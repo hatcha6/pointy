@@ -3,12 +3,15 @@ import 'package:flutter/foundation.dart';
 import '../../../core/result.dart';
 import '../../../data/models/product.dart';
 import '../../../data/models/product_draft.dart';
+import '../../../data/models/product_image_upload.dart';
 import '../../../data/models/product_page.dart';
 import '../../../data/models/product_query.dart';
 import '../../../data/models/product_variant.dart';
 import '../../../data/repositories/catalog_repository.dart';
 
 enum CatalogBarcodeLookupStatus { found, notFound, error }
+
+enum ProductCreateOutcome { failed, created, createdWithImageError }
 
 class CatalogBarcodeLookupOutcome {
   const CatalogBarcodeLookupOutcome._({required this.status, this.variant});
@@ -143,7 +146,11 @@ class CatalogViewModel extends ChangeNotifier {
     }
   }
 
-  Future<bool> createProduct(ProductDraft draft) async {
+  Future<ProductCreateOutcome> createProduct(
+    ProductDraft draft, {
+    ProductImageUpload? imageUpload,
+    String? imageImportToken,
+  }) async {
     _isSaving = true;
     _errorMessage = null;
     notifyListeners();
@@ -151,15 +158,55 @@ class CatalogViewModel extends ChangeNotifier {
     final result = await _catalogRepository.createProduct(draft);
     switch (result) {
       case Ok<Product>():
+        final imageAttached = await _attachProductImage(
+          result.value.id,
+          imageUpload: imageUpload,
+          imageImportToken: imageImportToken,
+        );
         await loadProducts();
         _isSaving = false;
+        if (!imageAttached) {
+          _errorMessage = 'catalog_image_attach_error';
+        }
         notifyListeners();
-        return true;
+        return imageAttached
+            ? ProductCreateOutcome.created
+            : ProductCreateOutcome.createdWithImageError;
       case Error<Product>():
         _errorMessage = 'catalog_create_error';
         _isSaving = false;
         notifyListeners();
-        return false;
+        return ProductCreateOutcome.failed;
     }
+  }
+
+  Future<bool> _attachProductImage(
+    int productId, {
+    ProductImageUpload? imageUpload,
+    String? imageImportToken,
+  }) async {
+    if (imageUpload == null && (imageImportToken ?? '').isEmpty) {
+      return true;
+    }
+
+    if (imageUpload != null) {
+      final result = await _catalogRepository.uploadProductImage(
+        productId: productId,
+        upload: imageUpload,
+      );
+      return switch (result) {
+        Ok() => true,
+        Error() => false,
+      };
+    }
+
+    final result = await _catalogRepository.importProductImage(
+      productId: productId,
+      importToken: imageImportToken!,
+    );
+    return switch (result) {
+      Ok() => true,
+      Error() => false,
+    };
   }
 }

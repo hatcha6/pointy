@@ -1,7 +1,9 @@
 import 'package:flutter/foundation.dart';
 
 import '../../../core/result.dart';
+import '../../../data/models/attachment_summary.dart';
 import '../../../data/models/product.dart';
+import '../../../data/models/product_image_upload.dart';
 import '../../../data/models/product_update_draft.dart';
 import '../../../data/models/product_variant.dart';
 import '../../../data/models/product_variant_draft.dart';
@@ -18,6 +20,7 @@ class ProductDetailsViewModel extends ChangeNotifier {
   bool _isLoading = false;
   bool _isSavingProduct = false;
   bool _isSavingVariant = false;
+  bool _isSavingImage = false;
   String? _errorMessage;
 
   CatalogRepository get catalogRepository => _catalogRepository;
@@ -39,6 +42,7 @@ class ProductDetailsViewModel extends ChangeNotifier {
   bool get isLoading => _isLoading;
   bool get isSavingProduct => _isSavingProduct;
   bool get isSavingVariant => _isSavingVariant;
+  bool get isSavingImage => _isSavingImage;
   String? get errorMessage => _errorMessage;
 
   Future<void> loadProduct() async {
@@ -174,6 +178,53 @@ class ProductDetailsViewModel extends ChangeNotifier {
       case Error<ProductVariant>():
         _errorMessage = 'variant_update_error';
         _isSavingVariant = false;
+        notifyListeners();
+        return false;
+    }
+  }
+
+  Future<bool> uploadProductImage(ProductImageUpload upload) async {
+    if (_isSavingImage) {
+      return false;
+    }
+
+    _isSavingImage = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    final result = await _catalogRepository.uploadProductImage(
+      productId: _product.id,
+      upload: upload,
+    );
+    return _handleProductImageSave(result);
+  }
+
+  Future<bool> importProductImage(String importToken) async {
+    if (_isSavingImage) {
+      return false;
+    }
+
+    _isSavingImage = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    final result = await _catalogRepository.importProductImage(
+      productId: _product.id,
+      importToken: importToken,
+    );
+    return _handleProductImageSave(result);
+  }
+
+  Future<bool> _handleProductImageSave(Result<AttachmentSummary> result) async {
+    switch (result) {
+      case Ok<AttachmentSummary>():
+        await loadProduct();
+        _isSavingImage = false;
+        notifyListeners();
+        return true;
+      case Error<AttachmentSummary>():
+        _errorMessage = 'product_image_attach_error';
+        _isSavingImage = false;
         notifyListeners();
         return false;
     }

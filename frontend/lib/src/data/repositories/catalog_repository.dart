@@ -1,8 +1,11 @@
 import '../../core/result.dart';
+import '../models/attachment_summary.dart';
 import '../models/product.dart';
 import '../models/product_category.dart';
 import '../models/product_category_query.dart';
 import '../models/product_draft.dart';
+import '../models/product_image_search_result.dart';
+import '../models/product_image_upload.dart';
 import '../models/product_page.dart';
 import '../models/product_query.dart';
 import '../models/product_update_draft.dart';
@@ -44,6 +47,36 @@ class CatalogRepository {
 
   Future<Result<Product>> loadProduct(int id) async {
     return Result.guard(() => _service.fetchProduct(id));
+  }
+
+  Future<Result<AttachmentSummary>> uploadProductImage({
+    required int productId,
+    required ProductImageUpload upload,
+  }) async {
+    return Result.guard(
+      () => _service.uploadProductImage(productId: productId, upload: upload),
+    );
+  }
+
+  Future<Result<AttachmentSummary>> importProductImage({
+    required int productId,
+    required String importToken,
+  }) async {
+    return Result.guard(
+      () => _service.importProductImage(
+        productId: productId,
+        importToken: importToken,
+      ),
+    );
+  }
+
+  Future<Result<List<ProductImageSearchResult>>> searchProductImages({
+    required String query,
+    int page = 1,
+  }) async {
+    return Result.guard(
+      () => _service.searchProductImages(query: query, page: page),
+    );
   }
 
   Future<Result<ProductVariantPage>> loadProductVariants({

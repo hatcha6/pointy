@@ -1,3 +1,4 @@
+import 'attachment_summary.dart';
 import 'product.dart';
 import 'variant_option_value.dart';
 
@@ -18,6 +19,8 @@ class ProductVariant {
     this.quantityOnHand = 0,
     this.optionValueIds = const [],
     this.optionValues = const [],
+    this.primaryImage,
+    this.imageAttachments = const [],
   });
 
   final int id;
@@ -35,6 +38,8 @@ class ProductVariant {
   final int quantityOnHand;
   final List<int> optionValueIds;
   final List<VariantOptionValue> optionValues;
+  final AttachmentSummary? primaryImage;
+  final List<AttachmentSummary> imageAttachments;
 
   String get displayLabel {
     final parent = productLabel;
@@ -156,6 +161,8 @@ class ProductVariant {
         optionValues,
       ),
       optionValues: optionValues,
+      primaryImage: _primaryImageFromJson(json),
+      imageAttachments: _imageAttachmentsFromJson(json),
     );
   }
 
@@ -189,8 +196,29 @@ class ProductVariant {
       quantityOnHand: quantityOnHand ?? this.quantityOnHand,
       optionValueIds: optionValueIds,
       optionValues: optionValues,
+      primaryImage: primaryImage,
+      imageAttachments: imageAttachments,
     );
   }
+}
+
+AttachmentSummary? _primaryImageFromJson(Map<String, Object?> json) {
+  final primaryImage = json['primary_image'];
+  if (primaryImage is Map<String, Object?>) {
+    return AttachmentSummary.fromJson(primaryImage);
+  }
+  return null;
+}
+
+List<AttachmentSummary> _imageAttachmentsFromJson(Map<String, Object?> json) {
+  final attachments = json['image_attachments'];
+  if (attachments is List<Object?>) {
+    return attachments
+        .whereType<Map<String, Object?>>()
+        .map(AttachmentSummary.fromJson)
+        .toList(growable: false);
+  }
+  return const [];
 }
 
 String _labelWithoutParent(String label, String parent) {

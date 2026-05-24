@@ -7,8 +7,22 @@ from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
+from apps.attachments.image_search import (
+    ProductImageDownloadError,
+    ProductImageImportError,
+    ProductImageSearchError,
+    ProductImageSearchUnavailable,
+    import_product_image_from_token,
+    search_product_images,
+)
 from apps.attachments.models import Attachment
-from apps.attachments.serializers import AttachmentSerializer, AttachmentSummarySerializer
+from apps.attachments.serializers import (
+    AttachmentSerializer,
+    AttachmentSummarySerializer,
+    ProductImageImportSerializer,
+    ProductImageSearchQuerySerializer,
+    ProductImageSearchResultSerializer,
+)
 from apps.core.permissions import HasPointyPermission
 from .models import (
     Product,
@@ -119,6 +133,8 @@ class ProductViewSet(viewsets.ModelViewSet):
         "update": ("catalog.change_product",),
         "partial_update": ("catalog.change_product",),
         "destroy": ("catalog.delete_product",),
+        "image_search": ("catalog.view_product",),
+        "image_import": ("catalog.change_product", "attachments.add_attachment"),
     }
     queryset = Product.objects.prefetch_related(
         "attachments",
@@ -148,6 +164,10 @@ class ProductViewSet(viewsets.ModelViewSet):
             if request.method == "POST":
                 return ("catalog.change_product", "attachments.add_attachment")
             return ("catalog.view_product", "attachments.view_attachment")
+        if self.action == "image_search":
+            return ("catalog.view_product",)
+        if self.action == "image_import":
+            return ("catalog.change_product", "attachments.add_attachment")
         return self.permission_map.get(self.action)
 
     def get_queryset(self):
@@ -277,6 +297,57 @@ class ProductViewSet(viewsets.ModelViewSet):
             context=self.get_serializer_context(),
         )
         return Response(serializer.data)
+
+    @action(detail=False, methods=["get"], url_path="image-search")
+    def image_search(self, request):
+        serializer = ProductImageSearchQuerySerializer(data=request.query_params)
+        serializer.is_valid(raise_exception=True)
+        try:
+            results = search_product_images(
+                query=serializer.validated_data["q"],
+                page=serializer.validated_data["page"],
+                page_size=serializer.validated_data["page_size"],
+            )
+        except ProductImageSearchUnavailable as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        except ProductImageSearchError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
+
+        return Response(
+            {
+                "results": ProductImageSearchResultSerializer(
+                    results,
+                    many=True,
+                    context=self.get_serializer_context(),
+                ).data,
+            }
+        )
+
+    @action(detail=True, methods=["post"], url_path="image-import")
+    def image_import(self, request, pk=None):
+        product = self.get_object()
+        serializer = ProductImageImportSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            attachment = import_product_image_from_token(
+                owner=product,
+                import_token=serializer.validated_data["import_token"],
+                is_primary=serializer.validated_data["is_primary"],
+                created_by=request.user if request.user.is_authenticated else None,
+            )
+        except ProductImageDownloadError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
+        except ProductImageImportError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+        self._clear_catalog_cache()
+        return Response(
+            AttachmentSummarySerializer(
+                attachment,
+                context=self.get_serializer_context(),
+            ).data,
+            status=status.HTTP_201_CREATED,
+        )
 
     def _create_attachment_for_product(self, request, product):
         data = request.data.copy()

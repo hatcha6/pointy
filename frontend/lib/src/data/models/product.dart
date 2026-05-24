@@ -1,3 +1,4 @@
+import 'attachment_summary.dart';
 import 'product_category.dart';
 import 'product_variant.dart';
 import 'variant_option.dart';
@@ -13,6 +14,8 @@ class Product {
     this.variantOptions = const [],
     this.defaultVariant,
     this.variants = const [],
+    this.primaryImage,
+    this.imageAttachments = const [],
   });
 
   final int id;
@@ -24,6 +27,8 @@ class Product {
   final List<VariantOption> variantOptions;
   final ProductVariant? defaultVariant;
   final List<ProductVariant> variants;
+  final AttachmentSummary? primaryImage;
+  final List<AttachmentSummary> imageAttachments;
 
   int? get variantId => defaultVariant?.id;
 
@@ -88,6 +93,8 @@ class Product {
       variantOptions: _variantOptionsFromJson(json),
       defaultVariant: defaultVariant,
       variants: variants,
+      primaryImage: _primaryImageFromJson(json),
+      imageAttachments: _imageAttachmentsFromJson(json),
     );
   }
 
@@ -104,6 +111,10 @@ class Product {
       categories: detail?.categories ?? const [],
       variantOptions: detail?.variantOptions ?? const [],
       defaultVariant: variant,
+      primaryImage: variant.primaryImage ?? detail?.primaryImage,
+      imageAttachments: variant.imageAttachments.isNotEmpty
+          ? variant.imageAttachments
+          : detail?.imageAttachments ?? const [],
     );
   }
 
@@ -127,6 +138,8 @@ class Product {
       variantOptions: variantOptions,
       defaultVariant: nextDefaultVariant,
       variants: variants ?? this.variants,
+      primaryImage: primaryImage,
+      imageAttachments: imageAttachments,
     );
   }
 
@@ -175,6 +188,27 @@ class Product {
         for (final id in optionIds)
           if (id is num) VariantOption(id: id.toInt(), code: '', name: ''),
       ];
+    }
+    return const [];
+  }
+
+  static AttachmentSummary? _primaryImageFromJson(Map<String, Object?> json) {
+    final primaryImage = json['primary_image'];
+    if (primaryImage is Map<String, Object?>) {
+      return AttachmentSummary.fromJson(primaryImage);
+    }
+    return null;
+  }
+
+  static List<AttachmentSummary> _imageAttachmentsFromJson(
+    Map<String, Object?> json,
+  ) {
+    final attachments = json['image_attachments'];
+    if (attachments is List<Object?>) {
+      return attachments
+          .whereType<Map<String, Object?>>()
+          .map(AttachmentSummary.fromJson)
+          .toList(growable: false);
     }
     return const [];
   }

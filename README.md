@@ -78,8 +78,30 @@ Common upload entry points:
 
 - `POST /api/attachments/` with `owner_type`, `owner_id`, `role`, and `file`
 - `POST /api/products/{id}/attachments/` for product images
+- `GET /api/products/image-search/?q=...` to search configured internet image
+  results for product setup
+- `POST /api/products/{id}/image-import/` with an image search `import_token`
+  to save a selected internet image as a product image
 - `POST /api/purchase-orders/{id}/attachments/` for supplier invoice scans
 - `GET /api/attachments/{id}/download/` for authenticated downloads
+- `content_url` values in attachment API responses include a short-lived signed
+  token so product image previews can render in the Flutter web app without
+  exposing unrestricted file URLs
+
+Internet product image search is provider-backed so production deployments can
+use an API with clear quota and usage controls. The default provider is SerpApi
+Google Images; set these in `backend/.env` to enable it:
+
+```sh
+POINTY_IMAGE_SEARCH_PROVIDER=serpapi
+POINTY_SERPAPI_API_KEY=your-key
+POINTY_PRODUCT_IMAGE_IMPORT_MAX_BYTES=10485760
+POINTY_ATTACHMENT_CONTENT_TOKEN_MAX_AGE_SECONDS=21600
+```
+
+Search responses include short-lived signed import tokens instead of raw image
+download URLs. When a user selects a result, Pointy validates the remote host,
+downloads the image server-side, and stores it through the attachment API.
 
 ## Variant API Notes
 

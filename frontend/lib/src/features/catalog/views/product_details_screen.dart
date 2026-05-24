@@ -10,6 +10,7 @@ import '../../../data/repositories/purchase_repository.dart';
 import '../../../shared/authorization_guards.dart';
 import '../../../shared/detail_section.dart';
 import '../../../shared/formatters.dart';
+import '../../../shared/product_image_thumbnail.dart';
 import '../../../shared/product_status_pill.dart';
 import '../view_models/product_details_view_model.dart';
 import '../view_models/product_stock_view_model.dart';
@@ -243,6 +244,10 @@ class ProductDetailsScreen extends StatelessWidget {
       quantityOnHand: variant.quantityOnHand,
       optionValueIds: variant.optionValueIds,
       optionValues: variant.optionValues,
+      primaryImage: variant.primaryImage ?? product.primaryImage,
+      imageAttachments: variant.imageAttachments.isNotEmpty
+          ? variant.imageAttachments
+          : product.imageAttachments,
     );
   }
 }
@@ -263,7 +268,6 @@ class _ParentSummaryCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final colorScheme = Theme.of(context).colorScheme;
 
     return Material(
       color: Colors.white,
@@ -275,11 +279,10 @@ class _ParentSummaryCard extends StatelessWidget {
           children: [
             Row(
               children: [
-                CircleAvatar(
-                  radius: 28,
-                  backgroundColor: colorScheme.primaryContainer,
-                  foregroundColor: colorScheme.onPrimaryContainer,
-                  child: Text(product.name.characters.first),
+                ProductImageThumbnail(
+                  imageUrl: product.primaryImage?.contentUrl,
+                  fallbackText: product.name,
+                  size: 56,
                 ),
                 const SizedBox(width: 12),
                 Expanded(

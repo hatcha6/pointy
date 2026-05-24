@@ -2138,6 +2138,90 @@ abstract class AppLocalizations {
   /// **'اختيار التصنيفات'**
   String get productCategoriesOpenPickerTooltip;
 
+  /// No description provided for @productImageLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'صورة المنتج'**
+  String get productImageLabel;
+
+  /// No description provided for @productImageEmpty.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم يتم اختيار صورة'**
+  String get productImageEmpty;
+
+  /// No description provided for @productImageUploadButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'رفع صورة'**
+  String get productImageUploadButton;
+
+  /// No description provided for @productImageSearchButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'بحث في الإنترنت'**
+  String get productImageSearchButton;
+
+  /// No description provided for @productImageClearSelectionButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'إلغاء الاختيار'**
+  String get productImageClearSelectionButton;
+
+  /// No description provided for @productImagePickError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر قراءة الصورة المختارة.'**
+  String get productImagePickError;
+
+  /// No description provided for @productImageSearchTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'بحث صور المنتج'**
+  String get productImageSearchTitle;
+
+  /// No description provided for @productImageSearchQueryLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'كلمة البحث'**
+  String get productImageSearchQueryLabel;
+
+  /// No description provided for @productImageSearchSubmitButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'بحث'**
+  String get productImageSearchSubmitButton;
+
+  /// No description provided for @productImageLoadMoreButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'عرض المزيد'**
+  String get productImageLoadMoreButton;
+
+  /// No description provided for @productImageSearchEmpty.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد صور بعد.'**
+  String get productImageSearchEmpty;
+
+  /// No description provided for @productImageSearchShortQuery.
+  ///
+  /// In ar, this message translates to:
+  /// **'أدخل حرفين على الأقل للبحث.'**
+  String get productImageSearchShortQuery;
+
+  /// No description provided for @productImageSearchError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر البحث عن الصور. تحقق من إعداد مزود البحث وحاول مرة أخرى.'**
+  String get productImageSearchError;
+
+  /// No description provided for @productImageAttachError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم حفظ المنتج، لكن تعذر حفظ الصورة.'**
+  String get productImageAttachError;
+
   /// No description provided for @productCategoryPickerTitle.
   ///
   /// In ar, this message translates to:
@@ -2719,6 +2803,12 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'تم حفظ المنتج'**
   String get productUpdatedMessage;
+
+  /// No description provided for @productCreatedImageAttachError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم إنشاء المنتج، لكن تعذر حفظ الصورة.'**
+  String get productCreatedImageAttachError;
 
   /// No description provided for @productCreateError.
   ///

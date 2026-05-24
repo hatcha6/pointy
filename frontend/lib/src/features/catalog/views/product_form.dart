@@ -11,6 +11,7 @@ import '../../../shared/product_category_picker.dart';
 import '../view_models/catalog_view_model.dart';
 import '../view_models/variant_generation.dart';
 import 'product_form_fields.dart';
+import 'product_image_picker.dart';
 import 'variant_option_creation_dialogs.dart';
 import 'variant_generation_fields.dart';
 
@@ -43,6 +44,7 @@ class _ProductFormState extends State<ProductForm> {
   final Set<int> _selectedVariantOptionIds = {};
   final Map<int, Set<int>> _selectedValueIdsByOption = {};
   Set<int> _valueErrorOptionIds = {};
+  ProductImageSelection? _selectedImage;
   var _isProductActive = true;
   var _isVariantActive = true;
   var _isDefaultVariant = true;
@@ -76,6 +78,7 @@ class _ProductFormState extends State<ProductForm> {
     super.initState();
     _lastSkuPrefix = _skuController.text;
     _lastBasePrice = _priceController.text;
+    _nameController.addListener(_refreshImageSearchSeed);
     _skuController.addListener(_syncGeneratedSkusFromPrefix);
     _priceController.addListener(_syncGeneratedPricesFromBase);
     _loadVariantOptions();
@@ -83,6 +86,7 @@ class _ProductFormState extends State<ProductForm> {
 
   @override
   void dispose() {
+    _nameController.removeListener(_refreshImageSearchSeed);
     _nameController.dispose();
     _descriptionController.dispose();
     _variantNameController.dispose();
@@ -104,6 +108,12 @@ class _ProductFormState extends State<ProductForm> {
       controller.dispose();
     }
     super.dispose();
+  }
+
+  void _refreshImageSearchSeed() {
+    if (_selectedImage == null && mounted) {
+      setState(() {});
+    }
   }
 
   @override
@@ -167,6 +177,18 @@ class _ProductFormState extends State<ProductForm> {
                                       ),
                                       requiredValidator: (value) =>
                                           _requiredValidator(context, value),
+                                    ),
+                                    const SizedBox(height: 12),
+                                    ProductImageField(
+                                      catalogRepository:
+                                          widget.viewModel.catalogRepository,
+                                      initialSearchQuery: _nameController.text
+                                          .trim(),
+                                      selection: _selectedImage,
+                                      onChanged: (selection) => setState(
+                                        () => _selectedImage = selection,
+                                      ),
+                                      enabled: !widget.viewModel.isSaving,
                                     ),
                                     const SizedBox(height: 12),
                                     VariantOptionTemplateField(
@@ -415,15 +437,28 @@ class _ProductFormState extends State<ProductForm> {
       variants: generatedVariants,
     );
 
-    final created = await widget.viewModel.createProduct(draft);
+    final imageSelection = _selectedImage;
+    final outcome = await widget.viewModel.createProduct(
+      draft,
+      imageUpload: imageSelection?.upload,
+      imageImportToken: imageSelection?.importToken,
+    );
     if (!mounted) {
       return;
     }
 
-    if (created) {
+    if (outcome != ProductCreateOutcome.failed) {
       ScaffoldMessenger.of(context)
         ..clearSnackBars()
-        ..showSnackBar(SnackBar(content: Text(l10n.productCreatedMessage)));
+        ..showSnackBar(
+          SnackBar(
+            content: Text(
+              outcome == ProductCreateOutcome.createdWithImageError
+                  ? l10n.productCreatedImageAttachError
+                  : l10n.productCreatedMessage,
+            ),
+          ),
+        );
       widget.onCreated?.call();
     }
   }

@@ -8,6 +8,7 @@ import '../../../shared/async_selection/async_multi_select_picker.dart';
 import '../../../shared/product_category_picker.dart';
 import '../view_models/product_details_view_model.dart';
 import 'product_form_fields.dart';
+import 'product_image_picker.dart';
 import 'variant_option_creation_dialogs.dart';
 import 'variant_generation_fields.dart';
 
@@ -32,6 +33,7 @@ class _ProductParentEditSheetState extends State<ProductParentEditSheet> {
   late List<AsyncSelectionOption<int>> _selectedCategories;
   List<VariantOption> _availableVariantOptions = [];
   late Set<int> _selectedVariantOptionIds;
+  ProductImageSelection? _selectedImage;
   var _isLoadingVariantOptions = false;
   var _variantOptionsLoadFailed = false;
   late bool _isActive;
@@ -61,14 +63,22 @@ class _ProductParentEditSheetState extends State<ProductParentEditSheet> {
       for (final option in product.variantOptions) option.id,
     };
     _isActive = product.isActive;
+    _nameController.addListener(_refreshImageSearchSeed);
     _loadVariantOptions();
   }
 
   @override
   void dispose() {
+    _nameController.removeListener(_refreshImageSearchSeed);
     _nameController.dispose();
     _descriptionController.dispose();
     super.dispose();
+  }
+
+  void _refreshImageSearchSeed() {
+    if (_selectedImage == null && mounted) {
+      setState(() {});
+    }
   }
 
   @override
@@ -80,81 +90,120 @@ class _ProductParentEditSheetState extends State<ProductParentEditSheet> {
       builder: (context, _) {
         return Material(
           color: Theme.of(context).colorScheme.surface,
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
-            child: Form(
-              key: _formKey,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Row(
-                    children: [
-                      Icon(
-                        Icons.edit_outlined,
-                        color: Theme.of(context).colorScheme.primary,
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          l10n.editProductButton,
-                          style: Theme.of(context).textTheme.titleLarge,
+          child: Form(
+            key: _formKey,
+            child: Column(
+              children: [
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.edit_outlined,
+                              color: Theme.of(context).colorScheme.primary,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                l10n.editProductButton,
+                                style: Theme.of(context).textTheme.titleLarge,
+                              ),
+                            ),
+                          ],
                         ),
-                      ),
-                    ],
+                        const SizedBox(height: 16),
+                        ProductParentFormFields(
+                          nameController: _nameController,
+                          descriptionController: _descriptionController,
+                          selectedCategories: _selectedCategories,
+                          isActive: _isActive,
+                          onPickCategories: _pickCategories,
+                          onClearCategories: () =>
+                              setState(() => _selectedCategories = []),
+                          onActiveChanged: (value) =>
+                              setState(() => _isActive = value),
+                          requiredValidator: (value) =>
+                              _requiredValidator(context, value),
+                        ),
+                        const SizedBox(height: 12),
+                        ProductImageField(
+                          catalogRepository: widget.viewModel.catalogRepository,
+                          initialSearchQuery: _nameController.text.trim(),
+                          currentImage: widget.viewModel.product.primaryImage,
+                          selection: _selectedImage,
+                          onChanged: (selection) =>
+                              setState(() => _selectedImage = selection),
+                          enabled:
+                              !widget.viewModel.isSavingProduct &&
+                              !widget.viewModel.isSavingImage,
+                          isSaving: widget.viewModel.isSavingImage,
+                        ),
+                        const SizedBox(height: 12),
+                        VariantOptionTemplateField(
+                          availableOptions: _availableVariantOptions,
+                          selectedOptions: _selectedVariantOptions,
+                          isLoading: _isLoadingVariantOptions,
+                          hasError: _variantOptionsLoadFailed,
+                          onReload: _loadVariantOptions,
+                          onToggleOption: _toggleVariantOption,
+                          onCreateOption: _createVariantOption,
+                        ),
+                        if (widget.viewModel.errorMessage ==
+                            'product_update_error') ...[
+                          const SizedBox(height: 8),
+                          Text(
+                            l10n.productUpdateError,
+                            style: TextStyle(
+                              color: Theme.of(context).colorScheme.error,
+                            ),
+                          ),
+                        ],
+                        if (widget.viewModel.errorMessage ==
+                            'product_image_attach_error') ...[
+                          const SizedBox(height: 8),
+                          Text(
+                            l10n.productImageAttachError,
+                            style: TextStyle(
+                              color: Theme.of(context).colorScheme.error,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
                   ),
-                  const SizedBox(height: 16),
-                  ProductParentFormFields(
-                    nameController: _nameController,
-                    descriptionController: _descriptionController,
-                    selectedCategories: _selectedCategories,
-                    isActive: _isActive,
-                    onPickCategories: _pickCategories,
-                    onClearCategories: () =>
-                        setState(() => _selectedCategories = []),
-                    onActiveChanged: (value) =>
-                        setState(() => _isActive = value),
-                    requiredValidator: (value) =>
-                        _requiredValidator(context, value),
-                  ),
-                  const SizedBox(height: 12),
-                  VariantOptionTemplateField(
-                    availableOptions: _availableVariantOptions,
-                    selectedOptions: _selectedVariantOptions,
-                    isLoading: _isLoadingVariantOptions,
-                    hasError: _variantOptionsLoadFailed,
-                    onReload: _loadVariantOptions,
-                    onToggleOption: _toggleVariantOption,
-                    onCreateOption: _createVariantOption,
-                  ),
-                  if (widget.viewModel.errorMessage ==
-                      'product_update_error') ...[
-                    const SizedBox(height: 8),
-                    Text(
-                      l10n.productUpdateError,
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.error,
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: FilledButton.icon(
+                      onPressed:
+                          widget.viewModel.isSavingProduct ||
+                              widget.viewModel.isSavingImage
+                          ? null
+                          : _submit,
+                      icon:
+                          widget.viewModel.isSavingProduct ||
+                              widget.viewModel.isSavingImage
+                          ? const SizedBox.square(
+                              dimension: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.save_outlined),
+                      label: Text(
+                        widget.viewModel.isSavingProduct ||
+                                widget.viewModel.isSavingImage
+                            ? l10n.savingProductButton
+                            : l10n.saveProductButton,
                       ),
                     ),
-                  ],
-                  const SizedBox(height: 16),
-                  FilledButton.icon(
-                    onPressed: widget.viewModel.isSavingProduct
-                        ? null
-                        : _submit,
-                    icon: widget.viewModel.isSavingProduct
-                        ? const SizedBox.square(
-                            dimension: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.save_outlined),
-                    label: Text(
-                      widget.viewModel.isSavingProduct
-                          ? l10n.savingProductButton
-                          : l10n.saveProductButton,
-                    ),
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
         );
@@ -191,11 +240,37 @@ class _ProductParentEditSheetState extends State<ProductParentEditSheet> {
       return;
     }
     if (updated) {
+      final imageSaved = await _saveSelectedImage();
+      if (!mounted) {
+        return;
+      }
+      if (!imageSaved) {
+        ScaffoldMessenger.of(context)
+          ..clearSnackBars()
+          ..showSnackBar(SnackBar(content: Text(l10n.productImageAttachError)));
+        return;
+      }
       ScaffoldMessenger.of(context)
         ..clearSnackBars()
         ..showSnackBar(SnackBar(content: Text(l10n.productUpdatedMessage)));
       widget.onSaved?.call();
     }
+  }
+
+  Future<bool> _saveSelectedImage() async {
+    final selected = _selectedImage;
+    if (selected == null) {
+      return true;
+    }
+    final upload = selected.upload;
+    if (upload != null) {
+      return widget.viewModel.uploadProductImage(upload);
+    }
+    final token = selected.importToken;
+    if (token != null && token.isNotEmpty) {
+      return widget.viewModel.importProductImage(token);
+    }
+    return true;
   }
 
   Future<void> _pickCategories() async {

@@ -2,13 +2,19 @@ from django.http import FileResponse, Http404
 from django.utils.http import content_disposition_header
 from rest_framework import parsers, viewsets
 from rest_framework.decorators import action
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.exceptions import PermissionDenied
+from rest_framework.permissions import AllowAny, IsAuthenticated
 
 from apps.core.permissions import HasPointyPermission
 
 from .models import Attachment, StorageVolume
 from .serializers import AttachmentSerializer, StorageVolumeSerializer
-from .services import AttachmentStorageError, open_attachment, sync_discovered_storage_volumes
+from .services import (
+    AttachmentStorageError,
+    is_valid_attachment_content_token,
+    open_attachment,
+    sync_discovered_storage_volumes,
+)
 
 
 class StorageVolumeViewSet(viewsets.ModelViewSet):
@@ -55,6 +61,11 @@ class AttachmentViewSet(viewsets.ModelViewSet):
     search_fields = ("original_filename", "checksum_sha256", "metadata")
     ordering_fields = ("created_at", "updated_at", "original_size", "stored_size")
 
+    def get_permissions(self):
+        if self.action == "content" and self.request.query_params.get("token"):
+            return [AllowAny()]
+        return super().get_permissions()
+
     def get_queryset(self):
         queryset = super().get_queryset()
         if self.request.query_params.get("include_deleted") != "true":
@@ -81,10 +92,15 @@ class AttachmentViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["get"], url_path="content")
     def content(self, request, pk=None):
-        return self._file_response(as_attachment=False)
+        return self._file_response(
+            as_attachment=False,
+            token=request.query_params.get("token", ""),
+        )
 
-    def _file_response(self, *, as_attachment):
+    def _file_response(self, *, as_attachment, token=""):
         attachment = self.get_object()
+        if token and not is_valid_attachment_content_token(attachment, token):
+            raise PermissionDenied("Attachment content token is invalid or expired.")
         try:
             file_obj = open_attachment(attachment)
         except AttachmentStorageError as exc:

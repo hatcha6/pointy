@@ -12,6 +12,7 @@ from pathlib import Path
 
 from django.conf import settings
 from django.contrib.contenttypes.models import ContentType
+from django.core import signing
 from django.core.exceptions import ObjectDoesNotExist, ValidationError
 from django.db import transaction
 from django.utils import timezone
@@ -25,6 +26,8 @@ class AttachmentStorageError(Exception):
 
 
 DEFAULT_VOLUME_NAME = "default"
+ATTACHMENT_CONTENT_SIGNING_SALT = "pointy.attachment-content"
+DEFAULT_ATTACHMENT_CONTENT_TOKEN_MAX_AGE_SECONDS = 60 * 60 * 6
 
 
 def storage_root_path() -> Path:
@@ -319,6 +322,38 @@ def open_attachment(attachment: Attachment):
     if attachment.storage_encoding == Attachment.StorageEncoding.GZIP:
         return gzip.open(path, "rb")
     return open(path, "rb")
+
+
+def sign_attachment_content_token(attachment: Attachment) -> str:
+    return signing.dumps(
+        {
+            "attachment_id": attachment.pk,
+            "checksum_sha256": attachment.checksum_sha256,
+        },
+        salt=ATTACHMENT_CONTENT_SIGNING_SALT,
+        compress=True,
+    )
+
+
+def is_valid_attachment_content_token(attachment: Attachment, token: str) -> bool:
+    max_age = getattr(
+        settings,
+        "POINTY_ATTACHMENT_CONTENT_TOKEN_MAX_AGE_SECONDS",
+        DEFAULT_ATTACHMENT_CONTENT_TOKEN_MAX_AGE_SECONDS,
+    )
+    try:
+        payload = signing.loads(
+            token,
+            salt=ATTACHMENT_CONTENT_SIGNING_SALT,
+            max_age=max_age,
+        )
+    except signing.BadSignature:
+        return False
+    return (
+        payload.get("attachment_id") == attachment.pk
+        and payload.get("checksum_sha256") == attachment.checksum_sha256
+        and attachment.status == Attachment.Status.ACTIVE
+    )
 
 
 def active_attachments_for(owner, *, role: str | None = None):

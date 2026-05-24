@@ -1,5 +1,6 @@
 import 'package:http/http.dart' as http;
 
+import '../models/attachment_summary.dart';
 import '../models/pos_user.dart';
 import '../models/analytics_export.dart';
 import '../models/analytics_event.dart';
@@ -8,6 +9,8 @@ import '../models/printer_config.dart';
 import '../models/product.dart';
 import '../models/product_category.dart';
 import '../models/product_draft.dart';
+import '../models/product_image_search_result.dart';
+import '../models/product_image_upload.dart';
 import '../models/product_page.dart';
 import '../models/product_update_draft.dart';
 import '../models/product_variant.dart';
@@ -162,6 +165,30 @@ class PosApiService {
 
   Future<Product> fetchProduct(int id) {
     return _catalog.fetchProduct(id);
+  }
+
+  Future<AttachmentSummary> uploadProductImage({
+    required int productId,
+    required ProductImageUpload upload,
+  }) {
+    return _catalog.uploadProductImage(productId: productId, upload: upload);
+  }
+
+  Future<AttachmentSummary> importProductImage({
+    required int productId,
+    required String importToken,
+  }) {
+    return _catalog.importProductImage(
+      productId: productId,
+      importToken: importToken,
+    );
+  }
+
+  Future<List<ProductImageSearchResult>> searchProductImages({
+    required String query,
+    int page = 1,
+  }) {
+    return _catalog.searchProductImages(query: query, page: page);
   }
 
   Future<ProductVariantPage> fetchProductVariants({

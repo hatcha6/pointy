@@ -11,3 +11,4 @@ frontend/.flutter-plugins
 frontend/.flutter-plugins-dependencies
 frontend/build/
 frontend/coverage/
+backend/media/

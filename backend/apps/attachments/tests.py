@@ -1,6 +1,7 @@
 import tempfile
 from decimal import Decimal
 from pathlib import Path
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
@@ -14,6 +15,11 @@ from apps.catalog.testing import create_product_with_default_variant
 from apps.core.roles import MANAGER_GROUP, ensure_role_groups
 from apps.purchasing.models import PurchaseOrder, Supplier
 
+from .image_search import (
+    ProductImageSearchResult,
+    RemoteImageUpload,
+    sign_image_import_payload,
+)
 from .models import Attachment
 
 
@@ -99,6 +105,118 @@ class AttachmentApiTests(TestCase):
         self.assertEqual(product_response.status_code, status.HTTP_200_OK)
         self.assertEqual(product_response.data["primary_image"]["id"], response.data["id"])
         self.assertEqual(len(product_response.data["image_attachments"]), 1)
+
+    def test_product_image_search_returns_signed_import_tokens(self):
+        with patch(
+            "apps.catalog.views.search_product_images",
+            return_value=[
+                ProductImageSearchResult(
+                    title="Coffee bag",
+                    thumbnail_url="https://images.example.com/thumb.jpg",
+                    image_url="https://images.example.com/full.jpg",
+                    source_url="https://shop.example.com/coffee",
+                    source_name="Example Shop",
+                    width=800,
+                    height=600,
+                )
+            ],
+        ):
+            response = self.client.get(
+                reverse("product-image-search"),
+                {"q": "قهوة", "page_size": 12},
+            )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        result = response.data["results"][0]
+        self.assertEqual(result["thumbnail_url"], "https://images.example.com/thumb.jpg")
+        self.assertEqual(result["source_name"], "Example Shop")
+        self.assertIn("import_token", result)
+        self.assertNotIn("image_url", result)
+
+    def test_product_image_import_downloads_and_stores_primary_image(self):
+        token = sign_image_import_payload(
+            {
+                "image_url": "https://images.example.com/full.jpg",
+                "thumbnail_url": "https://images.example.com/thumb.jpg",
+                "source_url": "https://shop.example.com/coffee",
+                "source_name": "Example Shop",
+                "title": "Coffee bag",
+                "provider": "serpapi",
+            }
+        )
+
+        with patch(
+            "apps.attachments.image_search.fetch_remote_image_upload",
+            return_value=RemoteImageUpload(
+                name="coffee.jpg",
+                content_type="image/jpeg",
+                data=b"imported coffee image",
+            ),
+        ):
+            response = self.client.post(
+                reverse("product-image-import", args=[self.product.pk]),
+                {"import_token": token},
+                format="json",
+            )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["role"], Attachment.Role.PRODUCT_IMAGE)
+        self.assertTrue(response.data["is_primary"])
+        self.assertEqual(response.data["metadata"]["imported_from"], "internet_search")
+        self.assertEqual(response.data["metadata"]["source_name"], "Example Shop")
+
+        content_response = self.client.get(
+            reverse("attachment-content", args=[response.data["id"]])
+        )
+        self.assertEqual(content_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            b"".join(content_response.streaming_content),
+            b"imported coffee image",
+        )
+
+    def test_signed_content_url_can_render_without_authenticated_api_session(self):
+        upload_response = self.client.post(
+            reverse("product-attachments", args=[self.product.pk]),
+            {
+                "file": SimpleUploadedFile(
+                    "preview.jpg",
+                    b"authenticated preview",
+                    content_type="image/jpeg",
+                ),
+            },
+            format="multipart",
+        )
+        self.assertEqual(upload_response.status_code, status.HTTP_201_CREATED)
+
+        anonymous = APIClient()
+        content_response = anonymous.get(upload_response.data["content_url"])
+
+        self.assertEqual(content_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            b"".join(content_response.streaming_content),
+            b"authenticated preview",
+        )
+
+    def test_unsigned_content_url_still_requires_authentication(self):
+        upload_response = self.client.post(
+            reverse("product-attachments", args=[self.product.pk]),
+            {
+                "file": SimpleUploadedFile(
+                    "private.jpg",
+                    b"private preview",
+                    content_type="image/jpeg",
+                ),
+            },
+            format="multipart",
+        )
+        self.assertEqual(upload_response.status_code, status.HTTP_201_CREATED)
+
+        anonymous = APIClient()
+        content_response = anonymous.get(
+            reverse("attachment-content", args=[upload_response.data["id"]])
+        )
+
+        self.assertEqual(content_response.status_code, status.HTTP_401_UNAUTHORIZED)
 
     def test_purchase_order_attachment_action_exposes_supplier_invoice_scans(self):
         supplier = Supplier.objects.create(name="Invoice supplier")

@@ -1,9 +1,24 @@
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
 
 typedef ApiPerformanceRecorder =
     void Function(ApiRequestPerformance performance);
+
+class ApiMultipartFile {
+  const ApiMultipartFile({
+    required this.fieldName,
+    required this.filename,
+    required this.bytes,
+    required this.contentType,
+  });
+
+  final String fieldName;
+  final String filename;
+  final List<int> bytes;
+  final String contentType;
+}
 
 class ApiRequestPerformance {
   const ApiRequestPerformance({
@@ -90,6 +105,42 @@ class PosApiSession {
         headers: headers(includeCsrf: includeCsrf),
         body: encodedBody,
       ),
+    );
+  }
+
+  Future<http.Response> postMultipart(
+    String path, {
+    Map<String, String> fields = const {},
+    List<ApiMultipartFile> files = const [],
+  }) async {
+    final request = http.MultipartRequest('POST', uri(path));
+    request.fields.addAll(fields);
+    final requestHeaders = headers(includeCsrf: true);
+    requestHeaders.remove('Content-Type');
+    request.headers.addAll(requestHeaders);
+    for (final file in files) {
+      request.files.add(
+        http.MultipartFile.fromBytes(
+          file.fieldName,
+          file.bytes,
+          filename: file.filename,
+          contentType: MediaType.parse(file.contentType),
+        ),
+      );
+    }
+
+    final requestSizeBytes =
+        fields.entries.fold<int>(
+          0,
+          (total, entry) =>
+              total + _encodedSize(entry.key) + _encodedSize(entry.value),
+        ) +
+        files.fold<int>(0, (total, file) => total + file.bytes.length);
+    return _send(
+      method: 'POST',
+      path: path,
+      requestSizeBytes: requestSizeBytes,
+      request: () async => http.Response.fromStream(await client.send(request)),
     );
   }
 

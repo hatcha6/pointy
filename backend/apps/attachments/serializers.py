@@ -3,13 +3,58 @@ from rest_framework import serializers
 from rest_framework.reverse import reverse
 
 from .models import Attachment, StorageVolume
+from .image_search import DEFAULT_IMAGE_SEARCH_PAGE_SIZE, ProductImageSearchResult
 from .services import (
     AttachmentStorageError,
     ensure_volume_path,
     normalize_storage_path,
     resolve_attachment_owner,
+    sign_attachment_content_token,
     store_uploaded_attachment,
 )
+
+
+class ProductImageSearchQuerySerializer(serializers.Serializer):
+    q = serializers.CharField(
+        min_length=2,
+        max_length=200,
+        trim_whitespace=True,
+    )
+    page = serializers.IntegerField(required=False, min_value=1, default=1)
+    page_size = serializers.IntegerField(
+        required=False,
+        min_value=1,
+        max_value=50,
+        default=DEFAULT_IMAGE_SEARCH_PAGE_SIZE,
+    )
+
+
+class ProductImageSearchResultSerializer(serializers.Serializer):
+    title = serializers.CharField()
+    thumbnail_url = serializers.URLField()
+    source_url = serializers.CharField(allow_blank=True)
+    source_name = serializers.CharField(allow_blank=True)
+    width = serializers.IntegerField(allow_null=True)
+    height = serializers.IntegerField(allow_null=True)
+    provider = serializers.CharField()
+    import_token = serializers.CharField()
+
+    def to_representation(self, instance: ProductImageSearchResult):
+        return {
+            "title": instance.title,
+            "thumbnail_url": instance.thumbnail_url,
+            "source_url": instance.source_url,
+            "source_name": instance.source_name,
+            "width": instance.width,
+            "height": instance.height,
+            "provider": instance.provider,
+            "import_token": instance.import_token,
+        }
+
+
+class ProductImageImportSerializer(serializers.Serializer):
+    import_token = serializers.CharField(trim_whitespace=True)
+    is_primary = serializers.BooleanField(required=False, default=True)
 
 
 class StorageVolumeSerializer(serializers.ModelSerializer):
@@ -86,7 +131,10 @@ class AttachmentSummarySerializer(serializers.ModelSerializer):
         return self._attachment_url("attachment-download", attachment)
 
     def get_content_url(self, attachment):
-        return self._attachment_url("attachment-content", attachment)
+        url = self._attachment_url("attachment-content", attachment)
+        token = sign_attachment_content_token(attachment)
+        separator = "&" if "?" in url else "?"
+        return f"{url}{separator}token={token}"
 
     def _attachment_url(self, view_name, attachment):
         request = self.context.get("request")

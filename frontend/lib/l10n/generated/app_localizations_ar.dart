@@ -1122,6 +1122,49 @@ class AppLocalizationsAr extends AppLocalizations {
   String get productCategoriesOpenPickerTooltip => 'اختيار التصنيفات';
 
   @override
+  String get productImageLabel => 'صورة المنتج';
+
+  @override
+  String get productImageEmpty => 'لم يتم اختيار صورة';
+
+  @override
+  String get productImageUploadButton => 'رفع صورة';
+
+  @override
+  String get productImageSearchButton => 'بحث في الإنترنت';
+
+  @override
+  String get productImageClearSelectionButton => 'إلغاء الاختيار';
+
+  @override
+  String get productImagePickError => 'تعذر قراءة الصورة المختارة.';
+
+  @override
+  String get productImageSearchTitle => 'بحث صور المنتج';
+
+  @override
+  String get productImageSearchQueryLabel => 'كلمة البحث';
+
+  @override
+  String get productImageSearchSubmitButton => 'بحث';
+
+  @override
+  String get productImageLoadMoreButton => 'عرض المزيد';
+
+  @override
+  String get productImageSearchEmpty => 'لا توجد صور بعد.';
+
+  @override
+  String get productImageSearchShortQuery => 'أدخل حرفين على الأقل للبحث.';
+
+  @override
+  String get productImageSearchError =>
+      'تعذر البحث عن الصور. تحقق من إعداد مزود البحث وحاول مرة أخرى.';
+
+  @override
+  String get productImageAttachError => 'تم حفظ المنتج، لكن تعذر حفظ الصورة.';
+
+  @override
   String get productCategoryPickerTitle => 'اختيار التصنيفات';
 
   @override
@@ -1447,6 +1490,10 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get productUpdatedMessage => 'تم حفظ المنتج';
+
+  @override
+  String get productCreatedImageAttachError =>
+      'تم إنشاء المنتج، لكن تعذر حفظ الصورة.';
 
   @override
   String get productCreateError =>

@@ -1,6 +1,9 @@
+import '../models/attachment_summary.dart';
 import '../models/product.dart';
 import '../models/product_category.dart';
 import '../models/product_draft.dart';
+import '../models/product_image_search_result.dart';
+import '../models/product_image_upload.dart';
 import '../models/product_page.dart';
 import '../models/product_update_draft.dart';
 import '../models/product_variant.dart';
@@ -66,6 +69,62 @@ class CatalogApiClient {
     return Product.fromJson(
       _session.decodedBody(response) as Map<String, Object?>,
     );
+  }
+
+  Future<AttachmentSummary> uploadProductImage({
+    required int productId,
+    required ProductImageUpload upload,
+  }) async {
+    final response = await _session.postMultipart(
+      'products/$productId/attachments/',
+      fields: const {'role': 'product_image', 'is_primary': 'true'},
+      files: [
+        ApiMultipartFile(
+          fieldName: 'file',
+          filename: upload.filename,
+          bytes: upload.bytes,
+          contentType: upload.contentType,
+        ),
+      ],
+    );
+    _session.ensureSuccess(response, 'Product image upload failed with status');
+    return AttachmentSummary.fromJson(
+      _session.decodedBody(response) as Map<String, Object?>,
+    );
+  }
+
+  Future<AttachmentSummary> importProductImage({
+    required int productId,
+    required String importToken,
+  }) async {
+    final response = await _session.post(
+      'products/$productId/image-import/',
+      body: {'import_token': importToken, 'is_primary': true},
+    );
+    _session.ensureSuccess(response, 'Product image import failed with status');
+    return AttachmentSummary.fromJson(
+      _session.decodedBody(response) as Map<String, Object?>,
+    );
+  }
+
+  Future<List<ProductImageSearchResult>> searchProductImages({
+    required String query,
+    int page = 1,
+  }) async {
+    final response = await _session.get(
+      'products/image-search/',
+      query: {'q': query, 'page': '$page'},
+    );
+    _session.ensureSuccess(response, 'Product image search failed with status');
+    final decoded = _session.decodedBody(response);
+    final results = decoded is Map<String, Object?> ? decoded['results'] : null;
+    if (results is! List<Object?>) {
+      return const [];
+    }
+    return results
+        .whereType<Map<String, Object?>>()
+        .map(ProductImageSearchResult.fromJson)
+        .toList(growable: false);
   }
 
   Future<ProductVariantPage> fetchProductVariants({
