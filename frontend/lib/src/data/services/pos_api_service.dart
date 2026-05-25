@@ -187,8 +187,13 @@ class PosApiService {
   Future<List<ProductImageSearchResult>> searchProductImages({
     required String query,
     int page = 1,
+    int? pageSize,
   }) {
-    return _catalog.searchProductImages(query: query, page: page);
+    return _catalog.searchProductImages(
+      query: query,
+      page: page,
+      pageSize: pageSize,
+    );
   }
 
   Future<ProductVariantPage> fetchProductVariants({

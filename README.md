@@ -89,15 +89,25 @@ Common upload entry points:
   exposing unrestricted file URLs
 
 Internet product image search is provider-backed so production deployments can
-use an API with clear quota and usage controls. The default provider is SerpApi
-Google Images; set these in `backend/.env` to enable it:
+use APIs with clear quota and usage controls. Configure providers as an ordered
+comma-separated list. Pointy collects unique results from each configured
+provider, and if one provider is missing a key, errors, or exhausts quota, the
+request continues with the next provider:
 
 ```sh
-POINTY_IMAGE_SEARCH_PROVIDER=serpapi
+POINTY_IMAGE_SEARCH_PROVIDERS=serper,serpapi
+POINTY_SERPER_API_KEY=your-serper-key
 POINTY_SERPAPI_API_KEY=your-key
 POINTY_PRODUCT_IMAGE_IMPORT_MAX_BYTES=10485760
 POINTY_ATTACHMENT_CONTENT_TOKEN_MAX_AGE_SECONDS=21600
 ```
+
+`POINTY_IMAGE_SEARCH_PROVIDER` is still accepted for older deployments as the
+preferred first provider, with the other built-in providers added behind it.
+Serper uses `https://google.serper.dev/images` and SerpApi uses
+`https://serpapi.com/search.json` by default; override
+`POINTY_SERPER_ENDPOINT` or `POINTY_SERPAPI_ENDPOINT` for tests or custom
+gateways.
 
 Search responses include short-lived signed import tokens instead of raw image
 download URLs. When a user selects a result, Pointy validates the remote host,

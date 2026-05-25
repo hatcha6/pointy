@@ -17,7 +17,10 @@ from apps.purchasing.models import PurchaseOrder, Supplier
 
 from .image_search import (
     ProductImageSearchResult,
+    ProductImageSearchUnavailable,
     RemoteImageUpload,
+    search_product_images,
+    search_serper_images,
     sign_image_import_payload,
 )
 from .models import Attachment
@@ -133,6 +136,143 @@ class AttachmentApiTests(TestCase):
         self.assertIn("import_token", result)
         self.assertNotIn("image_url", result)
 
+    def test_product_image_search_uses_next_provider_when_first_is_unavailable(self):
+        calls = []
+
+        def unavailable_provider(*, query, page, page_size):
+            calls.append(("serper", query, page, page_size))
+            raise ProductImageSearchUnavailable("quota exhausted")
+
+        def available_provider(*, query, page, page_size):
+            calls.append(("serpapi", query, page, page_size))
+            return [
+                ProductImageSearchResult(
+                    title="Fallback coffee bag",
+                    thumbnail_url="https://images.example.com/fallback-thumb.jpg",
+                    image_url="https://images.example.com/fallback-full.jpg",
+                    source_url="https://shop.example.com/fallback-coffee",
+                    source_name="Example Shop",
+                    provider="serpapi",
+                )
+            ]
+
+        with override_settings(POINTY_IMAGE_SEARCH_PROVIDERS="serper,serpapi"):
+            with (
+                patch(
+                    "apps.attachments.image_search.search_serper_images",
+                    side_effect=unavailable_provider,
+                ),
+                patch(
+                    "apps.attachments.image_search.search_serpapi_images",
+                    side_effect=available_provider,
+                ),
+            ):
+                results = search_product_images(query="قهوة", page=1, page_size=10)
+
+        self.assertEqual(results[0].provider, "serpapi")
+        self.assertEqual(
+            calls,
+            [
+                ("serper", "قهوة", 1, 10),
+                ("serpapi", "قهوة", 1, 10),
+            ],
+        )
+
+    def test_product_image_search_accumulates_unique_results_across_providers(self):
+        def serper_provider(*, query, page, page_size):
+            return [
+                ProductImageSearchResult(
+                    title="Coffee one",
+                    thumbnail_url="https://images.example.com/one-thumb.jpg",
+                    image_url="https://images.example.com/one-full.jpg",
+                    source_url="https://shop.example.com/coffee-one",
+                    source_name="Example Shop",
+                    provider="serper",
+                ),
+                ProductImageSearchResult(
+                    title="Coffee two",
+                    thumbnail_url="https://images.example.com/two-thumb.jpg",
+                    image_url="https://images.example.com/two-full.jpg",
+                    source_url="https://shop.example.com/coffee-two",
+                    source_name="Example Shop",
+                    provider="serper",
+                ),
+            ]
+
+        def serpapi_provider(*, query, page, page_size):
+            return [
+                ProductImageSearchResult(
+                    title="Coffee two duplicate",
+                    thumbnail_url="https://images.example.com/two-thumb-copy.jpg",
+                    image_url="https://images.example.com/two-full.jpg",
+                    source_url="https://shop.example.com/coffee-two-copy",
+                    source_name="Example Shop",
+                    provider="serpapi",
+                ),
+                ProductImageSearchResult(
+                    title="Coffee three",
+                    thumbnail_url="https://images.example.com/three-thumb.jpg",
+                    image_url="https://images.example.com/three-full.jpg",
+                    source_url="https://shop.example.com/coffee-three",
+                    source_name="Example Shop",
+                    provider="serpapi",
+                ),
+            ]
+
+        with override_settings(POINTY_IMAGE_SEARCH_PROVIDERS="serper,serpapi"):
+            with (
+                patch(
+                    "apps.attachments.image_search.search_serper_images",
+                    side_effect=serper_provider,
+                ),
+                patch(
+                    "apps.attachments.image_search.search_serpapi_images",
+                    side_effect=serpapi_provider,
+                ),
+            ):
+                results = search_product_images(query="قهوة", page=1, page_size=3)
+
+        self.assertEqual(
+            [result.image_url for result in results],
+            [
+                "https://images.example.com/one-full.jpg",
+                "https://images.example.com/two-full.jpg",
+                "https://images.example.com/three-full.jpg",
+            ],
+        )
+
+    def test_serper_image_search_maps_api_response(self):
+        with override_settings(
+            POINTY_SERPER_API_KEY="serper-key",
+            POINTY_SERPER_ENDPOINT="https://serper.example.com/images",
+        ):
+            with patch(
+                "apps.attachments.image_search.fetch_json",
+                return_value={
+                    "images": [
+                        {
+                            "title": "Coffee bag",
+                            "imageUrl": "https://images.example.com/coffee.jpg",
+                            "thumbnailUrl": "https://images.example.com/thumb.jpg",
+                            "link": "https://shop.example.com/coffee",
+                            "domain": "shop.example.com",
+                            "imageWidth": 900,
+                            "imageHeight": 700,
+                        }
+                    ]
+                },
+            ) as fetch_json:
+                results = search_serper_images(query="قهوة", page=2, page_size=12)
+
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0].provider, "serper")
+        self.assertEqual(results[0].source_name, "shop.example.com")
+        self.assertEqual(results[0].width, 900)
+        self.assertEqual(fetch_json.call_args.kwargs["method"], "POST")
+        self.assertEqual(fetch_json.call_args.kwargs["body"]["page"], 2)
+        self.assertEqual(fetch_json.call_args.kwargs["body"]["num"], 12)
+        self.assertEqual(fetch_json.call_args.kwargs["headers"]["X-API-KEY"], "serper-key")
+
     def test_product_image_import_downloads_and_stores_primary_image(self):
         token = sign_image_import_payload(
             {
@@ -237,9 +377,7 @@ class AttachmentApiTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(response.data["role"], Attachment.Role.SUPPLIER_INVOICE_SCAN)
 
-        order_response = self.client.get(
-            reverse("purchaseorder-detail", args=[purchase_order.pk])
-        )
+        order_response = self.client.get(reverse("purchaseorder-detail", args=[purchase_order.pk]))
         self.assertEqual(order_response.status_code, status.HTTP_200_OK)
         self.assertEqual(
             order_response.data["supplier_invoice_attachments"][0]["id"],

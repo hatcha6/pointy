@@ -7,7 +7,10 @@ import '../../../data/models/attachment_summary.dart';
 import '../../../data/models/product_image_search_result.dart';
 import '../../../data/models/product_image_upload.dart';
 import '../../../data/repositories/catalog_repository.dart';
+import '../../../shared/infinite_scroll_grid.dart';
 import '../../../shared/product_image_thumbnail.dart';
+
+const _productImageSearchPageSize = 30;
 
 sealed class ProductImageSelection {
   const ProductImageSelection();
@@ -212,9 +215,13 @@ class ProductImageSearchSheet extends StatefulWidget {
 class _ProductImageSearchSheetState extends State<ProductImageSearchSheet> {
   late final TextEditingController _searchController;
   List<ProductImageSearchResult> _results = [];
-  var _isSearching = false;
+  var _isLoadingInitial = false;
+  var _isLoadingMore = false;
+  var _hasMoreResults = false;
   var _page = 1;
   String? _errorKey;
+
+  bool get _isSearching => _isLoadingInitial || _isLoadingMore;
 
   @override
   void initState() {
@@ -295,17 +302,6 @@ class _ProductImageSearchSheetState extends State<ProductImageSearchSheet> {
             ],
             const SizedBox(height: 12),
             Expanded(child: _buildResults(context)),
-            if (_results.isNotEmpty) ...[
-              const SizedBox(height: 12),
-              Align(
-                alignment: AlignmentDirectional.centerStart,
-                child: OutlinedButton.icon(
-                  onPressed: _isSearching ? null : () => _search(reset: false),
-                  icon: const Icon(Icons.expand_more),
-                  label: Text(l10n.productImageLoadMoreButton),
-                ),
-              ),
-            ],
           ],
         ),
       ),
@@ -314,13 +310,6 @@ class _ProductImageSearchSheetState extends State<ProductImageSearchSheet> {
 
   Widget _buildResults(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    if (_isSearching && _results.isEmpty) {
-      return const Center(child: CircularProgressIndicator());
-    }
-    if (_results.isEmpty) {
-      return Center(child: Text(l10n.productImageSearchEmpty));
-    }
-
     return LayoutBuilder(
       builder: (context, constraints) {
         final crossAxisCount = constraints.maxWidth >= 760
@@ -328,16 +317,21 @@ class _ProductImageSearchSheetState extends State<ProductImageSearchSheet> {
             : constraints.maxWidth >= 520
             ? 3
             : 2;
-        return GridView.builder(
+        return InfiniteScrollGrid<ProductImageSearchResult>(
+          items: _results,
+          onLoadMore: () => _search(reset: false),
+          hasMore: _hasMoreResults,
+          isLoadingInitial: _isLoadingInitial,
+          isLoadingMore: _isLoadingMore,
+          emptyBuilder: (context) =>
+              Center(child: Text(l10n.productImageSearchEmpty)),
           gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: crossAxisCount,
             crossAxisSpacing: 10,
             mainAxisSpacing: 10,
             childAspectRatio: 0.88,
           ),
-          itemCount: _results.length,
-          itemBuilder: (context, index) {
-            final result = _results[index];
+          itemBuilder: (context, result) {
             return _ImageResultTile(
               result: result,
               onTap: () => Navigator.of(
@@ -351,24 +345,35 @@ class _ProductImageSearchSheetState extends State<ProductImageSearchSheet> {
   }
 
   Future<void> _search({required bool reset}) async {
+    if (_isSearching) {
+      return;
+    }
+
     final query = _searchController.text.trim();
     if (query.length < 2) {
-      setState(() => _errorKey = 'short');
+      setState(() {
+        _errorKey = 'short';
+        _hasMoreResults = false;
+      });
       return;
     }
 
     setState(() {
-      _isSearching = true;
       _errorKey = null;
       if (reset) {
         _page = 1;
         _results = [];
+        _hasMoreResults = true;
+        _isLoadingInitial = true;
+      } else {
+        _isLoadingMore = true;
       }
     });
 
     final result = await widget.catalogRepository.searchProductImages(
       query: query,
       page: _page,
+      pageSize: _productImageSearchPageSize,
     );
     if (!mounted) {
       return;
@@ -378,12 +383,16 @@ class _ProductImageSearchSheetState extends State<ProductImageSearchSheet> {
         setState(() {
           _results = reset ? result.value : [..._results, ...result.value];
           _page += 1;
-          _isSearching = false;
+          _hasMoreResults = result.value.length >= _productImageSearchPageSize;
+          _isLoadingInitial = false;
+          _isLoadingMore = false;
         });
       case Error<List<ProductImageSearchResult>>():
         setState(() {
           _errorKey = 'failed';
-          _isSearching = false;
+          _hasMoreResults = false;
+          _isLoadingInitial = false;
+          _isLoadingMore = false;
         });
     }
   }

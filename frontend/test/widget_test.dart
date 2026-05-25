@@ -31,6 +31,7 @@ import 'package:pointy_frontend/src/data/services/print_transport.dart';
 import 'package:pointy_frontend/src/features/catalog/view_models/category_management_view_model.dart';
 import 'package:pointy_frontend/src/features/catalog/view_models/product_stock_view_model.dart';
 import 'package:pointy_frontend/src/features/catalog/views/category_management_screen.dart';
+import 'package:pointy_frontend/src/features/catalog/views/product_image_picker.dart';
 import 'package:pointy_frontend/src/features/catalog/views/product_variant_details_screen.dart';
 import 'package:pointy_frontend/src/features/purchasing/views/purchase_order_details_screen.dart';
 import 'package:pointy_frontend/src/features/pos/views/register_cash_movement_sheet.dart';
@@ -2438,6 +2439,78 @@ void main() {
     await tester.pump();
 
     expect(loadMoreCalls, 1);
+  });
+
+  testWidgets('product image search loads additional pages while scrolling', (
+    WidgetTester tester,
+  ) async {
+    final requestedPages = <int>[];
+    final repository = CatalogRepository(
+      PosApiService(
+        baseUrl: 'http://pointy.test/api',
+        client: MockClient((request) async {
+          if (request.url.path.endsWith('/products/image-search/')) {
+            final page = int.parse(request.url.queryParameters['page'] ?? '1');
+            requestedPages.add(page);
+            expect(request.url.queryParameters['page_size'], '30');
+            final results = page == 1
+                ? List.generate(
+                    30,
+                    (index) => {
+                      'title': 'قهوة ${index + 1}',
+                      'thumbnail_url':
+                          'https://images.example.com/thumb-$index.jpg',
+                      'source_url': 'https://shop.example.com/coffee-$index',
+                      'source_name': 'متجر الصور',
+                      'provider': 'serper',
+                      'import_token': 'token-$index',
+                    },
+                  )
+                : const [];
+            return http.Response(
+              jsonEncode({'results': results}),
+              200,
+              headers: {'content-type': 'application/json'},
+            );
+          }
+          return http.Response('{}', 404);
+        }),
+      ),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        locale: const Locale('ar'),
+        supportedLocales: AppLocalizations.supportedLocales,
+        localizationsDelegates: const [
+          AppLocalizations.delegate,
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
+        home: Scaffold(
+          body: SizedBox(
+            width: 600,
+            height: 520,
+            child: ProductImageSearchSheet(
+              catalogRepository: repository,
+              initialQuery: 'قهوة',
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    expect(requestedPages, [1]);
+    expect(find.text('عرض المزيد'), findsNothing);
+
+    await tester.drag(find.byType(CustomScrollView), const Offset(0, -3000));
+    await tester.pump();
+    await tester.pump();
+
+    expect(requestedPages, [1, 2]);
   });
 
   testWidgets('infinite list requests more data when content underfills', (

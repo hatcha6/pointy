@@ -73,9 +73,14 @@ class CatalogRepository {
   Future<Result<List<ProductImageSearchResult>>> searchProductImages({
     required String query,
     int page = 1,
+    int? pageSize,
   }) async {
     return Result.guard(
-      () => _service.searchProductImages(query: query, page: page),
+      () => _service.searchProductImages(
+        query: query,
+        page: page,
+        pageSize: pageSize,
+      ),
     );
   }
 

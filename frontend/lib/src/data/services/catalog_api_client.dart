@@ -110,10 +110,15 @@ class CatalogApiClient {
   Future<List<ProductImageSearchResult>> searchProductImages({
     required String query,
     int page = 1,
+    int? pageSize,
   }) async {
+    final queryParameters = <String, String>{'q': query, 'page': '$page'};
+    if (pageSize != null) {
+      queryParameters['page_size'] = '$pageSize';
+    }
     final response = await _session.get(
       'products/image-search/',
-      query: {'q': query, 'page': '$page'},
+      query: queryParameters,
     );
     _session.ensureSuccess(response, 'Product image search failed with status');
     final decoded = _session.decodedBody(response);

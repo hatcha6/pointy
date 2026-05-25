@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import ipaddress
 import json
+import logging
 import mimetypes
 import socket
 from dataclasses import dataclass
@@ -23,10 +24,15 @@ from .services import clean_original_filename, store_uploaded_attachment
 
 IMAGE_IMPORT_SIGNING_SALT = "pointy.product-image-import"
 DEFAULT_SERPAPI_ENDPOINT = "https://serpapi.com/search.json"
+DEFAULT_SERPER_ENDPOINT = "https://google.serper.dev/images"
 DEFAULT_IMAGE_IMPORT_MAX_AGE_SECONDS = 60 * 60
 DEFAULT_IMAGE_SEARCH_PAGE_SIZE = 30
 DEFAULT_IMAGE_SEARCH_MAX_PAGE_SIZE = 50
 DEFAULT_IMAGE_FETCH_TIMEOUT_SECONDS = 8
+DEFAULT_IMAGE_SEARCH_PROVIDERS = ("serper", "serpapi")
+DISABLED_IMAGE_SEARCH_PROVIDERS = {"", "disabled", "none", "off"}
+
+logger = logging.getLogger(__name__)
 
 
 class ProductImageSearchError(Exception):
@@ -90,7 +96,45 @@ class ValidatingRedirectHandler(HTTPRedirectHandler):
 
 
 def configured_image_search_provider() -> str:
-    return str(getattr(settings, "POINTY_IMAGE_SEARCH_PROVIDER", "serpapi")).lower()
+    providers = configured_image_search_providers()
+    return providers[0] if providers else "disabled"
+
+
+def configured_image_search_providers() -> list[str]:
+    raw_providers = getattr(settings, "POINTY_IMAGE_SEARCH_PROVIDERS", "")
+    if raw_providers:
+        provider_names = parse_provider_names(raw_providers)
+    else:
+        legacy_provider = str(getattr(settings, "POINTY_IMAGE_SEARCH_PROVIDER", "")).strip()
+        if legacy_provider:
+            provider_names = parse_provider_names(legacy_provider)
+            if not provider_names or provider_names[0].lower() in DISABLED_IMAGE_SEARCH_PROVIDERS:
+                return []
+            provider_names.extend(
+                name
+                for name in DEFAULT_IMAGE_SEARCH_PROVIDERS
+                if name not in {provider.lower() for provider in provider_names}
+            )
+        else:
+            provider_names = list(DEFAULT_IMAGE_SEARCH_PROVIDERS)
+
+    configured_names = []
+    seen = set()
+    for name in provider_names:
+        normalized = name.lower()
+        if normalized in DISABLED_IMAGE_SEARCH_PROVIDERS or normalized in seen:
+            continue
+        configured_names.append(normalized)
+        seen.add(normalized)
+    return configured_names
+
+
+def parse_provider_names(value) -> list[str]:
+    if isinstance(value, str):
+        raw_names = value.split(",")
+    else:
+        raw_names = value or []
+    return [str(name).strip() for name in raw_names if str(name).strip()]
 
 
 def search_product_images(
@@ -99,14 +143,149 @@ def search_product_images(
     page: int = 1,
     page_size: int = DEFAULT_IMAGE_SEARCH_PAGE_SIZE,
 ) -> list[ProductImageSearchResult]:
-    provider = configured_image_search_provider()
-    if provider in {"", "disabled", "none", "off"}:
+    provider_names = configured_image_search_providers()
+    if not provider_names:
         raise ProductImageSearchUnavailable("Product image search is not configured.")
-    if provider != "serpapi":
+
+    page = max(page, 1)
+    page_size = min(max(page_size, 1), DEFAULT_IMAGE_SEARCH_MAX_PAGE_SIZE)
+    results = []
+    seen_urls = set()
+    failures = []
+    completed_provider = False
+
+    for provider_name in provider_names:
+        remaining = page_size - len(results)
+        if remaining <= 0:
+            break
+
+        search_provider = image_search_provider_registry().get(provider_name)
+        if search_provider is None:
+            failures.append(f"{provider_name}: unsupported")
+            logger.warning(
+                "Unsupported product image search provider configured: %s",
+                provider_name,
+            )
+            continue
+
+        try:
+            provider_results = search_provider(
+                query=query,
+                page=page,
+                page_size=remaining,
+            )
+        except ProductImageSearchUnavailable as exc:
+            failures.append(f"{provider_name}: {exc}")
+            logger.info(
+                "Product image search provider %s unavailable: %s",
+                provider_name,
+                exc,
+            )
+            continue
+        except ProductImageSearchError as exc:
+            failures.append(f"{provider_name}: {exc}")
+            logger.warning(
+                "Product image search provider %s failed: %s",
+                provider_name,
+                exc,
+            )
+            continue
+
+        completed_provider = True
+        for result in provider_results:
+            url_key = normalized_result_url(result)
+            if not url_key or url_key in seen_urls:
+                continue
+            results.append(result)
+            seen_urls.add(url_key)
+            if len(results) >= page_size:
+                break
+
+    if completed_provider:
+        return results
+
+    if failures:
         raise ProductImageSearchUnavailable(
-            f"Unsupported product image search provider: {provider}."
+            "Product image search providers are unavailable right now."
         )
-    return search_serpapi_images(query=query, page=page, page_size=page_size)
+    raise ProductImageSearchUnavailable("Product image search is not configured.")
+
+
+def image_search_provider_registry():
+    return {
+        "serper": search_serper_images,
+        "serpapi": search_serpapi_images,
+    }
+
+
+def search_serper_images(
+    *,
+    query: str,
+    page: int,
+    page_size: int,
+) -> list[ProductImageSearchResult]:
+    api_key = getattr(settings, "POINTY_SERPER_API_KEY", "")
+    if not api_key:
+        raise ProductImageSearchUnavailable("Serper image search key is not configured.")
+
+    page = max(page, 1)
+    page_size = min(max(page_size, 1), DEFAULT_IMAGE_SEARCH_MAX_PAGE_SIZE)
+    endpoint = getattr(settings, "POINTY_SERPER_ENDPOINT", DEFAULT_SERPER_ENDPOINT)
+    payload = fetch_json(
+        endpoint,
+        method="POST",
+        body={
+            "q": query,
+            "page": page,
+            "num": page_size,
+            "hl": getattr(settings, "POINTY_IMAGE_SEARCH_LANGUAGE", "ar"),
+            "gl": getattr(settings, "POINTY_IMAGE_SEARCH_COUNTRY", "us"),
+        },
+        headers={"X-API-KEY": api_key},
+    )
+    error_message = payload.get("error") or payload.get("message")
+    if error_message:
+        raise ProductImageSearchUnavailable(str(error_message))
+
+    results = []
+    for item in payload.get("images", []):
+        if not isinstance(item, dict):
+            continue
+        image_url = str(
+            item.get("imageUrl") or item.get("image_url") or item.get("original") or ""
+        ).strip()
+        thumbnail_url = str(
+            item.get("thumbnailUrl") or item.get("thumbnail_url") or item.get("thumbnail") or ""
+        ).strip()
+        thumbnail_url = thumbnail_url or image_url
+        if not is_supported_remote_image_result_url(image_url) or not thumbnail_url:
+            continue
+        source_url = str(item.get("link") or item.get("sourceUrl") or "").strip()
+        results.append(
+            ProductImageSearchResult(
+                title=str(item.get("title") or "").strip(),
+                thumbnail_url=thumbnail_url,
+                image_url=image_url,
+                source_url=source_url,
+                source_name=source_name_from_result(item, source_url),
+                width=optional_int(
+                    item.get("imageWidth")
+                    or item.get("image_width")
+                    or item.get("width")
+                    or item.get("original_width")
+                ),
+                height=optional_int(
+                    item.get("imageHeight")
+                    or item.get("image_height")
+                    or item.get("height")
+                    or item.get("original_height")
+                ),
+                provider="serper",
+            )
+        )
+        if len(results) >= page_size:
+            break
+    return results
 
 
 def search_serpapi_images(
@@ -141,7 +320,7 @@ def search_serpapi_images(
             continue
         image_url = str(item.get("original") or "").strip()
         thumbnail_url = str(item.get("thumbnail") or "").strip()
-        if not image_url or not thumbnail_url:
+        if not is_supported_remote_image_result_url(image_url) or not thumbnail_url:
             continue
         results.append(
             ProductImageSearchResult(
@@ -149,7 +328,10 @@ def search_serpapi_images(
                 thumbnail_url=thumbnail_url,
                 image_url=image_url,
                 source_url=str(item.get("link") or "").strip(),
-                source_name=str(item.get("source") or "").strip(),
+                source_name=source_name_from_result(
+                    item,
+                    str(item.get("link") or "").strip(),
+                ),
                 width=optional_int(item.get("original_width") or item.get("width")),
                 height=optional_int(item.get("original_height") or item.get("height")),
                 provider="serpapi",
@@ -160,18 +342,33 @@ def search_serpapi_images(
     return results
 
 
-def fetch_json(url: str) -> dict:
+def fetch_json(
+    url: str,
+    *,
+    method: str = "GET",
+    body: dict | None = None,
+    headers: dict | None = None,
+) -> dict:
     timeout = getattr(
         settings,
         "POINTY_IMAGE_FETCH_TIMEOUT_SECONDS",
         DEFAULT_IMAGE_FETCH_TIMEOUT_SECONDS,
     )
+    request_headers = {
+        "Accept": "application/json",
+        "User-Agent": "PointyPOS/1.0",
+    }
+    if headers:
+        request_headers.update(headers)
+    data = None
+    if body is not None:
+        data = json.dumps(body).encode("utf-8")
+        request_headers.setdefault("Content-Type", "application/json")
     request = Request(
         url,
-        headers={
-            "Accept": "application/json",
-            "User-Agent": "PointyPOS/1.0",
-        },
+        data=data,
+        headers=request_headers,
+        method=method,
     )
     try:
         with build_opener().open(request, timeout=timeout) as response:
@@ -341,6 +538,23 @@ def remote_image_filename(url: str, content_type: str) -> str:
         return path_name
     extension = mimetypes.guess_extension(content_type) or ".img"
     return f"{path_name or 'product-image'}{extension}"
+
+
+def normalized_result_url(result: ProductImageSearchResult) -> str:
+    return str(result.image_url or "").strip().lower()
+
+
+def is_supported_remote_image_result_url(url: str) -> bool:
+    parsed = urlparse(str(url or "").strip())
+    return bool(parsed.scheme in {"http", "https"} and parsed.hostname)
+
+
+def source_name_from_result(item: dict, source_url: str) -> str:
+    source_name = str(item.get("source") or item.get("domain") or "").strip()
+    if source_name:
+        return source_name
+    hostname = urlparse(source_url).hostname
+    return hostname or ""
 
 
 def optional_int(value) -> int | None:
