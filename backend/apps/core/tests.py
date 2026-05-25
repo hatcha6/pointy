@@ -13,8 +13,14 @@ from apps.catalog.models import ProductVariant
 from apps.catalog.testing import create_product_with_default_variant
 from apps.inventory.models import StockItem, StockMovement
 from apps.payments.models import Payment
-from apps.purchasing.models import PurchaseOrder, Supplier, SupplierPayment
-from apps.sales.models import Order, OrderLine, RegisterSession
+from apps.analytics.models import AnalyticsEvent
+from apps.purchasing.models import (
+    PurchaseOrder,
+    PurchaseOrderAuditEvent,
+    Supplier,
+    SupplierPayment,
+)
+from apps.sales.models import Order, OrderLine, RegisterCashMovement, RegisterSession
 from .roles import CASHIER_GROUP, MANAGER_GROUP, bootstrap_admin_user, ensure_role_groups
 
 
@@ -114,6 +120,14 @@ class PosUserManagementTests(TestCase):
 
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
+    def test_cashier_cannot_read_user_activity(self):
+        client = APIClient()
+        client.force_authenticate(user=self.cashier)
+
+        response = client.get(reverse("pos-user-activity", args=[self.cashier.pk]))
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
     def test_manager_can_create_cashier_user(self):
         client = APIClient()
         client.force_authenticate(user=self.manager)
@@ -148,6 +162,97 @@ class PosUserManagementTests(TestCase):
         self.cashier.refresh_from_db()
         self.assertTrue(self.cashier.groups.filter(name=MANAGER_GROUP).exists())
         self.assertFalse(self.cashier.groups.filter(name=CASHIER_GROUP).exists())
+
+    def test_manager_can_read_user_activity_overview(self):
+        client = APIClient()
+        client.force_authenticate(user=self.manager)
+        owner_key = f"user:{self.cashier.pk}"
+        session = RegisterSession.objects.create(
+            owner=self.cashier,
+            owner_key=owner_key,
+            status=RegisterSession.Status.CLOSED,
+            opening_cash=Decimal("10.00"),
+            closing_cash=Decimal("35.00"),
+            closed_at=timezone.now(),
+        )
+        order = Order.objects.create(
+            register_session=session,
+            status=Order.Status.PAID,
+            subtotal=Decimal("25.00"),
+            total=Decimal("25.00"),
+        )
+        RegisterCashMovement.objects.create(
+            register_session=session,
+            movement_type=RegisterCashMovement.MovementType.PAY_IN,
+            amount=Decimal("5.00"),
+            reason="Opening correction",
+            created_by=self.cashier,
+        )
+        supplier = Supplier.objects.create(name="مورد المستخدم")
+        purchase_order = PurchaseOrder.objects.create(
+            supplier=supplier,
+            status=PurchaseOrder.Status.RECEIVED,
+            supplier_invoice_number="SUP-INV-1",
+            subtotal=Decimal("40.00"),
+            total=Decimal("40.00"),
+        )
+        PurchaseOrderAuditEvent.objects.create(
+            purchase_order=purchase_order,
+            order_number=purchase_order.order_number,
+            action=PurchaseOrderAuditEvent.Action.CREATED,
+            created_by=self.cashier,
+        )
+        SupplierPayment.objects.create(
+            supplier=supplier,
+            purchase_order=purchase_order,
+            amount=Decimal("15.00"),
+            method=SupplierPayment.Method.CASH,
+            created_by=self.cashier,
+        )
+        AnalyticsEvent.objects.create(
+            name="sales.register_session.closed",
+            event_type=AnalyticsEvent.EventType.AUDIT,
+            severity=AnalyticsEvent.Severity.INFO,
+            source=AnalyticsEvent.Source.BACKEND,
+            occurred_at=timezone.now(),
+            received_by=self.cashier,
+        )
+
+        response = client.get(reverse("pos-user-activity", args=[self.cashier.pk]))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["user"]["id"], self.cashier.pk)
+        self.assertEqual(response.data["summary"]["sales"]["invoice_count"], 1)
+        self.assertEqual(response.data["summary"]["sales"]["net_sales"], "25.00")
+        self.assertEqual(
+            response.data["summary"]["register_sessions"]["session_count"],
+            1,
+        )
+        self.assertEqual(
+            response.data["summary"]["cash_movements"]["pay_in_total"],
+            "5.00",
+        )
+        self.assertEqual(
+            response.data["summary"]["purchasing"]["supplier_invoice_count"],
+            1,
+        )
+        self.assertEqual(
+            response.data["summary"]["purchasing"]["purchase_total"],
+            "40.00",
+        )
+        self.assertEqual(
+            response.data["summary"]["supplier_payments"]["payment_total"],
+            "15.00",
+        )
+        self.assertEqual(response.data["recent_sales"][0]["id"], order.pk)
+        self.assertEqual(
+            response.data["recent_purchase_orders"][0]["supplier_invoice_number"],
+            "SUP-INV-1",
+        )
+        self.assertEqual(
+            response.data["recent_activity"][0]["name"],
+            "sales.register_session.closed",
+        )
 
 
 class ShopSettingsApiTests(TestCase):

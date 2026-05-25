@@ -32,6 +32,8 @@ import 'features/reports/views/reports_screen.dart';
 import 'features/settings/view_models/shop_settings_view_model.dart';
 import 'features/settings/views/shop_settings_screen.dart';
 import 'features/users/view_models/user_management_view_model.dart';
+import 'features/users/view_models/user_details_view_model.dart';
+import 'features/users/views/user_details_screen.dart';
 import 'features/users/views/user_management_screen.dart';
 
 class AuthenticatedHome extends StatelessWidget {
@@ -424,6 +426,20 @@ class _AuthenticatedRoutes {
           AppCapability.manageDeviceSettings,
           () => replace(routeContext, deviceSettingsRouteBuilder),
         ),
+        onOpenUserDetails: guardedValueAction(AppCapability.manageUsers, (
+          user,
+        ) {
+          _trackScreenView('user_details');
+          push(
+            routeContext,
+            (_) => UserDetailsScreen(
+              viewModel: UserDetailsViewModel(
+                dependencies.userRepository,
+                initialUser: user,
+              ),
+            ),
+          );
+        }),
         onOpenShopSettings: capabilities.actionFor(
           AppCapability.manageShopSettings,
           () => replace(routeContext, shopSettingsRouteBuilder),

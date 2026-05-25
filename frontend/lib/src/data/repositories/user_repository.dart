@@ -1,5 +1,6 @@
 import '../../core/result.dart';
 import '../models/pos_user.dart';
+import '../models/user_activity.dart';
 import '../services/pos_api_service.dart';
 
 class UserRepository {
@@ -20,5 +21,9 @@ class UserRepository {
     required UserUpdateDraft draft,
   }) async {
     return Result.guard(() => _service.updateUser(id: id, draft: draft));
+  }
+
+  Future<Result<UserActivityOverview>> loadUserActivity(int id) async {
+    return Result.guard(() => _service.fetchUserActivity(id));
   }
 }

@@ -21,6 +21,7 @@ class UserManagementScreen extends StatelessWidget {
     required this.onOpenContacts,
     required this.onOpenRegisterSessions,
     required this.onOpenDeviceSettings,
+    required this.onOpenUserDetails,
     required this.onLogout,
     this.onOpenDashboard,
     this.onOpenDiscounts,
@@ -38,6 +39,7 @@ class UserManagementScreen extends StatelessWidget {
   final VoidCallback onOpenContacts;
   final VoidCallback onOpenRegisterSessions;
   final VoidCallback onOpenDeviceSettings;
+  final ValueChanged<PosUser> onOpenUserDetails;
   final VoidCallback? onOpenDashboard;
   final VoidCallback? onOpenDiscounts;
   final VoidCallback? onOpenReports;
@@ -99,6 +101,7 @@ class UserManagementScreen extends StatelessWidget {
               child: _UserManagementBody(
                 viewModel: viewModel,
                 currentUser: currentUser,
+                onOpenUserDetails: onOpenUserDetails,
               ),
             ),
           ),
@@ -143,10 +146,12 @@ class _UserManagementBody extends StatelessWidget {
   const _UserManagementBody({
     required this.viewModel,
     required this.currentUser,
+    required this.onOpenUserDetails,
   });
 
   final UserManagementViewModel viewModel;
   final PosUser currentUser;
+  final ValueChanged<PosUser> onOpenUserDetails;
 
   @override
   Widget build(BuildContext context) {
@@ -197,6 +202,7 @@ class _UserManagementBody extends StatelessWidget {
           enabled: !viewModel.isSaving && !isCurrentUser,
           onRoleChanged: (role) => viewModel.updateUserRole(user, role),
           onActiveChanged: (value) => viewModel.updateUserActive(user, value),
+          onOpenDetails: () => onOpenUserDetails(user),
         );
 
         return Card(
@@ -279,12 +285,14 @@ class _UserControls extends StatelessWidget {
     required this.enabled,
     required this.onRoleChanged,
     required this.onActiveChanged,
+    required this.onOpenDetails,
   });
 
   final PosUser user;
   final bool enabled;
   final ValueChanged<UserRole> onRoleChanged;
   final ValueChanged<bool> onActiveChanged;
+  final VoidCallback onOpenDetails;
 
   @override
   Widget build(BuildContext context) {
@@ -294,6 +302,11 @@ class _UserControls extends StatelessWidget {
       spacing: 8,
       crossAxisAlignment: WrapCrossAlignment.center,
       children: [
+        IconButton(
+          tooltip: l10n.userDetailsTooltip,
+          onPressed: onOpenDetails,
+          icon: const Icon(Icons.manage_accounts_outlined),
+        ),
         DropdownButton<UserRole>(
           value: user.role,
           onChanged: enabled

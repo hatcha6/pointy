@@ -706,6 +706,153 @@ class AppLocalizationsAr extends AppLocalizations {
   String get userStatusInactive => 'متوقف';
 
   @override
+  String get userDetailsTooltip => 'عرض تفاصيل المستخدم';
+
+  @override
+  String userDetailsTitle(String user) {
+    return 'تفاصيل $user';
+  }
+
+  @override
+  String get refreshUserDetailsTooltip => 'تحديث تفاصيل المستخدم';
+
+  @override
+  String get userActivityLoadError => 'تعذر تحميل نشاط المستخدم.';
+
+  @override
+  String get userDetailsOverviewTitle => 'ملخص المستخدم';
+
+  @override
+  String get userDetailsRecentSalesTitle => 'آخر فواتير العملاء';
+
+  @override
+  String get userDetailsRecentPurchasesTitle => 'آخر فواتير الموردين';
+
+  @override
+  String get userDetailsRecentSessionsTitle => 'آخر جلسات الدرج';
+
+  @override
+  String get userDetailsRecentActivityTitle => 'آخر النشاطات';
+
+  @override
+  String get userActivityNetSalesMetric => 'صافي المبيعات';
+
+  @override
+  String get userActivityCustomersMetric => 'العملاء';
+
+  @override
+  String get userActivityPurchaseTotalMetric => 'قيمة المشتريات';
+
+  @override
+  String get userActivitySupplierPaymentsMetric => 'مدفوعات الموردين';
+
+  @override
+  String get userActivityRegisterSessionsMetric => 'جلسات الدرج';
+
+  @override
+  String get userActivityCashMovementsMetric => 'صافي حركة النقد';
+
+  @override
+  String userActivityInvoicesDetail(int invoices, int paid) {
+    return '$invoices فواتير، $paid مدفوعة';
+  }
+
+  @override
+  String userActivityReturnsDetail(int count, String amount) {
+    return '$count إرجاع، $amount';
+  }
+
+  @override
+  String userActivitySupplierInvoicesDetail(int invoices, int orders) {
+    return '$invoices فواتير موردين، $orders أوامر';
+  }
+
+  @override
+  String userActivitySupplierPaymentsDetail(int payments, int refunds) {
+    return '$payments دفعات، $refunds استرداد';
+  }
+
+  @override
+  String userActivityRegisterSessionsDetail(int open, int closed) {
+    return '$open مفتوحة، $closed مغلقة';
+  }
+
+  @override
+  String userActivityCashMovementsDetail(String payIn, String payOut) {
+    return 'إيداع $payIn، سحب $payOut';
+  }
+
+  @override
+  String get userActivityEmptyRecentSales =>
+      'لا توجد فواتير عملاء لهذا المستخدم.';
+
+  @override
+  String get userActivityEmptyRecentPurchases =>
+      'لا توجد فواتير موردين لهذا المستخدم.';
+
+  @override
+  String get userActivityEmptyRecentSessions =>
+      'لا توجد جلسات درج لهذا المستخدم.';
+
+  @override
+  String get userActivityEmptyRecentActivity =>
+      'لا يوجد نشاط مسجل لهذا المستخدم.';
+
+  @override
+  String userActivityReceiptFallback(int id) {
+    return 'فاتورة #$id';
+  }
+
+  @override
+  String userActivityPurchaseFallback(int id) {
+    return 'أمر شراء #$id';
+  }
+
+  @override
+  String userActivitySessionFallback(int id) {
+    return 'جلسة درج #$id';
+  }
+
+  @override
+  String get userActivityEventLogin => 'تسجيل دخول ناجح';
+
+  @override
+  String get userActivityEventRegisterStarted => 'بدء جلسة درج';
+
+  @override
+  String get userActivityEventRegisterClosed => 'إغلاق جلسة درج';
+
+  @override
+  String get userActivityEventCashMovement => 'حركة نقدية في الدرج';
+
+  @override
+  String get userActivityEventUserCreated => 'إنشاء مستخدم';
+
+  @override
+  String get userActivityEventUserUpdated => 'تعديل مستخدم';
+
+  @override
+  String get userActivityEventUserDeleted => 'حذف مستخدم';
+
+  @override
+  String get userActivityEventFallback => 'نشاط مسجل';
+
+  @override
+  String get userActivityEventTypeSecurity => 'أمان';
+
+  @override
+  String get userActivityEventTypeAudit => 'تدقيق';
+
+  @override
+  String get userActivityEventTypeError => 'خطأ';
+
+  @override
+  String get userActivityEventTypePerformance => 'أداء';
+
+  @override
+  String get userActivityEventTypeUsage => 'استخدام';
+
+  @override
   String get shopSettingsTitle => 'إعدادات المتجر';
 
   @override
@@ -2683,6 +2830,217 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String supplierNetBalanceValue(String amount) {
     return 'الصافي $amount';
+  }
+
+  @override
+  String get refreshCustomerDetailsTooltip => 'تحديث تفاصيل العميل';
+
+  @override
+  String get customerDetailsLoadError => 'تعذر تحميل بيانات العميل.';
+
+  @override
+  String get customerProfileTitle => 'بيانات العميل';
+
+  @override
+  String get customerSalesSummaryTitle => 'ملخص تعاملات العميل';
+
+  @override
+  String get customerSalesSummaryLoadError => 'تعذر تحميل ملخص تعاملات العميل.';
+
+  @override
+  String get customerInvoiceHistoryTitle => 'الفواتير';
+
+  @override
+  String get customerInvoiceHistoryLoadError => 'تعذر تحميل فواتير العميل.';
+
+  @override
+  String get customerInvoiceHistoryEmpty => 'لا توجد فواتير مسجلة لهذا العميل.';
+
+  @override
+  String get customerAdjustmentHistoryTitle => 'الإرجاع والاستبدال والاسترداد';
+
+  @override
+  String get customerAdjustmentHistoryLoadError =>
+      'تعذر تحميل سجل الإرجاع والاسترداد.';
+
+  @override
+  String get customerAdjustmentHistoryEmpty =>
+      'لا توجد عمليات إرجاع أو استبدال أو استرداد لهذا العميل.';
+
+  @override
+  String get customerEmptyValue => 'غير مسجل';
+
+  @override
+  String get customerMarketingConsentLabel => 'موافقة التسويق';
+
+  @override
+  String get customerStatusLabel => 'الحالة';
+
+  @override
+  String get customerNotesLabel => 'الملاحظات';
+
+  @override
+  String get customerTotalInvoicedLabel => 'إجمالي الفواتير';
+
+  @override
+  String get customerNetSalesLabel => 'صافي المبيعات';
+
+  @override
+  String get customerInvoiceCountLabel => 'عدد الفواتير';
+
+  @override
+  String customerInvoiceCountValue(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count فواتير',
+      two: 'فاتورتان',
+      one: 'فاتورة واحدة',
+      zero: 'لا توجد فواتير',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get customerPaidInvoiceCountLabel => 'الفواتير المدفوعة';
+
+  @override
+  String customerPaidInvoiceCountValue(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count فواتير مدفوعة',
+      two: 'فاتورتان مدفوعتان',
+      one: 'فاتورة مدفوعة واحدة',
+      zero: 'لا توجد فواتير مدفوعة',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get customerVoidCountLabel => 'الفواتير الملغاة';
+
+  @override
+  String customerVoidCountValue(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count فواتير ملغاة',
+      two: 'فاتورتان ملغاتان',
+      one: 'فاتورة ملغاة واحدة',
+      zero: 'لا توجد فواتير ملغاة',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get customerVoidTotalLabel => 'إجمالي الإلغاء';
+
+  @override
+  String get customerReturnCountLabel => 'عمليات الإرجاع';
+
+  @override
+  String customerReturnCountValue(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count عمليات إرجاع',
+      two: 'إرجاعان',
+      one: 'إرجاع واحد',
+      zero: 'لا توجد عمليات إرجاع',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get customerReturnTotalLabel => 'إجمالي الإرجاع';
+
+  @override
+  String get customerRefundCountLabel => 'عمليات الاسترداد';
+
+  @override
+  String customerRefundCountValue(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count عمليات استرداد',
+      two: 'استردادان',
+      one: 'استرداد واحد',
+      zero: 'لا توجد عمليات استرداد',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get customerRefundTotalLabel => 'إجمالي الاسترداد';
+
+  @override
+  String get customerExchangeCountLabel => 'عمليات الاستبدال';
+
+  @override
+  String customerExchangeCountValue(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count عمليات استبدال',
+      two: 'استبدالان',
+      one: 'استبدال واحد',
+      zero: 'لا توجد عمليات استبدال',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get customerExchangeTotalLabel => 'إجمالي الاستبدال';
+
+  @override
+  String get customerLastInvoiceAtLabel => 'آخر فاتورة';
+
+  @override
+  String get saleOrderStatusPaid => 'مدفوعة';
+
+  @override
+  String get saleOrderStatusVoid => 'ملغاة';
+
+  @override
+  String get saleOrderStatusOpen => 'مفتوحة';
+
+  @override
+  String get customerAdjustmentTypeReturn => 'إرجاع';
+
+  @override
+  String get customerAdjustmentTypeVoid => 'إلغاء فاتورة';
+
+  @override
+  String get customerAdjustmentTypeExchange => 'استبدال';
+
+  @override
+  String get customerAdjustmentTypeRefund => 'استرداد';
+
+  @override
+  String get customerAdjustmentTypeUnknown => 'تعديل';
+
+  @override
+  String customerRefundMethodValue(String method) {
+    return 'استرداد: $method';
+  }
+
+  @override
+  String customerAdjustmentCreatedByValue(String username) {
+    return 'بواسطة $username';
+  }
+
+  @override
+  String customerAdjustmentLineCount(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count عناصر',
+      two: 'عنصران',
+      one: 'عنصر واحد',
+      zero: 'لا توجد عناصر',
+    );
+    return '$_temp0';
   }
 
   @override

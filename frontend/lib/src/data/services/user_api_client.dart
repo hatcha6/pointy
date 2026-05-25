@@ -1,4 +1,5 @@
 import '../models/pos_user.dart';
+import '../models/user_activity.dart';
 import 'api_session.dart';
 
 class UserApiClient {
@@ -27,6 +28,17 @@ class UserApiClient {
     final response = await _session.patch('users/$id/', body: draft.toJson());
     _session.ensureSuccess(response, 'User update failed with status');
     return PosUser.fromJson(
+      _session.decodedBody(response) as Map<String, Object?>,
+    );
+  }
+
+  Future<UserActivityOverview> fetchUserActivity(int id) async {
+    final response = await _session.get('users/$id/activity/');
+    _session.ensureSuccess(
+      response,
+      'User activity request failed with status',
+    );
+    return UserActivityOverview.fromJson(
       _session.decodedBody(response) as Map<String, Object?>,
     );
   }

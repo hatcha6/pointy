@@ -1090,6 +1090,45 @@ void main() {
     expect(find.textContaining('+21891222333'), findsOneWidget);
   });
 
+  testWidgets('customer details shows invoices and adjustments', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(PointyApp(apiService: _mockApiService()));
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+
+    await tester.tap(find.byIcon(Icons.menu));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('الجهات'));
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+    await tester.tap(find.text('ليلى أحمد'));
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+
+    expect(find.text('بيانات العميل'), findsOneWidget);
+    expect(find.text('ملخص تعاملات العميل'), findsOneWidget);
+    expect(find.text('إجمالي الفواتير'), findsOneWidget);
+    expect(find.text('صافي المبيعات'), findsOneWidget);
+
+    await tester.scrollUntilVisible(
+      find.text('الفواتير'),
+      400,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('الفواتير'), findsOneWidget);
+    expect(find.text('إيصال R-100'), findsWidgets);
+    await tester.scrollUntilVisible(
+      find.text('الإرجاع والاستبدال والاسترداد'),
+      400,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('الإرجاع والاستبدال والاسترداد'), findsOneWidget);
+    expect(find.text('إرجاع'), findsOneWidget);
+    expect(find.textContaining('طلب العميل الإرجاع'), findsOneWidget);
+  });
+
   testWidgets(
     'purchasing drawer opens searchable order list then create flow',
     (WidgetTester tester) async {
@@ -1937,6 +1976,7 @@ void main() {
             onOpenContacts: () {},
             onOpenRegisterSessions: () {},
             onOpenDeviceSettings: () {},
+            onOpenUserDetails: (_) {},
             onLogout: () {},
           ),
         ),
@@ -3203,6 +3243,32 @@ PosApiService _mockApiService({
         });
       }
 
+      if (path.endsWith('/customers/12/sales-summary/')) {
+        return _jsonResponse(_customerSalesSummaryJson());
+      }
+
+      if (path.endsWith('/customers/12/orders/')) {
+        return _jsonResponse({
+          'count': 1,
+          'next': null,
+          'previous': null,
+          'results': [_orderJson()],
+        });
+      }
+
+      if (path.endsWith('/customers/12/adjustments/')) {
+        return _jsonResponse({
+          'count': 1,
+          'next': null,
+          'previous': null,
+          'results': [_customerAdjustmentJson()],
+        });
+      }
+
+      if (path.endsWith('/customers/12/')) {
+        return _jsonResponse(_customerJson());
+      }
+
       if (path.endsWith('/suppliers/')) {
         if (request.method == 'POST') {
           final body = jsonDecode(request.body) as Map<String, Object?>;
@@ -4075,6 +4141,59 @@ Map<String, Object?> _customerJson({
     'is_active': true,
     'created_at': '2026-05-19T09:00:00Z',
     'updated_at': '2026-05-19T09:00:00Z',
+  };
+}
+
+Map<String, Object?> _customerSalesSummaryJson() {
+  return {
+    'customer': 12,
+    'invoice_count': 1,
+    'paid_invoice_count': 1,
+    'void_invoice_count': 0,
+    'return_count': 1,
+    'void_count': 0,
+    'refund_count': 1,
+    'exchange_count': 0,
+    'total_invoiced': '7.00',
+    'return_total': '3.50',
+    'void_total': '0.00',
+    'refund_total': '3.50',
+    'exchange_total': '0.00',
+    'net_sales': '3.50',
+    'last_invoice_at': '2026-05-15T09:10:00Z',
+  };
+}
+
+Map<String, Object?> _customerAdjustmentJson() {
+  return {
+    'id': 700,
+    'order': 100,
+    'receipt_number': 'R-100',
+    'customer': 12,
+    'register_session': 1,
+    'register_session_number': 'RS-1',
+    'adjustment_type': 'return',
+    'amount': '3.50',
+    'refund_method': 'cash',
+    'reason': 'طلب العميل الإرجاع',
+    'created_by': 1,
+    'created_by_username': 'manager',
+    'lines': [
+      {
+        'id': 701,
+        'order_line': 1000,
+        'product': 1,
+        'variant': 1,
+        'product_name': 'قهوة البيت',
+        'variant_name': 'قهوة البيت',
+        'quantity': 1,
+        'unit_price': '3.50',
+        'discount_total': '0.00',
+        'line_total': '3.50',
+      },
+    ],
+    'created_at': '2026-05-15T09:20:00Z',
+    'updated_at': '2026-05-15T09:20:00Z',
   };
 }
 

@@ -11,6 +11,7 @@ import '../../../shared/contact_picker_sheet.dart';
 import '../../../shared/formatters.dart';
 import '../../../shared/infinite_scroll_grid.dart';
 import '../view_models/contact_management_view_model.dart';
+import 'customer_details_screen.dart';
 import 'supplier_details_screen.dart';
 
 class ContactManagementScreen extends StatelessWidget {
@@ -286,6 +287,15 @@ class _CustomerList extends StatelessWidget {
               ].join(' • '),
               maxLines: 3,
               overflow: TextOverflow.ellipsis,
+            ),
+            trailing: const Icon(Icons.chevron_left),
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => CustomerDetailsScreen(
+                  customer: customer,
+                  contactRepository: viewModel.repository,
+                ),
+              ),
             ),
           ),
         );

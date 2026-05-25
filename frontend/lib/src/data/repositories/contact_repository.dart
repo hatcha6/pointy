@@ -1,5 +1,7 @@
 import '../../core/result.dart';
 import '../models/contact.dart';
+import '../models/customer_activity.dart';
+import '../models/sale_order_page.dart';
 import '../services/pos_api_service.dart';
 
 class ContactRepository {
@@ -27,6 +29,35 @@ class ContactRepository {
 
   Future<Result<SupplierContact>> loadSupplier(int supplierId) async {
     return Result.guard(() => _service.fetchSupplier(supplierId));
+  }
+
+  Future<Result<Customer>> loadCustomer(int customerId) async {
+    return Result.guard(() => _service.fetchCustomer(customerId));
+  }
+
+  Future<Result<CustomerSalesSummary>> loadCustomerSalesSummary(
+    int customerId,
+  ) async {
+    return Result.guard(() => _service.fetchCustomerSalesSummary(customerId));
+  }
+
+  Future<Result<SaleOrderPage>> loadCustomerOrderHistory({
+    required int customerId,
+    int page = 1,
+  }) async {
+    return Result.guard(
+      () => _service.fetchCustomerOrders(customerId: customerId, page: page),
+    );
+  }
+
+  Future<Result<CustomerAdjustmentHistoryPage>> loadCustomerAdjustmentHistory({
+    required int customerId,
+    int page = 1,
+  }) async {
+    return Result.guard(
+      () =>
+          _service.fetchCustomerAdjustments(customerId: customerId, page: page),
+    );
   }
 
   Future<Result<Customer>> createCustomer(CustomerDraft draft) async {

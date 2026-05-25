@@ -2,7 +2,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth import login, logout
 from django.middleware.csrf import get_token
 from rest_framework import status, views, viewsets
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
@@ -18,6 +18,7 @@ from .serializers import (
     ShopSettingsSerializer,
     UserSerializer,
 )
+from .user_activity import build_user_activity
 
 
 @api_view(["POST"])
@@ -57,6 +58,7 @@ class PosUserViewSet(viewsets.ModelViewSet):
     permission_map = {
         "list": ("auth.view_user",),
         "retrieve": ("auth.view_user",),
+        "activity": ("auth.view_user",),
         "create": ("auth.add_user",),
         "update": ("auth.change_user",),
         "partial_update": ("auth.change_user",),
@@ -105,6 +107,16 @@ class PosUserViewSet(viewsets.ModelViewSet):
                 "is_active": user.is_active,
                 "password_changed": password_changed,
             },
+        )
+
+    @action(detail=True, methods=["get"])
+    def activity(self, request, pk=None):
+        user = self.get_object()
+        return Response(
+            {
+                "user": PosUserSerializer(user).data,
+                **build_user_activity(user),
+            }
         )
 
     def perform_destroy(self, instance):

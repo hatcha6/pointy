@@ -17,6 +17,7 @@ import '../models/product_variant.dart';
 import '../models/product_variant_draft.dart';
 import '../models/product_variant_page.dart';
 import '../models/contact.dart';
+import '../models/customer_activity.dart';
 import '../models/dashboard.dart';
 import '../models/discount_rule.dart';
 import '../models/purchase_submission.dart';
@@ -39,6 +40,7 @@ import '../models/variant_option_draft.dart';
 import '../models/variant_option_value.dart';
 import '../models/variant_option_value_draft.dart';
 import '../models/variant_option_value_page.dart';
+import '../models/user_activity.dart';
 import 'api_session.dart';
 import 'analytics_api_client.dart';
 import 'auth_api_client.dart';
@@ -132,6 +134,10 @@ class PosApiService {
     required UserUpdateDraft draft,
   }) {
     return _users.updateUser(id: id, draft: draft);
+  }
+
+  Future<UserActivityOverview> fetchUserActivity(int id) {
+    return _users.fetchUserActivity(id);
   }
 
   Future<ShopSettings> fetchShopSettings() {
@@ -276,6 +282,31 @@ class PosApiService {
 
   Future<Customer> createCustomer(CustomerDraft draft) {
     return _customers.createCustomer(draft);
+  }
+
+  Future<Customer> fetchCustomer(int customerId) {
+    return _customers.fetchCustomer(customerId);
+  }
+
+  Future<CustomerSalesSummary> fetchCustomerSalesSummary(int customerId) {
+    return _customers.fetchCustomerSalesSummary(customerId);
+  }
+
+  Future<SaleOrderPage> fetchCustomerOrders({
+    required int customerId,
+    int page = 1,
+  }) {
+    return _customers.fetchCustomerOrders(customerId: customerId, page: page);
+  }
+
+  Future<CustomerAdjustmentHistoryPage> fetchCustomerAdjustments({
+    required int customerId,
+    int page = 1,
+  }) {
+    return _customers.fetchCustomerAdjustments(
+      customerId: customerId,
+      page: page,
+    );
   }
 
   Future<ReportRun> createReportRun(ReportRunDraft draft) {

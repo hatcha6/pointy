@@ -349,6 +349,145 @@
   "emptyUsers": "لا يوجد مستخدمون بعد.",
   "userStatusActive": "نشط",
   "userStatusInactive": "متوقف",
+  "userDetailsTooltip": "عرض تفاصيل المستخدم",
+  "userDetailsTitle": "تفاصيل {user}",
+  "@userDetailsTitle": {
+    "description": "User details screen title.",
+    "placeholders": {
+      "user": {
+        "type": "String"
+      }
+    }
+  },
+  "refreshUserDetailsTooltip": "تحديث تفاصيل المستخدم",
+  "userActivityLoadError": "تعذر تحميل نشاط المستخدم.",
+  "userDetailsOverviewTitle": "ملخص المستخدم",
+  "userDetailsRecentSalesTitle": "آخر فواتير العملاء",
+  "userDetailsRecentPurchasesTitle": "آخر فواتير الموردين",
+  "userDetailsRecentSessionsTitle": "آخر جلسات الدرج",
+  "userDetailsRecentActivityTitle": "آخر النشاطات",
+  "userActivityNetSalesMetric": "صافي المبيعات",
+  "userActivityCustomersMetric": "العملاء",
+  "userActivityPurchaseTotalMetric": "قيمة المشتريات",
+  "userActivitySupplierPaymentsMetric": "مدفوعات الموردين",
+  "userActivityRegisterSessionsMetric": "جلسات الدرج",
+  "userActivityCashMovementsMetric": "صافي حركة النقد",
+  "userActivityInvoicesDetail": "{invoices} فواتير، {paid} مدفوعة",
+  "@userActivityInvoicesDetail": {
+    "description": "Invoice count detail for a user.",
+    "placeholders": {
+      "invoices": {
+        "type": "int"
+      },
+      "paid": {
+        "type": "int"
+      }
+    }
+  },
+  "userActivityReturnsDetail": "{count} إرجاع، {amount}",
+  "@userActivityReturnsDetail": {
+    "description": "Return count and total detail for a user.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "userActivitySupplierInvoicesDetail": "{invoices} فواتير موردين، {orders} أوامر",
+  "@userActivitySupplierInvoicesDetail": {
+    "description": "Supplier invoice and purchase order count detail for a user.",
+    "placeholders": {
+      "invoices": {
+        "type": "int"
+      },
+      "orders": {
+        "type": "int"
+      }
+    }
+  },
+  "userActivitySupplierPaymentsDetail": "{payments} دفعات، {refunds} استرداد",
+  "@userActivitySupplierPaymentsDetail": {
+    "description": "Supplier payment and refund count detail for a user.",
+    "placeholders": {
+      "payments": {
+        "type": "int"
+      },
+      "refunds": {
+        "type": "int"
+      }
+    }
+  },
+  "userActivityRegisterSessionsDetail": "{open} مفتوحة، {closed} مغلقة",
+  "@userActivityRegisterSessionsDetail": {
+    "description": "Open and closed register session count detail for a user.",
+    "placeholders": {
+      "open": {
+        "type": "int"
+      },
+      "closed": {
+        "type": "int"
+      }
+    }
+  },
+  "userActivityCashMovementsDetail": "إيداع {payIn}، سحب {payOut}",
+  "@userActivityCashMovementsDetail": {
+    "description": "Pay in and pay out totals for a user.",
+    "placeholders": {
+      "payIn": {
+        "type": "String"
+      },
+      "payOut": {
+        "type": "String"
+      }
+    }
+  },
+  "userActivityEmptyRecentSales": "لا توجد فواتير عملاء لهذا المستخدم.",
+  "userActivityEmptyRecentPurchases": "لا توجد فواتير موردين لهذا المستخدم.",
+  "userActivityEmptyRecentSessions": "لا توجد جلسات درج لهذا المستخدم.",
+  "userActivityEmptyRecentActivity": "لا يوجد نشاط مسجل لهذا المستخدم.",
+  "userActivityReceiptFallback": "فاتورة #{id}",
+  "@userActivityReceiptFallback": {
+    "description": "Fallback receipt title.",
+    "placeholders": {
+      "id": {
+        "type": "int"
+      }
+    }
+  },
+  "userActivityPurchaseFallback": "أمر شراء #{id}",
+  "@userActivityPurchaseFallback": {
+    "description": "Fallback purchase order title.",
+    "placeholders": {
+      "id": {
+        "type": "int"
+      }
+    }
+  },
+  "userActivitySessionFallback": "جلسة درج #{id}",
+  "@userActivitySessionFallback": {
+    "description": "Fallback register session title.",
+    "placeholders": {
+      "id": {
+        "type": "int"
+      }
+    }
+  },
+  "userActivityEventLogin": "تسجيل دخول ناجح",
+  "userActivityEventRegisterStarted": "بدء جلسة درج",
+  "userActivityEventRegisterClosed": "إغلاق جلسة درج",
+  "userActivityEventCashMovement": "حركة نقدية في الدرج",
+  "userActivityEventUserCreated": "إنشاء مستخدم",
+  "userActivityEventUserUpdated": "تعديل مستخدم",
+  "userActivityEventUserDeleted": "حذف مستخدم",
+  "userActivityEventFallback": "نشاط مسجل",
+  "userActivityEventTypeSecurity": "أمان",
+  "userActivityEventTypeAudit": "تدقيق",
+  "userActivityEventTypeError": "خطأ",
+  "userActivityEventTypePerformance": "أداء",
+  "userActivityEventTypeUsage": "استخدام",
   "shopSettingsTitle": "إعدادات المتجر",
   "refreshShopSettingsTooltip": "تحديث إعدادات المتجر",
   "shopSettingsLoadError": "تعذر تحميل إعدادات المتجر.",
@@ -1513,6 +1652,123 @@
     "placeholders": {
       "amount": {
         "type": "String"
+      }
+    }
+  },
+  "refreshCustomerDetailsTooltip": "تحديث تفاصيل العميل",
+  "customerDetailsLoadError": "تعذر تحميل بيانات العميل.",
+  "customerProfileTitle": "بيانات العميل",
+  "customerSalesSummaryTitle": "ملخص تعاملات العميل",
+  "customerSalesSummaryLoadError": "تعذر تحميل ملخص تعاملات العميل.",
+  "customerInvoiceHistoryTitle": "الفواتير",
+  "customerInvoiceHistoryLoadError": "تعذر تحميل فواتير العميل.",
+  "customerInvoiceHistoryEmpty": "لا توجد فواتير مسجلة لهذا العميل.",
+  "customerAdjustmentHistoryTitle": "الإرجاع والاستبدال والاسترداد",
+  "customerAdjustmentHistoryLoadError": "تعذر تحميل سجل الإرجاع والاسترداد.",
+  "customerAdjustmentHistoryEmpty": "لا توجد عمليات إرجاع أو استبدال أو استرداد لهذا العميل.",
+  "customerEmptyValue": "غير مسجل",
+  "customerMarketingConsentLabel": "موافقة التسويق",
+  "customerStatusLabel": "الحالة",
+  "customerNotesLabel": "الملاحظات",
+  "customerTotalInvoicedLabel": "إجمالي الفواتير",
+  "customerNetSalesLabel": "صافي المبيعات",
+  "customerInvoiceCountLabel": "عدد الفواتير",
+  "customerInvoiceCountValue": "{count, plural, =0{لا توجد فواتير} =1{فاتورة واحدة} =2{فاتورتان} other{{count} فواتير}}",
+  "@customerInvoiceCountValue": {
+    "description": "Customer invoice count value.",
+    "placeholders": {
+      "count": {
+        "type": "num"
+      }
+    }
+  },
+  "customerPaidInvoiceCountLabel": "الفواتير المدفوعة",
+  "customerPaidInvoiceCountValue": "{count, plural, =0{لا توجد فواتير مدفوعة} =1{فاتورة مدفوعة واحدة} =2{فاتورتان مدفوعتان} other{{count} فواتير مدفوعة}}",
+  "@customerPaidInvoiceCountValue": {
+    "description": "Customer paid invoice count value.",
+    "placeholders": {
+      "count": {
+        "type": "num"
+      }
+    }
+  },
+  "customerVoidCountLabel": "الفواتير الملغاة",
+  "customerVoidCountValue": "{count, plural, =0{لا توجد فواتير ملغاة} =1{فاتورة ملغاة واحدة} =2{فاتورتان ملغاتان} other{{count} فواتير ملغاة}}",
+  "@customerVoidCountValue": {
+    "description": "Customer voided invoice count value.",
+    "placeholders": {
+      "count": {
+        "type": "num"
+      }
+    }
+  },
+  "customerVoidTotalLabel": "إجمالي الإلغاء",
+  "customerReturnCountLabel": "عمليات الإرجاع",
+  "customerReturnCountValue": "{count, plural, =0{لا توجد عمليات إرجاع} =1{إرجاع واحد} =2{إرجاعان} other{{count} عمليات إرجاع}}",
+  "@customerReturnCountValue": {
+    "description": "Customer return count value.",
+    "placeholders": {
+      "count": {
+        "type": "num"
+      }
+    }
+  },
+  "customerReturnTotalLabel": "إجمالي الإرجاع",
+  "customerRefundCountLabel": "عمليات الاسترداد",
+  "customerRefundCountValue": "{count, plural, =0{لا توجد عمليات استرداد} =1{استرداد واحد} =2{استردادان} other{{count} عمليات استرداد}}",
+  "@customerRefundCountValue": {
+    "description": "Customer refund count value.",
+    "placeholders": {
+      "count": {
+        "type": "num"
+      }
+    }
+  },
+  "customerRefundTotalLabel": "إجمالي الاسترداد",
+  "customerExchangeCountLabel": "عمليات الاستبدال",
+  "customerExchangeCountValue": "{count, plural, =0{لا توجد عمليات استبدال} =1{استبدال واحد} =2{استبدالان} other{{count} عمليات استبدال}}",
+  "@customerExchangeCountValue": {
+    "description": "Customer exchange count value.",
+    "placeholders": {
+      "count": {
+        "type": "num"
+      }
+    }
+  },
+  "customerExchangeTotalLabel": "إجمالي الاستبدال",
+  "customerLastInvoiceAtLabel": "آخر فاتورة",
+  "saleOrderStatusPaid": "مدفوعة",
+  "saleOrderStatusVoid": "ملغاة",
+  "saleOrderStatusOpen": "مفتوحة",
+  "customerAdjustmentTypeReturn": "إرجاع",
+  "customerAdjustmentTypeVoid": "إلغاء فاتورة",
+  "customerAdjustmentTypeExchange": "استبدال",
+  "customerAdjustmentTypeRefund": "استرداد",
+  "customerAdjustmentTypeUnknown": "تعديل",
+  "customerRefundMethodValue": "استرداد: {method}",
+  "@customerRefundMethodValue": {
+    "description": "Refund method shown on a customer adjustment.",
+    "placeholders": {
+      "method": {
+        "type": "String"
+      }
+    }
+  },
+  "customerAdjustmentCreatedByValue": "بواسطة {username}",
+  "@customerAdjustmentCreatedByValue": {
+    "description": "User who created a customer sales adjustment.",
+    "placeholders": {
+      "username": {
+        "type": "String"
+      }
+    }
+  },
+  "customerAdjustmentLineCount": "{count, plural, =0{لا توجد عناصر} =1{عنصر واحد} =2{عنصران} other{{count} عناصر}}",
+  "@customerAdjustmentLineCount": {
+    "description": "Line count label for customer adjustment history.",
+    "placeholders": {
+      "count": {
+        "type": "num"
       }
     }
   },

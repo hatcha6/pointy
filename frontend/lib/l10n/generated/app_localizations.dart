@@ -1372,6 +1372,252 @@ abstract class AppLocalizations {
   /// **'متوقف'**
   String get userStatusInactive;
 
+  /// No description provided for @userDetailsTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'عرض تفاصيل المستخدم'**
+  String get userDetailsTooltip;
+
+  /// User details screen title.
+  ///
+  /// In ar, this message translates to:
+  /// **'تفاصيل {user}'**
+  String userDetailsTitle(String user);
+
+  /// No description provided for @refreshUserDetailsTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحديث تفاصيل المستخدم'**
+  String get refreshUserDetailsTooltip;
+
+  /// No description provided for @userActivityLoadError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر تحميل نشاط المستخدم.'**
+  String get userActivityLoadError;
+
+  /// No description provided for @userDetailsOverviewTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'ملخص المستخدم'**
+  String get userDetailsOverviewTitle;
+
+  /// No description provided for @userDetailsRecentSalesTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'آخر فواتير العملاء'**
+  String get userDetailsRecentSalesTitle;
+
+  /// No description provided for @userDetailsRecentPurchasesTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'آخر فواتير الموردين'**
+  String get userDetailsRecentPurchasesTitle;
+
+  /// No description provided for @userDetailsRecentSessionsTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'آخر جلسات الدرج'**
+  String get userDetailsRecentSessionsTitle;
+
+  /// No description provided for @userDetailsRecentActivityTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'آخر النشاطات'**
+  String get userDetailsRecentActivityTitle;
+
+  /// No description provided for @userActivityNetSalesMetric.
+  ///
+  /// In ar, this message translates to:
+  /// **'صافي المبيعات'**
+  String get userActivityNetSalesMetric;
+
+  /// No description provided for @userActivityCustomersMetric.
+  ///
+  /// In ar, this message translates to:
+  /// **'العملاء'**
+  String get userActivityCustomersMetric;
+
+  /// No description provided for @userActivityPurchaseTotalMetric.
+  ///
+  /// In ar, this message translates to:
+  /// **'قيمة المشتريات'**
+  String get userActivityPurchaseTotalMetric;
+
+  /// No description provided for @userActivitySupplierPaymentsMetric.
+  ///
+  /// In ar, this message translates to:
+  /// **'مدفوعات الموردين'**
+  String get userActivitySupplierPaymentsMetric;
+
+  /// No description provided for @userActivityRegisterSessionsMetric.
+  ///
+  /// In ar, this message translates to:
+  /// **'جلسات الدرج'**
+  String get userActivityRegisterSessionsMetric;
+
+  /// No description provided for @userActivityCashMovementsMetric.
+  ///
+  /// In ar, this message translates to:
+  /// **'صافي حركة النقد'**
+  String get userActivityCashMovementsMetric;
+
+  /// Invoice count detail for a user.
+  ///
+  /// In ar, this message translates to:
+  /// **'{invoices} فواتير، {paid} مدفوعة'**
+  String userActivityInvoicesDetail(int invoices, int paid);
+
+  /// Return count and total detail for a user.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count} إرجاع، {amount}'**
+  String userActivityReturnsDetail(int count, String amount);
+
+  /// Supplier invoice and purchase order count detail for a user.
+  ///
+  /// In ar, this message translates to:
+  /// **'{invoices} فواتير موردين، {orders} أوامر'**
+  String userActivitySupplierInvoicesDetail(int invoices, int orders);
+
+  /// Supplier payment and refund count detail for a user.
+  ///
+  /// In ar, this message translates to:
+  /// **'{payments} دفعات، {refunds} استرداد'**
+  String userActivitySupplierPaymentsDetail(int payments, int refunds);
+
+  /// Open and closed register session count detail for a user.
+  ///
+  /// In ar, this message translates to:
+  /// **'{open} مفتوحة، {closed} مغلقة'**
+  String userActivityRegisterSessionsDetail(int open, int closed);
+
+  /// Pay in and pay out totals for a user.
+  ///
+  /// In ar, this message translates to:
+  /// **'إيداع {payIn}، سحب {payOut}'**
+  String userActivityCashMovementsDetail(String payIn, String payOut);
+
+  /// No description provided for @userActivityEmptyRecentSales.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد فواتير عملاء لهذا المستخدم.'**
+  String get userActivityEmptyRecentSales;
+
+  /// No description provided for @userActivityEmptyRecentPurchases.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد فواتير موردين لهذا المستخدم.'**
+  String get userActivityEmptyRecentPurchases;
+
+  /// No description provided for @userActivityEmptyRecentSessions.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد جلسات درج لهذا المستخدم.'**
+  String get userActivityEmptyRecentSessions;
+
+  /// No description provided for @userActivityEmptyRecentActivity.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا يوجد نشاط مسجل لهذا المستخدم.'**
+  String get userActivityEmptyRecentActivity;
+
+  /// Fallback receipt title.
+  ///
+  /// In ar, this message translates to:
+  /// **'فاتورة #{id}'**
+  String userActivityReceiptFallback(int id);
+
+  /// Fallback purchase order title.
+  ///
+  /// In ar, this message translates to:
+  /// **'أمر شراء #{id}'**
+  String userActivityPurchaseFallback(int id);
+
+  /// Fallback register session title.
+  ///
+  /// In ar, this message translates to:
+  /// **'جلسة درج #{id}'**
+  String userActivitySessionFallback(int id);
+
+  /// No description provided for @userActivityEventLogin.
+  ///
+  /// In ar, this message translates to:
+  /// **'تسجيل دخول ناجح'**
+  String get userActivityEventLogin;
+
+  /// No description provided for @userActivityEventRegisterStarted.
+  ///
+  /// In ar, this message translates to:
+  /// **'بدء جلسة درج'**
+  String get userActivityEventRegisterStarted;
+
+  /// No description provided for @userActivityEventRegisterClosed.
+  ///
+  /// In ar, this message translates to:
+  /// **'إغلاق جلسة درج'**
+  String get userActivityEventRegisterClosed;
+
+  /// No description provided for @userActivityEventCashMovement.
+  ///
+  /// In ar, this message translates to:
+  /// **'حركة نقدية في الدرج'**
+  String get userActivityEventCashMovement;
+
+  /// No description provided for @userActivityEventUserCreated.
+  ///
+  /// In ar, this message translates to:
+  /// **'إنشاء مستخدم'**
+  String get userActivityEventUserCreated;
+
+  /// No description provided for @userActivityEventUserUpdated.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعديل مستخدم'**
+  String get userActivityEventUserUpdated;
+
+  /// No description provided for @userActivityEventUserDeleted.
+  ///
+  /// In ar, this message translates to:
+  /// **'حذف مستخدم'**
+  String get userActivityEventUserDeleted;
+
+  /// No description provided for @userActivityEventFallback.
+  ///
+  /// In ar, this message translates to:
+  /// **'نشاط مسجل'**
+  String get userActivityEventFallback;
+
+  /// No description provided for @userActivityEventTypeSecurity.
+  ///
+  /// In ar, this message translates to:
+  /// **'أمان'**
+  String get userActivityEventTypeSecurity;
+
+  /// No description provided for @userActivityEventTypeAudit.
+  ///
+  /// In ar, this message translates to:
+  /// **'تدقيق'**
+  String get userActivityEventTypeAudit;
+
+  /// No description provided for @userActivityEventTypeError.
+  ///
+  /// In ar, this message translates to:
+  /// **'خطأ'**
+  String get userActivityEventTypeError;
+
+  /// No description provided for @userActivityEventTypePerformance.
+  ///
+  /// In ar, this message translates to:
+  /// **'أداء'**
+  String get userActivityEventTypePerformance;
+
+  /// No description provided for @userActivityEventTypeUsage.
+  ///
+  /// In ar, this message translates to:
+  /// **'استخدام'**
+  String get userActivityEventTypeUsage;
+
   /// No description provided for @shopSettingsTitle.
   ///
   /// In ar, this message translates to:
@@ -4757,6 +5003,276 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'الصافي {amount}'**
   String supplierNetBalanceValue(String amount);
+
+  /// No description provided for @refreshCustomerDetailsTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحديث تفاصيل العميل'**
+  String get refreshCustomerDetailsTooltip;
+
+  /// No description provided for @customerDetailsLoadError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر تحميل بيانات العميل.'**
+  String get customerDetailsLoadError;
+
+  /// No description provided for @customerProfileTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'بيانات العميل'**
+  String get customerProfileTitle;
+
+  /// No description provided for @customerSalesSummaryTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'ملخص تعاملات العميل'**
+  String get customerSalesSummaryTitle;
+
+  /// No description provided for @customerSalesSummaryLoadError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر تحميل ملخص تعاملات العميل.'**
+  String get customerSalesSummaryLoadError;
+
+  /// No description provided for @customerInvoiceHistoryTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'الفواتير'**
+  String get customerInvoiceHistoryTitle;
+
+  /// No description provided for @customerInvoiceHistoryLoadError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر تحميل فواتير العميل.'**
+  String get customerInvoiceHistoryLoadError;
+
+  /// No description provided for @customerInvoiceHistoryEmpty.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد فواتير مسجلة لهذا العميل.'**
+  String get customerInvoiceHistoryEmpty;
+
+  /// No description provided for @customerAdjustmentHistoryTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'الإرجاع والاستبدال والاسترداد'**
+  String get customerAdjustmentHistoryTitle;
+
+  /// No description provided for @customerAdjustmentHistoryLoadError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر تحميل سجل الإرجاع والاسترداد.'**
+  String get customerAdjustmentHistoryLoadError;
+
+  /// No description provided for @customerAdjustmentHistoryEmpty.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد عمليات إرجاع أو استبدال أو استرداد لهذا العميل.'**
+  String get customerAdjustmentHistoryEmpty;
+
+  /// No description provided for @customerEmptyValue.
+  ///
+  /// In ar, this message translates to:
+  /// **'غير مسجل'**
+  String get customerEmptyValue;
+
+  /// No description provided for @customerMarketingConsentLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'موافقة التسويق'**
+  String get customerMarketingConsentLabel;
+
+  /// No description provided for @customerStatusLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الحالة'**
+  String get customerStatusLabel;
+
+  /// No description provided for @customerNotesLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الملاحظات'**
+  String get customerNotesLabel;
+
+  /// No description provided for @customerTotalInvoicedLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'إجمالي الفواتير'**
+  String get customerTotalInvoicedLabel;
+
+  /// No description provided for @customerNetSalesLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'صافي المبيعات'**
+  String get customerNetSalesLabel;
+
+  /// No description provided for @customerInvoiceCountLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'عدد الفواتير'**
+  String get customerInvoiceCountLabel;
+
+  /// Customer invoice count value.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, =0{لا توجد فواتير} =1{فاتورة واحدة} =2{فاتورتان} other{{count} فواتير}}'**
+  String customerInvoiceCountValue(num count);
+
+  /// No description provided for @customerPaidInvoiceCountLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الفواتير المدفوعة'**
+  String get customerPaidInvoiceCountLabel;
+
+  /// Customer paid invoice count value.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, =0{لا توجد فواتير مدفوعة} =1{فاتورة مدفوعة واحدة} =2{فاتورتان مدفوعتان} other{{count} فواتير مدفوعة}}'**
+  String customerPaidInvoiceCountValue(num count);
+
+  /// No description provided for @customerVoidCountLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الفواتير الملغاة'**
+  String get customerVoidCountLabel;
+
+  /// Customer voided invoice count value.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, =0{لا توجد فواتير ملغاة} =1{فاتورة ملغاة واحدة} =2{فاتورتان ملغاتان} other{{count} فواتير ملغاة}}'**
+  String customerVoidCountValue(num count);
+
+  /// No description provided for @customerVoidTotalLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'إجمالي الإلغاء'**
+  String get customerVoidTotalLabel;
+
+  /// No description provided for @customerReturnCountLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'عمليات الإرجاع'**
+  String get customerReturnCountLabel;
+
+  /// Customer return count value.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, =0{لا توجد عمليات إرجاع} =1{إرجاع واحد} =2{إرجاعان} other{{count} عمليات إرجاع}}'**
+  String customerReturnCountValue(num count);
+
+  /// No description provided for @customerReturnTotalLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'إجمالي الإرجاع'**
+  String get customerReturnTotalLabel;
+
+  /// No description provided for @customerRefundCountLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'عمليات الاسترداد'**
+  String get customerRefundCountLabel;
+
+  /// Customer refund count value.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, =0{لا توجد عمليات استرداد} =1{استرداد واحد} =2{استردادان} other{{count} عمليات استرداد}}'**
+  String customerRefundCountValue(num count);
+
+  /// No description provided for @customerRefundTotalLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'إجمالي الاسترداد'**
+  String get customerRefundTotalLabel;
+
+  /// No description provided for @customerExchangeCountLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'عمليات الاستبدال'**
+  String get customerExchangeCountLabel;
+
+  /// Customer exchange count value.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, =0{لا توجد عمليات استبدال} =1{استبدال واحد} =2{استبدالان} other{{count} عمليات استبدال}}'**
+  String customerExchangeCountValue(num count);
+
+  /// No description provided for @customerExchangeTotalLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'إجمالي الاستبدال'**
+  String get customerExchangeTotalLabel;
+
+  /// No description provided for @customerLastInvoiceAtLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'آخر فاتورة'**
+  String get customerLastInvoiceAtLabel;
+
+  /// No description provided for @saleOrderStatusPaid.
+  ///
+  /// In ar, this message translates to:
+  /// **'مدفوعة'**
+  String get saleOrderStatusPaid;
+
+  /// No description provided for @saleOrderStatusVoid.
+  ///
+  /// In ar, this message translates to:
+  /// **'ملغاة'**
+  String get saleOrderStatusVoid;
+
+  /// No description provided for @saleOrderStatusOpen.
+  ///
+  /// In ar, this message translates to:
+  /// **'مفتوحة'**
+  String get saleOrderStatusOpen;
+
+  /// No description provided for @customerAdjustmentTypeReturn.
+  ///
+  /// In ar, this message translates to:
+  /// **'إرجاع'**
+  String get customerAdjustmentTypeReturn;
+
+  /// No description provided for @customerAdjustmentTypeVoid.
+  ///
+  /// In ar, this message translates to:
+  /// **'إلغاء فاتورة'**
+  String get customerAdjustmentTypeVoid;
+
+  /// No description provided for @customerAdjustmentTypeExchange.
+  ///
+  /// In ar, this message translates to:
+  /// **'استبدال'**
+  String get customerAdjustmentTypeExchange;
+
+  /// No description provided for @customerAdjustmentTypeRefund.
+  ///
+  /// In ar, this message translates to:
+  /// **'استرداد'**
+  String get customerAdjustmentTypeRefund;
+
+  /// No description provided for @customerAdjustmentTypeUnknown.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعديل'**
+  String get customerAdjustmentTypeUnknown;
+
+  /// Refund method shown on a customer adjustment.
+  ///
+  /// In ar, this message translates to:
+  /// **'استرداد: {method}'**
+  String customerRefundMethodValue(String method);
+
+  /// User who created a customer sales adjustment.
+  ///
+  /// In ar, this message translates to:
+  /// **'بواسطة {username}'**
+  String customerAdjustmentCreatedByValue(String username);
+
+  /// Line count label for customer adjustment history.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, =0{لا توجد عناصر} =1{عنصر واحد} =2{عنصران} other{{count} عناصر}}'**
+  String customerAdjustmentLineCount(num count);
 
   /// No description provided for @selectedCustomerLabel.
   ///
