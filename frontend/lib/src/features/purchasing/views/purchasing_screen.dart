@@ -10,6 +10,7 @@ import '../../../data/repositories/contact_repository.dart';
 import '../../../shared/app_navigation_drawer.dart';
 import '../../../shared/authorization_guards.dart';
 import '../../../shared/barcode/barcode_scan_listener.dart';
+import '../../../shared/responsive/responsive.dart';
 import '../view_models/purchase_view_model.dart';
 import 'purchase_catalog_pane.dart';
 import 'purchase_draft_pane.dart';
@@ -141,32 +142,13 @@ class _PurchasingWorkspace extends StatelessWidget {
       onBarcodeScanned: (barcode) {
         unawaited(_addBarcode(context, barcode));
       },
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final catalog = PurchaseCatalogPane(viewModel: viewModel);
-          final draft = PurchaseDraftPane(
-            viewModel: viewModel,
-            contactRepository: contactRepository,
-          );
-
-          if (constraints.maxWidth >= 720) {
-            return Row(
-              children: [
-                Expanded(flex: 3, child: catalog),
-                const VerticalDivider(width: 1),
-                SizedBox(width: 420, child: draft),
-              ],
-            );
-          }
-
-          return Column(
-            children: [
-              Expanded(child: catalog),
-              const Divider(height: 1),
-              Expanded(flex: 4, child: draft),
-            ],
-          );
-        },
+      child: TwoPaneLayout(
+        compactSecondaryFlex: 4,
+        primaryPane: PurchaseCatalogPane(viewModel: viewModel),
+        secondaryPane: PurchaseDraftPane(
+          viewModel: viewModel,
+          contactRepository: contactRepository,
+        ),
       ),
     );
   }

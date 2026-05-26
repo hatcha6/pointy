@@ -8,6 +8,7 @@ import '../../../data/repositories/contact_repository.dart';
 import '../../../shared/app_navigation_drawer.dart';
 import '../../../shared/authorization_guards.dart';
 import '../../../shared/barcode/barcode_scan_listener.dart';
+import '../../../shared/responsive/responsive.dart';
 import '../view_models/pos_view_model.dart';
 import 'pos_cart_pane.dart';
 import 'pos_catalog_pane.dart';
@@ -264,36 +265,18 @@ class _PosWorkspace extends StatelessWidget {
           !viewModel.isCheckingOut &&
           !viewModel.isResolvingBarcode,
       onBarcodeScanned: viewModel.addVariantByBarcode,
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final catalog = PosCatalogPane(
-            viewModel: viewModel,
-            capabilities: capabilities,
-          );
-          final cart = PosCartPane(
-            viewModel: viewModel,
-            contactRepository: contactRepository,
-            capabilities: capabilities,
-          );
-
-          if (constraints.maxWidth >= 720) {
-            return Row(
-              children: [
-                Expanded(flex: 3, child: catalog),
-                const VerticalDivider(width: 1),
-                SizedBox(width: 420, child: cart),
-              ],
-            );
-          }
-
-          return Column(
-            children: [
-              Expanded(flex: 2, child: catalog),
-              const Divider(height: 1),
-              Expanded(flex: 3, child: cart),
-            ],
-          );
-        },
+      child: TwoPaneLayout(
+        compactPrimaryFlex: 2,
+        compactSecondaryFlex: 3,
+        primaryPane: PosCatalogPane(
+          viewModel: viewModel,
+          capabilities: capabilities,
+        ),
+        secondaryPane: PosCartPane(
+          viewModel: viewModel,
+          contactRepository: contactRepository,
+          capabilities: capabilities,
+        ),
       ),
     );
   }

@@ -6,6 +6,7 @@ import '../../../data/models/product_variant.dart';
 import '../../../shared/async_selection/async_multi_select_picker.dart';
 import '../../../shared/decimal_text_input_formatter.dart';
 import '../../../shared/product_category_picker.dart';
+import '../../../shared/responsive/responsive.dart';
 import '../view_models/purchase_view_model.dart';
 
 Future<ProductVariant?> resolveOrCreatePurchaseVariant(
@@ -32,11 +33,8 @@ Future<ProductVariant?> showPurchaseQuickProductSheet(
   required String barcode,
   required PurchaseViewModel viewModel,
 }) {
-  return showModalBottomSheet<ProductVariant?>(
+  return showAdaptiveModalBottomSheet<ProductVariant?>(
     context: context,
-    isScrollControlled: true,
-    showDragHandle: true,
-    useSafeArea: true,
     builder: (context) {
       return PurchaseQuickProductSheet(
         barcode: barcode,

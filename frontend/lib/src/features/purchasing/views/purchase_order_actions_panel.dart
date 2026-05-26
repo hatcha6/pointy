@@ -35,10 +35,10 @@ class _PurchaseOrderActions extends StatelessWidget {
             ),
             const SizedBox(height: 8),
           ],
-          Wrap(
+          ResponsiveActionBar(
             spacing: 8,
             runSpacing: 8,
-            children: [
+            actions: [
               if (viewModel.canRecordPayment)
                 FilledButton.icon(
                   onPressed: viewModel.isRecordingPayment

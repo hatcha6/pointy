@@ -7,6 +7,7 @@ import '../../../data/repositories/purchase_repository.dart';
 import '../../../shared/date_formatters.dart';
 import '../../../shared/formatters.dart';
 import '../../../shared/order_totals.dart';
+import '../../../shared/responsive/responsive.dart';
 import '../view_models/purchase_order_details_view_model.dart';
 import 'purchase_order_filter_sheet.dart';
 

@@ -11,6 +11,7 @@ import '../../../data/repositories/contact_repository.dart';
 import '../../../shared/async_selection/async_selection.dart';
 import '../../../shared/decimal_text_input_formatter.dart';
 import '../../../shared/product_category_picker.dart';
+import '../../../shared/responsive/responsive.dart';
 import '../view_models/discount_management_view_model.dart';
 
 class DiscountRuleForm extends StatefulWidget {
@@ -1004,22 +1005,7 @@ class _ResponsiveFields extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final width = constraints.maxWidth >= 720
-            ? (constraints.maxWidth - 24) / 3
-            : constraints.maxWidth >= 480
-            ? (constraints.maxWidth - 12) / 2
-            : constraints.maxWidth;
-        return Wrap(
-          spacing: 12,
-          runSpacing: 12,
-          children: [
-            for (final child in children) SizedBox(width: width, child: child),
-          ],
-        );
-      },
-    );
+    return ResponsiveFormGrid(children: children);
   }
 }
 
