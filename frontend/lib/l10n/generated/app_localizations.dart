@@ -5406,6 +5406,60 @@ abstract class AppLocalizations {
   /// **'حذف الدفعة'**
   String get removeTenderTooltip;
 
+  /// No description provided for @paymentMethodSplitTender.
+  ///
+  /// In ar, this message translates to:
+  /// **'دفعات متعددة'**
+  String get paymentMethodSplitTender;
+
+  /// No description provided for @amountDueLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'المستحق'**
+  String get amountDueLabel;
+
+  /// No description provided for @paymentQuickAmountsLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'مبالغ سريعة'**
+  String get paymentQuickAmountsLabel;
+
+  /// No description provided for @paymentKeypadLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'لوحة الإدخال'**
+  String get paymentKeypadLabel;
+
+  /// No description provided for @paymentKeypadBackspaceTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'حذف آخر رقم'**
+  String get paymentKeypadBackspaceTooltip;
+
+  /// No description provided for @paymentKeypadClearTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'مسح المبلغ'**
+  String get paymentKeypadClearTooltip;
+
+  /// Payment tender line title.
+  ///
+  /// In ar, this message translates to:
+  /// **'دفعة {index}'**
+  String paymentTenderLineTitle(int index);
+
+  /// No description provided for @receiptToggleSubtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'سيتم إرسال الفاتورة إلى الطابعة بعد إتمام الدفع.'**
+  String get receiptToggleSubtitle;
+
+  /// No description provided for @receiptToggleTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'تبديل طباعة الفاتورة'**
+  String get receiptToggleTooltip;
+
   /// No description provided for @paidAmountLabel.
   ///
   /// In ar, this message translates to:

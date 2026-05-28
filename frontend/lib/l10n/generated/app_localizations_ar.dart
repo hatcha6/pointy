@@ -3113,6 +3113,36 @@ class AppLocalizationsAr extends AppLocalizations {
   String get removeTenderTooltip => 'حذف الدفعة';
 
   @override
+  String get paymentMethodSplitTender => 'دفعات متعددة';
+
+  @override
+  String get amountDueLabel => 'المستحق';
+
+  @override
+  String get paymentQuickAmountsLabel => 'مبالغ سريعة';
+
+  @override
+  String get paymentKeypadLabel => 'لوحة الإدخال';
+
+  @override
+  String get paymentKeypadBackspaceTooltip => 'حذف آخر رقم';
+
+  @override
+  String get paymentKeypadClearTooltip => 'مسح المبلغ';
+
+  @override
+  String paymentTenderLineTitle(int index) {
+    return 'دفعة $index';
+  }
+
+  @override
+  String get receiptToggleSubtitle =>
+      'سيتم إرسال الفاتورة إلى الطابعة بعد إتمام الدفع.';
+
+  @override
+  String get receiptToggleTooltip => 'تبديل طباعة الفاتورة';
+
+  @override
   String get paidAmountLabel => 'المدفوع';
 
   @override

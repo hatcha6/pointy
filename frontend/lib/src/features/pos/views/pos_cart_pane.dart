@@ -2,23 +2,19 @@ import 'package:flutter/material.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../core/authorization.dart';
-import '../../../data/models/sale_order.dart';
 import '../../../data/repositories/contact_repository.dart';
 import '../../../data/repositories/sale_repository.dart';
 import '../../../shared/authorization_guards.dart';
 import '../../../shared/contact_picker_sheet.dart';
-import '../../../shared/decimal_text_input_formatter.dart';
 import '../../../shared/components/components.dart';
 import '../../../shared/design/design.dart';
 import '../../../shared/formatters.dart';
 import '../../../shared/order/order.dart';
-import '../../../shared/order_totals.dart';
-import '../../../shared/payment_labels.dart';
 import '../../../shared/responsive/responsive.dart';
-import '../models/split_tender_payment.dart';
 import '../view_models/pos_view_model.dart';
 import 'cart_line_tile.dart';
 import 'cart_totals.dart';
+import 'payment/payment.dart';
 
 class PosCartPane extends StatelessWidget {
   const PosCartPane({
@@ -234,10 +230,16 @@ class PosCartPane extends StatelessWidget {
     );
   }
 
-  Future<_PaymentInput?> _showPaymentDialog(BuildContext context) {
-    return showDialog<_PaymentInput>(
+  Future<PaymentSheetResult?> _showPaymentDialog(BuildContext context) {
+    return showPosPaymentSheet(
       context: context,
-      builder: (context) => _PaymentDialog(viewModel: viewModel),
+      total: viewModel.total,
+      enableCashPayments: viewModel.enableCashPayments,
+      enableCardPayments: viewModel.enableCardPayments,
+      enableTransferPayments: viewModel.enableTransferPayments,
+      showPrintInvoiceToggle: viewModel.shouldShowPrintInvoiceCheckbox,
+      printInvoiceAfterPayment: viewModel.printInvoiceAfterPayment,
+      onPrintInvoiceChanged: viewModel.updatePrintInvoiceAfterPayment,
     );
   }
 }
@@ -465,345 +467,6 @@ class _CheckoutFooter extends StatelessWidget {
           ),
         ),
       ),
-    );
-  }
-}
-
-class _PaymentDialog extends StatefulWidget {
-  const _PaymentDialog({required this.viewModel});
-
-  final PosViewModel viewModel;
-
-  @override
-  State<_PaymentDialog> createState() => _PaymentDialogState();
-}
-
-class _PaymentDialogState extends State<_PaymentDialog> {
-  static const _paymentCalculator = SplitTenderPaymentCalculator();
-
-  late final List<_TenderLineInput> _tenders = [
-    _TenderLineInput(
-      method: _initialMethod,
-      amount: widget.viewModel.total.toStringAsFixed(2),
-    ),
-  ];
-  bool _showPaymentError = false;
-  bool _isBalancingTender = false;
-
-  @override
-  void dispose() {
-    for (final tender in _tenders) {
-      tender.dispose();
-    }
-    super.dispose();
-  }
-
-  PaymentMethod get _initialMethod {
-    if (widget.viewModel.enableCashPayments) {
-      return PaymentMethod.cash;
-    }
-    if (widget.viewModel.enableCardPayments) {
-      return PaymentMethod.card;
-    }
-    return PaymentMethod.transfer;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
-    final total = widget.viewModel.total;
-    final summary = _paymentCalculator.summary(
-      total: total,
-      tenders: _tenderInputs,
-    );
-
-    return AlertDialog(
-      icon: const Icon(Icons.payments_outlined),
-      title: Text(l10n.paymentDialogTitle),
-      content: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 520),
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              if (!_hasAnyPaymentMethod)
-                Text(l10n.noEnabledPaymentMethods)
-              else ...[
-                for (var index = 0; index < _tenders.length; index++) ...[
-                  _TenderLineEditor(
-                    key: ValueKey(_tenders[index]),
-                    index: index,
-                    tender: _tenders[index],
-                    enabledMethods: _enabledMethods,
-                    canRemove: _tenders.length > 1,
-                    methodLabel: (method) => paymentMethodLabel(l10n, method),
-                    onAmountChanged: () => _rebalanceFromTender(index),
-                    onMethodChanged: () =>
-                        setState(() => _showPaymentError = false),
-                    onRemove: () => _removeTender(index),
-                  ),
-                  const SizedBox(height: 10),
-                ],
-                OutlinedButton.icon(
-                  onPressed: _addTender,
-                  icon: const Icon(Icons.add),
-                  label: Text(l10n.addSplitTenderButton),
-                ),
-              ],
-              const SizedBox(height: 16),
-              TotalRow(label: l10n.total, value: total, isStrong: true),
-              TotalRow(label: l10n.paidAmountLabel, value: summary.paid),
-              TotalRow(
-                label: l10n.remainingAmountLabel,
-                value: summary.remaining,
-              ),
-              if (summary.changeDue > 0)
-                TotalRow(label: l10n.changeDueLabel, value: summary.changeDue),
-              if (_showPaymentError) ...[
-                const SizedBox(height: 8),
-                Text(
-                  l10n.paymentTotalTooLowError,
-                  style: TextStyle(color: Theme.of(context).colorScheme.error),
-                ),
-              ],
-            ],
-          ),
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: Text(l10n.cancelButton),
-        ),
-        FilledButton.icon(
-          onPressed: _hasAnyPaymentMethod ? () => _submit(total) : null,
-          icon: const Icon(Icons.check),
-          label: Text(l10n.confirmPaymentButton),
-        ),
-      ],
-    );
-  }
-
-  void _submit(double total) {
-    final payments = _appliedPayments(total);
-    if (payments == null) {
-      setState(() => _showPaymentError = true);
-      return;
-    }
-    Navigator.of(context).pop(_PaymentInput(payments: payments));
-  }
-
-  void _addTender() {
-    final summary = _paymentCalculator.summary(
-      total: widget.viewModel.total,
-      tenders: _tenderInputs,
-    );
-    setState(() {
-      _tenders.add(
-        _TenderLineInput(
-          method: _nextTenderMethod,
-          amount: summary.remaining > 0
-              ? summary.remaining.toStringAsFixed(2)
-              : '',
-        ),
-      );
-      _showPaymentError = false;
-    });
-  }
-
-  void _removeTender(int index) {
-    setState(() {
-      _tenders.removeAt(index).dispose();
-      _rebalanceAfterTenderRemoval();
-      _showPaymentError = false;
-    });
-  }
-
-  void _rebalanceAfterTenderRemoval() {
-    if (_tenders.isEmpty) {
-      return;
-    }
-
-    final balanceIndex = _tenders.length - 1;
-    final balanceAmount = _paymentCalculator.balanceTenderAmount(
-      total: widget.viewModel.total,
-      tenders: _tenderInputs,
-      balanceIndex: balanceIndex,
-    );
-    _setTenderAmount(_tenders[balanceIndex], balanceAmount);
-  }
-
-  void _rebalanceFromTender(int editedIndex) {
-    if (_isBalancingTender) {
-      return;
-    }
-    if (_tenders.length < 2) {
-      setState(() => _showPaymentError = false);
-      return;
-    }
-
-    _isBalancingTender = true;
-    final balanceIndex = _paymentCalculator.balanceTenderIndex(
-      editedIndex: editedIndex,
-      tenderCount: _tenders.length,
-    );
-    final balanceAmount = _paymentCalculator.balanceTenderAmount(
-      total: widget.viewModel.total,
-      tenders: _tenderInputs,
-      balanceIndex: balanceIndex,
-    );
-    _setTenderAmount(_tenders[balanceIndex], balanceAmount);
-    _isBalancingTender = false;
-    setState(() => _showPaymentError = false);
-  }
-
-  void _setTenderAmount(_TenderLineInput tender, double amount) {
-    final text = amount > 0 ? amount.toStringAsFixed(2) : '';
-    if (tender.amountController.text == text) {
-      return;
-    }
-    tender.amountController.value = TextEditingValue(
-      text: text,
-      selection: TextSelection.collapsed(offset: text.length),
-    );
-  }
-
-  List<SaleCheckoutPaymentDraft>? _appliedPayments(double total) {
-    return _paymentCalculator.appliedPayments(
-      total: total,
-      tenders: _tenderInputs,
-    );
-  }
-
-  List<SplitTenderInput> get _tenderInputs {
-    return [
-      for (final tender in _tenders)
-        SplitTenderInput(
-          method: tender.method,
-          amount: _paymentCalculator.parseAmount(tender.amountController.text),
-        ),
-    ];
-  }
-
-  bool get _hasAnyPaymentMethod {
-    return widget.viewModel.enableCashPayments ||
-        widget.viewModel.enableCardPayments ||
-        widget.viewModel.enableTransferPayments;
-  }
-
-  List<PaymentMethod> get _enabledMethods {
-    return [
-      if (widget.viewModel.enableCashPayments) PaymentMethod.cash,
-      if (widget.viewModel.enableCardPayments) PaymentMethod.card,
-      if (widget.viewModel.enableTransferPayments) PaymentMethod.transfer,
-    ];
-  }
-
-  PaymentMethod get _nextTenderMethod {
-    final usedMethods = _tenders.map((tender) => tender.method).toSet();
-    for (final method in _enabledMethods) {
-      if (!usedMethods.contains(method)) {
-        return method;
-      }
-    }
-    return _initialMethod;
-  }
-}
-
-class _PaymentInput {
-  const _PaymentInput({required this.payments});
-
-  final List<SaleCheckoutPaymentDraft> payments;
-}
-
-class _TenderLineInput {
-  _TenderLineInput({required this.method, required String amount})
-    : amountController = TextEditingController(text: amount);
-
-  PaymentMethod method;
-  final TextEditingController amountController;
-
-  void dispose() {
-    amountController.dispose();
-  }
-}
-
-class _TenderLineEditor extends StatelessWidget {
-  const _TenderLineEditor({
-    super.key,
-    required this.index,
-    required this.tender,
-    required this.enabledMethods,
-    required this.canRemove,
-    required this.methodLabel,
-    required this.onAmountChanged,
-    required this.onMethodChanged,
-    required this.onRemove,
-  });
-
-  final int index;
-  final _TenderLineInput tender;
-  final List<PaymentMethod> enabledMethods;
-  final bool canRemove;
-  final String Function(PaymentMethod method) methodLabel;
-  final VoidCallback onAmountChanged;
-  final VoidCallback onMethodChanged;
-  final VoidCallback onRemove;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
-
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Expanded(
-          child: DropdownButtonFormField<PaymentMethod>(
-            initialValue: tender.method,
-            decoration: InputDecoration(
-              labelText: l10n.paymentMethodLabel,
-              border: const OutlineInputBorder(),
-            ),
-            items: [
-              for (final method in enabledMethods)
-                DropdownMenuItem(
-                  value: method,
-                  child: Text(methodLabel(method)),
-                ),
-            ],
-            onChanged: (method) {
-              if (method == null) {
-                return;
-              }
-              tender.method = method;
-              onMethodChanged();
-            },
-          ),
-        ),
-        const SizedBox(width: 8),
-        SizedBox(
-          width: 132,
-          child: TextField(
-            key: ValueKey('payment_tender_amount_$index'),
-            controller: tender.amountController,
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            inputFormatters: [DecimalTextInputFormatter()],
-            onChanged: (_) => onAmountChanged(),
-            decoration: InputDecoration(
-              labelText: l10n.paymentTenderAmountLabel,
-              border: const OutlineInputBorder(),
-            ),
-          ),
-        ),
-        const SizedBox(width: 4),
-        IconButton(
-          key: ValueKey('payment_tender_remove_$index'),
-          tooltip: l10n.removeTenderTooltip,
-          onPressed: canRemove ? onRemove : null,
-          icon: const Icon(Icons.delete_outline),
-        ),
-      ],
     );
   }
 }

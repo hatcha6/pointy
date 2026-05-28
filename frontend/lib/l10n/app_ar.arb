@@ -1802,6 +1802,23 @@
   "paymentTenderAmountLabel": "المبلغ",
   "addSplitTenderButton": "إضافة دفعة",
   "removeTenderTooltip": "حذف الدفعة",
+  "paymentMethodSplitTender": "دفعات متعددة",
+  "amountDueLabel": "المستحق",
+  "paymentQuickAmountsLabel": "مبالغ سريعة",
+  "paymentKeypadLabel": "لوحة الإدخال",
+  "paymentKeypadBackspaceTooltip": "حذف آخر رقم",
+  "paymentKeypadClearTooltip": "مسح المبلغ",
+  "paymentTenderLineTitle": "دفعة {index}",
+  "@paymentTenderLineTitle": {
+    "description": "Payment tender line title.",
+    "placeholders": {
+      "index": {
+        "type": "int"
+      }
+    }
+  },
+  "receiptToggleSubtitle": "سيتم إرسال الفاتورة إلى الطابعة بعد إتمام الدفع.",
+  "receiptToggleTooltip": "تبديل طباعة الفاتورة",
   "paidAmountLabel": "المدفوع",
   "remainingAmountLabel": "المتبقي",
   "changeDueLabel": "الباقي للعميل",
