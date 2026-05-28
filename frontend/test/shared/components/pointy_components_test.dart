@@ -90,6 +90,139 @@ void main() {
       PointyDimensions.primaryActionHeight,
     );
   });
+
+  testWidgets('PointyDataList renders reusable rows and actions', (
+    tester,
+  ) async {
+    var tapped = false;
+
+    await _pumpSurface(
+      tester,
+      width: 480,
+      child: SizedBox(
+        height: 360,
+        child: Column(
+          children: [
+            const PointyFilterSummaryBar(
+              items: [
+                PointyFilterSummaryItem(
+                  label: 'هذا الشهر',
+                  icon: Icons.filter_alt_outlined,
+                  selected: true,
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Expanded(
+              child: PointyDataList<String>(
+                items: const ['طلب شراء 1001'],
+                onLoadMore: () async {},
+                hasMore: false,
+                isLoadingInitial: false,
+                isLoadingMore: false,
+                emptyBuilder: (context) => const PointyEmptyState(
+                  icon: Icons.inbox_outlined,
+                  title: 'لا توجد سجلات',
+                ),
+                itemBuilder: (context, item) {
+                  return PointyDataRow(
+                    leading: const Icon(Icons.receipt_long_outlined),
+                    title: item,
+                    subtitle: 'المورد الرئيسي • ٣ بنود',
+                    badges: const [
+                      PointyStatusPill(
+                        label: 'مكتمل',
+                        icon: Icons.check_circle_outline,
+                      ),
+                    ],
+                    trailing: const Text('١٢٥٫٠٠'),
+                    onTap: () => tapped = true,
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    expect(find.text('هذا الشهر'), findsOneWidget);
+    expect(find.text('طلب شراء 1001'), findsOneWidget);
+    expect(find.text('مكتمل'), findsOneWidget);
+
+    await tester.tap(find.text('طلب شراء 1001'));
+    expect(tapped, isTrue);
+  });
+
+  testWidgets('PointyDataList handles loading, error, and empty states', (
+    tester,
+  ) async {
+    await _pumpSurface(
+      tester,
+      width: 390,
+      child: SizedBox(
+        height: 240,
+        child: PointyDataList<String>(
+          items: const [],
+          onLoadMore: () async {},
+          hasMore: false,
+          isLoadingInitial: true,
+          isLoadingMore: false,
+          emptyBuilder: (context) => const PointyEmptyState(
+            icon: Icons.inbox_outlined,
+            title: 'لا توجد سجلات',
+          ),
+          itemBuilder: (context, item) => Text(item),
+        ),
+      ),
+    );
+    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+
+    await _pumpSurface(
+      tester,
+      width: 390,
+      child: SizedBox(
+        height: 240,
+        child: PointyDataList<String>(
+          items: const [],
+          onLoadMore: () async {},
+          hasMore: false,
+          isLoadingInitial: false,
+          isLoadingMore: false,
+          hasError: true,
+          errorBuilder: (context) =>
+              const PointyErrorState(title: 'تعذر تحميل السجلات'),
+          emptyBuilder: (context) => const PointyEmptyState(
+            icon: Icons.inbox_outlined,
+            title: 'لا توجد سجلات',
+          ),
+          itemBuilder: (context, item) => Text(item),
+        ),
+      ),
+    );
+    expect(find.text('تعذر تحميل السجلات'), findsOneWidget);
+
+    await _pumpSurface(
+      tester,
+      width: 390,
+      child: SizedBox(
+        height: 240,
+        child: PointyDataList<String>(
+          items: const [],
+          onLoadMore: () async {},
+          hasMore: false,
+          isLoadingInitial: false,
+          isLoadingMore: false,
+          emptyBuilder: (context) => const PointyEmptyState(
+            icon: Icons.inbox_outlined,
+            title: 'لا توجد سجلات',
+          ),
+          itemBuilder: (context, item) => Text(item),
+        ),
+      ),
+    );
+    expect(find.text('لا توجد سجلات'), findsOneWidget);
+  });
 }
 
 Future<void> _pumpSurface(
@@ -102,8 +235,10 @@ Future<void> _pumpSurface(
       theme: PointyTheme.light(),
       home: Directionality(
         textDirection: TextDirection.rtl,
-        child: Center(
-          child: SizedBox(width: width, child: child),
+        child: Material(
+          child: Center(
+            child: SizedBox(width: width, child: child),
+          ),
         ),
       ),
     ),

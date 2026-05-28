@@ -5,7 +5,9 @@ import '../../../core/authorization.dart';
 import '../../../data/models/pos_user.dart';
 import '../../../shared/app_navigation_drawer.dart';
 import '../../../shared/authorization_guards.dart';
+import '../../../shared/components/components.dart';
 import '../../../shared/date_formatters.dart';
+import '../../../shared/responsive/responsive.dart';
 
 typedef ReportActionCallback = Future<void> Function(ReportRequest request);
 
@@ -335,37 +337,34 @@ class _ReportsWorkspace extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         if (constraints.maxWidth >= 900) {
-          return Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              SizedBox(
-                width: 380,
-                child: _ReportCatalog(
-                  capabilities: capabilities,
-                  selectedType: selectedType,
-                  onSelectType: onSelectType,
-                ),
+          return TwoPaneLayout(
+            dualPaneBreakpoint: 900,
+            secondaryFirst: true,
+            secondaryPaneWidth: 380,
+            secondaryPane: _ReportCatalog(
+              capabilities: capabilities,
+              selectedType: selectedType,
+              onSelectType: onSelectType,
+            ),
+            primaryPane: AdaptiveMaxWidth(
+              width: AppContentWidth.detail,
+              child: _ReportConfiguration(
+                selectedType: selectedType,
+                selectedPreset: selectedPreset,
+                dateRange: dateRange,
+                granularity: granularity,
+                includeAuditTrail: includeAuditTrail,
+                includePreparedBy: includePreparedBy,
+                runningAction: runningAction,
+                onSelectPreset: onSelectPreset,
+                onSelectStartDate: onSelectStartDate,
+                onSelectEndDate: onSelectEndDate,
+                onSelectGranularity: onSelectGranularity,
+                onToggleAuditTrail: onToggleAuditTrail,
+                onTogglePreparedBy: onTogglePreparedBy,
+                onRunAction: onRunAction,
               ),
-              const VerticalDivider(width: 1),
-              Expanded(
-                child: _ReportConfiguration(
-                  selectedType: selectedType,
-                  selectedPreset: selectedPreset,
-                  dateRange: dateRange,
-                  granularity: granularity,
-                  includeAuditTrail: includeAuditTrail,
-                  includePreparedBy: includePreparedBy,
-                  runningAction: runningAction,
-                  onSelectPreset: onSelectPreset,
-                  onSelectStartDate: onSelectStartDate,
-                  onSelectEndDate: onSelectEndDate,
-                  onSelectGranularity: onSelectGranularity,
-                  onToggleAuditTrail: onToggleAuditTrail,
-                  onTogglePreparedBy: onTogglePreparedBy,
-                  onRunAction: onRunAction,
-                ),
-              ),
-            ],
+            ),
           );
         }
 
@@ -850,7 +849,15 @@ class _OutputActionsPanel extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(l10n.reportSelectedSummary(range, granularityLabel)),
+          PointyFilterSummaryBar(
+            items: [
+              PointyFilterSummaryItem(
+                label: l10n.reportSelectedSummary(range, granularityLabel),
+                icon: Icons.filter_alt_outlined,
+                selected: true,
+              ),
+            ],
+          ),
           const SizedBox(height: 12),
           if (runningLabel != null) ...[
             _ReportActionProgress(
@@ -858,10 +865,8 @@ class _OutputActionsPanel extends StatelessWidget {
             ),
             const SizedBox(height: 12),
           ],
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
+          ResponsiveActionBar(
+            actions: [
               FilledButton.icon(
                 onPressed: runningAction != null
                     ? null

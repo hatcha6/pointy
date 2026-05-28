@@ -7,10 +7,11 @@ import '../../../data/models/register_session.dart';
 import '../../../data/models/sale_order.dart';
 import '../../../data/repositories/contact_repository.dart';
 import '../../../shared/authorization_guards.dart';
+import '../../../shared/components/components.dart';
 import '../../../shared/contact_picker_sheet.dart';
 import '../../../shared/date_formatters.dart';
 import '../../../shared/formatters.dart';
-import '../../../shared/infinite_scroll_grid.dart';
+import '../../../shared/responsive/responsive.dart';
 import '../view_models/register_session_history_view_model.dart';
 import 'sale_order_details_sheet.dart';
 
@@ -31,24 +32,27 @@ class SessionOrders extends StatelessWidget {
     final l10n = AppLocalizations.of(context)!;
     final session = viewModel.selectedSession;
     final showReconciliation = capabilities.canManageShopSettings;
+    final spacing = AdaptiveSpacing.of(context);
 
     return Padding(
-      padding: const EdgeInsets.all(16),
+      padding: spacing.pagePadding,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(
-            session == null
+          PointySectionHeader(
+            title: session == null
                 ? l10n.sessionSalesPlaceholderTitle
                 : l10n.sessionSalesTitle(session.sessionNumber),
-            style: Theme.of(context).textTheme.titleLarge,
           ),
-          const SizedBox(height: 12),
+          SizedBox(height: spacing.sm),
           Expanded(
             child: RegisterSessionOrdersGuard(
               capabilities: capabilities,
               child: session == null
-                  ? Center(child: Text(l10n.selectRegisterSessionPrompt))
+                  ? PointyEmptyState(
+                      icon: Icons.point_of_sale_outlined,
+                      title: l10n.selectRegisterSessionPrompt,
+                    )
                   : DefaultTabController(
                       length: showReconciliation ? 3 : 2,
                       child: Column(
@@ -100,67 +104,58 @@ class _SessionSummaryPanel extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.symmetric(vertical: 12),
       children: [
-        Text(
-          l10n.sessionCashSummaryTitle,
-          style: Theme.of(context).textTheme.titleMedium,
-        ),
+        PointySectionHeader(title: l10n.sessionCashSummaryTitle),
         const SizedBox(height: 8),
-        _CashMetric(
+        PointyMetricTile(
           icon: Icons.lock_open_outlined,
           label: l10n.sessionOpeningCashMetric,
           value: formatMoney(session.openingCash),
         ),
-        _CashMetric(
+        PointyMetricTile(
           icon: Icons.payments_outlined,
           label: l10n.sessionCashSalesMetric,
           value: formatMoney(session.cashSalesTotal),
         ),
-        _CashMetric(
+        PointyMetricTile(
           icon: Icons.input,
           label: l10n.sessionPayInMetric,
           value: formatMoney(session.payInTotal),
         ),
-        _CashMetric(
+        PointyMetricTile(
           icon: Icons.output,
           label: l10n.sessionPayOutMetric,
           value: formatMoney(session.payOutTotal),
         ),
-        _CashMetric(
+        PointyMetricTile(
           icon: Icons.keyboard_return_outlined,
           label: l10n.sessionCashRefundMetric,
           value: formatMoney(session.cashRefundTotal),
         ),
         const Divider(height: 24),
-        _CashMetric(
+        PointyMetricTile(
           icon: Icons.calculate_outlined,
           label: l10n.sessionExpectedCashMetric,
           value: formatMoney(session.expectedCash),
-          isEmphasized: true,
         ),
-        _CashMetric(
+        PointyMetricTile(
           icon: Icons.fact_check_outlined,
           label: l10n.sessionClosingCashMetric,
           value: session.closingCash == null
               ? l10n.shopSettingsEmptyValue
               : formatMoney(session.closingCash!),
-          isEmphasized: true,
         ),
-        _CashMetric(
+        PointyMetricTile(
           icon: Icons.difference_outlined,
           label: l10n.sessionCashVarianceMetric,
           value: variance == null
               ? l10n.shopSettingsEmptyValue
               : formatMoney(variance),
-          valueColor: session.hasCashVariance
+          accentColor: session.hasCashVariance
               ? colorScheme.error
               : colorScheme.primary,
-          isEmphasized: session.hasCashVariance,
         ),
         const SizedBox(height: 16),
-        Text(
-          l10n.sessionDenominationsTitle,
-          style: Theme.of(context).textTheme.titleMedium,
-        ),
+        PointySectionHeader(title: l10n.sessionDenominationsTitle),
         const SizedBox(height: 8),
         Wrap(
           spacing: 8,
@@ -173,44 +168,12 @@ class _SessionSummaryPanel extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 8),
-        _CashMetric(
+        PointyMetricTile(
           icon: Icons.inventory_2_outlined,
           label: l10n.sessionDenominationTotalMetric,
           value: formatMoney(session.denominationTotal),
         ),
       ],
-    );
-  }
-}
-
-class _CashMetric extends StatelessWidget {
-  const _CashMetric({
-    required this.icon,
-    required this.label,
-    required this.value,
-    this.valueColor,
-    this.isEmphasized = false,
-  });
-
-  final IconData icon;
-  final String label;
-  final String value;
-  final Color? valueColor;
-  final bool isEmphasized;
-
-  @override
-  Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
-    return ListTile(
-      dense: true,
-      contentPadding: EdgeInsets.zero,
-      leading: Icon(icon),
-      title: Text(label),
-      trailing: Text(
-        value,
-        style: (isEmphasized ? textTheme.titleMedium : textTheme.bodyLarge)
-            ?.copyWith(color: valueColor),
-      ),
     );
   }
 }
@@ -250,42 +213,39 @@ class _SessionSalesList extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         Expanded(
-          child: switch ((
-            viewModel.isLoadingOrders,
-            viewModel.hasOrderLoadError,
-            viewModel.orders.isEmpty,
-          )) {
-            (true, _, _) => const Center(child: CircularProgressIndicator()),
-            (_, true, _) => Center(child: Text(l10n.sessionSalesLoadError)),
-            (_, _, true) => Center(child: Text(l10n.emptySessionSales)),
-            _ => InfiniteScrollList(
-              items: viewModel.orders,
-              onLoadMore: viewModel.loadMoreOrders,
-              hasMore: viewModel.hasMoreOrders,
-              isLoadingInitial: viewModel.isLoadingOrders,
-              isLoadingMore: viewModel.isLoadingMoreOrders,
-              emptyBuilder: (context) =>
-                  Center(child: Text(l10n.emptySessionSales)),
-              separatorBuilder: (_, _) => const Divider(height: 1),
-              itemBuilder: (context, order) {
-                final hasReturnableItems = order.lines.any(
-                  (line) => line.returnableQuantity > 0,
-                );
-                final canManagerAdjust =
-                    capabilities.canManageShopSettings &&
-                    order.status == 'paid' &&
-                    hasReturnableItems;
-                final canVoid = order.canVoid || canManagerAdjust;
-                final canReturn = order.canReturn || canManagerAdjust;
-                return SessionOrderTile(
-                  order: order,
-                  onReprint: viewModel.requestReprint,
-                  onVoid: canVoid ? viewModel.voidOrder : null,
-                  onReturn: canReturn ? viewModel.returnItems : null,
-                );
-              },
+          child: PointyDataList<SaleOrder>(
+            items: viewModel.orders,
+            onLoadMore: viewModel.loadMoreOrders,
+            hasMore: viewModel.hasMoreOrders,
+            isLoadingInitial: viewModel.isLoadingOrders,
+            isLoadingMore: viewModel.isLoadingMoreOrders,
+            hasError: viewModel.hasOrderLoadError,
+            errorBuilder: (context) => PointyErrorState(
+              title: l10n.sessionSalesLoadError,
+              icon: Icons.receipt_long_outlined,
             ),
-          },
+            emptyBuilder: (context) => PointyEmptyState(
+              icon: Icons.receipt_long_outlined,
+              title: l10n.emptySessionSales,
+            ),
+            itemBuilder: (context, order) {
+              final hasReturnableItems = order.lines.any(
+                (line) => line.returnableQuantity > 0,
+              );
+              final canManagerAdjust =
+                  capabilities.canManageShopSettings &&
+                  order.status == 'paid' &&
+                  hasReturnableItems;
+              final canVoid = order.canVoid || canManagerAdjust;
+              final canReturn = order.canReturn || canManagerAdjust;
+              return SessionOrderTile(
+                order: order,
+                onReprint: viewModel.requestReprint,
+                onVoid: canVoid ? viewModel.voidOrder : null,
+                onReturn: canReturn ? viewModel.returnItems : null,
+              );
+            },
+          ),
         ),
       ],
     );
@@ -350,28 +310,25 @@ class _SessionCashMovementList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    return switch ((
-      viewModel.isLoadingCashMovements,
-      viewModel.hasCashMovementLoadError,
-      viewModel.cashMovements.isEmpty,
-    )) {
-      (true, _, _) => const Center(child: CircularProgressIndicator()),
-      (_, true, _) => Center(child: Text(l10n.sessionCashMovementsLoadError)),
-      (_, _, true) => Center(child: Text(l10n.emptySessionCashMovements)),
-      _ => InfiniteScrollList(
-        items: viewModel.cashMovements,
-        onLoadMore: viewModel.loadMoreCashMovements,
-        hasMore: viewModel.hasMoreCashMovements,
-        isLoadingInitial: viewModel.isLoadingCashMovements,
-        isLoadingMore: viewModel.isLoadingMoreCashMovements,
-        emptyBuilder: (context) =>
-            Center(child: Text(l10n.emptySessionCashMovements)),
-        separatorBuilder: (_, _) => const Divider(height: 1),
-        itemBuilder: (context, movement) {
-          return SessionCashMovementTile(movement: movement);
-        },
+    return PointyDataList<RegisterCashMovement>(
+      items: viewModel.cashMovements,
+      onLoadMore: viewModel.loadMoreCashMovements,
+      hasMore: viewModel.hasMoreCashMovements,
+      isLoadingInitial: viewModel.isLoadingCashMovements,
+      isLoadingMore: viewModel.isLoadingMoreCashMovements,
+      hasError: viewModel.hasCashMovementLoadError,
+      errorBuilder: (context) => PointyErrorState(
+        title: l10n.sessionCashMovementsLoadError,
+        icon: Icons.payments_outlined,
       ),
-    };
+      emptyBuilder: (context) => PointyEmptyState(
+        icon: Icons.payments_outlined,
+        title: l10n.emptySessionCashMovements,
+      ),
+      itemBuilder: (context, movement) {
+        return SessionCashMovementTile(movement: movement);
+      },
+    );
   }
 }
 
@@ -399,17 +356,15 @@ class SessionOrderTile extends StatelessWidget {
     final l10n = AppLocalizations.of(context)!;
     final receiptNumber = order.receiptNumber ?? l10n.saleReceiptFallback;
 
-    return ListTile(
+    return PointyDataRow(
       leading: const Icon(Icons.receipt_long_outlined),
-      title: Text(l10n.saleReceiptTitle(receiptNumber)),
-      subtitle: Text(
-        [
-          if (order.createdAt != null) formatDateTime(order.createdAt!),
-          l10n.saleLineCount(order.lines.length),
-          if (order.customerName != null && order.customerName!.isNotEmpty)
-            order.customerName!,
-        ].join(' • '),
-      ),
+      title: l10n.saleReceiptTitle(receiptNumber),
+      subtitle: [
+        if (order.createdAt != null) formatDateTime(order.createdAt!),
+        l10n.saleLineCount(order.lines.length),
+        if (order.customerName != null && order.customerName!.isNotEmpty)
+          order.customerName!,
+      ].join(' • '),
       trailing: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.end,
@@ -454,17 +409,15 @@ class SessionCashMovementTile extends StatelessWidget {
     final l10n = AppLocalizations.of(context)!;
     final isPayIn = movement.movementType == RegisterCashMovementType.payIn;
 
-    return ListTile(
+    return PointyDataRow(
       leading: Icon(isPayIn ? Icons.input : Icons.output),
-      title: Text(
-        isPayIn ? l10n.cashMovementPayInLabel : l10n.cashMovementPayOutLabel,
-      ),
-      subtitle: Text(
-        [
-          if (movement.createdAt != null) formatDateTime(movement.createdAt!),
-          movement.reason,
-        ].join(' • '),
-      ),
+      title: isPayIn
+          ? l10n.cashMovementPayInLabel
+          : l10n.cashMovementPayOutLabel,
+      subtitle: [
+        if (movement.createdAt != null) formatDateTime(movement.createdAt!),
+        movement.reason,
+      ].join(' • '),
       trailing: Text(
         formatMoney(movement.amount),
         style: Theme.of(context).textTheme.titleMedium?.copyWith(

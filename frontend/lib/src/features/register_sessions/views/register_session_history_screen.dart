@@ -6,6 +6,7 @@ import '../../../data/models/pos_user.dart';
 import '../../../data/repositories/contact_repository.dart';
 import '../../../shared/app_navigation_drawer.dart';
 import '../../../shared/authorization_guards.dart';
+import '../../../shared/responsive/responsive.dart';
 import '../view_models/register_session_history_view_model.dart';
 import 'register_session_list.dart';
 import 'session_orders.dart';
@@ -126,36 +127,24 @@ class _HistoryWorkspace extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final sessions = RegisterSessionList(
-          viewModel: viewModel,
-          capabilities: capabilities,
-        );
-        final orders = SessionOrders(
-          viewModel: viewModel,
-          contactRepository: contactRepository,
-          capabilities: capabilities,
-        );
+    final sessions = RegisterSessionList(
+      viewModel: viewModel,
+      capabilities: capabilities,
+    );
+    final orders = SessionOrders(
+      viewModel: viewModel,
+      contactRepository: contactRepository,
+      capabilities: capabilities,
+    );
 
-        if (constraints.maxWidth >= 900) {
-          return Row(
-            children: [
-              SizedBox(width: 420, child: sessions),
-              const VerticalDivider(width: 1),
-              Expanded(child: orders),
-            ],
-          );
-        }
-
-        return Column(
-          children: [
-            Expanded(child: sessions),
-            const Divider(height: 1),
-            Expanded(child: orders),
-          ],
-        );
-      },
+    return TwoPaneLayout(
+      dualPaneBreakpoint: 900,
+      primaryPane: orders,
+      secondaryPane: sessions,
+      secondaryFirst: true,
+      secondaryPaneWidth: 420,
+      compactPrimaryFlex: 1,
+      compactSecondaryFlex: 1,
     );
   }
 }

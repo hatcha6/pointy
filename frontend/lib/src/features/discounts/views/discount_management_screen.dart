@@ -8,9 +8,10 @@ import '../../../data/repositories/catalog_repository.dart';
 import '../../../data/repositories/contact_repository.dart';
 import '../../../shared/app_navigation_drawer.dart';
 import '../../../shared/authorization_guards.dart';
+import '../../../shared/components/components.dart';
 import '../../../shared/date_formatters.dart';
 import '../../../shared/formatters.dart';
-import '../../../shared/infinite_scroll_grid.dart';
+import '../../../shared/responsive/responsive.dart';
 import '../view_models/discount_management_view_model.dart';
 import 'discount_rule_query_controls.dart';
 import 'discount_rule_form.dart';
@@ -114,19 +115,10 @@ class DiscountManagementScreen extends StatelessWidget {
                 catalogRepository: catalogRepository,
                 contactRepository: contactRepository,
                 capabilities: capabilities,
+                onCreateRule: viewModel.isSaving
+                    ? null
+                    : () => _showRuleForm(context),
               ),
-            ),
-          ),
-          floatingActionButton: AuthorizationGuard(
-            capabilities: capabilities,
-            capability: AppCapability.createDiscountRule,
-            fallback: const SizedBox.shrink(),
-            child: FloatingActionButton.extended(
-              onPressed: viewModel.isSaving
-                  ? null
-                  : () => _showRuleForm(context),
-              icon: const Icon(Icons.add),
-              label: Text(l10n.discountCreateButton),
             ),
           ),
         );
@@ -135,30 +127,21 @@ class DiscountManagementScreen extends StatelessWidget {
   }
 
   Future<void> _showRuleForm(BuildContext context, {DiscountRule? rule}) {
-    return showModalBottomSheet<void>(
+    return showAdaptiveModalBottomSheet<void>(
       context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      showDragHandle: true,
+      size: AdaptiveModalSize.expanded,
+      maxHeightFactor: 0.94,
       builder: (sheetContext) {
         return Padding(
           padding: EdgeInsets.only(
             bottom: MediaQuery.viewInsetsOf(sheetContext).bottom,
           ),
-          child: FractionallySizedBox(
-            heightFactor: 0.94,
-            child: Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 760),
-                child: DiscountRuleForm(
-                  viewModel: viewModel,
-                  catalogRepository: catalogRepository,
-                  contactRepository: contactRepository,
-                  rule: rule,
-                  onSaved: () => Navigator.of(sheetContext).pop(),
-                ),
-              ),
-            ),
+          child: DiscountRuleForm(
+            viewModel: viewModel,
+            catalogRepository: catalogRepository,
+            contactRepository: contactRepository,
+            rule: rule,
+            onSaved: () => Navigator.of(sheetContext).pop(),
           ),
         );
       },
@@ -172,29 +155,44 @@ class _DiscountManagementBody extends StatelessWidget {
     required this.catalogRepository,
     required this.contactRepository,
     required this.capabilities,
+    required this.onCreateRule,
   });
 
   final DiscountManagementViewModel viewModel;
   final CatalogRepository catalogRepository;
   final ContactRepository contactRepository;
   final AuthorizationCapabilities capabilities;
+  final VoidCallback? onCreateRule;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    final spacing = AdaptiveSpacing.of(context);
 
     return Padding(
-      padding: const EdgeInsets.all(16),
+      padding: spacing.pagePadding,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          ResponsiveActionBar(
+            alignment: WrapAlignment.start,
+            actions: [
+              if (capabilities.canCreateDiscountRule)
+                FilledButton.icon(
+                  onPressed: onCreateRule,
+                  icon: const Icon(Icons.add),
+                  label: Text(l10n.discountCreateButton),
+                ),
+            ],
+          ),
+          SizedBox(height: spacing.sm),
           DiscountRuleQueryControls(
             query: viewModel.query,
             onSearchChanged: viewModel.updateSearch,
             onQueryChanged: viewModel.applyQuery,
             enabled: !viewModel.isLoading,
           ),
-          const SizedBox(height: 12),
+          SizedBox(height: spacing.sm),
           if (viewModel.hasSaveError)
             Padding(
               padding: const EdgeInsets.only(bottom: 8),
@@ -204,27 +202,30 @@ class _DiscountManagementBody extends StatelessWidget {
               ),
             ),
           Expanded(
-            child: viewModel.hasLoadError && viewModel.rules.isEmpty
-                ? Center(child: Text(l10n.discountLoadError))
-                : InfiniteScrollList<DiscountRule>(
-                    items: viewModel.rules,
-                    onLoadMore: viewModel.loadMoreRules,
-                    hasMore: viewModel.hasMoreRules,
-                    isLoadingInitial: viewModel.isLoading,
-                    isLoadingMore: viewModel.isLoadingMore,
-                    emptyBuilder: (context) {
-                      return Center(child: Text(l10n.discountEmptyRules));
-                    },
-                    separatorBuilder: (_, _) => const SizedBox(height: 8),
-                    itemBuilder: (context, rule) {
-                      return _DiscountRuleTile(
-                        rule: rule,
-                        viewModel: viewModel,
-                        capabilities: capabilities,
-                        onEdit: () => _openForm(context, rule),
-                      );
-                    },
-                  ),
+            child: PointyDataList<DiscountRule>(
+              items: viewModel.rules,
+              onLoadMore: viewModel.loadMoreRules,
+              hasMore: viewModel.hasMoreRules,
+              isLoadingInitial: viewModel.isLoading,
+              isLoadingMore: viewModel.isLoadingMore,
+              hasError: viewModel.hasLoadError,
+              errorBuilder: (context) => PointyErrorState(
+                title: l10n.discountLoadError,
+                icon: Icons.local_offer_outlined,
+              ),
+              emptyBuilder: (context) => PointyEmptyState(
+                icon: Icons.local_offer_outlined,
+                title: l10n.discountEmptyRules,
+              ),
+              itemBuilder: (context, rule) {
+                return _DiscountRuleTile(
+                  rule: rule,
+                  viewModel: viewModel,
+                  capabilities: capabilities,
+                  onEdit: () => _openForm(context, rule),
+                );
+              },
+            ),
           ),
         ],
       ),
@@ -232,30 +233,21 @@ class _DiscountManagementBody extends StatelessWidget {
   }
 
   Future<void> _openForm(BuildContext context, DiscountRule rule) {
-    return showModalBottomSheet<void>(
+    return showAdaptiveModalBottomSheet<void>(
       context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      showDragHandle: true,
+      size: AdaptiveModalSize.expanded,
+      maxHeightFactor: 0.94,
       builder: (sheetContext) {
         return Padding(
           padding: EdgeInsets.only(
             bottom: MediaQuery.viewInsetsOf(sheetContext).bottom,
           ),
-          child: FractionallySizedBox(
-            heightFactor: 0.94,
-            child: Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 760),
-                child: DiscountRuleForm(
-                  viewModel: viewModel,
-                  catalogRepository: catalogRepository,
-                  contactRepository: contactRepository,
-                  rule: rule,
-                  onSaved: () => Navigator.of(sheetContext).pop(),
-                ),
-              ),
-            ),
+          child: DiscountRuleForm(
+            viewModel: viewModel,
+            catalogRepository: catalogRepository,
+            contactRepository: contactRepository,
+            rule: rule,
+            onSaved: () => Navigator.of(sheetContext).pop(),
           ),
         );
       },
@@ -282,133 +274,69 @@ class _DiscountRuleTile extends StatelessWidget {
     final colorScheme = Theme.of(context).colorScheme;
     final canChange = capabilities.canChangeDiscountRule && !viewModel.isSaving;
     final canDelete = capabilities.canDeleteDiscountRule && !viewModel.isSaving;
+    final facts = [
+      if (rule.description.isNotEmpty) rule.description,
+      ..._ruleFacts(l10n, rule),
+    ];
 
-    return Card(
-      margin: EdgeInsets.zero,
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final content = Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    CircleAvatar(
-                      backgroundColor: rule.isActive
-                          ? colorScheme.primaryContainer
-                          : colorScheme.surfaceContainerHighest,
-                      foregroundColor: rule.isActive
-                          ? colorScheme.onPrimaryContainer
-                          : colorScheme.onSurfaceVariant,
-                      child: Icon(
-                        rule.applicationType ==
-                                DiscountApplicationType.couponCode
-                            ? Icons.confirmation_number_outlined
-                            : Icons.auto_awesome_outlined,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            rule.name,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: Theme.of(context).textTheme.titleMedium,
-                          ),
-                          if (rule.description.isNotEmpty)
-                            Text(
-                              rule.description,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          const SizedBox(height: 6),
-                          Wrap(
-                            spacing: 6,
-                            runSpacing: 6,
-                            children: [
-                              _StatusChip(
-                                label: rule.isActive
-                                    ? l10n.discountStatusActive
-                                    : l10n.discountStatusInactive,
-                                icon: rule.isActive
-                                    ? Icons.check_circle_outline
-                                    : Icons.pause_circle_outline,
-                              ),
-                              _StatusChip(
-                                label: _channelLabel(l10n, rule.channel),
-                                icon: Icons.compare_arrows_outlined,
-                              ),
-                              _StatusChip(
-                                label: _applicationLabel(
-                                  l10n,
-                                  rule.applicationType,
-                                ),
-                                icon: Icons.rule_folder_outlined,
-                              ),
-                              _StatusChip(
-                                label: _scopeLabel(l10n, rule.scope),
-                                icon: Icons.view_list_outlined,
-                              ),
-                              if (rule.exclusive)
-                                _StatusChip(
-                                  label: l10n.discountExclusiveShort,
-                                  icon: Icons.block_outlined,
-                                ),
-                              if (rule.isArchived)
-                                _StatusChip(
-                                  label: l10n.discountArchivedLabel,
-                                  icon: Icons.archive_outlined,
-                                ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                _RuleFacts(rule: rule),
-              ],
-            );
-
-            final actions = _RuleActions(
-              rule: rule,
-              canChange: canChange,
-              canDelete: canDelete,
-              onEdit: onEdit,
-              onToggle: () => _toggleRule(context),
-              onArchive: () => _confirmArchive(context),
-            );
-
-            if (constraints.maxWidth >= 720) {
-              return Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(child: content),
-                  const SizedBox(width: 12),
-                  actions,
-                ],
-              );
-            }
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                content,
-                const SizedBox(height: 8),
-                Align(
-                  alignment: AlignmentDirectional.centerEnd,
-                  child: actions,
-                ),
-              ],
-            );
-          },
+    return PointyDataRow(
+      leading: CircleAvatar(
+        backgroundColor: rule.isActive
+            ? colorScheme.primaryContainer
+            : colorScheme.surfaceContainerHighest,
+        foregroundColor: rule.isActive
+            ? colorScheme.onPrimaryContainer
+            : colorScheme.onSurfaceVariant,
+        child: Icon(
+          rule.applicationType == DiscountApplicationType.couponCode
+              ? Icons.confirmation_number_outlined
+              : Icons.auto_awesome_outlined,
         ),
       ),
+      title: rule.name,
+      subtitle: facts.join(' • '),
+      badges: [
+        _StatusChip(
+          label: rule.isActive
+              ? l10n.discountStatusActive
+              : l10n.discountStatusInactive,
+          icon: rule.isActive
+              ? Icons.check_circle_outline
+              : Icons.pause_circle_outline,
+        ),
+        _StatusChip(
+          label: _channelLabel(l10n, rule.channel),
+          icon: Icons.compare_arrows_outlined,
+        ),
+        _StatusChip(
+          label: _applicationLabel(l10n, rule.applicationType),
+          icon: Icons.rule_folder_outlined,
+        ),
+        _StatusChip(
+          label: _scopeLabel(l10n, rule.scope),
+          icon: Icons.view_list_outlined,
+        ),
+        if (rule.exclusive)
+          _StatusChip(
+            label: l10n.discountExclusiveShort,
+            icon: Icons.block_outlined,
+          ),
+        if (rule.isArchived)
+          _StatusChip(
+            label: l10n.discountArchivedLabel,
+            icon: Icons.archive_outlined,
+          ),
+      ],
+      actions: [
+        _RuleActions(
+          rule: rule,
+          canChange: canChange,
+          canDelete: canDelete,
+          onEdit: onEdit,
+          onToggle: () => _toggleRule(context),
+          onArchive: () => _confirmArchive(context),
+        ),
+      ],
     );
   }
 
@@ -496,81 +424,62 @@ class _DiscountRuleTile extends StatelessWidget {
   }
 }
 
-class _RuleFacts extends StatelessWidget {
-  const _RuleFacts({required this.rule});
-
-  final DiscountRule rule;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
-    final facts = [
-      l10n.discountValueSummary(
-        _valueTypeLabel(l10n, rule.valueType),
-        _valueText(l10n, rule),
+List<String> _ruleFacts(AppLocalizations l10n, DiscountRule rule) {
+  return [
+    l10n.discountValueSummary(
+      _valueTypeLabel(l10n, rule.valueType),
+      _valueText(l10n, rule),
+    ),
+    l10n.discountPrioritySummary(rule.priority),
+    if (rule.couponCode.isNotEmpty) l10n.discountCouponSummary(rule.couponCode),
+    if (rule.minOrderSubtotal > 0)
+      l10n.discountMinSubtotalSummary(formatMoney(rule.minOrderSubtotal)),
+    if (rule.minLineQuantity != null)
+      l10n.discountMinLineQuantitySummary(rule.minLineQuantity!),
+    if (rule.maxDiscountAmount != null)
+      l10n.discountMaxAmountSummary(formatMoney(rule.maxDiscountAmount!)),
+    if (rule.usageLimit != null)
+      l10n.discountUsageSummary(rule.redemptionCount, rule.usageLimit!),
+    if (rule.usageLimit == null)
+      l10n.discountUsageCountSummary(rule.redemptionCount),
+    l10n.discountAppliedCountSummary(rule.appliedCount),
+    if (rule.startsAt != null)
+      l10n.discountStartsAtSummary(formatDateTime(rule.startsAt!)),
+    if (rule.endsAt != null)
+      l10n.discountEndsAtSummary(formatDateTime(rule.endsAt!)),
+    if (rule.products.isNotEmpty)
+      l10n.discountProductConstraintSummary(rule.products.length),
+    if (rule.variants.isNotEmpty)
+      l10n.discountVariantConstraintSummary(rule.variants.length),
+    if (rule.productCategories.isNotEmpty)
+      l10n.discountProductCategoryConstraintSummary(
+        rule.productCategories.length,
       ),
-      l10n.discountPrioritySummary(rule.priority),
-      if (rule.couponCode.isNotEmpty)
-        l10n.discountCouponSummary(rule.couponCode),
-      if (rule.minOrderSubtotal > 0)
-        l10n.discountMinSubtotalSummary(formatMoney(rule.minOrderSubtotal)),
-      if (rule.minLineQuantity != null)
-        l10n.discountMinLineQuantitySummary(rule.minLineQuantity!),
-      if (rule.maxDiscountAmount != null)
-        l10n.discountMaxAmountSummary(formatMoney(rule.maxDiscountAmount!)),
-      if (rule.usageLimit != null)
-        l10n.discountUsageSummary(rule.redemptionCount, rule.usageLimit!),
-      if (rule.usageLimit == null)
-        l10n.discountUsageCountSummary(rule.redemptionCount),
-      l10n.discountAppliedCountSummary(rule.appliedCount),
-      if (rule.startsAt != null)
-        l10n.discountStartsAtSummary(formatDateTime(rule.startsAt!)),
-      if (rule.endsAt != null)
-        l10n.discountEndsAtSummary(formatDateTime(rule.endsAt!)),
-      if (rule.products.isNotEmpty)
-        l10n.discountProductConstraintSummary(rule.products.length),
-      if (rule.variants.isNotEmpty)
-        l10n.discountVariantConstraintSummary(rule.variants.length),
-      if (rule.productCategories.isNotEmpty)
-        l10n.discountProductCategoryConstraintSummary(
-          rule.productCategories.length,
-        ),
-      if (rule.customers.isNotEmpty)
-        l10n.discountCustomerConstraintSummary(rule.customers.length),
-      if (rule.suppliers.isNotEmpty)
-        l10n.discountSupplierConstraintSummary(rule.suppliers.length),
-    ];
+    if (rule.customers.isNotEmpty)
+      l10n.discountCustomerConstraintSummary(rule.customers.length),
+    if (rule.suppliers.isNotEmpty)
+      l10n.discountSupplierConstraintSummary(rule.suppliers.length),
+  ];
+}
 
-    return Wrap(
-      spacing: 8,
-      runSpacing: 6,
-      children: [
-        for (final fact in facts)
-          Text(fact, style: Theme.of(context).textTheme.bodySmall),
-      ],
-    );
-  }
+String _valueText(AppLocalizations l10n, DiscountRule rule) {
+  return switch (rule.valueType) {
+    DiscountValueType.percentage => l10n.discountPercentageValue(
+      rule.value.toStringAsFixed(2),
+    ),
+    DiscountValueType.fixedAmount ||
+    DiscountValueType.fixedUnitAmount ||
+    DiscountValueType.fixedPrice => formatMoney(rule.value),
+  };
+}
 
-  String _valueText(AppLocalizations l10n, DiscountRule rule) {
-    return switch (rule.valueType) {
-      DiscountValueType.percentage => l10n.discountPercentageValue(
-        rule.value.toStringAsFixed(2),
-      ),
-      DiscountValueType.fixedAmount ||
-      DiscountValueType.fixedUnitAmount ||
-      DiscountValueType.fixedPrice => formatMoney(rule.value),
-    };
-  }
-
-  String _valueTypeLabel(AppLocalizations l10n, DiscountValueType type) {
-    return switch (type) {
-      DiscountValueType.percentage => l10n.discountValueTypePercentage,
-      DiscountValueType.fixedAmount => l10n.discountValueTypeFixedAmount,
-      DiscountValueType.fixedUnitAmount =>
-        l10n.discountValueTypeFixedUnitAmount,
-      DiscountValueType.fixedPrice => l10n.discountValueTypeFixedPrice,
-    };
-  }
+String _valueTypeLabel(AppLocalizations l10n, DiscountValueType type) {
+  return switch (type) {
+    DiscountValueType.percentage => l10n.discountValueTypePercentage,
+    DiscountValueType.fixedAmount => l10n.discountValueTypeFixedAmount,
+    DiscountValueType.fixedUnitAmount => l10n.discountValueTypeFixedUnitAmount,
+    DiscountValueType.fixedPrice => l10n.discountValueTypeFixedPrice,
+  };
 }
 
 class _StatusChip extends StatelessWidget {
@@ -581,11 +490,7 @@ class _StatusChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Chip(
-      visualDensity: VisualDensity.compact,
-      avatar: Icon(icon, size: 16),
-      label: Text(label),
-    );
+    return PointyStatusPill(label: label, icon: icon);
   }
 }
 

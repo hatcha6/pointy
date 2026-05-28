@@ -4,6 +4,7 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 import '../../../data/models/purchase_submission.dart';
 import '../../../data/repositories/contact_repository.dart';
 import '../../../shared/query_controls/query_control_bar.dart';
+import '../../../shared/responsive/responsive.dart';
 import 'purchase_order_filter_sheet.dart';
 
 class PurchaseOrderQueryControls extends StatelessWidget {
@@ -46,10 +47,9 @@ class PurchaseOrderQueryControls extends StatelessWidget {
   }
 
   Future<void> _showFilters(BuildContext context) async {
-    final updatedQuery = await showModalBottomSheet<PurchaseOrderQuery>(
+    final updatedQuery = await showAdaptiveModalBottomSheet<PurchaseOrderQuery>(
       context: context,
-      showDragHandle: true,
-      useSafeArea: true,
+      size: AdaptiveModalSize.standard,
       builder: (context) => PurchaseOrderFilterSheet(
         query: query,
         contactRepository: contactRepository,

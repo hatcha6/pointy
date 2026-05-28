@@ -3,6 +3,7 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../data/models/discount_rule.dart';
 import '../../../shared/query_controls/query_control_bar.dart';
+import '../../../shared/responsive/responsive.dart';
 import 'discount_rule_filter_sheet.dart';
 
 class DiscountRuleQueryControls extends StatelessWidget {
@@ -42,10 +43,9 @@ class DiscountRuleQueryControls extends StatelessWidget {
   }
 
   Future<void> _showFilters(BuildContext context) async {
-    final updatedQuery = await showModalBottomSheet<DiscountRuleQuery>(
+    final updatedQuery = await showAdaptiveModalBottomSheet<DiscountRuleQuery>(
       context: context,
-      showDragHandle: true,
-      useSafeArea: true,
+      size: AdaptiveModalSize.standard,
       builder: (context) => DiscountRuleFilterSheet(query: query),
     );
 

@@ -6,10 +6,11 @@ import '../../../data/models/contact.dart';
 import '../../../data/models/purchase_submission.dart';
 import '../../../data/repositories/contact_repository.dart';
 import '../../../data/repositories/purchase_repository.dart';
+import '../../../shared/components/components.dart';
 import '../../../shared/date_formatters.dart';
 import '../../../shared/detail_section.dart';
 import '../../../shared/formatters.dart';
-import '../../../shared/infinite_scroll_grid.dart';
+import '../../../shared/responsive/responsive.dart';
 import '../../purchasing/views/purchase_order_details_screen.dart';
 import '../../purchasing/views/purchase_order_filter_sheet.dart';
 import '../view_models/supplier_details_view_model.dart';
@@ -65,32 +66,35 @@ class _SupplierDetailsScreenState extends State<SupplierDetailsScreen> {
             ],
           ),
           body: SafeArea(
-            child: ListView(
-              padding: const EdgeInsets.all(16),
-              children: [
-                _SupplierHeader(supplier: supplier),
-                const SizedBox(height: 12),
-                DetailSection(
-                  title: l10n.supplierPurchaseSummaryTitle,
-                  icon: Icons.summarize_outlined,
-                  child: _SupplierTotals(viewModel: _viewModel),
-                ),
-                const SizedBox(height: 12),
-                DetailSection(
-                  title: l10n.supplierPurchaseHistoryTitle,
-                  icon: Icons.receipt_long_outlined,
-                  child: _SupplierPurchaseHistory(
-                    viewModel: _viewModel,
-                    onOpenPurchaseOrder: _openPurchaseOrder,
+            child: AdaptiveMaxWidth(
+              width: AppContentWidth.detail,
+              child: ListView(
+                padding: const EdgeInsets.all(16),
+                children: [
+                  _SupplierHeader(supplier: supplier),
+                  const SizedBox(height: 12),
+                  PointyDetailSection(
+                    title: l10n.supplierPurchaseSummaryTitle,
+                    icon: Icons.summarize_outlined,
+                    child: _SupplierTotals(viewModel: _viewModel),
                   ),
-                ),
-                const SizedBox(height: 12),
-                DetailSection(
-                  title: l10n.supplierReturnRefundHistoryTitle,
-                  icon: Icons.keyboard_return_outlined,
-                  child: _SupplierAdjustmentHistory(viewModel: _viewModel),
-                ),
-              ],
+                  const SizedBox(height: 12),
+                  PointyDetailSection(
+                    title: l10n.supplierPurchaseHistoryTitle,
+                    icon: Icons.receipt_long_outlined,
+                    child: _SupplierPurchaseHistory(
+                      viewModel: _viewModel,
+                      onOpenPurchaseOrder: _openPurchaseOrder,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  PointyDetailSection(
+                    title: l10n.supplierReturnRefundHistoryTitle,
+                    icon: Icons.keyboard_return_outlined,
+                    child: _SupplierAdjustmentHistory(viewModel: _viewModel),
+                  ),
+                ],
+              ),
             ),
           ),
         );
@@ -239,36 +243,30 @@ class _SupplierPurchaseHistory extends StatelessWidget {
         viewModel.purchaseHistory.length,
         viewModel.hasMorePurchaseHistory,
       ),
-      child: InfiniteScrollList<PurchaseOrder>(
+      child: PointyDataList<PurchaseOrder>(
         items: viewModel.purchaseHistory,
         onLoadMore: viewModel.loadMorePurchaseHistory,
         hasMore: viewModel.hasMorePurchaseHistory,
         isLoadingInitial: viewModel.isLoadingHistory,
         isLoadingMore: viewModel.isLoadingMoreHistory,
         emptyBuilder: (context) => Text(l10n.supplierPurchaseHistoryEmpty),
-        separatorBuilder: (_, _) => const Divider(height: 1),
+        padding: EdgeInsets.zero,
+        framed: false,
         itemBuilder: (context, order) {
-          return ListTile(
-            contentPadding: EdgeInsets.zero,
+          return PointyDataRow(
             leading: const Icon(Icons.receipt_long_outlined),
-            title: Text(
-              order.orderNumber.isEmpty
-                  ? l10n.purchaseOrderFallbackTitle(order.id)
-                  : order.orderNumber,
-            ),
-            subtitle: Text(
-              [
-                purchaseOrderStatusLabel(l10n, order.status),
-                l10n.purchaseOrderLineCount(order.lineCount),
-                if (order.receivedAt != null) formatDateTime(order.receivedAt!),
-                if (order.balanceDue > 0)
-                  l10n.purchaseOutstandingAmountValue(
-                    formatMoney(order.balanceDue),
-                  ),
-              ].join(' • '),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
+            title: order.orderNumber.isEmpty
+                ? l10n.purchaseOrderFallbackTitle(order.id)
+                : order.orderNumber,
+            subtitle: [
+              purchaseOrderStatusLabel(l10n, order.status),
+              l10n.purchaseOrderLineCount(order.lineCount),
+              if (order.receivedAt != null) formatDateTime(order.receivedAt!),
+              if (order.balanceDue > 0)
+                l10n.purchaseOutstandingAmountValue(
+                  formatMoney(order.balanceDue),
+                ),
+            ].join(' • '),
             trailing: Text(formatMoney(order.total)),
             onTap: () => onOpenPurchaseOrder(order),
           );
@@ -302,36 +300,28 @@ class _SupplierAdjustmentHistory extends StatelessWidget {
         viewModel.adjustmentHistory.length,
         viewModel.hasMoreAdjustments,
       ),
-      child: InfiniteScrollList<PurchaseAdjustmentHistoryEntry>(
+      child: PointyDataList<PurchaseAdjustmentHistoryEntry>(
         items: viewModel.adjustmentHistory,
         onLoadMore: viewModel.loadMoreAdjustments,
         hasMore: viewModel.hasMoreAdjustments,
         isLoadingInitial: viewModel.isLoadingAdjustments,
         isLoadingMore: viewModel.isLoadingMoreAdjustments,
         emptyBuilder: (context) => Text(l10n.supplierReturnRefundHistoryEmpty),
-        separatorBuilder: (_, _) => const Divider(height: 1),
+        padding: EdgeInsets.zero,
+        framed: false,
         itemBuilder: (context, adjustment) {
-          return ListTile(
-            contentPadding: EdgeInsets.zero,
+          return PointyDataRow(
             leading: Icon(_adjustmentIcon(adjustment.type)),
-            title: Text(_adjustmentTypeLabel(l10n, adjustment.type)),
-            subtitle: Text(
-              [
-                if (adjustment.purchaseOrderNumber != null &&
-                    adjustment.purchaseOrderNumber!.isNotEmpty)
-                  l10n.purchaseOrderNumberValue(
-                    adjustment.purchaseOrderNumber!,
-                  ),
-                if (adjustment.createdAt != null)
-                  formatDateTime(adjustment.createdAt!),
-                l10n.purchaseAdjustmentHistoryLineCount(
-                  adjustment.lines.length,
-                ),
-                if (adjustment.reason.isNotEmpty) adjustment.reason,
-              ].join(' • '),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
+            title: _adjustmentTypeLabel(l10n, adjustment.type),
+            subtitle: [
+              if (adjustment.purchaseOrderNumber != null &&
+                  adjustment.purchaseOrderNumber!.isNotEmpty)
+                l10n.purchaseOrderNumberValue(adjustment.purchaseOrderNumber!),
+              if (adjustment.createdAt != null)
+                formatDateTime(adjustment.createdAt!),
+              l10n.purchaseAdjustmentHistoryLineCount(adjustment.lines.length),
+              if (adjustment.reason.isNotEmpty) adjustment.reason,
+            ].join(' • '),
             trailing: Text(formatMoney(adjustment.amount)),
           );
         },

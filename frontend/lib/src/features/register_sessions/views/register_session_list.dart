@@ -4,9 +4,10 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 import '../../../core/authorization.dart';
 import '../../../data/models/register_session.dart';
 import '../../../shared/authorization_guards.dart';
+import '../../../shared/components/components.dart';
 import '../../../shared/date_formatters.dart';
 import '../../../shared/formatters.dart';
-import '../../../shared/infinite_scroll_grid.dart';
+import '../../../shared/responsive/responsive.dart';
 import '../view_models/register_session_history_view_model.dart';
 
 class RegisterSessionList extends StatelessWidget {
@@ -22,52 +23,49 @@ class RegisterSessionList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    final spacing = AdaptiveSpacing.of(context);
 
     return ColoredBox(
-      color: Colors.white,
+      color: Theme.of(context).colorScheme.surface,
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: spacing.pagePadding,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(
-              l10n.registerSessionsListTitle,
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
-            const SizedBox(height: 12),
+            PointySectionHeader(title: l10n.registerSessionsListTitle),
+            SizedBox(height: spacing.sm),
             Expanded(
-              child: viewModel.hasSessionLoadError && viewModel.sessions.isEmpty
-                  ? Center(child: Text(l10n.registerSessionHistoryLoadError))
-                  : InfiniteScrollList(
-                      items: viewModel.sessions,
-                      onLoadMore: viewModel.loadMoreSessions,
-                      hasMore: viewModel.hasMoreSessions,
-                      isLoadingInitial: viewModel.isLoadingSessions,
-                      isLoadingMore: viewModel.isLoadingMoreSessions,
-                      emptyBuilder: (context) {
-                        return Center(
-                          child: Text(l10n.emptyRegisterSessionHistory),
-                        );
-                      },
-                      separatorBuilder: (_, _) => const Divider(height: 1),
-                      itemBuilder: (context, session) {
-                        return RegisterSessionOrdersCapabilityBuilder(
-                          capabilities: capabilities,
-                          builder: (context, canViewOrders) {
-                            return RegisterSessionTile(
-                              session: session,
-                              isSelected:
-                                  viewModel.selectedSession?.id == session.id,
-                              showCashVariance:
-                                  capabilities.canManageShopSettings,
-                              onTap: canViewOrders
-                                  ? () => viewModel.selectSession(session)
-                                  : null,
-                            );
-                          },
-                        );
-                      },
-                    ),
+              child: PointyDataList<RegisterSession>(
+                items: viewModel.sessions,
+                onLoadMore: viewModel.loadMoreSessions,
+                hasMore: viewModel.hasMoreSessions,
+                isLoadingInitial: viewModel.isLoadingSessions,
+                isLoadingMore: viewModel.isLoadingMoreSessions,
+                hasError: viewModel.hasSessionLoadError,
+                errorBuilder: (context) => PointyErrorState(
+                  title: l10n.registerSessionHistoryLoadError,
+                  icon: Icons.manage_history_outlined,
+                ),
+                emptyBuilder: (context) => PointyEmptyState(
+                  icon: Icons.manage_history_outlined,
+                  title: l10n.emptyRegisterSessionHistory,
+                ),
+                itemBuilder: (context, session) {
+                  return RegisterSessionOrdersCapabilityBuilder(
+                    capabilities: capabilities,
+                    builder: (context, canViewOrders) {
+                      return RegisterSessionTile(
+                        session: session,
+                        isSelected: viewModel.selectedSession?.id == session.id,
+                        showCashVariance: capabilities.canManageShopSettings,
+                        onTap: canViewOrders
+                            ? () => viewModel.selectSession(session)
+                            : null,
+                      );
+                    },
+                  );
+                },
+              ),
             ),
           ],
         ),
@@ -93,25 +91,23 @@ class RegisterSessionTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    final colorScheme = Theme.of(context).colorScheme;
     final statusLabel = session.status == 'closed'
         ? l10n.registerSessionStatusClosed
         : l10n.registerSessionStatusOpen;
+    final statusIcon = session.status == 'closed'
+        ? Icons.lock_outline
+        : Icons.point_of_sale_outlined;
 
-    return ListTile(
+    return PointyDataRow(
       selected: isSelected,
-      leading: Icon(
-        session.status == 'closed'
-            ? Icons.lock_outline
-            : Icons.point_of_sale_outlined,
-      ),
-      title: Text(l10n.resumeRegisterSessionTitle(session.sessionNumber)),
-      subtitle: Text(
-        [
-          statusLabel,
-          if (session.openedAt != null) formatDateTime(session.openedAt!),
-          l10n.registerSessionOpeningCash(formatMoney(session.openingCash)),
-        ].join(' • '),
-      ),
+      leading: Icon(statusIcon, color: colorScheme.primary),
+      title: l10n.resumeRegisterSessionTitle(session.sessionNumber),
+      subtitle: [
+        if (session.openedAt != null) formatDateTime(session.openedAt!),
+        l10n.registerSessionOpeningCash(formatMoney(session.openingCash)),
+      ].join(' • '),
+      badges: [PointyStatusPill(label: statusLabel, icon: statusIcon)],
       trailing: onTap == null
           ? null
           : Row(

@@ -4,7 +4,8 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 import '../core/result.dart';
 import '../data/models/contact.dart';
 import '../data/repositories/contact_repository.dart';
-import 'infinite_scroll_grid.dart';
+import 'components/components.dart';
+import 'responsive/responsive.dart';
 
 class ContactSelectionTile extends StatelessWidget {
   const ContactSelectionTile({
@@ -115,11 +116,10 @@ Future<Customer?> showCustomerPickerSheet({
   required BuildContext context,
   required ContactRepository repository,
 }) {
-  return showModalBottomSheet<Customer?>(
+  return showAdaptiveModalBottomSheet<Customer?>(
     context: context,
-    isScrollControlled: true,
-    showDragHandle: true,
-    useSafeArea: true,
+    size: AdaptiveModalSize.standard,
+    maxHeightFactor: 0.9,
     builder: (context) => _CustomerPicker(repository: repository),
   );
 }
@@ -128,11 +128,10 @@ Future<SupplierContact?> showSupplierPickerSheet({
   required BuildContext context,
   required ContactRepository repository,
 }) {
-  return showModalBottomSheet<SupplierContact?>(
+  return showAdaptiveModalBottomSheet<SupplierContact?>(
     context: context,
-    isScrollControlled: true,
-    showDragHandle: true,
-    useSafeArea: true,
+    size: AdaptiveModalSize.standard,
+    maxHeightFactor: 0.9,
     builder: (context) => _SupplierPicker(repository: repository),
   );
 }
@@ -141,11 +140,10 @@ Future<Customer?> showCreateCustomerSheet({
   required BuildContext context,
   required ContactRepository repository,
 }) {
-  return showModalBottomSheet<Customer?>(
+  return showAdaptiveModalBottomSheet<Customer?>(
     context: context,
-    isScrollControlled: true,
-    showDragHandle: true,
-    useSafeArea: true,
+    size: AdaptiveModalSize.standard,
+    maxHeightFactor: 0.92,
     builder: (context) {
       return Padding(
         padding: EdgeInsets.only(
@@ -164,11 +162,10 @@ Future<SupplierContact?> showCreateSupplierSheet({
   required BuildContext context,
   required ContactRepository repository,
 }) {
-  return showModalBottomSheet<SupplierContact?>(
+  return showAdaptiveModalBottomSheet<SupplierContact?>(
     context: context,
-    isScrollControlled: true,
-    showDragHandle: true,
-    useSafeArea: true,
+    size: AdaptiveModalSize.standard,
+    maxHeightFactor: 0.92,
     builder: (context) {
       return Padding(
         padding: EdgeInsets.only(
@@ -215,10 +212,6 @@ class _CustomerPickerState extends State<_CustomerPicker> {
       title: l10n.chooseCustomerTitle,
       searchHint: l10n.contactSearchHint,
       createLabel: l10n.createNewCustomerAction,
-      isLoading: _isLoading,
-      hasError: _hasError,
-      errorText: l10n.contactsLoadError,
-      emptyText: l10n.emptyCustomers,
       onSearchChanged: (search) {
         _query = _query.copyWith(search: search);
         _load(reset: true);
@@ -233,24 +226,31 @@ class _CustomerPickerState extends State<_CustomerPicker> {
         }
         Navigator.of(context).pop(created);
       },
-      child: InfiniteScrollList<Customer>(
+      child: PointyDataList<Customer>(
         items: _customers,
         onLoadMore: () => _load(reset: false),
         hasMore: _hasMore,
         isLoadingInitial: _isLoading,
         isLoadingMore: _isLoadingMore,
-        emptyBuilder: (context) => Center(child: Text(l10n.emptyCustomers)),
-        separatorBuilder: (_, _) => const Divider(height: 1),
+        hasError: _hasError,
+        errorBuilder: (context) => PointyErrorState(
+          title: l10n.contactsLoadError,
+          icon: Icons.person_search_outlined,
+        ),
+        emptyBuilder: (context) => PointyEmptyState(
+          icon: Icons.person_outline,
+          title: l10n.emptyCustomers,
+        ),
+        padding: EdgeInsets.zero,
+        framed: false,
         itemBuilder: (context, customer) {
-          return ListTile(
+          return PointyDataRow(
             leading: const Icon(Icons.person_outline),
-            title: Text(customer.fullName),
-            subtitle: Text(
-              [
-                if (customer.phone.isNotEmpty) customer.phone,
-                if (customer.email.isNotEmpty) customer.email,
-              ].join(' • '),
-            ),
+            title: customer.fullName,
+            subtitle: [
+              if (customer.phone.isNotEmpty) customer.phone,
+              if (customer.email.isNotEmpty) customer.email,
+            ].join(' • '),
             onTap: () => Navigator.of(context).pop(customer),
           );
         },
@@ -337,10 +337,6 @@ class _SupplierPickerState extends State<_SupplierPicker> {
       title: l10n.chooseSupplierTitle,
       searchHint: l10n.contactSearchHint,
       createLabel: l10n.createNewSupplierAction,
-      isLoading: _isLoading,
-      hasError: _hasError,
-      errorText: l10n.contactsLoadError,
-      emptyText: l10n.emptySuppliers,
       onSearchChanged: (search) {
         _query = _query.copyWith(search: search);
         _load(reset: true);
@@ -355,25 +351,32 @@ class _SupplierPickerState extends State<_SupplierPicker> {
         }
         Navigator.of(context).pop(created);
       },
-      child: InfiniteScrollList<SupplierContact>(
+      child: PointyDataList<SupplierContact>(
         items: _suppliers,
         onLoadMore: () => _load(reset: false),
         hasMore: _hasMore,
         isLoadingInitial: _isLoading,
         isLoadingMore: _isLoadingMore,
-        emptyBuilder: (context) => Center(child: Text(l10n.emptySuppliers)),
-        separatorBuilder: (_, _) => const Divider(height: 1),
+        hasError: _hasError,
+        errorBuilder: (context) => PointyErrorState(
+          title: l10n.contactsLoadError,
+          icon: Icons.person_search_outlined,
+        ),
+        emptyBuilder: (context) => PointyEmptyState(
+          icon: Icons.local_shipping_outlined,
+          title: l10n.emptySuppliers,
+        ),
+        padding: EdgeInsets.zero,
+        framed: false,
         itemBuilder: (context, supplier) {
-          return ListTile(
+          return PointyDataRow(
             leading: const Icon(Icons.local_shipping_outlined),
-            title: Text(supplier.name),
-            subtitle: Text(
-              [
-                if (supplier.contactName.isNotEmpty) supplier.contactName,
-                if (supplier.phone.isNotEmpty) supplier.phone,
-                if (supplier.email.isNotEmpty) supplier.email,
-              ].join(' • '),
-            ),
+            title: supplier.name,
+            subtitle: [
+              if (supplier.contactName.isNotEmpty) supplier.contactName,
+              if (supplier.phone.isNotEmpty) supplier.phone,
+              if (supplier.email.isNotEmpty) supplier.email,
+            ].join(' • '),
             onTap: () => Navigator.of(context).pop(supplier),
           );
         },
@@ -433,10 +436,6 @@ class _PickerShell extends StatelessWidget {
     required this.title,
     required this.searchHint,
     required this.createLabel,
-    required this.isLoading,
-    required this.hasError,
-    required this.errorText,
-    required this.emptyText,
     required this.onSearchChanged,
     required this.onCreate,
     required this.child,
@@ -445,33 +444,34 @@ class _PickerShell extends StatelessWidget {
   final String title;
   final String searchHint;
   final String createLabel;
-  final bool isLoading;
-  final bool hasError;
-  final String errorText;
-  final String emptyText;
   final ValueChanged<String> onSearchChanged;
   final VoidCallback onCreate;
   final Widget child;
 
   @override
   Widget build(BuildContext context) {
+    final spacing = AdaptiveSpacing.of(context);
+
     return ConstrainedBox(
       constraints: BoxConstraints(
         maxHeight: MediaQuery.sizeOf(context).height * 0.86,
       ),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+        padding: EdgeInsetsDirectional.fromSTEB(
+          spacing.lg,
+          0,
+          spacing.lg,
+          spacing.lg,
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    title,
-                    style: Theme.of(context).textTheme.titleLarge,
-                  ),
-                ),
+            ResponsiveActionBar(
+              leading: Text(
+                title,
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+              actions: [
                 FilledButton.icon(
                   onPressed: onCreate,
                   icon: const Icon(Icons.add),
@@ -479,7 +479,7 @@ class _PickerShell extends StatelessWidget {
                 ),
               ],
             ),
-            const SizedBox(height: 12),
+            SizedBox(height: spacing.md),
             TextField(
               decoration: InputDecoration(
                 hintText: searchHint,
@@ -489,41 +489,12 @@ class _PickerShell extends StatelessWidget {
               ),
               onChanged: onSearchChanged,
             ),
-            if (hasError) ...[
-              const SizedBox(height: 8),
-              Text(
-                errorText,
-                style: TextStyle(color: Theme.of(context).colorScheme.error),
-              ),
-            ],
-            const SizedBox(height: 8),
-            Expanded(
-              child: isLoading
-                  ? const Center(child: CircularProgressIndicator())
-                  : _EmptyAwareChild(emptyText: emptyText, child: child),
-            ),
+            SizedBox(height: spacing.sm),
+            Expanded(child: child),
           ],
         ),
       ),
     );
-  }
-}
-
-class _EmptyAwareChild extends StatelessWidget {
-  const _EmptyAwareChild({required this.emptyText, required this.child});
-
-  final String emptyText;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    if (child is ListView) {
-      final list = child as ListView;
-      if ((list.semanticChildCount ?? 0) == 0) {
-        return Center(child: Text(emptyText));
-      }
-    }
-    return child;
   }
 }
 

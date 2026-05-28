@@ -11,6 +11,7 @@ class _PurchaseOrderActions extends StatelessWidget {
 
     return _Section(
       title: l10n.purchaseOrderActionsTitle,
+      icon: Icons.tune_outlined,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -36,6 +37,8 @@ class _PurchaseOrderActions extends StatelessWidget {
             const SizedBox(height: 8),
           ],
           ResponsiveActionBar(
+            compactBreakpoint: AppBreakpoints.largePhoneMin,
+            expandActionsOnCompact: false,
             spacing: 8,
             runSpacing: 8,
             actions: [

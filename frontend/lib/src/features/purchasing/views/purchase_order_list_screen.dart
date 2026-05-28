@@ -7,9 +7,11 @@ import '../../../data/models/purchase_submission.dart';
 import '../../../data/repositories/contact_repository.dart';
 import '../../../shared/app_navigation_drawer.dart';
 import '../../../shared/authorization_guards.dart';
+import '../../../shared/components/components.dart';
 import '../../../shared/date_formatters.dart';
 import '../../../shared/formatters.dart';
 import '../../../shared/infinite_scroll_grid.dart';
+import '../../../shared/responsive/responsive.dart';
 import '../view_models/purchase_order_list_view_model.dart';
 import 'purchase_order_filter_sheet.dart';
 import 'purchase_order_query_controls.dart';
@@ -106,16 +108,6 @@ class PurchaseOrderListScreen extends StatelessWidget {
               ),
             ],
           ),
-          floatingActionButton: AuthorizationGuard(
-            capabilities: capabilities,
-            capability: AppCapability.createPurchaseOrder,
-            fallback: const SizedBox.shrink(),
-            child: FloatingActionButton.extended(
-              onPressed: onCreatePurchaseOrder,
-              icon: const Icon(Icons.add),
-              label: Text(l10n.newPurchaseOrderButton),
-            ),
-          ),
           body: SafeArea(
             child: AuthorizationGuard(
               capabilities: capabilities,
@@ -123,6 +115,8 @@ class PurchaseOrderListScreen extends StatelessWidget {
               child: _PurchaseOrderListBody(
                 viewModel: viewModel,
                 contactRepository: contactRepository,
+                capabilities: capabilities,
+                onCreatePurchaseOrder: onCreatePurchaseOrder,
                 onOpenPurchaseOrder: onOpenPurchaseOrder,
               ),
             ),
@@ -137,27 +131,44 @@ class _PurchaseOrderListBody extends StatelessWidget {
   const _PurchaseOrderListBody({
     required this.viewModel,
     required this.contactRepository,
+    required this.capabilities,
+    required this.onCreatePurchaseOrder,
     required this.onOpenPurchaseOrder,
   });
 
   final PurchaseOrderListViewModel viewModel;
   final ContactRepository contactRepository;
+  final AuthorizationCapabilities capabilities;
+  final VoidCallback onCreatePurchaseOrder;
   final ValueChanged<PurchaseOrder> onOpenPurchaseOrder;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    final spacing = AdaptiveSpacing.of(context);
 
     return Padding(
-      padding: const EdgeInsets.all(16),
+      padding: spacing.pagePadding,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          ResponsiveActionBar(
+            alignment: WrapAlignment.start,
+            actions: [
+              if (capabilities.canCreatePurchaseOrder)
+                FilledButton.icon(
+                  onPressed: onCreatePurchaseOrder,
+                  icon: const Icon(Icons.add),
+                  label: Text(l10n.newPurchaseOrderButton),
+                ),
+            ],
+          ),
+          SizedBox(height: spacing.sm),
           _OutstandingPurchasesSection(
             viewModel: viewModel,
             onOpenPurchaseOrder: onOpenPurchaseOrder,
           ),
-          const SizedBox(height: 12),
+          SizedBox(height: spacing.sm),
           PurchaseOrderQueryControls(
             query: viewModel.query,
             contactRepository: contactRepository,
@@ -165,27 +176,30 @@ class _PurchaseOrderListBody extends StatelessWidget {
             onQueryChanged: viewModel.applyQuery,
             enabled: !viewModel.isLoading,
           ),
-          const SizedBox(height: 12),
+          SizedBox(height: spacing.md),
           Expanded(
-            child: viewModel.hasLoadError && viewModel.orders.isEmpty
-                ? Center(child: Text(l10n.purchaseOrdersLoadError))
-                : InfiniteScrollList(
-                    items: viewModel.orders,
-                    onLoadMore: viewModel.loadMoreOrders,
-                    hasMore: viewModel.hasMoreOrders,
-                    isLoadingInitial: viewModel.isLoading,
-                    isLoadingMore: viewModel.isLoadingMore,
-                    emptyBuilder: (context) {
-                      return Center(child: Text(l10n.emptyPurchaseOrders));
-                    },
-                    separatorBuilder: (_, _) => const SizedBox(height: 8),
-                    itemBuilder: (context, order) {
-                      return PurchaseOrderTile(
-                        order: order,
-                        onTap: () => onOpenPurchaseOrder(order),
-                      );
-                    },
-                  ),
+            child: PointyDataList<PurchaseOrder>(
+              items: viewModel.orders,
+              onLoadMore: viewModel.loadMoreOrders,
+              hasMore: viewModel.hasMoreOrders,
+              isLoadingInitial: viewModel.isLoading,
+              isLoadingMore: viewModel.isLoadingMore,
+              hasError: viewModel.hasLoadError,
+              errorBuilder: (context) => PointyErrorState(
+                title: l10n.purchaseOrdersLoadError,
+                icon: Icons.receipt_long_outlined,
+              ),
+              emptyBuilder: (context) => PointyEmptyState(
+                icon: Icons.receipt_long_outlined,
+                title: l10n.emptyPurchaseOrders,
+              ),
+              itemBuilder: (context, order) {
+                return PurchaseOrderTile(
+                  order: order,
+                  onTap: () => onOpenPurchaseOrder(order),
+                );
+              },
+            ),
           ),
         ],
       ),
@@ -339,48 +353,41 @@ class PurchaseOrderTile extends StatelessWidget {
     final receivedAt = order.receivedAt;
     final date = receivedAt ?? submittedAt ?? order.createdAt;
 
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: colorScheme.surface,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: colorScheme.outlineVariant),
+    return PointyDataRow(
+      leading: Icon(_statusIcon(order.status), color: colorScheme.primary),
+      title: l10n.purchaseOrderNumberValue(title),
+      subtitle: [
+        if (order.supplierInvoiceNumber.isNotEmpty)
+          l10n.supplierInvoiceNumberValue(order.supplierInvoiceNumber),
+        if (order.supplierInvoiceDate != null)
+          l10n.supplierInvoiceDateValue(formatDate(order.supplierInvoiceDate!)),
+        if (order.paymentStatus.isNotEmpty)
+          _paymentStatusLabel(l10n, order.paymentStatus),
+        l10n.purchaseOrderLineCount(order.lineCount),
+        if (date != null) formatDateTime(date),
+        if (order.dueDate != null)
+          l10n.purchaseOrderDueDateValue(formatDate(order.dueDate!)),
+        if (order.supplierName != null && order.supplierName!.isNotEmpty)
+          order.supplierName!,
+      ].join(' • '),
+      badges: [
+        PointyStatusPill(
+          label: purchaseOrderStatusLabel(l10n, order.status),
+          icon: _statusIcon(order.status),
+        ),
+      ],
+      trailing: Text(
+        order.balanceDue > 0
+            ? formatMoney(order.balanceDue)
+            : formatMoney(order.total),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+          color: colorScheme.onSurface,
+          fontWeight: FontWeight.w800,
+        ),
       ),
-      child: ListTile(
-        leading: Icon(_statusIcon(order.status)),
-        title: Text(
-          l10n.purchaseOrderNumberValue(title),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
-        subtitle: Text(
-          [
-            purchaseOrderStatusLabel(l10n, order.status),
-            if (order.supplierInvoiceNumber.isNotEmpty)
-              l10n.supplierInvoiceNumberValue(order.supplierInvoiceNumber),
-            if (order.supplierInvoiceDate != null)
-              l10n.supplierInvoiceDateValue(
-                formatDate(order.supplierInvoiceDate!),
-              ),
-            if (order.paymentStatus.isNotEmpty)
-              _paymentStatusLabel(l10n, order.paymentStatus),
-            l10n.purchaseOrderLineCount(order.lineCount),
-            if (date != null) formatDateTime(date),
-            if (order.dueDate != null)
-              l10n.purchaseOrderDueDateValue(formatDate(order.dueDate!)),
-            if (order.supplierName != null && order.supplierName!.isNotEmpty)
-              order.supplierName!,
-          ].join(' • '),
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-        ),
-        trailing: Text(
-          order.balanceDue > 0
-              ? formatMoney(order.balanceDue)
-              : formatMoney(order.total),
-          style: Theme.of(context).textTheme.titleMedium,
-        ),
-        onTap: onTap,
-      ),
+      onTap: onTap,
     );
   }
 

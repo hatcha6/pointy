@@ -4,6 +4,7 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 import '../../../core/authorization.dart';
 import '../../../data/models/purchase_submission.dart';
 import '../../../data/repositories/purchase_repository.dart';
+import '../../../shared/components/components.dart';
 import '../../../shared/date_formatters.dart';
 import '../../../shared/formatters.dart';
 import '../../../shared/order_totals.dart';
@@ -91,21 +92,24 @@ class _PurchaseOrderDetailsBody extends StatelessWidget {
   Widget build(BuildContext context) {
     final order = viewModel.order;
 
-    return ListView(
-      padding: const EdgeInsets.all(16),
-      children: [
-        _PurchaseOrderSummary(order: order),
-        const SizedBox(height: 12),
-        _PurchaseOrderActions(viewModel: viewModel),
-        const SizedBox(height: 16),
-        _PurchaseOrderLines(order: order),
-        const SizedBox(height: 16),
-        _PurchaseReceiptHistory(order: order),
-        const SizedBox(height: 16),
-        _PurchaseOrderAdjustmentHistory(order: order),
-        const SizedBox(height: 16),
-        _PurchaseOrderTotals(order: order),
-      ],
+    return AdaptiveMaxWidth(
+      width: AppContentWidth.detail,
+      child: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          _PurchaseOrderActions(viewModel: viewModel),
+          const SizedBox(height: 12),
+          _PurchaseOrderSummary(order: order),
+          const SizedBox(height: 16),
+          _PurchaseOrderLines(order: order),
+          const SizedBox(height: 16),
+          _PurchaseReceiptHistory(order: order),
+          const SizedBox(height: 16),
+          _PurchaseOrderAdjustmentHistory(order: order),
+          const SizedBox(height: 16),
+          _PurchaseOrderTotals(order: order),
+        ],
+      ),
     );
   }
 }
@@ -155,6 +159,7 @@ class _PurchaseOrderSummary extends StatelessWidget {
 
     return _Section(
       title: l10n.purchaseOrderDetailsSummaryTitle,
+      icon: Icons.fact_check_outlined,
       child: Column(
         children: [
           _DetailRow(
@@ -249,57 +254,50 @@ class _PurchaseOrderLines extends StatelessWidget {
 
     return _Section(
       title: l10n.purchaseOrderLinesTitle,
+      icon: Icons.inventory_2_outlined,
       child: Column(
         children: [
           for (final (index, line) in order.lines.indexed) ...[
-            if (index > 0) const Divider(height: 1),
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              title: Text(
-                line.displayName.isEmpty
-                    ? l10n.purchaseOrderUnknownProduct
-                    : line.displayName,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-              subtitle: Text(
-                [
-                  if (line.variantSku != null && line.variantSku!.isNotEmpty)
-                    line.variantSku!,
-                  l10n.purchaseOrderLineQuantity(line.quantity),
-                  l10n.purchaseLineReceivedQuantity(line.receivedQuantity),
-                  l10n.purchaseLineOpenQuantity(line.receivableQuantity),
-                  if (line.damagedQuantity > 0)
-                    l10n.purchaseLineDamagedQuantity(line.damagedQuantity),
-                  l10n.purchaseLineVarianceValue(
-                    _formatSignedQuantity(line.varianceQuantity),
+            if (index > 0) const SizedBox(height: 8),
+            PointyDataRow(
+              leading: const Icon(Icons.inventory_2_outlined),
+              title: line.displayName.isEmpty
+                  ? l10n.purchaseOrderUnknownProduct
+                  : line.displayName,
+              subtitle: [
+                if (line.variantSku != null && line.variantSku!.isNotEmpty)
+                  line.variantSku!,
+                l10n.purchaseOrderLineQuantity(line.quantity),
+                l10n.purchaseLineReceivedQuantity(line.receivedQuantity),
+                l10n.purchaseLineOpenQuantity(line.receivableQuantity),
+                if (line.damagedQuantity > 0)
+                  l10n.purchaseLineDamagedQuantity(line.damagedQuantity),
+                l10n.purchaseLineVarianceValue(
+                  _formatSignedQuantity(line.varianceQuantity),
+                ),
+                l10n.unitPriceEach(formatMoney(line.unitCost)),
+                if (line.discountAmount > 0)
+                  l10n.discountLineValue(formatMoney(line.discountAmount)),
+                if (line.netUnitCost != null && line.discountAmount > 0)
+                  l10n.purchaseLineNetCostValue(formatMoney(line.netUnitCost!)),
+                if (_costChangeText(l10n, line) != null)
+                  _costChangeText(l10n, line)!,
+                if (line.landedCostAllocation != null &&
+                    line.landedCostAllocation! > 0)
+                  l10n.purchaseLineLandedCostValue(
+                    formatMoney(line.landedCostAllocation!),
                   ),
-                  l10n.unitPriceEach(formatMoney(line.unitCost)),
-                  if (line.discountAmount > 0)
-                    l10n.discountLineValue(formatMoney(line.discountAmount)),
-                  if (line.netUnitCost != null && line.discountAmount > 0)
-                    l10n.purchaseLineNetCostValue(
-                      formatMoney(line.netUnitCost!),
-                    ),
-                  if (_costChangeText(l10n, line) != null)
-                    _costChangeText(l10n, line)!,
-                  if (line.landedCostAllocation != null &&
-                      line.landedCostAllocation! > 0)
-                    l10n.purchaseLineLandedCostValue(
-                      formatMoney(line.landedCostAllocation!),
-                    ),
-                  if (line.effectiveUnitCost != null &&
-                      line.effectiveUnitCost != line.unitCost)
-                    l10n.purchaseLineEffectiveCostValue(
-                      formatMoney(line.effectiveUnitCost!),
-                    ),
-                  if (line.adjustedQuantity > 0)
-                    l10n.purchaseAdjustmentLineRemaining(
-                      line.adjustableQuantity,
-                      line.quantity,
-                    ),
-                ].join(' • '),
-              ),
+                if (line.effectiveUnitCost != null &&
+                    line.effectiveUnitCost != line.unitCost)
+                  l10n.purchaseLineEffectiveCostValue(
+                    formatMoney(line.effectiveUnitCost!),
+                  ),
+                if (line.adjustedQuantity > 0)
+                  l10n.purchaseAdjustmentLineRemaining(
+                    line.adjustableQuantity,
+                    line.quantity,
+                  ),
+              ].join(' • '),
               trailing: Text(formatMoney(line.landedLineTotal ?? line.total)),
             ),
           ],
@@ -368,45 +366,41 @@ class _PurchaseReceiptHistory extends StatelessWidget {
 
     return _Section(
       title: l10n.purchaseReceiptHistoryTitle,
+      icon: Icons.move_to_inbox_outlined,
       child: order.receipts.isEmpty
           ? Text(l10n.purchaseReceiptHistoryEmpty)
           : Column(
               children: [
                 for (final (index, receipt) in order.receipts.indexed) ...[
-                  if (index > 0) const Divider(height: 1),
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
+                  if (index > 0) const SizedBox(height: 8),
+                  PointyDataRow(
                     leading: const Icon(Icons.inventory_2_outlined),
-                    title: Text(
-                      receipt.createdAt == null
-                          ? l10n.purchaseReceiptHistoryItemFallback
-                          : formatDateTime(receipt.createdAt!),
-                    ),
-                    subtitle: Text(
-                      [
-                        l10n.purchaseReceiptHistoryLineCount(
-                          receipt.lines.length,
-                        ),
-                        for (final line in receipt.lines)
-                          [
-                            line.displayName.isEmpty
-                                ? l10n.purchaseOrderUnknownProduct
-                                : line.displayName,
-                            l10n.purchaseLineReceivedQuantity(
-                              line.quantityReceived,
+                    title: receipt.createdAt == null
+                        ? l10n.purchaseReceiptHistoryItemFallback
+                        : formatDateTime(receipt.createdAt!),
+                    subtitle: [
+                      l10n.purchaseReceiptHistoryLineCount(
+                        receipt.lines.length,
+                      ),
+                      for (final line in receipt.lines)
+                        [
+                          line.displayName.isEmpty
+                              ? l10n.purchaseOrderUnknownProduct
+                              : line.displayName,
+                          l10n.purchaseLineReceivedQuantity(
+                            line.quantityReceived,
+                          ),
+                          if (line.quantityDamaged > 0)
+                            l10n.purchaseLineDamagedQuantity(
+                              line.quantityDamaged,
                             ),
-                            if (line.quantityDamaged > 0)
-                              l10n.purchaseLineDamagedQuantity(
-                                line.quantityDamaged,
-                              ),
-                            if (line.quantityRejected > 0)
-                              l10n.purchaseLineRejectedQuantity(
-                                line.quantityRejected,
-                              ),
-                          ].join('، '),
-                        if (receipt.note.isNotEmpty) receipt.note,
-                      ].join(' • '),
-                    ),
+                          if (line.quantityRejected > 0)
+                            l10n.purchaseLineRejectedQuantity(
+                              line.quantityRejected,
+                            ),
+                        ].join('، '),
+                      if (receipt.note.isNotEmpty) receipt.note,
+                    ].join(' • '),
                   ),
                 ],
               ],
@@ -426,52 +420,50 @@ class _PurchaseOrderAdjustmentHistory extends StatelessWidget {
 
     return _Section(
       title: l10n.purchaseOrderAdjustmentsTitle,
+      icon: Icons.assignment_return_outlined,
       child: order.adjustments.isEmpty
           ? Text(l10n.purchaseAdjustmentHistoryEmpty)
           : Column(
               children: [
                 for (final (index, adjustment)
                     in order.adjustments.indexed) ...[
-                  if (index > 0) const Divider(height: 1),
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
+                  if (index > 0) const SizedBox(height: 8),
+                  PointyDataRow(
                     leading: Icon(_adjustmentIcon(adjustment.type)),
-                    title: Text(_adjustmentTypeLabel(l10n, adjustment.type)),
-                    subtitle: Text(
-                      [
-                        if (adjustment.createdAt != null)
-                          formatDateTime(adjustment.createdAt!),
-                        l10n.purchaseAdjustmentHistoryLineCount(
-                          adjustment.lines.length,
+                    title: _adjustmentTypeLabel(l10n, adjustment.type),
+                    subtitle: [
+                      if (adjustment.createdAt != null)
+                        formatDateTime(adjustment.createdAt!),
+                      l10n.purchaseAdjustmentHistoryLineCount(
+                        adjustment.lines.length,
+                      ),
+                      if (adjustment.replacementLines.isNotEmpty)
+                        l10n.purchaseExchangeReplacementLineCount(
+                          adjustment.replacementLines.length,
                         ),
-                        if (adjustment.replacementLines.isNotEmpty)
-                          l10n.purchaseExchangeReplacementLineCount(
-                            adjustment.replacementLines.length,
+                      for (final line in adjustment.replacementLines)
+                        l10n.purchaseExchangeReplacementHistoryLine(
+                          line.displayName.isEmpty
+                              ? l10n.purchaseOrderUnknownProduct
+                              : line.displayName,
+                          line.quantity,
+                          formatMoney(line.unitCost),
+                        ),
+                      if (_adjustmentMethodLabel(l10n, adjustment) != null)
+                        l10n.purchaseAdjustmentSettlementMethod(
+                          _adjustmentMethodLabel(l10n, adjustment)!,
+                        ),
+                      for (final credit in adjustment.credits)
+                        l10n.purchaseAdjustmentSupplierCreditCreated(
+                          formatMoney(credit.amount),
+                        ),
+                      for (final credit in adjustment.credits)
+                        if (credit.remainingAmount != null)
+                          l10n.purchaseAdjustmentSupplierCreditRemaining(
+                            formatMoney(credit.remainingAmount!),
                           ),
-                        for (final line in adjustment.replacementLines)
-                          l10n.purchaseExchangeReplacementHistoryLine(
-                            line.displayName.isEmpty
-                                ? l10n.purchaseOrderUnknownProduct
-                                : line.displayName,
-                            line.quantity,
-                            formatMoney(line.unitCost),
-                          ),
-                        if (_adjustmentMethodLabel(l10n, adjustment) != null)
-                          l10n.purchaseAdjustmentSettlementMethod(
-                            _adjustmentMethodLabel(l10n, adjustment)!,
-                          ),
-                        for (final credit in adjustment.credits)
-                          l10n.purchaseAdjustmentSupplierCreditCreated(
-                            formatMoney(credit.amount),
-                          ),
-                        for (final credit in adjustment.credits)
-                          if (credit.remainingAmount != null)
-                            l10n.purchaseAdjustmentSupplierCreditRemaining(
-                              formatMoney(credit.remainingAmount!),
-                            ),
-                        if (adjustment.reason.isNotEmpty) adjustment.reason,
-                      ].join(' • '),
-                    ),
+                      if (adjustment.reason.isNotEmpty) adjustment.reason,
+                    ].join(' • '),
                     trailing: Text(formatMoney(adjustment.amount)),
                   ),
                 ],
@@ -515,38 +507,19 @@ String _adjustmentTypeLabel(
 }
 
 class _Section extends StatelessWidget {
-  const _Section({required this.title, required this.child});
+  const _Section({
+    required this.title,
+    required this.icon,
+    required this.child,
+  });
 
   final String title;
+  final IconData icon;
   final Widget child;
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: colorScheme.surface,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: colorScheme.outlineVariant),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              title,
-              style: Theme.of(
-                context,
-              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 8),
-            child,
-          ],
-        ),
-      ),
-    );
+    return PointyDetailSection(title: title, icon: icon, child: child);
   }
 }
 
@@ -562,9 +535,17 @@ class _DetailRow extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
         children: [
-          Text(label),
-          const Spacer(),
-          Text(value, style: const TextStyle(fontWeight: FontWeight.w600)),
+          Expanded(child: Text(label)),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              value,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.end,
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
+          ),
         ],
       ),
     );

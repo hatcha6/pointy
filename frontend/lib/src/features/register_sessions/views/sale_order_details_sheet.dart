@@ -4,6 +4,7 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 import '../../../data/models/sale_order.dart';
 import '../../../shared/formatters.dart';
 import '../../../shared/payment_labels.dart';
+import '../../../shared/responsive/responsive.dart';
 
 Future<void> showSaleOrderDetailsSheet(
   BuildContext context,
@@ -17,11 +18,10 @@ Future<void> showSaleOrderDetailsSheet(
   )?
   onReturn,
 }) {
-  return showModalBottomSheet<void>(
+  return showAdaptiveModalBottomSheet<void>(
     context: context,
-    isScrollControlled: true,
-    useSafeArea: true,
-    showDragHandle: true,
+    size: AdaptiveModalSize.standard,
+    maxHeightFactor: 0.92,
     builder: (context) {
       return _SaleOrderDetailsSheet(
         order: order,

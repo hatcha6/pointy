@@ -7,9 +7,10 @@ import '../../../data/models/pos_user.dart';
 import '../../../data/repositories/purchase_repository.dart';
 import '../../../shared/app_navigation_drawer.dart';
 import '../../../shared/authorization_guards.dart';
+import '../../../shared/components/components.dart';
 import '../../../shared/contact_picker_sheet.dart';
 import '../../../shared/formatters.dart';
-import '../../../shared/infinite_scroll_grid.dart';
+import '../../../shared/responsive/responsive.dart';
 import '../view_models/contact_management_view_model.dart';
 import 'customer_details_screen.dart';
 import 'supplier_details_screen.dart';
@@ -121,12 +122,6 @@ class ContactManagementScreen extends StatelessWidget {
                 ),
               ),
             ),
-            floatingActionButton: AuthorizationGuard(
-              capabilities: capabilities,
-              capability: AppCapability.manageContacts,
-              fallback: const SizedBox.shrink(),
-              child: _ContactFab(viewModel: viewModel),
-            ),
           );
         },
       ),
@@ -148,20 +143,13 @@ class _ContactManagementBody extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    final spacing = AdaptiveSpacing.of(context);
 
     return Column(
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-          child: TextField(
-            decoration: InputDecoration(
-              hintText: l10n.contactSearchHint,
-              prefixIcon: const Icon(Icons.search),
-              border: const OutlineInputBorder(),
-              isDense: true,
-            ),
-            onChanged: viewModel.updateSearch,
-          ),
+          padding: spacing.pagePadding.copyWith(bottom: spacing.sm),
+          child: _ContactActionBar(viewModel: viewModel),
         ),
         if (viewModel.hasError)
           Padding(
@@ -190,8 +178,8 @@ class _ContactManagementBody extends StatelessWidget {
   }
 }
 
-class _ContactFab extends StatelessWidget {
-  const _ContactFab({required this.viewModel});
+class _ContactActionBar extends StatelessWidget {
+  const _ContactActionBar({required this.viewModel});
 
   final ContactManagementViewModel viewModel;
 
@@ -199,44 +187,71 @@ class _ContactFab extends StatelessWidget {
   Widget build(BuildContext context) {
     final controller = DefaultTabController.of(context);
     final l10n = AppLocalizations.of(context)!;
+    final spacing = AdaptiveSpacing.of(context);
 
     return AnimatedBuilder(
       animation: controller,
       builder: (context, _) {
         final isCustomersTab = controller.index == 0;
-        return FloatingActionButton.extended(
-          onPressed: viewModel.isSaving
-              ? null
-              : () async {
-                  if (isCustomersTab) {
-                    final created = await showCreateCustomerSheet(
-                      context: context,
-                      repository: viewModel.repository,
-                    );
-                    if (created != null) {
-                      await viewModel.loadContacts();
-                    }
-                    return;
-                  }
-                  final created = await showCreateSupplierSheet(
-                    context: context,
-                    repository: viewModel.repository,
-                  );
-                  if (created != null) {
-                    await viewModel.loadContacts();
-                  }
-                },
-          icon: Icon(
-            isCustomersTab
-                ? Icons.person_add_alt_1
-                : Icons.add_business_outlined,
-          ),
-          label: Text(
-            isCustomersTab ? l10n.addCustomerButton : l10n.addSupplierButton,
-          ),
+        return LayoutBuilder(
+          builder: (context, constraints) {
+            final isWide = constraints.maxWidth >= AppBreakpoints.tabletMin;
+            return ResponsiveActionBar(
+              compactBreakpoint: AppBreakpoints.tabletMin,
+              actions: [
+                SizedBox(
+                  width: isWide
+                      ? constraints.maxWidth - 210 - spacing.sm
+                      : null,
+                  child: TextField(
+                    decoration: InputDecoration(
+                      hintText: l10n.contactSearchHint,
+                      prefixIcon: const Icon(Icons.search),
+                    ),
+                    onChanged: viewModel.updateSearch,
+                  ),
+                ),
+                FilledButton.icon(
+                  onPressed: viewModel.isSaving
+                      ? null
+                      : () => _createContact(context, isCustomersTab),
+                  icon: Icon(
+                    isCustomersTab
+                        ? Icons.person_add_alt_1
+                        : Icons.add_business_outlined,
+                  ),
+                  label: Text(
+                    isCustomersTab
+                        ? l10n.addCustomerButton
+                        : l10n.addSupplierButton,
+                  ),
+                ),
+              ],
+            );
+          },
         );
       },
     );
+  }
+
+  Future<void> _createContact(BuildContext context, bool isCustomersTab) async {
+    if (isCustomersTab) {
+      final created = await showCreateCustomerSheet(
+        context: context,
+        repository: viewModel.repository,
+      );
+      if (created != null) {
+        await viewModel.loadContacts();
+      }
+      return;
+    }
+    final created = await showCreateSupplierSheet(
+      context: context,
+      repository: viewModel.repository,
+    );
+    if (created != null) {
+      await viewModel.loadContacts();
+    }
   }
 }
 
@@ -249,52 +264,43 @@ class _CustomerList extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
 
-    return InfiniteScrollList<Customer>(
+    return PointyDataList<Customer>(
       items: viewModel.customers,
       onLoadMore: viewModel.loadMoreCustomers,
       hasMore: viewModel.hasMoreCustomers,
       isLoadingInitial: viewModel.isLoading,
       isLoadingMore: viewModel.isLoadingMoreCustomers,
-      emptyBuilder: (context) {
-        return Padding(
-          padding: const EdgeInsets.all(24),
-          child: Center(child: Text(l10n.emptyCustomers)),
-        );
-      },
+      emptyBuilder: (context) => PointyEmptyState(
+        icon: Icons.person_outline,
+        title: l10n.emptyCustomers,
+      ),
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
-      separatorBuilder: (_, _) => const SizedBox(height: 8),
+      framed: false,
       itemBuilder: (context, customer) {
-        return Card(
-          margin: EdgeInsets.zero,
-          child: ListTile(
-            leading: Icon(
-              customer.marketingConsent
-                  ? Icons.campaign_outlined
-                  : Icons.person_outline,
-            ),
-            title: Text(customer.fullName),
-            subtitle: Text(
-              [
-                if (customer.customerNumber.isNotEmpty)
-                  '${l10n.customerNumberLabel}: ${customer.customerNumber}',
-                if (customer.phone.isNotEmpty) customer.phone,
-                if (customer.email.isNotEmpty) customer.email,
-                genderLabel(l10n, customer.gender),
-                if (customer.birthday != null)
-                  '${l10n.customerBirthdayLabel}: ${_formatDate(customer.birthday!)}',
-                if (customer.marketingConsent) l10n.marketingAllowedLabel,
-                if (!customer.isActive) l10n.inactiveContactLabel,
-              ].join(' • '),
-              maxLines: 3,
-              overflow: TextOverflow.ellipsis,
-            ),
-            trailing: const Icon(Icons.chevron_left),
-            onTap: () => Navigator.of(context).push(
-              MaterialPageRoute<void>(
-                builder: (_) => CustomerDetailsScreen(
-                  customer: customer,
-                  contactRepository: viewModel.repository,
-                ),
+        return PointyDataRow(
+          leading: Icon(
+            customer.marketingConsent
+                ? Icons.campaign_outlined
+                : Icons.person_outline,
+          ),
+          title: customer.fullName,
+          subtitle: [
+            if (customer.customerNumber.isNotEmpty)
+              '${l10n.customerNumberLabel}: ${customer.customerNumber}',
+            if (customer.phone.isNotEmpty) customer.phone,
+            if (customer.email.isNotEmpty) customer.email,
+            genderLabel(l10n, customer.gender),
+            if (customer.birthday != null)
+              '${l10n.customerBirthdayLabel}: ${_formatDate(customer.birthday!)}',
+            if (customer.marketingConsent) l10n.marketingAllowedLabel,
+            if (!customer.isActive) l10n.inactiveContactLabel,
+          ].join(' • '),
+          trailing: const Icon(Icons.chevron_left),
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => CustomerDetailsScreen(
+                customer: customer,
+                contactRepository: viewModel.repository,
               ),
             ),
           ),
@@ -319,59 +325,48 @@ class _SupplierList extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
 
-    return InfiniteScrollList<SupplierContact>(
+    return PointyDataList<SupplierContact>(
       items: viewModel.suppliers,
       onLoadMore: viewModel.loadMoreSuppliers,
       hasMore: viewModel.hasMoreSuppliers,
       isLoadingInitial: viewModel.isLoading,
       isLoadingMore: viewModel.isLoadingMoreSuppliers,
-      emptyBuilder: (context) {
-        return Padding(
-          padding: const EdgeInsets.all(24),
-          child: Center(child: Text(l10n.emptySuppliers)),
-        );
-      },
+      emptyBuilder: (context) => PointyEmptyState(
+        icon: Icons.local_shipping_outlined,
+        title: l10n.emptySuppliers,
+      ),
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
-      separatorBuilder: (_, _) => const SizedBox(height: 8),
+      framed: false,
       itemBuilder: (context, supplier) {
-        return Card(
-          margin: EdgeInsets.zero,
-          child: ListTile(
-            leading: const Icon(Icons.local_shipping_outlined),
-            title: Text(supplier.name),
-            subtitle: Text(
-              [
-                if (supplier.contactName.isNotEmpty)
-                  '${l10n.supplierContactLabel}: ${supplier.contactName}',
-                if (supplier.phone.isNotEmpty) supplier.phone,
-                if (supplier.email.isNotEmpty) supplier.email,
-                if (supplier.address.isNotEmpty) supplier.address,
-                if (supplier.payableBalance > 0)
-                  l10n.supplierPayableBalanceValue(
-                    formatMoney(supplier.payableBalance),
-                  ),
-                if (supplier.creditBalance > 0)
-                  l10n.supplierCreditBalanceValue(
-                    formatMoney(supplier.creditBalance),
-                  ),
-                if (supplier.netBalance != 0)
-                  l10n.supplierNetBalanceValue(
-                    formatMoney(supplier.netBalance),
-                  ),
-                if (!supplier.isActive) l10n.inactiveContactLabel,
-              ].join(' • '),
-              maxLines: 3,
-              overflow: TextOverflow.ellipsis,
-            ),
-            trailing: const Icon(Icons.chevron_left),
-            onTap: () => Navigator.of(context).push(
-              MaterialPageRoute<void>(
-                builder: (_) => SupplierDetailsScreen(
-                  supplier: supplier,
-                  contactRepository: viewModel.repository,
-                  purchaseRepository: purchaseRepository,
-                  capabilities: capabilities,
-                ),
+        return PointyDataRow(
+          leading: const Icon(Icons.local_shipping_outlined),
+          title: supplier.name,
+          subtitle: [
+            if (supplier.contactName.isNotEmpty)
+              '${l10n.supplierContactLabel}: ${supplier.contactName}',
+            if (supplier.phone.isNotEmpty) supplier.phone,
+            if (supplier.email.isNotEmpty) supplier.email,
+            if (supplier.address.isNotEmpty) supplier.address,
+            if (supplier.payableBalance > 0)
+              l10n.supplierPayableBalanceValue(
+                formatMoney(supplier.payableBalance),
+              ),
+            if (supplier.creditBalance > 0)
+              l10n.supplierCreditBalanceValue(
+                formatMoney(supplier.creditBalance),
+              ),
+            if (supplier.netBalance != 0)
+              l10n.supplierNetBalanceValue(formatMoney(supplier.netBalance)),
+            if (!supplier.isActive) l10n.inactiveContactLabel,
+          ].join(' • '),
+          trailing: const Icon(Icons.chevron_left),
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => SupplierDetailsScreen(
+                supplier: supplier,
+                contactRepository: viewModel.repository,
+                purchaseRepository: purchaseRepository,
+                capabilities: capabilities,
               ),
             ),
           ),

@@ -5,12 +5,13 @@ import '../../../data/models/contact.dart';
 import '../../../data/models/customer_activity.dart';
 import '../../../data/models/sale_order.dart';
 import '../../../data/repositories/contact_repository.dart';
+import '../../../shared/components/components.dart';
 import '../../../shared/contact_picker_sheet.dart';
 import '../../../shared/date_formatters.dart';
 import '../../../shared/detail_section.dart';
 import '../../../shared/formatters.dart';
-import '../../../shared/infinite_scroll_grid.dart';
 import '../../../shared/payment_labels.dart';
+import '../../../shared/responsive/responsive.dart';
 import '../../register_sessions/views/sale_order_details_sheet.dart';
 import '../view_models/customer_details_view_model.dart';
 
@@ -60,35 +61,38 @@ class _CustomerDetailsScreenState extends State<CustomerDetailsScreen> {
             ],
           ),
           body: SafeArea(
-            child: ListView(
-              padding: const EdgeInsets.all(16),
-              children: [
-                _CustomerHeader(customer: customer),
-                const SizedBox(height: 12),
-                DetailSection(
-                  title: l10n.customerProfileTitle,
-                  icon: Icons.badge_outlined,
-                  child: _CustomerProfile(viewModel: _viewModel),
-                ),
-                const SizedBox(height: 12),
-                DetailSection(
-                  title: l10n.customerSalesSummaryTitle,
-                  icon: Icons.summarize_outlined,
-                  child: _CustomerSalesSummary(viewModel: _viewModel),
-                ),
-                const SizedBox(height: 12),
-                DetailSection(
-                  title: l10n.customerInvoiceHistoryTitle,
-                  icon: Icons.receipt_long_outlined,
-                  child: _CustomerInvoiceHistory(viewModel: _viewModel),
-                ),
-                const SizedBox(height: 12),
-                DetailSection(
-                  title: l10n.customerAdjustmentHistoryTitle,
-                  icon: Icons.assignment_return_outlined,
-                  child: _CustomerAdjustmentHistory(viewModel: _viewModel),
-                ),
-              ],
+            child: AdaptiveMaxWidth(
+              width: AppContentWidth.detail,
+              child: ListView(
+                padding: const EdgeInsets.all(16),
+                children: [
+                  _CustomerHeader(customer: customer),
+                  const SizedBox(height: 12),
+                  PointyDetailSection(
+                    title: l10n.customerProfileTitle,
+                    icon: Icons.badge_outlined,
+                    child: _CustomerProfile(viewModel: _viewModel),
+                  ),
+                  const SizedBox(height: 12),
+                  PointyDetailSection(
+                    title: l10n.customerSalesSummaryTitle,
+                    icon: Icons.summarize_outlined,
+                    child: _CustomerSalesSummary(viewModel: _viewModel),
+                  ),
+                  const SizedBox(height: 12),
+                  PointyDetailSection(
+                    title: l10n.customerInvoiceHistoryTitle,
+                    icon: Icons.receipt_long_outlined,
+                    child: _CustomerInvoiceHistory(viewModel: _viewModel),
+                  ),
+                  const SizedBox(height: 12),
+                  PointyDetailSection(
+                    title: l10n.customerAdjustmentHistoryTitle,
+                    icon: Icons.assignment_return_outlined,
+                    child: _CustomerAdjustmentHistory(viewModel: _viewModel),
+                  ),
+                ],
+              ),
             ),
           ),
         );
@@ -338,34 +342,28 @@ class _CustomerInvoiceHistory extends StatelessWidget {
         viewModel.orderHistory.length,
         viewModel.hasMoreOrders,
       ),
-      child: InfiniteScrollList<SaleOrder>(
+      child: PointyDataList<SaleOrder>(
         items: viewModel.orderHistory,
         onLoadMore: viewModel.loadMoreOrderHistory,
         hasMore: viewModel.hasMoreOrders,
         isLoadingInitial: viewModel.isLoadingOrders,
         isLoadingMore: viewModel.isLoadingMoreOrders,
         emptyBuilder: (context) => Text(l10n.customerInvoiceHistoryEmpty),
-        separatorBuilder: (_, _) => const Divider(height: 1),
+        padding: EdgeInsets.zero,
+        framed: false,
         itemBuilder: (context, order) {
-          return ListTile(
-            contentPadding: EdgeInsets.zero,
+          return PointyDataRow(
             leading: const Icon(Icons.receipt_long_outlined),
-            title: Text(
-              l10n.saleReceiptTitle(
-                order.receiptNumber ?? l10n.saleReceiptFallback,
-              ),
+            title: l10n.saleReceiptTitle(
+              order.receiptNumber ?? l10n.saleReceiptFallback,
             ),
-            subtitle: Text(
-              [
-                saleOrderStatusLabel(l10n, order.status),
-                if (order.createdAt != null) formatDateTime(order.createdAt!),
-                l10n.saleLineCount(order.lines.length),
-                if (order.discountTotal > 0)
-                  l10n.discountLineValue(formatMoney(order.discountTotal)),
-              ].join(' • '),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
+            subtitle: [
+              saleOrderStatusLabel(l10n, order.status),
+              if (order.createdAt != null) formatDateTime(order.createdAt!),
+              l10n.saleLineCount(order.lines.length),
+              if (order.discountTotal > 0)
+                l10n.discountLineValue(formatMoney(order.discountTotal)),
+            ].join(' • '),
             trailing: Text(formatMoney(order.total)),
             onTap: () => showSaleOrderDetailsSheet(context, order),
           );
@@ -399,38 +397,34 @@ class _CustomerAdjustmentHistory extends StatelessWidget {
         viewModel.adjustmentHistory.length,
         viewModel.hasMoreAdjustments,
       ),
-      child: InfiniteScrollList<CustomerAdjustmentHistoryEntry>(
+      child: PointyDataList<CustomerAdjustmentHistoryEntry>(
         items: viewModel.adjustmentHistory,
         onLoadMore: viewModel.loadMoreAdjustmentHistory,
         hasMore: viewModel.hasMoreAdjustments,
         isLoadingInitial: viewModel.isLoadingAdjustments,
         isLoadingMore: viewModel.isLoadingMoreAdjustments,
         emptyBuilder: (context) => Text(l10n.customerAdjustmentHistoryEmpty),
-        separatorBuilder: (_, _) => const Divider(height: 1),
+        padding: EdgeInsets.zero,
+        framed: false,
         itemBuilder: (context, adjustment) {
-          return ListTile(
-            contentPadding: EdgeInsets.zero,
+          return PointyDataRow(
             leading: Icon(_adjustmentIcon(adjustment.type)),
-            title: Text(customerAdjustmentTypeLabel(l10n, adjustment.type)),
-            subtitle: Text(
-              [
-                if (adjustment.receiptNumber.isNotEmpty)
-                  l10n.saleReceiptTitle(adjustment.receiptNumber),
-                if (adjustment.createdAt != null)
-                  formatDateTime(adjustment.createdAt!),
-                l10n.customerAdjustmentLineCount(adjustment.lines.length),
-                l10n.customerRefundMethodValue(
-                  paymentMethodLabel(l10n, adjustment.refundMethod),
+            title: customerAdjustmentTypeLabel(l10n, adjustment.type),
+            subtitle: [
+              if (adjustment.receiptNumber.isNotEmpty)
+                l10n.saleReceiptTitle(adjustment.receiptNumber),
+              if (adjustment.createdAt != null)
+                formatDateTime(adjustment.createdAt!),
+              l10n.customerAdjustmentLineCount(adjustment.lines.length),
+              l10n.customerRefundMethodValue(
+                paymentMethodLabel(l10n, adjustment.refundMethod),
+              ),
+              if (adjustment.reason.isNotEmpty) adjustment.reason,
+              if (adjustment.createdByUsername.isNotEmpty)
+                l10n.customerAdjustmentCreatedByValue(
+                  adjustment.createdByUsername,
                 ),
-                if (adjustment.reason.isNotEmpty) adjustment.reason,
-                if (adjustment.createdByUsername.isNotEmpty)
-                  l10n.customerAdjustmentCreatedByValue(
-                    adjustment.createdByUsername,
-                  ),
-              ].join(' • '),
-              maxLines: 3,
-              overflow: TextOverflow.ellipsis,
-            ),
+            ].join(' • '),
             trailing: Text(formatMoney(adjustment.amount)),
           );
         },
