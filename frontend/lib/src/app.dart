@@ -12,6 +12,7 @@ import 'core/analytics_interaction_tracker.dart';
 import 'data/models/analytics_event.dart';
 import 'data/services/pos_api_service.dart';
 import 'features/auth/views/auth_gate.dart';
+import 'shared/design/design.dart';
 
 class PointyApp extends StatefulWidget {
   const PointyApp({super.key, this.apiService});
@@ -88,14 +89,7 @@ class _PointyAppState extends State<PointyApp> {
         GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,
       ],
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF0F766E),
-          brightness: Brightness.light,
-        ),
-        scaffoldBackgroundColor: const Color(0xFFF6F7F9),
-        useMaterial3: true,
-      ),
+      theme: PointyTheme.light(),
       builder: (context, child) => AnalyticsInteractionTracker(
         analyticsEngine: _dependencies.analyticsEngine,
         child: child ?? const SizedBox.shrink(),
