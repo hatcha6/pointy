@@ -7,6 +7,7 @@ import '../data/models/product_query.dart';
 import '../data/repositories/catalog_repository.dart';
 import 'product_filter_sheet.dart';
 import 'query_controls/query_control_bar.dart';
+import 'responsive/responsive.dart';
 
 class ProductQueryControls extends StatelessWidget {
   const ProductQueryControls({
@@ -71,10 +72,9 @@ class ProductQueryControls extends StatelessWidget {
   }
 
   Future<void> _showFilters(BuildContext context) async {
-    final updatedQuery = await showModalBottomSheet<ProductQuery>(
+    final updatedQuery = await showAdaptiveModalBottomSheet<ProductQuery>(
       context: context,
-      showDragHandle: true,
-      useSafeArea: true,
+      size: AdaptiveModalSize.standard,
       builder: (context) {
         return ProductFilterSheet(
           query: query,

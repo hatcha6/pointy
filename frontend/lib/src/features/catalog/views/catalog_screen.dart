@@ -12,6 +12,8 @@ import '../../../shared/app_navigation_drawer.dart';
 import '../../../shared/authorization_guards.dart';
 import '../../../shared/barcode/camera_barcode_scanner_sheet.dart';
 import '../../../shared/barcode/barcode_scan_listener.dart';
+import '../../../shared/responsive/responsive.dart';
+import '../../../shared/shell/shell.dart';
 import '../view_models/catalog_view_model.dart';
 import 'product_form.dart';
 import 'product_list.dart';
@@ -65,7 +67,7 @@ class CatalogScreen extends StatelessWidget {
     return ListenableBuilder(
       listenable: viewModel,
       builder: (context, _) {
-        return Scaffold(
+        return PointyScaffold(
           drawer: AppNavigationDrawer(
             selectedDestination: AppNavigationDestination.catalog,
             currentUser: currentUser,
@@ -84,7 +86,7 @@ class CatalogScreen extends StatelessWidget {
             onOpenShopSettings: onOpenShopSettings,
             onLogout: onLogout,
           ),
-          appBar: AppBar(
+          appBar: PointyAppBar(
             leading: Builder(
               builder: (context) {
                 return IconButton(
@@ -107,24 +109,22 @@ class CatalogScreen extends StatelessWidget {
               ),
             ],
           ),
-          body: SafeArea(
-            child: CatalogManagementGuard(
-              capabilities: capabilities,
-              child: BarcodeScanListener(
-                onBarcodeScanned: (barcode) {
-                  _openProductForBarcode(context, barcode);
+          body: CatalogManagementGuard(
+            capabilities: capabilities,
+            child: BarcodeScanListener(
+              onBarcodeScanned: (barcode) {
+                _openProductForBarcode(context, barcode);
+              },
+              child: ProductList(
+                viewModel: viewModel,
+                inventoryRepository: inventoryRepository,
+                printingRepository: printingRepository,
+                purchaseRepository: purchaseRepository,
+                capabilities: capabilities,
+                onBarcodeSubmitted: (barcode) {
+                  return _openProductForBarcode(context, barcode);
                 },
-                child: ProductList(
-                  viewModel: viewModel,
-                  inventoryRepository: inventoryRepository,
-                  printingRepository: printingRepository,
-                  purchaseRepository: purchaseRepository,
-                  capabilities: capabilities,
-                  onBarcodeSubmitted: (barcode) {
-                    return _openProductForBarcode(context, barcode);
-                  },
-                  onOpenCameraScanner: () => _openCameraScanner(context),
-                ),
+                onOpenCameraScanner: () => _openCameraScanner(context),
               ),
             ),
           ),
@@ -214,27 +214,18 @@ class CatalogScreen extends StatelessWidget {
   }
 
   Future<void> _showProductForm(BuildContext context) {
-    return showModalBottomSheet<void>(
+    return showAdaptiveModalBottomSheet<void>(
       context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      showDragHandle: true,
+      size: AdaptiveModalSize.standard,
+      maxHeightFactor: 0.9,
       builder: (sheetContext) {
         return Padding(
           padding: EdgeInsets.only(
             bottom: MediaQuery.viewInsetsOf(sheetContext).bottom,
           ),
-          child: FractionallySizedBox(
-            heightFactor: 0.9,
-            child: Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 720),
-                child: ProductForm(
-                  viewModel: viewModel,
-                  onCreated: () => Navigator.of(sheetContext).pop(),
-                ),
-              ),
-            ),
+          child: ProductForm(
+            viewModel: viewModel,
+            onCreated: () => Navigator.of(sheetContext).pop(),
           ),
         );
       },

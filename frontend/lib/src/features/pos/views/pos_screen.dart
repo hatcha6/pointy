@@ -9,6 +9,7 @@ import '../../../shared/app_navigation_drawer.dart';
 import '../../../shared/authorization_guards.dart';
 import '../../../shared/barcode/barcode_scan_listener.dart';
 import '../../../shared/responsive/responsive.dart';
+import '../../../shared/shell/shell.dart';
 import '../view_models/pos_view_model.dart';
 import 'pos_cart_pane.dart';
 import 'pos_catalog_pane.dart';
@@ -61,7 +62,7 @@ class PosScreen extends StatelessWidget {
       builder: (context, _) {
         final l10n = AppLocalizations.of(context)!;
 
-        return Scaffold(
+        return PointyScaffold(
           drawer: AppNavigationDrawer(
             selectedDestination: AppNavigationDestination.pos,
             currentUser: currentUser,
@@ -80,7 +81,8 @@ class PosScreen extends StatelessWidget {
             onOpenShopSettings: onOpenShopSettings,
             onLogout: onLogout,
           ),
-          appBar: AppBar(
+          appBar: PointyAppBar(
+            style: PointyAppBarStyle.highFocus,
             leading: Builder(
               builder: (context) {
                 return IconButton(
@@ -171,22 +173,20 @@ class PosScreen extends StatelessWidget {
               ),
             ],
           ),
-          body: SafeArea(
-            child: PosAccessGuard(
-              capabilities: capabilities,
-              child:
-                  viewModel.registerSessionGateStatus ==
-                      RegisterSessionGateStatus.active
-                  ? _PosWorkspace(
-                      viewModel: viewModel,
-                      contactRepository: contactRepository,
-                      capabilities: capabilities,
-                    )
-                  : RegisterSessionGate(
-                      viewModel: viewModel,
-                      capabilities: capabilities,
-                    ),
-            ),
+          body: PosAccessGuard(
+            capabilities: capabilities,
+            child:
+                viewModel.registerSessionGateStatus ==
+                    RegisterSessionGateStatus.active
+                ? _PosWorkspace(
+                    viewModel: viewModel,
+                    contactRepository: contactRepository,
+                    capabilities: capabilities,
+                  )
+                : RegisterSessionGate(
+                    viewModel: viewModel,
+                    capabilities: capabilities,
+                  ),
           ),
         );
       },
@@ -194,10 +194,9 @@ class PosScreen extends StatelessWidget {
   }
 
   Future<void> _showCloseRegisterSessionSheet(BuildContext context) async {
-    await showModalBottomSheet<bool>(
+    await showAdaptiveModalBottomSheet<bool>(
       context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
+      size: AdaptiveModalSize.standard,
       builder: (context) {
         return RegisterSessionCloseSheet(
           onClose: (input) {
@@ -220,10 +219,9 @@ class PosScreen extends StatelessWidget {
   ) async {
     final messenger = ScaffoldMessenger.of(context);
     final l10n = AppLocalizations.of(context)!;
-    final didCreate = await showModalBottomSheet<bool>(
+    final didCreate = await showAdaptiveModalBottomSheet<bool>(
       context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
+      size: AdaptiveModalSize.standard,
       builder: (context) {
         return RegisterCashMovementSheet(
           movementType: movementType,
