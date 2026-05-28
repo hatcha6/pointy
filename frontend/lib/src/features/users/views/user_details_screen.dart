@@ -5,6 +5,9 @@ import '../../../data/models/pos_user.dart';
 import '../../../data/models/user_activity.dart';
 import '../../../shared/date_formatters.dart';
 import '../../../shared/formatters.dart';
+import '../../../shared/components/components.dart';
+import '../../../shared/responsive/responsive.dart';
+import '../../../shared/shell/shell.dart';
 import '../../purchasing/views/purchase_order_filter_sheet.dart';
 import '../view_models/user_details_view_model.dart';
 
@@ -21,9 +24,10 @@ class UserDetailsScreen extends StatelessWidget {
         final l10n = AppLocalizations.of(context)!;
         final user = viewModel.user;
 
-        return Scaffold(
-          appBar: AppBar(
+        return PointyScaffold(
+          appBar: PointyAppBar(
             title: Text(l10n.userDetailsTitle(user.label)),
+            isLoading: viewModel.isLoading,
             actions: [
               IconButton(
                 tooltip: l10n.refreshUserDetailsTooltip,
@@ -32,17 +36,23 @@ class UserDetailsScreen extends StatelessWidget {
               ),
             ],
           ),
-          body: SafeArea(
-            child: viewModel.isLoading && viewModel.activity == null
-                ? const Center(child: CircularProgressIndicator())
-                : viewModel.hasError && viewModel.activity == null
-                ? Center(child: Text(l10n.userActivityLoadError))
-                : _UserDetailsBody(
-                    user: user,
-                    activity: viewModel.activity,
-                    isRefreshing: viewModel.isLoading,
+          body: viewModel.isLoading && viewModel.activity == null
+              ? const PointyLoadingArea()
+              : viewModel.hasError && viewModel.activity == null
+              ? PointyErrorState(
+                  title: l10n.userActivityLoadError,
+                  icon: Icons.manage_accounts_outlined,
+                  action: FilledButton.icon(
+                    onPressed: viewModel.loadActivity,
+                    icon: const Icon(Icons.sync),
+                    label: Text(l10n.refreshUserDetailsTooltip),
                   ),
-          ),
+                )
+              : _UserDetailsBody(
+                  user: user,
+                  activity: viewModel.activity,
+                  isRefreshing: viewModel.isLoading,
+                ),
         );
       },
     );
@@ -64,31 +74,42 @@ class _UserDetailsBody extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final overview = activity;
+    final spacing = AdaptiveSpacing.of(context);
 
     return ListView(
-      padding: const EdgeInsets.all(16),
+      padding: spacing.pagePadding,
       children: [
-        _UserHeader(user: user, isRefreshing: isRefreshing),
-        const SizedBox(height: 12),
-        if (overview == null)
-          _Section(
-            title: l10n.userDetailsOverviewTitle,
-            icon: Icons.insights_outlined,
-            child: Text(l10n.userActivityLoadError),
-          )
-        else ...[
-          _OverviewSection(activity: overview),
-          const SizedBox(height: 12),
-          _RecentSalesSection(sales: overview.recentSales),
-          const SizedBox(height: 12),
-          _RecentPurchasesSection(
-            purchaseOrders: overview.recentPurchaseOrders,
+        AdaptiveMaxWidth(
+          width: AppContentWidth.detail,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _UserHeader(user: user, isRefreshing: isRefreshing),
+              SizedBox(height: spacing.md),
+              if (overview == null)
+                PointyDetailSection(
+                  title: l10n.userDetailsOverviewTitle,
+                  icon: Icons.insights_outlined,
+                  child: Text(l10n.userActivityLoadError),
+                )
+              else ...[
+                _OverviewSection(activity: overview),
+                SizedBox(height: spacing.md),
+                _RecentSalesSection(sales: overview.recentSales),
+                SizedBox(height: spacing.md),
+                _RecentPurchasesSection(
+                  purchaseOrders: overview.recentPurchaseOrders,
+                ),
+                SizedBox(height: spacing.md),
+                _RecentSessionsSection(
+                  sessions: overview.recentRegisterSessions,
+                ),
+                SizedBox(height: spacing.md),
+                _RecentActivitySection(events: overview.recentActivity),
+              ],
+            ],
           ),
-          const SizedBox(height: 12),
-          _RecentSessionsSection(sessions: overview.recentRegisterSessions),
-          const SizedBox(height: 12),
-          _RecentActivitySection(events: overview.recentActivity),
-        ],
+        ),
       ],
     );
   }
@@ -103,60 +124,46 @@ class _UserHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final theme = Theme.of(context);
-
-    return Material(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(8),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Row(
-          children: [
-            CircleAvatar(
-              radius: 28,
-              child: Icon(
-                user.role.isManager
+    return PointyDetailSection(
+      title: user.label,
+      icon: user.role.isManager
+          ? Icons.admin_panel_settings_outlined
+          : Icons.point_of_sale_outlined,
+      trailing: isRefreshing
+          ? const SizedBox.square(
+              dimension: 20,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : null,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(user.username),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              PointyStatusPill(
+                label: _roleLabel(l10n, user.role),
+                icon: user.role.isManager
                     ? Icons.admin_panel_settings_outlined
                     : Icons.point_of_sale_outlined,
               ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(user.label, style: theme.textTheme.titleLarge),
-                  const SizedBox(height: 2),
-                  Text(user.username),
-                  const SizedBox(height: 6),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      Chip(
-                        label: Text(_roleLabel(l10n, user.role)),
-                        visualDensity: VisualDensity.compact,
-                      ),
-                      Chip(
-                        label: Text(
-                          user.isActive
-                              ? l10n.userStatusActive
-                              : l10n.userStatusInactive,
-                        ),
-                        visualDensity: VisualDensity.compact,
-                      ),
-                    ],
-                  ),
-                ],
+              PointyStatusPill(
+                label: user.isActive
+                    ? l10n.userStatusActive
+                    : l10n.userStatusInactive,
+                icon: user.isActive
+                    ? Icons.check_circle_outline
+                    : Icons.pause_circle_outline,
+                color: user.isActive
+                    ? Theme.of(context).colorScheme.primary
+                    : Theme.of(context).colorScheme.error,
               ),
-            ),
-            if (isRefreshing)
-              const SizedBox.square(
-                dimension: 20,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
-          ],
-        ),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -231,7 +238,7 @@ class _OverviewSection extends StatelessWidget {
       ),
     ];
 
-    return _Section(
+    return PointyDetailSection(
       title: l10n.userDetailsOverviewTitle,
       icon: Icons.insights_outlined,
       child: _MetricGrid(metrics: metrics),
@@ -248,7 +255,7 @@ class _RecentSalesSection extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
 
-    return _Section(
+    return PointyDetailSection(
       title: l10n.userDetailsRecentSalesTitle,
       icon: Icons.receipt_long_outlined,
       child: _EmptyAwareColumn(
@@ -287,7 +294,7 @@ class _RecentPurchasesSection extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
 
-    return _Section(
+    return PointyDetailSection(
       title: l10n.userDetailsRecentPurchasesTitle,
       icon: Icons.inventory_2_outlined,
       child: _EmptyAwareColumn(
@@ -324,7 +331,7 @@ class _RecentSessionsSection extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
 
-    return _Section(
+    return PointyDetailSection(
       title: l10n.userDetailsRecentSessionsTitle,
       icon: Icons.point_of_sale_outlined,
       child: _EmptyAwareColumn(
@@ -369,7 +376,7 @@ class _RecentActivitySection extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
 
-    return _Section(
+    return PointyDetailSection(
       title: l10n.userDetailsRecentActivityTitle,
       icon: Icons.history_outlined,
       child: _EmptyAwareColumn(
@@ -391,48 +398,6 @@ class _RecentActivitySection extends StatelessWidget {
   }
 }
 
-class _Section extends StatelessWidget {
-  const _Section({
-    required this.title,
-    required this.icon,
-    required this.child,
-  });
-
-  final String title;
-  final IconData icon;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(8),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(icon, color: Theme.of(context).colorScheme.primary),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    title,
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            child,
-          ],
-        ),
-      ),
-    );
-  }
-}
-
 class _MetricGrid extends StatelessWidget {
   const _MetricGrid({required this.metrics});
 
@@ -447,7 +412,7 @@ class _MetricGrid extends StatelessWidget {
             : constraints.maxWidth >= 560
             ? 2
             : 1;
-        const spacing = 8.0;
+        final spacing = AdaptiveSpacing.of(context).sm;
         final tileWidth =
             (constraints.maxWidth - spacing * (columns - 1)) / columns;
 
@@ -458,58 +423,16 @@ class _MetricGrid extends StatelessWidget {
             for (final metric in metrics)
               SizedBox(
                 width: tileWidth,
-                child: _MetricTile(metric: metric),
+                child: PointyMetricTile(
+                  label: metric.label,
+                  value: metric.value,
+                  icon: metric.icon,
+                  subtitle: metric.detail.isEmpty ? null : metric.detail,
+                ),
               ),
           ],
         );
       },
-    );
-  }
-}
-
-class _MetricTile extends StatelessWidget {
-  const _MetricTile({required this.metric});
-
-  final _MetricData metric;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.45),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: colorScheme.outlineVariant),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Row(
-          children: [
-            Icon(metric.icon, color: colorScheme.primary),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(metric.label, style: theme.textTheme.labelLarge),
-                  const SizedBox(height: 4),
-                  Text(metric.value, style: theme.textTheme.titleMedium),
-                  if (metric.detail.isNotEmpty) ...[
-                    const SizedBox(height: 2),
-                    Text(
-                      metric.detail,
-                      style: theme.textTheme.bodySmall,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }
@@ -542,10 +465,7 @@ class _EmptyAwareColumn extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (isEmpty) {
-      return Padding(
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        child: Text(emptyText),
-      );
+      return PointyEmptyState(icon: Icons.inbox_outlined, title: emptyText);
     }
 
     return Column(
@@ -574,11 +494,12 @@ class _ActivityTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ListTile(
-      contentPadding: EdgeInsets.zero,
+    return PointyDataRow(
       leading: Icon(icon),
-      title: Text(title),
-      subtitle: subtitle.isEmpty ? null : Text(subtitle),
+      title: title,
+      subtitle: subtitle.isEmpty ? null : subtitle,
+      padding: EdgeInsetsDirectional.zero,
+      minHeight: 64,
       trailing: trailing == null
           ? null
           : Text(

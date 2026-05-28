@@ -9,7 +9,10 @@ import '../../../data/models/shop_settings.dart';
 import '../../../data/services/analytics_export_downloader.dart';
 import '../../../shared/app_navigation_drawer.dart';
 import '../../../shared/authorization_guards.dart';
+import '../../../shared/components/components.dart';
 import '../../../shared/decimal_text_input_formatter.dart';
+import '../../../shared/responsive/responsive.dart';
+import '../../../shared/shell/shell.dart';
 import '../view_models/shop_settings_view_model.dart';
 
 part 'shop_settings_widgets.dart';
@@ -57,7 +60,7 @@ class ShopSettingsScreen extends StatelessWidget {
     return ListenableBuilder(
       listenable: viewModel,
       builder: (context, _) {
-        return Scaffold(
+        return PointyScaffold(
           drawer: AppNavigationDrawer(
             selectedDestination: AppNavigationDestination.settings,
             currentUser: currentUser,
@@ -76,7 +79,7 @@ class ShopSettingsScreen extends StatelessWidget {
             onOpenShopSettings: () {},
             onLogout: onLogout,
           ),
-          appBar: AppBar(
+          appBar: PointyAppBar(
             leading: Builder(
               builder: (context) {
                 return IconButton(
@@ -87,6 +90,8 @@ class ShopSettingsScreen extends StatelessWidget {
               },
             ),
             title: Text(l10n.shopSettingsTitle),
+            isLoading: viewModel.isLoading || viewModel.isSaving,
+            reserveLoadingSlot: false,
             actions: [
               ShopSettingsGuard(
                 capabilities: capabilities,
@@ -99,11 +104,9 @@ class ShopSettingsScreen extends StatelessWidget {
               ),
             ],
           ),
-          body: SafeArea(
-            child: ShopSettingsGuard(
-              capabilities: capabilities,
-              child: _ShopSettingsBody(viewModel: viewModel),
-            ),
+          body: ShopSettingsGuard(
+            capabilities: capabilities,
+            child: _ShopSettingsBody(viewModel: viewModel),
           ),
         );
       },
@@ -121,14 +124,17 @@ class _ShopSettingsBody extends StatelessWidget {
     final l10n = AppLocalizations.of(context)!;
 
     if (viewModel.isLoading && viewModel.settings == null) {
-      return const Center(child: CircularProgressIndicator());
+      return const PointyLoadingArea();
     }
 
     if (viewModel.hasLoadError && viewModel.settings == null) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Text(l10n.shopSettingsLoadError, textAlign: TextAlign.center),
+      return PointyErrorState(
+        title: l10n.shopSettingsLoadError,
+        icon: Icons.settings_outlined,
+        action: FilledButton.icon(
+          onPressed: viewModel.loadSettings,
+          icon: const Icon(Icons.sync),
+          label: Text(l10n.refreshShopSettingsTooltip),
         ),
       );
     }
@@ -273,143 +279,130 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    final spacing = AdaptiveSpacing.of(context);
 
-    return ColoredBox(
-      color: Theme.of(context).colorScheme.surfaceContainerLowest,
-      child: Column(
-        children: [
-          Expanded(
-            child: ListView(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
-              children: [
-                Center(
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 720),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
+    return Column(
+      children: [
+        Expanded(
+          child: ListView(
+            padding: spacing.pagePadding,
+            children: [
+              AdaptiveMaxWidth(
+                width: AppContentWidth.form,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    PointySettingsSection(
                       children: [
-                        _SettingsListSection(
-                          children: [
-                            _SettingsNavigationTile(
-                              icon: Icons.storefront_outlined,
-                              iconColor: Colors.teal,
-                              title: l10n.shopIdentitySectionTitle,
-                              subtitle: _shopIdentitySummary(l10n),
-                              hasError: _shopNameError(l10n) != null,
-                              onTap: widget.viewModel.isSaving
-                                  ? null
-                                  : () => _openSettingsGroup(
-                                      context,
-                                      title: l10n.shopIdentitySectionTitle,
-                                      icon: Icons.storefront_outlined,
-                                      children: _buildIdentityFields,
-                                    ),
-                            ),
-                            _SettingsNavigationTile(
-                              icon: Icons.receipt_long_outlined,
-                              iconColor: Colors.indigo,
-                              title: l10n.receiptSettingsSectionTitle,
-                              subtitle: _receiptSummary(l10n),
-                              onTap: widget.viewModel.isSaving
-                                  ? null
-                                  : () => _openSettingsGroup(
-                                      context,
-                                      title: l10n.receiptSettingsSectionTitle,
-                                      icon: Icons.receipt_long_outlined,
-                                      children: _buildReceiptFields,
-                                    ),
-                            ),
-                            _SettingsNavigationTile(
-                              icon: Icons.point_of_sale_outlined,
-                              iconColor: Colors.deepOrange,
-                              title: l10n.registerSessionSettingsSectionTitle,
-                              subtitle: _registerSessionSummary(l10n),
-                              onTap: widget.viewModel.isSaving
-                                  ? null
-                                  : () => _openSettingsGroup(
-                                      context,
-                                      title: l10n
-                                          .registerSessionSettingsSectionTitle,
-                                      icon: Icons.point_of_sale_outlined,
-                                      children: _buildRegisterSessionFields,
-                                    ),
-                            ),
-                            _SettingsNavigationTile(
-                              icon: Icons.payments_outlined,
-                              iconColor: Colors.green,
-                              title: l10n.paymentSettingsSectionTitle,
-                              subtitle: _paymentSummary(l10n),
-                              hasError:
-                                  _paymentMethodsError(l10n) != null ||
-                                  _commissionError(
-                                        l10n,
-                                        _cardCommissionController,
-                                      ) !=
-                                      null ||
-                                  _commissionError(
-                                        l10n,
-                                        _transferCommissionController,
-                                      ) !=
-                                      null,
-                              onTap: widget.viewModel.isSaving
-                                  ? null
-                                  : () => _openSettingsGroup(
-                                      context,
-                                      title: l10n.paymentSettingsSectionTitle,
-                                      icon: Icons.payments_outlined,
-                                      children: _buildPaymentFields,
-                                    ),
-                            ),
-                            _SettingsNavigationTile(
-                              icon: Icons.inventory_2_outlined,
-                              iconColor: Colors.blueGrey,
-                              title: l10n.inventorySettingsSectionTitle,
-                              subtitle: _inventorySummary(l10n),
-                              hasError: _lowStockThresholdError(l10n) != null,
-                              onTap: widget.viewModel.isSaving
-                                  ? null
-                                  : () => _openSettingsGroup(
-                                      context,
-                                      title: l10n.inventorySettingsSectionTitle,
-                                      icon: Icons.inventory_2_outlined,
-                                      children: _buildInventoryFields,
-                                    ),
-                            ),
-                            _SettingsNavigationTile(
-                              icon: Icons.file_download_outlined,
-                              iconColor: Colors.purple,
-                              title: l10n.analyticsExportSectionTitle,
-                              subtitle: _analyticsExportSummary(l10n),
-                              onTap: widget.viewModel.isExportingAnalytics
-                                  ? null
-                                  : () => _openAnalyticsExport(context),
-                            ),
-                          ],
+                        PointySettingsTile(
+                          icon: Icons.storefront_outlined,
+                          title: l10n.shopIdentitySectionTitle,
+                          subtitle: _shopIdentitySummary(l10n),
+                          hasError: _shopNameError(l10n) != null,
+                          onTap: widget.viewModel.isSaving
+                              ? null
+                              : () => _openSettingsGroup(
+                                  context,
+                                  title: l10n.shopIdentitySectionTitle,
+                                  icon: Icons.storefront_outlined,
+                                  children: _buildIdentityFields,
+                                ),
                         ),
-                        if (widget.viewModel.hasSaveError)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 12),
-                            child: Text(
-                              l10n.shopSettingsSaveError,
-                              style: TextStyle(
-                                color: Theme.of(context).colorScheme.error,
-                              ),
-                            ),
-                          ),
+                        PointySettingsTile(
+                          icon: Icons.receipt_long_outlined,
+                          title: l10n.receiptSettingsSectionTitle,
+                          subtitle: _receiptSummary(l10n),
+                          onTap: widget.viewModel.isSaving
+                              ? null
+                              : () => _openSettingsGroup(
+                                  context,
+                                  title: l10n.receiptSettingsSectionTitle,
+                                  icon: Icons.receipt_long_outlined,
+                                  children: _buildReceiptFields,
+                                ),
+                        ),
+                        PointySettingsTile(
+                          icon: Icons.point_of_sale_outlined,
+                          title: l10n.registerSessionSettingsSectionTitle,
+                          subtitle: _registerSessionSummary(l10n),
+                          onTap: widget.viewModel.isSaving
+                              ? null
+                              : () => _openSettingsGroup(
+                                  context,
+                                  title:
+                                      l10n.registerSessionSettingsSectionTitle,
+                                  icon: Icons.point_of_sale_outlined,
+                                  children: _buildRegisterSessionFields,
+                                ),
+                        ),
+                        PointySettingsTile(
+                          icon: Icons.payments_outlined,
+                          title: l10n.paymentSettingsSectionTitle,
+                          subtitle: _paymentSummary(l10n),
+                          hasError:
+                              _paymentMethodsError(l10n) != null ||
+                              _commissionError(
+                                    l10n,
+                                    _cardCommissionController,
+                                  ) !=
+                                  null ||
+                              _commissionError(
+                                    l10n,
+                                    _transferCommissionController,
+                                  ) !=
+                                  null,
+                          onTap: widget.viewModel.isSaving
+                              ? null
+                              : () => _openSettingsGroup(
+                                  context,
+                                  title: l10n.paymentSettingsSectionTitle,
+                                  icon: Icons.payments_outlined,
+                                  children: _buildPaymentFields,
+                                ),
+                        ),
+                        PointySettingsTile(
+                          icon: Icons.inventory_2_outlined,
+                          title: l10n.inventorySettingsSectionTitle,
+                          subtitle: _inventorySummary(l10n),
+                          hasError: _lowStockThresholdError(l10n) != null,
+                          onTap: widget.viewModel.isSaving
+                              ? null
+                              : () => _openSettingsGroup(
+                                  context,
+                                  title: l10n.inventorySettingsSectionTitle,
+                                  icon: Icons.inventory_2_outlined,
+                                  children: _buildInventoryFields,
+                                ),
+                        ),
+                        PointySettingsTile(
+                          icon: Icons.file_download_outlined,
+                          title: l10n.analyticsExportSectionTitle,
+                          subtitle: _analyticsExportSummary(l10n),
+                          onTap: widget.viewModel.isExportingAnalytics
+                              ? null
+                              : () => _openAnalyticsExport(context),
+                        ),
                       ],
                     ),
-                  ),
+                    if (widget.viewModel.hasSaveError) ...[
+                      SizedBox(height: spacing.md),
+                      PointyErrorState(
+                        title: l10n.shopSettingsSaveError,
+                        icon: Icons.save_outlined,
+                      ),
+                    ],
+                  ],
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
-          _SettingsSaveBar(
-            isSaving: widget.viewModel.isSaving,
-            hasSaveError: widget.viewModel.hasSaveError,
-            onSubmit: _submit,
-          ),
-        ],
-      ),
+        ),
+        _SettingsSaveBar(
+          isSaving: widget.viewModel.isSaving,
+          hasSaveError: widget.viewModel.hasSaveError,
+          onSubmit: _submit,
+        ),
+      ],
     );
   }
 
@@ -709,72 +702,80 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
 
         return StatefulBuilder(
           builder: (context, setDialogState) {
-            return AlertDialog(
-              icon: const Icon(Icons.schedule_outlined),
-              title: Text(l10n.cashierReturnWindowDialogTitle),
-              content: Row(
-                children: [
-                  Expanded(
-                    child: DropdownButtonFormField<int>(
-                      initialValue: selectedDays,
-                      decoration: InputDecoration(
-                        labelText: l10n.cashierReturnWindowDaysLabel,
-                        border: const OutlineInputBorder(),
-                      ),
-                      items: [
-                        for (var value = 0; value <= 30; value++)
-                          DropdownMenuItem<int>(
-                            value: value,
-                            child: Text('$value'),
-                          ),
-                      ],
-                      onChanged: (value) {
-                        if (value == null) {
-                          return;
-                        }
-                        setDialogState(() => selectedDays = value);
-                      },
-                    ),
+            final isCompactDialog =
+                MediaQuery.sizeOf(context).width < AppBreakpoints.largePhoneMin;
+            final daysField = DropdownButtonFormField<int>(
+              initialValue: selectedDays,
+              decoration: InputDecoration(
+                labelText: l10n.cashierReturnWindowDaysLabel,
+              ),
+              items: [
+                for (var value = 0; value <= 30; value++)
+                  DropdownMenuItem<int>(value: value, child: Text('$value')),
+              ],
+              onChanged: (value) {
+                if (value == null) {
+                  return;
+                }
+                setDialogState(() => selectedDays = value);
+              },
+            );
+            final hoursField = DropdownButtonFormField<int>(
+              initialValue: selectedHours,
+              decoration: InputDecoration(
+                labelText: l10n.cashierReturnWindowHoursLabel,
+              ),
+              items: [
+                for (var value = 0; value < 24; value++)
+                  DropdownMenuItem<int>(value: value, child: Text('$value')),
+              ],
+              onChanged: (value) {
+                if (value == null) {
+                  return;
+                }
+                setDialogState(() => selectedHours = value);
+              },
+            );
+
+            return AdaptiveDialogSurface(
+              size: AdaptiveModalSize.compact,
+              child: AlertDialog(
+                icon: const Icon(Icons.schedule_outlined),
+                title: Text(l10n.cashierReturnWindowDialogTitle),
+                content: SizedBox(
+                  width: 320,
+                  child: isCompactDialog
+                      ? Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            daysField,
+                            const SizedBox(height: 12),
+                            hoursField,
+                          ],
+                        )
+                      : Row(
+                          children: [
+                            Expanded(child: daysField),
+                            const SizedBox(width: 12),
+                            Expanded(child: hoursField),
+                          ],
+                        ),
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: Text(l10n.cancelButton),
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: DropdownButtonFormField<int>(
-                      initialValue: selectedHours,
-                      decoration: InputDecoration(
-                        labelText: l10n.cashierReturnWindowHoursLabel,
-                        border: const OutlineInputBorder(),
-                      ),
-                      items: [
-                        for (var value = 0; value < 24; value++)
-                          DropdownMenuItem<int>(
-                            value: value,
-                            child: Text('$value'),
-                          ),
-                      ],
-                      onChanged: (value) {
-                        if (value == null) {
-                          return;
-                        }
-                        setDialogState(() => selectedHours = value);
-                      },
-                    ),
+                  FilledButton(
+                    onPressed: () {
+                      Navigator.of(
+                        context,
+                      ).pop(selectedDays * 24 + selectedHours);
+                    },
+                    child: Text(l10n.confirmButton),
                   ),
                 ],
               ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  child: Text(l10n.cancelButton),
-                ),
-                FilledButton(
-                  onPressed: () {
-                    Navigator.of(
-                      context,
-                    ).pop(selectedDays * 24 + selectedHours);
-                  },
-                  child: Text(l10n.confirmButton),
-                ),
-              ],
             );
           },
         );
@@ -811,55 +812,47 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
                 listenable: widget.viewModel,
                 builder: (context, _) {
                   final l10n = AppLocalizations.of(context)!;
+                  final spacing = AdaptiveSpacing.of(context);
 
-                  return Scaffold(
-                    appBar: AppBar(title: Text(title)),
-                    body: SafeArea(
-                      child: ColoredBox(
-                        color: Theme.of(
-                          context,
-                        ).colorScheme.surfaceContainerLowest,
-                        child: Column(
-                          children: [
-                            Expanded(
-                              child: ListView(
-                                padding: const EdgeInsets.fromLTRB(
-                                  16,
-                                  12,
-                                  16,
-                                  20,
-                                ),
-                                children: [
-                                  Center(
-                                    child: ConstrainedBox(
-                                      constraints: const BoxConstraints(
-                                        maxWidth: 720,
-                                      ),
-                                      child: _SettingsDetailSection(
-                                        icon: icon,
-                                        title: title,
-                                        children: children(
-                                          context,
-                                          l10n,
-                                          refreshRoute,
-                                        ),
-                                      ),
+                  return PointyScaffold(
+                    appBar: PointyAppBar(
+                      title: Text(title),
+                      isLoading: widget.viewModel.isSaving,
+                    ),
+                    body: Column(
+                      children: [
+                        Expanded(
+                          child: ListView(
+                            padding: spacing.pagePadding,
+                            children: [
+                              AdaptiveMaxWidth(
+                                width: AppContentWidth.form,
+                                child: PointyDetailSection(
+                                  icon: icon,
+                                  title: title,
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.stretch,
+                                    children: children(
+                                      context,
+                                      l10n,
+                                      refreshRoute,
                                     ),
                                   ),
-                                ],
+                                ),
                               ),
-                            ),
-                            _SettingsSaveBar(
-                              isSaving: widget.viewModel.isSaving,
-                              hasSaveError: widget.viewModel.hasSaveError,
-                              onSubmit: () {
-                                _submit();
-                                refreshRoute();
-                              },
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
-                      ),
+                        _SettingsSaveBar(
+                          isSaving: widget.viewModel.isSaving,
+                          hasSaveError: widget.viewModel.hasSaveError,
+                          onSubmit: () {
+                            _submit();
+                            refreshRoute();
+                          },
+                        ),
+                      ],
                     ),
                   );
                 },
@@ -883,58 +876,49 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
                 listenable: widget.viewModel,
                 builder: (context, _) {
                   final l10n = AppLocalizations.of(context)!;
+                  final spacing = AdaptiveSpacing.of(context);
 
-                  return Scaffold(
-                    appBar: AppBar(title: Text(l10n.analyticsExportTitle)),
-                    body: SafeArea(
-                      child: ColoredBox(
-                        color: Theme.of(
-                          context,
-                        ).colorScheme.surfaceContainerLowest,
-                        child: Column(
-                          children: [
-                            Expanded(
-                              child: ListView(
-                                padding: const EdgeInsets.fromLTRB(
-                                  16,
-                                  12,
-                                  16,
-                                  20,
-                                ),
-                                children: [
-                                  Center(
-                                    child: ConstrainedBox(
-                                      constraints: const BoxConstraints(
-                                        maxWidth: 720,
-                                      ),
-                                      child: _SettingsDetailSection(
-                                        icon: Icons.file_download_outlined,
-                                        title: l10n
-                                            .analyticsExportFiltersSectionTitle,
-                                        children: _buildAnalyticsExportFields(
-                                          context,
-                                          l10n,
-                                          refreshRoute,
-                                        ),
-                                      ),
+                  return PointyScaffold(
+                    appBar: PointyAppBar(
+                      title: Text(l10n.analyticsExportTitle),
+                      isLoading: widget.viewModel.isExportingAnalytics,
+                    ),
+                    body: Column(
+                      children: [
+                        Expanded(
+                          child: ListView(
+                            padding: spacing.pagePadding,
+                            children: [
+                              AdaptiveMaxWidth(
+                                width: AppContentWidth.form,
+                                child: PointyDetailSection(
+                                  icon: Icons.file_download_outlined,
+                                  title:
+                                      l10n.analyticsExportFiltersSectionTitle,
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.stretch,
+                                    children: _buildAnalyticsExportFields(
+                                      context,
+                                      l10n,
+                                      refreshRoute,
                                     ),
                                   ),
-                                ],
+                                ),
                               ),
-                            ),
-                            _AnalyticsExportActionBar(
-                              isExporting:
-                                  widget.viewModel.isExportingAnalytics,
-                              hasExportError:
-                                  widget.viewModel.hasAnalyticsExportError,
-                              onSubmit: () {
-                                _submitAnalyticsExport();
-                                refreshRoute();
-                              },
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
-                      ),
+                        _AnalyticsExportActionBar(
+                          isExporting: widget.viewModel.isExportingAnalytics,
+                          hasExportError:
+                              widget.viewModel.hasAnalyticsExportError,
+                          onSubmit: () {
+                            _submitAnalyticsExport();
+                            refreshRoute();
+                          },
+                        ),
+                      ],
                     ),
                   );
                 },

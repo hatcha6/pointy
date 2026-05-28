@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../core/analytics_engine.dart';
+import '../../../shared/components/components.dart';
+import '../../../shared/shell/shell.dart';
 import '../view_models/auth_view_model.dart';
 import 'login_screen.dart';
 
@@ -49,19 +51,8 @@ class _AuthCheckingScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
 
-    return Scaffold(
-      body: SafeArea(
-        child: Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const CircularProgressIndicator(),
-              const SizedBox(height: 16),
-              Text(l10n.authCheckingSession),
-            ],
-          ),
-        ),
-      ),
+    return PointyScaffold(
+      body: PointyLoadingArea(label: l10n.authCheckingSession),
     );
   }
 }

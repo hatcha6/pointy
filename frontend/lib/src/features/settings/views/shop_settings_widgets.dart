@@ -525,30 +525,6 @@ class _DateFilterTile extends StatelessWidget {
   }
 }
 
-class _SettingsListSection extends StatelessWidget {
-  const _SettingsListSection({required this.children});
-
-  final List<Widget> children;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Theme.of(context).colorScheme.surface,
-      borderRadius: BorderRadius.circular(8),
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        children: [
-          for (var index = 0; index < children.length; index++) ...[
-            children[index],
-            if (index != children.length - 1)
-              const Divider(height: 1, indent: 72),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
 class _DurationPickerTile extends StatelessWidget {
   const _DurationPickerTile({
     super.key,
@@ -582,119 +558,6 @@ class _DurationPickerTile extends StatelessWidget {
   }
 }
 
-class _SettingsNavigationTile extends StatelessWidget {
-  const _SettingsNavigationTile({
-    required this.icon,
-    required this.iconColor,
-    required this.title,
-    required this.subtitle,
-    required this.onTap,
-    this.hasError = false,
-  });
-
-  final IconData icon;
-  final Color iconColor;
-  final String title;
-  final String subtitle;
-  final VoidCallback? onTap;
-  final bool hasError;
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
-    final isRtl = Directionality.of(context) == TextDirection.rtl;
-
-    return InkWell(
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        child: Row(
-          children: [
-            DecoratedBox(
-              decoration: BoxDecoration(
-                color: iconColor.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: SizedBox.square(
-                dimension: 40,
-                child: Icon(icon, color: iconColor),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(title, style: textTheme.titleMedium),
-                  const SizedBox(height: 2),
-                  Text(
-                    subtitle,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: textTheme.bodyMedium?.copyWith(
-                      color: hasError
-                          ? colorScheme.error
-                          : colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 8),
-            Icon(
-              isRtl ? Icons.chevron_right : Icons.chevron_left,
-              color: colorScheme.onSurfaceVariant,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _SettingsDetailSection extends StatelessWidget {
-  const _SettingsDetailSection({
-    required this.icon,
-    required this.title,
-    required this.children,
-  });
-
-  final IconData icon;
-  final String title;
-  final List<Widget> children;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Theme.of(context).colorScheme.surface,
-      borderRadius: BorderRadius.circular(8),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              children: [
-                Icon(icon, color: Theme.of(context).colorScheme.primary),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    title,
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            ...children,
-          ],
-        ),
-      ),
-    );
-  }
-}
-
 class _SettingsSaveBar extends StatelessWidget {
   const _SettingsSaveBar({
     required this.isSaving,
@@ -711,45 +574,25 @@ class _SettingsSaveBar extends StatelessWidget {
     final l10n = AppLocalizations.of(context)!;
     final colorScheme = Theme.of(context).colorScheme;
 
-    return Material(
-      color: colorScheme.surface,
-      elevation: 3,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 720),
-            child: Row(
-              children: [
-                if (hasSaveError)
-                  Expanded(
-                    child: Text(
-                      l10n.shopSettingsSaveError,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(color: colorScheme.error),
-                    ),
-                  )
-                else
-                  const Spacer(),
-                const SizedBox(width: 12),
-                FilledButton.icon(
-                  onPressed: isSaving ? null : onSubmit,
-                  icon: isSaving
-                      ? const SizedBox.square(
-                          dimension: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.save_outlined),
-                  label: Text(
-                    isSaving
-                        ? l10n.savingSettingsButton
-                        : l10n.saveSettingsButton,
-                  ),
-                ),
-              ],
-            ),
-          ),
+    return PointyStickyActionFooter(
+      summary: hasSaveError
+          ? Text(
+              l10n.shopSettingsSaveError,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(color: colorScheme.error),
+            )
+          : null,
+      primaryAction: FilledButton.icon(
+        onPressed: isSaving ? null : onSubmit,
+        icon: isSaving
+            ? const SizedBox.square(
+                dimension: 18,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : const Icon(Icons.save_outlined),
+        label: Text(
+          isSaving ? l10n.savingSettingsButton : l10n.saveSettingsButton,
         ),
       ),
     );
@@ -772,46 +615,28 @@ class _AnalyticsExportActionBar extends StatelessWidget {
     final l10n = AppLocalizations.of(context)!;
     final colorScheme = Theme.of(context).colorScheme;
 
-    return Material(
-      color: colorScheme.surface,
-      elevation: 3,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 720),
-            child: Row(
-              children: [
-                if (hasExportError)
-                  Expanded(
-                    child: Text(
-                      l10n.analyticsExportFailedMessage,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(color: colorScheme.error),
-                    ),
-                  )
-                else
-                  const Spacer(),
-                const SizedBox(width: 12),
-                FilledButton.icon(
-                  key: const ValueKey('analytics_export_download_button'),
-                  onPressed: isExporting ? null : onSubmit,
-                  icon: isExporting
-                      ? const SizedBox.square(
-                          dimension: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.file_download_outlined),
-                  label: Text(
-                    isExporting
-                        ? l10n.analyticsExportRunningButton
-                        : l10n.analyticsExportDownloadButton,
-                  ),
-                ),
-              ],
-            ),
-          ),
+    return PointyStickyActionFooter(
+      summary: hasExportError
+          ? Text(
+              l10n.analyticsExportFailedMessage,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(color: colorScheme.error),
+            )
+          : null,
+      primaryAction: FilledButton.icon(
+        key: const ValueKey('analytics_export_download_button'),
+        onPressed: isExporting ? null : onSubmit,
+        icon: isExporting
+            ? const SizedBox.square(
+                dimension: 18,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : const Icon(Icons.file_download_outlined),
+        label: Text(
+          isExporting
+              ? l10n.analyticsExportRunningButton
+              : l10n.analyticsExportDownloadButton,
         ),
       ),
     );

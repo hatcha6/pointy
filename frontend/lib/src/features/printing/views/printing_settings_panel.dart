@@ -3,6 +3,8 @@ import 'package:flutter/services.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../data/models/printer_config.dart';
+import '../../../shared/components/components.dart';
+import '../../../shared/responsive/responsive.dart';
 import '../view_models/printing_settings_view_model.dart';
 
 class PrintingSettingsPanel extends StatefulWidget {
@@ -44,6 +46,7 @@ class _PrintingSettingsPanelState extends State<PrintingSettingsPanel> {
       builder: (context, _) {
         final config = widget.viewModel.config;
         final endpoint = config.endpoint;
+        final spacing = AdaptiveSpacing.of(context);
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -52,7 +55,7 @@ class _PrintingSettingsPanelState extends State<PrintingSettingsPanel> {
               l10n.printerTransportLabel,
               style: Theme.of(context).textTheme.labelLarge,
             ),
-            const SizedBox(height: 8),
+            SizedBox(height: spacing.sm),
             SegmentedButton<PrintTransportKind>(
               segments: [
                 ButtonSegment(
@@ -84,7 +87,7 @@ class _PrintingSettingsPanelState extends State<PrintingSettingsPanel> {
                       _syncEndpointControllers();
                     },
             ),
-            const SizedBox(height: 12),
+            SizedBox(height: spacing.md),
             _DiscoveredPrinterPicker(
               printers: widget.viewModel.discoveredPrinters,
               selected: endpoint,
@@ -100,37 +103,37 @@ class _PrintingSettingsPanelState extends State<PrintingSettingsPanel> {
                       _syncEndpointControllers();
                     },
             ),
-            const SizedBox(height: 12),
+            SizedBox(height: spacing.md),
             _SelectedPrinterSummary(endpoint: endpoint),
-            const SizedBox(height: 12),
-            TextFormField(
-              controller: _paperWidthController,
-              enabled: !widget.viewModel.isTesting,
-              keyboardType: TextInputType.number,
-              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-              onChanged: widget.viewModel.updatePaperWidth,
-              decoration: InputDecoration(
-                labelText: l10n.paperWidthLabel,
-                border: const OutlineInputBorder(),
-                prefixIcon: const Icon(Icons.receipt_outlined),
-              ),
-            ),
-            const SizedBox(height: 12),
-            TextFormField(
-              controller: _codeTableController,
-              enabled: !widget.viewModel.isTesting,
-              onChanged: widget.viewModel.updateCodeTable,
-              decoration: InputDecoration(
-                labelText: l10n.printerCodeTableLabel,
-                border: const OutlineInputBorder(),
-                prefixIcon: const Icon(Icons.translate_outlined),
-              ),
-            ),
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
+            SizedBox(height: spacing.md),
+            ResponsiveFormGrid(
+              maxColumns: 2,
               children: [
+                TextFormField(
+                  controller: _paperWidthController,
+                  enabled: !widget.viewModel.isTesting,
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  onChanged: widget.viewModel.updatePaperWidth,
+                  decoration: InputDecoration(
+                    labelText: l10n.paperWidthLabel,
+                    prefixIcon: const Icon(Icons.receipt_outlined),
+                  ),
+                ),
+                TextFormField(
+                  controller: _codeTableController,
+                  enabled: !widget.viewModel.isTesting,
+                  onChanged: widget.viewModel.updateCodeTable,
+                  decoration: InputDecoration(
+                    labelText: l10n.printerCodeTableLabel,
+                    prefixIcon: const Icon(Icons.translate_outlined),
+                  ),
+                ),
+              ],
+            ),
+            SizedBox(height: spacing.md),
+            ResponsiveActionBar(
+              actions: [
                 FilledButton.icon(
                   onPressed: widget.viewModel.isTesting
                       ? null
@@ -156,14 +159,13 @@ class _PrintingSettingsPanelState extends State<PrintingSettingsPanel> {
                 ),
               ],
             ),
-            if (widget.viewModel.hasConfigSaveError)
-              Padding(
-                padding: const EdgeInsets.only(top: 12),
-                child: Text(
-                  l10n.deviceSettingsSaveError,
-                  style: TextStyle(color: Theme.of(context).colorScheme.error),
-                ),
+            if (widget.viewModel.hasConfigSaveError) ...[
+              SizedBox(height: spacing.md),
+              Text(
+                l10n.deviceSettingsSaveError,
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
               ),
+            ],
             _PrinterTestMessage(
               outcome: widget.viewModel.testOutcome,
               transportKind: endpoint.kind,
@@ -208,6 +210,7 @@ class _DiscoveredPrinterPicker extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final colorScheme = Theme.of(context).colorScheme;
+    final spacing = AdaptiveSpacing.of(context);
     final selectedKey = _endpointKey(selected);
     final hasSelectedPrinter = printers.any(
       (printer) => _endpointKey(printer) == selectedKey,
@@ -223,7 +226,6 @@ class _DiscoveredPrinterPicker extends StatelessWidget {
                 initialValue: hasSelectedPrinter ? selectedKey : null,
                 decoration: InputDecoration(
                   labelText: l10n.discoveredPrintersLabel,
-                  border: const OutlineInputBorder(),
                   prefixIcon: const Icon(Icons.manage_search_outlined),
                 ),
                 hint: Text(
@@ -262,7 +264,7 @@ class _DiscoveredPrinterPicker extends StatelessWidget {
                       },
               ),
             ),
-            const SizedBox(width: 8),
+            SizedBox(width: spacing.sm),
             IconButton.filledTonal(
               tooltip: l10n.discoverPrintersButton,
               onPressed: isDiscovering ? null : onDiscover,
@@ -277,7 +279,7 @@ class _DiscoveredPrinterPicker extends StatelessWidget {
         ),
         if (hasDiscoveryError)
           Padding(
-            padding: const EdgeInsets.only(top: 8),
+            padding: EdgeInsets.only(top: spacing.sm),
             child: Text(
               l10n.printerDiscoveryError,
               style: TextStyle(color: colorScheme.error),
@@ -310,50 +312,17 @@ class _SelectedPrinterSummary extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final colorScheme = Theme.of(context).colorScheme;
     final name = endpoint.name.trim().isEmpty
         ? l10n.noSelectedPrinter
         : endpoint.name.trim();
     final details = _endpointDetails(endpoint);
 
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        border: Border.all(color: colorScheme.outlineVariant),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        child: Row(
-          children: [
-            Icon(_transportIcon(endpoint.kind), color: colorScheme.primary),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    l10n.selectedPrinterLabel,
-                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                      color: colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(name, maxLines: 1, overflow: TextOverflow.ellipsis),
-                  if (details.isNotEmpty)
-                    Text(
-                      details,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
+    return PointyDataRow(
+      leading: Icon(_transportIcon(endpoint.kind)),
+      title: l10n.selectedPrinterLabel,
+      subtitle: details.isEmpty ? name : '$name\n$details',
+      minHeight: 68,
+      padding: const EdgeInsetsDirectional.fromSTEB(12, 10, 12, 10),
     );
   }
 
@@ -417,7 +386,10 @@ class _PrinterTestMessage extends StatelessWidget {
 
     return Padding(
       padding: const EdgeInsets.only(top: 12),
-      child: Text(message, style: TextStyle(color: color)),
+      child: Align(
+        alignment: AlignmentDirectional.centerStart,
+        child: PointyStatusPill(label: message, color: color),
+      ),
     );
   }
 }

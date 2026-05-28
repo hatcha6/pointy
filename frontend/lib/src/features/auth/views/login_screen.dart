@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
+import '../../../shared/components/components.dart';
+import '../../../shared/responsive/responsive.dart';
+import '../../../shared/shell/shell.dart';
 import '../view_models/auth_view_model.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -31,31 +34,24 @@ class _LoginScreenState extends State<LoginScreen> {
     return ListenableBuilder(
       listenable: widget.viewModel,
       builder: (context, _) {
-        return Scaffold(
-          body: SafeArea(
-            child: Center(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(24),
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 420),
+        final spacing = AdaptiveSpacing.of(context);
+
+        return PointyScaffold(
+          body: Center(
+            child: SingleChildScrollView(
+              padding: spacing.pagePadding,
+              child: AdaptiveMaxWidth(
+                width: AppContentWidth.compact,
+                expand: false,
+                child: PointyDetailSection(
+                  title: l10n.loginTitle,
+                  icon: Icons.point_of_sale,
                   child: Form(
                     key: _formKey,
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        Icon(
-                          Icons.point_of_sale,
-                          size: 48,
-                          color: Theme.of(context).colorScheme.primary,
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          l10n.loginTitle,
-                          textAlign: TextAlign.center,
-                          style: Theme.of(context).textTheme.headlineSmall,
-                        ),
-                        const SizedBox(height: 24),
                         TextFormField(
                           controller: _usernameController,
                           enabled: !widget.viewModel.isSubmitting,
@@ -63,14 +59,13 @@ class _LoginScreenState extends State<LoginScreen> {
                           decoration: InputDecoration(
                             labelText: l10n.usernameLabel,
                             prefixIcon: const Icon(Icons.person_outline),
-                            border: const OutlineInputBorder(),
                           ),
                           validator: (value) =>
                               value == null || value.trim().isEmpty
                               ? l10n.requiredField
                               : null,
                         ),
-                        const SizedBox(height: 12),
+                        SizedBox(height: spacing.sm),
                         TextFormField(
                           controller: _passwordController,
                           enabled: !widget.viewModel.isSubmitting,
@@ -80,24 +75,17 @@ class _LoginScreenState extends State<LoginScreen> {
                           decoration: InputDecoration(
                             labelText: l10n.passwordLabel,
                             prefixIcon: const Icon(Icons.lock_outline),
-                            border: const OutlineInputBorder(),
                           ),
                           validator: (value) =>
                               value == null || value.trim().isEmpty
                               ? l10n.requiredField
                               : null,
                         ),
-                        const SizedBox(height: 12),
-                        if (widget.viewModel.hasError)
-                          Padding(
-                            padding: const EdgeInsets.only(bottom: 12),
-                            child: Text(
-                              l10n.loginError,
-                              style: TextStyle(
-                                color: Theme.of(context).colorScheme.error,
-                              ),
-                            ),
-                          ),
+                        if (widget.viewModel.hasError) ...[
+                          SizedBox(height: spacing.sm),
+                          _LoginError(message: l10n.loginError),
+                        ],
+                        SizedBox(height: spacing.md),
                         FilledButton.icon(
                           onPressed: widget.viewModel.isSubmitting
                               ? null
@@ -136,6 +124,40 @@ class _LoginScreenState extends State<LoginScreen> {
     await widget.viewModel.login(
       username: _usernameController.text.trim(),
       password: _passwordController.text,
+    );
+  }
+}
+
+class _LoginError extends StatelessWidget {
+  const _LoginError({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: colorScheme.errorContainer,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: colorScheme.error.withValues(alpha: 0.20)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          children: [
+            Icon(Icons.error_outline, color: colorScheme.onErrorContainer),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                message,
+                style: TextStyle(color: colorScheme.onErrorContainer),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

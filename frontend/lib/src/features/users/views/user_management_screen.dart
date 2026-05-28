@@ -5,7 +5,9 @@ import '../../../core/authorization.dart';
 import '../../../data/models/pos_user.dart';
 import '../../../shared/app_navigation_drawer.dart';
 import '../../../shared/authorization_guards.dart';
-import '../../../shared/infinite_scroll_grid.dart';
+import '../../../shared/components/components.dart';
+import '../../../shared/responsive/responsive.dart';
+import '../../../shared/shell/shell.dart';
 import '../view_models/user_management_view_model.dart';
 
 class UserManagementScreen extends StatelessWidget {
@@ -53,7 +55,7 @@ class UserManagementScreen extends StatelessWidget {
     return ListenableBuilder(
       listenable: viewModel,
       builder: (context, _) {
-        return Scaffold(
+        return PointyScaffold(
           drawer: AppNavigationDrawer(
             selectedDestination: AppNavigationDestination.users,
             currentUser: currentUser,
@@ -72,7 +74,7 @@ class UserManagementScreen extends StatelessWidget {
             onOpenShopSettings: onOpenShopSettings,
             onLogout: onLogout,
           ),
-          appBar: AppBar(
+          appBar: PointyAppBar(
             leading: Builder(
               builder: (context) {
                 return IconButton(
@@ -83,6 +85,7 @@ class UserManagementScreen extends StatelessWidget {
               },
             ),
             title: Text(l10n.usersManagementTitle),
+            reserveLoadingSlot: false,
             actions: [
               UserManagementGuard(
                 capabilities: capabilities,
@@ -95,25 +98,15 @@ class UserManagementScreen extends StatelessWidget {
               ),
             ],
           ),
-          body: SafeArea(
-            child: UserManagementGuard(
-              capabilities: capabilities,
-              child: _UserManagementBody(
-                viewModel: viewModel,
-                currentUser: currentUser,
-                onOpenUserDetails: onOpenUserDetails,
-              ),
-            ),
-          ),
-          floatingActionButton: UserManagementGuard(
+          body: UserManagementGuard(
             capabilities: capabilities,
-            fallback: const SizedBox.shrink(),
-            child: FloatingActionButton.extended(
-              onPressed: viewModel.isSaving
+            child: _UserManagementBody(
+              viewModel: viewModel,
+              currentUser: currentUser,
+              onOpenUserDetails: onOpenUserDetails,
+              onCreateUser: viewModel.isSaving
                   ? null
                   : () => _showCreateUserSheet(context),
-              icon: const Icon(Icons.person_add_alt_1),
-              label: Text(l10n.addUserButton),
             ),
           ),
         );
@@ -122,11 +115,10 @@ class UserManagementScreen extends StatelessWidget {
   }
 
   Future<void> _showCreateUserSheet(BuildContext context) {
-    return showModalBottomSheet<void>(
+    return showAdaptiveModalBottomSheet<void>(
       context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      showDragHandle: true,
+      size: AdaptiveModalSize.standard,
+      maxHeightFactor: 0.94,
       builder: (sheetContext) {
         return Padding(
           padding: EdgeInsets.only(
@@ -147,127 +139,103 @@ class _UserManagementBody extends StatelessWidget {
     required this.viewModel,
     required this.currentUser,
     required this.onOpenUserDetails,
+    required this.onCreateUser,
   });
 
   final UserManagementViewModel viewModel;
   final PosUser currentUser;
   final ValueChanged<PosUser> onOpenUserDetails;
+  final VoidCallback? onCreateUser;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
 
-    if (viewModel.isLoading) {
-      return const Center(child: CircularProgressIndicator());
-    }
+    final spacing = AdaptiveSpacing.of(context);
 
-    if (viewModel.hasError && viewModel.users.isEmpty) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Text(l10n.usersLoadError, textAlign: TextAlign.center),
-        ),
-      );
-    }
-
-    if (viewModel.users.isEmpty) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Text(l10n.emptyUsers, textAlign: TextAlign.center),
-        ),
-      );
-    }
-
-    return InfiniteScrollList<PosUser>(
-      items: viewModel.users,
-      onLoadMore: viewModel.loadMoreUsers,
-      hasMore: viewModel.hasMoreUsers,
-      isLoadingInitial: viewModel.isLoading,
-      isLoadingMore: viewModel.isLoadingMore,
-      emptyBuilder: (context) {
-        return Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Text(l10n.emptyUsers, textAlign: TextAlign.center),
+    return Padding(
+      padding: spacing.pagePadding,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          ResponsiveActionBar(
+            alignment: WrapAlignment.start,
+            actions: [
+              FilledButton.icon(
+                onPressed: onCreateUser,
+                icon: const Icon(Icons.person_add_alt_1),
+                label: Text(l10n.addUserButton),
+              ),
+            ],
           ),
-        );
-      },
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
-      separatorBuilder: (_, _) => const SizedBox(height: 8),
-      itemBuilder: (context, user) {
-        final isCurrentUser = user.id == currentUser.id;
-        final controls = _UserControls(
-          user: user,
-          enabled: !viewModel.isSaving && !isCurrentUser,
-          onRoleChanged: (role) => viewModel.updateUserRole(user, role),
-          onActiveChanged: (value) => viewModel.updateUserActive(user, value),
-          onOpenDetails: () => onOpenUserDetails(user),
-        );
-
-        return Card(
-          margin: EdgeInsets.zero,
-          child: Padding(
-            padding: const EdgeInsets.all(12),
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final details = Row(
-                  children: [
-                    CircleAvatar(
-                      child: Icon(
-                        user.role.isManager
-                            ? Icons.admin_panel_settings_outlined
-                            : Icons.point_of_sale_outlined,
-                      ),
+          SizedBox(height: spacing.sm),
+          Expanded(
+            child: PointyDataList<PosUser>(
+              items: viewModel.users,
+              onLoadMore: viewModel.loadMoreUsers,
+              hasMore: viewModel.hasMoreUsers,
+              isLoadingInitial: viewModel.isLoading,
+              isLoadingMore: viewModel.isLoadingMore,
+              hasError: viewModel.hasError,
+              errorBuilder: (context) => PointyErrorState(
+                title: l10n.usersLoadError,
+                icon: Icons.group_outlined,
+              ),
+              emptyBuilder: (context) => PointyEmptyState(
+                icon: Icons.group_outlined,
+                title: l10n.emptyUsers,
+              ),
+              padding: EdgeInsets.zero,
+              framed: false,
+              itemBuilder: (context, user) {
+                final isCurrentUser = user.id == currentUser.id;
+                return PointyDataRow(
+                  leading: CircleAvatar(
+                    child: Icon(
+                      user.role.isManager
+                          ? Icons.admin_panel_settings_outlined
+                          : Icons.point_of_sale_outlined,
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            user.label,
-                            style: Theme.of(context).textTheme.titleMedium,
-                          ),
-                          Text(user.username),
-                          Text(_roleLabel(l10n, user.role)),
-                          Text(
-                            user.isActive
-                                ? l10n.userStatusActive
-                                : l10n.userStatusInactive,
-                          ),
-                        ],
-                      ),
+                  ),
+                  title: user.label,
+                  subtitle: user.username,
+                  badges: [
+                    PointyStatusPill(
+                      label: _roleLabel(l10n, user.role),
+                      icon: user.role.isManager
+                          ? Icons.admin_panel_settings_outlined
+                          : Icons.point_of_sale_outlined,
                     ),
-                  ],
-                );
-
-                if (constraints.maxWidth >= 620) {
-                  return Row(
-                    children: [
-                      Expanded(child: details),
-                      const SizedBox(width: 12),
-                      controls,
-                    ],
-                  );
-                }
-
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    details,
-                    const SizedBox(height: 8),
-                    Align(
-                      alignment: AlignmentDirectional.centerEnd,
-                      child: controls,
+                    PointyStatusPill(
+                      label: user.isActive
+                          ? l10n.userStatusActive
+                          : l10n.userStatusInactive,
+                      icon: user.isActive
+                          ? Icons.check_circle_outline
+                          : Icons.pause_circle_outline,
+                      color: user.isActive
+                          ? Theme.of(context).colorScheme.primary
+                          : Theme.of(context).colorScheme.error,
                     ),
                   ],
+                  actions: [
+                    _UserControls(
+                      user: user,
+                      enabled: !viewModel.isSaving && !isCurrentUser,
+                      onRoleChanged: (role) =>
+                          viewModel.updateUserRole(user, role),
+                      onActiveChanged: (value) =>
+                          viewModel.updateUserActive(user, value),
+                      onOpenDetails: () => onOpenUserDetails(user),
+                    ),
+                  ],
+                  onTap: () => onOpenUserDetails(user),
                 );
               },
             ),
           ),
-        );
-      },
+        ],
+      ),
     );
   }
 
@@ -371,74 +339,68 @@ class _CreateUserFormState extends State<_CreateUserForm> {
     return ListenableBuilder(
       listenable: widget.viewModel,
       builder: (context, _) {
-        return Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 560),
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
-              child: Form(
-                key: _formKey,
-                child: SingleChildScrollView(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
+        final spacing = AdaptiveSpacing.of(context);
+
+        return AdaptiveMaxWidth(
+          width: AppContentWidth.form,
+          child: Padding(
+            padding: EdgeInsetsDirectional.fromSTEB(
+              spacing.lg,
+              0,
+              spacing.lg,
+              spacing.lg,
+            ),
+            child: Form(
+              key: _formKey,
+              child: ListView(
+                shrinkWrap: true,
+                children: [
+                  PointySectionHeader(
+                    title: l10n.userCreateTitle,
+                    leading: const Icon(Icons.person_add_alt_1),
+                  ),
+                  ResponsiveFormGrid(
+                    minChildWidth: 240,
+                    maxColumns: 2,
                     children: [
-                      Text(
-                        l10n.userCreateTitle,
-                        style: Theme.of(context).textTheme.titleLarge,
-                      ),
-                      const SizedBox(height: 16),
                       TextFormField(
                         controller: _displayNameController,
                         enabled: !widget.viewModel.isSaving,
                         decoration: InputDecoration(
                           labelText: l10n.displayNameLabel,
-                          border: const OutlineInputBorder(),
                         ),
                       ),
-                      const SizedBox(height: 12),
                       TextFormField(
                         controller: _usernameController,
                         enabled: !widget.viewModel.isSaving,
                         decoration: InputDecoration(
                           labelText: l10n.usernameLabel,
-                          border: const OutlineInputBorder(),
                         ),
                         validator: (value) =>
                             value == null || value.trim().isEmpty
                             ? l10n.requiredField
                             : null,
                       ),
-                      const SizedBox(height: 12),
                       TextFormField(
                         controller: _passwordController,
                         enabled: !widget.viewModel.isSaving,
                         obscureText: true,
                         decoration: InputDecoration(
                           labelText: l10n.passwordLabel,
-                          border: const OutlineInputBorder(),
                         ),
                         validator: (value) => value == null || value.isEmpty
                             ? l10n.requiredField
                             : null,
                       ),
-                      const SizedBox(height: 12),
                       TextFormField(
                         controller: _emailController,
                         enabled: !widget.viewModel.isSaving,
                         keyboardType: TextInputType.emailAddress,
-                        decoration: InputDecoration(
-                          labelText: l10n.emailLabel,
-                          border: const OutlineInputBorder(),
-                        ),
+                        decoration: InputDecoration(labelText: l10n.emailLabel),
                       ),
-                      const SizedBox(height: 12),
                       DropdownButtonFormField<UserRole>(
                         initialValue: _role,
-                        decoration: InputDecoration(
-                          labelText: l10n.roleLabel,
-                          border: const OutlineInputBorder(),
-                        ),
+                        decoration: InputDecoration(labelText: l10n.roleLabel),
                         items: [
                           DropdownMenuItem(
                             value: UserRole.cashier,
@@ -464,45 +426,41 @@ class _CreateUserFormState extends State<_CreateUserForm> {
                             ? null
                             : (value) => setState(() => _isActive = value),
                       ),
-                      if (widget.viewModel.hasSaveError)
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 12),
-                          child: Text(
-                            l10n.createUserError,
-                            style: TextStyle(
-                              color: Theme.of(context).colorScheme.error,
-                            ),
-                          ),
-                        ),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.end,
-                        children: [
-                          TextButton(
-                            onPressed: widget.viewModel.isSaving
-                                ? null
-                                : () => Navigator.of(context).pop(),
-                            child: Text(l10n.cancelButton),
-                          ),
-                          const SizedBox(width: 8),
-                          FilledButton.icon(
-                            onPressed: widget.viewModel.isSaving
-                                ? null
-                                : _submit,
-                            icon: widget.viewModel.isSaving
-                                ? const SizedBox.square(
-                                    dimension: 18,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                    ),
-                                  )
-                                : const Icon(Icons.person_add_alt_1),
-                            label: Text(l10n.createUserButton),
-                          ),
-                        ],
+                    ],
+                  ),
+                  if (widget.viewModel.hasSaveError) ...[
+                    SizedBox(height: spacing.sm),
+                    Text(
+                      l10n.createUserError,
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.error,
+                      ),
+                    ),
+                  ],
+                  SizedBox(height: spacing.md),
+                  ResponsiveActionBar(
+                    actions: [
+                      TextButton(
+                        onPressed: widget.viewModel.isSaving
+                            ? null
+                            : () => Navigator.of(context).pop(),
+                        child: Text(l10n.cancelButton),
+                      ),
+                      FilledButton.icon(
+                        onPressed: widget.viewModel.isSaving ? null : _submit,
+                        icon: widget.viewModel.isSaving
+                            ? const SizedBox.square(
+                                dimension: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Icon(Icons.person_add_alt_1),
+                        label: Text(l10n.createUserButton),
                       ),
                     ],
                   ),
-                ),
+                ],
               ),
             ),
           ),

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 import 'package:pointy_frontend/src/shared/components/components.dart';
 import 'package:pointy_frontend/src/shared/design/design.dart';
 
@@ -223,6 +224,126 @@ void main() {
     );
     expect(find.text('لا توجد سجلات'), findsOneWidget);
   });
+
+  testWidgets('Phase 7 settings and permission surfaces preserve Arabic text', (
+    tester,
+  ) async {
+    var tapped = false;
+
+    await _pumpSurface(
+      tester,
+      width: 480,
+      child: PointySettingsSection(
+        children: [
+          PointySettingsTile(
+            icon: Icons.storefront_outlined,
+            title: 'هوية المتجر',
+            subtitle: 'الفرع الرئيسي',
+            onTap: () => tapped = true,
+          ),
+        ],
+      ),
+    );
+
+    expect(find.text('هوية المتجر'), findsOneWidget);
+    expect(find.text('الفرع الرئيسي'), findsOneWidget);
+    await tester.tap(find.text('هوية المتجر'));
+    expect(tapped, isTrue);
+
+    await _pumpSurface(
+      tester,
+      width: 390,
+      child: const PointyPermissionDeniedView(
+        title: 'غير مصرح',
+        message: 'لا تملك صلاحية الوصول إلى هذه الصفحة.',
+      ),
+    );
+
+    expect(find.text('غير مصرح'), findsOneWidget);
+    expect(find.text('لا تملك صلاحية الوصول إلى هذه الصفحة.'), findsOneWidget);
+  });
+
+  testWidgets('PointyNavigationSurface keeps drawer destinations selectable', (
+    tester,
+  ) async {
+    var selected = -1;
+    var loggedOut = false;
+
+    await _pumpSurface(
+      tester,
+      width: 390,
+      child: PointyNavigationSurface(
+        selectedIndex: 0,
+        onDestinationSelected: (index) => selected = index,
+        userLabel: 'مدير المتجر',
+        roleLabel: 'مدير',
+        destinations: const [
+          NavigationDrawerDestination(
+            icon: Icon(Icons.dashboard_outlined),
+            label: Text('لوحة التحكم'),
+          ),
+          NavigationDrawerDestination(
+            icon: Icon(Icons.point_of_sale_outlined),
+            label: Text('نقطة البيع'),
+          ),
+        ],
+        logoutTile: ListTile(
+          title: const Text('تسجيل الخروج'),
+          onTap: () => loggedOut = true,
+        ),
+      ),
+    );
+
+    expect(find.byType(NavigationDrawer), findsOneWidget);
+    expect(find.text('مدير المتجر'), findsOneWidget);
+    expect(find.text('لوحة التحكم'), findsOneWidget);
+
+    await tester.tap(find.text('نقطة البيع'));
+    expect(selected, 1);
+
+    await tester.tap(find.text('تسجيل الخروج'));
+    expect(loggedOut, isTrue);
+  });
+
+  testWidgets('PointyDestructiveConfirmationDialog returns confirmation', (
+    tester,
+  ) async {
+    bool? confirmed;
+
+    await _pumpSurface(
+      tester,
+      width: 390,
+      child: Builder(
+        builder: (context) {
+          return FilledButton(
+            onPressed: () async {
+              confirmed = await showDialog<bool>(
+                context: context,
+                builder: (context) {
+                  return const PointyDestructiveConfirmationDialog(
+                    title: 'حذف العنصر',
+                    message: 'لا يمكن التراجع عن هذا الإجراء.',
+                    confirmLabel: 'حذف',
+                  );
+                },
+              );
+            },
+            child: const Text('فتح التأكيد'),
+          );
+        },
+      ),
+    );
+
+    await tester.tap(find.text('فتح التأكيد'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('حذف العنصر'), findsOneWidget);
+    expect(find.text('لا يمكن التراجع عن هذا الإجراء.'), findsOneWidget);
+
+    await tester.tap(find.text('حذف'));
+    await tester.pumpAndSettle();
+    expect(confirmed, isTrue);
+  });
 }
 
 Future<void> _pumpSurface(
@@ -232,6 +353,9 @@ Future<void> _pumpSurface(
 }) async {
   await tester.pumpWidget(
     MaterialApp(
+      locale: const Locale('ar'),
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
       theme: PointyTheme.light(),
       home: Directionality(
         textDirection: TextDirection.rtl,

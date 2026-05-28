@@ -5,6 +5,9 @@ import '../../../core/authorization.dart';
 import '../../../data/models/pos_user.dart';
 import '../../../shared/app_navigation_drawer.dart';
 import '../../../shared/authorization_guards.dart';
+import '../../../shared/components/components.dart';
+import '../../../shared/responsive/responsive.dart';
+import '../../../shared/shell/shell.dart';
 import '../../printing/view_models/printing_settings_view_model.dart';
 import '../../printing/views/printing_settings_panel.dart';
 
@@ -51,7 +54,7 @@ class DeviceSettingsScreen extends StatelessWidget {
     return ListenableBuilder(
       listenable: viewModel,
       builder: (context, _) {
-        return Scaffold(
+        return PointyScaffold(
           drawer: AppNavigationDrawer(
             selectedDestination: AppNavigationDestination.deviceSettings,
             currentUser: currentUser,
@@ -70,7 +73,7 @@ class DeviceSettingsScreen extends StatelessWidget {
             onOpenDeviceSettings: () {},
             onLogout: onLogout,
           ),
-          appBar: AppBar(
+          appBar: PointyAppBar(
             leading: Builder(
               builder: (context) {
                 return IconButton(
@@ -81,6 +84,8 @@ class DeviceSettingsScreen extends StatelessWidget {
               },
             ),
             title: Text(l10n.deviceSettingsTitle),
+            isLoading: viewModel.isLoadingConfig,
+            reserveLoadingSlot: false,
             actions: [
               PosAccessGuard(
                 capabilities: capabilities,
@@ -95,11 +100,9 @@ class DeviceSettingsScreen extends StatelessWidget {
               ),
             ],
           ),
-          body: SafeArea(
-            child: PosAccessGuard(
-              capabilities: capabilities,
-              child: _DeviceSettingsBody(viewModel: viewModel),
-            ),
+          body: PosAccessGuard(
+            capabilities: capabilities,
+            child: _DeviceSettingsBody(viewModel: viewModel),
           ),
         );
       },
@@ -115,61 +118,36 @@ class _DeviceSettingsBody extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final colorScheme = Theme.of(context).colorScheme;
+    final spacing = AdaptiveSpacing.of(context);
 
     if (viewModel.isLoadingConfig) {
-      return const Center(child: CircularProgressIndicator());
+      return const PointyLoadingArea();
     }
 
-    return ColoredBox(
-      color: colorScheme.surfaceContainerLowest,
-      child: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
-        children: [
-          Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 720),
-              child: Material(
-                color: colorScheme.surface,
-                borderRadius: BorderRadius.circular(8),
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Row(
-                        children: [
-                          Icon(
-                            Icons.print_outlined,
-                            color: colorScheme.primary,
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              l10n.devicePrinterSectionTitle,
-                              style: Theme.of(context).textTheme.titleMedium,
-                            ),
-                          ),
-                        ],
-                      ),
-                      if (viewModel.hasConfigLoadError)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 12),
-                          child: Text(
-                            l10n.deviceSettingsLoadError,
-                            style: TextStyle(color: colorScheme.error),
-                          ),
-                        ),
-                      const SizedBox(height: 16),
-                      PrintingSettingsPanel(viewModel: viewModel),
-                    ],
+    return ListView(
+      padding: spacing.pagePadding,
+      children: [
+        AdaptiveMaxWidth(
+          width: AppContentWidth.form,
+          child: PointyDetailSection(
+            icon: Icons.print_outlined,
+            title: l10n.devicePrinterSectionTitle,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (viewModel.hasConfigLoadError) ...[
+                  PointyErrorState(
+                    title: l10n.deviceSettingsLoadError,
+                    icon: Icons.print_disabled_outlined,
                   ),
-                ),
-              ),
+                  SizedBox(height: spacing.md),
+                ],
+                PrintingSettingsPanel(viewModel: viewModel),
+              ],
             ),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }

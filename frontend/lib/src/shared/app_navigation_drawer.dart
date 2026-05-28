@@ -6,6 +6,7 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 import '../core/analytics_interaction_tracker.dart';
 import '../core/authorization.dart';
 import '../data/models/pos_user.dart';
+import 'components/components.dart';
 
 enum AppNavigationDestination {
   dashboard,
@@ -165,7 +166,7 @@ class AppNavigationDrawer extends StatelessWidget {
       (destination) => destination.destination == selectedDestination,
     );
 
-    return NavigationDrawer(
+    return PointyNavigationSurface(
       selectedIndex: selectedIndex == -1 ? null : selectedIndex,
       onDestinationSelected: (index) {
         final destination = destinations[index];
@@ -184,60 +185,29 @@ class AppNavigationDrawer extends StatelessWidget {
         Navigator.of(context).pop();
         destination.onTap?.call();
       },
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(20, 24, 20, 16),
-          child: Row(
-            children: [
-              CircleAvatar(
-                backgroundColor: Theme.of(context).colorScheme.primary,
-                foregroundColor: Theme.of(context).colorScheme.onPrimary,
-                child: const Icon(Icons.point_of_sale),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      currentUser.label,
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      _roleLabel(l10n, currentUser.role),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-        const Divider(),
+      userLabel: currentUser.label,
+      roleLabel: _roleLabel(l10n, currentUser.role),
+      destinations: [
         for (final destination in destinations)
           NavigationDrawerDestination(
             icon: destination.icon,
             selectedIcon: destination.selectedIcon,
             label: Text(destination.label),
           ),
-        const Divider(),
-        ListTile(
-          leading: const Icon(Icons.logout),
-          title: Text(l10n.logoutButton),
-          onTap: () {
-            AnalyticsInteractionTracker.track(
-              context,
-              action: 'logout_selected',
-              target: 'navigation_drawer',
-            );
-            Navigator.of(context).pop();
-            onLogout();
-          },
-        ),
       ],
+      logoutTile: ListTile(
+        leading: const Icon(Icons.logout),
+        title: Text(l10n.logoutButton),
+        onTap: () {
+          AnalyticsInteractionTracker.track(
+            context,
+            action: 'logout_selected',
+            target: 'navigation_drawer',
+          );
+          Navigator.of(context).pop();
+          onLogout();
+        },
+      ),
     );
   }
 

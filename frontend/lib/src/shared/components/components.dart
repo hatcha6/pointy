@@ -1,11 +1,15 @@
 export 'pointy_data_list.dart';
 export 'pointy_data_row.dart';
 export 'pointy_detail_section.dart';
+export 'pointy_destructive_confirmation_dialog.dart';
 export 'pointy_empty_state.dart';
 export 'pointy_error_state.dart';
 export 'pointy_filter_summary_bar.dart';
 export 'pointy_loading_area.dart';
 export 'pointy_metric_tile.dart';
+export 'pointy_navigation_surface.dart';
+export 'pointy_permission_denied_view.dart';
 export 'pointy_section_header.dart';
+export 'pointy_settings_section.dart';
 export 'pointy_status_pill.dart';
 export 'pointy_sticky_action_footer.dart';

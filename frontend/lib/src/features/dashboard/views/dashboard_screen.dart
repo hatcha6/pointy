@@ -8,8 +8,11 @@ import '../../../data/models/dashboard.dart';
 import '../../../data/models/pos_user.dart';
 import '../../../shared/app_navigation_drawer.dart';
 import '../../../shared/authorization_guards.dart';
+import '../../../shared/components/components.dart';
 import '../../../shared/date_formatters.dart';
 import '../../../shared/formatters.dart';
+import '../../../shared/responsive/responsive.dart';
+import '../../../shared/shell/shell.dart';
 import '../view_models/dashboard_view_model.dart';
 
 class DashboardScreen extends StatelessWidget {
@@ -55,7 +58,7 @@ class DashboardScreen extends StatelessWidget {
     return ListenableBuilder(
       listenable: viewModel,
       builder: (context, _) {
-        return Scaffold(
+        return PointyScaffold(
           drawer: AppNavigationDrawer(
             selectedDestination: AppNavigationDestination.dashboard,
             currentUser: currentUser,
@@ -74,7 +77,7 @@ class DashboardScreen extends StatelessWidget {
             onOpenShopSettings: onOpenShopSettings,
             onLogout: onLogout,
           ),
-          appBar: AppBar(
+          appBar: PointyAppBar(
             leading: Builder(
               builder: (context) {
                 return IconButton(
@@ -85,6 +88,8 @@ class DashboardScreen extends StatelessWidget {
               },
             ),
             title: Text(l10n.dashboardTitle),
+            isLoading: viewModel.isLoading,
+            reserveLoadingSlot: false,
             actions: [
               DashboardGuard(
                 capabilities: capabilities,
@@ -97,13 +102,11 @@ class DashboardScreen extends StatelessWidget {
               ),
             ],
           ),
-          body: SafeArea(
-            child: DashboardGuard(
+          body: DashboardGuard(
+            capabilities: capabilities,
+            child: _DashboardBody(
+              viewModel: viewModel,
               capabilities: capabilities,
-              child: _DashboardBody(
-                viewModel: viewModel,
-                capabilities: capabilities,
-              ),
             ),
           ),
         );
@@ -122,55 +125,62 @@ class _DashboardBody extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final snapshot = viewModel.snapshot;
+    final spacing = AdaptiveSpacing.of(context);
 
     if (viewModel.isLoading && snapshot == null) {
-      return const Center(child: CircularProgressIndicator());
+      return const PointyLoadingArea();
     }
     if (viewModel.hasError && snapshot == null) {
-      return _CenteredMessage(
+      return PointyErrorState(
         icon: Icons.warning_amber,
-        message: l10n.dashboardLoadError,
-        actionLabel: l10n.refreshDashboardTooltip,
-        onPressed: viewModel.loadDashboard,
+        title: l10n.dashboardLoadError,
+        action: FilledButton.icon(
+          onPressed: viewModel.loadDashboard,
+          icon: const Icon(Icons.sync),
+          label: Text(l10n.refreshDashboardTooltip),
+        ),
       );
     }
     if (snapshot == null || !snapshot.hasSections) {
-      return _CenteredMessage(
+      return PointyEmptyState(
         icon: Icons.dashboard_outlined,
-        message: l10n.dashboardEmptyState,
+        title: l10n.dashboardEmptyState,
       );
     }
 
     return RefreshIndicator(
       onRefresh: viewModel.loadDashboard,
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          return SingleChildScrollView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                _DashboardToolbar(
-                  snapshot: snapshot,
-                  selectedDays: viewModel.selectedDays,
-                  isLoading: viewModel.isLoading,
-                  onChanged: viewModel.changePeriod,
-                ),
-                if (viewModel.hasError) ...[
-                  const SizedBox(height: 12),
-                  _InlineError(message: l10n.dashboardLoadError),
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: spacing.pagePadding,
+        child: AdaptiveMaxWidth(
+          width: AppContentWidth.workspace,
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _DashboardToolbar(
+                    snapshot: snapshot,
+                    selectedDays: viewModel.selectedDays,
+                    isLoading: viewModel.isLoading,
+                    onChanged: viewModel.changePeriod,
+                  ),
+                  if (viewModel.hasError) ...[
+                    SizedBox(height: spacing.md),
+                    _InlineError(message: l10n.dashboardLoadError),
+                  ],
+                  SizedBox(height: spacing.lg),
+                  _DashboardSections(
+                    snapshot: snapshot,
+                    capabilities: capabilities,
+                    maxWidth: constraints.maxWidth,
+                  ),
                 ],
-                const SizedBox(height: 16),
-                _DashboardSections(
-                  snapshot: snapshot,
-                  capabilities: capabilities,
-                  maxWidth: constraints.maxWidth,
-                ),
-              ],
-            ),
-          );
-        },
+              );
+            },
+          ),
+        ),
       ),
     );
   }
@@ -193,28 +203,13 @@ class _DashboardToolbar extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final generatedAt = snapshot.generatedAt;
-    return Wrap(
-      spacing: 12,
-      runSpacing: 12,
-      alignment: WrapAlignment.spaceBetween,
-      crossAxisAlignment: WrapCrossAlignment.center,
-      children: [
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              l10n.dashboardOverviewTitle,
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
-            const SizedBox(height: 4),
-            Text(
-              generatedAt == null
-                  ? l10n.dashboardLastUpdatedUnknown
-                  : l10n.dashboardLastUpdated(formatDateTime(generatedAt)),
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-          ],
-        ),
+    return PointySectionHeader(
+      title: l10n.dashboardOverviewTitle,
+      subtitle: generatedAt == null
+          ? l10n.dashboardLastUpdatedUnknown
+          : l10n.dashboardLastUpdated(formatDateTime(generatedAt)),
+      leading: const Icon(Icons.dashboard_outlined),
+      actions: [
         SegmentedButton<int>(
           segments: [
             ButtonSegment(value: 7, label: Text(l10n.dashboardRange7Days)),
@@ -845,24 +840,14 @@ class _DashboardSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final spacing = AdaptiveSpacing.of(context);
     return Padding(
-      padding: const EdgeInsets.only(bottom: 20),
+      padding: EdgeInsets.only(bottom: spacing.xl),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Row(
-            children: [
-              Icon(icon, size: 22),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  title,
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
+          PointySectionHeader(title: title, leading: Icon(icon, size: 22)),
+          SizedBox(height: spacing.sm),
           ...children,
         ],
       ),
@@ -878,16 +863,28 @@ class _MetricGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final spacing = AdaptiveSpacing.of(context);
     return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
+      padding: EdgeInsets.only(bottom: spacing.md),
       child: Wrap(
-        spacing: 12,
-        runSpacing: 12,
+        spacing: spacing.md,
+        runSpacing: spacing.md,
         children: [
           for (final metric in metrics)
             SizedBox(
-              width: _cardWidth(maxWidth, minWidth: 180, maxColumns: 4),
-              child: _MetricTile(metric: metric),
+              width: _cardWidth(
+                maxWidth,
+                minWidth: 180,
+                maxColumns: 4,
+                gap: spacing.md,
+              ),
+              child: PointyMetricTile(
+                label: metric.label,
+                value: metric.value,
+                icon: metric.icon,
+                accentColor: metric.accent,
+                subtitle: metric.detail,
+              ),
             ),
         ],
       ),
@@ -911,65 +908,6 @@ class _MetricData {
   final Color? accent;
 }
 
-class _MetricTile extends StatelessWidget {
-  const _MetricTile({required this.metric});
-
-  final _MetricData metric;
-
-  @override
-  Widget build(BuildContext context) {
-    final color = metric.accent ?? Theme.of(context).colorScheme.primary;
-    return Card(
-      margin: EdgeInsets.zero,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(metric.icon, color: color, size: 20),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    metric.label,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            FittedBox(
-              fit: BoxFit.scaleDown,
-              alignment: AlignmentDirectional.centerStart,
-              child: Text(
-                metric.value,
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
-            if (metric.detail != null) ...[
-              const SizedBox(height: 6),
-              Text(
-                metric.detail!,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(
-                  context,
-                ).textTheme.bodySmall?.copyWith(color: color),
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-}
-
 class _ResponsiveWrap extends StatelessWidget {
   const _ResponsiveWrap({required this.maxWidth, required this.children});
 
@@ -978,13 +916,19 @@ class _ResponsiveWrap extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final spacing = AdaptiveSpacing.of(context);
     return Wrap(
-      spacing: 12,
-      runSpacing: 12,
+      spacing: spacing.md,
+      runSpacing: spacing.md,
       children: [
         for (final child in children)
           SizedBox(
-            width: _cardWidth(maxWidth, minWidth: 320, maxColumns: 2),
+            width: _cardWidth(
+              maxWidth,
+              minWidth: 320,
+              maxColumns: 2,
+              gap: spacing.md,
+            ),
             child: child,
           ),
       ],
@@ -1007,34 +951,9 @@ class _DashboardCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      margin: EdgeInsets.zero,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-      child: ConstrainedBox(
-        constraints: BoxConstraints(minHeight: minHeight ?? 0),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Row(
-                children: [
-                  Icon(icon, size: 20),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      title,
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              child,
-            ],
-          ),
-        ),
-      ),
+    return ConstrainedBox(
+      constraints: BoxConstraints(minHeight: minHeight ?? 0),
+      child: PointyDetailSection(title: title, icon: icon, child: child),
     );
   }
 }
@@ -1152,7 +1071,7 @@ class _PaymentMixChart extends StatelessWidget {
                 radius: 74,
                 color: colors[index % colors.length],
                 titleStyle: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: Colors.white,
+                  color: Theme.of(context).colorScheme.onPrimary,
                   fontWeight: FontWeight.w700,
                 ),
               ),
@@ -1228,7 +1147,7 @@ class _StatusPieChart extends StatelessWidget {
                 radius: 72,
                 color: colors[index % colors.length],
                 titleStyle: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: Colors.white,
+                  color: Theme.of(context).colorScheme.onPrimary,
                   fontWeight: FontWeight.w700,
                 ),
               ),
@@ -1605,11 +1524,12 @@ class _InsightRows extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final spacing = AdaptiveSpacing.of(context);
     return Column(
       children: [
         for (var index = 0; index < rows.length; index += 1) ...[
           _InsightRow(row: rows[index]),
-          if (index < rows.length - 1) const Divider(height: 1),
+          if (index < rows.length - 1) SizedBox(height: spacing.xs),
         ],
       ],
     );
@@ -1623,50 +1543,21 @@ class _InsightRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 10),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  row.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(
-                    context,
-                  ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
-                ),
-                if (row.subtitle != null && row.subtitle!.isNotEmpty) ...[
-                  const SizedBox(height: 2),
-                  Text(
-                    row.subtitle!,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                ],
-              ],
+    return PointyDataRow(
+      title: row.title,
+      subtitle: row.subtitle,
+      minHeight: 60,
+      trailing: row.trailing == null || row.trailing!.isEmpty
+          ? null
+          : Text(
+              row.trailing!,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.end,
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w700),
             ),
-          ),
-          if (row.trailing != null && row.trailing!.isNotEmpty) ...[
-            const SizedBox(width: 12),
-            Flexible(
-              child: Text(
-                row.trailing!,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.end,
-                style: Theme.of(
-                  context,
-                ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w700),
-              ),
-            ),
-          ],
-        ],
-      ),
     );
   }
 }
@@ -1676,54 +1567,9 @@ class _EmptyWidgetData extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 28),
-      child: Center(
-        child: Text(
-          AppLocalizations.of(context)!.dashboardNoWidgetData,
-          textAlign: TextAlign.center,
-          style: Theme.of(context).textTheme.bodyMedium,
-        ),
-      ),
-    );
-  }
-}
-
-class _CenteredMessage extends StatelessWidget {
-  const _CenteredMessage({
-    required this.icon,
-    required this.message,
-    this.actionLabel,
-    this.onPressed,
-  });
-
-  final IconData icon;
-  final String message;
-  final String? actionLabel;
-  final VoidCallback? onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 40),
-            const SizedBox(height: 12),
-            Text(message, textAlign: TextAlign.center),
-            if (actionLabel != null && onPressed != null) ...[
-              const SizedBox(height: 12),
-              FilledButton.icon(
-                onPressed: onPressed,
-                icon: const Icon(Icons.sync),
-                label: Text(actionLabel!),
-              ),
-            ],
-          ],
-        ),
-      ),
+    return PointyEmptyState(
+      icon: Icons.insights_outlined,
+      title: AppLocalizations.of(context)!.dashboardNoWidgetData,
     );
   }
 }
@@ -1788,10 +1634,11 @@ double _cardWidth(
   double maxWidth, {
   required double minWidth,
   required int maxColumns,
+  double gap = 12,
 }) {
   var columns = maxWidth ~/ minWidth;
   columns = columns.clamp(1, maxColumns).toInt();
-  final gaps = (columns - 1) * 12;
+  final gaps = (columns - 1) * gap;
   return (maxWidth - gaps) / columns;
 }
 
@@ -1806,11 +1653,11 @@ List<Color> _chartColors(BuildContext context) {
   final scheme = Theme.of(context).colorScheme;
   return [
     scheme.primary,
-    scheme.tertiary,
     scheme.secondary,
-    const Color(0xFF64748B),
-    const Color(0xFFB45309),
-    const Color(0xFF7C3AED),
+    scheme.tertiary,
+    scheme.error,
+    scheme.inversePrimary,
+    scheme.outline,
   ];
 }
 
@@ -1832,13 +1679,7 @@ String _formatChange(double value) {
 }
 
 String _compactNumber(double value) {
-  if (value >= 1000000) {
-    return '${(value / 1000000).toStringAsFixed(1)}M';
-  }
-  if (value >= 1000) {
-    return '${(value / 1000).toStringAsFixed(1)}K';
-  }
-  return value.toStringAsFixed(0);
+  return NumberFormat.compact(locale: 'ar').format(value);
 }
 
 String _paymentMethodLabel(AppLocalizations l10n, String method) {
