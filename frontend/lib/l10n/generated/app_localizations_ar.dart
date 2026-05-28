@@ -1226,6 +1226,33 @@ class AppLocalizationsAr extends AppLocalizations {
   String get addProductButton => 'إضافة منتج';
 
   @override
+  String get productTableProductColumn => 'المنتج';
+
+  @override
+  String get productTableStockColumn => 'المخزون';
+
+  @override
+  String get productTablePriceColumn => 'السعر';
+
+  @override
+  String get productTableBarcodeColumn => 'الباركود';
+
+  @override
+  String get productTableEditColumn => 'تعديل';
+
+  @override
+  String get openProductDetailsTooltip => 'فتح تفاصيل المنتج';
+
+  @override
+  String get stockStatusAvailable => 'متوفر';
+
+  @override
+  String get stockStatusLow => 'منخفض';
+
+  @override
+  String get stockStatusOut => 'نافد';
+
+  @override
   String get newProductTitle => 'منتج جديد';
 
   @override

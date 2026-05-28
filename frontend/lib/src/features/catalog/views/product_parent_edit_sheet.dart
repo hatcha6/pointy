@@ -8,6 +8,7 @@ import '../../../shared/async_selection/async_multi_select_picker.dart';
 import '../../../shared/product_category_picker.dart';
 import '../view_models/product_details_view_model.dart';
 import 'product_form_fields.dart';
+import 'product_form_section.dart';
 import 'product_image_picker.dart';
 import 'variant_option_creation_dialogs.dart';
 import 'variant_generation_fields.dart';
@@ -100,57 +101,49 @@ class _ProductParentEditSheetState extends State<ProductParentEditSheet> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        Row(
+                        ProductFormSection(
+                          icon: Icons.edit_outlined,
+                          title: l10n.editProductButton,
                           children: [
-                            Icon(
-                              Icons.edit_outlined,
-                              color: Theme.of(context).colorScheme.primary,
+                            ProductParentFormFields(
+                              nameController: _nameController,
+                              descriptionController: _descriptionController,
+                              selectedCategories: _selectedCategories,
+                              isActive: _isActive,
+                              onPickCategories: _pickCategories,
+                              onClearCategories: () =>
+                                  setState(() => _selectedCategories = []),
+                              onActiveChanged: (value) =>
+                                  setState(() => _isActive = value),
+                              requiredValidator: (value) =>
+                                  _requiredValidator(context, value),
                             ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                l10n.editProductButton,
-                                style: Theme.of(context).textTheme.titleLarge,
-                              ),
+                            const SizedBox(height: 12),
+                            ProductImageField(
+                              catalogRepository:
+                                  widget.viewModel.catalogRepository,
+                              initialSearchQuery: _nameController.text.trim(),
+                              currentImage:
+                                  widget.viewModel.product.primaryImage,
+                              selection: _selectedImage,
+                              onChanged: (selection) =>
+                                  setState(() => _selectedImage = selection),
+                              enabled:
+                                  !widget.viewModel.isSavingProduct &&
+                                  !widget.viewModel.isSavingImage,
+                              isSaving: widget.viewModel.isSavingImage,
+                            ),
+                            const SizedBox(height: 12),
+                            VariantOptionTemplateField(
+                              availableOptions: _availableVariantOptions,
+                              selectedOptions: _selectedVariantOptions,
+                              isLoading: _isLoadingVariantOptions,
+                              hasError: _variantOptionsLoadFailed,
+                              onReload: _loadVariantOptions,
+                              onToggleOption: _toggleVariantOption,
+                              onCreateOption: _createVariantOption,
                             ),
                           ],
-                        ),
-                        const SizedBox(height: 16),
-                        ProductParentFormFields(
-                          nameController: _nameController,
-                          descriptionController: _descriptionController,
-                          selectedCategories: _selectedCategories,
-                          isActive: _isActive,
-                          onPickCategories: _pickCategories,
-                          onClearCategories: () =>
-                              setState(() => _selectedCategories = []),
-                          onActiveChanged: (value) =>
-                              setState(() => _isActive = value),
-                          requiredValidator: (value) =>
-                              _requiredValidator(context, value),
-                        ),
-                        const SizedBox(height: 12),
-                        ProductImageField(
-                          catalogRepository: widget.viewModel.catalogRepository,
-                          initialSearchQuery: _nameController.text.trim(),
-                          currentImage: widget.viewModel.product.primaryImage,
-                          selection: _selectedImage,
-                          onChanged: (selection) =>
-                              setState(() => _selectedImage = selection),
-                          enabled:
-                              !widget.viewModel.isSavingProduct &&
-                              !widget.viewModel.isSavingImage,
-                          isSaving: widget.viewModel.isSavingImage,
-                        ),
-                        const SizedBox(height: 12),
-                        VariantOptionTemplateField(
-                          availableOptions: _availableVariantOptions,
-                          selectedOptions: _selectedVariantOptions,
-                          isLoading: _isLoadingVariantOptions,
-                          hasError: _variantOptionsLoadFailed,
-                          onReload: _loadVariantOptions,
-                          onToggleOption: _toggleVariantOption,
-                          onCreateOption: _createVariantOption,
                         ),
                         if (widget.viewModel.errorMessage ==
                             'product_update_error') ...[

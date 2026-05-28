@@ -5,13 +5,15 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../core/authorization.dart';
 import '../../../data/models/product.dart';
+import '../../../data/models/product_query.dart';
 import '../../../data/repositories/catalog_repository.dart';
 import '../../../data/repositories/inventory_repository.dart';
 import '../../../data/repositories/printing_repository.dart';
 import '../../../data/repositories/purchase_repository.dart';
-import '../../../shared/infinite_scroll_grid.dart';
-import '../../../shared/product_tile.dart';
+import '../../../shared/catalog/catalog.dart';
+import '../../../shared/components/components.dart';
 import '../../../shared/product_query_controls.dart';
+import '../../../shared/responsive/responsive.dart';
 import '../view_models/catalog_view_model.dart';
 import '../view_models/product_details_view_model.dart';
 import 'product_details_screen.dart';
@@ -26,6 +28,7 @@ class ProductList extends StatelessWidget {
     required this.capabilities,
     required this.onBarcodeSubmitted,
     required this.onOpenCameraScanner,
+    required this.onCreateProduct,
   });
 
   final CatalogViewModel viewModel;
@@ -35,81 +38,143 @@ class ProductList extends StatelessWidget {
   final AuthorizationCapabilities capabilities;
   final FutureOr<bool> Function(String barcode) onBarcodeSubmitted;
   final VoidCallback onOpenCameraScanner;
+  final VoidCallback onCreateProduct;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    final spacing = AdaptiveSpacing.of(context);
 
     return Padding(
-      padding: const EdgeInsets.all(16),
+      padding: spacing.pagePadding,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Row(
-            children: [
-              Text(
-                l10n.productListTitle,
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
-              const Spacer(),
-              if (viewModel.isLoading)
-                const SizedBox.square(
-                  dimension: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                ),
-            ],
+          PointySectionHeader(
+            title: l10n.productListTitle,
+            trailing: viewModel.isLoading
+                ? const SizedBox.square(
+                    dimension: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : null,
           ),
           if (viewModel.errorMessage == 'catalog_load_error') ...[
-            const SizedBox(height: 8),
+            SizedBox(height: spacing.sm),
             Text(
               l10n.catalogLoadError,
               style: TextStyle(color: Theme.of(context).colorScheme.error),
             ),
           ],
-          const SizedBox(height: 12),
-          ProductQueryControls(
+          SizedBox(height: spacing.sm),
+          _CatalogActionBar(
             query: viewModel.query,
             catalogRepository: viewModel.catalogRepository,
-            searchFieldKey: const ValueKey('catalog_product_lookup_field'),
             onSearchChanged: viewModel.updateSearch,
-            onSearchSubmitted: onBarcodeSubmitted,
-            onOpenCameraScanner: onOpenCameraScanner,
             onQueryChanged: viewModel.applyQuery,
+            onBarcodeSubmitted: onBarcodeSubmitted,
+            onOpenCameraScanner: onOpenCameraScanner,
+            canCreateProduct: capabilities.canCreateProduct,
+            onCreateProduct: onCreateProduct,
           ),
-          const SizedBox(height: 12),
+          SizedBox(height: spacing.md),
           Expanded(
-            child: InfiniteScrollGrid(
-              items: viewModel.products,
+            child: PointyProductTable(
+              products: viewModel.products,
               onLoadMore: viewModel.loadMoreProducts,
               hasMore: viewModel.hasMoreProducts,
               isLoadingInitial: viewModel.isLoading,
               isLoadingMore: viewModel.isLoadingMore,
-              emptyBuilder: (context) => Center(child: Text(l10n.emptyCatalog)),
-              gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                maxCrossAxisExtent: 220,
-                mainAxisExtent: 156,
-                crossAxisSpacing: 12,
-                mainAxisSpacing: 12,
+              emptyBuilder: (context) => PointyEmptyState(
+                icon: Icons.inventory_2_outlined,
+                title: l10n.emptyCatalog,
               ),
-              itemBuilder: (context, product) {
-                return ProductTile(
-                  product: product,
-                  onTap: () => openProductDetails(
-                    context,
-                    product: product,
-                    catalogRepository: viewModel.catalogRepository,
-                    inventoryRepository: inventoryRepository,
-                    printingRepository: printingRepository,
-                    purchaseRepository: purchaseRepository,
-                    capabilities: capabilities,
-                    onChanged: viewModel.loadProducts,
-                  ),
-                );
-              },
+              onOpenProduct: (product) => _openProduct(context, product),
             ),
           ),
         ],
       ),
+    );
+  }
+
+  void _openProduct(BuildContext context, Product product) {
+    openProductDetails(
+      context,
+      product: product,
+      catalogRepository: viewModel.catalogRepository,
+      inventoryRepository: inventoryRepository,
+      printingRepository: printingRepository,
+      purchaseRepository: purchaseRepository,
+      capabilities: capabilities,
+      onChanged: viewModel.loadProducts,
+    );
+  }
+}
+
+class _CatalogActionBar extends StatelessWidget {
+  const _CatalogActionBar({
+    required this.query,
+    required this.catalogRepository,
+    required this.onSearchChanged,
+    required this.onQueryChanged,
+    required this.onBarcodeSubmitted,
+    required this.onOpenCameraScanner,
+    required this.canCreateProduct,
+    required this.onCreateProduct,
+  });
+
+  final ProductQuery query;
+  final CatalogRepository catalogRepository;
+  final ValueChanged<String> onSearchChanged;
+  final ValueChanged<ProductQuery> onQueryChanged;
+  final FutureOr<bool> Function(String barcode) onBarcodeSubmitted;
+  final VoidCallback onOpenCameraScanner;
+  final bool canCreateProduct;
+  final VoidCallback onCreateProduct;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final spacing = AdaptiveSpacing.of(context);
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.hasBoundedWidth
+            ? constraints.maxWidth
+            : MediaQuery.sizeOf(context).width;
+        final addButtonWidth = canCreateProduct ? 170.0 : 0.0;
+        final searchWidth =
+            width >= AppBreakpoints.tabletMin && canCreateProduct
+            ? (width - addButtonWidth - spacing.sm)
+                  .clamp(320.0, width)
+                  .toDouble()
+            : width;
+
+        return ResponsiveActionBar(
+          compactBreakpoint: AppBreakpoints.tabletMin,
+          alignment: WrapAlignment.spaceBetween,
+          actions: [
+            SizedBox(
+              width: searchWidth,
+              child: ProductQueryControls(
+                query: query,
+                catalogRepository: catalogRepository,
+                searchFieldKey: const ValueKey('catalog_product_lookup_field'),
+                onSearchChanged: onSearchChanged,
+                onSearchSubmitted: onBarcodeSubmitted,
+                onOpenCameraScanner: onOpenCameraScanner,
+                onQueryChanged: onQueryChanged,
+              ),
+            ),
+            if (canCreateProduct)
+              FilledButton.icon(
+                onPressed: onCreateProduct,
+                icon: const Icon(Icons.add),
+                label: Text(l10n.addProductButton),
+              ),
+          ],
+        );
+      },
     );
   }
 }

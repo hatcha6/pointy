@@ -528,6 +528,9 @@ void main() {
     final repository = PrintingRepository(
       _mockApiService(),
       serialTransport: transport,
+      bluetoothTransport: transport,
+      wifiTransport: transport,
+      fakeTransport: transport,
     );
 
     final result = await repository.printBarcodeLabels([
@@ -2379,6 +2382,9 @@ void main() {
           printingRepository: PrintingRepository(
             apiService,
             serialTransport: transport,
+            bluetoothTransport: transport,
+            wifiTransport: transport,
+            fakeTransport: transport,
           ),
           capabilities: AuthorizationCapabilities.forUser(
             PosUser.fromJson(_userJson()),
@@ -2398,7 +2404,11 @@ void main() {
 
     await tester.enterText(find.byType(TextFormField).last, '3');
     await tester.tap(find.text('طباعة').last);
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.runAsync(() async {
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+    });
+    await tester.pump();
 
     expect(find.text('تم إرسال 3 ملصقات باركود للطابعة.'), findsOneWidget);
     expect(_countSubsequence(transport.printedBytes, [29, 107]), 3);

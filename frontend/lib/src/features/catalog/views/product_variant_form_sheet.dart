@@ -6,6 +6,7 @@ import '../../../data/models/product_variant_draft.dart';
 import '../../../data/models/variant_option.dart';
 import '../view_models/product_details_view_model.dart';
 import 'product_form_fields.dart';
+import 'product_form_section.dart';
 import 'variant_option_creation_dialogs.dart';
 import 'variant_generation_fields.dart';
 
@@ -81,55 +82,45 @@ class _ProductVariantFormSheetState extends State<ProductVariantFormSheet> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Row(
+                  ProductFormSection(
+                    icon: _isEditing ? Icons.edit_outlined : Icons.add,
+                    title: _isEditing
+                        ? l10n.editVariantTitle
+                        : l10n.newVariantTitle,
                     children: [
-                      Icon(
-                        _isEditing ? Icons.edit_outlined : Icons.add,
-                        color: Theme.of(context).colorScheme.primary,
+                      ProductVariantFormFields(
+                        variantNameController: _variantNameController,
+                        skuController: _skuController,
+                        barcodeController: _barcodeController,
+                        priceController: _priceController,
+                        selectedOptionValues: const [],
+                        isActive: _isActive,
+                        isDefault: _isDefault,
+                        onPickOptionValues: () {},
+                        onClearOptionValues: null,
+                        onActiveChanged: (value) =>
+                            setState(() => _isActive = value),
+                        onDefaultChanged: (value) =>
+                            setState(() => _isDefault = value),
+                        requiredValidator: (value) =>
+                            _requiredValidator(context, value),
+                        numberValidator: (value) =>
+                            _numberValidator(context, value),
+                        showOptionValues: false,
                       ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          _isEditing
-                              ? l10n.editVariantTitle
-                              : l10n.newVariantTitle,
-                          style: Theme.of(context).textTheme.titleLarge,
+                      if (_variantOptions.isNotEmpty) ...[
+                        const SizedBox(height: 12),
+                        VariantOptionValuesField(
+                          options: _variantOptions,
+                          selectedValueIdsByOption: _selectedValueIdsByOption,
+                          errorOptionIds: _valueErrorOptionIds,
+                          onToggleValue: _toggleOptionValue,
+                          onCreateValue: _createVariantOptionValue,
+                          showInactiveSelectedValues: true,
                         ),
-                      ),
+                      ],
                     ],
                   ),
-                  const SizedBox(height: 16),
-                  ProductVariantFormFields(
-                    variantNameController: _variantNameController,
-                    skuController: _skuController,
-                    barcodeController: _barcodeController,
-                    priceController: _priceController,
-                    selectedOptionValues: const [],
-                    isActive: _isActive,
-                    isDefault: _isDefault,
-                    onPickOptionValues: () {},
-                    onClearOptionValues: null,
-                    onActiveChanged: (value) =>
-                        setState(() => _isActive = value),
-                    onDefaultChanged: (value) =>
-                        setState(() => _isDefault = value),
-                    requiredValidator: (value) =>
-                        _requiredValidator(context, value),
-                    numberValidator: (value) =>
-                        _numberValidator(context, value),
-                    showOptionValues: false,
-                  ),
-                  if (_variantOptions.isNotEmpty) ...[
-                    const SizedBox(height: 12),
-                    VariantOptionValuesField(
-                      options: _variantOptions,
-                      selectedValueIdsByOption: _selectedValueIdsByOption,
-                      errorOptionIds: _valueErrorOptionIds,
-                      onToggleValue: _toggleOptionValue,
-                      onCreateValue: _createVariantOptionValue,
-                      showInactiveSelectedValues: true,
-                    ),
-                  ],
                   if (_saveErrorKey != null) ...[
                     const SizedBox(height: 8),
                     Text(

@@ -12,6 +12,7 @@ import '../../../shared/detail_section.dart';
 import '../../../shared/formatters.dart';
 import '../../../shared/product_image_thumbnail.dart';
 import '../../../shared/product_status_pill.dart';
+import '../../../shared/responsive/responsive.dart';
 import '../view_models/product_details_view_model.dart';
 import '../view_models/product_stock_view_model.dart';
 import 'product_parent_edit_sheet.dart';
@@ -102,30 +103,21 @@ class ProductDetailsScreen extends StatelessWidget {
   }
 
   Future<void> _showProductEditor(BuildContext context) {
-    return showModalBottomSheet<void>(
+    return showAdaptiveModalBottomSheet<void>(
       context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      showDragHandle: true,
+      size: AdaptiveModalSize.standard,
+      maxHeightFactor: 0.9,
       builder: (sheetContext) {
         return Padding(
           padding: EdgeInsets.only(
             bottom: MediaQuery.viewInsetsOf(sheetContext).bottom,
           ),
-          child: FractionallySizedBox(
-            heightFactor: 0.78,
-            child: Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 640),
-                child: ProductParentEditSheet(
-                  viewModel: viewModel,
-                  onSaved: () {
-                    onChanged?.call();
-                    Navigator.of(sheetContext).pop();
-                  },
-                ),
-              ),
-            ),
+          child: ProductParentEditSheet(
+            viewModel: viewModel,
+            onSaved: () {
+              onChanged?.call();
+              Navigator.of(sheetContext).pop();
+            },
           ),
         );
       },
@@ -136,31 +128,22 @@ class ProductDetailsScreen extends StatelessWidget {
     BuildContext context, {
     ProductVariant? variant,
   }) {
-    return showModalBottomSheet<void>(
+    return showAdaptiveModalBottomSheet<void>(
       context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      showDragHandle: true,
+      size: AdaptiveModalSize.standard,
+      maxHeightFactor: 0.92,
       builder: (sheetContext) {
         return Padding(
           padding: EdgeInsets.only(
             bottom: MediaQuery.viewInsetsOf(sheetContext).bottom,
           ),
-          child: FractionallySizedBox(
-            heightFactor: 0.86,
-            child: Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 640),
-                child: ProductVariantFormSheet(
-                  viewModel: viewModel,
-                  variant: variant,
-                  onSaved: () {
-                    onChanged?.call();
-                    Navigator.of(sheetContext).pop();
-                  },
-                ),
-              ),
-            ),
+          child: ProductVariantFormSheet(
+            viewModel: viewModel,
+            variant: variant,
+            onSaved: () {
+              onChanged?.call();
+              Navigator.of(sheetContext).pop();
+            },
           ),
         );
       },
@@ -168,30 +151,21 @@ class ProductDetailsScreen extends StatelessWidget {
   }
 
   Future<void> _showVariantGenerator(BuildContext context) {
-    return showModalBottomSheet<void>(
+    return showAdaptiveModalBottomSheet<void>(
       context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      showDragHandle: true,
+      size: AdaptiveModalSize.expanded,
+      maxHeightFactor: 0.94,
       builder: (sheetContext) {
         return Padding(
           padding: EdgeInsets.only(
             bottom: MediaQuery.viewInsetsOf(sheetContext).bottom,
           ),
-          child: FractionallySizedBox(
-            heightFactor: 0.9,
-            child: Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 720),
-                child: ProductVariantGenerationSheet(
-                  viewModel: viewModel,
-                  onSaved: () {
-                    onChanged?.call();
-                    Navigator.of(sheetContext).pop();
-                  },
-                ),
-              ),
-            ),
+          child: ProductVariantGenerationSheet(
+            viewModel: viewModel,
+            onSaved: () {
+              onChanged?.call();
+              Navigator.of(sheetContext).pop();
+            },
           ),
         );
       },

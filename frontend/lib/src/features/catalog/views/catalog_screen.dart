@@ -125,15 +125,8 @@ class CatalogScreen extends StatelessWidget {
                   return _openProductForBarcode(context, barcode);
                 },
                 onOpenCameraScanner: () => _openCameraScanner(context),
+                onCreateProduct: () => _showProductForm(context),
               ),
-            ),
-          ),
-          floatingActionButton: ProductCreateGuard(
-            capabilities: capabilities,
-            child: FloatingActionButton.extended(
-              onPressed: () => _showProductForm(context),
-              icon: const Icon(Icons.add),
-              label: Text(l10n.addProductButton),
             ),
           ),
         );

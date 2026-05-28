@@ -4,6 +4,7 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 import '../../../shared/async_selection/async_multi_select_picker.dart';
 import '../../../shared/decimal_text_input_formatter.dart';
 import '../../../shared/product_category_picker.dart';
+import '../../../shared/responsive/responsive.dart';
 import '../../../shared/variant_option_value_picker.dart';
 
 class ProductParentFormFields extends StatelessWidget {
@@ -32,18 +33,29 @@ class ProductParentFormFields extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
 
+    final nameField = TextFormField(
+      controller: nameController,
+      textInputAction: TextInputAction.next,
+      decoration: InputDecoration(
+        labelText: l10n.productNameLabel,
+        hintText: l10n.productNameHint,
+        prefixIcon: const Icon(Icons.inventory_2_outlined),
+      ),
+      validator: requiredValidator,
+    );
+    final categoryField = AsyncSelectionField<int>(
+      fieldKey: const ValueKey('product_form_categories_field'),
+      strings: productCategoryFieldStrings(l10n),
+      selected: selectedCategories,
+      onPick: onPickCategories,
+      onClear: selectedCategories.isEmpty ? null : onClearCategories,
+      validator: (_) => null,
+    );
+
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        TextFormField(
-          controller: nameController,
-          textInputAction: TextInputAction.next,
-          decoration: InputDecoration(
-            labelText: l10n.productNameLabel,
-            hintText: l10n.productNameHint,
-            prefixIcon: const Icon(Icons.inventory_2_outlined),
-          ),
-          validator: requiredValidator,
-        ),
+        ResponsiveFormGrid(maxColumns: 2, children: [nameField, categoryField]),
         const SizedBox(height: 12),
         TextFormField(
           controller: descriptionController,
@@ -54,15 +66,6 @@ class ProductParentFormFields extends StatelessWidget {
             hintText: l10n.descriptionHint,
             prefixIcon: const Icon(Icons.notes_outlined),
           ),
-        ),
-        const SizedBox(height: 12),
-        AsyncSelectionField<int>(
-          fieldKey: const ValueKey('product_form_categories_field'),
-          strings: productCategoryFieldStrings(l10n),
-          selected: selectedCategories,
-          onPick: onPickCategories,
-          onClear: selectedCategories.isEmpty ? null : onClearCategories,
-          validator: (_) => null,
         ),
         const SizedBox(height: 8),
         SwitchListTile(
@@ -116,51 +119,49 @@ class ProductVariantFormFields extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
 
+    final fields = [
+      TextFormField(
+        controller: variantNameController,
+        textInputAction: TextInputAction.next,
+        decoration: InputDecoration(
+          labelText: l10n.variantNameLabel,
+          hintText: l10n.variantNameHint,
+          prefixIcon: const Icon(Icons.tune_outlined),
+        ),
+      ),
+      TextFormField(
+        controller: skuController,
+        textInputAction: TextInputAction.next,
+        textCapitalization: TextCapitalization.characters,
+        decoration: InputDecoration(
+          labelText: l10n.skuLabel,
+          hintText: l10n.skuHint,
+          prefixIcon: const Icon(Icons.qr_code_2),
+        ),
+        validator: requiredValidator,
+      ),
+      BarcodeInputRow(
+        controller: barcodeController,
+        label: l10n.barcodeLabel,
+        hint: l10n.barcodeHint,
+      ),
+      TextFormField(
+        controller: priceController,
+        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        textInputAction: TextInputAction.done,
+        inputFormatters: [DecimalTextInputFormatter()],
+        decoration: InputDecoration(
+          labelText: l10n.unitPriceLabel,
+          prefixIcon: const Icon(Icons.sell_outlined),
+        ),
+        validator: numberValidator,
+      ),
+    ];
+
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        TextFormField(
-          controller: variantNameController,
-          textInputAction: TextInputAction.next,
-          decoration: InputDecoration(
-            labelText: l10n.variantNameLabel,
-            hintText: l10n.variantNameHint,
-            prefixIcon: const Icon(Icons.tune_outlined),
-          ),
-        ),
-        const SizedBox(height: 12),
-        TextFormField(
-          controller: skuController,
-          textInputAction: TextInputAction.next,
-          textCapitalization: TextCapitalization.characters,
-          decoration: InputDecoration(
-            labelText: l10n.skuLabel,
-            hintText: l10n.skuHint,
-            prefixIcon: const Icon(Icons.qr_code_2),
-          ),
-          validator: requiredValidator,
-        ),
-        const SizedBox(height: 12),
-        TextFormField(
-          controller: barcodeController,
-          textInputAction: TextInputAction.next,
-          decoration: InputDecoration(
-            labelText: l10n.barcodeLabel,
-            hintText: l10n.barcodeHint,
-            prefixIcon: const Icon(Icons.document_scanner_outlined),
-          ),
-        ),
-        const SizedBox(height: 12),
-        TextFormField(
-          controller: priceController,
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          textInputAction: TextInputAction.done,
-          inputFormatters: [DecimalTextInputFormatter()],
-          decoration: InputDecoration(
-            labelText: l10n.unitPriceLabel,
-            prefixIcon: const Icon(Icons.sell_outlined),
-          ),
-          validator: numberValidator,
-        ),
+        ResponsiveFormGrid(maxColumns: 2, children: fields),
         const SizedBox(height: 12),
         if (showOptionValues) ...[
           AsyncSelectionField<int>(
@@ -171,7 +172,7 @@ class ProductVariantFormFields extends StatelessWidget {
             onClear: selectedOptionValues.isEmpty ? null : onClearOptionValues,
             validator: (_) => null,
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 12),
         ],
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
@@ -187,6 +188,32 @@ class ProductVariantFormFields extends StatelessWidget {
             onChanged: onDefaultChanged,
           ),
       ],
+    );
+  }
+}
+
+class BarcodeInputRow extends StatelessWidget {
+  const BarcodeInputRow({
+    super.key,
+    required this.controller,
+    required this.label,
+    required this.hint,
+  });
+
+  final TextEditingController controller;
+  final String label;
+  final String hint;
+
+  @override
+  Widget build(BuildContext context) {
+    return TextFormField(
+      controller: controller,
+      textInputAction: TextInputAction.next,
+      decoration: InputDecoration(
+        labelText: label,
+        hintText: hint,
+        prefixIcon: const Icon(Icons.document_scanner_outlined),
+      ),
     );
   }
 }

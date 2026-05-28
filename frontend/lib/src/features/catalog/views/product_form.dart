@@ -11,6 +11,7 @@ import '../../../shared/product_category_picker.dart';
 import '../view_models/catalog_view_model.dart';
 import '../view_models/variant_generation.dart';
 import 'product_form_fields.dart';
+import 'product_form_section.dart';
 import 'product_image_picker.dart';
 import 'variant_option_creation_dialogs.dart';
 import 'variant_generation_fields.dart';
@@ -157,49 +158,57 @@ class _ProductFormState extends State<ProductForm> {
                                   crossAxisAlignment:
                                       CrossAxisAlignment.stretch,
                                   children: [
-                                    _StepHeader(
+                                    ProductFormSection(
                                       icon: Icons.inventory_2_outlined,
                                       title: l10n.parentProductStepTitle,
-                                    ),
-                                    const SizedBox(height: 12),
-                                    ProductParentFormFields(
-                                      nameController: _nameController,
-                                      descriptionController:
-                                          _descriptionController,
-                                      selectedCategories: _selectedCategories,
-                                      isActive: _isProductActive,
-                                      onPickCategories: _pickCategories,
-                                      onClearCategories: () => setState(
-                                        () => _selectedCategories = [],
-                                      ),
-                                      onActiveChanged: (value) => setState(
-                                        () => _isProductActive = value,
-                                      ),
-                                      requiredValidator: (value) =>
-                                          _requiredValidator(context, value),
-                                    ),
-                                    const SizedBox(height: 12),
-                                    ProductImageField(
-                                      catalogRepository:
-                                          widget.viewModel.catalogRepository,
-                                      initialSearchQuery: _nameController.text
-                                          .trim(),
-                                      selection: _selectedImage,
-                                      onChanged: (selection) => setState(
-                                        () => _selectedImage = selection,
-                                      ),
-                                      enabled: !widget.viewModel.isSaving,
-                                    ),
-                                    const SizedBox(height: 12),
-                                    VariantOptionTemplateField(
-                                      availableOptions:
-                                          _availableVariantOptions,
-                                      selectedOptions: _selectedVariantOptions,
-                                      isLoading: _isLoadingVariantOptions,
-                                      hasError: _variantOptionsLoadFailed,
-                                      onReload: _loadVariantOptions,
-                                      onToggleOption: _toggleVariantOption,
-                                      onCreateOption: _createVariantOption,
+                                      children: [
+                                        ProductParentFormFields(
+                                          nameController: _nameController,
+                                          descriptionController:
+                                              _descriptionController,
+                                          selectedCategories:
+                                              _selectedCategories,
+                                          isActive: _isProductActive,
+                                          onPickCategories: _pickCategories,
+                                          onClearCategories: () => setState(
+                                            () => _selectedCategories = [],
+                                          ),
+                                          onActiveChanged: (value) => setState(
+                                            () => _isProductActive = value,
+                                          ),
+                                          requiredValidator: (value) =>
+                                              _requiredValidator(
+                                                context,
+                                                value,
+                                              ),
+                                        ),
+                                        const SizedBox(height: 12),
+                                        ProductImageField(
+                                          catalogRepository: widget
+                                              .viewModel
+                                              .catalogRepository,
+                                          initialSearchQuery: _nameController
+                                              .text
+                                              .trim(),
+                                          selection: _selectedImage,
+                                          onChanged: (selection) => setState(
+                                            () => _selectedImage = selection,
+                                          ),
+                                          enabled: !widget.viewModel.isSaving,
+                                        ),
+                                        const SizedBox(height: 12),
+                                        VariantOptionTemplateField(
+                                          availableOptions:
+                                              _availableVariantOptions,
+                                          selectedOptions:
+                                              _selectedVariantOptions,
+                                          isLoading: _isLoadingVariantOptions,
+                                          hasError: _variantOptionsLoadFailed,
+                                          onReload: _loadVariantOptions,
+                                          onToggleOption: _toggleVariantOption,
+                                          onCreateOption: _createVariantOption,
+                                        ),
+                                      ],
                                     ),
                                   ],
                                 ),
@@ -211,79 +220,100 @@ class _ProductFormState extends State<ProductForm> {
                                   crossAxisAlignment:
                                       CrossAxisAlignment.stretch,
                                   children: [
-                                    _StepHeader(
+                                    ProductFormSection(
                                       icon: Icons.qr_code_2,
                                       title: l10n.defaultVariantStepTitle,
+                                      children: [
+                                        if (_usesGeneratedVariants)
+                                          _GeneratedVariantFormStep(
+                                            skuController: _skuController,
+                                            priceController: _priceController,
+                                            selectedOptions:
+                                                _selectedVariantOptions,
+                                            selectedValueIdsByOption:
+                                                _selectedValueIdsByOption,
+                                            errorOptionIds:
+                                                _valueErrorOptionIds,
+                                            combinations:
+                                                _generatedCombinations,
+                                            nameControllers:
+                                                _generatedNameControllers,
+                                            skuControllers:
+                                                _generatedSkuControllers,
+                                            barcodeControllers:
+                                                _generatedBarcodeControllers,
+                                            priceControllers:
+                                                _generatedPriceControllers,
+                                            activeBySignature:
+                                                _generatedActiveBySignature,
+                                            defaultSignature:
+                                                _defaultGeneratedSignature,
+                                            onToggleValue: _toggleOptionValue,
+                                            onCreateValue:
+                                                _createVariantOptionValue,
+                                            onDefaultChanged: (signature) =>
+                                                setState(
+                                                  () =>
+                                                      _defaultGeneratedSignature =
+                                                          signature,
+                                                ),
+                                            onVariantActiveChanged:
+                                                (signature, value) => setState(
+                                                  () =>
+                                                      _generatedActiveBySignature[signature] =
+                                                          value,
+                                                ),
+                                            requiredValidator: (value) =>
+                                                _requiredValidator(
+                                                  context,
+                                                  value,
+                                                ),
+                                            numberValidator: (value) =>
+                                                _numberValidator(
+                                                  context,
+                                                  value,
+                                                ),
+                                            generationErrorText:
+                                                _generationErrorText(context),
+                                          )
+                                        else
+                                          ProductVariantFormFields(
+                                            variantNameController:
+                                                _variantNameController,
+                                            skuController: _skuController,
+                                            barcodeController:
+                                                _barcodeController,
+                                            priceController: _priceController,
+                                            selectedOptionValues: const [],
+                                            isActive: _isVariantActive,
+                                            isDefault: _isDefaultVariant,
+                                            onPickOptionValues: () {},
+                                            onClearOptionValues: null,
+                                            onActiveChanged: (value) =>
+                                                setState(
+                                                  () =>
+                                                      _isVariantActive = value,
+                                                ),
+                                            onDefaultChanged: (value) =>
+                                                setState(
+                                                  () =>
+                                                      _isDefaultVariant = value,
+                                                ),
+                                            requiredValidator: (value) =>
+                                                _requiredValidator(
+                                                  context,
+                                                  value,
+                                                ),
+                                            numberValidator: (value) =>
+                                                _numberValidator(
+                                                  context,
+                                                  value,
+                                                ),
+                                            showDefaultToggle: false,
+                                            showOptionValues: false,
+                                          ),
+                                      ],
                                     ),
-                                    const SizedBox(height: 12),
-                                    if (_usesGeneratedVariants)
-                                      _GeneratedVariantFormStep(
-                                        skuController: _skuController,
-                                        priceController: _priceController,
-                                        selectedOptions:
-                                            _selectedVariantOptions,
-                                        selectedValueIdsByOption:
-                                            _selectedValueIdsByOption,
-                                        errorOptionIds: _valueErrorOptionIds,
-                                        combinations: _generatedCombinations,
-                                        nameControllers:
-                                            _generatedNameControllers,
-                                        skuControllers:
-                                            _generatedSkuControllers,
-                                        barcodeControllers:
-                                            _generatedBarcodeControllers,
-                                        priceControllers:
-                                            _generatedPriceControllers,
-                                        activeBySignature:
-                                            _generatedActiveBySignature,
-                                        defaultSignature:
-                                            _defaultGeneratedSignature,
-                                        onToggleValue: _toggleOptionValue,
-                                        onCreateValue:
-                                            _createVariantOptionValue,
-                                        onDefaultChanged: (signature) =>
-                                            setState(
-                                              () => _defaultGeneratedSignature =
-                                                  signature,
-                                            ),
-                                        onVariantActiveChanged:
-                                            (signature, value) => setState(
-                                              () =>
-                                                  _generatedActiveBySignature[signature] =
-                                                      value,
-                                            ),
-                                        requiredValidator: (value) =>
-                                            _requiredValidator(context, value),
-                                        numberValidator: (value) =>
-                                            _numberValidator(context, value),
-                                        generationErrorText:
-                                            _generationErrorText(context),
-                                      )
-                                    else
-                                      ProductVariantFormFields(
-                                        variantNameController:
-                                            _variantNameController,
-                                        skuController: _skuController,
-                                        barcodeController: _barcodeController,
-                                        priceController: _priceController,
-                                        selectedOptionValues: const [],
-                                        isActive: _isVariantActive,
-                                        isDefault: _isDefaultVariant,
-                                        onPickOptionValues: () {},
-                                        onClearOptionValues: null,
-                                        onActiveChanged: (value) => setState(
-                                          () => _isVariantActive = value,
-                                        ),
-                                        onDefaultChanged: (value) => setState(
-                                          () => _isDefaultVariant = value,
-                                        ),
-                                        requiredValidator: (value) =>
-                                            _requiredValidator(context, value),
-                                        numberValidator: (value) =>
-                                            _numberValidator(context, value),
-                                        showDefaultToggle: false,
-                                        showOptionValues: false,
-                                      ),
                                   ],
                                 ),
                               ),
@@ -755,24 +785,6 @@ class _ProductFormState extends State<ProductForm> {
       return;
     }
     setState(() => _selectedCategories = picked);
-  }
-}
-
-class _StepHeader extends StatelessWidget {
-  const _StepHeader({required this.icon, required this.title});
-
-  final IconData icon;
-  final String title;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Icon(icon, color: Theme.of(context).colorScheme.primary),
-        const SizedBox(width: 8),
-        Text(title, style: Theme.of(context).textTheme.titleMedium),
-      ],
-    );
   }
 }
 

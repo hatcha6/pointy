@@ -2300,6 +2300,60 @@ abstract class AppLocalizations {
   /// **'إضافة منتج'**
   String get addProductButton;
 
+  /// No description provided for @productTableProductColumn.
+  ///
+  /// In ar, this message translates to:
+  /// **'المنتج'**
+  String get productTableProductColumn;
+
+  /// No description provided for @productTableStockColumn.
+  ///
+  /// In ar, this message translates to:
+  /// **'المخزون'**
+  String get productTableStockColumn;
+
+  /// No description provided for @productTablePriceColumn.
+  ///
+  /// In ar, this message translates to:
+  /// **'السعر'**
+  String get productTablePriceColumn;
+
+  /// No description provided for @productTableBarcodeColumn.
+  ///
+  /// In ar, this message translates to:
+  /// **'الباركود'**
+  String get productTableBarcodeColumn;
+
+  /// No description provided for @productTableEditColumn.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعديل'**
+  String get productTableEditColumn;
+
+  /// No description provided for @openProductDetailsTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'فتح تفاصيل المنتج'**
+  String get openProductDetailsTooltip;
+
+  /// No description provided for @stockStatusAvailable.
+  ///
+  /// In ar, this message translates to:
+  /// **'متوفر'**
+  String get stockStatusAvailable;
+
+  /// No description provided for @stockStatusLow.
+  ///
+  /// In ar, this message translates to:
+  /// **'منخفض'**
+  String get stockStatusLow;
+
+  /// No description provided for @stockStatusOut.
+  ///
+  /// In ar, this message translates to:
+  /// **'نافد'**
+  String get stockStatusOut;
+
   /// No description provided for @newProductTitle.
   ///
   /// In ar, this message translates to:
