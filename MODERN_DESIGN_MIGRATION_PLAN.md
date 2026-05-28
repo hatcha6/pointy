@@ -119,6 +119,9 @@ wrapped instead of replaced immediately.
 
 Make the current behavior measurable before visual migration starts.
 
+Phase 0 implementation notes are recorded in
+`MODERN_DESIGN_PHASE_0_BASELINE.md`.
+
 ### Work
 
 - Capture current routes, modals, and critical actions for:

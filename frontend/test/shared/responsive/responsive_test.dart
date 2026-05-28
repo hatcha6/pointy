@@ -14,6 +14,14 @@ void main() {
       expect(AppBreakpoints.forWidth(1024), AppBreakpoint.desktop);
       expect(AppBreakpoints.forWidth(1366), AppBreakpoint.widePos);
     });
+
+    test('keeps modern design QA viewport targets stable', () {
+      expect(AppBreakpoints.forWidth(390), AppBreakpoint.phone);
+      expect(AppBreakpoints.forWidth(430), AppBreakpoint.phone);
+      expect(AppBreakpoints.forWidth(768), AppBreakpoint.tablet);
+      expect(AppBreakpoints.forWidth(1024), AppBreakpoint.desktop);
+      expect(AppBreakpoints.forWidth(1366), AppBreakpoint.widePos);
+    });
   });
 
   group('ResponsiveFormGrid', () {
