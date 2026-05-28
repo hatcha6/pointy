@@ -7,15 +7,18 @@ import '../../../data/models/product.dart';
 import '../../../data/models/product_variant.dart';
 import '../../../shared/authorization_guards.dart';
 import '../../../shared/barcode/camera_barcode_scanner_sheet.dart';
+import '../../../shared/catalog/catalog.dart';
+import '../../../shared/components/components.dart';
+import '../../../shared/design/design.dart';
 import '../../../shared/infinite_scroll_grid.dart';
 import '../../../shared/product_query_controls.dart';
 import '../../../shared/product_tile.dart';
+import '../../../shared/responsive/responsive.dart';
 import '../view_models/pos_view_model.dart';
 import 'pos_variant_picker_sheet.dart';
 
-const _catalogGridSpacing = 12.0;
-const _catalogTileMinWidth = 156.0;
-const _catalogTileMainExtent = 156.0;
+const _catalogTileMinWidth = 168.0;
+const _catalogTileMainExtent = 236.0;
 const _catalogLoadMoreExtent = 720.0;
 const _catalogMaxColumnCount = 5;
 
@@ -32,51 +35,85 @@ class PosCatalogPane extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    final spacing = AdaptiveSpacing.of(context);
+    final colors = context.pointyColors;
 
     return Padding(
-      padding: const EdgeInsets.all(16),
+      padding: spacing.compactPadding,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Text(
-                l10n.catalogTitle,
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
-              const Spacer(),
-              if (viewModel.isLoading)
-                const SizedBox.square(
-                  dimension: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                ),
-            ],
+          PointySectionHeader(
+            title: l10n.catalogTitle,
+            trailing: viewModel.isLoading
+                ? const SizedBox.square(
+                    dimension: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : null,
+            padding: EdgeInsetsDirectional.only(bottom: spacing.sm),
           ),
-          if (viewModel.errorMessage != null)
-            Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child: Text(
-                l10n.sampleCatalogNotice,
-                style: TextStyle(
-                  color: Theme.of(context).colorScheme.secondary,
-                ),
-              ),
+          if (viewModel.errorMessage != null) ...[
+            Text(
+              l10n.sampleCatalogNotice,
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: colors.warning),
             ),
-          const SizedBox(height: 12),
+            SizedBox(height: spacing.sm),
+          ],
           _PosProductLookupControls(
             viewModel: viewModel,
             capabilities: capabilities,
           ),
+          SizedBox(height: spacing.sm),
+          PointyCategoryStrip<int>(
+            allLabel: l10n.posAllProductsFilterLabel,
+            items: [
+              for (final category in viewModel.query.categories)
+                if (category.name.trim().isNotEmpty)
+                  PointyCategoryStripItem(
+                    value: category.id,
+                    label: category.name,
+                  ),
+            ],
+            selectedValues: {
+              for (final category in viewModel.query.categories) category.id,
+            },
+            onSelectAll: () {
+              viewModel.applyQuery(
+                viewModel.query.copyWith(categories: const []),
+              );
+            },
+            onSelected: (categoryId) {
+              final category = viewModel.query.categories.firstWhere(
+                (category) => category.id == categoryId,
+              );
+              viewModel.applyQuery(
+                viewModel.query.copyWith(categories: [category]),
+              );
+            },
+          ),
           if (viewModel.barcodeScanStatus != BarcodeScanStatus.idle) ...[
-            const SizedBox(height: 8),
+            SizedBox(height: spacing.sm),
             _BarcodeScanStatusLine(viewModel: viewModel),
           ],
-          const SizedBox(height: 12),
+          SizedBox(height: spacing.md),
           Expanded(
-            child: _PosCatalogGrid(
-              viewModel: viewModel,
-              capabilities: capabilities,
-              emptyMessage: l10n.emptyCatalog,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: colors.surface,
+                border: Border.all(color: colors.line),
+                borderRadius: BorderRadius.circular(PointyRadii.card),
+              ),
+              child: Padding(
+                padding: EdgeInsetsDirectional.all(spacing.sm),
+                child: _PosCatalogGrid(
+                  viewModel: viewModel,
+                  capabilities: capabilities,
+                  emptyMessage: l10n.emptyCatalog,
+                ),
+              ),
             ),
           ),
         ],
@@ -105,6 +142,7 @@ class _PosCatalogGrid extends StatelessWidget {
       builder: (context, canCheckout) {
         return LayoutBuilder(
           builder: (context, constraints) {
+            final spacing = AdaptiveSpacing.of(context);
             return InfiniteScrollGrid<Product>(
               items: products,
               onLoadMore: viewModel.loadMoreCatalog,
@@ -115,10 +153,13 @@ class _PosCatalogGrid extends StatelessWidget {
               emptyBuilder: (context) =>
                   _PosCatalogEmptyState(message: emptyMessage),
               gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: _catalogColumnCountFor(constraints.maxWidth),
+                crossAxisCount: _catalogColumnCountFor(
+                  constraints.maxWidth,
+                  spacing.gutter,
+                ),
                 mainAxisExtent: _catalogTileMainExtent,
-                crossAxisSpacing: _catalogGridSpacing,
-                mainAxisSpacing: _catalogGridSpacing,
+                crossAxisSpacing: spacing.gutter,
+                mainAxisSpacing: spacing.gutter,
               ),
               itemBuilder: (context, product) {
                 return ProductTile(
@@ -168,15 +209,13 @@ class _PosCatalogGrid extends StatelessWidget {
     }
   }
 
-  int _catalogColumnCountFor(double width) {
+  int _catalogColumnCountFor(double width, double spacing) {
     if (!width.isFinite || width <= 0) {
       return 1;
     }
 
-    final count =
-        ((width + _catalogGridSpacing) /
-                (_catalogTileMinWidth + _catalogGridSpacing))
-            .floor();
+    final count = ((width + spacing) / (_catalogTileMinWidth + spacing))
+        .floor();
     return count.clamp(1, _catalogMaxColumnCount);
   }
 }
@@ -188,32 +227,7 @@ class _PosCatalogEmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
-
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.inventory_2_outlined,
-              color: colorScheme.onSurfaceVariant,
-              size: 32,
-            ),
-            const SizedBox(height: 10),
-            Text(
-              message,
-              textAlign: TextAlign.center,
-              style: textTheme.bodyMedium?.copyWith(
-                color: colorScheme.onSurfaceVariant,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
+    return PointyEmptyState(icon: Icons.inventory_2_outlined, title: message);
   }
 }
 
@@ -239,7 +253,8 @@ class _PosProductLookupControls extends StatelessWidget {
           allowAvailabilityFilter: false,
           searchHint: l10n.posProductLookupHint,
           searchFieldKey: const ValueKey('product_lookup_field'),
-          autofocus: true,
+          autofocus:
+              AppBreakpoints.of(context).index >= AppBreakpoint.tablet.index,
           onSearchChanged: viewModel.updateSearch,
           onOpenCameraScanner:
               canCheckout &&

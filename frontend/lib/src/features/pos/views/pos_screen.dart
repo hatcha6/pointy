@@ -266,6 +266,7 @@ class _PosWorkspace extends StatelessWidget {
       child: TwoPaneLayout(
         compactPrimaryFlex: 2,
         compactSecondaryFlex: 3,
+        minPrimaryWidth: 390,
         primaryPane: PosCatalogPane(
           viewModel: viewModel,
           capabilities: capabilities,

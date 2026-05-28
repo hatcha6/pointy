@@ -8,9 +8,13 @@ import '../../../data/repositories/sale_repository.dart';
 import '../../../shared/authorization_guards.dart';
 import '../../../shared/contact_picker_sheet.dart';
 import '../../../shared/decimal_text_input_formatter.dart';
+import '../../../shared/components/components.dart';
+import '../../../shared/design/design.dart';
 import '../../../shared/formatters.dart';
+import '../../../shared/order/order.dart';
 import '../../../shared/order_totals.dart';
 import '../../../shared/payment_labels.dart';
+import '../../../shared/responsive/responsive.dart';
 import '../models/split_tender_payment.dart';
 import '../view_models/pos_view_model.dart';
 import 'cart_line_tile.dart';
@@ -36,90 +40,41 @@ class PosCartPane extends StatelessWidget {
       capabilities: capabilities,
       builder: (context, canCheckout) {
         final isCartLocked = viewModel.isCheckingOut || !canCheckout;
+        final spacing = AdaptiveSpacing.of(context);
+        final colors = context.pointyColors;
 
         return ColoredBox(
-          color: Colors.white,
-          child: SafeArea(
-            top: false,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          l10n.currentSaleTitle,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.titleLarge,
-                        ),
-                      ),
-                      IconButton(
-                        tooltip: l10n.clearCartTooltip,
-                        visualDensity: VisualDensity.compact,
-                        onPressed: viewModel.cart.isEmpty || isCartLocked
-                            ? null
-                            : viewModel.clearCart,
-                        icon: const Icon(Icons.delete_outline),
-                      ),
-                    ],
+          color: colors.page,
+          child: Padding(
+            padding: spacing.compactPadding,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(
+                  child: PointyOrderPanel(
+                    title: l10n.currentSaleTitle,
+                    trailing: IconButton(
+                      tooltip: l10n.clearCartTooltip,
+                      onPressed: viewModel.cart.isEmpty || isCartLocked
+                          ? null
+                          : viewModel.clearCart,
+                      icon: const Icon(Icons.delete_outline),
+                      color: colors.danger,
+                    ),
+                    child: _CartScrollContent(
+                      viewModel: viewModel,
+                      isCartLocked: isCartLocked,
+                      onSelectCustomer: () => _selectCustomer(context),
+                    ),
                   ),
-                  const SizedBox(height: 6),
-                  ContactSelectionTile(
-                    label: l10n.selectedCustomerLabel,
-                    value: viewModel.selectedCustomer?.fullName ?? '',
-                    placeholder: l10n.walkInCustomerLabel,
-                    icon: Icons.person_outline,
-                    iconSize: 20,
-                    iconSpacing: 8,
-                    enabled: !viewModel.isCheckingOut,
-                    onSelect: () => _selectCustomer(context),
-                    onClear: () => viewModel.selectCustomer(null),
-                    padding: const EdgeInsetsDirectional.fromSTEB(10, 8, 6, 8),
-                    actionVisualDensity: VisualDensity.compact,
-                    selectActionIcon: Icons.edit_outlined,
-                  ),
-                  const SizedBox(height: 8),
-                  _CouponCodeField(viewModel: viewModel),
-                  const SizedBox(height: 8),
-                  Expanded(
-                    child: viewModel.cart.isEmpty
-                        ? Center(
-                            child: Text(
-                              l10n.emptyCart,
-                              textAlign: TextAlign.center,
-                            ),
-                          )
-                        : ListView.separated(
-                            padding: EdgeInsets.zero,
-                            itemCount: viewModel.cart.length,
-                            separatorBuilder: (_, _) =>
-                                const Divider(height: 1),
-                            itemBuilder: (context, index) {
-                              final line = viewModel.cart[index];
-                              return CartLineTile(
-                                line: line,
-                                onAdd: isCartLocked
-                                    ? null
-                                    : () => viewModel.addVariant(line.variant),
-                                onRemove: isCartLocked
-                                    ? null
-                                    : () => viewModel.decrementVariant(
-                                        line.variant,
-                                      ),
-                              );
-                            },
-                          ),
-                  ),
-                  _CheckoutFooter(
-                    viewModel: viewModel,
-                    capabilities: capabilities,
-                    onCheckout: () => _checkout(context),
-                  ),
-                ],
-              ),
+                ),
+                SizedBox(height: spacing.sm),
+                _CheckoutFooter(
+                  viewModel: viewModel,
+                  capabilities: capabilities,
+                  onCheckout: () => _checkout(context),
+                ),
+              ],
             ),
           ),
         );
@@ -287,6 +242,81 @@ class PosCartPane extends StatelessWidget {
   }
 }
 
+class _CartScrollContent extends StatelessWidget {
+  const _CartScrollContent({
+    required this.viewModel,
+    required this.isCartLocked,
+    required this.onSelectCustomer,
+  });
+
+  final PosViewModel viewModel;
+  final bool isCartLocked;
+  final VoidCallback onSelectCustomer;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final spacing = AdaptiveSpacing.of(context);
+    final colors = context.pointyColors;
+
+    return ListView(
+      padding: EdgeInsetsDirectional.fromSTEB(
+        spacing.md,
+        spacing.sm,
+        spacing.md,
+        spacing.md,
+      ),
+      children: [
+        ContactSelectionTile(
+          label: l10n.selectedCustomerLabel,
+          value: viewModel.selectedCustomer?.fullName ?? '',
+          placeholder: l10n.walkInCustomerLabel,
+          icon: Icons.person_outline,
+          iconSize: 20,
+          iconSpacing: 8,
+          enabled: !viewModel.isCheckingOut,
+          onSelect: onSelectCustomer,
+          onClear: () => viewModel.selectCustomer(null),
+          padding: const EdgeInsetsDirectional.fromSTEB(10, 8, 6, 8),
+          actionVisualDensity: VisualDensity.compact,
+          selectActionIcon: Icons.edit_outlined,
+        ),
+        SizedBox(height: spacing.sm),
+        _CouponCodeField(viewModel: viewModel),
+        SizedBox(height: spacing.sm),
+        Divider(height: 1, color: colors.line),
+        if (viewModel.cart.isEmpty)
+          SizedBox(
+            height: 220,
+            child: PointyEmptyState(
+              icon: Icons.shopping_cart_outlined,
+              title: l10n.emptyCart,
+            ),
+          )
+        else
+          for (var index = 0; index < viewModel.cart.length; index += 1) ...[
+            if (index > 0) Divider(height: 1, color: colors.line),
+            CartLineTile(
+              line: viewModel.cart[index],
+              onAdd: isCartLocked
+                  ? null
+                  : () => viewModel.addVariant(viewModel.cart[index].variant),
+              onRemove: isCartLocked
+                  ? null
+                  : () => viewModel.decrementVariant(
+                      viewModel.cart[index].variant,
+                    ),
+              onDelete: isCartLocked
+                  ? null
+                  : () =>
+                        viewModel.removeVariant(viewModel.cart[index].variant),
+            ),
+          ],
+      ],
+    );
+  }
+}
+
 class _CouponCodeField extends StatefulWidget {
   const _CouponCodeField({required this.viewModel});
 
@@ -389,63 +419,50 @@ class _CheckoutFooter extends StatelessWidget {
     final l10n = AppLocalizations.of(context)!;
     final canSubmit = viewModel.cart.isNotEmpty && !viewModel.isCheckingOut;
 
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        border: Border(
-          top: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
-        ),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.only(top: 8),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            CartTotals(viewModel: viewModel),
-            if (viewModel.shouldShowPrintInvoiceCheckbox)
-              CheckboxListTile(
-                value: viewModel.printInvoiceAfterPayment,
-                onChanged: viewModel.isCheckingOut
-                    ? null
-                    : (value) => viewModel.updatePrintInvoiceAfterPayment(
-                        value ?? false,
-                      ),
-                dense: true,
-                visualDensity: VisualDensity.compact,
-                contentPadding: EdgeInsets.zero,
-                controlAffinity: ListTileControlAffinity.leading,
-                title: Text(
-                  l10n.printInvoiceAfterPaymentLabel,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            const SizedBox(height: 8),
-            CheckoutGuard(
-              capabilities: capabilities,
-              child: FilledButton.icon(
-                style: FilledButton.styleFrom(
-                  minimumSize: const Size.fromHeight(44),
-                ),
-                onPressed: canSubmit ? onCheckout : null,
-                icon: viewModel.isCheckingOut
-                    ? const SizedBox.square(
-                        dimension: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.payments_outlined),
-                label: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  child: Text(
-                    viewModel.isCheckingOut
-                        ? l10n.checkoutInProgressButton
-                        : l10n.payAmount(formatMoney(viewModel.total)),
-                    maxLines: 1,
-                  ),
-                ),
+    return PointyStickyActionFooter(
+      summary: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          CartTotals(viewModel: viewModel),
+          if (viewModel.shouldShowPrintInvoiceCheckbox)
+            CheckboxListTile(
+              value: viewModel.printInvoiceAfterPayment,
+              onChanged: viewModel.isCheckingOut
+                  ? null
+                  : (value) => viewModel.updatePrintInvoiceAfterPayment(
+                      value ?? false,
+                    ),
+              dense: true,
+              visualDensity: VisualDensity.compact,
+              contentPadding: EdgeInsets.zero,
+              controlAffinity: ListTileControlAffinity.leading,
+              title: Text(
+                l10n.printInvoiceAfterPaymentLabel,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
             ),
-          ],
+        ],
+      ),
+      primaryAction: CheckoutGuard(
+        capabilities: capabilities,
+        child: FilledButton.icon(
+          onPressed: canSubmit ? onCheckout : null,
+          icon: viewModel.isCheckingOut
+              ? const SizedBox.square(
+                  dimension: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.payments_outlined),
+          label: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              viewModel.isCheckingOut
+                  ? l10n.checkoutInProgressButton
+                  : l10n.payAmount(formatMoney(viewModel.total)),
+              maxLines: 1,
+            ),
+          ),
         ),
       ),
     );

@@ -3530,6 +3530,12 @@ abstract class AppLocalizations {
   /// **'ابحث عن منتج أو امسح الباركود'**
   String get posProductLookupHint;
 
+  /// No description provided for @posAllProductsFilterLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الكل'**
+  String get posAllProductsFilterLabel;
+
   /// Title for the POS variant picker shown after tapping a product with multiple active variants.
   ///
   /// In ar, this message translates to:
@@ -3661,6 +3667,12 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'مسح السلة'**
   String get clearCartTooltip;
+
+  /// No description provided for @removeCartLineTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'حذف العنصر من السلة'**
+  String get removeCartLineTooltip;
 
   /// No description provided for @emptyCart.
   ///
@@ -5591,6 +5603,12 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'نقدية الافتتاح'**
   String get openingCashInputLabel;
+
+  /// No description provided for @moneyAmountHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'0.00'**
+  String get moneyAmountHint;
 
   /// No description provided for @openingCashRequiredError.
   ///

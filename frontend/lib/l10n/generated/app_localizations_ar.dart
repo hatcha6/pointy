@@ -1902,6 +1902,9 @@ class AppLocalizationsAr extends AppLocalizations {
   String get posProductLookupHint => 'ابحث عن منتج أو امسح الباركود';
 
   @override
+  String get posAllProductsFilterLabel => 'الكل';
+
+  @override
   String posVariantPickerTitle(String productName) {
     return 'اختيار خيار $productName';
   }
@@ -1980,6 +1983,9 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get clearCartTooltip => 'مسح السلة';
+
+  @override
+  String get removeCartLineTooltip => 'حذف العنصر من السلة';
 
   @override
   String get emptyCart => 'لا توجد عناصر في السلة';
@@ -3222,6 +3228,9 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get openingCashInputLabel => 'نقدية الافتتاح';
+
+  @override
+  String get moneyAmountHint => '0.00';
 
   @override
   String get openingCashRequiredError => 'أدخل نقدية الافتتاح قبل بدء الجلسة.';

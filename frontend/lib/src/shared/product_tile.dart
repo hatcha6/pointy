@@ -4,7 +4,7 @@ import '../core/analytics_interaction_tracker.dart';
 import '../data/models/product.dart';
 import '../data/models/product_variant.dart';
 import 'formatters.dart';
-import 'product_image_thumbnail.dart';
+import 'catalog/catalog.dart';
 import 'product_status_pill.dart';
 
 class ProductTile extends StatelessWidget {
@@ -42,63 +42,15 @@ class ProductTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(8),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onTap == null ? null : () => _handleTap(context),
-        child: Padding(
-          padding: const EdgeInsets.all(14),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  ProductImageThumbnail(
-                    imageUrl: imageUrl,
-                    fallbackText: title,
-                    size: 52,
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          sku,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.labelMedium,
-                        ),
-                        const SizedBox(height: 8),
-                        ProductStatusPill(isActive: isActive, compact: true),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              Expanded(
-                child: Text(
-                  title,
-                  style: Theme.of(context).textTheme.titleMedium,
-                  maxLines: 3,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              if (showPrice) ...[
-                const SizedBox(height: 10),
-                Text(
-                  formatMoney(unitPrice),
-                  style: Theme.of(context).textTheme.titleSmall,
-                ),
-              ],
-            ],
-          ),
-        ),
-      ),
+    return PointyProductCard(
+      title: title,
+      sku: sku,
+      priceLabel: showPrice ? formatMoney(unitPrice) : '',
+      imageUrl: imageUrl,
+      fallbackText: title,
+      status: ProductStatusPill(isActive: isActive, compact: true),
+      enabled: onTap != null,
+      onTap: () => _handleTap(context),
     );
   }
 

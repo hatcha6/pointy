@@ -185,7 +185,9 @@ class _StartSessionGate extends StatelessWidget {
           textInputAction: TextInputAction.done,
           decoration: InputDecoration(
             labelText: l10n.openingCashInputLabel,
-            hintText: viewModel.requireOpeningCash ? null : '0.00',
+            hintText: viewModel.requireOpeningCash
+                ? null
+                : l10n.moneyAmountHint,
             errorText: showOpeningCashRequiredError
                 ? l10n.openingCashRequiredError
                 : null,

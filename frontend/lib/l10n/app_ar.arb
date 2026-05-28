@@ -963,6 +963,7 @@
   "noBarcode": "لا يوجد باركود",
   "noDescription": "لا يوجد وصف لهذا المنتج",
   "posProductLookupHint": "ابحث عن منتج أو امسح الباركود",
+  "posAllProductsFilterLabel": "الكل",
   "posVariantPickerTitle": "اختيار خيار {productName}",
   "@posVariantPickerTitle": {
     "description": "Title for the POS variant picker shown after tapping a product with multiple active variants.",
@@ -1033,6 +1034,7 @@
   "toggleTorchTooltip": "تشغيل أو إيقاف الفلاش",
   "currentSaleTitle": "البيع الحالي",
   "clearCartTooltip": "مسح السلة",
+  "removeCartLineTooltip": "حذف العنصر من السلة",
   "emptyCart": "لا توجد عناصر في السلة",
   "purchasingTitle": "المشتريات",
   "purchaseOrdersTitle": "فواتير المشتريات",
@@ -1879,6 +1881,7 @@
   "registerSessionLoadError": "تعذر الاتصال بجلسة الدرج. حاول مرة أخرى.",
   "retryRegisterSessionButton": "إعادة المحاولة",
   "openingCashInputLabel": "نقدية الافتتاح",
+  "moneyAmountHint": "0.00",
   "openingCashRequiredError": "أدخل نقدية الافتتاح قبل بدء الجلسة.",
   "startRegisterSessionButton": "بدء الجلسة",
   "startingRegisterSessionButton": "جار بدء الجلسة...",

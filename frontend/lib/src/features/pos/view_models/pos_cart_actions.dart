@@ -28,6 +28,21 @@ extension PosCartActions on PosViewModel {
     unawaited(refreshDiscountPreview());
   }
 
+  void removeVariant(ProductVariant variant) {
+    if (_isCheckingOut) {
+      return;
+    }
+
+    final index = _cart.indexWhere((line) => line.variant.id == variant.id);
+    if (index == -1) {
+      return;
+    }
+
+    _cart.removeAt(index);
+    _notifyChanged();
+    unawaited(refreshDiscountPreview());
+  }
+
   void clearCart() {
     if (_isCheckingOut || _cart.isEmpty) {
       return;

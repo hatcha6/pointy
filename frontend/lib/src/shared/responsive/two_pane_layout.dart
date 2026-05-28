@@ -16,6 +16,7 @@ class TwoPaneLayout extends StatelessWidget {
     this.secondaryPaneMinWidth = AppPaneWidths.compact,
     this.secondaryPaneMaxWidth = AppPaneWidths.widePos,
     this.secondaryPaneMaxWidthFraction = 0.42,
+    this.minPrimaryWidth = AppPaneWidths.minPrimary,
     this.verticalDivider = const VerticalDivider(width: 1),
     this.horizontalDivider = const Divider(height: 1),
     this.secondaryFirst = false,
@@ -31,6 +32,7 @@ class TwoPaneLayout extends StatelessWidget {
   final double secondaryPaneMinWidth;
   final double secondaryPaneMaxWidth;
   final double secondaryPaneMaxWidthFraction;
+  final double minPrimaryWidth;
   final Widget? verticalDivider;
   final Widget? horizontalDivider;
   final bool secondaryFirst;
@@ -48,6 +50,7 @@ class TwoPaneLayout extends StatelessWidget {
                 minWidth: secondaryPaneMinWidth,
                 maxWidth: secondaryPaneMaxWidth,
                 maxWidthFraction: secondaryPaneMaxWidthFraction,
+                minPrimaryWidth: minPrimaryWidth,
               );
           return Row(children: _wideChildren(paneWidth));
         }
