@@ -668,6 +668,28 @@ void main() {
     expect(find.byIcon(Icons.delete_outline), findsOneWidget);
   });
 
+  testWidgets('register gate renders on phone width before starting POS', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(PointyApp(apiService: _mockApiService()));
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+
+    await _openPosFromDashboard(tester);
+
+    expect(find.text('جلسة الدرج'), findsOneWidget);
+    expect(
+      find.text('لا توجد جلسة درج مفتوحة. ابدأ جلسة جديدة قبل البيع.'),
+      findsOneWidget,
+    );
+    expect(find.text('بدء الجلسة'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('cash movement sheet requires a reason and submits amount', (
     WidgetTester tester,
   ) async {
@@ -2260,13 +2282,30 @@ void main() {
       ),
     );
 
-    await tester.enterText(find.byType(TextFormField).at(0), '25.50');
-    await tester.enterText(find.byType(TextFormField).at(1), '1');
-    await tester.enterText(find.byType(TextFormField).at(2), '2');
-    await tester.enterText(find.byType(TextFormField).at(3), '3');
-    await tester.enterText(find.byType(TextFormField).at(4), '4');
+    await tester.enterText(
+      find.byKey(const ValueKey('register_session_closing_cash_field')),
+      '25.50',
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('register_session_count_025_field')),
+      '1',
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('register_session_count_050_field')),
+      '2',
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('register_session_count_075_field')),
+      '3',
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('register_session_count_100_field')),
+      '4',
+    );
 
-    await tester.tap(find.text('إغلاق الجلسة'));
+    await tester.tap(
+      find.byKey(const ValueKey('register_session_close_submit_button')),
+    );
     await tester.pump();
 
     expect(submittedInput?.closingCash, 25.50);

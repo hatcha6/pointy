@@ -2,7 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
+import '../../../shared/components/components.dart';
+import '../../../shared/design/design.dart';
 import '../../../shared/decimal_text_input_formatter.dart';
+import '../../../shared/responsive/responsive.dart';
 
 class RegisterSessionCloseSheet extends StatefulWidget {
   const RegisterSessionCloseSheet({
@@ -43,118 +46,132 @@ class _RegisterSessionCloseSheetState extends State<RegisterSessionCloseSheet> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    final spacing = AdaptiveSpacing.of(context);
+    final colors = context.pointyColors;
 
-    return SafeArea(
-      child: Padding(
-        padding: EdgeInsets.only(
-          left: 16,
-          right: 16,
-          top: 16,
-          bottom: MediaQuery.viewInsetsOf(context).bottom + 16,
-        ),
-        child: SingleChildScrollView(
-          child: Form(
-            key: _formKey,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Row(
-                  children: [
-                    Text(
-                      l10n.closeRegisterSessionTitle,
-                      style: Theme.of(context).textTheme.titleLarge,
-                    ),
-                    const Spacer(),
-                    IconButton(
-                      tooltip: l10n.cancelButton,
-                      onPressed: _isSubmitting
-                          ? null
-                          : () => Navigator.of(context).pop(false),
-                      icon: const Icon(Icons.close),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: _closingCashController,
-                  enabled: !_isSubmitting,
-                  keyboardType: const TextInputType.numberWithOptions(
-                    decimal: true,
+    return Material(
+      color: colors.surface,
+      borderRadius: BorderRadius.circular(PointyRadii.sheet),
+      clipBehavior: Clip.antiAlias,
+      child: SafeArea(
+        top: false,
+        child: Form(
+          key: _formKey,
+          child: Column(
+            children: [
+              _CloseSheetHeader(
+                title: l10n.closeRegisterSessionTitle,
+                isSubmitting: _isSubmitting,
+                onCancel: () => Navigator.of(context).pop(false),
+              ),
+              Divider(height: 1, color: colors.line),
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: EdgeInsetsDirectional.only(
+                    start: spacing.lg,
+                    end: spacing.lg,
+                    top: spacing.lg,
+                    bottom:
+                        spacing.lg + MediaQuery.viewInsetsOf(context).bottom,
                   ),
-                  inputFormatters: [DecimalTextInputFormatter()],
-                  textInputAction: TextInputAction.next,
-                  decoration: InputDecoration(
-                    labelText: l10n.closingCashInputLabel,
-                    border: const OutlineInputBorder(),
-                    prefixIcon: const Icon(Icons.payments_outlined),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      TextFormField(
+                        key: const ValueKey(
+                          'register_session_closing_cash_field',
+                        ),
+                        controller: _closingCashController,
+                        enabled: !_isSubmitting,
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true,
+                        ),
+                        inputFormatters: [DecimalTextInputFormatter()],
+                        textInputAction: TextInputAction.next,
+                        decoration: InputDecoration(
+                          labelText: l10n.closingCashInputLabel,
+                          border: const OutlineInputBorder(),
+                          prefixIcon: const Icon(Icons.payments_outlined),
+                        ),
+                        validator: (value) => _validateMoney(value, l10n),
+                      ),
+                      SizedBox(height: spacing.md),
+                      ResponsiveFormGrid(
+                        minChildWidth: 148,
+                        maxColumns: 4,
+                        children: [
+                          _CountField(
+                            key: const ValueKey(
+                              'register_session_count_025_field',
+                            ),
+                            controller: _count025Controller,
+                            enabled: !_isSubmitting,
+                            label: l10n.denominationCountLabel('0.25'),
+                          ),
+                          _CountField(
+                            key: const ValueKey(
+                              'register_session_count_050_field',
+                            ),
+                            controller: _count050Controller,
+                            enabled: !_isSubmitting,
+                            label: l10n.denominationCountLabel('0.50'),
+                          ),
+                          _CountField(
+                            key: const ValueKey(
+                              'register_session_count_075_field',
+                            ),
+                            controller: _count075Controller,
+                            enabled: !_isSubmitting,
+                            label: l10n.denominationCountLabel('0.75'),
+                          ),
+                          _CountField(
+                            key: const ValueKey(
+                              'register_session_count_100_field',
+                            ),
+                            controller: _count100Controller,
+                            enabled: !_isSubmitting,
+                            label: l10n.denominationCountLabel('1.00'),
+                          ),
+                        ],
+                      ),
+                      if (_showError) ...[
+                        SizedBox(height: spacing.md),
+                        PointyInlineMessage.error(
+                          message: l10n.closeRegisterSessionError,
+                          icon: Icons.warning_amber_outlined,
+                        ),
+                      ],
+                    ],
                   ),
-                  validator: (value) => _validateMoney(value, l10n),
                 ),
-                const SizedBox(height: 12),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    _CountField(
-                      controller: _count025Controller,
-                      enabled: !_isSubmitting,
-                      label: l10n.denominationCountLabel('0.25'),
-                    ),
-                    _CountField(
-                      controller: _count050Controller,
-                      enabled: !_isSubmitting,
-                      label: l10n.denominationCountLabel('0.50'),
-                    ),
-                    _CountField(
-                      controller: _count075Controller,
-                      enabled: !_isSubmitting,
-                      label: l10n.denominationCountLabel('0.75'),
-                    ),
-                    _CountField(
-                      controller: _count100Controller,
-                      enabled: !_isSubmitting,
-                      label: l10n.denominationCountLabel('1.00'),
-                    ),
-                  ],
-                ),
-                if (_showError) ...[
-                  const SizedBox(height: 12),
-                  Text(
-                    l10n.closeRegisterSessionError,
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.error,
-                    ),
+              ),
+              PointyStickyActionFooter(
+                secondaryActions: [
+                  TextButton(
+                    key: const ValueKey('register_session_close_cancel_button'),
+                    onPressed: _isSubmitting
+                        ? null
+                        : () => Navigator.of(context).pop(false),
+                    child: Text(l10n.cancelButton),
                   ),
                 ],
-                const SizedBox(height: 16),
-                Row(
-                  children: [
-                    TextButton(
-                      onPressed: _isSubmitting
-                          ? null
-                          : () => Navigator.of(context).pop(false),
-                      child: Text(l10n.cancelButton),
-                    ),
-                    const Spacer(),
-                    FilledButton.icon(
-                      onPressed: _isSubmitting ? null : _submit,
-                      icon: _isSubmitting
-                          ? const SizedBox.square(
-                              dimension: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Icon(Icons.lock_outline),
-                      label: Text(
-                        _isSubmitting
-                            ? l10n.closingRegisterSessionButton
-                            : l10n.closeRegisterSessionButton,
-                      ),
-                    ),
-                  ],
+                primaryAction: FilledButton.icon(
+                  key: const ValueKey('register_session_close_submit_button'),
+                  onPressed: _isSubmitting ? null : _submit,
+                  icon: _isSubmitting
+                      ? const SizedBox.square(
+                          dimension: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.lock_outline),
+                  label: Text(
+                    _isSubmitting
+                        ? l10n.closingRegisterSessionButton
+                        : l10n.closeRegisterSessionButton,
+                  ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),
@@ -216,6 +233,53 @@ class _RegisterSessionCloseSheetState extends State<RegisterSessionCloseSheet> {
   }
 }
 
+class _CloseSheetHeader extends StatelessWidget {
+  const _CloseSheetHeader({
+    required this.title,
+    required this.isSubmitting,
+    required this.onCancel,
+  });
+
+  final String title;
+  final bool isSubmitting;
+  final VoidCallback onCancel;
+
+  @override
+  Widget build(BuildContext context) {
+    final spacing = AdaptiveSpacing.of(context);
+
+    return Padding(
+      padding: EdgeInsetsDirectional.fromSTEB(
+        spacing.lg,
+        spacing.sm,
+        spacing.sm,
+        spacing.sm,
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.lock_outline, color: context.pointyColors.primaryStrong),
+          SizedBox(width: spacing.sm),
+          Expanded(
+            child: Text(
+              title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(
+                context,
+              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+            ),
+          ),
+          IconButton(
+            tooltip: AppLocalizations.of(context)!.cancelButton,
+            onPressed: isSubmitting ? null : onCancel,
+            icon: const Icon(Icons.close),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class RegisterSessionCloseInput {
   const RegisterSessionCloseInput({
     required this.closingCash,
@@ -234,6 +298,7 @@ class RegisterSessionCloseInput {
 
 class _CountField extends StatelessWidget {
   const _CountField({
+    super.key,
     required this.controller,
     required this.enabled,
     required this.label,
@@ -245,18 +310,15 @@ class _CountField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: 132,
-      child: TextFormField(
-        controller: controller,
-        enabled: enabled,
-        keyboardType: TextInputType.number,
-        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-        textInputAction: TextInputAction.next,
-        decoration: InputDecoration(
-          labelText: label,
-          border: const OutlineInputBorder(),
-        ),
+    return TextFormField(
+      controller: controller,
+      enabled: enabled,
+      keyboardType: TextInputType.number,
+      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+      textInputAction: TextInputAction.next,
+      decoration: InputDecoration(
+        labelText: label,
+        border: const OutlineInputBorder(),
       ),
     );
   }

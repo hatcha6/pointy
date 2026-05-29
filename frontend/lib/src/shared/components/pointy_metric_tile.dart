@@ -49,13 +49,16 @@ class PointyMetricTile extends StatelessWidget {
                     ),
                   ),
                   SizedBox(height: spacing.xs),
-                  Text(
-                    value,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.titleLarge?.copyWith(
-                      color: colors.ink,
-                      fontWeight: FontWeight.w700,
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: AlignmentDirectional.centerStart,
+                    child: Text(
+                      value,
+                      maxLines: 1,
+                      style: theme.textTheme.titleLarge?.copyWith(
+                        color: colors.ink,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                   ),
                   if (subtitle != null) ...[
