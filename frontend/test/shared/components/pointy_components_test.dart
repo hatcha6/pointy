@@ -92,6 +92,55 @@ void main() {
     );
   });
 
+  testWidgets('PointyDetailSection renders reusable label-value rows', (
+    tester,
+  ) async {
+    await _pumpSurface(
+      tester,
+      width: 390,
+      child: const PointyDetailSection(
+        title: 'تفاصيل المنتج',
+        icon: Icons.inventory_2_outlined,
+        child: Column(
+          children: [
+            PointyDetailRow(label: 'الباركود', value: '1234567890'),
+            Divider(height: 20),
+            PointyDetailRow(label: 'الحالة', value: 'متوفر'),
+          ],
+        ),
+      ),
+    );
+
+    expect(find.text('تفاصيل المنتج'), findsOneWidget);
+    expect(find.text('الباركود'), findsOneWidget);
+    expect(find.text('1234567890'), findsOneWidget);
+    expect(find.text('متوفر'), findsOneWidget);
+  });
+
+  testWidgets('PointyInlineMessage renders semantic feedback rows', (
+    tester,
+  ) async {
+    await _pumpSurface(
+      tester,
+      width: 390,
+      child: const Column(
+        children: [
+          PointyInlineMessage.error(message: 'تعذر تنفيذ العملية.'),
+          SizedBox(height: 8),
+          PointyInlineMessage.success(
+            message: 'تم حفظ التغييرات.',
+            compact: true,
+          ),
+        ],
+      ),
+    );
+
+    expect(find.text('تعذر تنفيذ العملية.'), findsOneWidget);
+    expect(find.text('تم حفظ التغييرات.'), findsOneWidget);
+    expect(find.byIcon(Icons.error_outline), findsOneWidget);
+    expect(find.byIcon(Icons.check_circle_outline), findsOneWidget);
+  });
+
   testWidgets('PointyDataList renders reusable rows and actions', (
     tester,
   ) async {

@@ -591,9 +591,7 @@ class _SettingsSaveBar extends StatelessWidget {
                 child: CircularProgressIndicator(strokeWidth: 2),
               )
             : const Icon(Icons.save_outlined),
-        label: Text(
-          isSaving ? l10n.savingSettingsButton : l10n.saveSettingsButton,
-        ),
+        label: Text(isSaving ? l10n.savingButton : l10n.saveSettingsButton),
       ),
     );
   }

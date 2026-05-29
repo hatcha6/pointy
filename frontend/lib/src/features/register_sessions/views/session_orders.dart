@@ -361,7 +361,7 @@ class SessionOrderTile extends StatelessWidget {
       title: l10n.saleReceiptTitle(receiptNumber),
       subtitle: [
         if (order.createdAt != null) formatDateTime(order.createdAt!),
-        l10n.saleLineCount(order.lines.length),
+        l10n.lineItemCount(order.lines.length),
         if (order.customerName != null && order.customerName!.isNotEmpty)
           order.customerName!,
       ].join(' • '),

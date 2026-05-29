@@ -80,7 +80,7 @@ class _PurchaseOrderActions extends StatelessWidget {
                           l10n.purchaseOrderCancelSuccess,
                         ),
                   icon: const Icon(Icons.cancel_outlined),
-                  label: Text(l10n.cancelPurchaseOrderAction),
+                  label: Text(l10n.cancelButton),
                 ),
               if (viewModel.canReturn)
                 OutlinedButton.icon(

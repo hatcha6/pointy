@@ -8,7 +8,6 @@ import '../../../data/repositories/contact_repository.dart';
 import '../../../shared/components/components.dart';
 import '../../../shared/contact_picker_sheet.dart';
 import '../../../shared/date_formatters.dart';
-import '../../../shared/detail_section.dart';
 import '../../../shared/formatters.dart';
 import '../../../shared/payment_labels.dart';
 import '../../../shared/responsive/responsive.dart';
@@ -177,41 +176,41 @@ class _CustomerProfile extends StatelessWidget {
       children: [
         if (viewModel.hasCustomerError)
           _ErrorText(text: l10n.customerDetailsLoadError),
-        DetailRow(
+        PointyDetailRow(
           label: l10n.customerNumberLabel,
           value: _valueOrEmpty(l10n, customer.customerNumber),
         ),
         const Divider(height: 20),
-        DetailRow(
+        PointyDetailRow(
           label: l10n.phoneOptionalLabel,
           value: _valueOrEmpty(l10n, customer.phone),
         ),
         const Divider(height: 20),
-        DetailRow(
+        PointyDetailRow(
           label: l10n.emailOptionalLabel,
           value: _valueOrEmpty(l10n, customer.email),
         ),
         const Divider(height: 20),
-        DetailRow(
+        PointyDetailRow(
           label: l10n.genderLabel,
           value: genderLabel(l10n, customer.gender),
         ),
         const Divider(height: 20),
-        DetailRow(
+        PointyDetailRow(
           label: l10n.customerBirthdayLabel,
           value: customer.birthday == null
               ? l10n.customerEmptyValue
               : formatDate(customer.birthday!),
         ),
         const Divider(height: 20),
-        DetailRow(
+        PointyDetailRow(
           label: l10n.customerMarketingConsentLabel,
           value: customer.marketingConsent
               ? l10n.marketingAllowedLabel
               : l10n.customerEmptyValue,
         ),
         const Divider(height: 20),
-        DetailRow(
+        PointyDetailRow(
           label: l10n.customerStatusLabel,
           value: customer.isActive
               ? l10n.activeContactLabel
@@ -247,68 +246,68 @@ class _CustomerSalesSummary extends StatelessWidget {
       children: [
         if (viewModel.hasSummaryError)
           _ErrorText(text: l10n.customerSalesSummaryLoadError),
-        DetailRow(
+        PointyDetailRow(
           label: l10n.customerTotalInvoicedLabel,
           value: formatMoney(summary.totalInvoiced),
         ),
         const Divider(height: 20),
-        DetailRow(
+        PointyDetailRow(
           label: l10n.customerNetSalesLabel,
           value: formatMoney(summary.netSales),
         ),
         const Divider(height: 20),
-        DetailRow(
+        PointyDetailRow(
           label: l10n.customerInvoiceCountLabel,
           value: l10n.customerInvoiceCountValue(summary.invoiceCount),
         ),
         const Divider(height: 20),
-        DetailRow(
+        PointyDetailRow(
           label: l10n.customerPaidInvoiceCountLabel,
           value: l10n.customerPaidInvoiceCountValue(summary.paidInvoiceCount),
         ),
         const Divider(height: 20),
-        DetailRow(
+        PointyDetailRow(
           label: l10n.customerVoidCountLabel,
           value: l10n.customerVoidCountValue(summary.voidInvoiceCount),
         ),
         const Divider(height: 20),
-        DetailRow(
+        PointyDetailRow(
           label: l10n.customerVoidTotalLabel,
           value: formatMoney(summary.voidTotal),
         ),
         const Divider(height: 20),
-        DetailRow(
+        PointyDetailRow(
           label: l10n.customerReturnCountLabel,
           value: l10n.customerReturnCountValue(summary.returnCount),
         ),
         const Divider(height: 20),
-        DetailRow(
+        PointyDetailRow(
           label: l10n.customerReturnTotalLabel,
           value: formatMoney(summary.returnTotal),
         ),
         const Divider(height: 20),
-        DetailRow(
+        PointyDetailRow(
           label: l10n.customerRefundCountLabel,
           value: l10n.customerRefundCountValue(summary.refundCount),
         ),
         const Divider(height: 20),
-        DetailRow(
+        PointyDetailRow(
           label: l10n.customerRefundTotalLabel,
           value: formatMoney(summary.refundTotal),
         ),
         const Divider(height: 20),
-        DetailRow(
+        PointyDetailRow(
           label: l10n.customerExchangeCountLabel,
           value: l10n.customerExchangeCountValue(summary.exchangeCount),
         ),
         const Divider(height: 20),
-        DetailRow(
+        PointyDetailRow(
           label: l10n.customerExchangeTotalLabel,
           value: formatMoney(summary.exchangeTotal),
         ),
         if (summary.lastInvoiceAt != null) ...[
           const Divider(height: 20),
-          DetailRow(
+          PointyDetailRow(
             label: l10n.customerLastInvoiceAtLabel,
             value: formatDateTime(summary.lastInvoiceAt!),
           ),
@@ -360,7 +359,7 @@ class _CustomerInvoiceHistory extends StatelessWidget {
             subtitle: [
               saleOrderStatusLabel(l10n, order.status),
               if (order.createdAt != null) formatDateTime(order.createdAt!),
-              l10n.saleLineCount(order.lines.length),
+              l10n.lineItemCount(order.lines.length),
               if (order.discountTotal > 0)
                 l10n.discountLineValue(formatMoney(order.discountTotal)),
             ].join(' • '),
@@ -415,7 +414,7 @@ class _CustomerAdjustmentHistory extends StatelessWidget {
                 l10n.saleReceiptTitle(adjustment.receiptNumber),
               if (adjustment.createdAt != null)
                 formatDateTime(adjustment.createdAt!),
-              l10n.customerAdjustmentLineCount(adjustment.lines.length),
+              l10n.lineItemCount(adjustment.lines.length),
               l10n.customerRefundMethodValue(
                 paymentMethodLabel(l10n, adjustment.refundMethod),
               ),

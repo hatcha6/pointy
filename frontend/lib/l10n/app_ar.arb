@@ -6,6 +6,19 @@
   },
   "refreshCatalogTooltip": "تحديث المنتجات",
   "searchProductsHint": "ابحث باسم المنتج أو الرمز",
+  "categorySearchHint": "ابحث باسم التصنيف",
+  "categoriesLoadError": "تعذر تحميل التصنيفات.",
+  "savingButton": "جار الحفظ...",
+  "retryButton": "إعادة المحاولة",
+  "lineItemCount": "{count, plural, =0{لا توجد عناصر} =1{عنصر واحد} =2{عنصران} other{{count} عناصر}}",
+  "@lineItemCount": {
+    "description": "Reusable line count label for records that contain sale, purchase, or adjustment line items.",
+    "placeholders": {
+      "count": {
+        "type": "num"
+      }
+    }
+  },
   "clearSearchTooltip": "مسح البحث",
   "openCameraScannerTooltip": "فتح ماسح الكاميرا",
   "openFiltersTooltip": "الفلاتر والترتيب",
@@ -675,7 +688,6 @@
   "fakePrintSuccess": "نجحت الطباعة التجريبية بالمحاكاة.",
   "fakePrintFailure": "تعذرت الطباعة التجريبية بالمحاكاة.",
   "saveSettingsButton": "حفظ الإعدادات",
-  "savingSettingsButton": "جار الحفظ...",
   "catalogTitle": "المنتجات",
   "catalogManagementTitle": "إدارة المنتجات",
   "backTooltip": "رجوع",
@@ -721,9 +733,7 @@
   "productImageSearchError": "تعذر البحث عن الصور. تحقق من إعداد مزود البحث وحاول مرة أخرى.",
   "productImageAttachError": "تم حفظ المنتج، لكن تعذر حفظ الصورة.",
   "productCategoryPickerTitle": "اختيار التصنيفات",
-  "productCategoryPickerSearchHint": "ابحث باسم التصنيف",
   "productCategoryPickerEmpty": "لا توجد تصنيفات مطابقة",
-  "productCategoryPickerLoadError": "تعذر تحميل التصنيفات.",
   "productCategoryFallbackLabel": "تصنيف #{id}",
   "@productCategoryFallbackLabel": {
     "description": "Fallback category label when the category name is unavailable.",
@@ -809,7 +819,6 @@
   "activeCategoryLabel": "تصنيف نشط",
   "createCategoryButton": "إنشاء التصنيف",
   "creatingCategoryButton": "جار الإنشاء...",
-  "categoryLoadError": "تعذر تحميل التصنيفات.",
   "categoryCreateError": "تعذر إنشاء التصنيف. راجع البيانات وحاول مرة أخرى.",
   "categoryEmptyState": "لا توجد تصنيفات بعد.",
   "rootCategoryLabel": "تصنيف رئيسي",
@@ -817,7 +826,6 @@
   "categoryCollapseTooltip": "إخفاء الفروع",
   "categoryLoadingChildren": "جار تحميل الفروع...",
   "categoryChildrenLoadError": "تعذر تحميل الفروع.",
-  "categoryRetryChildrenButton": "إعادة المحاولة",
   "categoryLoadMoreChildrenButton": "تحميل فروع إضافية",
   "categoryParentValue": "ضمن {parent}",
   "@categoryParentValue": {
@@ -861,7 +869,6 @@
   "createProductButton": "إنشاء المنتج",
   "creatingProductButton": "جار الإنشاء...",
   "saveProductButton": "حفظ المنتج",
-  "savingProductButton": "جار الحفظ...",
   "editProductButton": "تعديل المنتج",
   "requiredField": "هذا الحقل مطلوب",
   "invalidNumber": "أدخل رقمًا صحيحًا",
@@ -888,7 +895,6 @@
   "editVariantTitle": "تعديل الخيار",
   "createVariantButton": "إنشاء الخيار",
   "saveVariantButton": "حفظ الخيار",
-  "savingVariantButton": "جار الحفظ...",
   "variantCreatedMessage": "تم إنشاء الخيار",
   "variantUpdatedMessage": "تم حفظ الخيار",
   "variantCreateError": "تعذر إنشاء الخيار. راجع البيانات وحاول مرة أخرى.",
@@ -937,7 +943,6 @@
   "stockMovementQuantityLabel": "الكمية",
   "stockMovementNoteLabel": "ملاحظة",
   "saveStockMovementButton": "حفظ الحركة",
-  "savingStockMovementButton": "جار الحفظ...",
   "stockMovementCreateError": "تعذر حفظ حركة المخزون. راجع الكمية وحاول مرة أخرى.",
   "stockMovementIncrease": "زيادة المخزون",
   "stockMovementDecrease": "نقص المخزون",
@@ -1113,15 +1118,6 @@
       }
     }
   },
-  "purchaseOrderLineCount": "{count, plural, =0{لا توجد عناصر} =1{عنصر واحد} =2{عنصران} other{{count} عناصر}}",
-  "@purchaseOrderLineCount": {
-    "description": "Line count label shown in a purchase order list item.",
-    "placeholders": {
-      "count": {
-        "type": "num"
-      }
-    }
-  },
   "purchaseOrderDetailsSummaryTitle": "ملخص أمر الشراء",
   "purchaseOrderNumberLabel": "رقم أمر الشراء",
   "purchaseOrderNumberValue": "أمر الشراء {orderNumber}",
@@ -1185,7 +1181,6 @@
   "submitPurchaseOrderAction": "إرسال",
   "receivePurchaseOrderAction": "تحديد كمستلم",
   "receivePurchaseLinesAction": "استلام كميات",
-  "cancelPurchaseOrderAction": "إلغاء",
   "purchaseOrderAdjustmentsTitle": "المرتجعات والاستبدالات",
   "returnPurchaseItemsAction": "إرجاع",
   "refundPurchaseItemsAction": "استرداد",
@@ -1295,15 +1290,6 @@
     "placeholders": {
       "amount": {
         "type": "String"
-      }
-    }
-  },
-  "purchaseAdjustmentHistoryLineCount": "{count, plural, =0{لا توجد عناصر} =1{عنصر واحد} =2{عنصران} other{{count} عناصر}}",
-  "@purchaseAdjustmentHistoryLineCount": {
-    "description": "Line count label for a purchase adjustment history item.",
-    "placeholders": {
-      "count": {
-        "type": "num"
       }
     }
   },
@@ -1471,15 +1457,6 @@
   "purchaseReceiptHistoryTitle": "سجل الاستلام",
   "purchaseReceiptHistoryEmpty": "لا توجد عمليات استلام مسجلة.",
   "purchaseReceiptHistoryItemFallback": "عملية استلام",
-  "purchaseReceiptHistoryLineCount": "{count, plural, =0{لا توجد عناصر} =1{عنصر واحد} =2{عنصران} other{{count} عناصر}}",
-  "@purchaseReceiptHistoryLineCount": {
-    "description": "Line count label for a purchase receipt history item.",
-    "placeholders": {
-      "count": {
-        "type": "num"
-      }
-    }
-  },
   "purchaseOrderPreviousCostValue": "آخر تكلفة {amount}",
   "@purchaseOrderPreviousCostValue": {
     "description": "Previous product purchase cost shown on a purchase order line.",
@@ -1552,7 +1529,6 @@
   "quickCreateUnitCostLabel": "تكلفة الشراء",
   "quickCreateProductButton": "إضافة للشراء",
   "quickCreateProductSaving": "جار الإضافة...",
-  "quickCreateProductError": "تعذر إنشاء المنتج. راجع البيانات وحاول مرة أخرى.",
   "submitPurchaseDraftButton": "إرسال أمر الشراء {amount}",
   "@submitPurchaseDraftButton": {
     "description": "Submit purchase order button label with total amount.",
@@ -1602,7 +1578,6 @@
   "activeContactLabel": "نشط",
   "saveCustomerButton": "حفظ العميل",
   "saveSupplierButton": "حفظ المورد",
-  "contactSavingButton": "جار الحفظ...",
   "customerCreateError": "تعذر حفظ العميل. راجع البيانات وحاول مرة أخرى.",
   "supplierCreateError": "تعذر حفظ المورد. راجع البيانات وحاول مرة أخرى.",
   "customerNumberLabel": "رقم العميل",
@@ -1774,15 +1749,6 @@
       }
     }
   },
-  "customerAdjustmentLineCount": "{count, plural, =0{لا توجد عناصر} =1{عنصر واحد} =2{عنصران} other{{count} عناصر}}",
-  "@customerAdjustmentLineCount": {
-    "description": "Line count label for customer adjustment history.",
-    "placeholders": {
-      "count": {
-        "type": "num"
-      }
-    }
-  },
   "selectedCustomerLabel": "العميل",
   "selectedSupplierLabel": "المورد",
   "walkInCustomerLabel": "عميل عابر",
@@ -1905,7 +1871,6 @@
   "checkingRegisterSession": "جار فحص جلسة الدرج...",
   "noOpenRegisterSession": "لا توجد جلسة درج مفتوحة. ابدأ جلسة جديدة قبل البيع.",
   "registerSessionLoadError": "تعذر الاتصال بجلسة الدرج. حاول مرة أخرى.",
-  "retryRegisterSessionButton": "إعادة المحاولة",
   "openingCashInputLabel": "نقدية الافتتاح",
   "moneyAmountHint": "0.00",
   "openingCashRequiredError": "أدخل نقدية الافتتاح قبل بدء الجلسة.",
@@ -1948,7 +1913,6 @@
   "cashMovementReasonLabel": "سبب الحركة",
   "cashMovementReasonRequiredError": "أدخل سبب الحركة قبل الحفظ.",
   "positiveAmountRequiredError": "أدخل مبلغًا أكبر من صفر.",
-  "savingCashMovementButton": "جار الحفظ...",
   "cashMovementCreateError": "تعذر حفظ الحركة النقدية. راجع المبلغ والسبب وحاول مرة أخرى.",
   "cashMovementCreatedMessage": "تم حفظ الحركة النقدية.",
   "closeRegisterSessionTooltip": "إغلاق جلسة الدرج",
@@ -2024,15 +1988,6 @@
     "placeholders": {
       "receiptNumber": {
         "type": "String"
-      }
-    }
-  },
-  "saleLineCount": "{count, plural, =0{لا توجد عناصر} =1{عنصر واحد} =2{عنصران} other{{count} عناصر}}",
-  "@saleLineCount": {
-    "description": "Number of sale lines.",
-    "placeholders": {
-      "count": {
-        "type": "num"
       }
     }
   },
@@ -2216,13 +2171,11 @@
     }
   },
   "discountProductPickerTitle": "اختيار المنتجات",
-  "discountProductPickerSearchHint": "ابحث باسم المنتج أو الرمز",
   "discountProductPickerEmpty": "لا توجد منتجات مطابقة.",
   "discountVariantPickerTitle": "اختيار خيارات المنتجات",
   "discountVariantPickerSearchHint": "ابحث باسم المنتج أو رمز SKU أو الباركود",
   "discountVariantPickerEmpty": "لا توجد خيارات مطابقة.",
   "discountProductCategoryPickerTitle": "اختيار التصنيفات",
-  "discountProductCategoryPickerSearchHint": "ابحث باسم التصنيف",
   "discountProductCategoryPickerEmpty": "لا توجد تصنيفات مطابقة.",
   "discountCustomerPickerTitle": "اختيار العملاء",
   "discountCustomerPickerSearchHint": "ابحث باسم العميل أو الهاتف",

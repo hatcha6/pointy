@@ -627,11 +627,12 @@ class PurchaseOrderApiTests(TestCase):
         self.assertIn("landed_cost_allocation_method", response.data)
 
     def test_purchase_order_due_date_and_accounting_fields_are_serialized(self):
+        due_date = timezone.localdate() + timezone.timedelta(days=7)
         response = self.client.post(
             reverse("purchaseorder-list"),
             {
                 "supplier": self.supplier.pk,
-                "due_date": "2026-05-25",
+                "due_date": due_date.isoformat(),
                 "lines": [
                     {
                         "variant": self.variant.pk,
@@ -644,7 +645,7 @@ class PurchaseOrderApiTests(TestCase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(response.data["due_date"], "2026-05-25")
+        self.assertEqual(response.data["due_date"], due_date.isoformat())
         self.assertEqual(response.data["paid_total"], "0.00")
         self.assertEqual(response.data["credit_applied_total"], "0.00")
         self.assertEqual(response.data["adjustment_credit_total"], "0.00")

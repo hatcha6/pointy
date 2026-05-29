@@ -242,8 +242,44 @@ Rules:
 - Avoid text overlap at every breakpoint.
 - Use constrained widths for forms and reports on wide screens.
 - Keep sticky bottom actions visible without hiding required fields.
+- During responsive QA, check the concrete viewport widths `390`, `430`,
+  `768`, `1024`, and `1366` px.
 
 ## Shared Components And Patterns
+
+### Modern Shared Surfaces
+
+Prefer the shared Pointy widgets before adding a feature-local card, row, dialog,
+or scaffold wrapper.
+
+Use:
+
+- `PointyScaffold` for top-level app screens so safe-area and background
+  handling stay consistent.
+- `PointyAppBar` for standard app bars with stable loading slots and localized
+  icon-button tooltips.
+- `PointyNavigationSurface` inside `AppNavigationDrawer`; preserve permission
+  filtering and logout behavior there instead of duplicating drawer layouts.
+- `PointyDetailSection` for titled card-like sections in detail, dashboard,
+  settings, and report surfaces.
+- `PointyDetailRow` for compact label/value rows inside detail sections.
+- `PointyDataList` and `PointyDataRow` for reusable loading, error, empty,
+  paginated, and action-row list states.
+- `PointyMetricTile` for numeric summaries and dashboard/user activity
+  metrics.
+- `PointyInlineMessage` for compact success, warning, and error feedback rows
+  inside forms, panels, and dashboards.
+- `PointySettingsSection` and `PointySettingsTile` for settings indexes and
+  grouped configuration entry points.
+- `PointyPermissionDeniedView` through authorization guards for blocked routes
+  and permission-limited screens.
+- `PointyDestructiveConfirmationDialog` for irreversible or high-impact
+  confirmations.
+- `PointyStickyActionFooter` for persistent save/checkout/submit actions.
+
+Use `AdaptiveMaxWidth`, `AdaptiveSpacing`, `ResponsiveFormGrid`,
+`ResponsiveActionBar`, `TwoPaneLayout`, and adaptive modal helpers instead of
+feature-local width math whenever the layout is not inherently domain-specific.
 
 ### App Bars
 
@@ -621,7 +657,8 @@ Use this checklist before considering a UI change complete.
 
 - Visible copy is Arabic and comes from `AppLocalizations`.
 - RTL layout uses semantic leading/trailing.
-- Text does not overlap or overflow awkwardly on compact and wide layouts.
+- Text does not overlap or overflow awkwardly at `390`, `430`, `768`, `1024`,
+  and `1366` px widths.
 - Primary workflow actions are visible and large enough to tap.
 - Loading, empty, error, disabled, and permission states are handled.
 - Destructive actions are visually distinct and confirmed when appropriate.

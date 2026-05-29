@@ -209,7 +209,6 @@ class _DiscoveredPrinterPicker extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final colorScheme = Theme.of(context).colorScheme;
     final spacing = AdaptiveSpacing.of(context);
     final selectedKey = _endpointKey(selected);
     final hasSelectedPrinter = printers.any(
@@ -280,9 +279,9 @@ class _DiscoveredPrinterPicker extends StatelessWidget {
         if (hasDiscoveryError)
           Padding(
             padding: EdgeInsets.only(top: spacing.sm),
-            child: Text(
-              l10n.printerDiscoveryError,
-              style: TextStyle(color: colorScheme.error),
+            child: PointyInlineMessage.error(
+              message: l10n.printerDiscoveryError,
+              compact: true,
             ),
           ),
       ],

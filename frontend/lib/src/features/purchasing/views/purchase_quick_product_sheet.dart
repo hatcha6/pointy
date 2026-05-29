@@ -184,7 +184,7 @@ class _PurchaseQuickProductSheetState extends State<PurchaseQuickProductSheet> {
             if (_hasError) ...[
               const SizedBox(height: 8),
               Text(
-                l10n.quickCreateProductError,
+                l10n.productCreateError,
                 style: TextStyle(color: Theme.of(context).colorScheme.error),
               ),
             ],

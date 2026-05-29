@@ -9,6 +9,31 @@ import 'package:pointy_frontend/src/data/models/pos_user.dart';
 import 'package:pointy_frontend/src/features/reports/views/reports_screen.dart';
 
 void main() {
+  testWidgets('keeps report workspace usable on compact and wide widths', (
+    tester,
+  ) async {
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    for (final size in [const Size(390, 900), const Size(1366, 900)]) {
+      tester.view
+        ..physicalSize = size
+        ..devicePixelRatio = 1;
+
+      await tester.pumpWidget(const _ReportsTestApp());
+      await tester.pumpAndSettle();
+
+      expect(find.text('التقارير'), findsWidgets);
+      expect(find.text('أنواع التقارير'), findsOneWidget);
+      expect(find.text('معاينة PDF', skipOffstage: false), findsOneWidget);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pumpAndSettle();
+    }
+  });
+
   testWidgets('shows report action progress and ignores duplicate taps', (
     tester,
   ) async {

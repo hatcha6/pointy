@@ -54,3 +54,29 @@ class PointyDetailSection extends StatelessWidget {
     );
   }
 }
+
+class PointyDetailRow extends StatelessWidget {
+  const PointyDetailRow({super.key, required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    final spacing = AdaptiveSpacing.of(context);
+
+    return Row(
+      children: [
+        Text(label, style: Theme.of(context).textTheme.labelLarge),
+        SizedBox(width: spacing.md),
+        Expanded(
+          child: Text(
+            value,
+            textAlign: TextAlign.end,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ],
+    );
+  }
+}

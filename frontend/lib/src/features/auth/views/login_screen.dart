@@ -83,7 +83,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                         if (widget.viewModel.hasError) ...[
                           SizedBox(height: spacing.sm),
-                          _LoginError(message: l10n.loginError),
+                          PointyInlineMessage.error(message: l10n.loginError),
                         ],
                         SizedBox(height: spacing.md),
                         FilledButton.icon(
@@ -124,40 +124,6 @@ class _LoginScreenState extends State<LoginScreen> {
     await widget.viewModel.login(
       username: _usernameController.text.trim(),
       password: _passwordController.text,
-    );
-  }
-}
-
-class _LoginError extends StatelessWidget {
-  const _LoginError({required this.message});
-
-  final String message;
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: colorScheme.errorContainer,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: colorScheme.error.withValues(alpha: 0.20)),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Row(
-          children: [
-            Icon(Icons.error_outline, color: colorScheme.onErrorContainer),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                message,
-                style: TextStyle(color: colorScheme.onErrorContainer),
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }

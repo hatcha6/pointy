@@ -56,11 +56,11 @@ AsyncSelectionPickerStrings<int> productCategoryPickerStrings(
 ) {
   return AsyncSelectionPickerStrings<int>(
     title: l10n.productCategoryPickerTitle,
-    searchHint: l10n.productCategoryPickerSearchHint,
+    searchHint: l10n.categorySearchHint,
     emptyText: l10n.productCategoryPickerEmpty,
     clearText: l10n.clearButton,
     clearSearchTooltip: l10n.clearSearchTooltip,
-    loadErrorText: l10n.productCategoryPickerLoadError,
+    loadErrorText: l10n.categoriesLoadError,
     confirmText: l10n.confirmButton,
     fallbackLabelForId: l10n.productCategoryFallbackLabel,
   );

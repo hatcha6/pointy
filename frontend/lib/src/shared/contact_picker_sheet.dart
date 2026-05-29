@@ -637,7 +637,7 @@ class _CustomerFormState extends State<CustomerForm> {
                     )
                   : const Icon(Icons.save_outlined),
               label: Text(
-                _isSaving ? l10n.contactSavingButton : l10n.saveCustomerButton,
+                _isSaving ? l10n.savingButton : l10n.saveCustomerButton,
               ),
             ),
           ],
@@ -809,7 +809,7 @@ class _SupplierFormState extends State<SupplierForm> {
                     )
                   : const Icon(Icons.save_outlined),
               label: Text(
-                _isSaving ? l10n.contactSavingButton : l10n.saveSupplierButton,
+                _isSaving ? l10n.savingButton : l10n.saveSupplierButton,
               ),
             ),
           ],

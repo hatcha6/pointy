@@ -18,6 +18,31 @@ class AppLocalizationsAr extends AppLocalizations {
   String get searchProductsHint => 'ابحث باسم المنتج أو الرمز';
 
   @override
+  String get categorySearchHint => 'ابحث باسم التصنيف';
+
+  @override
+  String get categoriesLoadError => 'تعذر تحميل التصنيفات.';
+
+  @override
+  String get savingButton => 'جار الحفظ...';
+
+  @override
+  String get retryButton => 'إعادة المحاولة';
+
+  @override
+  String lineItemCount(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count عناصر',
+      two: 'عنصران',
+      one: 'عنصر واحد',
+      zero: 'لا توجد عناصر',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String get clearSearchTooltip => 'مسح البحث';
 
   @override
@@ -1201,9 +1226,6 @@ class AppLocalizationsAr extends AppLocalizations {
   String get saveSettingsButton => 'حفظ الإعدادات';
 
   @override
-  String get savingSettingsButton => 'جار الحفظ...';
-
-  @override
   String get catalogTitle => 'المنتجات';
 
   @override
@@ -1342,13 +1364,7 @@ class AppLocalizationsAr extends AppLocalizations {
   String get productCategoryPickerTitle => 'اختيار التصنيفات';
 
   @override
-  String get productCategoryPickerSearchHint => 'ابحث باسم التصنيف';
-
-  @override
   String get productCategoryPickerEmpty => 'لا توجد تصنيفات مطابقة';
-
-  @override
-  String get productCategoryPickerLoadError => 'تعذر تحميل التصنيفات.';
 
   @override
   String productCategoryFallbackLabel(int id) {
@@ -1555,9 +1571,6 @@ class AppLocalizationsAr extends AppLocalizations {
   String get creatingCategoryButton => 'جار الإنشاء...';
 
   @override
-  String get categoryLoadError => 'تعذر تحميل التصنيفات.';
-
-  @override
   String get categoryCreateError =>
       'تعذر إنشاء التصنيف. راجع البيانات وحاول مرة أخرى.';
 
@@ -1578,9 +1591,6 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get categoryChildrenLoadError => 'تعذر تحميل الفروع.';
-
-  @override
-  String get categoryRetryChildrenButton => 'إعادة المحاولة';
 
   @override
   String get categoryLoadMoreChildrenButton => 'تحميل فروع إضافية';
@@ -1643,9 +1653,6 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get saveProductButton => 'حفظ المنتج';
-
-  @override
-  String get savingProductButton => 'جار الحفظ...';
 
   @override
   String get editProductButton => 'تعديل المنتج';
@@ -1727,9 +1734,6 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get saveVariantButton => 'حفظ الخيار';
-
-  @override
-  String get savingVariantButton => 'جار الحفظ...';
 
   @override
   String get variantCreatedMessage => 'تم إنشاء الخيار';
@@ -1856,9 +1860,6 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get saveStockMovementButton => 'حفظ الحركة';
-
-  @override
-  String get savingStockMovementButton => 'جار الحفظ...';
 
   @override
   String get stockMovementCreateError =>
@@ -2134,19 +2135,6 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
-  String purchaseOrderLineCount(num count) {
-    String _temp0 = intl.Intl.pluralLogic(
-      count,
-      locale: localeName,
-      other: '$count عناصر',
-      two: 'عنصران',
-      one: 'عنصر واحد',
-      zero: 'لا توجد عناصر',
-    );
-    return '$_temp0';
-  }
-
-  @override
   String get purchaseOrderDetailsSummaryTitle => 'ملخص أمر الشراء';
 
   @override
@@ -2246,9 +2234,6 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get receivePurchaseLinesAction => 'استلام كميات';
-
-  @override
-  String get cancelPurchaseOrderAction => 'إلغاء';
 
   @override
   String get purchaseOrderAdjustmentsTitle => 'المرتجعات والاستبدالات';
@@ -2415,19 +2400,6 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
-  String purchaseAdjustmentHistoryLineCount(num count) {
-    String _temp0 = intl.Intl.pluralLogic(
-      count,
-      locale: localeName,
-      other: '$count عناصر',
-      two: 'عنصران',
-      one: 'عنصر واحد',
-      zero: 'لا توجد عناصر',
-    );
-    return '$_temp0';
-  }
-
-  @override
   String purchaseExchangeReplacementLineCount(num count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,
@@ -2565,19 +2537,6 @@ class AppLocalizationsAr extends AppLocalizations {
   String get purchaseReceiptHistoryItemFallback => 'عملية استلام';
 
   @override
-  String purchaseReceiptHistoryLineCount(num count) {
-    String _temp0 = intl.Intl.pluralLogic(
-      count,
-      locale: localeName,
-      other: '$count عناصر',
-      two: 'عنصران',
-      one: 'عنصر واحد',
-      zero: 'لا توجد عناصر',
-    );
-    return '$_temp0';
-  }
-
-  @override
   String purchaseOrderPreviousCostValue(String amount) {
     return 'آخر تكلفة $amount';
   }
@@ -2660,10 +2619,6 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get quickCreateProductSaving => 'جار الإضافة...';
-
-  @override
-  String get quickCreateProductError =>
-      'تعذر إنشاء المنتج. راجع البيانات وحاول مرة أخرى.';
 
   @override
   String submitPurchaseDraftButton(String amount) {
@@ -2768,9 +2723,6 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get saveSupplierButton => 'حفظ المورد';
-
-  @override
-  String get contactSavingButton => 'جار الحفظ...';
 
   @override
   String get customerCreateError =>
@@ -3064,19 +3016,6 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
-  String customerAdjustmentLineCount(num count) {
-    String _temp0 = intl.Intl.pluralLogic(
-      count,
-      locale: localeName,
-      other: '$count عناصر',
-      two: 'عنصران',
-      one: 'عنصر واحد',
-      zero: 'لا توجد عناصر',
-    );
-    return '$_temp0';
-  }
-
-  @override
   String get selectedCustomerLabel => 'العميل';
 
   @override
@@ -3281,9 +3220,6 @@ class AppLocalizationsAr extends AppLocalizations {
       'تعذر الاتصال بجلسة الدرج. حاول مرة أخرى.';
 
   @override
-  String get retryRegisterSessionButton => 'إعادة المحاولة';
-
-  @override
   String get openingCashInputLabel => 'نقدية الافتتاح';
 
   @override
@@ -3342,9 +3278,6 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get positiveAmountRequiredError => 'أدخل مبلغًا أكبر من صفر.';
-
-  @override
-  String get savingCashMovementButton => 'جار الحفظ...';
 
   @override
   String get cashMovementCreateError =>
@@ -3494,19 +3427,6 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String saleReceiptTitle(String receiptNumber) {
     return 'إيصال $receiptNumber';
-  }
-
-  @override
-  String saleLineCount(num count) {
-    String _temp0 = intl.Intl.pluralLogic(
-      count,
-      locale: localeName,
-      other: '$count عناصر',
-      two: 'عنصران',
-      one: 'عنصر واحد',
-      zero: 'لا توجد عناصر',
-    );
-    return '$_temp0';
   }
 
   @override
@@ -3828,9 +3748,6 @@ class AppLocalizationsAr extends AppLocalizations {
   String get discountProductPickerTitle => 'اختيار المنتجات';
 
   @override
-  String get discountProductPickerSearchHint => 'ابحث باسم المنتج أو الرمز';
-
-  @override
   String get discountProductPickerEmpty => 'لا توجد منتجات مطابقة.';
 
   @override
@@ -3845,9 +3762,6 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get discountProductCategoryPickerTitle => 'اختيار التصنيفات';
-
-  @override
-  String get discountProductCategoryPickerSearchHint => 'ابحث باسم التصنيف';
 
   @override
   String get discountProductCategoryPickerEmpty => 'لا توجد تصنيفات مطابقة.';

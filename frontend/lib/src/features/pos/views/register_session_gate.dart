@@ -218,7 +218,7 @@ class _StartSessionGate extends StatelessWidget {
               ? null
               : viewModel.loadCurrentRegisterSession,
           icon: const Icon(Icons.refresh),
-          label: Text(l10n.retryRegisterSessionButton),
+          label: Text(l10n.retryButton),
         ),
       ],
     );

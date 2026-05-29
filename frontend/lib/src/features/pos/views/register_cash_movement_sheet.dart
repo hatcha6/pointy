@@ -131,7 +131,7 @@ class _RegisterCashMovementSheetState extends State<RegisterCashMovementSheet> {
                           : Icon(isPayIn ? Icons.input : Icons.output),
                       label: Text(
                         _isSubmitting
-                            ? l10n.savingCashMovementButton
+                            ? l10n.savingButton
                             : isPayIn
                             ? l10n.payInRegisterSessionButton
                             : l10n.payOutRegisterSessionButton,

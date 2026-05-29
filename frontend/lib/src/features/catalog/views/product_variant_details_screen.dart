@@ -8,8 +8,8 @@ import '../../../data/models/product.dart';
 import '../../../data/models/purchase_submission.dart';
 import '../../../data/repositories/printing_repository.dart';
 import '../../../shared/authorization_guards.dart';
+import '../../../shared/components/components.dart';
 import '../../../shared/date_formatters.dart';
-import '../../../shared/detail_section.dart';
 import '../../../shared/formatters.dart';
 import '../../../shared/infinite_scroll_grid.dart';
 import '../../../shared/product_status_pill.dart';
@@ -57,7 +57,7 @@ class ProductVariantDetailsScreen extends StatelessWidget {
                   ),
                 ),
                 if (capabilities.canViewStock) const SizedBox(height: 12),
-                DetailSection(
+                PointyDetailSection(
                   title: l10n.productAvailabilityTitle,
                   icon: product.isActive
                       ? Icons.check_circle_outline
@@ -77,17 +77,17 @@ class ProductVariantDetailsScreen extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 12),
-                DetailSection(
+                PointyDetailSection(
                   title: l10n.productIdentifierTitle,
                   icon: Icons.qr_code_2,
                   child: Column(
                     children: [
-                      DetailRow(
+                      PointyDetailRow(
                         label: l10n.skuLabel,
                         value: product.effectiveSku,
                       ),
                       const Divider(height: 20),
-                      DetailRow(
+                      PointyDetailRow(
                         label: l10n.barcodeLabel,
                         value: product.effectiveBarcode.isEmpty
                             ? l10n.noBarcode
@@ -97,7 +97,7 @@ class ProductVariantDetailsScreen extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 12),
-                DetailSection(
+                PointyDetailSection(
                   title: l10n.barcodeLabelPrintTitle,
                   icon: Icons.print_outlined,
                   child: _BarcodeLabelPrintSection(
@@ -106,7 +106,7 @@ class ProductVariantDetailsScreen extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 12),
-                DetailSection(
+                PointyDetailSection(
                   title: l10n.productDescriptionTitle,
                   icon: Icons.notes_outlined,
                   child: Text(
@@ -116,7 +116,7 @@ class ProductVariantDetailsScreen extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 12),
-                DetailSection(
+                PointyDetailSection(
                   title: l10n.productCostHistoryTitle,
                   icon: Icons.trending_up_outlined,
                   child: _ProductCostHistorySection(viewModel: viewModel),
@@ -554,7 +554,7 @@ class _StockSummarySection extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
 
-    return DetailSection(
+    return PointyDetailSection(
       title: l10n.stockSummaryTitle,
       icon: Icons.inventory_2_outlined,
       child: Column(

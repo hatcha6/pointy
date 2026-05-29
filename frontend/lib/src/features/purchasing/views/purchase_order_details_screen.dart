@@ -184,7 +184,7 @@ class _PurchaseOrderSummary extends StatelessWidget {
           ),
           _DetailRow(
             label: l10n.purchaseOrderLineCountLabel,
-            value: l10n.purchaseOrderLineCount(order.lineCount),
+            value: l10n.lineItemCount(order.lineCount),
           ),
           if (order.discountCodes.isNotEmpty)
             _DetailRow(
@@ -379,9 +379,7 @@ class _PurchaseReceiptHistory extends StatelessWidget {
                         ? l10n.purchaseReceiptHistoryItemFallback
                         : formatDateTime(receipt.createdAt!),
                     subtitle: [
-                      l10n.purchaseReceiptHistoryLineCount(
-                        receipt.lines.length,
-                      ),
+                      l10n.lineItemCount(receipt.lines.length),
                       for (final line in receipt.lines)
                         [
                           line.displayName.isEmpty
@@ -434,9 +432,7 @@ class _PurchaseOrderAdjustmentHistory extends StatelessWidget {
                     subtitle: [
                       if (adjustment.createdAt != null)
                         formatDateTime(adjustment.createdAt!),
-                      l10n.purchaseAdjustmentHistoryLineCount(
-                        adjustment.lines.length,
-                      ),
+                      l10n.lineItemCount(adjustment.lines.length),
                       if (adjustment.replacementLines.isNotEmpty)
                         l10n.purchaseExchangeReplacementLineCount(
                           adjustment.replacementLines.length,

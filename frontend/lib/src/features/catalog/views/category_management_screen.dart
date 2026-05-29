@@ -139,7 +139,7 @@ class _CategoryList extends StatelessWidget {
     }
     if (viewModel.errorMessage == 'category_load_error' &&
         viewModel.categories.isEmpty) {
-      return Center(child: Text(l10n.categoryLoadError));
+      return Center(child: Text(l10n.categoriesLoadError));
     }
     return InfiniteScrollList<CategoryTreeItem>(
       items: viewModel.visibleItems,
@@ -185,7 +185,7 @@ class _CategoryList extends StatelessWidget {
                 TextButton.icon(
                   onPressed: () => viewModel.retryLoadChildren(item.parent!.id),
                   icon: const Icon(Icons.refresh),
-                  label: Text(l10n.categoryRetryChildrenButton),
+                  label: Text(l10n.retryButton),
                 ),
               ],
             ),

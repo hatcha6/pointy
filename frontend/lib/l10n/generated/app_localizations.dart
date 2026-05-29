@@ -112,6 +112,36 @@ abstract class AppLocalizations {
   /// **'ابحث باسم المنتج أو الرمز'**
   String get searchProductsHint;
 
+  /// No description provided for @categorySearchHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'ابحث باسم التصنيف'**
+  String get categorySearchHint;
+
+  /// No description provided for @categoriesLoadError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر تحميل التصنيفات.'**
+  String get categoriesLoadError;
+
+  /// No description provided for @savingButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'جار الحفظ...'**
+  String get savingButton;
+
+  /// No description provided for @retryButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'إعادة المحاولة'**
+  String get retryButton;
+
+  /// Reusable line count label for records that contain sale, purchase, or adjustment line items.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, =0{لا توجد عناصر} =1{عنصر واحد} =2{عنصران} other{{count} عناصر}}'**
+  String lineItemCount(num count);
+
   /// No description provided for @clearSearchTooltip.
   ///
   /// In ar, this message translates to:
@@ -2252,12 +2282,6 @@ abstract class AppLocalizations {
   /// **'حفظ الإعدادات'**
   String get saveSettingsButton;
 
-  /// No description provided for @savingSettingsButton.
-  ///
-  /// In ar, this message translates to:
-  /// **'جار الحفظ...'**
-  String get savingSettingsButton;
-
   /// No description provided for @catalogTitle.
   ///
   /// In ar, this message translates to:
@@ -2528,23 +2552,11 @@ abstract class AppLocalizations {
   /// **'اختيار التصنيفات'**
   String get productCategoryPickerTitle;
 
-  /// No description provided for @productCategoryPickerSearchHint.
-  ///
-  /// In ar, this message translates to:
-  /// **'ابحث باسم التصنيف'**
-  String get productCategoryPickerSearchHint;
-
   /// No description provided for @productCategoryPickerEmpty.
   ///
   /// In ar, this message translates to:
   /// **'لا توجد تصنيفات مطابقة'**
   String get productCategoryPickerEmpty;
-
-  /// No description provided for @productCategoryPickerLoadError.
-  ///
-  /// In ar, this message translates to:
-  /// **'تعذر تحميل التصنيفات.'**
-  String get productCategoryPickerLoadError;
 
   /// Fallback category label when the category name is unavailable.
   ///
@@ -2912,12 +2924,6 @@ abstract class AppLocalizations {
   /// **'جار الإنشاء...'**
   String get creatingCategoryButton;
 
-  /// No description provided for @categoryLoadError.
-  ///
-  /// In ar, this message translates to:
-  /// **'تعذر تحميل التصنيفات.'**
-  String get categoryLoadError;
-
   /// No description provided for @categoryCreateError.
   ///
   /// In ar, this message translates to:
@@ -2959,12 +2965,6 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'تعذر تحميل الفروع.'**
   String get categoryChildrenLoadError;
-
-  /// No description provided for @categoryRetryChildrenButton.
-  ///
-  /// In ar, this message translates to:
-  /// **'إعادة المحاولة'**
-  String get categoryRetryChildrenButton;
 
   /// No description provided for @categoryLoadMoreChildrenButton.
   ///
@@ -3061,12 +3061,6 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'حفظ المنتج'**
   String get saveProductButton;
-
-  /// No description provided for @savingProductButton.
-  ///
-  /// In ar, this message translates to:
-  /// **'جار الحفظ...'**
-  String get savingProductButton;
 
   /// No description provided for @editProductButton.
   ///
@@ -3223,12 +3217,6 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'حفظ الخيار'**
   String get saveVariantButton;
-
-  /// No description provided for @savingVariantButton.
-  ///
-  /// In ar, this message translates to:
-  /// **'جار الحفظ...'**
-  String get savingVariantButton;
 
   /// No description provided for @variantCreatedMessage.
   ///
@@ -3469,12 +3457,6 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'حفظ الحركة'**
   String get saveStockMovementButton;
-
-  /// No description provided for @savingStockMovementButton.
-  ///
-  /// In ar, this message translates to:
-  /// **'جار الحفظ...'**
-  String get savingStockMovementButton;
 
   /// No description provided for @stockMovementCreateError.
   ///
@@ -3914,12 +3896,6 @@ abstract class AppLocalizations {
   /// **'أمر شراء #{id}'**
   String purchaseOrderFallbackTitle(int id);
 
-  /// Line count label shown in a purchase order list item.
-  ///
-  /// In ar, this message translates to:
-  /// **'{count, plural, =0{لا توجد عناصر} =1{عنصر واحد} =2{عنصران} other{{count} عناصر}}'**
-  String purchaseOrderLineCount(num count);
-
   /// No description provided for @purchaseOrderDetailsSummaryTitle.
   ///
   /// In ar, this message translates to:
@@ -4105,12 +4081,6 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'استلام كميات'**
   String get receivePurchaseLinesAction;
-
-  /// No description provided for @cancelPurchaseOrderAction.
-  ///
-  /// In ar, this message translates to:
-  /// **'إلغاء'**
-  String get cancelPurchaseOrderAction;
 
   /// No description provided for @purchaseOrderAdjustmentsTitle.
   ///
@@ -4382,12 +4352,6 @@ abstract class AppLocalizations {
   /// **'المتبقي من الرصيد {amount}'**
   String purchaseAdjustmentSupplierCreditRemaining(String amount);
 
-  /// Line count label for a purchase adjustment history item.
-  ///
-  /// In ar, this message translates to:
-  /// **'{count, plural, =0{لا توجد عناصر} =1{عنصر واحد} =2{عنصران} other{{count} عناصر}}'**
-  String purchaseAdjustmentHistoryLineCount(num count);
-
   /// Replacement line count label for a purchase exchange history item.
   ///
   /// In ar, this message translates to:
@@ -4572,12 +4536,6 @@ abstract class AppLocalizations {
   /// **'عملية استلام'**
   String get purchaseReceiptHistoryItemFallback;
 
-  /// Line count label for a purchase receipt history item.
-  ///
-  /// In ar, this message translates to:
-  /// **'{count, plural, =0{لا توجد عناصر} =1{عنصر واحد} =2{عنصران} other{{count} عناصر}}'**
-  String purchaseReceiptHistoryLineCount(num count);
-
   /// Previous product purchase cost shown on a purchase order line.
   ///
   /// In ar, this message translates to:
@@ -4721,12 +4679,6 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'جار الإضافة...'**
   String get quickCreateProductSaving;
-
-  /// No description provided for @quickCreateProductError.
-  ///
-  /// In ar, this message translates to:
-  /// **'تعذر إنشاء المنتج. راجع البيانات وحاول مرة أخرى.'**
-  String get quickCreateProductError;
 
   /// Submit purchase order button label with total amount.
   ///
@@ -4925,12 +4877,6 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'حفظ المورد'**
   String get saveSupplierButton;
-
-  /// No description provided for @contactSavingButton.
-  ///
-  /// In ar, this message translates to:
-  /// **'جار الحفظ...'**
-  String get contactSavingButton;
 
   /// No description provided for @customerCreateError.
   ///
@@ -5334,12 +5280,6 @@ abstract class AppLocalizations {
   /// **'بواسطة {username}'**
   String customerAdjustmentCreatedByValue(String username);
 
-  /// Line count label for customer adjustment history.
-  ///
-  /// In ar, this message translates to:
-  /// **'{count, plural, =0{لا توجد عناصر} =1{عنصر واحد} =2{عنصران} other{{count} عناصر}}'**
-  String customerAdjustmentLineCount(num count);
-
   /// No description provided for @selectedCustomerLabel.
   ///
   /// In ar, this message translates to:
@@ -5700,12 +5640,6 @@ abstract class AppLocalizations {
   /// **'تعذر الاتصال بجلسة الدرج. حاول مرة أخرى.'**
   String get registerSessionLoadError;
 
-  /// No description provided for @retryRegisterSessionButton.
-  ///
-  /// In ar, this message translates to:
-  /// **'إعادة المحاولة'**
-  String get retryRegisterSessionButton;
-
   /// No description provided for @openingCashInputLabel.
   ///
   /// In ar, this message translates to:
@@ -5813,12 +5747,6 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'أدخل مبلغًا أكبر من صفر.'**
   String get positiveAmountRequiredError;
-
-  /// No description provided for @savingCashMovementButton.
-  ///
-  /// In ar, this message translates to:
-  /// **'جار الحفظ...'**
-  String get savingCashMovementButton;
 
   /// No description provided for @cashMovementCreateError.
   ///
@@ -6095,12 +6023,6 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'إيصال {receiptNumber}'**
   String saleReceiptTitle(String receiptNumber);
-
-  /// Number of sale lines.
-  ///
-  /// In ar, this message translates to:
-  /// **'{count, plural, =0{لا توجد عناصر} =1{عنصر واحد} =2{عنصران} other{{count} عناصر}}'**
-  String saleLineCount(num count);
 
   /// Fallback product label in a sale line.
   ///
@@ -6696,12 +6618,6 @@ abstract class AppLocalizations {
   /// **'اختيار المنتجات'**
   String get discountProductPickerTitle;
 
-  /// No description provided for @discountProductPickerSearchHint.
-  ///
-  /// In ar, this message translates to:
-  /// **'ابحث باسم المنتج أو الرمز'**
-  String get discountProductPickerSearchHint;
-
   /// No description provided for @discountProductPickerEmpty.
   ///
   /// In ar, this message translates to:
@@ -6731,12 +6647,6 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'اختيار التصنيفات'**
   String get discountProductCategoryPickerTitle;
-
-  /// No description provided for @discountProductCategoryPickerSearchHint.
-  ///
-  /// In ar, this message translates to:
-  /// **'ابحث باسم التصنيف'**
-  String get discountProductCategoryPickerSearchHint;
 
   /// No description provided for @discountProductCategoryPickerEmpty.
   ///

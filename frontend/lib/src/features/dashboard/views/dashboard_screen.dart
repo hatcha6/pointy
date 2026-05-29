@@ -168,7 +168,10 @@ class _DashboardBody extends StatelessWidget {
                   ),
                   if (viewModel.hasError) ...[
                     SizedBox(height: spacing.md),
-                    _InlineError(message: l10n.dashboardLoadError),
+                    PointyInlineMessage.error(
+                      message: l10n.dashboardLoadError,
+                      icon: Icons.warning_amber_outlined,
+                    ),
                   ],
                   SizedBox(height: spacing.lg),
                   _DashboardSections(
@@ -1570,40 +1573,6 @@ class _EmptyWidgetData extends StatelessWidget {
     return PointyEmptyState(
       icon: Icons.insights_outlined,
       title: AppLocalizations.of(context)!.dashboardNoWidgetData,
-    );
-  }
-}
-
-class _InlineError extends StatelessWidget {
-  const _InlineError({required this.message});
-
-  final String message;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Theme.of(context).colorScheme.errorContainer,
-      borderRadius: BorderRadius.circular(8),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Row(
-          children: [
-            Icon(
-              Icons.warning_amber,
-              color: Theme.of(context).colorScheme.onErrorContainer,
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                message,
-                style: TextStyle(
-                  color: Theme.of(context).colorScheme.onErrorContainer,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }

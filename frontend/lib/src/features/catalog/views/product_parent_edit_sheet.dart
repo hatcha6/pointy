@@ -190,7 +190,7 @@ class _ProductParentEditSheetState extends State<ProductParentEditSheet> {
                       label: Text(
                         widget.viewModel.isSavingProduct ||
                                 widget.viewModel.isSavingImage
-                            ? l10n.savingProductButton
+                            ? l10n.savingButton
                             : l10n.saveProductButton,
                       ),
                     ),

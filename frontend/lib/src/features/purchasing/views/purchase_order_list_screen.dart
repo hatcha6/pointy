@@ -363,7 +363,7 @@ class PurchaseOrderTile extends StatelessWidget {
           l10n.supplierInvoiceDateValue(formatDate(order.supplierInvoiceDate!)),
         if (order.paymentStatus.isNotEmpty)
           _paymentStatusLabel(l10n, order.paymentStatus),
-        l10n.purchaseOrderLineCount(order.lineCount),
+        l10n.lineItemCount(order.lineCount),
         if (date != null) formatDateTime(date),
         if (order.dueDate != null)
           l10n.purchaseOrderDueDateValue(formatDate(order.dueDate!)),

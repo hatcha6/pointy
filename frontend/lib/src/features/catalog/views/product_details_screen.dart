@@ -8,7 +8,7 @@ import '../../../data/repositories/inventory_repository.dart';
 import '../../../data/repositories/printing_repository.dart';
 import '../../../data/repositories/purchase_repository.dart';
 import '../../../shared/authorization_guards.dart';
-import '../../../shared/detail_section.dart';
+import '../../../shared/components/components.dart';
 import '../../../shared/formatters.dart';
 import '../../../shared/product_image_thumbnail.dart';
 import '../../../shared/product_status_pill.dart';
@@ -403,7 +403,7 @@ class _VariantsSection extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
 
-    return DetailSection(
+    return PointyDetailSection(
       title: l10n.productVariantsTitle,
       icon: Icons.view_list_outlined,
       child: Column(

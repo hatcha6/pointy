@@ -5,6 +5,7 @@ export 'pointy_destructive_confirmation_dialog.dart';
 export 'pointy_empty_state.dart';
 export 'pointy_error_state.dart';
 export 'pointy_filter_summary_bar.dart';
+export 'pointy_inline_message.dart';
 export 'pointy_loading_area.dart';
 export 'pointy_metric_tile.dart';
 export 'pointy_navigation_surface.dart';

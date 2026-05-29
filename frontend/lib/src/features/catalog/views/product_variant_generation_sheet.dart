@@ -277,7 +277,7 @@ class _ProductVariantGenerationSheetState
                         : const Icon(Icons.auto_awesome_motion_outlined),
                     label: Text(
                       widget.viewModel.isSavingVariant
-                          ? l10n.savingVariantButton
+                          ? l10n.savingButton
                           : l10n.generateVariantsButton,
                     ),
                   ),

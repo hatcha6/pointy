@@ -145,7 +145,7 @@ class _ProductVariantFormSheetState extends State<ProductVariantFormSheet> {
                         : Icon(_isEditing ? Icons.save_outlined : Icons.add),
                     label: Text(
                       widget.viewModel.isSavingVariant
-                          ? l10n.savingVariantButton
+                          ? l10n.savingButton
                           : _isEditing
                           ? l10n.saveVariantButton
                           : l10n.createVariantButton,

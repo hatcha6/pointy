@@ -8,7 +8,6 @@ import '../../../data/repositories/contact_repository.dart';
 import '../../../data/repositories/purchase_repository.dart';
 import '../../../shared/components/components.dart';
 import '../../../shared/date_formatters.dart';
-import '../../../shared/detail_section.dart';
 import '../../../shared/formatters.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../../purchasing/views/purchase_order_details_screen.dart';
@@ -189,23 +188,23 @@ class _SupplierTotals extends StatelessWidget {
       children: [
         if (viewModel.hasSupplierError)
           _ErrorText(text: l10n.supplierDetailsLoadError),
-        DetailRow(
+        PointyDetailRow(
           label: l10n.supplierTotalBoughtLabel,
           value: formatMoney(supplier.totalBought),
         ),
         const Divider(height: 20),
-        DetailRow(
+        PointyDetailRow(
           label: l10n.supplierPurchaseCountLabel,
           value: l10n.supplierPurchaseCountValue(supplier.purchaseCount),
         ),
         const Divider(height: 20),
-        DetailRow(
+        PointyDetailRow(
           label: l10n.purchaseOrderBalanceDueLabel,
           value: formatMoney(supplier.payableBalance),
         ),
         if (supplier.creditBalance > 0) ...[
           const Divider(height: 20),
-          DetailRow(
+          PointyDetailRow(
             label: l10n.purchaseOrderCreditAppliedLabel,
             value: formatMoney(supplier.creditBalance),
           ),
@@ -260,7 +259,7 @@ class _SupplierPurchaseHistory extends StatelessWidget {
                 : order.orderNumber,
             subtitle: [
               purchaseOrderStatusLabel(l10n, order.status),
-              l10n.purchaseOrderLineCount(order.lineCount),
+              l10n.lineItemCount(order.lineCount),
               if (order.receivedAt != null) formatDateTime(order.receivedAt!),
               if (order.balanceDue > 0)
                 l10n.purchaseOutstandingAmountValue(
@@ -319,7 +318,7 @@ class _SupplierAdjustmentHistory extends StatelessWidget {
                 l10n.purchaseOrderNumberValue(adjustment.purchaseOrderNumber!),
               if (adjustment.createdAt != null)
                 formatDateTime(adjustment.createdAt!),
-              l10n.purchaseAdjustmentHistoryLineCount(adjustment.lines.length),
+              l10n.lineItemCount(adjustment.lines.length),
               if (adjustment.reason.isNotEmpty) adjustment.reason,
             ].join(' • '),
             trailing: Text(formatMoney(adjustment.amount)),

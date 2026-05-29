@@ -132,7 +132,7 @@ class _StockMovementFormState extends State<StockMovementForm> {
                           : const Icon(Icons.save_outlined),
                       label: Text(
                         widget.viewModel.isSavingMovement
-                            ? l10n.savingStockMovementButton
+                            ? l10n.savingButton
                             : l10n.saveStockMovementButton,
                       ),
                     ),

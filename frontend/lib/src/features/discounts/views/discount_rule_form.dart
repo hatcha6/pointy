@@ -701,7 +701,7 @@ class _DiscountRuleFormState extends State<DiscountRuleForm> {
       strings: _constraintPickerStrings(
         l10n,
         title: l10n.discountProductPickerTitle,
-        searchHint: l10n.discountProductPickerSearchHint,
+        searchHint: l10n.searchProductsHint,
         emptyText: l10n.discountProductPickerEmpty,
       ),
       selected: _selectedProducts,
@@ -795,7 +795,7 @@ class _DiscountRuleFormState extends State<DiscountRuleForm> {
       strings: _constraintPickerStrings(
         l10n,
         title: l10n.discountProductCategoryPickerTitle,
-        searchHint: l10n.discountProductCategoryPickerSearchHint,
+        searchHint: l10n.categorySearchHint,
         emptyText: l10n.discountProductCategoryPickerEmpty,
       ),
       selected: _selectedProductCategories,
