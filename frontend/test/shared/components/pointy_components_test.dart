@@ -118,6 +118,16 @@ void main() {
     expect(find.text('صافي المبيعات'), findsOneWidget);
     expect(find.text('أعلى من أمس'), findsOneWidget);
     expect(find.text('عدد الطلبات'), findsOneWidget);
+
+    final tiles = find.byType(PointyMetricTile);
+    final firstTileSize = tester.getSize(tiles.at(0));
+    final secondTileSize = tester.getSize(tiles.at(1));
+    expect(firstTileSize.width, secondTileSize.width);
+    expect(firstTileSize.height, secondTileSize.height);
+    expect(
+      firstTileSize.height,
+      greaterThanOrEqualTo(PointyDimensions.metricTileMinHeight),
+    );
   });
 
   testWidgets('PointyDetailSection renders reusable label-value rows', (

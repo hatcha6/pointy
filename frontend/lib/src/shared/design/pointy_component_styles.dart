@@ -15,6 +15,7 @@ abstract final class PointyDimensions {
   static const double iconButton = 48;
   static const double buttonHeight = 48;
   static const double primaryActionHeight = 64;
+  static const double metricTileMinHeight = 120;
   static const double denseGap = 8;
   static const double sectionGap = 20;
 }
