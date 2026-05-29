@@ -58,6 +58,55 @@ void main() {
         860,
       );
     });
+
+    testWidgets('constrains modal sheets on compact and desktop widths', (
+      tester,
+    ) async {
+      const sheetKey = Key('adaptive-modal-sheet');
+
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+      tester.view
+        ..physicalSize = const Size(390, 844)
+        ..devicePixelRatio = 1;
+
+      await _pumpSurface(
+        tester,
+        width: 390,
+        height: 844,
+        child: const MediaQuery(
+          data: MediaQueryData(size: Size(390, 844)),
+          child: AdaptiveModalSheet(
+            size: AdaptiveModalSize.expanded,
+            maxHeightFactor: 0.82,
+            child: SizedBox.expand(key: sheetKey),
+          ),
+        ),
+      );
+
+      expect(tester.getSize(find.byKey(sheetKey)).width, 390);
+      expect(tester.getSize(find.byKey(sheetKey)).height, closeTo(692.08, 0.1));
+
+      tester.view.physicalSize = const Size(1024, 768);
+      await _pumpSurface(
+        tester,
+        width: 1024,
+        height: 768,
+        child: const MediaQuery(
+          data: MediaQueryData(size: Size(1024, 768)),
+          child: AdaptiveModalSheet(
+            size: AdaptiveModalSize.expanded,
+            maxHeightFactor: 0.82,
+            child: SizedBox.expand(key: sheetKey),
+          ),
+        ),
+      );
+
+      expect(tester.getSize(find.byKey(sheetKey)).width, 860);
+      expect(tester.getSize(find.byKey(sheetKey)).height, closeTo(629.76, 0.1));
+    });
   });
 
   group('TwoPaneLayout', () {

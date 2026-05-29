@@ -10,19 +10,21 @@ class PointyDetailSection extends StatelessWidget {
     required this.icon,
     required this.child,
     this.trailing,
+    this.minHeight,
   });
 
   final String title;
   final IconData icon;
   final Widget child;
   final Widget? trailing;
+  final double? minHeight;
 
   @override
   Widget build(BuildContext context) {
     final spacing = AdaptiveSpacing.of(context);
     final colors = context.pointyColors;
 
-    return Card(
+    final section = Card(
       margin: EdgeInsets.zero,
       child: Padding(
         padding: spacing.compactPadding,
@@ -51,6 +53,15 @@ class PointyDetailSection extends StatelessWidget {
           ],
         ),
       ),
+    );
+
+    if (minHeight == null) {
+      return section;
+    }
+
+    return ConstrainedBox(
+      constraints: BoxConstraints(minHeight: minHeight!),
+      child: section,
     );
   }
 }

@@ -179,59 +179,59 @@ class _OverviewSection extends StatelessWidget {
     final l10n = AppLocalizations.of(context)!;
 
     final metrics = [
-      _MetricData(
+      PointyMetricGridItem(
         icon: Icons.receipt_long_outlined,
         label: l10n.userActivityNetSalesMetric,
         value: formatMoney(activity.sales.netSales),
-        detail: l10n.userActivityInvoicesDetail(
+        subtitle: l10n.userActivityInvoicesDetail(
           activity.sales.invoiceCount,
           activity.sales.paidInvoiceCount,
         ),
       ),
-      _MetricData(
+      PointyMetricGridItem(
         icon: Icons.people_alt_outlined,
         label: l10n.userActivityCustomersMetric,
         value: activity.sales.customerCount.toString(),
-        detail: l10n.userActivityReturnsDetail(
+        subtitle: l10n.userActivityReturnsDetail(
           activity.sales.returnCount,
           formatMoney(activity.sales.returnTotal),
         ),
       ),
-      _MetricData(
+      PointyMetricGridItem(
         icon: Icons.inventory_2_outlined,
         label: l10n.userActivityPurchaseTotalMetric,
         value: formatMoney(activity.purchasing.purchaseTotal),
-        detail: l10n.userActivitySupplierInvoicesDetail(
+        subtitle: l10n.userActivitySupplierInvoicesDetail(
           activity.purchasing.supplierInvoiceCount,
           activity.purchasing.purchaseOrderCount,
         ),
       ),
-      _MetricData(
+      PointyMetricGridItem(
         icon: Icons.payments_outlined,
         label: l10n.userActivitySupplierPaymentsMetric,
         value: formatMoney(activity.supplierPayments.paymentTotal),
-        detail: l10n.userActivitySupplierPaymentsDetail(
+        subtitle: l10n.userActivitySupplierPaymentsDetail(
           activity.supplierPayments.paymentCount,
           activity.supplierPayments.refundCount,
         ),
       ),
-      _MetricData(
+      PointyMetricGridItem(
         icon: Icons.point_of_sale_outlined,
         label: l10n.userActivityRegisterSessionsMetric,
         value: activity.registerSessions.sessionCount.toString(),
-        detail: l10n.userActivityRegisterSessionsDetail(
+        subtitle: l10n.userActivityRegisterSessionsDetail(
           activity.registerSessions.openCount,
           activity.registerSessions.closedCount,
         ),
       ),
-      _MetricData(
+      PointyMetricGridItem(
         icon: Icons.sync_alt_outlined,
         label: l10n.userActivityCashMovementsMetric,
         value: formatMoney(
           activity.cashMovements.payInTotal -
               activity.cashMovements.payOutTotal,
         ),
-        detail: l10n.userActivityCashMovementsDetail(
+        subtitle: l10n.userActivityCashMovementsDetail(
           formatMoney(activity.cashMovements.payInTotal),
           formatMoney(activity.cashMovements.payOutTotal),
         ),
@@ -241,7 +241,10 @@ class _OverviewSection extends StatelessWidget {
     return PointyDetailSection(
       title: l10n.userDetailsOverviewTitle,
       icon: Icons.insights_outlined,
-      child: _MetricGrid(metrics: metrics),
+      child: PointyMetricGrid(
+        metrics: metrics,
+        gap: PointyMetricGridGap.compact,
+      ),
     );
   }
 }
@@ -396,59 +399,6 @@ class _RecentActivitySection extends StatelessWidget {
       ),
     );
   }
-}
-
-class _MetricGrid extends StatelessWidget {
-  const _MetricGrid({required this.metrics});
-
-  final List<_MetricData> metrics;
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final columns = constraints.maxWidth >= 900
-            ? 3
-            : constraints.maxWidth >= 560
-            ? 2
-            : 1;
-        final spacing = AdaptiveSpacing.of(context).sm;
-        final tileWidth =
-            (constraints.maxWidth - spacing * (columns - 1)) / columns;
-
-        return Wrap(
-          spacing: spacing,
-          runSpacing: spacing,
-          children: [
-            for (final metric in metrics)
-              SizedBox(
-                width: tileWidth,
-                child: PointyMetricTile(
-                  label: metric.label,
-                  value: metric.value,
-                  icon: metric.icon,
-                  subtitle: metric.detail.isEmpty ? null : metric.detail,
-                ),
-              ),
-          ],
-        );
-      },
-    );
-  }
-}
-
-class _MetricData {
-  const _MetricData({
-    required this.icon,
-    required this.label,
-    required this.value,
-    this.detail = '',
-  });
-
-  final IconData icon;
-  final String label;
-  final String value;
-  final String detail;
 }
 
 class _EmptyAwareColumn extends StatelessWidget {

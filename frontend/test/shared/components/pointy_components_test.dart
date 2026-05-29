@@ -92,6 +92,34 @@ void main() {
     );
   });
 
+  testWidgets('PointyMetricGrid adapts reusable metric tiles', (tester) async {
+    await _pumpSurface(
+      tester,
+      width: 430,
+      child: const PointyMetricGrid(
+        minTileWidth: 180,
+        maxColumns: 4,
+        metrics: [
+          PointyMetricGridItem(
+            label: 'صافي المبيعات',
+            value: '١٢٣٫٠٠',
+            subtitle: 'أعلى من أمس',
+            icon: Icons.payments_outlined,
+          ),
+          PointyMetricGridItem(
+            label: 'عدد الطلبات',
+            value: '٨',
+            icon: Icons.receipt_long_outlined,
+          ),
+        ],
+      ),
+    );
+
+    expect(find.text('صافي المبيعات'), findsOneWidget);
+    expect(find.text('أعلى من أمس'), findsOneWidget);
+    expect(find.text('عدد الطلبات'), findsOneWidget);
+  });
+
   testWidgets('PointyDetailSection renders reusable label-value rows', (
     tester,
   ) async {
@@ -115,6 +143,25 @@ void main() {
     expect(find.text('الباركود'), findsOneWidget);
     expect(find.text('1234567890'), findsOneWidget);
     expect(find.text('متوفر'), findsOneWidget);
+  });
+
+  testWidgets('PointyDetailSection can reserve stable chart height', (
+    tester,
+  ) async {
+    await _pumpSurface(
+      tester,
+      width: 390,
+      child: const PointyDetailSection(
+        title: 'مخطط المبيعات',
+        icon: Icons.show_chart,
+        minHeight: 220,
+        child: Text('لا توجد بيانات'),
+      ),
+    );
+
+    expect(find.text('مخطط المبيعات'), findsOneWidget);
+    expect(find.text('لا توجد بيانات'), findsOneWidget);
+    expect(tester.getSize(find.byType(Card)).height, greaterThanOrEqualTo(220));
   });
 
   testWidgets('PointyInlineMessage renders semantic feedback rows', (

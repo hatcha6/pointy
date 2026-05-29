@@ -325,52 +325,58 @@ class _SalesSection extends StatelessWidget {
       title: l10n.dashboardSalesSectionTitle,
       icon: Icons.trending_up,
       children: [
-        _MetricGrid(
+        PointyMetricGrid(
           maxWidth: maxWidth,
+          minTileWidth: 180,
+          maxColumns: 4,
+          includeBottomSpacing: true,
           metrics: [
-            _MetricData(
+            PointyMetricGridItem(
               label: l10n.dashboardNetSalesMetric,
               value: formatMoney(summary.netSales),
               icon: Icons.payments_outlined,
-              accent: _semanticColor(context, summary.netSalesChangePercent),
-              detail: _formatChange(summary.netSalesChangePercent),
+              accentColor: _semanticColor(
+                context,
+                summary.netSalesChangePercent,
+              ),
+              subtitle: _formatChange(summary.netSalesChangePercent),
             ),
-            _MetricData(
+            PointyMetricGridItem(
               label: l10n.dashboardGrossProfitMetric,
               value: formatMoney(summary.grossProfit),
               icon: Icons.account_balance_wallet_outlined,
             ),
-            _MetricData(
+            PointyMetricGridItem(
               label: l10n.dashboardProfitMarginMetric,
               value: _formatPercent(summary.profitMarginPercent),
               icon: Icons.percent,
             ),
-            _MetricData(
+            PointyMetricGridItem(
               label: l10n.dashboardOrdersMetric,
               value: _formatNumber(summary.orderCount),
               icon: Icons.receipt_long_outlined,
-              detail: _formatChange(summary.orderCountChangePercent),
+              subtitle: _formatChange(summary.orderCountChangePercent),
             ),
-            _MetricData(
+            PointyMetricGridItem(
               label: l10n.dashboardAverageOrderMetric,
               value: formatMoney(summary.averageOrderValue),
               icon: Icons.shopping_bag_outlined,
             ),
-            _MetricData(
+            PointyMetricGridItem(
               label: l10n.dashboardItemsSoldMetric,
               value: _formatNumber(summary.itemsSold),
               icon: Icons.inventory_2_outlined,
             ),
-            _MetricData(
+            PointyMetricGridItem(
               label: l10n.dashboardDiscountsMetric,
               value: formatMoney(summary.discountTotal),
               icon: Icons.local_offer_outlined,
             ),
-            _MetricData(
+            PointyMetricGridItem(
               label: l10n.dashboardRefundsMetric,
               value: formatMoney(summary.refundTotal),
               icon: Icons.assignment_return_outlined,
-              detail: l10n.dashboardAdjustmentsDetail(
+              subtitle: l10n.dashboardAdjustmentsDetail(
                 summary.voidCount,
                 summary.returnCount,
               ),
@@ -380,34 +386,34 @@ class _SalesSection extends StatelessWidget {
         _ResponsiveWrap(
           maxWidth: maxWidth,
           children: [
-            _DashboardCard(
+            PointyDetailSection(
               title: l10n.dashboardSalesTrendTitle,
               icon: Icons.show_chart,
               minHeight: 300,
               child: _SalesTrendChart(points: section.trend),
             ),
-            _DashboardCard(
+            PointyDetailSection(
               title: l10n.dashboardHourlySalesTitle,
               icon: Icons.schedule,
               minHeight: 300,
               child: _HourlySalesChart(points: section.hourlySales),
             ),
-            _DashboardCard(
+            PointyDetailSection(
               title: l10n.dashboardTopProductsTitle,
               icon: Icons.star_outline,
               child: _TopProductsList(products: section.topProducts),
             ),
-            _DashboardCard(
+            PointyDetailSection(
               title: l10n.dashboardTopCategoriesTitle,
               icon: Icons.category_outlined,
               child: _TopCategoriesList(categories: section.topCategories),
             ),
-            _DashboardCard(
+            PointyDetailSection(
               title: l10n.dashboardRecentOrdersTitle,
               icon: Icons.history,
               child: _RecentOrdersList(orders: section.recentOrders),
             ),
-            _DashboardCard(
+            PointyDetailSection(
               title: l10n.dashboardRegistersTitle,
               icon: Icons.point_of_sale_outlined,
               child: _RegisterSummaryView(summary: section.registers),
@@ -432,20 +438,23 @@ class _PaymentsSection extends StatelessWidget {
       title: l10n.dashboardPaymentsSectionTitle,
       icon: Icons.credit_card,
       children: [
-        _MetricGrid(
+        PointyMetricGrid(
           maxWidth: maxWidth,
+          minTileWidth: 180,
+          maxColumns: 4,
+          includeBottomSpacing: true,
           metrics: [
-            _MetricData(
+            PointyMetricGridItem(
               label: l10n.dashboardPaymentsTotalMetric,
               value: formatMoney(section.summary.total),
               icon: Icons.payments_outlined,
             ),
-            _MetricData(
+            PointyMetricGridItem(
               label: l10n.dashboardPaymentCountMetric,
               value: _formatNumber(section.summary.paymentCount),
               icon: Icons.receipt_outlined,
             ),
-            _MetricData(
+            PointyMetricGridItem(
               label: l10n.dashboardCommissionMetric,
               value: formatMoney(section.summary.commissionTotal),
               icon: Icons.percent,
@@ -455,13 +464,13 @@ class _PaymentsSection extends StatelessWidget {
         _ResponsiveWrap(
           maxWidth: maxWidth,
           children: [
-            _DashboardCard(
+            PointyDetailSection(
               title: l10n.dashboardPaymentMixTitle,
               icon: Icons.pie_chart_outline,
               minHeight: 300,
               child: _PaymentMixChart(methods: section.methods),
             ),
-            _DashboardCard(
+            PointyDetailSection(
               title: l10n.dashboardPaymentMethodsTitle,
               icon: Icons.list_alt,
               child: _PaymentMethodList(methods: section.methods),
@@ -487,38 +496,41 @@ class _InventorySection extends StatelessWidget {
       title: l10n.dashboardInventorySectionTitle,
       icon: Icons.inventory_2,
       children: [
-        _MetricGrid(
+        PointyMetricGrid(
           maxWidth: maxWidth,
+          minTileWidth: 180,
+          maxColumns: 4,
+          includeBottomSpacing: true,
           metrics: [
-            _MetricData(
+            PointyMetricGridItem(
               label: l10n.dashboardProductsMetric,
               value: _formatNumber(summary.productCount),
               icon: Icons.inventory_2_outlined,
             ),
-            _MetricData(
+            PointyMetricGridItem(
               label: l10n.dashboardLowStockMetric,
               value: _formatNumber(summary.lowStockCount),
               icon: Icons.warning_amber,
-              accent: summary.lowStockCount > 0
+              accentColor: summary.lowStockCount > 0
                   ? Theme.of(context).colorScheme.error
                   : null,
             ),
-            _MetricData(
+            PointyMetricGridItem(
               label: l10n.dashboardOutOfStockMetric,
               value: _formatNumber(summary.outOfStockCount),
               icon: Icons.remove_shopping_cart_outlined,
             ),
-            _MetricData(
+            PointyMetricGridItem(
               label: l10n.dashboardRetailStockValueMetric,
               value: formatMoney(summary.retailStockValue),
               icon: Icons.storefront_outlined,
             ),
-            _MetricData(
+            PointyMetricGridItem(
               label: l10n.dashboardCommittedUnitsMetric,
               value: _formatNumber(summary.committedUnits),
               icon: Icons.lock_outline,
             ),
-            _MetricData(
+            PointyMetricGridItem(
               label: l10n.dashboardExpectedUnitsMetric,
               value: _formatNumber(summary.expectedUnits),
               icon: Icons.local_shipping_outlined,
@@ -528,23 +540,23 @@ class _InventorySection extends StatelessWidget {
         _ResponsiveWrap(
           maxWidth: maxWidth,
           children: [
-            _DashboardCard(
+            PointyDetailSection(
               title: l10n.dashboardLowStockTitle,
               icon: Icons.warning_amber,
               child: _StockItemList(items: section.lowStockItems),
             ),
-            _DashboardCard(
+            PointyDetailSection(
               title: l10n.dashboardDustyInventoryTitle,
               icon: Icons.hourglass_empty,
               child: _StockItemList(items: section.dustyItems),
             ),
-            _DashboardCard(
+            PointyDetailSection(
               title: l10n.dashboardStockMovementMixTitle,
               icon: Icons.compare_arrows,
               minHeight: 300,
               child: _StockMovementChart(movements: section.movementMix),
             ),
-            _DashboardCard(
+            PointyDetailSection(
               title: l10n.dashboardRecentStockMovementsTitle,
               icon: Icons.history,
               child: _RecentStockMovementList(
@@ -572,29 +584,32 @@ class _PurchasingSection extends StatelessWidget {
       title: l10n.dashboardPurchasingSectionTitle,
       icon: Icons.add_shopping_cart,
       children: [
-        _MetricGrid(
+        PointyMetricGrid(
           maxWidth: maxWidth,
+          minTileWidth: 180,
+          maxColumns: 4,
+          includeBottomSpacing: true,
           metrics: [
-            _MetricData(
+            PointyMetricGridItem(
               label: l10n.dashboardPurchasesMetric,
               value: formatMoney(summary.purchaseTotal),
               icon: Icons.shopping_cart_checkout,
             ),
-            _MetricData(
+            PointyMetricGridItem(
               label: l10n.dashboardDueToSuppliersMetric,
               value: formatMoney(summary.dueTotal),
               icon: Icons.account_balance_outlined,
             ),
-            _MetricData(
+            PointyMetricGridItem(
               label: l10n.dashboardOpenPurchasesMetric,
               value: _formatNumber(summary.openOrderCount),
               icon: Icons.pending_actions_outlined,
             ),
-            _MetricData(
+            PointyMetricGridItem(
               label: l10n.dashboardOverduePurchasesMetric,
               value: _formatNumber(summary.overdueOrderCount),
               icon: Icons.event_busy_outlined,
-              accent: summary.overdueOrderCount > 0
+              accentColor: summary.overdueOrderCount > 0
                   ? Theme.of(context).colorScheme.error
                   : null,
             ),
@@ -603,7 +618,7 @@ class _PurchasingSection extends StatelessWidget {
         _ResponsiveWrap(
           maxWidth: maxWidth,
           children: [
-            _DashboardCard(
+            PointyDetailSection(
               title: l10n.dashboardPurchaseStatusTitle,
               icon: Icons.donut_large,
               minHeight: 300,
@@ -612,12 +627,12 @@ class _PurchasingSection extends StatelessWidget {
                 labelForStatus: (status) => _purchaseStatusLabel(l10n, status),
               ),
             ),
-            _DashboardCard(
+            PointyDetailSection(
               title: l10n.dashboardOverduePurchasesTitle,
               icon: Icons.event_busy_outlined,
               child: _OverduePurchaseList(orders: section.overdueOrders),
             ),
-            _DashboardCard(
+            PointyDetailSection(
               title: l10n.dashboardSupplierBalancesTitle,
               icon: Icons.account_balance_wallet_outlined,
               child: _SupplierBalanceList(
@@ -645,30 +660,33 @@ class _CustomersSection extends StatelessWidget {
       title: l10n.dashboardCustomersSectionTitle,
       icon: Icons.people,
       children: [
-        _MetricGrid(
+        PointyMetricGrid(
           maxWidth: maxWidth,
+          minTileWidth: 180,
+          maxColumns: 4,
+          includeBottomSpacing: true,
           metrics: [
-            _MetricData(
+            PointyMetricGridItem(
               label: l10n.dashboardActiveCustomersMetric,
               value: _formatNumber(summary.activeCustomerCount),
               icon: Icons.people_outline,
             ),
-            _MetricData(
+            PointyMetricGridItem(
               label: l10n.dashboardNewCustomersMetric,
               value: _formatNumber(summary.newCustomerCount),
               icon: Icons.person_add_alt,
             ),
-            _MetricData(
+            PointyMetricGridItem(
               label: l10n.dashboardCustomersWithSalesMetric,
               value: _formatNumber(summary.customersWithSalesCount),
               icon: Icons.shopping_bag_outlined,
             ),
-            _MetricData(
+            PointyMetricGridItem(
               label: l10n.dashboardRepeatCustomersMetric,
               value: _formatNumber(summary.repeatCustomerCount),
               icon: Icons.repeat,
             ),
-            _MetricData(
+            PointyMetricGridItem(
               label: l10n.dashboardMarketingConsentMetric,
               value: _formatNumber(summary.marketingConsentCount),
               icon: Icons.mark_email_read_outlined,
@@ -678,12 +696,12 @@ class _CustomersSection extends StatelessWidget {
         _ResponsiveWrap(
           maxWidth: maxWidth,
           children: [
-            _DashboardCard(
+            PointyDetailSection(
               title: l10n.dashboardTopCustomersTitle,
               icon: Icons.workspace_premium_outlined,
               child: _TopCustomerList(customers: section.topCustomers),
             ),
-            _DashboardCard(
+            PointyDetailSection(
               title: l10n.dashboardRecentCustomersTitle,
               icon: Icons.person_add_alt,
               child: _RecentCustomerList(customers: section.recentCustomers),
@@ -709,30 +727,33 @@ class _DiscountsSection extends StatelessWidget {
       title: l10n.dashboardDiscountsSectionTitle,
       icon: Icons.local_offer,
       children: [
-        _MetricGrid(
+        PointyMetricGrid(
           maxWidth: maxWidth,
+          minTileWidth: 180,
+          maxColumns: 4,
+          includeBottomSpacing: true,
           metrics: [
-            _MetricData(
+            PointyMetricGridItem(
               label: l10n.dashboardActiveDiscountsMetric,
               value: _formatNumber(summary.activeRuleCount),
               icon: Icons.local_offer_outlined,
             ),
-            _MetricData(
+            PointyMetricGridItem(
               label: l10n.dashboardCouponDiscountsMetric,
               value: _formatNumber(summary.couponRuleCount),
               icon: Icons.confirmation_number_outlined,
             ),
-            _MetricData(
+            PointyMetricGridItem(
               label: l10n.dashboardRedemptionsMetric,
               value: _formatNumber(summary.redemptionCount),
               icon: Icons.redeem_outlined,
             ),
-            _MetricData(
+            PointyMetricGridItem(
               label: l10n.dashboardSalesDiscountMetric,
               value: formatMoney(summary.salesDiscountTotal),
               icon: Icons.point_of_sale_outlined,
             ),
-            _MetricData(
+            PointyMetricGridItem(
               label: l10n.dashboardPurchaseDiscountMetric,
               value: formatMoney(summary.purchaseDiscountTotal),
               icon: Icons.add_shopping_cart,
@@ -742,12 +763,12 @@ class _DiscountsSection extends StatelessWidget {
         _ResponsiveWrap(
           maxWidth: maxWidth,
           children: [
-            _DashboardCard(
+            PointyDetailSection(
               title: l10n.dashboardTopDiscountsTitle,
               icon: Icons.leaderboard_outlined,
               child: _DiscountRuleList(rules: section.topRules),
             ),
-            _DashboardCard(
+            PointyDetailSection(
               title: l10n.dashboardExpiringDiscountsTitle,
               icon: Icons.event_busy_outlined,
               child: _ExpiringDiscountList(rules: section.expiringRules),
@@ -773,33 +794,36 @@ class _PrintingSection extends StatelessWidget {
       title: l10n.dashboardPrintingSectionTitle,
       icon: Icons.print,
       children: [
-        _MetricGrid(
+        PointyMetricGrid(
           maxWidth: maxWidth,
+          minTileWidth: 180,
+          maxColumns: 4,
+          includeBottomSpacing: true,
           metrics: [
-            _MetricData(
+            PointyMetricGridItem(
               label: l10n.dashboardQueuedPrintJobsMetric,
               value: _formatNumber(summary.queuedCount),
               icon: Icons.queue_outlined,
             ),
-            _MetricData(
+            PointyMetricGridItem(
               label: l10n.dashboardClaimedPrintJobsMetric,
               value: _formatNumber(summary.claimedCount),
               icon: Icons.print_outlined,
             ),
-            _MetricData(
+            PointyMetricGridItem(
               label: l10n.dashboardFailedPrintJobsMetric,
               value: _formatNumber(summary.failedCount),
               icon: Icons.error_outline,
-              accent: summary.failedCount > 0
+              accentColor: summary.failedCount > 0
                   ? Theme.of(context).colorScheme.error
                   : null,
             ),
-            _MetricData(
+            PointyMetricGridItem(
               label: l10n.dashboardActivePrintAgentsMetric,
               value: _formatNumber(summary.activeAgentCount),
               icon: Icons.sensors,
             ),
-            _MetricData(
+            PointyMetricGridItem(
               label: l10n.dashboardStalePrintAgentsMetric,
               value: _formatNumber(summary.staleAgentCount),
               icon: Icons.sensors_off,
@@ -809,7 +833,7 @@ class _PrintingSection extends StatelessWidget {
         _ResponsiveWrap(
           maxWidth: maxWidth,
           children: [
-            _DashboardCard(
+            PointyDetailSection(
               title: l10n.dashboardPrintStatusTitle,
               icon: Icons.donut_large,
               minHeight: 300,
@@ -818,7 +842,7 @@ class _PrintingSection extends StatelessWidget {
                 labelForStatus: (status) => _printStatusLabel(l10n, status),
               ),
             ),
-            _DashboardCard(
+            PointyDetailSection(
               title: l10n.dashboardPrintFailuresTitle,
               icon: Icons.report_gmailerrorred,
               child: _PrintFailureList(failures: section.recentFailures),
@@ -858,59 +882,6 @@ class _DashboardSection extends StatelessWidget {
   }
 }
 
-class _MetricGrid extends StatelessWidget {
-  const _MetricGrid({required this.metrics, required this.maxWidth});
-
-  final List<_MetricData> metrics;
-  final double maxWidth;
-
-  @override
-  Widget build(BuildContext context) {
-    final spacing = AdaptiveSpacing.of(context);
-    return Padding(
-      padding: EdgeInsets.only(bottom: spacing.md),
-      child: Wrap(
-        spacing: spacing.md,
-        runSpacing: spacing.md,
-        children: [
-          for (final metric in metrics)
-            SizedBox(
-              width: _cardWidth(
-                maxWidth,
-                minWidth: 180,
-                maxColumns: 4,
-                gap: spacing.md,
-              ),
-              child: PointyMetricTile(
-                label: metric.label,
-                value: metric.value,
-                icon: metric.icon,
-                accentColor: metric.accent,
-                subtitle: metric.detail,
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-class _MetricData {
-  const _MetricData({
-    required this.label,
-    required this.value,
-    required this.icon,
-    this.detail,
-    this.accent,
-  });
-
-  final String label;
-  final String value;
-  final IconData icon;
-  final String? detail;
-  final Color? accent;
-}
-
 class _ResponsiveWrap extends StatelessWidget {
   const _ResponsiveWrap({required this.maxWidth, required this.children});
 
@@ -935,28 +906,6 @@ class _ResponsiveWrap extends StatelessWidget {
             child: child,
           ),
       ],
-    );
-  }
-}
-
-class _DashboardCard extends StatelessWidget {
-  const _DashboardCard({
-    required this.title,
-    required this.icon,
-    required this.child,
-    this.minHeight,
-  });
-
-  final String title;
-  final IconData icon;
-  final Widget child;
-  final double? minHeight;
-
-  @override
-  Widget build(BuildContext context) {
-    return ConstrainedBox(
-      constraints: BoxConstraints(minHeight: minHeight ?? 0),
-      child: PointyDetailSection(title: title, icon: icon, child: child),
     );
   }
 }

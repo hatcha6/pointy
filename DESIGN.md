@@ -261,12 +261,15 @@ Use:
 - `PointyNavigationSurface` inside `AppNavigationDrawer`; preserve permission
   filtering and logout behavior there instead of duplicating drawer layouts.
 - `PointyDetailSection` for titled card-like sections in detail, dashboard,
-  settings, and report surfaces.
+  settings, and report surfaces. Use its `minHeight` when a dashboard/report
+  card needs stable chart space.
 - `PointyDetailRow` for compact label/value rows inside detail sections.
 - `PointyDataList` and `PointyDataRow` for reusable loading, error, empty,
   paginated, and action-row list states.
 - `PointyMetricTile` for numeric summaries and dashboard/user activity
   metrics.
+- `PointyMetricGrid` for responsive groups of `PointyMetricTile` summaries.
+  Prefer it over feature-local width math.
 - `PointyInlineMessage` for compact success, warning, and error feedback rows
   inside forms, panels, and dashboards.
 - `PointySettingsSection` and `PointySettingsTile` for settings indexes and

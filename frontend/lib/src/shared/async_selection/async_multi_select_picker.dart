@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../infinite_scroll_grid.dart';
 import '../query_controls/debounced_search_field.dart';
+import '../responsive/responsive.dart';
 
 typedef AsyncSelectionPageLoader<T extends Object> =
     Future<AsyncSelectionPage<T>> Function(String search, int page);
@@ -80,22 +81,18 @@ showAsyncMultiSelectPicker<T extends Object>({
   Key Function(T id)? optionKeyForId,
   double heightFactor = 0.82,
 }) {
-  return showModalBottomSheet<List<AsyncSelectionOption<T>>>(
+  return showAdaptiveModalBottomSheet<List<AsyncSelectionOption<T>>>(
     context: context,
-    isScrollControlled: true,
-    useSafeArea: true,
-    showDragHandle: true,
+    size: AdaptiveModalSize.expanded,
+    maxHeightFactor: heightFactor,
     builder: (context) {
-      return FractionallySizedBox(
-        heightFactor: heightFactor,
-        child: _AsyncMultiSelectPickerSheet<T>(
-          strings: strings,
-          selected: selected,
-          loadPage: loadPage,
-          searchFieldKey: searchFieldKey,
-          applyButtonKey: applyButtonKey,
-          optionKeyForId: optionKeyForId,
-        ),
+      return _AsyncMultiSelectPickerSheet<T>(
+        strings: strings,
+        selected: selected,
+        loadPage: loadPage,
+        searchFieldKey: searchFieldKey,
+        applyButtonKey: applyButtonKey,
+        optionKeyForId: optionKeyForId,
       );
     },
   );

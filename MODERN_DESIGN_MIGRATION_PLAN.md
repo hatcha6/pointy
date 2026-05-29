@@ -487,6 +487,42 @@ Remove migration leftovers and make the design system sustainable.
   - `make test`
   - `make e2e` when the environment supports it.
 
+## Phase 9 - Post-Migration Design System Hardening
+
+### Objective
+
+Turn the final QA findings into reusable design-system affordances so future
+screens do not reintroduce local layout math or private dashboard-style helper
+widgets.
+
+### Work
+
+- Extract repeated metric-grid behavior into a shared component that composes
+  `PointyMetricTile` with the responsive foundation.
+- Move generic detail-section sizing behavior into `PointyDetailSection`
+  instead of feature-local wrappers.
+- Move shared async picker sheets onto the adaptive modal foundation.
+- Add focused shared-component coverage for the new reusable surfaces at
+  compact and wide widths.
+- Keep documenting any conventions that become source-of-truth design guidance.
+- Keep a short residual-debt list for larger follow-up work that should not be
+  mixed into a narrow hardening phase.
+
+### Reusable Widgets/Classes
+
+- `PointyMetricGrid`
+- `PointyMetricGridItem`
+- `PointyDetailSection.minHeight`
+- Adaptive async selection sheets
+
+### Acceptance Gate
+
+- No duplicate private metric-grid helpers remain in migrated screens.
+- Shared component tests cover the extracted metric grid and detail-section
+  sizing behavior.
+- Shared async selection sheets use `showAdaptiveModalBottomSheet`.
+- Phase 8 quality gates continue to pass after the hardening changes.
+
 ## Reuse Checklist For Every Phase
 
 Before creating a new widget, answer:
