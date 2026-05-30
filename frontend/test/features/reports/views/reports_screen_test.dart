@@ -27,7 +27,21 @@ void main() {
 
       expect(find.text('التقارير'), findsWidgets);
       expect(find.text('أنواع التقارير'), findsOneWidget);
-      expect(find.text('معاينة PDF', skipOffstage: false), findsOneWidget);
+
+      if (size.width < 900) {
+        expect(find.text('معاينة PDF', skipOffstage: false), findsNothing);
+
+        await tester.tap(find.text('ملخص المبيعات'));
+        await tester.pumpAndSettle();
+
+        expect(
+          find.byKey(const ValueKey('report_details_sheet')),
+          findsOneWidget,
+        );
+        expect(find.text('معاينة PDF', skipOffstage: false), findsOneWidget);
+      } else {
+        expect(find.text('معاينة PDF', skipOffstage: false), findsOneWidget);
+      }
 
       await tester.pumpWidget(const SizedBox.shrink());
       await tester.pumpAndSettle();
@@ -39,6 +53,14 @@ void main() {
   ) async {
     final completer = Completer<void>();
     var calls = 0;
+
+    tester.view
+      ..physicalSize = const Size(1366, 900)
+      ..devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
 
     await tester.pumpWidget(
       _ReportsTestApp(
@@ -72,6 +94,14 @@ void main() {
   });
 
   testWidgets('shows a localized report action error', (tester) async {
+    tester.view
+      ..physicalSize = const Size(1366, 900)
+      ..devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
     await tester.pumpWidget(
       _ReportsTestApp(
         onPrintReport: (_) async {

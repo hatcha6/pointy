@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
@@ -6,6 +8,7 @@ import '../../../data/models/pos_user.dart';
 import '../../../shared/app_navigation_drawer.dart';
 import '../../../shared/authorization_guards.dart';
 import '../../../shared/components/components.dart';
+import '../../../shared/design/design.dart';
 import '../../../shared/date_formatters.dart';
 import '../../../shared/responsive/responsive.dart';
 
@@ -143,11 +146,8 @@ class _ReportsScreenState extends State<ReportsScreen> {
             includeAuditTrail: _includeAuditTrail,
             includePreparedBy: _includePreparedBy,
             runningAction: _runningAction,
-            onSelectType: (type) {
-              setState(() {
-                _selectedType = type;
-              });
-            },
+            onSelectType: _selectReportType,
+            onOpenTypeDetails: _openReportDetails,
             onSelectPreset: (preset) {
               setState(() {
                 _selectedPreset = preset;
@@ -180,7 +180,104 @@ class _ReportsScreenState extends State<ReportsScreen> {
     );
   }
 
-  Future<void> _pickDate({required bool isStart}) async {
+  void _selectReportType(ReportType type) {
+    setState(() {
+      _selectedType = type;
+    });
+  }
+
+  void _openReportDetails(ReportType type) {
+    _selectReportType(type);
+    unawaited(_showReportDetailsSheet());
+  }
+
+  Future<void> _showReportDetailsSheet() {
+    return showAdaptiveModalBottomSheet<void>(
+      context: context,
+      size: AdaptiveModalSize.expanded,
+      maxHeightFactor: 0.92,
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            void refreshSheet() {
+              if (sheetContext.mounted) {
+                setSheetState(() {});
+              }
+            }
+
+            return _CompactReportDetailsSheet(
+              child: _ReportConfiguration(
+                selectedType: _effectiveSelectedType(),
+                selectedPreset: _selectedPreset,
+                dateRange: _dateRange,
+                granularity: _granularity,
+                includeAuditTrail: _includeAuditTrail,
+                includePreparedBy: _includePreparedBy,
+                runningAction: _runningAction,
+                onSelectPreset: (preset) {
+                  if (!mounted) {
+                    return;
+                  }
+                  setState(() {
+                    _selectedPreset = preset;
+                    if (preset != ReportPeriodPreset.custom) {
+                      _dateRange = _rangeForPreset(preset);
+                    }
+                  });
+                  refreshSheet();
+                },
+                onSelectStartDate: () {
+                  unawaited(
+                    _pickDate(isStart: true, onStateChanged: refreshSheet),
+                  );
+                },
+                onSelectEndDate: () {
+                  unawaited(
+                    _pickDate(isStart: false, onStateChanged: refreshSheet),
+                  );
+                },
+                onSelectGranularity: (granularity) {
+                  if (!mounted) {
+                    return;
+                  }
+                  setState(() {
+                    _granularity = granularity;
+                  });
+                  refreshSheet();
+                },
+                onToggleAuditTrail: (value) {
+                  if (!mounted) {
+                    return;
+                  }
+                  setState(() {
+                    _includeAuditTrail = value;
+                  });
+                  refreshSheet();
+                },
+                onTogglePreparedBy: (value) {
+                  if (!mounted) {
+                    return;
+                  }
+                  setState(() {
+                    _includePreparedBy = value;
+                  });
+                  refreshSheet();
+                },
+                onRunAction: (action) {
+                  unawaited(_runAction(action, onStateChanged: refreshSheet));
+                },
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _pickDate({
+    required bool isStart,
+    VoidCallback? onStateChanged,
+  }) async {
     final initialDate = isStart ? _dateRange.start : _dateRange.end;
     final pickedDate = await showDatePicker(
       context: context,
@@ -207,9 +304,13 @@ class _ReportsScreenState extends State<ReportsScreen> {
           : _dateRange.start;
       _dateRange = DateTimeRange(start: start, end: pickedDate);
     });
+    onStateChanged?.call();
   }
 
-  Future<void> _runAction(_ReportOutputAction action) async {
+  Future<void> _runAction(
+    _ReportOutputAction action, {
+    VoidCallback? onStateChanged,
+  }) async {
     if (_runningAction != null) {
       return;
     }
@@ -243,6 +344,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
     setState(() {
       _runningAction = action;
     });
+    onStateChanged?.call();
     try {
       await callback(request);
     } catch (_) {
@@ -257,6 +359,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
         setState(() {
           _runningAction = null;
         });
+        onStateChanged?.call();
       }
     }
   }
@@ -306,6 +409,7 @@ class _ReportsWorkspace extends StatelessWidget {
     required this.includePreparedBy,
     required this.runningAction,
     required this.onSelectType,
+    required this.onOpenTypeDetails,
     required this.onSelectPreset,
     required this.onSelectStartDate,
     required this.onSelectEndDate,
@@ -324,6 +428,7 @@ class _ReportsWorkspace extends StatelessWidget {
   final bool includePreparedBy;
   final _ReportOutputAction? runningAction;
   final ValueChanged<ReportType> onSelectType;
+  final ValueChanged<ReportType> onOpenTypeDetails;
   final ValueChanged<ReportPeriodPreset> onSelectPreset;
   final VoidCallback onSelectStartDate;
   final VoidCallback onSelectEndDate;
@@ -336,7 +441,12 @@ class _ReportsWorkspace extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        if (constraints.maxWidth >= 900) {
+        final width = constraints.hasBoundedWidth
+            ? constraints.maxWidth
+            : MediaQuery.sizeOf(context).width;
+        final isCompact = width < 900;
+
+        if (!isCompact) {
           return TwoPaneLayout(
             dualPaneBreakpoint: 900,
             secondaryFirst: true,
@@ -374,30 +484,31 @@ class _ReportsWorkspace extends StatelessWidget {
             _ReportCatalog(
               capabilities: capabilities,
               selectedType: selectedType,
-              onSelectType: onSelectType,
-              isScrollable: false,
-            ),
-            const SizedBox(height: 16),
-            _ReportConfiguration(
-              selectedType: selectedType,
-              selectedPreset: selectedPreset,
-              dateRange: dateRange,
-              granularity: granularity,
-              includeAuditTrail: includeAuditTrail,
-              includePreparedBy: includePreparedBy,
-              runningAction: runningAction,
-              onSelectPreset: onSelectPreset,
-              onSelectStartDate: onSelectStartDate,
-              onSelectEndDate: onSelectEndDate,
-              onSelectGranularity: onSelectGranularity,
-              onToggleAuditTrail: onToggleAuditTrail,
-              onTogglePreparedBy: onTogglePreparedBy,
-              onRunAction: onRunAction,
+              onSelectType: onOpenTypeDetails,
               isScrollable: false,
             ),
           ],
         );
       },
+    );
+  }
+}
+
+class _CompactReportDetailsSheet extends StatelessWidget {
+  const _CompactReportDetailsSheet({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.pointyColors;
+
+    return Material(
+      key: const ValueKey('report_details_sheet'),
+      color: colors.surface,
+      borderRadius: BorderRadius.circular(PointyRadii.sheet),
+      clipBehavior: Clip.antiAlias,
+      child: SafeArea(top: false, child: child),
     );
   }
 }
@@ -553,7 +664,6 @@ class _ReportConfiguration extends StatelessWidget {
     required this.onToggleAuditTrail,
     required this.onTogglePreparedBy,
     required this.onRunAction,
-    this.isScrollable = true,
   });
 
   final ReportType selectedType;
@@ -570,12 +680,11 @@ class _ReportConfiguration extends StatelessWidget {
   final ValueChanged<bool> onToggleAuditTrail;
   final ValueChanged<bool> onTogglePreparedBy;
   final ValueChanged<_ReportOutputAction> onRunAction;
-  final bool isScrollable;
 
   @override
   Widget build(BuildContext context) {
     final content = Padding(
-      padding: EdgeInsets.all(isScrollable ? 24 : 0),
+      padding: const EdgeInsets.all(24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -611,10 +720,6 @@ class _ReportConfiguration extends StatelessWidget {
         ],
       ),
     );
-
-    if (!isScrollable) {
-      return content;
-    }
 
     return ListView(children: [content]);
   }
