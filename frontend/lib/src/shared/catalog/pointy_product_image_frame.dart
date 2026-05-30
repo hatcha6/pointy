@@ -12,6 +12,8 @@ class PointyProductImageFrame extends StatelessWidget {
     this.borderRadius = PointyRadii.card,
     this.fit = BoxFit.contain,
     this.padding = const EdgeInsets.all(8),
+    this.backgroundColor,
+    this.border,
   });
 
   final String? imageUrl;
@@ -21,6 +23,8 @@ class PointyProductImageFrame extends StatelessWidget {
   final double borderRadius;
   final BoxFit fit;
   final EdgeInsetsGeometry padding;
+  final Color? backgroundColor;
+  final BoxBorder? border;
 
   @override
   Widget build(BuildContext context) {
@@ -32,7 +36,10 @@ class PointyProductImageFrame extends StatelessWidget {
         width: width,
         height: height,
         child: DecoratedBox(
-          decoration: BoxDecoration(color: context.pointyColors.subtleFill),
+          decoration: BoxDecoration(
+            color: backgroundColor ?? context.pointyColors.subtleFill,
+            border: border,
+          ),
           child: url.isEmpty
               ? _FallbackLabel(text: fallbackText)
               : Padding(

@@ -19,6 +19,7 @@ import 'pos_variant_picker_sheet.dart';
 
 const _catalogTileMinWidth = 168.0;
 const _catalogTileMainExtent = 236.0;
+const _catalogWideTileMainExtent = 252.0;
 const _catalogLoadMoreExtent = 720.0;
 const _catalogMaxColumnCount = 5;
 
@@ -143,6 +144,16 @@ class _PosCatalogGrid extends StatelessWidget {
         return LayoutBuilder(
           builder: (context, constraints) {
             final spacing = AdaptiveSpacing.of(context);
+            final columnCount = _catalogColumnCountFor(
+              constraints.maxWidth,
+              spacing.gutter,
+            );
+            final tileWidth = _catalogTileWidthFor(
+              constraints.maxWidth,
+              spacing.gutter,
+              columnCount,
+            );
+
             return InfiniteScrollGrid<Product>(
               items: products,
               onLoadMore: viewModel.loadMoreCatalog,
@@ -153,11 +164,8 @@ class _PosCatalogGrid extends StatelessWidget {
               emptyBuilder: (context) =>
                   _PosCatalogEmptyState(message: emptyMessage),
               gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: _catalogColumnCountFor(
-                  constraints.maxWidth,
-                  spacing.gutter,
-                ),
-                mainAxisExtent: _catalogTileMainExtent,
+                crossAxisCount: columnCount,
+                mainAxisExtent: _catalogTileMainExtentFor(tileWidth),
                 crossAxisSpacing: spacing.gutter,
                 mainAxisSpacing: spacing.gutter,
               ),
@@ -217,6 +225,20 @@ class _PosCatalogGrid extends StatelessWidget {
     final count = ((width + spacing) / (_catalogTileMinWidth + spacing))
         .floor();
     return count.clamp(1, _catalogMaxColumnCount);
+  }
+
+  double _catalogTileWidthFor(double width, double spacing, int columnCount) {
+    if (!width.isFinite || width <= 0 || columnCount <= 0) {
+      return _catalogTileMinWidth;
+    }
+    return (width - (spacing * (columnCount - 1))) / columnCount;
+  }
+
+  double _catalogTileMainExtentFor(double tileWidth) {
+    if (tileWidth >= 260) {
+      return _catalogWideTileMainExtent;
+    }
+    return _catalogTileMainExtent;
   }
 }
 

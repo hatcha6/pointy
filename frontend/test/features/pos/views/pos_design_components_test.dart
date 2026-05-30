@@ -27,6 +27,8 @@ void main() {
       expect(find.byType(ProductTile), findsOneWidget);
       expect(find.textContaining('قهوة عربية'), findsOneWidget);
       expect(find.text('12.75 د.ل'), findsOneWidget);
+      expect(find.text('متاح'), findsOneWidget);
+      expect(find.byIcon(Icons.add_shopping_cart_outlined), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
 
