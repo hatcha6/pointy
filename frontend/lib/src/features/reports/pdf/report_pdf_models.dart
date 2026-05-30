@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:pdf/pdf.dart';
 
 enum BusinessReportType {
@@ -86,6 +88,7 @@ class BusinessReportPdfDocument {
     required this.title,
     required this.businessName,
     required this.generatedAt,
+    this.businessLogoBytes,
     this.generatedBy,
     this.reference,
     this.period,
@@ -100,6 +103,7 @@ class BusinessReportPdfDocument {
   final String title;
   final String businessName;
   final DateTime generatedAt;
+  final Uint8List? businessLogoBytes;
   final String? generatedBy;
   final String? reference;
   final ReportPdfPeriod? period;

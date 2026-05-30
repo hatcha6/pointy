@@ -150,6 +150,7 @@ POINTY_ATTACHMENT_ALLOWED_TARGETS = env.list(
         "inventory.stockitem",
         "inventory.stockmovement",
         "reports.reportrun",
+        "core.shopsettings",
     ],
 )
 POINTY_PRODUCT_IMAGE_IMPORT_MAX_BYTES = env("POINTY_PRODUCT_IMAGE_IMPORT_MAX_BYTES")

@@ -939,6 +939,11 @@ class AppLocalizationsAr extends AppLocalizations {
   String get shopSettingsDisabledValue => 'متوقف';
 
   @override
+  String shopIdentitySummary(String shopName, String logoStatus) {
+    return '$shopName، $logoStatus';
+  }
+
+  @override
   String receiptSettingsSummary(String status) {
     return 'الطباعة التلقائية: $status';
   }
@@ -1089,6 +1094,33 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get shopNameLabel => 'اسم المتجر';
+
+  @override
+  String get shopLogoLabel => 'شعار المتجر';
+
+  @override
+  String get shopLogoEmpty => 'لم يتم رفع شعار بعد.';
+
+  @override
+  String get shopLogoUploadedValue => 'الشعار مرفوع';
+
+  @override
+  String get shopLogoMissingValue => 'الشعار غير مرفوع';
+
+  @override
+  String get shopLogoMarkedForRemoval => 'سيتم إزالة الشعار عند الحفظ.';
+
+  @override
+  String get shopLogoUploadButton => 'رفع شعار';
+
+  @override
+  String get shopLogoReplaceButton => 'استبدال الشعار';
+
+  @override
+  String get shopLogoRemoveButton => 'إزالة الشعار';
+
+  @override
+  String get shopLogoPickError => 'تعذر قراءة الشعار المختار.';
 
   @override
   String get receiptHeaderLabel => 'ترويسة الإيصال';

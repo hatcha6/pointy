@@ -1,3 +1,7 @@
+import 'dart:typed_data';
+
+import 'attachment_summary.dart';
+
 class ShopSettings {
   const ShopSettings({
     required this.shopName,
@@ -13,6 +17,7 @@ class ShopSettings {
     required this.enableTransferPayments,
     required this.cardCommissionPercent,
     required this.transferCommissionPercent,
+    this.logoAttachment,
   });
 
   final String shopName;
@@ -28,8 +33,10 @@ class ShopSettings {
   final bool enableTransferPayments;
   final double cardCommissionPercent;
   final double transferCommissionPercent;
+  final AttachmentSummary? logoAttachment;
 
   factory ShopSettings.fromJson(Map<String, Object?> json) {
+    final logoJson = json['logo_attachment'];
     return ShopSettings(
       shopName: json['shop_name']?.toString() ?? '',
       receiptHeader: json['receipt_header']?.toString() ?? '',
@@ -57,8 +64,23 @@ class ShopSettings {
         json['transfer_commission_percent'],
         0,
       ),
+      logoAttachment: logoJson is Map<String, Object?>
+          ? AttachmentSummary.fromJson(logoJson)
+          : null,
     );
   }
+}
+
+class ShopLogoUpload {
+  const ShopLogoUpload({
+    required this.filename,
+    required this.bytes,
+    required this.contentType,
+  });
+
+  final String filename;
+  final Uint8List bytes;
+  final String contentType;
 }
 
 class ShopSettingsDraft {

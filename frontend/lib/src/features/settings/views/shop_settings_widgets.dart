@@ -5,30 +5,252 @@ class _ShopIdentityFields extends StatelessWidget {
     required this.controller,
     required this.enabled,
     required this.errorText,
+    required this.logoAttachment,
+    required this.selectedLogoUpload,
+    required this.hasLogoMarkedForRemoval,
     required this.onChanged,
+    required this.onLogoSelected,
+    required this.onLogoCleared,
   });
 
   final TextEditingController controller;
   final bool enabled;
   final String? errorText;
+  final AttachmentSummary? logoAttachment;
+  final ShopLogoUpload? selectedLogoUpload;
+  final bool hasLogoMarkedForRemoval;
   final VoidCallback onChanged;
+  final ValueChanged<ShopLogoUpload> onLogoSelected;
+  final VoidCallback onLogoCleared;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
 
-    return TextFormField(
-      controller: controller,
-      enabled: enabled,
-      onChanged: (_) => onChanged(),
-      decoration: InputDecoration(
-        labelText: l10n.shopNameLabel,
-        errorText: errorText,
-        border: const OutlineInputBorder(),
-        prefixIcon: const Icon(Icons.storefront_outlined),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _ShopLogoField(
+          logoAttachment: logoAttachment,
+          selectedLogoUpload: selectedLogoUpload,
+          hasLogoMarkedForRemoval: hasLogoMarkedForRemoval,
+          enabled: enabled,
+          onLogoSelected: onLogoSelected,
+          onLogoCleared: onLogoCleared,
+        ),
+        const SizedBox(height: 16),
+        TextFormField(
+          controller: controller,
+          enabled: enabled,
+          onChanged: (_) => onChanged(),
+          decoration: InputDecoration(
+            labelText: l10n.shopNameLabel,
+            errorText: errorText,
+            border: const OutlineInputBorder(),
+            prefixIcon: const Icon(Icons.storefront_outlined),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ShopLogoField extends StatelessWidget {
+  const _ShopLogoField({
+    required this.logoAttachment,
+    required this.selectedLogoUpload,
+    required this.hasLogoMarkedForRemoval,
+    required this.enabled,
+    required this.onLogoSelected,
+    required this.onLogoCleared,
+  });
+
+  final AttachmentSummary? logoAttachment;
+  final ShopLogoUpload? selectedLogoUpload;
+  final bool hasLogoMarkedForRemoval;
+  final bool enabled;
+  final ValueChanged<ShopLogoUpload> onLogoSelected;
+  final VoidCallback onLogoCleared;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final hasLogo =
+        selectedLogoUpload != null ||
+        (!hasLogoMarkedForRemoval && logoAttachment != null);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(l10n.shopLogoLabel, style: theme.textTheme.titleSmall),
+        const SizedBox(height: 8),
+        DecoratedBox(
+          decoration: BoxDecoration(
+            border: Border.all(color: colorScheme.outlineVariant),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Row(
+              children: [
+                _ShopLogoPreview(
+                  logoAttachment: logoAttachment,
+                  selectedLogoUpload: selectedLogoUpload,
+                  hasLogoMarkedForRemoval: hasLogoMarkedForRemoval,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        hasLogo
+                            ? l10n.shopLogoUploadedValue
+                            : l10n.shopLogoEmpty,
+                        style: theme.textTheme.bodyMedium,
+                      ),
+                      if (selectedLogoUpload != null) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          selectedLogoUpload!.filename,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodySmall,
+                        ),
+                      ],
+                      if (hasLogoMarkedForRemoval) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          l10n.shopLogoMarkedForRemoval,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: colorScheme.error,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            FilledButton.icon(
+              onPressed: enabled ? () => _pickLogo(context) : null,
+              icon: const Icon(Icons.upload_file_outlined),
+              label: Text(
+                hasLogo
+                    ? l10n.shopLogoReplaceButton
+                    : l10n.shopLogoUploadButton,
+              ),
+            ),
+            if (hasLogo || hasLogoMarkedForRemoval)
+              OutlinedButton.icon(
+                onPressed: enabled ? onLogoCleared : null,
+                icon: const Icon(Icons.delete_outline),
+                label: Text(l10n.shopLogoRemoveButton),
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Future<void> _pickLogo(BuildContext context) async {
+    final l10n = AppLocalizations.of(context)!;
+    final result = await FilePicker.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: const ['png', 'jpg', 'jpeg'],
+      withData: true,
+      allowMultiple: false,
+    );
+    if (result == null || result.files.isEmpty) {
+      return;
+    }
+
+    final file = result.files.single;
+    final bytes = file.bytes;
+    if (bytes == null || bytes.isEmpty) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context)
+          ..clearSnackBars()
+          ..showSnackBar(SnackBar(content: Text(l10n.shopLogoPickError)));
+      }
+      return;
+    }
+
+    onLogoSelected(
+      ShopLogoUpload(
+        filename: file.name,
+        bytes: bytes,
+        contentType: _contentTypeForLogoFile(file),
       ),
     );
   }
+}
+
+class _ShopLogoPreview extends StatelessWidget {
+  const _ShopLogoPreview({
+    required this.logoAttachment,
+    required this.selectedLogoUpload,
+    required this.hasLogoMarkedForRemoval,
+  });
+
+  final AttachmentSummary? logoAttachment;
+  final ShopLogoUpload? selectedLogoUpload;
+  final bool hasLogoMarkedForRemoval;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    Widget child;
+    if (selectedLogoUpload != null) {
+      child = Image.memory(
+        selectedLogoUpload!.bytes,
+        fit: BoxFit.contain,
+        errorBuilder: (context, error, stackTrace) =>
+            Icon(Icons.storefront_outlined, color: colorScheme.primary),
+      );
+    } else if (!hasLogoMarkedForRemoval &&
+        (logoAttachment?.contentUrl.trim().isNotEmpty ?? false)) {
+      child = Image.network(
+        logoAttachment!.contentUrl,
+        fit: BoxFit.contain,
+        errorBuilder: (context, error, stackTrace) =>
+            Icon(Icons.storefront_outlined, color: colorScheme.primary),
+      );
+    } else {
+      child = Icon(Icons.storefront_outlined, color: colorScheme.primary);
+    }
+
+    return Container(
+      width: 72,
+      height: 72,
+      alignment: Alignment.center,
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: colorScheme.primaryContainer.withValues(alpha: 0.24),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: child,
+    );
+  }
+}
+
+String _contentTypeForLogoFile(PlatformFile file) {
+  final extension = (file.extension ?? '').toLowerCase();
+  return switch (extension) {
+    'jpg' || 'jpeg' => 'image/jpeg',
+    'png' => 'image/png',
+    _ => 'image/jpeg',
+  };
 }
 
 class _ReceiptSettingsFields extends StatelessWidget {

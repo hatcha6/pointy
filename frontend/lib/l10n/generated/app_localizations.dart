@@ -1768,6 +1768,12 @@ abstract class AppLocalizations {
   /// **'متوقف'**
   String get shopSettingsDisabledValue;
 
+  /// Summary for shop identity settings.
+  ///
+  /// In ar, this message translates to:
+  /// **'{shopName}، {logoStatus}'**
+  String shopIdentitySummary(String shopName, String logoStatus);
+
   /// Summary for receipt settings in the shop settings index.
   ///
   /// In ar, this message translates to:
@@ -2029,6 +2035,60 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'اسم المتجر'**
   String get shopNameLabel;
+
+  /// No description provided for @shopLogoLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'شعار المتجر'**
+  String get shopLogoLabel;
+
+  /// No description provided for @shopLogoEmpty.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم يتم رفع شعار بعد.'**
+  String get shopLogoEmpty;
+
+  /// No description provided for @shopLogoUploadedValue.
+  ///
+  /// In ar, this message translates to:
+  /// **'الشعار مرفوع'**
+  String get shopLogoUploadedValue;
+
+  /// No description provided for @shopLogoMissingValue.
+  ///
+  /// In ar, this message translates to:
+  /// **'الشعار غير مرفوع'**
+  String get shopLogoMissingValue;
+
+  /// No description provided for @shopLogoMarkedForRemoval.
+  ///
+  /// In ar, this message translates to:
+  /// **'سيتم إزالة الشعار عند الحفظ.'**
+  String get shopLogoMarkedForRemoval;
+
+  /// No description provided for @shopLogoUploadButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'رفع شعار'**
+  String get shopLogoUploadButton;
+
+  /// No description provided for @shopLogoReplaceButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'استبدال الشعار'**
+  String get shopLogoReplaceButton;
+
+  /// No description provided for @shopLogoRemoveButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'إزالة الشعار'**
+  String get shopLogoRemoveButton;
+
+  /// No description provided for @shopLogoPickError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر قراءة الشعار المختار.'**
+  String get shopLogoPickError;
 
   /// No description provided for @receiptHeaderLabel.
   ///

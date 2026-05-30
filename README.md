@@ -82,6 +82,8 @@ Common upload entry points:
   results for product setup
 - `POST /api/products/{id}/image-import/` with an image search `import_token`
   to save a selected internet image as a product image
+- `POST /api/shop-settings/logo/` with `file` to store the shop logo used by
+  reports, receipts, and invoices
 - `POST /api/purchase-orders/{id}/attachments/` for supplier invoice scans
 - `GET /api/attachments/{id}/download/` for authenticated downloads
 - `content_url` values in attachment API responses include a short-lived signed

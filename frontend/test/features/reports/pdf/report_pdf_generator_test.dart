@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pointy_frontend/src/features/reports/pdf/report_pdf.dart';
@@ -35,11 +38,12 @@ void main() {
 
   final generatedAt = DateTime(2026, 5, 21, 10, 30);
 
-  BusinessReportPdfDocument buildReport() {
+  BusinessReportPdfDocument buildReport({Uint8List? businessLogoBytes}) {
     return BusinessReportPdfDocument(
       type: BusinessReportType.salesSummary,
       title: 'Sales Summary',
       businessName: 'Pointy Store',
+      businessLogoBytes: businessLogoBytes,
       generatedAt: generatedAt,
       generatedBy: 'Manager',
       reference: 'RPT-1',
@@ -77,6 +81,17 @@ void main() {
     const generator = ReportPdfGenerator(labels: testLabels);
     final bytes = await generator.generate(
       buildReport(),
+      fonts: ReportPdfFonts.type1ForTests(),
+    );
+
+    expect(bytes, isNotEmpty);
+    expect(String.fromCharCodes(bytes.take(5)), '%PDF-');
+  });
+
+  test('generates report bytes when a shop logo is present', () async {
+    const generator = ReportPdfGenerator(labels: testLabels);
+    final bytes = await generator.generate(
+      buildReport(businessLogoBytes: _onePixelPngBytes),
       fonts: ReportPdfFonts.type1ForTests(),
     );
 
@@ -193,3 +208,7 @@ void main() {
     expect(report.suggestedFileName, 'Sales_Summary_20260521.pdf');
   });
 }
+
+final _onePixelPngBytes = base64Decode(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+);

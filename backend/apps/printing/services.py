@@ -3,8 +3,14 @@ from uuid import uuid4
 
 from django.db import transaction
 from django.db.models import Max
+from django.urls import reverse
 from django.utils import timezone
 
+from apps.attachments.models import Attachment
+from apps.attachments.services import (
+    active_attachments_for,
+    sign_attachment_content_token,
+)
 from apps.core.models import ShopSettings
 from apps.discounts.models import AppliedDiscount
 from apps.sales.models import Order
@@ -88,6 +94,26 @@ def money(value):
     return str(value)
 
 
+def shop_logo_payload(shop_settings):
+    attachment = (
+        active_attachments_for(shop_settings, role=Attachment.Role.SHOP_LOGO)
+        .filter(is_primary=True)
+        .first()
+    )
+    if attachment is None:
+        return None
+
+    content_path = reverse("attachment-content", kwargs={"pk": attachment.pk})
+    token = sign_attachment_content_token(attachment)
+    return {
+        "id": attachment.pk,
+        "original_filename": attachment.original_filename,
+        "content_type": attachment.content_type,
+        "content_url": f"{content_path}?token={token}",
+        "is_primary": attachment.is_primary,
+    }
+
+
 def build_receipt_payload(order):
     shop_settings = ShopSettings.load()
     order = (
@@ -104,6 +130,7 @@ def build_receipt_payload(order):
             "name": shop_settings.shop_name,
             "receipt_header": shop_settings.receipt_header,
             "receipt_footer": shop_settings.receipt_footer,
+            "logo": shop_logo_payload(shop_settings),
         },
         "order": {
             "id": order.pk,

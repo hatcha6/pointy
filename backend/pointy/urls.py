@@ -16,6 +16,7 @@ from apps.customers.views import CustomerViewSet
 from apps.discounts.views import DiscountRuleViewSet
 from apps.core.views import (
     PosUserViewSet,
+    ShopSettingsLogoView,
     ShopSettingsView,
     login_view,
     logout_view,
@@ -81,6 +82,11 @@ urlpatterns = [
     path("api/auth/me/", me_view, name="auth-me"),
     path("api/dashboard/", DashboardView.as_view(), name="dashboard"),
     path("api/shop-settings/", ShopSettingsView.as_view(), name="shop-settings"),
+    path(
+        "api/shop-settings/logo/",
+        ShopSettingsLogoView.as_view(),
+        name="shop-settings-logo",
+    ),
     path("api/", include(router.urls)),
     path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
     path("api/docs/", SpectacularSwaggerView.as_view(url_name="schema"), name="swagger-ui"),

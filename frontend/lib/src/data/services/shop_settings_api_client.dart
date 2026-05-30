@@ -29,6 +29,32 @@ class ShopSettingsApiClient {
     );
   }
 
+  Future<ShopSettings> uploadShopLogo(ShopLogoUpload upload) async {
+    final response = await _session.postMultipart(
+      'shop-settings/logo/',
+      files: [
+        ApiMultipartFile(
+          fieldName: 'file',
+          filename: upload.filename,
+          bytes: upload.bytes,
+          contentType: upload.contentType,
+        ),
+      ],
+    );
+    _session.ensureSuccess(response, 'Shop logo upload failed with status');
+    return ShopSettings.fromJson(
+      _session.decodedBody(response) as Map<String, Object?>,
+    );
+  }
+
+  Future<ShopSettings> removeShopLogo() async {
+    final response = await _session.delete('shop-settings/logo/');
+    _session.ensureSuccess(response, 'Shop logo remove failed with status');
+    return ShopSettings.fromJson(
+      _session.decodedBody(response) as Map<String, Object?>,
+    );
+  }
+
   Future<AnalyticsExportFile> exportAnalyticsEvents(
     AnalyticsExportQuery query,
   ) async {

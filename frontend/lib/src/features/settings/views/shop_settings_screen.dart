@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../core/authorization.dart';
 import '../../../data/models/analytics_export.dart';
+import '../../../data/models/attachment_summary.dart';
 import '../../../data/models/pos_user.dart';
 import '../../../data/models/shop_settings.dart';
 import '../../../data/services/analytics_export_downloader.dart';
@@ -176,6 +178,9 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
   late bool _enableCashPayments;
   late bool _enableCardPayments;
   late bool _enableTransferPayments;
+  AttachmentSummary? _logoAttachment;
+  ShopLogoUpload? _selectedLogoUpload;
+  bool _removeLogo = false;
   AnalyticsExportFormat _analyticsExportFormat = AnalyticsExportFormat.csv;
   DateTime? _analyticsOccurredFrom;
   DateTime? _analyticsOccurredTo;
@@ -222,6 +227,9 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
       _enableCashPayments = widget.settings.enableCashPayments;
       _enableCardPayments = widget.settings.enableCardPayments;
       _enableTransferPayments = widget.settings.enableTransferPayments;
+      _logoAttachment = widget.settings.logoAttachment;
+      _selectedLogoUpload = null;
+      _removeLogo = false;
     }
   }
 
@@ -268,6 +276,9 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
     _enableCashPayments = settings.enableCashPayments;
     _enableCardPayments = settings.enableCardPayments;
     _enableTransferPayments = settings.enableTransferPayments;
+    _logoAttachment = settings.logoAttachment;
+    _selectedLogoUpload = null;
+    _removeLogo = false;
   }
 
   void _setControllerText(TextEditingController controller, String value) {
@@ -408,10 +419,18 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
 
   String _shopIdentitySummary(AppLocalizations l10n) {
     final shopName = _shopNameController.text.trim();
+    final logoStatus = _hasVisibleLogo
+        ? l10n.shopLogoUploadedValue
+        : l10n.shopLogoMissingValue;
     if (shopName.isEmpty) {
-      return l10n.shopSettingsEmptyValue;
+      return logoStatus;
     }
-    return shopName;
+    return l10n.shopIdentitySummary(shopName, logoStatus);
+  }
+
+  bool get _hasVisibleLogo {
+    return _selectedLogoUpload != null ||
+        (!_removeLogo && _logoAttachment != null);
   }
 
   String _receiptSummary(AppLocalizations l10n) {
@@ -520,7 +539,24 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
         controller: _shopNameController,
         enabled: !widget.viewModel.isSaving,
         errorText: _shopNameError(l10n),
+        logoAttachment: _removeLogo ? null : _logoAttachment,
+        selectedLogoUpload: _selectedLogoUpload,
+        hasLogoMarkedForRemoval: _removeLogo,
         onChanged: () => _refreshSettingsGroup(refresh),
+        onLogoSelected: (upload) {
+          setState(() {
+            _selectedLogoUpload = upload;
+            _removeLogo = false;
+          });
+          refresh();
+        },
+        onLogoCleared: () {
+          setState(() {
+            _selectedLogoUpload = null;
+            _removeLogo = _logoAttachment != null;
+          });
+          refresh();
+        },
       ),
     ];
   }
@@ -1000,7 +1036,7 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
     }
 
     final messenger = ScaffoldMessenger.of(context);
-    final saved = await widget.viewModel.updateSettings(
+    var saved = await widget.viewModel.updateSettings(
       ShopSettingsDraft(
         shopName: _shopNameController.text.trim(),
         receiptHeader: _receiptHeaderController.text.trim(),
@@ -1020,6 +1056,11 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
         ),
       ),
     );
+    if (saved && _selectedLogoUpload != null) {
+      saved = await widget.viewModel.uploadLogo(_selectedLogoUpload!);
+    } else if (saved && _removeLogo) {
+      saved = await widget.viewModel.removeLogo();
+    }
 
     if (!mounted) {
       return;

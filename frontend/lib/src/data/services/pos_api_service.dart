@@ -148,6 +148,14 @@ class PosApiService {
     return _shopSettings.updateShopSettings(draft);
   }
 
+  Future<ShopSettings> uploadShopLogo(ShopLogoUpload upload) {
+    return _shopSettings.uploadShopLogo(upload);
+  }
+
+  Future<ShopSettings> removeShopLogo() {
+    return _shopSettings.removeShopLogo();
+  }
+
   Future<AnalyticsExportFile> exportAnalyticsEvents(
     AnalyticsExportQuery query,
   ) {

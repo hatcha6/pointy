@@ -1822,6 +1822,9 @@ void main() {
 
     await tester.tap(find.text('هوية المتجر'));
     await tester.pumpAndSettle();
+    expect(find.text('شعار المتجر'), findsOneWidget);
+    expect(find.text('لم يتم رفع شعار بعد.'), findsOneWidget);
+    expect(find.text('رفع شعار'), findsOneWidget);
     await tester.enterText(find.byType(TextFormField).first, 'متجر الاختبار');
     await tester.tap(find.text('حفظ الإعدادات'));
     await tester.pumpAndSettle(const Duration(seconds: 1));
@@ -2929,6 +2932,37 @@ PosApiService _mockApiService({
         );
       }
 
+      if (path.endsWith('/shop-settings/logo/')) {
+        if (request.method == 'DELETE') {
+          return _jsonResponse(
+            _shopSettingsJson(
+              autoPrintReceipts: shopSettingsAutoPrint,
+              requireOpeningCash: shopSettingsRequireOpeningCash,
+              allowOverselling: shopSettingsAllowOverselling,
+              cashierReturnWindowHours: shopSettingsCashierReturnWindowHours,
+            ),
+          );
+        }
+        return _jsonResponse(
+          _shopSettingsJson(
+            autoPrintReceipts: shopSettingsAutoPrint,
+            requireOpeningCash: shopSettingsRequireOpeningCash,
+            allowOverselling: shopSettingsAllowOverselling,
+            cashierReturnWindowHours: shopSettingsCashierReturnWindowHours,
+            logoAttachment: const {
+              'id': 10,
+              'original_filename': 'logo.png',
+              'content_type': 'image/png',
+              'content_url':
+                  'http://127.0.0.1:8000/api/attachments/10/content/',
+              'download_url':
+                  'http://127.0.0.1:8000/api/attachments/10/download/',
+              'is_primary': true,
+            },
+          ),
+        );
+      }
+
       if (path.endsWith('/analytics-events/export/')) {
         onAnalyticsExport?.call(request);
         return http.Response.bytes(
@@ -3822,9 +3856,11 @@ Map<String, Object?> _shopSettingsJson({
   bool requireOpeningCash = true,
   bool allowOverselling = false,
   int cashierReturnWindowHours = 42,
+  Map<String, Object?>? logoAttachment,
 }) {
   return {
     'shop_name': 'متجر نقطة البيع',
+    'logo_attachment': logoAttachment,
     'receipt_header': 'أهلا بكم',
     'receipt_footer': 'شكرا لزيارتكم',
     'require_opening_cash': requireOpeningCash,

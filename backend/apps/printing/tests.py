@@ -2,11 +2,13 @@ from decimal import Decimal
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
+from django.contrib.contenttypes.models import ContentType
 from django.test import TestCase
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient
 
+from apps.attachments.models import Attachment, StorageVolume
 from apps.catalog.models import ProductVariant
 from apps.catalog.testing import create_product_with_default_variant
 from apps.core.models import ShopSettings
@@ -152,6 +154,38 @@ class ReceiptAutoPrintTests(PrintingTestMixin, TestCase):
         self.assertEqual(job.payload["order"]["total"], "8.50")
         self.assertEqual(job.payload["order"]["lines"][0]["name"], "قهوة مختصة")
         self.assertEqual(job.payload["order"]["lines"][0]["unit_price"], "4.25")
+
+    def test_receipt_job_payload_includes_shop_logo_reference(self):
+        settings = ShopSettings.load()
+        volume = StorageVolume.objects.create(name="test-logo-volume", path="/tmp")
+        logo = Attachment.objects.create(
+            owner_content_type=ContentType.objects.get_for_model(
+                settings,
+                for_concrete_model=False,
+            ),
+            owner_object_id=settings.pk,
+            role=Attachment.Role.SHOP_LOGO,
+            storage_volume=volume,
+            relative_path="logos/logo.png",
+            original_filename="logo.png",
+            content_type="image/png",
+            original_size=12,
+            stored_size=12,
+            checksum_sha256="a" * 64,
+            is_primary=True,
+        )
+
+        response = self.checkout()
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        job = PrintJob.objects.get(order_id=response.data["id"])
+        self.assertEqual(job.payload["shop"]["logo"]["id"], logo.pk)
+        self.assertEqual(job.payload["shop"]["logo"]["content_type"], "image/png")
+        self.assertIn(
+            reverse("attachment-content", kwargs={"pk": logo.pk}),
+            job.payload["shop"]["logo"]["content_url"],
+        )
+        self.assertIn("token=", job.payload["shop"]["logo"]["content_url"])
 
     def test_receipt_job_payload_includes_variant_line_fields(self):
         variant = ProductVariant.objects.create(

@@ -521,6 +521,18 @@
   "shopSettingsEmptyValue": "غير محدد",
   "shopSettingsEnabledValue": "مفعل",
   "shopSettingsDisabledValue": "متوقف",
+  "shopIdentitySummary": "{shopName}، {logoStatus}",
+  "@shopIdentitySummary": {
+    "description": "Summary for shop identity settings.",
+    "placeholders": {
+      "shopName": {
+        "type": "String"
+      },
+      "logoStatus": {
+        "type": "String"
+      }
+    }
+  },
   "receiptSettingsSummary": "الطباعة التلقائية: {status}",
   "@receiptSettingsSummary": {
     "description": "Summary for receipt settings in the shop settings index.",
@@ -619,6 +631,15 @@
   "analyticsSourcePrintAgent": "وكيل الطباعة",
   "analyticsSourceIntegration": "تكامل",
   "shopNameLabel": "اسم المتجر",
+  "shopLogoLabel": "شعار المتجر",
+  "shopLogoEmpty": "لم يتم رفع شعار بعد.",
+  "shopLogoUploadedValue": "الشعار مرفوع",
+  "shopLogoMissingValue": "الشعار غير مرفوع",
+  "shopLogoMarkedForRemoval": "سيتم إزالة الشعار عند الحفظ.",
+  "shopLogoUploadButton": "رفع شعار",
+  "shopLogoReplaceButton": "استبدال الشعار",
+  "shopLogoRemoveButton": "إزالة الشعار",
+  "shopLogoPickError": "تعذر قراءة الشعار المختار.",
   "receiptHeaderLabel": "ترويسة الإيصال",
   "receiptFooterLabel": "خاتمة الإيصال",
   "requireOpeningCashLabel": "طلب نقدية افتتاح الجلسة",

@@ -16,6 +16,14 @@ class ShopSettingsRepository {
     return Result.guard(() => _service.updateShopSettings(draft));
   }
 
+  Future<Result<ShopSettings>> uploadLogo(ShopLogoUpload upload) async {
+    return Result.guard(() => _service.uploadShopLogo(upload));
+  }
+
+  Future<Result<ShopSettings>> removeLogo() async {
+    return Result.guard(_service.removeShopLogo);
+  }
+
   Future<Result<AnalyticsExportFile>> exportAnalyticsEvents(
     AnalyticsExportQuery query,
   ) async {

@@ -2,6 +2,10 @@ from django.contrib.auth import authenticate, get_user_model
 from django.contrib.auth.models import Group
 from rest_framework import serializers
 
+from apps.attachments.models import Attachment
+from apps.attachments.serializers import AttachmentSummarySerializer
+from apps.attachments.services import active_attachments_for
+
 from .models import ShopSettings
 from .roles import CASHIER_GROUP, MANAGER_GROUP, ROLE_GROUPS
 
@@ -116,6 +120,18 @@ class PosUserSerializer(serializers.ModelSerializer):
 
 
 class ShopSettingsSerializer(serializers.ModelSerializer):
+    logo_attachment = serializers.SerializerMethodField()
+
+    def get_logo_attachment(self, settings):
+        attachment = (
+            active_attachments_for(settings, role=Attachment.Role.SHOP_LOGO)
+            .filter(is_primary=True)
+            .first()
+        )
+        if attachment is None:
+            return None
+        return AttachmentSummarySerializer(attachment, context=self.context).data
+
     def validate(self, attrs):
         settings = self.instance or ShopSettings.load()
         enable_cash = attrs.get("enable_cash_payments", settings.enable_cash_payments)
@@ -146,6 +162,7 @@ class ShopSettingsSerializer(serializers.ModelSerializer):
             "enable_transfer_payments",
             "card_commission_percent",
             "transfer_commission_percent",
+            "logo_attachment",
             "updated_at",
         ]
-        read_only_fields = ["updated_at"]
+        read_only_fields = ["logo_attachment", "updated_at"]

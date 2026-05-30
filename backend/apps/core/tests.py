@@ -1,9 +1,12 @@
+import tempfile
 from decimal import Decimal
+from pathlib import Path
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.management import call_command
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 from rest_framework import status
@@ -11,6 +14,7 @@ from rest_framework.test import APIClient
 
 from apps.catalog.models import ProductVariant
 from apps.catalog.testing import create_product_with_default_variant
+from apps.attachments.models import Attachment
 from apps.inventory.models import StockItem, StockMovement
 from apps.payments.models import Payment
 from apps.analytics.models import AnalyticsEvent
@@ -318,6 +322,68 @@ class ShopSettingsApiTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("payment_methods", response.data)
 
+    def test_manager_can_upload_and_remove_shop_logo(self):
+        client = APIClient()
+        client.force_authenticate(user=self.manager)
+
+        with tempfile.TemporaryDirectory() as storage_root:
+            (Path(storage_root) / "volume-a").mkdir()
+            with override_settings(
+                POINTY_ATTACHMENT_STORAGE_ROOT=storage_root,
+                POINTY_ATTACHMENT_ALLOWED_CONTENT_TYPES=[],
+                POINTY_ATTACHMENT_MAX_UPLOAD_BYTES=1024 * 1024,
+            ):
+                upload_response = client.post(
+                    reverse("shop-settings-logo"),
+                    {
+                        "file": SimpleUploadedFile(
+                            "logo.png",
+                            b"shop logo bytes",
+                            content_type="image/png",
+                        ),
+                    },
+                    format="multipart",
+                )
+                read_response = client.get(reverse("shop-settings"))
+                delete_response = client.delete(reverse("shop-settings-logo"))
+
+        self.assertEqual(upload_response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(
+            upload_response.data["logo_attachment"]["role"],
+            Attachment.Role.SHOP_LOGO,
+        )
+        self.assertTrue(upload_response.data["logo_attachment"]["is_primary"])
+        self.assertIn("content_url", upload_response.data["logo_attachment"])
+        self.assertEqual(
+            read_response.data["logo_attachment"]["id"],
+            upload_response.data["logo_attachment"]["id"],
+        )
+        self.assertEqual(delete_response.status_code, status.HTTP_200_OK)
+        self.assertIsNone(delete_response.data["logo_attachment"])
+        self.assertEqual(
+            Attachment.objects.get(pk=upload_response.data["logo_attachment"]["id"]).status,
+            Attachment.Status.DELETED,
+        )
+
+    def test_shop_logo_rejects_non_reportable_files(self):
+        client = APIClient()
+        client.force_authenticate(user=self.manager)
+
+        response = client.post(
+            reverse("shop-settings-logo"),
+            {
+                "file": SimpleUploadedFile(
+                    "logo.svg",
+                    b"<svg />",
+                    content_type="image/svg+xml",
+                ),
+            },
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(Attachment.objects.count(), 0)
+
     def test_cashier_can_read_but_not_update_shop_settings(self):
         client = APIClient()
         client.force_authenticate(user=self.cashier)
@@ -328,10 +394,12 @@ class ShopSettingsApiTests(TestCase):
             {"shop_name": "غير مسموح"},
             format="json",
         )
+        upload_response = client.post(reverse("shop-settings-logo"), {}, format="multipart")
 
         self.assertEqual(read_response.status_code, status.HTTP_200_OK)
         self.assertIn("auto_print_receipts", read_response.data)
         self.assertEqual(update_response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(upload_response.status_code, status.HTTP_403_FORBIDDEN)
 
 
 class DashboardApiTests(TestCase):

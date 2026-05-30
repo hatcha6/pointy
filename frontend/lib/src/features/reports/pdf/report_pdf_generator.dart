@@ -222,6 +222,8 @@ class _Header extends pw.StatelessWidget {
 
   @override
   pw.Widget build(pw.Context context) {
+    final logoProvider = _logoProvider(report.businessLogoBytes);
+
     return pw.Container(
       padding: const pw.EdgeInsets.only(bottom: 10),
       decoration: const pw.BoxDecoration(
@@ -230,6 +232,20 @@ class _Header extends pw.StatelessWidget {
       child: pw.Row(
         crossAxisAlignment: pw.CrossAxisAlignment.start,
         children: [
+          if (logoProvider != null) ...[
+            pw.Container(
+              width: 48,
+              height: 48,
+              padding: const pw.EdgeInsets.all(4),
+              decoration: pw.BoxDecoration(
+                color: _ReportColors.fill,
+                border: pw.Border.all(color: _ReportColors.border),
+                borderRadius: const pw.BorderRadius.all(pw.Radius.circular(4)),
+              ),
+              child: pw.Image(logoProvider, fit: pw.BoxFit.contain),
+            ),
+            pw.SizedBox(width: 10),
+          ],
           pw.Expanded(
             child: pw.Column(
               crossAxisAlignment: pw.CrossAxisAlignment.start,
@@ -273,6 +289,17 @@ class _Header extends pw.StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+pw.ImageProvider? _logoProvider(Uint8List? bytes) {
+  if (bytes == null || bytes.isEmpty) {
+    return null;
+  }
+  try {
+    return pw.MemoryImage(bytes);
+  } on Object {
+    return null;
   }
 }
 

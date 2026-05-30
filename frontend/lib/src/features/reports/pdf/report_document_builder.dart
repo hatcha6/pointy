@@ -1,7 +1,10 @@
+import 'dart:typed_data';
+
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../data/models/pos_user.dart';
 import '../../../data/models/report_run.dart';
+import '../../../data/models/shop_settings.dart';
 import 'report_pdf.dart';
 
 BusinessReportPdfDocument buildBusinessReportPdfDocument({
@@ -10,6 +13,8 @@ BusinessReportPdfDocument buildBusinessReportPdfDocument({
   required PosUser currentUser,
   required bool includeAuditTrail,
   required bool includePreparedBy,
+  ShopSettings? shopSettings,
+  Uint8List? shopLogoBytes,
 }) {
   final payload = run.payload;
   final period = _periodFromPayload(payload);
@@ -19,8 +24,11 @@ BusinessReportPdfDocument buildBusinessReportPdfDocument({
   return BusinessReportPdfDocument(
     type: _businessReportType(run.reportType),
     title: _reportTitle(l10n, run.reportType),
-    businessName: l10n.appTitle,
+    businessName: shopSettings?.shopName.trim().isNotEmpty == true
+        ? shopSettings!.shopName.trim()
+        : l10n.appTitle,
     generatedAt: run.completedAt ?? run.createdAt,
+    businessLogoBytes: shopLogoBytes,
     generatedBy: includePreparedBy ? currentUser.label : null,
     reference: run.checksum.isEmpty
         ? 'RPT-${run.id}'

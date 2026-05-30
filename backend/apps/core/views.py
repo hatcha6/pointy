@@ -1,13 +1,16 @@
 from django.contrib.auth import get_user_model
 from django.contrib.auth import login, logout
 from django.middleware.csrf import get_token
-from rest_framework import status, views, viewsets
+from rest_framework import parsers, status, views, viewsets
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
 from apps.analytics.models import AnalyticsEvent
 from apps.analytics.services import record_domain_event
+from apps.attachments.models import Attachment
+from apps.attachments.serializers import AttachmentSerializer
+from apps.attachments.services import active_attachments_for, content_type_for_upload
 
 from .permissions import HasPointyPermission
 from .roles import ensure_role_groups
@@ -19,6 +22,9 @@ from .serializers import (
     UserSerializer,
 )
 from .user_activity import build_user_activity
+
+
+SHOP_LOGO_ALLOWED_CONTENT_TYPES = {"image/jpeg", "image/png"}
 
 
 @api_view(["POST"])
@@ -146,7 +152,10 @@ class ShopSettingsView(views.APIView):
         return ("core.view_shopsettings",)
 
     def get(self, request):
-        serializer = ShopSettingsSerializer(ShopSettings.load())
+        serializer = ShopSettingsSerializer(
+            ShopSettings.load(),
+            context={"request": request},
+        )
         return Response(serializer.data)
 
     def patch(self, request):
@@ -187,4 +196,79 @@ class ShopSettingsView(views.APIView):
                 "enable_transfer_payments": settings.enable_transfer_payments,
             },
         )
-        return Response(serializer.data)
+        return Response(
+            ShopSettingsSerializer(settings, context={"request": request}).data
+        )
+
+
+class ShopSettingsLogoView(views.APIView):
+    permission_classes = [IsAuthenticated, HasPointyPermission]
+    parser_classes = [parsers.MultiPartParser, parsers.FormParser]
+
+    def get_required_permissions(self, request):
+        return ("core.change_shopsettings",)
+
+    def post(self, request):
+        settings = ShopSettings.load()
+        data = request.data.copy()
+        uploaded_file = data.get("file")
+        content_type = (
+            content_type_for_upload(uploaded_file).lower() if uploaded_file else ""
+        )
+        if content_type not in SHOP_LOGO_ALLOWED_CONTENT_TYPES:
+            return Response(
+                {"file": ["Shop logo must be a PNG or JPEG image."]},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        data["role"] = Attachment.Role.SHOP_LOGO
+        data["is_primary"] = True
+        serializer = AttachmentSerializer(
+            data=data,
+            context={"request": request, "owner": settings},
+        )
+        serializer.is_valid(raise_exception=True)
+        attachment = serializer.save()
+        old_attachments = (
+            active_attachments_for(settings, role=Attachment.Role.SHOP_LOGO)
+            .exclude(pk=attachment.pk)
+        )
+        removed_count = 0
+        for old_attachment in old_attachments:
+            old_attachment.soft_delete(deleted_by=request.user)
+            removed_count += 1
+        record_domain_event(
+            name="settings.shop.logo_uploaded",
+            event_type=AnalyticsEvent.EventType.AUDIT,
+            user=request.user,
+            entity_type="shop_settings",
+            entity_id=settings.pk,
+            attributes={
+                "attachment_id": attachment.pk,
+                "content_type": attachment.content_type,
+                "original_size": attachment.original_size,
+                "replaced_count": removed_count,
+            },
+        )
+        return Response(
+            ShopSettingsSerializer(settings, context={"request": request}).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+    def delete(self, request):
+        settings = ShopSettings.load()
+        attachments = list(
+            active_attachments_for(settings, role=Attachment.Role.SHOP_LOGO)
+        )
+        for attachment in attachments:
+            attachment.soft_delete(deleted_by=request.user)
+        record_domain_event(
+            name="settings.shop.logo_removed",
+            event_type=AnalyticsEvent.EventType.AUDIT,
+            user=request.user,
+            entity_type="shop_settings",
+            entity_id=settings.pk,
+            attributes={"removed_count": len(attachments)},
+        )
+        return Response(
+            ShopSettingsSerializer(settings, context={"request": request}).data
+        )

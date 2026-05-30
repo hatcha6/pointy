@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import 'app_dependencies.dart';
@@ -10,6 +12,7 @@ import 'data/models/pos_user.dart';
 import 'data/models/purchase_submission.dart';
 import 'data/models/analytics_event.dart';
 import 'data/models/report_run.dart';
+import 'data/models/shop_settings.dart';
 import 'features/catalog/view_models/catalog_view_model.dart';
 import 'features/catalog/view_models/category_management_view_model.dart';
 import 'features/catalog/views/category_management_screen.dart';
@@ -1073,12 +1076,19 @@ class _AuthenticatedRoutes {
             metrics: {'row_count': run.rowCount},
           ),
         );
+        final shopSettings = await _loadShopSettingsForReport();
+        final shopLogoBytes = await _loadShopLogoBytes(shopSettings);
+        if (!context.mounted) {
+          return null;
+        }
         return buildBusinessReportPdfDocument(
           run: run,
           l10n: AppLocalizations.of(context)!,
           currentUser: currentUser,
           includeAuditTrail: request.includeAuditTrail,
           includePreparedBy: request.includePreparedBy,
+          shopSettings: shopSettings,
+          shopLogoBytes: shopLogoBytes,
         );
       case Error<ReportRun>():
         unawaited(
@@ -1095,6 +1105,59 @@ class _AuthenticatedRoutes {
         );
         return null;
     }
+  }
+
+  Future<ShopSettings?> _loadShopSettingsForReport() async {
+    final result = await dependencies.shopSettingsRepository.loadSettings();
+    return switch (result) {
+      Ok<ShopSettings>(value: final settings) => settings,
+      Error<ShopSettings>() => null,
+    };
+  }
+
+  Future<Uint8List?> _loadShopLogoBytes(ShopSettings? settings) async {
+    final attachment = settings?.logoAttachment;
+    final logoUrl = attachment?.contentUrl.trim();
+    final contentType = attachment?.contentType.toLowerCase() ?? '';
+    if (logoUrl == null ||
+        logoUrl.isEmpty ||
+        !_reportPdfLogoContentTypes.contains(contentType)) {
+      return null;
+    }
+
+    final logoUri = _resolveApiUri(logoUrl);
+    if (logoUri == null) {
+      return null;
+    }
+
+    try {
+      final response = await http.get(logoUri);
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        return response.bodyBytes;
+      }
+    } on Exception {
+      return null;
+    }
+    return null;
+  }
+
+  Uri? _resolveApiUri(String rawUrl) {
+    final uri = Uri.tryParse(rawUrl);
+    if (uri == null) {
+      return null;
+    }
+    if (uri.hasScheme) {
+      return uri;
+    }
+
+    final baseUri = Uri.tryParse(dependencies.service.baseUrl);
+    if (baseUri == null) {
+      return null;
+    }
+    final directoryBase = baseUri.path.endsWith('/')
+        ? baseUri
+        : baseUri.replace(path: '${baseUri.path}/');
+    return directoryBase.resolveUri(uri);
   }
 
   Map<String, Object?> _reportAttributes(ReportRequest request) {
@@ -1131,3 +1194,5 @@ class _AuthenticatedRoutes {
     ).showSnackBar(SnackBar(content: Text(message)));
   }
 }
+
+const _reportPdfLogoContentTypes = {'image/jpeg', 'image/jpg', 'image/png'};

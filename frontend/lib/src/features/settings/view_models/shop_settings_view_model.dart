@@ -70,6 +70,44 @@ class ShopSettingsViewModel extends ChangeNotifier {
     }
   }
 
+  Future<bool> uploadLogo(ShopLogoUpload upload) async {
+    _isSaving = true;
+    _hasSaveError = false;
+    notifyListeners();
+
+    final result = await _repository.uploadLogo(upload);
+    _isSaving = false;
+    switch (result) {
+      case Ok<ShopSettings>():
+        _settings = result.value;
+        notifyListeners();
+        return true;
+      case Error<ShopSettings>():
+        _hasSaveError = true;
+        notifyListeners();
+        return false;
+    }
+  }
+
+  Future<bool> removeLogo() async {
+    _isSaving = true;
+    _hasSaveError = false;
+    notifyListeners();
+
+    final result = await _repository.removeLogo();
+    _isSaving = false;
+    switch (result) {
+      case Ok<ShopSettings>():
+        _settings = result.value;
+        notifyListeners();
+        return true;
+      case Error<ShopSettings>():
+        _hasSaveError = true;
+        notifyListeners();
+        return false;
+    }
+  }
+
   Future<AnalyticsExportFile?> exportAnalyticsEvents(
     AnalyticsExportQuery query,
   ) async {
