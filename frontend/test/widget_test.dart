@@ -1656,6 +1656,39 @@ void main() {
     expect(find.text('نقدية الافتتاح'), findsNothing);
   });
 
+  testWidgets('login screen adapts between compact and wide layouts', (
+    WidgetTester tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    tester.view.physicalSize = const Size(390, 844);
+    await tester.pumpWidget(
+      PointyApp(apiService: _mockApiService(isAuthenticated: false)),
+    );
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+
+    expect(find.byKey(const ValueKey('login_compact_header')), findsOneWidget);
+    expect(find.byKey(const ValueKey('login_brand_panel')), findsNothing);
+    expect(find.text('نقطة البيع'), findsOneWidget);
+    expect(find.text('تسجيل الدخول'), findsOneWidget);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pumpAndSettle();
+
+    tester.view.physicalSize = const Size(1200, 900);
+    await tester.pumpWidget(
+      PointyApp(apiService: _mockApiService(isAuthenticated: false)),
+    );
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+
+    expect(find.byKey(const ValueKey('login_brand_panel')), findsOneWidget);
+    expect(find.byKey(const ValueKey('login_compact_header')), findsNothing);
+    expect(find.text('نقطة البيع'), findsOneWidget);
+    expect(find.text('تسجيل الدخول'), findsOneWidget);
+  });
+
   testWidgets('manager can open user management', (WidgetTester tester) async {
     await tester.pumpWidget(PointyApp(apiService: _mockApiService()));
     await tester.pumpAndSettle(const Duration(seconds: 1));
