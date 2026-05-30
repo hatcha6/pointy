@@ -2020,6 +2020,11 @@ void main() {
   testWidgets('register session history shows sessions and linked sales', (
     WidgetTester tester,
   ) async {
+    tester.view.physicalSize = const Size(1200, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
     await tester.pumpWidget(PointyApp(apiService: _mockApiService()));
     await tester.pumpAndSettle(const Duration(seconds: 1));
 
@@ -2056,6 +2061,39 @@ void main() {
 
     expect(find.text('إضافة نقدية'), findsOneWidget);
     expect(find.textContaining('تسوية الصندوق'), findsOneWidget);
+  });
+
+  testWidgets('register session history opens compact details in a sheet', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(PointyApp(apiService: _mockApiService()));
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+
+    await tester.tap(find.byIcon(Icons.menu));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('جلسات الدرج'));
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+
+    expect(find.text('جلسة RS-1'), findsOneWidget);
+    expect(find.text('اختر جلسة درج لعرض مبيعاتها.'), findsNothing);
+
+    await tester.tap(find.text('جلسة RS-1'));
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+
+    expect(find.text('مبيعات جلسة RS-1'), findsOneWidget);
+    expect(find.text('الملخص'), findsOneWidget);
+    expect(find.text('المبيعات'), findsOneWidget);
+    expect(find.text('حركات النقد'), findsOneWidget);
+
+    await tester.tap(find.text('المبيعات'));
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+
+    expect(find.text('إيصال R-100'), findsOneWidget);
   });
 
   testWidgets('sale details can request a receipt reprint', (

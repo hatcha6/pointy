@@ -1,11 +1,15 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../core/authorization.dart';
+import '../../../data/models/register_session.dart';
 import '../../../data/models/pos_user.dart';
 import '../../../data/repositories/contact_repository.dart';
 import '../../../shared/app_navigation_drawer.dart';
 import '../../../shared/authorization_guards.dart';
+import '../../../shared/design/design.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../view_models/register_session_history_view_model.dart';
 import 'register_session_list.dart';
@@ -127,24 +131,97 @@ class _HistoryWorkspace extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final sessions = RegisterSessionList(
-      viewModel: viewModel,
-      capabilities: capabilities,
-    );
-    final orders = SessionOrders(
-      viewModel: viewModel,
-      contactRepository: contactRepository,
-      capabilities: capabilities,
-    );
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.hasBoundedWidth
+            ? constraints.maxWidth
+            : MediaQuery.sizeOf(context).width;
+        final isCompact = width < 900;
+        final sessions = RegisterSessionList(
+          viewModel: viewModel,
+          capabilities: capabilities,
+          onSessionSelected: isCompact
+              ? (session) {
+                  unawaited(_showSessionDetailsSheet(context, session));
+                }
+              : null,
+        );
 
-    return TwoPaneLayout(
-      dualPaneBreakpoint: 900,
-      primaryPane: orders,
-      secondaryPane: sessions,
-      secondaryFirst: true,
-      secondaryPaneWidth: 420,
-      compactPrimaryFlex: 1,
-      compactSecondaryFlex: 1,
+        if (isCompact) {
+          return sessions;
+        }
+
+        final orders = SessionOrders(
+          viewModel: viewModel,
+          contactRepository: contactRepository,
+          capabilities: capabilities,
+        );
+
+        return TwoPaneLayout(
+          dualPaneBreakpoint: 900,
+          primaryPane: orders,
+          secondaryPane: sessions,
+          secondaryFirst: true,
+          secondaryPaneWidth: 420,
+          compactPrimaryFlex: 1,
+          compactSecondaryFlex: 1,
+        );
+      },
+    );
+  }
+
+  Future<void> _showSessionDetailsSheet(
+    BuildContext context,
+    RegisterSession session,
+  ) async {
+    unawaited(viewModel.selectSession(session));
+    await showAdaptiveModalBottomSheet<void>(
+      context: context,
+      size: AdaptiveModalSize.expanded,
+      maxHeightFactor: 0.92,
+      builder: (context) {
+        return _CompactSessionDetailsSheet(
+          viewModel: viewModel,
+          contactRepository: contactRepository,
+          capabilities: capabilities,
+        );
+      },
+    );
+  }
+}
+
+class _CompactSessionDetailsSheet extends StatelessWidget {
+  const _CompactSessionDetailsSheet({
+    required this.viewModel,
+    required this.contactRepository,
+    required this.capabilities,
+  });
+
+  final RegisterSessionHistoryViewModel viewModel;
+  final ContactRepository contactRepository;
+  final AuthorizationCapabilities capabilities;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.pointyColors;
+
+    return Material(
+      color: colors.surface,
+      borderRadius: BorderRadius.circular(PointyRadii.sheet),
+      clipBehavior: Clip.antiAlias,
+      child: SafeArea(
+        top: false,
+        child: ListenableBuilder(
+          listenable: viewModel,
+          builder: (context, _) {
+            return SessionOrders(
+              viewModel: viewModel,
+              contactRepository: contactRepository,
+              capabilities: capabilities,
+            );
+          },
+        ),
+      ),
     );
   }
 }

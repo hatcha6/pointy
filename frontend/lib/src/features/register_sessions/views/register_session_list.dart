@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
@@ -15,10 +17,12 @@ class RegisterSessionList extends StatelessWidget {
     super.key,
     required this.viewModel,
     required this.capabilities,
+    this.onSessionSelected,
   });
 
   final RegisterSessionHistoryViewModel viewModel;
   final AuthorizationCapabilities capabilities;
+  final void Function(RegisterSession session)? onSessionSelected;
 
   @override
   Widget build(BuildContext context) {
@@ -54,13 +58,20 @@ class RegisterSessionList extends StatelessWidget {
                   return RegisterSessionOrdersCapabilityBuilder(
                     capabilities: capabilities,
                     builder: (context, canViewOrders) {
+                      void handleTap() {
+                        final handler = onSessionSelected;
+                        if (handler != null) {
+                          handler(session);
+                          return;
+                        }
+                        unawaited(viewModel.selectSession(session));
+                      }
+
                       return RegisterSessionTile(
                         session: session,
                         isSelected: viewModel.selectedSession?.id == session.id,
                         showCashVariance: capabilities.canManageShopSettings,
-                        onTap: canViewOrders
-                            ? () => viewModel.selectSession(session)
-                            : null,
+                        onTap: canViewOrders ? handleTap : null,
                       );
                     },
                   );
