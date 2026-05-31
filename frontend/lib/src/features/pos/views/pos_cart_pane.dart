@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../core/authorization.dart';
+import '../../../data/models/sale_order.dart';
 import '../../../data/repositories/contact_repository.dart';
 import '../../../data/repositories/sale_repository.dart';
 import '../../../shared/authorization_guards.dart';
@@ -122,6 +123,20 @@ class PosCartPane extends StatelessWidget {
         );
       return;
     }
+    final lossLines = viewModel.checkoutLossLines();
+    if (lossLines.isNotEmpty) {
+      final shouldContinue = await _showLossWarningDialog(
+        context,
+        lossLines: lossLines,
+        canSellAtLoss: !viewModel.preventSellingAtLoss,
+      );
+      if (shouldContinue != true) {
+        return;
+      }
+      if (!context.mounted) {
+        return;
+      }
+    }
 
     final payment = await _showPaymentDialog(context);
     if (payment == null) {
@@ -141,6 +156,14 @@ class PosCartPane extends StatelessWidget {
         context,
         shortages: outcome.shortages,
         canOversell: false,
+      );
+      return;
+    }
+    if (outcome.isLossRejected) {
+      await _showLossWarningDialog(
+        context,
+        lossLines: outcome.lossLines,
+        canSellAtLoss: false,
       );
       return;
     }
@@ -220,6 +243,61 @@ class PosCartPane extends StatelessWidget {
               ),
             ),
             if (canOversell)
+              FilledButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                child: Text(l10n.continueSaleButton),
+              ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<bool?> _showLossWarningDialog(
+    BuildContext context, {
+    required List<SaleLossLine> lossLines,
+    required bool canSellAtLoss,
+  }) {
+    final l10n = AppLocalizations.of(context)!;
+    return showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          icon: const Icon(Icons.warning_amber_outlined),
+          title: Text(l10n.lossSaleWarningTitle),
+          content: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 420),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  canSellAtLoss
+                      ? l10n.lossSaleWarningMessage
+                      : l10n.lossSaleBlockedMessage,
+                ),
+                const SizedBox(height: 12),
+                for (final line in lossLines)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 4),
+                    child: Text(
+                      l10n.lossSaleLine(
+                        line.productName,
+                        formatMoney(line.lossAmount),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: Text(
+                canSellAtLoss ? l10n.cancelButton : l10n.reviewCartButton,
+              ),
+            ),
+            if (canSellAtLoss)
               FilledButton(
                 onPressed: () => Navigator.of(context).pop(true),
                 child: Text(l10n.continueSaleButton),

@@ -22,6 +22,12 @@ class SaleCheckoutStockException implements Exception {
   final List<SaleStockShortage> shortages;
 }
 
+class SaleCheckoutLossException implements Exception {
+  const SaleCheckoutLossException(this.lossLines);
+
+  final List<SaleLossLine> lossLines;
+}
+
 class SaleRepository {
   SaleRepository(this._service);
 
@@ -34,6 +40,10 @@ class SaleRepository {
       final shortages = _stockShortagesFromException(exception);
       if (shortages.isNotEmpty) {
         return Error(SaleCheckoutStockException(shortages));
+      }
+      final lossLines = _lossLinesFromException(exception);
+      if (lossLines.isNotEmpty) {
+        return Error(SaleCheckoutLossException(lossLines));
       }
       return Error(exception);
     } on Exception catch (exception) {
@@ -110,6 +120,24 @@ class SaleRepository {
             available: _intFromJson(item['available']),
           );
         })
+        .toList(growable: false);
+  }
+
+  List<SaleLossLine> _lossLinesFromException(PosApiException exception) {
+    if (exception.statusCode != 400) {
+      return const [];
+    }
+    final decoded = exception.decodedBody;
+    if (decoded is! Map<String, Object?>) {
+      return const [];
+    }
+    final loss = decoded['loss'];
+    if (loss is! List<Object?>) {
+      return const [];
+    }
+    return loss
+        .whereType<Map<String, Object?>>()
+        .map(SaleLossLine.fromJson)
         .toList(growable: false);
   }
 

@@ -10,6 +10,7 @@ class ShopSettings {
     required this.requireOpeningCash,
     required this.autoPrintReceipts,
     required this.allowOverselling,
+    required this.preventSellingAtLoss,
     required this.lowStockThreshold,
     required this.cashierReturnWindowHours,
     required this.enableCashPayments,
@@ -26,6 +27,7 @@ class ShopSettings {
   final bool requireOpeningCash;
   final bool autoPrintReceipts;
   final bool allowOverselling;
+  final bool preventSellingAtLoss;
   final int lowStockThreshold;
   final int cashierReturnWindowHours;
   final bool enableCashPayments;
@@ -50,6 +52,10 @@ class ShopSettings {
       allowOverselling: json['allow_overselling'] is bool
           ? json['allow_overselling'] as bool
           : json['allow_overselling']?.toString() == 'true',
+      preventSellingAtLoss: _boolFromJson(
+        json['prevent_selling_at_loss'],
+        true,
+      ),
       lowStockThreshold: (json['low_stock_threshold'] as num?)?.toInt() ?? 5,
       cashierReturnWindowHours:
           (json['cashier_return_window_hours'] as num?)?.toInt() ?? 42,
@@ -91,6 +97,7 @@ class ShopSettingsDraft {
     required this.requireOpeningCash,
     required this.autoPrintReceipts,
     required this.allowOverselling,
+    required this.preventSellingAtLoss,
     required this.lowStockThreshold,
     required this.cashierReturnWindowHours,
     required this.enableCashPayments,
@@ -106,6 +113,7 @@ class ShopSettingsDraft {
   final bool requireOpeningCash;
   final bool autoPrintReceipts;
   final bool allowOverselling;
+  final bool preventSellingAtLoss;
   final int lowStockThreshold;
   final int cashierReturnWindowHours;
   final bool enableCashPayments;
@@ -122,6 +130,7 @@ class ShopSettingsDraft {
       'require_opening_cash': requireOpeningCash,
       'auto_print_receipts': autoPrintReceipts,
       'allow_overselling': allowOverselling,
+      'prevent_selling_at_loss': preventSellingAtLoss,
       'low_stock_threshold': lowStockThreshold,
       'cashier_return_window_hours': cashierReturnWindowHours,
       'enable_cash_payments': enableCashPayments,

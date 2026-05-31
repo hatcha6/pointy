@@ -1741,7 +1741,7 @@ abstract class AppLocalizations {
   /// No description provided for @inventorySettingsSectionTitle.
   ///
   /// In ar, this message translates to:
-  /// **'تنبيهات المخزون'**
+  /// **'المخزون والربحية'**
   String get inventorySettingsSectionTitle;
 
   /// No description provided for @analyticsExportSectionTitle.
@@ -1789,8 +1789,12 @@ abstract class AppLocalizations {
   /// Summary for inventory settings in the shop settings index.
   ///
   /// In ar, this message translates to:
-  /// **'تنبيه عند {count} قطع أو أقل، البيع فوق المخزون: {status}'**
-  String inventorySettingsSummary(int count, String status);
+  /// **'تنبيه عند {count} قطع أو أقل، البيع فوق المخزون: {oversellStatus}، منع الخسارة: {lossStatus}'**
+  String inventorySettingsSummary(
+    int count,
+    String oversellStatus,
+    String lossStatus,
+  );
 
   /// Summary for payment settings in the shop settings index.
   ///
@@ -2161,6 +2165,18 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'السماح بالبيع فوق المخزون'**
   String get allowOversellingLabel;
+
+  /// No description provided for @preventSellingAtLossLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'منع البيع بخسارة'**
+  String get preventSellingAtLossLabel;
+
+  /// No description provided for @preventSellingAtLossSubtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'عند إيقافه سيظهر تحذير للكاشير قبل إتمام بيع بخسارة.'**
+  String get preventSellingAtLossSubtitle;
 
   /// No description provided for @paymentMethodCash.
   ///
@@ -5627,6 +5643,30 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'{productName}: المطلوب {requested}، المتاح {available}'**
   String oversellLine(String productName, int requested, int available);
+
+  /// No description provided for @lossSaleWarningTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'تنبيه الخسارة'**
+  String get lossSaleWarningTitle;
+
+  /// No description provided for @lossSaleWarningMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'نحن نبيع بعض عناصر السلة بخسارة. هل تريد إتمام البيع رغم ذلك؟'**
+  String get lossSaleWarningMessage;
+
+  /// No description provided for @lossSaleBlockedMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا يمكن إتمام البيع لأن إعدادات المتجر تمنع البيع بخسارة.'**
+  String get lossSaleBlockedMessage;
+
+  /// Loss-making sale line in the loss warning dialog.
+  ///
+  /// In ar, this message translates to:
+  /// **'{productName}: الخسارة {amount}'**
+  String lossSaleLine(String productName, String amount);
 
   /// No description provided for @reviewCartButton.
   ///

@@ -54,6 +54,10 @@ extension PosCheckoutActions on PosViewModel {
     return shortages;
   }
 
+  List<SaleLossLine> checkoutLossLines() {
+    return _discountPreview?.lossLines ?? const [];
+  }
+
   Future<SaleCheckoutOutcome> checkoutCurrentSale({
     required List<SaleCheckoutPaymentDraft> payments,
   }) async {
@@ -188,6 +192,9 @@ extension PosCheckoutActions on PosViewModel {
           );
           return SaleCheckoutOutcome.stockRejected(exception.shortages);
         }
+        if (exception is SaleCheckoutLossException) {
+          return SaleCheckoutOutcome.lossRejected(exception.lossLines);
+        }
         unawaited(
           _analyticsEngine?.trackPerformance(
                 name: analyticsEventNameToJson(
@@ -289,9 +296,11 @@ class SaleCheckoutOutcome {
   const SaleCheckoutOutcome._({
     required this.isSuccess,
     required this.isStockRejected,
+    required this.isLossRejected,
     this.order,
     this.printStatus = InvoicePrintStatus.notRequested,
     this.shortages = const [],
+    this.lossLines = const [],
   });
 
   const SaleCheckoutOutcome.success(
@@ -300,19 +309,35 @@ class SaleCheckoutOutcome {
   ) : this._(
         isSuccess: true,
         isStockRejected: false,
+        isLossRejected: false,
         order: order,
         printStatus: printStatus,
       );
 
   const SaleCheckoutOutcome.failure()
-    : this._(isSuccess: false, isStockRejected: false);
+    : this._(isSuccess: false, isStockRejected: false, isLossRejected: false);
 
   const SaleCheckoutOutcome.stockRejected(List<SaleStockShortage> shortages)
-    : this._(isSuccess: false, isStockRejected: true, shortages: shortages);
+    : this._(
+        isSuccess: false,
+        isStockRejected: true,
+        isLossRejected: false,
+        shortages: shortages,
+      );
+
+  const SaleCheckoutOutcome.lossRejected(List<SaleLossLine> lossLines)
+    : this._(
+        isSuccess: false,
+        isStockRejected: false,
+        isLossRejected: true,
+        lossLines: lossLines,
+      );
 
   final bool isSuccess;
   final bool isStockRejected;
+  final bool isLossRejected;
   final SaleOrder? order;
   final InvoicePrintStatus printStatus;
   final List<SaleStockShortage> shortages;
+  final List<SaleLossLine> lossLines;
 }

@@ -189,6 +189,121 @@ def latest_sale_unit_cost(variant):
     return latest_variant_unit_cost(variant.pk) or Decimal("0.00")
 
 
+def checkout_loss_lines(lines_data, discount_result=None):
+    discount_by_line_key = (
+        discount_allocations_by_line_key(discount_result)
+        if discount_result is not None
+        else {}
+    )
+    loss_lines = []
+    for line_data in lines_data:
+        variant = line_data["variant"]
+        quantity = int(line_data["quantity"])
+        unit_cost = money(latest_sale_unit_cost(variant))
+        if quantity <= 0 or unit_cost <= 0:
+            continue
+
+        unit_price = money(variant.unit_price)
+        line_subtotal = money(unit_price * quantity)
+        line_key = checkout_line_key(line_data)
+        discount_total = min(
+            money(discount_by_line_key.get(line_key, Decimal("0.00"))),
+            line_subtotal,
+        )
+        line_total = money(line_subtotal - discount_total)
+        line_cost = money(unit_cost * quantity)
+        if line_total < line_cost:
+            loss_lines.append(
+                sale_loss_line_payload(
+                    line_key=line_key,
+                    variant=variant,
+                    quantity=quantity,
+                    unit_price=unit_price,
+                    unit_cost=unit_cost,
+                    discount_total=discount_total,
+                    line_total=line_total,
+                    line_cost=line_cost,
+                )
+            )
+    return loss_lines
+
+
+def order_loss_lines(order):
+    loss_lines = []
+    lines = order.lines.select_related("variant", "variant__product")
+    for line in lines:
+        if line.quantity <= 0 or line.unit_cost <= 0:
+            continue
+        if line.line_total < line.line_cost:
+            loss_lines.append(
+                sale_loss_line_payload(
+                    line_key=str(line.pk),
+                    variant=line.variant,
+                    quantity=line.quantity,
+                    unit_price=line.unit_price,
+                    unit_cost=line.unit_cost,
+                    discount_total=line.discount_total,
+                    line_total=line.line_total,
+                    line_cost=line.line_cost,
+                )
+            )
+    return loss_lines
+
+
+def sale_loss_line_payload(
+    *,
+    line_key,
+    variant,
+    quantity,
+    unit_price,
+    unit_cost,
+    discount_total,
+    line_total,
+    line_cost,
+):
+    loss_amount = money(line_cost - line_total)
+    return {
+        "line_key": line_key,
+        "product": variant.product_id,
+        "product_id": variant.product_id,
+        "variant": variant.pk,
+        "variant_id": variant.pk,
+        "product_name": variant.product.name,
+        "variant_name": variant.full_name,
+        "quantity": quantity,
+        "unit_price": f"{unit_price:.2f}",
+        "unit_cost": f"{unit_cost:.2f}",
+        "discount_total": f"{discount_total:.2f}",
+        "line_total": f"{line_total:.2f}",
+        "line_cost": f"{line_cost:.2f}",
+        "loss_amount": f"{loss_amount:.2f}",
+    }
+
+
+def validate_checkout_loss_sales_allowed(*, settings, lines_data, discount_result):
+    if not settings.prevent_selling_at_loss:
+        return
+    loss_lines = checkout_loss_lines(lines_data, discount_result)
+    if loss_lines:
+        raise serializers.ValidationError(sale_loss_blocked_payload(loss_lines))
+
+
+def validate_order_loss_sales_allowed(*, settings, order):
+    if not settings.prevent_selling_at_loss:
+        return
+    loss_lines = order_loss_lines(order)
+    if loss_lines:
+        raise serializers.ValidationError(sale_loss_blocked_payload(loss_lines))
+
+
+def sale_loss_blocked_payload(loss_lines):
+    return {
+        "code": "sale_at_loss_blocked",
+        "detail": "Selling at a loss is disabled for this shop.",
+        "loss": loss_lines,
+    }
+
+
 @transaction.atomic
 def checkout_order(
     *,
@@ -202,7 +317,13 @@ def checkout_order(
 ):
     from apps.payments.serializers import PaymentSerializer
 
-    stock_adjustments = prepare_sale_stock_adjustments(lines_data)
+    settings = ShopSettings.load()
+    validate_checkout_loss_sales_allowed(
+        settings=settings,
+        lines_data=lines_data,
+        discount_result=discount_result,
+    )
+    stock_adjustments = prepare_sale_stock_adjustments(lines_data, settings=settings)
     order = create_order_with_lines(
         register_session=register_session,
         customer=customer,
@@ -254,8 +375,8 @@ def checkout_order(
     return order
 
 
-def prepare_sale_stock_adjustments(lines_data):
-    settings = ShopSettings.load()
+def prepare_sale_stock_adjustments(lines_data, *, settings=None):
+    settings = settings or ShopSettings.load()
     quantities_by_variant = {}
     variants_by_id = {}
     for line_data in lines_data:
@@ -348,6 +469,9 @@ def mark_order_paid(order, *, request=None, stock_already_recorded=False):
         raise serializers.ValidationError(
             {"order": "Only open orders can be marked paid."}
         )
+
+    settings = ShopSettings.load()
+    validate_order_loss_sales_allowed(settings=settings, order=locked_order)
 
     if not stock_already_recorded:
         stock_adjustments = prepare_sale_stock_adjustments_for_order(locked_order)

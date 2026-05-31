@@ -175,6 +175,7 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
   late bool _requireOpeningCash;
   late bool _autoPrintReceipts;
   late bool _allowOverselling;
+  late bool _preventSellingAtLoss;
   late bool _enableCashPayments;
   late bool _enableCardPayments;
   late bool _enableTransferPayments;
@@ -224,6 +225,7 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
       _requireOpeningCash = widget.settings.requireOpeningCash;
       _autoPrintReceipts = widget.settings.autoPrintReceipts;
       _allowOverselling = widget.settings.allowOverselling;
+      _preventSellingAtLoss = widget.settings.preventSellingAtLoss;
       _enableCashPayments = widget.settings.enableCashPayments;
       _enableCardPayments = widget.settings.enableCardPayments;
       _enableTransferPayments = widget.settings.enableTransferPayments;
@@ -273,6 +275,7 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
     _requireOpeningCash = settings.requireOpeningCash;
     _autoPrintReceipts = settings.autoPrintReceipts;
     _allowOverselling = settings.allowOverselling;
+    _preventSellingAtLoss = settings.preventSellingAtLoss;
     _enableCashPayments = settings.enableCashPayments;
     _enableCardPayments = settings.enableCardPayments;
     _enableTransferPayments = settings.enableTransferPayments;
@@ -455,7 +458,10 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
     final status = _allowOverselling
         ? l10n.shopSettingsEnabledValue
         : l10n.shopSettingsDisabledValue;
-    return l10n.inventorySettingsSummary(count, status);
+    final lossStatus = _preventSellingAtLoss
+        ? l10n.shopSettingsEnabledValue
+        : l10n.shopSettingsDisabledValue;
+    return l10n.inventorySettingsSummary(count, status, lossStatus);
   }
 
   String _paymentSummary(AppLocalizations l10n) {
@@ -646,9 +652,14 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
         enabled: !widget.viewModel.isSaving,
         errorText: _lowStockThresholdError(l10n),
         allowOverselling: _allowOverselling,
+        preventSellingAtLoss: _preventSellingAtLoss,
         onThresholdChanged: () => _refreshSettingsGroup(refresh),
         onAllowOversellingChanged: (value) {
           setState(() => _allowOverselling = value);
+          refresh();
+        },
+        onPreventSellingAtLossChanged: (value) {
+          setState(() => _preventSellingAtLoss = value);
           refresh();
         },
       ),
@@ -1044,6 +1055,7 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
         requireOpeningCash: _requireOpeningCash,
         autoPrintReceipts: _autoPrintReceipts,
         allowOverselling: _allowOverselling,
+        preventSellingAtLoss: _preventSellingAtLoss,
         lowStockThreshold:
             int.tryParse(_lowStockThresholdController.text.trim()) ?? 0,
         cashierReturnWindowHours: _cashierReturnWindowHours,

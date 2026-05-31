@@ -157,6 +157,8 @@ class PosViewModel extends ChangeNotifier {
   ProductQuery get query => _query;
   bool get requireOpeningCash => _checkoutSettings?.requireOpeningCash ?? true;
   bool get allowOverselling => _checkoutSettings?.allowOverselling ?? false;
+  bool get preventSellingAtLoss =>
+      _checkoutSettings?.preventSellingAtLoss ?? true;
   bool get shouldShowPrintInvoiceCheckbox =>
       _checkoutSettings != null && !_checkoutSettings!.autoPrintReceipts;
   bool get enableCashPayments => _checkoutSettings?.enableCashPayments ?? true;

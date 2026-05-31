@@ -187,6 +187,7 @@ class ShopSettingsView(views.APIView):
             attributes={
                 "changed_fields": sorted(changed_fields),
                 "allow_overselling": settings.allow_overselling,
+                "prevent_selling_at_loss": settings.prevent_selling_at_loss,
                 "auto_print_receipts": settings.auto_print_receipts,
                 "require_opening_cash": settings.require_opening_cash,
                 "cashier_return_window_hours": settings.cashier_return_window_hours,

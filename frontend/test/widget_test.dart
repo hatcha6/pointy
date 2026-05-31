@@ -629,6 +629,92 @@ void main() {
     expect(find.text('تم تسجيل البيع. رقم الإيصال: R-100'), findsOneWidget);
   });
 
+  testWidgets('checkout blocks loss sale when protection is enabled', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(1200, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    Map<String, Object?>? checkoutBody;
+
+    await tester.pumpWidget(
+      PointyApp(
+        apiService: _mockApiService(
+          saleDiscountPreviewHasLoss: true,
+          onCheckout: (request) {
+            checkoutBody = jsonDecode(request.body) as Map<String, Object?>;
+          },
+        ),
+      ),
+    );
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+
+    await _startRegisterSession(tester);
+    await tester.tap(find.byType(ProductTile).first);
+    await tester.pump();
+
+    await tester.tap(find.text('ادفع 3.50 د.ل'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('تنبيه الخسارة'), findsOneWidget);
+    expect(
+      find.text('لا يمكن إتمام البيع لأن إعدادات المتجر تمنع البيع بخسارة.'),
+      findsOneWidget,
+    );
+    expect(find.text('قهوة البيت: الخسارة 1.00 د.ل'), findsOneWidget);
+    expect(find.text('تأكيد الدفع'), findsNothing);
+    expect(checkoutBody, isNull);
+  });
+
+  testWidgets('checkout warns before allowed loss sale', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(1200, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    Map<String, Object?>? checkoutBody;
+
+    await tester.pumpWidget(
+      PointyApp(
+        apiService: _mockApiService(
+          shopSettingsPreventSellingAtLoss: false,
+          saleDiscountPreviewHasLoss: true,
+          onCheckout: (request) {
+            checkoutBody = jsonDecode(request.body) as Map<String, Object?>;
+          },
+        ),
+      ),
+    );
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+
+    await _startRegisterSession(tester);
+    await tester.tap(find.byType(ProductTile).first);
+    await tester.pump();
+
+    await tester.tap(find.text('ادفع 3.50 د.ل'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('تنبيه الخسارة'), findsOneWidget);
+    expect(
+      find.text(
+        'نحن نبيع بعض عناصر السلة بخسارة. هل تريد إتمام البيع رغم ذلك؟',
+      ),
+      findsOneWidget,
+    );
+    expect(checkoutBody, isNull);
+
+    await tester.tap(find.text('إتمام البيع'));
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+    await _confirmPayment(tester);
+
+    expect(checkoutBody, isNotNull);
+    expect(find.text('تم تسجيل البيع. رقم الإيصال: R-100'), findsOneWidget);
+  });
+
   testWidgets('register gate starts a session before showing POS', (
     WidgetTester tester,
   ) async {
@@ -1836,7 +1922,7 @@ void main() {
     expect(find.text('الطابعة المحلية'), findsNothing);
     expect(find.text('جلسة الدرج'), findsOneWidget);
     expect(find.text('طرق الدفع'), findsOneWidget);
-    expect(find.text('تنبيهات المخزون'), findsOneWidget);
+    expect(find.text('المخزون والربحية'), findsOneWidget);
 
     await tester.tap(find.text('جلسة الدرج'));
     await tester.pumpAndSettle();
@@ -1865,6 +1951,7 @@ void main() {
     expect(settingsBody?['shop_name'], 'متجر الاختبار');
     expect(settingsBody?['cashier_return_window_hours'], 42);
     expect(settingsBody?['enable_card_payments'], true);
+    expect(settingsBody?['prevent_selling_at_loss'], true);
     expect(settingsBody?['card_commission_percent'], '1.00');
     expect(settingsBody?['transfer_commission_percent'], '0.00');
     expect(find.text('تم حفظ إعدادات المتجر.'), findsOneWidget);
@@ -2859,6 +2946,8 @@ PosApiService _mockApiService({
   bool shopSettingsAutoPrint = false,
   bool shopSettingsRequireOpeningCash = true,
   bool shopSettingsAllowOverselling = false,
+  bool shopSettingsPreventSellingAtLoss = true,
+  bool saleDiscountPreviewHasLoss = false,
   int shopSettingsCashierReturnWindowHours = 42,
   int productQuantityOnHand = 12,
   String productBarcode = '',
@@ -2950,6 +3039,7 @@ PosApiService _mockApiService({
               autoPrintReceipts: shopSettingsAutoPrint,
               requireOpeningCash: shopSettingsRequireOpeningCash,
               allowOverselling: shopSettingsAllowOverselling,
+              preventSellingAtLoss: shopSettingsPreventSellingAtLoss,
               cashierReturnWindowHours: shopSettingsCashierReturnWindowHours,
             ),
             ...body,
@@ -2960,6 +3050,7 @@ PosApiService _mockApiService({
             autoPrintReceipts: shopSettingsAutoPrint,
             requireOpeningCash: shopSettingsRequireOpeningCash,
             allowOverselling: shopSettingsAllowOverselling,
+            preventSellingAtLoss: shopSettingsPreventSellingAtLoss,
             cashierReturnWindowHours: shopSettingsCashierReturnWindowHours,
           ),
         );
@@ -2972,6 +3063,7 @@ PosApiService _mockApiService({
               autoPrintReceipts: shopSettingsAutoPrint,
               requireOpeningCash: shopSettingsRequireOpeningCash,
               allowOverselling: shopSettingsAllowOverselling,
+              preventSellingAtLoss: shopSettingsPreventSellingAtLoss,
               cashierReturnWindowHours: shopSettingsCashierReturnWindowHours,
             ),
           );
@@ -2981,6 +3073,7 @@ PosApiService _mockApiService({
             autoPrintReceipts: shopSettingsAutoPrint,
             requireOpeningCash: shopSettingsRequireOpeningCash,
             allowOverselling: shopSettingsAllowOverselling,
+            preventSellingAtLoss: shopSettingsPreventSellingAtLoss,
             cashierReturnWindowHours: shopSettingsCashierReturnWindowHours,
             logoAttachment: const {
               'id': 10,
@@ -3756,7 +3849,9 @@ PosApiService _mockApiService({
 
       if (path.endsWith('/orders/discount-preview/')) {
         final body = jsonDecode(request.body) as Map<String, Object?>;
-        return _jsonResponse(_saleDiscountPreviewJson(body));
+        return _jsonResponse(
+          _saleDiscountPreviewJson(body, hasLoss: saleDiscountPreviewHasLoss),
+        );
       }
 
       if (path.endsWith('/orders/100/reprint/')) {
@@ -3888,6 +3983,7 @@ Map<String, Object?> _shopSettingsJson({
   bool autoPrintReceipts = false,
   bool requireOpeningCash = true,
   bool allowOverselling = false,
+  bool preventSellingAtLoss = true,
   int cashierReturnWindowHours = 42,
   Map<String, Object?>? logoAttachment,
 }) {
@@ -3899,6 +3995,7 @@ Map<String, Object?> _shopSettingsJson({
     'require_opening_cash': requireOpeningCash,
     'auto_print_receipts': autoPrintReceipts,
     'allow_overselling': allowOverselling,
+    'prevent_selling_at_loss': preventSellingAtLoss,
     'low_stock_threshold': 5,
     'cashier_return_window_hours': cashierReturnWindowHours,
     'enable_cash_payments': true,
@@ -4469,7 +4566,10 @@ Map<String, Object?> _orderJson({
   };
 }
 
-Map<String, Object?> _saleDiscountPreviewJson(Map<String, Object?> body) {
+Map<String, Object?> _saleDiscountPreviewJson(
+  Map<String, Object?> body, {
+  bool hasLoss = false,
+}) {
   final lines = body['lines'] is List<Object?>
       ? body['lines'] as List<Object?>
       : const <Object?>[];
@@ -4487,6 +4587,26 @@ Map<String, Object?> _saleDiscountPreviewJson(Map<String, Object?> body) {
     'discount_total': '0.00',
     'total': subtotal.toStringAsFixed(2),
     'applied_discounts': const [],
+    'loss_lines': hasLoss
+        ? const [
+            {
+              'line_key': '0',
+              'product': 1,
+              'product_id': 1,
+              'variant': 1,
+              'variant_id': 1,
+              'product_name': 'قهوة البيت',
+              'variant_name': 'قهوة البيت',
+              'quantity': 1,
+              'unit_price': '3.50',
+              'unit_cost': '4.50',
+              'discount_total': '0.00',
+              'line_total': '3.50',
+              'line_cost': '4.50',
+              'loss_amount': '1.00',
+            },
+          ]
+        : const [],
     'unapplied_coupon_codes': normalizedCouponCode.isEmpty
         ? const []
         : [normalizedCouponCode],

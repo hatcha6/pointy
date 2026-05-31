@@ -757,6 +757,100 @@ class OrderCheckoutApiTests(TestCase):
         order_line = Order.objects.get(pk=response.data["id"]).lines.get()
         self.assertEqual(order_line.unit_cost, Decimal("2.00"))
 
+    def test_checkout_rejects_loss_sale_when_setting_is_enabled_by_default(self):
+        self.start_session()
+        supplier = Supplier.objects.create(name="Loss prevention supplier")
+        purchase = PurchaseOrder.objects.create(
+            supplier=supplier,
+            status=PurchaseOrder.Status.RECEIVED,
+        )
+        purchase.lines.create(
+            variant=self.variant,
+            quantity=10,
+            unit_cost=Decimal("4.00"),
+        )
+
+        response = self.client.post(
+            reverse("order-checkout"),
+            self.checkout_payload(),
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.data["code"], "sale_at_loss_blocked")
+        self.assertEqual(len(response.data["loss"]), 1)
+        loss_line = response.data["loss"][0]
+        self.assertEqual(int(loss_line["variant_id"]), self.variant.pk)
+        self.assertEqual(str(loss_line["line_total"]), "7.00")
+        self.assertEqual(str(loss_line["line_cost"]), "8.00")
+        self.assertEqual(str(loss_line["loss_amount"]), "1.00")
+        self.assertEqual(Order.objects.count(), 0)
+        self.assertEqual(Payment.objects.count(), 0)
+        self.assertEqual(StockMovement.objects.count(), 0)
+        self.stock_item.refresh_from_db()
+        self.assertEqual(self.stock_item.quantity_on_hand, 10)
+
+    def test_checkout_allows_loss_sale_when_setting_is_disabled(self):
+        ShopSettings.load()
+        ShopSettings.objects.filter(pk=1).update(prevent_selling_at_loss=False)
+        self.start_session()
+        supplier = Supplier.objects.create(name="Loss allowed supplier")
+        purchase = PurchaseOrder.objects.create(
+            supplier=supplier,
+            status=PurchaseOrder.Status.RECEIVED,
+        )
+        purchase.lines.create(
+            variant=self.variant,
+            quantity=10,
+            unit_cost=Decimal("4.00"),
+        )
+
+        response = self.client.post(
+            reverse("order-checkout"),
+            self.checkout_payload(),
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["lines"][0]["line_profit"], "-1.00")
+        self.assertEqual(response.data["total_profit"], "-1.00")
+        self.stock_item.refresh_from_db()
+        self.assertEqual(self.stock_item.quantity_on_hand, 8)
+
+    def test_discount_preview_reports_loss_lines_from_current_costs(self):
+        supplier = Supplier.objects.create(name="Preview loss supplier")
+        purchase = PurchaseOrder.objects.create(
+            supplier=supplier,
+            status=PurchaseOrder.Status.RECEIVED,
+        )
+        purchase.lines.create(
+            variant=self.variant,
+            quantity=10,
+            unit_cost=Decimal("3.00"),
+        )
+        DiscountRule.objects.create(
+            name="Preview loss discount",
+            channel=DiscountRule.Channel.SALES,
+            value_type=DiscountRule.ValueType.FIXED_AMOUNT,
+            value=Decimal("2.00"),
+        )
+
+        response = self.client.post(
+            reverse("order-discount-preview"),
+            {"lines": [{"variant": self.variant.pk, "quantity": 2}]},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["subtotal"], "7.00")
+        self.assertEqual(response.data["discount_total"], "2.00")
+        self.assertEqual(len(response.data["loss_lines"]), 1)
+        loss_line = response.data["loss_lines"][0]
+        self.assertEqual(loss_line["variant_id"], self.variant.pk)
+        self.assertEqual(loss_line["line_total"], "5.00")
+        self.assertEqual(loss_line["line_cost"], "6.00")
+        self.assertEqual(loss_line["loss_amount"], "1.00")
+
     def test_checkout_prices_costs_and_stocks_the_exact_variant(self):
         variant = ProductVariant.objects.create(
             product=self.product,

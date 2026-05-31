@@ -516,7 +516,7 @@
   "receiptSettingsSectionTitle": "الإيصالات",
   "registerSessionSettingsSectionTitle": "جلسة الدرج",
   "paymentSettingsSectionTitle": "طرق الدفع",
-  "inventorySettingsSectionTitle": "تنبيهات المخزون",
+  "inventorySettingsSectionTitle": "المخزون والربحية",
   "analyticsExportSectionTitle": "تصدير التتبع",
   "shopSettingsEmptyValue": "غير محدد",
   "shopSettingsEnabledValue": "مفعل",
@@ -554,14 +554,17 @@
       }
     }
   },
-  "inventorySettingsSummary": "تنبيه عند {count} قطع أو أقل، البيع فوق المخزون: {status}",
+  "inventorySettingsSummary": "تنبيه عند {count} قطع أو أقل، البيع فوق المخزون: {oversellStatus}، منع الخسارة: {lossStatus}",
   "@inventorySettingsSummary": {
     "description": "Summary for inventory settings in the shop settings index.",
     "placeholders": {
       "count": {
         "type": "int"
       },
-      "status": {
+      "oversellStatus": {
+        "type": "String"
+      },
+      "lossStatus": {
         "type": "String"
       }
     }
@@ -679,6 +682,8 @@
   },
   "autoPrintReceiptsLabel": "طباعة الإيصالات تلقائيًا",
   "allowOversellingLabel": "السماح بالبيع فوق المخزون",
+  "preventSellingAtLossLabel": "منع البيع بخسارة",
+  "preventSellingAtLossSubtitle": "عند إيقافه سيظهر تحذير للكاشير قبل إتمام بيع بخسارة.",
   "paymentMethodCash": "نقد",
   "paymentMethodCard": "بطاقة",
   "paymentMethodTransfer": "تحويل",
@@ -1869,6 +1874,21 @@
       },
       "available": {
         "type": "int"
+      }
+    }
+  },
+  "lossSaleWarningTitle": "تنبيه الخسارة",
+  "lossSaleWarningMessage": "نحن نبيع بعض عناصر السلة بخسارة. هل تريد إتمام البيع رغم ذلك؟",
+  "lossSaleBlockedMessage": "لا يمكن إتمام البيع لأن إعدادات المتجر تمنع البيع بخسارة.",
+  "lossSaleLine": "{productName}: الخسارة {amount}",
+  "@lossSaleLine": {
+    "description": "Loss-making sale line in the loss warning dialog.",
+    "placeholders": {
+      "productName": {
+        "type": "String"
+      },
+      "amount": {
+        "type": "String"
       }
     }
   },

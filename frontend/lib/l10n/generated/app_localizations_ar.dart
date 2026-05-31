@@ -924,7 +924,7 @@ class AppLocalizationsAr extends AppLocalizations {
   String get paymentSettingsSectionTitle => 'طرق الدفع';
 
   @override
-  String get inventorySettingsSectionTitle => 'تنبيهات المخزون';
+  String get inventorySettingsSectionTitle => 'المخزون والربحية';
 
   @override
   String get analyticsExportSectionTitle => 'تصدير التتبع';
@@ -954,8 +954,12 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
-  String inventorySettingsSummary(int count, String status) {
-    return 'تنبيه عند $count قطع أو أقل، البيع فوق المخزون: $status';
+  String inventorySettingsSummary(
+    int count,
+    String oversellStatus,
+    String lossStatus,
+  ) {
+    return 'تنبيه عند $count قطع أو أقل، البيع فوق المخزون: $oversellStatus، منع الخسارة: $lossStatus';
   }
 
   @override
@@ -1163,6 +1167,13 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get allowOversellingLabel => 'السماح بالبيع فوق المخزون';
+
+  @override
+  String get preventSellingAtLossLabel => 'منع البيع بخسارة';
+
+  @override
+  String get preventSellingAtLossSubtitle =>
+      'عند إيقافه سيظهر تحذير للكاشير قبل إتمام بيع بخسارة.';
 
   @override
   String get paymentMethodCash => 'نقد';
@@ -3208,6 +3219,22 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String oversellLine(String productName, int requested, int available) {
     return '$productName: المطلوب $requested، المتاح $available';
+  }
+
+  @override
+  String get lossSaleWarningTitle => 'تنبيه الخسارة';
+
+  @override
+  String get lossSaleWarningMessage =>
+      'نحن نبيع بعض عناصر السلة بخسارة. هل تريد إتمام البيع رغم ذلك؟';
+
+  @override
+  String get lossSaleBlockedMessage =>
+      'لا يمكن إتمام البيع لأن إعدادات المتجر تمنع البيع بخسارة.';
+
+  @override
+  String lossSaleLine(String productName, String amount) {
+    return '$productName: الخسارة $amount';
   }
 
   @override

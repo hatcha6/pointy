@@ -449,16 +449,20 @@ class _InventorySettingsFields extends StatelessWidget {
     required this.enabled,
     required this.errorText,
     required this.allowOverselling,
+    required this.preventSellingAtLoss,
     required this.onThresholdChanged,
     required this.onAllowOversellingChanged,
+    required this.onPreventSellingAtLossChanged,
   });
 
   final TextEditingController controller;
   final bool enabled;
   final String? errorText;
   final bool allowOverselling;
+  final bool preventSellingAtLoss;
   final VoidCallback onThresholdChanged;
   final ValueChanged<bool> onAllowOversellingChanged;
+  final ValueChanged<bool> onPreventSellingAtLossChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -485,6 +489,13 @@ class _InventorySettingsFields extends StatelessWidget {
           value: allowOverselling,
           title: Text(l10n.allowOversellingLabel),
           onChanged: enabled ? onAllowOversellingChanged : null,
+        ),
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          value: preventSellingAtLoss,
+          title: Text(l10n.preventSellingAtLossLabel),
+          subtitle: Text(l10n.preventSellingAtLossSubtitle),
+          onChanged: enabled ? onPreventSellingAtLossChanged : null,
         ),
       ],
     );

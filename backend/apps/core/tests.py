@@ -281,6 +281,7 @@ class ShopSettingsApiTests(TestCase):
                 "receipt_footer": "شكرا لزيارتكم",
                 "require_opening_cash": False,
                 "auto_print_receipts": True,
+                "prevent_selling_at_loss": False,
                 "low_stock_threshold": 12,
                 "cashier_return_window_hours": 42,
                 "enable_cash_payments": True,
@@ -297,6 +298,7 @@ class ShopSettingsApiTests(TestCase):
         self.assertEqual(update_response.data["shop_name"], "متجر الوردية")
         self.assertFalse(update_response.data["require_opening_cash"])
         self.assertTrue(update_response.data["auto_print_receipts"])
+        self.assertFalse(update_response.data["prevent_selling_at_loss"])
         self.assertEqual(update_response.data["low_stock_threshold"], 12)
         self.assertEqual(update_response.data["cashier_return_window_hours"], 42)
         self.assertTrue(update_response.data["enable_cash_payments"])
@@ -398,6 +400,7 @@ class ShopSettingsApiTests(TestCase):
 
         self.assertEqual(read_response.status_code, status.HTTP_200_OK)
         self.assertIn("auto_print_receipts", read_response.data)
+        self.assertTrue(read_response.data["prevent_selling_at_loss"])
         self.assertEqual(update_response.status_code, status.HTTP_403_FORBIDDEN)
         self.assertEqual(upload_response.status_code, status.HTTP_403_FORBIDDEN)
 

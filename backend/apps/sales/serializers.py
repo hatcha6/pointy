@@ -19,6 +19,7 @@ from .services import (
     can_adjust_order,
     calculate_sales_discounts,
     checkout_line_key,
+    checkout_loss_lines,
     checkout_order,
     create_order_with_lines,
     return_order_items,
@@ -381,7 +382,7 @@ class OrderSerializer(serializers.ModelSerializer):
 
 class CheckoutLineSerializer(serializers.Serializer):
     variant = serializers.PrimaryKeyRelatedField(
-        queryset=ProductVariant.objects.active(),
+        queryset=ProductVariant.objects.active().select_related("product"),
     )
     quantity = serializers.IntegerField(min_value=1)
 
@@ -590,6 +591,10 @@ class DiscountPreviewSerializer(serializers.Serializer):
             "unapplied_coupon_codes": unapplied_coupon_codes(
                 discount_result,
                 coupon_codes,
+            ),
+            "loss_lines": checkout_loss_lines(
+                self.validated_data["lines"],
+                discount_result,
             ),
         }
 

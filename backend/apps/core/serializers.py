@@ -155,6 +155,7 @@ class ShopSettingsSerializer(serializers.ModelSerializer):
             "require_opening_cash",
             "auto_print_receipts",
             "allow_overselling",
+            "prevent_selling_at_loss",
             "low_stock_threshold",
             "cashier_return_window_hours",
             "enable_cash_payments",

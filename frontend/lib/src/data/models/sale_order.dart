@@ -103,6 +103,7 @@ class SaleDiscountPreview {
     required this.total,
     this.appliedDiscounts = const [],
     this.unappliedCouponCodes = const [],
+    this.lossLines = const [],
   });
 
   final double subtotal;
@@ -110,6 +111,7 @@ class SaleDiscountPreview {
   final double total;
   final List<AppliedDiscountInfo> appliedDiscounts;
   final List<String> unappliedCouponCodes;
+  final List<SaleLossLine> lossLines;
 
   factory SaleDiscountPreview.fromJson(Map<String, Object?> json) {
     return SaleDiscountPreview(
@@ -123,6 +125,45 @@ class SaleDiscountPreview {
       unappliedCouponCodes: _listFromJson(
         json['unapplied_coupon_codes'],
       ).map((code) => code.toString()).toList(growable: false),
+      lossLines: _listFromJson(json['loss_lines'])
+          .whereType<Map<String, Object?>>()
+          .map(SaleLossLine.fromJson)
+          .toList(growable: false),
+    );
+  }
+}
+
+class SaleLossLine {
+  const SaleLossLine({
+    required this.productName,
+    required this.quantity,
+    required this.unitPrice,
+    required this.unitCost,
+    required this.lineTotal,
+    required this.lineCost,
+    required this.lossAmount,
+  });
+
+  final String productName;
+  final int quantity;
+  final double unitPrice;
+  final double unitCost;
+  final double lineTotal;
+  final double lineCost;
+  final double lossAmount;
+
+  factory SaleLossLine.fromJson(Map<String, Object?> json) {
+    return SaleLossLine(
+      productName:
+          json['variant_name']?.toString() ??
+          json['product_name']?.toString() ??
+          '',
+      quantity: _intFromJson(json['quantity']),
+      unitPrice: _moneyFromJson(json['unit_price']),
+      unitCost: _moneyFromJson(json['unit_cost']),
+      lineTotal: _moneyFromJson(json['line_total']),
+      lineCost: _moneyFromJson(json['line_cost']),
+      lossAmount: _moneyFromJson(json['loss_amount']),
     );
   }
 }
