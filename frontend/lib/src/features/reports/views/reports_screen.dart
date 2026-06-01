@@ -11,6 +11,7 @@ import '../../../shared/components/components.dart';
 import '../../../shared/design/design.dart';
 import '../../../shared/date_formatters.dart';
 import '../../../shared/responsive/responsive.dart';
+import '../../../shared/shell/shell.dart';
 
 typedef ReportActionCallback = Future<void> Function(ReportRequest request);
 
@@ -103,7 +104,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
     final l10n = AppLocalizations.of(context)!;
     final selectedType = _effectiveSelectedType();
 
-    return Scaffold(
+    return PointyScaffold(
       drawer: AppNavigationDrawer(
         selectedDestination: AppNavigationDestination.reports,
         currentUser: widget.currentUser,
@@ -134,47 +135,45 @@ class _ReportsScreenState extends State<ReportsScreen> {
         ),
         title: Text(l10n.reportsTitle),
       ),
-      body: SafeArea(
-        child: ReportsGuard(
+      body: ReportsGuard(
+        capabilities: widget.capabilities,
+        child: _ReportsWorkspace(
           capabilities: widget.capabilities,
-          child: _ReportsWorkspace(
-            capabilities: widget.capabilities,
-            selectedType: selectedType,
-            selectedPreset: _selectedPreset,
-            dateRange: _dateRange,
-            granularity: _granularity,
-            includeAuditTrail: _includeAuditTrail,
-            includePreparedBy: _includePreparedBy,
-            runningAction: _runningAction,
-            onSelectType: _selectReportType,
-            onOpenTypeDetails: _openReportDetails,
-            onSelectPreset: (preset) {
-              setState(() {
-                _selectedPreset = preset;
-                if (preset != ReportPeriodPreset.custom) {
-                  _dateRange = _rangeForPreset(preset);
-                }
-              });
-            },
-            onSelectStartDate: () => _pickDate(isStart: true),
-            onSelectEndDate: () => _pickDate(isStart: false),
-            onSelectGranularity: (granularity) {
-              setState(() {
-                _granularity = granularity;
-              });
-            },
-            onToggleAuditTrail: (value) {
-              setState(() {
-                _includeAuditTrail = value;
-              });
-            },
-            onTogglePreparedBy: (value) {
-              setState(() {
-                _includePreparedBy = value;
-              });
-            },
-            onRunAction: _runAction,
-          ),
+          selectedType: selectedType,
+          selectedPreset: _selectedPreset,
+          dateRange: _dateRange,
+          granularity: _granularity,
+          includeAuditTrail: _includeAuditTrail,
+          includePreparedBy: _includePreparedBy,
+          runningAction: _runningAction,
+          onSelectType: _selectReportType,
+          onOpenTypeDetails: _openReportDetails,
+          onSelectPreset: (preset) {
+            setState(() {
+              _selectedPreset = preset;
+              if (preset != ReportPeriodPreset.custom) {
+                _dateRange = _rangeForPreset(preset);
+              }
+            });
+          },
+          onSelectStartDate: () => _pickDate(isStart: true),
+          onSelectEndDate: () => _pickDate(isStart: false),
+          onSelectGranularity: (granularity) {
+            setState(() {
+              _granularity = granularity;
+            });
+          },
+          onToggleAuditTrail: (value) {
+            setState(() {
+              _includeAuditTrail = value;
+            });
+          },
+          onTogglePreparedBy: (value) {
+            setState(() {
+              _includePreparedBy = value;
+            });
+          },
+          onRunAction: _runAction,
         ),
       ),
     );

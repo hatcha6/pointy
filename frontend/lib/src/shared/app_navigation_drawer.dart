@@ -64,7 +64,87 @@ class AppNavigationDrawer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final destinations = [
+    final destinations = _availableDestinations(l10n);
+    final selectedIndex = _selectedIndex(destinations);
+
+    return PointyNavigationSurface(
+      selectedIndex: selectedIndex,
+      onDestinationSelected: (index) {
+        _selectDestination(
+          context,
+          destinations[index],
+          target: 'navigation_drawer',
+          closeDrawer: true,
+        );
+      },
+      userLabel: currentUser.label,
+      roleLabel: _roleLabel(l10n, currentUser.role),
+      destinations: [
+        for (final destination in destinations)
+          NavigationDrawerDestination(
+            icon: destination.icon,
+            selectedIcon: destination.selectedIcon,
+            label: Text(destination.label),
+          ),
+      ],
+      logoutTile: ListTile(
+        leading: const Icon(Icons.logout),
+        title: Text(l10n.logoutButton),
+        onTap: () {
+          _logout(context, target: 'navigation_drawer', closeDrawer: true);
+        },
+      ),
+    );
+  }
+
+  Widget buildRail(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final destinations = _availableDestinations(l10n);
+    final selectedIndex = _selectedIndex(destinations);
+
+    return PointyNavigationRailSurface(
+      selectedIndex: selectedIndex,
+      onDestinationSelected: (index) {
+        _selectDestination(
+          context,
+          destinations[index],
+          target: 'navigation_rail',
+          closeDrawer: false,
+        );
+      },
+      userLabel: currentUser.label,
+      roleLabel: _roleLabel(l10n, currentUser.role),
+      logoutTooltip: l10n.logoutButton,
+      onLogout: () {
+        _logout(context, target: 'navigation_rail', closeDrawer: false);
+      },
+      destinations: [
+        for (final destination in destinations)
+          NavigationRailDestination(
+            icon: Tooltip(message: destination.label, child: destination.icon),
+            selectedIcon: Tooltip(
+              message: destination.label,
+              child: destination.selectedIcon,
+            ),
+            label: Semantics(
+              label: destination.label,
+              child: const SizedBox.shrink(),
+            ),
+          ),
+      ],
+    );
+  }
+
+  List<_DrawerDestination> _availableDestinations(AppLocalizations l10n) {
+    return [
+      _DrawerDestination(
+        destination: AppNavigationDestination.dashboard,
+        capability: AppCapability.viewDashboard,
+        icon: const Icon(Icons.dashboard_outlined),
+        selectedIcon: const Icon(Icons.dashboard),
+        label: l10n.dashboardDrawerLabel,
+        onTap: onOpenDashboard,
+      ),
       _DrawerDestination(
         destination: AppNavigationDestination.pos,
         capability: AppCapability.accessPos,
@@ -96,6 +176,14 @@ class AppNavigationDrawer extends StatelessWidget {
         selectedIcon: const Icon(Icons.inventory_2),
         label: l10n.catalogDrawerLabel,
         onTap: onOpenCatalog,
+      ),
+      _DrawerDestination(
+        destination: AppNavigationDestination.categories,
+        capability: AppCapability.manageCategories,
+        icon: const Icon(Icons.category_outlined),
+        selectedIcon: const Icon(Icons.category),
+        label: l10n.categoriesDrawerLabel,
+        onTap: onOpenCategories,
       ),
       _DrawerDestination(
         destination: AppNavigationDestination.registerSessions,
@@ -145,70 +233,53 @@ class AppNavigationDrawer extends StatelessWidget {
         label: l10n.settingsDrawerLabel,
         onTap: onOpenShopSettings,
       ),
-      _DrawerDestination(
-        destination: AppNavigationDestination.dashboard,
-        capability: AppCapability.viewDashboard,
-        icon: const Icon(Icons.dashboard_outlined),
-        selectedIcon: const Icon(Icons.dashboard),
-        label: l10n.dashboardDrawerLabel,
-        onTap: onOpenDashboard,
-      ),
-      _DrawerDestination(
-        destination: AppNavigationDestination.categories,
-        capability: AppCapability.manageCategories,
-        icon: const Icon(Icons.category_outlined),
-        selectedIcon: const Icon(Icons.category),
-        label: l10n.categoriesDrawerLabel,
-        onTap: onOpenCategories,
-      ),
     ].where((destination) => destination.isAvailable(capabilities)).toList();
+  }
+
+  int? _selectedIndex(List<_DrawerDestination> destinations) {
     final selectedIndex = destinations.indexWhere(
       (destination) => destination.destination == selectedDestination,
     );
+    return selectedIndex == -1 ? null : selectedIndex;
+  }
 
-    return PointyNavigationSurface(
-      selectedIndex: selectedIndex == -1 ? null : selectedIndex,
-      onDestinationSelected: (index) {
-        final destination = destinations[index];
-        unawaited(
-          AnalyticsInteractionTracker.maybeOf(context)?.trackInteraction(
-                action: 'navigation_destination_selected',
-                target: 'navigation_drawer',
-                attributes: {
-                  'destination': destination.destination.name,
-                  'was_selected':
-                      destination.destination == selectedDestination,
-                },
-              ) ??
-              Future<void>.value(),
-        );
-        Navigator.of(context).pop();
-        destination.onTap?.call();
-      },
-      userLabel: currentUser.label,
-      roleLabel: _roleLabel(l10n, currentUser.role),
-      destinations: [
-        for (final destination in destinations)
-          NavigationDrawerDestination(
-            icon: destination.icon,
-            selectedIcon: destination.selectedIcon,
-            label: Text(destination.label),
-          ),
-      ],
-      logoutTile: ListTile(
-        leading: const Icon(Icons.logout),
-        title: Text(l10n.logoutButton),
-        onTap: () {
-          AnalyticsInteractionTracker.track(
-            context,
-            action: 'logout_selected',
-            target: 'navigation_drawer',
-          );
-          Navigator.of(context).pop();
-          onLogout();
-        },
-      ),
+  void _selectDestination(
+    BuildContext context,
+    _DrawerDestination destination, {
+    required String target,
+    required bool closeDrawer,
+  }) {
+    unawaited(
+      AnalyticsInteractionTracker.maybeOf(context)?.trackInteraction(
+            action: 'navigation_destination_selected',
+            target: target,
+            attributes: {
+              'destination': destination.destination.name,
+              'was_selected': destination.destination == selectedDestination,
+            },
+          ) ??
+          Future<void>.value(),
     );
+    if (closeDrawer) {
+      Navigator.of(context).pop();
+    }
+    destination.onTap?.call();
+  }
+
+  void _logout(
+    BuildContext context, {
+    required String target,
+    required bool closeDrawer,
+  }) {
+    AnalyticsInteractionTracker.track(
+      context,
+      action: 'logout_selected',
+      target: target,
+    );
+    if (closeDrawer) {
+      Navigator.of(context).pop();
+    }
+    onLogout();
   }
 
   String _roleLabel(AppLocalizations l10n, UserRole role) {

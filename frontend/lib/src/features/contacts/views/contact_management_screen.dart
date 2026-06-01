@@ -11,6 +11,7 @@ import '../../../shared/components/components.dart';
 import '../../../shared/contact_picker_sheet.dart';
 import '../../../shared/formatters.dart';
 import '../../../shared/responsive/responsive.dart';
+import '../../../shared/shell/shell.dart';
 import '../view_models/contact_management_view_model.dart';
 import 'customer_details_screen.dart';
 import 'supplier_details_screen.dart';
@@ -62,7 +63,7 @@ class ContactManagementScreen extends StatelessWidget {
       child: ListenableBuilder(
         listenable: viewModel,
         builder: (context, _) {
-          return Scaffold(
+          return PointyScaffold(
             drawer: AppNavigationDrawer(
               selectedDestination: AppNavigationDestination.contacts,
               currentUser: currentUser,
@@ -111,15 +112,13 @@ class ContactManagementScreen extends StatelessWidget {
                 ),
               ],
             ),
-            body: SafeArea(
-              child: AuthorizationGuard(
+            body: AuthorizationGuard(
+              capabilities: capabilities,
+              capability: AppCapability.manageContacts,
+              child: _ContactManagementBody(
+                viewModel: viewModel,
+                purchaseRepository: purchaseRepository,
                 capabilities: capabilities,
-                capability: AppCapability.manageContacts,
-                child: _ContactManagementBody(
-                  viewModel: viewModel,
-                  purchaseRepository: purchaseRepository,
-                  capabilities: capabilities,
-                ),
               ),
             ),
           );

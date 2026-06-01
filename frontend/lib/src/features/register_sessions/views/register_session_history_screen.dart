@@ -11,6 +11,7 @@ import '../../../shared/app_navigation_drawer.dart';
 import '../../../shared/authorization_guards.dart';
 import '../../../shared/design/design.dart';
 import '../../../shared/responsive/responsive.dart';
+import '../../../shared/shell/shell.dart';
 import '../view_models/register_session_history_view_model.dart';
 import 'register_session_list.dart';
 import 'session_orders.dart';
@@ -60,7 +61,7 @@ class RegisterSessionHistoryScreen extends StatelessWidget {
     return ListenableBuilder(
       listenable: viewModel,
       builder: (context, _) {
-        return Scaffold(
+        return PointyScaffold(
           drawer: AppNavigationDrawer(
             selectedDestination: AppNavigationDestination.registerSessions,
             currentUser: currentUser,
@@ -102,14 +103,12 @@ class RegisterSessionHistoryScreen extends StatelessWidget {
               ),
             ],
           ),
-          body: SafeArea(
-            child: RegisterSessionsGuard(
+          body: RegisterSessionsGuard(
+            capabilities: capabilities,
+            child: _HistoryWorkspace(
+              viewModel: viewModel,
+              contactRepository: contactRepository,
               capabilities: capabilities,
-              child: _HistoryWorkspace(
-                viewModel: viewModel,
-                contactRepository: contactRepository,
-                capabilities: capabilities,
-              ),
             ),
           ),
         );

@@ -411,6 +411,50 @@ void main() {
     expect(loggedOut, isTrue);
   });
 
+  testWidgets(
+    'PointyNavigationRailSurface keeps rail destinations selectable',
+    (tester) async {
+      var selected = -1;
+      var loggedOut = false;
+
+      await _pumpSurface(
+        tester,
+        width: 360,
+        child: SizedBox(
+          height: 720,
+          child: PointyNavigationRailSurface(
+            selectedIndex: 0,
+            onDestinationSelected: (index) => selected = index,
+            userLabel: 'مدير المتجر',
+            roleLabel: 'مدير',
+            destinations: const [
+              NavigationRailDestination(
+                icon: Icon(Icons.dashboard_outlined),
+                label: Text('لوحة التحكم'),
+              ),
+              NavigationRailDestination(
+                icon: Icon(Icons.point_of_sale_outlined),
+                label: Text('نقطة البيع'),
+              ),
+            ],
+            logoutTooltip: 'تسجيل الخروج',
+            onLogout: () => loggedOut = true,
+          ),
+        ),
+      );
+
+      expect(find.byType(NavigationRail), findsOneWidget);
+      expect(find.byTooltip('مدير المتجر\nمدير'), findsOneWidget);
+      expect(find.byIcon(Icons.dashboard_outlined), findsOneWidget);
+
+      await tester.tap(find.byIcon(Icons.point_of_sale_outlined));
+      expect(selected, 1);
+
+      await tester.tap(find.byTooltip('تسجيل الخروج'));
+      expect(loggedOut, isTrue);
+    },
+  );
+
   testWidgets('PointyDestructiveConfirmationDialog returns confirmation', (
     tester,
   ) async {

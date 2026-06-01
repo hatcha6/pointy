@@ -726,7 +726,7 @@ void main() {
     await tester.pumpWidget(PointyApp(apiService: _mockApiService()));
     await tester.pumpAndSettle(const Duration(seconds: 1));
 
-    expect(find.text('لوحة التحكم'), findsOneWidget);
+    expect(find.text('لوحة التحكم'), findsWidgets);
     await _openPosFromDashboard(tester);
     expect(find.text('نقطة البيع'), findsOneWidget);
     expect(find.text('جلسة الدرج'), findsOneWidget);
@@ -1162,17 +1162,19 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('مدير النظام'), findsOneWidget);
+    expect(find.text('لوحة التحكم'), findsWidgets);
     expect(find.text('شاشة البيع'), findsOneWidget);
     expect(find.text('المشتريات'), findsOneWidget);
     expect(find.text('الجهات'), findsOneWidget);
     expect(find.text('المنتجات'), findsWidgets);
+    expect(find.text('التصنيفات'), findsOneWidget);
     expect(find.text('جلسات الدرج'), findsOneWidget);
     expect(find.text('الخصومات'), findsOneWidget);
     expect(find.text('التقارير'), findsOneWidget);
-    expect(find.text('المستخدمون'), findsOneWidget);
     expect(find.text('إعدادات الجهاز'), findsOneWidget);
     await tester.drag(find.byType(NavigationDrawer), const Offset(0, -240));
     await tester.pumpAndSettle();
+    expect(find.text('المستخدمون'), findsOneWidget);
     expect(find.text('إعدادات المتجر'), findsOneWidget);
     expect(find.text('تسجيل الخروج'), findsOneWidget);
   });
@@ -1780,6 +1782,8 @@ void main() {
     await tester.pumpAndSettle(const Duration(seconds: 1));
 
     await tester.tap(find.byIcon(Icons.menu));
+    await tester.pumpAndSettle();
+    await tester.drag(find.byType(NavigationDrawer), const Offset(0, -240));
     await tester.pumpAndSettle();
     await tester.tap(find.text('المستخدمون'));
     await tester.pumpAndSettle(const Duration(seconds: 1));

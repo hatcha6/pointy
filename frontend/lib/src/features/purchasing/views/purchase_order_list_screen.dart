@@ -12,6 +12,7 @@ import '../../../shared/date_formatters.dart';
 import '../../../shared/formatters.dart';
 import '../../../shared/infinite_scroll_grid.dart';
 import '../../../shared/responsive/responsive.dart';
+import '../../../shared/shell/shell.dart';
 import '../view_models/purchase_order_list_view_model.dart';
 import 'purchase_order_filter_sheet.dart';
 import 'purchase_order_query_controls.dart';
@@ -65,7 +66,7 @@ class PurchaseOrderListScreen extends StatelessWidget {
     return ListenableBuilder(
       listenable: viewModel,
       builder: (context, _) {
-        return Scaffold(
+        return PointyScaffold(
           drawer: AppNavigationDrawer(
             selectedDestination: AppNavigationDestination.purchasing,
             currentUser: currentUser,
@@ -108,17 +109,15 @@ class PurchaseOrderListScreen extends StatelessWidget {
               ),
             ],
           ),
-          body: SafeArea(
-            child: AuthorizationGuard(
+          body: AuthorizationGuard(
+            capabilities: capabilities,
+            capability: AppCapability.accessPurchasing,
+            child: _PurchaseOrderListBody(
+              viewModel: viewModel,
+              contactRepository: contactRepository,
               capabilities: capabilities,
-              capability: AppCapability.accessPurchasing,
-              child: _PurchaseOrderListBody(
-                viewModel: viewModel,
-                contactRepository: contactRepository,
-                capabilities: capabilities,
-                onCreatePurchaseOrder: onCreatePurchaseOrder,
-                onOpenPurchaseOrder: onOpenPurchaseOrder,
-              ),
+              onCreatePurchaseOrder: onCreatePurchaseOrder,
+              onOpenPurchaseOrder: onOpenPurchaseOrder,
             ),
           ),
         );

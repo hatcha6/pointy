@@ -11,6 +11,7 @@ import '../../../shared/app_navigation_drawer.dart';
 import '../../../shared/authorization_guards.dart';
 import '../../../shared/barcode/barcode_scan_listener.dart';
 import '../../../shared/responsive/responsive.dart';
+import '../../../shared/shell/shell.dart';
 import '../view_models/purchase_view_model.dart';
 import 'purchase_catalog_pane.dart';
 import 'purchase_draft_pane.dart';
@@ -63,7 +64,7 @@ class PurchasingScreen extends StatelessWidget {
     return ListenableBuilder(
       listenable: viewModel,
       builder: (context, _) {
-        return Scaffold(
+        return PointyScaffold(
           drawer: AppNavigationDrawer(
             selectedDestination: AppNavigationDestination.purchasing,
             currentUser: currentUser,
@@ -110,14 +111,12 @@ class PurchasingScreen extends StatelessWidget {
               ),
             ],
           ),
-          body: SafeArea(
-            child: AuthorizationGuard(
-              capabilities: capabilities,
-              capability: AppCapability.accessPurchasing,
-              child: _PurchasingWorkspace(
-                viewModel: viewModel,
-                contactRepository: contactRepository,
-              ),
+          body: AuthorizationGuard(
+            capabilities: capabilities,
+            capability: AppCapability.accessPurchasing,
+            child: _PurchasingWorkspace(
+              viewModel: viewModel,
+              contactRepository: contactRepository,
             ),
           ),
         );

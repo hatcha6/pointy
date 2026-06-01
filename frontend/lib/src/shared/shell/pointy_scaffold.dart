@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../app_navigation_drawer.dart';
+import '../responsive/responsive.dart';
+
 class PointyScaffold extends StatelessWidget {
   const PointyScaffold({
     super.key,
@@ -34,7 +37,22 @@ class PointyScaffold extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final navigationDrawer = drawer;
+    final usesNavigationRail =
+        navigationDrawer is AppNavigationDrawer &&
+        AppBreakpoints.of(context).index >= AppBreakpoint.desktop.index;
+
     Widget resolvedBody = body;
+    if (usesNavigationRail) {
+      resolvedBody = Row(
+        children: [
+          navigationDrawer.buildRail(context),
+          const VerticalDivider(width: 1),
+          Expanded(child: resolvedBody),
+        ],
+      );
+    }
+
     if (safeArea) {
       resolvedBody = SafeArea(
         top: safeAreaTop,

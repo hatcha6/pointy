@@ -12,6 +12,7 @@ import '../../../shared/components/components.dart';
 import '../../../shared/date_formatters.dart';
 import '../../../shared/formatters.dart';
 import '../../../shared/responsive/responsive.dart';
+import '../../../shared/shell/shell.dart';
 import '../view_models/discount_management_view_model.dart';
 import 'discount_rule_query_controls.dart';
 import 'discount_rule_form.dart';
@@ -63,7 +64,7 @@ class DiscountManagementScreen extends StatelessWidget {
     return ListenableBuilder(
       listenable: viewModel,
       builder: (context, _) {
-        return Scaffold(
+        return PointyScaffold(
           drawer: AppNavigationDrawer(
             selectedDestination: AppNavigationDestination.discounts,
             currentUser: currentUser,
@@ -106,19 +107,17 @@ class DiscountManagementScreen extends StatelessWidget {
               ),
             ],
           ),
-          body: SafeArea(
-            child: AuthorizationGuard(
+          body: AuthorizationGuard(
+            capabilities: capabilities,
+            capability: AppCapability.viewDiscountRules,
+            child: _DiscountManagementBody(
+              viewModel: viewModel,
+              catalogRepository: catalogRepository,
+              contactRepository: contactRepository,
               capabilities: capabilities,
-              capability: AppCapability.viewDiscountRules,
-              child: _DiscountManagementBody(
-                viewModel: viewModel,
-                catalogRepository: catalogRepository,
-                contactRepository: contactRepository,
-                capabilities: capabilities,
-                onCreateRule: viewModel.isSaving
-                    ? null
-                    : () => _showRuleForm(context),
-              ),
+              onCreateRule: viewModel.isSaving
+                  ? null
+                  : () => _showRuleForm(context),
             ),
           ),
         );

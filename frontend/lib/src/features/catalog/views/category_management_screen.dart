@@ -8,6 +8,7 @@ import '../../../shared/app_navigation_drawer.dart';
 import '../../../shared/async_selection/async_multi_select_picker.dart';
 import '../../../shared/infinite_scroll_grid.dart';
 import '../../../shared/product_category_picker.dart';
+import '../../../shared/shell/shell.dart';
 import '../view_models/category_management_view_model.dart';
 
 class CategoryManagementScreen extends StatelessWidget {
@@ -53,7 +54,7 @@ class CategoryManagementScreen extends StatelessWidget {
     return ListenableBuilder(
       listenable: viewModel,
       builder: (context, _) {
-        return Scaffold(
+        return PointyScaffold(
           drawer: AppNavigationDrawer(
             selectedDestination: AppNavigationDestination.categories,
             currentUser: currentUser,
@@ -98,7 +99,7 @@ class CategoryManagementScreen extends StatelessWidget {
             icon: const Icon(Icons.add),
             label: Text(l10n.addCategoryButton),
           ),
-          body: SafeArea(child: _CategoryList(viewModel: viewModel)),
+          body: _CategoryList(viewModel: viewModel),
         );
       },
     );
