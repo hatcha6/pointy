@@ -182,6 +182,18 @@ class PurchaseOrderViewSet(viewsets.ModelViewSet):
             return ("purchasing.view_purchaseorder", "attachments.add_attachment")
         return self.permission_map.get(self.action)
 
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        product_id = self.request.query_params.get("product")
+        variant_id = self.request.query_params.get("variant")
+        if product_id:
+            queryset = queryset.filter(lines__variant__product_id=product_id)
+        if variant_id:
+            queryset = queryset.filter(lines__variant_id=variant_id)
+        if product_id or variant_id:
+            queryset = queryset.distinct()
+        return queryset
+
     @action(detail=False, methods=["get"], url_path="variant-last-cost")
     def variant_last_cost(self, request):
         return self._last_cost_response(request)

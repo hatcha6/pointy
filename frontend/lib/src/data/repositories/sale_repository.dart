@@ -57,6 +57,13 @@ class SaleRepository {
     return Result.guard(() => _service.previewSaleDiscounts(draft));
   }
 
+  Future<Result<SaleOrderPage>> loadOrders({
+    SaleOrderQuery query = const SaleOrderQuery(),
+    int page = 1,
+  }) async {
+    return Result.guard(() => _service.fetchOrders(query: query, page: page));
+  }
+
   Future<Result<SaleOrderPage>> loadOrdersForSession(
     int sessionId, {
     SaleOrderQuery query = const SaleOrderQuery(),

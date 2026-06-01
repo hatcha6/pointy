@@ -419,19 +419,36 @@ class SaleOrderLine {
 }
 
 class SaleOrderQuery {
-  const SaleOrderQuery({this.customerId, this.customerName});
+  const SaleOrderQuery({
+    this.customerId,
+    this.customerName,
+    this.productId,
+    this.variantId,
+  });
 
   final int? customerId;
   final String? customerName;
+  final int? productId;
+  final int? variantId;
 
   bool get hasCustomerFilter => customerId != null;
 
   Map<String, String> toQueryParameters({required int page}) {
-    return {'page': '$page', if (customerId != null) 'customer': '$customerId'};
+    return {
+      'page': '$page',
+      if (customerId != null) 'customer': '$customerId',
+      if (productId != null) 'product': '$productId',
+      if (variantId != null) 'variant': '$variantId',
+    };
   }
 
   SaleOrderQuery withCustomer({int? id, String? name}) {
-    return SaleOrderQuery(customerId: id, customerName: name);
+    return SaleOrderQuery(
+      customerId: id,
+      customerName: name,
+      productId: productId,
+      variantId: variantId,
+    );
   }
 }
 

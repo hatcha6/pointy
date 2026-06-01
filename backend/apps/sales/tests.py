@@ -1255,6 +1255,69 @@ class OrderCheckoutApiTests(TestCase):
         self.assertEqual(response.data["results"][0]["id"], first_response.data["id"])
         self.assertEqual(response.data["results"][0]["customer"], first_customer.pk)
 
+    def test_order_list_filters_by_product_and_variant_without_duplicates(self):
+        self.start_session()
+        large_variant = ProductVariant.objects.create(
+            product=self.product,
+            name="Large",
+            sku="COFFEE-L",
+            unit_price=Decimal("5.00"),
+        )
+        StockItem.objects.create(variant=large_variant, quantity_on_hand=10)
+        other_product = create_product_with_default_variant(
+            sku="TEA",
+            barcode="",
+            name="Tea",
+            unit_price=Decimal("2.00"),
+        )
+        StockItem.objects.create(
+            variant=other_product.default_variant,
+            quantity_on_hand=10,
+        )
+        coffee_response = self.client.post(
+            reverse("order-checkout"),
+            {
+                "lines": [
+                    {"variant": self.variant.pk, "quantity": 1},
+                    {"variant": large_variant.pk, "quantity": 1},
+                ],
+                "payment_method": "cash",
+                "amount_received": "8.50",
+            },
+            format="json",
+        )
+        tea_response = self.client.post(
+            reverse("order-checkout"),
+            {
+                "lines": [{"variant": other_product.default_variant.pk, "quantity": 1}],
+                "payment_method": "cash",
+                "amount_received": "2.00",
+            },
+            format="json",
+        )
+
+        product_response = self.client.get(
+            reverse("order-list"),
+            {"product": self.product.pk},
+        )
+        variant_response = self.client.get(
+            reverse("order-list"),
+            {"product": self.product.pk, "variant": large_variant.pk},
+        )
+
+        self.assertEqual(coffee_response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(tea_response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(product_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            [order["id"] for order in product_response.data["results"]],
+            [coffee_response.data["id"]],
+        )
+        self.assertEqual(variant_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            [order["id"] for order in variant_response.data["results"]],
+            [coffee_response.data["id"]],
+        )
+
     def test_session_orders_filters_by_customer(self):
         session = self.start_session()
         first_customer = Customer.objects.create(full_name="Session first customer")

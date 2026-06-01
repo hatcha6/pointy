@@ -1831,6 +1831,31 @@ class AppLocalizationsAr extends AppLocalizations {
       'لا توجد مشتريات مسجلة لهذا المنتج بعد.';
 
   @override
+  String get productDocumentHistoryTitle => 'الفواتير المرتبطة';
+
+  @override
+  String get productRecentInvoicesTitle => 'فواتير البيع الأخيرة';
+
+  @override
+  String get productRecentPurchaseBillsTitle => 'فواتير الشراء الأخيرة';
+
+  @override
+  String get productRecentInvoicesLoadError =>
+      'تعذر تحميل فواتير البيع لهذا المنتج.';
+
+  @override
+  String get productRecentPurchaseBillsLoadError =>
+      'تعذر تحميل فواتير الشراء لهذا المنتج.';
+
+  @override
+  String get productRecentInvoicesEmpty =>
+      'لم يظهر هذا المنتج في أي فاتورة بيع بعد.';
+
+  @override
+  String get productRecentPurchaseBillsEmpty =>
+      'لم يظهر هذا المنتج في أي فاتورة شراء بعد.';
+
+  @override
   String get productLatestCostLabel => 'آخر تكلفة';
 
   @override

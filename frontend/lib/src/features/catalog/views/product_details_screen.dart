@@ -15,6 +15,7 @@ import '../../../shared/product_status_pill.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../view_models/product_details_view_model.dart';
 import '../view_models/product_stock_view_model.dart';
+import 'product_document_history_section.dart';
 import 'product_parent_edit_sheet.dart';
 import 'product_variant_details_screen.dart';
 import 'product_variant_form_sheet.dart';
@@ -94,6 +95,15 @@ class ProductDetailsScreen extends StatelessWidget {
                   onOpenVariant: (variant) =>
                       _openVariantDetails(context, product, variant),
                 ),
+                if (capabilities.canViewRegisterSessionOrders ||
+                    capabilities.canAccessPurchasing) ...[
+                  const SizedBox(height: 12),
+                  ProductDocumentHistorySection(
+                    viewModel: viewModel,
+                    purchaseRepository: purchaseRepository,
+                    capabilities: capabilities,
+                  ),
+                ],
               ],
             ),
           ),

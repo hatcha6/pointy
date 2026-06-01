@@ -10,6 +10,7 @@ import '../../../data/repositories/catalog_repository.dart';
 import '../../../data/repositories/inventory_repository.dart';
 import '../../../data/repositories/printing_repository.dart';
 import '../../../data/repositories/purchase_repository.dart';
+import '../../../data/repositories/sale_repository.dart';
 import '../../../shared/catalog/catalog.dart';
 import '../../../shared/components/components.dart';
 import '../../../shared/product_query_controls.dart';
@@ -25,6 +26,7 @@ class ProductList extends StatelessWidget {
     required this.inventoryRepository,
     required this.printingRepository,
     required this.purchaseRepository,
+    required this.saleRepository,
     required this.capabilities,
     required this.onBarcodeSubmitted,
     required this.onOpenCameraScanner,
@@ -35,6 +37,7 @@ class ProductList extends StatelessWidget {
   final InventoryRepository inventoryRepository;
   final PrintingRepository printingRepository;
   final PurchaseRepository purchaseRepository;
+  final SaleRepository saleRepository;
   final AuthorizationCapabilities capabilities;
   final FutureOr<bool> Function(String barcode) onBarcodeSubmitted;
   final VoidCallback onOpenCameraScanner;
@@ -105,6 +108,7 @@ class ProductList extends StatelessWidget {
       inventoryRepository: inventoryRepository,
       printingRepository: printingRepository,
       purchaseRepository: purchaseRepository,
+      saleRepository: saleRepository,
       capabilities: capabilities,
       onChanged: viewModel.loadProducts,
     );
@@ -186,13 +190,21 @@ Future<void> openProductDetails(
   required InventoryRepository inventoryRepository,
   required PrintingRepository printingRepository,
   required PurchaseRepository purchaseRepository,
+  required SaleRepository saleRepository,
   required AuthorizationCapabilities capabilities,
   VoidCallback? onChanged,
 }) {
   return Navigator.of(context).push(
     MaterialPageRoute<void>(
       builder: (_) => ProductDetailsScreen(
-        viewModel: ProductDetailsViewModel(catalogRepository, product),
+        viewModel: ProductDetailsViewModel(
+          catalogRepository,
+          purchaseRepository,
+          saleRepository,
+          product,
+          shouldLoadSaleHistory: capabilities.canViewRegisterSessionOrders,
+          shouldLoadPurchaseHistory: capabilities.canAccessPurchasing,
+        ),
         inventoryRepository: inventoryRepository,
         printingRepository: printingRepository,
         purchaseRepository: purchaseRepository,

@@ -52,6 +52,8 @@ class PurchaseOrderQuery extends ModelQuery {
     this.ordering = PurchaseOrderOrdering.newest,
     this.supplierId,
     this.supplierName,
+    this.productId,
+    this.variantId,
   });
 
   @override
@@ -59,6 +61,8 @@ class PurchaseOrderQuery extends ModelQuery {
   final PurchaseOrderStatusFilter status;
   final int? supplierId;
   final String? supplierName;
+  final int? productId;
+  final int? variantId;
   @override
   final PurchaseOrderOrdering ordering;
 
@@ -67,6 +71,10 @@ class PurchaseOrderQuery extends ModelQuery {
     ...status.filters,
     if (supplierId != null)
       QueryFilter(parameter: 'supplier', value: '$supplierId'),
+    if (productId != null)
+      QueryFilter(parameter: 'product', value: '$productId'),
+    if (variantId != null)
+      QueryFilter(parameter: 'variant', value: '$variantId'),
   ];
 
   PurchaseOrderQuery copyWith({
@@ -75,6 +83,8 @@ class PurchaseOrderQuery extends ModelQuery {
     PurchaseOrderOrdering? ordering,
     Object? supplierId = _unset,
     Object? supplierName = _unset,
+    Object? productId = _unset,
+    Object? variantId = _unset,
   }) {
     return PurchaseOrderQuery(
       search: search ?? this.search,
@@ -86,6 +96,12 @@ class PurchaseOrderQuery extends ModelQuery {
       supplierName: identical(supplierName, _unset)
           ? this.supplierName
           : supplierName as String?,
+      productId: identical(productId, _unset)
+          ? this.productId
+          : productId as int?,
+      variantId: identical(variantId, _unset)
+          ? this.variantId
+          : variantId as int?,
     );
   }
 
@@ -96,12 +112,21 @@ class PurchaseOrderQuery extends ModelQuery {
         other.status == status &&
         other.ordering == ordering &&
         other.supplierId == supplierId &&
-        other.supplierName == supplierName;
+        other.supplierName == supplierName &&
+        other.productId == productId &&
+        other.variantId == variantId;
   }
 
   @override
-  int get hashCode =>
-      Object.hash(search, status, ordering, supplierId, supplierName);
+  int get hashCode => Object.hash(
+    search,
+    status,
+    ordering,
+    supplierId,
+    supplierName,
+    productId,
+    variantId,
+  );
 }
 
 class PurchaseOrderPage {

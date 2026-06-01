@@ -3390,6 +3390,48 @@ abstract class AppLocalizations {
   /// **'لا توجد مشتريات مسجلة لهذا المنتج بعد.'**
   String get productCostHistoryEmpty;
 
+  /// No description provided for @productDocumentHistoryTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'الفواتير المرتبطة'**
+  String get productDocumentHistoryTitle;
+
+  /// No description provided for @productRecentInvoicesTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'فواتير البيع الأخيرة'**
+  String get productRecentInvoicesTitle;
+
+  /// No description provided for @productRecentPurchaseBillsTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'فواتير الشراء الأخيرة'**
+  String get productRecentPurchaseBillsTitle;
+
+  /// No description provided for @productRecentInvoicesLoadError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر تحميل فواتير البيع لهذا المنتج.'**
+  String get productRecentInvoicesLoadError;
+
+  /// No description provided for @productRecentPurchaseBillsLoadError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر تحميل فواتير الشراء لهذا المنتج.'**
+  String get productRecentPurchaseBillsLoadError;
+
+  /// No description provided for @productRecentInvoicesEmpty.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم يظهر هذا المنتج في أي فاتورة بيع بعد.'**
+  String get productRecentInvoicesEmpty;
+
+  /// No description provided for @productRecentPurchaseBillsEmpty.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم يظهر هذا المنتج في أي فاتورة شراء بعد.'**
+  String get productRecentPurchaseBillsEmpty;
+
   /// No description provided for @productLatestCostLabel.
   ///
   /// In ar, this message translates to:

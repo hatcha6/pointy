@@ -2022,6 +2022,65 @@ class PurchaseOrderApiTests(TestCase):
         )
         self.assertEqual(default_response.data["unit_cost"], Decimal("1.25"))
 
+    def test_purchase_order_list_filters_by_product_and_variant_without_duplicates(
+        self,
+    ):
+        variant = ProductVariant.objects.create(
+            product=self.product,
+            name="Large",
+            sku="PUR-COFFEE-L",
+            unit_price=Decimal("5.00"),
+        )
+        matching_order = PurchaseOrder.objects.create(
+            supplier=self.supplier,
+            status=PurchaseOrder.Status.RECEIVED,
+        )
+        matching_order.lines.create(
+            variant=self.variant,
+            quantity=1,
+            unit_cost=Decimal("1.25"),
+        )
+        matching_order.lines.create(
+            variant=variant,
+            quantity=1,
+            unit_cost=Decimal("2.75"),
+        )
+        other_order = PurchaseOrder.objects.create(
+            supplier=self.supplier,
+            status=PurchaseOrder.Status.RECEIVED,
+        )
+        other_order.lines.create(
+            variant=self.other_variant,
+            quantity=1,
+            unit_cost=Decimal("3.00"),
+        )
+
+        product_response = self.client.get(
+            reverse("purchaseorder-list"),
+            {"product": self.product.pk},
+        )
+        variant_response = self.client.get(
+            reverse("purchaseorder-list"),
+            {"product": self.product.pk, "variant": variant.pk},
+        )
+
+        self.assertEqual(product_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            [order["id"] for order in product_response.data["results"]],
+            [matching_order.pk],
+        )
+        self.assertEqual(variant_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            [order["id"] for order in variant_response.data["results"]],
+            [matching_order.pk],
+        )
+        self.assertFalse(
+            any(
+                order["id"] == other_order.pk
+                for order in product_response.data["results"]
+            )
+        )
+
     def test_receive_purchase_order_increases_exact_variant_stock(self):
         variant = ProductVariant.objects.create(
             product=self.product,

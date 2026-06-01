@@ -8,6 +8,7 @@ import '../../../data/models/product_variant.dart';
 import '../../../data/repositories/inventory_repository.dart';
 import '../../../data/repositories/printing_repository.dart';
 import '../../../data/repositories/purchase_repository.dart';
+import '../../../data/repositories/sale_repository.dart';
 import '../../../shared/app_navigation_drawer.dart';
 import '../../../shared/authorization_guards.dart';
 import '../../../shared/barcode/camera_barcode_scanner_sheet.dart';
@@ -25,6 +26,7 @@ class CatalogScreen extends StatelessWidget {
     required this.inventoryRepository,
     required this.printingRepository,
     required this.purchaseRepository,
+    required this.saleRepository,
     required this.currentUser,
     required this.capabilities,
     required this.onOpenPos,
@@ -45,6 +47,7 @@ class CatalogScreen extends StatelessWidget {
   final InventoryRepository inventoryRepository;
   final PrintingRepository printingRepository;
   final PurchaseRepository purchaseRepository;
+  final SaleRepository saleRepository;
   final PosUser currentUser;
   final AuthorizationCapabilities capabilities;
   final VoidCallback onOpenPos;
@@ -120,6 +123,7 @@ class CatalogScreen extends StatelessWidget {
                 inventoryRepository: inventoryRepository,
                 printingRepository: printingRepository,
                 purchaseRepository: purchaseRepository,
+                saleRepository: saleRepository,
                 capabilities: capabilities,
                 onBarcodeSubmitted: (barcode) {
                   return _openProductForBarcode(context, barcode);
@@ -159,6 +163,7 @@ class CatalogScreen extends StatelessWidget {
           inventoryRepository: inventoryRepository,
           printingRepository: printingRepository,
           purchaseRepository: purchaseRepository,
+          saleRepository: saleRepository,
           capabilities: capabilities,
           onChanged: viewModel.loadProducts,
         );
@@ -190,6 +195,7 @@ class CatalogScreen extends StatelessWidget {
       inventoryRepository: inventoryRepository,
       printingRepository: printingRepository,
       purchaseRepository: purchaseRepository,
+      saleRepository: saleRepository,
       capabilities: capabilities,
       onChanged: viewModel.loadProducts,
     );

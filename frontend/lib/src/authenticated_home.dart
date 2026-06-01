@@ -215,6 +215,7 @@ class _AuthenticatedRoutes {
         inventoryRepository: dependencies.inventoryRepository,
         printingRepository: dependencies.printingRepository,
         purchaseRepository: dependencies.purchaseRepository,
+        saleRepository: dependencies.saleRepository,
         currentUser: currentUser,
         capabilities: capabilities,
         onOpenDashboard: guardedAction(

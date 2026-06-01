@@ -7,20 +7,55 @@ import '../../../data/models/product_image_upload.dart';
 import '../../../data/models/product_update_draft.dart';
 import '../../../data/models/product_variant.dart';
 import '../../../data/models/product_variant_draft.dart';
+import '../../../data/models/purchase_submission.dart';
+import '../../../data/models/sale_order.dart';
+import '../../../data/models/sale_order_page.dart';
 import '../../../data/repositories/catalog_repository.dart';
+import '../../../data/repositories/purchase_repository.dart';
+import '../../../data/repositories/sale_repository.dart';
 
 class ProductDetailsViewModel extends ChangeNotifier {
-  ProductDetailsViewModel(this._catalogRepository, Product product)
-    : _product = product {
+  ProductDetailsViewModel(
+    this._catalogRepository,
+    this._purchaseRepository,
+    this._saleRepository,
+    Product product, {
+    bool shouldLoadSaleHistory = true,
+    bool shouldLoadPurchaseHistory = true,
+  }) : _product = product,
+       _shouldLoadSaleHistory = shouldLoadSaleHistory,
+       _shouldLoadPurchaseHistory = shouldLoadPurchaseHistory {
     loadProduct();
+    if (_shouldLoadSaleHistory) {
+      loadSaleHistory();
+    }
+    if (_shouldLoadPurchaseHistory) {
+      loadPurchaseHistory();
+    }
   }
 
   final CatalogRepository _catalogRepository;
+  final PurchaseRepository _purchaseRepository;
+  final SaleRepository _saleRepository;
+  final bool _shouldLoadSaleHistory;
+  final bool _shouldLoadPurchaseHistory;
   Product _product;
   bool _isLoading = false;
   bool _isSavingProduct = false;
   bool _isSavingVariant = false;
   bool _isSavingImage = false;
+  bool _isLoadingSaleHistory = false;
+  bool _isLoadingMoreSaleHistory = false;
+  bool _isLoadingPurchaseHistory = false;
+  bool _isLoadingMorePurchaseHistory = false;
+  bool _hasSaleHistoryError = false;
+  bool _hasPurchaseHistoryError = false;
+  bool _hasMoreSaleHistory = false;
+  bool _hasMorePurchaseHistory = false;
+  int _saleHistoryPage = 1;
+  int _purchaseHistoryPage = 1;
+  List<SaleOrder> _recentSaleOrders = [];
+  List<PurchaseOrder> _recentPurchaseOrders = [];
   String? _errorMessage;
 
   CatalogRepository get catalogRepository => _catalogRepository;
@@ -43,6 +78,17 @@ class ProductDetailsViewModel extends ChangeNotifier {
   bool get isSavingProduct => _isSavingProduct;
   bool get isSavingVariant => _isSavingVariant;
   bool get isSavingImage => _isSavingImage;
+  bool get isLoadingSaleHistory => _isLoadingSaleHistory;
+  bool get isLoadingMoreSaleHistory => _isLoadingMoreSaleHistory;
+  bool get isLoadingPurchaseHistory => _isLoadingPurchaseHistory;
+  bool get isLoadingMorePurchaseHistory => _isLoadingMorePurchaseHistory;
+  bool get hasSaleHistoryError => _hasSaleHistoryError;
+  bool get hasPurchaseHistoryError => _hasPurchaseHistoryError;
+  bool get hasMoreSaleHistory => _hasMoreSaleHistory;
+  bool get hasMorePurchaseHistory => _hasMorePurchaseHistory;
+  List<SaleOrder> get recentSaleOrders => List.unmodifiable(_recentSaleOrders);
+  List<PurchaseOrder> get recentPurchaseOrders =>
+      List.unmodifiable(_recentPurchaseOrders);
   String? get errorMessage => _errorMessage;
 
   Future<void> loadProduct() async {
@@ -228,5 +274,101 @@ class ProductDetailsViewModel extends ChangeNotifier {
         notifyListeners();
         return false;
     }
+  }
+
+  Future<void> loadSaleHistory() async {
+    await _loadSaleHistory(reset: true);
+  }
+
+  Future<void> loadMoreSaleHistory() async {
+    await _loadSaleHistory(reset: false);
+  }
+
+  Future<void> loadPurchaseHistory() async {
+    await _loadPurchaseHistory(reset: true);
+  }
+
+  Future<void> loadMorePurchaseHistory() async {
+    await _loadPurchaseHistory(reset: false);
+  }
+
+  Future<void> _loadSaleHistory({required bool reset}) async {
+    if (!_shouldLoadSaleHistory) {
+      return;
+    }
+    if (reset) {
+      _saleHistoryPage = 1;
+      _isLoadingSaleHistory = true;
+    } else {
+      if (_isLoadingMoreSaleHistory || !_hasMoreSaleHistory) {
+        return;
+      }
+      _isLoadingMoreSaleHistory = true;
+    }
+    _hasSaleHistoryError = false;
+    notifyListeners();
+
+    final page = reset ? 1 : _saleHistoryPage + 1;
+    final result = await _saleRepository.loadOrders(
+      query: SaleOrderQuery(productId: _product.id),
+      page: page,
+    );
+    switch (result) {
+      case Ok<SaleOrderPage>():
+        _recentSaleOrders = reset
+            ? result.value.orders
+            : [..._recentSaleOrders, ...result.value.orders];
+        _hasMoreSaleHistory = result.value.hasMore;
+        _saleHistoryPage = page;
+      case Error<SaleOrderPage>():
+        if (reset) {
+          _recentSaleOrders = [];
+        }
+        _hasSaleHistoryError = true;
+    }
+
+    _isLoadingSaleHistory = false;
+    _isLoadingMoreSaleHistory = false;
+    notifyListeners();
+  }
+
+  Future<void> _loadPurchaseHistory({required bool reset}) async {
+    if (!_shouldLoadPurchaseHistory) {
+      return;
+    }
+    if (reset) {
+      _purchaseHistoryPage = 1;
+      _isLoadingPurchaseHistory = true;
+    } else {
+      if (_isLoadingMorePurchaseHistory || !_hasMorePurchaseHistory) {
+        return;
+      }
+      _isLoadingMorePurchaseHistory = true;
+    }
+    _hasPurchaseHistoryError = false;
+    notifyListeners();
+
+    final page = reset ? 1 : _purchaseHistoryPage + 1;
+    final result = await _purchaseRepository.loadPurchaseOrders(
+      query: PurchaseOrderQuery(productId: _product.id),
+      page: page,
+    );
+    switch (result) {
+      case Ok<PurchaseOrderPage>():
+        _recentPurchaseOrders = reset
+            ? result.value.orders
+            : [..._recentPurchaseOrders, ...result.value.orders];
+        _hasMorePurchaseHistory = result.value.hasMore;
+        _purchaseHistoryPage = page;
+      case Error<PurchaseOrderPage>():
+        if (reset) {
+          _recentPurchaseOrders = [];
+        }
+        _hasPurchaseHistoryError = true;
+    }
+
+    _isLoadingPurchaseHistory = false;
+    _isLoadingMorePurchaseHistory = false;
+    notifyListeners();
   }
 }

@@ -1,5 +1,6 @@
 import '../models/print_job.dart';
 import '../models/sale_order.dart';
+import '../models/sale_order_page.dart';
 import 'api_session.dart';
 
 class SalesApiClient {
@@ -16,6 +17,18 @@ class SalesApiClient {
     return SaleOrder.fromJson(
       _session.decodedBody(response) as Map<String, Object?>,
     );
+  }
+
+  Future<SaleOrderPage> fetchOrders({
+    SaleOrderQuery query = const SaleOrderQuery(),
+    int page = 1,
+  }) async {
+    final response = await _session.get(
+      'orders/',
+      query: query.toQueryParameters(page: page),
+    );
+    _session.throwApiException(response, 'Order list failed with status');
+    return SaleOrderPage.fromAny(_session.decodedBody(response));
   }
 
   Future<SaleDiscountPreview> previewDiscounts(

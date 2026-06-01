@@ -60,6 +60,14 @@ class OrderViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         queryset = super().get_queryset()
+        product_id = self.request.query_params.get("product")
+        variant_id = self.request.query_params.get("variant")
+        if product_id:
+            queryset = queryset.filter(lines__variant__product_id=product_id)
+        if variant_id:
+            queryset = queryset.filter(lines__variant_id=variant_id)
+        if product_id or variant_id:
+            queryset = queryset.distinct()
         if user_is_manager(self.request.user):
             return queryset
         return queryset.filter(

@@ -441,6 +441,13 @@ class PosApiService {
     return _sales.checkout(draft);
   }
 
+  Future<SaleOrderPage> fetchOrders({
+    SaleOrderQuery query = const SaleOrderQuery(),
+    int page = 1,
+  }) {
+    return _sales.fetchOrders(query: query, page: page);
+  }
+
   Future<SaleDiscountPreview> previewSaleDiscounts(
     SaleDiscountPreviewDraft draft,
   ) {
