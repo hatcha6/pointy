@@ -84,19 +84,13 @@ class PurchasingScreen extends StatelessWidget {
             onLogout: onLogout,
           ),
           appBar: AppBar(
-            leading: Builder(
-              builder: (context) {
-                return IconButton(
-                  tooltip: showBackButton
-                      ? l10n.backTooltip
-                      : l10n.navigationMenuTooltip,
-                  icon: Icon(showBackButton ? Icons.arrow_back : Icons.menu),
-                  onPressed: showBackButton
-                      ? () => Navigator.of(context).maybePop()
-                      : Scaffold.of(context).openDrawer,
-                );
-              },
-            ),
+            leading: showBackButton
+                ? IconButton(
+                    tooltip: l10n.backTooltip,
+                    icon: const Icon(Icons.arrow_back),
+                    onPressed: () => Navigator.of(context).maybePop(),
+                  )
+                : const PointyNavigationMenuButton(),
             title: Text(l10n.newPurchaseOrderTitle),
             actions: [
               AuthorizationGuard(

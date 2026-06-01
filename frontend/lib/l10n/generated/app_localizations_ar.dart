@@ -94,6 +94,12 @@ class AppLocalizationsAr extends AppLocalizations {
   String get navigationMenuTooltip => 'فتح القائمة';
 
   @override
+  String get navigationRailExpandTooltip => 'توسيع التنقل';
+
+  @override
+  String get navigationRailCollapseTooltip => 'طي التنقل';
+
+  @override
   String get navigationMenuTitle => 'القائمة';
 
   @override
@@ -623,6 +629,282 @@ class AppLocalizationsAr extends AppLocalizations {
   String dashboardQuantityOnly(int quantity) {
     return '$quantity قطعة';
   }
+
+  @override
+  String get smartNotificationsTooltip => 'التنبيهات الذكية';
+
+  @override
+  String smartNotificationsTooltipWithCount(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count تنبيهات ذكية',
+      two: 'تنبيهان ذكيان',
+      one: 'تنبيه ذكي واحد',
+      zero: 'التنبيهات الذكية',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get smartNotificationsTitle => 'التنبيهات الذكية';
+
+  @override
+  String smartNotificationsActiveCount(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count تنبيهات نشطة',
+      two: 'تنبيهان نشطان',
+      one: 'تنبيه نشط واحد',
+      zero: 'لا توجد تنبيهات نشطة',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String smartNotificationsLastUpdated(String value) {
+    return 'آخر فحص: $value';
+  }
+
+  @override
+  String get smartNotificationsRefreshTooltip => 'تحديث التنبيهات';
+
+  @override
+  String get smartNotificationsRestoreTooltip => 'إظهار التنبيهات المخفية';
+
+  @override
+  String get smartNotificationsLoadError => 'تعذر تحميل التنبيهات الذكية.';
+
+  @override
+  String get smartNotificationsEmptyTitle => 'الأمور المهمة تحت السيطرة';
+
+  @override
+  String get smartNotificationsEmptyMessage =>
+      'سنظهر هنا فقط ما يحتاج انتباهًا فعليًا.';
+
+  @override
+  String get smartNotificationsHiddenOnlyTitle => 'كل التنبيهات الحالية مخفية';
+
+  @override
+  String get smartNotificationsHiddenOnlyMessage =>
+      'يمكنك إظهارها مرة أخرى إذا أردت مراجعتها.';
+
+  @override
+  String get smartNotificationsRestoreHiddenButton => 'إظهار المخفية';
+
+  @override
+  String get smartNotificationsDismissAllButton => 'إخفاء التنبيهات الحالية';
+
+  @override
+  String get smartNotificationDismissTooltip => 'إخفاء التنبيه';
+
+  @override
+  String get smartNotificationSnoozeAction => 'تأجيل ٤ ساعات';
+
+  @override
+  String get smartNotificationSeverityCritical => 'حرج';
+
+  @override
+  String get smartNotificationSeverityWarning => 'مهم';
+
+  @override
+  String get smartNotificationSeverityInfo => 'متابعة';
+
+  @override
+  String get smartNotificationCategoryInventory => 'المخزون';
+
+  @override
+  String get smartNotificationCategoryPurchasing => 'المشتريات';
+
+  @override
+  String get smartNotificationCategoryPrinting => 'الطباعة';
+
+  @override
+  String get smartNotificationCategorySales => 'المبيعات';
+
+  @override
+  String get smartNotificationCategoryDiscounts => 'الخصومات';
+
+  @override
+  String get smartNotificationCategoryOperations => 'التشغيل';
+
+  @override
+  String get smartNotificationOutOfStockTitle => 'منتجات نافدة تحتاج إجراء';
+
+  @override
+  String smartNotificationOutOfStockMessage(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count منتجات غير متاحة للبيع الآن.',
+      two: 'منتجان غير متاحين للبيع الآن.',
+      one: 'منتج واحد غير متاح للبيع الآن.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get smartNotificationLowStockTitle => 'مخزون منخفض';
+
+  @override
+  String smartNotificationLowStockMessage(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count منتجات وصلت إلى حد إعادة الطلب.',
+      two: 'منتجان وصلا إلى حد إعادة الطلب.',
+      one: 'منتج واحد وصل إلى حد إعادة الطلب.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String smartNotificationStockDetail(
+    String name,
+    int quantity,
+    int threshold,
+  ) {
+    return '$name: المتاح $quantity، حد الطلب $threshold';
+  }
+
+  @override
+  String get smartNotificationDustyInventoryTitle => 'مخزون راكد يحتاج مراجعة';
+
+  @override
+  String smartNotificationDustyInventoryMessage(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count منتجات متوفرة ولم تتحرك خلال الفترة.',
+      two: 'منتجان متوفران ولم يتحركا خلال الفترة.',
+      one: 'منتج واحد متوفر ولم يتحرك خلال الفترة.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String smartNotificationDustyInventoryDetail(String name, int quantity) {
+    return '$name: $quantity قطعة متاحة';
+  }
+
+  @override
+  String get smartNotificationOverduePurchasesTitle => 'مستحقات شراء متأخرة';
+
+  @override
+  String smartNotificationOverduePurchasesMessage(num count, String amount) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count أوامر شراء متأخرة، أقرب رصيد $amount.',
+      two: 'أمرا شراء متأخران، أقرب رصيد $amount.',
+      one: 'أمر شراء واحد متأخر بقيمة $amount.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String smartNotificationOverduePurchaseDetail(String order, String supplier) {
+    return '$order لدى $supplier';
+  }
+
+  @override
+  String get smartNotificationPrintFailuresTitle => 'فشل في الطباعة';
+
+  @override
+  String smartNotificationPrintFailuresMessage(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count مهام طباعة فشلت وتحتاج متابعة.',
+      two: 'مهمتا طباعة فشلتا وتحتاجان متابعة.',
+      one: 'مهمة طباعة واحدة فشلت وتحتاج متابعة.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get smartNotificationStalePrintAgentsTitle => 'وكلاء طباعة غير متصلين';
+
+  @override
+  String smartNotificationStalePrintAgentsMessage(num agents, int queued) {
+    String _temp0 = intl.Intl.pluralLogic(
+      agents,
+      locale: localeName,
+      other: '$agents وكلاء طباعة غير متصلين، و$queued مهمة في الانتظار.',
+      two: 'وكيلا طباعة غير متصلين، و$queued مهمة في الانتظار.',
+      one: 'وكيل طباعة واحد غير متصل، و$queued مهمة في الانتظار.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get smartNotificationRegisterVarianceTitle => 'فروقات نقدية في الدرج';
+
+  @override
+  String smartNotificationRegisterVarianceMessage(num count, String amount) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count جلسات درج فيها فرق نقدي، الإجمالي $amount.',
+      two: 'جلستا درج فيهما فرق نقدي، الإجمالي $amount.',
+      one: 'جلسة درج واحدة فيها فرق نقدي بقيمة $amount.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get smartNotificationSalesDropTitle => 'انخفاض واضح في المبيعات';
+
+  @override
+  String smartNotificationSalesDropMessage(int days, String percent) {
+    return 'صافي المبيعات أقل بنسبة $percent% خلال آخر $days يومًا مقارنة بالفترة السابقة.';
+  }
+
+  @override
+  String get smartNotificationLowProfitMarginTitle => 'بيع بهامش سلبي';
+
+  @override
+  String smartNotificationLowProfitMarginMessage(
+    String percent,
+    String amount,
+  ) {
+    return 'الهامش سلبي بنسبة $percent%، والفرق التقريبي $amount.';
+  }
+
+  @override
+  String get smartNotificationExpiringDiscountsTitle => 'خصومات تنتهي قريبًا';
+
+  @override
+  String smartNotificationExpiringDiscountsMessage(num count, int days) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count خصومات تنتهي قريبًا، أقربها خلال $days يوم.',
+      two: 'خصمان ينتهيان قريبًا، أقربهما خلال $days يوم.',
+      one: 'خصم واحد ينتهي خلال $days يوم.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String smartNotificationDiscountDetail(String name) {
+    return '$name';
+  }
+
+  @override
+  String get smartNotificationOperationsErrorTitle => 'خطأ تشغيلي يحتاج متابعة';
+
+  @override
+  String smartNotificationOperationsErrorMessage(String name, String source) {
+    return '$name من $source';
+  }
+
+  @override
+  String get smartNotificationUnknownTitle => 'تنبيه جديد';
+
+  @override
+  String get smartNotificationUnknownMessage => 'يوجد تنبيه يحتاج مراجعة.';
 
   @override
   String dashboardOrderCount(int count) {

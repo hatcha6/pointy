@@ -4,6 +4,7 @@ import '../models/attachment_summary.dart';
 import '../models/pos_user.dart';
 import '../models/analytics_export.dart';
 import '../models/analytics_event.dart';
+import '../models/business_alert.dart';
 import '../models/print_job.dart';
 import '../models/printer_config.dart';
 import '../models/product.dart';
@@ -44,6 +45,7 @@ import '../models/user_activity.dart';
 import 'api_session.dart';
 import 'analytics_api_client.dart';
 import 'auth_api_client.dart';
+import 'business_notification_api_client.dart';
 import 'catalog_api_client.dart';
 import 'customer_api_client.dart';
 import 'dashboard_api_client.dart';
@@ -71,6 +73,7 @@ class PosApiService {
     );
     _analytics = AnalyticsApiClient(_session);
     _auth = AuthApiClient(_session);
+    _businessNotifications = BusinessNotificationApiClient(_session);
     _users = UserApiClient(_session);
     _shopSettings = ShopSettingsApiClient(_session);
     _catalog = CatalogApiClient(_session);
@@ -89,6 +92,7 @@ class PosApiService {
 
   late final PosApiSession _session;
   late final AuthApiClient _auth;
+  late final BusinessNotificationApiClient _businessNotifications;
   late final AnalyticsApiClient _analytics;
   late final UserApiClient _users;
   late final ShopSettingsApiClient _shopSettings;
@@ -119,6 +123,33 @@ class PosApiService {
     List<AnalyticsEventDraft> events,
   ) {
     return _analytics.ingestEvents(events);
+  }
+
+  Future<BusinessAlertDigest> fetchBusinessNotifications({
+    bool includeHidden = true,
+  }) {
+    return _businessNotifications.fetchNotifications(
+      includeHidden: includeHidden,
+    );
+  }
+
+  Future<BusinessAlert> dismissBusinessNotification(String id) {
+    return _businessNotifications.dismissNotification(id);
+  }
+
+  Future<BusinessAlert> snoozeBusinessNotification(
+    String id, {
+    required int hours,
+  }) {
+    return _businessNotifications.snoozeNotification(id, hours: hours);
+  }
+
+  Future<void> dismissAllBusinessNotifications() {
+    return _businessNotifications.dismissAllNotifications();
+  }
+
+  Future<void> restoreHiddenBusinessNotifications() {
+    return _businessNotifications.restoreHiddenNotifications();
   }
 
   Future<PosUserPage> fetchUsers({int page = 1}) {

@@ -46,6 +46,7 @@ INSTALLED_APPS = [
     "apps.payments",
     "apps.printing",
     "apps.reports",
+    "apps.notifications",
     "apps.attachments",
 ]
 

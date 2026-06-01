@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../design/design.dart';
+import 'pointy_shell_action_scope.dart';
 
 enum PointyAppBarStyle { standard, highFocus }
 
@@ -35,6 +36,9 @@ class PointyAppBar extends StatelessWidget implements PreferredSizeWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final scopedActions =
+        PointyShellActionScope.maybeOf(context)?.buildAppBarActions(context) ??
+        const <Widget>[];
     final appBarTheme = switch (style) {
       PointyAppBarStyle.standard => theme.appBarTheme,
       PointyAppBarStyle.highFocus => PointyComponentStyles.darkAppBarTheme(
@@ -54,6 +58,7 @@ class PointyAppBar extends StatelessWidget implements PreferredSizeWidget {
             padding: const EdgeInsetsDirectional.only(end: 8),
             child: _AppBarProgress(color: appBarTheme.foregroundColor),
           ),
+        ...scopedActions,
         ...actions,
       ],
       bottom: bottom,

@@ -21,6 +21,7 @@ import 'features/contacts/views/contact_management_screen.dart';
 import 'features/dashboard/views/dashboard_screen.dart';
 import 'features/device_settings/views/device_settings_screen.dart';
 import 'features/discounts/views/discount_management_screen.dart';
+import 'features/notifications/views/notification_center_host.dart';
 import 'features/pos/view_models/pos_view_model.dart';
 import 'features/pos/views/pos_screen.dart';
 import 'features/purchasing/views/purchase_order_details_screen.dart';
@@ -56,10 +57,13 @@ class AuthenticatedHome extends StatelessWidget {
       currentUser: currentUser,
       capabilities: AuthorizationCapabilities.forUser(currentUser),
     );
-    if (routes.capabilities.canViewDashboard) {
-      return routes.buildDashboardScreen(context);
-    }
-    return routes.buildPosScreen(context);
+    final home = routes.capabilities.canViewDashboard
+        ? routes.buildDashboardScreen(context)
+        : routes.buildPosScreen(context);
+    return NotificationCenterHost(
+      viewModel: dependencies.notificationCenterViewModel,
+      child: home,
+    );
   }
 }
 

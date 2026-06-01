@@ -49,7 +49,7 @@ void main() {
       await tester.pumpWidget(PointyApp(apiService: apiService));
       await tester.pumpAndSettle(const Duration(seconds: 1));
 
-      expect(find.text('لوحة التحكم'), findsOneWidget);
+      expect(find.text('لوحة التحكم'), findsWidgets);
 
       await _openDrawerDestination(tester, 'شاشة البيع');
       expect(find.text('جلسة الدرج'), findsOneWidget);
@@ -146,7 +146,13 @@ void _setDesktopSurface(WidgetTester tester) {
 }
 
 Future<void> _openDrawerDestination(WidgetTester tester, String label) async {
-  await tester.tap(find.byTooltip('فتح القائمة'));
+  final expandedDestination = find.text(label);
+  if (!tester.any(expandedDestination)) {
+    final expandRail = find.byTooltip('توسيع التنقل');
+    await tester.tap(
+      tester.any(expandRail) ? expandRail : find.byTooltip('فتح القائمة'),
+    );
+  }
   await tester.pumpAndSettle();
   await tester.tap(find.text(label).last);
   await tester.pumpAndSettle(const Duration(seconds: 1));

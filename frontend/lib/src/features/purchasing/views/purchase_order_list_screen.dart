@@ -86,15 +86,7 @@ class PurchaseOrderListScreen extends StatelessWidget {
             onLogout: onLogout,
           ),
           appBar: AppBar(
-            leading: Builder(
-              builder: (context) {
-                return IconButton(
-                  tooltip: l10n.navigationMenuTooltip,
-                  icon: const Icon(Icons.menu),
-                  onPressed: Scaffold.of(context).openDrawer,
-                );
-              },
-            ),
+            leading: const PointyNavigationMenuButton(),
             title: Text(l10n.purchaseOrdersTitle),
             actions: [
               AuthorizationGuard(

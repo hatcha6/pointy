@@ -36,6 +36,8 @@
   "resetFiltersButton": "إعادة ضبط",
   "applyFiltersButton": "تطبيق",
   "navigationMenuTooltip": "فتح القائمة",
+  "navigationRailExpandTooltip": "توسيع التنقل",
+  "navigationRailCollapseTooltip": "طي التنقل",
   "navigationMenuTitle": "القائمة",
   "navigationMenuSubtitle": "تنقل سريع بين شاشات نقطة البيع",
   "posDrawerLabel": "شاشة البيع",
@@ -323,6 +325,236 @@
       }
     }
   },
+  "smartNotificationsTooltip": "التنبيهات الذكية",
+  "smartNotificationsTooltipWithCount": "{count, plural, =0{التنبيهات الذكية} =1{تنبيه ذكي واحد} =2{تنبيهان ذكيان} other{{count} تنبيهات ذكية}}",
+  "@smartNotificationsTooltipWithCount": {
+    "description": "Notification bell tooltip with active alert count.",
+    "placeholders": {
+      "count": {
+        "type": "num"
+      }
+    }
+  },
+  "smartNotificationsTitle": "التنبيهات الذكية",
+  "smartNotificationsActiveCount": "{count, plural, =0{لا توجد تنبيهات نشطة} =1{تنبيه نشط واحد} =2{تنبيهان نشطان} other{{count} تنبيهات نشطة}}",
+  "@smartNotificationsActiveCount": {
+    "description": "Active smart notification count.",
+    "placeholders": {
+      "count": {
+        "type": "num"
+      }
+    }
+  },
+  "smartNotificationsLastUpdated": "آخر فحص: {value}",
+  "@smartNotificationsLastUpdated": {
+    "description": "Smart notification last refresh time.",
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "smartNotificationsRefreshTooltip": "تحديث التنبيهات",
+  "smartNotificationsRestoreTooltip": "إظهار التنبيهات المخفية",
+  "smartNotificationsLoadError": "تعذر تحميل التنبيهات الذكية.",
+  "smartNotificationsEmptyTitle": "الأمور المهمة تحت السيطرة",
+  "smartNotificationsEmptyMessage": "سنظهر هنا فقط ما يحتاج انتباهًا فعليًا.",
+  "smartNotificationsHiddenOnlyTitle": "كل التنبيهات الحالية مخفية",
+  "smartNotificationsHiddenOnlyMessage": "يمكنك إظهارها مرة أخرى إذا أردت مراجعتها.",
+  "smartNotificationsRestoreHiddenButton": "إظهار المخفية",
+  "smartNotificationsDismissAllButton": "إخفاء التنبيهات الحالية",
+  "smartNotificationDismissTooltip": "إخفاء التنبيه",
+  "smartNotificationSnoozeAction": "تأجيل ٤ ساعات",
+  "smartNotificationSeverityCritical": "حرج",
+  "smartNotificationSeverityWarning": "مهم",
+  "smartNotificationSeverityInfo": "متابعة",
+  "smartNotificationCategoryInventory": "المخزون",
+  "smartNotificationCategoryPurchasing": "المشتريات",
+  "smartNotificationCategoryPrinting": "الطباعة",
+  "smartNotificationCategorySales": "المبيعات",
+  "smartNotificationCategoryDiscounts": "الخصومات",
+  "smartNotificationCategoryOperations": "التشغيل",
+  "smartNotificationOutOfStockTitle": "منتجات نافدة تحتاج إجراء",
+  "smartNotificationOutOfStockMessage": "{count, plural, =1{منتج واحد غير متاح للبيع الآن.} =2{منتجان غير متاحين للبيع الآن.} other{{count} منتجات غير متاحة للبيع الآن.}}",
+  "@smartNotificationOutOfStockMessage": {
+    "description": "Out-of-stock alert message.",
+    "placeholders": {
+      "count": {
+        "type": "num"
+      }
+    }
+  },
+  "smartNotificationLowStockTitle": "مخزون منخفض",
+  "smartNotificationLowStockMessage": "{count, plural, =1{منتج واحد وصل إلى حد إعادة الطلب.} =2{منتجان وصلا إلى حد إعادة الطلب.} other{{count} منتجات وصلت إلى حد إعادة الطلب.}}",
+  "@smartNotificationLowStockMessage": {
+    "description": "Low stock alert message.",
+    "placeholders": {
+      "count": {
+        "type": "num"
+      }
+    }
+  },
+  "smartNotificationStockDetail": "{name}: المتاح {quantity}، حد الطلب {threshold}",
+  "@smartNotificationStockDetail": {
+    "description": "Stock alert detail.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "quantity": {
+        "type": "int"
+      },
+      "threshold": {
+        "type": "int"
+      }
+    }
+  },
+  "smartNotificationDustyInventoryTitle": "مخزون راكد يحتاج مراجعة",
+  "smartNotificationDustyInventoryMessage": "{count, plural, =1{منتج واحد متوفر ولم يتحرك خلال الفترة.} =2{منتجان متوفران ولم يتحركا خلال الفترة.} other{{count} منتجات متوفرة ولم تتحرك خلال الفترة.}}",
+  "@smartNotificationDustyInventoryMessage": {
+    "description": "Dusty inventory alert message.",
+    "placeholders": {
+      "count": {
+        "type": "num"
+      }
+    }
+  },
+  "smartNotificationDustyInventoryDetail": "{name}: {quantity} قطعة متاحة",
+  "@smartNotificationDustyInventoryDetail": {
+    "description": "Dusty inventory detail.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "quantity": {
+        "type": "int"
+      }
+    }
+  },
+  "smartNotificationOverduePurchasesTitle": "مستحقات شراء متأخرة",
+  "smartNotificationOverduePurchasesMessage": "{count, plural, =1{أمر شراء واحد متأخر بقيمة {amount}.} =2{أمرا شراء متأخران، أقرب رصيد {amount}.} other{{count} أوامر شراء متأخرة، أقرب رصيد {amount}.}}",
+  "@smartNotificationOverduePurchasesMessage": {
+    "description": "Overdue purchase alert message.",
+    "placeholders": {
+      "count": {
+        "type": "num"
+      },
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "smartNotificationOverduePurchaseDetail": "{order} لدى {supplier}",
+  "@smartNotificationOverduePurchaseDetail": {
+    "description": "Overdue purchase detail.",
+    "placeholders": {
+      "order": {
+        "type": "String"
+      },
+      "supplier": {
+        "type": "String"
+      }
+    }
+  },
+  "smartNotificationPrintFailuresTitle": "فشل في الطباعة",
+  "smartNotificationPrintFailuresMessage": "{count, plural, =1{مهمة طباعة واحدة فشلت وتحتاج متابعة.} =2{مهمتا طباعة فشلتا وتحتاجان متابعة.} other{{count} مهام طباعة فشلت وتحتاج متابعة.}}",
+  "@smartNotificationPrintFailuresMessage": {
+    "description": "Print failure alert message.",
+    "placeholders": {
+      "count": {
+        "type": "num"
+      }
+    }
+  },
+  "smartNotificationStalePrintAgentsTitle": "وكلاء طباعة غير متصلين",
+  "smartNotificationStalePrintAgentsMessage": "{agents, plural, =1{وكيل طباعة واحد غير متصل، و{queued} مهمة في الانتظار.} =2{وكيلا طباعة غير متصلين، و{queued} مهمة في الانتظار.} other{{agents} وكلاء طباعة غير متصلين، و{queued} مهمة في الانتظار.}}",
+  "@smartNotificationStalePrintAgentsMessage": {
+    "description": "Stale print agents alert message.",
+    "placeholders": {
+      "agents": {
+        "type": "num"
+      },
+      "queued": {
+        "type": "int"
+      }
+    }
+  },
+  "smartNotificationRegisterVarianceTitle": "فروقات نقدية في الدرج",
+  "smartNotificationRegisterVarianceMessage": "{count, plural, =1{جلسة درج واحدة فيها فرق نقدي بقيمة {amount}.} =2{جلستا درج فيهما فرق نقدي، الإجمالي {amount}.} other{{count} جلسات درج فيها فرق نقدي، الإجمالي {amount}.}}",
+  "@smartNotificationRegisterVarianceMessage": {
+    "description": "Register cash variance alert message.",
+    "placeholders": {
+      "count": {
+        "type": "num"
+      },
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "smartNotificationSalesDropTitle": "انخفاض واضح في المبيعات",
+  "smartNotificationSalesDropMessage": "صافي المبيعات أقل بنسبة {percent}% خلال آخر {days} يومًا مقارنة بالفترة السابقة.",
+  "@smartNotificationSalesDropMessage": {
+    "description": "Sales drop alert message.",
+    "placeholders": {
+      "days": {
+        "type": "int"
+      },
+      "percent": {
+        "type": "String"
+      }
+    }
+  },
+  "smartNotificationLowProfitMarginTitle": "بيع بهامش سلبي",
+  "smartNotificationLowProfitMarginMessage": "الهامش سلبي بنسبة {percent}%، والفرق التقريبي {amount}.",
+  "@smartNotificationLowProfitMarginMessage": {
+    "description": "Negative margin alert message.",
+    "placeholders": {
+      "percent": {
+        "type": "String"
+      },
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "smartNotificationExpiringDiscountsTitle": "خصومات تنتهي قريبًا",
+  "smartNotificationExpiringDiscountsMessage": "{count, plural, =1{خصم واحد ينتهي خلال {days} يوم.} =2{خصمان ينتهيان قريبًا، أقربهما خلال {days} يوم.} other{{count} خصومات تنتهي قريبًا، أقربها خلال {days} يوم.}}",
+  "@smartNotificationExpiringDiscountsMessage": {
+    "description": "Expiring discounts alert message.",
+    "placeholders": {
+      "count": {
+        "type": "num"
+      },
+      "days": {
+        "type": "int"
+      }
+    }
+  },
+  "smartNotificationDiscountDetail": "{name}",
+  "@smartNotificationDiscountDetail": {
+    "description": "Expiring discount detail.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "smartNotificationOperationsErrorTitle": "خطأ تشغيلي يحتاج متابعة",
+  "smartNotificationOperationsErrorMessage": "{name} من {source}",
+  "@smartNotificationOperationsErrorMessage": {
+    "description": "Operational backend/frontend error alert message.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "source": {
+        "type": "String"
+      }
+    }
+  },
+  "smartNotificationUnknownTitle": "تنبيه جديد",
+  "smartNotificationUnknownMessage": "يوجد تنبيه يحتاج مراجعة.",
   "dashboardOrderCount": "{count, plural, =0{لا طلبات} =1{طلب واحد} =2{طلبان} other{{count} طلبات}}",
   "@dashboardOrderCount": {
     "description": "Order count label.",

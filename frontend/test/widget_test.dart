@@ -847,10 +847,7 @@ void main() {
     await tester.pumpWidget(PointyApp(apiService: _mockApiService()));
     await tester.pumpAndSettle(const Duration(seconds: 1));
 
-    await tester.tap(find.byIcon(Icons.menu));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('المنتجات').last);
-    await tester.pumpAndSettle(const Duration(seconds: 1));
+    await _openNavigationDestination(tester, 'المنتجات');
 
     expect(find.text('إدارة المنتجات'), findsOneWidget);
     expect(find.text('إضافة منتج'), findsOneWidget);
@@ -1034,10 +1031,7 @@ void main() {
       );
       await tester.pumpAndSettle(const Duration(seconds: 1));
 
-      await tester.tap(find.byIcon(Icons.menu));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('المنتجات').last);
-      await tester.pumpAndSettle(const Duration(seconds: 1));
+      await _openNavigationDestination(tester, 'المنتجات');
 
       expect(find.text('ابحث باسم المنتج أو الرمز'), findsOneWidget);
       expect(find.byTooltip('الفلاتر والترتيب'), findsOneWidget);
@@ -1060,10 +1054,7 @@ void main() {
     );
     await tester.pumpAndSettle(const Duration(seconds: 1));
 
-    await tester.tap(find.byIcon(Icons.menu));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('المنتجات').last);
-    await tester.pumpAndSettle(const Duration(seconds: 1));
+    await _openNavigationDestination(tester, 'المنتجات');
 
     await tester.enterText(
       find.byKey(const ValueKey('catalog_product_lookup_field')),
@@ -1084,10 +1075,7 @@ void main() {
       );
       await tester.pumpAndSettle(const Duration(seconds: 1));
 
-      await tester.tap(find.byIcon(Icons.menu));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('المنتجات').last);
-      await tester.pumpAndSettle(const Duration(seconds: 1));
+      await _openNavigationDestination(tester, 'المنتجات');
       FocusManager.instance.primaryFocus?.unfocus();
       await tester.pump();
 
@@ -1124,10 +1112,7 @@ void main() {
     );
     await tester.pumpAndSettle(const Duration(seconds: 1));
 
-    await tester.tap(find.byIcon(Icons.menu));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('المنتجات').last);
-    await tester.pumpAndSettle(const Duration(seconds: 1));
+    await _openNavigationDestination(tester, 'المنتجات');
 
     await tester.tap(find.byType(ProductTile).first);
     await tester.pumpAndSettle(const Duration(seconds: 1));
@@ -1158,7 +1143,7 @@ void main() {
     await tester.pumpWidget(PointyApp(apiService: _mockApiService()));
     await tester.pumpAndSettle(const Duration(seconds: 1));
 
-    await tester.tap(find.byIcon(Icons.menu));
+    await tester.tap(find.byTooltip('فتح القائمة'));
     await tester.pumpAndSettle();
 
     expect(find.text('مدير النظام'), findsOneWidget);
@@ -1185,10 +1170,7 @@ void main() {
     await tester.pumpWidget(PointyApp(apiService: _mockApiService()));
     await tester.pumpAndSettle(const Duration(seconds: 1));
 
-    await tester.tap(find.byIcon(Icons.menu));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('الجهات'));
-    await tester.pumpAndSettle(const Duration(seconds: 1));
+    await _openNavigationDestination(tester, 'الجهات');
 
     expect(find.text('العملاء والموردون'), findsOneWidget);
     expect(find.text('العملاء'), findsOneWidget);
@@ -1209,10 +1191,7 @@ void main() {
     await tester.pumpWidget(PointyApp(apiService: _mockApiService()));
     await tester.pumpAndSettle(const Duration(seconds: 1));
 
-    await tester.tap(find.byIcon(Icons.menu));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('الجهات'));
-    await tester.pumpAndSettle(const Duration(seconds: 1));
+    await _openNavigationDestination(tester, 'الجهات');
     await tester.tap(find.text('ليلى أحمد'));
     await tester.pumpAndSettle(const Duration(seconds: 1));
 
@@ -1258,10 +1237,7 @@ void main() {
       );
       await tester.pumpAndSettle(const Duration(seconds: 1));
 
-      await tester.tap(find.byIcon(Icons.menu));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('المشتريات'));
-      await tester.pumpAndSettle(const Duration(seconds: 1));
+      await _openNavigationDestination(tester, 'المشتريات');
 
       expect(find.text('فواتير المشتريات'), findsOneWidget);
       expect(find.text('أمر الشراء P20260515000200'), findsOneWidget);
@@ -1318,10 +1294,7 @@ void main() {
     await tester.pumpWidget(PointyApp(apiService: _mockApiService()));
     await tester.pumpAndSettle(const Duration(seconds: 1));
 
-    await tester.tap(find.byIcon(Icons.menu));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('المشتريات'));
-    await tester.pumpAndSettle(const Duration(seconds: 1));
+    await _openNavigationDestination(tester, 'المشتريات');
     await tester.tap(find.text('أمر شراء جديد'));
     await tester.pumpAndSettle(const Duration(seconds: 1));
 
@@ -1380,10 +1353,7 @@ void main() {
     await tester.pumpWidget(PointyApp(apiService: _mockApiService()));
     await tester.pumpAndSettle(const Duration(seconds: 1));
 
-    await tester.tap(find.byIcon(Icons.menu));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('المشتريات'));
-    await tester.pumpAndSettle(const Duration(seconds: 1));
+    await _openNavigationDestination(tester, 'المشتريات');
     await tester.tap(find.text('أمر الشراء P20260515000200'));
     await tester.pumpAndSettle(const Duration(seconds: 1));
 
@@ -1457,10 +1427,7 @@ void main() {
     );
     await tester.pumpAndSettle(const Duration(seconds: 1));
 
-    await tester.tap(find.byIcon(Icons.menu));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('المشتريات'));
-    await tester.pumpAndSettle(const Duration(seconds: 1));
+    await _openNavigationDestination(tester, 'المشتريات');
     await tester.tap(find.text('أمر الشراء P20260515000200'));
     await tester.pumpAndSettle(const Duration(seconds: 1));
 
@@ -1512,10 +1479,7 @@ void main() {
       );
       await tester.pumpAndSettle(const Duration(seconds: 1));
 
-      await tester.tap(find.byIcon(Icons.menu));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('المشتريات'));
-      await tester.pumpAndSettle(const Duration(seconds: 1));
+      await _openNavigationDestination(tester, 'المشتريات');
       await tester.tap(find.text('أمر الشراء P20260515000200'));
       await tester.pumpAndSettle(const Duration(seconds: 1));
 
@@ -1781,12 +1745,7 @@ void main() {
     await tester.pumpWidget(PointyApp(apiService: _mockApiService()));
     await tester.pumpAndSettle(const Duration(seconds: 1));
 
-    await tester.tap(find.byIcon(Icons.menu));
-    await tester.pumpAndSettle();
-    await tester.drag(find.byType(NavigationDrawer), const Offset(0, -240));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('المستخدمون'));
-    await tester.pumpAndSettle(const Duration(seconds: 1));
+    await _openNavigationDestination(tester, 'المستخدمون');
 
     expect(find.text('إدارة المستخدمين'), findsOneWidget);
     expect(find.text('كاشير الوردية'), findsOneWidget);
@@ -1814,10 +1773,7 @@ void main() {
     );
     await tester.pumpAndSettle(const Duration(seconds: 1));
 
-    await tester.tap(find.byIcon(Icons.menu));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('الخصومات'));
-    await tester.pumpAndSettle(const Duration(seconds: 1));
+    await _openNavigationDestination(tester, 'الخصومات');
 
     expect(find.text('إدارة الخصومات'), findsOneWidget);
     expect(find.text('خصم القهوة'), findsOneWidget);
@@ -1915,10 +1871,7 @@ void main() {
     );
     await tester.pumpAndSettle(const Duration(seconds: 1));
 
-    await tester.tap(find.byIcon(Icons.menu));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('إعدادات المتجر'));
-    await tester.pumpAndSettle(const Duration(seconds: 1));
+    await _openNavigationDestination(tester, 'إعدادات المتجر');
 
     expect(find.text('إعدادات المتجر'), findsWidgets);
     expect(find.text('هوية المتجر'), findsOneWidget);
@@ -1982,10 +1935,7 @@ void main() {
     );
     await tester.pumpAndSettle(const Duration(seconds: 1));
 
-    await tester.tap(find.byIcon(Icons.menu));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('إعدادات المتجر'));
-    await tester.pumpAndSettle(const Duration(seconds: 1));
+    await _openNavigationDestination(tester, 'إعدادات المتجر');
 
     expect(find.text('تصدير التتبع'), findsOneWidget);
     await tester.tap(find.text('تصدير التتبع'));
@@ -2039,10 +1989,7 @@ void main() {
     await tester.pumpWidget(PointyApp(apiService: _mockApiService()));
     await tester.pumpAndSettle(const Duration(seconds: 1));
 
-    await tester.tap(find.byIcon(Icons.menu));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('إعدادات الجهاز'));
-    await tester.pumpAndSettle(const Duration(seconds: 1));
+    await _openNavigationDestination(tester, 'إعدادات الجهاز');
 
     expect(find.text('إعدادات الجهاز'), findsWidgets);
     expect(find.text('الطابعة الافتراضية'), findsOneWidget);
@@ -2081,7 +2028,7 @@ void main() {
     );
     await tester.pumpAndSettle(const Duration(seconds: 1));
 
-    await tester.tap(find.byIcon(Icons.menu));
+    await tester.tap(find.byTooltip('فتح القائمة'));
     await tester.pumpAndSettle();
 
     expect(find.text('كاشير الوردية'), findsOneWidget);
@@ -2155,10 +2102,7 @@ void main() {
     await tester.pumpWidget(PointyApp(apiService: _mockApiService()));
     await tester.pumpAndSettle(const Duration(seconds: 1));
 
-    await tester.tap(find.byIcon(Icons.menu));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('جلسات الدرج'));
-    await tester.pumpAndSettle(const Duration(seconds: 1));
+    await _openNavigationDestination(tester, 'جلسات الدرج');
 
     expect(find.text('سجل جلسات الدرج'), findsOneWidget);
     expect(find.text('جلسة RS-1'), findsOneWidget);
@@ -2201,10 +2145,7 @@ void main() {
     await tester.pumpWidget(PointyApp(apiService: _mockApiService()));
     await tester.pumpAndSettle(const Duration(seconds: 1));
 
-    await tester.tap(find.byIcon(Icons.menu));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('جلسات الدرج'));
-    await tester.pumpAndSettle(const Duration(seconds: 1));
+    await _openNavigationDestination(tester, 'جلسات الدرج');
 
     expect(find.text('جلسة RS-1'), findsOneWidget);
     expect(find.text('اختر جلسة درج لعرض مبيعاتها.'), findsNothing);
@@ -2239,10 +2180,7 @@ void main() {
     );
     await tester.pumpAndSettle(const Duration(seconds: 1));
 
-    await tester.tap(find.byIcon(Icons.menu));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('جلسات الدرج'));
-    await tester.pumpAndSettle(const Duration(seconds: 1));
+    await _openNavigationDestination(tester, 'جلسات الدرج');
 
     await tester.tap(find.text('جلسة RS-1'));
     await tester.pumpAndSettle(const Duration(seconds: 1));
@@ -2274,10 +2212,7 @@ void main() {
       );
       await tester.pumpAndSettle(const Duration(seconds: 1));
 
-      await tester.tap(find.byIcon(Icons.menu));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('جلسات الدرج'));
-      await tester.pumpAndSettle(const Duration(seconds: 1));
+      await _openNavigationDestination(tester, 'جلسات الدرج');
       await tester.tap(find.text('جلسة RS-1'));
       await tester.pumpAndSettle(const Duration(seconds: 1));
       await tester.tap(find.text('المبيعات'));
@@ -2317,10 +2252,7 @@ void main() {
     );
     await tester.pumpAndSettle(const Duration(seconds: 1));
 
-    await tester.tap(find.byIcon(Icons.menu));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('جلسات الدرج'));
-    await tester.pumpAndSettle(const Duration(seconds: 1));
+    await _openNavigationDestination(tester, 'جلسات الدرج');
     await tester.tap(find.text('جلسة RS-1'));
     await tester.pumpAndSettle(const Duration(seconds: 1));
     await tester.tap(find.text('المبيعات'));
@@ -2359,10 +2291,7 @@ void main() {
     );
     await tester.pumpAndSettle(const Duration(seconds: 1));
 
-    await tester.tap(find.byIcon(Icons.menu));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('جلسات الدرج'));
-    await tester.pumpAndSettle(const Duration(seconds: 1));
+    await _openNavigationDestination(tester, 'جلسات الدرج');
     await tester.tap(find.text('جلسة RS-1'));
     await tester.pumpAndSettle(const Duration(seconds: 1));
     await tester.tap(find.text('المبيعات'));
@@ -2387,10 +2316,7 @@ void main() {
     );
     await tester.pumpAndSettle(const Duration(seconds: 1));
 
-    await tester.tap(find.byIcon(Icons.menu));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('جلسات الدرج'));
-    await tester.pumpAndSettle(const Duration(seconds: 1));
+    await _openNavigationDestination(tester, 'جلسات الدرج');
 
     await tester.tap(find.text('جلسة RS-1'));
     await tester.pumpAndSettle(const Duration(seconds: 1));
@@ -2634,10 +2560,7 @@ void main() {
     );
     await tester.pumpAndSettle(const Duration(seconds: 1));
 
-    await tester.tap(find.byIcon(Icons.menu));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('المنتجات').last);
-    await tester.pumpAndSettle(const Duration(seconds: 1));
+    await _openNavigationDestination(tester, 'المنتجات');
 
     await tester.tap(find.byType(ProductTile).first);
     await tester.pumpAndSettle(const Duration(seconds: 1));
@@ -2805,15 +2728,86 @@ Future<void> _startRegisterSession(WidgetTester tester) async {
   await tester.pumpAndSettle(const Duration(seconds: 1));
 }
 
+Future<void> _openNavigationDestination(
+  WidgetTester tester,
+  String label,
+) async {
+  Finder railDestination() {
+    return find.descendant(
+      of: find.byType(NavigationRail),
+      matching: find.text(label),
+    );
+  }
+
+  Finder drawerDestination() {
+    return find.descendant(
+      of: find.byType(NavigationDrawer),
+      matching: find.text(label),
+    );
+  }
+
+  Future<void> tapDestination(Finder destination) async {
+    await tester.ensureVisible(destination.first);
+    await tester.pumpAndSettle();
+    await tester.tap(destination.first);
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+  }
+
+  Future<Finder> scrollDrawerUntilDestinationIsBuilt() async {
+    var destination = drawerDestination();
+    for (
+      var attempts = 0;
+      attempts < 4 && !tester.any(destination);
+      attempts++
+    ) {
+      await tester.drag(find.byType(NavigationDrawer), const Offset(0, -240));
+      await tester.pumpAndSettle();
+      destination = drawerDestination();
+    }
+    return destination;
+  }
+
+  final visibleRailDestination = railDestination();
+  if (tester.any(visibleRailDestination)) {
+    await tapDestination(visibleRailDestination);
+    return;
+  }
+
+  var visibleDrawerDestination = drawerDestination();
+  if (tester.any(visibleDrawerDestination)) {
+    await tapDestination(visibleDrawerDestination);
+    return;
+  }
+
+  final openDrawerButton = find.byTooltip('فتح القائمة');
+  if (tester.any(openDrawerButton)) {
+    await tester.tap(openDrawerButton);
+    await tester.pumpAndSettle();
+    visibleDrawerDestination = await scrollDrawerUntilDestinationIsBuilt();
+    expect(visibleDrawerDestination, findsWidgets);
+    await tapDestination(visibleDrawerDestination);
+    return;
+  }
+
+  final expandRailButton = find.byTooltip('توسيع التنقل');
+  if (tester.any(expandRailButton)) {
+    await tester.tap(expandRailButton);
+    await tester.pumpAndSettle();
+    final expandedRailDestination = railDestination();
+    expect(expandedRailDestination, findsWidgets);
+    await tapDestination(expandedRailDestination);
+    return;
+  }
+
+  fail('Could not find navigation control for "$label".');
+}
+
 Future<void> _openPosFromDashboard(WidgetTester tester) async {
   if (find.text('نقطة البيع').evaluate().isNotEmpty ||
       find.text('البيع الحالي').evaluate().isNotEmpty) {
     return;
   }
-  await tester.tap(find.byIcon(Icons.menu));
-  await tester.pumpAndSettle();
-  await tester.tap(find.text('شاشة البيع'));
-  await tester.pumpAndSettle(const Duration(seconds: 1));
+  await _openNavigationDestination(tester, 'شاشة البيع');
 }
 
 Future<void> _confirmPayment(WidgetTester tester) async {

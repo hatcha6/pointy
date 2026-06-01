@@ -244,6 +244,18 @@ abstract class AppLocalizations {
   /// **'فتح القائمة'**
   String get navigationMenuTooltip;
 
+  /// No description provided for @navigationRailExpandTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'توسيع التنقل'**
+  String get navigationRailExpandTooltip;
+
+  /// No description provided for @navigationRailCollapseTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'طي التنقل'**
+  String get navigationRailCollapseTooltip;
+
   /// No description provided for @navigationMenuTitle.
   ///
   /// In ar, this message translates to:
@@ -1215,6 +1227,324 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'{quantity} قطعة'**
   String dashboardQuantityOnly(int quantity);
+
+  /// No description provided for @smartNotificationsTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'التنبيهات الذكية'**
+  String get smartNotificationsTooltip;
+
+  /// Notification bell tooltip with active alert count.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, =0{التنبيهات الذكية} =1{تنبيه ذكي واحد} =2{تنبيهان ذكيان} other{{count} تنبيهات ذكية}}'**
+  String smartNotificationsTooltipWithCount(num count);
+
+  /// No description provided for @smartNotificationsTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'التنبيهات الذكية'**
+  String get smartNotificationsTitle;
+
+  /// Active smart notification count.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, =0{لا توجد تنبيهات نشطة} =1{تنبيه نشط واحد} =2{تنبيهان نشطان} other{{count} تنبيهات نشطة}}'**
+  String smartNotificationsActiveCount(num count);
+
+  /// Smart notification last refresh time.
+  ///
+  /// In ar, this message translates to:
+  /// **'آخر فحص: {value}'**
+  String smartNotificationsLastUpdated(String value);
+
+  /// No description provided for @smartNotificationsRefreshTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحديث التنبيهات'**
+  String get smartNotificationsRefreshTooltip;
+
+  /// No description provided for @smartNotificationsRestoreTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'إظهار التنبيهات المخفية'**
+  String get smartNotificationsRestoreTooltip;
+
+  /// No description provided for @smartNotificationsLoadError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر تحميل التنبيهات الذكية.'**
+  String get smartNotificationsLoadError;
+
+  /// No description provided for @smartNotificationsEmptyTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'الأمور المهمة تحت السيطرة'**
+  String get smartNotificationsEmptyTitle;
+
+  /// No description provided for @smartNotificationsEmptyMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'سنظهر هنا فقط ما يحتاج انتباهًا فعليًا.'**
+  String get smartNotificationsEmptyMessage;
+
+  /// No description provided for @smartNotificationsHiddenOnlyTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'كل التنبيهات الحالية مخفية'**
+  String get smartNotificationsHiddenOnlyTitle;
+
+  /// No description provided for @smartNotificationsHiddenOnlyMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'يمكنك إظهارها مرة أخرى إذا أردت مراجعتها.'**
+  String get smartNotificationsHiddenOnlyMessage;
+
+  /// No description provided for @smartNotificationsRestoreHiddenButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'إظهار المخفية'**
+  String get smartNotificationsRestoreHiddenButton;
+
+  /// No description provided for @smartNotificationsDismissAllButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'إخفاء التنبيهات الحالية'**
+  String get smartNotificationsDismissAllButton;
+
+  /// No description provided for @smartNotificationDismissTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'إخفاء التنبيه'**
+  String get smartNotificationDismissTooltip;
+
+  /// No description provided for @smartNotificationSnoozeAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'تأجيل ٤ ساعات'**
+  String get smartNotificationSnoozeAction;
+
+  /// No description provided for @smartNotificationSeverityCritical.
+  ///
+  /// In ar, this message translates to:
+  /// **'حرج'**
+  String get smartNotificationSeverityCritical;
+
+  /// No description provided for @smartNotificationSeverityWarning.
+  ///
+  /// In ar, this message translates to:
+  /// **'مهم'**
+  String get smartNotificationSeverityWarning;
+
+  /// No description provided for @smartNotificationSeverityInfo.
+  ///
+  /// In ar, this message translates to:
+  /// **'متابعة'**
+  String get smartNotificationSeverityInfo;
+
+  /// No description provided for @smartNotificationCategoryInventory.
+  ///
+  /// In ar, this message translates to:
+  /// **'المخزون'**
+  String get smartNotificationCategoryInventory;
+
+  /// No description provided for @smartNotificationCategoryPurchasing.
+  ///
+  /// In ar, this message translates to:
+  /// **'المشتريات'**
+  String get smartNotificationCategoryPurchasing;
+
+  /// No description provided for @smartNotificationCategoryPrinting.
+  ///
+  /// In ar, this message translates to:
+  /// **'الطباعة'**
+  String get smartNotificationCategoryPrinting;
+
+  /// No description provided for @smartNotificationCategorySales.
+  ///
+  /// In ar, this message translates to:
+  /// **'المبيعات'**
+  String get smartNotificationCategorySales;
+
+  /// No description provided for @smartNotificationCategoryDiscounts.
+  ///
+  /// In ar, this message translates to:
+  /// **'الخصومات'**
+  String get smartNotificationCategoryDiscounts;
+
+  /// No description provided for @smartNotificationCategoryOperations.
+  ///
+  /// In ar, this message translates to:
+  /// **'التشغيل'**
+  String get smartNotificationCategoryOperations;
+
+  /// No description provided for @smartNotificationOutOfStockTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'منتجات نافدة تحتاج إجراء'**
+  String get smartNotificationOutOfStockTitle;
+
+  /// Out-of-stock alert message.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, =1{منتج واحد غير متاح للبيع الآن.} =2{منتجان غير متاحين للبيع الآن.} other{{count} منتجات غير متاحة للبيع الآن.}}'**
+  String smartNotificationOutOfStockMessage(num count);
+
+  /// No description provided for @smartNotificationLowStockTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'مخزون منخفض'**
+  String get smartNotificationLowStockTitle;
+
+  /// Low stock alert message.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, =1{منتج واحد وصل إلى حد إعادة الطلب.} =2{منتجان وصلا إلى حد إعادة الطلب.} other{{count} منتجات وصلت إلى حد إعادة الطلب.}}'**
+  String smartNotificationLowStockMessage(num count);
+
+  /// Stock alert detail.
+  ///
+  /// In ar, this message translates to:
+  /// **'{name}: المتاح {quantity}، حد الطلب {threshold}'**
+  String smartNotificationStockDetail(String name, int quantity, int threshold);
+
+  /// No description provided for @smartNotificationDustyInventoryTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'مخزون راكد يحتاج مراجعة'**
+  String get smartNotificationDustyInventoryTitle;
+
+  /// Dusty inventory alert message.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, =1{منتج واحد متوفر ولم يتحرك خلال الفترة.} =2{منتجان متوفران ولم يتحركا خلال الفترة.} other{{count} منتجات متوفرة ولم تتحرك خلال الفترة.}}'**
+  String smartNotificationDustyInventoryMessage(num count);
+
+  /// Dusty inventory detail.
+  ///
+  /// In ar, this message translates to:
+  /// **'{name}: {quantity} قطعة متاحة'**
+  String smartNotificationDustyInventoryDetail(String name, int quantity);
+
+  /// No description provided for @smartNotificationOverduePurchasesTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'مستحقات شراء متأخرة'**
+  String get smartNotificationOverduePurchasesTitle;
+
+  /// Overdue purchase alert message.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, =1{أمر شراء واحد متأخر بقيمة {amount}.} =2{أمرا شراء متأخران، أقرب رصيد {amount}.} other{{count} أوامر شراء متأخرة، أقرب رصيد {amount}.}}'**
+  String smartNotificationOverduePurchasesMessage(num count, String amount);
+
+  /// Overdue purchase detail.
+  ///
+  /// In ar, this message translates to:
+  /// **'{order} لدى {supplier}'**
+  String smartNotificationOverduePurchaseDetail(String order, String supplier);
+
+  /// No description provided for @smartNotificationPrintFailuresTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'فشل في الطباعة'**
+  String get smartNotificationPrintFailuresTitle;
+
+  /// Print failure alert message.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, =1{مهمة طباعة واحدة فشلت وتحتاج متابعة.} =2{مهمتا طباعة فشلتا وتحتاجان متابعة.} other{{count} مهام طباعة فشلت وتحتاج متابعة.}}'**
+  String smartNotificationPrintFailuresMessage(num count);
+
+  /// No description provided for @smartNotificationStalePrintAgentsTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'وكلاء طباعة غير متصلين'**
+  String get smartNotificationStalePrintAgentsTitle;
+
+  /// Stale print agents alert message.
+  ///
+  /// In ar, this message translates to:
+  /// **'{agents, plural, =1{وكيل طباعة واحد غير متصل، و{queued} مهمة في الانتظار.} =2{وكيلا طباعة غير متصلين، و{queued} مهمة في الانتظار.} other{{agents} وكلاء طباعة غير متصلين، و{queued} مهمة في الانتظار.}}'**
+  String smartNotificationStalePrintAgentsMessage(num agents, int queued);
+
+  /// No description provided for @smartNotificationRegisterVarianceTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'فروقات نقدية في الدرج'**
+  String get smartNotificationRegisterVarianceTitle;
+
+  /// Register cash variance alert message.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, =1{جلسة درج واحدة فيها فرق نقدي بقيمة {amount}.} =2{جلستا درج فيهما فرق نقدي، الإجمالي {amount}.} other{{count} جلسات درج فيها فرق نقدي، الإجمالي {amount}.}}'**
+  String smartNotificationRegisterVarianceMessage(num count, String amount);
+
+  /// No description provided for @smartNotificationSalesDropTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'انخفاض واضح في المبيعات'**
+  String get smartNotificationSalesDropTitle;
+
+  /// Sales drop alert message.
+  ///
+  /// In ar, this message translates to:
+  /// **'صافي المبيعات أقل بنسبة {percent}% خلال آخر {days} يومًا مقارنة بالفترة السابقة.'**
+  String smartNotificationSalesDropMessage(int days, String percent);
+
+  /// No description provided for @smartNotificationLowProfitMarginTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'بيع بهامش سلبي'**
+  String get smartNotificationLowProfitMarginTitle;
+
+  /// Negative margin alert message.
+  ///
+  /// In ar, this message translates to:
+  /// **'الهامش سلبي بنسبة {percent}%، والفرق التقريبي {amount}.'**
+  String smartNotificationLowProfitMarginMessage(String percent, String amount);
+
+  /// No description provided for @smartNotificationExpiringDiscountsTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'خصومات تنتهي قريبًا'**
+  String get smartNotificationExpiringDiscountsTitle;
+
+  /// Expiring discounts alert message.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, =1{خصم واحد ينتهي خلال {days} يوم.} =2{خصمان ينتهيان قريبًا، أقربهما خلال {days} يوم.} other{{count} خصومات تنتهي قريبًا، أقربها خلال {days} يوم.}}'**
+  String smartNotificationExpiringDiscountsMessage(num count, int days);
+
+  /// Expiring discount detail.
+  ///
+  /// In ar, this message translates to:
+  /// **'{name}'**
+  String smartNotificationDiscountDetail(String name);
+
+  /// No description provided for @smartNotificationOperationsErrorTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'خطأ تشغيلي يحتاج متابعة'**
+  String get smartNotificationOperationsErrorTitle;
+
+  /// Operational backend/frontend error alert message.
+  ///
+  /// In ar, this message translates to:
+  /// **'{name} من {source}'**
+  String smartNotificationOperationsErrorMessage(String name, String source);
+
+  /// No description provided for @smartNotificationUnknownTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'تنبيه جديد'**
+  String get smartNotificationUnknownTitle;
+
+  /// No description provided for @smartNotificationUnknownMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'يوجد تنبيه يحتاج مراجعة.'**
+  String get smartNotificationUnknownMessage;
 
   /// Order count label.
   ///

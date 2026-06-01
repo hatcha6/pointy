@@ -19,6 +19,7 @@ MANAGER_PERMISSION_DOMAINS = (
     "payments",
     "printing",
     "reports",
+    "notifications",
     "attachments",
 )
 USER_PERMISSION_CODES = (

@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 
 import '../app_navigation_drawer.dart';
 import '../responsive/responsive.dart';
+import 'pointy_navigation_rail_scope.dart';
+import 'pointy_shell_action_scope.dart';
 
-class PointyScaffold extends StatelessWidget {
+class PointyScaffold extends StatefulWidget {
   const PointyScaffold({
     super.key,
     required this.body,
@@ -36,42 +38,87 @@ class PointyScaffold extends StatelessWidget {
   final bool? resizeToAvoidBottomInset;
 
   @override
+  State<PointyScaffold> createState() => _PointyScaffoldState();
+}
+
+class _PointyScaffoldState extends State<PointyScaffold> {
+  late final PointyNavigationRailController _fallbackNavigationRailController;
+
+  @override
+  void initState() {
+    super.initState();
+    _fallbackNavigationRailController = PointyNavigationRailController();
+    _fallbackNavigationRailController.addListener(
+      _handleFallbackNavigationRailChanged,
+    );
+  }
+
+  @override
+  void dispose() {
+    _fallbackNavigationRailController.removeListener(
+      _handleFallbackNavigationRailChanged,
+    );
+    _fallbackNavigationRailController.dispose();
+    super.dispose();
+  }
+
+  void _handleFallbackNavigationRailChanged() {
+    setState(() {});
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final navigationDrawer = drawer;
+    final parentNavigationRailScope = PointyNavigationRailScope.maybeOf(
+      context,
+    );
+    final navigationRailController =
+        parentNavigationRailScope?.controller ??
+        _fallbackNavigationRailController;
+    final navigationDrawer = widget.drawer;
+    final shellActionScope = PointyShellActionScope.maybeOf(context);
+    final resolvedEndDrawer =
+        widget.endDrawer ?? shellActionScope?.buildEndDrawer(context);
     final usesNavigationRail =
         navigationDrawer is AppNavigationDrawer &&
         AppBreakpoints.of(context).index >= AppBreakpoint.desktop.index;
 
-    Widget resolvedBody = body;
+    Widget resolvedBody = widget.body;
     if (usesNavigationRail) {
       resolvedBody = Row(
         children: [
-          navigationDrawer.buildRail(context),
+          navigationDrawer.buildRail(
+            context,
+            extended: navigationRailController.isExpanded,
+          ),
           const VerticalDivider(width: 1),
           Expanded(child: resolvedBody),
         ],
       );
     }
 
-    if (safeArea) {
+    if (widget.safeArea) {
       resolvedBody = SafeArea(
-        top: safeAreaTop,
-        bottom: safeAreaBottom,
-        left: safeAreaLeft,
-        right: safeAreaRight,
+        top: widget.safeAreaTop,
+        bottom: widget.safeAreaBottom,
+        left: widget.safeAreaLeft,
+        right: widget.safeAreaRight,
         child: resolvedBody,
       );
     }
 
-    return Scaffold(
-      appBar: appBar,
-      drawer: drawer,
-      endDrawer: endDrawer,
-      floatingActionButton: floatingActionButton,
-      bottomNavigationBar: bottomNavigationBar,
-      backgroundColor: backgroundColor,
-      resizeToAvoidBottomInset: resizeToAvoidBottomInset,
-      body: resolvedBody,
+    return PointyNavigationRailScope(
+      isActive: usesNavigationRail,
+      controller: navigationRailController,
+      child: Scaffold(
+        appBar: widget.appBar,
+        drawer: usesNavigationRail ? null : widget.drawer,
+        endDrawer: resolvedEndDrawer,
+        floatingActionButton: widget.floatingActionButton,
+        bottomNavigationBar: widget.bottomNavigationBar,
+        backgroundColor: widget.backgroundColor,
+        resizeToAvoidBottomInset: widget.resizeToAvoidBottomInset,
+        body: resolvedBody,
+      ),
     );
   }
 }

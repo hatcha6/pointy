@@ -24,6 +24,7 @@ from apps.core.views import (
 )
 from apps.core.dashboard import DashboardView
 from apps.inventory.views import StockItemViewSet, StockMovementViewSet
+from apps.notifications.views import BusinessNotificationViewSet
 from apps.payments.views import PaymentViewSet
 from apps.printing.views import (
     PrinterProfileViewSet,
@@ -68,6 +69,11 @@ router.register("printer-profiles", PrinterProfileViewSet)
 router.register("print-agents", PrintAgentViewSet)
 router.register("print-jobs", PrintJobViewSet)
 router.register("reports", ReportRunViewSet, basename="report")
+router.register(
+    "business-notifications",
+    BusinessNotificationViewSet,
+    basename="business-notification",
+)
 router.register("attachments", AttachmentViewSet, basename="attachment")
 router.register(
     "attachment-storage-volumes",

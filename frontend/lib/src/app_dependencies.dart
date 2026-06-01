@@ -4,6 +4,7 @@ import 'core/analytics_engine.dart';
 import 'data/models/analytics_event.dart';
 import 'data/repositories/analytics_repository.dart';
 import 'data/repositories/auth_repository.dart';
+import 'data/repositories/business_alert_repository.dart';
 import 'data/repositories/catalog_repository.dart';
 import 'data/repositories/contact_repository.dart';
 import 'data/repositories/dashboard_repository.dart';
@@ -21,6 +22,7 @@ import 'features/auth/view_models/auth_view_model.dart';
 import 'features/contacts/view_models/contact_management_view_model.dart';
 import 'features/dashboard/view_models/dashboard_view_model.dart';
 import 'features/discounts/view_models/discount_management_view_model.dart';
+import 'features/notifications/view_models/notification_center_view_model.dart';
 import 'features/pos/view_models/pos_view_model.dart';
 import 'features/printing/view_models/printing_settings_view_model.dart';
 import 'features/purchasing/view_models/purchase_order_list_view_model.dart';
@@ -36,6 +38,7 @@ class PointyAppDependencies {
     catalogRepository = CatalogRepository(service);
     contactRepository = ContactRepository(service);
     dashboardRepository = DashboardRepository(service);
+    businessAlertRepository = BusinessAlertRepository(service);
     discountRepository = DiscountRepository(service);
     inventoryRepository = InventoryRepository(service);
     registerSessionRepository = RegisterSessionRepository(service);
@@ -66,6 +69,7 @@ class PointyAppDependencies {
   late final CatalogRepository catalogRepository;
   late final ContactRepository contactRepository;
   late final DashboardRepository dashboardRepository;
+  late final BusinessAlertRepository businessAlertRepository;
   late final DiscountRepository discountRepository;
   late final InventoryRepository inventoryRepository;
   late final RegisterSessionRepository registerSessionRepository;
@@ -80,6 +84,7 @@ class PointyAppDependencies {
   PrintingSettingsViewModel? _printingSettingsViewModel;
   ContactManagementViewModel? _contactManagementViewModel;
   DiscountManagementViewModel? _discountManagementViewModel;
+  NotificationCenterViewModel? _notificationCenterViewModel;
   DashboardViewModel? _dashboardViewModel;
   PurchaseViewModel? _purchaseViewModel;
   PurchaseOrderListViewModel? _purchaseOrderListViewModel;
@@ -104,6 +109,11 @@ class PointyAppDependencies {
   DashboardViewModel get dashboardViewModel =>
       _dashboardViewModel ??= DashboardViewModel(dashboardRepository);
 
+  NotificationCenterViewModel get notificationCenterViewModel =>
+      _notificationCenterViewModel ??= NotificationCenterViewModel(
+        businessAlertRepository,
+      );
+
   PurchaseViewModel get purchaseViewModel => _purchaseViewModel ??=
       PurchaseViewModel(catalogRepository, purchaseRepository);
 
@@ -127,6 +137,7 @@ class PointyAppDependencies {
       );
       posViewModel.loadCurrentRegisterSession();
       posViewModel.loadCheckoutSettings();
+      unawaited(notificationCenterViewModel.loadAlerts());
       _dashboardViewModel?.loadDashboard();
       _purchaseViewModel?.loadCatalog();
       _purchaseOrderListViewModel?.loadOrders();
@@ -155,6 +166,8 @@ class PointyAppDependencies {
     _contactManagementViewModel = null;
     _discountManagementViewModel?.dispose();
     _discountManagementViewModel = null;
+    _notificationCenterViewModel?.dispose();
+    _notificationCenterViewModel = null;
     _dashboardViewModel?.dispose();
     _dashboardViewModel = null;
     _purchaseViewModel?.dispose();

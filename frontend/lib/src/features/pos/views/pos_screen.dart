@@ -83,15 +83,7 @@ class PosScreen extends StatelessWidget {
           ),
           appBar: PointyAppBar(
             style: PointyAppBarStyle.highFocus,
-            leading: Builder(
-              builder: (context) {
-                return IconButton(
-                  tooltip: l10n.navigationMenuTooltip,
-                  onPressed: Scaffold.of(context).openDrawer,
-                  icon: const Icon(Icons.menu),
-                );
-              },
-            ),
+            leading: const PointyNavigationMenuButton(),
             title: Text(l10n.appTitle),
             actions: [
               if (viewModel.activeRegisterSession != null)

@@ -13,6 +13,7 @@ import 'data/models/analytics_event.dart';
 import 'data/services/pos_api_service.dart';
 import 'features/auth/views/auth_gate.dart';
 import 'shared/design/design.dart';
+import 'shared/shell/shell.dart';
 
 class PointyApp extends StatefulWidget {
   const PointyApp({super.key, this.apiService});
@@ -25,6 +26,7 @@ class PointyApp extends StatefulWidget {
 
 class _PointyAppState extends State<PointyApp> {
   late final PointyAppDependencies _dependencies;
+  late final PointyNavigationRailController _navigationRailController;
   void Function(FlutterErrorDetails details)? _previousFlutterErrorHandler;
   ErrorCallback? _previousPlatformErrorHandler;
   late final TimingsCallback _frameTimingsCallback;
@@ -33,6 +35,7 @@ class _PointyAppState extends State<PointyApp> {
   void initState() {
     super.initState();
     _dependencies = PointyAppDependencies(apiService: widget.apiService);
+    _navigationRailController = PointyNavigationRailController();
     _dependencies.authViewModel.addListener(_dependencies.handleAuthChanged);
     unawaited(_dependencies.analyticsEngine.start());
     _frameTimingsCallback = _dependencies.analyticsEngine.recordFrameTimings;
@@ -46,6 +49,7 @@ class _PointyAppState extends State<PointyApp> {
     PlatformDispatcher.instance.onError = _previousPlatformErrorHandler;
     SchedulerBinding.instance.removeTimingsCallback(_frameTimingsCallback);
     _dependencies.authViewModel.removeListener(_dependencies.handleAuthChanged);
+    _navigationRailController.dispose();
     _dependencies.dispose();
     super.dispose();
   }
@@ -92,7 +96,11 @@ class _PointyAppState extends State<PointyApp> {
       theme: PointyTheme.light(),
       builder: (context, child) => AnalyticsInteractionTracker(
         analyticsEngine: _dependencies.analyticsEngine,
-        child: child ?? const SizedBox.shrink(),
+        child: PointyNavigationRailScope(
+          isActive: false,
+          controller: _navigationRailController,
+          child: child ?? const SizedBox.shrink(),
+        ),
       ),
       home: AuthGate(
         viewModel: _dependencies.authViewModel,

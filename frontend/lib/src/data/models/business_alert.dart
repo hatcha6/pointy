@@ -1,0 +1,284 @@
+enum BusinessAlertSeverity {
+  critical,
+  warning,
+  info;
+
+  int get priority => switch (this) {
+    BusinessAlertSeverity.critical => 0,
+    BusinessAlertSeverity.warning => 1,
+    BusinessAlertSeverity.info => 2,
+  };
+}
+
+enum BusinessAlertCategory {
+  inventory,
+  purchasing,
+  printing,
+  sales,
+  discounts,
+  operations,
+}
+
+enum BusinessAlertType {
+  outOfStock,
+  lowStock,
+  overduePurchases,
+  printFailures,
+  stalePrintAgents,
+  registerVariance,
+  lowProfitMargin,
+  expiringDiscounts,
+  operationsError,
+  unknown,
+}
+
+class BusinessAlert {
+  const BusinessAlert({
+    required this.id,
+    required this.code,
+    required this.type,
+    required this.category,
+    required this.severity,
+    required this.sortScore,
+    required this.isHidden,
+    this.hiddenReason = '',
+    this.count = 0,
+    this.quantity = 0,
+    this.threshold = 0,
+    this.days = 0,
+    this.amount = 0,
+    this.percent = 0,
+    this.primaryLabel = '',
+    this.secondaryLabel = '',
+    this.detailLabel = '',
+    this.firstSeenAt,
+    this.lastSeenAt,
+    this.occurredAt,
+    this.acknowledgedAt,
+    this.snoozedUntil,
+  });
+
+  final String id;
+  final String code;
+  final BusinessAlertType type;
+  final BusinessAlertCategory category;
+  final BusinessAlertSeverity severity;
+  final int sortScore;
+  final bool isHidden;
+  final String hiddenReason;
+  final int count;
+  final int quantity;
+  final int threshold;
+  final int days;
+  final double amount;
+  final double percent;
+  final String primaryLabel;
+  final String secondaryLabel;
+  final String detailLabel;
+  final DateTime? firstSeenAt;
+  final DateTime? lastSeenAt;
+  final DateTime? occurredAt;
+  final DateTime? acknowledgedAt;
+  final DateTime? snoozedUntil;
+
+  factory BusinessAlert.fromJson(Map<String, Object?> json) {
+    final code = json['code']?.toString() ?? '';
+    final payload = _mapFromJson(json['payload']);
+    final type = _typeFromCode(code);
+    return BusinessAlert(
+      id: json['id']?.toString() ?? '',
+      code: code,
+      type: type,
+      category: _categoryFromJson(json['category']),
+      severity: _severityFromJson(json['severity']),
+      sortScore: _sortScore(type),
+      isHidden: json['is_hidden'] == true,
+      hiddenReason: json['hidden_reason']?.toString() ?? '',
+      count: _intFromJson(payload['count'], fallback: 1),
+      quantity: _quantityFromPayload(type, payload),
+      threshold: _intFromJson(payload['threshold']),
+      days: _intFromJson(payload['days']),
+      amount: _doubleFromJson(payload['amount']),
+      percent: _doubleFromJson(payload['percent']),
+      primaryLabel: _primaryLabel(type, payload),
+      secondaryLabel: _secondaryLabel(type, payload),
+      detailLabel: _detailLabel(type, payload),
+      firstSeenAt: _dateTimeFromJson(json['first_seen_at']),
+      lastSeenAt: _dateTimeFromJson(json['last_seen_at']),
+      occurredAt: _occurredAt(type, payload),
+      acknowledgedAt: _dateTimeFromJson(json['acknowledged_at']),
+      snoozedUntil: _dateTimeFromJson(json['snoozed_until']),
+    );
+  }
+
+  BusinessAlert copyWith({bool? isHidden, String? hiddenReason}) {
+    return BusinessAlert(
+      id: id,
+      code: code,
+      type: type,
+      category: category,
+      severity: severity,
+      sortScore: sortScore,
+      isHidden: isHidden ?? this.isHidden,
+      hiddenReason: hiddenReason ?? this.hiddenReason,
+      count: count,
+      quantity: quantity,
+      threshold: threshold,
+      days: days,
+      amount: amount,
+      percent: percent,
+      primaryLabel: primaryLabel,
+      secondaryLabel: secondaryLabel,
+      detailLabel: detailLabel,
+      firstSeenAt: firstSeenAt,
+      lastSeenAt: lastSeenAt,
+      occurredAt: occurredAt,
+      acknowledgedAt: acknowledgedAt,
+      snoozedUntil: snoozedUntil,
+    );
+  }
+}
+
+class BusinessAlertDigest {
+  const BusinessAlertDigest({required this.alerts, this.generatedAt});
+
+  final List<BusinessAlert> alerts;
+  final DateTime? generatedAt;
+}
+
+BusinessAlertType _typeFromCode(String code) {
+  return switch (code) {
+    'inventory.out_of_stock' => BusinessAlertType.outOfStock,
+    'inventory.low_stock' => BusinessAlertType.lowStock,
+    'purchasing.overdue_order' => BusinessAlertType.overduePurchases,
+    'printing.failed_job' => BusinessAlertType.printFailures,
+    'printing.stale_agent' => BusinessAlertType.stalePrintAgents,
+    'sales.register_variance' => BusinessAlertType.registerVariance,
+    'sales.negative_margin' => BusinessAlertType.lowProfitMargin,
+    'discounts.expiring_rule' => BusinessAlertType.expiringDiscounts,
+    'operations.backend_error' => BusinessAlertType.operationsError,
+    _ => BusinessAlertType.unknown,
+  };
+}
+
+BusinessAlertCategory _categoryFromJson(Object? value) {
+  return switch (value?.toString()) {
+    'inventory' => BusinessAlertCategory.inventory,
+    'purchasing' => BusinessAlertCategory.purchasing,
+    'printing' => BusinessAlertCategory.printing,
+    'sales' => BusinessAlertCategory.sales,
+    'discounts' => BusinessAlertCategory.discounts,
+    'operations' => BusinessAlertCategory.operations,
+    _ => BusinessAlertCategory.operations,
+  };
+}
+
+BusinessAlertSeverity _severityFromJson(Object? value) {
+  return switch (value?.toString()) {
+    'critical' => BusinessAlertSeverity.critical,
+    'warning' => BusinessAlertSeverity.warning,
+    _ => BusinessAlertSeverity.info,
+  };
+}
+
+int _sortScore(BusinessAlertType type) {
+  return switch (type) {
+    BusinessAlertType.outOfStock => 10,
+    BusinessAlertType.printFailures => 15,
+    BusinessAlertType.stalePrintAgents => 18,
+    BusinessAlertType.overduePurchases => 20,
+    BusinessAlertType.registerVariance => 25,
+    BusinessAlertType.lowProfitMargin => 28,
+    BusinessAlertType.lowStock => 30,
+    BusinessAlertType.operationsError => 35,
+    BusinessAlertType.expiringDiscounts => 60,
+    BusinessAlertType.unknown => 100,
+  };
+}
+
+int _quantityFromPayload(BusinessAlertType type, Map<String, Object?> payload) {
+  return switch (type) {
+    BusinessAlertType.stalePrintAgents => _intFromJson(payload['queued_count']),
+    _ => _intFromJson(payload['quantity']),
+  };
+}
+
+String _primaryLabel(BusinessAlertType type, Map<String, Object?> payload) {
+  return switch (type) {
+    BusinessAlertType.outOfStock ||
+    BusinessAlertType.lowStock => payload['product_name']?.toString() ?? '',
+    BusinessAlertType.overduePurchases =>
+      payload['order_number']?.toString() ?? '',
+    BusinessAlertType.printFailures =>
+      payload['receipt_number']?.toString() ?? '',
+    BusinessAlertType.stalePrintAgents =>
+      payload['agent_name']?.toString() ?? '',
+    BusinessAlertType.registerVariance =>
+      payload['session_number']?.toString() ?? '',
+    BusinessAlertType.expiringDiscounts =>
+      payload['rule_name']?.toString() ?? '',
+    BusinessAlertType.operationsError => payload['name']?.toString() ?? '',
+    BusinessAlertType.lowProfitMargin || BusinessAlertType.unknown => '',
+  };
+}
+
+String _secondaryLabel(BusinessAlertType type, Map<String, Object?> payload) {
+  return switch (type) {
+    BusinessAlertType.outOfStock ||
+    BusinessAlertType.lowStock => payload['sku']?.toString() ?? '',
+    BusinessAlertType.overduePurchases =>
+      payload['supplier_name']?.toString() ?? '',
+    BusinessAlertType.printFailures => payload['message']?.toString() ?? '',
+    BusinessAlertType.expiringDiscounts => payload['channel']?.toString() ?? '',
+    BusinessAlertType.operationsError => payload['source']?.toString() ?? '',
+    _ => '',
+  };
+}
+
+String _detailLabel(BusinessAlertType type, Map<String, Object?> payload) {
+  return switch (type) {
+    BusinessAlertType.operationsError => payload['message']?.toString() ?? '',
+    _ => '',
+  };
+}
+
+DateTime? _occurredAt(BusinessAlertType type, Map<String, Object?> payload) {
+  return switch (type) {
+    BusinessAlertType.overduePurchases => _dateTimeFromJson(
+      payload['due_date'],
+    ),
+    BusinessAlertType.printFailures => _dateTimeFromJson(payload['failed_at']),
+    BusinessAlertType.expiringDiscounts => _dateTimeFromJson(
+      payload['ends_at'],
+    ),
+    BusinessAlertType.operationsError => _dateTimeFromJson(
+      payload['occurred_at'],
+    ),
+    _ => null,
+  };
+}
+
+Map<String, Object?> _mapFromJson(Object? value) {
+  if (value is! Map) {
+    return const {};
+  }
+  return value.map((key, value) => MapEntry(key.toString(), value));
+}
+
+DateTime? _dateTimeFromJson(Object? value) {
+  return DateTime.tryParse(value?.toString() ?? '');
+}
+
+int _intFromJson(Object? value, {int fallback = 0}) {
+  if (value is num) {
+    return value.toInt();
+  }
+  return int.tryParse(value?.toString() ?? '') ?? fallback;
+}
+
+double _doubleFromJson(Object? value) {
+  if (value is num) {
+    return value.toDouble();
+  }
+  return double.tryParse(value?.toString() ?? '') ?? 0;
+}

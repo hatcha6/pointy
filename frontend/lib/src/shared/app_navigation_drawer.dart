@@ -97,7 +97,7 @@ class AppNavigationDrawer extends StatelessWidget {
     );
   }
 
-  Widget buildRail(BuildContext context) {
+  Widget buildRail(BuildContext context, {bool extended = false}) {
     final l10n = AppLocalizations.of(context)!;
     final destinations = _availableDestinations(l10n);
     final selectedIndex = _selectedIndex(destinations);
@@ -118,6 +118,7 @@ class AppNavigationDrawer extends StatelessWidget {
       onLogout: () {
         _logout(context, target: 'navigation_rail', closeDrawer: false);
       },
+      extended: extended,
       destinations: [
         for (final destination in destinations)
           NavigationRailDestination(
@@ -126,10 +127,12 @@ class AppNavigationDrawer extends StatelessWidget {
               message: destination.label,
               child: destination.selectedIcon,
             ),
-            label: Semantics(
-              label: destination.label,
-              child: const SizedBox.shrink(),
-            ),
+            label: extended
+                ? Text(destination.label)
+                : Semantics(
+                    label: destination.label,
+                    child: const SizedBox.shrink(),
+                  ),
           ),
       ],
     );

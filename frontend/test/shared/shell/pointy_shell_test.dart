@@ -8,36 +8,29 @@ import 'package:pointy_frontend/src/shared/design/design.dart';
 import 'package:pointy_frontend/src/shared/shell/shell.dart';
 
 void main() {
-  testWidgets('PointyScaffold preserves drawer opening from app bar leading', (
-    tester,
-  ) async {
-    await _pumpShell(
-      tester,
-      child: PointyScaffold(
-        drawer: const Drawer(child: Text('القائمة')),
-        appBar: PointyAppBar(
-          title: const Text('المنتجات'),
-          leading: Builder(
-            builder: (context) {
-              return IconButton(
-                tooltip: 'القائمة',
-                onPressed: Scaffold.of(context).openDrawer,
-                icon: const Icon(Icons.menu),
-              );
-            },
+  testWidgets(
+    'PointyScaffold opens compact drawer from navigation menu button',
+    (tester) async {
+      await _pumpShell(
+        tester,
+        child: PointyScaffold(
+          drawer: const Drawer(child: Text('القائمة')),
+          appBar: PointyAppBar(
+            title: const Text('المنتجات'),
+            leading: const PointyNavigationMenuButton(),
           ),
+          body: const Text('المحتوى'),
         ),
-        body: const Text('المحتوى'),
-      ),
-    );
+      );
 
-    expect(find.text('المحتوى'), findsOneWidget);
+      expect(find.text('المحتوى'), findsOneWidget);
 
-    await tester.tap(find.byTooltip('القائمة'));
-    await tester.pump(const Duration(milliseconds: 300));
+      await tester.tap(find.byTooltip('فتح القائمة'));
+      await tester.pump(const Duration(milliseconds: 300));
 
-    expect(find.byType(Drawer), findsOneWidget);
-  });
+      expect(find.byType(Drawer), findsOneWidget);
+    },
+  );
 
   testWidgets(
     'PointyAppBar supports high-focus style and stable loading slot',
@@ -82,11 +75,111 @@ void main() {
     );
 
     expect(find.byType(NavigationRail), findsOneWidget);
+    expect(find.byType(Scrollbar), findsNothing);
     expect(find.byTooltip('لوحة التحكم'), findsOneWidget);
     expect(find.text('المحتوى'), findsOneWidget);
 
     await tester.tap(find.byTooltip('المشتريات'));
     expect(opened, 'purchasing');
+  });
+
+  testWidgets(
+    'PointyScaffold toggles desktop navigation rail instead of drawer',
+    (tester) async {
+      await _pumpShell(
+        tester,
+        width: 1200,
+        child: PointyScaffold(
+          drawer: _navigationDrawer(),
+          appBar: AppBar(
+            leading: const PointyNavigationMenuButton(),
+            title: const Text('الصفحة'),
+          ),
+          body: const Text('المحتوى'),
+        ),
+      );
+
+      expect(find.byType(Drawer), findsNothing);
+      expect(
+        tester.widget<NavigationRail>(find.byType(NavigationRail)).extended,
+        isTrue,
+      );
+
+      await tester.tap(find.byTooltip('طي التنقل'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(Drawer), findsNothing);
+      expect(
+        tester.widget<NavigationRail>(find.byType(NavigationRail)).extended,
+        isFalse,
+      );
+
+      await tester.tap(find.byTooltip('توسيع التنقل'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(Drawer), findsNothing);
+      expect(
+        tester.widget<NavigationRail>(find.byType(NavigationRail)).extended,
+        isTrue,
+      );
+    },
+  );
+
+  testWidgets('PointyScaffold keeps desktop rail state across screens', (
+    tester,
+  ) async {
+    final controller = PointyNavigationRailController();
+    addTearDown(controller.dispose);
+    var showFirstScreen = true;
+
+    await _pumpShell(
+      tester,
+      width: 1200,
+      child: PointyNavigationRailScope(
+        isActive: false,
+        controller: controller,
+        child: StatefulBuilder(
+          builder: (context, setState) {
+            return PointyScaffold(
+              drawer: _navigationDrawer(),
+              appBar: AppBar(
+                leading: const PointyNavigationMenuButton(),
+                title: Text(showFirstScreen ? 'الأولى' : 'الثانية'),
+              ),
+              body: TextButton(
+                onPressed: () {
+                  setState(() {
+                    showFirstScreen = !showFirstScreen;
+                  });
+                },
+                child: const Text('تبديل الشاشة'),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+
+    expect(
+      tester.widget<NavigationRail>(find.byType(NavigationRail)).extended,
+      isTrue,
+    );
+
+    await tester.tap(find.byTooltip('طي التنقل'));
+    await tester.pumpAndSettle();
+    expect(
+      tester.widget<NavigationRail>(find.byType(NavigationRail)).extended,
+      isFalse,
+    );
+
+    await tester.tap(find.text('تبديل الشاشة'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('الثانية'), findsOneWidget);
+    expect(
+      tester.widget<NavigationRail>(find.byType(NavigationRail)).extended,
+      isFalse,
+    );
   });
 
   testWidgets('AppNavigationDrawer keeps primary destinations ordered', (
@@ -98,22 +191,14 @@ void main() {
       child: PointyScaffold(
         drawer: _navigationDrawer(),
         appBar: AppBar(
-          leading: Builder(
-            builder: (context) {
-              return IconButton(
-                tooltip: 'القائمة',
-                onPressed: Scaffold.of(context).openDrawer,
-                icon: const Icon(Icons.menu),
-              );
-            },
-          ),
+          leading: const PointyNavigationMenuButton(),
           title: const Text('الصفحة'),
         ),
         body: const Text('المحتوى'),
       ),
     );
 
-    await tester.tap(find.byTooltip('القائمة'));
+    await tester.tap(find.byTooltip('فتح القائمة'));
     await tester.pumpAndSettle();
 
     expect(_top(tester, 'لوحة التحكم'), lessThan(_top(tester, 'شاشة البيع')));
