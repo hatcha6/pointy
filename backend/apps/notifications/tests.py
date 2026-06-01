@@ -3,14 +3,18 @@ from decimal import Decimal
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.urls import reverse
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APIClient, APITestCase
 
+from apps.analytics.models import AnalyticsEvent
 from apps.catalog.testing import create_product_with_default_variant
 from apps.core.roles import CASHIER_GROUP, MANAGER_GROUP, ensure_role_groups
 from apps.inventory.models import StockItem
 from apps.notifications.models import BusinessNotification
+from apps.printing.models import PrintJob, PrintTemplate, PrintTemplateVersion
 from apps.purchasing.models import PurchaseOrder, Supplier
+from apps.sales.models import RegisterSession
 
 
 class BusinessNotificationApiTests(APITestCase):
@@ -142,3 +146,93 @@ class BusinessNotificationApiTests(APITestCase):
         )
         notification.refresh_from_db()
         self.assertEqual(notification.status, BusinessNotification.Status.RESOLVED)
+
+    def test_backend_errors_are_not_reported_as_business_notifications(self):
+        AnalyticsEvent.objects.create(
+            event_type=AnalyticsEvent.EventType.ERROR,
+            name="backend.checkout_failed",
+            severity=AnalyticsEvent.Severity.ERROR,
+            source=AnalyticsEvent.Source.BACKEND,
+            occurred_at=timezone.now(),
+            attributes={"message": "Internal processing failed."},
+        )
+        legacy_notification = BusinessNotification.objects.create(
+            code="operations.backend_error",
+            category=BusinessNotification.Category.OPERATIONS,
+            severity=BusinessNotification.Severity.WARNING,
+            fingerprint="operations.backend_error:legacy",
+            entity_type="analytics.analyticsevent",
+            entity_id="legacy",
+            payload={"message": "Legacy error notification"},
+        )
+        client = APIClient()
+        client.force_authenticate(user=self.manager)
+
+        response = client.get(reverse("business-notification-list"))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["results"], [])
+        legacy_notification.refresh_from_db()
+        self.assertEqual(
+            legacy_notification.status,
+            BusinessNotification.Status.RESOLVED,
+        )
+        self.assertFalse(
+            BusinessNotification.objects.filter(
+                code="operations.backend_error",
+                status=BusinessNotification.Status.ACTIVE,
+            ).exists()
+        )
+
+    def test_cashier_only_sees_cashier_safe_notification_codes(self):
+        self._create_failed_print_job()
+        RegisterSession.objects.create(
+            owner=self.cashier,
+            owner_key=f"user:{self.cashier.pk}:closed",
+            status=RegisterSession.Status.CLOSED,
+            opening_cash=Decimal("100.00"),
+            closing_cash=Decimal("80.00"),
+            closed_at=timezone.now(),
+        )
+        manager_client = APIClient()
+        manager_client.force_authenticate(user=self.manager)
+        cashier_client = APIClient()
+        cashier_client.force_authenticate(user=self.cashier)
+
+        manager_response = manager_client.get(reverse("business-notification-list"))
+        cashier_response = cashier_client.get(reverse("business-notification-list"))
+
+        self.assertEqual(manager_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(cashier_response.status_code, status.HTTP_200_OK)
+        manager_codes = {
+            notification["code"]
+            for notification in manager_response.data["results"]
+        }
+        cashier_codes = {
+            notification["code"]
+            for notification in cashier_response.data["results"]
+        }
+        self.assertIn("printing.failed_job", manager_codes)
+        self.assertIn("sales.register_variance", manager_codes)
+        self.assertEqual(cashier_codes, {"printing.failed_job"})
+
+    def _create_failed_print_job(self):
+        template = PrintTemplate.objects.create(
+            slug="notification-receipt",
+            name="Notification receipt",
+        )
+        version = PrintTemplateVersion.objects.create(
+            template=template,
+            version_number=1,
+            content="{{ receipt }}",
+            schema={"kind": "receipt"},
+        )
+        return PrintJob.objects.create(
+            job_type=PrintJob.Type.RECEIPT,
+            status=PrintJob.Status.FAILED,
+            template_version=version,
+            payload={"order": {"receipt_number": "R-NOTIFY"}},
+            idempotency_key="notification-print-failed",
+            failed_at=timezone.now(),
+            error_message="Printer disconnected",
+        )

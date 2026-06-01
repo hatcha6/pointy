@@ -6,7 +6,7 @@ from django.db.models import DecimalField, F, Q, Sum, Value
 from django.db.models.functions import Coalesce
 from django.utils import timezone
 
-from apps.analytics.models import AnalyticsEvent
+from apps.core.roles import user_is_manager
 from apps.discounts.models import DiscountRule
 from apps.inventory.models import StockItem
 from apps.printing.models import PrintAgent, PrintJob
@@ -27,6 +27,40 @@ MANAGED_CODES = (
     "operations.backend_error",
 )
 MONEY_FIELD = DecimalField(max_digits=12, decimal_places=2)
+NOTIFICATION_AUDIENCE_RULES = {
+    "inventory.out_of_stock": {
+        "permissions": ("inventory.view_stockitem", "inventory.view_stockmovement"),
+        "manager_only": True,
+    },
+    "inventory.low_stock": {
+        "permissions": ("inventory.view_stockitem", "inventory.view_stockmovement"),
+        "manager_only": True,
+    },
+    "purchasing.overdue_order": {
+        "permissions": ("purchasing.view_purchaseorder", "purchasing.view_supplier"),
+        "manager_only": True,
+    },
+    "printing.failed_job": {
+        "permissions": ("printing.view_printjob",),
+        "manager_only": False,
+    },
+    "printing.stale_agent": {
+        "permissions": ("printing.view_printagent",),
+        "manager_only": True,
+    },
+    "sales.register_variance": {
+        "permissions": ("sales.view_registersession",),
+        "manager_only": True,
+    },
+    "sales.negative_margin": {
+        "permissions": ("sales.view_order",),
+        "manager_only": True,
+    },
+    "discounts.expiring_rule": {
+        "permissions": ("discounts.view_discountrule",),
+        "manager_only": True,
+    },
+}
 
 
 def sync_business_notifications(now=None):
@@ -37,7 +71,6 @@ def sync_business_notifications(now=None):
     desired.extend(_printing_notifications(now))
     desired.extend(_sales_notifications(now))
     desired.extend(_discount_notifications(now))
-    desired.extend(_operations_notifications(now))
 
     fingerprints = set()
     with transaction.atomic():
@@ -66,10 +99,10 @@ def visible_notifications_for_user(user):
     queryset = BusinessNotification.objects.filter(
         status=BusinessNotification.Status.ACTIVE,
     )
-    categories = _categories_for_user(user)
-    if not categories:
+    codes = _codes_for_user(user)
+    if not codes:
         return queryset.none()
-    return queryset.filter(category__in=categories).prefetch_related("user_states")
+    return queryset.filter(code__in=codes).prefetch_related("user_states")
 
 
 def notification_is_hidden_for_user(notification, user, now=None):
@@ -401,38 +434,6 @@ def _discount_notifications(now):
     return specs
 
 
-def _operations_notifications(now):
-    specs = []
-    since = now - timedelta(hours=24)
-    events = AnalyticsEvent.objects.filter(
-        severity__in=(AnalyticsEvent.Severity.ERROR, AnalyticsEvent.Severity.CRITICAL),
-        occurred_at__gte=since,
-    ).order_by("-occurred_at")[:20]
-    for event in events:
-        specs.append(
-            _spec(
-                code="operations.backend_error",
-                category=BusinessNotification.Category.OPERATIONS,
-                severity=(
-                    BusinessNotification.Severity.CRITICAL
-                    if event.severity == AnalyticsEvent.Severity.CRITICAL
-                    else BusinessNotification.Severity.WARNING
-                ),
-                fingerprint=f"operations.backend_error:{event.pk}",
-                entity_type="analytics.analyticsevent",
-                entity_id=str(event.pk),
-                payload={
-                    "name": event.name,
-                    "source": event.source,
-                    "message": event.attributes.get("message", ""),
-                    "occurred_at": event.occurred_at.isoformat(),
-                    "count": 1,
-                },
-            )
-        )
-    return specs
-
-
 def _upsert_notification(spec, now):
     notification = BusinessNotification.objects.filter(
         fingerprint=spec["fingerprint"]
@@ -511,30 +512,15 @@ def _money(value):
     return str(Decimal(value).quantize(Decimal("0.01")))
 
 
-def _categories_for_user(user):
+def _codes_for_user(user):
     if not user or not user.is_authenticated:
         return ()
-    checks = (
-        (
-            BusinessNotification.Category.INVENTORY,
-            ("inventory.view_stockitem", "inventory.view_stockmovement"),
-        ),
-        (
-            BusinessNotification.Category.PURCHASING,
-            ("purchasing.view_purchaseorder", "purchasing.view_supplier"),
-        ),
-        (BusinessNotification.Category.PRINTING, ("printing.view_printjob",)),
-        (
-            BusinessNotification.Category.SALES,
-            ("sales.view_order", "sales.view_registersession"),
-        ),
-        (BusinessNotification.Category.DISCOUNTS, ("discounts.view_discountrule",)),
-        (BusinessNotification.Category.OPERATIONS, ("analytics.view_analyticsevent",)),
-    )
+    manager = user_is_manager(user)
     return [
-        category
-        for category, permission_codes in checks
-        if any(user.has_perm(permission_code) for permission_code in permission_codes)
+        code
+        for code, rule in NOTIFICATION_AUDIENCE_RULES.items()
+        if (manager or not rule["manager_only"])
+        and any(user.has_perm(permission_code) for permission_code in rule["permissions"])
     ]
 
 
