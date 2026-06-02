@@ -27,6 +27,7 @@ import '../models/register_cash_movement.dart';
 import '../models/register_cash_movement_page.dart';
 import '../models/register_session.dart';
 import '../models/register_session_page.dart';
+import '../models/relay_pairing.dart';
 import '../models/report_run.dart';
 import '../models/sale_order.dart';
 import '../models/sale_order_page.dart';
@@ -55,6 +56,7 @@ import 'pos_http_client.dart';
 import 'printing_api_client.dart';
 import 'purchasing_api_client.dart';
 import 'register_session_api_client.dart';
+import 'relay_api_client.dart';
 import 'reports_api_client.dart';
 import 'sales_api_client.dart';
 import 'shop_settings_api_client.dart';
@@ -65,7 +67,7 @@ export 'api_session.dart' show PosApiException;
 class PosApiService {
   PosApiService({
     http.Client? client,
-    this.baseUrl = 'http://127.0.0.1:8000/api',
+    String baseUrl = 'http://127.0.0.1:8000/api',
   }) {
     _session = PosApiSession(
       client: client ?? createPosHttpClient(),
@@ -82,13 +84,15 @@ class PosApiService {
     _discounts = DiscountApiClient(_session);
     _inventory = InventoryApiClient(_session);
     _registerSessions = RegisterSessionApiClient(_session);
+    _relay = RelayApiClient(_session);
     _reports = ReportsApiClient(_session);
     _sales = SalesApiClient(_session);
     _purchasing = PurchasingApiClient(_session);
     _printing = PrintingApiClient(_session);
   }
 
-  final String baseUrl;
+  String get baseUrl => _session.baseUrl;
+  bool get usesRelay => _session.usesRelay;
 
   late final PosApiSession _session;
   late final AuthApiClient _auth;
@@ -102,6 +106,7 @@ class PosApiService {
   late final DiscountApiClient _discounts;
   late final InventoryApiClient _inventory;
   late final RegisterSessionApiClient _registerSessions;
+  late final RelayApiClient _relay;
   late final ReportsApiClient _reports;
   late final SalesApiClient _sales;
   late final PurchasingApiClient _purchasing;
@@ -109,6 +114,18 @@ class PosApiService {
 
   set performanceRecorder(ApiPerformanceRecorder? recorder) {
     _session.performanceRecorder = recorder;
+  }
+
+  void configureConnectionTarget({
+    required String baseUrl,
+    String relayToken = '',
+    ApiConnectionTarget? fallbackTarget,
+  }) {
+    _session.configureConnectionTarget(
+      baseUrl: baseUrl,
+      relayToken: relayToken,
+      fallbackTarget: fallbackTarget,
+    );
   }
 
   Future<PosUser> login({required String username, required String password}) {
@@ -465,6 +482,15 @@ class PosApiService {
     return _registerSessions.closeRegisterSession(
       sessionId: sessionId,
       draft: draft,
+    );
+  }
+
+  Future<RelayPairing> requestRelayPairing({
+    String deviceId = '',
+    String deviceName = '',
+  }) {
+    return _relay.requestPairing(
+      RelayPairingRequest(deviceId: deviceId, deviceName: deviceName),
     );
   }
 

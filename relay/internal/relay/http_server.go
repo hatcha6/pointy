@@ -3,6 +3,7 @@ package relay
 import (
 	"bufio"
 	"context"
+	"crypto/subtle"
 	"encoding/json"
 	"errors"
 	"io"
@@ -16,20 +17,24 @@ import (
 	"pointy/relay/internal/control"
 )
 
-const AccessTokenHeader = "X-Pointy-Relay-Token"
+const (
+	AccessTokenHeader    = "X-Pointy-Relay-Token"
+	RelayedRequestHeader = "X-Pointy-Relayed-Request"
+)
 
 type HTTPServer struct {
-	Store             control.InstallationStore
-	Hub               *Hub
-	Logger            *slog.Logger
-	AdminToken        string
-	AllowOpenAdmin    bool
-	StreamOpenTimeout time.Duration
-	Presence          ConnectorPresence
-	NodeID            string
-	Tickets           control.RelayTicketService
-	TicketTTL         time.Duration
-	Clock             control.Clock
+	Store                         control.InstallationStore
+	Hub                           *Hub
+	Logger                        *slog.Logger
+	AdminToken                    string
+	AllowOpenAdmin                bool
+	RequireAdminClientCertificate bool
+	StreamOpenTimeout             time.Duration
+	Presence                      ConnectorPresence
+	NodeID                        string
+	Tickets                       control.RelayTicketService
+	TicketTTL                     time.Duration
+	Clock                         control.Clock
 }
 
 func (s HTTPServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -240,15 +245,23 @@ func (s HTTPServer) withAdmin(
 	r *http.Request,
 	handler func(http.ResponseWriter, *http.Request),
 ) {
+	if s.RequireAdminClientCertificate && !hasVerifiedClientCertificate(r) {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "admin client certificate required"})
+		return
+	}
 	if s.AdminToken == "" && !s.AllowOpenAdmin {
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "admin token is not configured"})
 		return
 	}
-	if s.AdminToken != "" && r.Header.Get("Authorization") != "Bearer "+s.AdminToken {
+	if s.AdminToken != "" && !constantTimeBearerTokenEqual(r.Header.Get("Authorization"), s.AdminToken) {
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "admin token required"})
 		return
 	}
 	handler(w, r)
+}
+
+func hasVerifiedClientCertificate(r *http.Request) bool {
+	return r.TLS != nil && len(r.TLS.PeerCertificates) > 0 && len(r.TLS.VerifiedChains) > 0
 }
 
 func outboundRequest(in *http.Request, targetPath string) *http.Request {
@@ -262,8 +275,10 @@ func outboundRequest(in *http.Request, targetPath string) *http.Request {
 	request.Close = true
 	request.Header = in.Header.Clone()
 	request.Header.Del(AccessTokenHeader)
+	request.Header.Del(RelayedRequestHeader)
 	removeHopHeaders(request.Header)
 	request.Header.Set("Connection", "close")
+	request.Header.Set(RelayedRequestHeader, "1")
 	request.Header.Set("X-Forwarded-Host", in.Host)
 	if host, _, err := net.SplitHostPort(in.RemoteAddr); err == nil {
 		appendForwardedFor(request.Header, host)
@@ -282,7 +297,23 @@ func relayTarget(r *http.Request) (string, string, bool) {
 	if len(parts) < 3 || parts[0] != "r" || parts[1] == "" {
 		return "", "", false
 	}
+	parsed, err := control.ParseToken(parts[1])
+	if err != nil || parsed.Purpose != control.TokenPurposeTicket {
+		return "", "", false
+	}
+	if !strings.HasPrefix("/"+parts[2], "/api/") {
+		return "", "", false
+	}
 	return parts[1], "/" + parts[2], true
+}
+
+func constantTimeBearerTokenEqual(headerValue string, expectedToken string) bool {
+	const prefix = "Bearer "
+	if !strings.HasPrefix(headerValue, prefix) {
+		return false
+	}
+	candidate := strings.TrimPrefix(headerValue, prefix)
+	return subtle.ConstantTimeCompare([]byte(candidate), []byte(expectedToken)) == 1
 }
 
 func copyHeader(dst, src http.Header) {

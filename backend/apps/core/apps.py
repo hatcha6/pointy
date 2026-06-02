@@ -7,3 +7,6 @@ class CoreConfig(AppConfig):
 
     def ready(self):
         from . import signals  # noqa: F401
+        from .discovery import start_discovery_responder
+
+        start_discovery_responder()

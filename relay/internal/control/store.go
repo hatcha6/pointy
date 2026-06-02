@@ -29,10 +29,12 @@ func (RealClock) Now() time.Time {
 type Installation struct {
 	ID                       string     `json:"id"`
 	BusinessID               string     `json:"business_id,omitempty"`
+	ShopName                 string     `json:"shop_name,omitempty"`
 	ConnectorTokenHash       string     `json:"connector_token_hash"`
 	AccessTokenHash          string     `json:"access_token_hash"`
 	RelayEnabled             bool       `json:"relay_enabled"`
 	AIEnabled                bool       `json:"ai_enabled"`
+	SubscriptionActive       bool       `json:"subscription_active"`
 	SubscriptionEndsAt       *time.Time `json:"subscription_ends_at,omitempty"`
 	CreatedAt                time.Time  `json:"created_at"`
 	UpdatedAt                time.Time  `json:"updated_at"`
@@ -43,6 +45,9 @@ func (i Installation) RelayActive(now time.Time) bool {
 	if !i.RelayEnabled {
 		return false
 	}
+	if !i.SubscriptionActive {
+		return false
+	}
 	if i.SubscriptionEndsAt == nil {
 		return true
 	}
@@ -51,8 +56,10 @@ func (i Installation) RelayActive(now time.Time) bool {
 
 type ProvisionInstallationRequest struct {
 	BusinessID         string     `json:"business_id"`
+	ShopName           string     `json:"shop_name,omitempty"`
 	RelayEnabled       *bool      `json:"relay_enabled,omitempty"`
 	AIEnabled          bool       `json:"ai_enabled"`
+	SubscriptionActive *bool      `json:"subscription_active,omitempty"`
 	SubscriptionEndsAt *time.Time `json:"subscription_ends_at,omitempty"`
 }
 
@@ -65,6 +72,7 @@ type ProvisionedInstallation struct {
 type SubscriptionUpdate struct {
 	RelayEnabled       *bool      `json:"relay_enabled,omitempty"`
 	AIEnabled          *bool      `json:"ai_enabled,omitempty"`
+	SubscriptionActive *bool      `json:"subscription_active,omitempty"`
 	SubscriptionEndsAt *time.Time `json:"subscription_ends_at,omitempty"`
 	ClearEnd           bool       `json:"clear_subscription_end,omitempty"`
 }
@@ -107,7 +115,7 @@ func validateInstallationToken(
 	if !ConstantTimeTokenEqual(rawToken, expectedHash) {
 		return ErrInvalidToken
 	}
-	if !installation.RelayActive(now) {
+	if purpose != TokenPurposeConnector && !installation.RelayActive(now) {
 		return ErrSubscriptionInactive
 	}
 	return nil
@@ -159,18 +167,24 @@ func (s *FileStore) ProvisionInstallation(
 		return ProvisionedInstallation{}, err
 	}
 
-	relayEnabled := true
+	relayEnabled := false
 	if request.RelayEnabled != nil {
 		relayEnabled = *request.RelayEnabled
+	}
+	subscriptionActive := false
+	if request.SubscriptionActive != nil {
+		subscriptionActive = *request.SubscriptionActive
 	}
 	now := s.clock.Now()
 	installation := Installation{
 		ID:                 id,
 		BusinessID:         request.BusinessID,
+		ShopName:           request.ShopName,
 		ConnectorTokenHash: TokenHash(connectorToken),
 		AccessTokenHash:    TokenHash(accessToken),
 		RelayEnabled:       relayEnabled,
 		AIEnabled:          request.AIEnabled,
+		SubscriptionActive: subscriptionActive,
 		SubscriptionEndsAt: request.SubscriptionEndsAt,
 		CreatedAt:          now,
 		UpdatedAt:          now,
@@ -216,6 +230,9 @@ func (s *FileStore) UpdateSubscription(
 	}
 	if update.AIEnabled != nil {
 		installation.AIEnabled = *update.AIEnabled
+	}
+	if update.SubscriptionActive != nil {
+		installation.SubscriptionActive = *update.SubscriptionActive
 	}
 	if update.ClearEnd {
 		installation.SubscriptionEndsAt = nil

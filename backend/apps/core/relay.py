@@ -1,0 +1,273 @@
+import json
+import ssl
+from dataclasses import dataclass
+from datetime import datetime, timezone as datetime_timezone
+from urllib import error, request
+from urllib.parse import urljoin, urlparse
+
+from django.conf import settings
+from django.core.exceptions import ImproperlyConfigured
+from django.utils import timezone
+from django.utils.dateparse import parse_datetime
+
+from .models import RelayInstallation, ShopSettings
+
+
+class RelayControlError(RuntimeError):
+    pass
+
+
+@dataclass(frozen=True)
+class RelayControlConfig:
+    control_url: str
+    public_api_url: str
+    connector_address: str
+    admin_token: str
+    timeout_seconds: int
+    allow_insecure_control: bool
+    ca_file: str
+    client_cert_file: str
+    client_key_file: str
+
+
+def relay_config():
+    return RelayControlConfig(
+        control_url=str(getattr(settings, "POINTY_RELAY_CONTROL_URL", "")).strip(),
+        public_api_url=str(getattr(settings, "POINTY_RELAY_PUBLIC_API_URL", "")).strip(),
+        connector_address=str(getattr(settings, "POINTY_RELAY_CONNECTOR_ADDR", "")).strip(),
+        admin_token=str(getattr(settings, "POINTY_RELAY_ADMIN_TOKEN", "")).strip(),
+        timeout_seconds=max(
+            int(getattr(settings, "POINTY_RELAY_REQUEST_TIMEOUT_SECONDS", 5)),
+            1,
+        ),
+        allow_insecure_control=bool(
+            getattr(settings, "POINTY_RELAY_ALLOW_INSECURE_CONTROL", False)
+        ),
+        ca_file=str(getattr(settings, "POINTY_RELAY_CONTROL_CA_FILE", "")).strip(),
+        client_cert_file=str(
+            getattr(settings, "POINTY_RELAY_CONTROL_CLIENT_CERT_FILE", "")
+        ).strip(),
+        client_key_file=str(
+            getattr(settings, "POINTY_RELAY_CONTROL_CLIENT_KEY_FILE", "")
+        ).strip(),
+    )
+
+
+def validate_relay_config(config):
+    if not config.control_url:
+        raise ImproperlyConfigured("POINTY_RELAY_CONTROL_URL is required.")
+    if not config.public_api_url:
+        raise ImproperlyConfigured("POINTY_RELAY_PUBLIC_API_URL is required.")
+    if not config.connector_address:
+        raise ImproperlyConfigured("POINTY_RELAY_CONNECTOR_ADDR is required.")
+    if not config.admin_token:
+        raise ImproperlyConfigured("POINTY_RELAY_ADMIN_TOKEN is required.")
+    parsed = urlparse(config.control_url)
+    if parsed.scheme != "https" and not config.allow_insecure_control:
+        raise ImproperlyConfigured(
+            "POINTY_RELAY_CONTROL_URL must use https unless "
+            "POINTY_RELAY_ALLOW_INSECURE_CONTROL is enabled for local development."
+        )
+
+
+class RelayControlClient:
+    def __init__(self, config=None):
+        self.config = config or relay_config()
+        validate_relay_config(self.config)
+        self._ssl_context = self._build_ssl_context()
+
+    def provision_installation(self, *, shop_name):
+        return self._request(
+            "POST",
+            "/v1/installations",
+            body={
+                "business_id": str(
+                    getattr(settings, "POINTY_RELAY_BUSINESS_ID", "")
+                ).strip(),
+                "shop_name": shop_name,
+                "relay_enabled": False,
+                "subscription_active": False,
+                "ai_enabled": False,
+            },
+            admin=True,
+        )
+
+    def get_installation(self, installation_id):
+        return self._request("GET", f"/v1/installations/{installation_id}", admin=True)
+
+    def issue_ticket(self, *, access_token, device_id="", device_name=""):
+        return self._request(
+            "POST",
+            "/v1/relay-tickets",
+            body={"device_id": device_id, "device_name": device_name},
+            relay_token=access_token,
+        )
+
+    def _request(self, method, path, *, body=None, admin=False, relay_token=""):
+        data = None
+        headers = {"Accept": "application/json"}
+        if body is not None:
+            data = json.dumps(body).encode("utf-8")
+            headers["Content-Type"] = "application/json"
+        if admin:
+            headers["Authorization"] = f"Bearer {self.config.admin_token}"
+        if relay_token:
+            headers["X-Pointy-Relay-Token"] = relay_token
+
+        url = urljoin(self.config.control_url.rstrip("/") + "/", path.lstrip("/"))
+        http_request = request.Request(url, data=data, headers=headers, method=method)
+        try:
+            with request.urlopen(
+                http_request,
+                timeout=self.config.timeout_seconds,
+                context=self._ssl_context,
+            ) as response:
+                content = response.read()
+        except error.HTTPError as exc:
+            detail = exc.read().decode("utf-8", errors="replace")
+            raise RelayControlError(f"relay control returned {exc.code}: {detail}") from exc
+        except error.URLError as exc:
+            raise RelayControlError(f"relay control request failed: {exc.reason}") from exc
+
+        if not content:
+            return {}
+        try:
+            return json.loads(content.decode("utf-8"))
+        except json.JSONDecodeError as exc:
+            raise RelayControlError("relay control returned invalid JSON") from exc
+
+    def _build_ssl_context(self):
+        parsed = urlparse(self.config.control_url)
+        if parsed.scheme != "https":
+            return None
+        context = ssl.create_default_context(cafile=self.config.ca_file or None)
+        if self.config.client_cert_file or self.config.client_key_file:
+            if not self.config.client_cert_file or not self.config.client_key_file:
+                raise ImproperlyConfigured(
+                    "POINTY_RELAY_CONTROL_CLIENT_CERT_FILE and "
+                    "POINTY_RELAY_CONTROL_CLIENT_KEY_FILE must be provided together."
+                )
+            context.load_cert_chain(
+                self.config.client_cert_file,
+                self.config.client_key_file,
+            )
+        return context
+
+
+def relay_status_payload(installation):
+    if installation is None:
+        return {
+            "configured": False,
+            "remote_access_supported": False,
+            "installation_id": "",
+            "shop_name": ShopSettings.load().shop_name,
+            "relay_public_api_url": "",
+            "relay_connector_address": "",
+            "relay_enabled": False,
+            "subscription_active": False,
+            "ai_enabled": False,
+            "subscription_ends_at": None,
+            "last_synced_at": None,
+            "connector_last_seen_at": None,
+            "connector_version": "",
+        }
+    return {
+        "configured": True,
+        "remote_access_supported": installation.remote_access_supported,
+        "installation_id": installation.installation_id,
+        "shop_name": installation.shop_name,
+        "relay_public_api_url": installation.relay_public_api_url,
+        "relay_connector_address": installation.relay_connector_address,
+        "relay_enabled": installation.relay_enabled,
+        "subscription_active": installation.subscription_active,
+        "ai_enabled": installation.ai_enabled,
+        "subscription_ends_at": installation.subscription_ends_at,
+        "last_synced_at": installation.last_synced_at,
+        "connector_last_seen_at": installation.connector_last_seen_at,
+        "connector_version": installation.connector_version,
+    }
+
+
+def parse_relay_datetime(value):
+    if value in ("", None):
+        return None
+    if isinstance(value, datetime):
+        parsed = value
+    elif isinstance(value, str):
+        parsed = parse_datetime(value)
+    else:
+        raise RelayControlError("relay control returned an invalid datetime value")
+
+    if parsed is None:
+        raise RelayControlError("relay control returned an invalid datetime value")
+    if timezone.is_naive(parsed):
+        parsed = timezone.make_aware(parsed, datetime_timezone.utc)
+    return parsed
+
+
+def ensure_relay_installation(*, client=None):
+    installation = RelayInstallation.load()
+    if installation is not None:
+        return installation, False
+
+    shop_settings = ShopSettings.load()
+    relay_client = client or RelayControlClient()
+    provisioned = relay_client.provision_installation(shop_name=shop_settings.shop_name)
+    relay_installation = provisioned["installation"]
+    installation = RelayInstallation.objects.create(
+        installation_id=relay_installation["id"],
+        shop_name=relay_installation.get("shop_name") or shop_settings.shop_name,
+        relay_public_api_url=relay_client.config.public_api_url,
+        relay_connector_address=relay_client.config.connector_address,
+        connector_token=provisioned["connector_token"],
+        access_token=provisioned["access_token"],
+        relay_enabled=bool(relay_installation.get("relay_enabled", False)),
+        subscription_active=bool(relay_installation.get("subscription_active", False)),
+        ai_enabled=bool(relay_installation.get("ai_enabled", False)),
+        subscription_ends_at=parse_relay_datetime(
+            relay_installation.get("subscription_ends_at")
+        ),
+        last_synced_at=timezone.now(),
+    )
+    return installation, True
+
+
+def sync_relay_installation(installation, *, client=None):
+    if installation is None:
+        return None
+    relay_client = client or RelayControlClient()
+    relay_installation = relay_client.get_installation(installation.installation_id)
+    installation.shop_name = relay_installation.get("shop_name") or installation.shop_name
+    installation.relay_enabled = bool(relay_installation.get("relay_enabled", False))
+    installation.subscription_active = bool(
+        relay_installation.get("subscription_active", False)
+    )
+    installation.ai_enabled = bool(relay_installation.get("ai_enabled", False))
+    installation.subscription_ends_at = parse_relay_datetime(
+        relay_installation.get("subscription_ends_at")
+    )
+    installation.last_synced_at = timezone.now()
+    installation.save(
+        update_fields=[
+            "shop_name",
+            "relay_enabled",
+            "subscription_active",
+            "ai_enabled",
+            "subscription_ends_at",
+            "last_synced_at",
+            "updated_at",
+        ]
+    )
+    return installation
+
+
+def issue_pairing_ticket(installation, *, device_id="", device_name="", client=None):
+    relay_client = client or RelayControlClient()
+    issued = relay_client.issue_ticket(
+        access_token=installation.access_token,
+        device_id=device_id,
+        device_name=device_name,
+    )
+    installation.last_pairing_issued_at = timezone.now()
+    installation.save(update_fields=["last_pairing_issued_at", "updated_at"])
+    return issued

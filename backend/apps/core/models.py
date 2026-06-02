@@ -1,5 +1,6 @@
 from django.db import models
 from django.core.validators import MinValueValidator
+from django.utils import timezone
 
 
 class TimeStampedModel(models.Model):
@@ -60,3 +61,39 @@ class ShopSettings(TimeStampedModel):
             "card": self.card_commission_percent,
             "transfer": self.transfer_commission_percent,
         }.get(method, 0)
+
+
+class RelayInstallation(TimeStampedModel):
+    installation_id = models.CharField(max_length=80, unique=True)
+    shop_name = models.CharField(max_length=120, blank=True)
+    relay_public_api_url = models.URLField(max_length=500)
+    relay_connector_address = models.CharField(max_length=255, blank=True)
+    connector_token = models.TextField()
+    access_token = models.TextField()
+    relay_enabled = models.BooleanField(default=False)
+    subscription_active = models.BooleanField(default=False)
+    ai_enabled = models.BooleanField(default=False)
+    subscription_ends_at = models.DateTimeField(null=True, blank=True)
+    last_synced_at = models.DateTimeField(null=True, blank=True)
+    last_pairing_issued_at = models.DateTimeField(null=True, blank=True)
+    connector_last_seen_at = models.DateTimeField(null=True, blank=True)
+    connector_version = models.CharField(max_length=80, blank=True)
+
+    class Meta:
+        verbose_name = "relay installation"
+        verbose_name_plural = "relay installations"
+
+    def __str__(self):
+        return self.installation_id
+
+    @classmethod
+    def load(cls):
+        return cls.objects.order_by("created_at").first()
+
+    @property
+    def remote_access_supported(self):
+        if not self.relay_enabled or not self.subscription_active:
+            return False
+        if self.subscription_ends_at is None:
+            return True
+        return timezone.now() < self.subscription_ends_at

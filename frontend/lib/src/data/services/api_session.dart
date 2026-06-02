@@ -66,19 +66,35 @@ class PosApiException implements Exception {
 }
 
 class PosApiSession {
-  PosApiSession({required this.client, required this.baseUrl});
+  PosApiSession({required this.client, required String baseUrl})
+    : _baseUrl = _normalizeBaseUrl(baseUrl);
 
   final http.Client client;
-  final String baseUrl;
   ApiPerformanceRecorder? performanceRecorder;
   final Map<String, String> _cookies = {};
   String? _csrfToken;
+  String _baseUrl;
+  String _relayToken = '';
+  ApiConnectionTarget? _fallbackTarget;
+
+  String get baseUrl => _baseUrl;
+  bool get usesRelay => _relayToken.isNotEmpty;
 
   Uri uri(String path, {Map<String, String>? queryParameters}) {
     final normalizedPath = path.startsWith('/') ? path.substring(1) : path;
     return Uri.parse(
       '$baseUrl/$normalizedPath',
     ).replace(queryParameters: queryParameters);
+  }
+
+  void configureConnectionTarget({
+    required String baseUrl,
+    String relayToken = '',
+    ApiConnectionTarget? fallbackTarget,
+  }) {
+    _baseUrl = _normalizeBaseUrl(baseUrl);
+    _relayToken = relayToken.trim();
+    _fallbackTarget = fallbackTarget;
   }
 
   Future<http.Response> get(String path, {Map<String, String>? query}) async {
@@ -113,22 +129,6 @@ class PosApiSession {
     Map<String, String> fields = const {},
     List<ApiMultipartFile> files = const [],
   }) async {
-    final request = http.MultipartRequest('POST', uri(path));
-    request.fields.addAll(fields);
-    final requestHeaders = headers(includeCsrf: true);
-    requestHeaders.remove('Content-Type');
-    request.headers.addAll(requestHeaders);
-    for (final file in files) {
-      request.files.add(
-        http.MultipartFile.fromBytes(
-          file.fieldName,
-          file.bytes,
-          filename: file.filename,
-          contentType: MediaType.parse(file.contentType),
-        ),
-      );
-    }
-
     final requestSizeBytes =
         fields.entries.fold<int>(
           0,
@@ -140,7 +140,24 @@ class PosApiSession {
       method: 'POST',
       path: path,
       requestSizeBytes: requestSizeBytes,
-      request: () async => http.Response.fromStream(await client.send(request)),
+      request: () async {
+        final request = http.MultipartRequest('POST', uri(path));
+        request.fields.addAll(fields);
+        final requestHeaders = headers(includeCsrf: true);
+        requestHeaders.remove('Content-Type');
+        request.headers.addAll(requestHeaders);
+        for (final file in files) {
+          request.files.add(
+            http.MultipartFile.fromBytes(
+              file.fieldName,
+              file.bytes,
+              filename: file.filename,
+              contentType: MediaType.parse(file.contentType),
+            ),
+          );
+        }
+        return http.Response.fromStream(await client.send(request));
+      },
     );
   }
 
@@ -175,6 +192,7 @@ class PosApiSession {
             .map((entry) => '${entry.key}=${entry.value}')
             .join('; '),
       if (includeCsrf && _csrfToken != null) 'X-CSRFToken': _csrfToken!,
+      if (_relayToken.isNotEmpty) 'X-Pointy-Relay-Token': _relayToken,
     };
   }
 
@@ -231,6 +249,31 @@ class PosApiSession {
       );
       return response;
     } on Exception catch (exception) {
+      if (_fallbackTarget != null) {
+        final fallback = _fallbackTarget!;
+        _fallbackTarget = null;
+        configureConnectionTarget(
+          baseUrl: fallback.baseUrl,
+          relayToken: fallback.relayToken,
+        );
+        try {
+          final response = await request();
+          stopwatch.stop();
+          captureResponseState(response);
+          _recordPerformance(
+            method: method,
+            path: path,
+            duration: stopwatch.elapsed,
+            statusCode: response.statusCode,
+            requestSizeBytes: requestSizeBytes,
+            responseSizeBytes: response.bodyBytes.length,
+          );
+          return response;
+        } on Exception {
+          // Record the original failure below; it is usually the LAN failure
+          // that caused routing to fall back.
+        }
+      }
       stopwatch.stop();
       _recordPerformance(
         method: method,
@@ -294,6 +337,17 @@ class PosApiSession {
       );
     }
   }
+}
+
+class ApiConnectionTarget {
+  const ApiConnectionTarget({required this.baseUrl, this.relayToken = ''});
+
+  final String baseUrl;
+  final String relayToken;
+}
+
+String _normalizeBaseUrl(String value) {
+  return value.trim().replaceFirst(RegExp(r'/+$'), '');
 }
 
 List<T> decodeListResponse<T>(

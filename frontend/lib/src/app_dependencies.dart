@@ -17,7 +17,11 @@ import 'data/repositories/report_repository.dart';
 import 'data/repositories/sale_repository.dart';
 import 'data/repositories/shop_settings_repository.dart';
 import 'data/repositories/user_repository.dart';
+import 'data/services/backend_discovery_service.dart';
+import 'data/services/connection_coordinator.dart';
+import 'data/services/connection_profile_storage.dart';
 import 'data/services/pos_api_service.dart';
+import 'data/services/pos_http_client.dart';
 import 'features/auth/view_models/auth_view_model.dart';
 import 'features/contacts/view_models/contact_management_view_model.dart';
 import 'features/dashboard/view_models/dashboard_view_model.dart';
@@ -29,8 +33,12 @@ import 'features/purchasing/view_models/purchase_order_list_view_model.dart';
 import 'features/purchasing/view_models/purchase_view_model.dart';
 
 class PointyAppDependencies {
-  PointyAppDependencies({PosApiService? apiService})
-    : service = apiService ?? PosApiService() {
+  PointyAppDependencies({
+    PosApiService? apiService,
+    bool? enableAutomaticConnection,
+  }) : service = apiService ?? PosApiService(),
+       _enableAutomaticConnection =
+           enableAutomaticConnection ?? apiService == null {
     analyticsRepository = AnalyticsRepository(service);
     analyticsEngine = AnalyticsEngine(analyticsRepository);
     service.performanceRecorder = analyticsEngine.recordApiRequest;
@@ -48,9 +56,18 @@ class PointyAppDependencies {
     printingRepository = PrintingRepository(service);
     purchaseRepository = PurchaseRepository(service);
     userRepository = UserRepository(service);
+    connectionCoordinator = ConnectionCoordinator(
+      service: service,
+      discovery: BackendDiscoveryService(
+        client: createPosHttpClient(),
+        defaultApiBaseUrl: service.baseUrl,
+      ),
+      storage: const SharedPreferencesConnectionProfileStorage(),
+    );
     authViewModel = AuthViewModel(
       authRepository,
       analyticsEngine: analyticsEngine,
+      autoLoad: false,
     );
     posViewModel = PosViewModel(
       catalogRepository,
@@ -63,6 +80,7 @@ class PointyAppDependencies {
   }
 
   final PosApiService service;
+  final bool _enableAutomaticConnection;
   late final AnalyticsRepository analyticsRepository;
   late final AnalyticsEngine analyticsEngine;
   late final AuthRepository authRepository;
@@ -79,6 +97,7 @@ class PointyAppDependencies {
   late final PrintingRepository printingRepository;
   late final PurchaseRepository purchaseRepository;
   late final UserRepository userRepository;
+  late final ConnectionCoordinator connectionCoordinator;
   late final AuthViewModel authViewModel;
   late final PosViewModel posViewModel;
   PrintingSettingsViewModel? _printingSettingsViewModel;
@@ -90,6 +109,13 @@ class PointyAppDependencies {
   PurchaseOrderListViewModel? _purchaseOrderListViewModel;
 
   int? _lastAuthenticatedUserId;
+
+  Future<void> start() async {
+    if (_enableAutomaticConnection) {
+      await connectionCoordinator.bootstrap();
+    }
+    await authViewModel.loadCurrentUser();
+  }
 
   PrintingSettingsViewModel get printingSettingsViewModel =>
       _printingSettingsViewModel ??= PrintingSettingsViewModel(
@@ -138,6 +164,9 @@ class PointyAppDependencies {
       posViewModel.loadCurrentRegisterSession();
       posViewModel.loadCheckoutSettings();
       unawaited(notificationCenterViewModel.loadAlerts());
+      if (_enableAutomaticConnection) {
+        unawaited(connectionCoordinator.pairAuthenticatedDevice());
+      }
       _dashboardViewModel?.loadDashboard();
       _purchaseViewModel?.loadCatalog();
       _purchaseOrderListViewModel?.loadOrders();

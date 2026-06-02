@@ -21,10 +21,12 @@ var postgresMigrations = []postgresMigration{
 CREATE TABLE IF NOT EXISTS relay_installations (
 	id text PRIMARY KEY,
 	business_id text NOT NULL DEFAULT '',
+	shop_name text NOT NULL DEFAULT '',
 	connector_token_hash text NOT NULL,
 	access_token_hash text NOT NULL,
-	relay_enabled boolean NOT NULL DEFAULT true,
+	relay_enabled boolean NOT NULL DEFAULT false,
 	ai_enabled boolean NOT NULL DEFAULT false,
+	subscription_active boolean NOT NULL DEFAULT false,
 	subscription_ends_at timestamptz,
 	created_at timestamptz NOT NULL,
 	updated_at timestamptz NOT NULL,
@@ -37,6 +39,23 @@ CREATE INDEX IF NOT EXISTS relay_installations_business_id_idx
 CREATE INDEX IF NOT EXISTS relay_installations_subscription_ends_at_idx
 	ON relay_installations (subscription_ends_at)
 	WHERE subscription_ends_at IS NOT NULL;
+`,
+	},
+	{
+		version: 2,
+		name:    "relay disabled subscription default",
+		sql: `
+ALTER TABLE relay_installations
+	ADD COLUMN IF NOT EXISTS shop_name text NOT NULL DEFAULT '';
+
+ALTER TABLE relay_installations
+	ADD COLUMN IF NOT EXISTS subscription_active boolean NOT NULL DEFAULT false;
+
+ALTER TABLE relay_installations
+	ALTER COLUMN relay_enabled SET DEFAULT false;
+
+ALTER TABLE relay_installations
+	ALTER COLUMN subscription_active SET DEFAULT false;
 `,
 	},
 }

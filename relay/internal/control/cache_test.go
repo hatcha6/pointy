@@ -14,11 +14,12 @@ func TestCachedInstallationStoreCachesTokenValidationLookups(t *testing.T) {
 	}
 	store := &countingStore{
 		installation: Installation{
-			ID:              "installation-1",
-			AccessTokenHash: TokenHash(token),
-			RelayEnabled:    true,
-			CreatedAt:       now,
-			UpdatedAt:       now,
+			ID:                 "installation-1",
+			AccessTokenHash:    TokenHash(token),
+			RelayEnabled:       true,
+			SubscriptionActive: true,
+			CreatedAt:          now,
+			UpdatedAt:          now,
 		},
 	}
 	cache := newMemoryInstallationCache()
@@ -47,6 +48,7 @@ func TestCachedInstallationStoreCapsTTLAtSubscriptionExpiry(t *testing.T) {
 			ID:                 "installation-1",
 			AccessTokenHash:    TokenHash(token),
 			RelayEnabled:       true,
+			SubscriptionActive: true,
 			SubscriptionEndsAt: &endsAt,
 			CreatedAt:          now,
 			UpdatedAt:          now,

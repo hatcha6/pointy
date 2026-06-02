@@ -11,9 +11,14 @@ import '../../../data/repositories/auth_repository.dart';
 enum AuthStatus { checking, unauthenticated, authenticated }
 
 class AuthViewModel extends ChangeNotifier {
-  AuthViewModel(this._authRepository, {AnalyticsEngine? analyticsEngine})
-    : _analyticsEngine = analyticsEngine {
-    loadCurrentUser();
+  AuthViewModel(
+    this._authRepository, {
+    AnalyticsEngine? analyticsEngine,
+    bool autoLoad = true,
+  }) : _analyticsEngine = analyticsEngine {
+    if (autoLoad) {
+      loadCurrentUser();
+    }
   }
 
   final AuthRepository _authRepository;

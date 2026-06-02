@@ -22,10 +22,14 @@ func TestFileStoreProvisionAndValidateTokens(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	enabled := true
 
 	provisioned, err := store.ProvisionInstallation(context.Background(), ProvisionInstallationRequest{
-		BusinessID: "business-1",
-		AIEnabled:  true,
+		BusinessID:         "business-1",
+		ShopName:           "متجر الاختبار",
+		RelayEnabled:       &enabled,
+		SubscriptionActive: &enabled,
+		AIEnabled:          true,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -38,6 +42,9 @@ func TestFileStoreProvisionAndValidateTokens(t *testing.T) {
 	}
 	if provisioned.Installation.AccessTokenHash == provisioned.AccessToken {
 		t.Fatal("access token must be stored hashed")
+	}
+	if provisioned.Installation.ShopName != "متجر الاختبار" {
+		t.Fatalf("expected shop name to be stored, got %q", provisioned.Installation.ShopName)
 	}
 
 	connectorInstallation, err := store.ValidateConnectorToken(
@@ -64,6 +71,32 @@ func TestFileStoreProvisionAndValidateTokens(t *testing.T) {
 	}
 }
 
+func TestFileStoreProvisionDefaultsRemoteAccessAndSubscriptionOff(t *testing.T) {
+	now := time.Date(2026, 6, 2, 12, 0, 0, 0, time.UTC)
+	store, err := NewFileStore(filepath.Join(t.TempDir(), "installations.json"), fixedClock{now: now})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	provisioned, err := store.ProvisionInstallation(context.Background(), ProvisionInstallationRequest{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if provisioned.Installation.RelayEnabled {
+		t.Fatal("new installations must not enable remote relay by default")
+	}
+	if provisioned.Installation.SubscriptionActive {
+		t.Fatal("new installations must not be subscribed by default")
+	}
+	if _, err := store.ValidateAccessToken(context.Background(), provisioned.AccessToken); !errors.Is(err, ErrSubscriptionInactive) {
+		t.Fatalf("expected inactive subscription, got %v", err)
+	}
+	if _, err := store.ValidateConnectorToken(context.Background(), provisioned.ConnectorToken); err != nil {
+		t.Fatalf("connector token should validate before subscription is active: %v", err)
+	}
+}
+
 func TestFileStoreRejectsInactiveSubscription(t *testing.T) {
 	now := time.Date(2026, 6, 2, 12, 0, 0, 0, time.UTC)
 	endedAt := now.Add(-time.Minute)
@@ -71,9 +104,12 @@ func TestFileStoreRejectsInactiveSubscription(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	enabled := true
 
 	provisioned, err := store.ProvisionInstallation(context.Background(), ProvisionInstallationRequest{
-		SubscriptionEndsAt: &endedAt,
+		RelayEnabled:       &enabled,
+		SubscriptionActive: &enabled,
+		SubscriptionEndsAt: endsAtPtr(endedAt),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -83,4 +119,8 @@ func TestFileStoreRejectsInactiveSubscription(t *testing.T) {
 	if !errors.Is(err, ErrSubscriptionInactive) {
 		t.Fatalf("expected inactive subscription, got %v", err)
 	}
+}
+
+func endsAtPtr(value time.Time) *time.Time {
+	return &value
 }

@@ -57,4 +57,34 @@ void main() {
       expect(timings, isEmpty);
     },
   );
+
+  test(
+    'API session retries once with relay fallback on network failure',
+    () async {
+      final session = PosApiSession(
+        client: MockClient((request) async {
+          if (request.url.host == 'lan.test') {
+            throw Exception('lan offline');
+          }
+          expect(request.url.toString(), 'https://relay.test/api/products/');
+          expect(request.headers['X-Pointy-Relay-Token'], 'ptt1.ticket');
+          return http.Response('{"ok":true}', 200);
+        }),
+        baseUrl: 'http://lan.test/api',
+      );
+      session.configureConnectionTarget(
+        baseUrl: 'http://lan.test/api',
+        fallbackTarget: const ApiConnectionTarget(
+          baseUrl: 'https://relay.test/api',
+          relayToken: 'ptt1.ticket',
+        ),
+      );
+
+      final response = await session.get('products/');
+
+      expect(response.statusCode, 200);
+      expect(session.baseUrl, 'https://relay.test/api');
+      expect(session.usesRelay, isTrue);
+    },
+  );
 }

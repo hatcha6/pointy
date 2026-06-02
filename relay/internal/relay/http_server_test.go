@@ -2,6 +2,8 @@ package relay
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -51,6 +53,9 @@ func TestHTTPRelayForwardsRequestThroughConnector(t *testing.T) {
 			if r.Header.Get(AccessTokenHeader) != "" {
 				t.Errorf("relay access token header must not reach backend")
 			}
+			if got := r.Header.Get(RelayedRequestHeader); got != "1" {
+				t.Errorf("expected relayed request marker, got %q", got)
+			}
 			if got := r.Header.Get("X-CSRFToken"); got != "csrf-token" {
 				t.Errorf("expected CSRF token to pass through, got %q", got)
 			}
@@ -95,12 +100,14 @@ func TestHTTPRelayForwardsRequestThroughConnector(t *testing.T) {
 
 	request, err := http.NewRequest(
 		http.MethodPost,
-		"http://relay.test/r/"+url.PathEscape(provisioned.AccessToken)+"/api/echo?x=1",
+		"http://relay.test/api/echo?x=1",
 		strings.NewReader("sale=42"),
 	)
 	if err != nil {
 		t.Fatal(err)
 	}
+	request.Header.Set(AccessTokenHeader, provisioned.AccessToken)
+	request.Header.Set(RelayedRequestHeader, "client-spoof")
 	request.Header.Set("Cookie", "sessionid=session-token; csrftoken=csrf-token")
 	request.Header.Set("X-CSRFToken", "csrf-token")
 	recorder := httptest.NewRecorder()
@@ -127,6 +134,32 @@ func TestHTTPRelayForwardsRequestThroughConnector(t *testing.T) {
 	}
 }
 
+func TestHTTPRelayRejectsAccessTokenInURLPath(t *testing.T) {
+	store, provisioned := provisionRelayInstallation(t)
+	server := HTTPServer{
+		Store:  store,
+		Hub:    NewHub(),
+		Logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
+	}
+
+	request, err := http.NewRequest(
+		http.MethodGet,
+		"http://relay.test/r/"+url.PathEscape(provisioned.AccessToken)+"/api/products/",
+		nil,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	recorder := httptest.NewRecorder()
+	server.ServeHTTP(recorder, request)
+	response := recorder.Result()
+	defer response.Body.Close()
+
+	if response.StatusCode != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d", response.StatusCode)
+	}
+}
+
 func TestHTTPRelayRejectsInactiveSubscriptionBeforeRouting(t *testing.T) {
 	now := time.Date(2026, 6, 2, 12, 0, 0, 0, time.UTC)
 	endedAt := now.Add(-time.Second)
@@ -134,7 +167,10 @@ func TestHTTPRelayRejectsInactiveSubscriptionBeforeRouting(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	enabled := true
 	provisioned, err := store.ProvisionInstallation(context.Background(), control.ProvisionInstallationRequest{
+		RelayEnabled:       &enabled,
+		SubscriptionActive: &enabled,
 		SubscriptionEndsAt: &endedAt,
 	})
 	if err != nil {
@@ -158,6 +194,57 @@ func TestHTTPRelayRejectsInactiveSubscriptionBeforeRouting(t *testing.T) {
 
 	if response.StatusCode != http.StatusPaymentRequired {
 		t.Fatalf("expected 402, got %d", response.StatusCode)
+	}
+}
+
+func TestHTTPAdminEndpointsRequireVerifiedClientCertificate(t *testing.T) {
+	store, _ := provisionRelayInstallation(t)
+	server := HTTPServer{
+		Store:                         store,
+		Hub:                           NewHub(),
+		Logger:                        slog.New(slog.NewTextHandler(io.Discard, nil)),
+		AllowOpenAdmin:                true,
+		RequireAdminClientCertificate: true,
+	}
+
+	request, err := http.NewRequest(
+		http.MethodPost,
+		"http://relay.test/v1/installations",
+		strings.NewReader(`{}`),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	recorder := httptest.NewRecorder()
+	server.ServeHTTP(recorder, request)
+	response := recorder.Result()
+	defer response.Body.Close()
+
+	if response.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("expected 401 without client certificate, got %d", response.StatusCode)
+	}
+
+	certificate := &x509.Certificate{}
+	request, err = http.NewRequest(
+		http.MethodPost,
+		"http://relay.test/v1/installations",
+		strings.NewReader(`{}`),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.TLS = &tls.ConnectionState{
+		PeerCertificates: []*x509.Certificate{certificate},
+		VerifiedChains:   [][]*x509.Certificate{{certificate}},
+	}
+	recorder = httptest.NewRecorder()
+	server.ServeHTTP(recorder, request)
+	response = recorder.Result()
+	defer response.Body.Close()
+
+	if response.StatusCode != http.StatusCreated {
+		content, _ := io.ReadAll(response.Body)
+		t.Fatalf("expected 201 with verified client certificate, got %d: %s", response.StatusCode, string(content))
 	}
 }
 
@@ -327,8 +414,11 @@ func provisionRelayInstallation(t *testing.T) (*control.FileStore, control.Provi
 	if err != nil {
 		t.Fatal(err)
 	}
+	enabled := true
 	provisioned, err := store.ProvisionInstallation(context.Background(), control.ProvisionInstallationRequest{
-		BusinessID: "business-1",
+		BusinessID:         "business-1",
+		RelayEnabled:       &enabled,
+		SubscriptionActive: &enabled,
 	})
 	if err != nil {
 		t.Fatal(err)

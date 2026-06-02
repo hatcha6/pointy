@@ -1,6 +1,8 @@
 import tempfile
+from datetime import timedelta
 from decimal import Decimal
 from pathlib import Path
+from unittest import mock
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
@@ -25,7 +27,63 @@ from apps.purchasing.models import (
     SupplierPayment,
 )
 from apps.sales.models import Order, OrderLine, RegisterCashMovement, RegisterSession
+from .models import RelayInstallation, ShopSettings
 from .roles import CASHIER_GROUP, MANAGER_GROUP, bootstrap_admin_user, ensure_role_groups
+from .discovery import private_network_host_for_peer
+
+
+class FakeRelayConfig:
+    public_api_url = "https://relay.example"
+    connector_address = "relay.example:443"
+
+
+class FakeRelayControlClient:
+    config = FakeRelayConfig()
+
+    def __init__(self, *, relay_enabled=False, subscription_active=False):
+        self.relay_enabled = relay_enabled
+        self.subscription_active = subscription_active
+        self.provisioned_shop_name = ""
+        self.issued_ticket_request = None
+
+    def provision_installation(self, *, shop_name):
+        self.provisioned_shop_name = shop_name
+        return {
+            "installation": {
+                "id": "installation-1",
+                "shop_name": shop_name,
+                "relay_enabled": False,
+                "subscription_active": False,
+                "ai_enabled": False,
+                "subscription_ends_at": None,
+            },
+            "connector_token": "ptc1.installation-1.connector-secret",
+            "access_token": "ptr1.installation-1.access-secret",
+        }
+
+    def get_installation(self, installation_id):
+        return {
+            "id": installation_id,
+            "shop_name": "متجر آمن",
+            "relay_enabled": self.relay_enabled,
+            "subscription_active": self.subscription_active,
+            "ai_enabled": False,
+            "subscription_ends_at": None,
+        }
+
+    def issue_ticket(self, *, access_token, device_id="", device_name=""):
+        self.issued_ticket_request = {
+            "access_token": access_token,
+            "device_id": device_id,
+            "device_name": device_name,
+        }
+        return {
+            "token": "ptt1.installation-1.ticket-secret",
+            "installation_id": "installation-1",
+            "device_id": device_id,
+            "device_name": device_name,
+            "expires_at": timezone.now() + timedelta(minutes=15),
+        }
 
 
 class ApiAuthenticationTests(TestCase):
@@ -403,6 +461,317 @@ class ShopSettingsApiTests(TestCase):
         self.assertTrue(read_response.data["prevent_selling_at_loss"])
         self.assertEqual(update_response.status_code, status.HTTP_403_FORBIDDEN)
         self.assertEqual(upload_response.status_code, status.HTTP_403_FORBIDDEN)
+
+
+class RelayBackendApiTests(TestCase):
+    def setUp(self):
+        ensure_role_groups()
+        User = get_user_model()
+        self.manager = User.objects.create_user(username="relay-manager", password="pass")
+        self.manager.groups.add(Group.objects.get(name=MANAGER_GROUP))
+        self.cashier = User.objects.create_user(username="relay-cashier", password="pass")
+        self.cashier.groups.add(Group.objects.get(name=CASHIER_GROUP))
+        settings = ShopSettings.load()
+        settings.shop_name = "متجر آمن"
+        settings.save(update_fields=["shop_name"])
+
+    def test_manager_can_provision_relay_installation_with_safe_defaults(self):
+        fake_relay = FakeRelayControlClient()
+        client = APIClient()
+        client.force_authenticate(user=self.manager)
+
+        with mock.patch("apps.core.relay.RelayControlClient", return_value=fake_relay):
+            response = client.post(reverse("relay-installation"), {}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertFalse(response.data["remote_access_supported"])
+        self.assertFalse(response.data["relay_enabled"])
+        self.assertFalse(response.data["subscription_active"])
+        self.assertEqual(response.data["shop_name"], "متجر آمن")
+        self.assertEqual(fake_relay.provisioned_shop_name, "متجر آمن")
+        installation = RelayInstallation.objects.get()
+        self.assertEqual(installation.installation_id, "installation-1")
+        self.assertFalse(installation.relay_enabled)
+        self.assertFalse(installation.subscription_active)
+        self.assertEqual(
+            installation.connector_token,
+            "ptc1.installation-1.connector-secret",
+        )
+
+    def test_cashier_cannot_manage_relay_installation(self):
+        client = APIClient()
+        client.force_authenticate(user=self.cashier)
+
+        response = client.post(reverse("relay-installation"), {}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(RelayInstallation.objects.count(), 0)
+
+    def test_pairing_returns_short_lived_ticket_when_subscription_is_active(self):
+        installation = RelayInstallation.objects.create(
+            installation_id="installation-1",
+            shop_name="متجر آمن",
+            relay_public_api_url="https://relay.example",
+            relay_connector_address="relay.example:443",
+            connector_token="ptc1.installation-1.connector-secret",
+            access_token="ptr1.installation-1.access-secret",
+            relay_enabled=True,
+            subscription_active=True,
+        )
+        fake_relay = FakeRelayControlClient(
+            relay_enabled=True,
+            subscription_active=True,
+        )
+        client = APIClient()
+        client.force_authenticate(user=self.cashier)
+
+        with mock.patch("apps.core.relay.RelayControlClient", return_value=fake_relay):
+            response = client.post(
+                reverse("relay-pairing"),
+                {"device_id": "phone-1", "device_name": "هاتف المدير"},
+                format="json",
+            )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data["remote_access_supported"])
+        self.assertEqual(response.data["relay_token"], "ptt1.installation-1.ticket-secret")
+        self.assertEqual(response.data["relay_public_api_url"], "https://relay.example")
+        self.assertEqual(
+            fake_relay.issued_ticket_request,
+            {
+                "access_token": "ptr1.installation-1.access-secret",
+                "device_id": "phone-1",
+                "device_name": "هاتف المدير",
+            },
+        )
+        installation.refresh_from_db()
+        self.assertIsNotNone(installation.last_pairing_issued_at)
+
+    def test_pairing_does_not_issue_ticket_when_subscription_is_inactive(self):
+        RelayInstallation.objects.create(
+            installation_id="installation-1",
+            shop_name="متجر آمن",
+            relay_public_api_url="https://relay.example",
+            relay_connector_address="relay.example:443",
+            connector_token="ptc1.installation-1.connector-secret",
+            access_token="ptr1.installation-1.access-secret",
+            relay_enabled=True,
+            subscription_active=True,
+        )
+        fake_relay = FakeRelayControlClient(
+            relay_enabled=True,
+            subscription_active=False,
+        )
+        client = APIClient()
+        client.force_authenticate(user=self.cashier)
+
+        with mock.patch("apps.core.relay.RelayControlClient", return_value=fake_relay):
+            response = client.post(reverse("relay-pairing"), {}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertFalse(response.data["remote_access_supported"])
+        self.assertEqual(response.data["relay_token"], "")
+        self.assertEqual(response.data["reason"], "relay_not_active")
+        self.assertIsNone(fake_relay.issued_ticket_request)
+
+    def test_pairing_requires_lan_request(self):
+        RelayInstallation.objects.create(
+            installation_id="installation-1",
+            shop_name="متجر آمن",
+            relay_public_api_url="https://relay.example",
+            relay_connector_address="relay.example:443",
+            connector_token="ptc1.installation-1.connector-secret",
+            access_token="ptr1.installation-1.access-secret",
+            relay_enabled=True,
+            subscription_active=True,
+        )
+        fake_relay = FakeRelayControlClient(
+            relay_enabled=True,
+            subscription_active=True,
+        )
+        client = APIClient()
+        client.force_authenticate(user=self.cashier)
+
+        with mock.patch("apps.core.relay.RelayControlClient", return_value=fake_relay):
+            response = client.post(
+                reverse("relay-pairing"),
+                {},
+                format="json",
+                REMOTE_ADDR="8.8.8.8",
+                HTTP_X_FORWARDED_FOR="192.168.1.10",
+            )
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertFalse(response.data["remote_access_supported"])
+        self.assertEqual(response.data["reason"], "relay_requires_lan_pairing")
+        self.assertIsNone(fake_relay.issued_ticket_request)
+
+    def test_pairing_rejects_relay_tunneled_request(self):
+        RelayInstallation.objects.create(
+            installation_id="installation-1",
+            shop_name="متجر آمن",
+            relay_public_api_url="https://relay.example",
+            relay_connector_address="relay.example:443",
+            connector_token="ptc1.installation-1.connector-secret",
+            access_token="ptr1.installation-1.access-secret",
+            relay_enabled=True,
+            subscription_active=True,
+        )
+        fake_relay = FakeRelayControlClient(
+            relay_enabled=True,
+            subscription_active=True,
+        )
+        client = APIClient()
+        client.force_authenticate(user=self.cashier)
+
+        with mock.patch("apps.core.relay.RelayControlClient", return_value=fake_relay):
+            response = client.post(
+                reverse("relay-pairing"),
+                {},
+                format="json",
+                REMOTE_ADDR="127.0.0.1",
+                HTTP_X_POINTY_RELAYED_REQUEST="1",
+            )
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertFalse(response.data["remote_access_supported"])
+        self.assertEqual(response.data["reason"], "relay_requires_lan_pairing")
+        self.assertIsNone(fake_relay.issued_ticket_request)
+
+    @override_settings(POINTY_RELAY_CONNECTOR_SETUP_TOKEN="setup-secret")
+    def test_connector_config_requires_setup_token(self):
+        fake_relay = FakeRelayControlClient()
+
+        with mock.patch("apps.core.relay.RelayControlClient", return_value=fake_relay):
+            rejected = APIClient().post(reverse("relay-connector-config"), {}, format="json")
+            accepted = APIClient().post(
+                reverse("relay-connector-config"),
+                {},
+                format="json",
+                HTTP_X_POINTY_CONNECTOR_SETUP_TOKEN="setup-secret",
+            )
+
+        self.assertEqual(rejected.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(accepted.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            accepted.data["connector_token"],
+            "ptc1.installation-1.connector-secret",
+        )
+        self.assertEqual(accepted.data["relay_connector_address"], "relay.example:443")
+
+    def test_discovery_service_returns_safe_lan_metadata(self):
+        RelayInstallation.objects.create(
+            installation_id="installation-1",
+            shop_name="متجر آمن",
+            relay_public_api_url="https://relay.example",
+            relay_connector_address="relay.example:443",
+            connector_token="ptc1.installation-1.connector-secret",
+            access_token="ptr1.installation-1.access-secret",
+            relay_enabled=True,
+            subscription_active=True,
+        )
+
+        response = APIClient().get(
+            reverse("discovery-service"),
+            REMOTE_ADDR="192.168.1.10",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["service"], "pointy-backend")
+        self.assertEqual(response.data["shop_name"], "متجر آمن")
+        self.assertIn("backend_url", response.data)
+        self.assertEqual(response.data["installation_id"], "installation-1")
+        self.assertEqual(response.data["pairing_path"], "/api/relay/pairing/")
+        self.assertTrue(response.data["remote_access_supported"])
+        self.assertEqual(response.data["relay_public_api_url"], "https://relay.example")
+        self.assertNotIn("access_token", response.data)
+        self.assertNotIn("connector_token", response.data)
+
+    def test_discovery_service_is_private_network_only_by_default(self):
+        response = APIClient().get(
+            reverse("discovery-service"),
+            REMOTE_ADDR="8.8.8.8",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_discovery_service_does_not_trust_forwarded_for_by_default(self):
+        response = APIClient().get(
+            reverse("discovery-service"),
+            REMOTE_ADDR="8.8.8.8",
+            HTTP_X_FORWARDED_FOR="192.168.1.10",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_discovery_service_rejects_relay_tunneled_request(self):
+        response = APIClient().get(
+            reverse("discovery-service"),
+            REMOTE_ADDR="127.0.0.1",
+            HTTP_X_POINTY_RELAYED_REQUEST="1",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    @override_settings(POINTY_DISCOVERY_TRUST_PROXY_HEADERS=True)
+    def test_discovery_service_can_trust_forwarded_for_when_configured(self):
+        response = APIClient().get(
+            reverse("discovery-service"),
+            REMOTE_ADDR="8.8.8.8",
+            HTTP_X_FORWARDED_FOR="192.168.1.10",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    @override_settings(POINTY_DISCOVERY_ENABLED=False)
+    def test_discovery_service_respects_disabled_setting(self):
+        response = APIClient().get(
+            reverse("discovery-service"),
+            REMOTE_ADDR="192.168.1.10",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_udp_discovery_uses_local_interface_for_peer(self):
+        fake_socket = mock.Mock()
+        fake_socket.getsockname.return_value = ("192.168.1.5", 47777)
+        fake_socket_factory = mock.Mock(return_value=fake_socket)
+
+        with mock.patch("apps.core.discovery.socket.socket", fake_socket_factory):
+            host = private_network_host_for_peer("192.168.1.10")
+
+        self.assertEqual(host, "192.168.1.5")
+        fake_socket.connect.assert_called_once_with(("192.168.1.10", 9))
+        fake_socket.close.assert_called_once()
+
+    @override_settings(POINTY_RELAY_CONNECTOR_SETUP_TOKEN="setup-secret")
+    def test_connector_heartbeat_updates_installation_metadata(self):
+        installation = RelayInstallation.objects.create(
+            installation_id="installation-1",
+            shop_name="متجر آمن",
+            relay_public_api_url="https://relay.example",
+            relay_connector_address="relay.example:443",
+            connector_token="ptc1.installation-1.connector-secret",
+            access_token="ptr1.installation-1.access-secret",
+        )
+
+        rejected = APIClient().post(
+            reverse("relay-connector-heartbeat"),
+            {"version": "pointy-relay/test"},
+            format="json",
+        )
+        accepted = APIClient().post(
+            reverse("relay-connector-heartbeat"),
+            {"version": "pointy-relay/test"},
+            format="json",
+            HTTP_X_POINTY_CONNECTOR_SETUP_TOKEN="setup-secret",
+        )
+
+        self.assertEqual(rejected.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(accepted.status_code, status.HTTP_200_OK)
+        installation.refresh_from_db()
+        self.assertIsNotNone(installation.connector_last_seen_at)
+        self.assertEqual(installation.connector_version, "pointy-relay/test")
 
 
 class DashboardApiTests(TestCase):

@@ -37,6 +37,7 @@ class _PointyAppState extends State<PointyApp> {
     _dependencies = PointyAppDependencies(apiService: widget.apiService);
     _navigationRailController = PointyNavigationRailController();
     _dependencies.authViewModel.addListener(_dependencies.handleAuthChanged);
+    unawaited(_dependencies.start());
     unawaited(_dependencies.analyticsEngine.start());
     _frameTimingsCallback = _dependencies.analyticsEngine.recordFrameTimings;
     SchedulerBinding.instance.addTimingsCallback(_frameTimingsCallback);

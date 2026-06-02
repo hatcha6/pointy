@@ -3,6 +3,7 @@ package connector
 import (
 	"bufio"
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"io"
@@ -27,6 +28,8 @@ type Client struct {
 	ReconnectMinWait time.Duration
 	ReconnectMaxWait time.Duration
 	HTTPClient       *http.Client
+	UseTLS           bool
+	TLSConfig        *tls.Config
 }
 
 func (c Client) Run(ctx context.Context) error {
@@ -77,6 +80,16 @@ func (c Client) RunOnce(ctx context.Context) error {
 	raw, err := dialer.DialContext(ctx, "tcp", c.RelayAddress)
 	if err != nil {
 		return err
+	}
+	if c.UseTLS {
+		tlsConn := tls.Client(raw, c.TLSConfig)
+		handshakeCtx, cancel := context.WithTimeout(ctx, timeout)
+		defer cancel()
+		if err := tlsConn.HandshakeContext(handshakeCtx); err != nil {
+			_ = raw.Close()
+			return err
+		}
+		raw = tlsConn
 	}
 	conn := protocol.NewConn(raw)
 	if err := conn.WriteFrame(protocol.Frame{

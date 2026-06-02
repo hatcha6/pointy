@@ -71,18 +71,24 @@ func (s *PostgresStore) ProvisionInstallation(
 		return ProvisionedInstallation{}, err
 	}
 
-	relayEnabled := true
+	relayEnabled := false
 	if request.RelayEnabled != nil {
 		relayEnabled = *request.RelayEnabled
+	}
+	subscriptionActive := false
+	if request.SubscriptionActive != nil {
+		subscriptionActive = *request.SubscriptionActive
 	}
 	now := s.clock.Now()
 	installation := Installation{
 		ID:                 id,
 		BusinessID:         request.BusinessID,
+		ShopName:           request.ShopName,
 		ConnectorTokenHash: TokenHash(connectorToken),
 		AccessTokenHash:    TokenHash(accessToken),
 		RelayEnabled:       relayEnabled,
 		AIEnabled:          request.AIEnabled,
+		SubscriptionActive: subscriptionActive,
 		SubscriptionEndsAt: request.SubscriptionEndsAt,
 		CreatedAt:          now,
 		UpdatedAt:          now,
@@ -93,20 +99,24 @@ func (s *PostgresStore) ProvisionInstallation(
 		`INSERT INTO relay_installations (
 			id,
 			business_id,
+			shop_name,
 			connector_token_hash,
 			access_token_hash,
 			relay_enabled,
 			ai_enabled,
+			subscription_active,
 			subscription_ends_at,
 			created_at,
 			updated_at
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
 		installation.ID,
 		installation.BusinessID,
+		installation.ShopName,
 		installation.ConnectorTokenHash,
 		installation.AccessTokenHash,
 		installation.RelayEnabled,
 		installation.AIEnabled,
+		installation.SubscriptionActive,
 		installation.SubscriptionEndsAt,
 		installation.CreatedAt,
 		installation.UpdatedAt,
@@ -137,20 +147,23 @@ func (s *PostgresStore) UpdateSubscription(
 		SET
 			relay_enabled = CASE WHEN $2 THEN $3 ELSE relay_enabled END,
 			ai_enabled = CASE WHEN $4 THEN $5 ELSE ai_enabled END,
+			subscription_active = CASE WHEN $6 THEN $7 ELSE subscription_active END,
 			subscription_ends_at = CASE
-				WHEN $6 THEN NULL
-				WHEN $7 THEN $8::timestamptz
+				WHEN $8 THEN NULL
+				WHEN $9 THEN $10::timestamptz
 				ELSE subscription_ends_at
 			END,
-			updated_at = $9::timestamptz
+			updated_at = $11::timestamptz
 		WHERE id = $1
 		RETURNING
 			id,
 			business_id,
+			shop_name,
 			connector_token_hash,
 			access_token_hash,
 			relay_enabled,
 			ai_enabled,
+			subscription_active,
 			subscription_ends_at,
 			created_at,
 			updated_at,
@@ -160,6 +173,8 @@ func (s *PostgresStore) UpdateSubscription(
 		boolValue(update.RelayEnabled),
 		update.AIEnabled != nil,
 		boolValue(update.AIEnabled),
+		update.SubscriptionActive != nil,
+		boolValue(update.SubscriptionActive),
 		update.ClearEnd,
 		update.SubscriptionEndsAt != nil,
 		update.SubscriptionEndsAt,
@@ -235,10 +250,12 @@ func (s *PostgresStore) validateToken(
 const selectInstallationSQL = `SELECT
 	id,
 	business_id,
+	shop_name,
 	connector_token_hash,
 	access_token_hash,
 	relay_enabled,
 	ai_enabled,
+	subscription_active,
 	subscription_ends_at,
 	created_at,
 	updated_at,
@@ -252,10 +269,12 @@ func scanInstallation(row pgx.Row) (Installation, error) {
 	err := row.Scan(
 		&installation.ID,
 		&installation.BusinessID,
+		&installation.ShopName,
 		&installation.ConnectorTokenHash,
 		&installation.AccessTokenHash,
 		&installation.RelayEnabled,
 		&installation.AIEnabled,
+		&installation.SubscriptionActive,
 		&subscriptionEndsAt,
 		&installation.CreatedAt,
 		&installation.UpdatedAt,

@@ -165,20 +165,25 @@ outbound tunnel open to the relay, and the connector forwards each request to
 the local Pointy backend. Django still owns normal cashier/admin
 authentication and authorization.
 
-Start the relay data services, apply migrations, and provision an installation
-token pair:
+Start the relay data services and apply relay migrations:
 
 ```sh
 make postgres
 make redis
 make relay-migrate
-make relay-provision
 ```
 
-The command prints:
+For local development, put relay control values in `backend/.env` before
+starting Django:
 
-- `connector_token` - store this only on the on-prem server/connector.
-- `access_token` - use this from a remote client or mobile device setting.
+```env
+POINTY_RELAY_CONTROL_URL=http://127.0.0.1:8091
+POINTY_RELAY_PUBLIC_API_URL=http://127.0.0.1:8091
+POINTY_RELAY_CONNECTOR_ADDR=127.0.0.1:8092
+POINTY_RELAY_ADMIN_TOKEN=local-admin
+POINTY_RELAY_ALLOW_INSECURE_CONTROL=true
+POINTY_RELAY_CONNECTOR_SETUP_TOKEN=local-connector-setup
+```
 
 Start the relay server:
 
@@ -190,33 +195,64 @@ Start Django and the on-prem connector in separate terminals:
 
 ```sh
 make backend-run
-make relay-connector RELAY_CONNECTOR_TOKEN="ptc1.<installation-id>.<secret>"
+make relay-connector RELAY_CONNECTOR_SETUP_TOKEN=local-connector-setup
 ```
 
-Remote clients can route through the relay with a header:
+By default, Django exposes a private-network discovery endpoint at
+`/api/discovery/service/` and answers UDP discovery probes on port `47777`.
+The connector uses that discovery path when `--backend` is omitted, so the
+normal local setup does not need a backend URL. Flutter also discovers the LAN
+backend before loading the current session. After a cashier or manager signs in
+over LAN, the app asks the backend for a short-lived relay ticket and stores the
+local API URL plus the relay fallback. Later requests use LAN first and switch
+to relay only when the saved local target is unreachable.
 
-```sh
-curl \
-  -H 'X-Pointy-Relay-Token: ptr1.<installation-id>.<secret>' \
-  http://127.0.0.1:8091/api/shop-settings/
-```
+Discovery only returns non-secret metadata such as shop name, installation id,
+backend URL, relay public URL, and connector heartbeat time. Relay pairing is
+authenticated and LAN-only by default. The LAN gate uses the direct remote
+address unless `POINTY_DISCOVERY_TRUST_PROXY_HEADERS=true` is explicitly set
+for a trusted reverse-proxy deployment. Requests forwarded through the relay are
+tagged by the relay and are never accepted as LAN pairing requests, even though
+they reach Django through the local connector.
 
-Clients that can store the long-lived access token should exchange it for a
-short-lived relay ticket and then use the returned `ptt1...` token for normal
-remote API traffic:
+Managers provision the installation through the backend:
 
 ```sh
 curl \
   -X POST \
-  -H 'X-Pointy-Relay-Token: ptr1.<installation-id>.<secret>' \
+  -b cookies.txt \
+  -H 'X-CSRFToken: <csrftoken>' \
   -H 'Content-Type: application/json' \
-  -d '{"device_id":"register-1","device_name":"front register"}' \
-  http://127.0.0.1:8091/v1/relay-tickets
+  -d '{}' \
+  http://127.0.0.1:8000/api/relay/installation/
 ```
 
-For simple clients that cannot send custom headers, the relay also accepts
-`/r/<relay-token>/api/...`, but the header form is preferred because it keeps
-tokens out of URLs and most access logs.
+New installations are intentionally safe by default: remote relay access is not
+enabled and the relay subscription is not active. A phone or register that is
+already authenticated to the local backend asks the backend for pairing:
+
+```sh
+curl \
+  -X POST \
+  -b cookies.txt \
+  -H 'X-CSRFToken: <csrftoken>' \
+  -H 'Content-Type: application/json' \
+  -d '{"device_id":"phone-1","device_name":"manager phone"}' \
+  http://127.0.0.1:8000/api/relay/pairing/
+```
+
+When the relay entitlement and subscription are active, the backend exchanges
+its stored long-lived access token for a short-lived `ptt1...` relay ticket and
+returns the relay URL, shop name, installation id, ticket, and expiry to the
+phone. Long-lived `ptr1...` access tokens are not meant to be stored on phones.
+The relay accepts `/r/<relay-ticket>/api/...` only for short-lived ticket tokens;
+long-lived access tokens must stay in backend-controlled server-side paths.
+
+Production relay deployments should run both public listeners with TLS. The
+connector listener requires connector mTLS by default, and HTTP admin endpoints
+can require backend client certificates with `RELAY_REQUIRE_ADMIN_CLIENT_CERT`
+and `RELAY_HTTP_CLIENT_CA`. The Makefile defaults to explicit insecure relay
+listeners only for local development.
 
 The relay uses PostgreSQL for durable installation state: token hashes,
 subscription flags, AI entitlement flags, and connector heartbeat metadata.
@@ -226,8 +262,8 @@ metadata and token hashes. Live request bodies and tunnel bytes stay on the
 connector TCP session and are never stored in Redis.
 
 Remote relay access is denied when an installation's relay entitlement is
-disabled or its subscription end time has passed. Local LAN access to the
-on-prem backend is unaffected.
+disabled, the subscription flag is inactive, or its subscription end time has
+passed. Local LAN access to the on-prem backend is unaffected.
 
 ## Quality Gates
 

@@ -23,6 +23,13 @@ from apps.core.views import (
     me_view,
 )
 from apps.core.dashboard import DashboardView
+from apps.core.relay_views import (
+    DiscoveryServiceView,
+    RelayConnectorConfigView,
+    RelayConnectorHeartbeatView,
+    RelayInstallationView,
+    RelayPairingView,
+)
 from apps.inventory.views import StockItemViewSet, StockMovementViewSet
 from apps.notifications.views import BusinessNotificationViewSet
 from apps.payments.views import PaymentViewSet
@@ -87,6 +94,27 @@ urlpatterns = [
     path("api/auth/logout/", logout_view, name="auth-logout"),
     path("api/auth/me/", me_view, name="auth-me"),
     path("api/dashboard/", DashboardView.as_view(), name="dashboard"),
+    path(
+        "api/discovery/service/",
+        DiscoveryServiceView.as_view(),
+        name="discovery-service",
+    ),
+    path(
+        "api/relay/installation/",
+        RelayInstallationView.as_view(),
+        name="relay-installation",
+    ),
+    path("api/relay/pairing/", RelayPairingView.as_view(), name="relay-pairing"),
+    path(
+        "api/relay/connector-config/",
+        RelayConnectorConfigView.as_view(),
+        name="relay-connector-config",
+    ),
+    path(
+        "api/relay/connector-heartbeat/",
+        RelayConnectorHeartbeatView.as_view(),
+        name="relay-connector-heartbeat",
+    ),
     path("api/shop-settings/", ShopSettingsView.as_view(), name="shop-settings"),
     path(
         "api/shop-settings/logo/",
