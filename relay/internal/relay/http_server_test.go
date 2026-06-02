@@ -298,6 +298,7 @@ func TestHTTPAdminStatusReturnsSanitizedMetricsSnapshot(t *testing.T) {
 	var payload struct {
 		Status      string                 `json:"status"`
 		NodeID      string                 `json:"node_id"`
+		Draining    bool                   `json:"draining"`
 		GeneratedAt time.Time              `json:"generated_at"`
 		Metrics     observability.Snapshot `json:"metrics"`
 		Limits      map[string]any         `json:"limits"`
@@ -308,6 +309,9 @@ func TestHTTPAdminStatusReturnsSanitizedMetricsSnapshot(t *testing.T) {
 	if payload.Status != "ok" || payload.NodeID != "relay-node-a" {
 		t.Fatalf("unexpected status payload %#v", payload)
 	}
+	if payload.Draining {
+		t.Fatal("expected status to report non-draining node")
+	}
 	if !payload.GeneratedAt.Equal(now) {
 		t.Fatalf("unexpected generated_at %s", payload.GeneratedAt)
 	}
@@ -317,6 +321,36 @@ func TestHTTPAdminStatusReturnsSanitizedMetricsSnapshot(t *testing.T) {
 	if payload.Limits["stream_open_timeout"] != "2s" ||
 		payload.Limits["relay_request_timeout"] != "3s" {
 		t.Fatalf("unexpected limits %#v", payload.Limits)
+	}
+}
+
+func TestHTTPReadyzReportsDraining(t *testing.T) {
+	store, _ := provisionRelayInstallation(t)
+	server := HTTPServer{
+		Store:    store,
+		Hub:      NewHub(),
+		Logger:   slog.New(slog.NewTextHandler(io.Discard, nil)),
+		Draining: true,
+	}
+
+	request, err := http.NewRequest(http.MethodGet, "http://relay.test/readyz", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	recorder := httptest.NewRecorder()
+	server.ServeHTTP(recorder, request)
+	response := recorder.Result()
+	defer response.Body.Close()
+
+	if response.StatusCode != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503 while draining, got %d", response.StatusCode)
+	}
+	var payload map[string]string
+	if err := json.NewDecoder(response.Body).Decode(&payload); err != nil {
+		t.Fatal(err)
+	}
+	if payload["status"] != "draining" {
+		t.Fatalf("unexpected readiness payload %#v", payload)
 	}
 }
 
@@ -601,6 +635,11 @@ func TestHTTPRelayAdminConsoleIsSeparateAndProtected(t *testing.T) {
 		!strings.Contains(string(content), "csrf_token") ||
 		!strings.Contains(response.Header.Get("Content-Type"), "text/html") {
 		t.Fatalf("unexpected admin console response %q", string(content))
+	}
+	if response.Header.Get("Cache-Control") != "no-store" ||
+		response.Header.Get("X-Content-Type-Options") != "nosniff" ||
+		!strings.Contains(response.Header.Get("Content-Security-Policy"), "frame-ancestors 'none'") {
+		t.Fatalf("admin console is missing hardened headers: %#v", response.Header)
 	}
 
 	post, err := http.NewRequest(

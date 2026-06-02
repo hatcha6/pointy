@@ -222,6 +222,12 @@ is enabled for local development. Keep this URL on a private network and rotate
 the node proxy token through the deployment secret manager. Node proxy headers
 are stripped before requests reach the on-prem backend.
 
+To drain a node for deployment or maintenance, set `POINTY_RELAY_DRAINING=true`.
+The node keeps `/healthz` healthy, returns `503` from `/readyz`, reports the
+drain state in `/v1/status`, and rejects new connector handshakes so connectors
+can reconnect to another relay node. Existing sessions remain bounded by the
+normal relay and connector request timeouts.
+
 ## Operational Limits
 
 The relay server applies bounded defaults to the remote HTTP path:
@@ -304,3 +310,22 @@ go vet ./...
 
 The integration tests run without binding local ports; they use in-memory
 protocol sessions to verify relay, connector, subscription, and HTTP behavior.
+
+Production E2E is opt-in because it requires reachable PostgreSQL and Redis.
+It applies relay migrations, uses PostgreSQL for installation/admin-audit state,
+uses Redis for cache, presence, tickets, refresh tokens, and rate limits, then
+exercises a two-node relay path where a phone request enters node A and routes
+to the connector on node B:
+
+```sh
+make postgres redis
+make relay-production-test
+```
+
+Override the service URLs when needed:
+
+```sh
+make relay-production-test \
+  RELAY_E2E_DATABASE_URL='postgres://postgres:postgres@127.0.0.1:5432/pointy?sslmode=disable' \
+  RELAY_E2E_REDIS_URL='redis://127.0.0.1:6379/0'
+```

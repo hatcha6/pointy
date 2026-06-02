@@ -133,6 +133,20 @@ func (s *CachedInstallationStore) SetConnectorCertificate(
 	return installation, nil
 }
 
+func (s *CachedInstallationStore) RevokeConnectorCertificateFingerprint(
+	ctx context.Context,
+	revocation ConnectorCertificateRevocation,
+) error {
+	return s.store.RevokeConnectorCertificateFingerprint(ctx, revocation)
+}
+
+func (s *CachedInstallationStore) IsConnectorCertificateFingerprintRevoked(
+	ctx context.Context,
+	fingerprintSHA256 string,
+) (bool, error) {
+	return s.store.IsConnectorCertificateFingerprintRevoked(ctx, fingerprintSHA256)
+}
+
 func (s *CachedInstallationStore) MarkConnectorConnected(
 	ctx context.Context,
 	id string,

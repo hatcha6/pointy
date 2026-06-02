@@ -415,6 +415,65 @@ func (s *PostgresStore) SetConnectorCertificate(
 	return installation, nil
 }
 
+func (s *PostgresStore) RevokeConnectorCertificateFingerprint(
+	ctx context.Context,
+	revocation ConnectorCertificateRevocation,
+) error {
+	record, err := connectorCertificateRevocation(revocation, s.clock.Now())
+	if err != nil {
+		return err
+	}
+	_, err = s.pool.Exec(
+		ctx,
+		`INSERT INTO relay_revoked_connector_certificate_fingerprints (
+			fingerprint_sha256,
+			installation_id,
+			serial_number,
+			expires_at,
+			revoked_at,
+			reason
+		) VALUES ($1, $2, $3, $4::timestamptz, $5::timestamptz, $6)
+		ON CONFLICT (fingerprint_sha256) DO UPDATE
+		SET
+			installation_id = EXCLUDED.installation_id,
+			serial_number = EXCLUDED.serial_number,
+			expires_at = EXCLUDED.expires_at,
+			revoked_at = EXCLUDED.revoked_at,
+			reason = EXCLUDED.reason`,
+		record.FingerprintSHA256,
+		record.InstallationID,
+		record.SerialNumber,
+		record.ExpiresAt,
+		record.RevokedAt,
+		record.Reason,
+	)
+	return err
+}
+
+func (s *PostgresStore) IsConnectorCertificateFingerprintRevoked(
+	ctx context.Context,
+	fingerprintSHA256 string,
+) (bool, error) {
+	fingerprintSHA256 = normalizeConnectorCertificateFingerprint(fingerprintSHA256)
+	if fingerprintSHA256 == "" {
+		return false, nil
+	}
+	var revoked bool
+	err := s.pool.QueryRow(
+		ctx,
+		`SELECT EXISTS (
+			SELECT 1
+			FROM relay_revoked_connector_certificate_fingerprints
+			WHERE fingerprint_sha256 = $1
+		)`,
+		fingerprintSHA256,
+	).Scan(&revoked)
+	if err != nil {
+		return false, err
+	}
+	return revoked, nil
+}
+
 func (s *PostgresStore) MarkConnectorConnected(
 	ctx context.Context,
 	id string,

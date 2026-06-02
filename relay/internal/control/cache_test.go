@@ -106,6 +106,20 @@ func (s *countingStore) SetConnectorCertificate(
 	return s.installation, nil
 }
 
+func (s *countingStore) RevokeConnectorCertificateFingerprint(
+	context.Context,
+	ConnectorCertificateRevocation,
+) error {
+	return nil
+}
+
+func (s *countingStore) IsConnectorCertificateFingerprintRevoked(
+	context.Context,
+	string,
+) (bool, error) {
+	return false, nil
+}
+
 func (s *countingStore) MarkConnectorConnected(context.Context, string, time.Time) error {
 	return nil
 }

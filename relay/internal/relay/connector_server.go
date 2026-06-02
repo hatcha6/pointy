@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net"
 	"time"
@@ -23,6 +24,7 @@ type ConnectorServer struct {
 	Presence                  ConnectorPresence
 	NodeID                    string
 	NodeRelayURL              string
+	Draining                  bool
 	PresenceTTL               time.Duration
 	PresenceHeartbeatInterval time.Duration
 }
@@ -63,6 +65,12 @@ func (s ConnectorServer) handleConn(ctx context.Context, raw net.Conn, logger *s
 		_ = conn.Close()
 		return
 	}
+	if s.Draining {
+		_ = protocol.WriteError(conn, "relay node is draining")
+		logger.Info("relay connector rejected because node is draining")
+		_ = conn.Close()
+		return
+	}
 	installation, err := s.Store.ValidateConnectorToken(ctx, string(frame.Payload))
 	if err != nil {
 		_ = protocol.WriteError(conn, "connector token rejected")
@@ -70,7 +78,7 @@ func (s ConnectorServer) handleConn(ctx context.Context, raw net.Conn, logger *s
 		_ = conn.Close()
 		return
 	}
-	if err := validateConnectorCertificate(raw, installation, time.Now().UTC()); err != nil {
+	if err := validateConnectorCertificate(ctx, raw, installation, time.Now().UTC(), s.Store); err != nil {
 		_ = protocol.WriteError(conn, "connector certificate rejected")
 		logger.Warn(
 			"relay connector certificate rejected",
@@ -108,9 +116,11 @@ func (s ConnectorServer) handleConn(ctx context.Context, raw net.Conn, logger *s
 }
 
 func validateConnectorCertificate(
+	ctx context.Context,
 	raw net.Conn,
 	installation control.Installation,
 	now time.Time,
+	revocations control.InstallationStore,
 ) error {
 	if installation.ConnectorCertificateFingerprint == "" {
 		return nil
@@ -123,13 +133,30 @@ func validateConnectorCertificate(
 	if len(state.PeerCertificates) == 0 {
 		return errors.New("connector certificate is missing")
 	}
+	return validateConnectorCertificateState(ctx, state, installation, now, revocations)
+}
+
+func validateConnectorCertificateState(
+	ctx context.Context,
+	state tls.ConnectionState,
+	installation control.Installation,
+	now time.Time,
+	revocations control.InstallationStore,
+) error {
+	if len(state.PeerCertificates) == 0 {
+		return errors.New("connector certificate is missing")
+	}
 	certificate := state.PeerCertificates[0]
 	fingerprint := security.CertificateFingerprintSHA256(certificate.Raw)
 	if fingerprint != installation.ConnectorCertificateFingerprint {
 		return errors.New("connector certificate fingerprint does not match installation")
 	}
-	if installation.ConnectorCertificateExpiresAt != nil &&
-		!now.Before(*installation.ConnectorCertificateExpiresAt) {
+	if revoked, err := revocations.IsConnectorCertificateFingerprintRevoked(ctx, fingerprint); err != nil {
+		return fmt.Errorf("connector certificate revocation check failed: %w", err)
+	} else if revoked {
+		return control.ErrConnectorCertificateRevoked
+	}
+	if control.ConnectorCertificateExpired(installation.ConnectorCertificateExpiresAt, now) {
 		return errors.New("connector certificate binding is expired")
 	}
 	return nil

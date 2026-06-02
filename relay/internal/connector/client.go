@@ -35,6 +35,14 @@ type Client struct {
 }
 
 func (c Client) Run(ctx context.Context) error {
+	return c.run(ctx, c.RunOnce, sleepContext)
+}
+
+type runOnceFunc func(context.Context) error
+
+type reconnectWaitFunc func(context.Context, time.Duration) error
+
+func (c Client) run(ctx context.Context, runOnce runOnceFunc, wait reconnectWaitFunc) error {
 	minWait := c.ReconnectMinWait
 	if minWait == 0 {
 		minWait = time.Second
@@ -49,21 +57,28 @@ func (c Client) Run(ctx context.Context) error {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		err := c.RunOnce(ctx)
+		err := runOnce(ctx)
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
 		c.logger().Warn("relay connector session ended", "error", err)
 
-		wait := backoff(attempt, minWait, maxWait)
+		reconnectWait := backoff(attempt, minWait, maxWait)
 		attempt++
-		timer := time.NewTimer(wait)
-		select {
-		case <-ctx.Done():
-			timer.Stop()
-			return ctx.Err()
-		case <-timer.C:
+		if err := wait(ctx, reconnectWait); err != nil {
+			return err
 		}
+	}
+}
+
+func sleepContext(ctx context.Context, wait time.Duration) error {
+	timer := time.NewTimer(wait)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
 	}
 }
 

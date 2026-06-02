@@ -26,9 +26,12 @@ RELAY_CONTROL_CLIENT_KEY ?=
 RELAY_CONTROL_TLS_SERVER_NAME ?=
 RELAY_DATABASE_URL ?= postgres://postgres:postgres@127.0.0.1:5432/pointy?sslmode=disable
 RELAY_REDIS_URL ?= redis://127.0.0.1:6379/0
+RELAY_E2E_DATABASE_URL ?= $(RELAY_DATABASE_URL)
+RELAY_E2E_REDIS_URL ?= $(RELAY_REDIS_URL)
 RELAY_NODE_ID ?=
 RELAY_NODE_INTERNAL_URL ?=
 RELAY_NODE_PROXY_TOKEN ?=
+RELAY_DRAINING ?= false
 RELAY_ALLOW_INSECURE_NODE_PROXY ?= false
 RELAY_TICKET_TTL ?= 15m
 RELAY_TICKET_REFRESH_TTL ?= 168h
@@ -93,7 +96,7 @@ ENDURANCE_WORKERS ?= 4
 		backend-seed-variants backend-load-test backend-stress-test backend-endurance-test \
 	backend-shell backend-superuser backend-test backend-check backend-celery \
 	frontend-install frontend-l10n frontend-run frontend-web frontend-test frontend-e2e frontend-analyze frontend-format \
-	relay-install relay-format relay-check relay-test relay-run relay-connector relay-migrate relay-provision relay-subscription-update \
+	relay-install relay-format relay-check relay-test relay-production-test relay-run relay-connector relay-migrate relay-provision relay-subscription-update \
 	format check test e2e dev dev-local dev-no-redis clean
 
 help: ## Show available commands.
@@ -248,6 +251,13 @@ relay-check: ## Run relay static checks.
 relay-test: ## Run relay tests.
 	cd "$(RELAY_DIR)" && GOCACHE="$(abspath $(GO_CACHE))" GOMODCACHE="$(abspath $(GO_MOD_CACHE))" $(GO) test ./...
 
+relay-production-test: ## Run opt-in relay production E2E tests against PostgreSQL and Redis.
+	cd "$(RELAY_DIR)" && GOCACHE="$(abspath $(GO_CACHE))" GOMODCACHE="$(abspath $(GO_MOD_CACHE))" \
+		POINTY_RELAY_PRODUCTION_E2E=1 \
+		POINTY_RELAY_E2E_DATABASE_URL="$(RELAY_E2E_DATABASE_URL)" \
+		POINTY_RELAY_E2E_REDIS_URL="$(RELAY_E2E_REDIS_URL)" \
+		$(GO) test -count=1 ./internal/e2e
+
 relay-run: ## Run the relay server.
 	cd "$(RELAY_DIR)" && GOCACHE="$(abspath $(GO_CACHE))" GOMODCACHE="$(abspath $(GO_MOD_CACHE))" \
 		POINTY_RELAY_ADMIN_TOKEN="$(RELAY_ADMIN_TOKEN)" \
@@ -256,6 +266,7 @@ relay-run: ## Run the relay server.
 		POINTY_RELAY_NODE_ID="$(RELAY_NODE_ID)" \
 		POINTY_RELAY_NODE_INTERNAL_URL="$(RELAY_NODE_INTERNAL_URL)" \
 		POINTY_RELAY_NODE_PROXY_TOKEN="$(RELAY_NODE_PROXY_TOKEN)" \
+		POINTY_RELAY_DRAINING="$(RELAY_DRAINING)" \
 		POINTY_RELAY_ALLOW_INSECURE_NODE_PROXY="$(RELAY_ALLOW_INSECURE_NODE_PROXY)" \
 		POINTY_RELAY_TICKET_TTL="$(RELAY_TICKET_TTL)" \
 		POINTY_RELAY_TICKET_REFRESH_TTL="$(RELAY_TICKET_REFRESH_TTL)" \

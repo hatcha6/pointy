@@ -293,6 +293,10 @@ node B when Redis presence shows that node B owns the connector session. The
 internal URL is HTTPS-only by default; `RELAY_ALLOW_INSECURE_NODE_PROXY` is for
 local development.
 
+Operators can drain a relay node with `RELAY_DRAINING=true`: `/readyz` returns
+unavailable, `/v1/status` reports the drain state, and new connector sessions
+are rejected while existing bounded requests finish.
+
 The production relay path has explicit guardrails for request size, response
 size, stream-open timeout, total relay timeout, concurrent remote requests, and
 Redis-backed rate limits for relayed requests, ticket issuance, and ticket
@@ -324,6 +328,15 @@ These include the backend, frontend, and relay checks. Relay-only checks are:
 ```sh
 make relay-check
 make relay-test
+```
+
+Relay production E2E is opt-in because it requires PostgreSQL and Redis. It
+runs relay migrations, exercises Redis-backed tickets/presence/rate limits, and
+verifies a two-node relay request preserves Django session cookies and CSRF:
+
+```sh
+make postgres redis
+make relay-production-test
 ```
 
 The pilot-day POS flow is automated as an opt-in Flutter E2E test. It runs the

@@ -97,6 +97,27 @@ CREATE INDEX IF NOT EXISTS relay_admin_audit_events_action_created_idx
 	ON relay_admin_audit_events (action, created_at DESC);
 `,
 	},
+	{
+		version: 5,
+		name:    "revoked connector certificate fingerprints",
+		sql: `
+CREATE TABLE IF NOT EXISTS relay_revoked_connector_certificate_fingerprints (
+	fingerprint_sha256 text PRIMARY KEY,
+	installation_id text NOT NULL DEFAULT '',
+	serial_number text NOT NULL DEFAULT '',
+	expires_at timestamptz,
+	revoked_at timestamptz NOT NULL,
+	reason text NOT NULL DEFAULT ''
+);
+
+CREATE INDEX IF NOT EXISTS relay_revoked_connector_certificate_fingerprints_installation_idx
+	ON relay_revoked_connector_certificate_fingerprints (installation_id, revoked_at DESC)
+	WHERE installation_id <> '';
+
+CREATE INDEX IF NOT EXISTS relay_revoked_connector_certificate_fingerprints_revoked_at_idx
+	ON relay_revoked_connector_certificate_fingerprints (revoked_at DESC);
+`,
+	},
 }
 
 func MigratePostgres(ctx context.Context, pool *pgxpool.Pool) error {

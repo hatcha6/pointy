@@ -140,6 +140,7 @@ type HTTPServer struct {
 	Metrics                       *observability.Metrics
 	Presence                      ConnectorPresence
 	NodeID                        string
+	Draining                      bool
 	NodeProxyToken                string
 	NodeProxyHTTPClient           *http.Client
 	AllowInsecureNodeProxy        bool
@@ -184,6 +185,10 @@ func (s HTTPServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case r.URL.Path == "/healthz":
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 	case r.URL.Path == "/readyz":
+		if s.Draining {
+			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"status": "draining"})
+			return
+		}
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ready"})
 	case r.URL.Path == "/v1/relay-tickets" && r.Method == http.MethodPost:
 		s.handleIssueRelayTicket(w, r)
@@ -360,6 +365,7 @@ func (s HTTPServer) handleStatus(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"status":       "ok",
 		"node_id":      s.NodeID,
+		"draining":     s.Draining,
 		"generated_at": s.clock().Now(),
 		"metrics":      s.metrics().Snapshot(),
 		"limits": map[string]any{
@@ -495,7 +501,7 @@ func (s HTTPServer) handleInstallationAuditEvents(
 }
 
 func (s HTTPServer) handleAdminConsole(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	setAdminConsoleHeaders(w.Header())
 	w.WriteHeader(http.StatusOK)
 	_ = adminConsoleTemplate.Execute(w, adminConsoleData{
 		GeneratedAt: s.clock().Now(),
@@ -560,9 +566,19 @@ func (s HTTPServer) renderAdminConsole(
 	if data.CSRFToken == "" {
 		data.CSRFToken = s.adminCSRFToken(data.GeneratedAt)
 	}
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	setAdminConsoleHeaders(w.Header())
 	w.WriteHeader(statusCode)
 	_ = adminConsoleTemplate.Execute(w, data)
+}
+
+func setAdminConsoleHeaders(header http.Header) {
+	header.Set("Content-Type", "text/html; charset=utf-8")
+	header.Set("Cache-Control", "no-store")
+	header.Set("X-Content-Type-Options", "nosniff")
+	header.Set(
+		"Content-Security-Policy",
+		"default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'",
+	)
 }
 
 func (s HTTPServer) updateAdminSubscription(

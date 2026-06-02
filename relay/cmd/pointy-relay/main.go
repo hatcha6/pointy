@@ -164,6 +164,11 @@ func runServer(args []string) error {
 		envString("POINTY_RELAY_NODE_PROXY_TOKEN", ""),
 		"shared bearer secret required for relay node-to-node routing",
 	)
+	draining := flags.Bool(
+		"draining",
+		envBool("POINTY_RELAY_DRAINING", false),
+		"mark this relay node as draining; readiness fails and new connector sessions are rejected",
+	)
 	allowInsecureNodeProxy := flags.Bool(
 		"allow-insecure-node-proxy",
 		envBool("POINTY_RELAY_ALLOW_INSECURE_NODE_PROXY", false),
@@ -340,6 +345,7 @@ func runServer(args []string) error {
 		Presence:     presence,
 		NodeID:       nodeID,
 		NodeRelayURL: strings.TrimSpace(*nodeInternalURL),
+		Draining:     *draining,
 	}
 	httpServer := &http.Server{
 		Handler: relayserver.HTTPServer{
@@ -361,6 +367,7 @@ func runServer(args []string) error {
 			Metrics:                       metrics,
 			Presence:                      presence,
 			NodeID:                        nodeID,
+			Draining:                      *draining,
 			NodeProxyToken:                strings.TrimSpace(*nodeProxyToken),
 			AllowInsecureNodeProxy:        *allowInsecureNodeProxy,
 			Tickets:                       tickets,

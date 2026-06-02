@@ -7,13 +7,16 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 )
 
 var (
-	ErrNotFound             = errors.New("installation not found")
-	ErrSubscriptionInactive = errors.New("relay subscription is inactive")
+	ErrNotFound                                = errors.New("installation not found")
+	ErrSubscriptionInactive                    = errors.New("relay subscription is inactive")
+	ErrConnectorCertificateFingerprintRequired = errors.New("connector certificate fingerprint is required")
+	ErrConnectorCertificateRevoked             = errors.New("connector certificate fingerprint is revoked")
 )
 
 type Clock interface {
@@ -103,6 +106,15 @@ type ConnectorCertificateMetadata struct {
 	ExpiresAt         time.Time
 }
 
+type ConnectorCertificateRevocation struct {
+	FingerprintSHA256 string     `json:"fingerprint_sha256"`
+	InstallationID    string     `json:"installation_id,omitempty"`
+	SerialNumber      string     `json:"serial_number,omitempty"`
+	ExpiresAt         *time.Time `json:"expires_at,omitempty"`
+	RevokedAt         time.Time  `json:"revoked_at"`
+	Reason            string     `json:"reason,omitempty"`
+}
+
 type InstallationStore interface {
 	ProvisionInstallation(ctx context.Context, request ProvisionInstallationRequest) (ProvisionedInstallation, error)
 	GetInstallation(ctx context.Context, id string) (Installation, error)
@@ -110,6 +122,8 @@ type InstallationStore interface {
 	ValidateConnectorToken(ctx context.Context, rawToken string) (Installation, error)
 	ValidateAccessToken(ctx context.Context, rawToken string) (Installation, error)
 	SetConnectorCertificate(ctx context.Context, id string, certificate ConnectorCertificateMetadata) (Installation, error)
+	RevokeConnectorCertificateFingerprint(ctx context.Context, revocation ConnectorCertificateRevocation) error
+	IsConnectorCertificateFingerprintRevoked(ctx context.Context, fingerprintSHA256 string) (bool, error)
 	MarkConnectorConnected(ctx context.Context, id string, connectedAt time.Time) error
 }
 
@@ -166,8 +180,9 @@ type FileStore struct {
 }
 
 type fileStoreData struct {
-	Installations    map[string]Installation      `json:"installations"`
-	AdminAuditEvents map[string][]AdminAuditEvent `json:"admin_audit_events,omitempty"`
+	Installations                    map[string]Installation                   `json:"installations"`
+	AdminAuditEvents                 map[string][]AdminAuditEvent              `json:"admin_audit_events,omitempty"`
+	RevokedConnectorCertFingerprints map[string]ConnectorCertificateRevocation `json:"revoked_connector_certificate_fingerprints,omitempty"`
 }
 
 func NewFileStore(path string, clock Clock) (*FileStore, error) {
@@ -377,6 +392,50 @@ func (s *FileStore) SetConnectorCertificate(
 	return installation, nil
 }
 
+func (s *FileStore) RevokeConnectorCertificateFingerprint(
+	_ context.Context,
+	revocation ConnectorCertificateRevocation,
+) error {
+	record, err := connectorCertificateRevocation(revocation, s.clock.Now())
+	if err != nil {
+		return err
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.data.RevokedConnectorCertFingerprints == nil {
+		s.data.RevokedConnectorCertFingerprints = map[string]ConnectorCertificateRevocation{}
+	}
+	previous, hadPrevious := s.data.RevokedConnectorCertFingerprints[record.FingerprintSHA256]
+	s.data.RevokedConnectorCertFingerprints[record.FingerprintSHA256] = record
+	if err := s.saveLocked(); err != nil {
+		if hadPrevious {
+			s.data.RevokedConnectorCertFingerprints[record.FingerprintSHA256] = previous
+		} else {
+			delete(s.data.RevokedConnectorCertFingerprints, record.FingerprintSHA256)
+		}
+		return err
+	}
+	return nil
+}
+
+func (s *FileStore) IsConnectorCertificateFingerprintRevoked(
+	_ context.Context,
+	fingerprintSHA256 string,
+) (bool, error) {
+	fingerprintSHA256 = normalizeConnectorCertificateFingerprint(fingerprintSHA256)
+	if fingerprintSHA256 == "" {
+		return false, nil
+	}
+
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	_, ok := s.data.RevokedConnectorCertFingerprints[fingerprintSHA256]
+	return ok, nil
+}
+
 func (s *FileStore) MarkConnectorConnected(
 	_ context.Context,
 	id string,
@@ -446,6 +505,9 @@ func (s *FileStore) load() error {
 	if s.data.AdminAuditEvents == nil {
 		s.data.AdminAuditEvents = map[string][]AdminAuditEvent{}
 	}
+	if s.data.RevokedConnectorCertFingerprints == nil {
+		s.data.RevokedConnectorCertFingerprints = map[string]ConnectorCertificateRevocation{}
+	}
 	return nil
 }
 
@@ -462,6 +524,51 @@ func (s *FileStore) saveLocked() error {
 		return err
 	}
 	return os.Rename(tmpPath, s.path)
+}
+
+func connectorCertificateRevocation(
+	revocation ConnectorCertificateRevocation,
+	now time.Time,
+) (ConnectorCertificateRevocation, error) {
+	revocation.FingerprintSHA256 = normalizeConnectorCertificateFingerprint(revocation.FingerprintSHA256)
+	if revocation.FingerprintSHA256 == "" {
+		return ConnectorCertificateRevocation{}, ErrConnectorCertificateFingerprintRequired
+	}
+	if revocation.RevokedAt.IsZero() {
+		revocation.RevokedAt = now
+	}
+	revocation.RevokedAt = revocation.RevokedAt.UTC()
+	revocation.Reason = strings.TrimSpace(revocation.Reason)
+	if revocation.ExpiresAt != nil {
+		expiresAt := revocation.ExpiresAt.UTC()
+		revocation.ExpiresAt = &expiresAt
+	}
+	return revocation, nil
+}
+
+func normalizeConnectorCertificateFingerprint(fingerprintSHA256 string) string {
+	return strings.ToLower(strings.TrimSpace(fingerprintSHA256))
+}
+
+func ConnectorCertificateExpired(expiresAt *time.Time, now time.Time) bool {
+	if expiresAt == nil {
+		return false
+	}
+	return !now.UTC().Before(expiresAt.UTC())
+}
+
+func ConnectorCertificateRotationDue(
+	expiresAt *time.Time,
+	now time.Time,
+	rotationWindow time.Duration,
+) bool {
+	if expiresAt == nil {
+		return false
+	}
+	if rotationWindow < 0 {
+		rotationWindow = 0
+	}
+	return !now.UTC().Add(rotationWindow).Before(expiresAt.UTC())
 }
 
 func applySubscriptionUpdate(

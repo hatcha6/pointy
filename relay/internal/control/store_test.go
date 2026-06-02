@@ -214,6 +214,75 @@ func TestFileStoreStoresConnectorCertificateBinding(t *testing.T) {
 	}
 }
 
+func TestFileStoreRevokesConnectorCertificateFingerprint(t *testing.T) {
+	now := time.Date(2026, 6, 2, 12, 0, 0, 0, time.UTC)
+	path := filepath.Join(t.TempDir(), "installations.json")
+	store, err := NewFileStore(path, fixedClock{now: now})
+	if err != nil {
+		t.Fatal(err)
+	}
+	expiresAt := now.Add(time.Hour)
+
+	if err := store.RevokeConnectorCertificateFingerprint(
+		context.Background(),
+		ConnectorCertificateRevocation{
+			FingerprintSHA256: " ABCDEF ",
+			InstallationID:    "installation-1",
+			SerialNumber:      "serial",
+			ExpiresAt:         &expiresAt,
+			Reason:            "rotated",
+		},
+	); err != nil {
+		t.Fatal(err)
+	}
+
+	revoked, err := store.IsConnectorCertificateFingerprintRevoked(context.Background(), "abcdef")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !revoked {
+		t.Fatal("expected normalized fingerprint to be revoked")
+	}
+	reloaded, err := NewFileStore(path, fixedClock{now: now})
+	if err != nil {
+		t.Fatal(err)
+	}
+	revoked, err = reloaded.IsConnectorCertificateFingerprintRevoked(context.Background(), " ABCDEF ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !revoked {
+		t.Fatal("expected revocation to persist on disk")
+	}
+	if _, err := connectorCertificateRevocation(
+		ConnectorCertificateRevocation{},
+		now,
+	); !errors.Is(err, ErrConnectorCertificateFingerprintRequired) {
+		t.Fatalf("expected fingerprint required error, got %v", err)
+	}
+}
+
+func TestConnectorCertificateExpiryAndRotationHelpers(t *testing.T) {
+	now := time.Date(2026, 6, 2, 12, 0, 0, 0, time.UTC)
+	expiresAt := now.Add(30 * time.Minute)
+
+	if ConnectorCertificateExpired(&expiresAt, now) {
+		t.Fatal("certificate should not be expired before expiry")
+	}
+	if !ConnectorCertificateExpired(&expiresAt, expiresAt) {
+		t.Fatal("certificate should be expired at exact expiry")
+	}
+	if !ConnectorCertificateRotationDue(&expiresAt, now, time.Hour) {
+		t.Fatal("certificate should be due for rotation inside rotation window")
+	}
+	if ConnectorCertificateRotationDue(&expiresAt, now, 10*time.Minute) {
+		t.Fatal("certificate should not be due outside rotation window")
+	}
+	if ConnectorCertificateRotationDue(nil, now, time.Hour) {
+		t.Fatal("missing certificate expiry should not be due for rotation")
+	}
+}
+
 func endsAtPtr(value time.Time) *time.Time {
 	return &value
 }
