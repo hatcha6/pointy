@@ -269,14 +269,16 @@ with relay admin auth, actor, and reason metadata. Each change writes a relay
 admin audit event and the customer backend later observes the new entitlement
 state through its normal relay sync path.
 
-Production relay deployments should run both public listeners with TLS. The
-connector listener requires connector mTLS by default, and HTTP admin endpoints
-can require backend client certificates with `RELAY_REQUIRE_ADMIN_CLIENT_CERT`
-and `RELAY_HTTP_CLIENT_CA`. The Makefile defaults to explicit insecure relay
-listeners only for local development. To issue connector client certificates
-automatically, configure the relay with `RELAY_CONNECTOR_CLIENT_CA` and
-`RELAY_CONNECTOR_CLIENT_CA_KEY`; the connector generates its private key locally
-and sends only a CSR through the backend bootstrap path.
+Production relay deployments should run the public phone listener and connector
+listener with TLS, and should expose relay admin/control routes only on a
+separate private listener with `RELAY_ADMIN_HTTP_ADDR`. Set
+`RELAY_PRODUCTION=true` to make the relay refuse unsafe startup config:
+cleartext listeners, open admin access, missing admin mTLS, missing connector
+mTLS, or unsafe node-to-node routing. The Makefile defaults to explicit
+insecure relay listeners only for local development. To issue connector client
+certificates automatically, configure the relay with `RELAY_CONNECTOR_CLIENT_CA`
+and `RELAY_CONNECTOR_CLIENT_CA_KEY`; the connector generates its private key
+locally and sends only a CSR through the backend bootstrap path.
 
 The relay uses PostgreSQL for durable installation state: token hashes,
 subscription flags, AI entitlement flags, and connector heartbeat metadata.
@@ -290,8 +292,9 @@ For multi-node relay deployments, each relay node can advertise a private
 `RELAY_NODE_INTERNAL_URL` and require a shared `RELAY_NODE_PROXY_TOKEN` for
 node-to-node routing. This lets a phone request that lands on node A route to
 node B when Redis presence shows that node B owns the connector session. The
-internal URL is HTTPS-only by default; `RELAY_ALLOW_INSECURE_NODE_PROXY` is for
-local development.
+internal URL is HTTPS-only by default and should point at the private
+admin/control listener when listeners are split; `RELAY_ALLOW_INSECURE_NODE_PROXY`
+is for local development.
 
 Operators can drain a relay node with `RELAY_DRAINING=true`: `/readyz` returns
 unavailable, `/v1/status` reports the drain state, and new connector sessions
@@ -308,7 +311,9 @@ documented in `relay/README.md`.
 Relay support endpoints are available at `/v1/status`, `/v1/metrics`, and
 `/v1/installations/<installation-id>/status`. They require relay admin auth and
 return aggregate counters plus sanitized per-installation support state without
-exposing connector/access token hashes or bearer credentials.
+exposing connector/access token hashes or bearer credentials. In production,
+serve them from the private admin/control listener, not the public phone
+listener.
 
 Remote relay access is denied when an installation's relay entitlement is
 disabled, the subscription flag is inactive, or its subscription end time has

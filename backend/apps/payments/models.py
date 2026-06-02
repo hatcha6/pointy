@@ -22,6 +22,7 @@ class Payment(TimeStampedModel):
     )
     commission_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     external_reference = models.CharField(max_length=128, blank=True)
+    card_receipt_data = models.JSONField(default=dict, blank=True)
 
     class Meta:
         ordering = ["-created_at"]

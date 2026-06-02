@@ -44,6 +44,9 @@ In production, omit the insecure flags and provide TLS material:
 
 ```sh
 POINTY_RELAY_ADMIN_TOKEN=local-admin \
+POINTY_RELAY_PRODUCTION=true \
+POINTY_RELAY_HTTP_ADDR=0.0.0.0:443 \
+POINTY_RELAY_ADMIN_HTTP_ADDR=127.0.0.1:8093 \
 POINTY_RELAY_DATABASE_URL='postgres://postgres:postgres@127.0.0.1:5432/pointy?sslmode=disable' \
 POINTY_RELAY_REDIS_URL='redis://127.0.0.1:6379/0' \
 POINTY_RELAY_HTTP_TLS_CERT=/etc/pointy/relay-http.crt \
@@ -56,6 +59,14 @@ POINTY_RELAY_REQUIRE_ADMIN_CLIENT_CERT=true \
 POINTY_RELAY_HTTP_CLIENT_CA=/etc/pointy/backend-ca.crt \
 go run ./cmd/pointy-relay server
 ```
+
+`POINTY_RELAY_PRODUCTION=true` refuses startup when the deployment still uses
+development-only security settings. It requires a separate admin/control
+listener, HTTP TLS, admin bearer auth, admin client certificate verification,
+connector mTLS, automatic connector certificate issuer material, and safe
+node-to-node routing settings. The public HTTP listener should be the only
+listener reachable by phones. Keep `POINTY_RELAY_ADMIN_HTTP_ADDR` private,
+behind company access controls, and off the customer-facing load balancer.
 
 The connector can bootstrap from the local Django backend instead of receiving
 a token on the command line. When `--backend` is omitted, it probes localhost
@@ -106,9 +117,11 @@ not Pointy customer-app settings. Do not add these controls to the Flutter POS
 or the on-prem Django admin UI.
 
 The relay exposes admin APIs and a small `/admin` console from the Go relay
-service. They are protected by the normal relay admin bearer token and, in
-production, should also sit behind company SSO/reverse-proxy controls and admin
-client certificates:
+service. In production, run these routes on the separate private admin listener
+with `POINTY_RELAY_ADMIN_HTTP_ADDR`; the public listener serves only phone
+ticket, refresh, and relay traffic. Admin routes are protected by the normal
+relay admin bearer token and should also sit behind company SSO/reverse-proxy
+controls and admin client certificates:
 
 ```sh
 curl \
@@ -218,9 +231,12 @@ configure each relay node with:
   node-to-node relay requests.
 
 The internal URL must be HTTPS unless `POINTY_RELAY_ALLOW_INSECURE_NODE_PROXY`
-is enabled for local development. Keep this URL on a private network and rotate
-the node proxy token through the deployment secret manager. Node proxy headers
-are stripped before requests reach the on-prem backend.
+is enabled for local development. When public and admin listeners are split,
+point this URL at the node's private admin/control listener because
+`/v1/node/relay/...` is intentionally hidden from the public listener. Keep this
+URL on a private network and rotate the node proxy token through the deployment
+secret manager. Node proxy headers are stripped before requests reach the
+on-prem backend.
 
 To drain a node for deployment or maintenance, set `POINTY_RELAY_DRAINING=true`.
 The node keeps `/healthz` healthy, returns `503` from `/readyz`, reports the
@@ -256,7 +272,8 @@ apply consistently across multiple relay nodes.
 ## Observability
 
 Admin-support endpoints are protected by the normal relay admin token and, when
-enabled, the admin client certificate requirement:
+enabled, the admin client certificate requirement. In production, call these on
+the private admin listener:
 
 ```sh
 curl \

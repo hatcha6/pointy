@@ -24,6 +24,8 @@ class ShopSettings(TimeStampedModel):
     enable_cash_payments = models.BooleanField(default=True)
     enable_card_payments = models.BooleanField(default=True)
     enable_transfer_payments = models.BooleanField(default=True)
+    require_card_payment_receipt = models.BooleanField(default=False)
+    trusted_card_terminal_ids = models.JSONField(default=list, blank=True)
     card_commission_percent = models.DecimalField(
         max_digits=5,
         decimal_places=2,

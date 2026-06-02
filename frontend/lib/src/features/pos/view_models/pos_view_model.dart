@@ -165,6 +165,10 @@ class PosViewModel extends ChangeNotifier {
   bool get enableCardPayments => _checkoutSettings?.enableCardPayments ?? true;
   bool get enableTransferPayments =>
       _checkoutSettings?.enableTransferPayments ?? true;
+  bool get requireCardPaymentReceipt =>
+      _checkoutSettings?.requireCardPaymentReceipt ?? false;
+  List<String> get trustedCardTerminalIds =>
+      _checkoutSettings?.trustedCardTerminalIds ?? const [];
 
   double get subtotal => _cart.fold(0, (sum, line) => sum + line.subtotal);
   double get total => _discountPreview?.total ?? subtotal;

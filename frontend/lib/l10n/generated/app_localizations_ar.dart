@@ -1249,6 +1249,8 @@ class AppLocalizationsAr extends AppLocalizations {
     num count,
     String cardCommission,
     String transferCommission,
+    String receiptStatus,
+    String terminalStatus,
   ) {
     String _temp0 = intl.Intl.pluralLogic(
       count,
@@ -1258,7 +1260,7 @@ class AppLocalizationsAr extends AppLocalizations {
       one: 'طريقة دفع واحدة مفعلة',
       zero: 'لا توجد طرق دفع مفعلة',
     );
-    return '$_temp0، بطاقة $cardCommission%، تحويل $transferCommission%';
+    return '$_temp0، بطاقة $cardCommission%، تحويل $transferCommission%، إثبات البطاقة: $receiptStatus، $terminalStatus';
   }
 
   @override
@@ -1465,6 +1467,34 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get paymentMethodTransfer => 'تحويل';
+
+  @override
+  String get requireCardReceiptSettingLabel =>
+      'إلزام مسح ومطابقة إيصال البطاقة';
+
+  @override
+  String get requireCardReceiptSettingSubtitle =>
+      'يجب مسح رابط QR من إيصال معاملات ومطابقة المبلغ لكل دفعة بطاقة.';
+
+  @override
+  String get trustedCardTerminalIdsLabel => 'أجهزة البطاقة الموثوقة';
+
+  @override
+  String get trustedCardTerminalIdsHelper =>
+      'اكتب رقم كل جهاز أو Terminal ID في سطر منفصل. اتركها فارغة لقبول أي جهاز.';
+
+  @override
+  String trustedCardTerminalCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count أجهزة موثوقة',
+      two: 'جهازان موثوقان',
+      one: 'جهاز موثوق واحد',
+      zero: 'لا توجد أجهزة محددة',
+    );
+    return '$_temp0';
+  }
 
   @override
   String get cardCommissionPercentLabel => 'عمولة البطاقة (%)';
@@ -3449,6 +3479,78 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String paymentTenderLineTitle(int index) {
     return 'دفعة $index';
+  }
+
+  @override
+  String get cardReceiptValidateButton => 'طابق الإيصال';
+
+  @override
+  String get cardReceiptRescanButton => 'إعادة المسح';
+
+  @override
+  String get cardReceiptRequiredInline => 'هذه الدفعة تحتاج مسح إيصال البطاقة.';
+
+  @override
+  String get cardReceiptRequiredError =>
+      'يجب مطابقة كل دفعة بطاقة قبل تأكيد الدفع.';
+
+  @override
+  String cardReceiptValidatedSummary(String amount, String maskedPan) {
+    return 'تمت المطابقة: $amount، البطاقة $maskedPan';
+  }
+
+  @override
+  String get cardReceiptDialogTitle => 'مطابقة إيصال البطاقة';
+
+  @override
+  String cardReceiptExpectedAmount(String amount) {
+    return 'المبلغ المتوقع: $amount';
+  }
+
+  @override
+  String get cardReceiptUrlLabel => 'رابط إيصال معاملات';
+
+  @override
+  String get cardReceiptCameraTooltip => 'مسح QR بالكاميرا';
+
+  @override
+  String get cardReceiptCameraTitle => 'امسح QR إيصال البطاقة';
+
+  @override
+  String cardReceiptAmountMismatch(
+    String receiptAmount,
+    String expectedAmount,
+  ) {
+    return 'مبلغ الإيصال $receiptAmount لا يطابق مبلغ الدفعة $expectedAmount.';
+  }
+
+  @override
+  String get cardReceiptUrlRequiredError => 'أدخل رابط الإيصال أو امسح رمز QR.';
+
+  @override
+  String get cardReceiptInvalidUrlError =>
+      'الرابط ليس رابط إيصال معاملات صالحًا.';
+
+  @override
+  String get cardReceiptMissingQueryError =>
+      'رابط الإيصال لا يحتوي على بيانات المطابقة.';
+
+  @override
+  String get cardReceiptDecodeError => 'تعذر قراءة بيانات إيصال معاملات.';
+
+  @override
+  String get cardReceiptInvalidAmountError => 'تعذر قراءة مبلغ الإيصال.';
+
+  @override
+  String get cardReceiptUnsuccessfulError => 'الإيصال لا يشير إلى عملية ناجحة.';
+
+  @override
+  String get cardReceiptMissingReferenceError =>
+      'الإيصال لا يحتوي على بيانات البطاقة أو مرجع العملية.';
+
+  @override
+  String cardReceiptTerminalNotTrusted(String terminalId) {
+    return 'جهاز البطاقة $terminalId غير موجود ضمن الأجهزة الموثوقة.';
   }
 
   @override

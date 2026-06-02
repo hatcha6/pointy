@@ -198,13 +198,24 @@ class AppliedDiscountInfo {
 }
 
 class SaleCheckoutPaymentDraft {
-  const SaleCheckoutPaymentDraft({required this.method, required this.amount});
+  const SaleCheckoutPaymentDraft({
+    required this.method,
+    required this.amount,
+    this.cardReceiptUrl = '',
+  });
 
   final PaymentMethod method;
   final double amount;
+  final String cardReceiptUrl;
 
   Map<String, Object?> toJson() {
-    return {'method': method.apiValue, 'amount': amount.toStringAsFixed(2)};
+    final normalizedReceiptUrl = cardReceiptUrl.trim();
+    return {
+      'method': method.apiValue,
+      'amount': amount.toStringAsFixed(2),
+      if (normalizedReceiptUrl.isNotEmpty)
+        'card_receipt_url': normalizedReceiptUrl,
+    };
   }
 }
 
@@ -342,6 +353,7 @@ class SalePayment {
     required this.commissionPercent,
     required this.commissionAmount,
     this.externalReference = '',
+    this.cardReceipt,
     this.createdAt,
   });
 
@@ -351,6 +363,7 @@ class SalePayment {
   final double commissionPercent;
   final double commissionAmount;
   final String externalReference;
+  final SalePaymentCardReceipt? cardReceipt;
   final DateTime? createdAt;
 
   factory SalePayment.fromJson(Map<String, Object?> json) {
@@ -361,7 +374,41 @@ class SalePayment {
       commissionPercent: _moneyFromJson(json['commission_percent']),
       commissionAmount: _moneyFromJson(json['commission_amount']),
       externalReference: json['external_reference']?.toString() ?? '',
+      cardReceipt: json['card_receipt_data'] is Map<String, Object?>
+          ? SalePaymentCardReceipt.fromJson(
+              json['card_receipt_data'] as Map<String, Object?>,
+            )
+          : null,
       createdAt: _dateTimeFromJson(json['created_at']),
+    );
+  }
+}
+
+class SalePaymentCardReceipt {
+  const SalePaymentCardReceipt({
+    required this.provider,
+    required this.amount,
+    required this.maskedPan,
+    required this.rrn,
+    required this.stan,
+    required this.authorizationCode,
+  });
+
+  final String provider;
+  final double amount;
+  final String maskedPan;
+  final String rrn;
+  final String stan;
+  final String authorizationCode;
+
+  factory SalePaymentCardReceipt.fromJson(Map<String, Object?> json) {
+    return SalePaymentCardReceipt(
+      provider: json['provider']?.toString() ?? '',
+      amount: _moneyFromJson(json['amount']),
+      maskedPan: json['masked_pan']?.toString() ?? '',
+      rrn: json['rrn']?.toString() ?? '',
+      stan: json['stan']?.toString() ?? '',
+      authorizationCode: json['authorization_code']?.toString() ?? '',
     );
   }
 }

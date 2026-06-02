@@ -159,6 +159,7 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
   late final TextEditingController _lowStockThresholdController;
   late final TextEditingController _cardCommissionController;
   late final TextEditingController _transferCommissionController;
+  late final TextEditingController _trustedCardTerminalIdsController;
   late final TextEditingController _analyticsSearchController;
   late final TextEditingController _analyticsPlatformController;
   late final TextEditingController _analyticsSessionController;
@@ -171,6 +172,7 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
   late bool _enableCashPayments;
   late bool _enableCardPayments;
   late bool _enableTransferPayments;
+  late bool _requireCardPaymentReceipt;
   AttachmentSummary? _logoAttachment;
   ShopLogoUpload? _selectedLogoUpload;
   bool _removeLogo = false;
@@ -213,6 +215,10 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
         _transferCommissionController,
         widget.settings.transferCommissionPercent.toStringAsFixed(2),
       );
+      _setControllerText(
+        _trustedCardTerminalIdsController,
+        widget.settings.trustedCardTerminalIds.join('\n'),
+      );
       _cashierReturnWindowHours = widget.settings.cashierReturnWindowHours;
       _requireOpeningCash = widget.settings.requireOpeningCash;
       _autoPrintReceipts = widget.settings.autoPrintReceipts;
@@ -221,6 +227,7 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
       _enableCashPayments = widget.settings.enableCashPayments;
       _enableCardPayments = widget.settings.enableCardPayments;
       _enableTransferPayments = widget.settings.enableTransferPayments;
+      _requireCardPaymentReceipt = widget.settings.requireCardPaymentReceipt;
       _logoAttachment = widget.settings.logoAttachment;
       _selectedLogoUpload = null;
       _removeLogo = false;
@@ -235,6 +242,7 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
     _lowStockThresholdController.dispose();
     _cardCommissionController.dispose();
     _transferCommissionController.dispose();
+    _trustedCardTerminalIdsController.dispose();
     _analyticsSearchController.dispose();
     _analyticsPlatformController.dispose();
     _analyticsSessionController.dispose();
@@ -259,6 +267,9 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
     _transferCommissionController = TextEditingController(
       text: settings.transferCommissionPercent.toStringAsFixed(2),
     );
+    _trustedCardTerminalIdsController = TextEditingController(
+      text: settings.trustedCardTerminalIds.join('\n'),
+    );
     _analyticsSearchController = TextEditingController();
     _analyticsPlatformController = TextEditingController();
     _analyticsSessionController = TextEditingController();
@@ -271,6 +282,7 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
     _enableCashPayments = settings.enableCashPayments;
     _enableCardPayments = settings.enableCardPayments;
     _enableTransferPayments = settings.enableTransferPayments;
+    _requireCardPaymentReceipt = settings.requireCardPaymentReceipt;
     _logoAttachment = settings.logoAttachment;
     _selectedLogoUpload = null;
     _removeLogo = false;
@@ -466,6 +478,10 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
       enabledCount,
       _cardCommissionController.text.trim(),
       _transferCommissionController.text.trim(),
+      _requireCardPaymentReceipt
+          ? l10n.shopSettingsEnabledValue
+          : l10n.shopSettingsDisabledValue,
+      l10n.trustedCardTerminalCount(_trustedCardTerminalIds.length),
     );
   }
 
@@ -606,10 +622,12 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
       _PaymentSettingsFields(
         cardCommissionController: _cardCommissionController,
         transferCommissionController: _transferCommissionController,
+        trustedTerminalIdsController: _trustedCardTerminalIdsController,
         enabled: !widget.viewModel.isSaving,
         enableCashPayments: _enableCashPayments,
         enableCardPayments: _enableCardPayments,
         enableTransferPayments: _enableTransferPayments,
+        requireCardPaymentReceipt: _requireCardPaymentReceipt,
         paymentMethodsError: _paymentMethodsError(l10n),
         cardCommissionError: _commissionError(l10n, _cardCommissionController),
         transferCommissionError: _commissionError(
@@ -624,11 +642,16 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
           setState(() => _enableCardPayments = value);
           refresh();
         },
+        onRequireCardReceiptChanged: (value) {
+          setState(() => _requireCardPaymentReceipt = value);
+          refresh();
+        },
         onEnableTransferChanged: (value) {
           setState(() => _enableTransferPayments = value);
           refresh();
         },
         onCommissionChanged: () => _refreshSettingsGroup(refresh),
+        onTrustedTerminalIdsChanged: () => _refreshSettingsGroup(refresh),
       ),
     ];
   }
@@ -1054,6 +1077,8 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
         enableCashPayments: _enableCashPayments,
         enableCardPayments: _enableCardPayments,
         enableTransferPayments: _enableTransferPayments,
+        requireCardPaymentReceipt: _requireCardPaymentReceipt,
+        trustedCardTerminalIds: _trustedCardTerminalIds,
         cardCommissionPercent: _parsePercent(_cardCommissionController.text),
         transferCommissionPercent: _parsePercent(
           _transferCommissionController.text,
@@ -1083,6 +1108,17 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
 
   double _parsePercent(String value) {
     return double.parse(value.trim().replaceAll(',', '.'));
+  }
+
+  List<String> get _trustedCardTerminalIds {
+    final ids = _trustedCardTerminalIdsController.text
+        .split(RegExp(r'[\s,،]+'))
+        .map((value) => value.trim().toUpperCase())
+        .where((value) => value.isNotEmpty)
+        .toSet()
+        .toList(growable: false);
+    ids.sort();
+    return ids;
   }
 
   String _formatOptionalDate(DateTime? date, AppLocalizations l10n) {

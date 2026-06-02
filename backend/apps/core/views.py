@@ -195,6 +195,12 @@ class ShopSettingsView(views.APIView):
                 "enable_cash_payments": settings.enable_cash_payments,
                 "enable_card_payments": settings.enable_card_payments,
                 "enable_transfer_payments": settings.enable_transfer_payments,
+                "require_card_payment_receipt": (
+                    settings.require_card_payment_receipt
+                ),
+                "trusted_card_terminal_count": len(
+                    settings.trusted_card_terminal_ids or []
+                ),
             },
         )
         return Response(

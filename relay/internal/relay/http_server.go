@@ -125,6 +125,7 @@ type HTTPServer struct {
 	Store                         control.InstallationStore
 	Hub                           *Hub
 	Logger                        *slog.Logger
+	RouteMode                     RouteMode
 	AdminToken                    string
 	AllowOpenAdmin                bool
 	RequireAdminClientCertificate bool
@@ -150,6 +151,22 @@ type HTTPServer struct {
 	Clock                         control.Clock
 	ConnectorCertificateIssuer    ConnectorCertificateIssuer
 	ConnectorCertificateTTL       time.Duration
+}
+
+type RouteMode int
+
+const (
+	RouteAll RouteMode = iota
+	RoutePublic
+	RouteAdmin
+)
+
+func (m RouteMode) allowsPublic() bool {
+	return m == RouteAll || m == RoutePublic
+}
+
+func (m RouteMode) allowsAdmin() bool {
+	return m == RouteAll || m == RouteAdmin
 }
 
 type ConnectorCertificateIssuer interface {
@@ -191,27 +208,67 @@ func (s HTTPServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ready"})
 	case r.URL.Path == "/v1/relay-tickets" && r.Method == http.MethodPost:
+		if !s.RouteMode.allowsPublic() {
+			writeNotFound(w)
+			return
+		}
 		s.handleIssueRelayTicket(w, r)
 	case r.URL.Path == "/v1/relay-ticket-refresh" && r.Method == http.MethodPost:
+		if !s.RouteMode.allowsPublic() {
+			writeNotFound(w)
+			return
+		}
 		s.handleRefreshRelayTicket(w, r)
 	case r.URL.Path == "/v1/status" && r.Method == http.MethodGet:
+		if !s.RouteMode.allowsAdmin() {
+			writeNotFound(w)
+			return
+		}
 		s.withAdmin(w, r, s.handleStatus)
 	case r.URL.Path == "/v1/metrics" && r.Method == http.MethodGet:
+		if !s.RouteMode.allowsAdmin() {
+			writeNotFound(w)
+			return
+		}
 		s.withAdmin(w, r, s.handleMetrics)
 	case strings.HasPrefix(r.URL.Path, "/v1/node/relay/"):
+		if !s.RouteMode.allowsAdmin() {
+			writeNotFound(w)
+			return
+		}
 		s.withNodeProxy(w, r, s.handleNodeRelay)
 	case r.URL.Path == "/v1/installations" && r.Method == http.MethodPost:
+		if !s.RouteMode.allowsAdmin() {
+			writeNotFound(w)
+			return
+		}
 		s.withAdmin(w, r, s.handleProvisionInstallation)
 	case strings.HasPrefix(r.URL.Path, "/v1/installations/"):
+		if !s.RouteMode.allowsAdmin() {
+			writeNotFound(w)
+			return
+		}
 		s.withAdmin(w, r, s.handleInstallation)
 	case (r.URL.Path == "/admin" || r.URL.Path == "/admin/") && r.Method == http.MethodGet:
+		if !s.RouteMode.allowsAdmin() {
+			writeNotFound(w)
+			return
+		}
 		s.withAdmin(w, r, s.handleAdminConsole)
 	case r.URL.Path == "/admin/subscription" && r.Method == http.MethodPost:
+		if !s.RouteMode.allowsAdmin() {
+			writeNotFound(w)
+			return
+		}
 		s.withAdmin(w, r, s.handleAdminSubscriptionForm)
 	default:
+		if !s.RouteMode.allowsPublic() {
+			writeNotFound(w)
+			return
+		}
 		token, targetPath, ok := relayTarget(r)
 		if !ok {
-			writeJSON(w, http.StatusNotFound, map[string]string{"error": "not found"})
+			writeNotFound(w)
 			return
 		}
 		s.handleRelay(w, r, token, targetPath)
@@ -1572,6 +1629,10 @@ func writeJSON(w http.ResponseWriter, statusCode int, value any) {
 	w.Header().Set("Content-Length", strconv.Itoa(jsonSize(value)))
 	w.WriteHeader(statusCode)
 	_ = json.NewEncoder(w).Encode(value)
+}
+
+func writeNotFound(w http.ResponseWriter) {
+	writeJSON(w, http.StatusNotFound, map[string]string{"error": "not found"})
 }
 
 func jsonSize(value any) int {

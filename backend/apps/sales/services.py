@@ -334,12 +334,16 @@ def checkout_order(
     record_sale_stock_movements(order, stock_adjustments, request=request)
 
     for payment_data in payments_data:
+        serializer_data = {
+            "order": order.pk,
+            "method": payment_data["method"],
+            "amount": payment_data["amount"],
+        }
+        receipt_url = payment_data.get("card_receipt_url", "")
+        if receipt_url:
+            serializer_data["card_receipt_url"] = receipt_url
         payment_serializer = PaymentSerializer(
-            data={
-                "order": order.pk,
-                "method": payment_data["method"],
-                "amount": payment_data["amount"],
-            },
+            data=serializer_data,
             context={
                 "request": request,
                 "stock_already_recorded": True,

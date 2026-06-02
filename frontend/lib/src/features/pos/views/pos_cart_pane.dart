@@ -315,6 +315,8 @@ class PosCartPane extends StatelessWidget {
       enableCashPayments: viewModel.enableCashPayments,
       enableCardPayments: viewModel.enableCardPayments,
       enableTransferPayments: viewModel.enableTransferPayments,
+      requireCardReceipt: viewModel.requireCardPaymentReceipt,
+      trustedCardTerminalIds: viewModel.trustedCardTerminalIds,
       showPrintInvoiceToggle: viewModel.shouldShowPrintInvoiceCheckbox,
       printInvoiceAfterPayment: viewModel.printInvoiceAfterPayment,
       onPrintInvoiceChanged: viewModel.updatePrintInvoiceAfterPayment,

@@ -226,6 +226,8 @@ Future<void> _pumpPaymentSheet(
               enableCashPayments: enableCash,
               enableCardPayments: enableCard,
               enableTransferPayments: enableTransfer,
+              requireCardReceipt: false,
+              trustedCardTerminalIds: const [],
               showPrintInvoiceToggle: showPrintInvoiceToggle,
               printInvoiceAfterPayment: printInvoiceAfterPayment,
               onPrintInvoiceChanged: onPrintInvoiceChanged ?? (_) {},

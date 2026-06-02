@@ -146,6 +146,21 @@ class ShopSettingsSerializer(serializers.ModelSerializer):
             )
         return attrs
 
+    def validate_trusted_card_terminal_ids(self, value):
+        if not isinstance(value, list):
+            raise serializers.ValidationError("Trusted terminal IDs must be a list.")
+        normalized = []
+        seen = set()
+        for item in value:
+            terminal_id = str(item).strip().upper()
+            if not terminal_id:
+                continue
+            if terminal_id in seen:
+                continue
+            normalized.append(terminal_id)
+            seen.add(terminal_id)
+        return normalized
+
     class Meta:
         model = ShopSettings
         fields = [
@@ -161,6 +176,8 @@ class ShopSettingsSerializer(serializers.ModelSerializer):
             "enable_cash_payments",
             "enable_card_payments",
             "enable_transfer_payments",
+            "require_card_payment_receipt",
+            "trusted_card_terminal_ids",
             "card_commission_percent",
             "transfer_commission_percent",
             "logo_attachment",

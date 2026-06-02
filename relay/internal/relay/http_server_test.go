@@ -262,6 +262,100 @@ func TestHTTPAdminEndpointsRequireVerifiedClientCertificate(t *testing.T) {
 	}
 }
 
+func TestHTTPPublicRouteModeHidesAdminAndNodeRoutes(t *testing.T) {
+	store, _ := provisionRelayInstallation(t)
+	server := HTTPServer{
+		Store:          store,
+		Hub:            NewHub(),
+		Logger:         slog.New(slog.NewTextHandler(io.Discard, nil)),
+		RouteMode:      RoutePublic,
+		AdminToken:     "admin-token",
+		NodeProxyToken: "node-token",
+	}
+
+	for _, request := range []struct {
+		method string
+		url    string
+	}{
+		{method: http.MethodGet, url: "http://relay.test/v1/status"},
+		{method: http.MethodGet, url: "http://relay.test/admin"},
+		{method: http.MethodGet, url: "http://relay.test/v1/node/relay/api/products/"},
+		{method: http.MethodPost, url: "http://relay.test/v1/installations"},
+	} {
+		t.Run(request.url, func(t *testing.T) {
+			httpRequest, err := http.NewRequest(request.method, request.url, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			httpRequest.Header.Set("Authorization", "Bearer admin-token")
+			httpRequest.Header.Set(NodeProxyTokenHeader, "node-token")
+			recorder := httptest.NewRecorder()
+			server.ServeHTTP(recorder, httpRequest)
+			response := recorder.Result()
+			defer response.Body.Close()
+			if response.StatusCode != http.StatusNotFound {
+				t.Fatalf("expected hidden route 404, got %d", response.StatusCode)
+			}
+		})
+	}
+}
+
+func TestHTTPAdminRouteModeHidesPublicRelayRoutes(t *testing.T) {
+	store, provisioned := provisionRelayInstallation(t)
+	server := HTTPServer{
+		Store:      store,
+		Hub:        NewHub(),
+		Logger:     slog.New(slog.NewTextHandler(io.Discard, nil)),
+		RouteMode:  RouteAdmin,
+		AdminToken: "admin-token",
+		Tickets:    newMemoryTicketService(time.Date(2026, 6, 2, 12, 0, 0, 0, time.UTC)),
+	}
+
+	for _, request := range []struct {
+		method string
+		url    string
+		body   io.Reader
+	}{
+		{
+			method: http.MethodPost,
+			url:    "http://relay.test/v1/relay-tickets",
+			body:   strings.NewReader(`{"device_id":"register-1"}`),
+		},
+		{
+			method: http.MethodGet,
+			url:    "http://relay.test/api/products/",
+		},
+	} {
+		t.Run(request.url, func(t *testing.T) {
+			httpRequest, err := http.NewRequest(request.method, request.url, request.body)
+			if err != nil {
+				t.Fatal(err)
+			}
+			httpRequest.Header.Set(AccessTokenHeader, provisioned.AccessToken)
+			recorder := httptest.NewRecorder()
+			server.ServeHTTP(recorder, httpRequest)
+			response := recorder.Result()
+			defer response.Body.Close()
+			if response.StatusCode != http.StatusNotFound {
+				t.Fatalf("expected hidden route 404, got %d", response.StatusCode)
+			}
+		})
+	}
+
+	statusRequest, err := http.NewRequest(http.MethodGet, "http://relay.test/v1/status", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	statusRequest.Header.Set("Authorization", "Bearer admin-token")
+	recorder := httptest.NewRecorder()
+	server.ServeHTTP(recorder, statusRequest)
+	statusResponse := recorder.Result()
+	defer statusResponse.Body.Close()
+	if statusResponse.StatusCode != http.StatusOK {
+		t.Fatalf("expected admin status route to remain available, got %d", statusResponse.StatusCode)
+	}
+}
+
 func TestHTTPAdminStatusReturnsSanitizedMetricsSnapshot(t *testing.T) {
 	now := time.Date(2026, 6, 2, 12, 0, 0, 0, time.UTC)
 	metrics := observability.NewMetrics()

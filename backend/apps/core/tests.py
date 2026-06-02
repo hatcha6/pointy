@@ -361,6 +361,8 @@ class ShopSettingsApiTests(TestCase):
                 "enable_cash_payments": True,
                 "enable_card_payments": False,
                 "enable_transfer_payments": True,
+                "require_card_payment_receipt": True,
+                "trusted_card_terminal_ids": ["0JA8Y13W", " 0ja8y13w ", ""],
                 "card_commission_percent": "1.50",
                 "transfer_commission_percent": "0.25",
             },
@@ -378,6 +380,8 @@ class ShopSettingsApiTests(TestCase):
         self.assertTrue(update_response.data["enable_cash_payments"])
         self.assertFalse(update_response.data["enable_card_payments"])
         self.assertTrue(update_response.data["enable_transfer_payments"])
+        self.assertTrue(update_response.data["require_card_payment_receipt"])
+        self.assertEqual(update_response.data["trusted_card_terminal_ids"], ["0JA8Y13W"])
         self.assertEqual(update_response.data["card_commission_percent"], "1.50")
         self.assertEqual(update_response.data["transfer_commission_percent"], "0.25")
 

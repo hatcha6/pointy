@@ -1,10 +1,16 @@
+import '../../../data/models/card_payment_receipt.dart';
 import '../../../data/models/sale_order.dart';
 
 class SplitTenderInput {
-  const SplitTenderInput({required this.method, required this.amount});
+  const SplitTenderInput({
+    required this.method,
+    required this.amount,
+    this.cardReceipt,
+  });
 
   final PaymentMethod method;
   final double amount;
+  final CardPaymentReceipt? cardReceipt;
 }
 
 class SplitTenderPaymentSummary {
@@ -100,6 +106,9 @@ class SplitTenderPaymentCalculator {
           SaleCheckoutPaymentDraft(
             method: tender.method,
             amount: appliedAmount,
+            cardReceiptUrl: tender.method == PaymentMethod.card
+                ? tender.cardReceipt?.sourceUrl ?? ''
+                : '',
           ),
         );
       }

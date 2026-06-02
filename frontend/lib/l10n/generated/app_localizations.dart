@@ -2129,11 +2129,13 @@ abstract class AppLocalizations {
   /// Summary for payment settings in the shop settings index.
   ///
   /// In ar, this message translates to:
-  /// **'{count, plural, =0{لا توجد طرق دفع مفعلة} =1{طريقة دفع واحدة مفعلة} =2{طريقتان مفعّلتان} other{{count} طرق دفع مفعلة}}، بطاقة {cardCommission}%، تحويل {transferCommission}%'**
+  /// **'{count, plural, =0{لا توجد طرق دفع مفعلة} =1{طريقة دفع واحدة مفعلة} =2{طريقتان مفعّلتان} other{{count} طرق دفع مفعلة}}، بطاقة {cardCommission}%، تحويل {transferCommission}%، إثبات البطاقة: {receiptStatus}، {terminalStatus}'**
   String paymentSettingsSummary(
     num count,
     String cardCommission,
     String transferCommission,
+    String receiptStatus,
+    String terminalStatus,
   );
 
   /// No description provided for @analyticsExportAllEventsSummary.
@@ -2525,6 +2527,36 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'تحويل'**
   String get paymentMethodTransfer;
+
+  /// No description provided for @requireCardReceiptSettingLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'إلزام مسح ومطابقة إيصال البطاقة'**
+  String get requireCardReceiptSettingLabel;
+
+  /// No description provided for @requireCardReceiptSettingSubtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'يجب مسح رابط QR من إيصال معاملات ومطابقة المبلغ لكل دفعة بطاقة.'**
+  String get requireCardReceiptSettingSubtitle;
+
+  /// No description provided for @trustedCardTerminalIdsLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'أجهزة البطاقة الموثوقة'**
+  String get trustedCardTerminalIdsLabel;
+
+  /// No description provided for @trustedCardTerminalIdsHelper.
+  ///
+  /// In ar, this message translates to:
+  /// **'اكتب رقم كل جهاز أو Terminal ID في سطر منفصل. اتركها فارغة لقبول أي جهاز.'**
+  String get trustedCardTerminalIdsHelper;
+
+  /// Trusted card terminal ID count in shop payment settings.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, =0{لا توجد أجهزة محددة} =1{جهاز موثوق واحد} =2{جهازان موثوقان} other{{count} أجهزة موثوقة}}'**
+  String trustedCardTerminalCount(int count);
 
   /// No description provided for @cardCommissionPercentLabel.
   ///
@@ -5889,6 +5921,120 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'دفعة {index}'**
   String paymentTenderLineTitle(int index);
+
+  /// No description provided for @cardReceiptValidateButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'طابق الإيصال'**
+  String get cardReceiptValidateButton;
+
+  /// No description provided for @cardReceiptRescanButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'إعادة المسح'**
+  String get cardReceiptRescanButton;
+
+  /// No description provided for @cardReceiptRequiredInline.
+  ///
+  /// In ar, this message translates to:
+  /// **'هذه الدفعة تحتاج مسح إيصال البطاقة.'**
+  String get cardReceiptRequiredInline;
+
+  /// No description provided for @cardReceiptRequiredError.
+  ///
+  /// In ar, this message translates to:
+  /// **'يجب مطابقة كل دفعة بطاقة قبل تأكيد الدفع.'**
+  String get cardReceiptRequiredError;
+
+  /// Short successful card receipt validation summary.
+  ///
+  /// In ar, this message translates to:
+  /// **'تمت المطابقة: {amount}، البطاقة {maskedPan}'**
+  String cardReceiptValidatedSummary(String amount, String maskedPan);
+
+  /// No description provided for @cardReceiptDialogTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'مطابقة إيصال البطاقة'**
+  String get cardReceiptDialogTitle;
+
+  /// Expected card payment amount in the receipt validation dialog.
+  ///
+  /// In ar, this message translates to:
+  /// **'المبلغ المتوقع: {amount}'**
+  String cardReceiptExpectedAmount(String amount);
+
+  /// No description provided for @cardReceiptUrlLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'رابط إيصال معاملات'**
+  String get cardReceiptUrlLabel;
+
+  /// No description provided for @cardReceiptCameraTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'مسح QR بالكاميرا'**
+  String get cardReceiptCameraTooltip;
+
+  /// No description provided for @cardReceiptCameraTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'امسح QR إيصال البطاقة'**
+  String get cardReceiptCameraTitle;
+
+  /// Shown when a Moamalat receipt amount differs from the card tender amount.
+  ///
+  /// In ar, this message translates to:
+  /// **'مبلغ الإيصال {receiptAmount} لا يطابق مبلغ الدفعة {expectedAmount}.'**
+  String cardReceiptAmountMismatch(String receiptAmount, String expectedAmount);
+
+  /// No description provided for @cardReceiptUrlRequiredError.
+  ///
+  /// In ar, this message translates to:
+  /// **'أدخل رابط الإيصال أو امسح رمز QR.'**
+  String get cardReceiptUrlRequiredError;
+
+  /// No description provided for @cardReceiptInvalidUrlError.
+  ///
+  /// In ar, this message translates to:
+  /// **'الرابط ليس رابط إيصال معاملات صالحًا.'**
+  String get cardReceiptInvalidUrlError;
+
+  /// No description provided for @cardReceiptMissingQueryError.
+  ///
+  /// In ar, this message translates to:
+  /// **'رابط الإيصال لا يحتوي على بيانات المطابقة.'**
+  String get cardReceiptMissingQueryError;
+
+  /// No description provided for @cardReceiptDecodeError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر قراءة بيانات إيصال معاملات.'**
+  String get cardReceiptDecodeError;
+
+  /// No description provided for @cardReceiptInvalidAmountError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر قراءة مبلغ الإيصال.'**
+  String get cardReceiptInvalidAmountError;
+
+  /// No description provided for @cardReceiptUnsuccessfulError.
+  ///
+  /// In ar, this message translates to:
+  /// **'الإيصال لا يشير إلى عملية ناجحة.'**
+  String get cardReceiptUnsuccessfulError;
+
+  /// No description provided for @cardReceiptMissingReferenceError.
+  ///
+  /// In ar, this message translates to:
+  /// **'الإيصال لا يحتوي على بيانات البطاقة أو مرجع العملية.'**
+  String get cardReceiptMissingReferenceError;
+
+  /// Shown when a card receipt terminal ID is not in the shop allowlist.
+  ///
+  /// In ar, this message translates to:
+  /// **'جهاز البطاقة {terminalId} غير موجود ضمن الأجهزة الموثوقة.'**
+  String cardReceiptTerminalNotTrusted(String terminalId);
 
   /// No description provided for @receiptToggleSubtitle.
   ///

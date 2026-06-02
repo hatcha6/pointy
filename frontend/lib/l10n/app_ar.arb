@@ -801,7 +801,7 @@
       }
     }
   },
-  "paymentSettingsSummary": "{count, plural, =0{لا توجد طرق دفع مفعلة} =1{طريقة دفع واحدة مفعلة} =2{طريقتان مفعّلتان} other{{count} طرق دفع مفعلة}}، بطاقة {cardCommission}%، تحويل {transferCommission}%",
+  "paymentSettingsSummary": "{count, plural, =0{لا توجد طرق دفع مفعلة} =1{طريقة دفع واحدة مفعلة} =2{طريقتان مفعّلتان} other{{count} طرق دفع مفعلة}}، بطاقة {cardCommission}%، تحويل {transferCommission}%، إثبات البطاقة: {receiptStatus}، {terminalStatus}",
   "@paymentSettingsSummary": {
     "description": "Summary for payment settings in the shop settings index.",
     "placeholders": {
@@ -812,6 +812,12 @@
         "type": "String"
       },
       "transferCommission": {
+        "type": "String"
+      },
+      "receiptStatus": {
+        "type": "String"
+      },
+      "terminalStatus": {
         "type": "String"
       }
     }
@@ -919,6 +925,19 @@
   "paymentMethodCash": "نقد",
   "paymentMethodCard": "بطاقة",
   "paymentMethodTransfer": "تحويل",
+  "requireCardReceiptSettingLabel": "إلزام مسح ومطابقة إيصال البطاقة",
+  "requireCardReceiptSettingSubtitle": "يجب مسح رابط QR من إيصال معاملات ومطابقة المبلغ لكل دفعة بطاقة.",
+  "trustedCardTerminalIdsLabel": "أجهزة البطاقة الموثوقة",
+  "trustedCardTerminalIdsHelper": "اكتب رقم كل جهاز أو Terminal ID في سطر منفصل. اتركها فارغة لقبول أي جهاز.",
+  "trustedCardTerminalCount": "{count, plural, =0{لا توجد أجهزة محددة} =1{جهاز موثوق واحد} =2{جهازان موثوقان} other{{count} أجهزة موثوقة}}",
+  "@trustedCardTerminalCount": {
+    "description": "Trusted card terminal ID count in shop payment settings.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "cardCommissionPercentLabel": "عمولة البطاقة (%)",
   "transferCommissionPercentLabel": "عمولة التحويل (%)",
   "paymentMethodsRequiredError": "فعّل طريقة دفع واحدة على الأقل.",
@@ -2054,6 +2073,63 @@
     "placeholders": {
       "index": {
         "type": "int"
+      }
+    }
+  },
+  "cardReceiptValidateButton": "طابق الإيصال",
+  "cardReceiptRescanButton": "إعادة المسح",
+  "cardReceiptRequiredInline": "هذه الدفعة تحتاج مسح إيصال البطاقة.",
+  "cardReceiptRequiredError": "يجب مطابقة كل دفعة بطاقة قبل تأكيد الدفع.",
+  "cardReceiptValidatedSummary": "تمت المطابقة: {amount}، البطاقة {maskedPan}",
+  "@cardReceiptValidatedSummary": {
+    "description": "Short successful card receipt validation summary.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      },
+      "maskedPan": {
+        "type": "String"
+      }
+    }
+  },
+  "cardReceiptDialogTitle": "مطابقة إيصال البطاقة",
+  "cardReceiptExpectedAmount": "المبلغ المتوقع: {amount}",
+  "@cardReceiptExpectedAmount": {
+    "description": "Expected card payment amount in the receipt validation dialog.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "cardReceiptUrlLabel": "رابط إيصال معاملات",
+  "cardReceiptCameraTooltip": "مسح QR بالكاميرا",
+  "cardReceiptCameraTitle": "امسح QR إيصال البطاقة",
+  "cardReceiptAmountMismatch": "مبلغ الإيصال {receiptAmount} لا يطابق مبلغ الدفعة {expectedAmount}.",
+  "@cardReceiptAmountMismatch": {
+    "description": "Shown when a Moamalat receipt amount differs from the card tender amount.",
+    "placeholders": {
+      "receiptAmount": {
+        "type": "String"
+      },
+      "expectedAmount": {
+        "type": "String"
+      }
+    }
+  },
+  "cardReceiptUrlRequiredError": "أدخل رابط الإيصال أو امسح رمز QR.",
+  "cardReceiptInvalidUrlError": "الرابط ليس رابط إيصال معاملات صالحًا.",
+  "cardReceiptMissingQueryError": "رابط الإيصال لا يحتوي على بيانات المطابقة.",
+  "cardReceiptDecodeError": "تعذر قراءة بيانات إيصال معاملات.",
+  "cardReceiptInvalidAmountError": "تعذر قراءة مبلغ الإيصال.",
+  "cardReceiptUnsuccessfulError": "الإيصال لا يشير إلى عملية ناجحة.",
+  "cardReceiptMissingReferenceError": "الإيصال لا يحتوي على بيانات البطاقة أو مرجع العملية.",
+  "cardReceiptTerminalNotTrusted": "جهاز البطاقة {terminalId} غير موجود ضمن الأجهزة الموثوقة.",
+  "@cardReceiptTerminalNotTrusted": {
+    "description": "Shown when a card receipt terminal ID is not in the shop allowlist.",
+    "placeholders": {
+      "terminalId": {
+        "type": "String"
       }
     }
   },

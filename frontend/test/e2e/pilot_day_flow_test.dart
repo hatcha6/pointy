@@ -209,6 +209,8 @@ class _PilotDayApiService extends PosApiService {
     'enable_cash_payments': true,
     'enable_card_payments': true,
     'enable_transfer_payments': true,
+    'require_card_payment_receipt': false,
+    'trusted_card_terminal_ids': const [],
     'card_commission_percent': '1.00',
     'transfer_commission_percent': '0.00',
   });

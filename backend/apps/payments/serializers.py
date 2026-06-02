@@ -5,6 +5,11 @@ from rest_framework import serializers
 from apps.core.models import ShopSettings
 from apps.core.roles import user_is_manager
 from apps.sales.models import Order
+from .moamalat import (
+    MoamalatReceiptError,
+    parse_moamalat_receipt_url,
+    payment_amount_matches_receipt,
+)
 from .models import Payment
 
 
@@ -18,6 +23,13 @@ def payment_commission_values(method, amount):
 
 
 class PaymentSerializer(serializers.ModelSerializer):
+    card_receipt_url = serializers.CharField(
+        write_only=True,
+        required=False,
+        allow_blank=True,
+        trim_whitespace=True,
+    )
+
     class Meta:
         model = Payment
         fields = [
@@ -28,12 +40,15 @@ class PaymentSerializer(serializers.ModelSerializer):
             "commission_percent",
             "commission_amount",
             "external_reference",
+            "card_receipt_data",
+            "card_receipt_url",
             "created_at",
             "updated_at",
         ]
         read_only_fields = (
             "commission_percent",
             "commission_amount",
+            "card_receipt_data",
             "created_at",
             "updated_at",
         )
@@ -57,6 +72,53 @@ class PaymentSerializer(serializers.ModelSerializer):
         attrs = super().validate(attrs)
         order = attrs.get("order", getattr(self.instance, "order", None))
         amount = attrs.get("amount", getattr(self.instance, "amount", None))
+        method = attrs.get("method", getattr(self.instance, "method", None))
+        receipt_url = attrs.pop("card_receipt_url", "").strip()
+        settings = ShopSettings.load()
+        if receipt_url and method != Payment.Method.CARD:
+            raise serializers.ValidationError(
+                {"card_receipt_url": "Card receipt validation is only for card payments."}
+            )
+        if method == Payment.Method.CARD:
+            existing_receipt_data = getattr(self.instance, "card_receipt_data", {}) or {}
+            if receipt_url:
+                try:
+                    receipt = parse_moamalat_receipt_url(receipt_url)
+                except MoamalatReceiptError as exc:
+                    raise serializers.ValidationError(
+                        {"card_receipt_url": str(exc)}
+                    ) from exc
+                if not payment_amount_matches_receipt(amount, receipt):
+                    raise serializers.ValidationError(
+                        {
+                            "card_receipt_url": (
+                                "Card receipt amount does not match the payment amount."
+                            )
+                        }
+                    )
+                trusted_terminal_ids = {
+                    str(terminal_id).strip().upper()
+                    for terminal_id in settings.trusted_card_terminal_ids or []
+                    if str(terminal_id).strip()
+                }
+                receipt_terminal_id = (
+                    str(receipt.fields.get("TerminalId", "")).strip().upper()
+                )
+                if trusted_terminal_ids and receipt_terminal_id not in trusted_terminal_ids:
+                    raise serializers.ValidationError(
+                        {
+                            "card_receipt_url": (
+                                "Card receipt terminal is not trusted for this shop."
+                            )
+                        }
+                    )
+                attrs["card_receipt_data"] = receipt.to_payment_data()
+                if not attrs.get("external_reference"):
+                    attrs["external_reference"] = receipt.reference[:128]
+            elif settings.require_card_payment_receipt and not existing_receipt_data:
+                raise serializers.ValidationError(
+                    {"card_receipt_url": "Card receipt validation is required."}
+                )
         if order is None or amount is None or amount <= 0:
             return attrs
 

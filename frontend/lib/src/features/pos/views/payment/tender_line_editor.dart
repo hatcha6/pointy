@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
+import '../../../../data/models/card_payment_receipt.dart';
 import '../../../../data/models/sale_order.dart';
+import '../../../../shared/components/components.dart';
 import '../../../../shared/decimal_text_input_formatter.dart';
+import '../../../../shared/formatters.dart';
 import '../../../../shared/payment_labels.dart';
 import '../../../../shared/responsive/responsive.dart';
 
@@ -23,6 +26,10 @@ class TenderLineEditor extends StatelessWidget {
     required this.onAmountChanged,
     required this.onMethodChanged,
     required this.onRemove,
+    required this.requireCardReceipt,
+    required this.cardReceipt,
+    required this.canValidateCardReceipt,
+    required this.onValidateCardReceipt,
   });
 
   final int index;
@@ -39,6 +46,10 @@ class TenderLineEditor extends StatelessWidget {
   final VoidCallback onAmountChanged;
   final ValueChanged<PaymentMethod> onMethodChanged;
   final VoidCallback onRemove;
+  final bool requireCardReceipt;
+  final CardPaymentReceipt? cardReceipt;
+  final bool canValidateCardReceipt;
+  final VoidCallback onValidateCardReceipt;
 
   @override
   Widget build(BuildContext context) {
@@ -102,6 +113,17 @@ class TenderLineEditor extends StatelessWidget {
                   ),
                 ],
               );
+              final receiptControls = method == PaymentMethod.card
+                  ? <Widget>[
+                      SizedBox(height: spacing.sm),
+                      _CardReceiptControls(
+                        cardReceipt: cardReceipt,
+                        requireCardReceipt: requireCardReceipt,
+                        canValidateCardReceipt: canValidateCardReceipt,
+                        onValidateCardReceipt: onValidateCardReceipt,
+                      ),
+                    ]
+                  : const <Widget>[];
 
               if (constraints.maxWidth < 420) {
                 return Column(
@@ -112,6 +134,7 @@ class TenderLineEditor extends StatelessWidget {
                     methodField,
                     SizedBox(height: spacing.sm),
                     amountField,
+                    ...receiptControls,
                   ],
                 );
               }
@@ -129,12 +152,68 @@ class TenderLineEditor extends StatelessWidget {
                       SizedBox(width: 160, child: amountField),
                     ],
                   ),
+                  ...receiptControls,
                 ],
               );
             },
           ),
         ),
       ),
+    );
+  }
+}
+
+class _CardReceiptControls extends StatelessWidget {
+  const _CardReceiptControls({
+    required this.cardReceipt,
+    required this.requireCardReceipt,
+    required this.canValidateCardReceipt,
+    required this.onValidateCardReceipt,
+  });
+
+  final CardPaymentReceipt? cardReceipt;
+  final bool requireCardReceipt;
+  final bool canValidateCardReceipt;
+  final VoidCallback onValidateCardReceipt;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final receipt = cardReceipt;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Align(
+          alignment: AlignmentDirectional.centerStart,
+          child: OutlinedButton.icon(
+            key: const ValueKey('payment_card_receipt_button'),
+            onPressed: canValidateCardReceipt ? onValidateCardReceipt : null,
+            icon: const Icon(Icons.qr_code_scanner_outlined),
+            label: Text(
+              receipt == null
+                  ? l10n.cardReceiptValidateButton
+                  : l10n.cardReceiptRescanButton,
+            ),
+          ),
+        ),
+        if (receipt != null) ...[
+          const SizedBox(height: 8),
+          PointyInlineMessage.success(
+            compact: true,
+            message: l10n.cardReceiptValidatedSummary(
+              formatMoney(receipt.amount),
+              receipt.maskedPan,
+            ),
+          ),
+        ] else if (requireCardReceipt) ...[
+          const SizedBox(height: 8),
+          PointyInlineMessage.warning(
+            compact: true,
+            message: l10n.cardReceiptRequiredInline,
+          ),
+        ],
+      ],
     );
   }
 }

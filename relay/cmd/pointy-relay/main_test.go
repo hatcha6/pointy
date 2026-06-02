@@ -131,6 +131,128 @@ func TestFetchBackendConnectorConfigHandlesBootstrapHTTPError(t *testing.T) {
 	}
 }
 
+func TestValidateServerSecurityConfigAllowsDevelopmentDefaults(t *testing.T) {
+	if err := validateServerSecurityConfig(serverSecurityConfig{
+		AllowOpenAdmin:         true,
+		AllowInsecureHTTP:      true,
+		AllowInsecureConnector: true,
+		AllowInsecureNodeProxy: true,
+	}); err != nil {
+		t.Fatalf("development config should allow explicit insecure settings: %v", err)
+	}
+}
+
+func TestValidateServerSecurityConfigAcceptsProductionConfig(t *testing.T) {
+	config := validProductionServerSecurityConfig()
+
+	if err := validateServerSecurityConfig(config); err != nil {
+		t.Fatalf("valid production config rejected: %v", err)
+	}
+}
+
+func TestValidateServerSecurityConfigRejectsUnsafeProductionConfig(t *testing.T) {
+	for _, tt := range []struct {
+		name    string
+		mutate  func(*serverSecurityConfig)
+		message string
+	}{
+		{
+			name:    "missing admin listener",
+			mutate:  func(config *serverSecurityConfig) { config.AdminHTTPAddr = "" },
+			message: "admin HTTP listener",
+		},
+		{
+			name:    "open admin",
+			mutate:  func(config *serverSecurityConfig) { config.AllowOpenAdmin = true },
+			message: "open admin",
+		},
+		{
+			name:    "missing admin token",
+			mutate:  func(config *serverSecurityConfig) { config.AdminToken = "" },
+			message: "admin token",
+		},
+		{
+			name:    "insecure HTTP",
+			mutate:  func(config *serverSecurityConfig) { config.AllowInsecureHTTP = true },
+			message: "cleartext HTTP",
+		},
+		{
+			name:    "missing HTTP TLS",
+			mutate:  func(config *serverSecurityConfig) { config.HTTPTLSCert = "" },
+			message: "HTTP TLS",
+		},
+		{
+			name:    "admin client certs disabled",
+			mutate:  func(config *serverSecurityConfig) { config.RequireAdminClientCert = false },
+			message: "admin client certificates",
+		},
+		{
+			name:    "missing admin client CA",
+			mutate:  func(config *serverSecurityConfig) { config.HTTPClientCA = "" },
+			message: "admin HTTP client CA",
+		},
+		{
+			name:    "insecure connector",
+			mutate:  func(config *serverSecurityConfig) { config.AllowInsecureConnector = true },
+			message: "cleartext connector",
+		},
+		{
+			name:    "missing connector mTLS",
+			mutate:  func(config *serverSecurityConfig) { config.ConnectorClientCA = "" },
+			message: "connector mTLS",
+		},
+		{
+			name:    "missing connector issuer key",
+			mutate:  func(config *serverSecurityConfig) { config.ConnectorClientCAKey = "" },
+			message: "automatic certificate issuance",
+		},
+		{
+			name:    "insecure node proxy",
+			mutate:  func(config *serverSecurityConfig) { config.AllowInsecureNodeProxy = true },
+			message: "insecure node proxy",
+		},
+		{
+			name: "node internal URL without proxy token",
+			mutate: func(config *serverSecurityConfig) {
+				config.NodeInternalURL = "https://relay-node-a.internal"
+				config.NodeProxyToken = ""
+			},
+			message: "node proxy token",
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			config := validProductionServerSecurityConfig()
+			tt.mutate(&config)
+
+			err := validateServerSecurityConfig(config)
+			if err == nil {
+				t.Fatal("expected unsafe production config rejection")
+			}
+			if !strings.Contains(err.Error(), tt.message) {
+				t.Fatalf("expected error containing %q, got %v", tt.message, err)
+			}
+		})
+	}
+}
+
+func validProductionServerSecurityConfig() serverSecurityConfig {
+	return serverSecurityConfig{
+		Production:             true,
+		AdminHTTPAddr:          "127.0.0.1:8093",
+		AdminToken:             "admin-secret",
+		HTTPTLSCert:            "/etc/pointy/relay-http.crt",
+		HTTPTLSKey:             "/etc/pointy/relay-http.key",
+		HTTPClientCA:           "/etc/pointy/admin-ca.crt",
+		RequireAdminClientCert: true,
+		ConnectorTLSCert:       "/etc/pointy/relay-connector.crt",
+		ConnectorTLSKey:        "/etc/pointy/relay-connector.key",
+		ConnectorClientCA:      "/etc/pointy/connector-ca.crt",
+		ConnectorClientCAKey:   "/etc/pointy/connector-ca.key",
+		NodeInternalURL:        "https://relay-node-a.internal",
+		NodeProxyToken:         "node-secret",
+	}
+}
+
 func TestSubscriptionUpdateBodyBuildsExplicitAuditedChanges(t *testing.T) {
 	body, err := subscriptionUpdateBody(subscriptionUpdateOptions{
 		InstallationID:     "installation-1",

@@ -274,6 +274,7 @@ class OrderPaymentSerializer(serializers.Serializer):
         read_only=True,
     )
     external_reference = serializers.CharField(read_only=True)
+    card_receipt_data = serializers.JSONField(read_only=True)
     created_at = serializers.DateTimeField(read_only=True)
 
 
@@ -400,6 +401,12 @@ class CheckoutPaymentSerializer(serializers.Serializer):
         max_digits=10,
         decimal_places=2,
         min_value=Decimal("0.01"),
+    )
+    card_receipt_url = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        trim_whitespace=True,
+        write_only=True,
     )
 
     def __init__(self, *args, **kwargs):

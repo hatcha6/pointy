@@ -3,12 +3,14 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
+import '../../../../data/models/card_payment_receipt.dart';
 import '../../../../data/models/sale_order.dart';
 import '../../../../shared/design/design.dart';
 import '../../../../shared/formatters.dart';
 import '../../../../shared/responsive/responsive.dart';
 import '../../../../shared/components/components.dart';
 import '../../models/split_tender_payment.dart';
+import 'card_receipt_validation_dialog.dart';
 import 'payment_method_segmented_control.dart';
 import 'pointy_amount_display.dart';
 import 'pointy_keypad.dart';
@@ -28,6 +30,8 @@ Future<PaymentSheetResult?> showPosPaymentSheet({
   required bool enableCashPayments,
   required bool enableCardPayments,
   required bool enableTransferPayments,
+  required bool requireCardReceipt,
+  required List<String> trustedCardTerminalIds,
   required bool showPrintInvoiceToggle,
   required bool printInvoiceAfterPayment,
   required ValueChanged<bool> onPrintInvoiceChanged,
@@ -39,6 +43,8 @@ Future<PaymentSheetResult?> showPosPaymentSheet({
       enableCashPayments: enableCashPayments,
       enableCardPayments: enableCardPayments,
       enableTransferPayments: enableTransferPayments,
+      requireCardReceipt: requireCardReceipt,
+      trustedCardTerminalIds: trustedCardTerminalIds,
       showPrintInvoiceToggle: showPrintInvoiceToggle,
       printInvoiceAfterPayment: printInvoiceAfterPayment,
       onPrintInvoiceChanged: onPrintInvoiceChanged,
@@ -76,6 +82,8 @@ class PaymentSheet extends StatefulWidget {
     required this.enableCashPayments,
     required this.enableCardPayments,
     required this.enableTransferPayments,
+    required this.requireCardReceipt,
+    required this.trustedCardTerminalIds,
     required this.showPrintInvoiceToggle,
     required this.printInvoiceAfterPayment,
     required this.onPrintInvoiceChanged,
@@ -87,6 +95,8 @@ class PaymentSheet extends StatefulWidget {
   final bool enableCashPayments;
   final bool enableCardPayments;
   final bool enableTransferPayments;
+  final bool requireCardReceipt;
+  final List<String> trustedCardTerminalIds;
   final bool showPrintInvoiceToggle;
   final bool printInvoiceAfterPayment;
   final ValueChanged<bool> onPrintInvoiceChanged;
@@ -286,6 +296,12 @@ class _PaymentSheetState extends State<PaymentSheet> {
             onAmountChanged: () => _rebalanceFromTender(entry.$1),
             onMethodChanged: (method) => _updateTenderMethod(entry.$1, method),
             onRemove: () => _removeTender(entry.$1),
+            requireCardReceipt: widget.requireCardReceipt,
+            cardReceipt: entry.$2.cardReceipt,
+            canValidateCardReceipt:
+                entry.$2.method == PaymentMethod.card &&
+                _calculator.parseAmount(entry.$2.amountController.text) > 0,
+            onValidateCardReceipt: () => _validateCardReceipt(entry.$1),
           ),
         ],
         if (widget.showPrintInvoiceToggle) ...[
@@ -356,6 +372,8 @@ class _PaymentSheetState extends State<PaymentSheet> {
           Text(
             _enabledMethods.isEmpty
                 ? l10n.noEnabledPaymentMethods
+                : _hasMissingRequiredCardReceipt
+                ? l10n.cardReceiptRequiredError
                 : l10n.paymentTotalTooLowError,
             style: Theme.of(
               context,
@@ -368,11 +386,37 @@ class _PaymentSheetState extends State<PaymentSheet> {
 
   void _submit() {
     final payments = _appliedPayments;
-    if (payments == null) {
+    if (payments == null || _hasMissingRequiredCardReceipt) {
       setState(() => _showPaymentError = true);
       return;
     }
     widget.onSubmit(PaymentSheetResult(payments: payments));
+  }
+
+  Future<void> _validateCardReceipt(int index) async {
+    if (index < 0 || index >= _tenders.length) {
+      return;
+    }
+    final tender = _tenders[index];
+    final amount = _calculator.parseAmount(tender.amountController.text);
+    if (tender.method != PaymentMethod.card || amount <= 0) {
+      return;
+    }
+
+    final receipt = await showCardReceiptValidationDialog(
+      context: context,
+      expectedAmount: amount,
+      trustedTerminalIds: widget.trustedCardTerminalIds,
+    );
+    if (receipt == null || !mounted) {
+      return;
+    }
+
+    setState(() {
+      tender.cardReceipt = receipt;
+      _activeTenderIndex = index;
+      _showPaymentError = false;
+    });
   }
 
   void _addTender() {
@@ -462,6 +506,9 @@ class _PaymentSheetState extends State<PaymentSheet> {
   void _updateTenderMethod(int index, PaymentMethod method) {
     setState(() {
       _tenders[index].method = method;
+      if (method != PaymentMethod.card) {
+        _tenders[index].cardReceipt = null;
+      }
       _activeTenderIndex = index;
       _showPaymentError = false;
     });
@@ -478,6 +525,9 @@ class _PaymentSheetState extends State<PaymentSheet> {
       }
       final tender = _tenders.first;
       tender.method = method;
+      if (method != PaymentMethod.card) {
+        tender.cardReceipt = null;
+      }
       _activeTenderIndex = 0;
       _showPaymentError = false;
       _setTenderAmount(0, widget.total.toStringAsFixed(2), rebalance: false);
@@ -546,8 +596,20 @@ class _PaymentSheetState extends State<PaymentSheet> {
         selection: TextSelection.collapsed(offset: text.length),
       );
     }
+    _clearMismatchedCardReceipt(tender);
     if (rebalance && !_isBalancingTender) {
       _rebalanceFromTender(index);
+    }
+  }
+
+  void _clearMismatchedCardReceipt(_TenderLineInput tender) {
+    final receipt = tender.cardReceipt;
+    if (receipt == null) {
+      return;
+    }
+    final amount = _calculator.parseAmount(tender.amountController.text);
+    if (tender.method != PaymentMethod.card || !receipt.amountMatches(amount)) {
+      tender.cardReceipt = null;
     }
   }
 
@@ -575,6 +637,7 @@ class _PaymentSheetState extends State<PaymentSheet> {
         SplitTenderInput(
           method: tender.method,
           amount: _calculator.parseAmount(tender.amountController.text),
+          cardReceipt: tender.cardReceipt,
         ),
     ];
   }
@@ -590,7 +653,21 @@ class _PaymentSheetState extends State<PaymentSheet> {
     );
   }
 
-  bool get _canSubmit => _enabledMethods.isNotEmpty && _appliedPayments != null;
+  bool get _canSubmit =>
+      _enabledMethods.isNotEmpty &&
+      _appliedPayments != null &&
+      !_hasMissingRequiredCardReceipt;
+
+  bool get _hasMissingRequiredCardReceipt {
+    if (!widget.requireCardReceipt) {
+      return false;
+    }
+    return _tenders.any((tender) {
+      return tender.method == PaymentMethod.card &&
+          _calculator.parseAmount(tender.amountController.text) > 0 &&
+          tender.cardReceipt == null;
+    });
+  }
 
   bool get _canUseSplitTenderMode => _enabledMethods.length > 1;
 
@@ -674,6 +751,7 @@ class _TenderLineInput {
 
   PaymentMethod method;
   final TextEditingController amountController;
+  CardPaymentReceipt? cardReceipt;
 
   void dispose() {
     amountController.dispose();

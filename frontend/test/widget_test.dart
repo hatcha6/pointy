@@ -11,6 +11,7 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 import 'package:pointy_frontend/src/core/authorization.dart';
 import 'package:pointy_frontend/src/core/result.dart';
 import 'package:pointy_frontend/src/data/models/barcode_label.dart';
+import 'package:pointy_frontend/src/data/models/card_payment_receipt.dart';
 import 'package:pointy_frontend/src/data/models/pos_user.dart';
 import 'package:pointy_frontend/src/data/models/print_job.dart';
 import 'package:pointy_frontend/src/data/models/printer_config.dart';
@@ -36,6 +37,7 @@ import 'package:pointy_frontend/src/features/catalog/views/product_variant_detai
 import 'package:pointy_frontend/src/features/purchasing/views/purchase_order_details_screen.dart';
 import 'package:pointy_frontend/src/features/pos/views/register_cash_movement_sheet.dart';
 import 'package:pointy_frontend/src/features/pos/views/register_session_close_sheet.dart';
+import 'package:pointy_frontend/src/features/pos/views/payment/payment_sheet.dart';
 import 'package:pointy_frontend/src/features/users/view_models/user_management_view_model.dart';
 import 'package:pointy_frontend/src/features/users/views/user_management_screen.dart';
 import 'package:pointy_frontend/src/shared/infinite_scroll_grid.dart';
@@ -72,6 +74,17 @@ void main() {
       );
     },
   );
+
+  test('Moamalat receipt parser decodes the terminal receipt URL', () {
+    final receipt = const MoamalatReceiptParser().parse(
+      _sampleMoamalatReceiptUrl,
+    );
+
+    expect(receipt.amount, 1.0);
+    expect(receipt.maskedPan, '639974*********8809');
+    expect(receipt.reference, '615316000050');
+    expect(receipt.isSuccessful, isTrue);
+  });
 
   test('purchasing permissions expose workflow capabilities', () {
     final cashier = PosUser.fromJson(
@@ -384,6 +397,67 @@ void main() {
       {'method': 'cash', 'amount': '5.00'},
       {'method': 'card', 'amount': '2.00'},
     ]);
+  });
+
+  testWidgets('payment sheet requires validated Moamalat receipt for card', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(1200, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    PaymentSheetResult? result;
+
+    await tester.pumpWidget(
+      _localizedTestApp(
+        PaymentSheet(
+          total: 1,
+          enableCashPayments: true,
+          enableCardPayments: true,
+          enableTransferPayments: false,
+          requireCardReceipt: true,
+          trustedCardTerminalIds: const ['0JA8Y13W'],
+          showPrintInvoiceToggle: false,
+          printInvoiceAfterPayment: false,
+          onPrintInvoiceChanged: (_) {},
+          onSubmit: (submitted) => result = submitted,
+          onCancel: () {},
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('بطاقة'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('هذه الدفعة تحتاج مسح إيصال البطاقة.'), findsOneWidget);
+    expect(
+      tester
+          .widget<FilledButton>(
+            find.byKey(const ValueKey('payment_confirm_button')),
+          )
+          .onPressed,
+      isNull,
+    );
+
+    await tester.tap(find.byKey(const ValueKey('payment_card_receipt_button')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('card_receipt_url_field')),
+      _sampleMoamalatReceiptUrl,
+    );
+    await tester.tap(find.text('طابق الإيصال').last);
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('تمت المطابقة'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('payment_confirm_button')));
+    await tester.pump();
+
+    expect(result?.payments.single.toJson(), {
+      'method': 'card',
+      'amount': '1.00',
+      'card_receipt_url': _sampleMoamalatReceiptUrl,
+    });
   });
 
   testWidgets('checkout rebalances split tender after deleting a line', (
@@ -1908,6 +1982,7 @@ void main() {
     expect(settingsBody?['shop_name'], 'متجر الاختبار');
     expect(settingsBody?['cashier_return_window_hours'], 42);
     expect(settingsBody?['enable_card_payments'], true);
+    expect(settingsBody?['require_card_payment_receipt'], false);
     expect(settingsBody?['prevent_selling_at_loss'], true);
     expect(settingsBody?['card_commission_percent'], '1.00');
     expect(settingsBody?['transfer_commission_percent'], '0.00');
@@ -2913,6 +2988,20 @@ class _CapturingPrintTransport extends PrintTransport {
   }
 }
 
+Widget _localizedTestApp(Widget child) {
+  return MaterialApp(
+    locale: const Locale('ar'),
+    supportedLocales: AppLocalizations.supportedLocales,
+    localizationsDelegates: const [
+      AppLocalizations.delegate,
+      GlobalMaterialLocalizations.delegate,
+      GlobalWidgetsLocalizations.delegate,
+      GlobalCupertinoLocalizations.delegate,
+    ],
+    home: Scaffold(body: child),
+  );
+}
+
 PosApiService _mockApiService({
   bool isAuthenticated = true,
   bool hasOpenSession = false,
@@ -2945,6 +3034,8 @@ PosApiService _mockApiService({
   bool shopSettingsRequireOpeningCash = true,
   bool shopSettingsAllowOverselling = false,
   bool shopSettingsPreventSellingAtLoss = true,
+  bool shopSettingsRequireCardReceipt = false,
+  List<String> shopSettingsTrustedCardTerminalIds = const [],
   bool saleDiscountPreviewHasLoss = false,
   int shopSettingsCashierReturnWindowHours = 42,
   int productQuantityOnHand = 12,
@@ -3038,6 +3129,8 @@ PosApiService _mockApiService({
               requireOpeningCash: shopSettingsRequireOpeningCash,
               allowOverselling: shopSettingsAllowOverselling,
               preventSellingAtLoss: shopSettingsPreventSellingAtLoss,
+              requireCardPaymentReceipt: shopSettingsRequireCardReceipt,
+              trustedCardTerminalIds: shopSettingsTrustedCardTerminalIds,
               cashierReturnWindowHours: shopSettingsCashierReturnWindowHours,
             ),
             ...body,
@@ -3049,6 +3142,8 @@ PosApiService _mockApiService({
             requireOpeningCash: shopSettingsRequireOpeningCash,
             allowOverselling: shopSettingsAllowOverselling,
             preventSellingAtLoss: shopSettingsPreventSellingAtLoss,
+            requireCardPaymentReceipt: shopSettingsRequireCardReceipt,
+            trustedCardTerminalIds: shopSettingsTrustedCardTerminalIds,
             cashierReturnWindowHours: shopSettingsCashierReturnWindowHours,
           ),
         );
@@ -3062,6 +3157,8 @@ PosApiService _mockApiService({
               requireOpeningCash: shopSettingsRequireOpeningCash,
               allowOverselling: shopSettingsAllowOverselling,
               preventSellingAtLoss: shopSettingsPreventSellingAtLoss,
+              requireCardPaymentReceipt: shopSettingsRequireCardReceipt,
+              trustedCardTerminalIds: shopSettingsTrustedCardTerminalIds,
               cashierReturnWindowHours: shopSettingsCashierReturnWindowHours,
             ),
           );
@@ -3072,6 +3169,8 @@ PosApiService _mockApiService({
             requireOpeningCash: shopSettingsRequireOpeningCash,
             allowOverselling: shopSettingsAllowOverselling,
             preventSellingAtLoss: shopSettingsPreventSellingAtLoss,
+            requireCardPaymentReceipt: shopSettingsRequireCardReceipt,
+            trustedCardTerminalIds: shopSettingsTrustedCardTerminalIds,
             cashierReturnWindowHours: shopSettingsCashierReturnWindowHours,
             logoAttachment: const {
               'id': 10,
@@ -3885,6 +3984,10 @@ PosApiService _mockApiService({
   );
 }
 
+const _sampleMoamalatReceiptUrl =
+    'https://receipt.moamalat.net:9443/frontTicketDigital/#/digital/ticket?query='
+    'eJxdUstum0AU%2FZURy6qJZgBjsFcDdmVagxPAjtzd1EYNagALcCU36iqOVaVf0UXkNGobpUoX%2FZOZv%20mdsa1WvQuYOefc14GJ08c2cYij61i3sIV1YhuGqXf5E3%2FkW%2F6lS6PupRak1eycFU3I8lTraDENaQ%2FRoTsOpzSEQ0LPXvt9RLXnSEvSKs8KduFlzQq0gR%20PI5pQNJz%20y%2Fpz4PBLak%20JcSYJj1XzZLWQ5cNxMEIuDV8RSVC%2FBxjFKhwYEBMs8RMaAm4ZjtM2nx3CtrFzqDYoL%20ZpBZpTGp2ORgGK6bA%2FUKwqaasyiQfHttMmpuu2W05LN90Xuz0mkRJBmPKpsNiXPe3dzZsEUqKIihU1mzVZWeyXOBgoWb94X2azNFzmb9RALQn2WJMmmfIT60fYOtItROyOYXTM3d7L5ryssg9MFvXKuRJCtFQ2zctl0QBEjgFD%2FOFYrP8bJG5Ys6zlKPfimt8jvhVr%2Fltci7W44V8RvxMb%2Fg1G%2FI7UMuVitR8dfET8FkS%2FZMou7yfIP4kNAm6nzvNU9edP4kpuKj4jkG35D%20h2A%209HcYXg8gCttwBt%20FbmRWm9KIs63dvWr6qyCtK6Zm8P0ElZNS4r3kmbsK6rpEh9adIyiKUcUO7HifoB%2FgIuTbwBIKb28Q%2Fm9%206L';
+
 http.Response _jsonResponse(Map<String, Object?> body) {
   return http.Response.bytes(
     utf8.encode(jsonEncode(body)),
@@ -3982,6 +4085,8 @@ Map<String, Object?> _shopSettingsJson({
   bool requireOpeningCash = true,
   bool allowOverselling = false,
   bool preventSellingAtLoss = true,
+  bool requireCardPaymentReceipt = false,
+  List<String> trustedCardTerminalIds = const [],
   int cashierReturnWindowHours = 42,
   Map<String, Object?>? logoAttachment,
 }) {
@@ -3999,6 +4104,8 @@ Map<String, Object?> _shopSettingsJson({
     'enable_cash_payments': true,
     'enable_card_payments': true,
     'enable_transfer_payments': true,
+    'require_card_payment_receipt': requireCardPaymentReceipt,
+    'trusted_card_terminal_ids': trustedCardTerminalIds,
     'card_commission_percent': '1.00',
     'transfer_commission_percent': '0.00',
   };

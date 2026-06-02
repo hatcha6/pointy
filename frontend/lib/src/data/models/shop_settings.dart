@@ -16,6 +16,8 @@ class ShopSettings {
     required this.enableCashPayments,
     required this.enableCardPayments,
     required this.enableTransferPayments,
+    required this.requireCardPaymentReceipt,
+    required this.trustedCardTerminalIds,
     required this.cardCommissionPercent,
     required this.transferCommissionPercent,
     this.logoAttachment,
@@ -33,6 +35,8 @@ class ShopSettings {
   final bool enableCashPayments;
   final bool enableCardPayments;
   final bool enableTransferPayments;
+  final bool requireCardPaymentReceipt;
+  final List<String> trustedCardTerminalIds;
   final double cardCommissionPercent;
   final double transferCommissionPercent;
   final AttachmentSummary? logoAttachment;
@@ -64,6 +68,13 @@ class ShopSettings {
       enableTransferPayments: _boolFromJson(
         json['enable_transfer_payments'],
         true,
+      ),
+      requireCardPaymentReceipt: _boolFromJson(
+        json['require_card_payment_receipt'],
+        false,
+      ),
+      trustedCardTerminalIds: _stringListFromJson(
+        json['trusted_card_terminal_ids'],
       ),
       cardCommissionPercent: _moneyFromJson(json['card_commission_percent'], 1),
       transferCommissionPercent: _moneyFromJson(
@@ -103,6 +114,8 @@ class ShopSettingsDraft {
     required this.enableCashPayments,
     required this.enableCardPayments,
     required this.enableTransferPayments,
+    required this.requireCardPaymentReceipt,
+    required this.trustedCardTerminalIds,
     required this.cardCommissionPercent,
     required this.transferCommissionPercent,
   });
@@ -119,6 +132,8 @@ class ShopSettingsDraft {
   final bool enableCashPayments;
   final bool enableCardPayments;
   final bool enableTransferPayments;
+  final bool requireCardPaymentReceipt;
+  final List<String> trustedCardTerminalIds;
   final double cardCommissionPercent;
   final double transferCommissionPercent;
 
@@ -136,6 +151,8 @@ class ShopSettingsDraft {
       'enable_cash_payments': enableCashPayments,
       'enable_card_payments': enableCardPayments,
       'enable_transfer_payments': enableTransferPayments,
+      'require_card_payment_receipt': requireCardPaymentReceipt,
+      'trusted_card_terminal_ids': trustedCardTerminalIds,
       'card_commission_percent': cardCommissionPercent.toStringAsFixed(2),
       'transfer_commission_percent': transferCommissionPercent.toStringAsFixed(
         2,
@@ -159,4 +176,15 @@ double _moneyFromJson(Object? value, double fallback) {
     return fallback;
   }
   return double.tryParse(value.toString()) ?? fallback;
+}
+
+List<String> _stringListFromJson(Object? value) {
+  if (value is! List<Object?>) {
+    return const [];
+  }
+  return value
+      .map((item) => item?.toString().trim().toUpperCase() ?? '')
+      .where((item) => item.isNotEmpty)
+      .toSet()
+      .toList(growable: false);
 }

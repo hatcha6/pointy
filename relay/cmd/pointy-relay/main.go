@@ -77,7 +77,12 @@ func runServer(args []string) error {
 	httpAddr := flags.String(
 		"http",
 		envString("POINTY_RELAY_HTTP_ADDR", "127.0.0.1:8091"),
-		"HTTP address for control and remote client traffic",
+		"HTTP address for public remote client traffic",
+	)
+	adminHTTPAddr := flags.String(
+		"admin-http",
+		envString("POINTY_RELAY_ADMIN_HTTP_ADDR", ""),
+		"separate HTTP address for admin control and internal relay traffic",
 	)
 	connectorAddr := flags.String(
 		"connector",
@@ -239,7 +244,33 @@ func runServer(args []string) error {
 		envBool("POINTY_RELAY_ALLOW_OPEN_ADMIN", false),
 		"allow unauthenticated admin control endpoints for local development",
 	)
+	production := flags.Bool(
+		"production",
+		envBool("POINTY_RELAY_PRODUCTION", false),
+		"enforce production relay security configuration",
+	)
 	if err := flags.Parse(args); err != nil {
+		return err
+	}
+	if err := validateServerSecurityConfig(serverSecurityConfig{
+		Production:             *production,
+		AdminHTTPAddr:          *adminHTTPAddr,
+		AdminToken:             *adminToken,
+		AllowOpenAdmin:         *allowOpenAdmin,
+		AllowInsecureHTTP:      *allowInsecureHTTP,
+		HTTPTLSCert:            *httpTLSCert,
+		HTTPTLSKey:             *httpTLSKey,
+		HTTPClientCA:           *httpClientCA,
+		RequireAdminClientCert: *requireAdminClientCert,
+		AllowInsecureConnector: *allowInsecureConnector,
+		ConnectorTLSCert:       *connectorTLSCert,
+		ConnectorTLSKey:        *connectorTLSKey,
+		ConnectorClientCA:      *connectorClientCA,
+		ConnectorClientCAKey:   *connectorClientCAKey,
+		NodeInternalURL:        *nodeInternalURL,
+		NodeProxyToken:         *nodeProxyToken,
+		AllowInsecureNodeProxy: *allowInsecureNodeProxy,
+	}); err != nil {
 		return err
 	}
 
@@ -319,12 +350,19 @@ func runServer(args []string) error {
 		_ = connectorListener.Close()
 		return err
 	}
+	adminHTTPAddress := strings.TrimSpace(*adminHTTPAddr)
+	httpClientCAFile := *httpClientCA
+	httpRequiresAdminClientCert := *requireAdminClientCert
+	if adminHTTPAddress != "" {
+		httpClientCAFile = ""
+		httpRequiresAdminClientCert = false
+	}
 	secureHTTP, err := secureHTTPListener(
 		httpListener,
 		*httpTLSCert,
 		*httpTLSKey,
-		*httpClientCA,
-		*requireAdminClientCert,
+		httpClientCAFile,
+		httpRequiresAdminClientCert,
 		*allowInsecureHTTP,
 	)
 	if err != nil {
@@ -333,6 +371,30 @@ func runServer(args []string) error {
 		return err
 	}
 	httpListener = secureHTTP
+	var adminHTTPListener net.Listener
+	if adminHTTPAddress != "" {
+		adminHTTPListener, err = net.Listen("tcp", adminHTTPAddress)
+		if err != nil {
+			_ = connectorListener.Close()
+			_ = httpListener.Close()
+			return err
+		}
+		secureAdminHTTP, err := secureHTTPListener(
+			adminHTTPListener,
+			*httpTLSCert,
+			*httpTLSKey,
+			*httpClientCA,
+			*requireAdminClientCert,
+			*allowInsecureHTTP,
+		)
+		if err != nil {
+			_ = connectorListener.Close()
+			_ = httpListener.Close()
+			_ = adminHTTPListener.Close()
+			return err
+		}
+		adminHTTPListener = secureAdminHTTP
+	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -347,65 +409,170 @@ func runServer(args []string) error {
 		NodeRelayURL: strings.TrimSpace(*nodeInternalURL),
 		Draining:     *draining,
 	}
+	baseHTTPHandler := relayserver.HTTPServer{
+		Store:                         store,
+		Hub:                           hub,
+		Logger:                        logger,
+		AdminToken:                    *adminToken,
+		AllowOpenAdmin:                *allowOpenAdmin,
+		RequireAdminClientCertificate: *requireAdminClientCert,
+		StreamOpenTimeout:             *streamOpenTimeout,
+		RelayRequestTimeout:           *relayRequestTimeout,
+		MaxRelayedRequestBodyBytes:    *maxRelayedRequestBodyBytes,
+		MaxRelayedResponseBodyBytes:   *maxRelayedResponseBodyBytes,
+		RelayLimiter:                  limit.New(*maxConcurrentRelayRequests),
+		RateLimiter:                   rateLimiter,
+		RelayRequestRateLimit:         ratelimit.Policy{Limit: *relayRequestRateLimit, Window: *rateLimitWindow},
+		TicketIssueRateLimit:          ratelimit.Policy{Limit: *ticketIssueRateLimit, Window: *rateLimitWindow},
+		TicketRefreshRateLimit:        ratelimit.Policy{Limit: *ticketRefreshRateLimit, Window: *rateLimitWindow},
+		Metrics:                       metrics,
+		Presence:                      presence,
+		NodeID:                        nodeID,
+		Draining:                      *draining,
+		NodeProxyToken:                strings.TrimSpace(*nodeProxyToken),
+		AllowInsecureNodeProxy:        *allowInsecureNodeProxy,
+		Tickets:                       tickets,
+		TicketTTL:                     *ticketTTL,
+		TicketRefreshTTL:              *ticketRefreshTTL,
+		ConnectorCertificateIssuer:    connectorCertificateIssuer,
+		ConnectorCertificateTTL:       *connectorClientCertTTL,
+	}
+	publicHTTPHandler := baseHTTPHandler
+	publicHTTPHandler.RouteMode = relayserver.RouteAll
+	if adminHTTPListener != nil {
+		publicHTTPHandler.RouteMode = relayserver.RoutePublic
+	}
 	httpServer := &http.Server{
-		Handler: relayserver.HTTPServer{
-			Store:                         store,
-			Hub:                           hub,
-			Logger:                        logger,
-			AdminToken:                    *adminToken,
-			AllowOpenAdmin:                *allowOpenAdmin,
-			RequireAdminClientCertificate: *requireAdminClientCert,
-			StreamOpenTimeout:             *streamOpenTimeout,
-			RelayRequestTimeout:           *relayRequestTimeout,
-			MaxRelayedRequestBodyBytes:    *maxRelayedRequestBodyBytes,
-			MaxRelayedResponseBodyBytes:   *maxRelayedResponseBodyBytes,
-			RelayLimiter:                  limit.New(*maxConcurrentRelayRequests),
-			RateLimiter:                   rateLimiter,
-			RelayRequestRateLimit:         ratelimit.Policy{Limit: *relayRequestRateLimit, Window: *rateLimitWindow},
-			TicketIssueRateLimit:          ratelimit.Policy{Limit: *ticketIssueRateLimit, Window: *rateLimitWindow},
-			TicketRefreshRateLimit:        ratelimit.Policy{Limit: *ticketRefreshRateLimit, Window: *rateLimitWindow},
-			Metrics:                       metrics,
-			Presence:                      presence,
-			NodeID:                        nodeID,
-			Draining:                      *draining,
-			NodeProxyToken:                strings.TrimSpace(*nodeProxyToken),
-			AllowInsecureNodeProxy:        *allowInsecureNodeProxy,
-			Tickets:                       tickets,
-			TicketTTL:                     *ticketTTL,
-			TicketRefreshTTL:              *ticketRefreshTTL,
-			ConnectorCertificateIssuer:    connectorCertificateIssuer,
-			ConnectorCertificateTTL:       *connectorClientCertTTL,
-		},
+		Handler:           publicHTTPHandler,
 		ReadHeaderTimeout: 5 * time.Second,
 	}
+	var adminHTTPServer *http.Server
+	if adminHTTPListener != nil {
+		adminHTTPHandler := baseHTTPHandler
+		adminHTTPHandler.RouteMode = relayserver.RouteAdmin
+		adminHTTPServer = &http.Server{
+			Handler:           adminHTTPHandler,
+			ReadHeaderTimeout: 5 * time.Second,
+		}
+	}
 
-	errs := make(chan error, 2)
+	errs := make(chan error, 3)
 	go func() {
 		logger.Info("relay connector listener started", "addr", connectorListener.Addr().String())
 		errs <- connectorServer.Serve(ctx, connectorListener)
 	}()
 	go func() {
-		logger.Info("relay HTTP listener started", "addr", httpListener.Addr().String())
+		logger.Info("relay public HTTP listener started", "addr", httpListener.Addr().String())
 		if err := httpServer.Serve(httpListener); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			errs <- err
 			return
 		}
 		errs <- nil
 	}()
+	if adminHTTPServer != nil {
+		go func() {
+			logger.Info("relay admin HTTP listener started", "addr", adminHTTPListener.Addr().String())
+			if err := adminHTTPServer.Serve(adminHTTPListener); err != nil && !errors.Is(err, http.ErrServerClosed) {
+				errs <- err
+				return
+			}
+			errs <- nil
+		}()
+	}
 
 	select {
 	case <-ctx.Done():
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		_ = httpServer.Shutdown(shutdownCtx)
+		if adminHTTPServer != nil {
+			_ = adminHTTPServer.Shutdown(shutdownCtx)
+		}
 		_ = connectorListener.Close()
 		return nil
 	case err := <-errs:
 		if err != nil {
+			shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			_ = httpServer.Shutdown(shutdownCtx)
+			if adminHTTPServer != nil {
+				_ = adminHTTPServer.Shutdown(shutdownCtx)
+			}
+			_ = connectorListener.Close()
 			return err
 		}
 		return nil
 	}
+}
+
+type serverSecurityConfig struct {
+	Production             bool
+	AdminHTTPAddr          string
+	AdminToken             string
+	AllowOpenAdmin         bool
+	AllowInsecureHTTP      bool
+	HTTPTLSCert            string
+	HTTPTLSKey             string
+	HTTPClientCA           string
+	RequireAdminClientCert bool
+	AllowInsecureConnector bool
+	ConnectorTLSCert       string
+	ConnectorTLSKey        string
+	ConnectorClientCA      string
+	ConnectorClientCAKey   string
+	NodeInternalURL        string
+	NodeProxyToken         string
+	AllowInsecureNodeProxy bool
+}
+
+func validateServerSecurityConfig(config serverSecurityConfig) error {
+	if !config.Production {
+		return nil
+	}
+
+	var problems []string
+	if strings.TrimSpace(config.AdminHTTPAddr) == "" {
+		problems = append(problems, "admin HTTP listener must be separate from the public listener")
+	}
+	if config.AllowOpenAdmin {
+		problems = append(problems, "open admin endpoints are not allowed")
+	}
+	if strings.TrimSpace(config.AdminToken) == "" {
+		problems = append(problems, "admin token is required")
+	}
+	if config.AllowInsecureHTTP {
+		problems = append(problems, "cleartext HTTP listener is not allowed")
+	}
+	if strings.TrimSpace(config.HTTPTLSCert) == "" || strings.TrimSpace(config.HTTPTLSKey) == "" {
+		problems = append(problems, "HTTP TLS certificate and key are required")
+	}
+	if !config.RequireAdminClientCert {
+		problems = append(problems, "admin client certificates must be required")
+	}
+	if strings.TrimSpace(config.HTTPClientCA) == "" {
+		problems = append(problems, "admin HTTP client CA is required")
+	}
+	if config.AllowInsecureConnector {
+		problems = append(problems, "cleartext connector listener is not allowed")
+	}
+	if strings.TrimSpace(config.ConnectorTLSCert) == "" ||
+		strings.TrimSpace(config.ConnectorTLSKey) == "" ||
+		strings.TrimSpace(config.ConnectorClientCA) == "" {
+		problems = append(problems, "connector mTLS certificate, key, and client CA are required")
+	}
+	if strings.TrimSpace(config.ConnectorClientCAKey) == "" {
+		problems = append(problems, "connector client CA key is required for automatic certificate issuance")
+	}
+	if config.AllowInsecureNodeProxy {
+		problems = append(problems, "insecure node proxy routing is not allowed")
+	}
+	if strings.TrimSpace(config.NodeInternalURL) != "" && strings.TrimSpace(config.NodeProxyToken) == "" {
+		problems = append(problems, "node proxy token is required when node internal URL is configured")
+	}
+	if len(problems) > 0 {
+		return fmt.Errorf("production relay configuration is unsafe: %s", strings.Join(problems, "; "))
+	}
+	return nil
 }
 
 func runConnector(args []string) error {

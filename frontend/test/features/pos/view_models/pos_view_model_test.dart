@@ -314,6 +314,8 @@ const _settings = ShopSettings(
   enableCashPayments: true,
   enableCardPayments: true,
   enableTransferPayments: true,
+  requireCardPaymentReceipt: false,
+  trustedCardTerminalIds: [],
   cardCommissionPercent: 1,
   transferCommissionPercent: 0,
 );

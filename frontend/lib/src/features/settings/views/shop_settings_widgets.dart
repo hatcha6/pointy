@@ -351,32 +351,40 @@ class _PaymentSettingsFields extends StatelessWidget {
   const _PaymentSettingsFields({
     required this.cardCommissionController,
     required this.transferCommissionController,
+    required this.trustedTerminalIdsController,
     required this.enabled,
     required this.enableCashPayments,
     required this.enableCardPayments,
     required this.enableTransferPayments,
+    required this.requireCardPaymentReceipt,
     required this.paymentMethodsError,
     required this.cardCommissionError,
     required this.transferCommissionError,
     required this.onEnableCashChanged,
     required this.onEnableCardChanged,
+    required this.onRequireCardReceiptChanged,
     required this.onEnableTransferChanged,
     required this.onCommissionChanged,
+    required this.onTrustedTerminalIdsChanged,
   });
 
   final TextEditingController cardCommissionController;
   final TextEditingController transferCommissionController;
+  final TextEditingController trustedTerminalIdsController;
   final bool enabled;
   final bool enableCashPayments;
   final bool enableCardPayments;
   final bool enableTransferPayments;
+  final bool requireCardPaymentReceipt;
   final String? paymentMethodsError;
   final String? cardCommissionError;
   final String? transferCommissionError;
   final ValueChanged<bool> onEnableCashChanged;
   final ValueChanged<bool> onEnableCardChanged;
+  final ValueChanged<bool> onRequireCardReceiptChanged;
   final ValueChanged<bool> onEnableTransferChanged;
   final VoidCallback onCommissionChanged;
+  final VoidCallback onTrustedTerminalIdsChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -396,7 +404,31 @@ class _PaymentSettingsFields extends StatelessWidget {
           title: Text(l10n.paymentMethodCard),
           onChanged: enabled ? onEnableCardChanged : null,
         ),
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          value: requireCardPaymentReceipt,
+          title: Text(l10n.requireCardReceiptSettingLabel),
+          subtitle: Text(l10n.requireCardReceiptSettingSubtitle),
+          onChanged: enabled && enableCardPayments
+              ? onRequireCardReceiptChanged
+              : null,
+        ),
         const SizedBox(height: 8),
+        TextFormField(
+          controller: trustedTerminalIdsController,
+          enabled: enabled && enableCardPayments,
+          minLines: 2,
+          maxLines: 4,
+          textDirection: TextDirection.ltr,
+          onChanged: (_) => onTrustedTerminalIdsChanged(),
+          decoration: InputDecoration(
+            labelText: l10n.trustedCardTerminalIdsLabel,
+            helperText: l10n.trustedCardTerminalIdsHelper,
+            border: const OutlineInputBorder(),
+            prefixIcon: const Icon(Icons.point_of_sale_outlined),
+          ),
+        ),
+        const SizedBox(height: 12),
         TextFormField(
           controller: cardCommissionController,
           enabled: enabled && enableCardPayments,

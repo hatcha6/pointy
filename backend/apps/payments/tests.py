@@ -1,4 +1,8 @@
+import base64
+import json
+import zlib
 from decimal import Decimal
+from urllib.parse import quote
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
@@ -8,11 +12,13 @@ from rest_framework import status
 from rest_framework.test import APIClient
 
 from apps.catalog.testing import create_product_with_default_variant
+from apps.core.models import ShopSettings
 from apps.core.roles import CASHIER_GROUP, MANAGER_GROUP, ensure_role_groups
 from apps.inventory.models import StockItem, StockMovement
 from apps.sales.models import Order, RegisterSession
 from apps.sales.services import create_order_with_lines
 from .models import Payment
+from .moamalat import parse_moamalat_receipt_url
 from .serializers import PaymentSerializer
 
 
@@ -141,3 +147,137 @@ class PaymentStockMovementTests(TestCase):
         movement = StockMovement.objects.get()
         self.assertEqual(movement.movement_type, StockMovement.Type.DECREASE)
         self.assertEqual(movement.quantity, 2)
+
+
+class MoamalatCardReceiptTests(TestCase):
+    def setUp(self):
+        self.session = RegisterSession.objects.create(owner_key="user:receipt")
+        self.order = Order.objects.create(
+            register_session=self.session,
+            subtotal=Decimal("10.00"),
+            total=Decimal("10.00"),
+        )
+
+    def test_parser_reads_moamalat_receipt_payload(self):
+        receipt = parse_moamalat_receipt_url(_moamalat_receipt_url("1.000"))
+
+        self.assertEqual(receipt.amount, Decimal("1.00"))
+        self.assertEqual(receipt.fields["PAN"], "639974*********8809")
+        self.assertEqual(receipt.reference, "615316000050")
+
+    def test_card_receipt_required_when_shop_setting_is_enabled(self):
+        settings = ShopSettings.load()
+        settings.require_card_payment_receipt = True
+        settings.save(update_fields=["require_card_payment_receipt"])
+
+        serializer = PaymentSerializer(
+            data={
+                "order": self.order.pk,
+                "method": Payment.Method.CARD,
+                "amount": "6.00",
+            }
+        )
+
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("card_receipt_url", serializer.errors)
+
+    def test_card_receipt_is_stored_as_redacted_payment_evidence(self):
+        settings = ShopSettings.load()
+        settings.require_card_payment_receipt = True
+        settings.save(update_fields=["require_card_payment_receipt"])
+
+        serializer = PaymentSerializer(
+            data={
+                "order": self.order.pk,
+                "method": Payment.Method.CARD,
+                "amount": "6.00",
+                "card_receipt_url": _moamalat_receipt_url("6.000"),
+            }
+        )
+
+        serializer.is_valid(raise_exception=True)
+        payment = serializer.save()
+
+        self.assertEqual(payment.external_reference, "615316000050")
+        self.assertEqual(payment.card_receipt_data["provider"], "moamalat")
+        self.assertEqual(
+            payment.card_receipt_data["validation_method"],
+            "decoded_receipt_payload",
+        )
+        self.assertFalse(payment.card_receipt_data["server_validated"])
+        self.assertEqual(payment.card_receipt_data["amount"], "6.00")
+        self.assertEqual(
+            payment.card_receipt_data["masked_pan"],
+            "639974*********8809",
+        )
+        self.assertNotIn("CardHolder", payment.card_receipt_data)
+
+    def test_card_receipt_amount_must_match_payment_amount(self):
+        serializer = PaymentSerializer(
+            data={
+                "order": self.order.pk,
+                "method": Payment.Method.CARD,
+                "amount": "6.00",
+                "card_receipt_url": _moamalat_receipt_url("5.000"),
+            }
+        )
+
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("card_receipt_url", serializer.errors)
+
+    def test_card_receipt_terminal_must_be_trusted_when_configured(self):
+        settings = ShopSettings.load()
+        settings.trusted_card_terminal_ids = ["OTHERTERM"]
+        settings.save(update_fields=["trusted_card_terminal_ids"])
+
+        serializer = PaymentSerializer(
+            data={
+                "order": self.order.pk,
+                "method": Payment.Method.CARD,
+                "amount": "6.00",
+                "card_receipt_url": _moamalat_receipt_url("6.000"),
+            }
+        )
+
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("card_receipt_url", serializer.errors)
+
+        settings.trusted_card_terminal_ids = ["0JA8Y13W"]
+        settings.save(update_fields=["trusted_card_terminal_ids"])
+        serializer = PaymentSerializer(
+            data={
+                "order": self.order.pk,
+                "method": Payment.Method.CARD,
+                "amount": "6.00",
+                "card_receipt_url": _moamalat_receipt_url("6.000"),
+            }
+        )
+
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+
+
+def _moamalat_receipt_url(amount):
+    fields = {
+        "MerchantName": "SANAD ALBUNYAN ALTAWZIE A",
+        "TerminalCity": "MISURATA LY",
+        "TerminalId": "0JA8Y13W",
+        "CardType": "NUMO BANK1",
+        "AID": "A0000009021010",
+        "PAN": "639974*********8809",
+        "CardHolder": "QARQOOM SALEH",
+        "TransactionType": "شراء",
+        "InvoiceNumber": "5",
+        "DateTime": "02-06-26 18:33:41",
+        "AuthorizationCode": "000055",
+        "Amount": f"{amount} د.ل",
+        "TransactionStatus": "تمت العملية بنجاح ",
+        "RRN": "615316000050",
+        "STAN": "000050",
+        "BATCH": "4",
+    }
+    payload = f"V9E081919220260602183342;شراء;AR;{json.dumps(fields, ensure_ascii=False)}"
+    query = base64.b64encode(zlib.compress(payload.encode("utf-8"))).decode("ascii")
+    return (
+        "https://receipt.moamalat.net:9443/frontTicketDigital/"
+        f"#/digital/ticket?query={quote(query)}"
+    )
