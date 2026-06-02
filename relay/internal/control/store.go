@@ -27,18 +27,21 @@ func (RealClock) Now() time.Time {
 }
 
 type Installation struct {
-	ID                       string     `json:"id"`
-	BusinessID               string     `json:"business_id,omitempty"`
-	ShopName                 string     `json:"shop_name,omitempty"`
-	ConnectorTokenHash       string     `json:"connector_token_hash"`
-	AccessTokenHash          string     `json:"access_token_hash"`
-	RelayEnabled             bool       `json:"relay_enabled"`
-	AIEnabled                bool       `json:"ai_enabled"`
-	SubscriptionActive       bool       `json:"subscription_active"`
-	SubscriptionEndsAt       *time.Time `json:"subscription_ends_at,omitempty"`
-	CreatedAt                time.Time  `json:"created_at"`
-	UpdatedAt                time.Time  `json:"updated_at"`
-	LastConnectorConnectedAt *time.Time `json:"last_connector_connected_at,omitempty"`
+	ID                              string     `json:"id"`
+	BusinessID                      string     `json:"business_id,omitempty"`
+	ShopName                        string     `json:"shop_name,omitempty"`
+	ConnectorTokenHash              string     `json:"connector_token_hash"`
+	AccessTokenHash                 string     `json:"access_token_hash"`
+	ConnectorCertificateFingerprint string     `json:"connector_certificate_fingerprint,omitempty"`
+	ConnectorCertificateSerial      string     `json:"connector_certificate_serial,omitempty"`
+	ConnectorCertificateExpiresAt   *time.Time `json:"connector_certificate_expires_at,omitempty"`
+	RelayEnabled                    bool       `json:"relay_enabled"`
+	AIEnabled                       bool       `json:"ai_enabled"`
+	SubscriptionActive              bool       `json:"subscription_active"`
+	SubscriptionEndsAt              *time.Time `json:"subscription_ends_at,omitempty"`
+	CreatedAt                       time.Time  `json:"created_at"`
+	UpdatedAt                       time.Time  `json:"updated_at"`
+	LastConnectorConnectedAt        *time.Time `json:"last_connector_connected_at,omitempty"`
 }
 
 func (i Installation) RelayActive(now time.Time) bool {
@@ -77,13 +80,47 @@ type SubscriptionUpdate struct {
 	ClearEnd           bool       `json:"clear_subscription_end,omitempty"`
 }
 
+type AdminAuditMetadata struct {
+	Action string
+	Actor  string
+	Reason string
+}
+
+type AdminAuditEvent struct {
+	ID             string         `json:"id"`
+	InstallationID string         `json:"installation_id"`
+	Action         string         `json:"action"`
+	Actor          string         `json:"actor"`
+	Reason         string         `json:"reason,omitempty"`
+	Before         map[string]any `json:"before"`
+	After          map[string]any `json:"after"`
+	CreatedAt      time.Time      `json:"created_at"`
+}
+
+type ConnectorCertificateMetadata struct {
+	FingerprintSHA256 string
+	SerialNumber      string
+	ExpiresAt         time.Time
+}
+
 type InstallationStore interface {
 	ProvisionInstallation(ctx context.Context, request ProvisionInstallationRequest) (ProvisionedInstallation, error)
 	GetInstallation(ctx context.Context, id string) (Installation, error)
 	UpdateSubscription(ctx context.Context, id string, update SubscriptionUpdate) (Installation, error)
 	ValidateConnectorToken(ctx context.Context, rawToken string) (Installation, error)
 	ValidateAccessToken(ctx context.Context, rawToken string) (Installation, error)
+	SetConnectorCertificate(ctx context.Context, id string, certificate ConnectorCertificateMetadata) (Installation, error)
 	MarkConnectorConnected(ctx context.Context, id string, connectedAt time.Time) error
+}
+
+type AdminSubscriptionStore interface {
+	UpdateSubscriptionWithAudit(
+		ctx context.Context,
+		id string,
+		update SubscriptionUpdate,
+		metadata AdminAuditMetadata,
+	) (Installation, AdminAuditEvent, error)
+	ListAdminAuditEvents(ctx context.Context, installationID string, limit int) ([]AdminAuditEvent, error)
 }
 
 func validateInstallationToken(
@@ -129,7 +166,8 @@ type FileStore struct {
 }
 
 type fileStoreData struct {
-	Installations map[string]Installation `json:"installations"`
+	Installations    map[string]Installation      `json:"installations"`
+	AdminAuditEvents map[string][]AdminAuditEvent `json:"admin_audit_events,omitempty"`
 }
 
 func NewFileStore(path string, clock Clock) (*FileStore, error) {
@@ -247,6 +285,63 @@ func (s *FileStore) UpdateSubscription(
 	return installation, nil
 }
 
+func (s *FileStore) UpdateSubscriptionWithAudit(
+	_ context.Context,
+	id string,
+	update SubscriptionUpdate,
+	metadata AdminAuditMetadata,
+) (Installation, AdminAuditEvent, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	installation, ok := s.data.Installations[id]
+	if !ok {
+		return Installation{}, AdminAuditEvent{}, ErrNotFound
+	}
+	before := InstallationSubscriptionAuditState(installation, s.clock.Now())
+	installation = applySubscriptionUpdate(installation, update, s.clock.Now())
+	event, err := newAdminAuditEvent(
+		id,
+		metadata,
+		before,
+		InstallationSubscriptionAuditState(installation, s.clock.Now()),
+		s.clock.Now(),
+	)
+	if err != nil {
+		return Installation{}, AdminAuditEvent{}, err
+	}
+	s.data.Installations[id] = installation
+	if s.data.AdminAuditEvents == nil {
+		s.data.AdminAuditEvents = map[string][]AdminAuditEvent{}
+	}
+	s.data.AdminAuditEvents[id] = append([]AdminAuditEvent{event}, s.data.AdminAuditEvents[id]...)
+	if err := s.saveLocked(); err != nil {
+		return Installation{}, AdminAuditEvent{}, err
+	}
+	return installation, event, nil
+}
+
+func (s *FileStore) ListAdminAuditEvents(
+	_ context.Context,
+	installationID string,
+	limit int,
+) ([]AdminAuditEvent, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if _, ok := s.data.Installations[installationID]; !ok {
+		return nil, ErrNotFound
+	}
+	events := append([]AdminAuditEvent(nil), s.data.AdminAuditEvents[installationID]...)
+	if limit <= 0 || limit > 100 {
+		limit = 100
+	}
+	if len(events) > limit {
+		events = events[:limit]
+	}
+	return events, nil
+}
+
 func (s *FileStore) ValidateConnectorToken(
 	ctx context.Context,
 	rawToken string,
@@ -256,6 +351,30 @@ func (s *FileStore) ValidateConnectorToken(
 
 func (s *FileStore) ValidateAccessToken(ctx context.Context, rawToken string) (Installation, error) {
 	return s.validateToken(ctx, rawToken, TokenPurposeAccess)
+}
+
+func (s *FileStore) SetConnectorCertificate(
+	_ context.Context,
+	id string,
+	certificate ConnectorCertificateMetadata,
+) (Installation, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	installation, ok := s.data.Installations[id]
+	if !ok {
+		return Installation{}, ErrNotFound
+	}
+	expiresAt := certificate.ExpiresAt.UTC()
+	installation.ConnectorCertificateFingerprint = certificate.FingerprintSHA256
+	installation.ConnectorCertificateSerial = certificate.SerialNumber
+	installation.ConnectorCertificateExpiresAt = &expiresAt
+	installation.UpdatedAt = s.clock.Now()
+	s.data.Installations[id] = installation
+	if err := s.saveLocked(); err != nil {
+		return Installation{}, err
+	}
+	return installation, nil
 }
 
 func (s *FileStore) MarkConnectorConnected(
@@ -324,6 +443,9 @@ func (s *FileStore) load() error {
 	if s.data.Installations == nil {
 		s.data.Installations = map[string]Installation{}
 	}
+	if s.data.AdminAuditEvents == nil {
+		s.data.AdminAuditEvents = map[string][]AdminAuditEvent{}
+	}
 	return nil
 }
 
@@ -340,4 +462,68 @@ func (s *FileStore) saveLocked() error {
 		return err
 	}
 	return os.Rename(tmpPath, s.path)
+}
+
+func applySubscriptionUpdate(
+	installation Installation,
+	update SubscriptionUpdate,
+	now time.Time,
+) Installation {
+	if update.RelayEnabled != nil {
+		installation.RelayEnabled = *update.RelayEnabled
+	}
+	if update.AIEnabled != nil {
+		installation.AIEnabled = *update.AIEnabled
+	}
+	if update.SubscriptionActive != nil {
+		installation.SubscriptionActive = *update.SubscriptionActive
+	}
+	if update.ClearEnd {
+		installation.SubscriptionEndsAt = nil
+	} else if update.SubscriptionEndsAt != nil {
+		endsAt := update.SubscriptionEndsAt.UTC()
+		installation.SubscriptionEndsAt = &endsAt
+	}
+	installation.UpdatedAt = now
+	return installation
+}
+
+func InstallationSubscriptionAuditState(
+	installation Installation,
+	now time.Time,
+) map[string]any {
+	return map[string]any{
+		"relay_enabled":        installation.RelayEnabled,
+		"subscription_active":  installation.SubscriptionActive,
+		"subscription_ends_at": installation.SubscriptionEndsAt,
+		"ai_enabled":           installation.AIEnabled,
+		"relay_active":         installation.RelayActive(now),
+	}
+}
+
+func newAdminAuditEvent(
+	installationID string,
+	metadata AdminAuditMetadata,
+	before map[string]any,
+	after map[string]any,
+	now time.Time,
+) (AdminAuditEvent, error) {
+	id, err := NewInstallationID()
+	if err != nil {
+		return AdminAuditEvent{}, err
+	}
+	action := metadata.Action
+	if action == "" {
+		action = "subscription.updated"
+	}
+	return AdminAuditEvent{
+		ID:             id,
+		InstallationID: installationID,
+		Action:         action,
+		Actor:          metadata.Actor,
+		Reason:         metadata.Reason,
+		Before:         before,
+		After:          after,
+		CreatedAt:      now.UTC(),
+	}, nil
 }

@@ -98,6 +98,14 @@ func (s *countingStore) ValidateAccessToken(context.Context, string) (Installati
 	return Installation{}, nil
 }
 
+func (s *countingStore) SetConnectorCertificate(
+	context.Context,
+	string,
+	ConnectorCertificateMetadata,
+) (Installation, error) {
+	return s.installation, nil
+}
+
 func (s *countingStore) MarkConnectorConnected(context.Context, string, time.Time) error {
 	return nil
 }

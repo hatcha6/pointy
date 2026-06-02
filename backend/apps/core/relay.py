@@ -1,3 +1,6 @@
+import base64
+import hashlib
+import hmac
 import json
 import ssl
 from dataclasses import dataclass
@@ -7,10 +10,11 @@ from urllib.parse import urljoin, urlparse
 
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
+from django.db import transaction
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 
-from .models import RelayInstallation, ShopSettings
+from .models import RelayConnectorSetupToken, RelayInstallation, ShopSettings
 
 
 class RelayControlError(RuntimeError):
@@ -101,6 +105,14 @@ class RelayControlClient:
             "/v1/relay-tickets",
             body={"device_id": device_id, "device_name": device_name},
             relay_token=access_token,
+        )
+
+    def issue_connector_certificate(self, *, installation_id, csr_pem):
+        return self._request(
+            "POST",
+            f"/v1/installations/{installation_id}/connector-certificate",
+            body={"csr_pem": csr_pem},
+            admin=True,
         )
 
     def _request(self, method, path, *, body=None, admin=False, relay_token=""):
@@ -271,3 +283,45 @@ def issue_pairing_ticket(installation, *, device_id="", device_name="", client=N
     installation.last_pairing_issued_at = timezone.now()
     installation.save(update_fields=["last_pairing_issued_at", "updated_at"])
     return issued
+
+
+def consume_connector_setup_token(raw_token):
+    token = str(raw_token or "").strip()
+    if not token:
+        return False
+    token_hash = connector_setup_token_hash(token)
+    now = timezone.now()
+    with transaction.atomic():
+        record = _locked_setup_token(token_hash, token)
+        if record is None:
+            return False
+        if record.consumed_at is not None:
+            return False
+        if record.expires_at is not None and now >= record.expires_at:
+            return False
+        record.consumed_at = now
+        record.save(update_fields=["consumed_at", "updated_at"])
+    return True
+
+
+def connector_setup_token_hash(raw_token):
+    digest = hashlib.sha256(str(raw_token).encode("utf-8")).digest()
+    return base64.urlsafe_b64encode(digest).decode("ascii").rstrip("=")
+
+
+def _locked_setup_token(token_hash, raw_token):
+    record = (
+        RelayConnectorSetupToken.objects.select_for_update()
+        .filter(token_hash=token_hash)
+        .first()
+    )
+    if record is not None:
+        return record
+
+    seed_token = str(getattr(settings, "POINTY_RELAY_CONNECTOR_SETUP_TOKEN", "")).strip()
+    if not seed_token or not hmac.compare_digest(raw_token, seed_token):
+        return None
+    record, _ = RelayConnectorSetupToken.objects.select_for_update().get_or_create(
+        token_hash=token_hash
+    )
+    return record

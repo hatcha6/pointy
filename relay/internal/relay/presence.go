@@ -12,6 +12,7 @@ type ConnectorPresenceRecord struct {
 	InstallationID string    `json:"installation_id"`
 	NodeID         string    `json:"node_id"`
 	ConnectionID   string    `json:"connection_id"`
+	RelayHTTPURL   string    `json:"relay_http_url,omitempty"`
 	ConnectedAt    time.Time `json:"connected_at"`
 	RefreshedAt    time.Time `json:"refreshed_at"`
 	ExpiresAt      time.Time `json:"expires_at"`

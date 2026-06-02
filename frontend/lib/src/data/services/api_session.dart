@@ -249,7 +249,7 @@ class PosApiSession {
       );
       return response;
     } on Exception catch (exception) {
-      if (_fallbackTarget != null) {
+      if (_fallbackTarget != null && _fallbackTarget!.isUsable) {
         final fallback = _fallbackTarget!;
         _fallbackTarget = null;
         configureConnectionTarget(
@@ -273,6 +273,8 @@ class PosApiSession {
           // Record the original failure below; it is usually the LAN failure
           // that caused routing to fall back.
         }
+      } else if (_fallbackTarget != null) {
+        _fallbackTarget = null;
       }
       stopwatch.stop();
       _recordPerformance(
@@ -340,10 +342,26 @@ class PosApiSession {
 }
 
 class ApiConnectionTarget {
-  const ApiConnectionTarget({required this.baseUrl, this.relayToken = ''});
+  const ApiConnectionTarget({
+    required this.baseUrl,
+    this.relayToken = '',
+    this.relayTokenExpiresAt,
+  });
 
   final String baseUrl;
   final String relayToken;
+  final DateTime? relayTokenExpiresAt;
+
+  bool get isUsable {
+    if (relayToken.trim().isEmpty) {
+      return true;
+    }
+    final expiresAt = relayTokenExpiresAt;
+    if (expiresAt == null) {
+      return true;
+    }
+    return DateTime.now().toUtc().isBefore(expiresAt.toUtc());
+  }
 }
 
 String _normalizeBaseUrl(String value) {

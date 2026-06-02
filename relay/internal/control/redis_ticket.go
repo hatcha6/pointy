@@ -39,18 +39,24 @@ func (s *RedisRelayTicketService) IssueTicket(
 	ctx context.Context,
 	installation Installation,
 	request RelayTicketRequest,
-	ttl time.Duration,
+	ticketTTL time.Duration,
+	refreshTTL time.Duration,
 ) (IssuedRelayTicket, error) {
-	if ttl <= 0 {
-		ttl = 15 * time.Minute
-	}
+	ticketTTL = normalizeTicketTTL(ticketTTL)
+	refreshTTL = normalizeRefreshTTL(refreshTTL)
+
 	token, err := NewToken(TicketTokenPrefix, installation.ID)
+	if err != nil {
+		return IssuedRelayTicket{}, err
+	}
+	refreshToken, err := NewToken(RefreshTokenPrefix, installation.ID)
 	if err != nil {
 		return IssuedRelayTicket{}, err
 	}
 
 	now := s.clock.Now()
-	expiresAt := now.Add(ttl)
+	expiresAt := now.Add(ticketTTL)
+	refreshExpiresAt := now.Add(refreshTTL)
 	ticket := RelayTicket{
 		InstallationID: installation.ID,
 		DeviceID:       strings.TrimSpace(request.DeviceID),
@@ -59,20 +65,38 @@ func (s *RedisRelayTicketService) IssueTicket(
 		IssuedAt:       now,
 		ExpiresAt:      expiresAt,
 	}
+	refresh := RelayRefreshToken{
+		InstallationID: installation.ID,
+		DeviceID:       ticket.DeviceID,
+		DeviceName:     ticket.DeviceName,
+		TokenHash:      TokenHash(refreshToken),
+		IssuedAt:       now,
+		ExpiresAt:      refreshExpiresAt,
+	}
 	content, err := json.Marshal(ticket)
 	if err != nil {
 		return IssuedRelayTicket{}, err
 	}
-	if err := s.client.Set(ctx, s.key(ticket.TokenHash), content, ttl).Err(); err != nil {
+	refreshContent, err := json.Marshal(refresh)
+	if err != nil {
+		return IssuedRelayTicket{}, err
+	}
+	if err := s.client.Set(ctx, s.ticketKey(ticket.TokenHash), content, ticketTTL).Err(); err != nil {
+		return IssuedRelayTicket{}, err
+	}
+	if err := s.client.Set(ctx, s.refreshKey(refresh.TokenHash), refreshContent, refreshTTL).Err(); err != nil {
+		_ = s.client.Del(ctx, s.ticketKey(ticket.TokenHash)).Err()
 		return IssuedRelayTicket{}, err
 	}
 
 	return IssuedRelayTicket{
-		InstallationID: ticket.InstallationID,
-		DeviceID:       ticket.DeviceID,
-		DeviceName:     ticket.DeviceName,
-		Token:          token,
-		ExpiresAt:      expiresAt,
+		InstallationID:   ticket.InstallationID,
+		DeviceID:         ticket.DeviceID,
+		DeviceName:       ticket.DeviceName,
+		Token:            token,
+		ExpiresAt:        expiresAt,
+		RefreshToken:     refreshToken,
+		RefreshExpiresAt: refreshExpiresAt,
 	}, nil
 }
 
@@ -90,7 +114,7 @@ func (s *RedisRelayTicketService) ValidateTicket(
 	}
 
 	tokenHash := TokenHash(rawToken)
-	content, err := s.client.Get(ctx, s.key(tokenHash)).Bytes()
+	content, err := s.client.Get(ctx, s.ticketKey(tokenHash)).Bytes()
 	if errors.Is(err, redis.Nil) {
 		return RelayTicket{}, ErrRelayTicketNotFound
 	}
@@ -100,19 +124,72 @@ func (s *RedisRelayTicketService) ValidateTicket(
 
 	var ticket RelayTicket
 	if err := json.Unmarshal(content, &ticket); err != nil {
-		_ = s.client.Del(ctx, s.key(tokenHash)).Err()
+		_ = s.client.Del(ctx, s.ticketKey(tokenHash)).Err()
 		return RelayTicket{}, err
 	}
 	if ticket.TokenHash != tokenHash || ticket.InstallationID != parsed.InstallationID {
 		return RelayTicket{}, ErrInvalidToken
 	}
 	if !now.Before(ticket.ExpiresAt) {
-		_ = s.client.Del(ctx, s.key(tokenHash)).Err()
+		_ = s.client.Del(ctx, s.ticketKey(tokenHash)).Err()
 		return RelayTicket{}, ErrRelayTicketNotFound
 	}
 	return ticket, nil
 }
 
-func (s *RedisRelayTicketService) key(tokenHash string) string {
+func (s *RedisRelayTicketService) ConsumeRefreshToken(
+	ctx context.Context,
+	rawToken string,
+	now time.Time,
+) (RelayRefreshToken, error) {
+	parsed, err := ParseToken(rawToken)
+	if err != nil {
+		return RelayRefreshToken{}, err
+	}
+	if parsed.Purpose != TokenPurposeRefresh {
+		return RelayRefreshToken{}, ErrWrongPurpose
+	}
+
+	tokenHash := TokenHash(rawToken)
+	content, err := s.client.GetDel(ctx, s.refreshKey(tokenHash)).Bytes()
+	if errors.Is(err, redis.Nil) {
+		return RelayRefreshToken{}, ErrRelayRefreshTokenNotFound
+	}
+	if err != nil {
+		return RelayRefreshToken{}, err
+	}
+
+	var refresh RelayRefreshToken
+	if err := json.Unmarshal(content, &refresh); err != nil {
+		return RelayRefreshToken{}, err
+	}
+	if refresh.TokenHash != tokenHash || refresh.InstallationID != parsed.InstallationID {
+		return RelayRefreshToken{}, ErrInvalidToken
+	}
+	if !now.Before(refresh.ExpiresAt) {
+		return RelayRefreshToken{}, ErrRelayRefreshTokenNotFound
+	}
+	return refresh, nil
+}
+
+func (s *RedisRelayTicketService) ticketKey(tokenHash string) string {
 	return s.keyPrefix + ":ticket:" + tokenHash
+}
+
+func (s *RedisRelayTicketService) refreshKey(tokenHash string) string {
+	return s.keyPrefix + ":ticket-refresh:" + tokenHash
+}
+
+func normalizeTicketTTL(ttl time.Duration) time.Duration {
+	if ttl <= 0 {
+		return 15 * time.Minute
+	}
+	return ttl
+}
+
+func normalizeRefreshTTL(ttl time.Duration) time.Duration {
+	if ttl <= 0 {
+		return 7 * 24 * time.Hour
+	}
+	return ttl
 }

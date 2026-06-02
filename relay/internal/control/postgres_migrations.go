@@ -24,6 +24,9 @@ CREATE TABLE IF NOT EXISTS relay_installations (
 	shop_name text NOT NULL DEFAULT '',
 	connector_token_hash text NOT NULL,
 	access_token_hash text NOT NULL,
+	connector_certificate_fingerprint text NOT NULL DEFAULT '',
+	connector_certificate_serial text NOT NULL DEFAULT '',
+	connector_certificate_expires_at timestamptz,
 	relay_enabled boolean NOT NULL DEFAULT false,
 	ai_enabled boolean NOT NULL DEFAULT false,
 	subscription_active boolean NOT NULL DEFAULT false,
@@ -56,6 +59,42 @@ ALTER TABLE relay_installations
 
 ALTER TABLE relay_installations
 	ALTER COLUMN subscription_active SET DEFAULT false;
+`,
+	},
+	{
+		version: 3,
+		name:    "connector certificate binding",
+		sql: `
+ALTER TABLE relay_installations
+	ADD COLUMN IF NOT EXISTS connector_certificate_fingerprint text NOT NULL DEFAULT '';
+
+ALTER TABLE relay_installations
+	ADD COLUMN IF NOT EXISTS connector_certificate_serial text NOT NULL DEFAULT '';
+
+ALTER TABLE relay_installations
+	ADD COLUMN IF NOT EXISTS connector_certificate_expires_at timestamptz;
+`,
+	},
+	{
+		version: 4,
+		name:    "relay admin audit events",
+		sql: `
+CREATE TABLE IF NOT EXISTS relay_admin_audit_events (
+	id text PRIMARY KEY,
+	installation_id text NOT NULL REFERENCES relay_installations(id) ON DELETE CASCADE,
+	action text NOT NULL,
+	actor text NOT NULL,
+	reason text NOT NULL DEFAULT '',
+	before_state jsonb NOT NULL DEFAULT '{}'::jsonb,
+	after_state jsonb NOT NULL DEFAULT '{}'::jsonb,
+	created_at timestamptz NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS relay_admin_audit_events_installation_created_idx
+	ON relay_admin_audit_events (installation_id, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS relay_admin_audit_events_action_created_idx
+	ON relay_admin_audit_events (action, created_at DESC);
 `,
 	},
 }

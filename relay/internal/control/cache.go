@@ -2,6 +2,7 @@ package control
 
 import (
 	"context"
+	"errors"
 	"time"
 )
 
@@ -70,6 +71,41 @@ func (s *CachedInstallationStore) UpdateSubscription(
 	return installation, nil
 }
 
+func (s *CachedInstallationStore) UpdateSubscriptionWithAudit(
+	ctx context.Context,
+	id string,
+	update SubscriptionUpdate,
+	metadata AdminAuditMetadata,
+) (Installation, AdminAuditEvent, error) {
+	adminStore, ok := s.store.(AdminSubscriptionStore)
+	if !ok {
+		return Installation{}, AdminAuditEvent{}, errors.New("admin audit store is unavailable")
+	}
+	installation, event, err := adminStore.UpdateSubscriptionWithAudit(
+		ctx,
+		id,
+		update,
+		metadata,
+	)
+	if err != nil {
+		return Installation{}, AdminAuditEvent{}, err
+	}
+	_ = s.cacheInstallation(ctx, installation)
+	return installation, event, nil
+}
+
+func (s *CachedInstallationStore) ListAdminAuditEvents(
+	ctx context.Context,
+	installationID string,
+	limit int,
+) ([]AdminAuditEvent, error) {
+	adminStore, ok := s.store.(AdminSubscriptionStore)
+	if !ok {
+		return nil, errors.New("admin audit store is unavailable")
+	}
+	return adminStore.ListAdminAuditEvents(ctx, installationID, limit)
+}
+
 func (s *CachedInstallationStore) ValidateConnectorToken(
 	ctx context.Context,
 	rawToken string,
@@ -82,6 +118,19 @@ func (s *CachedInstallationStore) ValidateAccessToken(
 	rawToken string,
 ) (Installation, error) {
 	return s.validateToken(ctx, rawToken, TokenPurposeAccess)
+}
+
+func (s *CachedInstallationStore) SetConnectorCertificate(
+	ctx context.Context,
+	id string,
+	certificate ConnectorCertificateMetadata,
+) (Installation, error) {
+	installation, err := s.store.SetConnectorCertificate(ctx, id, certificate)
+	if err != nil {
+		return Installation{}, err
+	}
+	_ = s.cacheInstallation(ctx, installation)
+	return installation, nil
 }
 
 func (s *CachedInstallationStore) MarkConnectorConnected(

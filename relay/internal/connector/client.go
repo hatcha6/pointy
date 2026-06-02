@@ -15,21 +15,23 @@ import (
 	"strings"
 	"time"
 
+	"pointy/relay/internal/limit"
 	"pointy/relay/internal/protocol"
 )
 
 type Client struct {
-	RelayAddress     string
-	Token            string
-	BackendURL       *url.URL
-	Logger           *slog.Logger
-	DialTimeout      time.Duration
-	RequestTimeout   time.Duration
-	ReconnectMinWait time.Duration
-	ReconnectMaxWait time.Duration
-	HTTPClient       *http.Client
-	UseTLS           bool
-	TLSConfig        *tls.Config
+	RelayAddress          string
+	Token                 string
+	BackendURL            *url.URL
+	Logger                *slog.Logger
+	DialTimeout           time.Duration
+	RequestTimeout        time.Duration
+	MaxConcurrentRequests int
+	ReconnectMinWait      time.Duration
+	ReconnectMaxWait      time.Duration
+	HTTPClient            *http.Client
+	UseTLS                bool
+	TLSConfig             *tls.Config
 }
 
 func (c Client) Run(ctx context.Context) error {
@@ -127,6 +129,7 @@ func (c Client) ServeSession(ctx context.Context, session *protocol.Session) err
 	}()
 
 	c.logger().Info("relay connector session established")
+	requestLimiter := limit.New(c.MaxConcurrentRequests)
 	for {
 		acceptCtx, cancel := context.WithCancel(ctx)
 		stream, err := session.Accept(acceptCtx)
@@ -141,8 +144,21 @@ func (c Client) ServeSession(ctx context.Context, session *protocol.Session) err
 			}
 			return err
 		}
-		go c.handleStream(ctx, stream)
+		release, ok := limit.TryAcquire(requestLimiter)
+		if !ok {
+			go rejectStream(stream, http.StatusTooManyRequests, "connector request limit reached")
+			continue
+		}
+		go func() {
+			defer release()
+			c.handleStream(ctx, stream)
+		}()
 	}
+}
+
+func rejectStream(stream *protocol.Stream, statusCode int, message string) {
+	defer stream.Close()
+	_ = writeHTTPError(stream, statusCode, message)
 }
 
 func (c Client) handleStream(ctx context.Context, stream *protocol.Stream) {

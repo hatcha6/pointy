@@ -14,6 +14,7 @@ const (
 	ConnectorTokenPrefix = "ptc1"
 	AccessTokenPrefix    = "ptr1"
 	TicketTokenPrefix    = "ptt1"
+	RefreshTokenPrefix   = "ptrf1"
 )
 
 var (
@@ -27,6 +28,7 @@ const (
 	TokenPurposeConnector TokenPurpose = "connector"
 	TokenPurposeAccess    TokenPurpose = "access"
 	TokenPurposeTicket    TokenPurpose = "ticket"
+	TokenPurposeRefresh   TokenPurpose = "refresh"
 )
 
 type ParsedToken struct {
@@ -75,6 +77,8 @@ func ParseToken(raw string) (ParsedToken, error) {
 		purpose = TokenPurposeAccess
 	case TicketTokenPrefix:
 		purpose = TokenPurposeTicket
+	case RefreshTokenPrefix:
+		purpose = TokenPurposeRefresh
 	default:
 		return ParsedToken{}, ErrInvalidToken
 	}

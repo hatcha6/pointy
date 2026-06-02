@@ -87,4 +87,32 @@ void main() {
       expect(session.usesRelay, isTrue);
     },
   );
+
+  test('API session skips expired relay fallback on network failure', () async {
+    var requests = 0;
+    final session = PosApiSession(
+      client: MockClient((request) async {
+        requests += 1;
+        expect(request.url.host, 'lan.test');
+        throw Exception('lan offline');
+      }),
+      baseUrl: 'http://lan.test/api',
+    );
+    session.configureConnectionTarget(
+      baseUrl: 'http://lan.test/api',
+      fallbackTarget: ApiConnectionTarget(
+        baseUrl: 'https://relay.test/api',
+        relayToken: 'ptt1.expired',
+        relayTokenExpiresAt: DateTime.now().toUtc().subtract(
+          const Duration(minutes: 1),
+        ),
+      ),
+    );
+
+    await expectLater(session.get('products/'), throwsException);
+
+    expect(requests, 1);
+    expect(session.baseUrl, 'http://lan.test/api');
+    expect(session.usesRelay, isFalse);
+  });
 }

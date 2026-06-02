@@ -182,6 +182,7 @@ class PointyAppDependencies {
   }
 
   void dispose() {
+    connectionCoordinator.dispose();
     analyticsEngine.dispose();
     authViewModel.dispose();
     posViewModel.dispose();

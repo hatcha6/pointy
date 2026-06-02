@@ -6,7 +6,9 @@ class RelayPairing {
     required this.relayPublicApiUrl,
     required this.relayToken,
     required this.reason,
+    this.relayRefreshToken = '',
     this.expiresAt,
+    this.refreshExpiresAt,
   });
 
   final bool remoteAccessSupported;
@@ -15,9 +17,13 @@ class RelayPairing {
   final String relayPublicApiUrl;
   final String relayToken;
   final String reason;
+  final String relayRefreshToken;
   final DateTime? expiresAt;
+  final DateTime? refreshExpiresAt;
 
   bool get hasTicket => remoteAccessSupported && relayToken.trim().isNotEmpty;
+  bool get hasRefreshToken =>
+      remoteAccessSupported && relayRefreshToken.trim().isNotEmpty;
 
   factory RelayPairing.fromJson(Map<String, Object?> json) {
     return RelayPairing(
@@ -27,7 +33,9 @@ class RelayPairing {
       relayPublicApiUrl: json['relay_public_api_url']?.toString() ?? '',
       relayToken: json['relay_token']?.toString() ?? '',
       reason: json['reason']?.toString() ?? '',
+      relayRefreshToken: json['relay_refresh_token']?.toString() ?? '',
       expiresAt: _dateTimeFromJson(json['expires_at']),
+      refreshExpiresAt: _dateTimeFromJson(json['refresh_expires_at']),
     );
   }
 }

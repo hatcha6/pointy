@@ -198,6 +198,12 @@ make backend-run
 make relay-connector RELAY_CONNECTOR_SETUP_TOKEN=local-connector-setup
 ```
 
+The connector setup token is consumed once by the backend. After a successful
+bootstrap the connector writes its connector token and, for mTLS, its issued
+certificate material to `POINTY_RELAY_CONNECTOR_STATE_FILE` or the default
+state file under the user's Pointy state directory. Heartbeats use the connector
+token, not the setup token, so the setup secret is never needed after first run.
+
 By default, Django exposes a private-network discovery endpoint at
 `/api/discovery/service/` and answers UDP discovery probes on port `47777`.
 The connector uses that discovery path when `--backend` is omitted, so the
@@ -205,7 +211,12 @@ normal local setup does not need a backend URL. Flutter also discovers the LAN
 backend before loading the current session. After a cashier or manager signs in
 over LAN, the app asks the backend for a short-lived relay ticket and stores the
 local API URL plus the relay fallback. Later requests use LAN first and switch
-to relay only when the saved local target is unreachable.
+to relay only when the saved local target is unreachable. Relay tickets remain
+short lived. The app prefers LAN refresh while the backend is reachable; when
+LAN is unavailable, an already-paired device may use its rotating relay refresh
+credential to mint the next short-lived ticket remotely. If both the ticket and
+refresh credential expire while LAN is unavailable, the app stays offline until
+it pairs over LAN again.
 
 Discovery only returns non-secret metadata such as shop name, installation id,
 backend URL, relay public URL, and connector heartbeat time. Relay pairing is
@@ -243,23 +254,57 @@ curl \
 
 When the relay entitlement and subscription are active, the backend exchanges
 its stored long-lived access token for a short-lived `ptt1...` relay ticket and
-returns the relay URL, shop name, installation id, ticket, and expiry to the
-phone. Long-lived `ptr1...` access tokens are not meant to be stored on phones.
+returns the relay URL, shop name, installation id, ticket, rotating
+`ptrf1...` refresh credential, and expiries to the phone. Long-lived `ptr1...`
+access tokens are not meant to be stored on phones.
 The relay accepts `/r/<relay-ticket>/api/...` only for short-lived ticket tokens;
-long-lived access tokens must stay in backend-controlled server-side paths.
+long-lived access tokens and refresh credentials must stay out of URL paths.
+Refresh credentials are hash-stored in Redis, consumed atomically on use, and
+rotated every time the relay issues a refreshed ticket.
+
+Relay subscriptions are managed by our company through the separate Go relay
+cloud service, not through the customer Pointy Flutter or Django UI. Operators
+use the relay admin API, `/admin` console, or `pointy-relay subscription update`
+with relay admin auth, actor, and reason metadata. Each change writes a relay
+admin audit event and the customer backend later observes the new entitlement
+state through its normal relay sync path.
 
 Production relay deployments should run both public listeners with TLS. The
 connector listener requires connector mTLS by default, and HTTP admin endpoints
 can require backend client certificates with `RELAY_REQUIRE_ADMIN_CLIENT_CERT`
 and `RELAY_HTTP_CLIENT_CA`. The Makefile defaults to explicit insecure relay
-listeners only for local development.
+listeners only for local development. To issue connector client certificates
+automatically, configure the relay with `RELAY_CONNECTOR_CLIENT_CA` and
+`RELAY_CONNECTOR_CLIENT_CA_KEY`; the connector generates its private key locally
+and sends only a CSR through the backend bootstrap path.
 
 The relay uses PostgreSQL for durable installation state: token hashes,
 subscription flags, AI entitlement flags, and connector heartbeat metadata.
 Redis is used for hot installation cache entries and short-lived connector
 presence/relay-node ownership. Redis also stores short-lived relay ticket
-metadata and token hashes. Live request bodies and tunnel bytes stay on the
-connector TCP session and are never stored in Redis.
+metadata plus rotating refresh-token metadata and token hashes. Live request
+bodies and tunnel bytes stay on the connector TCP session and are never stored
+in Redis.
+
+For multi-node relay deployments, each relay node can advertise a private
+`RELAY_NODE_INTERNAL_URL` and require a shared `RELAY_NODE_PROXY_TOKEN` for
+node-to-node routing. This lets a phone request that lands on node A route to
+node B when Redis presence shows that node B owns the connector session. The
+internal URL is HTTPS-only by default; `RELAY_ALLOW_INSECURE_NODE_PROXY` is for
+local development.
+
+The production relay path has explicit guardrails for request size, response
+size, stream-open timeout, total relay timeout, concurrent remote requests, and
+Redis-backed rate limits for relayed requests, ticket issuance, and ticket
+refreshes. The connector also caps concurrent backend-forwarded requests and
+applies a backend request timeout. These are configured with the `RELAY_*`
+Makefile variables or the matching `POINTY_RELAY_*` environment variables
+documented in `relay/README.md`.
+
+Relay support endpoints are available at `/v1/status`, `/v1/metrics`, and
+`/v1/installations/<installation-id>/status`. They require relay admin auth and
+return aggregate counters plus sanitized per-installation support state without
+exposing connector/access token hashes or bearer credentials.
 
 Remote relay access is denied when an installation's relay entitlement is
 disabled, the subscription flag is inactive, or its subscription end time has

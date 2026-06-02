@@ -2,22 +2,27 @@ package relay
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"log/slog"
 	"net"
 	"time"
 
 	"pointy/relay/internal/control"
+	"pointy/relay/internal/observability"
 	"pointy/relay/internal/protocol"
+	"pointy/relay/internal/security"
 )
 
 type ConnectorServer struct {
 	Store                     control.InstallationStore
 	Hub                       *Hub
 	Logger                    *slog.Logger
+	Metrics                   *observability.Metrics
 	HandshakeTimeout          time.Duration
 	Presence                  ConnectorPresence
 	NodeID                    string
+	NodeRelayURL              string
 	PresenceTTL               time.Duration
 	PresenceHeartbeatInterval time.Duration
 }
@@ -65,6 +70,18 @@ func (s ConnectorServer) handleConn(ctx context.Context, raw net.Conn, logger *s
 		_ = conn.Close()
 		return
 	}
+	if err := validateConnectorCertificate(raw, installation, time.Now().UTC()); err != nil {
+		_ = protocol.WriteError(conn, "connector certificate rejected")
+		logger.Warn(
+			"relay connector certificate rejected",
+			"installation_id",
+			installation.ID,
+			"error",
+			err,
+		)
+		_ = conn.Close()
+		return
+	}
 	if err := conn.WriteFrame(protocol.Frame{Type: protocol.FrameHelloAck}); err != nil {
 		logger.Warn("relay connector handshake ack failed", "installation_id", installation.ID, "error", err)
 		_ = conn.Close()
@@ -75,6 +92,8 @@ func (s ConnectorServer) handleConn(ctx context.Context, raw net.Conn, logger *s
 	session := protocol.NewSession(conn)
 	unregister := s.Hub.Register(installation.ID, session)
 	defer unregister()
+	releaseMetrics := s.metrics().ConnectorConnected()
+	defer releaseMetrics()
 	stopPresence := s.startPresence(ctx, installation.ID, logger)
 	defer stopPresence()
 	if err := s.Store.MarkConnectorConnected(ctx, installation.ID, time.Now().UTC()); err != nil {
@@ -86,6 +105,34 @@ func (s ConnectorServer) handleConn(ctx context.Context, raw net.Conn, logger *s
 		return
 	}
 	logger.Info("relay connector disconnected", "installation_id", installation.ID)
+}
+
+func validateConnectorCertificate(
+	raw net.Conn,
+	installation control.Installation,
+	now time.Time,
+) error {
+	if installation.ConnectorCertificateFingerprint == "" {
+		return nil
+	}
+	tlsConn, ok := raw.(*tls.Conn)
+	if !ok {
+		return errors.New("connector certificate binding requires TLS")
+	}
+	state := tlsConn.ConnectionState()
+	if len(state.PeerCertificates) == 0 {
+		return errors.New("connector certificate is missing")
+	}
+	certificate := state.PeerCertificates[0]
+	fingerprint := security.CertificateFingerprintSHA256(certificate.Raw)
+	if fingerprint != installation.ConnectorCertificateFingerprint {
+		return errors.New("connector certificate fingerprint does not match installation")
+	}
+	if installation.ConnectorCertificateExpiresAt != nil &&
+		!now.Before(*installation.ConnectorCertificateExpiresAt) {
+		return errors.New("connector certificate binding is expired")
+	}
+	return nil
 }
 
 func (s ConnectorServer) startPresence(
@@ -118,6 +165,7 @@ func (s ConnectorServer) startPresence(
 		InstallationID: installationID,
 		NodeID:         s.NodeID,
 		ConnectionID:   connectionID,
+		RelayHTTPURL:   s.NodeRelayURL,
 		ConnectedAt:    time.Now().UTC(),
 	}
 	lease, err := s.Presence.MarkOnline(ctx, record, ttl)
@@ -166,4 +214,11 @@ func (s ConnectorServer) logger() *slog.Logger {
 		return s.Logger
 	}
 	return slog.Default()
+}
+
+func (s ConnectorServer) metrics() *observability.Metrics {
+	if s.Metrics != nil {
+		return s.Metrics
+	}
+	return nil
 }

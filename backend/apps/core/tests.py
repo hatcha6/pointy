@@ -27,7 +27,7 @@ from apps.purchasing.models import (
     SupplierPayment,
 )
 from apps.sales.models import Order, OrderLine, RegisterCashMovement, RegisterSession
-from .models import RelayInstallation, ShopSettings
+from .models import RelayConnectorSetupToken, RelayInstallation, ShopSettings
 from .roles import CASHIER_GROUP, MANAGER_GROUP, bootstrap_admin_user, ensure_role_groups
 from .discovery import private_network_host_for_peer
 
@@ -45,6 +45,7 @@ class FakeRelayControlClient:
         self.subscription_active = subscription_active
         self.provisioned_shop_name = ""
         self.issued_ticket_request = None
+        self.issued_connector_certificate_request = None
 
     def provision_installation(self, *, shop_name):
         self.provisioned_shop_name = shop_name
@@ -83,6 +84,21 @@ class FakeRelayControlClient:
             "device_id": device_id,
             "device_name": device_name,
             "expires_at": timezone.now() + timedelta(minutes=15),
+            "refresh_token": "ptrf1.installation-1.refresh-secret",
+            "refresh_expires_at": timezone.now() + timedelta(days=7),
+        }
+
+    def issue_connector_certificate(self, *, installation_id, csr_pem):
+        self.issued_connector_certificate_request = {
+            "installation_id": installation_id,
+            "csr_pem": csr_pem,
+        }
+        return {
+            "certificate_pem": "-----BEGIN CERTIFICATE-----\ncert\n-----END CERTIFICATE-----\n",
+            "ca_certificate_pem": "-----BEGIN CERTIFICATE-----\nca\n-----END CERTIFICATE-----\n",
+            "fingerprint_sha256": "fingerprint",
+            "serial_number": "serial",
+            "expires_at": timezone.now() + timedelta(days=90),
         }
 
 
@@ -480,8 +496,9 @@ class RelayBackendApiTests(TestCase):
         client = APIClient()
         client.force_authenticate(user=self.manager)
 
-        with mock.patch("apps.core.relay.RelayControlClient", return_value=fake_relay):
-            response = client.post(reverse("relay-installation"), {}, format="json")
+        with self.captureOnCommitCallbacks(execute=True):
+            with mock.patch("apps.core.relay.RelayControlClient", return_value=fake_relay):
+                response = client.post(reverse("relay-installation"), {}, format="json")
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertFalse(response.data["remote_access_supported"])
@@ -497,6 +514,15 @@ class RelayBackendApiTests(TestCase):
             installation.connector_token,
             "ptc1.installation-1.connector-secret",
         )
+        event = AnalyticsEvent.objects.get(name="relay.installation.provisioned")
+        self.assertEqual(event.event_type, AnalyticsEvent.EventType.AUDIT)
+        self.assertEqual(event.source, AnalyticsEvent.Source.BACKEND)
+        self.assertEqual(event.received_by, self.manager)
+        self.assertEqual(event.entity_type, "relay_installation")
+        self.assertEqual(event.entity_id, str(installation.pk))
+        self.assertEqual(event.attributes["installation_id"], "installation-1")
+        self.assertFalse(event.attributes["relay_enabled"])
+        self.assertFalse(event.attributes["subscription_active"])
 
     def test_cashier_cannot_manage_relay_installation(self):
         client = APIClient()
@@ -506,6 +532,45 @@ class RelayBackendApiTests(TestCase):
 
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
         self.assertEqual(RelayInstallation.objects.count(), 0)
+
+    def test_manager_syncs_relay_installation_with_audit_event(self):
+        installation = RelayInstallation.objects.create(
+            installation_id="installation-1",
+            shop_name="متجر آمن",
+            relay_public_api_url="https://relay.example",
+            relay_connector_address="relay.example:443",
+            connector_token="ptc1.installation-1.connector-secret",
+            access_token="ptr1.installation-1.access-secret",
+            relay_enabled=False,
+            subscription_active=False,
+        )
+        fake_relay = FakeRelayControlClient(
+            relay_enabled=True,
+            subscription_active=True,
+        )
+        client = APIClient()
+        client.force_authenticate(user=self.manager)
+
+        with self.captureOnCommitCallbacks(execute=True):
+            with mock.patch("apps.core.relay.RelayControlClient", return_value=fake_relay):
+                response = client.post(
+                    reverse("relay-installation"),
+                    {"sync": True},
+                    format="json",
+                )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        installation.refresh_from_db()
+        self.assertTrue(installation.relay_enabled)
+        self.assertTrue(installation.subscription_active)
+        event = AnalyticsEvent.objects.get(name="relay.installation.synced")
+        self.assertEqual(event.event_type, AnalyticsEvent.EventType.AUDIT)
+        self.assertEqual(event.received_by, self.manager)
+        self.assertEqual(event.entity_type, "relay_installation")
+        self.assertEqual(event.entity_id, str(installation.pk))
+        self.assertEqual(event.attributes["installation_id"], "installation-1")
+        self.assertTrue(event.attributes["relay_enabled"])
+        self.assertTrue(event.attributes["subscription_active"])
 
     def test_pairing_returns_short_lived_ticket_when_subscription_is_active(self):
         installation = RelayInstallation.objects.create(
@@ -525,16 +590,21 @@ class RelayBackendApiTests(TestCase):
         client = APIClient()
         client.force_authenticate(user=self.cashier)
 
-        with mock.patch("apps.core.relay.RelayControlClient", return_value=fake_relay):
-            response = client.post(
-                reverse("relay-pairing"),
-                {"device_id": "phone-1", "device_name": "هاتف المدير"},
-                format="json",
-            )
+        with self.captureOnCommitCallbacks(execute=True):
+            with mock.patch("apps.core.relay.RelayControlClient", return_value=fake_relay):
+                response = client.post(
+                    reverse("relay-pairing"),
+                    {"device_id": "phone-1", "device_name": "هاتف المدير"},
+                    format="json",
+                )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertTrue(response.data["remote_access_supported"])
         self.assertEqual(response.data["relay_token"], "ptt1.installation-1.ticket-secret")
+        self.assertEqual(
+            response.data["relay_refresh_token"],
+            "ptrf1.installation-1.refresh-secret",
+        )
         self.assertEqual(response.data["relay_public_api_url"], "https://relay.example")
         self.assertEqual(
             fake_relay.issued_ticket_request,
@@ -546,6 +616,17 @@ class RelayBackendApiTests(TestCase):
         )
         installation.refresh_from_db()
         self.assertIsNotNone(installation.last_pairing_issued_at)
+        event = AnalyticsEvent.objects.get(name="relay.pairing.ticket_issued")
+        self.assertEqual(event.event_type, AnalyticsEvent.EventType.AUDIT)
+        self.assertEqual(event.received_by, self.cashier)
+        self.assertEqual(event.installation_id, "installation-1")
+        self.assertEqual(event.device_id, "phone-1")
+        self.assertEqual(event.entity_type, "relay_installation")
+        self.assertEqual(event.entity_id, str(installation.pk))
+        self.assertTrue(event.attributes["relay_enabled"])
+        self.assertTrue(event.attributes["subscription_active"])
+        self.assertTrue(event.attributes["device_id_present"])
+        self.assertTrue(event.attributes["device_name_present"])
 
     def test_pairing_does_not_issue_ticket_when_subscription_is_inactive(self):
         RelayInstallation.objects.create(
@@ -571,8 +652,51 @@ class RelayBackendApiTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertFalse(response.data["remote_access_supported"])
         self.assertEqual(response.data["relay_token"], "")
+        self.assertEqual(response.data["relay_refresh_token"], "")
         self.assertEqual(response.data["reason"], "relay_not_active")
         self.assertIsNone(fake_relay.issued_ticket_request)
+
+    def test_pairing_refresh_can_issue_repeated_lan_tickets(self):
+        installation = RelayInstallation.objects.create(
+            installation_id="installation-1",
+            shop_name="متجر آمن",
+            relay_public_api_url="https://relay.example",
+            relay_connector_address="relay.example:443",
+            connector_token="ptc1.installation-1.connector-secret",
+            access_token="ptr1.installation-1.access-secret",
+            relay_enabled=True,
+            subscription_active=True,
+        )
+        fake_relay = FakeRelayControlClient(
+            relay_enabled=True,
+            subscription_active=True,
+        )
+        client = APIClient()
+        client.force_authenticate(user=self.cashier)
+
+        with mock.patch("apps.core.relay.RelayControlClient", return_value=fake_relay):
+            first = client.post(
+                reverse("relay-pairing"),
+                {"device_id": "phone-1"},
+                format="json",
+            )
+            first_issued_at = RelayInstallation.objects.get().last_pairing_issued_at
+            second = client.post(
+                reverse("relay-pairing"),
+                {"device_id": "phone-1"},
+                format="json",
+            )
+
+        self.assertEqual(first.status_code, status.HTTP_200_OK)
+        self.assertEqual(second.status_code, status.HTTP_200_OK)
+        self.assertTrue(first.data["remote_access_supported"])
+        self.assertTrue(second.data["remote_access_supported"])
+        installation.refresh_from_db()
+        self.assertIsNotNone(first_issued_at)
+        self.assertGreaterEqual(
+            installation.last_pairing_issued_at,
+            first_issued_at,
+        )
 
     def test_pairing_requires_lan_request(self):
         RelayInstallation.objects.create(
@@ -638,26 +762,103 @@ class RelayBackendApiTests(TestCase):
         self.assertEqual(response.data["reason"], "relay_requires_lan_pairing")
         self.assertIsNone(fake_relay.issued_ticket_request)
 
+    def test_first_pairing_rejects_relay_tunneled_request_before_configuration(self):
+        fake_relay = FakeRelayControlClient(
+            relay_enabled=True,
+            subscription_active=True,
+        )
+        client = APIClient()
+        client.force_authenticate(user=self.cashier)
+
+        with mock.patch("apps.core.relay.RelayControlClient", return_value=fake_relay):
+            response = client.post(
+                reverse("relay-pairing"),
+                {},
+                format="json",
+                REMOTE_ADDR="127.0.0.1",
+                HTTP_X_POINTY_RELAYED_REQUEST="1",
+            )
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertFalse(response.data["remote_access_supported"])
+        self.assertEqual(response.data["reason"], "relay_requires_lan_pairing")
+        self.assertIsNone(fake_relay.issued_ticket_request)
+        self.assertEqual(RelayInstallation.objects.count(), 0)
+
     @override_settings(POINTY_RELAY_CONNECTOR_SETUP_TOKEN="setup-secret")
     def test_connector_config_requires_setup_token(self):
         fake_relay = FakeRelayControlClient()
 
-        with mock.patch("apps.core.relay.RelayControlClient", return_value=fake_relay):
-            rejected = APIClient().post(reverse("relay-connector-config"), {}, format="json")
-            accepted = APIClient().post(
-                reverse("relay-connector-config"),
-                {},
-                format="json",
-                HTTP_X_POINTY_CONNECTOR_SETUP_TOKEN="setup-secret",
-            )
+        with self.captureOnCommitCallbacks(execute=True):
+            with mock.patch(
+                "apps.core.relay.RelayControlClient",
+                return_value=fake_relay,
+            ), mock.patch(
+                "apps.core.relay_views.RelayControlClient",
+                return_value=fake_relay,
+            ):
+                rejected = APIClient().post(
+                    reverse("relay-connector-config"),
+                    {},
+                    format="json",
+                )
+                accepted = APIClient().post(
+                    reverse("relay-connector-config"),
+                    {"csr_pem": "-----BEGIN CERTIFICATE REQUEST-----\ncsr\n-----END CERTIFICATE REQUEST-----\n"},
+                    format="json",
+                    HTTP_X_POINTY_CONNECTOR_SETUP_TOKEN="setup-secret",
+                )
+                replayed = APIClient().post(
+                    reverse("relay-connector-config"),
+                    {},
+                    format="json",
+                    HTTP_X_POINTY_CONNECTOR_SETUP_TOKEN="setup-secret",
+                )
 
         self.assertEqual(rejected.status_code, status.HTTP_403_FORBIDDEN)
         self.assertEqual(accepted.status_code, status.HTTP_200_OK)
+        self.assertEqual(replayed.status_code, status.HTTP_403_FORBIDDEN)
         self.assertEqual(
             accepted.data["connector_token"],
             "ptc1.installation-1.connector-secret",
         )
         self.assertEqual(accepted.data["relay_connector_address"], "relay.example:443")
+        self.assertIn("BEGIN CERTIFICATE", accepted.data["connector_certificate_pem"])
+        self.assertIn(
+            "BEGIN CERTIFICATE",
+            accepted.data["connector_ca_certificate_pem"],
+        )
+        self.assertEqual(
+            fake_relay.issued_connector_certificate_request["installation_id"],
+            "installation-1",
+        )
+        setup_token = RelayConnectorSetupToken.objects.get()
+        self.assertNotEqual(setup_token.token_hash, "setup-secret")
+        self.assertIsNotNone(setup_token.consumed_at)
+        installation = RelayInstallation.objects.get()
+        event = AnalyticsEvent.objects.get(name="relay.connector.bootstrap_succeeded")
+        self.assertEqual(event.event_type, AnalyticsEvent.EventType.AUDIT)
+        self.assertIsNone(event.received_by)
+        self.assertEqual(event.installation_id, "installation-1")
+        self.assertEqual(event.entity_type, "relay_installation")
+        self.assertEqual(event.entity_id, str(installation.pk))
+        self.assertTrue(event.attributes["certificate_issued"])
+        self.assertNotIn("connector_token", event.attributes)
+
+    @override_settings(POINTY_RELAY_CONNECTOR_SETUP_TOKEN="setup-secret")
+    def test_connector_config_rejects_relay_tunneled_request(self):
+        with mock.patch("apps.core.relay_views.ensure_relay_installation") as ensure:
+            response = APIClient().post(
+                reverse("relay-connector-config"),
+                {},
+                format="json",
+                HTTP_X_POINTY_CONNECTOR_SETUP_TOKEN="setup-secret",
+                HTTP_X_POINTY_RELAYED_REQUEST="1",
+            )
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        ensure.assert_not_called()
+        self.assertEqual(RelayConnectorSetupToken.objects.count(), 0)
 
     def test_discovery_service_returns_safe_lan_metadata(self):
         RelayInstallation.objects.create(
@@ -744,7 +945,6 @@ class RelayBackendApiTests(TestCase):
         fake_socket.connect.assert_called_once_with(("192.168.1.10", 9))
         fake_socket.close.assert_called_once()
 
-    @override_settings(POINTY_RELAY_CONNECTOR_SETUP_TOKEN="setup-secret")
     def test_connector_heartbeat_updates_installation_metadata(self):
         installation = RelayInstallation.objects.create(
             installation_id="installation-1",
@@ -764,11 +964,18 @@ class RelayBackendApiTests(TestCase):
             reverse("relay-connector-heartbeat"),
             {"version": "pointy-relay/test"},
             format="json",
+            HTTP_X_POINTY_CONNECTOR_TOKEN="ptc1.installation-1.connector-secret",
+        )
+        setup_token_rejected = APIClient().post(
+            reverse("relay-connector-heartbeat"),
+            {"version": "pointy-relay/test"},
+            format="json",
             HTTP_X_POINTY_CONNECTOR_SETUP_TOKEN="setup-secret",
         )
 
         self.assertEqual(rejected.status_code, status.HTTP_403_FORBIDDEN)
         self.assertEqual(accepted.status_code, status.HTTP_200_OK)
+        self.assertEqual(setup_token_rejected.status_code, status.HTTP_403_FORBIDDEN)
         installation.refresh_from_db()
         self.assertIsNotNone(installation.connector_last_seen_at)
         self.assertEqual(installation.connector_version, "pointy-relay/test")

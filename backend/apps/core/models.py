@@ -97,3 +97,21 @@ class RelayInstallation(TimeStampedModel):
         if self.subscription_ends_at is None:
             return True
         return timezone.now() < self.subscription_ends_at
+
+
+class RelayConnectorSetupToken(TimeStampedModel):
+    token_hash = models.CharField(max_length=96, unique=True)
+    expires_at = models.DateTimeField(null=True, blank=True)
+    consumed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        verbose_name = "relay connector setup token"
+        verbose_name_plural = "relay connector setup tokens"
+
+    @property
+    def is_consumed(self):
+        return self.consumed_at is not None
+
+    @property
+    def is_expired(self):
+        return self.expires_at is not None and timezone.now() >= self.expires_at

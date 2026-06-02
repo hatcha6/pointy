@@ -121,6 +121,99 @@ func TestFileStoreRejectsInactiveSubscription(t *testing.T) {
 	}
 }
 
+func TestFileStoreSubscriptionUpdateCreatesAuditEvent(t *testing.T) {
+	now := time.Date(2026, 6, 2, 12, 0, 0, 0, time.UTC)
+	store, err := NewFileStore(filepath.Join(t.TempDir(), "installations.json"), fixedClock{now: now})
+	if err != nil {
+		t.Fatal(err)
+	}
+	provisioned, err := store.ProvisionInstallation(context.Background(), ProvisionInstallationRequest{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	enabled := true
+	endsAt := now.Add(30 * 24 * time.Hour)
+
+	installation, event, err := store.UpdateSubscriptionWithAudit(
+		context.Background(),
+		provisioned.Installation.ID,
+		SubscriptionUpdate{
+			RelayEnabled:       &enabled,
+			SubscriptionActive: &enabled,
+			SubscriptionEndsAt: &endsAt,
+		},
+		AdminAuditMetadata{
+			Actor:  "ops@example.com",
+			Reason: "customer subscription activated",
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !installation.RelayEnabled || !installation.SubscriptionActive {
+		t.Fatalf("expected subscription to be enabled, got %#v", installation)
+	}
+	if event.Action != "subscription.updated" ||
+		event.Actor != "ops@example.com" ||
+		event.InstallationID != provisioned.Installation.ID {
+		t.Fatalf("unexpected audit event %#v", event)
+	}
+	if event.Before["relay_enabled"] != false ||
+		event.After["relay_enabled"] != true ||
+		event.After["subscription_active"] != true {
+		t.Fatalf("unexpected before/after state %#v -> %#v", event.Before, event.After)
+	}
+	if _, ok := event.After["access_token_hash"]; ok {
+		t.Fatal("audit state must not expose access token hash")
+	}
+
+	events, err := store.ListAdminAuditEvents(context.Background(), provisioned.Installation.ID, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(events) != 1 || events[0].ID != event.ID {
+		t.Fatalf("unexpected audit events %#v", events)
+	}
+}
+
+func TestFileStoreStoresConnectorCertificateBinding(t *testing.T) {
+	now := time.Date(2026, 6, 2, 12, 0, 0, 0, time.UTC)
+	store, err := NewFileStore(filepath.Join(t.TempDir(), "installations.json"), fixedClock{now: now})
+	if err != nil {
+		t.Fatal(err)
+	}
+	provisioned, err := store.ProvisionInstallation(context.Background(), ProvisionInstallationRequest{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	expiresAt := now.Add(time.Hour)
+
+	installation, err := store.SetConnectorCertificate(
+		context.Background(),
+		provisioned.Installation.ID,
+		ConnectorCertificateMetadata{
+			FingerprintSHA256: "fingerprint",
+			SerialNumber:      "serial",
+			ExpiresAt:         expiresAt,
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if installation.ConnectorCertificateFingerprint != "fingerprint" {
+		t.Fatalf("unexpected connector certificate fingerprint %q", installation.ConnectorCertificateFingerprint)
+	}
+	if installation.ConnectorCertificateSerial != "serial" {
+		t.Fatalf("unexpected connector certificate serial %q", installation.ConnectorCertificateSerial)
+	}
+	if installation.ConnectorCertificateExpiresAt == nil ||
+		!installation.ConnectorCertificateExpiresAt.Equal(expiresAt) {
+		t.Fatalf("unexpected connector certificate expiry %#v", installation.ConnectorCertificateExpiresAt)
+	}
+}
+
 func endsAtPtr(value time.Time) *time.Time {
 	return &value
 }

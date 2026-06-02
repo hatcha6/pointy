@@ -2,6 +2,7 @@ package control
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -102,18 +103,24 @@ func (s *PostgresStore) ProvisionInstallation(
 			shop_name,
 			connector_token_hash,
 			access_token_hash,
+			connector_certificate_fingerprint,
+			connector_certificate_serial,
+			connector_certificate_expires_at,
 			relay_enabled,
 			ai_enabled,
 			subscription_active,
 			subscription_ends_at,
 			created_at,
 			updated_at
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
 		installation.ID,
 		installation.BusinessID,
 		installation.ShopName,
 		installation.ConnectorTokenHash,
 		installation.AccessTokenHash,
+		installation.ConnectorCertificateFingerprint,
+		installation.ConnectorCertificateSerial,
+		installation.ConnectorCertificateExpiresAt,
 		installation.RelayEnabled,
 		installation.AIEnabled,
 		installation.SubscriptionActive,
@@ -161,6 +168,9 @@ func (s *PostgresStore) UpdateSubscription(
 			shop_name,
 			connector_token_hash,
 			access_token_hash,
+			connector_certificate_fingerprint,
+			connector_certificate_serial,
+			connector_certificate_expires_at,
 			relay_enabled,
 			ai_enabled,
 			subscription_active,
@@ -186,6 +196,169 @@ func (s *PostgresStore) UpdateSubscription(
 	return installation, nil
 }
 
+func (s *PostgresStore) UpdateSubscriptionWithAudit(
+	ctx context.Context,
+	id string,
+	update SubscriptionUpdate,
+	metadata AdminAuditMetadata,
+) (Installation, AdminAuditEvent, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return Installation{}, AdminAuditEvent{}, err
+	}
+	defer tx.Rollback(ctx)
+
+	beforeInstallation, err := scanInstallation(tx.QueryRow(
+		ctx,
+		selectInstallationSQL+" WHERE id = $1 FOR UPDATE",
+		id,
+	))
+	if err != nil {
+		return Installation{}, AdminAuditEvent{}, err
+	}
+	now := s.clock.Now()
+	installation, err := scanInstallation(tx.QueryRow(
+		ctx,
+		`UPDATE relay_installations
+		SET
+			relay_enabled = CASE WHEN $2 THEN $3 ELSE relay_enabled END,
+			ai_enabled = CASE WHEN $4 THEN $5 ELSE ai_enabled END,
+			subscription_active = CASE WHEN $6 THEN $7 ELSE subscription_active END,
+			subscription_ends_at = CASE
+				WHEN $8 THEN NULL
+				WHEN $9 THEN $10::timestamptz
+				ELSE subscription_ends_at
+			END,
+			updated_at = $11::timestamptz
+		WHERE id = $1
+		RETURNING
+			id,
+			business_id,
+			shop_name,
+			connector_token_hash,
+			access_token_hash,
+			connector_certificate_fingerprint,
+			connector_certificate_serial,
+			connector_certificate_expires_at,
+			relay_enabled,
+			ai_enabled,
+			subscription_active,
+			subscription_ends_at,
+			created_at,
+			updated_at,
+			last_connector_connected_at`,
+		id,
+		update.RelayEnabled != nil,
+		boolValue(update.RelayEnabled),
+		update.AIEnabled != nil,
+		boolValue(update.AIEnabled),
+		update.SubscriptionActive != nil,
+		boolValue(update.SubscriptionActive),
+		update.ClearEnd,
+		update.SubscriptionEndsAt != nil,
+		update.SubscriptionEndsAt,
+		now,
+	))
+	if err != nil {
+		return Installation{}, AdminAuditEvent{}, err
+	}
+	event, err := newAdminAuditEvent(
+		installation.ID,
+		metadata,
+		InstallationSubscriptionAuditState(beforeInstallation, now),
+		InstallationSubscriptionAuditState(installation, now),
+		now,
+	)
+	if err != nil {
+		return Installation{}, AdminAuditEvent{}, err
+	}
+	beforeState, err := json.Marshal(event.Before)
+	if err != nil {
+		return Installation{}, AdminAuditEvent{}, err
+	}
+	afterState, err := json.Marshal(event.After)
+	if err != nil {
+		return Installation{}, AdminAuditEvent{}, err
+	}
+	if _, err := tx.Exec(
+		ctx,
+		`INSERT INTO relay_admin_audit_events (
+			id,
+			installation_id,
+			action,
+			actor,
+			reason,
+			before_state,
+			after_state,
+			created_at
+		) VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, $8::timestamptz)`,
+		event.ID,
+		event.InstallationID,
+		event.Action,
+		event.Actor,
+		event.Reason,
+		beforeState,
+		afterState,
+		event.CreatedAt,
+	); err != nil {
+		return Installation{}, AdminAuditEvent{}, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return Installation{}, AdminAuditEvent{}, err
+	}
+	return installation, event, nil
+}
+
+func (s *PostgresStore) ListAdminAuditEvents(
+	ctx context.Context,
+	installationID string,
+	limit int,
+) ([]AdminAuditEvent, error) {
+	if limit <= 0 || limit > 100 {
+		limit = 100
+	}
+	rows, err := s.pool.Query(
+		ctx,
+		`SELECT
+			id,
+			installation_id,
+			action,
+			actor,
+			reason,
+			before_state,
+			after_state,
+			created_at
+		FROM relay_admin_audit_events
+		WHERE installation_id = $1
+		ORDER BY created_at DESC, id DESC
+		LIMIT $2`,
+		installationID,
+		limit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var events []AdminAuditEvent
+	for rows.Next() {
+		event, err := scanAdminAuditEvent(rows)
+		if err != nil {
+			return nil, err
+		}
+		events = append(events, event)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if len(events) == 0 {
+		if _, err := s.GetInstallation(ctx, installationID); err != nil {
+			return nil, err
+		}
+	}
+	return events, nil
+}
+
 func (s *PostgresStore) ValidateConnectorToken(
 	ctx context.Context,
 	rawToken string,
@@ -198,6 +371,48 @@ func (s *PostgresStore) ValidateAccessToken(
 	rawToken string,
 ) (Installation, error) {
 	return s.validateToken(ctx, rawToken, TokenPurposeAccess)
+}
+
+func (s *PostgresStore) SetConnectorCertificate(
+	ctx context.Context,
+	id string,
+	certificate ConnectorCertificateMetadata,
+) (Installation, error) {
+	installation, err := scanInstallation(s.pool.QueryRow(
+		ctx,
+		`UPDATE relay_installations
+		SET
+			connector_certificate_fingerprint = $2,
+			connector_certificate_serial = $3,
+			connector_certificate_expires_at = $4::timestamptz,
+			updated_at = $5::timestamptz
+		WHERE id = $1
+		RETURNING
+			id,
+			business_id,
+			shop_name,
+			connector_token_hash,
+			access_token_hash,
+			connector_certificate_fingerprint,
+			connector_certificate_serial,
+			connector_certificate_expires_at,
+			relay_enabled,
+			ai_enabled,
+			subscription_active,
+			subscription_ends_at,
+			created_at,
+			updated_at,
+			last_connector_connected_at`,
+		id,
+		certificate.FingerprintSHA256,
+		certificate.SerialNumber,
+		certificate.ExpiresAt.UTC(),
+		s.clock.Now(),
+	))
+	if err != nil {
+		return Installation{}, err
+	}
+	return installation, nil
 }
 
 func (s *PostgresStore) MarkConnectorConnected(
@@ -253,6 +468,9 @@ const selectInstallationSQL = `SELECT
 	shop_name,
 	connector_token_hash,
 	access_token_hash,
+	connector_certificate_fingerprint,
+	connector_certificate_serial,
+	connector_certificate_expires_at,
 	relay_enabled,
 	ai_enabled,
 	subscription_active,
@@ -264,6 +482,7 @@ FROM relay_installations`
 
 func scanInstallation(row pgx.Row) (Installation, error) {
 	var installation Installation
+	var connectorCertificateExpiresAt pgtype.Timestamptz
 	var subscriptionEndsAt pgtype.Timestamptz
 	var lastConnectorConnectedAt pgtype.Timestamptz
 	err := row.Scan(
@@ -272,6 +491,9 @@ func scanInstallation(row pgx.Row) (Installation, error) {
 		&installation.ShopName,
 		&installation.ConnectorTokenHash,
 		&installation.AccessTokenHash,
+		&installation.ConnectorCertificateFingerprint,
+		&installation.ConnectorCertificateSerial,
+		&connectorCertificateExpiresAt,
 		&installation.RelayEnabled,
 		&installation.AIEnabled,
 		&installation.SubscriptionActive,
@@ -286,6 +508,10 @@ func scanInstallation(row pgx.Row) (Installation, error) {
 	if err != nil {
 		return Installation{}, err
 	}
+	if connectorCertificateExpiresAt.Valid {
+		value := connectorCertificateExpiresAt.Time.UTC()
+		installation.ConnectorCertificateExpiresAt = &value
+	}
 	if subscriptionEndsAt.Valid {
 		value := subscriptionEndsAt.Time.UTC()
 		installation.SubscriptionEndsAt = &value
@@ -297,6 +523,37 @@ func scanInstallation(row pgx.Row) (Installation, error) {
 	installation.CreatedAt = installation.CreatedAt.UTC()
 	installation.UpdatedAt = installation.UpdatedAt.UTC()
 	return installation, nil
+}
+
+type adminAuditEventRow interface {
+	Scan(dest ...any) error
+}
+
+func scanAdminAuditEvent(row adminAuditEventRow) (AdminAuditEvent, error) {
+	var event AdminAuditEvent
+	var beforeState []byte
+	var afterState []byte
+	err := row.Scan(
+		&event.ID,
+		&event.InstallationID,
+		&event.Action,
+		&event.Actor,
+		&event.Reason,
+		&beforeState,
+		&afterState,
+		&event.CreatedAt,
+	)
+	if err != nil {
+		return AdminAuditEvent{}, err
+	}
+	if err := json.Unmarshal(beforeState, &event.Before); err != nil {
+		return AdminAuditEvent{}, err
+	}
+	if err := json.Unmarshal(afterState, &event.After); err != nil {
+		return AdminAuditEvent{}, err
+	}
+	event.CreatedAt = event.CreatedAt.UTC()
+	return event, nil
 }
 
 func boolValue(value *bool) bool {

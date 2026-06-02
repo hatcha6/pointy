@@ -23,6 +23,8 @@ void main() {
             'relay_public_api_url': 'https://relay.example',
             'relay_token': 'ptt1.installation-1.ticket-secret',
             'expires_at': '2026-06-02T12:15:00Z',
+            'relay_refresh_token': 'ptrf1.installation-1.refresh-secret',
+            'refresh_expires_at': '2026-06-09T12:00:00Z',
             'reason': '',
           }),
           200,
@@ -42,7 +44,9 @@ void main() {
     expect(pairing.shopName, 'متجر آمن');
     expect(pairing.relayPublicApiUrl, 'https://relay.example');
     expect(pairing.relayToken, 'ptt1.installation-1.ticket-secret');
+    expect(pairing.relayRefreshToken, 'ptrf1.installation-1.refresh-secret');
     expect(pairing.expiresAt?.toUtc(), DateTime.utc(2026, 6, 2, 12, 15));
+    expect(pairing.refreshExpiresAt?.toUtc(), DateTime.utc(2026, 6, 9, 12));
   });
 
   test(
@@ -58,6 +62,8 @@ void main() {
               'relay_public_api_url': 'https://relay.example',
               'relay_token': '',
               'expires_at': null,
+              'relay_refresh_token': '',
+              'refresh_expires_at': null,
               'reason': 'relay_not_active',
             }),
             200,

@@ -33,6 +33,8 @@ class RelayPairingResponseSerializer(serializers.Serializer):
     relay_public_api_url = serializers.URLField(allow_blank=True)
     relay_token = serializers.CharField(allow_blank=True)
     expires_at = serializers.DateTimeField(allow_null=True)
+    relay_refresh_token = serializers.CharField(allow_blank=True)
+    refresh_expires_at = serializers.DateTimeField(allow_null=True)
     reason = serializers.CharField(allow_blank=True)
 
 
@@ -41,6 +43,14 @@ class RelayConnectorConfigSerializer(serializers.Serializer):
     shop_name = serializers.CharField(allow_blank=True)
     relay_connector_address = serializers.CharField()
     connector_token = serializers.CharField()
+    tls_server_name = serializers.CharField(allow_blank=True)
+    connector_certificate_pem = serializers.CharField(allow_blank=True)
+    connector_ca_certificate_pem = serializers.CharField(allow_blank=True)
+    connector_certificate_expires_at = serializers.DateTimeField(allow_null=True)
+
+
+class RelayConnectorConfigRequestSerializer(serializers.Serializer):
+    csr_pem = serializers.CharField(required=False, allow_blank=True)
 
 
 class RelayConnectorHeartbeatSerializer(serializers.Serializer):
