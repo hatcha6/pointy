@@ -1,4 +1,15 @@
 services:
+  postgres:
+    image: postgres:17-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: pointy
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
   redis:
     image: redis:7-alpine
     ports:
@@ -8,4 +19,5 @@ services:
       - redis-data:/data
 
 volumes:
+  postgres-data:
   redis-data:

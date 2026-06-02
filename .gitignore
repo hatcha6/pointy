@@ -12,3 +12,6 @@ frontend/.flutter-plugins-dependencies
 frontend/build/
 frontend/coverage/
 backend/media/
+relay/.gocache/
+relay/.gomodcache/
+relay/data/

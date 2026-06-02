@@ -6,6 +6,7 @@ A starter point-of-sale stack with a Django REST Framework backend, Redis-backed
 
 - `backend/` - Django API for catalog, sales, payments, inventory, Redis cache, and Celery tasks.
 - `frontend/` - Flutter POS client with cashier-first sales, catalog, register-session, printing, and settings screens.
+- `relay/` - Standalone Go relay server and on-prem connector for remote Pointy access.
 
 ## Backend Quick Start
 
@@ -156,6 +157,78 @@ flutter run
 
 The Flutter app reads from the Django API. The POS catalog keeps a small Arabic sample fallback only for local development when the API is unavailable.
 
+## Relay Quick Start
+
+The relay is a separate Go project. It keeps the fast remote-access path out of
+Django: mobile clients talk to the relay, the on-prem connector keeps one
+outbound tunnel open to the relay, and the connector forwards each request to
+the local Pointy backend. Django still owns normal cashier/admin
+authentication and authorization.
+
+Start the relay data services, apply migrations, and provision an installation
+token pair:
+
+```sh
+make postgres
+make redis
+make relay-migrate
+make relay-provision
+```
+
+The command prints:
+
+- `connector_token` - store this only on the on-prem server/connector.
+- `access_token` - use this from a remote client or mobile device setting.
+
+Start the relay server:
+
+```sh
+make relay-run RELAY_ADMIN_TOKEN=local-admin
+```
+
+Start Django and the on-prem connector in separate terminals:
+
+```sh
+make backend-run
+make relay-connector RELAY_CONNECTOR_TOKEN="ptc1.<installation-id>.<secret>"
+```
+
+Remote clients can route through the relay with a header:
+
+```sh
+curl \
+  -H 'X-Pointy-Relay-Token: ptr1.<installation-id>.<secret>' \
+  http://127.0.0.1:8091/api/shop-settings/
+```
+
+Clients that can store the long-lived access token should exchange it for a
+short-lived relay ticket and then use the returned `ptt1...` token for normal
+remote API traffic:
+
+```sh
+curl \
+  -X POST \
+  -H 'X-Pointy-Relay-Token: ptr1.<installation-id>.<secret>' \
+  -H 'Content-Type: application/json' \
+  -d '{"device_id":"register-1","device_name":"front register"}' \
+  http://127.0.0.1:8091/v1/relay-tickets
+```
+
+For simple clients that cannot send custom headers, the relay also accepts
+`/r/<relay-token>/api/...`, but the header form is preferred because it keeps
+tokens out of URLs and most access logs.
+
+The relay uses PostgreSQL for durable installation state: token hashes,
+subscription flags, AI entitlement flags, and connector heartbeat metadata.
+Redis is used for hot installation cache entries and short-lived connector
+presence/relay-node ownership. Redis also stores short-lived relay ticket
+metadata and token hashes. Live request bodies and tunnel bytes stay on the
+connector TCP session and are never stored in Redis.
+
+Remote relay access is denied when an installation's relay entitlement is
+disabled or its subscription end time has passed. Local LAN access to the
+on-prem backend is unaffected.
+
 ## Quality Gates
 
 Fast checks stay on the normal targets:
@@ -163,6 +236,13 @@ Fast checks stay on the normal targets:
 ```sh
 make check
 make test
+```
+
+These include the backend, frontend, and relay checks. Relay-only checks are:
+
+```sh
+make relay-check
+make relay-test
 ```
 
 The pilot-day POS flow is automated as an opt-in Flutter E2E test. It runs the
@@ -258,5 +338,6 @@ Useful variants:
 ```sh
 make dev-local     # Use a local redis-server instead of Docker
 make dev-no-redis  # Start only Django and Flutter
+make postgres-ping # Check PostgreSQL connectivity
 make redis-ping    # Check Redis connectivity
 ```

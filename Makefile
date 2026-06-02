@@ -3,15 +3,30 @@ SHELL := /bin/zsh
 
 BACKEND_DIR := backend
 FRONTEND_DIR := frontend
+RELAY_DIR := relay
 PYTHON ?= python3
 VENV := $(BACKEND_DIR)/.venv
 PIP := $(VENV)/bin/pip
 MANAGE := $(VENV)/bin/python $(BACKEND_DIR)/manage.py
 FLUTTER ?= flutter
+GO ?= go
+GO_CACHE ?= $(RELAY_DIR)/.gocache
+GO_MOD_CACHE ?= $(RELAY_DIR)/.gomodcache
 WEB_HOST ?= 127.0.0.1
 WEB_PORT ?= 8080
 API_HOST ?= 127.0.0.1
 API_PORT ?= 8000
+RELAY_HTTP_ADDR ?= 127.0.0.1:8091
+RELAY_CONNECTOR_ADDR ?= 127.0.0.1:8092
+RELAY_DATABASE_URL ?= postgres://postgres:postgres@127.0.0.1:5432/pointy?sslmode=disable
+RELAY_REDIS_URL ?= redis://127.0.0.1:6379/0
+RELAY_NODE_ID ?=
+RELAY_TICKET_TTL ?= 15m
+RELAY_ADMIN_TOKEN ?=
+RELAY_CONNECTOR_TOKEN ?=
+RELAY_BACKEND_URL ?= http://127.0.0.1:8000
+POSTGRES_HOST ?= 127.0.0.1
+POSTGRES_PORT ?= 5432
 LOAD_BASE_URL ?= http://127.0.0.1:8000/api
 LOAD_DURATION ?= 60
 LOAD_WORKERS ?= 4
@@ -26,17 +41,18 @@ STRESS_COLLAPSE_P95_MS ?= 2000
 ENDURANCE_DURATION ?= 3600
 ENDURANCE_WORKERS ?= 4
 
-.PHONY: help setup install docker-check redis redis-local redis-stop redis-logs redis-ping \
+.PHONY: help setup install docker-check postgres postgres-stop postgres-logs postgres-ping redis redis-local redis-stop redis-logs redis-ping \
 		backend-venv backend-install backend-env backend-migrate backend-migrations backend-dev-migrate backend-run \
 		backend-seed-variants backend-load-test backend-stress-test backend-endurance-test \
 	backend-shell backend-superuser backend-test backend-check backend-celery \
 	frontend-install frontend-l10n frontend-run frontend-web frontend-test frontend-e2e frontend-analyze frontend-format \
+	relay-install relay-format relay-check relay-test relay-run relay-connector relay-migrate relay-provision \
 	format check test e2e dev dev-local dev-no-redis clean
 
 help: ## Show available commands.
 	@awk 'BEGIN {FS = ":.*##"; printf "\nPointy POS commands\n\n"} /^[a-zA-Z0-9_-]+:.*##/ {printf "  %-22s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
-setup: backend-env backend-install frontend-install ## Prepare backend and frontend dependencies.
+setup: backend-env backend-install frontend-install relay-install ## Prepare backend, frontend, and relay dependencies.
 
 install: setup ## Alias for setup.
 
@@ -47,6 +63,22 @@ docker-check: ## Check that Docker is reachable.
 		printf "If you have redis-server installed locally, use: make dev-local\n\n"; \
 		exit 1; \
 	}
+
+postgres: docker-check ## Start PostgreSQL in the background with Docker Compose.
+	docker compose up -d postgres
+
+postgres-stop: ## Stop PostgreSQL.
+	docker compose stop postgres
+
+postgres-logs: ## Tail PostgreSQL logs.
+	docker compose logs -f postgres
+
+postgres-ping: ## Check PostgreSQL connectivity.
+	@command -v pg_isready >/dev/null 2>&1 || { \
+		printf "\npg_isready was not found on PATH.\n"; \
+		exit 1; \
+	}
+	pg_isready -h "$(POSTGRES_HOST)" -p "$(POSTGRES_PORT)"
 
 redis: docker-check ## Start Redis in the background with Docker Compose.
 	docker compose up -d redis
@@ -157,11 +189,48 @@ frontend-analyze: frontend-install ## Run Flutter analyzer.
 frontend-format: ## Format Flutter source and tests.
 	cd "$(FRONTEND_DIR)" && dart format lib test
 
-format: frontend-l10n frontend-format ## Format all currently scaffolded code.
+relay-install: ## Download relay Go modules.
+	cd "$(RELAY_DIR)" && GOCACHE="$(abspath $(GO_CACHE))" GOMODCACHE="$(abspath $(GO_MOD_CACHE))" $(GO) mod download
 
-check: backend-check frontend-analyze ## Run non-mutating project checks.
+relay-format: ## Format relay source.
+	cd "$(RELAY_DIR)" && GOCACHE="$(abspath $(GO_CACHE))" GOMODCACHE="$(abspath $(GO_MOD_CACHE))" $(GO) fmt ./...
 
-test: backend-test frontend-test ## Run backend and frontend tests.
+relay-check: ## Run relay static checks.
+	cd "$(RELAY_DIR)" && GOCACHE="$(abspath $(GO_CACHE))" GOMODCACHE="$(abspath $(GO_MOD_CACHE))" $(GO) vet ./...
+
+relay-test: ## Run relay tests.
+	cd "$(RELAY_DIR)" && GOCACHE="$(abspath $(GO_CACHE))" GOMODCACHE="$(abspath $(GO_MOD_CACHE))" $(GO) test ./...
+
+relay-run: ## Run the relay server.
+	cd "$(RELAY_DIR)" && GOCACHE="$(abspath $(GO_CACHE))" GOMODCACHE="$(abspath $(GO_MOD_CACHE))" \
+		POINTY_RELAY_ADMIN_TOKEN="$(RELAY_ADMIN_TOKEN)" \
+		POINTY_RELAY_DATABASE_URL="$(RELAY_DATABASE_URL)" \
+		POINTY_RELAY_REDIS_URL="$(RELAY_REDIS_URL)" \
+		POINTY_RELAY_NODE_ID="$(RELAY_NODE_ID)" \
+		POINTY_RELAY_TICKET_TTL="$(RELAY_TICKET_TTL)" \
+		$(GO) run ./cmd/pointy-relay server \
+		--http "$(RELAY_HTTP_ADDR)" \
+		--connector "$(RELAY_CONNECTOR_ADDR)"
+
+relay-connector: ## Run the on-prem relay connector beside a local backend.
+	cd "$(RELAY_DIR)" && GOCACHE="$(abspath $(GO_CACHE))" GOMODCACHE="$(abspath $(GO_MOD_CACHE))" POINTY_RELAY_CONNECTOR_TOKEN="$(RELAY_CONNECTOR_TOKEN)" \
+		$(GO) run ./cmd/pointy-relay connector \
+		--relay "$(RELAY_CONNECTOR_ADDR)" \
+		--backend "$(RELAY_BACKEND_URL)"
+
+relay-migrate: ## Apply relay PostgreSQL migrations.
+	cd "$(RELAY_DIR)" && GOCACHE="$(abspath $(GO_CACHE))" GOMODCACHE="$(abspath $(GO_MOD_CACHE))" \
+		$(GO) run ./cmd/pointy-relay migrate --database-url "$(RELAY_DATABASE_URL)"
+
+relay-provision: ## Provision a local relay installation and print one-time tokens.
+	cd "$(RELAY_DIR)" && GOCACHE="$(abspath $(GO_CACHE))" GOMODCACHE="$(abspath $(GO_MOD_CACHE))" \
+		$(GO) run ./cmd/pointy-relay provision --database-url "$(RELAY_DATABASE_URL)"
+
+format: frontend-l10n frontend-format relay-format ## Format all currently scaffolded code.
+
+check: backend-check frontend-analyze relay-check ## Run non-mutating project checks.
+
+test: backend-test frontend-test relay-test ## Run backend, frontend, and relay tests.
 
 e2e: frontend-e2e ## Run opt-in end-to-end tests.
 
@@ -176,4 +245,4 @@ dev-no-redis: backend-dev-migrate ## Run Django and Flutter web without starting
 
 clean: ## Remove generated local caches and build output.
 	find "$(BACKEND_DIR)" -type d -name __pycache__ -prune -exec rm -rf {} +
-	rm -rf "$(VENV)/.installed" "$(FRONTEND_DIR)/build" "$(FRONTEND_DIR)/.dart_tool"
+	rm -rf "$(VENV)/.installed" "$(FRONTEND_DIR)/build" "$(FRONTEND_DIR)/.dart_tool" "$(GO_CACHE)" "$(GO_MOD_CACHE)"
