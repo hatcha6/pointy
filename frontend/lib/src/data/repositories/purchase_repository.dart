@@ -122,9 +122,7 @@ class PurchaseRepository {
     required int supplierId,
     String supplierInvoiceNumber = '',
     DateTime? supplierInvoiceDate,
-    double shippingCost = 0,
-    double customsCost = 0,
-    double handlingCost = 0,
+    List<PurchaseLandedCostEntry> landedCostEntries = const [],
     LandedCostAllocationMethod landedCostAllocationMethod =
         LandedCostAllocationMethod.byLineValue,
     String discountCode = '',
@@ -139,9 +137,7 @@ class PurchaseRepository {
         supplierId: supplierId,
         supplierInvoiceNumber: supplierInvoiceNumber,
         supplierInvoiceDate: supplierInvoiceDate,
-        shippingCost: shippingCost,
-        customsCost: customsCost,
-        handlingCost: handlingCost,
+        landedCostEntries: landedCostEntries,
         landedCostAllocationMethod: landedCostAllocationMethod,
         discountCode: discountCode,
       );
@@ -150,7 +146,22 @@ class PurchaseRepository {
       if (!receiveImmediately) {
         return submittedOrder.toSubmission();
       }
-      final receivedOrder = await _service.receivePurchaseOrder(order.id);
+      final receiveDraft = PurchaseReceiveDraft(
+        lines: [
+          for (final line in submittedOrder.lines)
+            if (line.receivableQuantity > 0)
+              PurchaseReceiveLineDraft(
+                purchaseLineId: line.id,
+                quantityReceived: line.receivableQuantity,
+                quantityDamaged: 0,
+                expiryDate: line.expiryDate,
+              ),
+        ],
+      );
+      final receivedOrder = await _service.receivePurchaseOrder(
+        submittedOrder.id,
+        draft: receiveDraft,
+      );
       return receivedOrder.toSubmission();
     });
   }

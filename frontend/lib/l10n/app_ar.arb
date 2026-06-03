@@ -394,6 +394,19 @@
       }
     }
   },
+  "smartNotificationExpiringStockTitle": "مخزون يقترب من الانتهاء",
+  "smartNotificationExpiringStockMessage": "{count, plural, =1{دفعة مخزون واحدة تحتاج متابعة خلال {days} يوم.} =2{دفعتا مخزون تحتاجان متابعة، أقربهما خلال {days} يوم.} other{{count} دفعات مخزون تحتاج متابعة، أقربها خلال {days} يوم.}}",
+  "@smartNotificationExpiringStockMessage": {
+    "description": "Expiring stock batch alert message.",
+    "placeholders": {
+      "count": {
+        "type": "num"
+      },
+      "days": {
+        "type": "int"
+      }
+    }
+  },
   "smartNotificationStockDetail": "{name}: المتاح {quantity}، حد الطلب {threshold}",
   "@smartNotificationStockDetail": {
     "description": "Stock alert detail.",
@@ -406,6 +419,39 @@
       },
       "threshold": {
         "type": "int"
+      }
+    }
+  },
+  "smartNotificationExpiringStockDetailBasic": "{name}: المتبقي {quantity}، تاريخ الانتهاء {date}",
+  "@smartNotificationExpiringStockDetailBasic": {
+    "description": "Expiring stock detail without source context.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "quantity": {
+        "type": "int"
+      },
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "smartNotificationExpiringStockDetail": "{name}: المتبقي {quantity}، تاريخ الانتهاء {date}، المرجع {context}",
+  "@smartNotificationExpiringStockDetail": {
+    "description": "Expiring stock detail with source context.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "quantity": {
+        "type": "int"
+      },
+      "date": {
+        "type": "String"
+      },
+      "context": {
+        "type": "String"
       }
     }
   },
@@ -1123,6 +1169,8 @@
     }
   },
   "activeProductLabel": "متاح للبيع",
+  "productTracksExpiryLabel": "يتابع تاريخ الانتهاء",
+  "productTracksExpiryHint": "سيطلب تاريخ انتهاء عند شراء هذا المنتج ويظهر تنبيه قبل انتهائه.",
   "activeVariantLabel": "متاح للبيع",
   "defaultVariantLabel": "الخيار الافتراضي",
   "variantNameLabel": "اسم الخيار",
@@ -1623,6 +1671,7 @@
   "purchaseReceiveNoOpenLines": "لا توجد كميات مفتوحة للاستلام.",
   "purchaseReceiveNoItemsSelected": "أدخل كمية مستلمة أو تالفة أو مرفوضة لعنصر واحد على الأقل.",
   "purchaseReceiveInvalidQuantityError": "أدخل كميات صحيحة لا تقل عن صفر.",
+  "purchaseExpiryDatesRequired": "أدخل تاريخ انتهاء لكل منتج يتابع الانتهاء.",
   "purchaseReceiveReceivedLabel": "مستلم سليم",
   "purchaseReceiveDamagedLabel": "تالف عند الوصول",
   "purchaseReceiveRejectedLabel": "مرفوض/لن يصل",
@@ -1774,12 +1823,36 @@
   "clearPurchaseDraftTooltip": "مسح مسودة الشراء",
   "emptyPurchaseDraft": "لا توجد عناصر في مسودة الشراء",
   "purchaseLineCostLabel": "التكلفة",
+  "purchaseLineExpiryDateLabel": "تاريخ الانتهاء",
+  "purchaseLineExpiryDateHint": "مثال: 2026-12-31",
+  "purchaseLineExpiryDatePickerTooltip": "اختيار تاريخ الانتهاء",
+  "purchaseLineExpiryDateInvalid": "أدخل تاريخًا صحيحًا بصيغة سنة-شهر-يوم.",
+  "purchaseLineExpiryDateRequired": "تاريخ الانتهاء مطلوب لهذا المنتج.",
   "purchaseShippingCostLabel": "الشحن",
   "purchaseCustomsCostLabel": "الجمارك",
   "purchaseHandlingCostLabel": "المناولة",
   "purchaseLandedCostTotalLabel": "تكاليف الوصول",
+  "purchaseLandedCostButton": "تكاليف الوصول {amount}",
+  "@purchaseLandedCostButton": {
+    "description": "Button label showing the purchase landed cost total.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "purchaseLandedCostSheetTitle": "تكاليف الوصول",
+  "landedCostAllocationMethodLabel": "طريقة توزيع تكاليف الوصول",
+  "landedCostEntryNameLabel": "اسم التكلفة",
+  "landedCostEntryCostLabel": "القيمة",
+  "addLandedCostEntryButton": "إضافة تكلفة",
+  "saveLandedCostEntriesButton": "حفظ التكاليف",
+  "removeLandedCostEntryTooltip": "حذف التكلفة",
+  "defaultLandedCostEntryName": "تكلفة وصول",
   "landedCostAllocationByLineValueLabel": "حسب قيمة السطر",
   "landedCostAllocationByQuantityLabel": "حسب الكمية",
+  "landedCostAllocationByRetailValueLabel": "حسب قيمة البيع",
+  "landedCostAllocationEquallyByLineLabel": "بالتساوي على السطور",
   "purchaseLineLandedCostValue": "تكلفة وصول {amount}",
   "@purchaseLineLandedCostValue": {
     "description": "Allocated landed cost shown on a purchase order line.",

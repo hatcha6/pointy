@@ -10,6 +10,7 @@ class Product {
     required this.quantityOnHand,
     this.description = '',
     this.isActive = true,
+    this.tracksExpiry = false,
     this.categories = const [],
     this.variantOptions = const [],
     this.defaultVariant,
@@ -23,6 +24,7 @@ class Product {
   final int quantityOnHand;
   final String description;
   final bool isActive;
+  final bool tracksExpiry;
   final List<ProductCategory> categories;
   final List<VariantOption> variantOptions;
   final ProductVariant? defaultVariant;
@@ -89,6 +91,7 @@ class Product {
       ),
       description: (json['description'] as String?) ?? '',
       isActive: (json['is_active'] as bool?) ?? true,
+      tracksExpiry: (json['tracks_expiry'] as bool?) ?? false,
       categories: _categoriesFromJson(json),
       variantOptions: _variantOptionsFromJson(json),
       defaultVariant: defaultVariant,
@@ -108,6 +111,7 @@ class Product {
       quantityOnHand: variant.quantityOnHand,
       description: detail?.description ?? '',
       isActive: variant.isSellable,
+      tracksExpiry: detail?.tracksExpiry ?? variant.tracksExpiry,
       categories: detail?.categories ?? const [],
       variantOptions: detail?.variantOptions ?? const [],
       defaultVariant: variant,
@@ -122,6 +126,7 @@ class Product {
     int? quantityOnHand,
     ProductVariant? defaultVariant,
     List<ProductVariant>? variants,
+    bool? tracksExpiry,
   }) {
     final nextDefaultVariant =
         defaultVariant ??
@@ -134,6 +139,7 @@ class Product {
       quantityOnHand: quantityOnHand ?? this.quantityOnHand,
       description: description,
       isActive: isActive,
+      tracksExpiry: tracksExpiry ?? this.tracksExpiry,
       categories: categories,
       variantOptions: variantOptions,
       defaultVariant: nextDefaultVariant,

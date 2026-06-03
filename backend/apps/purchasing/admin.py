@@ -6,6 +6,7 @@ from .models import (
     PurchaseOrderAdjustment,
     PurchaseOrderAdjustmentReplacementLine,
     PurchaseOrderAuditEvent,
+    PurchaseOrderLandedCostEntry,
     PurchaseReceipt,
     PurchaseReceiptLine,
     Supplier,
@@ -46,6 +47,11 @@ class PurchaseOrderAuditEventInline(admin.TabularInline):
         "created_at",
     )
     can_delete = False
+
+
+class PurchaseOrderLandedCostEntryInline(admin.TabularInline):
+    model = PurchaseOrderLandedCostEntry
+    extra = 0
 
 
 class PurchaseReceiptLineInline(admin.TabularInline):
@@ -100,7 +106,11 @@ class PurchaseOrderAdmin(admin.ModelAdmin):
     )
     list_filter = ("status", "supplier")
     search_fields = ("order_number", "supplier__name", "supplier_invoice_number")
-    inlines = [PurchaseLineInline, PurchaseOrderAuditEventInline]
+    inlines = [
+        PurchaseLineInline,
+        PurchaseOrderLandedCostEntryInline,
+        PurchaseOrderAuditEventInline,
+    ]
 
 
 @admin.register(PurchaseOrderAuditEvent)

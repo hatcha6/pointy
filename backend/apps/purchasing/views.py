@@ -145,6 +145,7 @@ class PurchaseOrderViewSet(viewsets.ModelViewSet):
     queryset = PurchaseOrder.objects.select_related("supplier").prefetch_related(
         "lines__variant__product",
         "lines__receipt_lines",
+        "landed_cost_entries",
         "receipts__lines__variant__product",
         "receipts__created_by",
         "adjustments__lines__variant__product",

@@ -14,9 +14,11 @@ class ProductParentFormFields extends StatelessWidget {
     required this.descriptionController,
     required this.selectedCategories,
     required this.isActive,
+    required this.tracksExpiry,
     required this.onPickCategories,
     required this.onClearCategories,
     required this.onActiveChanged,
+    required this.onTracksExpiryChanged,
     required this.requiredValidator,
   });
 
@@ -24,9 +26,11 @@ class ProductParentFormFields extends StatelessWidget {
   final TextEditingController descriptionController;
   final List<AsyncSelectionOption<int>> selectedCategories;
   final bool isActive;
+  final bool tracksExpiry;
   final VoidCallback onPickCategories;
   final VoidCallback? onClearCategories;
   final ValueChanged<bool> onActiveChanged;
+  final ValueChanged<bool> onTracksExpiryChanged;
   final FormFieldValidator<String> requiredValidator;
 
   @override
@@ -73,6 +77,13 @@ class ProductParentFormFields extends StatelessWidget {
           title: Text(l10n.activeProductLabel),
           value: isActive,
           onChanged: onActiveChanged,
+        ),
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          title: Text(l10n.productTracksExpiryLabel),
+          subtitle: Text(l10n.productTracksExpiryHint),
+          value: tracksExpiry,
+          onChanged: onTracksExpiryChanged,
         ),
       ],
     );

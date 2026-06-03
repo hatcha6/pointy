@@ -36,9 +36,7 @@ class PurchaseViewModel extends ChangeNotifier {
   int _nextVariantPage = 1;
   String _supplierInvoiceNumber = '';
   String _supplierInvoiceDateInput = '';
-  double _shippingCost = 0;
-  double _customsCost = 0;
-  double _handlingCost = 0;
+  List<PurchaseLandedCostEntry> _landedCostEntries = [];
   String _discountCode = '';
   PurchaseDiscountPreview? _discountPreview;
   bool _isLoadingDiscountPreview = false;
@@ -62,9 +60,8 @@ class PurchaseViewModel extends ChangeNotifier {
   bool get hasMoreProducts => _hasMoreProducts;
   String get supplierInvoiceNumber => _supplierInvoiceNumber;
   String get supplierInvoiceDateInput => _supplierInvoiceDateInput;
-  double get shippingCost => _shippingCost;
-  double get customsCost => _customsCost;
-  double get handlingCost => _handlingCost;
+  List<PurchaseLandedCostEntry> get landedCostEntries =>
+      List.unmodifiable(_landedCostEntries);
   String get discountCode => _discountCode;
   PurchaseDiscountPreview? get discountPreview => _discountPreview;
   bool get isLoadingDiscountPreview => _isLoadingDiscountPreview;
@@ -85,13 +82,36 @@ class PurchaseViewModel extends ChangeNotifier {
   ProductQuery get query => _query;
 
   double get subtotal => _draft.fold(0, (sum, line) => sum + line.subtotal);
-  double get landedCostTotal => _shippingCost + _customsCost + _handlingCost;
+  double get landedCostTotal =>
+      _landedCostEntries.fold(0, (sum, entry) => sum + entry.cost);
   double get total => _discountPreview?.total ?? subtotal + landedCostTotal;
+  bool get hasMissingExpiryDates => _draft.any(
+    (line) => line.variant.tracksExpiry && line.expiryDate == null,
+  );
   bool get canSubmitDraft =>
       _draft.isNotEmpty &&
       _selectedSupplier != null &&
       !hasInvalidSupplierInvoiceDate &&
+      !hasMissingExpiryDates &&
       !_isSubmitting;
+
+  PurchaseDiscountPreviewLine? discountPreviewLineForDraftIndex(int index) {
+    if (_isLoadingDiscountPreview ||
+        _discountPreview == null ||
+        index < 0 ||
+        index >= _draft.length ||
+        index >= _discountPreview!.lines.length) {
+      return null;
+    }
+    final draftLine = _draft[index];
+    final previewLine = _discountPreview!.lines[index];
+    if (previewLine.variantId != draftLine.variant.id ||
+        previewLine.quantity != draftLine.quantity ||
+        (previewLine.unitCost - draftLine.unitCost).abs() >= 0.005) {
+      return null;
+    }
+    return previewLine;
+  }
 
   Future<void> loadCatalog() async {
     _isLoading = true;
@@ -265,6 +285,21 @@ class PurchaseViewModel extends ChangeNotifier {
     unawaited(refreshDiscountPreview());
   }
 
+  void updateLineExpiryDate(ProductVariant variant, DateTime? expiryDate) {
+    if (_isSubmitting) {
+      return;
+    }
+    final index = _draft.indexWhere((line) => line.variant.id == variant.id);
+    if (index == -1) {
+      return;
+    }
+    _draft[index] = _draft[index].copyWith(
+      expiryDate: expiryDate,
+      clearExpiryDate: expiryDate == null,
+    );
+    notifyListeners();
+  }
+
   void clearDraft() {
     if (_isSubmitting) {
       return;
@@ -311,18 +346,6 @@ class PurchaseViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  void updateShippingCost(double value) {
-    _updateLandedCost(value, (cost) => _shippingCost = cost);
-  }
-
-  void updateCustomsCost(double value) {
-    _updateLandedCost(value, (cost) => _customsCost = cost);
-  }
-
-  void updateHandlingCost(double value) {
-    _updateLandedCost(value, (cost) => _handlingCost = cost);
-  }
-
   void updateDiscountCode(String value) {
     if (_isSubmitting) {
       return;
@@ -337,6 +360,19 @@ class PurchaseViewModel extends ChangeNotifier {
       return;
     }
     _landedCostAllocationMethod = method;
+    notifyListeners();
+    unawaited(refreshDiscountPreview());
+  }
+
+  void updateLandedCosts({
+    required List<PurchaseLandedCostEntry> entries,
+    required LandedCostAllocationMethod allocationMethod,
+  }) {
+    if (_isSubmitting) {
+      return;
+    }
+    _landedCostEntries = _normalizedLandedCostEntries(entries);
+    _landedCostAllocationMethod = allocationMethod;
     notifyListeners();
     unawaited(refreshDiscountPreview());
   }
@@ -360,9 +396,7 @@ class PurchaseViewModel extends ChangeNotifier {
       PurchaseDiscountPreviewDraft.fromDraftLines(
         List<PurchaseDraftLine>.of(_draft),
         supplierId: supplier.id,
-        shippingCost: _shippingCost,
-        customsCost: _customsCost,
-        handlingCost: _handlingCost,
+        landedCostEntries: _landedCostEntries,
         landedCostAllocationMethod: _landedCostAllocationMethod,
         discountCode: _discountCode,
       ),
@@ -385,7 +419,10 @@ class PurchaseViewModel extends ChangeNotifier {
 
   Future<Result<PurchaseSubmission>> submitDraft() async {
     final supplier = _selectedSupplier;
-    if (_draft.isEmpty || supplier == null || _isSubmitting) {
+    if (_draft.isEmpty ||
+        supplier == null ||
+        hasMissingExpiryDates ||
+        _isSubmitting) {
       return Error(Exception('purchase draft is not ready'));
     }
 
@@ -398,9 +435,7 @@ class PurchaseViewModel extends ChangeNotifier {
       supplierId: supplier.id,
       supplierInvoiceNumber: _supplierInvoiceNumber,
       supplierInvoiceDate: supplierInvoiceDate,
-      shippingCost: _shippingCost,
-      customsCost: _customsCost,
-      handlingCost: _handlingCost,
+      landedCostEntries: _landedCostEntries,
       landedCostAllocationMethod: _landedCostAllocationMethod,
       discountCode: _discountCode,
     );
@@ -448,21 +483,25 @@ class PurchaseViewModel extends ChangeNotifier {
     return cost;
   }
 
-  void _updateLandedCost(double value, ValueChanged<double> assign) {
-    if (_isSubmitting || value < 0) {
-      return;
-    }
-    assign(value);
-    notifyListeners();
-    unawaited(refreshDiscountPreview());
-  }
-
   void _resetLandedCosts() {
-    _shippingCost = 0;
-    _customsCost = 0;
-    _handlingCost = 0;
+    _landedCostEntries = [];
     _discountCode = '';
     _landedCostAllocationMethod = LandedCostAllocationMethod.byLineValue;
+  }
+
+  List<PurchaseLandedCostEntry> _normalizedLandedCostEntries(
+    List<PurchaseLandedCostEntry> entries,
+  ) {
+    return entries
+        .where((entry) => entry.name.trim().isNotEmpty && entry.cost > 0)
+        .map(
+          (entry) => PurchaseLandedCostEntry(
+            id: entry.id,
+            name: entry.name.trim(),
+            cost: entry.cost,
+          ),
+        )
+        .toList(growable: false);
   }
 
   void _clearDiscountPreview() {

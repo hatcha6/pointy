@@ -1402,11 +1402,44 @@ abstract class AppLocalizations {
   /// **'{count, plural, =1{منتج واحد وصل إلى حد إعادة الطلب.} =2{منتجان وصلا إلى حد إعادة الطلب.} other{{count} منتجات وصلت إلى حد إعادة الطلب.}}'**
   String smartNotificationLowStockMessage(num count);
 
+  /// No description provided for @smartNotificationExpiringStockTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'مخزون يقترب من الانتهاء'**
+  String get smartNotificationExpiringStockTitle;
+
+  /// Expiring stock batch alert message.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, =1{دفعة مخزون واحدة تحتاج متابعة خلال {days} يوم.} =2{دفعتا مخزون تحتاجان متابعة، أقربهما خلال {days} يوم.} other{{count} دفعات مخزون تحتاج متابعة، أقربها خلال {days} يوم.}}'**
+  String smartNotificationExpiringStockMessage(num count, int days);
+
   /// Stock alert detail.
   ///
   /// In ar, this message translates to:
   /// **'{name}: المتاح {quantity}، حد الطلب {threshold}'**
   String smartNotificationStockDetail(String name, int quantity, int threshold);
+
+  /// Expiring stock detail without source context.
+  ///
+  /// In ar, this message translates to:
+  /// **'{name}: المتبقي {quantity}، تاريخ الانتهاء {date}'**
+  String smartNotificationExpiringStockDetailBasic(
+    String name,
+    int quantity,
+    String date,
+  );
+
+  /// Expiring stock detail with source context.
+  ///
+  /// In ar, this message translates to:
+  /// **'{name}: المتبقي {quantity}، تاريخ الانتهاء {date}، المرجع {context}'**
+  String smartNotificationExpiringStockDetail(
+    String name,
+    int quantity,
+    String date,
+    String context,
+  );
 
   /// No description provided for @smartNotificationDustyInventoryTitle.
   ///
@@ -3428,6 +3461,18 @@ abstract class AppLocalizations {
   /// **'متاح للبيع'**
   String get activeProductLabel;
 
+  /// No description provided for @productTracksExpiryLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'يتابع تاريخ الانتهاء'**
+  String get productTracksExpiryLabel;
+
+  /// No description provided for @productTracksExpiryHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'سيطلب تاريخ انتهاء عند شراء هذا المنتج ويظهر تنبيه قبل انتهائه.'**
+  String get productTracksExpiryHint;
+
   /// No description provided for @activeVariantLabel.
   ///
   /// In ar, this message translates to:
@@ -4884,6 +4929,12 @@ abstract class AppLocalizations {
   /// **'أدخل كميات صحيحة لا تقل عن صفر.'**
   String get purchaseReceiveInvalidQuantityError;
 
+  /// No description provided for @purchaseExpiryDatesRequired.
+  ///
+  /// In ar, this message translates to:
+  /// **'أدخل تاريخ انتهاء لكل منتج يتابع الانتهاء.'**
+  String get purchaseExpiryDatesRequired;
+
   /// No description provided for @purchaseReceiveReceivedLabel.
   ///
   /// In ar, this message translates to:
@@ -5070,6 +5121,36 @@ abstract class AppLocalizations {
   /// **'التكلفة'**
   String get purchaseLineCostLabel;
 
+  /// No description provided for @purchaseLineExpiryDateLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'تاريخ الانتهاء'**
+  String get purchaseLineExpiryDateLabel;
+
+  /// No description provided for @purchaseLineExpiryDateHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'مثال: 2026-12-31'**
+  String get purchaseLineExpiryDateHint;
+
+  /// No description provided for @purchaseLineExpiryDatePickerTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختيار تاريخ الانتهاء'**
+  String get purchaseLineExpiryDatePickerTooltip;
+
+  /// No description provided for @purchaseLineExpiryDateInvalid.
+  ///
+  /// In ar, this message translates to:
+  /// **'أدخل تاريخًا صحيحًا بصيغة سنة-شهر-يوم.'**
+  String get purchaseLineExpiryDateInvalid;
+
+  /// No description provided for @purchaseLineExpiryDateRequired.
+  ///
+  /// In ar, this message translates to:
+  /// **'تاريخ الانتهاء مطلوب لهذا المنتج.'**
+  String get purchaseLineExpiryDateRequired;
+
   /// No description provided for @purchaseShippingCostLabel.
   ///
   /// In ar, this message translates to:
@@ -5094,6 +5175,60 @@ abstract class AppLocalizations {
   /// **'تكاليف الوصول'**
   String get purchaseLandedCostTotalLabel;
 
+  /// Button label showing the purchase landed cost total.
+  ///
+  /// In ar, this message translates to:
+  /// **'تكاليف الوصول {amount}'**
+  String purchaseLandedCostButton(String amount);
+
+  /// No description provided for @purchaseLandedCostSheetTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'تكاليف الوصول'**
+  String get purchaseLandedCostSheetTitle;
+
+  /// No description provided for @landedCostAllocationMethodLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'طريقة توزيع تكاليف الوصول'**
+  String get landedCostAllocationMethodLabel;
+
+  /// No description provided for @landedCostEntryNameLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'اسم التكلفة'**
+  String get landedCostEntryNameLabel;
+
+  /// No description provided for @landedCostEntryCostLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'القيمة'**
+  String get landedCostEntryCostLabel;
+
+  /// No description provided for @addLandedCostEntryButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'إضافة تكلفة'**
+  String get addLandedCostEntryButton;
+
+  /// No description provided for @saveLandedCostEntriesButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'حفظ التكاليف'**
+  String get saveLandedCostEntriesButton;
+
+  /// No description provided for @removeLandedCostEntryTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'حذف التكلفة'**
+  String get removeLandedCostEntryTooltip;
+
+  /// No description provided for @defaultLandedCostEntryName.
+  ///
+  /// In ar, this message translates to:
+  /// **'تكلفة وصول'**
+  String get defaultLandedCostEntryName;
+
   /// No description provided for @landedCostAllocationByLineValueLabel.
   ///
   /// In ar, this message translates to:
@@ -5105,6 +5240,18 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'حسب الكمية'**
   String get landedCostAllocationByQuantityLabel;
+
+  /// No description provided for @landedCostAllocationByRetailValueLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'حسب قيمة البيع'**
+  String get landedCostAllocationByRetailValueLabel;
+
+  /// No description provided for @landedCostAllocationEquallyByLineLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'بالتساوي على السطور'**
+  String get landedCostAllocationEquallyByLineLabel;
 
   /// Allocated landed cost shown on a purchase order line.
   ///

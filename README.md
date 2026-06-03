@@ -42,11 +42,15 @@ make redis
 
 If Docker Desktop is not running, open it and retry. If Redis is installed locally, use `make dev-local` instead of `make dev`.
 
-Run a Celery worker:
+Run Celery for background and scheduled jobs:
 
 ```sh
-celery -A pointy worker -l info
+make backend-celery
+make backend-celery-beat
 ```
+
+The worker processes Redis-backed tasks. Beat schedules recurring jobs such as
+business notification sync and expiry-date stock alerts.
 
 ## Attachment Storage
 

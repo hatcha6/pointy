@@ -1,6 +1,7 @@
 from datetime import timedelta
 from decimal import Decimal
 
+from django.conf import settings
 from django.db import transaction
 from django.db.models import DecimalField, F, Q, Sum, Value
 from django.db.models.functions import Coalesce
@@ -8,7 +9,7 @@ from django.utils import timezone
 
 from apps.core.roles import user_is_manager
 from apps.discounts.models import DiscountRule
-from apps.inventory.models import StockItem
+from apps.inventory.models import StockBatch, StockItem
 from apps.printing.models import PrintAgent, PrintJob
 from apps.purchasing.models import PurchaseOrder, SupplierPayment
 from apps.sales.models import Order, OrderLine, RegisterSession
@@ -18,6 +19,7 @@ from .models import BusinessNotification, BusinessNotificationUserState
 MANAGED_CODES = (
     "inventory.out_of_stock",
     "inventory.low_stock",
+    "inventory.expiring_batch",
     "purchasing.overdue_order",
     "printing.failed_job",
     "printing.stale_agent",
@@ -33,6 +35,10 @@ NOTIFICATION_AUDIENCE_RULES = {
         "manager_only": True,
     },
     "inventory.low_stock": {
+        "permissions": ("inventory.view_stockitem", "inventory.view_stockmovement"),
+        "manager_only": True,
+    },
+    "inventory.expiring_batch": {
         "permissions": ("inventory.view_stockitem", "inventory.view_stockmovement"),
         "manager_only": True,
     },
@@ -67,6 +73,7 @@ def sync_business_notifications(now=None):
     now = now or timezone.now()
     desired = []
     desired.extend(_inventory_notifications(now))
+    desired.extend(_expiry_notifications(now))
     desired.extend(_purchasing_notifications(now))
     desired.extend(_printing_notifications(now))
     desired.extend(_sales_notifications(now))
@@ -215,6 +222,64 @@ def _inventory_notifications(now):
                     payload=_stock_payload(item),
                 )
             )
+    return specs
+
+
+def _expiry_notifications(now):
+    specs = []
+    today = timezone.localdate(now)
+    alert_window_days = max(
+        getattr(settings, "POINTY_EXPIRY_ALERT_WINDOW_DAYS", 30),
+        0,
+    )
+    window_end = today + timedelta(days=alert_window_days)
+    batches = (
+        StockBatch.objects.select_related(
+            "variant",
+            "variant__product",
+            "source_receipt_line",
+            "source_receipt_line__receipt",
+            "source_receipt_line__receipt__purchase_order",
+            "source_receipt_line__receipt__purchase_order__supplier",
+        )
+        .filter(
+            remaining_quantity__gt=0,
+            expiry_date__lte=window_end,
+            variant__is_active=True,
+            variant__product__is_active=True,
+            variant__product__tracks_expiry=True,
+        )
+        .order_by("expiry_date", "id")
+    )
+    for batch in batches:
+        days = (batch.expiry_date - today).days
+        severity = BusinessNotification.Severity.INFO
+        if days <= 1:
+            severity = BusinessNotification.Severity.CRITICAL
+        elif days <= 7:
+            severity = BusinessNotification.Severity.WARNING
+        order = batch.source_receipt_line.receipt.purchase_order
+        supplier_name = order.supplier.name if order.supplier_id else ""
+        specs.append(
+            _spec(
+                code="inventory.expiring_batch",
+                category=BusinessNotification.Category.INVENTORY,
+                severity=severity,
+                fingerprint=f"inventory.expiring_batch:stockbatch:{batch.pk}",
+                entity_type="inventory.stockbatch",
+                entity_id=str(batch.pk),
+                payload={
+                    "product_name": batch.variant.full_name,
+                    "sku": batch.variant.sku,
+                    "quantity": batch.remaining_quantity,
+                    "expiry_date": batch.expiry_date.isoformat(),
+                    "days": max(days, 0),
+                    "order_number": order.order_number,
+                    "supplier_name": supplier_name,
+                    "count": 1,
+                },
+            )
+        )
     return specs
 
 

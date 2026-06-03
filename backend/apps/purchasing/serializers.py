@@ -21,6 +21,7 @@ from .models import (
     PurchaseOrderAdjustmentLine,
     PurchaseOrderAdjustmentReplacementLine,
     PurchaseOrderAuditEvent,
+    PurchaseOrderLandedCostEntry,
     PurchaseReceipt,
     PurchaseReceiptLine,
     Supplier,
@@ -106,6 +107,10 @@ class PurchaseLineSerializer(serializers.ModelSerializer):
     product_name = serializers.CharField(source="variant.product.name", read_only=True)
     variant_sku = serializers.CharField(source="variant.sku", read_only=True)
     variant_name = serializers.CharField(source="variant.display_name", read_only=True)
+    tracks_expiry = serializers.BooleanField(
+        source="variant.product.tracks_expiry",
+        read_only=True,
+    )
     line_total = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
     discount_amount = serializers.DecimalField(
         max_digits=10,
@@ -165,7 +170,9 @@ class PurchaseLineSerializer(serializers.ModelSerializer):
             "product_name",
             "variant_sku",
             "variant_name",
+            "tracks_expiry",
             "quantity",
+            "expiry_date",
             "adjusted_quantity",
             "accepted_quantity",
             "damaged_quantity",
@@ -193,6 +200,7 @@ class PurchaseLineSerializer(serializers.ModelSerializer):
             "id",
             "product_name",
             "variant_sku",
+            "tracks_expiry",
             "previous_unit_cost",
             "unit_cost_change",
             "unit_cost_change_percent",
@@ -261,11 +269,41 @@ class PurchaseLineSerializer(serializers.ModelSerializer):
         return value
 
     def validate(self, attrs):
-        variant = attrs.get("variant")
+        variant = attrs.get("variant", getattr(self.instance, "variant", None))
         if variant is None:
             raise serializers.ValidationError({"variant": "Variant is required."})
+        expiry_date = attrs.get(
+            "expiry_date",
+            getattr(self.instance, "expiry_date", None),
+        )
+        if variant.product.tracks_expiry and expiry_date is None:
+            raise serializers.ValidationError(
+                {
+                    "expiry_date": (
+                        "Expiry date is required for products that track expiry."
+                    )
+                }
+            )
         attrs["variant"] = variant
         return attrs
+
+
+class PurchaseOrderLandedCostEntrySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PurchaseOrderLandedCostEntry
+        fields = ["id", "name", "amount"]
+        read_only_fields = ("id",)
+
+    def validate_name(self, value):
+        name = value.strip()
+        if not name:
+            raise serializers.ValidationError("Name is required.")
+        return name
+
+    def validate_amount(self, value):
+        if value < Decimal("0.00"):
+            raise serializers.ValidationError("Amount cannot be negative.")
+        return value
 
 
 def money_string(value):
@@ -277,6 +315,10 @@ class PurchaseReceiptLineSerializer(serializers.ModelSerializer):
     product_name = serializers.CharField(source="variant.product.name", read_only=True)
     variant_sku = serializers.CharField(source="variant.sku", read_only=True)
     variant_name = serializers.CharField(source="variant.display_name", read_only=True)
+    tracks_expiry = serializers.BooleanField(
+        source="variant.product.tracks_expiry",
+        read_only=True,
+    )
     received_quantity = serializers.IntegerField(read_only=True)
     backordered_quantity = serializers.IntegerField(read_only=True)
 
@@ -290,6 +332,7 @@ class PurchaseReceiptLineSerializer(serializers.ModelSerializer):
             "product_name",
             "variant_sku",
             "variant_name",
+            "tracks_expiry",
             "ordered_quantity",
             "outstanding_before",
             "accepted_quantity",
@@ -300,6 +343,7 @@ class PurchaseReceiptLineSerializer(serializers.ModelSerializer):
             "over_received_quantity",
             "outstanding_after",
             "backordered_quantity",
+            "expiry_date",
             "notes",
             "created_at",
         ]
@@ -403,6 +447,7 @@ class ProductCostHistorySerializer(serializers.ModelSerializer):
             "unit_cost",
             "effective_unit_cost",
             "landed_unit_cost",
+            "expiry_date",
             "received_at",
             "submitted_at",
             "created_at",
@@ -621,32 +666,21 @@ class PurchaseDiscountPreviewSerializer(serializers.Serializer):
         allow_empty=True,
         write_only=True,
     )
-    shipping_amount = serializers.DecimalField(
-        max_digits=10,
-        decimal_places=2,
-        min_value=Decimal("0.00"),
+    landed_cost_entries = PurchaseOrderLandedCostEntrySerializer(
+        many=True,
         required=False,
-        default=Decimal("0.00"),
-    )
-    customs_amount = serializers.DecimalField(
-        max_digits=10,
-        decimal_places=2,
-        min_value=Decimal("0.00"),
-        required=False,
-        default=Decimal("0.00"),
-    )
-    handling_amount = serializers.DecimalField(
-        max_digits=10,
-        decimal_places=2,
-        min_value=Decimal("0.00"),
-        required=False,
-        default=Decimal("0.00"),
+        allow_empty=True,
     )
     landed_cost_allocation_method = serializers.ChoiceField(
         choices=PurchaseOrder.LandedCostAllocationMethod.choices,
         required=False,
         default=PurchaseOrder.LandedCostAllocationMethod.LINE_VALUE,
     )
+
+    def to_internal_value(self, data):
+        if isinstance(data, dict):
+            reject_legacy_landed_cost_fields(data)
+        return super().to_internal_value(data)
 
     def validate(self, attrs):
         coupon_codes = normalized_purchase_discount_codes(attrs)
@@ -678,11 +712,9 @@ class PurchaseDiscountPreviewSerializer(serializers.Serializer):
     @property
     def preview_data(self):
         discount_result = self.validated_data["discount_result"]
-        landed_cost_total = (
-            self.validated_data["shipping_amount"]
-            + self.validated_data["customs_amount"]
-            + self.validated_data["handling_amount"]
-        ).quantize(Decimal("0.01"))
+        landed_cost_total = landed_cost_total_from_validated_data(
+            self.validated_data
+        )
         coupon_codes = self.validated_data.get("coupon_codes", ())
         return {
             "subtotal": f"{discount_result.subtotal:.2f}",
@@ -731,6 +763,32 @@ def normalized_purchase_discount_codes(attrs):
     return tuple(normalized_codes)
 
 
+def reject_legacy_landed_cost_fields(data):
+    legacy_fields = (
+        "shipping_amount",
+        "shipping_cost",
+        "customs_amount",
+        "customs_cost",
+        "handling_amount",
+        "handling_cost",
+        "landed_costs",
+    )
+    errors = {
+        field: "Use landed_cost_entries."
+        for field in legacy_fields
+        if field in data
+    }
+    if errors:
+        raise serializers.ValidationError(errors)
+
+
+def landed_cost_total_from_validated_data(data):
+    return sum(
+        (entry["amount"] for entry in data.get("landed_cost_entries", ())),
+        Decimal("0.00"),
+    ).quantize(Decimal("0.01"))
+
+
 def unapplied_purchase_discount_codes(discount_result, discount_codes):
     requested_codes = {
         normalize_coupon_code(code)
@@ -773,6 +831,17 @@ def purchase_preview_line_payloads(
 
     if landed_cost_allocation_method == PurchaseOrder.LandedCostAllocationMethod.QUANTITY:
         weights = quantities_by_key
+    elif (
+        landed_cost_allocation_method
+        == PurchaseOrder.LandedCostAllocationMethod.RETAIL_VALUE
+    ):
+        weights = {
+            str(index): (line["variant"].unit_price * Decimal(line["quantity"]))
+            .quantize(Decimal("0.01"))
+            for index, line in enumerate(lines)
+        }
+    elif landed_cost_allocation_method == PurchaseOrder.LandedCostAllocationMethod.EQUAL:
+        weights = {str(index): Decimal("1.00") for index in range(len(lines))}
     else:
         weights = net_totals_by_key
         if sum(weights.values(), Decimal("0.00")) == Decimal("0.00"):
@@ -848,6 +917,11 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
     receipts = PurchaseReceiptSerializer(many=True, read_only=True)
     adjustments = PurchaseOrderAdjustmentSerializer(many=True, read_only=True)
     audit_events = PurchaseOrderAuditEventSerializer(many=True, read_only=True)
+    landed_cost_entries = PurchaseOrderLandedCostEntrySerializer(
+        many=True,
+        required=False,
+        allow_empty=True,
+    )
     supplier_name = serializers.CharField(source="supplier.name", read_only=True)
     landed_cost_total = serializers.DecimalField(
         max_digits=10,
@@ -911,9 +985,7 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
             "discount_codes",
             "discount_total",
             "applied_discounts",
-            "shipping_amount",
-            "customs_amount",
-            "handling_amount",
+            "landed_cost_entries",
             "landed_cost_allocation_method",
             "landed_cost_total",
             "total",
@@ -964,24 +1036,10 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
         )
         validators = []
 
-    def validate_shipping_amount(self, value):
-        return self._validate_landed_cost_amount(value, "Shipping amount")
-
-    def validate_customs_amount(self, value):
-        return self._validate_landed_cost_amount(value, "Customs amount")
-
-    def validate_handling_amount(self, value):
-        return self._validate_landed_cost_amount(value, "Handling amount")
-
-    def _validate_landed_cost_amount(self, value, label):
-        if value < Decimal("0.00"):
-            raise serializers.ValidationError(f"{label} cannot be negative.")
-        return value
-
     def to_internal_value(self, data):
         if isinstance(data, dict):
             data = data.copy()
-            self._normalize_landed_cost_aliases(data)
+            reject_legacy_landed_cost_fields(data)
             legacy_number = data.get("supplier_reference")
             invoice_number = data.get("supplier_invoice_number")
             if (
@@ -1000,33 +1058,6 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
             if legacy_number is not None and invoice_number is None:
                 data["supplier_invoice_number"] = legacy_number
         return super().to_internal_value(data)
-
-    def _normalize_landed_cost_aliases(self, data):
-        for canonical, alias in (
-            ("shipping_amount", "shipping_cost"),
-            ("customs_amount", "customs_cost"),
-            ("handling_amount", "handling_cost"),
-        ):
-            alias_value = data.get(alias)
-            canonical_value = data.get(canonical)
-            if (
-                alias_value is not None
-                and canonical_value is not None
-                and str(alias_value).strip() != str(canonical_value).strip()
-            ):
-                raise serializers.ValidationError(
-                    {alias: f"Use {canonical}; aliases must match when both are provided."}
-                )
-            if alias_value is not None and canonical_value is None:
-                data[canonical] = alias_value
-
-        allocation_method = data.get("landed_cost_allocation_method")
-        allocation_aliases = {
-            "by_line_value": PurchaseOrder.LandedCostAllocationMethod.LINE_VALUE,
-            "by_quantity": PurchaseOrder.LandedCostAllocationMethod.QUANTITY,
-        }
-        if allocation_method in allocation_aliases:
-            data["landed_cost_allocation_method"] = allocation_aliases[allocation_method]
 
     def get_can_return(self, purchase_order):
         return self._can_adjust(purchase_order)
@@ -1147,17 +1178,21 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         lines_data = validated_data.pop("lines", [])
+        landed_cost_entries_data = validated_data.pop("landed_cost_entries", None)
         return save_purchase_order_with_lines(
             lines_data=lines_data,
+            landed_cost_entries_data=landed_cost_entries_data,
             request=self.context.get("request"),
             **validated_data,
         )
 
     def update(self, instance, validated_data):
         lines_data = validated_data.pop("lines", None)
+        landed_cost_entries_data = validated_data.pop("landed_cost_entries", None)
         return save_purchase_order_with_lines(
             purchase_order=instance,
             lines_data=lines_data,
+            landed_cost_entries_data=landed_cost_entries_data,
             request=self.context.get("request"),
             **validated_data,
         )
@@ -1179,6 +1214,9 @@ class PurchaseReceiptLineInputSerializer(serializers.Serializer):
     quantity_damaged = serializers.IntegerField(min_value=0, required=False)
     cancelled_quantity = serializers.IntegerField(min_value=0, required=False)
     quantity_rejected = serializers.IntegerField(min_value=0, required=False)
+    expiry_date = serializers.DateField(required=False, allow_null=True)
+    expiration_date = serializers.DateField(required=False, allow_null=True)
+    expires_on = serializers.DateField(required=False, allow_null=True)
     notes = serializers.CharField(required=False, allow_blank=True, trim_whitespace=True)
     note = serializers.CharField(required=False, allow_blank=True, trim_whitespace=True)
 
@@ -1243,6 +1281,22 @@ class PurchaseReceiptLineInputSerializer(serializers.Serializer):
             attrs["cancelled_quantity"] = attrs["quantity_rejected"]
             attrs.pop("quantity_rejected", None)
 
+        expiry_keys = [
+            key for key in ("expiry_date", "expiration_date", "expires_on") if key in attrs
+        ]
+        if len(expiry_keys) > 1:
+            expiry_values = {attrs[key] for key in expiry_keys}
+            if len(expiry_values) > 1:
+                raise serializers.ValidationError(
+                    {"expiry_date": "Expiry date aliases must match."}
+                )
+        if "expiration_date" in attrs:
+            attrs["expiry_date"] = attrs["expiration_date"]
+            attrs.pop("expiration_date", None)
+        if "expires_on" in attrs:
+            attrs["expiry_date"] = attrs["expires_on"]
+            attrs.pop("expires_on", None)
+
         if "note" in attrs:
             attrs["notes"] = attrs.get("notes", attrs["note"])
             attrs.pop("note", None)
@@ -1287,6 +1341,7 @@ class PurchaseReceiptInputSerializer(serializers.Serializer):
             accepted_quantity = line_data.get("accepted_quantity", 0)
             damaged_quantity = line_data.get("damaged_quantity", 0)
             cancelled_quantity = line_data.get("cancelled_quantity", 0)
+            expiry_date = line_data.get("expiry_date", line.expiry_date)
             if accepted_quantity + damaged_quantity + cancelled_quantity <= 0:
                 raise serializers.ValidationError(
                     {
@@ -1308,6 +1363,19 @@ class PurchaseReceiptInputSerializer(serializers.Serializer):
                         )
                     }
                 )
+            if (
+                accepted_quantity > 0
+                and line.variant.product.tracks_expiry
+                and expiry_date is None
+            ):
+                raise serializers.ValidationError(
+                    {
+                        "expiry_date": (
+                            "Expiry date is required for received products that "
+                            "track expiry."
+                        )
+                    }
+                )
             validated_lines.append(
                 {
                     "line": line,
@@ -1320,6 +1388,7 @@ class PurchaseReceiptInputSerializer(serializers.Serializer):
                         - line.outstanding_quantity,
                         0,
                     ),
+                    "expiry_date": expiry_date,
                     "notes": line_data.get("notes", ""),
                 }
             )

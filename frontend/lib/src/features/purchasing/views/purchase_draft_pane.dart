@@ -30,23 +30,10 @@ class _PurchaseDraftPaneState extends State<PurchaseDraftPane> {
       TextEditingController(text: widget.viewModel.supplierInvoiceNumber);
   late final TextEditingController _supplierInvoiceDateController =
       TextEditingController(text: widget.viewModel.supplierInvoiceDateInput);
-  late final TextEditingController _shippingCostController =
-      TextEditingController(
-        text: _costInputText(widget.viewModel.shippingCost),
-      );
-  late final TextEditingController _customsCostController =
-      TextEditingController(text: _costInputText(widget.viewModel.customsCost));
-  late final TextEditingController _handlingCostController =
-      TextEditingController(
-        text: _costInputText(widget.viewModel.handlingCost),
-      );
   late final TextEditingController _discountCodeController =
       TextEditingController(text: widget.viewModel.discountCode);
   final FocusNode _supplierInvoiceNumberFocusNode = FocusNode();
   final FocusNode _supplierInvoiceDateFocusNode = FocusNode();
-  final FocusNode _shippingCostFocusNode = FocusNode();
-  final FocusNode _customsCostFocusNode = FocusNode();
-  final FocusNode _handlingCostFocusNode = FocusNode();
   final FocusNode _discountCodeFocusNode = FocusNode();
 
   PurchaseViewModel get viewModel => widget.viewModel;
@@ -65,24 +52,6 @@ class _PurchaseDraftPaneState extends State<PurchaseDraftPane> {
       value: widget.viewModel.supplierInvoiceDateInput,
     );
     _syncController(
-      controller: _shippingCostController,
-      focusNode: _shippingCostFocusNode,
-      value: _costInputText(widget.viewModel.shippingCost),
-      syncEmptyWhileFocused: false,
-    );
-    _syncController(
-      controller: _customsCostController,
-      focusNode: _customsCostFocusNode,
-      value: _costInputText(widget.viewModel.customsCost),
-      syncEmptyWhileFocused: false,
-    );
-    _syncController(
-      controller: _handlingCostController,
-      focusNode: _handlingCostFocusNode,
-      value: _costInputText(widget.viewModel.handlingCost),
-      syncEmptyWhileFocused: false,
-    );
-    _syncController(
       controller: _discountCodeController,
       focusNode: _discountCodeFocusNode,
       value: widget.viewModel.discountCode,
@@ -93,15 +62,9 @@ class _PurchaseDraftPaneState extends State<PurchaseDraftPane> {
   void dispose() {
     _supplierInvoiceNumberController.dispose();
     _supplierInvoiceDateController.dispose();
-    _shippingCostController.dispose();
-    _customsCostController.dispose();
-    _handlingCostController.dispose();
     _discountCodeController.dispose();
     _supplierInvoiceNumberFocusNode.dispose();
     _supplierInvoiceDateFocusNode.dispose();
-    _shippingCostFocusNode.dispose();
-    _customsCostFocusNode.dispose();
-    _handlingCostFocusNode.dispose();
     _discountCodeFocusNode.dispose();
     super.dispose();
   }
@@ -268,6 +231,8 @@ class _PurchaseDraftPaneState extends State<PurchaseDraftPane> {
                         final line = viewModel.draft[index];
                         return PurchaseDraftLineTile(
                           line: line,
+                          previewLine: viewModel
+                              .discountPreviewLineForDraftIndex(index),
                           enabled: !viewModel.isSubmitting,
                           onAdd: () => viewModel.addVariant(line.variant),
                           onRemove: () =>
@@ -275,10 +240,23 @@ class _PurchaseDraftPaneState extends State<PurchaseDraftPane> {
                           onCostChanged: (unitCost) {
                             viewModel.updateLineCost(line.variant, unitCost);
                           },
+                          onExpiryDateChanged: (expiryDate) {
+                            viewModel.updateLineExpiryDate(
+                              line.variant,
+                              expiryDate,
+                            );
+                          },
                         );
                       },
                     ),
             ),
+            if (viewModel.hasMissingExpiryDates) ...[
+              const SizedBox(height: 6),
+              Text(
+                l10n.purchaseExpiryDatesRequired,
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
+            ],
             Column(
               children: [
                 TotalRow(label: l10n.subtotal, value: viewModel.subtotal),
@@ -345,94 +323,30 @@ class _PurchaseDraftPaneState extends State<PurchaseDraftPane> {
   }
 
   Widget _buildLandedCostSection(AppLocalizations l10n) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Row(
-          children: [
-            Expanded(
-              child: _LandedCostField(
-                key: const ValueKey('shipping_cost_field'),
-                controller: _shippingCostController,
-                focusNode: _shippingCostFocusNode,
-                label: l10n.purchaseShippingCostLabel,
-                icon: Icons.local_shipping_outlined,
-                enabled: !viewModel.isSubmitting,
-                onChanged: viewModel.updateShippingCost,
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: _LandedCostField(
-                key: const ValueKey('customs_cost_field'),
-                controller: _customsCostController,
-                focusNode: _customsCostFocusNode,
-                label: l10n.purchaseCustomsCostLabel,
-                icon: Icons.account_balance_outlined,
-                enabled: !viewModel.isSubmitting,
-                onChanged: viewModel.updateCustomsCost,
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: _LandedCostField(
-                key: const ValueKey('handling_cost_field'),
-                controller: _handlingCostController,
-                focusNode: _handlingCostFocusNode,
-                label: l10n.purchaseHandlingCostLabel,
-                icon: Icons.inventory_2_outlined,
-                enabled: !viewModel.isSubmitting,
-                onChanged: viewModel.updateHandlingCost,
-              ),
-            ),
-          ],
-        ),
-        if (viewModel.landedCostTotal > 0) ...[
-          const SizedBox(height: 8),
-          SegmentedButton<LandedCostAllocationMethod>(
-            showSelectedIcon: false,
-            style: const ButtonStyle(
-              visualDensity: VisualDensity(horizontal: -2, vertical: -2),
-            ),
-            segments: [
-              ButtonSegment(
-                value: LandedCostAllocationMethod.byLineValue,
-                label: Text(
-                  l10n.landedCostAllocationByLineValueLabel,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                icon: const Icon(Icons.payments_outlined),
-                enabled: !viewModel.isSubmitting,
-              ),
-              ButtonSegment(
-                value: LandedCostAllocationMethod.byQuantity,
-                label: Text(
-                  l10n.landedCostAllocationByQuantityLabel,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                icon: const Icon(Icons.numbers_outlined),
-                enabled: !viewModel.isSubmitting,
-              ),
-            ],
-            selected: {viewModel.landedCostAllocationMethod},
-            onSelectionChanged: viewModel.isSubmitting
-                ? null
-                : (selection) {
-                    if (selection.isNotEmpty) {
-                      viewModel.updateLandedCostAllocationMethod(
-                        selection.first,
-                      );
-                    }
-                  },
-          ),
-        ],
-      ],
+    return OutlinedButton.icon(
+      key: const ValueKey('landed_cost_button'),
+      onPressed: viewModel.isSubmitting
+          ? null
+          : () => _editLandedCosts(context),
+      icon: const Icon(Icons.request_quote_outlined),
+      label: Text(
+        l10n.purchaseLandedCostButton(formatMoney(viewModel.landedCostTotal)),
+        overflow: TextOverflow.ellipsis,
+      ),
     );
   }
 
   Future<void> _submitDraft(BuildContext context) async {
     final l10n = AppLocalizations.of(context)!;
     final messenger = ScaffoldMessenger.of(context);
+    if (viewModel.hasMissingExpiryDates) {
+      messenger
+        ..clearSnackBars()
+        ..showSnackBar(
+          SnackBar(content: Text(l10n.purchaseExpiryDatesRequired)),
+        );
+      return;
+    }
     await viewModel.refreshDiscountPreview();
     if (!context.mounted) {
       return;
@@ -504,6 +418,27 @@ class _PurchaseDraftPaneState extends State<PurchaseDraftPane> {
     viewModel.updateSupplierInvoiceDateInput(formatted);
   }
 
+  Future<void> _editLandedCosts(BuildContext context) async {
+    final result = await showModalBottomSheet<_LandedCostSheetResult>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (context) {
+        return _LandedCostSheet(
+          entries: viewModel.landedCostEntries,
+          allocationMethod: viewModel.landedCostAllocationMethod,
+        );
+      },
+    );
+    if (result == null || !context.mounted) {
+      return;
+    }
+    viewModel.updateLandedCosts(
+      entries: result.entries,
+      allocationMethod: result.allocationMethod,
+    );
+  }
+
   void _syncController({
     required TextEditingController controller,
     required FocusNode focusNode,
@@ -517,15 +452,25 @@ class _PurchaseDraftPaneState extends State<PurchaseDraftPane> {
     }
   }
 
-  String _formatDateInput(DateTime date) {
-    final month = date.month.toString().padLeft(2, '0');
-    final day = date.day.toString().padLeft(2, '0');
-    return '${date.year}-$month-$day';
-  }
+  String _formatDateInput(DateTime date) => _formatDateInputValue(date);
+}
 
-  String _costInputText(double value) {
-    return value == 0 ? '' : value.toStringAsFixed(2);
+String _formatDateInputValue(DateTime date) {
+  final month = date.month.toString().padLeft(2, '0');
+  final day = date.day.toString().padLeft(2, '0');
+  return '${date.year}-$month-$day';
+}
+
+DateTime? _parseDateInputValue(String text) {
+  if (text.length != 10) {
+    return null;
   }
+  final parsed = DateTime.tryParse(text);
+  if (parsed == null) {
+    return null;
+  }
+  final date = DateTime(parsed.year, parsed.month, parsed.day);
+  return _formatDateInputValue(date) == text ? date : null;
 }
 
 class _DateDashInputFormatter extends TextInputFormatter {
@@ -553,44 +498,269 @@ class _DateDashInputFormatter extends TextInputFormatter {
   }
 }
 
-class _LandedCostField extends StatelessWidget {
-  const _LandedCostField({
-    super.key,
-    required this.controller,
-    required this.focusNode,
-    required this.label,
-    required this.icon,
-    required this.enabled,
-    required this.onChanged,
+class _LandedCostSheetResult {
+  const _LandedCostSheetResult({
+    required this.entries,
+    required this.allocationMethod,
   });
 
-  final TextEditingController controller;
-  final FocusNode focusNode;
-  final String label;
-  final IconData icon;
-  final bool enabled;
-  final ValueChanged<double> onChanged;
+  final List<PurchaseLandedCostEntry> entries;
+  final LandedCostAllocationMethod allocationMethod;
+}
+
+class _LandedCostEntryControllers {
+  _LandedCostEntryControllers(PurchaseLandedCostEntry entry)
+    : name = TextEditingController(text: entry.name),
+      cost = TextEditingController(
+        text: entry.cost == 0 ? '' : entry.cost.toStringAsFixed(2),
+      );
+
+  final TextEditingController name;
+  final TextEditingController cost;
+
+  void dispose() {
+    name.dispose();
+    cost.dispose();
+  }
+}
+
+class _LandedCostSheet extends StatefulWidget {
+  const _LandedCostSheet({
+    required this.entries,
+    required this.allocationMethod,
+  });
+
+  final List<PurchaseLandedCostEntry> entries;
+  final LandedCostAllocationMethod allocationMethod;
+
+  @override
+  State<_LandedCostSheet> createState() => _LandedCostSheetState();
+}
+
+class _LandedCostSheetState extends State<_LandedCostSheet> {
+  late final List<_LandedCostEntryControllers> _entryControllers;
+  late LandedCostAllocationMethod _allocationMethod;
+
+  @override
+  void initState() {
+    super.initState();
+    _allocationMethod = widget.allocationMethod;
+    final entries = widget.entries.isEmpty
+        ? const [PurchaseLandedCostEntry(name: '', cost: 0)]
+        : widget.entries;
+    _entryControllers = entries
+        .map(_LandedCostEntryControllers.new)
+        .toList(growable: true);
+  }
+
+  @override
+  void dispose() {
+    for (final controller in _entryControllers) {
+      controller.dispose();
+    }
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    return TextField(
-      controller: controller,
-      focusNode: focusNode,
-      enabled: enabled,
-      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-      inputFormatters: [DecimalTextInputFormatter()],
-      decoration: InputDecoration(
-        labelText: label,
-        isDense: true,
-        prefixIcon: Icon(icon),
+    final l10n = AppLocalizations.of(context)!;
+    final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
+    final total = _currentEntries(
+      l10n,
+    ).fold<double>(0, (sum, entry) => sum + entry.cost);
+
+    return Padding(
+      padding: EdgeInsets.only(bottom: bottomInset),
+      child: SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      l10n.purchaseLandedCostSheetTitle,
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                  ),
+                  Text(
+                    formatMoney(total),
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              DropdownButtonFormField<LandedCostAllocationMethod>(
+                initialValue: _allocationMethod,
+                decoration: InputDecoration(
+                  labelText: l10n.landedCostAllocationMethodLabel,
+                  isDense: true,
+                  prefixIcon: const Icon(Icons.call_split_outlined),
+                ),
+                items: [
+                  for (final method in LandedCostAllocationMethod.values)
+                    DropdownMenuItem(
+                      value: method,
+                      child: Text(_landedCostAllocationLabel(l10n, method)),
+                    ),
+                ],
+                onChanged: (method) {
+                  if (method == null) {
+                    return;
+                  }
+                  setState(() => _allocationMethod = method);
+                },
+              ),
+              const SizedBox(height: 12),
+              for (final (index, controllers) in _entryControllers.indexed) ...[
+                if (index > 0) const SizedBox(height: 8),
+                _LandedCostEntryRow(
+                  nameController: controllers.name,
+                  costController: controllers.cost,
+                  canRemove: _entryControllers.length > 1,
+                  onChanged: () => setState(() {}),
+                  onRemove: () => _removeEntry(index),
+                ),
+              ],
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                onPressed: _addEntry,
+                icon: const Icon(Icons.add),
+                label: Text(l10n.addLandedCostEntryButton),
+              ),
+              const SizedBox(height: 8),
+              FilledButton.icon(
+                onPressed: () {
+                  Navigator.of(context).pop(
+                    _LandedCostSheetResult(
+                      entries: _currentEntries(l10n),
+                      allocationMethod: _allocationMethod,
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.check),
+                label: Text(l10n.saveLandedCostEntriesButton),
+              ),
+            ],
+          ),
+        ),
       ),
-      onChanged: (value) {
-        final normalized = value.trim().replaceAll(',', '.');
-        final parsed = normalized.isEmpty ? 0.0 : double.tryParse(normalized);
-        if (parsed != null && parsed >= 0) {
-          onChanged(parsed);
-        }
-      },
+    );
+  }
+
+  void _addEntry() {
+    setState(() {
+      _entryControllers.add(
+        _LandedCostEntryControllers(
+          const PurchaseLandedCostEntry(name: '', cost: 0),
+        ),
+      );
+    });
+  }
+
+  void _removeEntry(int index) {
+    setState(() {
+      final removed = _entryControllers.removeAt(index);
+      removed.dispose();
+    });
+  }
+
+  List<PurchaseLandedCostEntry> _currentEntries(AppLocalizations l10n) {
+    return _entryControllers
+        .map((controllers) {
+          final name = controllers.name.text.trim();
+          final cost = _parseCost(controllers.cost.text);
+          if (cost <= 0) {
+            return null;
+          }
+          return PurchaseLandedCostEntry(
+            name: name.isEmpty ? l10n.defaultLandedCostEntryName : name,
+            cost: cost,
+          );
+        })
+        .nonNulls
+        .toList(growable: false);
+  }
+
+  double _parseCost(String value) {
+    final normalized = value.trim().replaceAll(',', '.');
+    return double.tryParse(normalized) ?? 0;
+  }
+
+  String _landedCostAllocationLabel(
+    AppLocalizations l10n,
+    LandedCostAllocationMethod method,
+  ) {
+    return switch (method) {
+      LandedCostAllocationMethod.byLineValue =>
+        l10n.landedCostAllocationByLineValueLabel,
+      LandedCostAllocationMethod.byQuantity =>
+        l10n.landedCostAllocationByQuantityLabel,
+      LandedCostAllocationMethod.byRetailValue =>
+        l10n.landedCostAllocationByRetailValueLabel,
+      LandedCostAllocationMethod.equallyByLine =>
+        l10n.landedCostAllocationEquallyByLineLabel,
+    };
+  }
+}
+
+class _LandedCostEntryRow extends StatelessWidget {
+  const _LandedCostEntryRow({
+    required this.nameController,
+    required this.costController,
+    required this.canRemove,
+    required this.onChanged,
+    required this.onRemove,
+  });
+
+  final TextEditingController nameController;
+  final TextEditingController costController;
+  final bool canRemove;
+  final VoidCallback onChanged;
+  final VoidCallback onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+
+    return Row(
+      children: [
+        Expanded(
+          child: TextField(
+            controller: nameController,
+            textInputAction: TextInputAction.next,
+            decoration: InputDecoration(
+              labelText: l10n.landedCostEntryNameLabel,
+              isDense: true,
+              prefixIcon: const Icon(Icons.edit_note_outlined),
+            ),
+            onChanged: (_) => onChanged(),
+          ),
+        ),
+        const SizedBox(width: 8),
+        SizedBox(
+          width: 120,
+          child: TextField(
+            controller: costController,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            inputFormatters: [DecimalTextInputFormatter()],
+            decoration: InputDecoration(
+              labelText: l10n.landedCostEntryCostLabel,
+              isDense: true,
+            ),
+            onChanged: (_) => onChanged(),
+          ),
+        ),
+        const SizedBox(width: 4),
+        IconButton(
+          tooltip: l10n.removeLandedCostEntryTooltip,
+          onPressed: canRemove ? onRemove : null,
+          icon: const Icon(Icons.close),
+        ),
+      ],
     );
   }
 }
@@ -599,17 +769,21 @@ class PurchaseDraftLineTile extends StatefulWidget {
   const PurchaseDraftLineTile({
     super.key,
     required this.line,
+    this.previewLine,
     required this.enabled,
     required this.onAdd,
     required this.onRemove,
     required this.onCostChanged,
+    required this.onExpiryDateChanged,
   });
 
   final PurchaseDraftLine line;
+  final PurchaseDiscountPreviewLine? previewLine;
   final bool enabled;
   final Future<void> Function() onAdd;
   final VoidCallback onRemove;
   final ValueChanged<double> onCostChanged;
+  final ValueChanged<DateTime?> onExpiryDateChanged;
 
   @override
   State<PurchaseDraftLineTile> createState() => _PurchaseDraftLineTileState();
@@ -619,7 +793,12 @@ class _PurchaseDraftLineTileState extends State<PurchaseDraftLineTile> {
   late final TextEditingController _costController = TextEditingController(
     text: widget.line.unitCost.toStringAsFixed(2),
   );
+  late final TextEditingController _expiryController = TextEditingController(
+    text: _formatNullableDate(widget.line.expiryDate),
+  );
   final FocusNode _costFocusNode = FocusNode();
+  final FocusNode _expiryFocusNode = FocusNode();
+  bool _expiryInputInvalid = false;
 
   @override
   void didUpdateWidget(covariant PurchaseDraftLineTile oldWidget) {
@@ -628,12 +807,20 @@ class _PurchaseDraftLineTileState extends State<PurchaseDraftLineTile> {
     if (!_costFocusNode.hasFocus && _costController.text != nextText) {
       _costController.text = nextText;
     }
+    final nextExpiryText = _formatNullableDate(widget.line.expiryDate);
+    if (!_expiryFocusNode.hasFocus &&
+        _expiryController.text != nextExpiryText) {
+      _expiryController.text = nextExpiryText;
+      _expiryInputInvalid = false;
+    }
   }
 
   @override
   void dispose() {
     _costFocusNode.dispose();
     _costController.dispose();
+    _expiryFocusNode.dispose();
+    _expiryController.dispose();
     super.dispose();
   }
 
@@ -641,6 +828,22 @@ class _PurchaseDraftLineTileState extends State<PurchaseDraftLineTile> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final line = widget.line;
+    final theme = Theme.of(context);
+    final previewLine = widget.previewLine;
+    final allocatedLandedCost = previewLine?.allocatedLandedCost ?? 0;
+    final effectiveUnitCost = previewLine?.effectiveUnitCost;
+    final hasAllocatedLandedCost = allocatedLandedCost > 0;
+    final costDetails = <String>[
+      if (hasAllocatedLandedCost)
+        l10n.purchaseLineLandedCostValue(formatMoney(allocatedLandedCost)),
+      if (hasAllocatedLandedCost &&
+          effectiveUnitCost != null &&
+          (effectiveUnitCost - line.unitCost).abs() >= 0.005)
+        l10n.purchaseLineEffectiveCostValue(formatMoney(effectiveUnitCost)),
+    ];
+    final lineTotal = hasAllocatedLandedCost
+        ? previewLine!.effectiveLineTotal ?? line.total + allocatedLandedCost
+        : line.total;
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 10),
@@ -660,8 +863,46 @@ class _PurchaseDraftLineTileState extends State<PurchaseDraftLineTile> {
                     line.variant.sku,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodySmall,
+                    style: theme.textTheme.bodySmall,
                   ),
+                if (costDetails.isNotEmpty)
+                  Text(
+                    costDetails.join(' • '),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.secondary,
+                    ),
+                  ),
+                if (line.variant.tracksExpiry) ...[
+                  const SizedBox(height: 8),
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 220),
+                    child: TextField(
+                      key: ValueKey(
+                        'purchase_line_expiry_${line.variant.id}_field',
+                      ),
+                      controller: _expiryController,
+                      focusNode: _expiryFocusNode,
+                      enabled: widget.enabled,
+                      keyboardType: TextInputType.datetime,
+                      inputFormatters: const [_DateDashInputFormatter()],
+                      decoration: InputDecoration(
+                        labelText: l10n.purchaseLineExpiryDateLabel,
+                        hintText: l10n.purchaseLineExpiryDateHint,
+                        isDense: true,
+                        prefixIcon: const Icon(Icons.event_busy_outlined),
+                        suffixIcon: IconButton(
+                          tooltip: l10n.purchaseLineExpiryDatePickerTooltip,
+                          onPressed: widget.enabled ? _pickExpiryDate : null,
+                          icon: const Icon(Icons.calendar_month_outlined),
+                        ),
+                        errorText: _expiryErrorText(l10n),
+                      ),
+                      onChanged: _handleExpiryInputChanged,
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
@@ -703,10 +944,58 @@ class _PurchaseDraftLineTileState extends State<PurchaseDraftLineTile> {
           ),
           SizedBox(
             width: 72,
-            child: Text(formatMoney(line.total), textAlign: TextAlign.end),
+            child: Text(formatMoney(lineTotal), textAlign: TextAlign.end),
           ),
         ],
       ),
     );
+  }
+
+  void _handleExpiryInputChanged(String value) {
+    final text = value.trim();
+    if (text.isEmpty) {
+      setState(() => _expiryInputInvalid = false);
+      widget.onExpiryDateChanged(null);
+      return;
+    }
+    final parsed = _parseDateInputValue(text);
+    if (parsed == null) {
+      setState(() => _expiryInputInvalid = true);
+      widget.onExpiryDateChanged(null);
+      return;
+    }
+    setState(() => _expiryInputInvalid = false);
+    widget.onExpiryDateChanged(parsed);
+  }
+
+  Future<void> _pickExpiryDate() async {
+    final current = widget.line.expiryDate ?? DateTime.now();
+    final selected = await showDatePicker(
+      context: context,
+      initialDate: current,
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2100),
+    );
+    if (selected == null || !mounted) {
+      return;
+    }
+    final value = DateTime(selected.year, selected.month, selected.day);
+    _expiryController.text = _formatDateInputValue(value);
+    setState(() => _expiryInputInvalid = false);
+    widget.onExpiryDateChanged(value);
+  }
+
+  String? _expiryErrorText(AppLocalizations l10n) {
+    if (_expiryInputInvalid) {
+      return l10n.purchaseLineExpiryDateInvalid;
+    }
+    if (widget.line.variant.tracksExpiry && widget.line.expiryDate == null) {
+      return l10n.purchaseLineExpiryDateRequired;
+    }
+    return null;
+  }
+
+  String _formatNullableDate(DateTime? date) {
+    return date == null ? '' : _formatDateInputValue(date);
   }
 }

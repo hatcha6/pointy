@@ -22,6 +22,7 @@ enum BusinessAlertCategory {
 enum BusinessAlertType {
   outOfStock,
   lowStock,
+  expiringStock,
   overduePurchases,
   printFailures,
   stalePrintAgents,
@@ -150,6 +151,7 @@ BusinessAlertType _typeFromCode(String code) {
   return switch (code) {
     'inventory.out_of_stock' => BusinessAlertType.outOfStock,
     'inventory.low_stock' => BusinessAlertType.lowStock,
+    'inventory.expiring_batch' => BusinessAlertType.expiringStock,
     'purchasing.overdue_order' => BusinessAlertType.overduePurchases,
     'printing.failed_job' => BusinessAlertType.printFailures,
     'printing.stale_agent' => BusinessAlertType.stalePrintAgents,
@@ -187,6 +189,7 @@ int _sortScore(BusinessAlertType type) {
     BusinessAlertType.printFailures => 15,
     BusinessAlertType.stalePrintAgents => 18,
     BusinessAlertType.overduePurchases => 20,
+    BusinessAlertType.expiringStock => 22,
     BusinessAlertType.registerVariance => 25,
     BusinessAlertType.lowProfitMargin => 28,
     BusinessAlertType.lowStock => 30,
@@ -206,7 +209,9 @@ int _quantityFromPayload(BusinessAlertType type, Map<String, Object?> payload) {
 String _primaryLabel(BusinessAlertType type, Map<String, Object?> payload) {
   return switch (type) {
     BusinessAlertType.outOfStock ||
-    BusinessAlertType.lowStock => payload['product_name']?.toString() ?? '',
+    BusinessAlertType.lowStock ||
+    BusinessAlertType.expiringStock =>
+      payload['product_name']?.toString() ?? '',
     BusinessAlertType.overduePurchases =>
       payload['order_number']?.toString() ?? '',
     BusinessAlertType.printFailures =>
@@ -225,7 +230,8 @@ String _primaryLabel(BusinessAlertType type, Map<String, Object?> payload) {
 String _secondaryLabel(BusinessAlertType type, Map<String, Object?> payload) {
   return switch (type) {
     BusinessAlertType.outOfStock ||
-    BusinessAlertType.lowStock => payload['sku']?.toString() ?? '',
+    BusinessAlertType.lowStock ||
+    BusinessAlertType.expiringStock => payload['sku']?.toString() ?? '',
     BusinessAlertType.overduePurchases =>
       payload['supplier_name']?.toString() ?? '',
     BusinessAlertType.printFailures => payload['message']?.toString() ?? '',
@@ -237,6 +243,7 @@ String _secondaryLabel(BusinessAlertType type, Map<String, Object?> payload) {
 
 String _detailLabel(BusinessAlertType type, Map<String, Object?> payload) {
   return switch (type) {
+    BusinessAlertType.expiringStock => _stockBatchDetail(payload),
     BusinessAlertType.operationsError => payload['message']?.toString() ?? '',
     _ => '',
   };
@@ -247,6 +254,9 @@ DateTime? _occurredAt(BusinessAlertType type, Map<String, Object?> payload) {
     BusinessAlertType.overduePurchases => _dateTimeFromJson(
       payload['due_date'],
     ),
+    BusinessAlertType.expiringStock => _dateTimeFromJson(
+      payload['expiry_date'],
+    ),
     BusinessAlertType.printFailures => _dateTimeFromJson(payload['failed_at']),
     BusinessAlertType.expiringDiscounts => _dateTimeFromJson(
       payload['ends_at'],
@@ -256,6 +266,14 @@ DateTime? _occurredAt(BusinessAlertType type, Map<String, Object?> payload) {
     ),
     _ => null,
   };
+}
+
+String _stockBatchDetail(Map<String, Object?> payload) {
+  final parts = [
+    payload['supplier_name']?.toString().trim() ?? '',
+    payload['order_number']?.toString().trim() ?? '',
+  ].where((value) => value.isNotEmpty);
+  return parts.join(' • ');
 }
 
 Map<String, Object?> _mapFromJson(Object? value) {

@@ -25,8 +25,16 @@ class _PurchaseReceiveDialogState extends State<_PurchaseReceiveDialog> {
     for (final line in _receivableLines)
       line.id: TextEditingController(text: '0'),
   };
+  late final Map<int, TextEditingController> _expiryControllers = {
+    for (final line in _receivableLines)
+      if (line.tracksExpiry)
+        line.id: TextEditingController(
+          text: _formatReceiveDate(line.expiryDate),
+        ),
+  };
   final TextEditingController _noteController = TextEditingController();
   bool _showQuantityError = false;
+  bool _showExpiryError = false;
 
   @override
   void dispose() {
@@ -37,6 +45,9 @@ class _PurchaseReceiveDialogState extends State<_PurchaseReceiveDialog> {
       controller.dispose();
     }
     for (final controller in _rejectedControllers.values) {
+      controller.dispose();
+    }
+    for (final controller in _expiryControllers.values) {
       controller.dispose();
     }
     _noteController.dispose();
@@ -65,7 +76,11 @@ class _PurchaseReceiveDialogState extends State<_PurchaseReceiveDialog> {
                     receivedController: _receivedControllers[line.id]!,
                     damagedController: _damagedControllers[line.id]!,
                     rejectedController: _rejectedControllers[line.id]!,
-                    onChanged: () => setState(() {}),
+                    expiryController: _expiryControllers[line.id],
+                    onChanged: () => setState(() {
+                      _showQuantityError = false;
+                      _showExpiryError = false;
+                    }),
                   ),
               if (_showQuantityError) ...[
                 const SizedBox(height: 8),
@@ -73,6 +88,18 @@ class _PurchaseReceiveDialogState extends State<_PurchaseReceiveDialog> {
                   alignment: AlignmentDirectional.centerStart,
                   child: Text(
                     l10n.purchaseReceiveInvalidQuantityError,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                  ),
+                ),
+              ],
+              if (_showExpiryError) ...[
+                const SizedBox(height: 8),
+                Align(
+                  alignment: AlignmentDirectional.centerStart,
+                  child: Text(
+                    l10n.purchaseLineExpiryDateRequired,
                     style: TextStyle(
                       color: Theme.of(context).colorScheme.error,
                     ),
@@ -121,6 +148,15 @@ class _PurchaseReceiveDialogState extends State<_PurchaseReceiveDialog> {
         setState(() => _showQuantityError = true);
         return;
       }
+      DateTime? expiryDate;
+      if (line.tracksExpiry && received > 0) {
+        final expiryText = _expiryControllers[line.id]!.text.trim();
+        expiryDate = _parseReceiveDate(expiryText);
+        if (expiryDate == null) {
+          setState(() => _showExpiryError = true);
+          return;
+        }
+      }
       if (received > 0 || damaged > 0 || rejected > 0) {
         lines.add(
           PurchaseReceiveLineDraft(
@@ -128,6 +164,7 @@ class _PurchaseReceiveDialogState extends State<_PurchaseReceiveDialog> {
             quantityReceived: received,
             quantityDamaged: damaged,
             quantityRejected: rejected,
+            expiryDate: expiryDate,
           ),
         );
       }
@@ -136,6 +173,8 @@ class _PurchaseReceiveDialogState extends State<_PurchaseReceiveDialog> {
       setState(() => _showQuantityError = true);
       return;
     }
+    _showQuantityError = false;
+    _showExpiryError = false;
     Navigator.of(context).pop(
       _PurchaseReceiveDialogResult(
         lines: lines,
@@ -151,6 +190,7 @@ class _PurchaseReceiveLineInput extends StatelessWidget {
     required this.receivedController,
     required this.damagedController,
     required this.rejectedController,
+    this.expiryController,
     required this.onChanged,
   });
 
@@ -158,6 +198,7 @@ class _PurchaseReceiveLineInput extends StatelessWidget {
   final TextEditingController receivedController;
   final TextEditingController damagedController;
   final TextEditingController rejectedController;
+  final TextEditingController? expiryController;
   final VoidCallback onChanged;
 
   @override
@@ -170,6 +211,12 @@ class _PurchaseReceiveLineInput extends StatelessWidget {
         line.receivedQuantity + line.damagedQuantity + received + damaged;
     final afterOpen = line.receivableQuantity - received - damaged - rejected;
     final afterVariance = afterDelivered - line.quantity;
+    final expiryController = this.expiryController;
+    final expiryText = expiryController?.text.trim() ?? '';
+    final expiryInvalid =
+        line.tracksExpiry &&
+        received > 0 &&
+        _parseReceiveDate(expiryText) == null;
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
@@ -246,9 +293,53 @@ class _PurchaseReceiveLineInput extends StatelessWidget {
               ),
             ],
           ),
+          if (line.tracksExpiry && expiryController != null) ...[
+            const SizedBox(height: 8),
+            TextField(
+              controller: expiryController,
+              keyboardType: TextInputType.datetime,
+              inputFormatters: const [_ReceiveDateDashInputFormatter()],
+              decoration: InputDecoration(
+                labelText: l10n.purchaseLineExpiryDateLabel,
+                hintText: l10n.purchaseLineExpiryDateHint,
+                border: const OutlineInputBorder(),
+                isDense: true,
+                prefixIcon: const Icon(Icons.event_busy_outlined),
+                suffixIcon: IconButton(
+                  tooltip: l10n.purchaseLineExpiryDatePickerTooltip,
+                  onPressed: () => _pickExpiryDate(context),
+                  icon: const Icon(Icons.calendar_month_outlined),
+                ),
+                errorText: expiryInvalid
+                    ? l10n.purchaseLineExpiryDateInvalid
+                    : null,
+              ),
+              onChanged: (_) => onChanged(),
+            ),
+          ],
         ],
       ),
     );
+  }
+
+  Future<void> _pickExpiryDate(BuildContext context) async {
+    final controller = expiryController;
+    if (controller == null) {
+      return;
+    }
+    final parsed = _parseReceiveDate(controller.text.trim());
+    final current = parsed ?? line.expiryDate ?? DateTime.now();
+    final selected = await showDatePicker(
+      context: context,
+      initialDate: current,
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2100),
+    );
+    if (selected == null || !context.mounted) {
+      return;
+    }
+    controller.text = _formatReceiveDate(selected);
+    onChanged();
   }
 }
 
@@ -257,4 +348,50 @@ class _PurchaseReceiveDialogResult {
 
   final List<PurchaseReceiveLineDraft> lines;
   final String note;
+}
+
+String _formatReceiveDate(DateTime? date) {
+  if (date == null) {
+    return '';
+  }
+  final month = date.month.toString().padLeft(2, '0');
+  final day = date.day.toString().padLeft(2, '0');
+  return '${date.year}-$month-$day';
+}
+
+DateTime? _parseReceiveDate(String text) {
+  if (text.length != 10) {
+    return null;
+  }
+  final parsed = DateTime.tryParse(text);
+  if (parsed == null) {
+    return null;
+  }
+  final date = DateTime(parsed.year, parsed.month, parsed.day);
+  return _formatReceiveDate(date) == text ? date : null;
+}
+
+class _ReceiveDateDashInputFormatter extends TextInputFormatter {
+  const _ReceiveDateDashInputFormatter();
+
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    final digits = newValue.text.replaceAll(RegExp(r'[^0-9]'), '');
+    final limited = digits.length > 8 ? digits.substring(0, 8) : digits;
+    final buffer = StringBuffer();
+    for (var index = 0; index < limited.length; index += 1) {
+      if (index == 4 || index == 6) {
+        buffer.write('-');
+      }
+      buffer.write(limited[index]);
+    }
+    final text = buffer.toString();
+    return TextEditingValue(
+      text: text,
+      selection: TextSelection.collapsed(offset: text.length),
+    );
+  }
 }

@@ -180,6 +180,7 @@ class ProductDetailsViewModel extends ChangeNotifier {
         name: _product.name,
         description: _product.description,
         isActive: _product.isActive,
+        tracksExpiry: _product.tracksExpiry,
         categoryIds: [for (final category in _product.categories) category.id],
         variantOptionIds: variantOptionIds,
         variants: variants,

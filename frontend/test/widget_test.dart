@@ -1399,6 +1399,7 @@ void main() {
       find.widgetWithText(TextFormField, 'تكلفة الشراء'),
       '4.25',
     );
+    await tester.ensureVisible(find.text('إضافة للشراء'));
     await tester.tap(find.text('إضافة للشراء'));
     await tester.pumpAndSettle(const Duration(seconds: 1));
 
@@ -1484,6 +1485,37 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('المرتجعات والاستبدالات'), findsOneWidget);
     expect(find.text('إرجاع'), findsWidgets);
+  });
+
+  testWidgets('purchase order details show landed cost allocations', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      PointyApp(
+        apiService: _mockApiService(purchaseOrderDetailHasLandedCosts: true),
+      ),
+    );
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+
+    await _openNavigationDestination(tester, 'المشتريات');
+    await tester.tap(find.text('أمر الشراء P20260515000200'));
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+
+    expect(find.text('طريقة توزيع تكاليف الوصول'), findsOneWidget);
+    expect(find.text('حسب الكمية'), findsOneWidget);
+
+    await tester.scrollUntilVisible(find.text('محتويات أمر الشراء'), 120);
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('تكلفة وصول 1.00 د.ل'), findsOneWidget);
+    expect(find.textContaining('التكلفة الفعلية 4.25 د.ل'), findsOneWidget);
+    expect(find.text('8.50 د.ل'), findsWidgets);
+
+    await tester.scrollUntilVisible(find.text('شحن'), 120);
+    await tester.pumpAndSettle();
+
+    expect(find.text('شحن'), findsOneWidget);
+    expect(find.text('تخليص'), findsOneWidget);
   });
 
   testWidgets('purchase order details can record supplier payment', (
@@ -3009,6 +3041,7 @@ PosApiService _mockApiService({
   int purchaseReturnStatusCode = 200,
   String purchaseOrderDetailStatus = 'draft',
   bool purchaseOrderDetailCanAdjust = true,
+  bool purchaseOrderDetailHasLandedCosts = false,
   String currentUserRole = 'manager',
   String currentUserDisplayName = 'مدير النظام',
   List<String> currentUserPermissions = const [],
@@ -3885,6 +3918,9 @@ PosApiService _mockApiService({
       }
 
       if (path.endsWith('/purchase-orders/200/')) {
+        final purchaseOrderDetailTotal = purchaseOrderDetailHasLandedCosts
+            ? 8.5
+            : 7.5;
         return _jsonResponse(
           _purchaseOrderJson(
             status: purchaseOrderDetailStatus,
@@ -3898,12 +3934,23 @@ PosApiService _mockApiService({
             openQuantity: purchaseOrderDetailStatus == 'received' ? 0 : 2,
             canAdjust: purchaseOrderDetailCanAdjust,
             paidTotal: supplierPaidTotal.toStringAsFixed(2),
-            balanceDue: (7.5 - supplierPaidTotal).toStringAsFixed(2),
+            balanceDue: (purchaseOrderDetailTotal - supplierPaidTotal)
+                .toStringAsFixed(2),
             paymentStatus: supplierPaidTotal <= 0
                 ? 'unpaid'
-                : supplierPaidTotal >= 7.5
+                : supplierPaidTotal >= purchaseOrderDetailTotal
                 ? 'paid'
                 : 'partial',
+            landedCostEntries: purchaseOrderDetailHasLandedCosts
+                ? const [
+                    {'id': 1, 'name': 'شحن', 'amount': '0.75'},
+                    {'id': 2, 'name': 'تخليص', 'amount': '0.25'},
+                  ]
+                : const [],
+            landedCostTotal: purchaseOrderDetailHasLandedCosts
+                ? '1.00'
+                : '0.00',
+            landedCostAllocationMethod: 'quantity',
           ),
         );
       }
@@ -4301,6 +4348,9 @@ Map<String, Object?> _purchaseOrderJson({
   String orderNumber = 'P20260515000200',
   String status = 'draft',
   String total = '7.50',
+  String landedCostTotal = '0.00',
+  List<Map<String, Object?>> landedCostEntries = const [],
+  String landedCostAllocationMethod = 'line_value',
   String? submittedAt,
   String? receivedAt,
   String? dueDate = '2026-05-25',
@@ -4324,6 +4374,15 @@ Map<String, Object?> _purchaseOrderJson({
   List<Map<String, Object?>> receipts = const [],
   List<Map<String, Object?>> adjustments = const [],
 }) {
+  final subtotal = double.tryParse(total) ?? 0;
+  final landedCost = double.tryParse(landedCostTotal) ?? 0;
+  final documentTotal = (subtotal + landedCost).toStringAsFixed(2);
+  final lineQuantity = 2;
+  final effectiveUnitCost = lineQuantity == 0
+      ? 0.0
+      : (subtotal + landedCost) / lineQuantity;
+  final landedUnitCost = lineQuantity == 0 ? 0.0 : landedCost / lineQuantity;
+
   return {
     'id': id,
     'order_number': orderNumber,
@@ -4340,7 +4399,7 @@ Map<String, Object?> _purchaseOrderJson({
         'product': 1,
         'product_name': 'قهوة البيت',
         'variant_sku': 'COF-001',
-        'quantity': 2,
+        'quantity': lineQuantity,
         'received_quantity': receivedQuantity,
         'damaged_quantity': damagedQuantity,
         'rejected_quantity': rejectedQuantity,
@@ -4349,12 +4408,21 @@ Map<String, Object?> _purchaseOrderJson({
         'adjustable_quantity': adjustableQuantity,
         'unit_cost': '3.75',
         'line_total': total,
+        if (landedCost > 0) ...{
+          'allocated_landed_cost': landedCostTotal,
+          'landed_unit_cost': landedUnitCost.toStringAsFixed(2),
+          'effective_unit_cost': effectiveUnitCost.toStringAsFixed(2),
+          'effective_line_total': documentTotal,
+        },
       },
     ],
     'receipts': receipts,
     'adjustments': adjustments,
     'subtotal': total,
-    'total': total,
+    'landed_cost_entries': landedCostEntries,
+    'landed_cost_total': landedCostTotal,
+    'landed_cost_allocation_method': landedCostAllocationMethod,
+    'total': documentTotal,
     'due_date': dueDate,
     'paid_total': paidTotal,
     'credit_applied_total': creditAppliedTotal,
@@ -4719,32 +4787,94 @@ Map<String, Object?> _saleDiscountPreviewJson(
 }
 
 Map<String, Object?> _purchaseDiscountPreviewJson(Map<String, Object?> body) {
-  var subtotal = 0.0;
   final rawLines = body['lines'] is List<Object?>
       ? body['lines'] as List<Object?>
       : const <Object?>[];
+  final previewLines = <Map<String, Object?>>[];
+  var subtotal = 0.0;
   for (final line in rawLines.whereType<Map<String, Object?>>()) {
     final quantity = int.tryParse('${line['quantity']}') ?? 0;
     final unitCost = double.tryParse('${line['unit_cost']}') ?? 0;
-    subtotal += unitCost * quantity;
+    final lineTotal = unitCost * quantity;
+    subtotal += lineTotal;
+    previewLines.add({
+      'product': line['product'] ?? line['variant'] ?? 0,
+      'variant': line['variant'] ?? 0,
+      'quantity': quantity,
+      'unit_cost': unitCost.toStringAsFixed(2),
+      'line_total': lineTotal.toStringAsFixed(2),
+    });
   }
-  final landedCostTotal =
-      (double.tryParse('${body['shipping_amount'] ?? '0'}') ?? 0) +
-      (double.tryParse('${body['customs_amount'] ?? '0'}') ?? 0) +
-      (double.tryParse('${body['handling_amount'] ?? '0'}') ?? 0);
+  final landedCostEntries = body['landed_cost_entries'] is List<Object?>
+      ? body['landed_cost_entries'] as List<Object?>
+      : const <Object?>[];
+  final landedCostTotal = landedCostEntries
+      .whereType<Map<String, Object?>>()
+      .fold<double>(
+        0,
+        (sum, entry) =>
+            sum + (double.tryParse('${entry['amount'] ?? '0'}') ?? 0),
+      );
   final codes = body['discount_codes'] is List<Object?>
       ? body['discount_codes'] as List<Object?>
       : const <Object?>[];
   final normalizedCode = codes.isEmpty ? '' : codes.first.toString().trim();
   final hasValidCode = normalizedCode.toUpperCase() == 'SUPSAVE';
   final discountTotal = hasValidCode ? 1.0 : 0.0;
+  final allocationMethod = body['landed_cost_allocation_method']?.toString();
+  final landedAllocations = _allocatePreviewAmounts(
+    amount: landedCostTotal,
+    weights: [
+      for (final line in previewLines)
+        switch (allocationMethod) {
+          'quantity' => (line['quantity'] as int).toDouble(),
+          'equal' => 1.0,
+          _ => double.tryParse('${line['line_total']}') ?? 0,
+        },
+    ],
+  );
+  final discountAllocations = _allocatePreviewAmounts(
+    amount: discountTotal,
+    weights: [
+      for (final line in previewLines)
+        double.tryParse('${line['line_total']}') ?? 0,
+    ],
+  );
 
   return {
     'subtotal': subtotal.toStringAsFixed(2),
     'discount_total': discountTotal.toStringAsFixed(2),
     'landed_cost_total': landedCostTotal.toStringAsFixed(2),
     'total': (subtotal - discountTotal + landedCostTotal).toStringAsFixed(2),
-    'lines': const [],
+    'lines': [
+      for (final (index, line) in previewLines.indexed)
+        () {
+          final quantity = line['quantity'] as int;
+          final lineTotal = double.tryParse('${line['line_total']}') ?? 0;
+          final discountAmount = discountAllocations[index];
+          final netLineTotal = lineTotal - discountAmount;
+          final allocatedLandedCost = landedAllocations[index];
+          final landedUnitCost = quantity == 0
+              ? 0.0
+              : allocatedLandedCost / quantity;
+          final effectiveUnitCost = quantity == 0
+              ? 0.0
+              : (netLineTotal + allocatedLandedCost) / quantity;
+          return {
+            ...line,
+            'discount_amount': discountAmount.toStringAsFixed(2),
+            'net_line_total': netLineTotal.toStringAsFixed(2),
+            'net_unit_cost': quantity == 0
+                ? '0.00'
+                : (netLineTotal / quantity).toStringAsFixed(2),
+            'allocated_landed_cost': allocatedLandedCost.toStringAsFixed(2),
+            'landed_unit_cost': landedUnitCost.toStringAsFixed(2),
+            'effective_unit_cost': effectiveUnitCost.toStringAsFixed(2),
+            'effective_line_total': (netLineTotal + allocatedLandedCost)
+                .toStringAsFixed(2),
+          };
+        }(),
+    ],
     'applied_discounts': hasValidCode
         ? [
             {
@@ -4764,6 +4894,32 @@ Map<String, Object?> _purchaseDiscountPreviewJson(Map<String, Object?> body) {
         ? const []
         : [normalizedCode],
   };
+}
+
+List<double> _allocatePreviewAmounts({
+  required double amount,
+  required List<double> weights,
+}) {
+  if (amount <= 0 || weights.isEmpty) {
+    return List<double>.filled(weights.length, 0);
+  }
+  final totalWeight = weights.fold<double>(0, (sum, weight) => sum + weight);
+  if (totalWeight <= 0) {
+    return List<double>.filled(weights.length, 0);
+  }
+  final totalCents = (amount * 100).round();
+  var allocatedCents = 0;
+  return [
+    for (final (index, weight) in weights.indexed)
+      if (index == weights.length - 1)
+        (totalCents - allocatedCents) / 100
+      else
+        () {
+          final cents = (totalCents * weight / totalWeight).floor();
+          allocatedCents += cents;
+          return cents / 100;
+        }(),
+  ];
 }
 
 Map<String, Object?> _printJobJson({String status = 'queued'}) {

@@ -13,6 +13,8 @@ from apps.discounts.models import (
 from apps.discounts.services import DiscountUsageLimitExceeded, persist_applied_discounts
 from apps.inventory.models import StockMovement
 from apps.inventory.services import (
+    consume_expiring_stock_batches,
+    create_expiring_stock_batch,
     create_stock_movement,
     lock_stock_item,
     save_stock_item_quantities,
@@ -25,6 +27,7 @@ from .models import (
     PurchaseOrderAdjustmentLine,
     PurchaseOrderAdjustmentReplacementLine,
     PurchaseOrderAuditEvent,
+    PurchaseOrderLandedCostEntry,
     PurchaseReceipt,
     PurchaseReceiptLine,
     Supplier,
@@ -109,6 +112,7 @@ def save_purchase_order_with_lines(
     *,
     purchase_order=None,
     lines_data=None,
+    landed_cost_entries_data=None,
     request=None,
     **order_fields,
 ):
@@ -130,6 +134,12 @@ def save_purchase_order_with_lines(
         for line_data in lines_data:
             PurchaseLine.objects.create(purchase_order=purchase_order, **line_data)
 
+    if landed_cost_entries_data is not None:
+        replace_purchase_order_landed_cost_entries(
+            purchase_order,
+            landed_cost_entries_data,
+        )
+
     clear_purchase_order_applied_discounts(purchase_order)
     discount_result = purchase_order.recalculate()
     validate_requested_purchase_discount_codes(purchase_order, discount_result)
@@ -147,6 +157,22 @@ def save_purchase_order_with_lines(
         request=request,
     )
     return purchase_order
+
+
+def replace_purchase_order_landed_cost_entries(purchase_order, entries_data):
+    purchase_order.landed_cost_entries.all().delete()
+    PurchaseOrderLandedCostEntry.objects.bulk_create(
+        [
+            PurchaseOrderLandedCostEntry(
+                purchase_order=purchase_order,
+                name=entry["name"],
+                amount=entry["amount"],
+            )
+            for entry in entries_data
+        ]
+    )
+    if hasattr(purchase_order, "_prefetched_objects_cache"):
+        purchase_order._prefetched_objects_cache.pop("landed_cost_entries", None)
 
 
 def purchase_order_content_type():
@@ -237,6 +263,18 @@ def submit_purchase_order(purchase_order, *, request=None):
         raise serializers.ValidationError(
             {"detail": "Purchase order must include at least one line."}
         )
+    missing_expiry = locked_order.lines.filter(
+        variant__product__tracks_expiry=True,
+        expiry_date__isnull=True,
+    ).exists()
+    if missing_expiry:
+        raise serializers.ValidationError(
+            {
+                "lines": (
+                    "Expiry date is required for products that track expiry."
+                )
+            }
+        )
 
     created_by = purchase_created_by(request)
     for line in locked_order.lines.select_related(
@@ -302,6 +340,7 @@ def default_receipt_lines(locked_order, lines=None):
             "damaged_quantity": 0,
             "cancelled_quantity": 0,
             "allowed_over_receipt_quantity": 0,
+            "expiry_date": line.expiry_date,
             "notes": "",
         }
         for line in lines
@@ -360,6 +399,21 @@ def validate_receipt_line_quantities(
             )
 
 
+def validate_receipt_line_expiry(line, accepted_quantity, expiry_date):
+    if (
+        accepted_quantity > 0
+        and line.variant.product.tracks_expiry
+        and expiry_date is None
+    ):
+        raise serializers.ValidationError(
+            {
+                "expiry_date": (
+                    "Expiry date is required for received products that track expiry."
+                )
+            }
+        )
+
+
 def fresh_purchase_receipt_lines(locked_order, lines_data, *, locked_lines):
     requested_by_line = {}
     for line_data in lines_data:
@@ -396,6 +450,8 @@ def fresh_purchase_receipt_lines(locked_order, lines_data, *, locked_lines):
             cancelled_quantity,
             allowed_over_receipt_quantity=allowed_over_receipt_quantity,
         )
+        expiry_date = line_data.get("expiry_date", line.expiry_date)
+        validate_receipt_line_expiry(line, accepted_quantity, expiry_date)
         fresh_lines.append(
             {
                 "line": line,
@@ -403,6 +459,7 @@ def fresh_purchase_receipt_lines(locked_order, lines_data, *, locked_lines):
                 "damaged_quantity": damaged_quantity,
                 "cancelled_quantity": cancelled_quantity,
                 "allowed_over_receipt_quantity": allowed_over_receipt_quantity,
+                "expiry_date": expiry_date,
                 "notes": line_data.get("notes", ""),
             }
         )
@@ -533,6 +590,8 @@ def receive_purchase_order(purchase_order, *, request=None, lines_data=None, not
                 0,
             ),
         )
+        expiry_date = line_data.get("expiry_date", line.expiry_date)
+        validate_receipt_line_expiry(line, accepted_quantity, expiry_date)
         expected_quantities = receipt_line_expected_quantities(
             line,
             accepted_quantity,
@@ -548,7 +607,7 @@ def receive_purchase_order(purchase_order, *, request=None, lines_data=None, not
             expected_quantities=expected_quantities,
             created_by=created_by,
         )
-        PurchaseReceiptLine.objects.create(
+        receipt_line = PurchaseReceiptLine.objects.create(
             receipt=receipt,
             purchase_line=line,
             variant=line.variant,
@@ -560,7 +619,13 @@ def receive_purchase_order(purchase_order, *, request=None, lines_data=None, not
             expected_reduction_quantity=expected_quantities["expected_reduction"],
             over_received_quantity=expected_quantities["over_received"],
             outstanding_after=expected_quantities["outstanding_after"],
+            expiry_date=expiry_date,
             notes=line_data.get("notes", ""),
+        )
+        create_expiring_stock_batch(
+            receipt_line=receipt_line,
+            expiry_date=expiry_date,
+            quantity=accepted_quantity,
         )
 
     has_outstanding = any(
@@ -703,6 +768,7 @@ def record_purchase_adjustment_stock_movements(
         before = stock_snapshot(stock_item)
         stock_item.quantity_on_hand -= quantity
         save_stock_item_quantities(stock_item)
+        consume_expiring_stock_batches(variant=line.variant, quantity=quantity)
         create_stock_movement(
             variant=line.variant,
             stock_item=stock_item,

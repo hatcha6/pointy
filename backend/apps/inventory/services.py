@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from .models import StockItem, StockMovement
+from .models import StockBatch, StockItem, StockMovement
 
 
 def lock_stock_item(*, variant):
@@ -64,3 +64,43 @@ def create_stock_movement(
         expected_before=before["expected"],
         expected_after=stock_item.quantity_expected,
     )
+
+
+def create_expiring_stock_batch(*, receipt_line, expiry_date, quantity):
+    if expiry_date is None or quantity <= 0:
+        return None
+    variant = receipt_line.variant
+    if not getattr(variant.product, "tracks_expiry", False):
+        return None
+    batch, _ = StockBatch.objects.get_or_create(
+        source_receipt_line=receipt_line,
+        defaults={
+            "variant": variant,
+            "expiry_date": expiry_date,
+            "received_quantity": quantity,
+            "remaining_quantity": quantity,
+        },
+    )
+    return batch
+
+
+def consume_expiring_stock_batches(*, variant, quantity):
+    if quantity <= 0 or not getattr(variant.product, "tracks_expiry", False):
+        return 0
+
+    remaining = quantity
+    consumed = 0
+    batches = (
+        StockBatch.objects.select_for_update()
+        .filter(variant=variant, remaining_quantity__gt=0)
+        .order_by("expiry_date", "created_at", "id")
+    )
+    for batch in batches:
+        if remaining <= 0:
+            break
+        used = min(batch.remaining_quantity, remaining)
+        batch.remaining_quantity -= used
+        batch.save(update_fields=["remaining_quantity", "updated_at"])
+        remaining -= used
+        consumed += used
+    return consumed

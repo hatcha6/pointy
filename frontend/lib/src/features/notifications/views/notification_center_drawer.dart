@@ -319,6 +319,7 @@ class _NotificationAlertRow extends StatelessWidget {
     return switch (alert.type) {
       BusinessAlertType.outOfStock => Icons.inventory_2_outlined,
       BusinessAlertType.lowStock => Icons.production_quantity_limits_outlined,
+      BusinessAlertType.expiringStock => Icons.event_busy_outlined,
       BusinessAlertType.overduePurchases => Icons.event_busy_outlined,
       BusinessAlertType.printFailures => Icons.print_disabled_outlined,
       BusinessAlertType.stalePrintAgents => Icons.wifi_off_outlined,
@@ -357,6 +358,8 @@ class _NotificationAlertRow extends StatelessWidget {
     return switch (alert.type) {
       BusinessAlertType.outOfStock => l10n.smartNotificationOutOfStockTitle,
       BusinessAlertType.lowStock => l10n.smartNotificationLowStockTitle,
+      BusinessAlertType.expiringStock =>
+        l10n.smartNotificationExpiringStockTitle,
       BusinessAlertType.overduePurchases =>
         l10n.smartNotificationOverduePurchasesTitle,
       BusinessAlertType.printFailures =>
@@ -383,6 +386,8 @@ class _NotificationAlertRow extends StatelessWidget {
       BusinessAlertType.lowStock => l10n.smartNotificationLowStockMessage(
         alert.count,
       ),
+      BusinessAlertType.expiringStock =>
+        l10n.smartNotificationExpiringStockMessage(alert.count, alert.days),
       BusinessAlertType.overduePurchases =>
         l10n.smartNotificationOverduePurchasesMessage(
           alert.count,
@@ -433,6 +438,10 @@ class _NotificationAlertRow extends StatelessWidget {
                 alert.primaryLabel,
                 alert.secondaryLabel,
               ),
+      BusinessAlertType.expiringStock =>
+        alert.primaryLabel.isEmpty || alert.occurredAt == null
+            ? ''
+            : _expiringStockDetail(l10n),
       BusinessAlertType.printFailures => alert.secondaryLabel,
       BusinessAlertType.expiringDiscounts =>
         alert.primaryLabel.isEmpty
@@ -444,5 +453,24 @@ class _NotificationAlertRow extends StatelessWidget {
       BusinessAlertType.lowProfitMargin ||
       BusinessAlertType.unknown => '',
     };
+  }
+
+  String _expiringStockDetail(AppLocalizations l10n) {
+    final context = alert.detailLabel.isEmpty
+        ? alert.secondaryLabel
+        : alert.detailLabel;
+    if (context.isEmpty) {
+      return l10n.smartNotificationExpiringStockDetailBasic(
+        alert.primaryLabel,
+        alert.quantity,
+        formatDate(alert.occurredAt!),
+      );
+    }
+    return l10n.smartNotificationExpiringStockDetail(
+      alert.primaryLabel,
+      alert.quantity,
+      formatDate(alert.occurredAt!),
+      context,
+    );
   }
 }

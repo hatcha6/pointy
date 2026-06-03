@@ -47,6 +47,7 @@ class _ProductFormState extends State<ProductForm> {
   Set<int> _valueErrorOptionIds = {};
   ProductImageSelection? _selectedImage;
   var _isProductActive = true;
+  var _tracksExpiry = false;
   var _isVariantActive = true;
   var _isDefaultVariant = true;
   var _isLoadingVariantOptions = false;
@@ -169,6 +170,7 @@ class _ProductFormState extends State<ProductForm> {
                                           selectedCategories:
                                               _selectedCategories,
                                           isActive: _isProductActive,
+                                          tracksExpiry: _tracksExpiry,
                                           onPickCategories: _pickCategories,
                                           onClearCategories: () => setState(
                                             () => _selectedCategories = [],
@@ -176,6 +178,10 @@ class _ProductFormState extends State<ProductForm> {
                                           onActiveChanged: (value) => setState(
                                             () => _isProductActive = value,
                                           ),
+                                          onTracksExpiryChanged: (value) =>
+                                              setState(
+                                                () => _tracksExpiry = value,
+                                              ),
                                           requiredValidator: (value) =>
                                               _requiredValidator(
                                                 context,
@@ -456,6 +462,7 @@ class _ProductFormState extends State<ProductForm> {
       name: _nameController.text.trim(),
       description: _descriptionController.text.trim(),
       isActive: _isProductActive,
+      tracksExpiry: _tracksExpiry,
       variantName: _variantNameController.text.trim(),
       variantSku: _skuController.text.trim(),
       variantBarcode: _barcodeController.text.trim(),

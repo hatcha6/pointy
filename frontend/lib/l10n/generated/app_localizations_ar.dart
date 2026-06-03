@@ -760,12 +760,46 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
+  String get smartNotificationExpiringStockTitle => 'مخزون يقترب من الانتهاء';
+
+  @override
+  String smartNotificationExpiringStockMessage(num count, int days) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count دفعات مخزون تحتاج متابعة، أقربها خلال $days يوم.',
+      two: 'دفعتا مخزون تحتاجان متابعة، أقربهما خلال $days يوم.',
+      one: 'دفعة مخزون واحدة تحتاج متابعة خلال $days يوم.',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String smartNotificationStockDetail(
     String name,
     int quantity,
     int threshold,
   ) {
     return '$name: المتاح $quantity، حد الطلب $threshold';
+  }
+
+  @override
+  String smartNotificationExpiringStockDetailBasic(
+    String name,
+    int quantity,
+    String date,
+  ) {
+    return '$name: المتبقي $quantity، تاريخ الانتهاء $date';
+  }
+
+  @override
+  String smartNotificationExpiringStockDetail(
+    String name,
+    int quantity,
+    String date,
+    String context,
+  ) {
+    return '$name: المتبقي $quantity، تاريخ الانتهاء $date، المرجع $context';
   }
 
   @override
@@ -1972,6 +2006,13 @@ class AppLocalizationsAr extends AppLocalizations {
   String get activeProductLabel => 'متاح للبيع';
 
   @override
+  String get productTracksExpiryLabel => 'يتابع تاريخ الانتهاء';
+
+  @override
+  String get productTracksExpiryHint =>
+      'سيطلب تاريخ انتهاء عند شراء هذا المنتج ويظهر تنبيه قبل انتهائه.';
+
+  @override
   String get activeVariantLabel => 'متاح للبيع';
 
   @override
@@ -2826,6 +2867,10 @@ class AppLocalizationsAr extends AppLocalizations {
       'أدخل كميات صحيحة لا تقل عن صفر.';
 
   @override
+  String get purchaseExpiryDatesRequired =>
+      'أدخل تاريخ انتهاء لكل منتج يتابع الانتهاء.';
+
+  @override
   String get purchaseReceiveReceivedLabel => 'مستلم سليم';
 
   @override
@@ -2950,6 +2995,23 @@ class AppLocalizationsAr extends AppLocalizations {
   String get purchaseLineCostLabel => 'التكلفة';
 
   @override
+  String get purchaseLineExpiryDateLabel => 'تاريخ الانتهاء';
+
+  @override
+  String get purchaseLineExpiryDateHint => 'مثال: 2026-12-31';
+
+  @override
+  String get purchaseLineExpiryDatePickerTooltip => 'اختيار تاريخ الانتهاء';
+
+  @override
+  String get purchaseLineExpiryDateInvalid =>
+      'أدخل تاريخًا صحيحًا بصيغة سنة-شهر-يوم.';
+
+  @override
+  String get purchaseLineExpiryDateRequired =>
+      'تاريخ الانتهاء مطلوب لهذا المنتج.';
+
+  @override
   String get purchaseShippingCostLabel => 'الشحن';
 
   @override
@@ -2962,10 +3024,45 @@ class AppLocalizationsAr extends AppLocalizations {
   String get purchaseLandedCostTotalLabel => 'تكاليف الوصول';
 
   @override
+  String purchaseLandedCostButton(String amount) {
+    return 'تكاليف الوصول $amount';
+  }
+
+  @override
+  String get purchaseLandedCostSheetTitle => 'تكاليف الوصول';
+
+  @override
+  String get landedCostAllocationMethodLabel => 'طريقة توزيع تكاليف الوصول';
+
+  @override
+  String get landedCostEntryNameLabel => 'اسم التكلفة';
+
+  @override
+  String get landedCostEntryCostLabel => 'القيمة';
+
+  @override
+  String get addLandedCostEntryButton => 'إضافة تكلفة';
+
+  @override
+  String get saveLandedCostEntriesButton => 'حفظ التكاليف';
+
+  @override
+  String get removeLandedCostEntryTooltip => 'حذف التكلفة';
+
+  @override
+  String get defaultLandedCostEntryName => 'تكلفة وصول';
+
+  @override
   String get landedCostAllocationByLineValueLabel => 'حسب قيمة السطر';
 
   @override
   String get landedCostAllocationByQuantityLabel => 'حسب الكمية';
+
+  @override
+  String get landedCostAllocationByRetailValueLabel => 'حسب قيمة البيع';
+
+  @override
+  String get landedCostAllocationEquallyByLineLabel => 'بالتساوي على السطور';
 
   @override
   String purchaseLineLandedCostValue(String amount) {

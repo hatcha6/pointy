@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import StockItem, StockMovement
+from .models import StockBatch, StockItem, StockMovement
 
 
 @admin.register(StockItem)
@@ -50,3 +50,28 @@ class StockMovementAdmin(admin.ModelAdmin):
     @admin.display(ordering="variant__product__name", description="Product")
     def parent_product(self, movement):
         return movement.variant.product
+
+
+@admin.register(StockBatch)
+class StockBatchAdmin(admin.ModelAdmin):
+    list_display = (
+        "variant",
+        "parent_product",
+        "expiry_date",
+        "remaining_quantity",
+        "received_quantity",
+        "source_receipt_line",
+        "created_at",
+    )
+    list_filter = ("expiry_date",)
+    search_fields = (
+        "variant__sku",
+        "variant__barcode",
+        "variant__name",
+        "variant__product__name",
+    )
+    raw_id_fields = ("variant", "source_receipt_line")
+
+    @admin.display(ordering="variant__product__name", description="Product")
+    def parent_product(self, batch):
+        return batch.variant.product

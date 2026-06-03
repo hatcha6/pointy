@@ -19,6 +19,7 @@ from apps.discounts.services import (
 )
 from apps.inventory.models import StockMovement
 from apps.inventory.services import (
+    consume_expiring_stock_batches,
     create_stock_movement,
     lock_stock_item,
     save_stock_item_quantities,
@@ -445,6 +446,7 @@ def record_sale_stock_movements(order, stock_adjustments, *, request=None):
         before = stock_snapshot(stock_item)
         stock_item.quantity_on_hand -= quantity
         save_stock_item_quantities(stock_item)
+        consume_expiring_stock_batches(variant=variant, quantity=quantity)
         create_stock_movement(
             variant=variant,
             stock_item=stock_item,

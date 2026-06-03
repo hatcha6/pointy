@@ -182,6 +182,7 @@ class ProductCatalogSummarySerializer(serializers.ModelSerializer):
             "name",
             "description",
             "is_active",
+            "tracks_expiry",
             "categories",
             "category_details",
             "variant_options",
@@ -266,6 +267,10 @@ class ProductVariantSerializer(serializers.ModelSerializer):
     )
     product_name = serializers.CharField(source="product.name", read_only=True)
     product_detail = ProductCatalogSummarySerializer(source="product", read_only=True)
+    tracks_expiry = serializers.BooleanField(
+        source="product.tracks_expiry",
+        read_only=True,
+    )
     display_name = serializers.CharField(read_only=True)
     full_name = serializers.CharField(read_only=True)
     quantity_on_hand = serializers.IntegerField(read_only=True)
@@ -296,6 +301,7 @@ class ProductVariantSerializer(serializers.ModelSerializer):
             "barcode",
             "unit_price",
             "is_active",
+            "tracks_expiry",
             "is_default",
             "option_values",
             "option_value_details",
@@ -486,6 +492,7 @@ class ProductCatalogSerializer(serializers.ModelSerializer):
             "name",
             "description",
             "is_active",
+            "tracks_expiry",
             "default_variant",
             "variants",
             "categories",

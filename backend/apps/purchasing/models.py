@@ -62,6 +62,8 @@ class PurchaseOrder(TimeStampedModel):
     class LandedCostAllocationMethod(models.TextChoices):
         LINE_VALUE = "line_value", "By line value"
         QUANTITY = "quantity", "By quantity"
+        RETAIL_VALUE = "retail_value", "By retail value"
+        EQUAL = "equal", "Equally by line"
 
     supplier = models.ForeignKey(
         Supplier,
@@ -80,24 +82,6 @@ class PurchaseOrder(TimeStampedModel):
     discount_codes = models.JSONField(default=list, blank=True)
     subtotal = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     discount_total = models.DecimalField(
-        max_digits=10,
-        decimal_places=2,
-        default=0,
-        validators=[MinValueValidator(Decimal("0.00"))],
-    )
-    shipping_amount = models.DecimalField(
-        max_digits=10,
-        decimal_places=2,
-        default=0,
-        validators=[MinValueValidator(Decimal("0.00"))],
-    )
-    customs_amount = models.DecimalField(
-        max_digits=10,
-        decimal_places=2,
-        default=0,
-        validators=[MinValueValidator(Decimal("0.00"))],
-    )
-    handling_amount = models.DecimalField(
         max_digits=10,
         decimal_places=2,
         default=0,
@@ -213,11 +197,20 @@ class PurchaseOrder(TimeStampedModel):
 
     @property
     def landed_cost_total(self):
-        return (
-            Decimal(self.shipping_amount)
-            + Decimal(self.customs_amount)
-            + Decimal(self.handling_amount)
-        ).quantize(self.MONEY_PLACES)
+        if self.pk is None:
+            return Decimal("0.00")
+
+        cached_entries = getattr(self, "_prefetched_objects_cache", {}).get(
+            "landed_cost_entries"
+        )
+        if cached_entries is not None:
+            return sum(
+                (Decimal(entry.amount) for entry in cached_entries),
+                Decimal("0.00"),
+            ).quantize(self.MONEY_PLACES)
+
+        total = self.landed_cost_entries.aggregate(total=Sum("amount"))["total"]
+        return (total or Decimal("0.00")).quantize(self.MONEY_PLACES)
 
     def allocate_landed_costs(self, lines, landed_cost_total) -> None:
         if not lines:
@@ -279,6 +272,21 @@ class PurchaseOrder(TimeStampedModel):
             == self.LandedCostAllocationMethod.QUANTITY
         ):
             return {line.pk: Decimal(line.quantity) for line in lines}
+        if (
+            self.landed_cost_allocation_method
+            == self.LandedCostAllocationMethod.RETAIL_VALUE
+        ):
+            return {
+                line.pk: (line.variant.unit_price * line.quantity).quantize(
+                    self.MONEY_PLACES
+                )
+                for line in lines
+            }
+        if (
+            self.landed_cost_allocation_method
+            == self.LandedCostAllocationMethod.EQUAL
+        ):
+            return {line.pk: Decimal("1.00") for line in lines}
         return {line.pk: line.net_line_total for line in lines}
 
     def save(self, *args, **kwargs):
@@ -354,6 +362,26 @@ class PurchaseOrder(TimeStampedModel):
         )
 
 
+class PurchaseOrderLandedCostEntry(TimeStampedModel):
+    purchase_order = models.ForeignKey(
+        PurchaseOrder,
+        on_delete=models.CASCADE,
+        related_name="landed_cost_entries",
+    )
+    name = models.CharField(max_length=120)
+    amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        validators=[MinValueValidator(Decimal("0.00"))],
+    )
+
+    class Meta:
+        ordering = ["created_at", "id"]
+
+    def __str__(self) -> str:
+        return f"{self.name} {self.amount}"
+
+
 class PurchaseLine(TimeStampedModel):
     purchase_order = models.ForeignKey(
         PurchaseOrder,
@@ -407,6 +435,7 @@ class PurchaseLine(TimeStampedModel):
         default=0,
         validators=[MinValueValidator(Decimal("0.00"))],
     )
+    expiry_date = models.DateField(null=True, blank=True, db_index=True)
 
     class Meta:
         ordering = ["created_at"]
@@ -579,6 +608,7 @@ class PurchaseReceiptLine(TimeStampedModel):
     expected_reduction_quantity = models.PositiveIntegerField(default=0)
     over_received_quantity = models.PositiveIntegerField(default=0)
     outstanding_after = models.PositiveIntegerField(default=0)
+    expiry_date = models.DateField(null=True, blank=True, db_index=True)
     notes = models.TextField(blank=True)
 
     class Meta:

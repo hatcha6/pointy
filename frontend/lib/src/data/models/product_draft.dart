@@ -6,6 +6,7 @@ class ProductDraft {
     required this.name,
     required this.variantUnitPrice,
     required this.isActive,
+    required this.tracksExpiry,
     this.variantName = '',
     this.variantBarcode = '',
     this.description = '',
@@ -20,6 +21,7 @@ class ProductDraft {
   final String variantName;
   final double variantUnitPrice;
   final bool isActive;
+  final bool tracksExpiry;
   final String variantBarcode;
   final String description;
   final List<int> categoryIds;
@@ -32,6 +34,7 @@ class ProductDraft {
       'name': name,
       'description': description,
       'is_active': isActive,
+      'tracks_expiry': tracksExpiry,
       'categories': categoryIds,
       'variant_options': variantOptionIds,
       if (variants.isEmpty)

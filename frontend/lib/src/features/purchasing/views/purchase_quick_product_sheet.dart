@@ -82,6 +82,7 @@ class _PurchaseQuickProductSheetState extends State<PurchaseQuickProductSheet> {
   List<AsyncSelectionOption<int>> _selectedCategories = [];
   bool _isSaving = false;
   bool _hasError = false;
+  bool _tracksExpiry = false;
 
   @override
   void dispose() {
@@ -104,122 +105,134 @@ class _PurchaseQuickProductSheetState extends State<PurchaseQuickProductSheet> {
       ),
       child: Form(
         key: _formKey,
-        child: ListView(
-          shrinkWrap: true,
-          children: [
-            Row(
-              children: [
-                const Icon(Icons.add_business_outlined),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    l10n.quickCreateProductTitle,
-                    style: Theme.of(context).textTheme.titleLarge,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Text(l10n.quickCreateProductMessage(widget.barcode)),
-            const SizedBox(height: 16),
-            TextFormField(
-              controller: _barcodeController,
-              enabled: false,
-              decoration: InputDecoration(
-                labelText: l10n.barcodeLabel,
-                prefixIcon: const Icon(Icons.document_scanner_outlined),
-              ),
-            ),
-            const SizedBox(height: 12),
-            TextFormField(
-              controller: _nameController,
-              autofocus: true,
-              textInputAction: TextInputAction.next,
-              decoration: InputDecoration(
-                labelText: l10n.productNameLabel,
-                hintText: l10n.quickCreateProductNameHint,
-                prefixIcon: const Icon(Icons.inventory_2_outlined),
-              ),
-              validator: _requiredValidator,
-            ),
-            const SizedBox(height: 12),
-            TextFormField(
-              controller: _skuController,
-              textInputAction: TextInputAction.next,
-              textCapitalization: TextCapitalization.characters,
-              decoration: InputDecoration(
-                labelText: l10n.skuLabel,
-                prefixIcon: const Icon(Icons.qr_code_2),
-              ),
-              validator: _requiredValidator,
-            ),
-            const SizedBox(height: 12),
-            TextFormField(
-              controller: _priceController,
-              keyboardType: const TextInputType.numberWithOptions(
-                decimal: true,
-              ),
-              textInputAction: TextInputAction.done,
-              inputFormatters: [DecimalTextInputFormatter()],
-              decoration: InputDecoration(
-                labelText: l10n.quickCreateUnitCostLabel,
-                prefixIcon: const Icon(Icons.payments_outlined),
-              ),
-              validator: _numberValidator,
-              onFieldSubmitted: (_) => _submit(),
-            ),
-            const SizedBox(height: 12),
-            AsyncSelectionField<int>(
-              fieldKey: const ValueKey(
-                'purchase_quick_product_categories_field',
-              ),
-              strings: productCategoryFieldStrings(l10n),
-              selected: _selectedCategories,
-              onPick: _pickCategories,
-              onClear: _selectedCategories.isEmpty
-                  ? null
-                  : () => setState(() => _selectedCategories = []),
-              validator: (_) => null,
-            ),
-            if (_hasError) ...[
-              const SizedBox(height: 8),
-              Text(
-                l10n.productCreateError,
-                style: TextStyle(color: Theme.of(context).colorScheme.error),
-              ),
-            ],
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: _isSaving
-                        ? null
-                        : () =>
-                              Navigator.of(context).pop<ProductVariant?>(null),
-                    child: Text(l10n.cancelButton),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: FilledButton.icon(
-                    onPressed: _isSaving ? null : _submit,
-                    icon: _isSaving
-                        ? const SizedBox.square(
-                            dimension: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.add),
-                    label: Text(
-                      _isSaving
-                          ? l10n.quickCreateProductSaving
-                          : l10n.quickCreateProductButton,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  const Icon(Icons.add_business_outlined),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      l10n.quickCreateProductTitle,
+                      style: Theme.of(context).textTheme.titleLarge,
                     ),
                   ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Text(l10n.quickCreateProductMessage(widget.barcode)),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _barcodeController,
+                enabled: false,
+                decoration: InputDecoration(
+                  labelText: l10n.barcodeLabel,
+                  prefixIcon: const Icon(Icons.document_scanner_outlined),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _nameController,
+                autofocus: true,
+                textInputAction: TextInputAction.next,
+                decoration: InputDecoration(
+                  labelText: l10n.productNameLabel,
+                  hintText: l10n.quickCreateProductNameHint,
+                  prefixIcon: const Icon(Icons.inventory_2_outlined),
+                ),
+                validator: _requiredValidator,
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _skuController,
+                textInputAction: TextInputAction.next,
+                textCapitalization: TextCapitalization.characters,
+                decoration: InputDecoration(
+                  labelText: l10n.skuLabel,
+                  prefixIcon: const Icon(Icons.qr_code_2),
+                ),
+                validator: _requiredValidator,
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _priceController,
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+                textInputAction: TextInputAction.done,
+                inputFormatters: [DecimalTextInputFormatter()],
+                decoration: InputDecoration(
+                  labelText: l10n.quickCreateUnitCostLabel,
+                  prefixIcon: const Icon(Icons.payments_outlined),
+                ),
+                validator: _numberValidator,
+                onFieldSubmitted: (_) => _submit(),
+              ),
+              const SizedBox(height: 12),
+              AsyncSelectionField<int>(
+                fieldKey: const ValueKey(
+                  'purchase_quick_product_categories_field',
+                ),
+                strings: productCategoryFieldStrings(l10n),
+                selected: _selectedCategories,
+                onPick: _pickCategories,
+                onClear: _selectedCategories.isEmpty
+                    ? null
+                    : () => setState(() => _selectedCategories = []),
+                validator: (_) => null,
+              ),
+              const SizedBox(height: 8),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: Text(l10n.productTracksExpiryLabel),
+                subtitle: Text(l10n.productTracksExpiryHint),
+                value: _tracksExpiry,
+                onChanged: (value) => setState(() => _tracksExpiry = value),
+              ),
+              if (_hasError) ...[
+                const SizedBox(height: 8),
+                Text(
+                  l10n.productCreateError,
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
                 ),
               ],
-            ),
-          ],
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: _isSaving
+                          ? null
+                          : () => Navigator.of(
+                              context,
+                            ).pop<ProductVariant?>(null),
+                      child: Text(l10n.cancelButton),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: FilledButton.icon(
+                      onPressed: _isSaving ? null : _submit,
+                      icon: _isSaving
+                          ? const SizedBox.square(
+                              dimension: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.add),
+                      label: Text(
+                        _isSaving
+                            ? l10n.quickCreateProductSaving
+                            : l10n.quickCreateProductButton,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -265,6 +278,7 @@ class _PurchaseQuickProductSheetState extends State<PurchaseQuickProductSheet> {
         name: _nameController.text.trim(),
         variantUnitPrice: 0,
         isActive: true,
+        tracksExpiry: _tracksExpiry,
         categoryIds: [for (final category in _selectedCategories) category.id],
       ),
       unitCost,

@@ -16,6 +16,7 @@ class ProductVariant {
     this.barcode = '',
     this.isActive = true,
     this.isDefault = false,
+    this.tracksExpiry = false,
     this.quantityOnHand = 0,
     this.optionValueIds = const [],
     this.optionValues = const [],
@@ -35,6 +36,7 @@ class ProductVariant {
   final double unitPrice;
   final bool isActive;
   final bool isDefault;
+  final bool tracksExpiry;
   final int quantityOnHand;
   final List<int> optionValueIds;
   final List<VariantOptionValue> optionValues;
@@ -155,6 +157,10 @@ class ProductVariant {
       unitPrice: _moneyFromJson(json['unit_price']),
       isActive: _boolFromJson(json['is_active'], fallback: true),
       isDefault: _boolFromJson(json['is_default']),
+      tracksExpiry: _boolFromJson(
+        json['tracks_expiry'],
+        fallback: productDetail?.tracksExpiry ?? false,
+      ),
       quantityOnHand: _intFromJson(json['quantity_on_hand']),
       optionValueIds: _optionValueIdsFromJson(
         json['option_values'],
@@ -193,6 +199,7 @@ class ProductVariant {
       unitPrice: unitPrice,
       isActive: isActive,
       isDefault: isDefault,
+      tracksExpiry: tracksExpiry,
       quantityOnHand: quantityOnHand ?? this.quantityOnHand,
       optionValueIds: optionValueIds,
       optionValues: optionValues,

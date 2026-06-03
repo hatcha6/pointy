@@ -44,9 +44,10 @@ class ProductAdmin(admin.ModelAdmin):
         "default_variant_sku",
         "variant_count",
         "quantity_on_hand",
+        "tracks_expiry",
         "is_active",
     )
-    list_filter = ("is_active", "categories")
+    list_filter = ("is_active", "tracks_expiry", "categories")
     search_fields = ("variants__sku", "variants__barcode", "name")
     filter_horizontal = ("categories", "variant_options")
     inlines = (ProductVariantInline,)

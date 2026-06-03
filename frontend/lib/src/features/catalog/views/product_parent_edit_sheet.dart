@@ -38,6 +38,7 @@ class _ProductParentEditSheetState extends State<ProductParentEditSheet> {
   var _isLoadingVariantOptions = false;
   var _variantOptionsLoadFailed = false;
   late bool _isActive;
+  late bool _tracksExpiry;
 
   List<VariantOption> get _selectedVariantOptions {
     return [
@@ -64,6 +65,7 @@ class _ProductParentEditSheetState extends State<ProductParentEditSheet> {
       for (final option in product.variantOptions) option.id,
     };
     _isActive = product.isActive;
+    _tracksExpiry = product.tracksExpiry;
     _nameController.addListener(_refreshImageSearchSeed);
     _loadVariantOptions();
   }
@@ -110,11 +112,14 @@ class _ProductParentEditSheetState extends State<ProductParentEditSheet> {
                               descriptionController: _descriptionController,
                               selectedCategories: _selectedCategories,
                               isActive: _isActive,
+                              tracksExpiry: _tracksExpiry,
                               onPickCategories: _pickCategories,
                               onClearCategories: () =>
                                   setState(() => _selectedCategories = []),
                               onActiveChanged: (value) =>
                                   setState(() => _isActive = value),
+                              onTracksExpiryChanged: (value) =>
+                                  setState(() => _tracksExpiry = value),
                               requiredValidator: (value) =>
                                   _requiredValidator(context, value),
                             ),
@@ -223,6 +228,7 @@ class _ProductParentEditSheetState extends State<ProductParentEditSheet> {
         name: _nameController.text.trim(),
         description: _descriptionController.text.trim(),
         isActive: _isActive,
+        tracksExpiry: _tracksExpiry,
         categoryIds: [for (final category in _selectedCategories) category.id],
         variantOptionIds: [
           for (final optionId in _selectedVariantOptionIds) optionId,

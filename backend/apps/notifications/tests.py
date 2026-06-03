@@ -1,3 +1,4 @@
+from datetime import timedelta
 from decimal import Decimal
 
 from django.contrib.auth import get_user_model
@@ -10,10 +11,10 @@ from rest_framework.test import APIClient, APITestCase
 from apps.analytics.models import AnalyticsEvent
 from apps.catalog.testing import create_product_with_default_variant
 from apps.core.roles import CASHIER_GROUP, MANAGER_GROUP, ensure_role_groups
-from apps.inventory.models import StockItem
+from apps.inventory.models import StockBatch, StockItem
 from apps.notifications.models import BusinessNotification
 from apps.printing.models import PrintJob, PrintTemplate, PrintTemplateVersion
-from apps.purchasing.models import PurchaseOrder, Supplier
+from apps.purchasing.models import PurchaseOrder, PurchaseReceipt, Supplier
 from apps.sales.models import RegisterSession
 
 
@@ -146,6 +147,55 @@ class BusinessNotificationApiTests(APITestCase):
         )
         notification.refresh_from_db()
         self.assertEqual(notification.status, BusinessNotification.Status.RESOLVED)
+
+    def test_manager_sees_expiring_stock_batch_alert(self):
+        product = create_product_with_default_variant(
+            name="حليب قريب الانتهاء",
+            sku="ALERT-MILK",
+            unit_price=Decimal("6.00"),
+        )
+        product.tracks_expiry = True
+        product.save(update_fields=["tracks_expiry", "updated_at"])
+        supplier = Supplier.objects.create(name="مورد الحليب")
+        order = PurchaseOrder.objects.create(supplier=supplier)
+        purchase_line = order.lines.create(
+            variant=product.default_variant,
+            quantity=5,
+            unit_cost=Decimal("4.00"),
+            expiry_date=timezone.localdate() + timedelta(days=3),
+        )
+        receipt = PurchaseReceipt.objects.create(purchase_order=order)
+        receipt_line = receipt.lines.create(
+            purchase_line=purchase_line,
+            variant=product.default_variant,
+            ordered_quantity=5,
+            outstanding_before=5,
+            accepted_quantity=5,
+            outstanding_after=0,
+            expiry_date=purchase_line.expiry_date,
+        )
+        StockBatch.objects.create(
+            variant=product.default_variant,
+            source_receipt_line=receipt_line,
+            expiry_date=purchase_line.expiry_date,
+            received_quantity=5,
+            remaining_quantity=5,
+        )
+        client = APIClient()
+        client.force_authenticate(user=self.manager)
+
+        response = client.get(reverse("business-notification-list"))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        expiry_alert = next(
+            item
+            for item in response.data["results"]
+            if item["code"] == "inventory.expiring_batch"
+        )
+        self.assertEqual(expiry_alert["payload"]["sku"], "ALERT-MILK")
+        self.assertEqual(expiry_alert["payload"]["quantity"], 5)
+        self.assertEqual(expiry_alert["payload"]["days"], 3)
+        self.assertEqual(expiry_alert["payload"]["supplier_name"], "مورد الحليب")
 
     def test_backend_errors_are_not_reported_as_business_notifications(self):
         AnalyticsEvent.objects.create(

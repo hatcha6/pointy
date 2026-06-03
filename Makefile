@@ -96,7 +96,7 @@ ENDURANCE_WORKERS ?= 4
 .PHONY: help setup install docker-check postgres postgres-stop postgres-logs postgres-ping redis redis-local redis-stop redis-logs redis-ping \
 		backend-venv backend-install backend-env backend-migrate backend-migrations backend-dev-migrate backend-run \
 		backend-seed-variants backend-load-test backend-stress-test backend-endurance-test \
-	backend-shell backend-superuser backend-test backend-check backend-celery \
+	backend-shell backend-superuser backend-test backend-check backend-celery backend-celery-beat \
 	frontend-install frontend-l10n frontend-run frontend-web frontend-test frontend-e2e frontend-analyze frontend-format \
 	relay-install relay-format relay-check relay-test relay-production-test relay-run relay-connector relay-migrate relay-provision relay-subscription-update \
 	format check test e2e dev dev-local dev-no-redis clean
@@ -216,6 +216,9 @@ backend-check: backend-env backend-install ## Run Django system checks.
 
 backend-celery: backend-env backend-install ## Run a Celery worker.
 	cd "$(BACKEND_DIR)" && .venv/bin/celery -A pointy worker -l info
+
+backend-celery-beat: backend-env backend-install ## Run the Celery Beat scheduler.
+	cd "$(BACKEND_DIR)" && .venv/bin/celery -A pointy beat -l info
 
 frontend-install: ## Install Flutter dependencies.
 	cd "$(FRONTEND_DIR)" && $(FLUTTER) pub get

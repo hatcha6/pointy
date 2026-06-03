@@ -34,6 +34,7 @@ class Product(TimeStampedModel):
     name = models.CharField(max_length=255)
     description = models.TextField(blank=True)
     is_active = models.BooleanField(default=True)
+    tracks_expiry = models.BooleanField(default=False, db_index=True)
     categories = models.ManyToManyField(
         "ProductCategory",
         blank=True,

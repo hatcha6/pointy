@@ -8,6 +8,7 @@ from apps.analytics.services import record_domain_event
 from apps.core.permissions import HasPointyPermission
 from .models import StockItem, StockMovement
 from .serializers import StockItemSerializer, StockMovementSerializer
+from .services import consume_expiring_stock_batches
 
 
 class StockItemFilter(django_filters.FilterSet):
@@ -100,6 +101,11 @@ class StockMovementViewSet(
                     "updated_at",
                 ],
             )
+            if movement_type in (
+                StockMovement.Type.DECREASE,
+                StockMovement.Type.DAMAGED,
+            ):
+                consume_expiring_stock_batches(variant=variant, quantity=quantity)
             movement = serializer.save(
                 stock_item=stock_item,
                 variant=variant,

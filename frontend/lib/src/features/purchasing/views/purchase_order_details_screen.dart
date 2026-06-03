@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../core/authorization.dart';
@@ -136,7 +137,10 @@ class _PurchaseOrderTotals extends StatelessWidget {
                   : l10n.discountCouponAppliedLabel(discount.couponCode),
               value: -discount.discountAmount,
             ),
-        if (order.landedCostTotal > 0)
+        if (order.landedCostEntries.isNotEmpty) ...[
+          for (final entry in order.landedCostEntries)
+            if (entry.cost > 0) TotalRow(label: entry.name, value: entry.cost),
+        ] else if (order.landedCostTotal > 0)
           TotalRow(
             label: l10n.purchaseLandedCostTotalLabel,
             value: order.landedCostTotal,
@@ -190,6 +194,20 @@ class _PurchaseOrderSummary extends StatelessWidget {
             _DetailRow(
               label: l10n.discountCouponCodeLabel,
               value: order.discountCodes.join('، '),
+            ),
+          if (order.landedCostTotal > 0)
+            _DetailRow(
+              label: l10n.landedCostAllocationMethodLabel,
+              value: switch (order.landedCostAllocationMethod) {
+                LandedCostAllocationMethod.byQuantity =>
+                  l10n.landedCostAllocationByQuantityLabel,
+                LandedCostAllocationMethod.byLineValue =>
+                  l10n.landedCostAllocationByLineValueLabel,
+                LandedCostAllocationMethod.byRetailValue =>
+                  l10n.landedCostAllocationByRetailValueLabel,
+                LandedCostAllocationMethod.equallyByLine =>
+                  l10n.landedCostAllocationEquallyByLineLabel,
+              },
             ),
           if (order.createdAt != null)
             _DetailRow(

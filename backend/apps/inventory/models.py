@@ -1,4 +1,5 @@
 from django.db import models
+from django.db.models import F, Q
 
 from apps.catalog.models import ProductVariant
 from apps.core.models import TimeStampedModel
@@ -64,3 +65,41 @@ class StockMovement(TimeStampedModel):
 
     def __str__(self) -> str:
         return f"{self.variant.sku} {self.movement_type} {self.quantity}"
+
+
+class StockBatch(TimeStampedModel):
+    variant = models.ForeignKey(
+        ProductVariant,
+        on_delete=models.CASCADE,
+        related_name="stock_batches",
+    )
+    source_receipt_line = models.OneToOneField(
+        "purchasing.PurchaseReceiptLine",
+        on_delete=models.PROTECT,
+        related_name="stock_batch",
+    )
+    expiry_date = models.DateField(db_index=True)
+    received_quantity = models.PositiveIntegerField()
+    remaining_quantity = models.PositiveIntegerField()
+
+    class Meta:
+        ordering = ["expiry_date", "created_at", "id"]
+        indexes = [
+            models.Index(
+                fields=["variant", "expiry_date", "remaining_quantity"],
+                name="stockbatch_variant_expiry_idx",
+            ),
+            models.Index(
+                fields=["expiry_date", "remaining_quantity"],
+                name="stockbatch_exp_remain_idx",
+            ),
+        ]
+        constraints = [
+            models.CheckConstraint(
+                condition=Q(remaining_quantity__lte=F("received_quantity")),
+                name="stock_batch_remaining_lte_received",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.variant.sku} expires {self.expiry_date}"

@@ -1,3 +1,4 @@
+from datetime import timedelta
 from pathlib import Path
 
 import environ
@@ -25,6 +26,8 @@ env = environ.Env(
     POINTY_DISCOVERY_UDP_PORT=(int, 47777),
     POINTY_DISCOVERY_API_PORT=(int, 8000),
     POINTY_DISCOVERY_TRUST_PROXY_HEADERS=(bool, False),
+    POINTY_EXPIRY_ALERT_WINDOW_DAYS=(int, 30),
+    POINTY_NOTIFICATION_SYNC_INTERVAL_MINUTES=(int, 15),
 )
 environ.Env.read_env(BASE_DIR / ".env")
 
@@ -123,6 +126,18 @@ CACHES = {
 CELERY_BROKER_URL = REDIS_URL
 CELERY_RESULT_BACKEND = REDIS_URL
 CELERY_TASK_ALWAYS_EAGER = False
+CELERY_TIMEZONE = TIME_ZONE
+POINTY_EXPIRY_ALERT_WINDOW_DAYS = env("POINTY_EXPIRY_ALERT_WINDOW_DAYS")
+POINTY_NOTIFICATION_SYNC_INTERVAL_MINUTES = max(
+    env("POINTY_NOTIFICATION_SYNC_INTERVAL_MINUTES"),
+    1,
+)
+CELERY_BEAT_SCHEDULE = {
+    "notifications.sync-business-notifications": {
+        "task": "notifications.sync_business_notifications",
+        "schedule": timedelta(minutes=POINTY_NOTIFICATION_SYNC_INTERVAL_MINUTES),
+    },
+}
 
 CORS_ALLOWED_ORIGINS = env("CORS_ALLOWED_ORIGINS")
 CORS_ALLOW_CREDENTIALS = True
