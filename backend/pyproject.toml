@@ -45,6 +45,8 @@ packages = [
   "apps.sales.management",
   "apps.sales.management.commands",
   "apps.sales.migrations",
+  "apps.fraud",
+  "apps.fraud.migrations",
   "apps.customers",
   "apps.customers.migrations",
   "apps.purchasing",

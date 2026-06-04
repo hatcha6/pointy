@@ -142,6 +142,15 @@ class _ActivityLogBody extends StatelessWidget {
             onQueryChanged: viewModel.applyQuery,
             enabled: !viewModel.isLoading,
           ),
+          if (viewModel.investigationReason.isNotEmpty) ...[
+            SizedBox(height: spacing.sm),
+            PointyInlineMessage.warning(
+              message: l10n.activityLogSuspicionReviewBanner(
+                viewModel.investigationReason,
+              ),
+              icon: Icons.manage_search_outlined,
+            ),
+          ],
           SizedBox(height: spacing.md),
           PointyMetricGrid(
             gap: PointyMetricGridGap.compact,

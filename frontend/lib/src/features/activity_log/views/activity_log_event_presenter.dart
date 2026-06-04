@@ -250,6 +250,8 @@ String? _knownEventTitle(AppLocalizations l10n, String name) {
     'report.shared' => l10n.activityEventReportShared,
     'reports.run.completed' => l10n.activityEventReportRunCompleted,
     'reports.run.failed' => l10n.activityEventReportRunFailed,
+    'fraud.suspected_activity.detected' =>
+      l10n.activityEventSuspectedActivityDetected,
     _ => null,
   };
 }
@@ -298,6 +300,11 @@ String _businessSummary(AppLocalizations l10n, AnalyticsEventRecord event) {
     if (_lineCount(event) != null) l10n.lineItemCount(_lineCount(event)!),
     if (_stringAttribute(event, 'reason').isNotEmpty)
       l10n.activityLogReasonSummary(_stringAttribute(event, 'reason')),
+    if (event.name.startsWith('fraud.') &&
+        _stringAttribute(event, 'rule_code').isNotEmpty)
+      l10n.activityLogSuspicionRuleSummary(
+        _stringAttribute(event, 'rule_code'),
+      ),
   ];
   return values.join(' - ');
 }
@@ -496,6 +503,9 @@ IconData _businessEventIcon(
 ) {
   if (event.isFraudSignal) {
     return Icons.gpp_maybe_outlined;
+  }
+  if (event.name.startsWith('fraud.')) {
+    return Icons.manage_search_outlined;
   }
   if (target != null) {
     return activityLogDrillDownIcon(target);

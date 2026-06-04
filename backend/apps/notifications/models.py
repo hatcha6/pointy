@@ -11,6 +11,7 @@ class BusinessNotification(TimeStampedModel):
         PURCHASING = "purchasing", "Purchasing"
         PRINTING = "printing", "Printing"
         SALES = "sales", "Sales"
+        FRAUD = "fraud", "Fraud"
         DISCOUNTS = "discounts", "Discounts"
         OPERATIONS = "operations", "Operations"
 

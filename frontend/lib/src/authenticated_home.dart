@@ -11,6 +11,7 @@ import 'core/authorization.dart';
 import 'data/models/pos_user.dart';
 import 'data/models/purchase_submission.dart';
 import 'data/models/analytics_event.dart';
+import 'data/models/business_alert.dart';
 import 'data/models/report_run.dart';
 import 'data/models/sale_order.dart';
 import 'data/models/shop_settings.dart';
@@ -66,6 +67,7 @@ class AuthenticatedHome extends StatelessWidget {
         : routes.buildPosScreen(context);
     return NotificationCenterHost(
       viewModel: dependencies.notificationCenterViewModel,
+      onOpenAlert: routes.openBusinessAlert,
       child: home,
     );
   }
@@ -741,6 +743,26 @@ class _AuthenticatedRoutes {
         onOpenTarget: _openActivityTarget,
         onLogout: () => logout(routeContext),
       ),
+    );
+  }
+
+  Future<void> openBusinessAlert(
+    BuildContext context,
+    BusinessAlert alert,
+  ) async {
+    final query = alert.investigationActivityQuery();
+    if (query == null || !capabilities.canViewActivityLog) {
+      return;
+    }
+
+    final navigator = Navigator.of(context);
+    navigator.pop();
+    await dependencies.activityLogViewModel.applyInvestigationQuery(
+      query,
+      reason: alert.investigationReason,
+    );
+    navigator.pushReplacement(
+      MaterialPageRoute<void>(builder: activityLogRouteBuilder),
     );
   }
 

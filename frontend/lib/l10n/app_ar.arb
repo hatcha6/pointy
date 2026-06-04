@@ -57,11 +57,20 @@
   "activityLogSearchHint": "ابحث باسم الحدث أو الأثر أو الكيان",
   "activityLogTotalMetric": "إجمالي النتائج",
   "activityLogLoadedMetric": "المعروض الآن",
-  "activityLogFraudMetric": "إشارات احتيال",
+  "activityLogFraudMetric": "مؤشرات اشتباه",
   "activityLogHighRiskMetric": "مخاطر عالية",
   "activityLogUsersLoadWarning": "تعذر تحميل قائمة المستخدمين للفلاتر. يمكنك متابعة البحث والفلاتر الأخرى.",
   "activityLogLoadError": "تعذر تحميل سجل النشاط.",
   "activityLogEmpty": "لا توجد أحداث تطابق الفلاتر الحالية.",
+  "activityLogSuspicionReviewBanner": "تم فتح سجل النشاط بفلاتر مراجعة لأن النظام لاحظ نمطًا مشتبهًا: {reason}. راجع الأحداث والطلبات ضمن الفترة المحددة قبل اتخاذ أي إجراء.",
+  "@activityLogSuspicionReviewBanner": {
+    "description": "Activity log banner shown when opened from a suspected activity notification.",
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
   "activityLogNoEventSelected": "اختر حدثًا لمراجعة التفاصيل.",
   "activityLogUnknownUser": "مستخدم غير معروف",
   "activityLogEventSubtitle": "{date} بواسطة {user}",
@@ -230,6 +239,15 @@
     "description": "Activity log reason summary.",
     "placeholders": {
       "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "activityLogSuspicionRuleSummary": "قاعدة المراجعة: {rule}",
+  "@activityLogSuspicionRuleSummary": {
+    "description": "Summary for suspected activity detection rule.",
+    "placeholders": {
+      "rule": {
         "type": "String"
       }
     }
@@ -438,7 +456,7 @@
   "activityLogSourceFilterTitle": "المصدر",
   "activityLogOrderingTitle": "ترتيب النتائج",
   "activityActionAll": "كل الإجراءات",
-  "activityActionFraudSignal": "إشارات الاحتيال",
+  "activityActionFraudSignal": "مؤشرات الاشتباه",
   "activityActionPosLineAdded": "إضافة سطر بيع",
   "activityActionPosLineQuantityChanged": "تغيير كمية سطر بيع",
   "activityActionPosLineDeleted": "حذف سطر بيع",
@@ -480,6 +498,7 @@
   "activityEventOrderPaid": "تم دفع فاتورة",
   "activityEventOrderVoided": "ألغيت فاتورة",
   "activityEventOrderReturned": "تم تسجيل مرتجع",
+  "activityEventSuspectedActivityDetected": "رُصد نمط مشتبه للمراجعة",
   "activityEventReceiptReprintQueued": "أعيدت طباعة إيصال",
   "activityEventReceiptReprintFailed": "فشلت إعادة طباعة إيصال",
   "activityEventRegisterSessionStarted": "بدأت جلسة درج",
@@ -878,6 +897,7 @@
   "smartNotificationsDismissAllButton": "إخفاء التنبيهات الحالية",
   "smartNotificationDismissTooltip": "إخفاء التنبيه",
   "smartNotificationSnoozeAction": "تأجيل ٤ ساعات",
+  "smartNotificationReviewAction": "مراجعة",
   "smartNotificationSeverityCritical": "حرج",
   "smartNotificationSeverityWarning": "مهم",
   "smartNotificationSeverityInfo": "متابعة",
@@ -885,6 +905,7 @@
   "smartNotificationCategoryPurchasing": "المشتريات",
   "smartNotificationCategoryPrinting": "الطباعة",
   "smartNotificationCategorySales": "المبيعات",
+  "smartNotificationCategoryFraud": "مراجعة الاشتباه",
   "smartNotificationCategoryDiscounts": "الخصومات",
   "smartNotificationCategoryOperations": "التشغيل",
   "smartNotificationOutOfStockTitle": "منتجات نافدة تحتاج إجراء",
@@ -1034,6 +1055,19 @@
         "type": "num"
       },
       "queued": {
+        "type": "int"
+      }
+    }
+  },
+  "smartNotificationSuspectedActivityTitle": "نشاط مشتبه يحتاج مراجعة",
+  "smartNotificationSuspectedActivityMessage": "النظام لاحظ نمطًا مشتبهًا لدى {user} بدرجة {score}. هذه مراجعة أولية وليست حكمًا نهائيًا.",
+  "@smartNotificationSuspectedActivityMessage": {
+    "description": "Suspected cashier activity alert message.",
+    "placeholders": {
+      "user": {
+        "type": "String"
+      },
+      "score": {
         "type": "int"
       }
     }
@@ -1424,7 +1458,7 @@
   "analyticsEventTypeError": "خطأ",
   "analyticsEventTypePerformance": "أداء",
   "analyticsEventTypeSecurity": "أمان",
-  "analyticsEventTypeFraudSignal": "إشارة احتيال",
+  "analyticsEventTypeFraudSignal": "مؤشر اشتباه",
   "analyticsEventTypeAudit": "تدقيق",
   "analyticsSeverityDebug": "تصحيح",
   "analyticsSeverityInfo": "معلومة",

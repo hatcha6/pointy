@@ -14,6 +14,7 @@ from apps.catalog.views import (
 )
 from apps.customers.views import CustomerViewSet
 from apps.discounts.views import DiscountRuleViewSet
+from apps.fraud.views import FraudFindingViewSet
 from apps.core.views import (
     PosUserViewSet,
     ShopSettingsLogoView,
@@ -63,6 +64,7 @@ router.register("variant-option-values", VariantOptionValueViewSet)
 router.register("stock", StockItemViewSet)
 router.register("stock-movements", StockMovementViewSet)
 router.register("orders", OrderViewSet)
+router.register("fraud-findings", FraudFindingViewSet, basename="fraud-finding")
 router.register("customers", CustomerViewSet)
 router.register("discount-rules", DiscountRuleViewSet)
 router.register("suppliers", SupplierViewSet)

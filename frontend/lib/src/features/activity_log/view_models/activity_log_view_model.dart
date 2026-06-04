@@ -36,6 +36,8 @@ class ActivityLogViewModel extends ChangeNotifier {
   bool _hasMoreEvents = true;
   int _nextPage = 1;
   int _totalCount = 0;
+  int _loadSerial = 0;
+  String _investigationReason = '';
 
   List<AnalyticsEventRecord> get events => List.unmodifiable(_events);
   List<PosUser> get users => List.unmodifiable(_users);
@@ -49,12 +51,15 @@ class ActivityLogViewModel extends ChangeNotifier {
   bool get hasMoreEvents => _hasMoreEvents;
   int get totalCount => _totalCount;
   int get loadedCount => _events.length;
+  String get investigationReason => _investigationReason;
   int get loadedFraudSignalCount =>
       _events.where((event) => event.isFraudSignal).length;
   int get loadedHighRiskCount =>
       _events.where((event) => (event.riskScore ?? 0) >= 70).length;
 
   Future<void> loadEvents() async {
+    final loadSerial = ++_loadSerial;
+    final query = _query;
     _isLoading = true;
     _hasLoadError = false;
     _hasMoreEvents = true;
@@ -62,9 +67,12 @@ class ActivityLogViewModel extends ChangeNotifier {
     notifyListeners();
 
     final result = await _analyticsRepository.loadEvents(
-      query: _query,
+      query: query,
       page: _nextPage,
     );
+    if (loadSerial != _loadSerial) {
+      return;
+    }
     switch (result) {
       case Ok<AnalyticsEventPage>():
         _events = result.value.events;
@@ -89,13 +97,20 @@ class ActivityLogViewModel extends ChangeNotifier {
       return;
     }
 
+    final loadSerial = _loadSerial;
+    final query = _query;
     _isLoadingMore = true;
     notifyListeners();
 
     final result = await _analyticsRepository.loadEvents(
-      query: _query,
+      query: query,
       page: _nextPage,
     );
+    if (loadSerial != _loadSerial) {
+      _isLoadingMore = false;
+      notifyListeners();
+      return;
+    }
     switch (result) {
       case Ok<AnalyticsEventPage>():
         _events = [..._events, ...result.value.events];
@@ -142,19 +157,32 @@ class ActivityLogViewModel extends ChangeNotifier {
     if (search == _query.search) {
       return;
     }
+    _investigationReason = '';
     _query = _query.copyWith(search: search);
     await loadEvents();
   }
 
   Future<void> applyQuery(AnalyticsEventQuery query) async {
+    _investigationReason = '';
     if (query == _query) {
+      notifyListeners();
       return;
     }
     _query = _normalizedQuery(query);
     await loadEvents();
   }
 
+  Future<void> applyInvestigationQuery(
+    AnalyticsEventQuery query, {
+    required String reason,
+  }) async {
+    _investigationReason = reason.trim();
+    _query = _normalizedQuery(query);
+    await loadEvents();
+  }
+
   Future<void> resetQuery() async {
+    _investigationReason = '';
     await applyQuery(
       _queryForDateRange(
         const AnalyticsEventQuery(),

@@ -13,6 +13,7 @@ MANAGER_PERMISSION_DOMAINS = (
     "core",
     "inventory",
     "sales",
+    "fraud",
     "customers",
     "discounts",
     "purchasing",

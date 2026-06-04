@@ -50,7 +50,8 @@ make backend-celery-beat
 ```
 
 The worker processes Redis-backed tasks. Beat schedules recurring jobs such as
-business notification sync and expiry-date stock alerts.
+business notification sync, suspected cashier activity detection, and expiry-date
+stock alerts.
 
 ## Attachment Storage
 

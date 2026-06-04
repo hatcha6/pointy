@@ -1,3 +1,5 @@
+import 'analytics_event.dart';
+
 enum BusinessAlertSeverity {
   critical,
   warning,
@@ -15,6 +17,7 @@ enum BusinessAlertCategory {
   purchasing,
   printing,
   sales,
+  fraud,
   discounts,
   operations,
 }
@@ -26,6 +29,7 @@ enum BusinessAlertType {
   overduePurchases,
   printFailures,
   stalePrintAgents,
+  suspectedCashierActivity,
   registerVariance,
   lowProfitMargin,
   expiringDiscounts,
@@ -49,6 +53,7 @@ class BusinessAlert {
     this.days = 0,
     this.amount = 0,
     this.percent = 0,
+    this.riskScore = 0,
     this.primaryLabel = '',
     this.secondaryLabel = '',
     this.detailLabel = '',
@@ -57,6 +62,7 @@ class BusinessAlert {
     this.occurredAt,
     this.acknowledgedAt,
     this.snoozedUntil,
+    this.payload = const {},
   });
 
   final String id;
@@ -73,6 +79,7 @@ class BusinessAlert {
   final int days;
   final double amount;
   final double percent;
+  final int riskScore;
   final String primaryLabel;
   final String secondaryLabel;
   final String detailLabel;
@@ -81,6 +88,43 @@ class BusinessAlert {
   final DateTime? occurredAt;
   final DateTime? acknowledgedAt;
   final DateTime? snoozedUntil;
+  final Map<String, Object?> payload;
+
+  bool get hasInvestigationQuery {
+    return _mapFromJson(payload['investigation_query']).isNotEmpty;
+  }
+
+  String get investigationReason {
+    final headline = payload['headline']?.toString() ?? '';
+    if (headline.trim().isNotEmpty) {
+      return headline;
+    }
+    return payload['rule_title']?.toString() ?? '';
+  }
+
+  AnalyticsEventQuery? investigationActivityQuery() {
+    final query = _mapFromJson(payload['investigation_query']);
+    if (query.isEmpty) {
+      return null;
+    }
+    final userId = _intFromJson(query['received_by']);
+    final userLabel = payload['user_label']?.toString() ?? primaryLabel;
+    return AnalyticsEventQuery(
+      activityScope: _activityScopeFromJson(query['activity_scope']),
+      dateRange: AnalyticsEventDateRange.custom,
+      occurredAfter: _nullableDateTimeFromJson(query['occurred_at_after']),
+      occurredBefore: _nullableDateTimeFromJson(query['occurred_at_before']),
+      userIds: userId <= 0 ? const [] : [userId],
+      userLabels: userId <= 0 || userLabel.trim().isEmpty
+          ? const []
+          : [userLabel],
+      registerSessionId: query['session_id']?.toString() ?? '',
+      entityType: query['entity_type']?.toString() ?? '',
+      entityId: query['entity_id']?.toString() ?? '',
+      minRiskScore: _nullableIntFromJson(query['risk_score_min']),
+      ordering: _orderingFromJson(query['ordering']),
+    );
+  }
 
   factory BusinessAlert.fromJson(Map<String, Object?> json) {
     final code = json['code']?.toString() ?? '';
@@ -101,6 +145,7 @@ class BusinessAlert {
       days: _intFromJson(payload['days']),
       amount: _doubleFromJson(payload['amount']),
       percent: _doubleFromJson(payload['percent']),
+      riskScore: _intFromJson(payload['risk_score']),
       primaryLabel: _primaryLabel(type, payload),
       secondaryLabel: _secondaryLabel(type, payload),
       detailLabel: _detailLabel(type, payload),
@@ -109,6 +154,7 @@ class BusinessAlert {
       occurredAt: _occurredAt(type, payload),
       acknowledgedAt: _dateTimeFromJson(json['acknowledged_at']),
       snoozedUntil: _dateTimeFromJson(json['snoozed_until']),
+      payload: payload,
     );
   }
 
@@ -128,6 +174,7 @@ class BusinessAlert {
       days: days,
       amount: amount,
       percent: percent,
+      riskScore: riskScore,
       primaryLabel: primaryLabel,
       secondaryLabel: secondaryLabel,
       detailLabel: detailLabel,
@@ -136,6 +183,7 @@ class BusinessAlert {
       occurredAt: occurredAt,
       acknowledgedAt: acknowledgedAt,
       snoozedUntil: snoozedUntil,
+      payload: payload,
     );
   }
 }
@@ -155,6 +203,8 @@ BusinessAlertType _typeFromCode(String code) {
     'purchasing.overdue_order' => BusinessAlertType.overduePurchases,
     'printing.failed_job' => BusinessAlertType.printFailures,
     'printing.stale_agent' => BusinessAlertType.stalePrintAgents,
+    'fraud.suspected_cashier_activity' =>
+      BusinessAlertType.suspectedCashierActivity,
     'sales.register_variance' => BusinessAlertType.registerVariance,
     'sales.negative_margin' => BusinessAlertType.lowProfitMargin,
     'discounts.expiring_rule' => BusinessAlertType.expiringDiscounts,
@@ -169,6 +219,7 @@ BusinessAlertCategory _categoryFromJson(Object? value) {
     'purchasing' => BusinessAlertCategory.purchasing,
     'printing' => BusinessAlertCategory.printing,
     'sales' => BusinessAlertCategory.sales,
+    'fraud' => BusinessAlertCategory.fraud,
     'discounts' => BusinessAlertCategory.discounts,
     'operations' => BusinessAlertCategory.operations,
     _ => BusinessAlertCategory.operations,
@@ -188,6 +239,7 @@ int _sortScore(BusinessAlertType type) {
     BusinessAlertType.outOfStock => 10,
     BusinessAlertType.printFailures => 15,
     BusinessAlertType.stalePrintAgents => 18,
+    BusinessAlertType.suspectedCashierActivity => 19,
     BusinessAlertType.overduePurchases => 20,
     BusinessAlertType.expiringStock => 22,
     BusinessAlertType.registerVariance => 25,
@@ -202,6 +254,9 @@ int _sortScore(BusinessAlertType type) {
 int _quantityFromPayload(BusinessAlertType type, Map<String, Object?> payload) {
   return switch (type) {
     BusinessAlertType.stalePrintAgents => _intFromJson(payload['queued_count']),
+    BusinessAlertType.suspectedCashierActivity => _intFromJson(
+      payload['risk_score'],
+    ),
     _ => _intFromJson(payload['quantity']),
   };
 }
@@ -218,6 +273,8 @@ String _primaryLabel(BusinessAlertType type, Map<String, Object?> payload) {
       payload['receipt_number']?.toString() ?? '',
     BusinessAlertType.stalePrintAgents =>
       payload['agent_name']?.toString() ?? '',
+    BusinessAlertType.suspectedCashierActivity =>
+      payload['user_label']?.toString() ?? '',
     BusinessAlertType.registerVariance =>
       payload['session_number']?.toString() ?? '',
     BusinessAlertType.expiringDiscounts =>
@@ -236,6 +293,8 @@ String _secondaryLabel(BusinessAlertType type, Map<String, Object?> payload) {
       payload['supplier_name']?.toString() ?? '',
     BusinessAlertType.printFailures => payload['message']?.toString() ?? '',
     BusinessAlertType.expiringDiscounts => payload['channel']?.toString() ?? '',
+    BusinessAlertType.suspectedCashierActivity =>
+      payload['rule_title']?.toString() ?? '',
     BusinessAlertType.operationsError => payload['source']?.toString() ?? '',
     _ => '',
   };
@@ -244,6 +303,8 @@ String _secondaryLabel(BusinessAlertType type, Map<String, Object?> payload) {
 String _detailLabel(BusinessAlertType type, Map<String, Object?> payload) {
   return switch (type) {
     BusinessAlertType.expiringStock => _stockBatchDetail(payload),
+    BusinessAlertType.suspectedCashierActivity =>
+      payload['headline']?.toString() ?? '',
     BusinessAlertType.operationsError => payload['message']?.toString() ?? '',
     _ => '',
   };
@@ -260,6 +321,9 @@ DateTime? _occurredAt(BusinessAlertType type, Map<String, Object?> payload) {
     BusinessAlertType.printFailures => _dateTimeFromJson(payload['failed_at']),
     BusinessAlertType.expiringDiscounts => _dateTimeFromJson(
       payload['ends_at'],
+    ),
+    BusinessAlertType.suspectedCashierActivity => _dateTimeFromJson(
+      payload['window_end'],
     ),
     BusinessAlertType.operationsError => _dateTimeFromJson(
       payload['occurred_at'],
@@ -285,6 +349,38 @@ Map<String, Object?> _mapFromJson(Object? value) {
 
 DateTime? _dateTimeFromJson(Object? value) {
   return DateTime.tryParse(value?.toString() ?? '');
+}
+
+DateTime? _nullableDateTimeFromJson(Object? value) {
+  if (value is String && value.isNotEmpty) {
+    return DateTime.parse(value).toUtc();
+  }
+  return null;
+}
+
+int? _nullableIntFromJson(Object? value) {
+  if (value == null || value.toString().trim().isEmpty) {
+    return null;
+  }
+  final parsed = _intFromJson(value);
+  return parsed;
+}
+
+AnalyticsEventActivityScope _activityScopeFromJson(Object? value) {
+  return switch (value?.toString()) {
+    'all' => AnalyticsEventActivityScope.all,
+    'technical' => AnalyticsEventActivityScope.technical,
+    _ => AnalyticsEventActivityScope.reviewable,
+  };
+}
+
+AnalyticsEventOrdering _orderingFromJson(Object? value) {
+  return switch (value?.toString()) {
+    'occurred_at' => AnalyticsEventOrdering.oldest,
+    '-risk_score' => AnalyticsEventOrdering.highestRisk,
+    '-created_at' => AnalyticsEventOrdering.newestReceived,
+    _ => AnalyticsEventOrdering.newest,
+  };
 }
 
 int _intFromJson(Object? value, {int fallback = 0}) {

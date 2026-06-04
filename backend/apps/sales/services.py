@@ -704,11 +704,7 @@ def void_order(*, order, reason, request=None, register_session=None):
     expired = cashier_window_expired(locked_order)
     record_domain_event(
         name="sales.order.voided",
-        event_type=(
-            AnalyticsEvent.EventType.FRAUD_SIGNAL
-            if expired
-            else AnalyticsEvent.EventType.AUDIT
-        ),
+        event_type=AnalyticsEvent.EventType.AUDIT,
         severity=(
             AnalyticsEvent.Severity.WARNING
             if expired
@@ -717,7 +713,6 @@ def void_order(*, order, reason, request=None, register_session=None):
         user=getattr(request, "user", None),
         entity_type="sale_order",
         entity_id=locked_order.pk,
-        risk_score=70 if expired else None,
         attributes={
             "receipt_number": locked_order.receipt_number,
             "register_session_id": locked_order.register_session_id,
@@ -726,6 +721,7 @@ def void_order(*, order, reason, request=None, register_session=None):
                 request is not None and user_is_manager(request.user)
             ),
             "cashier_window_expired": expired,
+            "requires_suspicion_review": expired,
             "line_count": len(lines),
         },
         metrics={
@@ -761,11 +757,7 @@ def return_order_items(*, order, lines, reason, request=None, register_session=N
     expired = cashier_window_expired(locked_order)
     record_domain_event(
         name="sales.order.returned",
-        event_type=(
-            AnalyticsEvent.EventType.FRAUD_SIGNAL
-            if expired
-            else AnalyticsEvent.EventType.AUDIT
-        ),
+        event_type=AnalyticsEvent.EventType.AUDIT,
         severity=(
             AnalyticsEvent.Severity.WARNING
             if expired
@@ -774,7 +766,6 @@ def return_order_items(*, order, lines, reason, request=None, register_session=N
         user=getattr(request, "user", None),
         entity_type="sale_order",
         entity_id=locked_order.pk,
-        risk_score=60 if expired else None,
         attributes={
             "receipt_number": locked_order.receipt_number,
             "register_session_id": locked_order.register_session_id,
@@ -785,6 +776,7 @@ def return_order_items(*, order, lines, reason, request=None, register_session=N
                 request is not None and user_is_manager(request.user)
             ),
             "cashier_window_expired": expired,
+            "requires_suspicion_review": expired,
             "order_became_void": locked_order.status == Order.Status.VOID,
             "line_count": len(lines),
         },

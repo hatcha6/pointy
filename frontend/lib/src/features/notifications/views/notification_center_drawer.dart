@@ -13,9 +13,15 @@ import '../../../shared/responsive/responsive.dart';
 import '../view_models/notification_center_view_model.dart';
 
 class NotificationCenterDrawer extends StatelessWidget {
-  const NotificationCenterDrawer({super.key, required this.viewModel});
+  const NotificationCenterDrawer({
+    super.key,
+    required this.viewModel,
+    this.onOpenAlert,
+  });
 
   final NotificationCenterViewModel viewModel;
+  final Future<void> Function(BuildContext context, BusinessAlert alert)?
+  onOpenAlert;
 
   @override
   Widget build(BuildContext context) {
@@ -26,7 +32,10 @@ class NotificationCenterDrawer extends StatelessWidget {
         child: ListenableBuilder(
           listenable: viewModel,
           builder: (context, _) {
-            return _NotificationCenterBody(viewModel: viewModel);
+            return _NotificationCenterBody(
+              viewModel: viewModel,
+              onOpenAlert: onOpenAlert,
+            );
           },
         ),
       ),
@@ -35,9 +44,14 @@ class NotificationCenterDrawer extends StatelessWidget {
 }
 
 class _NotificationCenterBody extends StatelessWidget {
-  const _NotificationCenterBody({required this.viewModel});
+  const _NotificationCenterBody({
+    required this.viewModel,
+    required this.onOpenAlert,
+  });
 
   final NotificationCenterViewModel viewModel;
+  final Future<void> Function(BuildContext context, BusinessAlert alert)?
+  onOpenAlert;
 
   @override
   Widget build(BuildContext context) {
@@ -146,6 +160,9 @@ class _NotificationCenterBody extends StatelessWidget {
                   }
                   return _NotificationAlertRow(
                     alert: alerts[index],
+                    onReview: onOpenAlert == null
+                        ? null
+                        : () => unawaited(onOpenAlert!(context, alerts[index])),
                     onDismiss: () =>
                         unawaited(viewModel.dismissAlert(alerts[index].id)),
                     onSnooze: () =>
@@ -192,11 +209,13 @@ class _FooterActions extends StatelessWidget {
 class _NotificationAlertRow extends StatelessWidget {
   const _NotificationAlertRow({
     required this.alert,
+    required this.onReview,
     required this.onDismiss,
     required this.onSnooze,
   });
 
   final BusinessAlert alert;
+  final VoidCallback? onReview;
   final VoidCallback onDismiss;
   final VoidCallback onSnooze;
 
@@ -275,6 +294,14 @@ class _NotificationAlertRow extends StatelessWidget {
             SizedBox(height: spacing.sm),
             Row(
               children: [
+                if (alert.hasInvestigationQuery && onReview != null) ...[
+                  FilledButton.tonalIcon(
+                    onPressed: onReview,
+                    icon: const Icon(Icons.manage_search_outlined),
+                    label: Text(l10n.smartNotificationReviewAction),
+                  ),
+                  SizedBox(width: spacing.xs),
+                ],
                 TextButton.icon(
                   onPressed: onSnooze,
                   icon: const Icon(Icons.schedule_outlined),
@@ -323,6 +350,8 @@ class _NotificationAlertRow extends StatelessWidget {
       BusinessAlertType.overduePurchases => Icons.event_busy_outlined,
       BusinessAlertType.printFailures => Icons.print_disabled_outlined,
       BusinessAlertType.stalePrintAgents => Icons.wifi_off_outlined,
+      BusinessAlertType.suspectedCashierActivity =>
+        Icons.manage_search_outlined,
       BusinessAlertType.registerVariance => Icons.point_of_sale_outlined,
       BusinessAlertType.lowProfitMargin => Icons.warning_amber_outlined,
       BusinessAlertType.expiringDiscounts => Icons.local_offer_outlined,
@@ -347,6 +376,7 @@ class _NotificationAlertRow extends StatelessWidget {
         l10n.smartNotificationCategoryPurchasing,
       BusinessAlertCategory.printing => l10n.smartNotificationCategoryPrinting,
       BusinessAlertCategory.sales => l10n.smartNotificationCategorySales,
+      BusinessAlertCategory.fraud => l10n.smartNotificationCategoryFraud,
       BusinessAlertCategory.discounts =>
         l10n.smartNotificationCategoryDiscounts,
       BusinessAlertCategory.operations =>
@@ -366,6 +396,8 @@ class _NotificationAlertRow extends StatelessWidget {
         l10n.smartNotificationPrintFailuresTitle,
       BusinessAlertType.stalePrintAgents =>
         l10n.smartNotificationStalePrintAgentsTitle,
+      BusinessAlertType.suspectedCashierActivity =>
+        l10n.smartNotificationSuspectedActivityTitle,
       BusinessAlertType.registerVariance =>
         l10n.smartNotificationRegisterVarianceTitle,
       BusinessAlertType.lowProfitMargin =>
@@ -399,6 +431,11 @@ class _NotificationAlertRow extends StatelessWidget {
         l10n.smartNotificationStalePrintAgentsMessage(
           alert.count,
           alert.quantity,
+        ),
+      BusinessAlertType.suspectedCashierActivity =>
+        l10n.smartNotificationSuspectedActivityMessage(
+          alert.primaryLabel,
+          alert.riskScore,
         ),
       BusinessAlertType.registerVariance =>
         l10n.smartNotificationRegisterVarianceMessage(
@@ -443,6 +480,7 @@ class _NotificationAlertRow extends StatelessWidget {
             ? ''
             : _expiringStockDetail(l10n),
       BusinessAlertType.printFailures => alert.secondaryLabel,
+      BusinessAlertType.suspectedCashierActivity => alert.detailLabel,
       BusinessAlertType.expiringDiscounts =>
         alert.primaryLabel.isEmpty
             ? ''

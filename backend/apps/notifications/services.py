@@ -25,6 +25,7 @@ MANAGED_CODES = (
     "printing.stale_agent",
     "sales.register_variance",
     "sales.negative_margin",
+    "fraud.suspected_cashier_activity",
     "discounts.expiring_rule",
     "operations.backend_error",
 )
@@ -62,6 +63,10 @@ NOTIFICATION_AUDIENCE_RULES = {
         "permissions": ("sales.view_order",),
         "manager_only": True,
     },
+    "fraud.suspected_cashier_activity": {
+        "permissions": ("fraud.view_fraudfinding", "analytics.view_analyticsevent"),
+        "manager_only": True,
+    },
     "discounts.expiring_rule": {
         "permissions": ("discounts.view_discountrule",),
         "manager_only": True,
@@ -77,6 +82,7 @@ def sync_business_notifications(now=None):
     desired.extend(_purchasing_notifications(now))
     desired.extend(_printing_notifications(now))
     desired.extend(_sales_notifications(now))
+    desired.extend(_fraud_notifications(now))
     desired.extend(_discount_notifications(now))
 
     fingerprints = set()
@@ -497,6 +503,12 @@ def _discount_notifications(now):
             )
         )
     return specs
+
+
+def _fraud_notifications(now):
+    from apps.fraud.services import suspected_fraud_notification_specs
+
+    return suspected_fraud_notification_specs(now=now)
 
 
 def _upsert_notification(spec, now):

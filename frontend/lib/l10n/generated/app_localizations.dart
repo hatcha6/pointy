@@ -373,7 +373,7 @@ abstract class AppLocalizations {
   /// No description provided for @activityLogFraudMetric.
   ///
   /// In ar, this message translates to:
-  /// **'إشارات احتيال'**
+  /// **'مؤشرات اشتباه'**
   String get activityLogFraudMetric;
 
   /// No description provided for @activityLogHighRiskMetric.
@@ -399,6 +399,12 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'لا توجد أحداث تطابق الفلاتر الحالية.'**
   String get activityLogEmpty;
+
+  /// Activity log banner shown when opened from a suspected activity notification.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم فتح سجل النشاط بفلاتر مراجعة لأن النظام لاحظ نمطًا مشتبهًا: {reason}. راجع الأحداث والطلبات ضمن الفترة المحددة قبل اتخاذ أي إجراء.'**
+  String activityLogSuspicionReviewBanner(String reason);
 
   /// No description provided for @activityLogNoEventSelected.
   ///
@@ -643,6 +649,12 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'السبب: {reason}'**
   String activityLogReasonSummary(String reason);
+
+  /// Summary for suspected activity detection rule.
+  ///
+  /// In ar, this message translates to:
+  /// **'قاعدة المراجعة: {rule}'**
+  String activityLogSuspicionRuleSummary(String rule);
 
   /// Readable backend request activity title.
   ///
@@ -1235,7 +1247,7 @@ abstract class AppLocalizations {
   /// No description provided for @activityActionFraudSignal.
   ///
   /// In ar, this message translates to:
-  /// **'إشارات الاحتيال'**
+  /// **'مؤشرات الاشتباه'**
   String get activityActionFraudSignal;
 
   /// No description provided for @activityActionPosLineAdded.
@@ -1483,6 +1495,12 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'تم تسجيل مرتجع'**
   String get activityEventOrderReturned;
+
+  /// No description provided for @activityEventSuspectedActivityDetected.
+  ///
+  /// In ar, this message translates to:
+  /// **'رُصد نمط مشتبه للمراجعة'**
+  String get activityEventSuspectedActivityDetected;
 
   /// No description provided for @activityEventReceiptReprintQueued.
   ///
@@ -2978,6 +2996,12 @@ abstract class AppLocalizations {
   /// **'تأجيل ٤ ساعات'**
   String get smartNotificationSnoozeAction;
 
+  /// No description provided for @smartNotificationReviewAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'مراجعة'**
+  String get smartNotificationReviewAction;
+
   /// No description provided for @smartNotificationSeverityCritical.
   ///
   /// In ar, this message translates to:
@@ -3019,6 +3043,12 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'المبيعات'**
   String get smartNotificationCategorySales;
+
+  /// No description provided for @smartNotificationCategoryFraud.
+  ///
+  /// In ar, this message translates to:
+  /// **'مراجعة الاشتباه'**
+  String get smartNotificationCategoryFraud;
 
   /// No description provided for @smartNotificationCategoryDiscounts.
   ///
@@ -3154,6 +3184,18 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'{agents, plural, =1{وكيل طباعة واحد غير متصل، و{queued} مهمة في الانتظار.} =2{وكيلا طباعة غير متصلين، و{queued} مهمة في الانتظار.} other{{agents} وكلاء طباعة غير متصلين، و{queued} مهمة في الانتظار.}}'**
   String smartNotificationStalePrintAgentsMessage(num agents, int queued);
+
+  /// No description provided for @smartNotificationSuspectedActivityTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'نشاط مشتبه يحتاج مراجعة'**
+  String get smartNotificationSuspectedActivityTitle;
+
+  /// Suspected cashier activity alert message.
+  ///
+  /// In ar, this message translates to:
+  /// **'النظام لاحظ نمطًا مشتبهًا لدى {user} بدرجة {score}. هذه مراجعة أولية وليست حكمًا نهائيًا.'**
+  String smartNotificationSuspectedActivityMessage(String user, int score);
 
   /// No description provided for @smartNotificationRegisterVarianceTitle.
   ///
@@ -4020,7 +4062,7 @@ abstract class AppLocalizations {
   /// No description provided for @analyticsEventTypeFraudSignal.
   ///
   /// In ar, this message translates to:
-  /// **'إشارة احتيال'**
+  /// **'مؤشر اشتباه'**
   String get analyticsEventTypeFraudSignal;
 
   /// No description provided for @analyticsEventTypeAudit.

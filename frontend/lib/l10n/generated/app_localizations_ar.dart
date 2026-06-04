@@ -157,7 +157,7 @@ class AppLocalizationsAr extends AppLocalizations {
   String get activityLogLoadedMetric => 'المعروض الآن';
 
   @override
-  String get activityLogFraudMetric => 'إشارات احتيال';
+  String get activityLogFraudMetric => 'مؤشرات اشتباه';
 
   @override
   String get activityLogHighRiskMetric => 'مخاطر عالية';
@@ -171,6 +171,11 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get activityLogEmpty => 'لا توجد أحداث تطابق الفلاتر الحالية.';
+
+  @override
+  String activityLogSuspicionReviewBanner(String reason) {
+    return 'تم فتح سجل النشاط بفلاتر مراجعة لأن النظام لاحظ نمطًا مشتبهًا: $reason. راجع الأحداث والطلبات ضمن الفترة المحددة قبل اتخاذ أي إجراء.';
+  }
 
   @override
   String get activityLogNoEventSelected => 'اختر حدثًا لمراجعة التفاصيل.';
@@ -324,6 +329,11 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String activityLogReasonSummary(String reason) {
     return 'السبب: $reason';
+  }
+
+  @override
+  String activityLogSuspicionRuleSummary(String rule) {
+    return 'قاعدة المراجعة: $rule';
   }
 
   @override
@@ -647,7 +657,7 @@ class AppLocalizationsAr extends AppLocalizations {
   String get activityActionAll => 'كل الإجراءات';
 
   @override
-  String get activityActionFraudSignal => 'إشارات الاحتيال';
+  String get activityActionFraudSignal => 'مؤشرات الاشتباه';
 
   @override
   String get activityActionPosLineAdded => 'إضافة سطر بيع';
@@ -771,6 +781,10 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get activityEventOrderReturned => 'تم تسجيل مرتجع';
+
+  @override
+  String get activityEventSuspectedActivityDetected =>
+      'رُصد نمط مشتبه للمراجعة';
 
   @override
   String get activityEventReceiptReprintQueued => 'أعيدت طباعة إيصال';
@@ -1600,6 +1614,9 @@ class AppLocalizationsAr extends AppLocalizations {
   String get smartNotificationSnoozeAction => 'تأجيل ٤ ساعات';
 
   @override
+  String get smartNotificationReviewAction => 'مراجعة';
+
+  @override
   String get smartNotificationSeverityCritical => 'حرج';
 
   @override
@@ -1619,6 +1636,9 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get smartNotificationCategorySales => 'المبيعات';
+
+  @override
+  String get smartNotificationCategoryFraud => 'مراجعة الاشتباه';
 
   @override
   String get smartNotificationCategoryDiscounts => 'الخصومات';
@@ -1767,6 +1787,15 @@ class AppLocalizationsAr extends AppLocalizations {
       one: 'وكيل طباعة واحد غير متصل، و$queued مهمة في الانتظار.',
     );
     return '$_temp0';
+  }
+
+  @override
+  String get smartNotificationSuspectedActivityTitle =>
+      'نشاط مشتبه يحتاج مراجعة';
+
+  @override
+  String smartNotificationSuspectedActivityMessage(String user, int score) {
+    return 'النظام لاحظ نمطًا مشتبهًا لدى $user بدرجة $score. هذه مراجعة أولية وليست حكمًا نهائيًا.';
   }
 
   @override
@@ -2296,7 +2325,7 @@ class AppLocalizationsAr extends AppLocalizations {
   String get analyticsEventTypeSecurity => 'أمان';
 
   @override
-  String get analyticsEventTypeFraudSignal => 'إشارة احتيال';
+  String get analyticsEventTypeFraudSignal => 'مؤشر اشتباه';
 
   @override
   String get analyticsEventTypeAudit => 'تدقيق';
