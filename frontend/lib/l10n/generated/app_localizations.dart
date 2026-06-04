@@ -4403,6 +4403,12 @@ abstract class AppLocalizations {
   /// **'لا توجد عناصر في السلة'**
   String get emptyCart;
 
+  /// No description provided for @openCartSheetButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'مراجعة السلة'**
+  String get openCartSheetButton;
+
   /// No description provided for @purchasingTitle.
   ///
   /// In ar, this message translates to:
@@ -5264,6 +5270,12 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'مسودة الشراء'**
   String get purchaseDraftTitle;
+
+  /// No description provided for @openPurchaseDraftSheetButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'مراجعة المسودة'**
+  String get openPurchaseDraftSheetButton;
 
   /// No description provided for @clearPurchaseDraftTooltip.
   ///

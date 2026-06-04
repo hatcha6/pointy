@@ -223,7 +223,7 @@ class _PaymentSheetState extends State<PaymentSheet> {
       children: [
         _buildSummaryPanel(l10n, summary),
         SizedBox(height: spacing.lg),
-        _buildPaymentControls(l10n),
+        _buildPaymentControls(l10n, includeKeypad: false),
       ],
     );
   }

@@ -10,6 +10,9 @@ import '../../../data/repositories/contact_repository.dart';
 import '../../../shared/app_navigation_drawer.dart';
 import '../../../shared/authorization_guards.dart';
 import '../../../shared/barcode/barcode_scan_listener.dart';
+import '../../../shared/design/design.dart';
+import '../../../shared/formatters.dart';
+import '../../../shared/order/order.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../../../shared/shell/shell.dart';
 import '../view_models/purchase_view_model.dart';
@@ -135,13 +138,26 @@ class _PurchasingWorkspace extends StatelessWidget {
       onBarcodeScanned: (barcode) {
         unawaited(_addBarcode(context, barcode));
       },
-      child: TwoPaneLayout(
-        compactSecondaryFlex: 4,
-        primaryPane: PurchaseCatalogPane(viewModel: viewModel),
-        secondaryPane: PurchaseDraftPane(
-          viewModel: viewModel,
-          contactRepository: contactRepository,
-        ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final width = constraints.hasBoundedWidth
+              ? constraints.maxWidth
+              : MediaQuery.sizeOf(context).width;
+          if (AppBreakpoints.usesTwoPane(width)) {
+            return TwoPaneLayout(
+              primaryPane: PurchaseCatalogPane(viewModel: viewModel),
+              secondaryPane: PurchaseDraftPane(
+                viewModel: viewModel,
+                contactRepository: contactRepository,
+              ),
+            );
+          }
+
+          return _CompactPurchasingWorkspace(
+            viewModel: viewModel,
+            contactRepository: contactRepository,
+          );
+        },
       ),
     );
   }
@@ -169,5 +185,65 @@ class _PurchasingWorkspace extends StatelessWidget {
       return;
     }
     await viewModel.addVariant(variant);
+  }
+}
+
+class _CompactPurchasingWorkspace extends StatelessWidget {
+  const _CompactPurchasingWorkspace({
+    required this.viewModel,
+    required this.contactRepository,
+  });
+
+  final PurchaseViewModel viewModel;
+  final ContactRepository contactRepository;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+
+    return Column(
+      children: [
+        Expanded(child: PurchaseCatalogPane(viewModel: viewModel)),
+        PointyCompactOrderLauncher(
+          title: l10n.purchaseDraftTitle,
+          lineCountLabel: l10n.lineItemCount(viewModel.draft.length),
+          totalLabel: formatMoney(viewModel.total),
+          actionLabel: l10n.openPurchaseDraftSheetButton,
+          icon: Icons.assignment_outlined,
+          isBusy: viewModel.isSubmitting,
+          onPressed: () => _showDraftSheet(context),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _showDraftSheet(BuildContext context) {
+    final colors = context.pointyColors;
+
+    return showAdaptiveModalBottomSheet<void>(
+      context: context,
+      size: AdaptiveModalSize.expanded,
+      backgroundColor: colors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(PointyRadii.sheet),
+        ),
+      ),
+      clipBehavior: Clip.antiAlias,
+      builder: (sheetContext) {
+        return ListenableBuilder(
+          listenable: viewModel,
+          builder: (context, _) {
+            return PurchaseDraftPane(
+              viewModel: viewModel,
+              contactRepository: contactRepository,
+              onSubmitSuccess: () {
+                Navigator.of(sheetContext).pop();
+              },
+            );
+          },
+        );
+      },
+    );
   }
 }

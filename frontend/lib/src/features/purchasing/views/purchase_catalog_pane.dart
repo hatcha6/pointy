@@ -8,6 +8,7 @@ import '../../../shared/barcode/camera_barcode_scanner_sheet.dart';
 import '../../../shared/infinite_scroll_grid.dart';
 import '../../../shared/product_query_controls.dart';
 import '../../../shared/product_tile.dart';
+import '../../../shared/responsive/responsive.dart';
 import '../view_models/purchase_view_model.dart';
 import 'purchase_quick_product_sheet.dart';
 
@@ -56,7 +57,8 @@ class PurchaseCatalogPane extends StatelessWidget {
             allowAvailabilityFilter: false,
             searchHint: l10n.purchaseProductLookupHint,
             searchFieldKey: const ValueKey('purchase_product_lookup_field'),
-            autofocus: true,
+            autofocus:
+                AppBreakpoints.of(context).index >= AppBreakpoint.tablet.index,
             onSearchChanged: viewModel.updateSearch,
             onOpenCameraScanner: viewModel.isSubmitting
                 ? null

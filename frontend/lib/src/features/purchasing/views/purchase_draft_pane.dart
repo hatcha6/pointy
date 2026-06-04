@@ -16,10 +16,12 @@ class PurchaseDraftPane extends StatefulWidget {
     super.key,
     required this.viewModel,
     required this.contactRepository,
+    this.onSubmitSuccess,
   });
 
   final PurchaseViewModel viewModel;
   final ContactRepository contactRepository;
+  final VoidCallback? onSubmitSuccess;
 
   @override
   State<PurchaseDraftPane> createState() => _PurchaseDraftPaneState();
@@ -389,6 +391,10 @@ class _PurchaseDraftPaneState extends State<PurchaseDraftPane> {
     messenger
       ..clearSnackBars()
       ..showSnackBar(SnackBar(content: Text(message)));
+
+    if (result is Ok<PurchaseSubmission>) {
+      widget.onSubmitSuccess?.call();
+    }
   }
 
   Future<void> _selectSupplier(BuildContext context) async {

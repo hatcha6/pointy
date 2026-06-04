@@ -7,6 +7,7 @@ import 'package:pointy_frontend/src/data/models/product.dart';
 import 'package:pointy_frontend/src/data/models/product_variant.dart';
 import 'package:pointy_frontend/src/features/pos/views/cart_line_tile.dart';
 import 'package:pointy_frontend/src/shared/design/design.dart';
+import 'package:pointy_frontend/src/shared/order/order.dart';
 import 'package:pointy_frontend/src/shared/product_tile.dart';
 
 void main() {
@@ -55,6 +56,41 @@ void main() {
       expect(tester.getSize(find.byTooltip('إنقاص عنصر')).height, 48);
       expect(tester.getSize(find.byTooltip('حذف العنصر من السلة')).height, 48);
       expect(tester.takeException(), isNull);
+    });
+  }
+
+  for (final width in [320.0, 390.0]) {
+    testWidgets('compact order launcher stays usable at width $width', (
+      tester,
+    ) async {
+      var tapCount = 0;
+
+      await _pumpAtWidth(
+        tester,
+        width: width,
+        child: SizedBox(
+          width: width,
+          child: PointyCompactOrderLauncher(
+            title: 'البيع الحالي',
+            lineCountLabel: 'عنصر واحد',
+            totalLabel: '12.75 د.ل',
+            actionLabel: 'مراجعة السلة',
+            icon: Icons.shopping_cart_checkout_outlined,
+            onPressed: () => tapCount += 1,
+          ),
+        ),
+      );
+
+      expect(find.text('البيع الحالي'), findsOneWidget);
+      expect(find.text('عنصر واحد'), findsOneWidget);
+      expect(find.text('12.75 د.ل'), findsOneWidget);
+      expect(find.text('مراجعة السلة'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+
+      await tester.tap(find.text('مراجعة السلة'));
+      await tester.pump();
+
+      expect(tapCount, 1);
     });
   }
 }

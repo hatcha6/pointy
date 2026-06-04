@@ -7,12 +7,14 @@ import 'package:pointy_frontend/src/features/pos/views/payment/payment.dart';
 import 'package:pointy_frontend/src/shared/design/design.dart';
 
 void main() {
-  testWidgets('keypad entry can submit a cash payment', (tester) async {
+  testWidgets('wide keypad entry can submit a cash payment', (tester) async {
     PaymentSheetResult? submitted;
 
     await _pumpPaymentSheet(
       tester,
       total: 12.5,
+      width: 1366,
+      height: 768,
       onSubmit: (result) => submitted = result,
     );
 
@@ -29,6 +31,17 @@ void main() {
 
     expect(submitted?.payments.single.method, PaymentMethod.cash);
     expect(submitted?.payments.single.amount, 12.5);
+  });
+
+  testWidgets('compact checkout omits the keypad', (tester) async {
+    await _pumpPaymentSheet(tester, total: 12.5);
+
+    expect(find.byKey(const ValueKey('payment_keypad_digit_1')), findsNothing);
+    expect(find.byKey(const ValueKey('payment_keypad_clear')), findsNothing);
+    expect(
+      find.byKey(const ValueKey('payment_tender_amount_0')),
+      findsOneWidget,
+    );
   });
 
   testWidgets('quick cash amounts show change and apply only the sale total', (

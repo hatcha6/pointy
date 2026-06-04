@@ -8,6 +8,9 @@ import '../../../data/repositories/contact_repository.dart';
 import '../../../shared/app_navigation_drawer.dart';
 import '../../../shared/authorization_guards.dart';
 import '../../../shared/barcode/barcode_scan_listener.dart';
+import '../../../shared/design/design.dart';
+import '../../../shared/formatters.dart';
+import '../../../shared/order/order.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../../../shared/shell/shell.dart';
 import '../view_models/pos_view_model.dart';
@@ -255,20 +258,101 @@ class _PosWorkspace extends StatelessWidget {
           !viewModel.isCheckingOut &&
           !viewModel.isResolvingBarcode,
       onBarcodeScanned: viewModel.addVariantByBarcode,
-      child: TwoPaneLayout(
-        compactPrimaryFlex: 2,
-        compactSecondaryFlex: 3,
-        minPrimaryWidth: 390,
-        primaryPane: PosCatalogPane(
-          viewModel: viewModel,
-          capabilities: capabilities,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final width = constraints.hasBoundedWidth
+              ? constraints.maxWidth
+              : MediaQuery.sizeOf(context).width;
+          if (AppBreakpoints.usesTwoPane(width)) {
+            return TwoPaneLayout(
+              minPrimaryWidth: 390,
+              primaryPane: PosCatalogPane(
+                viewModel: viewModel,
+                capabilities: capabilities,
+              ),
+              secondaryPane: PosCartPane(
+                viewModel: viewModel,
+                contactRepository: contactRepository,
+                capabilities: capabilities,
+              ),
+            );
+          }
+
+          return _CompactPosWorkspace(
+            viewModel: viewModel,
+            contactRepository: contactRepository,
+            capabilities: capabilities,
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _CompactPosWorkspace extends StatelessWidget {
+  const _CompactPosWorkspace({
+    required this.viewModel,
+    required this.contactRepository,
+    required this.capabilities,
+  });
+
+  final PosViewModel viewModel;
+  final ContactRepository contactRepository;
+  final AuthorizationCapabilities capabilities;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+
+    return Column(
+      children: [
+        Expanded(
+          child: PosCatalogPane(
+            viewModel: viewModel,
+            capabilities: capabilities,
+          ),
         ),
-        secondaryPane: PosCartPane(
-          viewModel: viewModel,
-          contactRepository: contactRepository,
-          capabilities: capabilities,
+        PointyCompactOrderLauncher(
+          title: l10n.currentSaleTitle,
+          lineCountLabel: l10n.lineItemCount(viewModel.cart.length),
+          totalLabel: formatMoney(viewModel.total),
+          actionLabel: l10n.openCartSheetButton,
+          icon: Icons.shopping_cart_checkout_outlined,
+          isBusy: viewModel.isCheckingOut,
+          onPressed: () => _showCartSheet(context),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _showCartSheet(BuildContext context) {
+    final colors = context.pointyColors;
+
+    return showAdaptiveModalBottomSheet<void>(
+      context: context,
+      size: AdaptiveModalSize.expanded,
+      backgroundColor: colors.page,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(PointyRadii.sheet),
         ),
       ),
+      clipBehavior: Clip.antiAlias,
+      builder: (sheetContext) {
+        return ListenableBuilder(
+          listenable: viewModel,
+          builder: (context, _) {
+            return PosCartPane(
+              viewModel: viewModel,
+              contactRepository: contactRepository,
+              capabilities: capabilities,
+              onCheckoutSuccess: () {
+                Navigator.of(sheetContext).pop();
+              },
+            );
+          },
+        );
+      },
     );
   }
 }

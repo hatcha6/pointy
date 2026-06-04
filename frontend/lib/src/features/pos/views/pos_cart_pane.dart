@@ -23,11 +23,13 @@ class PosCartPane extends StatelessWidget {
     required this.viewModel,
     required this.contactRepository,
     required this.capabilities,
+    this.onCheckoutSuccess,
   });
 
   final PosViewModel viewModel;
   final ContactRepository contactRepository;
   final AuthorizationCapabilities capabilities;
+  final VoidCallback? onCheckoutSuccess;
 
   @override
   Widget build(BuildContext context) {
@@ -185,6 +187,10 @@ class PosCartPane extends StatelessWidget {
     messenger
       ..clearSnackBars()
       ..showSnackBar(SnackBar(content: Text(message)));
+
+    if (outcome.isSuccess) {
+      onCheckoutSuccess?.call();
+    }
   }
 
   Future<void> _selectCustomer(BuildContext context) async {

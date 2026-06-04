@@ -2532,6 +2532,9 @@ class AppLocalizationsAr extends AppLocalizations {
   String get emptyCart => 'لا توجد عناصر في السلة';
 
   @override
+  String get openCartSheetButton => 'مراجعة السلة';
+
+  @override
   String get purchasingTitle => 'المشتريات';
 
   @override
@@ -3076,6 +3079,9 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get purchaseDraftTitle => 'مسودة الشراء';
+
+  @override
+  String get openPurchaseDraftSheetButton => 'مراجعة المسودة';
 
   @override
   String get clearPurchaseDraftTooltip => 'مسح مسودة الشراء';
