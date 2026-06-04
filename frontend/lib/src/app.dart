@@ -11,7 +11,9 @@ import 'authenticated_home.dart';
 import 'core/analytics_interaction_tracker.dart';
 import 'data/models/analytics_event.dart';
 import 'data/services/pos_api_service.dart';
+import 'features/auth/view_models/auth_view_model.dart';
 import 'features/auth/views/auth_gate.dart';
+import 'features/printing/view_models/printing_settings_view_model.dart';
 import 'shared/design/design.dart';
 import 'shared/shell/shell.dart';
 
@@ -97,10 +99,14 @@ class _PointyAppState extends State<PointyApp> {
       theme: PointyTheme.light(),
       builder: (context, child) => AnalyticsInteractionTracker(
         analyticsEngine: _dependencies.analyticsEngine,
-        child: PointyNavigationRailScope(
-          isActive: false,
-          controller: _navigationRailController,
-          child: child ?? const SizedBox.shrink(),
+        child: _PrinterConnectionNotifier(
+          authViewModel: _dependencies.authViewModel,
+          printingSettingsViewModel: _dependencies.printingSettingsViewModel,
+          child: PointyNavigationRailScope(
+            isActive: false,
+            controller: _navigationRailController,
+            child: child ?? const SizedBox.shrink(),
+          ),
         ),
       ),
       home: AuthGate(
@@ -125,5 +131,99 @@ class _PointyAppState extends State<PointyApp> {
       dependencies: _dependencies,
       currentUser: currentUser,
     );
+  }
+}
+
+class _PrinterConnectionNotifier extends StatefulWidget {
+  const _PrinterConnectionNotifier({
+    required this.authViewModel,
+    required this.printingSettingsViewModel,
+    required this.child,
+  });
+
+  final AuthViewModel authViewModel;
+  final PrintingSettingsViewModel printingSettingsViewModel;
+  final Widget child;
+
+  @override
+  State<_PrinterConnectionNotifier> createState() =>
+      _PrinterConnectionNotifierState();
+}
+
+class _PrinterConnectionNotifierState
+    extends State<_PrinterConnectionNotifier> {
+  String? _lastEndpointKey;
+  String? _notifiedDisconnectedEndpointKey;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.authViewModel.addListener(_handleStateChanged);
+    widget.printingSettingsViewModel.addListener(_handleStateChanged);
+  }
+
+  @override
+  void didUpdateWidget(_PrinterConnectionNotifier oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.authViewModel != widget.authViewModel) {
+      oldWidget.authViewModel.removeListener(_handleStateChanged);
+      widget.authViewModel.addListener(_handleStateChanged);
+    }
+    if (oldWidget.printingSettingsViewModel !=
+        widget.printingSettingsViewModel) {
+      oldWidget.printingSettingsViewModel.removeListener(_handleStateChanged);
+      widget.printingSettingsViewModel.addListener(_handleStateChanged);
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.authViewModel.removeListener(_handleStateChanged);
+    widget.printingSettingsViewModel.removeListener(_handleStateChanged);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return widget.child;
+  }
+
+  void _handleStateChanged() {
+    final endpoint = widget.printingSettingsViewModel.config.endpoint;
+    final endpointKey =
+        '${endpoint.kind.name}:${endpoint.address}:${endpoint.port}';
+    if (_lastEndpointKey != endpointKey) {
+      _lastEndpointKey = endpointKey;
+      _notifiedDisconnectedEndpointKey = null;
+    }
+
+    if (widget.printingSettingsViewModel.connectionState ==
+        PrinterConnectionState.connected) {
+      _notifiedDisconnectedEndpointKey = null;
+      return;
+    }
+
+    if (widget.authViewModel.status != AuthStatus.authenticated ||
+        !widget.printingSettingsViewModel.shouldWarnPrinterDisconnected ||
+        _notifiedDisconnectedEndpointKey == endpointKey) {
+      return;
+    }
+
+    _notifiedDisconnectedEndpointKey = endpointKey;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      final l10n = AppLocalizations.of(context)!;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(l10n.printerDisconnectedSnackBar),
+          action: SnackBarAction(
+            label: l10n.checkPrinterConnectionButton,
+            onPressed: widget.printingSettingsViewModel.checkPrinterConnection,
+          ),
+        ),
+      );
+    });
   }
 }

@@ -12,6 +12,7 @@ import 'package:pointy_frontend/src/core/authorization.dart';
 import 'package:pointy_frontend/src/core/result.dart';
 import 'package:pointy_frontend/src/data/models/barcode_label.dart';
 import 'package:pointy_frontend/src/data/models/card_payment_receipt.dart';
+import 'package:pointy_frontend/src/data/models/device_settings.dart';
 import 'package:pointy_frontend/src/data/models/pos_user.dart';
 import 'package:pointy_frontend/src/data/models/print_job.dart';
 import 'package:pointy_frontend/src/data/models/printer_config.dart';
@@ -21,6 +22,7 @@ import 'package:pointy_frontend/src/data/models/purchase_submission.dart';
 import 'package:pointy_frontend/src/data/models/register_cash_movement.dart';
 import 'package:pointy_frontend/src/app.dart';
 import 'package:pointy_frontend/src/data/repositories/catalog_repository.dart';
+import 'package:pointy_frontend/src/data/repositories/device_settings_repository.dart';
 import 'package:pointy_frontend/src/data/repositories/printing_repository.dart';
 import 'package:pointy_frontend/src/data/repositories/inventory_repository.dart';
 import 'package:pointy_frontend/src/data/repositories/purchase_repository.dart';
@@ -35,6 +37,7 @@ import 'package:pointy_frontend/src/features/catalog/views/category_management_s
 import 'package:pointy_frontend/src/features/catalog/views/product_image_picker.dart';
 import 'package:pointy_frontend/src/features/catalog/views/product_variant_details_screen.dart';
 import 'package:pointy_frontend/src/features/purchasing/views/purchase_order_details_screen.dart';
+import 'package:pointy_frontend/src/features/printing/view_models/printing_settings_view_model.dart';
 import 'package:pointy_frontend/src/features/pos/views/register_cash_movement_sheet.dart';
 import 'package:pointy_frontend/src/features/pos/views/register_session_close_sheet.dart';
 import 'package:pointy_frontend/src/features/pos/views/payment/payment_sheet.dart';
@@ -272,6 +275,99 @@ void main() {
       expect(config.endpoint.address, '192.168.1.55');
       expect(config.isEnabled, isTrue);
       expect(config.autoClaimJobs, isTrue);
+    },
+  );
+
+  test('device settings repository persists usage mode', () async {
+    final repository = DeviceSettingsRepository();
+
+    final initialResult = await repository.loadUsageMode();
+    expect(switch (initialResult) {
+      Ok<DeviceUsageMode>(value: final mode) => mode,
+      Error<DeviceUsageMode>() => fail('Usage mode should load'),
+    }, DeviceUsageMode.singleUser);
+
+    final saveResult = await repository.saveUsageMode(
+      DeviceUsageMode.multiUser,
+    );
+    expect(saveResult, isA<Ok<void>>());
+
+    final loadedResult = await repository.loadUsageMode();
+    expect(switch (loadedResult) {
+      Ok<DeviceUsageMode>(value: final mode) => mode,
+      Error<DeviceUsageMode>() => fail('Usage mode should load'),
+    }, DeviceUsageMode.multiUser);
+  });
+
+  test('printing repository stores POS receipt role printer config', () async {
+    SharedPreferences.setMockInitialValues({
+      'default_printer_config': jsonEncode({
+        'endpoint': {
+          'kind': 'serial',
+          'name': 'Legacy',
+          'address': '/dev/tty.legacy',
+        },
+      }),
+    });
+    final repository = PrintingRepository(_mockApiService());
+
+    final migratedResult = await repository.loadPrinterConfigForRole(
+      PrinterRole.posReceipt,
+    );
+    final migratedConfig = switch (migratedResult) {
+      Ok<PrinterConfig>(value: final config) => config,
+      Error<PrinterConfig>() => fail('POS receipt printer should load'),
+    };
+    expect(migratedConfig.endpoint.address, '/dev/tty.legacy');
+
+    final saveResult = await repository.savePrinterConfigForRole(
+      PrinterRole.posReceipt,
+      const PrinterConfig(
+        endpoint: PrinterEndpoint(
+          kind: PrintTransportKind.wifi,
+          name: 'Counter',
+          address: '192.168.1.55',
+          port: 9100,
+        ),
+      ),
+    );
+    expect(saveResult, isA<Ok<void>>());
+
+    final preferences = await SharedPreferences.getInstance();
+    expect(
+      preferences.getString('printer_role_configs'),
+      contains('pos_receipt'),
+    );
+    expect(
+      preferences.getString('default_printer_config'),
+      contains('192.168.1.55'),
+    );
+  });
+
+  test(
+    'printing settings view model tracks disconnected printer health',
+    () async {
+      _setFakePrinterConfig();
+      final transport = _StatusPrintTransport(isAvailable: false);
+      final viewModel = PrintingSettingsViewModel(
+        PrintingRepository(
+          _mockApiService(),
+          serialTransport: transport,
+          bluetoothTransport: transport,
+          wifiTransport: transport,
+          fakeTransport: transport,
+        ),
+        autoLoad: false,
+        statusCheckInterval: const Duration(hours: 1),
+      );
+      addTearDown(viewModel.dispose);
+
+      await viewModel.loadDefaultConfig();
+      await Future<void>.delayed(Duration.zero);
+
+      expect(viewModel.hasConfiguredPrinter, isTrue);
+      expect(viewModel.connectionState, PrinterConnectionState.disconnected);
+      expect(viewModel.shouldWarnPrinterDisconnected, isTrue);
     },
   );
 
@@ -1814,6 +1910,27 @@ void main() {
     expect(find.text('نقدية الافتتاح'), findsNothing);
   });
 
+  testWidgets('multi-user device mode forgets authenticated user on startup', (
+    WidgetTester tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({'device_usage_mode': 'multi_user'});
+    var logoutRequests = 0;
+
+    await tester.pumpWidget(
+      PointyApp(
+        apiService: _mockApiService(
+          onLogout: (_) {
+            logoutRequests += 1;
+          },
+        ),
+      ),
+    );
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+
+    expect(find.text('تسجيل الدخول'), findsOneWidget);
+    expect(logoutRequests, 1);
+  });
+
   testWidgets('login screen adapts between compact and wide layouts', (
     WidgetTester tester,
   ) async {
@@ -2088,6 +2205,7 @@ void main() {
   testWidgets('manager can configure and fake-test local printing', (
     WidgetTester tester,
   ) async {
+    _setFakePrinterConfig();
     tester.view.physicalSize = const Size(1200, 1000);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
@@ -2099,15 +2217,15 @@ void main() {
     await _openNavigationDestination(tester, 'إعدادات الجهاز');
 
     expect(find.text('إعدادات الجهاز'), findsWidgets);
-    expect(find.text('الطابعة الافتراضية'), findsOneWidget);
-    expect(find.text('طريقة الاتصال'), findsOneWidget);
-    expect(find.text('تسلسلي'), findsOneWidget);
-    expect(find.text('محاكاة'), findsOneWidget);
+    expect(find.text('استخدام الجهاز'), findsOneWidget);
+    expect(find.text('أدوار الطباعة'), findsOneWidget);
+    expect(find.text('إيصال نقطة البيع'), findsOneWidget);
+    expect(find.text('طابعة إيصال نقطة البيع'), findsOneWidget);
+    expect(find.text('طريقة الاتصال'), findsNothing);
+    expect(find.byType(SegmentedButton<PrintTransportKind>), findsNothing);
     expect(find.text('تفعيل وكيل الطباعة المحلي'), findsNothing);
     expect(find.text('استلام مهام الطباعة تلقائيًا'), findsNothing);
 
-    await tester.tap(find.text('محاكاة'));
-    await tester.pumpAndSettle();
     await tester.tap(find.text('اختبار الطابعة'));
     await tester.pumpAndSettle();
 
@@ -2986,6 +3104,40 @@ class _StaticDiscoveryTransport extends PrintTransport {
   }
 }
 
+class _StatusPrintTransport extends PrintTransport {
+  const _StatusPrintTransport({required this.isAvailable});
+
+  final bool isAvailable;
+
+  @override
+  Future<List<PrinterEndpoint>> discover() async => const [];
+
+  @override
+  Future<PrintTransportStatus> status(PrinterEndpoint endpoint) async {
+    return PrintTransportStatus(
+      isAvailable: isAvailable,
+      message: isAvailable ? 'ready' : 'offline',
+    );
+  }
+
+  @override
+  Future<PrintTransportResult> printJob({
+    required PrintJob job,
+    required PrinterEndpoint endpoint,
+  }) async {
+    return isAvailable
+        ? const PrintTransportResult.success('printed')
+        : const PrintTransportResult.failure('offline');
+  }
+
+  @override
+  Future<PrintTransportResult> printTest(PrinterEndpoint endpoint) async {
+    return isAvailable
+        ? const PrintTransportResult.success('printed')
+        : const PrintTransportResult.failure('offline');
+  }
+}
+
 class _CapturingPrintTransport extends PrintTransport {
   List<int> printedBytes = const [];
 
@@ -3046,6 +3198,7 @@ PosApiService _mockApiService({
   String currentUserDisplayName = 'مدير النظام',
   List<String> currentUserPermissions = const [],
   void Function(http.Request request)? onCheckout,
+  void Function(http.Request request)? onLogout,
   void Function(http.Request request)? onPurchaseOrderCreate,
   void Function(http.Request request)? onPurchaseOrderReceive,
   void Function(http.Request request)? onPurchaseOrderExchange,
@@ -3111,6 +3264,7 @@ PosApiService _mockApiService({
       }
 
       if (path.endsWith('/auth/logout/')) {
+        onLogout?.call(request);
         authenticated = false;
         return http.Response('', 204);
       }

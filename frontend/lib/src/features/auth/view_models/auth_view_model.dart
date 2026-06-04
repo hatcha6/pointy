@@ -34,10 +34,19 @@ class AuthViewModel extends ChangeNotifier {
   bool get isSubmitting => _isSubmitting;
   bool get hasError => _hasError;
 
-  Future<void> loadCurrentUser() async {
+  Future<void> loadCurrentUser({bool forgetRememberedUser = false}) async {
     _status = AuthStatus.checking;
     _hasError = false;
     notifyListeners();
+
+    if (forgetRememberedUser) {
+      await _authRepository.forgetCurrentUser();
+      _currentUser = null;
+      _status = AuthStatus.unauthenticated;
+      _hasError = false;
+      notifyListeners();
+      return;
+    }
 
     final result = await _authRepository.loadCurrentUser();
     switch (result) {

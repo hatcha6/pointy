@@ -2065,10 +2065,40 @@ abstract class AppLocalizations {
   /// **'تعذر حفظ إعدادات الجهاز المحلية.'**
   String get deviceSettingsSaveError;
 
+  /// No description provided for @deviceUsageSectionTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'استخدام الجهاز'**
+  String get deviceUsageSectionTitle;
+
+  /// No description provided for @deviceUsageSingleUserTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'مستخدم واحد'**
+  String get deviceUsageSingleUserTitle;
+
+  /// No description provided for @deviceUsageSingleUserDescription.
+  ///
+  /// In ar, this message translates to:
+  /// **'يفتح التطبيق بنفس الجلسة المحفوظة عند تشغيله مرة أخرى.'**
+  String get deviceUsageSingleUserDescription;
+
+  /// No description provided for @deviceUsageMultiUserTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'عدة مستخدمين'**
+  String get deviceUsageMultiUserTitle;
+
+  /// No description provided for @deviceUsageMultiUserDescription.
+  ///
+  /// In ar, this message translates to:
+  /// **'ينسى الجهاز المستخدم المسجل عند فتح التطبيق ويطلب تسجيل الدخول كل مرة.'**
+  String get deviceUsageMultiUserDescription;
+
   /// No description provided for @devicePrinterSectionTitle.
   ///
   /// In ar, this message translates to:
-  /// **'الطابعة الافتراضية'**
+  /// **'أدوار الطباعة'**
   String get devicePrinterSectionTitle;
 
   /// No description provided for @shopIdentitySectionTitle.
@@ -2645,10 +2675,40 @@ abstract class AppLocalizations {
   /// **'محاكاة'**
   String get printerTransportFake;
 
+  /// No description provided for @posReceiptPrinterRoleTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'إيصال نقطة البيع'**
+  String get posReceiptPrinterRoleTitle;
+
+  /// No description provided for @posReceiptPrinterRoleDescription.
+  ///
+  /// In ar, this message translates to:
+  /// **'الطابعة الافتراضية لفواتير البيع وإعادة الطباعة من شاشة نقطة البيع.'**
+  String get posReceiptPrinterRoleDescription;
+
+  /// No description provided for @configurePrinterRoleButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختيار طابعة الإيصال'**
+  String get configurePrinterRoleButton;
+
+  /// No description provided for @printerRoleDialogTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'طابعة إيصال نقطة البيع'**
+  String get printerRoleDialogTitle;
+
+  /// No description provided for @printerRoleDialogDoneButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم'**
+  String get printerRoleDialogDoneButton;
+
   /// No description provided for @selectedPrinterLabel.
   ///
   /// In ar, this message translates to:
-  /// **'الطابعة الافتراضية لهذا الجهاز'**
+  /// **'طابعة إيصال نقطة البيع'**
   String get selectedPrinterLabel;
 
   /// No description provided for @noSelectedPrinter.
@@ -2672,7 +2732,7 @@ abstract class AppLocalizations {
   /// No description provided for @discoveredPrintersLabel.
   ///
   /// In ar, this message translates to:
-  /// **'الطابعات المكتشفة'**
+  /// **'اختر الطابعة'**
   String get discoveredPrintersLabel;
 
   /// No description provided for @selectDiscoveredPrinterHint.
@@ -2684,7 +2744,7 @@ abstract class AppLocalizations {
   /// No description provided for @noDiscoveredPrinters.
   ///
   /// In ar, this message translates to:
-  /// **'لم يتم اكتشاف طابعات بعد'**
+  /// **'اضغط على البحث لاكتشاف الطابعات المتاحة'**
   String get noDiscoveredPrinters;
 
   /// No description provided for @discoverPrintersButton.
@@ -2696,8 +2756,50 @@ abstract class AppLocalizations {
   /// No description provided for @printerDiscoveryError.
   ///
   /// In ar, this message translates to:
-  /// **'تعذر اكتشاف الطابعات. يمكنك إدخال بيانات الطابعة يدويًا.'**
+  /// **'تعذر اكتشاف الطابعات. تحقق من الاتصال وحاول مرة أخرى.'**
   String get printerDiscoveryError;
+
+  /// No description provided for @checkPrinterConnectionButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'فحص الاتصال'**
+  String get checkPrinterConnectionButton;
+
+  /// No description provided for @printerStatusUnknown.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم يتم فحص اتصال الطابعة بعد.'**
+  String get printerStatusUnknown;
+
+  /// No description provided for @printerStatusNotConfigured.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر طابعة إيصال حتى يبدأ الجهاز بفحص اتصالها.'**
+  String get printerStatusNotConfigured;
+
+  /// No description provided for @printerStatusChecking.
+  ///
+  /// In ar, this message translates to:
+  /// **'جار فحص اتصال الطابعة...'**
+  String get printerStatusChecking;
+
+  /// No description provided for @printerStatusConnected.
+  ///
+  /// In ar, this message translates to:
+  /// **'طابعة الإيصال متصلة وجاهزة.'**
+  String get printerStatusConnected;
+
+  /// No description provided for @printerStatusDisconnected.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر الاتصال بطابعة الإيصال. تحقق من تشغيلها واتصالها.'**
+  String get printerStatusDisconnected;
+
+  /// No description provided for @printerDisconnectedSnackBar.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر الاتصال بطابعة إيصال نقطة البيع.'**
+  String get printerDisconnectedSnackBar;
 
   /// No description provided for @testPrinterButton.
   ///

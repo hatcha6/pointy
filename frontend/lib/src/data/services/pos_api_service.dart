@@ -134,6 +134,10 @@ class PosApiService {
 
   Future<void> logout() => _auth.logout();
 
+  void clearAuthState() {
+    _session.clearAuthState();
+  }
+
   Future<PosUser?> fetchCurrentUser() => _auth.fetchCurrentUser();
 
   Future<AnalyticsIngestResult> ingestAnalyticsEvents(

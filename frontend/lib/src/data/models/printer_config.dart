@@ -1,5 +1,20 @@
 enum PrintTransportKind { serial, bluetooth, wifi, fake }
 
+enum PrinterRole { posReceipt }
+
+PrinterRole printerRoleFromJson(Object? value) {
+  return switch (value?.toString()) {
+    'pos_receipt' || 'posReceipt' => PrinterRole.posReceipt,
+    _ => PrinterRole.posReceipt,
+  };
+}
+
+String printerRoleToJson(PrinterRole role) {
+  return switch (role) {
+    PrinterRole.posReceipt => 'pos_receipt',
+  };
+}
+
 class PrinterEndpoint {
   const PrinterEndpoint({
     required this.kind,

@@ -115,18 +115,36 @@ class PrintingRepository {
   }
 
   Future<Result<PrinterConfig>> loadDefaultPrinterConfig() async {
+    return loadPrinterConfigForRole(PrinterRole.posReceipt);
+  }
+
+  Future<Result<void>> saveDefaultPrinterConfig(PrinterConfig config) async {
+    return savePrinterConfigForRole(PrinterRole.posReceipt, config);
+  }
+
+  Future<Result<PrinterConfig>> loadPrinterConfigForRole(
+    PrinterRole role,
+  ) async {
     return Result.guard(() async {
-      final config = await _storageService.loadDefaultPrinterConfig();
+      final config = await _storageService.loadPrinterConfigForRole(role);
       return _devicePrintableConfig(config ?? PrinterConfig.defaultConfig());
     });
   }
 
-  Future<Result<void>> saveDefaultPrinterConfig(PrinterConfig config) async {
+  Future<Result<void>> savePrinterConfigForRole(
+    PrinterRole role,
+    PrinterConfig config,
+  ) async {
     return Result.guard(() async {
-      await _storageService.saveDefaultPrinterConfig(
+      await _storageService.savePrinterConfigForRole(
+        role,
         _devicePrintableConfig(config),
       );
     });
+  }
+
+  Future<PrintTransportStatus> printerStatus(PrinterConfig config) {
+    return _transportFor(config.endpoint).status(config.endpoint);
   }
 
   Future<PrintTransportResult> testPrinter(PrinterConfig config) {

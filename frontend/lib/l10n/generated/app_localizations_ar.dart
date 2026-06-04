@@ -1222,7 +1222,24 @@ class AppLocalizationsAr extends AppLocalizations {
   String get deviceSettingsSaveError => 'تعذر حفظ إعدادات الجهاز المحلية.';
 
   @override
-  String get devicePrinterSectionTitle => 'الطابعة الافتراضية';
+  String get deviceUsageSectionTitle => 'استخدام الجهاز';
+
+  @override
+  String get deviceUsageSingleUserTitle => 'مستخدم واحد';
+
+  @override
+  String get deviceUsageSingleUserDescription =>
+      'يفتح التطبيق بنفس الجلسة المحفوظة عند تشغيله مرة أخرى.';
+
+  @override
+  String get deviceUsageMultiUserTitle => 'عدة مستخدمين';
+
+  @override
+  String get deviceUsageMultiUserDescription =>
+      'ينسى الجهاز المستخدم المسجل عند فتح التطبيق ويطلب تسجيل الدخول كل مرة.';
+
+  @override
+  String get devicePrinterSectionTitle => 'أدوار الطباعة';
 
   @override
   String get shopIdentitySectionTitle => 'هوية المتجر';
@@ -1558,7 +1575,23 @@ class AppLocalizationsAr extends AppLocalizations {
   String get printerTransportFake => 'محاكاة';
 
   @override
-  String get selectedPrinterLabel => 'الطابعة الافتراضية لهذا الجهاز';
+  String get posReceiptPrinterRoleTitle => 'إيصال نقطة البيع';
+
+  @override
+  String get posReceiptPrinterRoleDescription =>
+      'الطابعة الافتراضية لفواتير البيع وإعادة الطباعة من شاشة نقطة البيع.';
+
+  @override
+  String get configurePrinterRoleButton => 'اختيار طابعة الإيصال';
+
+  @override
+  String get printerRoleDialogTitle => 'طابعة إيصال نقطة البيع';
+
+  @override
+  String get printerRoleDialogDoneButton => 'تم';
+
+  @override
+  String get selectedPrinterLabel => 'طابعة إيصال نقطة البيع';
 
   @override
   String get noSelectedPrinter => 'لم يتم اختيار طابعة';
@@ -1570,20 +1603,44 @@ class AppLocalizationsAr extends AppLocalizations {
   String get printerCodeTableLabel => 'جدول ترميز الطابعة';
 
   @override
-  String get discoveredPrintersLabel => 'الطابعات المكتشفة';
+  String get discoveredPrintersLabel => 'اختر الطابعة';
 
   @override
   String get selectDiscoveredPrinterHint => 'اختر طابعة';
 
   @override
-  String get noDiscoveredPrinters => 'لم يتم اكتشاف طابعات بعد';
+  String get noDiscoveredPrinters => 'اضغط على البحث لاكتشاف الطابعات المتاحة';
 
   @override
   String get discoverPrintersButton => 'اكتشاف الطابعات';
 
   @override
   String get printerDiscoveryError =>
-      'تعذر اكتشاف الطابعات. يمكنك إدخال بيانات الطابعة يدويًا.';
+      'تعذر اكتشاف الطابعات. تحقق من الاتصال وحاول مرة أخرى.';
+
+  @override
+  String get checkPrinterConnectionButton => 'فحص الاتصال';
+
+  @override
+  String get printerStatusUnknown => 'لم يتم فحص اتصال الطابعة بعد.';
+
+  @override
+  String get printerStatusNotConfigured =>
+      'اختر طابعة إيصال حتى يبدأ الجهاز بفحص اتصالها.';
+
+  @override
+  String get printerStatusChecking => 'جار فحص اتصال الطابعة...';
+
+  @override
+  String get printerStatusConnected => 'طابعة الإيصال متصلة وجاهزة.';
+
+  @override
+  String get printerStatusDisconnected =>
+      'تعذر الاتصال بطابعة الإيصال. تحقق من تشغيلها واتصالها.';
+
+  @override
+  String get printerDisconnectedSnackBar =>
+      'تعذر الاتصال بطابعة إيصال نقطة البيع.';
 
   @override
   String get testPrinterButton => 'اختبار الطابعة';

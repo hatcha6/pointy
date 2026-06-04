@@ -636,7 +636,8 @@ class _AuthenticatedRoutes {
     return _screen(
       'device_settings',
       DeviceSettingsScreen(
-        viewModel: dependencies.printingSettingsViewModel,
+        deviceSettingsViewModel: dependencies.deviceSettingsViewModel,
+        printingSettingsViewModel: dependencies.printingSettingsViewModel,
         currentUser: currentUser,
         capabilities: capabilities,
         onOpenDashboard: guardedAction(

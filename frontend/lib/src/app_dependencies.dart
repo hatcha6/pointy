@@ -1,13 +1,16 @@
 import 'dart:async';
 
 import 'core/analytics_engine.dart';
+import 'core/result.dart';
 import 'data/models/analytics_event.dart';
+import 'data/models/device_settings.dart';
 import 'data/repositories/analytics_repository.dart';
 import 'data/repositories/auth_repository.dart';
 import 'data/repositories/business_alert_repository.dart';
 import 'data/repositories/catalog_repository.dart';
 import 'data/repositories/contact_repository.dart';
 import 'data/repositories/dashboard_repository.dart';
+import 'data/repositories/device_settings_repository.dart';
 import 'data/repositories/discount_repository.dart';
 import 'data/repositories/inventory_repository.dart';
 import 'data/repositories/printing_repository.dart';
@@ -25,6 +28,7 @@ import 'data/services/pos_http_client.dart';
 import 'features/auth/view_models/auth_view_model.dart';
 import 'features/contacts/view_models/contact_management_view_model.dart';
 import 'features/dashboard/view_models/dashboard_view_model.dart';
+import 'features/device_settings/view_models/device_settings_view_model.dart';
 import 'features/discounts/view_models/discount_management_view_model.dart';
 import 'features/notifications/view_models/notification_center_view_model.dart';
 import 'features/pos/view_models/pos_view_model.dart';
@@ -46,6 +50,7 @@ class PointyAppDependencies {
     catalogRepository = CatalogRepository(service);
     contactRepository = ContactRepository(service);
     dashboardRepository = DashboardRepository(service);
+    deviceSettingsRepository = const DeviceSettingsRepository();
     businessAlertRepository = BusinessAlertRepository(service);
     discountRepository = DiscountRepository(service);
     inventoryRepository = InventoryRepository(service);
@@ -87,6 +92,7 @@ class PointyAppDependencies {
   late final CatalogRepository catalogRepository;
   late final ContactRepository contactRepository;
   late final DashboardRepository dashboardRepository;
+  late final DeviceSettingsRepository deviceSettingsRepository;
   late final BusinessAlertRepository businessAlertRepository;
   late final DiscountRepository discountRepository;
   late final InventoryRepository inventoryRepository;
@@ -100,6 +106,7 @@ class PointyAppDependencies {
   late final ConnectionCoordinator connectionCoordinator;
   late final AuthViewModel authViewModel;
   late final PosViewModel posViewModel;
+  DeviceSettingsViewModel? _deviceSettingsViewModel;
   PrintingSettingsViewModel? _printingSettingsViewModel;
   ContactManagementViewModel? _contactManagementViewModel;
   DiscountManagementViewModel? _discountManagementViewModel;
@@ -114,8 +121,20 @@ class PointyAppDependencies {
     if (_enableAutomaticConnection) {
       await connectionCoordinator.bootstrap();
     }
-    await authViewModel.loadCurrentUser();
+    final usageModeResult = await deviceSettingsRepository.loadUsageMode();
+    final usageMode = switch (usageModeResult) {
+      Ok<DeviceUsageMode>(value: final mode) => mode,
+      Error<DeviceUsageMode>() => DeviceUsageMode.singleUser,
+    };
+    await authViewModel.loadCurrentUser(
+      forgetRememberedUser: usageMode == DeviceUsageMode.multiUser,
+    );
   }
+
+  DeviceSettingsViewModel get deviceSettingsViewModel =>
+      _deviceSettingsViewModel ??= DeviceSettingsViewModel(
+        deviceSettingsRepository,
+      );
 
   PrintingSettingsViewModel get printingSettingsViewModel =>
       _printingSettingsViewModel ??= PrintingSettingsViewModel(
@@ -186,12 +205,12 @@ class PointyAppDependencies {
     analyticsEngine.dispose();
     authViewModel.dispose();
     posViewModel.dispose();
+    _deviceSettingsViewModel?.dispose();
+    _printingSettingsViewModel?.dispose();
     _disposeSessionViewModels();
   }
 
   void _disposeSessionViewModels() {
-    _printingSettingsViewModel?.dispose();
-    _printingSettingsViewModel = null;
     _contactManagementViewModel?.dispose();
     _contactManagementViewModel = null;
     _discountManagementViewModel?.dispose();
