@@ -5,6 +5,8 @@ from django.db import models, transaction
 from django.utils import timezone
 from rest_framework import serializers
 
+from apps.analytics.models import AnalyticsEvent
+from apps.analytics.services import record_domain_event
 from apps.discounts.models import (
     AppliedDiscount,
     DiscountRedemption,
@@ -91,7 +93,7 @@ def record_purchase_order_audit_event(
 ):
     if created_by is None:
         created_by = purchase_created_by(request)
-    return PurchaseOrderAuditEvent.objects.create(
+    audit_event = PurchaseOrderAuditEvent.objects.create(
         purchase_order=purchase_order,
         order_number=purchase_order.order_number,
         action=action,
@@ -99,6 +101,35 @@ def record_purchase_order_audit_event(
         details=details or {},
         created_by=created_by,
     )
+    action_value = str(action)
+    record_domain_event(
+        name=f"purchasing.purchase_order.{action_value}",
+        event_type=AnalyticsEvent.EventType.AUDIT,
+        severity=(
+            AnalyticsEvent.Severity.WARNING
+            if action_value
+            in {
+                PurchaseOrderAuditEvent.Action.ADJUSTED,
+                PurchaseOrderAuditEvent.Action.CANCELLED,
+                PurchaseOrderAuditEvent.Action.DELETED,
+            }
+            else AnalyticsEvent.Severity.INFO
+        ),
+        user=created_by,
+        entity_type="purchase_order",
+        entity_id=purchase_order.pk,
+        attributes={
+            "purchase_order_audit_event_id": audit_event.pk,
+            "order_number": purchase_order.order_number,
+            "action": action_value,
+            "status": purchase_order.status,
+            "supplier_id": purchase_order.supplier_id,
+            "message_present": bool(message),
+            "details": details or {},
+        },
+        metrics={"total": float(purchase_order.total)},
+    )
+    return audit_event
 
 
 def decrement_expected(stock_item, quantity):

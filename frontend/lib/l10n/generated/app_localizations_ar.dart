@@ -139,6 +139,506 @@ class AppLocalizationsAr extends AppLocalizations {
   String get reportsDrawerLabel => 'التقارير';
 
   @override
+  String get activityLogDrawerLabel => 'سجل النشاط';
+
+  @override
+  String get activityLogTitle => 'سجل نشاط المستخدمين';
+
+  @override
+  String get refreshActivityLogTooltip => 'تحديث سجل النشاط';
+
+  @override
+  String get activityLogSearchHint => 'ابحث باسم الحدث أو الأثر أو الكيان';
+
+  @override
+  String get activityLogTotalMetric => 'إجمالي النتائج';
+
+  @override
+  String get activityLogLoadedMetric => 'المعروض الآن';
+
+  @override
+  String get activityLogFraudMetric => 'إشارات احتيال';
+
+  @override
+  String get activityLogHighRiskMetric => 'مخاطر عالية';
+
+  @override
+  String get activityLogUsersLoadWarning =>
+      'تعذر تحميل قائمة المستخدمين للفلاتر. يمكنك متابعة البحث والفلاتر الأخرى.';
+
+  @override
+  String get activityLogLoadError => 'تعذر تحميل سجل النشاط.';
+
+  @override
+  String get activityLogEmpty => 'لا توجد أحداث تطابق الفلاتر الحالية.';
+
+  @override
+  String get activityLogNoEventSelected => 'اختر حدثًا لمراجعة التفاصيل.';
+
+  @override
+  String get activityLogUnknownUser => 'مستخدم غير معروف';
+
+  @override
+  String activityLogEventSubtitle(String date, String user) {
+    return '$date بواسطة $user';
+  }
+
+  @override
+  String activityLogEventSubtitleWithSummary(
+    String date,
+    String user,
+    String summary,
+  ) {
+    return '$date بواسطة $user - $summary';
+  }
+
+  @override
+  String activityLogRiskScore(int score) {
+    return 'مخاطر $score';
+  }
+
+  @override
+  String get activityLogDetailUser => 'المستخدم';
+
+  @override
+  String get activityLogDetailRisk => 'درجة المخاطر';
+
+  @override
+  String get activityLogNoRiskScore => 'لا توجد';
+
+  @override
+  String get activityLogDetailEventSection => 'الحدث';
+
+  @override
+  String get activityLogRawNameLabel => 'الاسم الخام';
+
+  @override
+  String get activityLogTypeLabel => 'النوع';
+
+  @override
+  String get activityLogSeverityLabel => 'الحدة';
+
+  @override
+  String get activityLogSourceLabel => 'المصدر';
+
+  @override
+  String get activityLogDetailContextSection => 'السياق';
+
+  @override
+  String get activityLogSessionLabel => 'الجلسة';
+
+  @override
+  String get activityLogEntityTypeLabel => 'نوع الكيان';
+
+  @override
+  String get activityLogEntityIdLabel => 'معرّف الكيان';
+
+  @override
+  String get activityLogTraceIdLabel => 'أثر الطلب';
+
+  @override
+  String get activityLogPlatformLabel => 'المنصة';
+
+  @override
+  String get activityLogAttributesSection => 'البيانات';
+
+  @override
+  String get activityLogNoAttributes => 'لا توجد بيانات إضافية.';
+
+  @override
+  String get activityLogMetricsSection => 'المقاييس';
+
+  @override
+  String get activityLogNoMetrics => 'لا توجد مقاييس.';
+
+  @override
+  String get activityLogMissingValue => 'غير متوفر';
+
+  @override
+  String get activityLogOpenInvoice => 'فتح الفاتورة';
+
+  @override
+  String get activityLogOpenPurchaseOrder => 'فتح أمر الشراء';
+
+  @override
+  String get activityLogOpenTargetError => 'تعذر فتح تفاصيل هذا السجل.';
+
+  @override
+  String get activityLogNoSummary => 'لا توجد خلاصة إضافية.';
+
+  @override
+  String activityLogSessionSummary(String session) {
+    return 'جلسة $session';
+  }
+
+  @override
+  String activityLogTotalSummary(String total) {
+    return 'الإجمالي $total';
+  }
+
+  @override
+  String activityLogReasonSummary(String reason) {
+    return 'السبب: $reason';
+  }
+
+  @override
+  String activityBackendRequestTitle(String method, String target) {
+    return '$method $target';
+  }
+
+  @override
+  String activityFrontendInteractionTitle(String action, String target) {
+    return '$action $target';
+  }
+
+  @override
+  String activityEventUnknownTitle(String name) {
+    return 'حدث غير مصنف: $name';
+  }
+
+  @override
+  String activityLogMethodPathSummary(String method, String path) {
+    return '$method $path';
+  }
+
+  @override
+  String activityLogRequestSummary(String method, String path, int status) {
+    return '$method $path - الحالة $status';
+  }
+
+  @override
+  String activityLogInteractionSummary(String action, String target) {
+    return 'الإجراء $action على $target';
+  }
+
+  @override
+  String get activityRequestMethodGet => 'استعرض';
+
+  @override
+  String get activityRequestMethodPost => 'نفّذ';
+
+  @override
+  String get activityRequestMethodPatch => 'عدّل';
+
+  @override
+  String get activityRequestMethodDelete => 'حذف';
+
+  @override
+  String get activityRequestMethodOther => 'طلب';
+
+  @override
+  String get activityTargetActivityLog => 'سجل النشاط';
+
+  @override
+  String get activityTargetUsers => 'المستخدمين';
+
+  @override
+  String get activityTargetInvoices => 'الفواتير';
+
+  @override
+  String get activityTargetCheckout => 'إكمال بيع';
+
+  @override
+  String get activityTargetPurchaseOrders => 'أوامر الشراء';
+
+  @override
+  String get activityTargetCustomers => 'العملاء';
+
+  @override
+  String get activityTargetSuppliers => 'الموردين';
+
+  @override
+  String get activityTargetCatalog => 'المنتجات والمخزون';
+
+  @override
+  String get activityTargetRegisterSessions => 'جلسات الدرج';
+
+  @override
+  String get activityTargetDiscounts => 'الخصومات';
+
+  @override
+  String get activityTargetReports => 'التقارير';
+
+  @override
+  String get activityTargetAuth => 'تسجيل الدخول';
+
+  @override
+  String get activityTargetSystem => 'النظام';
+
+  @override
+  String get activityTargetCurrentScreen => 'الشاشة الحالية';
+
+  @override
+  String get activityInteractionNavigation => 'فتح شاشة';
+
+  @override
+  String get activityInteractionLogout => 'اختار الخروج من';
+
+  @override
+  String get activityInteractionProductSelected => 'فتح منتج من';
+
+  @override
+  String get activityInteractionPointer => 'لمس';
+
+  @override
+  String get activityInteractionScroll => 'مرر';
+
+  @override
+  String get activityInteractionKeyboard => 'استخدم لوحة المفاتيح في';
+
+  @override
+  String get activityInteractionFocus => 'نقل التركيز داخل';
+
+  @override
+  String get activityInteractionGeneral => 'تفاعل مع';
+
+  @override
+  String get activityLogScopeFilterTitle => 'نطاق السجل';
+
+  @override
+  String get activityScopeReviewable => 'الأحداث المهمة فقط';
+
+  @override
+  String get activityScopeAll => 'كل الأحداث';
+
+  @override
+  String get activityScopeTechnical => 'السجل التقني فقط';
+
+  @override
+  String get activityLogActionFilterTitle => 'الإجراء';
+
+  @override
+  String get activityLogDateFilterTitle => 'الفترة';
+
+  @override
+  String get activityLogFromDateOpen => 'من البداية';
+
+  @override
+  String get activityLogToDateOpen => 'إلى الآن';
+
+  @override
+  String activityLogFromDateValue(String date) {
+    return 'من $date';
+  }
+
+  @override
+  String activityLogToDateValue(String date) {
+    return 'إلى $date';
+  }
+
+  @override
+  String get activityLogUserFilterTitle => 'المستخدم';
+
+  @override
+  String get activityLogUserFilterLabel => 'المستخدم';
+
+  @override
+  String get activityLogAllUsers => 'كل المستخدمين';
+
+  @override
+  String get activityLogContextFilterTitle => 'السياق';
+
+  @override
+  String get activityLogSessionFilterLabel => 'معرّف جلسة الدرج';
+
+  @override
+  String get activityLogEntityTypeFilterLabel => 'نوع الكيان';
+
+  @override
+  String get activityLogEntityIdFilterLabel => 'معرّف الكيان';
+
+  @override
+  String get activityLogEventTypeFilterTitle => 'نوع الحدث';
+
+  @override
+  String get activityLogSeverityFilterTitle => 'الحدة';
+
+  @override
+  String get activityLogRiskFilterTitle => 'درجة المخاطر';
+
+  @override
+  String get activityLogRiskAll => 'كل درجات المخاطر';
+
+  @override
+  String activityLogRiskAtLeast(int score) {
+    return '$score فأعلى';
+  }
+
+  @override
+  String get activityLogSourceFilterTitle => 'المصدر';
+
+  @override
+  String get activityLogOrderingTitle => 'ترتيب النتائج';
+
+  @override
+  String get activityActionAll => 'كل الإجراءات';
+
+  @override
+  String get activityActionFraudSignal => 'إشارات الاحتيال';
+
+  @override
+  String get activityActionPosLineDeleted => 'حذف سطر بيع';
+
+  @override
+  String get activityActionPurchaseLineDeleted => 'حذف سطر شراء';
+
+  @override
+  String get activityActionInvoiceCreated => 'إنشاء فاتورة';
+
+  @override
+  String get activityActionCustomerCreated => 'إنشاء عميل';
+
+  @override
+  String get activityActionRegisterCashMovement => 'حركة نقدية في الدرج';
+
+  @override
+  String get activityActionOrderVoided => 'إلغاء فاتورة';
+
+  @override
+  String get activityActionOrderReturned => 'مرتجع فاتورة';
+
+  @override
+  String get activityActionPurchaseOrderDeleted => 'حذف أمر شراء';
+
+  @override
+  String get activityActionAnyDeleted => 'أي حذف';
+
+  @override
+  String get activityDateRangeAll => 'كل الفترات';
+
+  @override
+  String get activityDateRangeToday => 'اليوم';
+
+  @override
+  String get activityDateRange7Days => 'آخر 7 أيام';
+
+  @override
+  String get activityDateRange30Days => 'آخر 30 يومًا';
+
+  @override
+  String get activityDateRangeCustom => 'فترة مخصصة';
+
+  @override
+  String get activityOrderingNewest => 'الأحدث أولًا';
+
+  @override
+  String get activityOrderingOldest => 'الأقدم أولًا';
+
+  @override
+  String get activityOrderingHighestRisk => 'الأعلى مخاطرة أولًا';
+
+  @override
+  String get activityOrderingNewestReceived => 'الأحدث وصولًا أولًا';
+
+  @override
+  String get activityEventCheckoutCompleted => 'اكتملت عملية بيع';
+
+  @override
+  String get activityEventOrderPaid => 'تم دفع فاتورة';
+
+  @override
+  String get activityEventOrderVoided => 'ألغيت فاتورة';
+
+  @override
+  String get activityEventOrderReturned => 'تم تسجيل مرتجع';
+
+  @override
+  String get activityEventRegisterSessionStarted => 'بدأت جلسة درج';
+
+  @override
+  String get activityEventRegisterSessionClosed => 'أغلقت جلسة درج';
+
+  @override
+  String get activityEventRegisterCashMovementCreated => 'سجلت حركة نقدية';
+
+  @override
+  String get activityEventPosLineDeleted => 'حذف سطر من سلة البيع';
+
+  @override
+  String get activityEventPurchaseLineDeleted => 'حذف سطر من مسودة الشراء';
+
+  @override
+  String get activityEventPurchaseOrderCreated => 'أنشئ أمر شراء';
+
+  @override
+  String get activityEventPurchaseOrderUpdated => 'حُدث أمر شراء';
+
+  @override
+  String get activityEventPurchaseOrderSubmitted => 'أرسل أمر شراء';
+
+  @override
+  String get activityEventPurchaseOrderReceived => 'استلم أمر شراء';
+
+  @override
+  String get activityEventPurchaseOrderAdjusted => 'عدّل أمر شراء';
+
+  @override
+  String get activityEventPurchaseOrderCancelled => 'ألغي أمر شراء';
+
+  @override
+  String get activityEventPurchaseOrderDeleted => 'حذف أمر شراء';
+
+  @override
+  String get activityEventCustomerCreated => 'أنشئ عميل';
+
+  @override
+  String get activityEventCustomerUpdated => 'حُدث عميل';
+
+  @override
+  String get activityEventCustomerDeleted => 'حذف عميل';
+
+  @override
+  String get activityEventUserCreated => 'أنشئ مستخدم';
+
+  @override
+  String get activityEventUserUpdated => 'حُدث مستخدم';
+
+  @override
+  String get activityEventUserDeleted => 'حذف مستخدم';
+
+  @override
+  String get activityEventAppFlutterError => 'سجل التطبيق خطأ';
+
+  @override
+  String get activityEventAppPlatformError => 'سجل النظام خطأ';
+
+  @override
+  String get activityEventAuthSessionStarted => 'بدأت جلسة دخول';
+
+  @override
+  String get activityEventLoginSucceeded => 'نجح تسجيل الدخول';
+
+  @override
+  String get activityEventLoginFailed => 'فشل تسجيل الدخول';
+
+  @override
+  String get activityEventLogout => 'سجل المستخدم خروجه';
+
+  @override
+  String get activityEventAnalyticsExportStarted => 'بدأ تصدير التحليلات';
+
+  @override
+  String get activityEventAnalyticsExportCompleted => 'اكتمل تصدير التحليلات';
+
+  @override
+  String get activityEventAnalyticsExportFailed => 'فشل تصدير التحليلات';
+
+  @override
+  String get activityEventReportGenerated => 'أنشئ تقرير';
+
+  @override
+  String get activityEventReportGenerationFailed => 'فشل إنشاء تقرير';
+
+  @override
+  String get activityEventReportPreviewed => 'عاين المستخدم تقريرًا';
+
+  @override
+  String get activityEventReportPrinted => 'طبع المستخدم تقريرًا';
+
+  @override
+  String get activityEventReportShared => 'شارك المستخدم تقريرًا';
+
+  @override
   String get reportsTitle => 'التقارير';
 
   @override

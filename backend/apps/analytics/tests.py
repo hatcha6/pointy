@@ -32,6 +32,49 @@ class AnalyticsEventApiTests(TestCase):
         )
         self.cashier.groups.add(Group.objects.get(name=CASHIER_GROUP))
 
+    def _manager_client(self):
+        client = APIClient()
+        client.force_authenticate(user=self.manager)
+        return client
+
+    def _occurred_at(self, day, hour=9):
+        return timezone.datetime(
+            2026,
+            5,
+            day,
+            hour,
+            0,
+            tzinfo=timezone.get_current_timezone(),
+        )
+
+    def _create_event(
+        self,
+        *,
+        name,
+        occurred_at=None,
+        event_type=AnalyticsEvent.EventType.USAGE,
+        severity=AnalyticsEvent.Severity.INFO,
+        source=AnalyticsEvent.Source.BACKEND,
+        received_by=None,
+        session_id="",
+        risk_score=None,
+    ):
+        return AnalyticsEvent.objects.create(
+            event_type=event_type,
+            name=name,
+            severity=severity,
+            source=source,
+            occurred_at=occurred_at or timezone.now(),
+            received_by=received_by,
+            session_id=session_id,
+            risk_score=risk_score,
+        )
+
+    def _list_event_names(self, params):
+        response = self._manager_client().get(reverse("analytics-event-list"), params)
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        return [event["name"] for event in response.data["results"]]
+
     def test_cashier_can_ingest_usage_event(self):
         client = APIClient()
         client.force_authenticate(user=self.cashier)
@@ -133,6 +176,187 @@ class AnalyticsEventApiTests(TestCase):
         self.assertEqual(manager_response.status_code, status.HTTP_200_OK)
         self.assertEqual(manager_response.data["results"][0]["name"], "app.started")
         self.assertEqual(cashier_response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_manager_list_filters_activity_fields_and_ordering(self):
+        self._create_event(
+            name="app.old",
+            occurred_at=self._occurred_at(19, 8),
+            received_by=self.manager,
+            session_id="register-0",
+            risk_score=5,
+        )
+        self._create_event(
+            name="sales.checkout.completed",
+            occurred_at=self._occurred_at(20, 9),
+            received_by=self.cashier,
+            session_id="register-1",
+            risk_score=82,
+        )
+        self._create_event(
+            name="app.new",
+            occurred_at=self._occurred_at(21, 10),
+            received_by=self.manager,
+            session_id="register-2",
+            risk_score=40,
+        )
+
+        self.assertEqual(
+            self._list_event_names(
+                {
+                    "occurred_at_after": "2026-05-20T00:00:00Z",
+                    "occurred_at_before": "2026-05-20T23:59:59Z",
+                }
+            ),
+            ["sales.checkout.completed"],
+        )
+        self.assertEqual(
+            self._list_event_names(
+                {
+                    "date_from": "2026-05-20T00:00:00Z",
+                    "date_to": "2026-05-20T23:59:59Z",
+                }
+            ),
+            ["sales.checkout.completed"],
+        )
+        self.assertEqual(
+            self._list_event_names({"user": self.cashier.id}),
+            ["sales.checkout.completed"],
+        )
+        self.assertEqual(
+            self._list_event_names(
+                {
+                    "risk_score_min": 80,
+                    "risk_score_max": 90,
+                }
+            ),
+            ["sales.checkout.completed"],
+        )
+        self.assertEqual(
+            self._list_event_names({"name": "sales.checkout.completed"}),
+            ["sales.checkout.completed"],
+        )
+        self.assertEqual(
+            self._list_event_names({"session_id": "register-1"}),
+            ["sales.checkout.completed"],
+        )
+        self.assertEqual(
+            self._list_event_names({"register_session": "register-1"}),
+            ["sales.checkout.completed"],
+        )
+        self.assertEqual(
+            self._list_event_names(
+                {
+                    "risk_score_min": 0,
+                    "ordering": "occurred_at",
+                }
+            ),
+            ["app.old", "sales.checkout.completed", "app.new"],
+        )
+
+    def test_manager_list_filters_by_action_categories(self):
+        self._create_event(
+            name="sale.void.risk",
+            event_type=AnalyticsEvent.EventType.FRAUD_SIGNAL,
+            occurred_at=self._occurred_at(20, 8),
+        )
+        action_names = {
+            "pos_line_deleted": "pos.cart.line.deleted",
+            "purchase_line_deleted": "purchasing.draft.line.deleted",
+            "invoice_created": "sales.checkout.completed",
+            "customer_created": "customers.customer.created",
+            "register_cash_movement": "sales.register_cash_movement.created",
+            "order_voided": "sales.order.voided",
+            "order_returned": "sales.order.returned",
+            "purchase_order_deleted": "purchasing.purchase_order.deleted",
+        }
+        for index, event_name in enumerate(action_names.values(), start=9):
+            self._create_event(
+                name=event_name,
+                event_type=AnalyticsEvent.EventType.AUDIT,
+                occurred_at=self._occurred_at(20, index),
+            )
+        self._create_event(
+            name="app.started",
+            occurred_at=self._occurred_at(21, 9),
+        )
+
+        self.assertEqual(
+            self._list_event_names({"action": "fraud_signal"}),
+            ["sale.void.risk"],
+        )
+        for action_name, event_name in action_names.items():
+            with self.subTest(action=action_name):
+                self.assertEqual(
+                    self._list_event_names({"action": action_name}),
+                    [event_name],
+                )
+        self.assertCountEqual(
+            self._list_event_names({"action": "any_deleted"}),
+            [
+                "pos.cart.line.deleted",
+                "purchasing.draft.line.deleted",
+                "purchasing.purchase_order.deleted",
+            ],
+        )
+
+    def test_manager_list_filters_reviewable_activity_scope(self):
+        self._create_event(
+            name="backend.request",
+            event_type=AnalyticsEvent.EventType.PERFORMANCE,
+            occurred_at=self._occurred_at(20, 8),
+        )
+        self._create_event(
+            name="frontend.interaction",
+            event_type=AnalyticsEvent.EventType.USAGE,
+            occurred_at=self._occurred_at(20, 9),
+        )
+        self._create_event(
+            name="sales.checkout.completed",
+            event_type=AnalyticsEvent.EventType.AUDIT,
+            occurred_at=self._occurred_at(20, 10),
+        )
+        self._create_event(
+            name="sale.void.risk",
+            event_type=AnalyticsEvent.EventType.FRAUD_SIGNAL,
+            occurred_at=self._occurred_at(20, 11),
+        )
+
+        self.assertEqual(
+            self._list_event_names({"activity_scope": "reviewable"}),
+            ["sale.void.risk", "sales.checkout.completed"],
+        )
+        technical_names = self._list_event_names(
+            {
+                "activity_scope": "technical",
+                "ordering": "occurred_at",
+            }
+        )
+        self.assertIn("backend.request", technical_names)
+        self.assertIn("frontend.interaction", technical_names)
+        self.assertNotIn("sales.checkout.completed", technical_names)
+        self.assertNotIn("sale.void.risk", technical_names)
+
+    def test_manager_list_rejects_invalid_filter_ranges(self):
+        invalid_queries = (
+            {
+                "occurred_at_after": "2026-05-21T00:00:00Z",
+                "occurred_at_before": "2026-05-20T00:00:00Z",
+            },
+            {
+                "date_from": "2026-05-21T00:00:00Z",
+                "date_to": "2026-05-20T00:00:00Z",
+            },
+            {
+                "risk_score_min": 90,
+                "risk_score_max": 10,
+            },
+        )
+        client = self._manager_client()
+
+        for query in invalid_queries:
+            with self.subTest(query=query):
+                response = client.get(reverse("analytics-event-list"), query)
+                self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_manager_can_export_filtered_events_zip(self):
         sale_event = AnalyticsEvent.objects.create(

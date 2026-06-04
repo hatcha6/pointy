@@ -1,5 +1,7 @@
 import 'dart:math';
 
+import 'query.dart';
+
 enum AnalyticsEventType {
   usage,
   error,
@@ -149,6 +151,29 @@ class AnalyticsEventDraft {
     );
   }
 
+  factory AnalyticsEventDraft.audit({
+    required String name,
+    AnalyticsEventSeverity severity = AnalyticsEventSeverity.info,
+    Map<String, Object?> attributes = const {},
+    Map<String, num> metrics = const {},
+    String? sessionId,
+    String? entityType,
+    String? entityId,
+    DateTime? occurredAt,
+  }) {
+    return AnalyticsEventDraft(
+      eventType: AnalyticsEventType.audit,
+      name: name,
+      severity: severity,
+      occurredAt: occurredAt,
+      sessionId: sessionId,
+      entityType: entityType,
+      entityId: entityId,
+      attributes: attributes,
+      metrics: metrics,
+    );
+  }
+
   factory AnalyticsEventDraft.fromJson(Map<String, Object?> json) {
     return AnalyticsEventDraft(
       clientEventId: json['client_event_id']?.toString(),
@@ -272,6 +297,413 @@ class AnalyticsIngestResult {
   final int duplicates;
   final List<String> eventIds;
   final List<String> duplicateEventIds;
+}
+
+enum AnalyticsEventTypeFilter implements QueryFilterSet {
+  all(null),
+  audit(QueryFilter(parameter: 'event_type', value: 'audit')),
+  fraudSignal(QueryFilter(parameter: 'event_type', value: 'fraud_signal')),
+  security(QueryFilter(parameter: 'event_type', value: 'security')),
+  error(QueryFilter(parameter: 'event_type', value: 'error')),
+  performance(QueryFilter(parameter: 'event_type', value: 'performance')),
+  usage(QueryFilter(parameter: 'event_type', value: 'usage'));
+
+  const AnalyticsEventTypeFilter(this._filter);
+
+  final QueryFilter? _filter;
+
+  @override
+  Iterable<QueryFilter> get filters {
+    final filter = _filter;
+    return filter == null ? const [] : [filter];
+  }
+}
+
+enum AnalyticsEventSeverityFilter implements QueryFilterSet {
+  all(null),
+  warning(QueryFilter(parameter: 'severity', value: 'warning')),
+  error(QueryFilter(parameter: 'severity', value: 'error')),
+  critical(QueryFilter(parameter: 'severity', value: 'critical')),
+  info(QueryFilter(parameter: 'severity', value: 'info')),
+  debug(QueryFilter(parameter: 'severity', value: 'debug'));
+
+  const AnalyticsEventSeverityFilter(this._filter);
+
+  final QueryFilter? _filter;
+
+  @override
+  Iterable<QueryFilter> get filters {
+    final filter = _filter;
+    return filter == null ? const [] : [filter];
+  }
+}
+
+enum AnalyticsEventSourceFilter implements QueryFilterSet {
+  all(null),
+  backend(QueryFilter(parameter: 'source', value: 'backend')),
+  frontend(QueryFilter(parameter: 'source', value: 'frontend')),
+  printAgent(QueryFilter(parameter: 'source', value: 'print_agent')),
+  integration(QueryFilter(parameter: 'source', value: 'integration'));
+
+  const AnalyticsEventSourceFilter(this._filter);
+
+  final QueryFilter? _filter;
+
+  @override
+  Iterable<QueryFilter> get filters {
+    final filter = _filter;
+    return filter == null ? const [] : [filter];
+  }
+}
+
+enum AnalyticsEventActivityScope implements QueryFilterSet {
+  reviewable(QueryFilter(parameter: 'activity_scope', value: 'reviewable')),
+  all(QueryFilter(parameter: 'activity_scope', value: 'all')),
+  technical(QueryFilter(parameter: 'activity_scope', value: 'technical'));
+
+  const AnalyticsEventActivityScope(this._filter);
+
+  final QueryFilter _filter;
+
+  @override
+  Iterable<QueryFilter> get filters => [_filter];
+}
+
+enum AnalyticsEventActionFilter implements QueryFilterSet {
+  all(null),
+  fraudSignal(QueryFilter(parameter: 'action', value: 'fraud_signal')),
+  posLineDeleted(QueryFilter(parameter: 'action', value: 'pos_line_deleted')),
+  purchaseLineDeleted(
+    QueryFilter(parameter: 'action', value: 'purchase_line_deleted'),
+  ),
+  invoiceCreated(QueryFilter(parameter: 'action', value: 'invoice_created')),
+  customerCreated(QueryFilter(parameter: 'action', value: 'customer_created')),
+  registerCashMovement(
+    QueryFilter(parameter: 'action', value: 'register_cash_movement'),
+  ),
+  orderVoided(QueryFilter(parameter: 'action', value: 'order_voided')),
+  orderReturned(QueryFilter(parameter: 'action', value: 'order_returned')),
+  purchaseOrderDeleted(
+    QueryFilter(parameter: 'action', value: 'purchase_order_deleted'),
+  ),
+  anyDeleted(QueryFilter(parameter: 'action', value: 'any_deleted'));
+
+  const AnalyticsEventActionFilter(this._filter);
+
+  final QueryFilter? _filter;
+
+  @override
+  Iterable<QueryFilter> get filters {
+    final filter = _filter;
+    return filter == null ? const [] : [filter];
+  }
+}
+
+enum AnalyticsEventDateRange { all, today, last7Days, last30Days, custom }
+
+enum AnalyticsEventOrdering implements QueryOrdering {
+  newest('-occurred_at'),
+  oldest('occurred_at'),
+  highestRisk('-risk_score'),
+  newestReceived('-created_at');
+
+  const AnalyticsEventOrdering(this.apiValue);
+
+  @override
+  final String apiValue;
+}
+
+class AnalyticsEventQuery extends ModelQuery {
+  const AnalyticsEventQuery({
+    this.search = '',
+    this.type = AnalyticsEventTypeFilter.all,
+    this.severity = AnalyticsEventSeverityFilter.all,
+    this.source = AnalyticsEventSourceFilter.all,
+    this.activityScope = AnalyticsEventActivityScope.reviewable,
+    this.action = AnalyticsEventActionFilter.all,
+    this.dateRange = AnalyticsEventDateRange.last7Days,
+    this.occurredAfter,
+    this.occurredBefore,
+    this.userId,
+    this.userLabel = '',
+    this.registerSessionId = '',
+    this.entityType = '',
+    this.entityId = '',
+    this.minRiskScore,
+    this.ordering = AnalyticsEventOrdering.newest,
+  });
+
+  @override
+  final String search;
+  final AnalyticsEventTypeFilter type;
+  final AnalyticsEventSeverityFilter severity;
+  final AnalyticsEventSourceFilter source;
+  final AnalyticsEventActivityScope activityScope;
+  final AnalyticsEventActionFilter action;
+  final AnalyticsEventDateRange dateRange;
+  final DateTime? occurredAfter;
+  final DateTime? occurredBefore;
+  final int? userId;
+  final String userLabel;
+  final String registerSessionId;
+  final String entityType;
+  final String entityId;
+  final int? minRiskScore;
+  @override
+  final AnalyticsEventOrdering ordering;
+
+  @override
+  Iterable<QueryFilter> get filters => [
+    ...type.filters,
+    ...severity.filters,
+    ...source.filters,
+    ...activityScope.filters,
+    ...action.filters,
+  ];
+
+  int get activeFilterCount {
+    return [
+      type != AnalyticsEventTypeFilter.all,
+      severity != AnalyticsEventSeverityFilter.all,
+      source != AnalyticsEventSourceFilter.all,
+      activityScope != AnalyticsEventActivityScope.reviewable,
+      action != AnalyticsEventActionFilter.all,
+      dateRange != AnalyticsEventDateRange.all,
+      userId != null,
+      registerSessionId.trim().isNotEmpty,
+      entityType.trim().isNotEmpty,
+      entityId.trim().isNotEmpty,
+      minRiskScore != null,
+    ].where((isActive) => isActive).length;
+  }
+
+  @override
+  Map<String, String> toQueryParameters({required int page}) {
+    return {
+      if (search.trim().isNotEmpty) 'search': search.trim(),
+      for (final filter in filters) filter.parameter: filter.value,
+      if (occurredAfter != null)
+        'occurred_at_after': occurredAfter!.toUtc().toIso8601String(),
+      if (occurredBefore != null)
+        'occurred_at_before': occurredBefore!.toUtc().toIso8601String(),
+      if (userId != null) 'received_by': '$userId',
+      if (registerSessionId.trim().isNotEmpty)
+        'session_id': registerSessionId.trim(),
+      if (entityType.trim().isNotEmpty) 'entity_type': entityType.trim(),
+      if (entityId.trim().isNotEmpty) 'entity_id': entityId.trim(),
+      if (minRiskScore != null) 'risk_score_min': '$minRiskScore',
+      'ordering': ordering.apiValue,
+      'page': '$page',
+    };
+  }
+
+  AnalyticsEventQuery copyWith({
+    String? search,
+    AnalyticsEventTypeFilter? type,
+    AnalyticsEventSeverityFilter? severity,
+    AnalyticsEventSourceFilter? source,
+    AnalyticsEventActivityScope? activityScope,
+    AnalyticsEventActionFilter? action,
+    AnalyticsEventDateRange? dateRange,
+    DateTime? occurredAfter,
+    DateTime? occurredBefore,
+    bool clearOccurredAfter = false,
+    bool clearOccurredBefore = false,
+    int? userId,
+    bool clearUser = false,
+    String? userLabel,
+    String? registerSessionId,
+    String? entityType,
+    String? entityId,
+    int? minRiskScore,
+    bool clearMinRiskScore = false,
+    AnalyticsEventOrdering? ordering,
+  }) {
+    return AnalyticsEventQuery(
+      search: search ?? this.search,
+      type: type ?? this.type,
+      severity: severity ?? this.severity,
+      source: source ?? this.source,
+      activityScope: activityScope ?? this.activityScope,
+      action: action ?? this.action,
+      dateRange: dateRange ?? this.dateRange,
+      occurredAfter: clearOccurredAfter
+          ? null
+          : occurredAfter ?? this.occurredAfter,
+      occurredBefore: clearOccurredBefore
+          ? null
+          : occurredBefore ?? this.occurredBefore,
+      userId: clearUser ? null : userId ?? this.userId,
+      userLabel: clearUser ? '' : userLabel ?? this.userLabel,
+      registerSessionId: registerSessionId ?? this.registerSessionId,
+      entityType: entityType ?? this.entityType,
+      entityId: entityId ?? this.entityId,
+      minRiskScore: clearMinRiskScore
+          ? null
+          : minRiskScore ?? this.minRiskScore,
+      ordering: ordering ?? this.ordering,
+    );
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return other is AnalyticsEventQuery &&
+        other.search == search &&
+        other.type == type &&
+        other.severity == severity &&
+        other.source == source &&
+        other.activityScope == activityScope &&
+        other.action == action &&
+        other.dateRange == dateRange &&
+        other.occurredAfter == occurredAfter &&
+        other.occurredBefore == occurredBefore &&
+        other.userId == userId &&
+        other.userLabel == userLabel &&
+        other.registerSessionId == registerSessionId &&
+        other.entityType == entityType &&
+        other.entityId == entityId &&
+        other.minRiskScore == minRiskScore &&
+        other.ordering == ordering;
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    search,
+    type,
+    severity,
+    source,
+    activityScope,
+    action,
+    dateRange,
+    occurredAfter,
+    occurredBefore,
+    userId,
+    userLabel,
+    registerSessionId,
+    entityType,
+    entityId,
+    minRiskScore,
+    ordering,
+  );
+}
+
+class AnalyticsEventPage {
+  const AnalyticsEventPage({
+    required this.events,
+    required this.hasMore,
+    required this.totalCount,
+  });
+
+  final List<AnalyticsEventRecord> events;
+  final bool hasMore;
+  final int totalCount;
+
+  factory AnalyticsEventPage.fromJson(Map<String, Object?> json) {
+    final results = (json['results'] as List<Object?>? ?? const [])
+        .whereType<Map<String, Object?>>()
+        .map(AnalyticsEventRecord.fromJson)
+        .toList(growable: false);
+    return AnalyticsEventPage(
+      events: results,
+      hasMore: json['next'] != null,
+      totalCount: _intFromJson(json['count']),
+    );
+  }
+}
+
+class AnalyticsEventRecord {
+  const AnalyticsEventRecord({
+    required this.id,
+    required this.clientEventId,
+    required this.eventType,
+    required this.name,
+    required this.severity,
+    required this.source,
+    required this.occurredAt,
+    required this.attributes,
+    required this.metrics,
+    this.receivedBy,
+    this.receivedByUsername = '',
+    this.sessionId = '',
+    this.deviceId = '',
+    this.installationId = '',
+    this.appVersion = '',
+    this.platform = '',
+    this.requestPath = '',
+    this.ipAddress = '',
+    this.userAgent = '',
+    this.traceId = '',
+    this.entityType = '',
+    this.entityId = '',
+    this.riskScore,
+  });
+
+  final int id;
+  final String clientEventId;
+  final AnalyticsEventType eventType;
+  final String name;
+  final AnalyticsEventSeverity severity;
+  final AnalyticsEventSource source;
+  final DateTime occurredAt;
+  final int? receivedBy;
+  final String receivedByUsername;
+  final String sessionId;
+  final String deviceId;
+  final String installationId;
+  final String appVersion;
+  final String platform;
+  final String requestPath;
+  final String ipAddress;
+  final String userAgent;
+  final String traceId;
+  final String entityType;
+  final String entityId;
+  final int? riskScore;
+  final Map<String, Object?> attributes;
+  final Map<String, Object?> metrics;
+
+  bool get isFraudSignal => eventType == AnalyticsEventType.fraudSignal;
+
+  bool get hasRiskScore => riskScore != null;
+
+  String get registerSessionReference {
+    final attributeSession = attributes['register_session_id'];
+    if (attributeSession != null && attributeSession.toString().isNotEmpty) {
+      return 'register:$attributeSession';
+    }
+    if (entityType == 'register_session' && entityId.isNotEmpty) {
+      return 'register:$entityId';
+    }
+    return sessionId;
+  }
+
+  factory AnalyticsEventRecord.fromJson(Map<String, Object?> json) {
+    return AnalyticsEventRecord(
+      id: _intFromJson(json['id']),
+      clientEventId: json['client_event_id']?.toString() ?? '',
+      eventType: analyticsEventTypeFromJson(json['event_type']?.toString()),
+      name: json['name']?.toString() ?? '',
+      severity: analyticsEventSeverityFromJson(json['severity']?.toString()),
+      source: analyticsEventSourceFromJson(json['source']?.toString()),
+      occurredAt: _dateTimeFromJson(json['occurred_at']),
+      receivedBy: _nullableIntFromJson(json['received_by']),
+      receivedByUsername: json['received_by_username']?.toString() ?? '',
+      sessionId: json['session_id']?.toString() ?? '',
+      deviceId: json['device_id']?.toString() ?? '',
+      installationId: json['installation_id']?.toString() ?? '',
+      appVersion: json['app_version']?.toString() ?? '',
+      platform: json['platform']?.toString() ?? '',
+      requestPath: json['request_path']?.toString() ?? '',
+      ipAddress: json['ip_address']?.toString() ?? '',
+      userAgent: json['user_agent']?.toString() ?? '',
+      traceId: json['trace_id']?.toString() ?? '',
+      entityType: json['entity_type']?.toString() ?? '',
+      entityId: json['entity_id']?.toString() ?? '',
+      riskScore: _nullableIntFromJson(json['risk_score']),
+      attributes: _objectMapFromJson(json['attributes']),
+      metrics: _objectMapFromJson(json['metrics']),
+    );
+  }
 }
 
 String analyticsEventTypeToJson(AnalyticsEventType type) {
@@ -428,4 +860,27 @@ List<String> _stringListFromJson(Object? value) {
     return const [];
   }
   return value.map((item) => item.toString()).toList(growable: false);
+}
+
+int _intFromJson(Object? value) {
+  if (value is int) {
+    return value;
+  }
+  if (value is num) {
+    return value.toInt();
+  }
+  return int.tryParse((value ?? 0).toString()) ?? 0;
+}
+
+int? _nullableIntFromJson(Object? value) {
+  if (value == null || value.toString().isEmpty) {
+    return null;
+  }
+  if (value is int) {
+    return value;
+  }
+  if (value is num) {
+    return value.toInt();
+  }
+  return int.tryParse(value.toString());
 }

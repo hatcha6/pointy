@@ -146,6 +146,13 @@ class PosApiService {
     return _analytics.ingestEvents(events);
   }
 
+  Future<AnalyticsEventPage> fetchAnalyticsEvents({
+    required AnalyticsEventQuery query,
+    int page = 1,
+  }) {
+    return _analytics.fetchEvents(query: query, page: page);
+  }
+
   Future<BusinessAlertDigest> fetchBusinessNotifications({
     bool includeHidden = true,
   }) {
@@ -507,6 +514,10 @@ class PosApiService {
     int page = 1,
   }) {
     return _sales.fetchOrders(query: query, page: page);
+  }
+
+  Future<SaleOrder> fetchOrder(int saleOrderId) {
+    return _sales.fetchOrder(saleOrderId);
   }
 
   Future<SaleDiscountPreview> previewSaleDiscounts(

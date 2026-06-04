@@ -18,6 +18,7 @@ enum AppNavigationDestination {
   registerSessions,
   discounts,
   reports,
+  activityLog,
   deviceSettings,
   users,
   settings,
@@ -39,6 +40,7 @@ class AppNavigationDrawer extends StatelessWidget {
     this.onOpenDashboard,
     this.onOpenDiscounts,
     this.onOpenReports,
+    this.onOpenActivityLog,
     this.onOpenCategories,
     this.onOpenUsers,
     this.onOpenShopSettings,
@@ -56,6 +58,7 @@ class AppNavigationDrawer extends StatelessWidget {
   final VoidCallback? onOpenDashboard;
   final VoidCallback? onOpenDiscounts;
   final VoidCallback? onOpenReports;
+  final VoidCallback? onOpenActivityLog;
   final VoidCallback? onOpenCategories;
   final VoidCallback? onOpenUsers;
   final VoidCallback? onOpenShopSettings;
@@ -211,6 +214,14 @@ class AppNavigationDrawer extends StatelessWidget {
         selectedIcon: const Icon(Icons.summarize),
         label: l10n.reportsDrawerLabel,
         onTap: onOpenReports,
+      ),
+      _DrawerDestination(
+        destination: AppNavigationDestination.activityLog,
+        capability: AppCapability.viewActivityLog,
+        icon: const Icon(Icons.manage_search_outlined),
+        selectedIcon: const Icon(Icons.manage_search),
+        label: l10n.activityLogDrawerLabel,
+        onTap: onOpenActivityLog,
       ),
       _DrawerDestination(
         destination: AppNavigationDestination.deviceSettings,

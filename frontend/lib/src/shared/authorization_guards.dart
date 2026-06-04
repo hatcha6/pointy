@@ -135,6 +135,29 @@ class ReportsGuard extends StatelessWidget {
   }
 }
 
+class ActivityLogGuard extends StatelessWidget {
+  const ActivityLogGuard({
+    super.key,
+    required this.capabilities,
+    required this.child,
+    this.fallback = const AuthorizationDeniedView(),
+  });
+
+  final AuthorizationCapabilities capabilities;
+  final Widget child;
+  final Widget fallback;
+
+  @override
+  Widget build(BuildContext context) {
+    return AuthorizationGuard(
+      capabilities: capabilities,
+      capability: AppCapability.viewActivityLog,
+      fallback: fallback,
+      child: child,
+    );
+  }
+}
+
 class CheckoutGuard extends StatelessWidget {
   const CheckoutGuard({
     super.key,

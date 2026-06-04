@@ -61,6 +61,7 @@ class ReportsScreen extends StatefulWidget {
     required this.onLogout,
     this.onOpenDashboard,
     this.onOpenDiscounts,
+    this.onOpenActivityLog,
     this.onOpenUsers,
     this.onOpenShopSettings,
     this.onPreviewPdf,
@@ -79,6 +80,7 @@ class ReportsScreen extends StatefulWidget {
   final VoidCallback onOpenDeviceSettings;
   final VoidCallback? onOpenDashboard;
   final VoidCallback? onOpenDiscounts;
+  final VoidCallback? onOpenActivityLog;
   final VoidCallback? onOpenUsers;
   final VoidCallback? onOpenShopSettings;
   final VoidCallback onLogout;
@@ -119,6 +121,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
         onOpenDeviceSettings: widget.onOpenDeviceSettings,
         onOpenDiscounts: widget.onOpenDiscounts,
         onOpenReports: () {},
+        onOpenActivityLog: widget.onOpenActivityLog,
         onOpenUsers: widget.onOpenUsers,
         onOpenShopSettings: widget.onOpenShopSettings,
         onLogout: widget.onLogout,

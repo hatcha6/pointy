@@ -12,7 +12,10 @@ import 'data/models/pos_user.dart';
 import 'data/models/purchase_submission.dart';
 import 'data/models/analytics_event.dart';
 import 'data/models/report_run.dart';
+import 'data/models/sale_order.dart';
 import 'data/models/shop_settings.dart';
+import 'features/activity_log/views/activity_log_event_presenter.dart';
+import 'features/activity_log/views/activity_log_screen.dart';
 import 'features/catalog/view_models/catalog_view_model.dart';
 import 'features/catalog/view_models/category_management_view_model.dart';
 import 'features/catalog/views/category_management_screen.dart';
@@ -29,6 +32,7 @@ import 'features/purchasing/views/purchase_order_list_screen.dart';
 import 'features/purchasing/views/purchasing_screen.dart';
 import 'features/register_sessions/view_models/register_session_history_view_model.dart';
 import 'features/register_sessions/views/register_session_history_screen.dart';
+import 'features/register_sessions/views/sale_order_details_sheet.dart';
 import 'features/reports/pdf/report_document_builder.dart';
 import 'features/reports/pdf/report_pdf.dart';
 import 'features/reports/views/report_pdf_preview_screen.dart';
@@ -129,6 +133,10 @@ class _AuthenticatedRoutes {
           AppCapability.viewReports,
           () => push(context, reportsRouteBuilder),
         ),
+        onOpenActivityLog: guardedAction(
+          AppCapability.viewActivityLog,
+          () => push(context, activityLogRouteBuilder),
+        ),
         onOpenDeviceSettings: guardedAction(
           AppCapability.manageDeviceSettings,
           () => push(context, deviceSettingsRouteBuilder),
@@ -189,6 +197,10 @@ class _AuthenticatedRoutes {
         onOpenReports: guardedAction(
           AppCapability.viewReports,
           () => replace(routeContext, reportsRouteBuilder),
+        ),
+        onOpenActivityLog: guardedAction(
+          AppCapability.viewActivityLog,
+          () => replace(routeContext, activityLogRouteBuilder),
         ),
         onOpenDeviceSettings: guardedAction(
           AppCapability.manageDeviceSettings,
@@ -254,6 +266,10 @@ class _AuthenticatedRoutes {
           AppCapability.viewReports,
           () => replace(routeContext, reportsRouteBuilder),
         ),
+        onOpenActivityLog: guardedAction(
+          AppCapability.viewActivityLog,
+          () => replace(routeContext, activityLogRouteBuilder),
+        ),
         onOpenDeviceSettings: guardedAction(
           AppCapability.manageDeviceSettings,
           () => replace(routeContext, deviceSettingsRouteBuilder),
@@ -309,6 +325,10 @@ class _AuthenticatedRoutes {
         onOpenReports: guardedAction(
           AppCapability.viewReports,
           () => replace(routeContext, reportsRouteBuilder),
+        ),
+        onOpenActivityLog: guardedAction(
+          AppCapability.viewActivityLog,
+          () => replace(routeContext, activityLogRouteBuilder),
         ),
         onOpenDeviceSettings: guardedAction(
           AppCapability.manageDeviceSettings,
@@ -370,6 +390,10 @@ class _AuthenticatedRoutes {
           AppCapability.viewReports,
           () => replace(routeContext, reportsRouteBuilder),
         ),
+        onOpenActivityLog: guardedAction(
+          AppCapability.viewActivityLog,
+          () => replace(routeContext, activityLogRouteBuilder),
+        ),
         onOpenDeviceSettings: guardedAction(
           AppCapability.manageDeviceSettings,
           () => replace(routeContext, deviceSettingsRouteBuilder),
@@ -429,6 +453,10 @@ class _AuthenticatedRoutes {
         onOpenReports: guardedAction(
           AppCapability.viewReports,
           () => replace(routeContext, reportsRouteBuilder),
+        ),
+        onOpenActivityLog: guardedAction(
+          AppCapability.viewActivityLog,
+          () => replace(routeContext, activityLogRouteBuilder),
         ),
         onOpenDeviceSettings: guardedAction(
           AppCapability.manageDeviceSettings,
@@ -503,6 +531,10 @@ class _AuthenticatedRoutes {
           AppCapability.viewReports,
           () => replace(routeContext, reportsRouteBuilder),
         ),
+        onOpenActivityLog: guardedAction(
+          AppCapability.viewActivityLog,
+          () => replace(routeContext, activityLogRouteBuilder),
+        ),
         onOpenDeviceSettings: guardedAction(
           AppCapability.manageDeviceSettings,
           () => replace(routeContext, deviceSettingsRouteBuilder),
@@ -556,6 +588,10 @@ class _AuthenticatedRoutes {
         onOpenReports: guardedAction(
           AppCapability.viewReports,
           () => replace(routeContext, reportsRouteBuilder),
+        ),
+        onOpenActivityLog: guardedAction(
+          AppCapability.viewActivityLog,
+          () => replace(routeContext, activityLogRouteBuilder),
         ),
         onOpenDeviceSettings: guardedAction(
           AppCapability.manageDeviceSettings,
@@ -616,6 +652,10 @@ class _AuthenticatedRoutes {
           AppCapability.manageDeviceSettings,
           () => replace(routeContext, deviceSettingsRouteBuilder),
         ),
+        onOpenActivityLog: guardedAction(
+          AppCapability.viewActivityLog,
+          () => replace(routeContext, activityLogRouteBuilder),
+        ),
         onOpenUsers: capabilities.actionFor(
           AppCapability.manageUsers,
           () => replace(routeContext, usersRouteBuilder),
@@ -630,6 +670,114 @@ class _AuthenticatedRoutes {
         onLogout: () => logout(routeContext),
       ),
     );
+  }
+
+  Widget activityLogRouteBuilder(BuildContext routeContext) {
+    return _screen(
+      'activity_log',
+      ActivityLogScreen(
+        viewModel: dependencies.activityLogViewModel,
+        currentUser: currentUser,
+        capabilities: capabilities,
+        onOpenDashboard: guardedAction(
+          AppCapability.viewDashboard,
+          () => openDashboard(routeContext),
+        ),
+        onOpenPos: guardedAction(
+          AppCapability.accessPos,
+          () => openPos(routeContext),
+        ),
+        onOpenCatalog: guardedAction(
+          AppCapability.viewCatalogManagement,
+          () => replace(routeContext, catalogRouteBuilder),
+        ),
+        onOpenCategories: guardedAction(
+          AppCapability.manageCategories,
+          () => replace(routeContext, categoryRouteBuilder),
+        ),
+        onOpenPurchasing: guardedAction(
+          AppCapability.accessPurchasing,
+          () => replace(routeContext, purchasingRouteBuilder),
+        ),
+        onOpenContacts: guardedAction(
+          AppCapability.manageContacts,
+          () => replace(routeContext, contactsRouteBuilder),
+        ),
+        onOpenRegisterSessions: guardedAction(
+          AppCapability.viewRegisterSessions,
+          () => replace(routeContext, registerSessionsRouteBuilder),
+        ),
+        onOpenDiscounts: guardedAction(
+          AppCapability.viewDiscountRules,
+          () => replace(routeContext, discountsRouteBuilder),
+        ),
+        onOpenReports: guardedAction(
+          AppCapability.viewReports,
+          () => replace(routeContext, reportsRouteBuilder),
+        ),
+        onOpenDeviceSettings: guardedAction(
+          AppCapability.manageDeviceSettings,
+          () => replace(routeContext, deviceSettingsRouteBuilder),
+        ),
+        onOpenUsers: capabilities.actionFor(
+          AppCapability.manageUsers,
+          () => replace(routeContext, usersRouteBuilder),
+        ),
+        onOpenShopSettings: capabilities.actionFor(
+          AppCapability.manageShopSettings,
+          () => replace(routeContext, shopSettingsRouteBuilder),
+        ),
+        onOpenTarget: _openActivityTarget,
+        onLogout: () => logout(routeContext),
+      ),
+    );
+  }
+
+  Future<void> _openActivityTarget(
+    BuildContext context,
+    ActivityLogDrillDownTarget target,
+  ) async {
+    final l10n = AppLocalizations.of(context)!;
+    final messenger = ScaffoldMessenger.of(context);
+
+    switch (target.type) {
+      case ActivityLogDrillDownType.saleOrder:
+        final result = await dependencies.saleRepository.loadOrder(target.id);
+        if (!context.mounted) {
+          return;
+        }
+        switch (result) {
+          case Ok<SaleOrder>():
+            await showSaleOrderDetailsSheet(context, result.value);
+          case Error<SaleOrder>():
+            messenger.showSnackBar(
+              SnackBar(content: Text(l10n.activityLogOpenTargetError)),
+            );
+        }
+      case ActivityLogDrillDownType.purchaseOrder:
+        final result = await dependencies.purchaseRepository.loadPurchaseOrder(
+          target.id,
+        );
+        if (!context.mounted) {
+          return;
+        }
+        switch (result) {
+          case Ok<PurchaseOrder>():
+            await Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => PurchaseOrderDetailsScreen(
+                  purchaseRepository: dependencies.purchaseRepository,
+                  initialOrder: result.value,
+                  capabilities: capabilities,
+                ),
+              ),
+            );
+          case Error<PurchaseOrder>():
+            messenger.showSnackBar(
+              SnackBar(content: Text(l10n.activityLogOpenTargetError)),
+            );
+        }
+    }
   }
 
   Widget deviceSettingsRouteBuilder(BuildContext routeContext) {
@@ -675,6 +823,10 @@ class _AuthenticatedRoutes {
         onOpenReports: guardedAction(
           AppCapability.viewReports,
           () => replace(routeContext, reportsRouteBuilder),
+        ),
+        onOpenActivityLog: guardedAction(
+          AppCapability.viewActivityLog,
+          () => replace(routeContext, activityLogRouteBuilder),
         ),
         onOpenUsers: capabilities.actionFor(
           AppCapability.manageUsers,
@@ -729,6 +881,10 @@ class _AuthenticatedRoutes {
           AppCapability.viewReports,
           () => replace(routeContext, reportsRouteBuilder),
         ),
+        onOpenActivityLog: guardedAction(
+          AppCapability.viewActivityLog,
+          () => replace(routeContext, activityLogRouteBuilder),
+        ),
         onOpenDeviceSettings: guardedAction(
           AppCapability.manageDeviceSettings,
           () => replace(routeContext, deviceSettingsRouteBuilder),
@@ -761,7 +917,7 @@ class _AuthenticatedRoutes {
         onCreatePurchaseOrder: guardedAction(
           AppCapability.createPurchaseOrder,
           () async {
-            dependencies.purchaseViewModel.clearDraft();
+            dependencies.purchaseViewModel.clearDraft(trackLineDeletes: false);
             await push(routeContext, createPurchaseOrderRouteBuilder);
             await dependencies.purchaseOrderListViewModel.loadOrders();
           },
@@ -808,6 +964,10 @@ class _AuthenticatedRoutes {
         onOpenReports: guardedAction(
           AppCapability.viewReports,
           () => replace(routeContext, reportsRouteBuilder),
+        ),
+        onOpenActivityLog: guardedAction(
+          AppCapability.viewActivityLog,
+          () => replace(routeContext, activityLogRouteBuilder),
         ),
         onOpenDeviceSettings: guardedAction(
           AppCapability.manageDeviceSettings,
@@ -866,6 +1026,10 @@ class _AuthenticatedRoutes {
         onOpenReports: guardedAction(
           AppCapability.viewReports,
           () => replace(routeContext, reportsRouteBuilder),
+        ),
+        onOpenActivityLog: guardedAction(
+          AppCapability.viewActivityLog,
+          () => replace(routeContext, activityLogRouteBuilder),
         ),
         onOpenDeviceSettings: guardedAction(
           AppCapability.manageDeviceSettings,

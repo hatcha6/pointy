@@ -7,6 +7,7 @@ from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
+from apps.analytics.models import AnalyticsEvent
 from apps.catalog.testing import create_product_with_default_variant
 from apps.core.roles import ensure_role_groups
 from apps.customers.models import Customer
@@ -57,6 +58,49 @@ class CustomerApiTests(APITestCase):
         customer = Customer.objects.get()
         self.assertEqual(customer.phone, "")
         self.assertIsNone(customer.birthday)
+
+    def test_customer_crud_records_audit_events(self):
+        with self.captureOnCommitCallbacks(execute=True):
+            create_response = self.client.post(
+                reverse("customer-list"),
+                {"full_name": "Audit customer", "phone": "091000111"},
+                format="json",
+            )
+            customer_id = create_response.data["id"]
+
+            update_response = self.client.patch(
+                reverse("customer-detail", args=[customer_id]),
+                {"is_active": False},
+                format="json",
+            )
+            delete_response = self.client.delete(
+                reverse("customer-detail", args=[customer_id]),
+            )
+
+        self.assertEqual(create_response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(update_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(delete_response.status_code, status.HTTP_204_NO_CONTENT)
+        events = {
+            event.name: event
+            for event in AnalyticsEvent.objects.filter(entity_type="customer")
+        }
+        self.assertEqual(
+            set(events),
+            {
+                "customers.customer.created",
+                "customers.customer.updated",
+                "customers.customer.deleted",
+            },
+        )
+        self.assertEqual(events["customers.customer.created"].received_by, self.user)
+        self.assertEqual(
+            events["customers.customer.created"].event_type,
+            AnalyticsEvent.EventType.AUDIT,
+        )
+        self.assertEqual(
+            events["customers.customer.deleted"].severity,
+            AnalyticsEvent.Severity.WARNING,
+        )
 
     def test_customer_birthday_cannot_be_in_future(self):
         future_date = timezone.localdate() + timedelta(days=1)

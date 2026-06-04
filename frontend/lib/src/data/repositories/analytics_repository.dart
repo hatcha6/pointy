@@ -13,6 +13,15 @@ class AnalyticsRepository implements AnalyticsEventSink {
 
   final PosApiService _service;
 
+  Future<Result<AnalyticsEventPage>> loadEvents({
+    required AnalyticsEventQuery query,
+    int page = 1,
+  }) {
+    return Result.guard(
+      () => _service.fetchAnalyticsEvents(query: query, page: page),
+    );
+  }
+
   @override
   Future<Result<AnalyticsIngestResult>> ingestEvents(
     List<AnalyticsEventDraft> events,

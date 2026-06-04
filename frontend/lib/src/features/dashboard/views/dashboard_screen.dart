@@ -31,6 +31,7 @@ class DashboardScreen extends StatelessWidget {
     required this.onLogout,
     this.onOpenDiscounts,
     this.onOpenReports,
+    this.onOpenActivityLog,
     this.onOpenUsers,
     this.onOpenShopSettings,
   });
@@ -47,6 +48,7 @@ class DashboardScreen extends StatelessWidget {
   final VoidCallback onOpenDeviceSettings;
   final VoidCallback? onOpenDiscounts;
   final VoidCallback? onOpenReports;
+  final VoidCallback? onOpenActivityLog;
   final VoidCallback? onOpenUsers;
   final VoidCallback? onOpenShopSettings;
   final VoidCallback onLogout;
@@ -73,6 +75,7 @@ class DashboardScreen extends StatelessWidget {
             onOpenDeviceSettings: onOpenDeviceSettings,
             onOpenDiscounts: onOpenDiscounts,
             onOpenReports: onOpenReports,
+            onOpenActivityLog: onOpenActivityLog,
             onOpenUsers: onOpenUsers,
             onOpenShopSettings: onOpenShopSettings,
             onLogout: onLogout,

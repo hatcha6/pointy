@@ -26,6 +26,7 @@ import 'data/services/connection_profile_storage.dart';
 import 'data/services/pos_api_service.dart';
 import 'data/services/pos_http_client.dart';
 import 'features/auth/view_models/auth_view_model.dart';
+import 'features/activity_log/view_models/activity_log_view_model.dart';
 import 'features/contacts/view_models/contact_management_view_model.dart';
 import 'features/dashboard/view_models/dashboard_view_model.dart';
 import 'features/device_settings/view_models/device_settings_view_model.dart';
@@ -111,6 +112,7 @@ class PointyAppDependencies {
   ContactManagementViewModel? _contactManagementViewModel;
   DiscountManagementViewModel? _discountManagementViewModel;
   NotificationCenterViewModel? _notificationCenterViewModel;
+  ActivityLogViewModel? _activityLogViewModel;
   DashboardViewModel? _dashboardViewModel;
   PurchaseViewModel? _purchaseViewModel;
   PurchaseOrderListViewModel? _purchaseOrderListViewModel;
@@ -154,13 +156,20 @@ class PointyAppDependencies {
   DashboardViewModel get dashboardViewModel =>
       _dashboardViewModel ??= DashboardViewModel(dashboardRepository);
 
+  ActivityLogViewModel get activityLogViewModel => _activityLogViewModel ??=
+      ActivityLogViewModel(analyticsRepository, userRepository);
+
   NotificationCenterViewModel get notificationCenterViewModel =>
       _notificationCenterViewModel ??= NotificationCenterViewModel(
         businessAlertRepository,
       );
 
-  PurchaseViewModel get purchaseViewModel => _purchaseViewModel ??=
-      PurchaseViewModel(catalogRepository, purchaseRepository);
+  PurchaseViewModel get purchaseViewModel =>
+      _purchaseViewModel ??= PurchaseViewModel(
+        catalogRepository,
+        purchaseRepository,
+        analyticsEngine: analyticsEngine,
+      );
 
   PurchaseOrderListViewModel get purchaseOrderListViewModel =>
       _purchaseOrderListViewModel ??= PurchaseOrderListViewModel(
@@ -191,6 +200,8 @@ class PointyAppDependencies {
       _purchaseOrderListViewModel?.loadOrders();
       _contactManagementViewModel?.loadContacts();
       _discountManagementViewModel?.loadRules();
+      _activityLogViewModel?.loadEvents();
+      _activityLogViewModel?.loadUsers();
     }
 
     if (authViewModel.status == AuthStatus.unauthenticated) {
@@ -217,6 +228,8 @@ class PointyAppDependencies {
     _discountManagementViewModel = null;
     _notificationCenterViewModel?.dispose();
     _notificationCenterViewModel = null;
+    _activityLogViewModel?.dispose();
+    _activityLogViewModel = null;
     _dashboardViewModel?.dispose();
     _dashboardViewModel = null;
     _purchaseViewModel?.dispose();

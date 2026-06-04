@@ -2,7 +2,9 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
+import '../../../core/analytics_engine.dart';
 import '../../../core/result.dart';
+import '../../../data/models/analytics_event.dart';
 import '../../../data/models/contact.dart';
 import '../../../data/models/product.dart';
 import '../../../data/models/product_draft.dart';
@@ -14,12 +16,17 @@ import '../../../data/repositories/catalog_repository.dart';
 import '../../../data/repositories/purchase_repository.dart';
 
 class PurchaseViewModel extends ChangeNotifier {
-  PurchaseViewModel(this._catalogRepository, this._purchaseRepository) {
+  PurchaseViewModel(
+    this._catalogRepository,
+    this._purchaseRepository, {
+    AnalyticsEngine? analyticsEngine,
+  }) : _analyticsEngine = analyticsEngine {
     loadCatalog();
   }
 
   final CatalogRepository _catalogRepository;
   final PurchaseRepository _purchaseRepository;
+  final AnalyticsEngine? _analyticsEngine;
 
   CatalogRepository get catalogRepository => _catalogRepository;
 
@@ -264,6 +271,7 @@ class PurchaseViewModel extends ChangeNotifier {
     final line = _draft[index];
     if (line.quantity <= 1) {
       _draft.removeAt(index);
+      _trackDraftLineDeleted(line, reason: 'decrement_to_zero');
     } else {
       _draft[index] = line.copyWith(quantity: line.quantity - 1);
     }
@@ -300,16 +308,22 @@ class PurchaseViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  void clearDraft() {
+  void clearDraft({bool trackLineDeletes = true}) {
     if (_isSubmitting) {
       return;
     }
+    final removedLines = trackLineDeletes
+        ? List<PurchaseDraftLine>.of(_draft)
+        : const <PurchaseDraftLine>[];
     _draft.clear();
     _selectedSupplier = null;
     _supplierInvoiceNumber = '';
     _supplierInvoiceDateInput = '';
     _resetLandedCosts();
     _clearDiscountPreview();
+    for (final line in removedLines) {
+      _trackDraftLineDeleted(line, reason: 'clear_draft');
+    }
     notifyListeners();
   }
 
@@ -509,6 +523,41 @@ class PurchaseViewModel extends ChangeNotifier {
     _discountPreview = null;
     _hasDiscountPreviewError = false;
     _isLoadingDiscountPreview = false;
+  }
+
+  void _trackDraftLineDeleted(
+    PurchaseDraftLine line, {
+    required String reason,
+  }) {
+    final analyticsEngine = _analyticsEngine;
+    if (analyticsEngine == null) {
+      return;
+    }
+    unawaited(
+      analyticsEngine.track(
+        AnalyticsEventDraft.audit(
+          name: 'purchasing.draft.line.deleted',
+          severity: AnalyticsEventSeverity.warning,
+          entityType: 'purchase_draft_line',
+          entityId: '${line.variant.id}',
+          attributes: {
+            'reason': reason,
+            'supplier_id': _selectedSupplier?.id,
+            'supplier_name': _selectedSupplier?.name,
+            'product_id': line.variant.productId,
+            'variant_id': line.variant.id,
+            'product_name': line.variant.productLabel,
+            'variant_name': line.variant.variantLabel,
+            'sku': line.variant.sku,
+          },
+          metrics: {
+            'quantity': line.quantity,
+            'unit_cost': line.unitCost,
+            'line_total': line.subtotal,
+          },
+        ),
+      ),
+    );
   }
 
   DateTime? _parseSupplierInvoiceDate(String input) {

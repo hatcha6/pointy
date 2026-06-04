@@ -30,6 +30,7 @@ class DeviceSettingsScreen extends StatelessWidget {
     this.onOpenDashboard,
     this.onOpenDiscounts,
     this.onOpenReports,
+    this.onOpenActivityLog,
     this.onOpenUsers,
     this.onOpenShopSettings,
   });
@@ -47,6 +48,7 @@ class DeviceSettingsScreen extends StatelessWidget {
   final VoidCallback? onOpenDashboard;
   final VoidCallback? onOpenDiscounts;
   final VoidCallback? onOpenReports;
+  final VoidCallback? onOpenActivityLog;
   final VoidCallback? onOpenUsers;
   final VoidCallback? onOpenShopSettings;
   final VoidCallback onLogout;
@@ -81,6 +83,7 @@ class DeviceSettingsScreen extends StatelessWidget {
                 onOpenShopSettings: onOpenShopSettings,
                 onOpenDiscounts: onOpenDiscounts,
                 onOpenReports: onOpenReports,
+                onOpenActivityLog: onOpenActivityLog,
                 onOpenDeviceSettings: () {},
                 onLogout: onLogout,
               ),

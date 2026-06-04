@@ -6,6 +6,8 @@ from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
+from apps.analytics.models import AnalyticsEvent
+from apps.analytics.services import record_domain_event
 from apps.core.permissions import HasPointyPermission
 from apps.core.roles import user_is_manager
 from apps.sales.models import Order, OrderAdjustment
@@ -43,6 +45,55 @@ class CustomerViewSet(viewsets.ModelViewSet):
         "birthday",
         "customer_number",
     )
+
+    def perform_create(self, serializer):
+        customer = serializer.save()
+        record_domain_event(
+            name="customers.customer.created",
+            event_type=AnalyticsEvent.EventType.AUDIT,
+            user=self.request.user,
+            entity_type="customer",
+            entity_id=customer.pk,
+            attributes={
+                "customer_number": customer.customer_number,
+                "full_name_present": bool(customer.full_name),
+                "phone_present": bool(customer.phone),
+                "email_present": bool(customer.email),
+            },
+        )
+
+    def perform_update(self, serializer):
+        customer = serializer.save()
+        record_domain_event(
+            name="customers.customer.updated",
+            event_type=AnalyticsEvent.EventType.AUDIT,
+            user=self.request.user,
+            entity_type="customer",
+            entity_id=customer.pk,
+            attributes={
+                "customer_number": customer.customer_number,
+                "is_active": customer.is_active,
+                "changed_fields": sorted(serializer.validated_data.keys()),
+            },
+        )
+
+    def perform_destroy(self, instance):
+        customer_id = instance.pk
+        customer_number = instance.customer_number
+        is_active = instance.is_active
+        instance.delete()
+        record_domain_event(
+            name="customers.customer.deleted",
+            event_type=AnalyticsEvent.EventType.AUDIT,
+            severity=AnalyticsEvent.Severity.WARNING,
+            user=self.request.user,
+            entity_type="customer",
+            entity_id=customer_id,
+            attributes={
+                "customer_number": customer_number,
+                "was_active": is_active,
+            },
+        )
 
     @action(detail=True, methods=["get"], url_path="sales-summary")
     def sales_summary(self, request, pk=None):

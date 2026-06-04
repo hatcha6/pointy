@@ -31,6 +31,14 @@ class SalesApiClient {
     return SaleOrderPage.fromAny(_session.decodedBody(response));
   }
 
+  Future<SaleOrder> fetchOrder(int saleOrderId) async {
+    final response = await _session.get('orders/$saleOrderId/');
+    _session.throwApiException(response, 'Order detail failed with status');
+    return SaleOrder.fromJson(
+      _session.decodedBody(response) as Map<String, Object?>,
+    );
+  }
+
   Future<SaleDiscountPreview> previewDiscounts(
     SaleDiscountPreviewDraft draft,
   ) async {

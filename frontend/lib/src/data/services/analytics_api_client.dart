@@ -6,6 +6,23 @@ class AnalyticsApiClient {
 
   final PosApiSession _session;
 
+  Future<AnalyticsEventPage> fetchEvents({
+    required AnalyticsEventQuery query,
+    int page = 1,
+  }) async {
+    final response = await _session.get(
+      'analytics-events/',
+      query: query.toQueryParameters(page: page),
+    );
+    _session.throwApiException(
+      response,
+      'Analytics event list failed with status',
+    );
+    return AnalyticsEventPage.fromJson(
+      _session.decodedBody(response) as Map<String, Object?>,
+    );
+  }
+
   Future<AnalyticsIngestResult> ingestEvents(
     List<AnalyticsEventDraft> events,
   ) async {

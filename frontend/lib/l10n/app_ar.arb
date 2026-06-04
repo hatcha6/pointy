@@ -51,6 +51,308 @@
   "settingsDrawerLabel": "إعدادات المتجر",
   "dashboardDrawerLabel": "لوحة التحكم",
   "reportsDrawerLabel": "التقارير",
+  "activityLogDrawerLabel": "سجل النشاط",
+  "activityLogTitle": "سجل نشاط المستخدمين",
+  "refreshActivityLogTooltip": "تحديث سجل النشاط",
+  "activityLogSearchHint": "ابحث باسم الحدث أو الأثر أو الكيان",
+  "activityLogTotalMetric": "إجمالي النتائج",
+  "activityLogLoadedMetric": "المعروض الآن",
+  "activityLogFraudMetric": "إشارات احتيال",
+  "activityLogHighRiskMetric": "مخاطر عالية",
+  "activityLogUsersLoadWarning": "تعذر تحميل قائمة المستخدمين للفلاتر. يمكنك متابعة البحث والفلاتر الأخرى.",
+  "activityLogLoadError": "تعذر تحميل سجل النشاط.",
+  "activityLogEmpty": "لا توجد أحداث تطابق الفلاتر الحالية.",
+  "activityLogNoEventSelected": "اختر حدثًا لمراجعة التفاصيل.",
+  "activityLogUnknownUser": "مستخدم غير معروف",
+  "activityLogEventSubtitle": "{date} بواسطة {user}",
+  "@activityLogEventSubtitle": {
+    "description": "Activity timeline event subtitle.",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      },
+      "user": {
+        "type": "String"
+      }
+    }
+  },
+  "activityLogEventSubtitleWithSummary": "{date} بواسطة {user} - {summary}",
+  "@activityLogEventSubtitleWithSummary": {
+    "description": "Activity timeline event subtitle with a readable summary.",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      },
+      "user": {
+        "type": "String"
+      },
+      "summary": {
+        "type": "String"
+      }
+    }
+  },
+  "activityLogRiskScore": "مخاطر {score}",
+  "@activityLogRiskScore": {
+    "description": "Risk score label.",
+    "placeholders": {
+      "score": {
+        "type": "int"
+      }
+    }
+  },
+  "activityLogDetailUser": "المستخدم",
+  "activityLogDetailRisk": "درجة المخاطر",
+  "activityLogNoRiskScore": "لا توجد",
+  "activityLogDetailEventSection": "الحدث",
+  "activityLogRawNameLabel": "الاسم الخام",
+  "activityLogTypeLabel": "النوع",
+  "activityLogSeverityLabel": "الحدة",
+  "activityLogSourceLabel": "المصدر",
+  "activityLogDetailContextSection": "السياق",
+  "activityLogSessionLabel": "الجلسة",
+  "activityLogEntityTypeLabel": "نوع الكيان",
+  "activityLogEntityIdLabel": "معرّف الكيان",
+  "activityLogTraceIdLabel": "أثر الطلب",
+  "activityLogPlatformLabel": "المنصة",
+  "activityLogAttributesSection": "البيانات",
+  "activityLogNoAttributes": "لا توجد بيانات إضافية.",
+  "activityLogMetricsSection": "المقاييس",
+  "activityLogNoMetrics": "لا توجد مقاييس.",
+  "activityLogMissingValue": "غير متوفر",
+  "activityLogOpenInvoice": "فتح الفاتورة",
+  "activityLogOpenPurchaseOrder": "فتح أمر الشراء",
+  "activityLogOpenTargetError": "تعذر فتح تفاصيل هذا السجل.",
+  "activityLogNoSummary": "لا توجد خلاصة إضافية.",
+  "activityLogSessionSummary": "جلسة {session}",
+  "@activityLogSessionSummary": {
+    "description": "Activity log session summary.",
+    "placeholders": {
+      "session": {
+        "type": "String"
+      }
+    }
+  },
+  "activityLogTotalSummary": "الإجمالي {total}",
+  "@activityLogTotalSummary": {
+    "description": "Activity log total metric summary.",
+    "placeholders": {
+      "total": {
+        "type": "String"
+      }
+    }
+  },
+  "activityLogReasonSummary": "السبب: {reason}",
+  "@activityLogReasonSummary": {
+    "description": "Activity log reason summary.",
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "activityBackendRequestTitle": "{method} {target}",
+  "@activityBackendRequestTitle": {
+    "description": "Readable backend request activity title.",
+    "placeholders": {
+      "method": {
+        "type": "String"
+      },
+      "target": {
+        "type": "String"
+      }
+    }
+  },
+  "activityFrontendInteractionTitle": "{action} {target}",
+  "@activityFrontendInteractionTitle": {
+    "description": "Readable frontend interaction activity title.",
+    "placeholders": {
+      "action": {
+        "type": "String"
+      },
+      "target": {
+        "type": "String"
+      }
+    }
+  },
+  "activityEventUnknownTitle": "حدث غير مصنف: {name}",
+  "@activityEventUnknownTitle": {
+    "description": "Fallback title for unknown activity event names.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "activityLogMethodPathSummary": "{method} {path}",
+  "@activityLogMethodPathSummary": {
+    "description": "HTTP method and path summary.",
+    "placeholders": {
+      "method": {
+        "type": "String"
+      },
+      "path": {
+        "type": "String"
+      }
+    }
+  },
+  "activityLogRequestSummary": "{method} {path} - الحالة {status}",
+  "@activityLogRequestSummary": {
+    "description": "HTTP request summary with status.",
+    "placeholders": {
+      "method": {
+        "type": "String"
+      },
+      "path": {
+        "type": "String"
+      },
+      "status": {
+        "type": "int"
+      }
+    }
+  },
+  "activityLogInteractionSummary": "الإجراء {action} على {target}",
+  "@activityLogInteractionSummary": {
+    "description": "Raw frontend interaction summary.",
+    "placeholders": {
+      "action": {
+        "type": "String"
+      },
+      "target": {
+        "type": "String"
+      }
+    }
+  },
+  "activityRequestMethodGet": "استعرض",
+  "activityRequestMethodPost": "نفّذ",
+  "activityRequestMethodPatch": "عدّل",
+  "activityRequestMethodDelete": "حذف",
+  "activityRequestMethodOther": "طلب",
+  "activityTargetActivityLog": "سجل النشاط",
+  "activityTargetUsers": "المستخدمين",
+  "activityTargetInvoices": "الفواتير",
+  "activityTargetCheckout": "إكمال بيع",
+  "activityTargetPurchaseOrders": "أوامر الشراء",
+  "activityTargetCustomers": "العملاء",
+  "activityTargetSuppliers": "الموردين",
+  "activityTargetCatalog": "المنتجات والمخزون",
+  "activityTargetRegisterSessions": "جلسات الدرج",
+  "activityTargetDiscounts": "الخصومات",
+  "activityTargetReports": "التقارير",
+  "activityTargetAuth": "تسجيل الدخول",
+  "activityTargetSystem": "النظام",
+  "activityTargetCurrentScreen": "الشاشة الحالية",
+  "activityInteractionNavigation": "فتح شاشة",
+  "activityInteractionLogout": "اختار الخروج من",
+  "activityInteractionProductSelected": "فتح منتج من",
+  "activityInteractionPointer": "لمس",
+  "activityInteractionScroll": "مرر",
+  "activityInteractionKeyboard": "استخدم لوحة المفاتيح في",
+  "activityInteractionFocus": "نقل التركيز داخل",
+  "activityInteractionGeneral": "تفاعل مع",
+  "activityLogScopeFilterTitle": "نطاق السجل",
+  "activityScopeReviewable": "الأحداث المهمة فقط",
+  "activityScopeAll": "كل الأحداث",
+  "activityScopeTechnical": "السجل التقني فقط",
+  "activityLogActionFilterTitle": "الإجراء",
+  "activityLogDateFilterTitle": "الفترة",
+  "activityLogFromDateOpen": "من البداية",
+  "activityLogToDateOpen": "إلى الآن",
+  "activityLogFromDateValue": "من {date}",
+  "@activityLogFromDateValue": {
+    "description": "Activity log start date value.",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "activityLogToDateValue": "إلى {date}",
+  "@activityLogToDateValue": {
+    "description": "Activity log end date value.",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "activityLogUserFilterTitle": "المستخدم",
+  "activityLogUserFilterLabel": "المستخدم",
+  "activityLogAllUsers": "كل المستخدمين",
+  "activityLogContextFilterTitle": "السياق",
+  "activityLogSessionFilterLabel": "معرّف جلسة الدرج",
+  "activityLogEntityTypeFilterLabel": "نوع الكيان",
+  "activityLogEntityIdFilterLabel": "معرّف الكيان",
+  "activityLogEventTypeFilterTitle": "نوع الحدث",
+  "activityLogSeverityFilterTitle": "الحدة",
+  "activityLogRiskFilterTitle": "درجة المخاطر",
+  "activityLogRiskAll": "كل درجات المخاطر",
+  "activityLogRiskAtLeast": "{score} فأعلى",
+  "@activityLogRiskAtLeast": {
+    "description": "Minimum risk score filter.",
+    "placeholders": {
+      "score": {
+        "type": "int"
+      }
+    }
+  },
+  "activityLogSourceFilterTitle": "المصدر",
+  "activityLogOrderingTitle": "ترتيب النتائج",
+  "activityActionAll": "كل الإجراءات",
+  "activityActionFraudSignal": "إشارات الاحتيال",
+  "activityActionPosLineDeleted": "حذف سطر بيع",
+  "activityActionPurchaseLineDeleted": "حذف سطر شراء",
+  "activityActionInvoiceCreated": "إنشاء فاتورة",
+  "activityActionCustomerCreated": "إنشاء عميل",
+  "activityActionRegisterCashMovement": "حركة نقدية في الدرج",
+  "activityActionOrderVoided": "إلغاء فاتورة",
+  "activityActionOrderReturned": "مرتجع فاتورة",
+  "activityActionPurchaseOrderDeleted": "حذف أمر شراء",
+  "activityActionAnyDeleted": "أي حذف",
+  "activityDateRangeAll": "كل الفترات",
+  "activityDateRangeToday": "اليوم",
+  "activityDateRange7Days": "آخر 7 أيام",
+  "activityDateRange30Days": "آخر 30 يومًا",
+  "activityDateRangeCustom": "فترة مخصصة",
+  "activityOrderingNewest": "الأحدث أولًا",
+  "activityOrderingOldest": "الأقدم أولًا",
+  "activityOrderingHighestRisk": "الأعلى مخاطرة أولًا",
+  "activityOrderingNewestReceived": "الأحدث وصولًا أولًا",
+  "activityEventCheckoutCompleted": "اكتملت عملية بيع",
+  "activityEventOrderPaid": "تم دفع فاتورة",
+  "activityEventOrderVoided": "ألغيت فاتورة",
+  "activityEventOrderReturned": "تم تسجيل مرتجع",
+  "activityEventRegisterSessionStarted": "بدأت جلسة درج",
+  "activityEventRegisterSessionClosed": "أغلقت جلسة درج",
+  "activityEventRegisterCashMovementCreated": "سجلت حركة نقدية",
+  "activityEventPosLineDeleted": "حذف سطر من سلة البيع",
+  "activityEventPurchaseLineDeleted": "حذف سطر من مسودة الشراء",
+  "activityEventPurchaseOrderCreated": "أنشئ أمر شراء",
+  "activityEventPurchaseOrderUpdated": "حُدث أمر شراء",
+  "activityEventPurchaseOrderSubmitted": "أرسل أمر شراء",
+  "activityEventPurchaseOrderReceived": "استلم أمر شراء",
+  "activityEventPurchaseOrderAdjusted": "عدّل أمر شراء",
+  "activityEventPurchaseOrderCancelled": "ألغي أمر شراء",
+  "activityEventPurchaseOrderDeleted": "حذف أمر شراء",
+  "activityEventCustomerCreated": "أنشئ عميل",
+  "activityEventCustomerUpdated": "حُدث عميل",
+  "activityEventCustomerDeleted": "حذف عميل",
+  "activityEventUserCreated": "أنشئ مستخدم",
+  "activityEventUserUpdated": "حُدث مستخدم",
+  "activityEventUserDeleted": "حذف مستخدم",
+  "activityEventAppFlutterError": "سجل التطبيق خطأ",
+  "activityEventAppPlatformError": "سجل النظام خطأ",
+  "activityEventAuthSessionStarted": "بدأت جلسة دخول",
+  "activityEventLoginSucceeded": "نجح تسجيل الدخول",
+  "activityEventLoginFailed": "فشل تسجيل الدخول",
+  "activityEventLogout": "سجل المستخدم خروجه",
+  "activityEventAnalyticsExportStarted": "بدأ تصدير التحليلات",
+  "activityEventAnalyticsExportCompleted": "اكتمل تصدير التحليلات",
+  "activityEventAnalyticsExportFailed": "فشل تصدير التحليلات",
+  "activityEventReportGenerated": "أنشئ تقرير",
+  "activityEventReportGenerationFailed": "فشل إنشاء تقرير",
+  "activityEventReportPreviewed": "عاين المستخدم تقريرًا",
+  "activityEventReportPrinted": "طبع المستخدم تقريرًا",
+  "activityEventReportShared": "شارك المستخدم تقريرًا",
   "reportsTitle": "التقارير",
   "reportsCatalogTitle": "أنواع التقارير",
   "reportsSetupTitle": "إعداد التقرير",

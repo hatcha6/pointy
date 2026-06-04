@@ -334,6 +334,940 @@ abstract class AppLocalizations {
   /// **'التقارير'**
   String get reportsDrawerLabel;
 
+  /// No description provided for @activityLogDrawerLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'سجل النشاط'**
+  String get activityLogDrawerLabel;
+
+  /// No description provided for @activityLogTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'سجل نشاط المستخدمين'**
+  String get activityLogTitle;
+
+  /// No description provided for @refreshActivityLogTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحديث سجل النشاط'**
+  String get refreshActivityLogTooltip;
+
+  /// No description provided for @activityLogSearchHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'ابحث باسم الحدث أو الأثر أو الكيان'**
+  String get activityLogSearchHint;
+
+  /// No description provided for @activityLogTotalMetric.
+  ///
+  /// In ar, this message translates to:
+  /// **'إجمالي النتائج'**
+  String get activityLogTotalMetric;
+
+  /// No description provided for @activityLogLoadedMetric.
+  ///
+  /// In ar, this message translates to:
+  /// **'المعروض الآن'**
+  String get activityLogLoadedMetric;
+
+  /// No description provided for @activityLogFraudMetric.
+  ///
+  /// In ar, this message translates to:
+  /// **'إشارات احتيال'**
+  String get activityLogFraudMetric;
+
+  /// No description provided for @activityLogHighRiskMetric.
+  ///
+  /// In ar, this message translates to:
+  /// **'مخاطر عالية'**
+  String get activityLogHighRiskMetric;
+
+  /// No description provided for @activityLogUsersLoadWarning.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر تحميل قائمة المستخدمين للفلاتر. يمكنك متابعة البحث والفلاتر الأخرى.'**
+  String get activityLogUsersLoadWarning;
+
+  /// No description provided for @activityLogLoadError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر تحميل سجل النشاط.'**
+  String get activityLogLoadError;
+
+  /// No description provided for @activityLogEmpty.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد أحداث تطابق الفلاتر الحالية.'**
+  String get activityLogEmpty;
+
+  /// No description provided for @activityLogNoEventSelected.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر حدثًا لمراجعة التفاصيل.'**
+  String get activityLogNoEventSelected;
+
+  /// No description provided for @activityLogUnknownUser.
+  ///
+  /// In ar, this message translates to:
+  /// **'مستخدم غير معروف'**
+  String get activityLogUnknownUser;
+
+  /// Activity timeline event subtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'{date} بواسطة {user}'**
+  String activityLogEventSubtitle(String date, String user);
+
+  /// Activity timeline event subtitle with a readable summary.
+  ///
+  /// In ar, this message translates to:
+  /// **'{date} بواسطة {user} - {summary}'**
+  String activityLogEventSubtitleWithSummary(
+    String date,
+    String user,
+    String summary,
+  );
+
+  /// Risk score label.
+  ///
+  /// In ar, this message translates to:
+  /// **'مخاطر {score}'**
+  String activityLogRiskScore(int score);
+
+  /// No description provided for @activityLogDetailUser.
+  ///
+  /// In ar, this message translates to:
+  /// **'المستخدم'**
+  String get activityLogDetailUser;
+
+  /// No description provided for @activityLogDetailRisk.
+  ///
+  /// In ar, this message translates to:
+  /// **'درجة المخاطر'**
+  String get activityLogDetailRisk;
+
+  /// No description provided for @activityLogNoRiskScore.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد'**
+  String get activityLogNoRiskScore;
+
+  /// No description provided for @activityLogDetailEventSection.
+  ///
+  /// In ar, this message translates to:
+  /// **'الحدث'**
+  String get activityLogDetailEventSection;
+
+  /// No description provided for @activityLogRawNameLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الاسم الخام'**
+  String get activityLogRawNameLabel;
+
+  /// No description provided for @activityLogTypeLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'النوع'**
+  String get activityLogTypeLabel;
+
+  /// No description provided for @activityLogSeverityLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الحدة'**
+  String get activityLogSeverityLabel;
+
+  /// No description provided for @activityLogSourceLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'المصدر'**
+  String get activityLogSourceLabel;
+
+  /// No description provided for @activityLogDetailContextSection.
+  ///
+  /// In ar, this message translates to:
+  /// **'السياق'**
+  String get activityLogDetailContextSection;
+
+  /// No description provided for @activityLogSessionLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الجلسة'**
+  String get activityLogSessionLabel;
+
+  /// No description provided for @activityLogEntityTypeLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'نوع الكيان'**
+  String get activityLogEntityTypeLabel;
+
+  /// No description provided for @activityLogEntityIdLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'معرّف الكيان'**
+  String get activityLogEntityIdLabel;
+
+  /// No description provided for @activityLogTraceIdLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'أثر الطلب'**
+  String get activityLogTraceIdLabel;
+
+  /// No description provided for @activityLogPlatformLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'المنصة'**
+  String get activityLogPlatformLabel;
+
+  /// No description provided for @activityLogAttributesSection.
+  ///
+  /// In ar, this message translates to:
+  /// **'البيانات'**
+  String get activityLogAttributesSection;
+
+  /// No description provided for @activityLogNoAttributes.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد بيانات إضافية.'**
+  String get activityLogNoAttributes;
+
+  /// No description provided for @activityLogMetricsSection.
+  ///
+  /// In ar, this message translates to:
+  /// **'المقاييس'**
+  String get activityLogMetricsSection;
+
+  /// No description provided for @activityLogNoMetrics.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد مقاييس.'**
+  String get activityLogNoMetrics;
+
+  /// No description provided for @activityLogMissingValue.
+  ///
+  /// In ar, this message translates to:
+  /// **'غير متوفر'**
+  String get activityLogMissingValue;
+
+  /// No description provided for @activityLogOpenInvoice.
+  ///
+  /// In ar, this message translates to:
+  /// **'فتح الفاتورة'**
+  String get activityLogOpenInvoice;
+
+  /// No description provided for @activityLogOpenPurchaseOrder.
+  ///
+  /// In ar, this message translates to:
+  /// **'فتح أمر الشراء'**
+  String get activityLogOpenPurchaseOrder;
+
+  /// No description provided for @activityLogOpenTargetError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر فتح تفاصيل هذا السجل.'**
+  String get activityLogOpenTargetError;
+
+  /// No description provided for @activityLogNoSummary.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد خلاصة إضافية.'**
+  String get activityLogNoSummary;
+
+  /// Activity log session summary.
+  ///
+  /// In ar, this message translates to:
+  /// **'جلسة {session}'**
+  String activityLogSessionSummary(String session);
+
+  /// Activity log total metric summary.
+  ///
+  /// In ar, this message translates to:
+  /// **'الإجمالي {total}'**
+  String activityLogTotalSummary(String total);
+
+  /// Activity log reason summary.
+  ///
+  /// In ar, this message translates to:
+  /// **'السبب: {reason}'**
+  String activityLogReasonSummary(String reason);
+
+  /// Readable backend request activity title.
+  ///
+  /// In ar, this message translates to:
+  /// **'{method} {target}'**
+  String activityBackendRequestTitle(String method, String target);
+
+  /// Readable frontend interaction activity title.
+  ///
+  /// In ar, this message translates to:
+  /// **'{action} {target}'**
+  String activityFrontendInteractionTitle(String action, String target);
+
+  /// Fallback title for unknown activity event names.
+  ///
+  /// In ar, this message translates to:
+  /// **'حدث غير مصنف: {name}'**
+  String activityEventUnknownTitle(String name);
+
+  /// HTTP method and path summary.
+  ///
+  /// In ar, this message translates to:
+  /// **'{method} {path}'**
+  String activityLogMethodPathSummary(String method, String path);
+
+  /// HTTP request summary with status.
+  ///
+  /// In ar, this message translates to:
+  /// **'{method} {path} - الحالة {status}'**
+  String activityLogRequestSummary(String method, String path, int status);
+
+  /// Raw frontend interaction summary.
+  ///
+  /// In ar, this message translates to:
+  /// **'الإجراء {action} على {target}'**
+  String activityLogInteractionSummary(String action, String target);
+
+  /// No description provided for @activityRequestMethodGet.
+  ///
+  /// In ar, this message translates to:
+  /// **'استعرض'**
+  String get activityRequestMethodGet;
+
+  /// No description provided for @activityRequestMethodPost.
+  ///
+  /// In ar, this message translates to:
+  /// **'نفّذ'**
+  String get activityRequestMethodPost;
+
+  /// No description provided for @activityRequestMethodPatch.
+  ///
+  /// In ar, this message translates to:
+  /// **'عدّل'**
+  String get activityRequestMethodPatch;
+
+  /// No description provided for @activityRequestMethodDelete.
+  ///
+  /// In ar, this message translates to:
+  /// **'حذف'**
+  String get activityRequestMethodDelete;
+
+  /// No description provided for @activityRequestMethodOther.
+  ///
+  /// In ar, this message translates to:
+  /// **'طلب'**
+  String get activityRequestMethodOther;
+
+  /// No description provided for @activityTargetActivityLog.
+  ///
+  /// In ar, this message translates to:
+  /// **'سجل النشاط'**
+  String get activityTargetActivityLog;
+
+  /// No description provided for @activityTargetUsers.
+  ///
+  /// In ar, this message translates to:
+  /// **'المستخدمين'**
+  String get activityTargetUsers;
+
+  /// No description provided for @activityTargetInvoices.
+  ///
+  /// In ar, this message translates to:
+  /// **'الفواتير'**
+  String get activityTargetInvoices;
+
+  /// No description provided for @activityTargetCheckout.
+  ///
+  /// In ar, this message translates to:
+  /// **'إكمال بيع'**
+  String get activityTargetCheckout;
+
+  /// No description provided for @activityTargetPurchaseOrders.
+  ///
+  /// In ar, this message translates to:
+  /// **'أوامر الشراء'**
+  String get activityTargetPurchaseOrders;
+
+  /// No description provided for @activityTargetCustomers.
+  ///
+  /// In ar, this message translates to:
+  /// **'العملاء'**
+  String get activityTargetCustomers;
+
+  /// No description provided for @activityTargetSuppliers.
+  ///
+  /// In ar, this message translates to:
+  /// **'الموردين'**
+  String get activityTargetSuppliers;
+
+  /// No description provided for @activityTargetCatalog.
+  ///
+  /// In ar, this message translates to:
+  /// **'المنتجات والمخزون'**
+  String get activityTargetCatalog;
+
+  /// No description provided for @activityTargetRegisterSessions.
+  ///
+  /// In ar, this message translates to:
+  /// **'جلسات الدرج'**
+  String get activityTargetRegisterSessions;
+
+  /// No description provided for @activityTargetDiscounts.
+  ///
+  /// In ar, this message translates to:
+  /// **'الخصومات'**
+  String get activityTargetDiscounts;
+
+  /// No description provided for @activityTargetReports.
+  ///
+  /// In ar, this message translates to:
+  /// **'التقارير'**
+  String get activityTargetReports;
+
+  /// No description provided for @activityTargetAuth.
+  ///
+  /// In ar, this message translates to:
+  /// **'تسجيل الدخول'**
+  String get activityTargetAuth;
+
+  /// No description provided for @activityTargetSystem.
+  ///
+  /// In ar, this message translates to:
+  /// **'النظام'**
+  String get activityTargetSystem;
+
+  /// No description provided for @activityTargetCurrentScreen.
+  ///
+  /// In ar, this message translates to:
+  /// **'الشاشة الحالية'**
+  String get activityTargetCurrentScreen;
+
+  /// No description provided for @activityInteractionNavigation.
+  ///
+  /// In ar, this message translates to:
+  /// **'فتح شاشة'**
+  String get activityInteractionNavigation;
+
+  /// No description provided for @activityInteractionLogout.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختار الخروج من'**
+  String get activityInteractionLogout;
+
+  /// No description provided for @activityInteractionProductSelected.
+  ///
+  /// In ar, this message translates to:
+  /// **'فتح منتج من'**
+  String get activityInteractionProductSelected;
+
+  /// No description provided for @activityInteractionPointer.
+  ///
+  /// In ar, this message translates to:
+  /// **'لمس'**
+  String get activityInteractionPointer;
+
+  /// No description provided for @activityInteractionScroll.
+  ///
+  /// In ar, this message translates to:
+  /// **'مرر'**
+  String get activityInteractionScroll;
+
+  /// No description provided for @activityInteractionKeyboard.
+  ///
+  /// In ar, this message translates to:
+  /// **'استخدم لوحة المفاتيح في'**
+  String get activityInteractionKeyboard;
+
+  /// No description provided for @activityInteractionFocus.
+  ///
+  /// In ar, this message translates to:
+  /// **'نقل التركيز داخل'**
+  String get activityInteractionFocus;
+
+  /// No description provided for @activityInteractionGeneral.
+  ///
+  /// In ar, this message translates to:
+  /// **'تفاعل مع'**
+  String get activityInteractionGeneral;
+
+  /// No description provided for @activityLogScopeFilterTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'نطاق السجل'**
+  String get activityLogScopeFilterTitle;
+
+  /// No description provided for @activityScopeReviewable.
+  ///
+  /// In ar, this message translates to:
+  /// **'الأحداث المهمة فقط'**
+  String get activityScopeReviewable;
+
+  /// No description provided for @activityScopeAll.
+  ///
+  /// In ar, this message translates to:
+  /// **'كل الأحداث'**
+  String get activityScopeAll;
+
+  /// No description provided for @activityScopeTechnical.
+  ///
+  /// In ar, this message translates to:
+  /// **'السجل التقني فقط'**
+  String get activityScopeTechnical;
+
+  /// No description provided for @activityLogActionFilterTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'الإجراء'**
+  String get activityLogActionFilterTitle;
+
+  /// No description provided for @activityLogDateFilterTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'الفترة'**
+  String get activityLogDateFilterTitle;
+
+  /// No description provided for @activityLogFromDateOpen.
+  ///
+  /// In ar, this message translates to:
+  /// **'من البداية'**
+  String get activityLogFromDateOpen;
+
+  /// No description provided for @activityLogToDateOpen.
+  ///
+  /// In ar, this message translates to:
+  /// **'إلى الآن'**
+  String get activityLogToDateOpen;
+
+  /// Activity log start date value.
+  ///
+  /// In ar, this message translates to:
+  /// **'من {date}'**
+  String activityLogFromDateValue(String date);
+
+  /// Activity log end date value.
+  ///
+  /// In ar, this message translates to:
+  /// **'إلى {date}'**
+  String activityLogToDateValue(String date);
+
+  /// No description provided for @activityLogUserFilterTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'المستخدم'**
+  String get activityLogUserFilterTitle;
+
+  /// No description provided for @activityLogUserFilterLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'المستخدم'**
+  String get activityLogUserFilterLabel;
+
+  /// No description provided for @activityLogAllUsers.
+  ///
+  /// In ar, this message translates to:
+  /// **'كل المستخدمين'**
+  String get activityLogAllUsers;
+
+  /// No description provided for @activityLogContextFilterTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'السياق'**
+  String get activityLogContextFilterTitle;
+
+  /// No description provided for @activityLogSessionFilterLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'معرّف جلسة الدرج'**
+  String get activityLogSessionFilterLabel;
+
+  /// No description provided for @activityLogEntityTypeFilterLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'نوع الكيان'**
+  String get activityLogEntityTypeFilterLabel;
+
+  /// No description provided for @activityLogEntityIdFilterLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'معرّف الكيان'**
+  String get activityLogEntityIdFilterLabel;
+
+  /// No description provided for @activityLogEventTypeFilterTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'نوع الحدث'**
+  String get activityLogEventTypeFilterTitle;
+
+  /// No description provided for @activityLogSeverityFilterTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'الحدة'**
+  String get activityLogSeverityFilterTitle;
+
+  /// No description provided for @activityLogRiskFilterTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'درجة المخاطر'**
+  String get activityLogRiskFilterTitle;
+
+  /// No description provided for @activityLogRiskAll.
+  ///
+  /// In ar, this message translates to:
+  /// **'كل درجات المخاطر'**
+  String get activityLogRiskAll;
+
+  /// Minimum risk score filter.
+  ///
+  /// In ar, this message translates to:
+  /// **'{score} فأعلى'**
+  String activityLogRiskAtLeast(int score);
+
+  /// No description provided for @activityLogSourceFilterTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'المصدر'**
+  String get activityLogSourceFilterTitle;
+
+  /// No description provided for @activityLogOrderingTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'ترتيب النتائج'**
+  String get activityLogOrderingTitle;
+
+  /// No description provided for @activityActionAll.
+  ///
+  /// In ar, this message translates to:
+  /// **'كل الإجراءات'**
+  String get activityActionAll;
+
+  /// No description provided for @activityActionFraudSignal.
+  ///
+  /// In ar, this message translates to:
+  /// **'إشارات الاحتيال'**
+  String get activityActionFraudSignal;
+
+  /// No description provided for @activityActionPosLineDeleted.
+  ///
+  /// In ar, this message translates to:
+  /// **'حذف سطر بيع'**
+  String get activityActionPosLineDeleted;
+
+  /// No description provided for @activityActionPurchaseLineDeleted.
+  ///
+  /// In ar, this message translates to:
+  /// **'حذف سطر شراء'**
+  String get activityActionPurchaseLineDeleted;
+
+  /// No description provided for @activityActionInvoiceCreated.
+  ///
+  /// In ar, this message translates to:
+  /// **'إنشاء فاتورة'**
+  String get activityActionInvoiceCreated;
+
+  /// No description provided for @activityActionCustomerCreated.
+  ///
+  /// In ar, this message translates to:
+  /// **'إنشاء عميل'**
+  String get activityActionCustomerCreated;
+
+  /// No description provided for @activityActionRegisterCashMovement.
+  ///
+  /// In ar, this message translates to:
+  /// **'حركة نقدية في الدرج'**
+  String get activityActionRegisterCashMovement;
+
+  /// No description provided for @activityActionOrderVoided.
+  ///
+  /// In ar, this message translates to:
+  /// **'إلغاء فاتورة'**
+  String get activityActionOrderVoided;
+
+  /// No description provided for @activityActionOrderReturned.
+  ///
+  /// In ar, this message translates to:
+  /// **'مرتجع فاتورة'**
+  String get activityActionOrderReturned;
+
+  /// No description provided for @activityActionPurchaseOrderDeleted.
+  ///
+  /// In ar, this message translates to:
+  /// **'حذف أمر شراء'**
+  String get activityActionPurchaseOrderDeleted;
+
+  /// No description provided for @activityActionAnyDeleted.
+  ///
+  /// In ar, this message translates to:
+  /// **'أي حذف'**
+  String get activityActionAnyDeleted;
+
+  /// No description provided for @activityDateRangeAll.
+  ///
+  /// In ar, this message translates to:
+  /// **'كل الفترات'**
+  String get activityDateRangeAll;
+
+  /// No description provided for @activityDateRangeToday.
+  ///
+  /// In ar, this message translates to:
+  /// **'اليوم'**
+  String get activityDateRangeToday;
+
+  /// No description provided for @activityDateRange7Days.
+  ///
+  /// In ar, this message translates to:
+  /// **'آخر 7 أيام'**
+  String get activityDateRange7Days;
+
+  /// No description provided for @activityDateRange30Days.
+  ///
+  /// In ar, this message translates to:
+  /// **'آخر 30 يومًا'**
+  String get activityDateRange30Days;
+
+  /// No description provided for @activityDateRangeCustom.
+  ///
+  /// In ar, this message translates to:
+  /// **'فترة مخصصة'**
+  String get activityDateRangeCustom;
+
+  /// No description provided for @activityOrderingNewest.
+  ///
+  /// In ar, this message translates to:
+  /// **'الأحدث أولًا'**
+  String get activityOrderingNewest;
+
+  /// No description provided for @activityOrderingOldest.
+  ///
+  /// In ar, this message translates to:
+  /// **'الأقدم أولًا'**
+  String get activityOrderingOldest;
+
+  /// No description provided for @activityOrderingHighestRisk.
+  ///
+  /// In ar, this message translates to:
+  /// **'الأعلى مخاطرة أولًا'**
+  String get activityOrderingHighestRisk;
+
+  /// No description provided for @activityOrderingNewestReceived.
+  ///
+  /// In ar, this message translates to:
+  /// **'الأحدث وصولًا أولًا'**
+  String get activityOrderingNewestReceived;
+
+  /// No description provided for @activityEventCheckoutCompleted.
+  ///
+  /// In ar, this message translates to:
+  /// **'اكتملت عملية بيع'**
+  String get activityEventCheckoutCompleted;
+
+  /// No description provided for @activityEventOrderPaid.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم دفع فاتورة'**
+  String get activityEventOrderPaid;
+
+  /// No description provided for @activityEventOrderVoided.
+  ///
+  /// In ar, this message translates to:
+  /// **'ألغيت فاتورة'**
+  String get activityEventOrderVoided;
+
+  /// No description provided for @activityEventOrderReturned.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم تسجيل مرتجع'**
+  String get activityEventOrderReturned;
+
+  /// No description provided for @activityEventRegisterSessionStarted.
+  ///
+  /// In ar, this message translates to:
+  /// **'بدأت جلسة درج'**
+  String get activityEventRegisterSessionStarted;
+
+  /// No description provided for @activityEventRegisterSessionClosed.
+  ///
+  /// In ar, this message translates to:
+  /// **'أغلقت جلسة درج'**
+  String get activityEventRegisterSessionClosed;
+
+  /// No description provided for @activityEventRegisterCashMovementCreated.
+  ///
+  /// In ar, this message translates to:
+  /// **'سجلت حركة نقدية'**
+  String get activityEventRegisterCashMovementCreated;
+
+  /// No description provided for @activityEventPosLineDeleted.
+  ///
+  /// In ar, this message translates to:
+  /// **'حذف سطر من سلة البيع'**
+  String get activityEventPosLineDeleted;
+
+  /// No description provided for @activityEventPurchaseLineDeleted.
+  ///
+  /// In ar, this message translates to:
+  /// **'حذف سطر من مسودة الشراء'**
+  String get activityEventPurchaseLineDeleted;
+
+  /// No description provided for @activityEventPurchaseOrderCreated.
+  ///
+  /// In ar, this message translates to:
+  /// **'أنشئ أمر شراء'**
+  String get activityEventPurchaseOrderCreated;
+
+  /// No description provided for @activityEventPurchaseOrderUpdated.
+  ///
+  /// In ar, this message translates to:
+  /// **'حُدث أمر شراء'**
+  String get activityEventPurchaseOrderUpdated;
+
+  /// No description provided for @activityEventPurchaseOrderSubmitted.
+  ///
+  /// In ar, this message translates to:
+  /// **'أرسل أمر شراء'**
+  String get activityEventPurchaseOrderSubmitted;
+
+  /// No description provided for @activityEventPurchaseOrderReceived.
+  ///
+  /// In ar, this message translates to:
+  /// **'استلم أمر شراء'**
+  String get activityEventPurchaseOrderReceived;
+
+  /// No description provided for @activityEventPurchaseOrderAdjusted.
+  ///
+  /// In ar, this message translates to:
+  /// **'عدّل أمر شراء'**
+  String get activityEventPurchaseOrderAdjusted;
+
+  /// No description provided for @activityEventPurchaseOrderCancelled.
+  ///
+  /// In ar, this message translates to:
+  /// **'ألغي أمر شراء'**
+  String get activityEventPurchaseOrderCancelled;
+
+  /// No description provided for @activityEventPurchaseOrderDeleted.
+  ///
+  /// In ar, this message translates to:
+  /// **'حذف أمر شراء'**
+  String get activityEventPurchaseOrderDeleted;
+
+  /// No description provided for @activityEventCustomerCreated.
+  ///
+  /// In ar, this message translates to:
+  /// **'أنشئ عميل'**
+  String get activityEventCustomerCreated;
+
+  /// No description provided for @activityEventCustomerUpdated.
+  ///
+  /// In ar, this message translates to:
+  /// **'حُدث عميل'**
+  String get activityEventCustomerUpdated;
+
+  /// No description provided for @activityEventCustomerDeleted.
+  ///
+  /// In ar, this message translates to:
+  /// **'حذف عميل'**
+  String get activityEventCustomerDeleted;
+
+  /// No description provided for @activityEventUserCreated.
+  ///
+  /// In ar, this message translates to:
+  /// **'أنشئ مستخدم'**
+  String get activityEventUserCreated;
+
+  /// No description provided for @activityEventUserUpdated.
+  ///
+  /// In ar, this message translates to:
+  /// **'حُدث مستخدم'**
+  String get activityEventUserUpdated;
+
+  /// No description provided for @activityEventUserDeleted.
+  ///
+  /// In ar, this message translates to:
+  /// **'حذف مستخدم'**
+  String get activityEventUserDeleted;
+
+  /// No description provided for @activityEventAppFlutterError.
+  ///
+  /// In ar, this message translates to:
+  /// **'سجل التطبيق خطأ'**
+  String get activityEventAppFlutterError;
+
+  /// No description provided for @activityEventAppPlatformError.
+  ///
+  /// In ar, this message translates to:
+  /// **'سجل النظام خطأ'**
+  String get activityEventAppPlatformError;
+
+  /// No description provided for @activityEventAuthSessionStarted.
+  ///
+  /// In ar, this message translates to:
+  /// **'بدأت جلسة دخول'**
+  String get activityEventAuthSessionStarted;
+
+  /// No description provided for @activityEventLoginSucceeded.
+  ///
+  /// In ar, this message translates to:
+  /// **'نجح تسجيل الدخول'**
+  String get activityEventLoginSucceeded;
+
+  /// No description provided for @activityEventLoginFailed.
+  ///
+  /// In ar, this message translates to:
+  /// **'فشل تسجيل الدخول'**
+  String get activityEventLoginFailed;
+
+  /// No description provided for @activityEventLogout.
+  ///
+  /// In ar, this message translates to:
+  /// **'سجل المستخدم خروجه'**
+  String get activityEventLogout;
+
+  /// No description provided for @activityEventAnalyticsExportStarted.
+  ///
+  /// In ar, this message translates to:
+  /// **'بدأ تصدير التحليلات'**
+  String get activityEventAnalyticsExportStarted;
+
+  /// No description provided for @activityEventAnalyticsExportCompleted.
+  ///
+  /// In ar, this message translates to:
+  /// **'اكتمل تصدير التحليلات'**
+  String get activityEventAnalyticsExportCompleted;
+
+  /// No description provided for @activityEventAnalyticsExportFailed.
+  ///
+  /// In ar, this message translates to:
+  /// **'فشل تصدير التحليلات'**
+  String get activityEventAnalyticsExportFailed;
+
+  /// No description provided for @activityEventReportGenerated.
+  ///
+  /// In ar, this message translates to:
+  /// **'أنشئ تقرير'**
+  String get activityEventReportGenerated;
+
+  /// No description provided for @activityEventReportGenerationFailed.
+  ///
+  /// In ar, this message translates to:
+  /// **'فشل إنشاء تقرير'**
+  String get activityEventReportGenerationFailed;
+
+  /// No description provided for @activityEventReportPreviewed.
+  ///
+  /// In ar, this message translates to:
+  /// **'عاين المستخدم تقريرًا'**
+  String get activityEventReportPreviewed;
+
+  /// No description provided for @activityEventReportPrinted.
+  ///
+  /// In ar, this message translates to:
+  /// **'طبع المستخدم تقريرًا'**
+  String get activityEventReportPrinted;
+
+  /// No description provided for @activityEventReportShared.
+  ///
+  /// In ar, this message translates to:
+  /// **'شارك المستخدم تقريرًا'**
+  String get activityEventReportShared;
+
   /// No description provided for @reportsTitle.
   ///
   /// In ar, this message translates to:
