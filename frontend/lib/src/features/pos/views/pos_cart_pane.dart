@@ -388,16 +388,22 @@ class _CartScrollContent extends StatelessWidget {
               line: viewModel.cart[index],
               onAdd: isCartLocked
                   ? null
-                  : () => viewModel.addVariant(viewModel.cart[index].variant),
+                  : () => viewModel.addVariant(
+                      viewModel.cart[index].variant,
+                      source: 'cart_quantity_button',
+                    ),
               onRemove: isCartLocked
                   ? null
                   : () => viewModel.decrementVariant(
                       viewModel.cart[index].variant,
+                      source: 'cart_quantity_button',
                     ),
               onDelete: isCartLocked
                   ? null
-                  : () =>
-                        viewModel.removeVariant(viewModel.cart[index].variant),
+                  : () => viewModel.removeVariant(
+                      viewModel.cart[index].variant,
+                      source: 'cart_delete_button',
+                    ),
             ),
           ],
       ],

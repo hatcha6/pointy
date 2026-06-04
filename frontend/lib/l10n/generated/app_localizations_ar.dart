@@ -277,6 +277,51 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
+  String activityLogCartTotalSummary(String total) {
+    return 'إجمالي السلة $total';
+  }
+
+  @override
+  String activityLogDraftTotalSummary(String total) {
+    return 'إجمالي مسودة الشراء $total';
+  }
+
+  @override
+  String activityLogProductSummary(String product, String quantity) {
+    return '$product - الكمية $quantity';
+  }
+
+  @override
+  String activityLogSupplierSummary(String supplier) {
+    return 'المورد $supplier';
+  }
+
+  @override
+  String activityLogUserSummary(String user) {
+    return 'المستخدم $user';
+  }
+
+  @override
+  String activityLogDiscountRuleSummary(String rule) {
+    return 'قاعدة الخصم $rule';
+  }
+
+  @override
+  String activityLogReportSummary(String report) {
+    return 'التقرير $report';
+  }
+
+  @override
+  String activityLogMovementTypeSummary(String movementType) {
+    return 'نوع الحركة $movementType';
+  }
+
+  @override
+  String activityLogUiSourceSummary(String source) {
+    return 'من $source';
+  }
+
+  @override
   String activityLogReasonSummary(String reason) {
     return 'السبب: $reason';
   }
@@ -393,6 +438,110 @@ class AppLocalizationsAr extends AppLocalizations {
   String get activityInteractionGeneral => 'تفاعل مع';
 
   @override
+  String get activityUiSourceProductTile => 'بطاقة المنتج';
+
+  @override
+  String get activityUiSourceVariantPicker => 'نافذة اختيار المتغير';
+
+  @override
+  String get activityUiSourceBarcodeLookup => 'حقل الباركود';
+
+  @override
+  String get activityUiSourceHardwareScanner => 'ماسح الباركود الخارجي';
+
+  @override
+  String get activityUiSourceCameraScanner => 'ماسح الكاميرا';
+
+  @override
+  String get activityUiSourceCartQuantityButton => 'أزرار كمية السلة';
+
+  @override
+  String get activityUiSourceCartDeleteButton => 'زر حذف سطر السلة';
+
+  @override
+  String get activityUiSourceCartClearButton => 'زر تفريغ السلة';
+
+  @override
+  String get activityUiSourcePurchaseCatalog => 'كتالوج الشراء';
+
+  @override
+  String get activityUiSourcePurchaseBarcodeLookup => 'حقل باركود الشراء';
+
+  @override
+  String get activityUiSourcePurchaseCameraScanner => 'ماسح كاميرا الشراء';
+
+  @override
+  String get activityUiSourcePurchaseDraftQuantityButton =>
+      'أزرار كمية مسودة الشراء';
+
+  @override
+  String get activityUiSourcePurchaseDraftClearButton =>
+      'زر تفريغ مسودة الشراء';
+
+  @override
+  String get activityUiSourceRegisterSessionGate => 'واجهة فتح الدرج';
+
+  @override
+  String get activityUiSourceRegisterSessionCloseSheet => 'نافذة إغلاق الدرج';
+
+  @override
+  String get activityUiSourceRegisterCashMovementSheet =>
+      'نافذة الحركة النقدية';
+
+  @override
+  String get activityUiSourceRegisterSessionHistory => 'سجل جلسات الدرج';
+
+  @override
+  String get activityUiSourceSaleOrderDetailsSheet => 'نافذة تفاصيل الفاتورة';
+
+  @override
+  String get activityUiSourceCatalogProductForm => 'نموذج المنتج';
+
+  @override
+  String get activityUiSourceCatalogProductDetails => 'تفاصيل المنتج';
+
+  @override
+  String get activityUiSourceCatalogVariantForm => 'نموذج متغير المنتج';
+
+  @override
+  String get activityUiSourceCatalogVariantGenerator => 'مولّد المتغيرات';
+
+  @override
+  String get activityUiSourceCategoryManagement => 'إدارة التصنيفات';
+
+  @override
+  String get activityUiSourceStockMovementForm => 'نموذج حركة المخزون';
+
+  @override
+  String get activityUiSourceBarcodeLabelPanel => 'لوحة طباعة الباركود';
+
+  @override
+  String get activityUiSourceUserManagement => 'إدارة المستخدمين';
+
+  @override
+  String get activityUiSourceShopSettings => 'إعدادات المتجر';
+
+  @override
+  String get activityUiSourceDeviceSettings => 'إعدادات الجهاز';
+
+  @override
+  String get activityUiSourceDiscountManagement => 'إدارة الخصومات';
+
+  @override
+  String get activityUiSourceReportsScreen => 'شاشة التقارير';
+
+  @override
+  String get activityUiSourceAnalyticsExportSheet => 'نافذة تصدير التحليلات';
+
+  @override
+  String get activityUiSourcePrintingSettings => 'إعدادات الطباعة';
+
+  @override
+  String activityUiSourceUnknown(String source) {
+    return '$source';
+  }
+
+  @override
   String get activityLogScopeFilterTitle => 'نطاق السجل';
 
   @override
@@ -436,6 +585,30 @@ class AppLocalizationsAr extends AppLocalizations {
   String get activityLogAllUsers => 'كل المستخدمين';
 
   @override
+  String get activityLogUserFilterHelper =>
+      'اختر مستخدمًا أو أكثر لتصفية الإجراءات المسجلة.';
+
+  @override
+  String get activityLogUsersOpenPickerTooltip => 'اختيار المستخدمين';
+
+  @override
+  String get activityLogUserPickerTitle => 'اختيار المستخدمين';
+
+  @override
+  String get activityLogUserPickerSearchHint => 'ابحث باسم المستخدم أو البريد';
+
+  @override
+  String get activityLogUserPickerEmpty => 'لا يوجد مستخدمون مطابقون.';
+
+  @override
+  String get activityLogUserPickerLoadError => 'تعذر تحميل المستخدمين.';
+
+  @override
+  String activityLogUserFallbackLabel(int id) {
+    return 'مستخدم #$id';
+  }
+
+  @override
   String get activityLogContextFilterTitle => 'السياق';
 
   @override
@@ -477,10 +650,31 @@ class AppLocalizationsAr extends AppLocalizations {
   String get activityActionFraudSignal => 'إشارات الاحتيال';
 
   @override
+  String get activityActionPosLineAdded => 'إضافة سطر بيع';
+
+  @override
+  String get activityActionPosLineQuantityChanged => 'تغيير كمية سطر بيع';
+
+  @override
   String get activityActionPosLineDeleted => 'حذف سطر بيع';
 
   @override
+  String get activityActionPosCartCleared => 'تفريغ سلة البيع';
+
+  @override
+  String get activityActionPurchaseLineAdded => 'إضافة سطر شراء';
+
+  @override
+  String get activityActionPurchaseLineQuantityChanged => 'تغيير كمية سطر شراء';
+
+  @override
   String get activityActionPurchaseLineDeleted => 'حذف سطر شراء';
+
+  @override
+  String get activityActionPurchaseDraftCleared => 'تفريغ مسودة شراء';
+
+  @override
+  String get activityActionPurchaseDraftSubmitted => 'إرسال مسودة شراء';
 
   @override
   String get activityActionInvoiceCreated => 'إنشاء فاتورة';
@@ -492,10 +686,46 @@ class AppLocalizationsAr extends AppLocalizations {
   String get activityActionRegisterCashMovement => 'حركة نقدية في الدرج';
 
   @override
+  String get activityActionRegisterSessionStarted => 'فتح جلسة درج';
+
+  @override
+  String get activityActionRegisterSessionClosed => 'إغلاق جلسة درج';
+
+  @override
+  String get activityActionReceiptReprinted => 'إعادة طباعة إيصال';
+
+  @override
   String get activityActionOrderVoided => 'إلغاء فاتورة';
 
   @override
   String get activityActionOrderReturned => 'مرتجع فاتورة';
+
+  @override
+  String get activityActionProductChanged => 'تغييرات المنتجات';
+
+  @override
+  String get activityActionStockMovementCreated => 'حركات المخزون';
+
+  @override
+  String get activityActionBarcodeLabelsPrinted => 'طباعة ملصقات باركود';
+
+  @override
+  String get activityActionUserChanged => 'تغييرات المستخدمين';
+
+  @override
+  String get activityActionSettingsChanged => 'تغييرات الإعدادات';
+
+  @override
+  String get activityActionDiscountChanged => 'تغييرات الخصومات';
+
+  @override
+  String get activityActionReportActivity => 'نشاط التقارير';
+
+  @override
+  String get activityActionPrinterActivity => 'نشاط الطباعة';
+
+  @override
+  String get activityActionAnalyticsExport => 'تصدير التحليلات';
 
   @override
   String get activityActionPurchaseOrderDeleted => 'حذف أمر شراء';
@@ -543,7 +773,16 @@ class AppLocalizationsAr extends AppLocalizations {
   String get activityEventOrderReturned => 'تم تسجيل مرتجع';
 
   @override
+  String get activityEventReceiptReprintQueued => 'أعيدت طباعة إيصال';
+
+  @override
+  String get activityEventReceiptReprintFailed => 'فشلت إعادة طباعة إيصال';
+
+  @override
   String get activityEventRegisterSessionStarted => 'بدأت جلسة درج';
+
+  @override
+  String get activityEventRegisterSessionResumed => 'استؤنفت جلسة درج';
 
   @override
   String get activityEventRegisterSessionClosed => 'أغلقت جلسة درج';
@@ -552,10 +791,73 @@ class AppLocalizationsAr extends AppLocalizations {
   String get activityEventRegisterCashMovementCreated => 'سجلت حركة نقدية';
 
   @override
+  String get activityEventSalesHistorySessionSelected => 'فتحت جلسة من السجل';
+
+  @override
+  String get activityEventSalesHistoryOrderVoidCompleted =>
+      'اكتمل إلغاء فاتورة من السجل';
+
+  @override
+  String get activityEventSalesHistoryOrderReturnCompleted =>
+      'اكتمل مرتجع فاتورة من السجل';
+
+  @override
+  String get activityEventPosLineAdded => 'أضيف سطر إلى سلة البيع';
+
+  @override
+  String get activityEventPosLineQuantityIncreased =>
+      'زادت كمية سطر في سلة البيع';
+
+  @override
+  String get activityEventPosLineQuantityDecreased =>
+      'نقصت كمية سطر في سلة البيع';
+
+  @override
   String get activityEventPosLineDeleted => 'حذف سطر من سلة البيع';
 
   @override
+  String get activityEventPosCartCleared => 'أفرغت سلة البيع';
+
+  @override
+  String get activityEventPosCheckoutStarted => 'بدأ إرسال عملية بيع';
+
+  @override
+  String get activityEventPosCheckoutCompleted =>
+      'اكتملت عملية البيع من الواجهة';
+
+  @override
+  String get activityEventPosCheckoutFailed => 'فشل إرسال عملية بيع';
+
+  @override
+  String get activityEventPosCheckoutStockRejected =>
+      'رفضت عملية بيع بسبب المخزون';
+
+  @override
+  String get activityEventPurchaseLineAdded => 'أضيف سطر إلى مسودة الشراء';
+
+  @override
+  String get activityEventPurchaseLineQuantityIncreased =>
+      'زادت كمية سطر في مسودة الشراء';
+
+  @override
+  String get activityEventPurchaseLineQuantityDecreased =>
+      'نقصت كمية سطر في مسودة الشراء';
+
+  @override
   String get activityEventPurchaseLineDeleted => 'حذف سطر من مسودة الشراء';
+
+  @override
+  String get activityEventPurchaseDraftCleared => 'أفرغت مسودة الشراء';
+
+  @override
+  String get activityEventPurchaseSupplierSelected =>
+      'اختير مورد لمسودة الشراء';
+
+  @override
+  String get activityEventPurchaseDraftSubmitted => 'أرسلت مسودة شراء';
+
+  @override
+  String get activityEventPurchaseDraftSubmitFailed => 'فشل إرسال مسودة شراء';
 
   @override
   String get activityEventPurchaseOrderCreated => 'أنشئ أمر شراء';
@@ -588,6 +890,36 @@ class AppLocalizationsAr extends AppLocalizations {
   String get activityEventCustomerDeleted => 'حذف عميل';
 
   @override
+  String get activityEventCatalogProductCreated => 'أنشئ منتج';
+
+  @override
+  String get activityEventCatalogProductUpdated => 'حُدث منتج';
+
+  @override
+  String get activityEventCatalogProductImageUploaded => 'رُفعت صورة منتج';
+
+  @override
+  String get activityEventCatalogProductImageImported => 'استوردت صورة منتج';
+
+  @override
+  String get activityEventCatalogVariantCreated => 'أنشئ متغير منتج';
+
+  @override
+  String get activityEventCatalogVariantUpdated => 'حُدث متغير منتج';
+
+  @override
+  String get activityEventCatalogVariantsGenerated => 'وُلدت متغيرات منتج';
+
+  @override
+  String get activityEventCatalogCategoryCreated => 'أنشئ تصنيف منتج';
+
+  @override
+  String get activityEventStockMovementCreated => 'سجلت حركة مخزون';
+
+  @override
+  String get activityEventStockMovementCreateFailed => 'فشل تسجيل حركة مخزون';
+
+  @override
   String get activityEventUserCreated => 'أنشئ مستخدم';
 
   @override
@@ -595,6 +927,58 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get activityEventUserDeleted => 'حذف مستخدم';
+
+  @override
+  String get activityEventUserRoleChanged => 'تغير دور مستخدم';
+
+  @override
+  String get activityEventUserActiveChanged => 'تغيرت حالة مستخدم';
+
+  @override
+  String get activityEventShopSettingsUpdated => 'حُدثت إعدادات المتجر';
+
+  @override
+  String get activityEventShopLogoUploaded => 'رُفع شعار المتجر';
+
+  @override
+  String get activityEventShopLogoRemoved => 'أزيل شعار المتجر';
+
+  @override
+  String get activityEventDeviceUsageModeChanged => 'تغير وضع استخدام الجهاز';
+
+  @override
+  String get activityEventDiscountRuleCreated => 'أنشئت قاعدة خصم';
+
+  @override
+  String get activityEventDiscountRuleUpdated => 'حُدثت قاعدة خصم';
+
+  @override
+  String get activityEventDiscountRuleEnabled => 'فُعلت قاعدة خصم';
+
+  @override
+  String get activityEventDiscountRuleDisabled => 'عُطلت قاعدة خصم';
+
+  @override
+  String get activityEventDiscountRuleArchived => 'أرشفت قاعدة خصم';
+
+  @override
+  String get activityEventBarcodeLabelsPrinted => 'طُبعت ملصقات باركود';
+
+  @override
+  String get activityEventBarcodeLabelsFailed => 'فشلت طباعة ملصقات باركود';
+
+  @override
+  String get activityEventPrinterDiscoveryCompleted =>
+      'اكتمل البحث عن الطابعات';
+
+  @override
+  String get activityEventPrinterDiscoveryFailed => 'فشل البحث عن الطابعات';
+
+  @override
+  String get activityEventPrinterTested => 'اختُبرت الطابعة';
+
+  @override
+  String get activityEventPrinterFakeReceiptPrinted => 'طُبع إيصال تجريبي';
 
   @override
   String get activityEventAppFlutterError => 'سجل التطبيق خطأ';
@@ -624,6 +1008,13 @@ class AppLocalizationsAr extends AppLocalizations {
   String get activityEventAnalyticsExportFailed => 'فشل تصدير التحليلات';
 
   @override
+  String get activityEventAnalyticsExportDownloaded => 'نُزل ملف التحليلات';
+
+  @override
+  String get activityEventAnalyticsExportDownloadFailed =>
+      'فشل تنزيل ملف التحليلات';
+
+  @override
   String get activityEventReportGenerated => 'أنشئ تقرير';
 
   @override
@@ -637,6 +1028,12 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get activityEventReportShared => 'شارك المستخدم تقريرًا';
+
+  @override
+  String get activityEventReportRunCompleted => 'اكتمل تشغيل تقرير';
+
+  @override
+  String get activityEventReportRunFailed => 'فشل تشغيل تقرير';
 
   @override
   String get reportsTitle => 'التقارير';

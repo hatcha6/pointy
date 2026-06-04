@@ -7,8 +7,14 @@ class UserApiClient {
 
   final PosApiSession _session;
 
-  Future<PosUserPage> fetchUsers({int page = 1}) async {
-    final response = await _session.get('users/', query: {'page': '$page'});
+  Future<PosUserPage> fetchUsers({int page = 1, String search = ''}) async {
+    final response = await _session.get(
+      'users/',
+      query: {
+        'page': '$page',
+        if (search.trim().isNotEmpty) 'search': search.trim(),
+      },
+    );
     _session.ensureSuccess(response, 'Users request failed with status');
     return PosUserPage.fromAny(_session.decodedBody(response));
   }

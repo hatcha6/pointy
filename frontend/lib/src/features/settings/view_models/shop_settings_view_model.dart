@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
+import '../../../core/analytics_audit.dart';
 import '../../../core/analytics_engine.dart';
 import '../../../core/result.dart';
 import '../../../data/models/analytics_event.dart';
@@ -61,6 +62,7 @@ class ShopSettingsViewModel extends ChangeNotifier {
     switch (result) {
       case Ok<ShopSettings>():
         _settings = result.value;
+        _trackShopSettingsUpdated(result.value, draft);
         notifyListeners();
         return true;
       case Error<ShopSettings>():
@@ -80,6 +82,10 @@ class ShopSettingsViewModel extends ChangeNotifier {
     switch (result) {
       case Ok<ShopSettings>():
         _settings = result.value;
+        _trackShopLogoChanged(
+          name: 'settings.shop.logo_upload.completed',
+          settings: result.value,
+        );
         notifyListeners();
         return true;
       case Error<ShopSettings>():
@@ -99,6 +105,10 @@ class ShopSettingsViewModel extends ChangeNotifier {
     switch (result) {
       case Ok<ShopSettings>():
         _settings = result.value;
+        _trackShopLogoChanged(
+          name: 'settings.shop.logo_remove.completed',
+          settings: result.value,
+        );
         notifyListeners();
         return true;
       case Error<ShopSettings>():
@@ -179,5 +189,79 @@ class ShopSettingsViewModel extends ChangeNotifier {
         notifyListeners();
         return null;
     }
+  }
+
+  void trackAnalyticsExportDownloadResult(
+    AnalyticsExportFile file, {
+    required bool downloaded,
+  }) {
+    unawaited(
+      _analyticsEngine?.trackUsage(
+        downloaded
+            ? AnalyticsEventName.analyticsExportDownloaded
+            : AnalyticsEventName.analyticsExportDownloadFailed,
+        severity: downloaded
+            ? AnalyticsEventSeverity.info
+            : AnalyticsEventSeverity.warning,
+        attributes: {
+          'filename_extension': file.filename.split('.').last,
+          'content_type': file.contentType,
+          'source': 'analytics_export_sheet',
+        },
+        metrics: {'byte_count': file.bytes.length},
+        flushImmediately: !downloaded,
+      ),
+    );
+  }
+
+  void _trackShopSettingsUpdated(
+    ShopSettings settings,
+    ShopSettingsDraft draft,
+  ) {
+    trackAuditEvent(
+      _analyticsEngine,
+      name: 'settings.shop.form_saved',
+      entityType: 'shop_settings',
+      attributes: {
+        'shop_name_present': settings.shopName.trim().isNotEmpty,
+        'require_opening_cash': settings.requireOpeningCash,
+        'auto_print_receipts': settings.autoPrintReceipts,
+        'allow_overselling': settings.allowOverselling,
+        'prevent_selling_at_loss': settings.preventSellingAtLoss,
+        'enable_cash_payments': settings.enableCashPayments,
+        'enable_card_payments': settings.enableCardPayments,
+        'enable_transfer_payments': settings.enableTransferPayments,
+        'require_card_payment_receipt': settings.requireCardPaymentReceipt,
+        'source': 'shop_settings',
+      },
+      metrics: {
+        'low_stock_threshold': draft.lowStockThreshold,
+        'cashier_return_window_hours': draft.cashierReturnWindowHours,
+        'enabled_payment_method_count': [
+          draft.enableCashPayments,
+          draft.enableCardPayments,
+          draft.enableTransferPayments,
+        ].where((isEnabled) => isEnabled).length,
+        'trusted_card_terminal_count': draft.trustedCardTerminalIds.length,
+        'card_commission_percent': draft.cardCommissionPercent,
+        'transfer_commission_percent': draft.transferCommissionPercent,
+      },
+    );
+  }
+
+  void _trackShopLogoChanged({
+    required String name,
+    required ShopSettings settings,
+  }) {
+    trackAuditEvent(
+      _analyticsEngine,
+      name: name,
+      entityType: 'shop_settings',
+      attributes: {
+        'shop_name_present': settings.shopName.trim().isNotEmpty,
+        'logo_present': settings.logoAttachment != null,
+        'source': 'shop_settings',
+      },
+    );
   }
 }

@@ -89,7 +89,12 @@ class PurchaseCatalogPane extends StatelessWidget {
                   showPrice: false,
                   onTap: viewModel.isSubmitting
                       ? null
-                      : () => unawaited(viewModel.addVariant(variant)),
+                      : () => unawaited(
+                          viewModel.addVariant(
+                            variant,
+                            source: 'purchase_catalog_tile',
+                          ),
+                        ),
                 );
               },
             ),
@@ -121,7 +126,7 @@ class PurchaseCatalogPane extends StatelessWidget {
     if (variant == null) {
       return false;
     }
-    await viewModel.addVariant(variant);
+    await viewModel.addVariant(variant, source: 'purchase_barcode_lookup');
     return true;
   }
 
@@ -143,7 +148,11 @@ class PurchaseCatalogPane extends StatelessWidget {
       return;
     }
     for (final entry in entries) {
-      await viewModel.addVariant(entry.variant, quantity: entry.quantity);
+      await viewModel.addVariant(
+        entry.variant,
+        quantity: entry.quantity,
+        source: 'purchase_camera_scanner',
+      );
     }
   }
 }

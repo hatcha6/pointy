@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
+import '../../../core/analytics_engine.dart';
 import '../../../core/authorization.dart';
 import '../../../data/models/product.dart';
 import '../../../data/models/product_query.dart';
@@ -28,6 +29,7 @@ class ProductList extends StatelessWidget {
     required this.purchaseRepository,
     required this.saleRepository,
     required this.capabilities,
+    this.analyticsEngine,
     required this.onBarcodeSubmitted,
     required this.onOpenCameraScanner,
     required this.onCreateProduct,
@@ -39,6 +41,7 @@ class ProductList extends StatelessWidget {
   final PurchaseRepository purchaseRepository;
   final SaleRepository saleRepository;
   final AuthorizationCapabilities capabilities;
+  final AnalyticsEngine? analyticsEngine;
   final FutureOr<bool> Function(String barcode) onBarcodeSubmitted;
   final VoidCallback onOpenCameraScanner;
   final VoidCallback onCreateProduct;
@@ -110,6 +113,7 @@ class ProductList extends StatelessWidget {
       purchaseRepository: purchaseRepository,
       saleRepository: saleRepository,
       capabilities: capabilities,
+      analyticsEngine: analyticsEngine,
       onChanged: viewModel.loadProducts,
     );
   }
@@ -192,6 +196,7 @@ Future<void> openProductDetails(
   required PurchaseRepository purchaseRepository,
   required SaleRepository saleRepository,
   required AuthorizationCapabilities capabilities,
+  AnalyticsEngine? analyticsEngine,
   VoidCallback? onChanged,
 }) {
   return Navigator.of(context).push(
@@ -202,6 +207,7 @@ Future<void> openProductDetails(
           purchaseRepository,
           saleRepository,
           product,
+          analyticsEngine: analyticsEngine,
           shouldLoadSaleHistory: capabilities.canViewRegisterSessionOrders,
           shouldLoadPurchaseHistory: capabilities.canAccessPurchasing,
         ),
@@ -209,6 +215,7 @@ Future<void> openProductDetails(
         printingRepository: printingRepository,
         purchaseRepository: purchaseRepository,
         capabilities: capabilities,
+        analyticsEngine: analyticsEngine,
         onChanged: onChanged,
       ),
     ),

@@ -6,6 +6,7 @@ from django.test import TestCase
 from django.utils import timezone
 from rest_framework.test import APIClient
 
+from apps.analytics.models import AnalyticsEvent
 from apps.catalog.models import ProductCategory, ProductVariant
 from apps.catalog.testing import create_product_with_default_variant
 from apps.customers.models import Customer
@@ -490,59 +491,86 @@ class DiscountRuleApiTests(TestCase):
         )
 
     def test_create_update_disable_and_archive_discount_rule(self):
-        response = self.client.post(
-            "/api/discount-rules/",
-            {
-                "name": "Manager coupon",
-                "channel": DiscountRule.Channel.BOTH,
-                "application_type": DiscountRule.ApplicationType.COUPON_CODE,
-                "coupon_code": " save10 ",
-                "scope": DiscountRule.Scope.DOCUMENT,
-                "value_type": DiscountRule.ValueType.PERCENTAGE,
-                "value": "10.0000",
-                "max_discount_amount": "5.00",
-                "min_order_subtotal": "20.00",
-                "priority": 10,
-                "exclusive": False,
-                "products": [self.product.pk],
-                "variants": [self.variant.pk],
-                "product_categories": [self.category.pk],
-            },
-            format="json",
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(
+                "/api/discount-rules/",
+                {
+                    "name": "Manager coupon",
+                    "channel": DiscountRule.Channel.BOTH,
+                    "application_type": DiscountRule.ApplicationType.COUPON_CODE,
+                    "coupon_code": " save10 ",
+                    "scope": DiscountRule.Scope.DOCUMENT,
+                    "value_type": DiscountRule.ValueType.PERCENTAGE,
+                    "value": "10.0000",
+                    "max_discount_amount": "5.00",
+                    "min_order_subtotal": "20.00",
+                    "priority": 10,
+                    "exclusive": False,
+                    "products": [self.product.pk],
+                    "variants": [self.variant.pk],
+                    "product_categories": [self.category.pk],
+                },
+                format="json",
+            )
+
+            self.assertEqual(response.status_code, 201, response.data)
+            rule_id = response.data["id"]
+            self.assertEqual(response.data["coupon_code"], "SAVE10")
+            self.assertTrue(response.data["is_active"])
+            self.assertEqual(response.data["products"], [self.product.pk])
+            self.assertEqual(response.data["variants"], [self.variant.pk])
+            self.assertEqual(response.data["product_variants"], [self.variant.pk])
+            self.assertEqual(response.data["product_categories"], [self.category.pk])
+
+            patch_response = self.client.patch(
+                f"/api/discount-rules/{rule_id}/",
+                {"is_active": False, "priority": 5},
+                format="json",
+            )
+
+            self.assertEqual(patch_response.status_code, 200, patch_response.data)
+            self.assertFalse(patch_response.data["is_active"])
+            self.assertEqual(patch_response.data["priority"], 5)
+
+            enable_response = self.client.post(
+                f"/api/discount-rules/{rule_id}/enable/"
+            )
+            self.assertEqual(enable_response.status_code, 200, enable_response.data)
+            self.assertTrue(enable_response.data["is_active"])
+
+            disable_response = self.client.post(
+                f"/api/discount-rules/{rule_id}/disable/"
+            )
+            self.assertEqual(disable_response.status_code, 200, disable_response.data)
+            self.assertFalse(disable_response.data["is_active"])
+
+            delete_response = self.client.delete(f"/api/discount-rules/{rule_id}/")
+            self.assertEqual(delete_response.status_code, 200, delete_response.data)
+            self.assertFalse(delete_response.data["is_active"])
+            self.assertIn("archived_at", delete_response.data["metadata"])
+            self.assertTrue(DiscountRule.objects.filter(pk=rule_id).exists())
+
+        event_names = list(
+            AnalyticsEvent.objects.filter(entity_type="discount_rule")
+            .order_by("id")
+            .values_list("name", flat=True)
         )
-
-        self.assertEqual(response.status_code, 201, response.data)
-        rule_id = response.data["id"]
-        self.assertEqual(response.data["coupon_code"], "SAVE10")
-        self.assertTrue(response.data["is_active"])
-        self.assertEqual(response.data["products"], [self.product.pk])
-        self.assertEqual(response.data["variants"], [self.variant.pk])
-        self.assertEqual(response.data["product_variants"], [self.variant.pk])
-        self.assertEqual(response.data["product_categories"], [self.category.pk])
-
-        patch_response = self.client.patch(
-            f"/api/discount-rules/{rule_id}/",
-            {"is_active": False, "priority": 5},
-            format="json",
+        self.assertEqual(
+            event_names,
+            [
+                "discounts.rule.created",
+                "discounts.rule.updated",
+                "discounts.rule.enabled",
+                "discounts.rule.disabled",
+                "discounts.rule.archived",
+            ],
         )
-
-        self.assertEqual(patch_response.status_code, 200, patch_response.data)
-        self.assertFalse(patch_response.data["is_active"])
-        self.assertEqual(patch_response.data["priority"], 5)
-
-        enable_response = self.client.post(f"/api/discount-rules/{rule_id}/enable/")
-        self.assertEqual(enable_response.status_code, 200, enable_response.data)
-        self.assertTrue(enable_response.data["is_active"])
-
-        disable_response = self.client.post(f"/api/discount-rules/{rule_id}/disable/")
-        self.assertEqual(disable_response.status_code, 200, disable_response.data)
-        self.assertFalse(disable_response.data["is_active"])
-
-        delete_response = self.client.delete(f"/api/discount-rules/{rule_id}/")
-        self.assertEqual(delete_response.status_code, 200, delete_response.data)
-        self.assertFalse(delete_response.data["is_active"])
-        self.assertIn("archived_at", delete_response.data["metadata"])
-        self.assertTrue(DiscountRule.objects.filter(pk=rule_id).exists())
+        updated_event = AnalyticsEvent.objects.get(name="discounts.rule.updated")
+        self.assertEqual(
+            updated_event.attributes["changed_fields"],
+            ["is_active", "priority"],
+        )
+        self.assertEqual(updated_event.metrics["changed_field_count"], 2)
 
     def test_discount_rule_accepts_legacy_product_variants_alias(self):
         response = self.client.post(

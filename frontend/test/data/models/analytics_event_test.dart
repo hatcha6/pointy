@@ -88,6 +88,62 @@ void main() {
     expect(params['page'], '2');
   });
 
+  test('analytics event query serializes multi-user activity filters', () {
+    final query = AnalyticsEventQuery(
+      dateRange: AnalyticsEventDateRange.all,
+      userIds: const [7, 9, 7],
+      userLabels: const ['مدير', 'كاشير'],
+    );
+
+    final params = query.toQueryParameters(page: 1);
+
+    expect(params['received_by'], '7,9');
+    expect(query.activeFilterCount, 1);
+    expect(
+      query,
+      const AnalyticsEventQuery(
+        dateRange: AnalyticsEventDateRange.all,
+        userId: 7,
+        userLabel: 'مدير',
+      ).copyWith(userIds: const [7, 9], userLabels: const ['مدير', 'كاشير']),
+    );
+  });
+
+  test('analytics event query serializes cart and draft action filters', () {
+    final expectedActions = {
+      AnalyticsEventActionFilter.posCartCleared: 'pos_cart_cleared',
+      AnalyticsEventActionFilter.posLineQuantityChanged:
+          'pos_line_quantity_changed',
+      AnalyticsEventActionFilter.purchaseDraftSubmitted:
+          'purchase_draft_submitted',
+      AnalyticsEventActionFilter.purchaseLineQuantityChanged:
+          'purchase_line_quantity_changed',
+      AnalyticsEventActionFilter.registerSessionStarted:
+          'register_session_started',
+      AnalyticsEventActionFilter.registerSessionClosed:
+          'register_session_closed',
+      AnalyticsEventActionFilter.receiptReprinted: 'receipt_reprinted',
+      AnalyticsEventActionFilter.productChanged: 'product_changed',
+      AnalyticsEventActionFilter.stockMovementCreated: 'stock_movement_created',
+      AnalyticsEventActionFilter.barcodeLabelsPrinted: 'barcode_labels_printed',
+      AnalyticsEventActionFilter.userChanged: 'user_changed',
+      AnalyticsEventActionFilter.settingsChanged: 'settings_changed',
+      AnalyticsEventActionFilter.discountChanged: 'discount_changed',
+      AnalyticsEventActionFilter.reportActivity: 'report_activity',
+      AnalyticsEventActionFilter.printerActivity: 'printer_activity',
+      AnalyticsEventActionFilter.analyticsExport: 'analytics_export',
+    };
+
+    for (final entry in expectedActions.entries) {
+      expect(
+        AnalyticsEventQuery(
+          action: entry.key,
+        ).toQueryParameters(page: 1)['action'],
+        entry.value,
+      );
+    }
+  });
+
   test('analytics event record derives register session references', () {
     final event = AnalyticsEventRecord.fromJson({
       'id': 1,

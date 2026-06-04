@@ -202,7 +202,7 @@ class _PosCatalogGrid extends StatelessWidget {
           variants: result.variants,
         );
         if (variant != null && context.mounted) {
-          viewModel.addVariant(variant);
+          viewModel.addVariant(variant, source: 'variant_picker');
         }
       case PosProductSelectionStatus.unavailable:
         messenger
@@ -313,7 +313,11 @@ class _PosProductLookupControls extends StatelessWidget {
       if (viewModel.isCheckingOut) {
         return;
       }
-      viewModel.addVariant(entry.variant, quantity: entry.quantity);
+      viewModel.addVariant(
+        entry.variant,
+        quantity: entry.quantity,
+        source: 'camera_scanner',
+      );
     }
   }
 

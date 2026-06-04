@@ -1,6 +1,9 @@
 import 'package:flutter/foundation.dart';
 
+import '../../../core/analytics_audit.dart';
+import '../../../core/analytics_engine.dart';
 import '../../../core/result.dart';
+import '../../../data/models/analytics_event.dart';
 import '../../../data/models/product.dart';
 import '../../../data/models/purchase_submission.dart';
 import '../../../data/models/stock_item.dart';
@@ -13,14 +16,16 @@ class ProductStockViewModel extends ChangeNotifier {
   ProductStockViewModel(
     this._inventoryRepository,
     this._purchaseRepository,
-    this.product,
-  ) {
+    this.product, {
+    AnalyticsEngine? analyticsEngine,
+  }) : _analyticsEngine = analyticsEngine {
     load();
   }
 
   final InventoryRepository _inventoryRepository;
   final PurchaseRepository _purchaseRepository;
   final Product product;
+  final AnalyticsEngine? _analyticsEngine;
 
   StockItem? _stockItem;
   List<StockMovement> _movements = [];
@@ -251,15 +256,71 @@ class ProductStockViewModel extends ChangeNotifier {
     );
     switch (result) {
       case Ok<StockMovement>():
+        _trackStockMovementCreated(result.value);
         await load();
         _isSavingMovement = false;
         notifyListeners();
         return true;
       case Error<StockMovement>():
+        _trackStockMovementFailed(
+          movementType: movementType,
+          quantity: quantity,
+          note: note,
+        );
         _errorMessage = 'stock_movement_create_error';
         _isSavingMovement = false;
         notifyListeners();
         return false;
     }
+  }
+
+  void _trackStockMovementCreated(StockMovement movement) {
+    trackAuditEvent(
+      _analyticsEngine,
+      name: 'catalog.stock_movement.created',
+      entityType: 'stock_movement',
+      entityId: movement.id,
+      attributes: {
+        'product_id': product.id,
+        'product_name': product.name,
+        if (product.variantId != null) 'variant_id': product.variantId,
+        'movement_type': movement.movementType.apiValue,
+        'note_present': movement.note.trim().isNotEmpty,
+        'source': 'stock_movement_form',
+      },
+      metrics: {
+        'quantity': movement.quantity,
+        'on_hand_before': movement.onHandBefore,
+        'on_hand_after': movement.onHandAfter,
+        'committed_before': movement.committedBefore,
+        'committed_after': movement.committedAfter,
+        'expected_before': movement.expectedBefore,
+        'expected_after': movement.expectedAfter,
+      },
+    );
+  }
+
+  void _trackStockMovementFailed({
+    required StockMovementType movementType,
+    required int quantity,
+    required String note,
+  }) {
+    trackAuditEvent(
+      _analyticsEngine,
+      name: 'inventory.manual_movement.create_failed',
+      severity: AnalyticsEventSeverity.warning,
+      entityType: 'product',
+      entityId: product.id,
+      attributes: {
+        'product_id': product.id,
+        'product_name': product.name,
+        if (product.variantId != null) 'variant_id': product.variantId,
+        'movement_type': movementType.apiValue,
+        'note_present': note.trim().isNotEmpty,
+        'source': 'stock_movement_form',
+      },
+      metrics: {'quantity': quantity},
+      flushImmediately: true,
+    );
   }
 }

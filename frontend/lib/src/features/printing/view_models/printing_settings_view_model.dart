@@ -2,7 +2,10 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
+import '../../../core/analytics_audit.dart';
+import '../../../core/analytics_engine.dart';
 import '../../../core/result.dart';
+import '../../../data/models/analytics_event.dart';
 import '../../../data/models/printer_config.dart';
 import '../../../data/repositories/printing_repository.dart';
 import '../../../data/services/print_transport.dart';
@@ -20,15 +23,18 @@ enum PrinterConnectionState {
 class PrintingSettingsViewModel extends ChangeNotifier {
   PrintingSettingsViewModel(
     this._repository, {
+    AnalyticsEngine? analyticsEngine,
     Duration statusCheckInterval = const Duration(minutes: 2),
     bool autoLoad = true,
-  }) : _statusCheckInterval = statusCheckInterval {
+  }) : _analyticsEngine = analyticsEngine,
+       _statusCheckInterval = statusCheckInterval {
     if (autoLoad) {
       loadDefaultConfig();
     }
   }
 
   final PrintingRepository _repository;
+  final AnalyticsEngine? _analyticsEngine;
   final Duration _statusCheckInterval;
 
   PrinterConfig _config = PrinterConfig.defaultConfig();
@@ -195,8 +201,13 @@ class PrintingSettingsViewModel extends ChangeNotifier {
     switch (result) {
       case Ok<List<PrinterEndpoint>>():
         _discoveredPrinters = result.value;
+        _trackPrinterDiscovery(
+          success: true,
+          discoveredCount: result.value.length,
+        );
       case Error<List<PrinterEndpoint>>():
         _hasDiscoveryError = true;
+        _trackPrinterDiscovery(success: false, discoveredCount: 0);
     }
 
     _isDiscovering = false;
@@ -213,6 +224,7 @@ class PrintingSettingsViewModel extends ChangeNotifier {
         ? PrinterTestOutcome.success
         : PrinterTestOutcome.failed;
     _updateConnectionStateFromPrintResult(result);
+    _trackPrinterTest(result, name: 'printing.printer.tested');
     _isTesting = false;
     notifyListeners();
   }
@@ -229,6 +241,7 @@ class PrintingSettingsViewModel extends ChangeNotifier {
         ? PrinterTestOutcome.fakeSuccess
         : PrinterTestOutcome.fakeFailed;
     _updateConnectionStateFromPrintResult(result);
+    _trackPrinterTest(result, name: 'printing.printer.fake_receipt_printed');
     _isTesting = false;
     notifyListeners();
   }
@@ -343,6 +356,48 @@ class PrintingSettingsViewModel extends ChangeNotifier {
     return endpoint.kind != PrintTransportKind.serial ||
         name.isNotEmpty ||
         address != '/dev/tty.usbserial';
+  }
+
+  void _trackPrinterDiscovery({
+    required bool success,
+    required int discoveredCount,
+  }) {
+    trackAuditEvent(
+      _analyticsEngine,
+      name: success
+          ? 'printing.printer.discovery_completed'
+          : 'printing.printer.discovery_failed',
+      severity: success
+          ? AnalyticsEventSeverity.info
+          : AnalyticsEventSeverity.warning,
+      entityType: 'printer_settings',
+      attributes: {
+        'transport_kind': _config.endpoint.kind.name,
+        'source': 'printing_settings',
+      },
+      metrics: {'discovered_count': discoveredCount},
+      flushImmediately: !success,
+    );
+  }
+
+  void _trackPrinterTest(PrintTransportResult result, {required String name}) {
+    trackAuditEvent(
+      _analyticsEngine,
+      name: name,
+      severity: result.isSuccess
+          ? AnalyticsEventSeverity.info
+          : AnalyticsEventSeverity.warning,
+      entityType: 'printer_settings',
+      attributes: {
+        'transport_kind': _config.endpoint.kind.name,
+        'printer_configured': hasConfiguredPrinter,
+        'paper_width_mm': _config.endpoint.paperWidthMm,
+        'outcome': result.isSuccess ? 'success' : 'failed',
+        'source': 'printing_settings',
+      },
+      metrics: {'timeout_ms': _config.endpoint.timeoutMs},
+      flushImmediately: !result.isSuccess,
+    );
   }
 
   void _notifyIfActive() {

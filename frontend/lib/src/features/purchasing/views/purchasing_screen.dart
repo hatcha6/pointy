@@ -187,7 +187,7 @@ class _PurchasingWorkspace extends StatelessWidget {
     if (variant == null) {
       return;
     }
-    await viewModel.addVariant(variant);
+    await viewModel.addVariant(variant, source: 'purchase_barcode_lookup');
   }
 }
 

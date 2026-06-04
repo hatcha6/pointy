@@ -32,6 +32,8 @@ enum AnalyticsEventName {
   analyticsExportStarted,
   analyticsExportCompleted,
   analyticsExportFailed,
+  analyticsExportDownloaded,
+  analyticsExportDownloadFailed,
   reportGenerated,
   reportGenerationFailed,
   reportPreviewed,
@@ -372,17 +374,56 @@ enum AnalyticsEventActivityScope implements QueryFilterSet {
 enum AnalyticsEventActionFilter implements QueryFilterSet {
   all(null),
   fraudSignal(QueryFilter(parameter: 'action', value: 'fraud_signal')),
+  posLineAdded(QueryFilter(parameter: 'action', value: 'pos_line_added')),
   posLineDeleted(QueryFilter(parameter: 'action', value: 'pos_line_deleted')),
+  posLineQuantityChanged(
+    QueryFilter(parameter: 'action', value: 'pos_line_quantity_changed'),
+  ),
+  posCartCleared(QueryFilter(parameter: 'action', value: 'pos_cart_cleared')),
+  purchaseLineAdded(
+    QueryFilter(parameter: 'action', value: 'purchase_line_added'),
+  ),
   purchaseLineDeleted(
     QueryFilter(parameter: 'action', value: 'purchase_line_deleted'),
+  ),
+  purchaseLineQuantityChanged(
+    QueryFilter(parameter: 'action', value: 'purchase_line_quantity_changed'),
+  ),
+  purchaseDraftCleared(
+    QueryFilter(parameter: 'action', value: 'purchase_draft_cleared'),
+  ),
+  purchaseDraftSubmitted(
+    QueryFilter(parameter: 'action', value: 'purchase_draft_submitted'),
   ),
   invoiceCreated(QueryFilter(parameter: 'action', value: 'invoice_created')),
   customerCreated(QueryFilter(parameter: 'action', value: 'customer_created')),
   registerCashMovement(
     QueryFilter(parameter: 'action', value: 'register_cash_movement'),
   ),
+  registerSessionStarted(
+    QueryFilter(parameter: 'action', value: 'register_session_started'),
+  ),
+  registerSessionClosed(
+    QueryFilter(parameter: 'action', value: 'register_session_closed'),
+  ),
+  receiptReprinted(
+    QueryFilter(parameter: 'action', value: 'receipt_reprinted'),
+  ),
   orderVoided(QueryFilter(parameter: 'action', value: 'order_voided')),
   orderReturned(QueryFilter(parameter: 'action', value: 'order_returned')),
+  productChanged(QueryFilter(parameter: 'action', value: 'product_changed')),
+  stockMovementCreated(
+    QueryFilter(parameter: 'action', value: 'stock_movement_created'),
+  ),
+  barcodeLabelsPrinted(
+    QueryFilter(parameter: 'action', value: 'barcode_labels_printed'),
+  ),
+  userChanged(QueryFilter(parameter: 'action', value: 'user_changed')),
+  settingsChanged(QueryFilter(parameter: 'action', value: 'settings_changed')),
+  discountChanged(QueryFilter(parameter: 'action', value: 'discount_changed')),
+  reportActivity(QueryFilter(parameter: 'action', value: 'report_activity')),
+  printerActivity(QueryFilter(parameter: 'action', value: 'printer_activity')),
+  analyticsExport(QueryFilter(parameter: 'action', value: 'analytics_export')),
   purchaseOrderDeleted(
     QueryFilter(parameter: 'action', value: 'purchase_order_deleted'),
   ),
@@ -426,6 +467,8 @@ class AnalyticsEventQuery extends ModelQuery {
     this.occurredBefore,
     this.userId,
     this.userLabel = '',
+    this.userIds = const [],
+    this.userLabels = const [],
     this.registerSessionId = '',
     this.entityType = '',
     this.entityId = '',
@@ -445,12 +488,33 @@ class AnalyticsEventQuery extends ModelQuery {
   final DateTime? occurredBefore;
   final int? userId;
   final String userLabel;
+  final List<int> userIds;
+  final List<String> userLabels;
   final String registerSessionId;
   final String entityType;
   final String entityId;
   final int? minRiskScore;
   @override
   final AnalyticsEventOrdering ordering;
+
+  List<int> get selectedUserIds {
+    final ids = userIds.isNotEmpty ? userIds : [?userId];
+    final seen = <int>{};
+    return [
+      for (final id in ids)
+        if (seen.add(id)) id,
+    ];
+  }
+
+  List<String> get selectedUserLabels {
+    final labels = userLabels.isNotEmpty
+        ? userLabels
+        : [if (userLabel.trim().isNotEmpty) userLabel];
+    return [
+      for (final label in labels)
+        if (label.trim().isNotEmpty) label,
+    ];
+  }
 
   @override
   Iterable<QueryFilter> get filters => [
@@ -469,7 +533,7 @@ class AnalyticsEventQuery extends ModelQuery {
       activityScope != AnalyticsEventActivityScope.reviewable,
       action != AnalyticsEventActionFilter.all,
       dateRange != AnalyticsEventDateRange.all,
-      userId != null,
+      selectedUserIds.isNotEmpty,
       registerSessionId.trim().isNotEmpty,
       entityType.trim().isNotEmpty,
       entityId.trim().isNotEmpty,
@@ -479,6 +543,7 @@ class AnalyticsEventQuery extends ModelQuery {
 
   @override
   Map<String, String> toQueryParameters({required int page}) {
+    final userIds = selectedUserIds;
     return {
       if (search.trim().isNotEmpty) 'search': search.trim(),
       for (final filter in filters) filter.parameter: filter.value,
@@ -486,7 +551,7 @@ class AnalyticsEventQuery extends ModelQuery {
         'occurred_at_after': occurredAfter!.toUtc().toIso8601String(),
       if (occurredBefore != null)
         'occurred_at_before': occurredBefore!.toUtc().toIso8601String(),
-      if (userId != null) 'received_by': '$userId',
+      if (userIds.isNotEmpty) 'received_by': userIds.join(','),
       if (registerSessionId.trim().isNotEmpty)
         'session_id': registerSessionId.trim(),
       if (entityType.trim().isNotEmpty) 'entity_type': entityType.trim(),
@@ -512,6 +577,8 @@ class AnalyticsEventQuery extends ModelQuery {
     int? userId,
     bool clearUser = false,
     String? userLabel,
+    List<int>? userIds,
+    List<String>? userLabels,
     String? registerSessionId,
     String? entityType,
     String? entityId,
@@ -519,6 +586,14 @@ class AnalyticsEventQuery extends ModelQuery {
     bool clearMinRiskScore = false,
     AnalyticsEventOrdering? ordering,
   }) {
+    final nextUserIds = clearUser
+        ? const <int>[]
+        : userIds ?? (userId == null ? this.userIds : <int>[userId]);
+    final nextUserLabels = clearUser
+        ? const <String>[]
+        : userLabels ??
+              (userLabel == null ? this.userLabels : <String>[userLabel]);
+
     return AnalyticsEventQuery(
       search: search ?? this.search,
       type: type ?? this.type,
@@ -533,8 +608,24 @@ class AnalyticsEventQuery extends ModelQuery {
       occurredBefore: clearOccurredBefore
           ? null
           : occurredBefore ?? this.occurredBefore,
-      userId: clearUser ? null : userId ?? this.userId,
-      userLabel: clearUser ? '' : userLabel ?? this.userLabel,
+      userId: clearUser
+          ? null
+          : userId ??
+                (userIds == null
+                    ? this.userId
+                    : userIds.length == 1
+                    ? userIds.first
+                    : null),
+      userLabel: clearUser
+          ? ''
+          : userLabel ??
+                (userLabels == null
+                    ? this.userLabel
+                    : userLabels.length == 1
+                    ? userLabels.first
+                    : ''),
+      userIds: nextUserIds,
+      userLabels: nextUserLabels,
       registerSessionId: registerSessionId ?? this.registerSessionId,
       entityType: entityType ?? this.entityType,
       entityId: entityId ?? this.entityId,
@@ -557,8 +648,8 @@ class AnalyticsEventQuery extends ModelQuery {
         other.dateRange == dateRange &&
         other.occurredAfter == occurredAfter &&
         other.occurredBefore == occurredBefore &&
-        other.userId == userId &&
-        other.userLabel == userLabel &&
+        _intListsEqual(other.selectedUserIds, selectedUserIds) &&
+        _stringListsEqual(other.selectedUserLabels, selectedUserLabels) &&
         other.registerSessionId == registerSessionId &&
         other.entityType == entityType &&
         other.entityId == entityId &&
@@ -577,14 +668,38 @@ class AnalyticsEventQuery extends ModelQuery {
     dateRange,
     occurredAfter,
     occurredBefore,
-    userId,
-    userLabel,
+    Object.hashAll(selectedUserIds),
+    Object.hashAll(selectedUserLabels),
     registerSessionId,
     entityType,
     entityId,
     minRiskScore,
     ordering,
   );
+}
+
+bool _intListsEqual(List<int> left, List<int> right) {
+  if (left.length != right.length) {
+    return false;
+  }
+  for (var index = 0; index < left.length; index += 1) {
+    if (left[index] != right[index]) {
+      return false;
+    }
+  }
+  return true;
+}
+
+bool _stringListsEqual(List<String> left, List<String> right) {
+  if (left.length != right.length) {
+    return false;
+  }
+  for (var index = 0; index < left.length; index += 1) {
+    if (left[index] != right[index]) {
+      return false;
+    }
+  }
+  return true;
 }
 
 class AnalyticsEventPage {
@@ -784,6 +899,10 @@ String analyticsEventNameToJson(AnalyticsEventName name) {
     AnalyticsEventName.analyticsExportStarted => 'analytics.export.started',
     AnalyticsEventName.analyticsExportCompleted => 'analytics.export.completed',
     AnalyticsEventName.analyticsExportFailed => 'analytics.export.failed',
+    AnalyticsEventName.analyticsExportDownloaded =>
+      'analytics.export.downloaded',
+    AnalyticsEventName.analyticsExportDownloadFailed =>
+      'analytics.export.download_failed',
     AnalyticsEventName.reportGenerated => 'report.generated',
     AnalyticsEventName.reportGenerationFailed => 'report.generation_failed',
     AnalyticsEventName.reportPreviewed => 'report.previewed',

@@ -93,7 +93,9 @@ class _PurchaseDraftPaneState extends State<PurchaseDraftPane> {
                   tooltip: l10n.clearPurchaseDraftTooltip,
                   onPressed: viewModel.draft.isEmpty || viewModel.isSubmitting
                       ? null
-                      : viewModel.clearDraft,
+                      : () => viewModel.clearDraft(
+                          source: 'purchase_draft_clear_button',
+                        ),
                   icon: const Icon(Icons.delete_outline),
                 ),
               ],
@@ -236,9 +238,14 @@ class _PurchaseDraftPaneState extends State<PurchaseDraftPane> {
                           previewLine: viewModel
                               .discountPreviewLineForDraftIndex(index),
                           enabled: !viewModel.isSubmitting,
-                          onAdd: () => viewModel.addVariant(line.variant),
-                          onRemove: () =>
-                              viewModel.decrementVariant(line.variant),
+                          onAdd: () => viewModel.addVariant(
+                            line.variant,
+                            source: 'purchase_draft_quantity_button',
+                          ),
+                          onRemove: () => viewModel.decrementVariant(
+                            line.variant,
+                            source: 'purchase_draft_quantity_button',
+                          ),
                           onCostChanged: (unitCost) {
                             viewModel.updateLineCost(line.variant, unitCost);
                           },

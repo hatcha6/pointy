@@ -1,7 +1,11 @@
 part of 'pos_view_model.dart';
 
 extension PosBarcodeActions on PosViewModel {
-  Future<bool> addVariantByBarcode(String barcode, {int quantity = 1}) async {
+  Future<bool> addVariantByBarcode(
+    String barcode, {
+    int quantity = 1,
+    String source = 'barcode_lookup',
+  }) async {
     final normalizedBarcode = barcode.trim();
     if (normalizedBarcode.isEmpty ||
         quantity <= 0 ||
@@ -25,7 +29,7 @@ extension PosBarcodeActions on PosViewModel {
         if (value == null) {
           _barcodeScanStatus = BarcodeScanStatus.notFound;
         } else {
-          _addVariantToCart(value, quantity: quantity);
+          _addVariantToCartAndTrack(value, quantity: quantity, source: source);
           _lastScannedProductName = value.displayLabel;
           _barcodeScanStatus = BarcodeScanStatus.found;
           unawaited(refreshDiscountPreview());

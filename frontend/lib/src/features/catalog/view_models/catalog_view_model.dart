@@ -1,5 +1,7 @@
 import 'package:flutter/foundation.dart';
 
+import '../../../core/analytics_audit.dart';
+import '../../../core/analytics_engine.dart';
 import '../../../core/result.dart';
 import '../../../data/models/product.dart';
 import '../../../data/models/product_draft.dart';
@@ -35,11 +37,13 @@ class CatalogBarcodeLookupOutcome {
 }
 
 class CatalogViewModel extends ChangeNotifier {
-  CatalogViewModel(this._catalogRepository) {
+  CatalogViewModel(this._catalogRepository, {AnalyticsEngine? analyticsEngine})
+    : _analyticsEngine = analyticsEngine {
     loadProducts();
   }
 
   final CatalogRepository _catalogRepository;
+  final AnalyticsEngine? _analyticsEngine;
 
   CatalogRepository get catalogRepository => _catalogRepository;
 
@@ -163,6 +167,12 @@ class CatalogViewModel extends ChangeNotifier {
           imageUpload: imageUpload,
           imageImportToken: imageImportToken,
         );
+        _trackProductCreated(
+          result.value,
+          draft: draft,
+          imageRequested: imageUpload != null || imageImportToken != null,
+          imageAttached: imageAttached,
+        );
         await loadProducts();
         _isSaving = false;
         if (!imageAttached) {
@@ -208,5 +218,34 @@ class CatalogViewModel extends ChangeNotifier {
       Ok() => true,
       Error() => false,
     };
+  }
+
+  void _trackProductCreated(
+    Product product, {
+    required ProductDraft draft,
+    required bool imageRequested,
+    required bool imageAttached,
+  }) {
+    trackAuditEvent(
+      _analyticsEngine,
+      name: 'catalog.product.created',
+      entityType: 'product',
+      entityId: product.id,
+      attributes: {
+        'product_id': product.id,
+        'product_name': product.name,
+        'is_active': product.isActive,
+        'tracks_expiry': product.tracksExpiry,
+        'image_requested': imageRequested,
+        'image_attached': imageAttached,
+        'source': 'catalog_product_form',
+      },
+      metrics: {
+        'category_count': draft.categoryIds.length,
+        'variant_option_count': draft.variantOptionIds.length,
+        'variant_count': draft.variants.isEmpty ? 1 : draft.variants.length,
+        'default_unit_price': draft.variantUnitPrice,
+      },
+    );
   }
 }

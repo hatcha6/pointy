@@ -50,6 +50,7 @@ extension PosRegisterSessionActions on PosViewModel {
     switch (result) {
       case Ok<RegisterSession>():
         _activateRegisterSession(result.value);
+        _trackRegisterSessionStarted(result.value, openingCash: openingCash);
         await loadCatalog();
         _isStartingRegisterSession = false;
         _notifyChanged();
@@ -69,6 +70,7 @@ extension PosRegisterSessionActions on PosViewModel {
     }
 
     _activateRegisterSession(session);
+    _trackRegisterSessionResumed(session);
     _notifyChanged();
     await loadCatalog();
   }
@@ -101,6 +103,7 @@ extension PosRegisterSessionActions on PosViewModel {
     );
     switch (result) {
       case Ok<RegisterSession>():
+        _trackRegisterSessionClosed(result.value);
         _activeRegisterSession = null;
         _availableRegisterSession = null;
         _cart.clear();
@@ -138,6 +141,7 @@ extension PosRegisterSessionActions on PosViewModel {
     );
     switch (result) {
       case Ok<RegisterCashMovement>():
+        _trackRegisterCashMovement(result.value, session);
         _isCreatingCashMovement = false;
         _notifyChanged();
         return true;
@@ -153,5 +157,92 @@ extension PosRegisterSessionActions on PosViewModel {
     _activeRegisterSession = session;
     _availableRegisterSession = null;
     _cart.clear();
+  }
+
+  void _trackRegisterSessionStarted(
+    RegisterSession session, {
+    required double openingCash,
+  }) {
+    trackAuditEvent(
+      _analyticsEngine,
+      name: 'pos.register_session.started',
+      sessionId: 'register:${session.id}',
+      entityType: 'register_session',
+      entityId: session.id,
+      attributes: {
+        'register_session_id': session.id,
+        'session_number': session.sessionNumber,
+        'status': session.status,
+        'source': 'register_session_gate',
+      },
+      metrics: {'opening_cash': openingCash},
+    );
+  }
+
+  void _trackRegisterSessionResumed(RegisterSession session) {
+    trackAuditEvent(
+      _analyticsEngine,
+      name: 'pos.register_session.resumed',
+      sessionId: 'register:${session.id}',
+      entityType: 'register_session',
+      entityId: session.id,
+      attributes: {
+        'register_session_id': session.id,
+        'session_number': session.sessionNumber,
+        'status': session.status,
+        'source': 'register_session_gate',
+      },
+      metrics: {'opening_cash': session.openingCash},
+    );
+  }
+
+  void _trackRegisterSessionClosed(RegisterSession session) {
+    trackAuditEvent(
+      _analyticsEngine,
+      name: 'pos.register_session.closed',
+      sessionId: 'register:${session.id}',
+      entityType: 'register_session',
+      entityId: session.id,
+      attributes: {
+        'register_session_id': session.id,
+        'session_number': session.sessionNumber,
+        'status': session.status,
+        'source': 'register_session_close_sheet',
+        'has_cash_variance': session.hasCashVariance,
+      },
+      metrics: {
+        'opening_cash': session.openingCash,
+        if (session.closingCash != null) 'closing_cash': session.closingCash!,
+        'expected_cash': session.expectedCash,
+        'denomination_total': session.denominationTotal,
+        if (session.cashVariance != null)
+          'cash_variance': session.cashVariance!,
+        'count_025': session.count025,
+        'count_050': session.count050,
+        'count_075': session.count075,
+        'count_100': session.count100,
+      },
+    );
+  }
+
+  void _trackRegisterCashMovement(
+    RegisterCashMovement movement,
+    RegisterSession session,
+  ) {
+    trackAuditEvent(
+      _analyticsEngine,
+      name: 'pos.register_cash_movement.created',
+      sessionId: 'register:${session.id}',
+      entityType: 'register_cash_movement',
+      entityId: movement.id,
+      attributes: {
+        'register_session_id': session.id,
+        'session_number': session.sessionNumber,
+        'movement_type': movement.movementType.toJson(),
+        'reason_present': movement.reason.trim().isNotEmpty,
+        'source': 'register_cash_movement_sheet',
+      },
+      metrics: {'amount': movement.amount},
+    );
   }
 }

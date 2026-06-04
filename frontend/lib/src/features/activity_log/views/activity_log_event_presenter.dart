@@ -115,13 +115,47 @@ String? _knownEventTitle(AppLocalizations l10n, String name) {
     'sales.order.paid' => l10n.activityEventOrderPaid,
     'sales.order.voided' => l10n.activityEventOrderVoided,
     'sales.order.returned' => l10n.activityEventOrderReturned,
+    'sales.receipt.reprint.queued' => l10n.activityEventReceiptReprintQueued,
+    'sales.receipt.reprint.failed' => l10n.activityEventReceiptReprintFailed,
     'sales.register_session.started' =>
       l10n.activityEventRegisterSessionStarted,
     'sales.register_session.closed' => l10n.activityEventRegisterSessionClosed,
     'sales.register_cash_movement.created' =>
       l10n.activityEventRegisterCashMovementCreated,
+    'sales_history.session.selected' =>
+      l10n.activityEventSalesHistorySessionSelected,
+    'sales_history.order_void.completed' =>
+      l10n.activityEventSalesHistoryOrderVoidCompleted,
+    'sales_history.order_return.completed' =>
+      l10n.activityEventSalesHistoryOrderReturnCompleted,
+    'pos.register_session.started' => l10n.activityEventRegisterSessionStarted,
+    'pos.register_session.resumed' => l10n.activityEventRegisterSessionResumed,
+    'pos.register_session.closed' => l10n.activityEventRegisterSessionClosed,
+    'pos.register_cash_movement.created' =>
+      l10n.activityEventRegisterCashMovementCreated,
+    'pos.cart.line.added' => l10n.activityEventPosLineAdded,
+    'pos.cart.line.quantity_increased' =>
+      l10n.activityEventPosLineQuantityIncreased,
+    'pos.cart.line.quantity_decreased' =>
+      l10n.activityEventPosLineQuantityDecreased,
     'pos.cart.line.deleted' => l10n.activityEventPosLineDeleted,
+    'pos.cart.cleared' => l10n.activityEventPosCartCleared,
+    'pos.checkout.started' => l10n.activityEventPosCheckoutStarted,
+    'pos.checkout.completed' => l10n.activityEventPosCheckoutCompleted,
+    'pos.checkout.failed' => l10n.activityEventPosCheckoutFailed,
+    'pos.checkout.stock_rejected' => l10n.activityEventPosCheckoutStockRejected,
+    'purchasing.draft.line.added' => l10n.activityEventPurchaseLineAdded,
+    'purchasing.draft.line.quantity_increased' =>
+      l10n.activityEventPurchaseLineQuantityIncreased,
+    'purchasing.draft.line.quantity_decreased' =>
+      l10n.activityEventPurchaseLineQuantityDecreased,
     'purchasing.draft.line.deleted' => l10n.activityEventPurchaseLineDeleted,
+    'purchasing.draft.cleared' => l10n.activityEventPurchaseDraftCleared,
+    'purchasing.draft.supplier.selected' =>
+      l10n.activityEventPurchaseSupplierSelected,
+    'purchasing.draft.submitted' => l10n.activityEventPurchaseDraftSubmitted,
+    'purchasing.draft.submit_failed' =>
+      l10n.activityEventPurchaseDraftSubmitFailed,
     'purchasing.purchase_order.created' =>
       l10n.activityEventPurchaseOrderCreated,
     'purchasing.purchase_order.updated' =>
@@ -139,9 +173,63 @@ String? _knownEventTitle(AppLocalizations l10n, String name) {
     'customers.customer.created' => l10n.activityEventCustomerCreated,
     'customers.customer.updated' => l10n.activityEventCustomerUpdated,
     'customers.customer.deleted' => l10n.activityEventCustomerDeleted,
+    'catalog.product.created' => l10n.activityEventCatalogProductCreated,
+    'catalog.product.updated' => l10n.activityEventCatalogProductUpdated,
+    'catalog.product.image_uploaded' =>
+      l10n.activityEventCatalogProductImageUploaded,
+    'catalog.product.image_imported' =>
+      l10n.activityEventCatalogProductImageImported,
+    'catalog.product_variant.created' =>
+      l10n.activityEventCatalogVariantCreated,
+    'catalog.product_variant.updated' =>
+      l10n.activityEventCatalogVariantUpdated,
+    'catalog.product.variants_generated' =>
+      l10n.activityEventCatalogVariantsGenerated,
+    'catalog.category.created' => l10n.activityEventCatalogCategoryCreated,
+    'catalog.stock_movement.created' => l10n.activityEventStockMovementCreated,
+    'inventory.manual_movement.created' =>
+      l10n.activityEventStockMovementCreated,
+    'inventory.manual_movement.create_failed' =>
+      l10n.activityEventStockMovementCreateFailed,
     'users.user.created' => l10n.activityEventUserCreated,
     'users.user.updated' => l10n.activityEventUserUpdated,
     'users.user.deleted' => l10n.activityEventUserDeleted,
+    'users.management.user.created' => l10n.activityEventUserCreated,
+    'users.management.user.role_changed' => l10n.activityEventUserRoleChanged,
+    'users.management.user.active_changed' =>
+      l10n.activityEventUserActiveChanged,
+    'settings.shop.updated' => l10n.activityEventShopSettingsUpdated,
+    'settings.shop.logo_uploaded' => l10n.activityEventShopLogoUploaded,
+    'settings.shop.logo_removed' => l10n.activityEventShopLogoRemoved,
+    'settings.shop.form_saved' => l10n.activityEventShopSettingsUpdated,
+    'settings.shop.logo_upload.completed' => l10n.activityEventShopLogoUploaded,
+    'settings.shop.logo_remove.completed' => l10n.activityEventShopLogoRemoved,
+    'settings.device.usage_mode_changed' =>
+      l10n.activityEventDeviceUsageModeChanged,
+    'discounts.rule.created' => l10n.activityEventDiscountRuleCreated,
+    'discounts.rule.updated' => l10n.activityEventDiscountRuleUpdated,
+    'discounts.rule.enabled' => l10n.activityEventDiscountRuleEnabled,
+    'discounts.rule.disabled' => l10n.activityEventDiscountRuleDisabled,
+    'discounts.rule.archived' => l10n.activityEventDiscountRuleArchived,
+    'discounts.management.rule.created' =>
+      l10n.activityEventDiscountRuleCreated,
+    'discounts.management.rule.updated' =>
+      l10n.activityEventDiscountRuleUpdated,
+    'discounts.management.rule.enabled' =>
+      l10n.activityEventDiscountRuleEnabled,
+    'discounts.management.rule.disabled' =>
+      l10n.activityEventDiscountRuleDisabled,
+    'discounts.management.rule.archived' =>
+      l10n.activityEventDiscountRuleArchived,
+    'printing.barcode_labels.printed' => l10n.activityEventBarcodeLabelsPrinted,
+    'printing.barcode_labels.failed' => l10n.activityEventBarcodeLabelsFailed,
+    'printing.printer.discovery_completed' =>
+      l10n.activityEventPrinterDiscoveryCompleted,
+    'printing.printer.discovery_failed' =>
+      l10n.activityEventPrinterDiscoveryFailed,
+    'printing.printer.tested' => l10n.activityEventPrinterTested,
+    'printing.printer.fake_receipt_printed' =>
+      l10n.activityEventPrinterFakeReceiptPrinted,
     'app.flutter_error' => l10n.activityEventAppFlutterError,
     'app.platform_error' => l10n.activityEventAppPlatformError,
     'auth.session_started' => l10n.activityEventAuthSessionStarted,
@@ -151,25 +239,62 @@ String? _knownEventTitle(AppLocalizations l10n, String name) {
     'analytics.export.started' => l10n.activityEventAnalyticsExportStarted,
     'analytics.export.completed' => l10n.activityEventAnalyticsExportCompleted,
     'analytics.export.failed' => l10n.activityEventAnalyticsExportFailed,
+    'analytics.export.downloaded' =>
+      l10n.activityEventAnalyticsExportDownloaded,
+    'analytics.export.download_failed' =>
+      l10n.activityEventAnalyticsExportDownloadFailed,
     'report.generated' => l10n.activityEventReportGenerated,
     'report.generation_failed' => l10n.activityEventReportGenerationFailed,
     'report.previewed' => l10n.activityEventReportPreviewed,
     'report.printed' => l10n.activityEventReportPrinted,
     'report.shared' => l10n.activityEventReportShared,
+    'reports.run.completed' => l10n.activityEventReportRunCompleted,
+    'reports.run.failed' => l10n.activityEventReportRunFailed,
     _ => null,
   };
 }
 
 String _businessSummary(AppLocalizations l10n, AnalyticsEventRecord event) {
   final values = <String>[
+    if (_stringAttribute(event, 'product_name').isNotEmpty)
+      l10n.activityLogProductSummary(
+        _productDisplayName(event),
+        _quantityValue(event).toString(),
+      ),
     if (_stringAttribute(event, 'receipt_number').isNotEmpty)
       l10n.saleReceiptTitle(_stringAttribute(event, 'receipt_number')),
     if (_stringAttribute(event, 'order_number').isNotEmpty)
       l10n.purchaseOrderNumberValue(_stringAttribute(event, 'order_number')),
+    if (_stringAttribute(event, 'supplier_name').isNotEmpty)
+      l10n.activityLogSupplierSummary(_stringAttribute(event, 'supplier_name')),
+    if (_stringAttribute(event, 'target_user_label').isNotEmpty)
+      l10n.activityLogUserSummary(_stringAttribute(event, 'target_user_label')),
+    if (_stringAttribute(event, 'discount_rule_name').isNotEmpty)
+      l10n.activityLogDiscountRuleSummary(
+        _stringAttribute(event, 'discount_rule_name'),
+      ),
+    if (_stringAttribute(event, 'report_type').isNotEmpty)
+      l10n.activityLogReportSummary(_stringAttribute(event, 'report_type')),
+    if (_stringAttribute(event, 'movement_type').isNotEmpty)
+      l10n.activityLogMovementTypeSummary(
+        _stringAttribute(event, 'movement_type'),
+      ),
+    if (_stringAttribute(event, 'source').isNotEmpty)
+      l10n.activityLogUiSourceSummary(
+        _uiSourceLabel(l10n, _stringAttribute(event, 'source')),
+      ),
     if (event.registerSessionReference.isNotEmpty)
       l10n.activityLogSessionSummary(event.registerSessionReference),
     if (_metric(event, 'total') != null)
       l10n.activityLogTotalSummary(_metric(event, 'total')!.toStringAsFixed(2)),
+    if (_metric(event, 'cart_total') != null)
+      l10n.activityLogCartTotalSummary(
+        _metric(event, 'cart_total')!.toStringAsFixed(2),
+      ),
+    if (_metric(event, 'draft_total') != null)
+      l10n.activityLogDraftTotalSummary(
+        _metric(event, 'draft_total')!.toStringAsFixed(2),
+      ),
     if (_lineCount(event) != null) l10n.lineItemCount(_lineCount(event)!),
     if (_stringAttribute(event, 'reason').isNotEmpty)
       l10n.activityLogReasonSummary(_stringAttribute(event, 'reason')),
@@ -322,6 +447,49 @@ String _destinationLabel(AppLocalizations l10n, String destination) {
   };
 }
 
+String _uiSourceLabel(AppLocalizations l10n, String source) {
+  return switch (source) {
+    'product_tile' => l10n.activityUiSourceProductTile,
+    'variant_picker' => l10n.activityUiSourceVariantPicker,
+    'barcode_lookup' => l10n.activityUiSourceBarcodeLookup,
+    'hardware_scanner' => l10n.activityUiSourceHardwareScanner,
+    'camera_scanner' => l10n.activityUiSourceCameraScanner,
+    'cart_quantity_button' => l10n.activityUiSourceCartQuantityButton,
+    'cart_delete_button' => l10n.activityUiSourceCartDeleteButton,
+    'cart_clear_button' => l10n.activityUiSourceCartClearButton,
+    'purchase_catalog' ||
+    'purchase_catalog_tile' => l10n.activityUiSourcePurchaseCatalog,
+    'purchase_barcode_lookup' => l10n.activityUiSourcePurchaseBarcodeLookup,
+    'purchase_camera_scanner' => l10n.activityUiSourcePurchaseCameraScanner,
+    'purchase_draft_quantity_button' =>
+      l10n.activityUiSourcePurchaseDraftQuantityButton,
+    'purchase_draft_clear_button' =>
+      l10n.activityUiSourcePurchaseDraftClearButton,
+    'register_session_gate' => l10n.activityUiSourceRegisterSessionGate,
+    'register_session_close_sheet' =>
+      l10n.activityUiSourceRegisterSessionCloseSheet,
+    'register_cash_movement_sheet' =>
+      l10n.activityUiSourceRegisterCashMovementSheet,
+    'register_session_history' => l10n.activityUiSourceRegisterSessionHistory,
+    'sale_order_details_sheet' => l10n.activityUiSourceSaleOrderDetailsSheet,
+    'catalog_product_form' => l10n.activityUiSourceCatalogProductForm,
+    'catalog_product_details' => l10n.activityUiSourceCatalogProductDetails,
+    'catalog_variant_form' => l10n.activityUiSourceCatalogVariantForm,
+    'catalog_variant_generator' => l10n.activityUiSourceCatalogVariantGenerator,
+    'category_management' => l10n.activityUiSourceCategoryManagement,
+    'stock_movement_form' => l10n.activityUiSourceStockMovementForm,
+    'barcode_label_panel' => l10n.activityUiSourceBarcodeLabelPanel,
+    'user_management' => l10n.activityUiSourceUserManagement,
+    'shop_settings' => l10n.activityUiSourceShopSettings,
+    'device_settings' => l10n.activityUiSourceDeviceSettings,
+    'discount_management' => l10n.activityUiSourceDiscountManagement,
+    'reports_screen' => l10n.activityUiSourceReportsScreen,
+    'analytics_export_sheet' => l10n.activityUiSourceAnalyticsExportSheet,
+    'printing_settings' => l10n.activityUiSourcePrintingSettings,
+    _ => l10n.activityUiSourceUnknown(source),
+  };
+}
+
 IconData _businessEventIcon(
   AnalyticsEventRecord event,
   ActivityLogDrillDownTarget? target,
@@ -336,17 +504,48 @@ IconData _businessEventIcon(
     'sales.checkout.completed' => Icons.receipt_long_outlined,
     'sales.order.voided' => Icons.block_outlined,
     'sales.order.returned' => Icons.keyboard_return_outlined,
+    'sales.receipt.reprint.queued' => Icons.print_outlined,
+    'sales.receipt.reprint.failed' => Icons.print_disabled_outlined,
     'sales.register_session.started' => Icons.point_of_sale_outlined,
     'sales.register_session.closed' => Icons.lock_clock_outlined,
     'sales.register_cash_movement.created' =>
       Icons.account_balance_wallet_outlined,
+    String name when name.startsWith('sales_history.') =>
+      Icons.manage_history_outlined,
+    String name when name.startsWith('pos.register_session.') =>
+      Icons.point_of_sale_outlined,
+    'pos.register_cash_movement.created' =>
+      Icons.account_balance_wallet_outlined,
+    'pos.cart.line.added' => Icons.add_shopping_cart_outlined,
+    'pos.cart.line.quantity_increased' => Icons.add_circle_outline,
+    'pos.cart.line.quantity_decreased' => Icons.remove_circle_outline,
     'pos.cart.line.deleted' => Icons.remove_shopping_cart_outlined,
+    'pos.cart.cleared' => Icons.delete_sweep_outlined,
+    String name when name.startsWith('pos.checkout.') =>
+      Icons.shopping_cart_checkout_outlined,
+    'purchasing.draft.line.added' => Icons.add_circle_outline,
+    'purchasing.draft.line.quantity_increased' => Icons.add_circle_outline,
+    'purchasing.draft.line.quantity_decreased' => Icons.remove_circle_outline,
     'purchasing.draft.line.deleted' => Icons.remove_circle_outline,
+    'purchasing.draft.cleared' => Icons.delete_sweep_outlined,
+    'purchasing.draft.supplier.selected' => Icons.local_shipping_outlined,
+    'purchasing.draft.submitted' => Icons.assignment_turned_in_outlined,
+    'purchasing.draft.submit_failed' => Icons.error_outline,
     String name when name.startsWith('purchasing.') =>
       Icons.add_shopping_cart_outlined,
     String name when name.startsWith('customers.') => Icons.contacts_outlined,
+    String name when name.startsWith('catalog.') => Icons.inventory_2_outlined,
+    String name when name.startsWith('inventory.') => Icons.move_down_outlined,
     String name when name.startsWith('users.') =>
       Icons.admin_panel_settings_outlined,
+    String name when name.startsWith('settings.') => Icons.settings_outlined,
+    String name when name.startsWith('discounts.') => Icons.percent_outlined,
+    String name when name.startsWith('printing.') => Icons.print_outlined,
+    String name when name.startsWith('analytics.') =>
+      Icons.file_download_outlined,
+    String name
+        when name.startsWith('report.') || name.startsWith('reports.') =>
+      Icons.assessment_outlined,
     String name when name.startsWith('auth.') => Icons.login_outlined,
     _ => Icons.fact_check_outlined,
   };
@@ -384,6 +583,23 @@ int? _lineCount(AnalyticsEventRecord event) {
   final attributeValue = event.attributes['line_count'];
   return int.tryParse(attributeValue?.toString() ?? '') ??
       _intMetric(event, 'item_count');
+}
+
+String _productDisplayName(AnalyticsEventRecord event) {
+  final product = _stringAttribute(event, 'product_name');
+  final variant = _stringAttribute(event, 'variant_name');
+  if (variant.isEmpty || variant == product) {
+    return product;
+  }
+  return '$product / $variant';
+}
+
+int _quantityValue(AnalyticsEventRecord event) {
+  final value =
+      event.metrics['quantity'] ??
+      event.attributes['new_quantity'] ??
+      event.attributes['quantity'];
+  return int.tryParse(value?.toString() ?? '') ?? 0;
 }
 
 int? _intValue(String value) {

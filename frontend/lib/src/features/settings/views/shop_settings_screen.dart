@@ -1061,6 +1061,12 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
     }
 
     final downloaded = file != null && await downloadAnalyticsExportFile(file);
+    if (file != null) {
+      widget.viewModel.trackAnalyticsExportDownloadResult(
+        file,
+        downloaded: downloaded,
+      );
+    }
     messenger
       ..clearSnackBars()
       ..showSnackBar(

@@ -180,8 +180,8 @@ class PosApiService {
     return _businessNotifications.restoreHiddenNotifications();
   }
 
-  Future<PosUserPage> fetchUsers({int page = 1}) {
-    return _users.fetchUsers(page: page);
+  Future<PosUserPage> fetchUsers({int page = 1, String search = ''}) {
+    return _users.fetchUsers(page: page, search: search);
   }
 
   Future<PosUser> createUser(UserCreateDraft draft) {

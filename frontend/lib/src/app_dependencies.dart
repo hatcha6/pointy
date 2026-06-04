@@ -136,11 +136,13 @@ class PointyAppDependencies {
   DeviceSettingsViewModel get deviceSettingsViewModel =>
       _deviceSettingsViewModel ??= DeviceSettingsViewModel(
         deviceSettingsRepository,
+        analyticsEngine: analyticsEngine,
       );
 
   PrintingSettingsViewModel get printingSettingsViewModel =>
       _printingSettingsViewModel ??= PrintingSettingsViewModel(
         printingRepository,
+        analyticsEngine: analyticsEngine,
       );
 
   ContactManagementViewModel get contactManagementViewModel =>
@@ -151,6 +153,7 @@ class PointyAppDependencies {
   DiscountManagementViewModel get discountManagementViewModel =>
       _discountManagementViewModel ??= DiscountManagementViewModel(
         discountRepository,
+        analyticsEngine: analyticsEngine,
       );
 
   DashboardViewModel get dashboardViewModel =>

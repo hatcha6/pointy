@@ -56,6 +56,9 @@ void main() {
 
     expect(find.text('سجل نشاط المستخدمين'), findsOneWidget);
     expect(find.text('اكتملت عملية بيع'), findsWidgets);
+    expect(find.text('أضيف سطر إلى سلة البيع'), findsWidgets);
+    expect(find.textContaining('قهوة البيت'), findsWidgets);
+    expect(find.textContaining('بطاقة المنتج'), findsWidgets);
     expect(find.textContaining('إيصال'), findsWidgets);
     expect(find.textContaining('cashier'), findsWidgets);
     expect(find.text('مخاطر 82'), findsWidgets);
@@ -68,6 +71,83 @@ void main() {
 
     expect(openedTarget?.type, ActivityLogDrillDownType.saleOrder);
     expect(openedTarget?.id, 42);
+  });
+
+  testWidgets('activity log user filter uses async multi-select picker', (
+    tester,
+  ) async {
+    tester.view
+      ..physicalSize = const Size(1280, 820)
+      ..devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final service = _FakeActivityLogApiService();
+    final viewModel = ActivityLogViewModel(
+      AnalyticsRepository(service),
+      UserRepository(service),
+      clock: () => DateTime(2026, 5, 20, 12),
+    );
+    addTearDown(viewModel.dispose);
+
+    await tester.pumpWidget(
+      _TestApp(
+        child: ActivityLogScreen(
+          viewModel: viewModel,
+          currentUser: _manager,
+          capabilities: AuthorizationCapabilities.forUser(_manager),
+          onOpenPos: () {},
+          onOpenCatalog: () {},
+          onOpenCategories: () {},
+          onOpenPurchasing: () {},
+          onOpenContacts: () {},
+          onOpenRegisterSessions: () {},
+          onOpenDeviceSettings: () {},
+          onLogout: () {},
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('الفلاتر'));
+    await tester.pumpAndSettle();
+    expect(find.text('الفلاتر والترتيب'), findsOneWidget);
+    final userFilterField = find.byKey(
+      const ValueKey('activity_log_user_filter_field'),
+    );
+    await tester.scrollUntilVisible(
+      userFilterField,
+      280,
+      scrollable: find.byType(Scrollable).last,
+    );
+    await tester.ensureVisible(userFilterField);
+    await tester.pumpAndSettle();
+    await tester.tap(userFilterField);
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('activity_log_user_filter_search_field')),
+      findsOneWidget,
+    );
+
+    await tester.tap(
+      find.byKey(const ValueKey('activity_log_user_filter_option_2')),
+    );
+    await tester.pump();
+    await tester.tap(
+      find.byKey(const ValueKey('activity_log_user_filter_option_3')),
+    );
+    await tester.pump();
+    await tester.tap(
+      find.byKey(const ValueKey('activity_log_user_filter_apply_button')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('activity_log_user_filter_search_field')),
+      findsNothing,
+    );
+    expect(find.text('كاشير احتياطي'), findsWidgets);
   });
 }
 
@@ -120,15 +200,35 @@ class _FakeActivityLogApiService extends PosApiService {
           attributes: {'receipt_number': 'INV-42', 'register_session_id': 7},
           metrics: {'total': 25.5},
         ),
+        AnalyticsEventRecord(
+          id: 2,
+          clientEventId: 'event-2',
+          eventType: AnalyticsEventType.audit,
+          name: 'pos.cart.line.added',
+          severity: AnalyticsEventSeverity.info,
+          source: AnalyticsEventSource.frontend,
+          occurredAt: DateTime.utc(2026, 5, 20, 9, 31),
+          receivedBy: 2,
+          receivedByUsername: 'cashier',
+          entityType: 'cart_line',
+          entityId: '101',
+          attributes: {
+            'product_name': 'قهوة البيت',
+            'variant_name': 'قهوة البيت',
+            'source': 'product_tile',
+            'register_session_id': 7,
+          },
+          metrics: {'quantity': 1, 'cart_total': 3.5},
+        ),
       ],
       hasMore: false,
-      totalCount: 1,
+      totalCount: 2,
     );
   }
 
   @override
-  Future<PosUserPage> fetchUsers({int page = 1}) async {
-    return const PosUserPage(users: [_cashier], hasMore: false);
+  Future<PosUserPage> fetchUsers({int page = 1, String search = ''}) async {
+    return const PosUserPage(users: [_cashier, _secondCashier], hasMore: false);
   }
 }
 
@@ -144,6 +244,15 @@ const _cashier = PosUser(
   id: 2,
   username: 'cashier',
   displayName: 'Cashier',
+  role: UserRole.cashier,
+  isActive: true,
+);
+
+const _secondCashier = PosUser(
+  id: 3,
+  username: 'backup-cashier',
+  displayName: 'كاشير احتياطي',
+  email: 'backup@example.test',
   role: UserRole.cashier,
   isActive: true,
 );

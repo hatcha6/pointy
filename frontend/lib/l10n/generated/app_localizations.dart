@@ -584,6 +584,60 @@ abstract class AppLocalizations {
   /// **'الإجمالي {total}'**
   String activityLogTotalSummary(String total);
 
+  /// Activity log sale cart total summary.
+  ///
+  /// In ar, this message translates to:
+  /// **'إجمالي السلة {total}'**
+  String activityLogCartTotalSummary(String total);
+
+  /// Activity log purchase draft total summary.
+  ///
+  /// In ar, this message translates to:
+  /// **'إجمالي مسودة الشراء {total}'**
+  String activityLogDraftTotalSummary(String total);
+
+  /// Activity log product and quantity summary.
+  ///
+  /// In ar, this message translates to:
+  /// **'{product} - الكمية {quantity}'**
+  String activityLogProductSummary(String product, String quantity);
+
+  /// Activity log supplier summary.
+  ///
+  /// In ar, this message translates to:
+  /// **'المورد {supplier}'**
+  String activityLogSupplierSummary(String supplier);
+
+  /// Activity log target user summary.
+  ///
+  /// In ar, this message translates to:
+  /// **'المستخدم {user}'**
+  String activityLogUserSummary(String user);
+
+  /// Activity log discount rule summary.
+  ///
+  /// In ar, this message translates to:
+  /// **'قاعدة الخصم {rule}'**
+  String activityLogDiscountRuleSummary(String rule);
+
+  /// Activity log report type summary.
+  ///
+  /// In ar, this message translates to:
+  /// **'التقرير {report}'**
+  String activityLogReportSummary(String report);
+
+  /// Activity log movement type summary.
+  ///
+  /// In ar, this message translates to:
+  /// **'نوع الحركة {movementType}'**
+  String activityLogMovementTypeSummary(String movementType);
+
+  /// Activity log UI source summary.
+  ///
+  /// In ar, this message translates to:
+  /// **'من {source}'**
+  String activityLogUiSourceSummary(String source);
+
   /// Activity log reason summary.
   ///
   /// In ar, this message translates to:
@@ -788,6 +842,204 @@ abstract class AppLocalizations {
   /// **'تفاعل مع'**
   String get activityInteractionGeneral;
 
+  /// No description provided for @activityUiSourceProductTile.
+  ///
+  /// In ar, this message translates to:
+  /// **'بطاقة المنتج'**
+  String get activityUiSourceProductTile;
+
+  /// No description provided for @activityUiSourceVariantPicker.
+  ///
+  /// In ar, this message translates to:
+  /// **'نافذة اختيار المتغير'**
+  String get activityUiSourceVariantPicker;
+
+  /// No description provided for @activityUiSourceBarcodeLookup.
+  ///
+  /// In ar, this message translates to:
+  /// **'حقل الباركود'**
+  String get activityUiSourceBarcodeLookup;
+
+  /// No description provided for @activityUiSourceHardwareScanner.
+  ///
+  /// In ar, this message translates to:
+  /// **'ماسح الباركود الخارجي'**
+  String get activityUiSourceHardwareScanner;
+
+  /// No description provided for @activityUiSourceCameraScanner.
+  ///
+  /// In ar, this message translates to:
+  /// **'ماسح الكاميرا'**
+  String get activityUiSourceCameraScanner;
+
+  /// No description provided for @activityUiSourceCartQuantityButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'أزرار كمية السلة'**
+  String get activityUiSourceCartQuantityButton;
+
+  /// No description provided for @activityUiSourceCartDeleteButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'زر حذف سطر السلة'**
+  String get activityUiSourceCartDeleteButton;
+
+  /// No description provided for @activityUiSourceCartClearButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'زر تفريغ السلة'**
+  String get activityUiSourceCartClearButton;
+
+  /// No description provided for @activityUiSourcePurchaseCatalog.
+  ///
+  /// In ar, this message translates to:
+  /// **'كتالوج الشراء'**
+  String get activityUiSourcePurchaseCatalog;
+
+  /// No description provided for @activityUiSourcePurchaseBarcodeLookup.
+  ///
+  /// In ar, this message translates to:
+  /// **'حقل باركود الشراء'**
+  String get activityUiSourcePurchaseBarcodeLookup;
+
+  /// No description provided for @activityUiSourcePurchaseCameraScanner.
+  ///
+  /// In ar, this message translates to:
+  /// **'ماسح كاميرا الشراء'**
+  String get activityUiSourcePurchaseCameraScanner;
+
+  /// No description provided for @activityUiSourcePurchaseDraftQuantityButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'أزرار كمية مسودة الشراء'**
+  String get activityUiSourcePurchaseDraftQuantityButton;
+
+  /// No description provided for @activityUiSourcePurchaseDraftClearButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'زر تفريغ مسودة الشراء'**
+  String get activityUiSourcePurchaseDraftClearButton;
+
+  /// No description provided for @activityUiSourceRegisterSessionGate.
+  ///
+  /// In ar, this message translates to:
+  /// **'واجهة فتح الدرج'**
+  String get activityUiSourceRegisterSessionGate;
+
+  /// No description provided for @activityUiSourceRegisterSessionCloseSheet.
+  ///
+  /// In ar, this message translates to:
+  /// **'نافذة إغلاق الدرج'**
+  String get activityUiSourceRegisterSessionCloseSheet;
+
+  /// No description provided for @activityUiSourceRegisterCashMovementSheet.
+  ///
+  /// In ar, this message translates to:
+  /// **'نافذة الحركة النقدية'**
+  String get activityUiSourceRegisterCashMovementSheet;
+
+  /// No description provided for @activityUiSourceRegisterSessionHistory.
+  ///
+  /// In ar, this message translates to:
+  /// **'سجل جلسات الدرج'**
+  String get activityUiSourceRegisterSessionHistory;
+
+  /// No description provided for @activityUiSourceSaleOrderDetailsSheet.
+  ///
+  /// In ar, this message translates to:
+  /// **'نافذة تفاصيل الفاتورة'**
+  String get activityUiSourceSaleOrderDetailsSheet;
+
+  /// No description provided for @activityUiSourceCatalogProductForm.
+  ///
+  /// In ar, this message translates to:
+  /// **'نموذج المنتج'**
+  String get activityUiSourceCatalogProductForm;
+
+  /// No description provided for @activityUiSourceCatalogProductDetails.
+  ///
+  /// In ar, this message translates to:
+  /// **'تفاصيل المنتج'**
+  String get activityUiSourceCatalogProductDetails;
+
+  /// No description provided for @activityUiSourceCatalogVariantForm.
+  ///
+  /// In ar, this message translates to:
+  /// **'نموذج متغير المنتج'**
+  String get activityUiSourceCatalogVariantForm;
+
+  /// No description provided for @activityUiSourceCatalogVariantGenerator.
+  ///
+  /// In ar, this message translates to:
+  /// **'مولّد المتغيرات'**
+  String get activityUiSourceCatalogVariantGenerator;
+
+  /// No description provided for @activityUiSourceCategoryManagement.
+  ///
+  /// In ar, this message translates to:
+  /// **'إدارة التصنيفات'**
+  String get activityUiSourceCategoryManagement;
+
+  /// No description provided for @activityUiSourceStockMovementForm.
+  ///
+  /// In ar, this message translates to:
+  /// **'نموذج حركة المخزون'**
+  String get activityUiSourceStockMovementForm;
+
+  /// No description provided for @activityUiSourceBarcodeLabelPanel.
+  ///
+  /// In ar, this message translates to:
+  /// **'لوحة طباعة الباركود'**
+  String get activityUiSourceBarcodeLabelPanel;
+
+  /// No description provided for @activityUiSourceUserManagement.
+  ///
+  /// In ar, this message translates to:
+  /// **'إدارة المستخدمين'**
+  String get activityUiSourceUserManagement;
+
+  /// No description provided for @activityUiSourceShopSettings.
+  ///
+  /// In ar, this message translates to:
+  /// **'إعدادات المتجر'**
+  String get activityUiSourceShopSettings;
+
+  /// No description provided for @activityUiSourceDeviceSettings.
+  ///
+  /// In ar, this message translates to:
+  /// **'إعدادات الجهاز'**
+  String get activityUiSourceDeviceSettings;
+
+  /// No description provided for @activityUiSourceDiscountManagement.
+  ///
+  /// In ar, this message translates to:
+  /// **'إدارة الخصومات'**
+  String get activityUiSourceDiscountManagement;
+
+  /// No description provided for @activityUiSourceReportsScreen.
+  ///
+  /// In ar, this message translates to:
+  /// **'شاشة التقارير'**
+  String get activityUiSourceReportsScreen;
+
+  /// No description provided for @activityUiSourceAnalyticsExportSheet.
+  ///
+  /// In ar, this message translates to:
+  /// **'نافذة تصدير التحليلات'**
+  String get activityUiSourceAnalyticsExportSheet;
+
+  /// No description provided for @activityUiSourcePrintingSettings.
+  ///
+  /// In ar, this message translates to:
+  /// **'إعدادات الطباعة'**
+  String get activityUiSourcePrintingSettings;
+
+  /// Fallback label for unknown UI source values.
+  ///
+  /// In ar, this message translates to:
+  /// **'{source}'**
+  String activityUiSourceUnknown(String source);
+
   /// No description provided for @activityLogScopeFilterTitle.
   ///
   /// In ar, this message translates to:
@@ -865,6 +1117,48 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'كل المستخدمين'**
   String get activityLogAllUsers;
+
+  /// No description provided for @activityLogUserFilterHelper.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر مستخدمًا أو أكثر لتصفية الإجراءات المسجلة.'**
+  String get activityLogUserFilterHelper;
+
+  /// No description provided for @activityLogUsersOpenPickerTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختيار المستخدمين'**
+  String get activityLogUsersOpenPickerTooltip;
+
+  /// No description provided for @activityLogUserPickerTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختيار المستخدمين'**
+  String get activityLogUserPickerTitle;
+
+  /// No description provided for @activityLogUserPickerSearchHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'ابحث باسم المستخدم أو البريد'**
+  String get activityLogUserPickerSearchHint;
+
+  /// No description provided for @activityLogUserPickerEmpty.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا يوجد مستخدمون مطابقون.'**
+  String get activityLogUserPickerEmpty;
+
+  /// No description provided for @activityLogUserPickerLoadError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر تحميل المستخدمين.'**
+  String get activityLogUserPickerLoadError;
+
+  /// Fallback label for activity log user filters when the user name is not available.
+  ///
+  /// In ar, this message translates to:
+  /// **'مستخدم #{id}'**
+  String activityLogUserFallbackLabel(int id);
 
   /// No description provided for @activityLogContextFilterTitle.
   ///
@@ -944,17 +1238,59 @@ abstract class AppLocalizations {
   /// **'إشارات الاحتيال'**
   String get activityActionFraudSignal;
 
+  /// No description provided for @activityActionPosLineAdded.
+  ///
+  /// In ar, this message translates to:
+  /// **'إضافة سطر بيع'**
+  String get activityActionPosLineAdded;
+
+  /// No description provided for @activityActionPosLineQuantityChanged.
+  ///
+  /// In ar, this message translates to:
+  /// **'تغيير كمية سطر بيع'**
+  String get activityActionPosLineQuantityChanged;
+
   /// No description provided for @activityActionPosLineDeleted.
   ///
   /// In ar, this message translates to:
   /// **'حذف سطر بيع'**
   String get activityActionPosLineDeleted;
 
+  /// No description provided for @activityActionPosCartCleared.
+  ///
+  /// In ar, this message translates to:
+  /// **'تفريغ سلة البيع'**
+  String get activityActionPosCartCleared;
+
+  /// No description provided for @activityActionPurchaseLineAdded.
+  ///
+  /// In ar, this message translates to:
+  /// **'إضافة سطر شراء'**
+  String get activityActionPurchaseLineAdded;
+
+  /// No description provided for @activityActionPurchaseLineQuantityChanged.
+  ///
+  /// In ar, this message translates to:
+  /// **'تغيير كمية سطر شراء'**
+  String get activityActionPurchaseLineQuantityChanged;
+
   /// No description provided for @activityActionPurchaseLineDeleted.
   ///
   /// In ar, this message translates to:
   /// **'حذف سطر شراء'**
   String get activityActionPurchaseLineDeleted;
+
+  /// No description provided for @activityActionPurchaseDraftCleared.
+  ///
+  /// In ar, this message translates to:
+  /// **'تفريغ مسودة شراء'**
+  String get activityActionPurchaseDraftCleared;
+
+  /// No description provided for @activityActionPurchaseDraftSubmitted.
+  ///
+  /// In ar, this message translates to:
+  /// **'إرسال مسودة شراء'**
+  String get activityActionPurchaseDraftSubmitted;
 
   /// No description provided for @activityActionInvoiceCreated.
   ///
@@ -974,6 +1310,24 @@ abstract class AppLocalizations {
   /// **'حركة نقدية في الدرج'**
   String get activityActionRegisterCashMovement;
 
+  /// No description provided for @activityActionRegisterSessionStarted.
+  ///
+  /// In ar, this message translates to:
+  /// **'فتح جلسة درج'**
+  String get activityActionRegisterSessionStarted;
+
+  /// No description provided for @activityActionRegisterSessionClosed.
+  ///
+  /// In ar, this message translates to:
+  /// **'إغلاق جلسة درج'**
+  String get activityActionRegisterSessionClosed;
+
+  /// No description provided for @activityActionReceiptReprinted.
+  ///
+  /// In ar, this message translates to:
+  /// **'إعادة طباعة إيصال'**
+  String get activityActionReceiptReprinted;
+
   /// No description provided for @activityActionOrderVoided.
   ///
   /// In ar, this message translates to:
@@ -985,6 +1339,60 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'مرتجع فاتورة'**
   String get activityActionOrderReturned;
+
+  /// No description provided for @activityActionProductChanged.
+  ///
+  /// In ar, this message translates to:
+  /// **'تغييرات المنتجات'**
+  String get activityActionProductChanged;
+
+  /// No description provided for @activityActionStockMovementCreated.
+  ///
+  /// In ar, this message translates to:
+  /// **'حركات المخزون'**
+  String get activityActionStockMovementCreated;
+
+  /// No description provided for @activityActionBarcodeLabelsPrinted.
+  ///
+  /// In ar, this message translates to:
+  /// **'طباعة ملصقات باركود'**
+  String get activityActionBarcodeLabelsPrinted;
+
+  /// No description provided for @activityActionUserChanged.
+  ///
+  /// In ar, this message translates to:
+  /// **'تغييرات المستخدمين'**
+  String get activityActionUserChanged;
+
+  /// No description provided for @activityActionSettingsChanged.
+  ///
+  /// In ar, this message translates to:
+  /// **'تغييرات الإعدادات'**
+  String get activityActionSettingsChanged;
+
+  /// No description provided for @activityActionDiscountChanged.
+  ///
+  /// In ar, this message translates to:
+  /// **'تغييرات الخصومات'**
+  String get activityActionDiscountChanged;
+
+  /// No description provided for @activityActionReportActivity.
+  ///
+  /// In ar, this message translates to:
+  /// **'نشاط التقارير'**
+  String get activityActionReportActivity;
+
+  /// No description provided for @activityActionPrinterActivity.
+  ///
+  /// In ar, this message translates to:
+  /// **'نشاط الطباعة'**
+  String get activityActionPrinterActivity;
+
+  /// No description provided for @activityActionAnalyticsExport.
+  ///
+  /// In ar, this message translates to:
+  /// **'تصدير التحليلات'**
+  String get activityActionAnalyticsExport;
 
   /// No description provided for @activityActionPurchaseOrderDeleted.
   ///
@@ -1076,11 +1484,29 @@ abstract class AppLocalizations {
   /// **'تم تسجيل مرتجع'**
   String get activityEventOrderReturned;
 
+  /// No description provided for @activityEventReceiptReprintQueued.
+  ///
+  /// In ar, this message translates to:
+  /// **'أعيدت طباعة إيصال'**
+  String get activityEventReceiptReprintQueued;
+
+  /// No description provided for @activityEventReceiptReprintFailed.
+  ///
+  /// In ar, this message translates to:
+  /// **'فشلت إعادة طباعة إيصال'**
+  String get activityEventReceiptReprintFailed;
+
   /// No description provided for @activityEventRegisterSessionStarted.
   ///
   /// In ar, this message translates to:
   /// **'بدأت جلسة درج'**
   String get activityEventRegisterSessionStarted;
+
+  /// No description provided for @activityEventRegisterSessionResumed.
+  ///
+  /// In ar, this message translates to:
+  /// **'استؤنفت جلسة درج'**
+  String get activityEventRegisterSessionResumed;
 
   /// No description provided for @activityEventRegisterSessionClosed.
   ///
@@ -1094,17 +1520,125 @@ abstract class AppLocalizations {
   /// **'سجلت حركة نقدية'**
   String get activityEventRegisterCashMovementCreated;
 
+  /// No description provided for @activityEventSalesHistorySessionSelected.
+  ///
+  /// In ar, this message translates to:
+  /// **'فتحت جلسة من السجل'**
+  String get activityEventSalesHistorySessionSelected;
+
+  /// No description provided for @activityEventSalesHistoryOrderVoidCompleted.
+  ///
+  /// In ar, this message translates to:
+  /// **'اكتمل إلغاء فاتورة من السجل'**
+  String get activityEventSalesHistoryOrderVoidCompleted;
+
+  /// No description provided for @activityEventSalesHistoryOrderReturnCompleted.
+  ///
+  /// In ar, this message translates to:
+  /// **'اكتمل مرتجع فاتورة من السجل'**
+  String get activityEventSalesHistoryOrderReturnCompleted;
+
+  /// No description provided for @activityEventPosLineAdded.
+  ///
+  /// In ar, this message translates to:
+  /// **'أضيف سطر إلى سلة البيع'**
+  String get activityEventPosLineAdded;
+
+  /// No description provided for @activityEventPosLineQuantityIncreased.
+  ///
+  /// In ar, this message translates to:
+  /// **'زادت كمية سطر في سلة البيع'**
+  String get activityEventPosLineQuantityIncreased;
+
+  /// No description provided for @activityEventPosLineQuantityDecreased.
+  ///
+  /// In ar, this message translates to:
+  /// **'نقصت كمية سطر في سلة البيع'**
+  String get activityEventPosLineQuantityDecreased;
+
   /// No description provided for @activityEventPosLineDeleted.
   ///
   /// In ar, this message translates to:
   /// **'حذف سطر من سلة البيع'**
   String get activityEventPosLineDeleted;
 
+  /// No description provided for @activityEventPosCartCleared.
+  ///
+  /// In ar, this message translates to:
+  /// **'أفرغت سلة البيع'**
+  String get activityEventPosCartCleared;
+
+  /// No description provided for @activityEventPosCheckoutStarted.
+  ///
+  /// In ar, this message translates to:
+  /// **'بدأ إرسال عملية بيع'**
+  String get activityEventPosCheckoutStarted;
+
+  /// No description provided for @activityEventPosCheckoutCompleted.
+  ///
+  /// In ar, this message translates to:
+  /// **'اكتملت عملية البيع من الواجهة'**
+  String get activityEventPosCheckoutCompleted;
+
+  /// No description provided for @activityEventPosCheckoutFailed.
+  ///
+  /// In ar, this message translates to:
+  /// **'فشل إرسال عملية بيع'**
+  String get activityEventPosCheckoutFailed;
+
+  /// No description provided for @activityEventPosCheckoutStockRejected.
+  ///
+  /// In ar, this message translates to:
+  /// **'رفضت عملية بيع بسبب المخزون'**
+  String get activityEventPosCheckoutStockRejected;
+
+  /// No description provided for @activityEventPurchaseLineAdded.
+  ///
+  /// In ar, this message translates to:
+  /// **'أضيف سطر إلى مسودة الشراء'**
+  String get activityEventPurchaseLineAdded;
+
+  /// No description provided for @activityEventPurchaseLineQuantityIncreased.
+  ///
+  /// In ar, this message translates to:
+  /// **'زادت كمية سطر في مسودة الشراء'**
+  String get activityEventPurchaseLineQuantityIncreased;
+
+  /// No description provided for @activityEventPurchaseLineQuantityDecreased.
+  ///
+  /// In ar, this message translates to:
+  /// **'نقصت كمية سطر في مسودة الشراء'**
+  String get activityEventPurchaseLineQuantityDecreased;
+
   /// No description provided for @activityEventPurchaseLineDeleted.
   ///
   /// In ar, this message translates to:
   /// **'حذف سطر من مسودة الشراء'**
   String get activityEventPurchaseLineDeleted;
+
+  /// No description provided for @activityEventPurchaseDraftCleared.
+  ///
+  /// In ar, this message translates to:
+  /// **'أفرغت مسودة الشراء'**
+  String get activityEventPurchaseDraftCleared;
+
+  /// No description provided for @activityEventPurchaseSupplierSelected.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختير مورد لمسودة الشراء'**
+  String get activityEventPurchaseSupplierSelected;
+
+  /// No description provided for @activityEventPurchaseDraftSubmitted.
+  ///
+  /// In ar, this message translates to:
+  /// **'أرسلت مسودة شراء'**
+  String get activityEventPurchaseDraftSubmitted;
+
+  /// No description provided for @activityEventPurchaseDraftSubmitFailed.
+  ///
+  /// In ar, this message translates to:
+  /// **'فشل إرسال مسودة شراء'**
+  String get activityEventPurchaseDraftSubmitFailed;
 
   /// No description provided for @activityEventPurchaseOrderCreated.
   ///
@@ -1166,6 +1700,66 @@ abstract class AppLocalizations {
   /// **'حذف عميل'**
   String get activityEventCustomerDeleted;
 
+  /// No description provided for @activityEventCatalogProductCreated.
+  ///
+  /// In ar, this message translates to:
+  /// **'أنشئ منتج'**
+  String get activityEventCatalogProductCreated;
+
+  /// No description provided for @activityEventCatalogProductUpdated.
+  ///
+  /// In ar, this message translates to:
+  /// **'حُدث منتج'**
+  String get activityEventCatalogProductUpdated;
+
+  /// No description provided for @activityEventCatalogProductImageUploaded.
+  ///
+  /// In ar, this message translates to:
+  /// **'رُفعت صورة منتج'**
+  String get activityEventCatalogProductImageUploaded;
+
+  /// No description provided for @activityEventCatalogProductImageImported.
+  ///
+  /// In ar, this message translates to:
+  /// **'استوردت صورة منتج'**
+  String get activityEventCatalogProductImageImported;
+
+  /// No description provided for @activityEventCatalogVariantCreated.
+  ///
+  /// In ar, this message translates to:
+  /// **'أنشئ متغير منتج'**
+  String get activityEventCatalogVariantCreated;
+
+  /// No description provided for @activityEventCatalogVariantUpdated.
+  ///
+  /// In ar, this message translates to:
+  /// **'حُدث متغير منتج'**
+  String get activityEventCatalogVariantUpdated;
+
+  /// No description provided for @activityEventCatalogVariantsGenerated.
+  ///
+  /// In ar, this message translates to:
+  /// **'وُلدت متغيرات منتج'**
+  String get activityEventCatalogVariantsGenerated;
+
+  /// No description provided for @activityEventCatalogCategoryCreated.
+  ///
+  /// In ar, this message translates to:
+  /// **'أنشئ تصنيف منتج'**
+  String get activityEventCatalogCategoryCreated;
+
+  /// No description provided for @activityEventStockMovementCreated.
+  ///
+  /// In ar, this message translates to:
+  /// **'سجلت حركة مخزون'**
+  String get activityEventStockMovementCreated;
+
+  /// No description provided for @activityEventStockMovementCreateFailed.
+  ///
+  /// In ar, this message translates to:
+  /// **'فشل تسجيل حركة مخزون'**
+  String get activityEventStockMovementCreateFailed;
+
   /// No description provided for @activityEventUserCreated.
   ///
   /// In ar, this message translates to:
@@ -1183,6 +1777,108 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'حذف مستخدم'**
   String get activityEventUserDeleted;
+
+  /// No description provided for @activityEventUserRoleChanged.
+  ///
+  /// In ar, this message translates to:
+  /// **'تغير دور مستخدم'**
+  String get activityEventUserRoleChanged;
+
+  /// No description provided for @activityEventUserActiveChanged.
+  ///
+  /// In ar, this message translates to:
+  /// **'تغيرت حالة مستخدم'**
+  String get activityEventUserActiveChanged;
+
+  /// No description provided for @activityEventShopSettingsUpdated.
+  ///
+  /// In ar, this message translates to:
+  /// **'حُدثت إعدادات المتجر'**
+  String get activityEventShopSettingsUpdated;
+
+  /// No description provided for @activityEventShopLogoUploaded.
+  ///
+  /// In ar, this message translates to:
+  /// **'رُفع شعار المتجر'**
+  String get activityEventShopLogoUploaded;
+
+  /// No description provided for @activityEventShopLogoRemoved.
+  ///
+  /// In ar, this message translates to:
+  /// **'أزيل شعار المتجر'**
+  String get activityEventShopLogoRemoved;
+
+  /// No description provided for @activityEventDeviceUsageModeChanged.
+  ///
+  /// In ar, this message translates to:
+  /// **'تغير وضع استخدام الجهاز'**
+  String get activityEventDeviceUsageModeChanged;
+
+  /// No description provided for @activityEventDiscountRuleCreated.
+  ///
+  /// In ar, this message translates to:
+  /// **'أنشئت قاعدة خصم'**
+  String get activityEventDiscountRuleCreated;
+
+  /// No description provided for @activityEventDiscountRuleUpdated.
+  ///
+  /// In ar, this message translates to:
+  /// **'حُدثت قاعدة خصم'**
+  String get activityEventDiscountRuleUpdated;
+
+  /// No description provided for @activityEventDiscountRuleEnabled.
+  ///
+  /// In ar, this message translates to:
+  /// **'فُعلت قاعدة خصم'**
+  String get activityEventDiscountRuleEnabled;
+
+  /// No description provided for @activityEventDiscountRuleDisabled.
+  ///
+  /// In ar, this message translates to:
+  /// **'عُطلت قاعدة خصم'**
+  String get activityEventDiscountRuleDisabled;
+
+  /// No description provided for @activityEventDiscountRuleArchived.
+  ///
+  /// In ar, this message translates to:
+  /// **'أرشفت قاعدة خصم'**
+  String get activityEventDiscountRuleArchived;
+
+  /// No description provided for @activityEventBarcodeLabelsPrinted.
+  ///
+  /// In ar, this message translates to:
+  /// **'طُبعت ملصقات باركود'**
+  String get activityEventBarcodeLabelsPrinted;
+
+  /// No description provided for @activityEventBarcodeLabelsFailed.
+  ///
+  /// In ar, this message translates to:
+  /// **'فشلت طباعة ملصقات باركود'**
+  String get activityEventBarcodeLabelsFailed;
+
+  /// No description provided for @activityEventPrinterDiscoveryCompleted.
+  ///
+  /// In ar, this message translates to:
+  /// **'اكتمل البحث عن الطابعات'**
+  String get activityEventPrinterDiscoveryCompleted;
+
+  /// No description provided for @activityEventPrinterDiscoveryFailed.
+  ///
+  /// In ar, this message translates to:
+  /// **'فشل البحث عن الطابعات'**
+  String get activityEventPrinterDiscoveryFailed;
+
+  /// No description provided for @activityEventPrinterTested.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختُبرت الطابعة'**
+  String get activityEventPrinterTested;
+
+  /// No description provided for @activityEventPrinterFakeReceiptPrinted.
+  ///
+  /// In ar, this message translates to:
+  /// **'طُبع إيصال تجريبي'**
+  String get activityEventPrinterFakeReceiptPrinted;
 
   /// No description provided for @activityEventAppFlutterError.
   ///
@@ -1238,6 +1934,18 @@ abstract class AppLocalizations {
   /// **'فشل تصدير التحليلات'**
   String get activityEventAnalyticsExportFailed;
 
+  /// No description provided for @activityEventAnalyticsExportDownloaded.
+  ///
+  /// In ar, this message translates to:
+  /// **'نُزل ملف التحليلات'**
+  String get activityEventAnalyticsExportDownloaded;
+
+  /// No description provided for @activityEventAnalyticsExportDownloadFailed.
+  ///
+  /// In ar, this message translates to:
+  /// **'فشل تنزيل ملف التحليلات'**
+  String get activityEventAnalyticsExportDownloadFailed;
+
   /// No description provided for @activityEventReportGenerated.
   ///
   /// In ar, this message translates to:
@@ -1267,6 +1975,18 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'شارك المستخدم تقريرًا'**
   String get activityEventReportShared;
+
+  /// No description provided for @activityEventReportRunCompleted.
+  ///
+  /// In ar, this message translates to:
+  /// **'اكتمل تشغيل تقرير'**
+  String get activityEventReportRunCompleted;
+
+  /// No description provided for @activityEventReportRunFailed.
+  ///
+  /// In ar, this message translates to:
+  /// **'فشل تشغيل تقرير'**
+  String get activityEventReportRunFailed;
 
   /// No description provided for @reportsTitle.
   ///

@@ -260,7 +260,8 @@ class _PosWorkspace extends StatelessWidget {
           capabilities.canCheckoutSale &&
           !viewModel.isCheckingOut &&
           !viewModel.isResolvingBarcode,
-      onBarcodeScanned: viewModel.addVariantByBarcode,
+      onBarcodeScanned: (barcode) =>
+          viewModel.addVariantByBarcode(barcode, source: 'hardware_scanner'),
       child: LayoutBuilder(
         builder: (context, constraints) {
           final width = constraints.hasBoundedWidth

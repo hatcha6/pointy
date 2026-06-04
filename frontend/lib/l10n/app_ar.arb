@@ -141,6 +141,90 @@
       }
     }
   },
+  "activityLogCartTotalSummary": "إجمالي السلة {total}",
+  "@activityLogCartTotalSummary": {
+    "description": "Activity log sale cart total summary.",
+    "placeholders": {
+      "total": {
+        "type": "String"
+      }
+    }
+  },
+  "activityLogDraftTotalSummary": "إجمالي مسودة الشراء {total}",
+  "@activityLogDraftTotalSummary": {
+    "description": "Activity log purchase draft total summary.",
+    "placeholders": {
+      "total": {
+        "type": "String"
+      }
+    }
+  },
+  "activityLogProductSummary": "{product} - الكمية {quantity}",
+  "@activityLogProductSummary": {
+    "description": "Activity log product and quantity summary.",
+    "placeholders": {
+      "product": {
+        "type": "String"
+      },
+      "quantity": {
+        "type": "String"
+      }
+    }
+  },
+  "activityLogSupplierSummary": "المورد {supplier}",
+  "@activityLogSupplierSummary": {
+    "description": "Activity log supplier summary.",
+    "placeholders": {
+      "supplier": {
+        "type": "String"
+      }
+    }
+  },
+  "activityLogUserSummary": "المستخدم {user}",
+  "@activityLogUserSummary": {
+    "description": "Activity log target user summary.",
+    "placeholders": {
+      "user": {
+        "type": "String"
+      }
+    }
+  },
+  "activityLogDiscountRuleSummary": "قاعدة الخصم {rule}",
+  "@activityLogDiscountRuleSummary": {
+    "description": "Activity log discount rule summary.",
+    "placeholders": {
+      "rule": {
+        "type": "String"
+      }
+    }
+  },
+  "activityLogReportSummary": "التقرير {report}",
+  "@activityLogReportSummary": {
+    "description": "Activity log report type summary.",
+    "placeholders": {
+      "report": {
+        "type": "String"
+      }
+    }
+  },
+  "activityLogMovementTypeSummary": "نوع الحركة {movementType}",
+  "@activityLogMovementTypeSummary": {
+    "description": "Activity log movement type summary.",
+    "placeholders": {
+      "movementType": {
+        "type": "String"
+      }
+    }
+  },
+  "activityLogUiSourceSummary": "من {source}",
+  "@activityLogUiSourceSummary": {
+    "description": "Activity log UI source summary.",
+    "placeholders": {
+      "source": {
+        "type": "String"
+      }
+    }
+  },
   "activityLogReasonSummary": "السبب: {reason}",
   "@activityLogReasonSummary": {
     "description": "Activity log reason summary.",
@@ -249,6 +333,47 @@
   "activityInteractionKeyboard": "استخدم لوحة المفاتيح في",
   "activityInteractionFocus": "نقل التركيز داخل",
   "activityInteractionGeneral": "تفاعل مع",
+  "activityUiSourceProductTile": "بطاقة المنتج",
+  "activityUiSourceVariantPicker": "نافذة اختيار المتغير",
+  "activityUiSourceBarcodeLookup": "حقل الباركود",
+  "activityUiSourceHardwareScanner": "ماسح الباركود الخارجي",
+  "activityUiSourceCameraScanner": "ماسح الكاميرا",
+  "activityUiSourceCartQuantityButton": "أزرار كمية السلة",
+  "activityUiSourceCartDeleteButton": "زر حذف سطر السلة",
+  "activityUiSourceCartClearButton": "زر تفريغ السلة",
+  "activityUiSourcePurchaseCatalog": "كتالوج الشراء",
+  "activityUiSourcePurchaseBarcodeLookup": "حقل باركود الشراء",
+  "activityUiSourcePurchaseCameraScanner": "ماسح كاميرا الشراء",
+  "activityUiSourcePurchaseDraftQuantityButton": "أزرار كمية مسودة الشراء",
+  "activityUiSourcePurchaseDraftClearButton": "زر تفريغ مسودة الشراء",
+  "activityUiSourceRegisterSessionGate": "واجهة فتح الدرج",
+  "activityUiSourceRegisterSessionCloseSheet": "نافذة إغلاق الدرج",
+  "activityUiSourceRegisterCashMovementSheet": "نافذة الحركة النقدية",
+  "activityUiSourceRegisterSessionHistory": "سجل جلسات الدرج",
+  "activityUiSourceSaleOrderDetailsSheet": "نافذة تفاصيل الفاتورة",
+  "activityUiSourceCatalogProductForm": "نموذج المنتج",
+  "activityUiSourceCatalogProductDetails": "تفاصيل المنتج",
+  "activityUiSourceCatalogVariantForm": "نموذج متغير المنتج",
+  "activityUiSourceCatalogVariantGenerator": "مولّد المتغيرات",
+  "activityUiSourceCategoryManagement": "إدارة التصنيفات",
+  "activityUiSourceStockMovementForm": "نموذج حركة المخزون",
+  "activityUiSourceBarcodeLabelPanel": "لوحة طباعة الباركود",
+  "activityUiSourceUserManagement": "إدارة المستخدمين",
+  "activityUiSourceShopSettings": "إعدادات المتجر",
+  "activityUiSourceDeviceSettings": "إعدادات الجهاز",
+  "activityUiSourceDiscountManagement": "إدارة الخصومات",
+  "activityUiSourceReportsScreen": "شاشة التقارير",
+  "activityUiSourceAnalyticsExportSheet": "نافذة تصدير التحليلات",
+  "activityUiSourcePrintingSettings": "إعدادات الطباعة",
+  "activityUiSourceUnknown": "{source}",
+  "@activityUiSourceUnknown": {
+    "description": "Fallback label for unknown UI source values.",
+    "placeholders": {
+      "source": {
+        "type": "String"
+      }
+    }
+  },
   "activityLogScopeFilterTitle": "نطاق السجل",
   "activityScopeReviewable": "الأحداث المهمة فقط",
   "activityScopeAll": "كل الأحداث",
@@ -278,6 +403,21 @@
   "activityLogUserFilterTitle": "المستخدم",
   "activityLogUserFilterLabel": "المستخدم",
   "activityLogAllUsers": "كل المستخدمين",
+  "activityLogUserFilterHelper": "اختر مستخدمًا أو أكثر لتصفية الإجراءات المسجلة.",
+  "activityLogUsersOpenPickerTooltip": "اختيار المستخدمين",
+  "activityLogUserPickerTitle": "اختيار المستخدمين",
+  "activityLogUserPickerSearchHint": "ابحث باسم المستخدم أو البريد",
+  "activityLogUserPickerEmpty": "لا يوجد مستخدمون مطابقون.",
+  "activityLogUserPickerLoadError": "تعذر تحميل المستخدمين.",
+  "activityLogUserFallbackLabel": "مستخدم #{id}",
+  "@activityLogUserFallbackLabel": {
+    "description": "Fallback label for activity log user filters when the user name is not available.",
+    "placeholders": {
+      "id": {
+        "type": "int"
+      }
+    }
+  },
   "activityLogContextFilterTitle": "السياق",
   "activityLogSessionFilterLabel": "معرّف جلسة الدرج",
   "activityLogEntityTypeFilterLabel": "نوع الكيان",
@@ -299,13 +439,32 @@
   "activityLogOrderingTitle": "ترتيب النتائج",
   "activityActionAll": "كل الإجراءات",
   "activityActionFraudSignal": "إشارات الاحتيال",
+  "activityActionPosLineAdded": "إضافة سطر بيع",
+  "activityActionPosLineQuantityChanged": "تغيير كمية سطر بيع",
   "activityActionPosLineDeleted": "حذف سطر بيع",
+  "activityActionPosCartCleared": "تفريغ سلة البيع",
+  "activityActionPurchaseLineAdded": "إضافة سطر شراء",
+  "activityActionPurchaseLineQuantityChanged": "تغيير كمية سطر شراء",
   "activityActionPurchaseLineDeleted": "حذف سطر شراء",
+  "activityActionPurchaseDraftCleared": "تفريغ مسودة شراء",
+  "activityActionPurchaseDraftSubmitted": "إرسال مسودة شراء",
   "activityActionInvoiceCreated": "إنشاء فاتورة",
   "activityActionCustomerCreated": "إنشاء عميل",
   "activityActionRegisterCashMovement": "حركة نقدية في الدرج",
+  "activityActionRegisterSessionStarted": "فتح جلسة درج",
+  "activityActionRegisterSessionClosed": "إغلاق جلسة درج",
+  "activityActionReceiptReprinted": "إعادة طباعة إيصال",
   "activityActionOrderVoided": "إلغاء فاتورة",
   "activityActionOrderReturned": "مرتجع فاتورة",
+  "activityActionProductChanged": "تغييرات المنتجات",
+  "activityActionStockMovementCreated": "حركات المخزون",
+  "activityActionBarcodeLabelsPrinted": "طباعة ملصقات باركود",
+  "activityActionUserChanged": "تغييرات المستخدمين",
+  "activityActionSettingsChanged": "تغييرات الإعدادات",
+  "activityActionDiscountChanged": "تغييرات الخصومات",
+  "activityActionReportActivity": "نشاط التقارير",
+  "activityActionPrinterActivity": "نشاط الطباعة",
+  "activityActionAnalyticsExport": "تصدير التحليلات",
   "activityActionPurchaseOrderDeleted": "حذف أمر شراء",
   "activityActionAnyDeleted": "أي حذف",
   "activityDateRangeAll": "كل الفترات",
@@ -321,11 +480,32 @@
   "activityEventOrderPaid": "تم دفع فاتورة",
   "activityEventOrderVoided": "ألغيت فاتورة",
   "activityEventOrderReturned": "تم تسجيل مرتجع",
+  "activityEventReceiptReprintQueued": "أعيدت طباعة إيصال",
+  "activityEventReceiptReprintFailed": "فشلت إعادة طباعة إيصال",
   "activityEventRegisterSessionStarted": "بدأت جلسة درج",
+  "activityEventRegisterSessionResumed": "استؤنفت جلسة درج",
   "activityEventRegisterSessionClosed": "أغلقت جلسة درج",
   "activityEventRegisterCashMovementCreated": "سجلت حركة نقدية",
+  "activityEventSalesHistorySessionSelected": "فتحت جلسة من السجل",
+  "activityEventSalesHistoryOrderVoidCompleted": "اكتمل إلغاء فاتورة من السجل",
+  "activityEventSalesHistoryOrderReturnCompleted": "اكتمل مرتجع فاتورة من السجل",
+  "activityEventPosLineAdded": "أضيف سطر إلى سلة البيع",
+  "activityEventPosLineQuantityIncreased": "زادت كمية سطر في سلة البيع",
+  "activityEventPosLineQuantityDecreased": "نقصت كمية سطر في سلة البيع",
   "activityEventPosLineDeleted": "حذف سطر من سلة البيع",
+  "activityEventPosCartCleared": "أفرغت سلة البيع",
+  "activityEventPosCheckoutStarted": "بدأ إرسال عملية بيع",
+  "activityEventPosCheckoutCompleted": "اكتملت عملية البيع من الواجهة",
+  "activityEventPosCheckoutFailed": "فشل إرسال عملية بيع",
+  "activityEventPosCheckoutStockRejected": "رفضت عملية بيع بسبب المخزون",
+  "activityEventPurchaseLineAdded": "أضيف سطر إلى مسودة الشراء",
+  "activityEventPurchaseLineQuantityIncreased": "زادت كمية سطر في مسودة الشراء",
+  "activityEventPurchaseLineQuantityDecreased": "نقصت كمية سطر في مسودة الشراء",
   "activityEventPurchaseLineDeleted": "حذف سطر من مسودة الشراء",
+  "activityEventPurchaseDraftCleared": "أفرغت مسودة الشراء",
+  "activityEventPurchaseSupplierSelected": "اختير مورد لمسودة الشراء",
+  "activityEventPurchaseDraftSubmitted": "أرسلت مسودة شراء",
+  "activityEventPurchaseDraftSubmitFailed": "فشل إرسال مسودة شراء",
   "activityEventPurchaseOrderCreated": "أنشئ أمر شراء",
   "activityEventPurchaseOrderUpdated": "حُدث أمر شراء",
   "activityEventPurchaseOrderSubmitted": "أرسل أمر شراء",
@@ -336,9 +516,36 @@
   "activityEventCustomerCreated": "أنشئ عميل",
   "activityEventCustomerUpdated": "حُدث عميل",
   "activityEventCustomerDeleted": "حذف عميل",
+  "activityEventCatalogProductCreated": "أنشئ منتج",
+  "activityEventCatalogProductUpdated": "حُدث منتج",
+  "activityEventCatalogProductImageUploaded": "رُفعت صورة منتج",
+  "activityEventCatalogProductImageImported": "استوردت صورة منتج",
+  "activityEventCatalogVariantCreated": "أنشئ متغير منتج",
+  "activityEventCatalogVariantUpdated": "حُدث متغير منتج",
+  "activityEventCatalogVariantsGenerated": "وُلدت متغيرات منتج",
+  "activityEventCatalogCategoryCreated": "أنشئ تصنيف منتج",
+  "activityEventStockMovementCreated": "سجلت حركة مخزون",
+  "activityEventStockMovementCreateFailed": "فشل تسجيل حركة مخزون",
   "activityEventUserCreated": "أنشئ مستخدم",
   "activityEventUserUpdated": "حُدث مستخدم",
   "activityEventUserDeleted": "حذف مستخدم",
+  "activityEventUserRoleChanged": "تغير دور مستخدم",
+  "activityEventUserActiveChanged": "تغيرت حالة مستخدم",
+  "activityEventShopSettingsUpdated": "حُدثت إعدادات المتجر",
+  "activityEventShopLogoUploaded": "رُفع شعار المتجر",
+  "activityEventShopLogoRemoved": "أزيل شعار المتجر",
+  "activityEventDeviceUsageModeChanged": "تغير وضع استخدام الجهاز",
+  "activityEventDiscountRuleCreated": "أنشئت قاعدة خصم",
+  "activityEventDiscountRuleUpdated": "حُدثت قاعدة خصم",
+  "activityEventDiscountRuleEnabled": "فُعلت قاعدة خصم",
+  "activityEventDiscountRuleDisabled": "عُطلت قاعدة خصم",
+  "activityEventDiscountRuleArchived": "أرشفت قاعدة خصم",
+  "activityEventBarcodeLabelsPrinted": "طُبعت ملصقات باركود",
+  "activityEventBarcodeLabelsFailed": "فشلت طباعة ملصقات باركود",
+  "activityEventPrinterDiscoveryCompleted": "اكتمل البحث عن الطابعات",
+  "activityEventPrinterDiscoveryFailed": "فشل البحث عن الطابعات",
+  "activityEventPrinterTested": "اختُبرت الطابعة",
+  "activityEventPrinterFakeReceiptPrinted": "طُبع إيصال تجريبي",
   "activityEventAppFlutterError": "سجل التطبيق خطأ",
   "activityEventAppPlatformError": "سجل النظام خطأ",
   "activityEventAuthSessionStarted": "بدأت جلسة دخول",
@@ -348,11 +555,15 @@
   "activityEventAnalyticsExportStarted": "بدأ تصدير التحليلات",
   "activityEventAnalyticsExportCompleted": "اكتمل تصدير التحليلات",
   "activityEventAnalyticsExportFailed": "فشل تصدير التحليلات",
+  "activityEventAnalyticsExportDownloaded": "نُزل ملف التحليلات",
+  "activityEventAnalyticsExportDownloadFailed": "فشل تنزيل ملف التحليلات",
   "activityEventReportGenerated": "أنشئ تقرير",
   "activityEventReportGenerationFailed": "فشل إنشاء تقرير",
   "activityEventReportPreviewed": "عاين المستخدم تقريرًا",
   "activityEventReportPrinted": "طبع المستخدم تقريرًا",
   "activityEventReportShared": "شارك المستخدم تقريرًا",
+  "activityEventReportRunCompleted": "اكتمل تشغيل تقرير",
+  "activityEventReportRunFailed": "فشل تشغيل تقرير",
   "reportsTitle": "التقارير",
   "reportsCatalogTitle": "أنواع التقارير",
   "reportsSetupTitle": "إعداد التقرير",

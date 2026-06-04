@@ -1,6 +1,9 @@
 import 'package:flutter/foundation.dart';
 
+import '../../../core/analytics_audit.dart';
+import '../../../core/analytics_engine.dart';
 import '../../../core/result.dart';
+import '../../../data/models/analytics_event.dart';
 import '../../../data/models/contact.dart';
 import '../../../data/models/print_job.dart';
 import '../../../data/models/register_cash_movement.dart';
@@ -15,13 +18,15 @@ import '../../../data/repositories/sale_repository.dart';
 class RegisterSessionHistoryViewModel extends ChangeNotifier {
   RegisterSessionHistoryViewModel(
     this._registerSessionRepository,
-    this._saleRepository,
-  ) {
+    this._saleRepository, {
+    AnalyticsEngine? analyticsEngine,
+  }) : _analyticsEngine = analyticsEngine {
     loadSessions();
   }
 
   final RegisterSessionRepository _registerSessionRepository;
   final SaleRepository _saleRepository;
+  final AnalyticsEngine? _analyticsEngine;
 
   List<RegisterSession> _sessions = [];
   List<SaleOrder> _orders = [];
@@ -136,6 +141,7 @@ class RegisterSessionHistoryViewModel extends ChangeNotifier {
     }
 
     _selectedSession = session;
+    _trackSessionSelected(session);
     _orders = [];
     _cashMovements = [];
     _isLoadingOrders = true;
@@ -295,10 +301,14 @@ class RegisterSessionHistoryViewModel extends ChangeNotifier {
 
   Future<bool> requestReprint(SaleOrder order) async {
     final result = await _saleRepository.requestReprint(order.id);
-    return switch (result) {
-      Ok<PrintJob>() => true,
-      Error<PrintJob>() => false,
-    };
+    switch (result) {
+      case Ok<PrintJob>(value: final printJob):
+        _trackReceiptReprintQueued(order, printJob);
+        return true;
+      case Error<PrintJob>():
+        _trackReceiptReprintFailed(order);
+        return false;
+    }
   }
 
   Future<bool> voidOrder(SaleOrder order, {String reason = ''}) async {
@@ -306,7 +316,12 @@ class RegisterSessionHistoryViewModel extends ChangeNotifier {
       saleOrderId: order.id,
       draft: SaleVoidDraft(reason: reason),
     );
-    return _handleOrderAdjustmentResult(result);
+    return _handleOrderAdjustmentResult(
+      result,
+      eventName: 'sales_history.order_void.completed',
+      order: order,
+      reason: reason,
+    );
   }
 
   Future<bool> returnItems(
@@ -318,13 +333,38 @@ class RegisterSessionHistoryViewModel extends ChangeNotifier {
       saleOrderId: order.id,
       draft: SaleReturnDraft(lines: lines, reason: reason),
     );
-    return _handleOrderAdjustmentResult(result);
+    return _handleOrderAdjustmentResult(
+      result,
+      eventName: 'sales_history.order_return.completed',
+      order: order,
+      reason: reason,
+      metrics: {
+        'returned_quantity': lines.fold<int>(
+          0,
+          (sum, line) => sum + line.quantity,
+        ),
+        'returned_line_count': lines.length,
+      },
+    );
   }
 
-  bool _handleOrderAdjustmentResult(Result<SaleOrder> result) {
+  bool _handleOrderAdjustmentResult(
+    Result<SaleOrder> result, {
+    required String eventName,
+    required SaleOrder order,
+    required String reason,
+    Map<String, num> metrics = const {},
+  }) {
     switch (result) {
-      case Ok<SaleOrder>():
-        _replaceOrder(result.value);
+      case Ok<SaleOrder>(value: final updatedOrder):
+        _replaceOrder(updatedOrder);
+        _trackOrderAdjustmentCompleted(
+          eventName: eventName,
+          originalOrder: order,
+          updatedOrder: updatedOrder,
+          reason: reason,
+          metrics: metrics,
+        );
         notifyListeners();
         return true;
       case Error<SaleOrder>():
@@ -337,5 +377,105 @@ class RegisterSessionHistoryViewModel extends ChangeNotifier {
       for (final order in _orders)
         if (order.id == updatedOrder.id) updatedOrder else order,
     ];
+  }
+
+  void _trackSessionSelected(RegisterSession session) {
+    trackAuditEvent(
+      _analyticsEngine,
+      name: 'sales_history.session.selected',
+      sessionId: 'register:${session.id}',
+      entityType: 'register_session',
+      entityId: session.id,
+      attributes: {
+        'register_session_id': session.id,
+        'session_number': session.sessionNumber,
+        'status': session.status,
+        'source': 'register_session_history',
+      },
+      metrics: {
+        'opening_cash': session.openingCash,
+        'expected_cash': session.expectedCash,
+        'denomination_total': session.denominationTotal,
+      },
+    );
+  }
+
+  void _trackReceiptReprintQueued(SaleOrder order, PrintJob printJob) {
+    trackAuditEvent(
+      _analyticsEngine,
+      name: 'sales.receipt.reprint.queued',
+      sessionId: _orderSessionId(order),
+      entityType: 'sale_order',
+      entityId: order.id,
+      attributes: {
+        ..._orderAttributes(order),
+        'print_job_id': printJob.id,
+        'print_job_status': printJob.status.name,
+        'source': 'sale_order_details_sheet',
+      },
+      metrics: {'total': order.total, 'line_count': order.lines.length},
+    );
+  }
+
+  void _trackReceiptReprintFailed(SaleOrder order) {
+    trackAuditEvent(
+      _analyticsEngine,
+      name: 'sales.receipt.reprint.failed',
+      severity: AnalyticsEventSeverity.warning,
+      sessionId: _orderSessionId(order),
+      entityType: 'sale_order',
+      entityId: order.id,
+      attributes: {
+        ..._orderAttributes(order),
+        'source': 'sale_order_details_sheet',
+      },
+      metrics: {'total': order.total, 'line_count': order.lines.length},
+      flushImmediately: true,
+    );
+  }
+
+  void _trackOrderAdjustmentCompleted({
+    required String eventName,
+    required SaleOrder originalOrder,
+    required SaleOrder updatedOrder,
+    required String reason,
+    Map<String, num> metrics = const {},
+  }) {
+    trackAuditEvent(
+      _analyticsEngine,
+      name: eventName,
+      sessionId: _orderSessionId(originalOrder),
+      entityType: 'sale_order',
+      entityId: originalOrder.id,
+      attributes: {
+        ..._orderAttributes(originalOrder),
+        'updated_status': updatedOrder.status,
+        'reason_present': reason.trim().isNotEmpty,
+        'source': 'sale_order_details_sheet',
+      },
+      metrics: {
+        'total': originalOrder.total,
+        'line_count': originalOrder.lines.length,
+        ...metrics,
+      },
+    );
+  }
+
+  Map<String, Object?> _orderAttributes(SaleOrder order) {
+    return {
+      'sale_order_id': order.id,
+      if (order.receiptNumber?.isNotEmpty == true)
+        'receipt_number': order.receiptNumber,
+      if (order.registerSession != null)
+        'register_session_id': order.registerSession,
+      if (order.registerSessionNumber?.isNotEmpty == true)
+        'session_number': order.registerSessionNumber,
+      'status': order.status,
+    };
+  }
+
+  String? _orderSessionId(SaleOrder order) {
+    final registerSession = order.registerSession;
+    return registerSession == null ? null : 'register:$registerSession';
   }
 }

@@ -199,6 +199,15 @@ class AnalyticsEventApiTests(TestCase):
             session_id="register-2",
             risk_score=40,
         )
+        other_user = get_user_model().objects.create_user(
+            username="analytics-other",
+            password="pass",
+        )
+        self._create_event(
+            name="other.user.event",
+            occurred_at=self._occurred_at(22, 11),
+            received_by=other_user,
+        )
 
         self.assertEqual(
             self._list_event_names(
@@ -221,6 +230,15 @@ class AnalyticsEventApiTests(TestCase):
         self.assertEqual(
             self._list_event_names({"user": self.cashier.id}),
             ["sales.checkout.completed"],
+        )
+        self.assertEqual(
+            self._list_event_names(
+                {
+                    "received_by": f"{self.manager.id},{self.cashier.id}",
+                    "risk_score_min": 0,
+                }
+            ),
+            ["app.new", "sales.checkout.completed", "app.old"],
         )
         self.assertEqual(
             self._list_event_names(
@@ -260,20 +278,37 @@ class AnalyticsEventApiTests(TestCase):
             occurred_at=self._occurred_at(20, 8),
         )
         action_names = {
+            "pos_line_added": "pos.cart.line.added",
             "pos_line_deleted": "pos.cart.line.deleted",
+            "pos_cart_cleared": "pos.cart.cleared",
+            "purchase_line_added": "purchasing.draft.line.added",
             "purchase_line_deleted": "purchasing.draft.line.deleted",
+            "purchase_draft_cleared": "purchasing.draft.cleared",
+            "purchase_draft_submitted": "purchasing.draft.submitted",
             "invoice_created": "sales.checkout.completed",
             "customer_created": "customers.customer.created",
             "register_cash_movement": "sales.register_cash_movement.created",
+            "register_session_started": "sales.register_session.started",
+            "register_session_closed": "sales.register_session.closed",
+            "receipt_reprinted": "sales.receipt.reprint.queued",
             "order_voided": "sales.order.voided",
             "order_returned": "sales.order.returned",
+            "product_changed": "catalog.product.created",
+            "stock_movement_created": "catalog.stock_movement.created",
+            "barcode_labels_printed": "printing.barcode_labels.printed",
+            "user_changed": "users.management.user.role_changed",
+            "settings_changed": "settings.device.usage_mode_changed",
+            "discount_changed": "discounts.rule.updated",
+            "report_activity": "report.generated",
+            "printer_activity": "printing.printer.tested",
+            "analytics_export": "analytics.export.downloaded",
             "purchase_order_deleted": "purchasing.purchase_order.deleted",
         }
-        for index, event_name in enumerate(action_names.values(), start=9):
+        for index, event_name in enumerate(action_names.values()):
             self._create_event(
                 name=event_name,
                 event_type=AnalyticsEvent.EventType.AUDIT,
-                occurred_at=self._occurred_at(20, index),
+                occurred_at=self._occurred_at(20 + index // 12, 8 + index % 12),
             )
         self._create_event(
             name="app.started",
@@ -286,10 +321,51 @@ class AnalyticsEventApiTests(TestCase):
         )
         for action_name, event_name in action_names.items():
             with self.subTest(action=action_name):
+                expected_names = [event_name]
+                if action_name == "printer_activity":
+                    expected_names = [
+                        "printing.printer.tested",
+                        "printing.barcode_labels.printed",
+                        "sales.receipt.reprint.queued",
+                    ]
                 self.assertEqual(
                     self._list_event_names({"action": action_name}),
-                    [event_name],
+                    expected_names,
                 )
+        self._create_event(
+            name="pos.cart.line.quantity_increased",
+            event_type=AnalyticsEvent.EventType.AUDIT,
+            occurred_at=self._occurred_at(21, 9),
+        )
+        self._create_event(
+            name="pos.cart.line.quantity_decreased",
+            event_type=AnalyticsEvent.EventType.AUDIT,
+            occurred_at=self._occurred_at(21, 10),
+        )
+        self.assertCountEqual(
+            self._list_event_names({"action": "pos_line_quantity_changed"}),
+            [
+                "pos.cart.line.quantity_increased",
+                "pos.cart.line.quantity_decreased",
+            ],
+        )
+        self._create_event(
+            name="purchasing.draft.line.quantity_increased",
+            event_type=AnalyticsEvent.EventType.AUDIT,
+            occurred_at=self._occurred_at(21, 11),
+        )
+        self._create_event(
+            name="purchasing.draft.line.quantity_decreased",
+            event_type=AnalyticsEvent.EventType.AUDIT,
+            occurred_at=self._occurred_at(21, 12),
+        )
+        self.assertCountEqual(
+            self._list_event_names({"action": "purchase_line_quantity_changed"}),
+            [
+                "purchasing.draft.line.quantity_increased",
+                "purchasing.draft.line.quantity_decreased",
+            ],
+        )
         self.assertCountEqual(
             self._list_event_names({"action": "any_deleted"}),
             [

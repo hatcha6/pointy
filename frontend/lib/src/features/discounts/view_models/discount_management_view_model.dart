@@ -1,15 +1,21 @@
 import 'package:flutter/foundation.dart';
 
+import '../../../core/analytics_audit.dart';
+import '../../../core/analytics_engine.dart';
 import '../../../core/result.dart';
 import '../../../data/models/discount_rule.dart';
 import '../../../data/repositories/discount_repository.dart';
 
 class DiscountManagementViewModel extends ChangeNotifier {
-  DiscountManagementViewModel(this._discountRepository) {
+  DiscountManagementViewModel(
+    this._discountRepository, {
+    AnalyticsEngine? analyticsEngine,
+  }) : _analyticsEngine = analyticsEngine {
     loadRules();
   }
 
   final DiscountRepository _discountRepository;
+  final AnalyticsEngine? _analyticsEngine;
 
   List<DiscountRule> _rules = [];
   bool _isLoading = false;
@@ -100,7 +106,10 @@ class DiscountManagementViewModel extends ChangeNotifier {
   }
 
   Future<bool> createRule(DiscountRuleDraft draft) async {
-    return _save(() => _discountRepository.createDiscountRule(draft));
+    return _save(
+      () => _discountRepository.createDiscountRule(draft),
+      eventName: 'discounts.management.rule.created',
+    );
   }
 
   Future<bool> updateRule({
@@ -109,6 +118,7 @@ class DiscountManagementViewModel extends ChangeNotifier {
   }) async {
     return _save(
       () => _discountRepository.updateDiscountRule(id: rule.id, draft: draft),
+      eventName: 'discounts.management.rule.updated',
     );
   }
 
@@ -120,14 +130,23 @@ class DiscountManagementViewModel extends ChangeNotifier {
       () => isActive
           ? _discountRepository.enableDiscountRule(rule.id)
           : _discountRepository.disableDiscountRule(rule.id),
+      eventName: isActive
+          ? 'discounts.management.rule.enabled'
+          : 'discounts.management.rule.disabled',
     );
   }
 
   Future<bool> archiveRule(DiscountRule rule) async {
-    return _save(() => _discountRepository.archiveDiscountRule(rule.id));
+    return _save(
+      () => _discountRepository.archiveDiscountRule(rule.id),
+      eventName: 'discounts.management.rule.archived',
+    );
   }
 
-  Future<bool> _save(Future<Result<DiscountRule>> Function() operation) async {
+  Future<bool> _save(
+    Future<Result<DiscountRule>> Function() operation, {
+    required String eventName,
+  }) async {
     _isSaving = true;
     _hasSaveError = false;
     notifyListeners();
@@ -137,6 +156,7 @@ class DiscountManagementViewModel extends ChangeNotifier {
     switch (result) {
       case Ok<DiscountRule>(value: final rule):
         _upsertRule(rule);
+        _trackRuleChanged(name: eventName, rule: rule);
         notifyListeners();
         return true;
       case Error<DiscountRule>():
@@ -144,6 +164,44 @@ class DiscountManagementViewModel extends ChangeNotifier {
         notifyListeners();
         return false;
     }
+  }
+
+  void _trackRuleChanged({required String name, required DiscountRule rule}) {
+    trackAuditEvent(
+      _analyticsEngine,
+      name: name,
+      entityType: 'discount_rule',
+      entityId: rule.id,
+      attributes: {
+        'discount_rule_id': rule.id,
+        'discount_rule_name': rule.name,
+        'channel': rule.channel.apiValue,
+        'application_type': rule.applicationType.apiValue,
+        'coupon_code_present': rule.couponCode.trim().isNotEmpty,
+        'scope': rule.scope.apiValue,
+        'value_type': rule.valueType.apiValue,
+        'exclusive': rule.exclusive,
+        'is_active': rule.isActive,
+        'has_schedule': rule.startsAt != null || rule.endsAt != null,
+        'has_usage_limit': rule.usageLimit != null,
+        'source': 'discount_management',
+      },
+      metrics: {
+        'value': rule.value,
+        'priority': rule.priority,
+        'constraint_count': _constraintCount(rule),
+        'redemption_count': rule.redemptionCount,
+        'applied_count': rule.appliedCount,
+      },
+    );
+  }
+
+  int _constraintCount(DiscountRule rule) {
+    return rule.products.length +
+        rule.variants.length +
+        rule.productCategories.length +
+        rule.customers.length +
+        rule.suppliers.length;
   }
 
   void _upsertRule(DiscountRule rule) {

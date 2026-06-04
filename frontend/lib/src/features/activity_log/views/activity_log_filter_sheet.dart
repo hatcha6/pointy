@@ -3,6 +3,7 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../data/models/analytics_event.dart';
 import '../../../data/models/pos_user.dart';
+import '../../../shared/async_selection/async_multi_select_picker.dart';
 import '../../../shared/date_formatters.dart';
 import '../../../shared/query_controls/query_filter_sheet.dart';
 
@@ -29,8 +30,7 @@ class _ActivityLogFilterSheetState extends State<ActivityLogFilterSheet> {
   late var _dateRange = widget.query.dateRange;
   late DateTime? _occurredAfter = widget.query.occurredAfter;
   late DateTime? _occurredBefore = widget.query.occurredBefore;
-  late int? _userId = widget.query.userId;
-  late String _userLabel = widget.query.userLabel;
+  late List<AsyncSelectionOption<int>> _selectedUsers;
   late int? _minRiskScore = widget.query.minRiskScore;
   late var _ordering = widget.query.ordering;
   late final TextEditingController _sessionController;
@@ -40,6 +40,7 @@ class _ActivityLogFilterSheetState extends State<ActivityLogFilterSheet> {
   @override
   void initState() {
     super.initState();
+    _selectedUsers = _selectedUserOptionsFromQuery(widget.query, widget.users);
     _sessionController = TextEditingController(
       text: widget.query.registerSessionId,
     );
@@ -152,36 +153,15 @@ class _ActivityLogFilterSheetState extends State<ActivityLogFilterSheet> {
           children: [
             Padding(
               padding: const EdgeInsets.all(14),
-              child: DropdownButtonFormField<int?>(
-                initialValue: _userId,
-                decoration: InputDecoration(
-                  labelText: l10n.activityLogUserFilterLabel,
-                  border: const OutlineInputBorder(),
-                  prefixIcon: const Icon(Icons.person_search_outlined),
-                ),
-                items: [
-                  DropdownMenuItem<int?>(
-                    value: null,
-                    child: Text(l10n.activityLogAllUsers),
-                  ),
-                  for (final user in widget.users)
-                    DropdownMenuItem<int?>(
-                      value: user.id,
-                      child: Text(user.label),
-                    ),
-                ],
-                onChanged: (value) {
-                  setState(() {
-                    _userId = value;
-                    _userLabel = value == null
-                        ? ''
-                        : widget.users
-                                  .where((user) => user.id == value)
-                                  .firstOrNull
-                                  ?.label ??
-                              '';
-                  });
-                },
+              child: AsyncSelectionField<int>(
+                fieldKey: const ValueKey('activity_log_user_filter_field'),
+                strings: activityLogUserFieldStrings(l10n),
+                selected: _selectedUsers,
+                onPick: () => _pickUsers(context),
+                onClear: _selectedUsers.isEmpty
+                    ? null
+                    : () => setState(() => _selectedUsers = []),
+                validator: (_) => null,
               ),
             ),
           ],
@@ -315,8 +295,7 @@ class _ActivityLogFilterSheetState extends State<ActivityLogFilterSheet> {
       _dateRange = AnalyticsEventDateRange.last7Days;
       _occurredAfter = null;
       _occurredBefore = null;
-      _userId = null;
-      _userLabel = '';
+      _selectedUsers = [];
       _sessionController.clear();
       _entityTypeController.clear();
       _entityIdController.clear();
@@ -338,9 +317,9 @@ class _ActivityLogFilterSheetState extends State<ActivityLogFilterSheet> {
         occurredBefore: _occurredBefore,
         clearOccurredAfter: _occurredAfter == null,
         clearOccurredBefore: _occurredBefore == null,
-        userId: _userId,
-        userLabel: _userLabel,
-        clearUser: _userId == null,
+        userIds: [for (final user in _selectedUsers) user.id],
+        userLabels: [for (final user in _selectedUsers) user.label],
+        clearUser: _selectedUsers.isEmpty,
         registerSessionId: _sessionController.text,
         entityType: _entityTypeController.text,
         entityId: _entityIdController.text,
@@ -350,6 +329,116 @@ class _ActivityLogFilterSheetState extends State<ActivityLogFilterSheet> {
       ),
     );
   }
+
+  Future<void> _pickUsers(BuildContext context) async {
+    final l10n = AppLocalizations.of(context)!;
+    final picked = await showAsyncMultiSelectPicker<int>(
+      context: context,
+      strings: activityLogUserPickerStrings(l10n),
+      selected: _selectedUsers,
+      searchFieldKey: const ValueKey('activity_log_user_filter_search_field'),
+      applyButtonKey: const ValueKey('activity_log_user_filter_apply_button'),
+      optionKeyForId: (id) => ValueKey('activity_log_user_filter_option_$id'),
+      loadPage: _loadUserSelectionPage,
+    );
+    if (!mounted || picked == null) {
+      return;
+    }
+    setState(() => _selectedUsers = picked);
+  }
+
+  Future<AsyncSelectionPage<int>> _loadUserSelectionPage(
+    String search,
+    int page,
+  ) async {
+    const pageSize = 24;
+    final normalizedSearch = search.trim().toLowerCase();
+    final users = [
+      for (final user in widget.users)
+        if (_matchesUserSearch(user, normalizedSearch)) user,
+    ];
+    final start = (page - 1) * pageSize;
+    if (start >= users.length) {
+      return const AsyncSelectionPage<int>(options: [], hasMore: false);
+    }
+    final end = start + pageSize > users.length
+        ? users.length
+        : start + pageSize;
+    return AsyncSelectionPage<int>(
+      options: [for (final user in users.sublist(start, end)) userOption(user)],
+      hasMore: end < users.length,
+    );
+  }
+}
+
+AsyncSelectionFieldStrings<int> activityLogUserFieldStrings(
+  AppLocalizations l10n,
+) {
+  return AsyncSelectionFieldStrings<int>(
+    label: l10n.activityLogUserFilterLabel,
+    emptyText: l10n.activityLogAllUsers,
+    helperText: l10n.activityLogUserFilterHelper,
+    clearTooltip: l10n.clearButton,
+    openPickerTooltip: l10n.activityLogUsersOpenPickerTooltip,
+    fallbackLabelForId: l10n.activityLogUserFallbackLabel,
+  );
+}
+
+AsyncSelectionPickerStrings<int> activityLogUserPickerStrings(
+  AppLocalizations l10n,
+) {
+  return AsyncSelectionPickerStrings<int>(
+    title: l10n.activityLogUserPickerTitle,
+    searchHint: l10n.activityLogUserPickerSearchHint,
+    emptyText: l10n.activityLogUserPickerEmpty,
+    clearText: l10n.clearButton,
+    clearSearchTooltip: l10n.clearSearchTooltip,
+    loadErrorText: l10n.activityLogUserPickerLoadError,
+    confirmText: l10n.confirmButton,
+    fallbackLabelForId: l10n.activityLogUserFallbackLabel,
+  );
+}
+
+AsyncSelectionOption<int> userOption(PosUser user) {
+  final subtitleParts = [
+    if (user.username.trim().isNotEmpty && user.username != user.label)
+      user.username,
+    if (user.email.trim().isNotEmpty) user.email,
+  ];
+  return AsyncSelectionOption<int>(
+    id: user.id,
+    label: user.label,
+    subtitle: subtitleParts.join(' - '),
+  );
+}
+
+List<AsyncSelectionOption<int>> _selectedUserOptionsFromQuery(
+  AnalyticsEventQuery query,
+  List<PosUser> users,
+) {
+  final usersById = {for (final user in users) user.id: user};
+  final userIds = query.selectedUserIds;
+  final userLabels = query.selectedUserLabels;
+  return [
+    for (final (index, id) in userIds.indexed)
+      if (usersById[id] case final user?)
+        userOption(user)
+      else
+        AsyncSelectionOption<int>(
+          id: id,
+          label: index < userLabels.length ? userLabels[index] : '',
+          subtitle: '',
+        ),
+  ];
+}
+
+bool _matchesUserSearch(PosUser user, String search) {
+  if (search.isEmpty) {
+    return true;
+  }
+  return user.label.toLowerCase().contains(search) ||
+      user.username.toLowerCase().contains(search) ||
+      user.email.toLowerCase().contains(search);
 }
 
 class _TextFilterField extends StatelessWidget {
@@ -397,19 +486,55 @@ String activityActionFilterLabel(
   return switch (action) {
     AnalyticsEventActionFilter.all => l10n.activityActionAll,
     AnalyticsEventActionFilter.fraudSignal => l10n.activityActionFraudSignal,
+    AnalyticsEventActionFilter.posLineAdded => l10n.activityActionPosLineAdded,
     AnalyticsEventActionFilter.posLineDeleted =>
       l10n.activityActionPosLineDeleted,
+    AnalyticsEventActionFilter.posLineQuantityChanged =>
+      l10n.activityActionPosLineQuantityChanged,
+    AnalyticsEventActionFilter.posCartCleared =>
+      l10n.activityActionPosCartCleared,
+    AnalyticsEventActionFilter.purchaseLineAdded =>
+      l10n.activityActionPurchaseLineAdded,
     AnalyticsEventActionFilter.purchaseLineDeleted =>
       l10n.activityActionPurchaseLineDeleted,
+    AnalyticsEventActionFilter.purchaseLineQuantityChanged =>
+      l10n.activityActionPurchaseLineQuantityChanged,
+    AnalyticsEventActionFilter.purchaseDraftCleared =>
+      l10n.activityActionPurchaseDraftCleared,
+    AnalyticsEventActionFilter.purchaseDraftSubmitted =>
+      l10n.activityActionPurchaseDraftSubmitted,
     AnalyticsEventActionFilter.invoiceCreated =>
       l10n.activityActionInvoiceCreated,
     AnalyticsEventActionFilter.customerCreated =>
       l10n.activityActionCustomerCreated,
     AnalyticsEventActionFilter.registerCashMovement =>
       l10n.activityActionRegisterCashMovement,
+    AnalyticsEventActionFilter.registerSessionStarted =>
+      l10n.activityActionRegisterSessionStarted,
+    AnalyticsEventActionFilter.registerSessionClosed =>
+      l10n.activityActionRegisterSessionClosed,
+    AnalyticsEventActionFilter.receiptReprinted =>
+      l10n.activityActionReceiptReprinted,
     AnalyticsEventActionFilter.orderVoided => l10n.activityActionOrderVoided,
     AnalyticsEventActionFilter.orderReturned =>
       l10n.activityActionOrderReturned,
+    AnalyticsEventActionFilter.productChanged =>
+      l10n.activityActionProductChanged,
+    AnalyticsEventActionFilter.stockMovementCreated =>
+      l10n.activityActionStockMovementCreated,
+    AnalyticsEventActionFilter.barcodeLabelsPrinted =>
+      l10n.activityActionBarcodeLabelsPrinted,
+    AnalyticsEventActionFilter.userChanged => l10n.activityActionUserChanged,
+    AnalyticsEventActionFilter.settingsChanged =>
+      l10n.activityActionSettingsChanged,
+    AnalyticsEventActionFilter.discountChanged =>
+      l10n.activityActionDiscountChanged,
+    AnalyticsEventActionFilter.reportActivity =>
+      l10n.activityActionReportActivity,
+    AnalyticsEventActionFilter.printerActivity =>
+      l10n.activityActionPrinterActivity,
+    AnalyticsEventActionFilter.analyticsExport =>
+      l10n.activityActionAnalyticsExport,
     AnalyticsEventActionFilter.purchaseOrderDeleted =>
       l10n.activityActionPurchaseOrderDeleted,
     AnalyticsEventActionFilter.anyDeleted => l10n.activityActionAnyDeleted,
@@ -496,16 +621,42 @@ IconData _actionIcon(AnalyticsEventActionFilter action) {
   return switch (action) {
     AnalyticsEventActionFilter.all => Icons.manage_search_outlined,
     AnalyticsEventActionFilter.fraudSignal => Icons.gpp_maybe_outlined,
+    AnalyticsEventActionFilter.posLineAdded => Icons.add_shopping_cart_outlined,
     AnalyticsEventActionFilter.posLineDeleted =>
       Icons.remove_shopping_cart_outlined,
+    AnalyticsEventActionFilter.posLineQuantityChanged =>
+      Icons.exposure_outlined,
+    AnalyticsEventActionFilter.posCartCleared =>
+      Icons.remove_shopping_cart_outlined,
+    AnalyticsEventActionFilter.purchaseLineAdded => Icons.add_circle_outline,
     AnalyticsEventActionFilter.purchaseLineDeleted =>
       Icons.remove_circle_outline,
+    AnalyticsEventActionFilter.purchaseLineQuantityChanged =>
+      Icons.exposure_outlined,
+    AnalyticsEventActionFilter.purchaseDraftCleared =>
+      Icons.delete_sweep_outlined,
+    AnalyticsEventActionFilter.purchaseDraftSubmitted =>
+      Icons.assignment_turned_in_outlined,
     AnalyticsEventActionFilter.invoiceCreated => Icons.receipt_long_outlined,
     AnalyticsEventActionFilter.customerCreated => Icons.person_add_alt_1,
     AnalyticsEventActionFilter.registerCashMovement =>
       Icons.account_balance_wallet_outlined,
+    AnalyticsEventActionFilter.registerSessionStarted =>
+      Icons.point_of_sale_outlined,
+    AnalyticsEventActionFilter.registerSessionClosed =>
+      Icons.lock_clock_outlined,
+    AnalyticsEventActionFilter.receiptReprinted => Icons.print_outlined,
     AnalyticsEventActionFilter.orderVoided => Icons.block_outlined,
     AnalyticsEventActionFilter.orderReturned => Icons.keyboard_return_outlined,
+    AnalyticsEventActionFilter.productChanged => Icons.inventory_2_outlined,
+    AnalyticsEventActionFilter.stockMovementCreated => Icons.move_down_outlined,
+    AnalyticsEventActionFilter.barcodeLabelsPrinted => Icons.qr_code_2,
+    AnalyticsEventActionFilter.userChanged => Icons.manage_accounts_outlined,
+    AnalyticsEventActionFilter.settingsChanged => Icons.settings_outlined,
+    AnalyticsEventActionFilter.discountChanged => Icons.percent_outlined,
+    AnalyticsEventActionFilter.reportActivity => Icons.assessment_outlined,
+    AnalyticsEventActionFilter.printerActivity => Icons.print_outlined,
+    AnalyticsEventActionFilter.analyticsExport => Icons.file_download_outlined,
     AnalyticsEventActionFilter.purchaseOrderDeleted =>
       Icons.delete_sweep_outlined,
     AnalyticsEventActionFilter.anyDeleted => Icons.delete_outline,

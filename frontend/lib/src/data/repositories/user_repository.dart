@@ -8,8 +8,11 @@ class UserRepository {
 
   final PosApiService _service;
 
-  Future<Result<PosUserPage>> loadUsers({int page = 1}) async {
-    return Result.guard(() => _service.fetchUsers(page: page));
+  Future<Result<PosUserPage>> loadUsers({
+    int page = 1,
+    String search = '',
+  }) async {
+    return Result.guard(() => _service.fetchUsers(page: page, search: search));
   }
 
   Future<Result<PosUser>> createUser(UserCreateDraft draft) async {

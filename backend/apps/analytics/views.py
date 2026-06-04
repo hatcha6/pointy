@@ -19,13 +19,124 @@ from .services import build_events_export_zip, filter_events_for_export, ingest_
 
 
 ANALYTICS_EVENT_ACTIONS = {
+    "pos_line_added": "pos.cart.line.added",
     "pos_line_deleted": "pos.cart.line.deleted",
+    "pos_line_quantity_changed": (
+        "pos.cart.line.quantity_increased",
+        "pos.cart.line.quantity_decreased",
+    ),
+    "pos_cart_cleared": "pos.cart.cleared",
+    "purchase_line_added": "purchasing.draft.line.added",
     "purchase_line_deleted": "purchasing.draft.line.deleted",
+    "purchase_line_quantity_changed": (
+        "purchasing.draft.line.quantity_increased",
+        "purchasing.draft.line.quantity_decreased",
+    ),
+    "purchase_draft_cleared": "purchasing.draft.cleared",
+    "purchase_draft_submitted": "purchasing.draft.submitted",
     "invoice_created": "sales.checkout.completed",
     "customer_created": "customers.customer.created",
-    "register_cash_movement": "sales.register_cash_movement.created",
-    "order_voided": "sales.order.voided",
-    "order_returned": "sales.order.returned",
+    "register_cash_movement": (
+        "sales.register_cash_movement.created",
+        "pos.register_cash_movement.created",
+    ),
+    "register_session_started": (
+        "sales.register_session.started",
+        "pos.register_session.started",
+        "pos.register_session.resumed",
+    ),
+    "register_session_closed": (
+        "sales.register_session.closed",
+        "pos.register_session.closed",
+    ),
+    "receipt_reprinted": (
+        "sales.receipt.reprint.queued",
+        "sales.receipt.reprint.failed",
+    ),
+    "order_voided": (
+        "sales.order.voided",
+        "sales_history.order_void.completed",
+    ),
+    "order_returned": (
+        "sales.order.returned",
+        "sales_history.order_return.completed",
+    ),
+    "product_changed": (
+        "catalog.product.created",
+        "catalog.product.updated",
+        "catalog.product.image_uploaded",
+        "catalog.product.image_imported",
+        "catalog.product_variant.created",
+        "catalog.product_variant.updated",
+        "catalog.product.variants_generated",
+        "catalog.category.created",
+        "catalog.category.updated",
+        "catalog.category.deleted",
+    ),
+    "stock_movement_created": (
+        "inventory.manual_movement.created",
+        "catalog.stock_movement.created",
+        "inventory.manual_movement.create_failed",
+    ),
+    "barcode_labels_printed": (
+        "printing.barcode_labels.printed",
+        "printing.barcode_labels.failed",
+    ),
+    "user_changed": (
+        "users.user.created",
+        "users.user.updated",
+        "users.user.deleted",
+        "users.management.user.created",
+        "users.management.user.role_changed",
+        "users.management.user.active_changed",
+    ),
+    "settings_changed": (
+        "settings.shop.updated",
+        "settings.shop.logo_uploaded",
+        "settings.shop.logo_removed",
+        "settings.shop.form_saved",
+        "settings.shop.logo_upload.completed",
+        "settings.shop.logo_remove.completed",
+        "settings.device.usage_mode_changed",
+    ),
+    "discount_changed": (
+        "discounts.rule.created",
+        "discounts.rule.updated",
+        "discounts.rule.enabled",
+        "discounts.rule.disabled",
+        "discounts.rule.archived",
+        "discounts.management.rule.created",
+        "discounts.management.rule.updated",
+        "discounts.management.rule.enabled",
+        "discounts.management.rule.disabled",
+        "discounts.management.rule.archived",
+    ),
+    "report_activity": (
+        "report.generated",
+        "report.generation_failed",
+        "report.previewed",
+        "report.printed",
+        "report.shared",
+        "reports.run.completed",
+        "reports.run.failed",
+    ),
+    "printer_activity": (
+        "printing.printer.discovery_completed",
+        "printing.printer.discovery_failed",
+        "printing.printer.tested",
+        "printing.printer.fake_receipt_printed",
+        "printing.barcode_labels.printed",
+        "printing.barcode_labels.failed",
+        "sales.receipt.reprint.queued",
+        "sales.receipt.reprint.failed",
+    ),
+    "analytics_export": (
+        "analytics.export.started",
+        "analytics.export.completed",
+        "analytics.export.failed",
+        "analytics.export.downloaded",
+        "analytics.export.download_failed",
+    ),
     "purchase_order_deleted": "purchasing.purchase_order.deleted",
 }
 
@@ -39,6 +150,10 @@ TECHNICAL_EVENT_NAMES = {
     "frontend.operation",
     "frontend.screen_viewed",
 }
+
+
+class NumberInFilter(django_filters.BaseInFilter, django_filters.NumberFilter):
+    pass
 
 
 class AnalyticsEventFilterForm(forms.Form):
@@ -98,11 +213,16 @@ class AnalyticsEventFilter(django_filters.FilterSet):
         ),
         method="filter_action",
     )
-    received_by = django_filters.NumberFilter(
+    received_by = NumberInFilter(
         field_name="received_by_id",
+        lookup_expr="in",
         min_value=1,
     )
-    user = django_filters.NumberFilter(field_name="received_by_id", min_value=1)
+    user = NumberInFilter(
+        field_name="received_by_id",
+        lookup_expr="in",
+        min_value=1,
+    )
     occurred_at_after = django_filters.IsoDateTimeFilter(
         field_name="occurred_at",
         lookup_expr="gte",
@@ -165,7 +285,10 @@ class AnalyticsEventFilter(django_filters.FilterSet):
             return queryset.filter(event_type=AnalyticsEvent.EventType.FRAUD_SIGNAL)
         if value == "any_deleted":
             return queryset.filter(name__contains="deleted")
-        return queryset.filter(name=ANALYTICS_EVENT_ACTIONS[value])
+        event_names = ANALYTICS_EVENT_ACTIONS[value]
+        if isinstance(event_names, str):
+            return queryset.filter(name=event_names)
+        return queryset.filter(name__in=event_names)
 
     def filter_activity_scope(self, queryset, name, value):
         technical_query = Q(event_type=AnalyticsEvent.EventType.PERFORMANCE) | Q(

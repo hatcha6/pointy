@@ -227,13 +227,17 @@ class _AuthenticatedRoutes {
     return _screen(
       'catalog',
       CatalogScreen(
-        viewModel: CatalogViewModel(dependencies.catalogRepository),
+        viewModel: CatalogViewModel(
+          dependencies.catalogRepository,
+          analyticsEngine: dependencies.analyticsEngine,
+        ),
         inventoryRepository: dependencies.inventoryRepository,
         printingRepository: dependencies.printingRepository,
         purchaseRepository: dependencies.purchaseRepository,
         saleRepository: dependencies.saleRepository,
         currentUser: currentUser,
         capabilities: capabilities,
+        analyticsEngine: dependencies.analyticsEngine,
         onOpenDashboard: guardedAction(
           AppCapability.viewDashboard,
           () => openDashboard(routeContext),
@@ -291,7 +295,10 @@ class _AuthenticatedRoutes {
     return _screen(
       'categories',
       CategoryManagementScreen(
-        viewModel: CategoryManagementViewModel(dependencies.catalogRepository),
+        viewModel: CategoryManagementViewModel(
+          dependencies.catalogRepository,
+          analyticsEngine: dependencies.analyticsEngine,
+        ),
         currentUser: currentUser,
         capabilities: capabilities,
         onOpenDashboard: guardedAction(
@@ -354,6 +361,7 @@ class _AuthenticatedRoutes {
         viewModel: RegisterSessionHistoryViewModel(
           dependencies.registerSessionRepository,
           dependencies.saleRepository,
+          analyticsEngine: dependencies.analyticsEngine,
         ),
         contactRepository: dependencies.contactRepository,
         currentUser: currentUser,
@@ -415,7 +423,10 @@ class _AuthenticatedRoutes {
     return _screen(
       'users',
       UserManagementScreen(
-        viewModel: UserManagementViewModel(dependencies.userRepository),
+        viewModel: UserManagementViewModel(
+          dependencies.userRepository,
+          analyticsEngine: dependencies.analyticsEngine,
+        ),
         currentUser: currentUser,
         capabilities: capabilities,
         onOpenDashboard: guardedAction(
@@ -1338,6 +1349,7 @@ class _AuthenticatedRoutes {
       'end_date': _apiDate(request.dateRange.end),
       'include_audit_trail': request.includeAuditTrail,
       'include_prepared_by': request.includePreparedBy,
+      'source': 'reports_screen',
     };
   }
 

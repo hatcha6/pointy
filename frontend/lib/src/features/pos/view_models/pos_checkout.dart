@@ -73,16 +73,30 @@ extension PosCheckoutActions on PosViewModel {
 
     final checkoutStopwatch = Stopwatch()..start();
     final cartSnapshot = List<CartLine>.of(_cart);
+    final customerSnapshot = _selectedCustomer;
+    final couponCodeSnapshot = _couponCode.trim();
     unawaited(
       _analyticsEngine?.trackUsage(
             AnalyticsEventName.posCheckoutStarted,
             attributes: {
+              'register_session_id': _activeRegisterSession?.id,
               'line_count': cartSnapshot.length,
+              'item_count': _checkoutCartItemCount(cartSnapshot),
               'payment_count': payments.length,
-              'has_customer': _selectedCustomer != null,
-              'has_coupon': _couponCode.trim().isNotEmpty,
+              'has_customer': customerSnapshot != null,
+              'customer_id': customerSnapshot?.id,
+              'customer_name': customerSnapshot?.fullName,
+              'has_coupon': couponCodeSnapshot.isNotEmpty,
+              'coupon_code_present': couponCodeSnapshot.isNotEmpty,
+              'cart_total': _checkoutCartTotal(cartSnapshot),
+              'lines': _checkoutCartLineSnapshots(cartSnapshot),
             },
-            metrics: {'total': total},
+            metrics: {
+              'line_count': cartSnapshot.length,
+              'item_count': _checkoutCartItemCount(cartSnapshot),
+              'payment_count': payments.length,
+              'total': total,
+            },
           ) ??
           Future<void>.value(),
     );
@@ -133,6 +147,7 @@ extension PosCheckoutActions on PosViewModel {
                 attributes: {'operation': 'pos.checkout', 'outcome': 'success'},
                 metrics: {
                   'line_count': cartSnapshot.length,
+                  'item_count': _checkoutCartItemCount(cartSnapshot),
                   'total': result.value.total,
                 },
                 entityType: 'sale_order',
@@ -144,12 +159,25 @@ extension PosCheckoutActions on PosViewModel {
           _analyticsEngine?.trackUsage(
                 AnalyticsEventName.posCheckoutCompleted,
                 attributes: {
+                  'register_session_id': _activeRegisterSession?.id,
                   'line_count': cartSnapshot.length,
+                  'item_count': _checkoutCartItemCount(cartSnapshot),
                   'payment_count': payments.length,
                   'print_status': printStatus.name,
                   'receipt_number': result.value.receiptNumber,
+                  'customer_id': result.value.customer,
+                  'customer_name':
+                      result.value.customerName ?? customerSnapshot?.fullName,
+                  'coupon_code_present': couponCodeSnapshot.isNotEmpty,
+                  'cart_total': _checkoutCartTotal(cartSnapshot),
+                  'lines': _checkoutCartLineSnapshots(cartSnapshot),
                 },
-                metrics: {'total': result.value.total},
+                metrics: {
+                  'line_count': cartSnapshot.length,
+                  'item_count': _checkoutCartItemCount(cartSnapshot),
+                  'payment_count': payments.length,
+                  'total': result.value.total,
+                },
                 entityType: 'sale_order',
                 entityId: result.value.id.toString(),
                 flushImmediately: true,
@@ -174,6 +202,8 @@ extension PosCheckoutActions on PosViewModel {
                   },
                   metrics: {
                     'shortage_count': exception.shortages.length,
+                    'line_count': cartSnapshot.length,
+                    'item_count': _checkoutCartItemCount(cartSnapshot),
                     'total': total,
                   },
                   flushImmediately: true,
@@ -184,8 +214,20 @@ extension PosCheckoutActions on PosViewModel {
             _analyticsEngine?.trackUsage(
                   AnalyticsEventName.posCheckoutStockRejected,
                   severity: AnalyticsEventSeverity.warning,
-                  attributes: {'shortage_count': exception.shortages.length},
-                  metrics: {'total': total},
+                  attributes: {
+                    'register_session_id': _activeRegisterSession?.id,
+                    'shortage_count': exception.shortages.length,
+                    'line_count': cartSnapshot.length,
+                    'item_count': _checkoutCartItemCount(cartSnapshot),
+                    'cart_total': _checkoutCartTotal(cartSnapshot),
+                    'lines': _checkoutCartLineSnapshots(cartSnapshot),
+                  },
+                  metrics: {
+                    'shortage_count': exception.shortages.length,
+                    'line_count': cartSnapshot.length,
+                    'item_count': _checkoutCartItemCount(cartSnapshot),
+                    'total': total,
+                  },
                   flushImmediately: true,
                 ) ??
                 Future<void>.value(),
@@ -193,6 +235,29 @@ extension PosCheckoutActions on PosViewModel {
           return SaleCheckoutOutcome.stockRejected(exception.shortages);
         }
         if (exception is SaleCheckoutLossException) {
+          unawaited(
+            _analyticsEngine?.trackUsage(
+                  AnalyticsEventName.posCheckoutFailed,
+                  severity: AnalyticsEventSeverity.warning,
+                  attributes: {
+                    'register_session_id': _activeRegisterSession?.id,
+                    'failure_reason': 'loss_rejected',
+                    'loss_line_count': exception.lossLines.length,
+                    'line_count': cartSnapshot.length,
+                    'item_count': _checkoutCartItemCount(cartSnapshot),
+                    'cart_total': _checkoutCartTotal(cartSnapshot),
+                    'lines': _checkoutCartLineSnapshots(cartSnapshot),
+                  },
+                  metrics: {
+                    'loss_line_count': exception.lossLines.length,
+                    'line_count': cartSnapshot.length,
+                    'item_count': _checkoutCartItemCount(cartSnapshot),
+                    'total': total,
+                  },
+                  flushImmediately: true,
+                ) ??
+                Future<void>.value(),
+          );
           return SaleCheckoutOutcome.lossRejected(exception.lossLines);
         }
         unawaited(
@@ -203,7 +268,11 @@ extension PosCheckoutActions on PosViewModel {
                 duration: checkoutStopwatch.elapsed,
                 severity: AnalyticsEventSeverity.error,
                 attributes: {'operation': 'pos.checkout', 'outcome': 'failure'},
-                metrics: {'line_count': cartSnapshot.length, 'total': total},
+                metrics: {
+                  'line_count': cartSnapshot.length,
+                  'item_count': _checkoutCartItemCount(cartSnapshot),
+                  'total': total,
+                },
                 flushImmediately: true,
               ) ??
               Future<void>.value(),
@@ -213,7 +282,14 @@ extension PosCheckoutActions on PosViewModel {
                 exception,
                 StackTrace.current,
                 name: AnalyticsEventName.posCheckoutFailed,
-                attributes: {'line_count': cartSnapshot.length},
+                attributes: {
+                  'register_session_id': _activeRegisterSession?.id,
+                  'failure_reason': 'checkout_error',
+                  'line_count': cartSnapshot.length,
+                  'item_count': _checkoutCartItemCount(cartSnapshot),
+                  'cart_total': _checkoutCartTotal(cartSnapshot),
+                  'lines': _checkoutCartLineSnapshots(cartSnapshot),
+                },
               ) ??
               Future<void>.value(),
         );
@@ -288,6 +364,30 @@ extension PosCheckoutActions on PosViewModel {
       variants: adjustedVariants,
     );
   }
+}
+
+List<Map<String, Object?>> _checkoutCartLineSnapshots(List<CartLine> lines) {
+  return [
+    for (final line in lines.take(50))
+      {
+        'product_id': line.variant.productId,
+        'variant_id': line.variant.id,
+        'product_name': line.variant.productLabel,
+        'variant_name': line.variant.variantLabel,
+        'sku': line.variant.sku,
+        'quantity': line.quantity,
+        'unit_price': line.variant.unitPrice,
+        'line_total': line.total,
+      },
+  ];
+}
+
+int _checkoutCartItemCount(List<CartLine> lines) {
+  return lines.fold(0, (sum, line) => sum + line.quantity);
+}
+
+double _checkoutCartTotal(List<CartLine> lines) {
+  return lines.fold(0, (sum, line) => sum + line.total);
 }
 
 enum InvoicePrintStatus { notRequested, printed, failed }

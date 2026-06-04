@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
+import '../../../core/analytics_engine.dart';
 import '../../../core/authorization.dart';
 import '../../../data/models/product.dart';
 import '../../../data/models/product_variant.dart';
@@ -29,6 +30,7 @@ class ProductDetailsScreen extends StatelessWidget {
     required this.printingRepository,
     required this.purchaseRepository,
     required this.capabilities,
+    this.analyticsEngine,
     this.onChanged,
   });
 
@@ -37,6 +39,7 @@ class ProductDetailsScreen extends StatelessWidget {
   final PrintingRepository printingRepository;
   final PurchaseRepository purchaseRepository;
   final AuthorizationCapabilities capabilities;
+  final AnalyticsEngine? analyticsEngine;
   final VoidCallback? onChanged;
 
   @override
@@ -197,9 +200,11 @@ class ProductDetailsScreen extends StatelessWidget {
             inventoryRepository,
             purchaseRepository,
             detailProduct,
+            analyticsEngine: analyticsEngine,
           ),
           printingRepository: printingRepository,
           capabilities: capabilities,
+          analyticsEngine: analyticsEngine,
         ),
       ),
     );

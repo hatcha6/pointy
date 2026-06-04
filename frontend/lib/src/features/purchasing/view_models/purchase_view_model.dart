@@ -229,12 +229,14 @@ class PurchaseViewModel extends ChangeNotifier {
     ProductVariant variant, {
     int quantity = 1,
     double? unitCost,
+    String source = 'purchase_catalog',
   }) async {
     if (_isSubmitting) {
       return;
     }
 
     final index = _draft.indexWhere((line) => line.variant.id == variant.id);
+    final previousQuantity = index == -1 ? 0 : _draft[index].quantity;
     if (index == -1) {
       final cost = unitCost ?? await _lastCostForVariant(variant);
       if (_isSubmitting) {
@@ -254,11 +256,25 @@ class PurchaseViewModel extends ChangeNotifier {
         unitCost: unitCost,
       );
     }
+    final updatedLine = _draft
+        .where((line) => line.variant.id == variant.id)
+        .firstOrNull;
+    if (updatedLine != null) {
+      _trackDraftLineAdded(
+        updatedLine,
+        addedQuantity: quantity,
+        previousQuantity: previousQuantity,
+        source: source,
+      );
+    }
     notifyListeners();
     unawaited(refreshDiscountPreview());
   }
 
-  void decrementVariant(ProductVariant variant) {
+  void decrementVariant(
+    ProductVariant variant, {
+    String source = 'purchase_draft_quantity_button',
+  }) {
     if (_isSubmitting) {
       return;
     }
@@ -271,9 +287,17 @@ class PurchaseViewModel extends ChangeNotifier {
     final line = _draft[index];
     if (line.quantity <= 1) {
       _draft.removeAt(index);
-      _trackDraftLineDeleted(line, reason: 'decrement_to_zero');
+      _trackDraftLineDeleted(line, reason: 'decrement_to_zero', source: source);
     } else {
-      _draft[index] = line.copyWith(quantity: line.quantity - 1);
+      final updatedLine = line.copyWith(quantity: line.quantity - 1);
+      _draft[index] = updatedLine;
+      _trackDraftLineQuantityChanged(
+        updatedLine,
+        previousQuantity: line.quantity,
+        newQuantity: updatedLine.quantity,
+        reason: 'decrement',
+        source: source,
+      );
     }
     notifyListeners();
     unawaited(refreshDiscountPreview());
@@ -308,22 +332,28 @@ class PurchaseViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  void clearDraft({bool trackLineDeletes = true}) {
+  void clearDraft({
+    bool trackLineDeletes = true,
+    String source = 'purchase_draft_clear_button',
+  }) {
     if (_isSubmitting) {
       return;
     }
     final removedLines = trackLineDeletes
         ? List<PurchaseDraftLine>.of(_draft)
         : const <PurchaseDraftLine>[];
+    for (final line in removedLines) {
+      _trackDraftLineDeleted(line, reason: 'clear_draft', source: source);
+    }
+    if (removedLines.isNotEmpty) {
+      _trackDraftCleared(removedLines, source: source);
+    }
     _draft.clear();
     _selectedSupplier = null;
     _supplierInvoiceNumber = '';
     _supplierInvoiceDateInput = '';
     _resetLandedCosts();
     _clearDiscountPreview();
-    for (final line in removedLines) {
-      _trackDraftLineDeleted(line, reason: 'clear_draft');
-    }
     notifyListeners();
   }
 
@@ -332,6 +362,7 @@ class PurchaseViewModel extends ChangeNotifier {
       return;
     }
     _selectedSupplier = supplier;
+    _trackSupplierSelected(supplier);
     notifyListeners();
     unawaited(refreshDiscountPreview());
   }
@@ -455,6 +486,7 @@ class PurchaseViewModel extends ChangeNotifier {
     );
     switch (result) {
       case Ok<PurchaseSubmission>():
+        _trackDraftSubmitted(result.value, supplier: supplier);
         _draft.clear();
         _selectedSupplier = null;
         _supplierInvoiceNumber = '';
@@ -463,6 +495,7 @@ class PurchaseViewModel extends ChangeNotifier {
         _resetLandedCosts();
         _clearDiscountPreview();
       case Error<PurchaseSubmission>():
+        _trackDraftSubmitFailed(supplier);
         break;
     }
 
@@ -525,9 +558,86 @@ class PurchaseViewModel extends ChangeNotifier {
     _isLoadingDiscountPreview = false;
   }
 
+  void _trackDraftLineAdded(
+    PurchaseDraftLine line, {
+    required int addedQuantity,
+    required int previousQuantity,
+    required String source,
+  }) {
+    _trackDraftLineAuditEvent(
+      name: previousQuantity == 0
+          ? 'purchasing.draft.line.added'
+          : 'purchasing.draft.line.quantity_increased',
+      severity: AnalyticsEventSeverity.info,
+      line: line,
+      attributes: {
+        'reason': previousQuantity == 0
+            ? 'add_to_purchase_draft'
+            : 'increment_existing_line',
+        'previous_quantity': previousQuantity,
+        'new_quantity': line.quantity,
+        'added_quantity': addedQuantity,
+        'source': source,
+      },
+      metrics: {
+        'quantity': line.quantity,
+        'added_quantity': addedQuantity,
+        'unit_cost': line.unitCost,
+        'line_total': line.subtotal,
+      },
+    );
+  }
+
+  void _trackDraftLineQuantityChanged(
+    PurchaseDraftLine line, {
+    required int previousQuantity,
+    required int newQuantity,
+    required String reason,
+    required String source,
+  }) {
+    _trackDraftLineAuditEvent(
+      name: 'purchasing.draft.line.quantity_decreased',
+      severity: AnalyticsEventSeverity.warning,
+      line: line,
+      attributes: {
+        'reason': reason,
+        'previous_quantity': previousQuantity,
+        'new_quantity': newQuantity,
+        'source': source,
+      },
+      metrics: {
+        'quantity': newQuantity,
+        'quantity_delta': newQuantity - previousQuantity,
+        'unit_cost': line.unitCost,
+        'line_total': line.subtotal,
+      },
+    );
+  }
+
   void _trackDraftLineDeleted(
     PurchaseDraftLine line, {
     required String reason,
+    required String source,
+  }) {
+    _trackDraftLineAuditEvent(
+      name: 'purchasing.draft.line.deleted',
+      severity: AnalyticsEventSeverity.warning,
+      line: line,
+      attributes: {'reason': reason, 'source': source},
+      metrics: {
+        'quantity': line.quantity,
+        'unit_cost': line.unitCost,
+        'line_total': line.subtotal,
+      },
+    );
+  }
+
+  void _trackDraftLineAuditEvent({
+    required String name,
+    required AnalyticsEventSeverity severity,
+    required PurchaseDraftLine line,
+    required Map<String, Object?> attributes,
+    required Map<String, num> metrics,
   }) {
     final analyticsEngine = _analyticsEngine;
     if (analyticsEngine == null) {
@@ -536,12 +646,12 @@ class PurchaseViewModel extends ChangeNotifier {
     unawaited(
       analyticsEngine.track(
         AnalyticsEventDraft.audit(
-          name: 'purchasing.draft.line.deleted',
-          severity: AnalyticsEventSeverity.warning,
+          name: name,
+          severity: severity,
           entityType: 'purchase_draft_line',
           entityId: '${line.variant.id}',
           attributes: {
-            'reason': reason,
+            ...attributes,
             'supplier_id': _selectedSupplier?.id,
             'supplier_name': _selectedSupplier?.name,
             'product_id': line.variant.productId,
@@ -549,15 +659,179 @@ class PurchaseViewModel extends ChangeNotifier {
             'product_name': line.variant.productLabel,
             'variant_name': line.variant.variantLabel,
             'sku': line.variant.sku,
+            'draft_line_count': _draft.length,
+            'draft_item_count': _draftItemCount(_draft),
+            'draft_total': _draftTotal(_draft),
           },
           metrics: {
-            'quantity': line.quantity,
-            'unit_cost': line.unitCost,
-            'line_total': line.subtotal,
+            ...metrics,
+            'draft_line_count': _draft.length,
+            'draft_item_count': _draftItemCount(_draft),
+            'draft_total': _draftTotal(_draft),
           },
         ),
       ),
     );
+  }
+
+  void _trackDraftCleared(
+    List<PurchaseDraftLine> removedLines, {
+    required String source,
+  }) {
+    final analyticsEngine = _analyticsEngine;
+    if (analyticsEngine == null) {
+      return;
+    }
+    unawaited(
+      analyticsEngine.track(
+        AnalyticsEventDraft.audit(
+          name: 'purchasing.draft.cleared',
+          severity: AnalyticsEventSeverity.warning,
+          entityType: 'purchase_draft',
+          attributes: {
+            'supplier_id': _selectedSupplier?.id,
+            'supplier_name': _selectedSupplier?.name,
+            'source': source,
+            'line_count': removedLines.length,
+            'item_count': _draftItemCount(removedLines),
+            'draft_total': _draftTotal(removedLines),
+            'lines': _draftLineSnapshots(removedLines),
+          },
+          metrics: {
+            'line_count': removedLines.length,
+            'item_count': _draftItemCount(removedLines),
+            'draft_total': _draftTotal(removedLines),
+          },
+        ),
+      ),
+    );
+  }
+
+  void _trackSupplierSelected(SupplierContact? supplier) {
+    final analyticsEngine = _analyticsEngine;
+    if (analyticsEngine == null || supplier == null) {
+      return;
+    }
+    unawaited(
+      analyticsEngine.track(
+        AnalyticsEventDraft.audit(
+          name: 'purchasing.draft.supplier.selected',
+          entityType: 'supplier',
+          entityId: '${supplier.id}',
+          attributes: {
+            'supplier_id': supplier.id,
+            'supplier_name': supplier.name,
+            'draft_line_count': _draft.length,
+            'draft_item_count': _draftItemCount(_draft),
+            'draft_total': _draftTotal(_draft),
+          },
+          metrics: {
+            'draft_line_count': _draft.length,
+            'draft_item_count': _draftItemCount(_draft),
+            'draft_total': _draftTotal(_draft),
+          },
+        ),
+      ),
+    );
+  }
+
+  void _trackDraftSubmitted(
+    PurchaseSubmission submission, {
+    required SupplierContact supplier,
+  }) {
+    final analyticsEngine = _analyticsEngine;
+    if (analyticsEngine == null) {
+      return;
+    }
+    final draftSnapshot = List<PurchaseDraftLine>.of(_draft);
+    unawaited(
+      analyticsEngine.track(
+        AnalyticsEventDraft.audit(
+          name: 'purchasing.draft.submitted',
+          entityType: 'purchase_draft',
+          entityId: submission.draftNumber,
+          attributes: {
+            'draft_number': submission.draftNumber,
+            'order_number': submission.draftNumber,
+            'submission_status': submission.status,
+            'supplier_id': supplier.id,
+            'supplier_name': supplier.name,
+            'receive_immediately': _receiveImmediately,
+            'supplier_invoice_number_present': _supplierInvoiceNumber
+                .trim()
+                .isNotEmpty,
+            'discount_code_present': _discountCode.trim().isNotEmpty,
+            'line_count': draftSnapshot.length,
+            'item_count': _draftItemCount(draftSnapshot),
+            'draft_total': _draftTotal(draftSnapshot),
+            'purchase_total': submission.total,
+            'lines': _draftLineSnapshots(draftSnapshot),
+          },
+          metrics: {
+            'line_count': draftSnapshot.length,
+            'item_count': _draftItemCount(draftSnapshot),
+            'draft_total': _draftTotal(draftSnapshot),
+            'purchase_total': submission.total,
+          },
+        ),
+      ),
+    );
+  }
+
+  void _trackDraftSubmitFailed(SupplierContact supplier) {
+    final analyticsEngine = _analyticsEngine;
+    if (analyticsEngine == null) {
+      return;
+    }
+    unawaited(
+      analyticsEngine.track(
+        AnalyticsEventDraft.audit(
+          name: 'purchasing.draft.submit_failed',
+          severity: AnalyticsEventSeverity.error,
+          entityType: 'supplier',
+          entityId: '${supplier.id}',
+          attributes: {
+            'supplier_id': supplier.id,
+            'supplier_name': supplier.name,
+            'line_count': _draft.length,
+            'item_count': _draftItemCount(_draft),
+            'draft_total': _draftTotal(_draft),
+            'lines': _draftLineSnapshots(_draft),
+          },
+          metrics: {
+            'line_count': _draft.length,
+            'item_count': _draftItemCount(_draft),
+            'draft_total': _draftTotal(_draft),
+          },
+        ),
+      ),
+    );
+  }
+
+  List<Map<String, Object?>> _draftLineSnapshots(
+    List<PurchaseDraftLine> lines,
+  ) {
+    return [
+      for (final line in lines.take(50))
+        {
+          'product_id': line.variant.productId,
+          'variant_id': line.variant.id,
+          'product_name': line.variant.productLabel,
+          'variant_name': line.variant.variantLabel,
+          'sku': line.variant.sku,
+          'quantity': line.quantity,
+          'unit_cost': line.unitCost,
+          'line_total': line.subtotal,
+        },
+    ];
+  }
+
+  int _draftItemCount(List<PurchaseDraftLine> lines) {
+    return lines.fold(0, (sum, line) => sum + line.quantity);
+  }
+
+  double _draftTotal(List<PurchaseDraftLine> lines) {
+    return lines.fold(0, (sum, line) => sum + line.subtotal);
   }
 
   DateTime? _parseSupplierInvoiceDate(String input) {

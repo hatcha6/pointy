@@ -3,6 +3,9 @@ import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:pointy_frontend/src/core/analytics_engine.dart';
+import 'package:pointy_frontend/src/core/result.dart';
+import 'package:pointy_frontend/src/data/models/analytics_event.dart';
 import 'package:pointy_frontend/src/data/models/print_job.dart';
 import 'package:pointy_frontend/src/data/models/printer_config.dart';
 import 'package:pointy_frontend/src/data/models/product.dart';
@@ -14,11 +17,13 @@ import 'package:pointy_frontend/src/data/models/query.dart';
 import 'package:pointy_frontend/src/data/models/register_session.dart';
 import 'package:pointy_frontend/src/data/models/sale_order.dart';
 import 'package:pointy_frontend/src/data/models/shop_settings.dart';
+import 'package:pointy_frontend/src/data/repositories/analytics_repository.dart';
 import 'package:pointy_frontend/src/data/repositories/catalog_repository.dart';
 import 'package:pointy_frontend/src/data/repositories/printing_repository.dart';
 import 'package:pointy_frontend/src/data/repositories/register_session_repository.dart';
 import 'package:pointy_frontend/src/data/repositories/sale_repository.dart';
 import 'package:pointy_frontend/src/data/repositories/shop_settings_repository.dart';
+import 'package:pointy_frontend/src/data/services/analytics_queue_storage.dart';
 import 'package:pointy_frontend/src/data/services/pos_api_service.dart';
 import 'package:pointy_frontend/src/data/services/print_transport.dart';
 import 'package:pointy_frontend/src/features/pos/view_models/pos_view_model.dart';
@@ -179,11 +184,99 @@ void main() {
       expect(multiResult.status, PosProductSelectionStatus.chooseVariant);
       expect(multiResult.variants.map((variant) => variant.id), [201, 202]);
       expect(viewModel.cart, hasLength(1));
+
+      await _settle();
+    },
+  );
+
+  test(
+    'cart audit tracking captures item, source, and cart snapshots',
+    () async {
+      final sink = _FakeAnalyticsSink();
+      final engine = AnalyticsEngine(
+        sink,
+        storage: MemoryAnalyticsQueueStorage(installationId: 'pos-audit-test'),
+        flushInterval: const Duration(hours: 1),
+        maxBatchSize: 100,
+      );
+      await engine.start();
+      sink.acceptedEvents.clear();
+
+      final viewModel = _viewModel(
+        _FakePosApiService(),
+        analyticsEngine: engine,
+      );
+      addTearDown(viewModel.dispose);
+      addTearDown(engine.dispose);
+
+      await viewModel.loadCurrentRegisterSession();
+      await viewModel.resumeRegisterSession();
+
+      viewModel.addVariant(_coffeeVariant, source: 'product_tile');
+      await _settle();
+      viewModel.addVariant(_coffeeVariant, source: 'cart_quantity_button');
+      await _settle();
+      viewModel.decrementVariant(
+        _coffeeVariant,
+        source: 'cart_quantity_button',
+      );
+      await _settle();
+      viewModel.clearCart(source: 'cart_clear_button');
+      await _settle();
+      await engine.flush();
+
+      final events = sink.acceptedEvents
+          .where((event) => event.name.startsWith('pos.cart.'))
+          .toList();
+      expect(events.map((event) => event.name), [
+        'pos.cart.line.added',
+        'pos.cart.line.quantity_increased',
+        'pos.cart.line.quantity_decreased',
+        'pos.cart.line.deleted',
+        'pos.cart.cleared',
+      ]);
+
+      final added = events.first;
+      expect(added.eventType, AnalyticsEventType.audit);
+      expect(added.entityType, 'cart_line');
+      expect(added.entityId, '${_coffeeVariant.id}');
+      expect(added.sessionId, 'register:${_openSession.id}');
+      expect(added.attributes['source'], 'product_tile');
+      expect(added.attributes['product_name'], _coffeeVariant.productName);
+      expect(added.attributes['variant_id'], _coffeeVariant.id);
+      expect(added.metrics['quantity'], 1);
+      expect(added.metrics['cart_total'], _coffeeVariant.unitPrice);
+
+      final increased = events[1];
+      expect(increased.name, 'pos.cart.line.quantity_increased');
+      expect(increased.attributes['previous_quantity'], 1);
+      expect(increased.attributes['new_quantity'], 2);
+      expect(increased.metrics['cart_item_count'], 2);
+
+      final deleted = events[3];
+      expect(deleted.name, 'pos.cart.line.deleted');
+      expect(deleted.attributes['reason'], 'clear_cart');
+      expect(deleted.attributes['source'], 'cart_clear_button');
+
+      final cleared = events.last;
+      expect(cleared.entityType, 'cart');
+      expect(cleared.attributes['source'], 'cart_clear_button');
+      expect(cleared.metrics['line_count'], 1);
+      expect(cleared.metrics['item_count'], 1);
+      final clearedLines = cleared.attributes['lines'] as List<Object?>;
+      expect(clearedLines, hasLength(1));
+      expect(
+        (clearedLines.single! as Map<String, Object?>)['product_name'],
+        _coffeeVariant.productName,
+      );
     },
   );
 }
 
-PosViewModel _viewModel(_FakePosApiService apiService) {
+PosViewModel _viewModel(
+  _FakePosApiService apiService, {
+  AnalyticsEngine? analyticsEngine,
+}) {
   return PosViewModel(
     CatalogRepository(apiService),
     RegisterSessionRepository(apiService),
@@ -196,6 +289,7 @@ PosViewModel _viewModel(_FakePosApiService apiService) {
       wifiTransport: const _NoopPrintTransport(),
       fakeTransport: const _NoopPrintTransport(),
     ),
+    analyticsEngine: analyticsEngine,
   );
 }
 
@@ -407,6 +501,24 @@ class _FakePosApiService extends PosApiService {
       (sum, payment) => sum + payment.amount,
     );
     return Future.value(_saleOrder(total: total, lines: const []));
+  }
+}
+
+class _FakeAnalyticsSink implements AnalyticsEventSink {
+  final List<AnalyticsEventDraft> acceptedEvents = [];
+
+  @override
+  Future<Result<AnalyticsIngestResult>> ingestEvents(
+    List<AnalyticsEventDraft> events,
+  ) async {
+    acceptedEvents.addAll(events);
+    return Ok(
+      AnalyticsIngestResult(
+        accepted: events.length,
+        duplicates: 0,
+        eventIds: events.map((event) => event.clientEventId).toList(),
+      ),
+    );
   }
 }
 

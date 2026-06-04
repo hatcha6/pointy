@@ -2,7 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
+import '../../../core/analytics_audit.dart';
+import '../../../core/analytics_engine.dart';
 import '../../../core/authorization.dart';
+import '../../../data/models/analytics_event.dart';
 import '../../../data/models/barcode_label.dart';
 import '../../../data/models/product.dart';
 import '../../../data/models/purchase_submission.dart';
@@ -24,11 +27,13 @@ class ProductVariantDetailsScreen extends StatelessWidget {
     required this.viewModel,
     required this.printingRepository,
     required this.capabilities,
+    this.analyticsEngine,
   });
 
   final ProductStockViewModel viewModel;
   final PrintingRepository printingRepository;
   final AuthorizationCapabilities capabilities;
+  final AnalyticsEngine? analyticsEngine;
 
   @override
   Widget build(BuildContext context) {
@@ -103,6 +108,7 @@ class ProductVariantDetailsScreen extends StatelessWidget {
                   child: _BarcodeLabelPrintSection(
                     product: product,
                     printingRepository: printingRepository,
+                    analyticsEngine: analyticsEngine,
                   ),
                 ),
                 const SizedBox(height: 12),
@@ -375,10 +381,12 @@ class _BarcodeLabelPrintSection extends StatefulWidget {
   const _BarcodeLabelPrintSection({
     required this.product,
     required this.printingRepository,
+    this.analyticsEngine,
   });
 
   final Product product;
   final PrintingRepository printingRepository;
+  final AnalyticsEngine? analyticsEngine;
 
   @override
   State<_BarcodeLabelPrintSection> createState() =>
@@ -444,6 +452,11 @@ class _BarcodeLabelPrintSectionState extends State<_BarcodeLabelPrintSection> {
           ? BarcodeLabelPrintLine.product(widget.product, copies: copies)
           : BarcodeLabelPrintLine.variant(variant, copies: copies),
     ]);
+    _trackBarcodeLabelsPrinted(
+      success: result.isSuccess,
+      copies: copies,
+      variantId: variant?.id,
+    );
 
     if (!mounted) {
       return;
@@ -457,6 +470,34 @@ class _BarcodeLabelPrintSectionState extends State<_BarcodeLabelPrintSection> {
               : l10n.barcodeLabelPrintError,
         ),
       ),
+    );
+  }
+
+  void _trackBarcodeLabelsPrinted({
+    required bool success,
+    required int copies,
+    required int? variantId,
+  }) {
+    trackAuditEvent(
+      widget.analyticsEngine,
+      name: success
+          ? 'printing.barcode_labels.printed'
+          : 'printing.barcode_labels.failed',
+      severity: success
+          ? AnalyticsEventSeverity.info
+          : AnalyticsEventSeverity.warning,
+      entityType: variantId == null ? 'product' : 'product_variant',
+      entityId: variantId ?? widget.product.id,
+      attributes: {
+        'product_id': widget.product.id,
+        'product_name': widget.product.name,
+        'variant_id': ?variantId,
+        'sku': widget.product.effectiveSku,
+        'barcode_present': widget.product.effectiveBarcode.trim().isNotEmpty,
+        'source': 'barcode_label_panel',
+      },
+      metrics: {'copies': copies, 'label_count': copies},
+      flushImmediately: !success,
     );
   }
 

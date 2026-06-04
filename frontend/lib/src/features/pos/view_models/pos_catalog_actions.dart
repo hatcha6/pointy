@@ -159,7 +159,7 @@ extension PosCatalogActions on PosViewModel {
           return const PosProductSelectionResult.unavailable();
         }
         if (variants.length == 1) {
-          addVariant(variants.single);
+          addVariant(variants.single, source: 'product_tile');
           return const PosProductSelectionResult.added();
         }
         return PosProductSelectionResult.chooseVariant(variants);

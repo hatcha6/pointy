@@ -1,5 +1,7 @@
 import 'package:flutter/foundation.dart';
 
+import '../../../core/analytics_audit.dart';
+import '../../../core/analytics_engine.dart';
 import '../../../core/result.dart';
 import '../../../data/models/product_category.dart';
 import '../../../data/models/product_category_query.dart';
@@ -36,11 +38,15 @@ class CategoryTreeItem {
 }
 
 class CategoryManagementViewModel extends ChangeNotifier {
-  CategoryManagementViewModel(this._catalogRepository) {
+  CategoryManagementViewModel(
+    this._catalogRepository, {
+    AnalyticsEngine? analyticsEngine,
+  }) : _analyticsEngine = analyticsEngine {
     loadCategories();
   }
 
   final CatalogRepository _catalogRepository;
+  final AnalyticsEngine? _analyticsEngine;
 
   CatalogRepository get catalogRepository => _catalogRepository;
 
@@ -187,7 +193,8 @@ class CategoryManagementViewModel extends ChangeNotifier {
 
     final result = await _catalogRepository.createProductCategory(draft);
     switch (result) {
-      case Ok<ProductCategory>():
+      case Ok<ProductCategory>(value: final category):
+        _trackCategoryCreated(category, draft);
         await loadCategories();
         _isSaving = false;
         notifyListeners();
@@ -198,6 +205,25 @@ class CategoryManagementViewModel extends ChangeNotifier {
         notifyListeners();
         return false;
     }
+  }
+
+  void _trackCategoryCreated(
+    ProductCategory category,
+    ProductCategoryDraft draft,
+  ) {
+    trackAuditEvent(
+      _analyticsEngine,
+      name: 'catalog.category.created',
+      entityType: 'product_category',
+      entityId: category.id,
+      attributes: {
+        'category_id': category.id,
+        'category_name': category.name,
+        if (draft.parentId != null) 'parent_id': draft.parentId,
+        'is_active': category.isActive,
+        'source': 'category_management',
+      },
+    );
   }
 
   void _appendCategory(

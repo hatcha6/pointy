@@ -1,5 +1,7 @@
 import 'package:flutter/foundation.dart';
 
+import '../../../core/analytics_audit.dart';
+import '../../../core/analytics_engine.dart';
 import '../../../core/result.dart';
 import '../../../data/models/attachment_summary.dart';
 import '../../../data/models/product.dart';
@@ -20,9 +22,11 @@ class ProductDetailsViewModel extends ChangeNotifier {
     this._purchaseRepository,
     this._saleRepository,
     Product product, {
+    AnalyticsEngine? analyticsEngine,
     bool shouldLoadSaleHistory = true,
     bool shouldLoadPurchaseHistory = true,
-  }) : _product = product,
+  }) : _analyticsEngine = analyticsEngine,
+       _product = product,
        _shouldLoadSaleHistory = shouldLoadSaleHistory,
        _shouldLoadPurchaseHistory = shouldLoadPurchaseHistory {
     loadProduct();
@@ -37,6 +41,7 @@ class ProductDetailsViewModel extends ChangeNotifier {
   final CatalogRepository _catalogRepository;
   final PurchaseRepository _purchaseRepository;
   final SaleRepository _saleRepository;
+  final AnalyticsEngine? _analyticsEngine;
   final bool _shouldLoadSaleHistory;
   final bool _shouldLoadPurchaseHistory;
   Product _product;
@@ -124,6 +129,7 @@ class ProductDetailsViewModel extends ChangeNotifier {
     switch (result) {
       case Ok<Product>():
         _product = result.value;
+        _trackProductUpdated(result.value, draft);
         _isSavingProduct = false;
         notifyListeners();
         return true;
@@ -150,6 +156,11 @@ class ProductDetailsViewModel extends ChangeNotifier {
     );
     switch (result) {
       case Ok<ProductVariant>():
+        _trackVariantChanged(
+          name: 'catalog.product_variant.created',
+          variant: result.value,
+          source: 'catalog_variant_form',
+        );
         await loadProduct();
         _isSavingVariant = false;
         notifyListeners();
@@ -189,6 +200,11 @@ class ProductDetailsViewModel extends ChangeNotifier {
     switch (result) {
       case Ok<Product>():
         _product = result.value;
+        _trackGeneratedVariants(
+          product: result.value,
+          variantOptionIds: variantOptionIds,
+          requestedVariants: variants,
+        );
         _isSavingVariant = false;
         notifyListeners();
         return true;
@@ -218,6 +234,11 @@ class ProductDetailsViewModel extends ChangeNotifier {
     );
     switch (result) {
       case Ok<ProductVariant>():
+        _trackVariantChanged(
+          name: 'catalog.product_variant.updated',
+          variant: result.value,
+          source: 'catalog_variant_form',
+        );
         await loadProduct();
         _isSavingVariant = false;
         notifyListeners();
@@ -243,7 +264,11 @@ class ProductDetailsViewModel extends ChangeNotifier {
       productId: _product.id,
       upload: upload,
     );
-    return _handleProductImageSave(result);
+    return _handleProductImageSave(
+      result,
+      eventName: 'catalog.product.image_uploaded',
+      source: 'catalog_product_details',
+    );
   }
 
   Future<bool> importProductImage(String importToken) async {
@@ -259,12 +284,21 @@ class ProductDetailsViewModel extends ChangeNotifier {
       productId: _product.id,
       importToken: importToken,
     );
-    return _handleProductImageSave(result);
+    return _handleProductImageSave(
+      result,
+      eventName: 'catalog.product.image_imported',
+      source: 'catalog_product_details',
+    );
   }
 
-  Future<bool> _handleProductImageSave(Result<AttachmentSummary> result) async {
+  Future<bool> _handleProductImageSave(
+    Result<AttachmentSummary> result, {
+    required String eventName,
+    required String source,
+  }) async {
     switch (result) {
       case Ok<AttachmentSummary>():
+        _trackProductImageSaved(eventName: eventName, source: source);
         await loadProduct();
         _isSavingImage = false;
         notifyListeners();
@@ -275,6 +309,98 @@ class ProductDetailsViewModel extends ChangeNotifier {
         notifyListeners();
         return false;
     }
+  }
+
+  void _trackProductUpdated(Product product, ProductUpdateDraft draft) {
+    trackAuditEvent(
+      _analyticsEngine,
+      name: 'catalog.product.updated',
+      entityType: 'product',
+      entityId: product.id,
+      attributes: {
+        'product_id': product.id,
+        'product_name': product.name,
+        'is_active': product.isActive,
+        'tracks_expiry': product.tracksExpiry,
+        'source': 'catalog_product_details',
+      },
+      metrics: {
+        'category_count': draft.categoryIds.length,
+        if (draft.variantOptionIds != null)
+          'variant_option_count': draft.variantOptionIds!.length,
+        'variant_count': product.variants.length,
+        'active_variant_count': product.activeVariants.length,
+      },
+    );
+  }
+
+  void _trackVariantChanged({
+    required String name,
+    required ProductVariant variant,
+    required String source,
+  }) {
+    trackAuditEvent(
+      _analyticsEngine,
+      name: name,
+      entityType: 'product_variant',
+      entityId: variant.id,
+      attributes: {
+        'product_id': variant.productId,
+        'product_name': _product.name,
+        'variant_id': variant.id,
+        'variant_name': variant.displayLabel,
+        'sku': variant.sku,
+        'barcode_present': variant.barcode.trim().isNotEmpty,
+        'is_active': variant.isActive,
+        'is_default': variant.isDefault,
+        'source': source,
+      },
+      metrics: {
+        'unit_price': variant.unitPrice,
+        'option_value_count': variant.optionValueIds.length,
+      },
+    );
+  }
+
+  void _trackGeneratedVariants({
+    required Product product,
+    required List<int> variantOptionIds,
+    required List<ProductVariantDraft> requestedVariants,
+  }) {
+    trackAuditEvent(
+      _analyticsEngine,
+      name: 'catalog.product.variants_generated',
+      entityType: 'product',
+      entityId: product.id,
+      attributes: {
+        'product_id': product.id,
+        'product_name': product.name,
+        'source': 'catalog_variant_generator',
+      },
+      metrics: {
+        'variant_option_count': variantOptionIds.length,
+        'generated_variant_count': requestedVariants.length,
+        'variant_count': product.variants.length,
+      },
+    );
+  }
+
+  void _trackProductImageSaved({
+    required String eventName,
+    required String source,
+  }) {
+    trackAuditEvent(
+      _analyticsEngine,
+      name: eventName,
+      entityType: 'product',
+      entityId: _product.id,
+      attributes: {
+        'product_id': _product.id,
+        'product_name': _product.name,
+        'source': source,
+      },
+      metrics: {'image_count': _product.imageAttachments.length + 1},
+    );
   }
 
   Future<void> loadSaleHistory() async {

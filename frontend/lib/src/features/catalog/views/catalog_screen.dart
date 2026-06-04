@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
+import '../../../core/analytics_engine.dart';
 import '../../../core/authorization.dart';
 import '../../../data/models/product.dart';
 import '../../../data/models/pos_user.dart';
@@ -29,6 +30,7 @@ class CatalogScreen extends StatelessWidget {
     required this.saleRepository,
     required this.currentUser,
     required this.capabilities,
+    this.analyticsEngine,
     required this.onOpenPos,
     required this.onOpenPurchasing,
     required this.onOpenContacts,
@@ -51,6 +53,7 @@ class CatalogScreen extends StatelessWidget {
   final SaleRepository saleRepository;
   final PosUser currentUser;
   final AuthorizationCapabilities capabilities;
+  final AnalyticsEngine? analyticsEngine;
   final VoidCallback onOpenPos;
   final VoidCallback onOpenPurchasing;
   final VoidCallback onOpenContacts;
@@ -120,6 +123,7 @@ class CatalogScreen extends StatelessWidget {
                 purchaseRepository: purchaseRepository,
                 saleRepository: saleRepository,
                 capabilities: capabilities,
+                analyticsEngine: analyticsEngine,
                 onBarcodeSubmitted: (barcode) {
                   return _openProductForBarcode(context, barcode);
                 },
@@ -160,6 +164,7 @@ class CatalogScreen extends StatelessWidget {
           purchaseRepository: purchaseRepository,
           saleRepository: saleRepository,
           capabilities: capabilities,
+          analyticsEngine: analyticsEngine,
           onChanged: viewModel.loadProducts,
         );
         return true;
@@ -192,6 +197,7 @@ class CatalogScreen extends StatelessWidget {
       purchaseRepository: purchaseRepository,
       saleRepository: saleRepository,
       capabilities: capabilities,
+      analyticsEngine: analyticsEngine,
       onChanged: viewModel.loadProducts,
     );
   }
