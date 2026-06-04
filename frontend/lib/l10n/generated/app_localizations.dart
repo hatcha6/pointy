@@ -2612,8 +2612,68 @@ abstract class AppLocalizations {
   /// No description provided for @trustedCardTerminalIdsHelper.
   ///
   /// In ar, this message translates to:
-  /// **'اكتب رقم كل جهاز أو Terminal ID في سطر منفصل. اتركها فارغة لقبول أي جهاز.'**
+  /// **'حدد أجهزة البطاقة التي تقبل إيصالاتها عند مطابقة الدفع. اترك القائمة فارغة لقبول أي جهاز.'**
   String get trustedCardTerminalIdsHelper;
+
+  /// No description provided for @manageTrustedCardTerminalsButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'إدارة الأجهزة'**
+  String get manageTrustedCardTerminalsButton;
+
+  /// No description provided for @addTrustedCardTerminalButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'إضافة جهاز'**
+  String get addTrustedCardTerminalButton;
+
+  /// No description provided for @trustedCardTerminalsDialogTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'إدارة أجهزة البطاقة'**
+  String get trustedCardTerminalsDialogTitle;
+
+  /// No description provided for @trustedCardTerminalsDialogDescription.
+  ///
+  /// In ar, this message translates to:
+  /// **'أضف رقم الجهاز كما يظهر في إيصال البطاقة. عند ترك القائمة فارغة سيتم قبول أي جهاز.'**
+  String get trustedCardTerminalsDialogDescription;
+
+  /// No description provided for @trustedCardTerminalIdFieldLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'رقم الجهاز'**
+  String get trustedCardTerminalIdFieldLabel;
+
+  /// No description provided for @trustedCardTerminalIdFieldHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'مثال: 0JA8Y13W'**
+  String get trustedCardTerminalIdFieldHint;
+
+  /// No description provided for @trustedCardTerminalRequiredError.
+  ///
+  /// In ar, this message translates to:
+  /// **'أدخل رقم الجهاز.'**
+  String get trustedCardTerminalRequiredError;
+
+  /// No description provided for @trustedCardTerminalDuplicateError.
+  ///
+  /// In ar, this message translates to:
+  /// **'هذا الجهاز موجود في القائمة.'**
+  String get trustedCardTerminalDuplicateError;
+
+  /// No description provided for @trustedCardTerminalAllowAnyMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد أجهزة محددة؛ سيتم قبول أي جهاز بطاقة عند مطابقة الإيصال.'**
+  String get trustedCardTerminalAllowAnyMessage;
+
+  /// Tooltip for removing a trusted card terminal from shop settings.
+  ///
+  /// In ar, this message translates to:
+  /// **'إزالة الجهاز {terminalId}'**
+  String removeTrustedCardTerminalTooltip(String terminalId);
 
   /// Trusted card terminal ID count in shop payment settings.
   ///

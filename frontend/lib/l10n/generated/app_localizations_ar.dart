@@ -1532,7 +1532,42 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get trustedCardTerminalIdsHelper =>
-      'اكتب رقم كل جهاز أو Terminal ID في سطر منفصل. اتركها فارغة لقبول أي جهاز.';
+      'حدد أجهزة البطاقة التي تقبل إيصالاتها عند مطابقة الدفع. اترك القائمة فارغة لقبول أي جهاز.';
+
+  @override
+  String get manageTrustedCardTerminalsButton => 'إدارة الأجهزة';
+
+  @override
+  String get addTrustedCardTerminalButton => 'إضافة جهاز';
+
+  @override
+  String get trustedCardTerminalsDialogTitle => 'إدارة أجهزة البطاقة';
+
+  @override
+  String get trustedCardTerminalsDialogDescription =>
+      'أضف رقم الجهاز كما يظهر في إيصال البطاقة. عند ترك القائمة فارغة سيتم قبول أي جهاز.';
+
+  @override
+  String get trustedCardTerminalIdFieldLabel => 'رقم الجهاز';
+
+  @override
+  String get trustedCardTerminalIdFieldHint => 'مثال: 0JA8Y13W';
+
+  @override
+  String get trustedCardTerminalRequiredError => 'أدخل رقم الجهاز.';
+
+  @override
+  String get trustedCardTerminalDuplicateError =>
+      'هذا الجهاز موجود في القائمة.';
+
+  @override
+  String get trustedCardTerminalAllowAnyMessage =>
+      'لا توجد أجهزة محددة؛ سيتم قبول أي جهاز بطاقة عند مطابقة الإيصال.';
+
+  @override
+  String removeTrustedCardTerminalTooltip(String terminalId) {
+    return 'إزالة الجهاز $terminalId';
+  }
 
   @override
   String trustedCardTerminalCount(int count) {

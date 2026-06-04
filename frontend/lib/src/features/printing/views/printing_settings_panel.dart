@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -132,7 +133,11 @@ class _PrinterRoleDialogState extends State<_PrinterRoleDialog> {
     );
     _codeTableController = TextEditingController(text: endpoint.codeTable);
     if (widget.viewModel.discoveredPrinters.isEmpty) {
-      unawaited(widget.viewModel.discoverPrinters());
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && widget.viewModel.discoveredPrinters.isEmpty) {
+          unawaited(widget.viewModel.discoverPrinters());
+        }
+      });
     }
   }
 
@@ -152,10 +157,15 @@ class _PrinterRoleDialogState extends State<_PrinterRoleDialog> {
       listenable: widget.viewModel,
       builder: (context, _) {
         final endpoint = widget.viewModel.config.endpoint;
+        final availableDialogWidth = math.max(
+          280.0,
+          MediaQuery.sizeOf(context).width - spacing.xl * 2,
+        );
+        final dialogWidth = math.min(availableDialogWidth, 560.0);
         return AlertDialog(
           title: Text(l10n.printerRoleDialogTitle),
-          content: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 560),
+          content: SizedBox(
+            width: dialogWidth,
             child: SingleChildScrollView(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -282,6 +292,7 @@ class _DiscoveredPrinterDropdown extends StatelessWidget {
               child: DropdownButtonFormField<String>(
                 key: ValueKey('$selectedKey:${options.length}'),
                 initialValue: hasSelectedPrinter ? selectedKey : null,
+                isExpanded: true,
                 decoration: InputDecoration(
                   labelText: l10n.discoveredPrintersLabel,
                   prefixIcon: const Icon(Icons.print_outlined),
@@ -296,15 +307,14 @@ class _DiscoveredPrinterDropdown extends StatelessWidget {
                     DropdownMenuItem<String>(
                       value: _endpointKey(printer),
                       child: Row(
+                        mainAxisSize: MainAxisSize.min,
                         children: [
                           Icon(_transportIcon(printer.kind), size: 20),
                           const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              _printerLabel(printer),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
+                          Text(
+                            _printerLabel(printer),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ],
                       ),

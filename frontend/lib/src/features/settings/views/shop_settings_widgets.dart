@@ -351,7 +351,7 @@ class _PaymentSettingsFields extends StatelessWidget {
   const _PaymentSettingsFields({
     required this.cardCommissionController,
     required this.transferCommissionController,
-    required this.trustedTerminalIdsController,
+    required this.trustedTerminalIds,
     required this.enabled,
     required this.enableCashPayments,
     required this.enableCardPayments,
@@ -365,12 +365,12 @@ class _PaymentSettingsFields extends StatelessWidget {
     required this.onRequireCardReceiptChanged,
     required this.onEnableTransferChanged,
     required this.onCommissionChanged,
-    required this.onTrustedTerminalIdsChanged,
+    required this.onManageTrustedTerminalIds,
   });
 
   final TextEditingController cardCommissionController;
   final TextEditingController transferCommissionController;
-  final TextEditingController trustedTerminalIdsController;
+  final List<String> trustedTerminalIds;
   final bool enabled;
   final bool enableCashPayments;
   final bool enableCardPayments;
@@ -384,7 +384,7 @@ class _PaymentSettingsFields extends StatelessWidget {
   final ValueChanged<bool> onRequireCardReceiptChanged;
   final ValueChanged<bool> onEnableTransferChanged;
   final VoidCallback onCommissionChanged;
-  final VoidCallback onTrustedTerminalIdsChanged;
+  final VoidCallback onManageTrustedTerminalIds;
 
   @override
   Widget build(BuildContext context) {
@@ -414,19 +414,10 @@ class _PaymentSettingsFields extends StatelessWidget {
               : null,
         ),
         const SizedBox(height: 8),
-        TextFormField(
-          controller: trustedTerminalIdsController,
+        _TrustedCardTerminalListField(
+          terminalIds: trustedTerminalIds,
           enabled: enabled && enableCardPayments,
-          minLines: 2,
-          maxLines: 4,
-          textDirection: TextDirection.ltr,
-          onChanged: (_) => onTrustedTerminalIdsChanged(),
-          decoration: InputDecoration(
-            labelText: l10n.trustedCardTerminalIdsLabel,
-            helperText: l10n.trustedCardTerminalIdsHelper,
-            border: const OutlineInputBorder(),
-            prefixIcon: const Icon(Icons.point_of_sale_outlined),
-          ),
+          onManage: onManageTrustedTerminalIds,
         ),
         const SizedBox(height: 12),
         TextFormField(
@@ -471,6 +462,360 @@ class _PaymentSettingsFields extends StatelessWidget {
           ),
         ],
       ],
+    );
+  }
+}
+
+class _TrustedCardTerminalListField extends StatelessWidget {
+  const _TrustedCardTerminalListField({
+    required this.terminalIds,
+    required this.enabled,
+    required this.onManage,
+  });
+
+  final List<String> terminalIds;
+  final bool enabled;
+  final VoidCallback onManage;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final borderColor = enabled
+        ? colorScheme.outlineVariant
+        : colorScheme.outlineVariant.withValues(alpha: 0.55);
+    final foregroundColor = enabled
+        ? colorScheme.onSurface
+        : colorScheme.onSurfaceVariant;
+
+    return DecoratedBox(
+      key: const ValueKey('trusted_card_terminal_list_field'),
+      decoration: BoxDecoration(
+        border: Border.all(color: borderColor),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Padding(
+        padding: const EdgeInsetsDirectional.fromSTEB(12, 10, 12, 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.point_of_sale_outlined, color: colorScheme.primary),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        l10n.trustedCardTerminalIdsLabel,
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          color: foregroundColor,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        l10n.trustedCardTerminalIdsHelper,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 10),
+                FilledButton.tonalIcon(
+                  key: const ValueKey('manage_trusted_card_terminals_button'),
+                  onPressed: enabled ? onManage : null,
+                  icon: const Icon(Icons.edit_outlined),
+                  label: Text(l10n.manageTrustedCardTerminalsButton),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            if (terminalIds.isEmpty)
+              PointyInlineMessage(
+                message: l10n.trustedCardTerminalAllowAnyMessage,
+                icon: Icons.info_outline,
+                compact: true,
+              )
+            else
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 156),
+                child: ListView.separated(
+                  shrinkWrap: true,
+                  itemCount: terminalIds.length,
+                  separatorBuilder: (context, index) =>
+                      const SizedBox(height: 8),
+                  itemBuilder: (context, index) {
+                    final terminalId = terminalIds[index];
+                    return _TrustedCardTerminalListRow(terminalId: terminalId);
+                  },
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _TrustedCardTerminalListRow extends StatelessWidget {
+  const _TrustedCardTerminalListRow({required this.terminalId});
+
+  final String terminalId;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.38),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Padding(
+        padding: const EdgeInsetsDirectional.symmetric(
+          horizontal: 12,
+          vertical: 8,
+        ),
+        child: Row(
+          children: [
+            Icon(
+              Icons.confirmation_number_outlined,
+              color: colorScheme.onSurfaceVariant,
+              size: 20,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                terminalId,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textDirection: TextDirection.ltr,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _TrustedCardTerminalsDialog extends StatefulWidget {
+  const _TrustedCardTerminalsDialog({required this.initialTerminalIds});
+
+  final List<String> initialTerminalIds;
+
+  @override
+  State<_TrustedCardTerminalsDialog> createState() =>
+      _TrustedCardTerminalsDialogState();
+}
+
+class _TrustedCardTerminalsDialogState
+    extends State<_TrustedCardTerminalsDialog> {
+  late final TextEditingController _terminalIdController;
+  late List<String> _terminalIds;
+  String? _terminalIdError;
+
+  @override
+  void initState() {
+    super.initState();
+    _terminalIdController = TextEditingController();
+    _terminalIds = [...widget.initialTerminalIds]..sort();
+  }
+
+  @override
+  void dispose() {
+    _terminalIdController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+
+    return AdaptiveDialogSurface(
+      size: AdaptiveModalSize.standard,
+      child: AlertDialog(
+        icon: const Icon(Icons.point_of_sale_outlined),
+        title: Text(l10n.trustedCardTerminalsDialogTitle),
+        content: SizedBox(
+          width: 460,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(l10n.trustedCardTerminalsDialogDescription),
+              const SizedBox(height: 16),
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final isCompact = constraints.maxWidth < 420;
+                  final input = TextFormField(
+                    key: const ValueKey('trusted_card_terminal_id_field'),
+                    controller: _terminalIdController,
+                    autofocus: true,
+                    textDirection: TextDirection.ltr,
+                    textInputAction: TextInputAction.done,
+                    onChanged: (_) {
+                      if (_terminalIdError != null) {
+                        setState(() => _terminalIdError = null);
+                      }
+                    },
+                    onFieldSubmitted: (_) => _addTerminal(l10n),
+                    decoration: InputDecoration(
+                      labelText: l10n.trustedCardTerminalIdFieldLabel,
+                      hintText: l10n.trustedCardTerminalIdFieldHint,
+                      errorText: _terminalIdError,
+                      border: const OutlineInputBorder(),
+                      prefixIcon: const Icon(Icons.badge_outlined),
+                    ),
+                  );
+                  final addButton = FilledButton.tonalIcon(
+                    key: const ValueKey('add_trusted_card_terminal_button'),
+                    onPressed: () => _addTerminal(l10n),
+                    icon: const Icon(Icons.add),
+                    label: Text(l10n.addTrustedCardTerminalButton),
+                  );
+
+                  if (isCompact) {
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        input,
+                        const SizedBox(height: 10),
+                        Align(
+                          alignment: AlignmentDirectional.centerEnd,
+                          child: addButton,
+                        ),
+                      ],
+                    );
+                  }
+
+                  return Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(child: input),
+                      const SizedBox(width: 10),
+                      Padding(
+                        padding: const EdgeInsets.only(top: 2),
+                        child: addButton,
+                      ),
+                    ],
+                  );
+                },
+              ),
+              const SizedBox(height: 16),
+              if (_terminalIds.isEmpty)
+                PointyInlineMessage(
+                  message: l10n.trustedCardTerminalAllowAnyMessage,
+                  icon: Icons.info_outline,
+                  compact: true,
+                )
+              else
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxHeight: 240),
+                  child: ListView.separated(
+                    shrinkWrap: true,
+                    itemCount: _terminalIds.length,
+                    separatorBuilder: (context, index) =>
+                        const SizedBox(height: 8),
+                    itemBuilder: (context, index) {
+                      final terminalId = _terminalIds[index];
+                      return _EditableTrustedCardTerminalRow(
+                        terminalId: terminalId,
+                        onRemove: () => _removeTerminal(terminalId),
+                      );
+                    },
+                  ),
+                ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text(l10n.cancelButton),
+          ),
+          FilledButton(
+            key: const ValueKey('trusted_card_terminals_done_button'),
+            onPressed: () => Navigator.of(context).pop(_terminalIds),
+            child: Text(l10n.confirmButton),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _addTerminal(AppLocalizations l10n) {
+    final terminalId = _normalizeTerminalId(_terminalIdController.text);
+    if (terminalId.isEmpty) {
+      setState(() => _terminalIdError = l10n.trustedCardTerminalRequiredError);
+      return;
+    }
+    if (_terminalIds.contains(terminalId)) {
+      setState(() => _terminalIdError = l10n.trustedCardTerminalDuplicateError);
+      return;
+    }
+
+    setState(() {
+      _terminalIds = [..._terminalIds, terminalId]..sort();
+      _terminalIdError = null;
+      _terminalIdController.clear();
+    });
+  }
+
+  void _removeTerminal(String terminalId) {
+    setState(() {
+      _terminalIds = _terminalIds
+          .where((currentTerminalId) => currentTerminalId != terminalId)
+          .toList(growable: false);
+    });
+  }
+
+  String _normalizeTerminalId(String value) => value.trim().toUpperCase();
+}
+
+class _EditableTrustedCardTerminalRow extends StatelessWidget {
+  const _EditableTrustedCardTerminalRow({
+    required this.terminalId,
+    required this.onRemove,
+  });
+
+  final String terminalId;
+  final VoidCallback onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+
+    return Material(
+      color: Theme.of(
+        context,
+      ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.38),
+      borderRadius: BorderRadius.circular(8),
+      child: ListTile(
+        dense: true,
+        leading: const Icon(Icons.confirmation_number_outlined),
+        title: Text(
+          terminalId,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          textDirection: TextDirection.ltr,
+        ),
+        trailing: IconButton(
+          key: ValueKey('remove_trusted_card_terminal_$terminalId'),
+          tooltip: l10n.removeTrustedCardTerminalTooltip(terminalId),
+          onPressed: onRemove,
+          icon: const Icon(Icons.delete_outline),
+        ),
+      ),
     );
   }
 }

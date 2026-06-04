@@ -979,7 +979,25 @@
   "requireCardReceiptSettingLabel": "إلزام مسح ومطابقة إيصال البطاقة",
   "requireCardReceiptSettingSubtitle": "يجب مسح رابط QR من إيصال معاملات ومطابقة المبلغ لكل دفعة بطاقة.",
   "trustedCardTerminalIdsLabel": "أجهزة البطاقة الموثوقة",
-  "trustedCardTerminalIdsHelper": "اكتب رقم كل جهاز أو Terminal ID في سطر منفصل. اتركها فارغة لقبول أي جهاز.",
+  "trustedCardTerminalIdsHelper": "حدد أجهزة البطاقة التي تقبل إيصالاتها عند مطابقة الدفع. اترك القائمة فارغة لقبول أي جهاز.",
+  "manageTrustedCardTerminalsButton": "إدارة الأجهزة",
+  "addTrustedCardTerminalButton": "إضافة جهاز",
+  "trustedCardTerminalsDialogTitle": "إدارة أجهزة البطاقة",
+  "trustedCardTerminalsDialogDescription": "أضف رقم الجهاز كما يظهر في إيصال البطاقة. عند ترك القائمة فارغة سيتم قبول أي جهاز.",
+  "trustedCardTerminalIdFieldLabel": "رقم الجهاز",
+  "trustedCardTerminalIdFieldHint": "مثال: 0JA8Y13W",
+  "trustedCardTerminalRequiredError": "أدخل رقم الجهاز.",
+  "trustedCardTerminalDuplicateError": "هذا الجهاز موجود في القائمة.",
+  "trustedCardTerminalAllowAnyMessage": "لا توجد أجهزة محددة؛ سيتم قبول أي جهاز بطاقة عند مطابقة الإيصال.",
+  "removeTrustedCardTerminalTooltip": "إزالة الجهاز {terminalId}",
+  "@removeTrustedCardTerminalTooltip": {
+    "description": "Tooltip for removing a trusted card terminal from shop settings.",
+    "placeholders": {
+      "terminalId": {
+        "type": "String"
+      }
+    }
+  },
   "trustedCardTerminalCount": "{count, plural, =0{لا توجد أجهزة محددة} =1{جهاز موثوق واحد} =2{جهازان موثوقان} other{{count} أجهزة موثوقة}}",
   "@trustedCardTerminalCount": {
     "description": "Trusted card terminal ID count in shop payment settings.",

@@ -2119,6 +2119,61 @@ void main() {
     await tester.tap(find.byType(BackButton));
     await tester.pumpAndSettle();
 
+    await tester.tap(find.text('طرق الدفع'));
+    await tester.pumpAndSettle();
+    expect(find.text('أجهزة البطاقة الموثوقة'), findsOneWidget);
+    expect(
+      find.text(
+        'لا توجد أجهزة محددة؛ سيتم قبول أي جهاز بطاقة عند مطابقة الإيصال.',
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('trusted_card_terminal_id_field')),
+      findsNothing,
+    );
+
+    await tester.tap(
+      find.byKey(const ValueKey('manage_trusted_card_terminals_button')),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('إدارة أجهزة البطاقة'), findsOneWidget);
+
+    await tester.enterText(
+      find.byKey(const ValueKey('trusted_card_terminal_id_field')),
+      '0ja8y13w',
+    );
+    await tester.tap(
+      find.byKey(const ValueKey('add_trusted_card_terminal_button')),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('0JA8Y13W'), findsOneWidget);
+
+    await tester.enterText(
+      find.byKey(const ValueKey('trusted_card_terminal_id_field')),
+      'abc123',
+    );
+    await tester.tap(
+      find.byKey(const ValueKey('add_trusted_card_terminal_button')),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('ABC123'), findsOneWidget);
+
+    await tester.tap(
+      find.byKey(const ValueKey('remove_trusted_card_terminal_ABC123')),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('ABC123'), findsNothing);
+
+    await tester.tap(
+      find.byKey(const ValueKey('trusted_card_terminals_done_button')),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('0JA8Y13W'), findsOneWidget);
+
+    await tester.tap(find.byType(BackButton));
+    await tester.pumpAndSettle();
+
     await tester.tap(find.text('هوية المتجر'));
     await tester.pumpAndSettle();
     expect(find.text('شعار المتجر'), findsOneWidget);
@@ -2133,6 +2188,7 @@ void main() {
     expect(settingsBody?['enable_card_payments'], true);
     expect(settingsBody?['require_card_payment_receipt'], false);
     expect(settingsBody?['prevent_selling_at_loss'], true);
+    expect(settingsBody?['trusted_card_terminal_ids'], ['0JA8Y13W']);
     expect(settingsBody?['card_commission_percent'], '1.00');
     expect(settingsBody?['transfer_commission_percent'], '0.00');
     expect(find.text('تم حفظ إعدادات المتجر.'), findsOneWidget);
@@ -2230,6 +2286,23 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('تم إرسال اختبار الطباعة.'), findsOneWidget);
+
+    await tester.tap(find.text('اختيار طابعة الإيصال'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(find.text('اختر الطابعة'), findsOneWidget);
+    expect(find.text('عرض الورق بالملليمتر'), findsOneWidget);
+    final dropdownCenterY = tester
+        .getCenter(find.byType(DropdownButtonFormField<String>))
+        .dy;
+    final discoverButtonCenterY = tester
+        .getCenter(find.byTooltip('اكتشاف الطابعات'))
+        .dy;
+    expect((dropdownCenterY - discoverButtonCenterY).abs(), lessThan(1));
+    await tester.tap(find.text('تم'));
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+    expect(find.text('اختيار طابعة الإيصال'), findsOneWidget);
   });
 
   testWidgets('cashier navigation hides management destinations', (
