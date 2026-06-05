@@ -34,6 +34,7 @@ import 'features/discounts/view_models/discount_management_view_model.dart';
 import 'features/notifications/view_models/notification_center_view_model.dart';
 import 'features/pos/view_models/pos_view_model.dart';
 import 'features/printing/view_models/printing_settings_view_model.dart';
+import 'features/invoices/view_models/invoice_list_view_model.dart';
 import 'features/purchasing/view_models/purchase_order_list_view_model.dart';
 import 'features/purchasing/view_models/purchase_view_model.dart';
 
@@ -114,6 +115,7 @@ class PointyAppDependencies {
   NotificationCenterViewModel? _notificationCenterViewModel;
   ActivityLogViewModel? _activityLogViewModel;
   DashboardViewModel? _dashboardViewModel;
+  InvoiceListViewModel? _invoiceListViewModel;
   PurchaseViewModel? _purchaseViewModel;
   PurchaseOrderListViewModel? _purchaseOrderListViewModel;
 
@@ -167,6 +169,9 @@ class PointyAppDependencies {
         businessAlertRepository,
       );
 
+  InvoiceListViewModel get invoiceListViewModel =>
+      _invoiceListViewModel ??= InvoiceListViewModel(saleRepository);
+
   PurchaseViewModel get purchaseViewModel =>
       _purchaseViewModel ??= PurchaseViewModel(
         catalogRepository,
@@ -199,6 +204,7 @@ class PointyAppDependencies {
         unawaited(connectionCoordinator.pairAuthenticatedDevice());
       }
       _dashboardViewModel?.loadDashboard();
+      _invoiceListViewModel?.loadInvoices();
       _purchaseViewModel?.loadCatalog();
       _purchaseOrderListViewModel?.loadOrders();
       _contactManagementViewModel?.loadContacts();
@@ -235,6 +241,8 @@ class PointyAppDependencies {
     _activityLogViewModel = null;
     _dashboardViewModel?.dispose();
     _dashboardViewModel = null;
+    _invoiceListViewModel?.dispose();
+    _invoiceListViewModel = null;
     _purchaseViewModel?.dispose();
     _purchaseViewModel = null;
     _purchaseOrderListViewModel?.dispose();

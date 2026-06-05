@@ -304,6 +304,12 @@ abstract class AppLocalizations {
   /// **'جلسات الدرج'**
   String get registerSessionsDrawerLabel;
 
+  /// No description provided for @invoicesDrawerLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الفواتير'**
+  String get invoicesDrawerLabel;
+
   /// No description provided for @deviceSettingsDrawerLabel.
   ///
   /// In ar, this message translates to:
@@ -8646,6 +8652,228 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'سحب نقدية'**
   String get cashMovementPayOutLabel;
+
+  /// No description provided for @invoicesTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'الفواتير'**
+  String get invoicesTitle;
+
+  /// No description provided for @refreshInvoicesTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحديث الفواتير'**
+  String get refreshInvoicesTooltip;
+
+  /// No description provided for @searchInvoicesHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'ابحث برقم الفاتورة أو المنتج أو SKU أو الباركود'**
+  String get searchInvoicesHint;
+
+  /// No description provided for @invoicesLoadError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر تحميل الفواتير.'**
+  String get invoicesLoadError;
+
+  /// No description provided for @emptyInvoices.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد فواتير تطابق الفلاتر الحالية.'**
+  String get emptyInvoices;
+
+  /// Invoice details title.
+  ///
+  /// In ar, this message translates to:
+  /// **'فاتورة {receiptNumber}'**
+  String invoiceDetailsTitle(String receiptNumber);
+
+  /// No description provided for @refreshInvoiceDetailsTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحديث تفاصيل الفاتورة'**
+  String get refreshInvoiceDetailsTooltip;
+
+  /// No description provided for @invoiceDetailsLoadError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر تحميل تفاصيل الفاتورة.'**
+  String get invoiceDetailsLoadError;
+
+  /// No description provided for @invoiceActionsTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'الإجراءات'**
+  String get invoiceActionsTitle;
+
+  /// No description provided for @invoiceSummaryTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'ملخص الفاتورة'**
+  String get invoiceSummaryTitle;
+
+  /// No description provided for @invoiceNumberLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'رقم الفاتورة'**
+  String get invoiceNumberLabel;
+
+  /// Invoice number displayed in a list row.
+  ///
+  /// In ar, this message translates to:
+  /// **'فاتورة {receiptNumber}'**
+  String invoiceNumberValue(String receiptNumber);
+
+  /// No description provided for @invoiceStatusLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الحالة'**
+  String get invoiceStatusLabel;
+
+  /// No description provided for @invoiceStatusFilterTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'حالة الفاتورة'**
+  String get invoiceStatusFilterTitle;
+
+  /// No description provided for @invoiceStatusAll.
+  ///
+  /// In ar, this message translates to:
+  /// **'كل الحالات'**
+  String get invoiceStatusAll;
+
+  /// No description provided for @invoiceStatusOpen.
+  ///
+  /// In ar, this message translates to:
+  /// **'مفتوحة'**
+  String get invoiceStatusOpen;
+
+  /// No description provided for @invoiceStatusPaid.
+  ///
+  /// In ar, this message translates to:
+  /// **'مدفوعة'**
+  String get invoiceStatusPaid;
+
+  /// No description provided for @invoiceStatusVoid.
+  ///
+  /// In ar, this message translates to:
+  /// **'ملغاة'**
+  String get invoiceStatusVoid;
+
+  /// No description provided for @invoiceCustomerFilterTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'العميل'**
+  String get invoiceCustomerFilterTitle;
+
+  /// No description provided for @invoiceCustomerLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'العميل'**
+  String get invoiceCustomerLabel;
+
+  /// No description provided for @invoiceRegisterSessionLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'جلسة الدرج'**
+  String get invoiceRegisterSessionLabel;
+
+  /// Register session value shown in an invoice row.
+  ///
+  /// In ar, this message translates to:
+  /// **'جلسة {sessionNumber}'**
+  String invoiceRegisterSessionValue(String sessionNumber);
+
+  /// No description provided for @invoiceLineCountLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'العناصر'**
+  String get invoiceLineCountLabel;
+
+  /// No description provided for @invoiceCreatedAtLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'تاريخ الإصدار'**
+  String get invoiceCreatedAtLabel;
+
+  /// No description provided for @invoiceUpdatedAtLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'آخر تحديث'**
+  String get invoiceUpdatedAtLabel;
+
+  /// No description provided for @invoiceLinesTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'المنتجات'**
+  String get invoiceLinesTitle;
+
+  /// No description provided for @invoiceLinesEmpty.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد منتجات في هذه الفاتورة.'**
+  String get invoiceLinesEmpty;
+
+  /// No description provided for @invoicePaymentsEmpty.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد مدفوعات مسجلة لهذه الفاتورة.'**
+  String get invoicePaymentsEmpty;
+
+  /// No description provided for @invoiceTotalsTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'الإجماليات'**
+  String get invoiceTotalsTitle;
+
+  /// No description provided for @invoiceOrderingNewest.
+  ///
+  /// In ar, this message translates to:
+  /// **'الأحدث أولًا'**
+  String get invoiceOrderingNewest;
+
+  /// No description provided for @invoiceOrderingUpdated.
+  ///
+  /// In ar, this message translates to:
+  /// **'آخر تحديث أولًا'**
+  String get invoiceOrderingUpdated;
+
+  /// No description provided for @invoiceOrderingTotalDesc.
+  ///
+  /// In ar, this message translates to:
+  /// **'الإجمالي: من الأعلى إلى الأقل'**
+  String get invoiceOrderingTotalDesc;
+
+  /// No description provided for @invoiceOrderingReceiptNumber.
+  ///
+  /// In ar, this message translates to:
+  /// **'رقم الفاتورة'**
+  String get invoiceOrderingReceiptNumber;
+
+  /// No description provided for @invoiceReprintButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'إعادة طباعة الفاتورة'**
+  String get invoiceReprintButton;
+
+  /// No description provided for @invoiceReprintInProgressButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'جار طلب الطباعة...'**
+  String get invoiceReprintInProgressButton;
+
+  /// No description provided for @invoiceReprintQueuedMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم إرسال طلب إعادة طباعة الفاتورة.'**
+  String get invoiceReprintQueuedMessage;
+
+  /// No description provided for @invoiceReprintError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر إرسال طلب إعادة طباعة الفاتورة.'**
+  String get invoiceReprintError;
 
   /// No description provided for @saleReceiptFallback.
   ///

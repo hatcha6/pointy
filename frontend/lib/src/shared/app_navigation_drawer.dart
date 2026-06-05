@@ -11,6 +11,7 @@ import 'components/components.dart';
 enum AppNavigationDestination {
   dashboard,
   pos,
+  invoices,
   purchasing,
   contacts,
   catalog,
@@ -38,6 +39,7 @@ class AppNavigationDrawer extends StatelessWidget {
     required this.onOpenDeviceSettings,
     required this.onLogout,
     this.onOpenDashboard,
+    this.onOpenInvoices,
     this.onOpenDiscounts,
     this.onOpenReports,
     this.onOpenActivityLog,
@@ -50,6 +52,7 @@ class AppNavigationDrawer extends StatelessWidget {
   final PosUser currentUser;
   final AuthorizationCapabilities capabilities;
   final VoidCallback onOpenPos;
+  final VoidCallback? onOpenInvoices;
   final VoidCallback? onOpenPurchasing;
   final VoidCallback? onOpenContacts;
   final VoidCallback onOpenCatalog;
@@ -158,6 +161,14 @@ class AppNavigationDrawer extends StatelessWidget {
         selectedIcon: const Icon(Icons.receipt_long),
         label: l10n.posDrawerLabel,
         onTap: onOpenPos,
+      ),
+      _DrawerDestination(
+        destination: AppNavigationDestination.invoices,
+        capability: AppCapability.viewInvoices,
+        icon: const Icon(Icons.request_quote_outlined),
+        selectedIcon: const Icon(Icons.request_quote),
+        label: l10n.invoicesDrawerLabel,
+        onTap: onOpenInvoices,
       ),
       _DrawerDestination(
         destination: AppNavigationDestination.purchasing,

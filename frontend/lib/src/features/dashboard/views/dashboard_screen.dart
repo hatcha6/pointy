@@ -22,6 +22,7 @@ class DashboardScreen extends StatelessWidget {
     required this.currentUser,
     required this.capabilities,
     required this.onOpenPos,
+    required this.onOpenInvoices,
     required this.onOpenCatalog,
     required this.onOpenCategories,
     required this.onOpenPurchasing,
@@ -40,6 +41,7 @@ class DashboardScreen extends StatelessWidget {
   final PosUser currentUser;
   final AuthorizationCapabilities capabilities;
   final VoidCallback onOpenPos;
+  final VoidCallback onOpenInvoices;
   final VoidCallback onOpenCatalog;
   final VoidCallback onOpenCategories;
   final VoidCallback onOpenPurchasing;
@@ -67,6 +69,7 @@ class DashboardScreen extends StatelessWidget {
             capabilities: capabilities,
             onOpenDashboard: () {},
             onOpenPos: onOpenPos,
+            onOpenInvoices: onOpenInvoices,
             onOpenPurchasing: onOpenPurchasing,
             onOpenContacts: onOpenContacts,
             onOpenCatalog: onOpenCatalog,

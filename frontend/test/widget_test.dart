@@ -1066,6 +1066,7 @@ void main() {
           currentUser: manager,
           capabilities: AuthorizationCapabilities.forUser(manager),
           onOpenPos: () {},
+          onOpenInvoices: () {},
           onOpenPurchasing: () {},
           onOpenContacts: () {},
           onOpenCatalog: () {},
@@ -1319,6 +1320,7 @@ void main() {
     expect(find.text('مدير النظام'), findsOneWidget);
     expect(find.text('لوحة التحكم'), findsWidgets);
     expect(find.text('شاشة البيع'), findsOneWidget);
+    expect(find.text('الفواتير'), findsOneWidget);
     expect(find.text('المشتريات'), findsOneWidget);
     expect(find.text('الجهات'), findsOneWidget);
     expect(find.text('المنتجات'), findsWidgets);
@@ -1326,9 +1328,9 @@ void main() {
     expect(find.text('جلسات الدرج'), findsOneWidget);
     expect(find.text('الخصومات'), findsOneWidget);
     expect(find.text('التقارير'), findsOneWidget);
-    expect(find.text('سجل النشاط'), findsOneWidget);
     await tester.drag(find.byType(NavigationDrawer), const Offset(0, -320));
     await tester.pumpAndSettle();
+    expect(find.text('سجل النشاط'), findsOneWidget);
     expect(find.text('إعدادات الجهاز'), findsOneWidget);
     expect(find.text('المستخدمون'), findsOneWidget);
     expect(find.text('إعدادات المتجر'), findsOneWidget);
@@ -2368,6 +2370,7 @@ void main() {
             currentUser: cashier,
             capabilities: AuthorizationCapabilities.forUser(cashier),
             onOpenPos: () {},
+            onOpenInvoices: () {},
             onOpenCatalog: () {},
             onOpenCategories: () {},
             onOpenPurchasing: () {},

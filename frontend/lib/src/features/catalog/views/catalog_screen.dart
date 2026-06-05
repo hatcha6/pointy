@@ -32,6 +32,7 @@ class CatalogScreen extends StatelessWidget {
     required this.capabilities,
     this.analyticsEngine,
     required this.onOpenPos,
+    required this.onOpenInvoices,
     required this.onOpenPurchasing,
     required this.onOpenContacts,
     required this.onOpenRegisterSessions,
@@ -55,6 +56,7 @@ class CatalogScreen extends StatelessWidget {
   final AuthorizationCapabilities capabilities;
   final AnalyticsEngine? analyticsEngine;
   final VoidCallback onOpenPos;
+  final VoidCallback onOpenInvoices;
   final VoidCallback onOpenPurchasing;
   final VoidCallback onOpenContacts;
   final VoidCallback onOpenRegisterSessions;
@@ -82,6 +84,7 @@ class CatalogScreen extends StatelessWidget {
             capabilities: capabilities,
             onOpenDashboard: onOpenDashboard,
             onOpenPos: onOpenPos,
+            onOpenInvoices: onOpenInvoices,
             onOpenPurchasing: onOpenPurchasing,
             onOpenContacts: onOpenContacts,
             onOpenCatalog: () {},

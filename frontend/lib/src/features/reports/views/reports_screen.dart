@@ -52,6 +52,7 @@ class ReportsScreen extends StatefulWidget {
     required this.currentUser,
     required this.capabilities,
     required this.onOpenPos,
+    required this.onOpenInvoices,
     required this.onOpenCatalog,
     required this.onOpenCategories,
     required this.onOpenPurchasing,
@@ -72,6 +73,7 @@ class ReportsScreen extends StatefulWidget {
   final PosUser currentUser;
   final AuthorizationCapabilities capabilities;
   final VoidCallback onOpenPos;
+  final VoidCallback onOpenInvoices;
   final VoidCallback onOpenCatalog;
   final VoidCallback onOpenCategories;
   final VoidCallback onOpenPurchasing;
@@ -113,6 +115,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
         capabilities: widget.capabilities,
         onOpenDashboard: widget.onOpenDashboard,
         onOpenPos: widget.onOpenPos,
+        onOpenInvoices: widget.onOpenInvoices,
         onOpenPurchasing: widget.onOpenPurchasing,
         onOpenContacts: widget.onOpenContacts,
         onOpenCatalog: widget.onOpenCatalog,

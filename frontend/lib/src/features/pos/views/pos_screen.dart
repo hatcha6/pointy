@@ -27,6 +27,7 @@ class PosScreen extends StatelessWidget {
     required this.contactRepository,
     required this.currentUser,
     required this.capabilities,
+    required this.onOpenInvoices,
     required this.onOpenPurchasing,
     required this.onOpenContacts,
     required this.onOpenCatalog,
@@ -46,6 +47,7 @@ class PosScreen extends StatelessWidget {
   final ContactRepository contactRepository;
   final PosUser currentUser;
   final AuthorizationCapabilities capabilities;
+  final VoidCallback onOpenInvoices;
   final VoidCallback onOpenPurchasing;
   final VoidCallback onOpenContacts;
   final VoidCallback onOpenCatalog;
@@ -74,6 +76,7 @@ class PosScreen extends StatelessWidget {
             capabilities: capabilities,
             onOpenDashboard: onOpenDashboard,
             onOpenPos: () {},
+            onOpenInvoices: onOpenInvoices,
             onOpenPurchasing: onOpenPurchasing,
             onOpenContacts: onOpenContacts,
             onOpenCatalog: onOpenCatalog,

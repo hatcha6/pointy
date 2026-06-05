@@ -3,18 +3,24 @@ import 'package:pointy_frontend/src/data/models/purchase_submission.dart';
 import 'package:pointy_frontend/src/data/models/sale_order.dart';
 
 void main() {
-  test('sale order query includes product and variant filters', () {
+  test('sale order query includes invoice filters and ordering', () {
     final query = const SaleOrderQuery(
+      search: 'R2026',
+      status: SaleOrderStatusFilter.paid,
       customerId: 3,
       productId: 9,
       variantId: 27,
+      ordering: SaleOrderOrdering.totalDesc,
     ).toQueryParameters(page: 2);
 
     expect(query, {
-      'page': '2',
+      'search': 'R2026',
+      'status': 'paid',
       'customer': '3',
       'product': '9',
       'variant': '27',
+      'ordering': '-total',
+      'page': '2',
     });
   });
 

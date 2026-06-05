@@ -25,6 +25,8 @@ import 'features/contacts/views/contact_management_screen.dart';
 import 'features/dashboard/views/dashboard_screen.dart';
 import 'features/device_settings/views/device_settings_screen.dart';
 import 'features/discounts/views/discount_management_screen.dart';
+import 'features/invoices/views/invoice_details_screen.dart';
+import 'features/invoices/views/invoice_list_screen.dart';
 import 'features/notifications/views/notification_center_host.dart';
 import 'features/pos/view_models/pos_view_model.dart';
 import 'features/pos/views/pos_screen.dart';
@@ -33,7 +35,6 @@ import 'features/purchasing/views/purchase_order_list_screen.dart';
 import 'features/purchasing/views/purchasing_screen.dart';
 import 'features/register_sessions/view_models/register_session_history_view_model.dart';
 import 'features/register_sessions/views/register_session_history_screen.dart';
-import 'features/register_sessions/views/sale_order_details_sheet.dart';
 import 'features/reports/pdf/report_document_builder.dart';
 import 'features/reports/pdf/report_pdf.dart';
 import 'features/reports/views/report_pdf_preview_screen.dart';
@@ -111,6 +112,10 @@ class _AuthenticatedRoutes {
           AppCapability.viewDashboard,
           () => openDashboard(context),
         ),
+        onOpenInvoices: guardedAction(
+          AppCapability.viewInvoices,
+          () => push(context, invoicesRouteBuilder),
+        ),
         onOpenPurchasing: guardedAction(
           AppCapability.accessPurchasing,
           () => push(context, purchasingRouteBuilder),
@@ -171,6 +176,10 @@ class _AuthenticatedRoutes {
         onOpenPos: guardedAction(
           AppCapability.accessPos,
           () => openPos(routeContext),
+        ),
+        onOpenInvoices: guardedAction(
+          AppCapability.viewInvoices,
+          () => replace(routeContext, invoicesRouteBuilder),
         ),
         onOpenCatalog: guardedAction(
           AppCapability.viewCatalogManagement,
@@ -248,6 +257,10 @@ class _AuthenticatedRoutes {
           AppCapability.accessPos,
           () => openPos(routeContext),
         ),
+        onOpenInvoices: guardedAction(
+          AppCapability.viewInvoices,
+          () => replace(routeContext, invoicesRouteBuilder),
+        ),
         onOpenPurchasing: guardedAction(
           AppCapability.accessPurchasing,
           () => replace(routeContext, purchasingRouteBuilder),
@@ -310,6 +323,10 @@ class _AuthenticatedRoutes {
         onOpenPos: guardedAction(
           AppCapability.accessPos,
           () => openPos(routeContext),
+        ),
+        onOpenInvoices: guardedAction(
+          AppCapability.viewInvoices,
+          () => replace(routeContext, invoicesRouteBuilder),
         ),
         onOpenCatalog: guardedAction(
           AppCapability.viewCatalogManagement,
@@ -376,6 +393,10 @@ class _AuthenticatedRoutes {
           AppCapability.accessPos,
           () => openPos(routeContext),
         ),
+        onOpenInvoices: guardedAction(
+          AppCapability.viewInvoices,
+          () => replace(routeContext, invoicesRouteBuilder),
+        ),
         onOpenCatalog: guardedAction(
           AppCapability.viewCatalogManagement,
           () => replace(routeContext, catalogRouteBuilder),
@@ -391,6 +412,86 @@ class _AuthenticatedRoutes {
         onOpenContacts: guardedAction(
           AppCapability.manageContacts,
           () => replace(routeContext, contactsRouteBuilder),
+        ),
+        onOpenDiscounts: guardedAction(
+          AppCapability.viewDiscountRules,
+          () => replace(routeContext, discountsRouteBuilder),
+        ),
+        onOpenReports: guardedAction(
+          AppCapability.viewReports,
+          () => replace(routeContext, reportsRouteBuilder),
+        ),
+        onOpenActivityLog: guardedAction(
+          AppCapability.viewActivityLog,
+          () => replace(routeContext, activityLogRouteBuilder),
+        ),
+        onOpenDeviceSettings: guardedAction(
+          AppCapability.manageDeviceSettings,
+          () => replace(routeContext, deviceSettingsRouteBuilder),
+        ),
+        onOpenUsers: capabilities.actionFor(
+          AppCapability.manageUsers,
+          () => replace(routeContext, usersRouteBuilder),
+        ),
+        onOpenShopSettings: capabilities.actionFor(
+          AppCapability.manageShopSettings,
+          () => replace(routeContext, shopSettingsRouteBuilder),
+        ),
+        onLogout: () => logout(routeContext),
+      ),
+    );
+  }
+
+  Widget invoicesRouteBuilder(BuildContext routeContext) {
+    return _screen(
+      'invoices',
+      InvoiceListScreen(
+        viewModel: dependencies.invoiceListViewModel,
+        contactRepository: dependencies.contactRepository,
+        currentUser: currentUser,
+        capabilities: capabilities,
+        onOpenDashboard: guardedAction(
+          AppCapability.viewDashboard,
+          () => openDashboard(routeContext),
+        ),
+        onOpenInvoice: guardedSaleOrderAction(AppCapability.viewInvoices, (
+          order,
+        ) async {
+          _trackScreenView('invoice_details');
+          await push(
+            routeContext,
+            (context) => InvoiceDetailsScreen(
+              saleRepository: dependencies.saleRepository,
+              initialOrder: order,
+              capabilities: capabilities,
+              analyticsEngine: dependencies.analyticsEngine,
+            ),
+          );
+          await dependencies.invoiceListViewModel.loadInvoices();
+        }),
+        onOpenPos: guardedAction(
+          AppCapability.accessPos,
+          () => openPos(routeContext),
+        ),
+        onOpenCatalog: guardedAction(
+          AppCapability.viewCatalogManagement,
+          () => replace(routeContext, catalogRouteBuilder),
+        ),
+        onOpenCategories: guardedAction(
+          AppCapability.manageCategories,
+          () => replace(routeContext, categoryRouteBuilder),
+        ),
+        onOpenPurchasing: guardedAction(
+          AppCapability.accessPurchasing,
+          () => replace(routeContext, purchasingRouteBuilder),
+        ),
+        onOpenContacts: guardedAction(
+          AppCapability.manageContacts,
+          () => replace(routeContext, contactsRouteBuilder),
+        ),
+        onOpenRegisterSessions: guardedAction(
+          AppCapability.viewRegisterSessions,
+          () => replace(routeContext, registerSessionsRouteBuilder),
         ),
         onOpenDiscounts: guardedAction(
           AppCapability.viewDiscountRules,
@@ -438,6 +539,10 @@ class _AuthenticatedRoutes {
         onOpenPos: guardedAction(
           AppCapability.accessPos,
           () => openPos(routeContext),
+        ),
+        onOpenInvoices: guardedAction(
+          AppCapability.viewInvoices,
+          () => replace(routeContext, invoicesRouteBuilder),
         ),
         onOpenCatalog: guardedAction(
           AppCapability.viewCatalogManagement,
@@ -516,6 +621,10 @@ class _AuthenticatedRoutes {
           AppCapability.accessPos,
           () => openPos(routeContext),
         ),
+        onOpenInvoices: guardedAction(
+          AppCapability.viewInvoices,
+          () => replace(routeContext, invoicesRouteBuilder),
+        ),
         onOpenCatalog: guardedAction(
           AppCapability.viewCatalogManagement,
           () => replace(routeContext, catalogRouteBuilder),
@@ -578,6 +687,10 @@ class _AuthenticatedRoutes {
           AppCapability.accessPos,
           () => openPos(routeContext),
         ),
+        onOpenInvoices: guardedAction(
+          AppCapability.viewInvoices,
+          () => replace(routeContext, invoicesRouteBuilder),
+        ),
         onOpenCatalog: guardedAction(
           AppCapability.viewCatalogManagement,
           () => replace(routeContext, catalogRouteBuilder),
@@ -636,6 +749,10 @@ class _AuthenticatedRoutes {
         onOpenPos: guardedAction(
           AppCapability.accessPos,
           () => openPos(routeContext),
+        ),
+        onOpenInvoices: guardedAction(
+          AppCapability.viewInvoices,
+          () => replace(routeContext, invoicesRouteBuilder),
         ),
         onOpenCatalog: guardedAction(
           AppCapability.viewCatalogManagement,
@@ -699,6 +816,10 @@ class _AuthenticatedRoutes {
         onOpenPos: guardedAction(
           AppCapability.accessPos,
           () => openPos(routeContext),
+        ),
+        onOpenInvoices: guardedAction(
+          AppCapability.viewInvoices,
+          () => replace(routeContext, invoicesRouteBuilder),
         ),
         onOpenCatalog: guardedAction(
           AppCapability.viewCatalogManagement,
@@ -781,7 +902,16 @@ class _AuthenticatedRoutes {
         }
         switch (result) {
           case Ok<SaleOrder>():
-            await showSaleOrderDetailsSheet(context, result.value);
+            await Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => InvoiceDetailsScreen(
+                  saleRepository: dependencies.saleRepository,
+                  initialOrder: result.value,
+                  capabilities: capabilities,
+                  analyticsEngine: dependencies.analyticsEngine,
+                ),
+              ),
+            );
           case Error<SaleOrder>():
             messenger.showSnackBar(
               SnackBar(content: Text(l10n.activityLogOpenTargetError)),
@@ -828,6 +958,10 @@ class _AuthenticatedRoutes {
         onOpenPos: guardedAction(
           AppCapability.accessPos,
           () => openPos(routeContext),
+        ),
+        onOpenInvoices: guardedAction(
+          AppCapability.viewInvoices,
+          () => replace(routeContext, invoicesRouteBuilder),
         ),
         onOpenCatalog: guardedAction(
           AppCapability.viewCatalogManagement,
@@ -889,6 +1023,10 @@ class _AuthenticatedRoutes {
         onOpenPos: guardedAction(
           AppCapability.accessPos,
           () => openPos(routeContext),
+        ),
+        onOpenInvoices: guardedAction(
+          AppCapability.viewInvoices,
+          () => replace(routeContext, invoicesRouteBuilder),
         ),
         onOpenPurchasing: guardedAction(
           AppCapability.accessPurchasing,
@@ -974,6 +1112,10 @@ class _AuthenticatedRoutes {
           AppCapability.accessPos,
           () => openPos(routeContext),
         ),
+        onOpenInvoices: guardedAction(
+          AppCapability.viewInvoices,
+          () => replace(routeContext, invoicesRouteBuilder),
+        ),
         onOpenCatalog: guardedAction(
           AppCapability.viewCatalogManagement,
           () => replace(routeContext, catalogRouteBuilder),
@@ -1035,6 +1177,10 @@ class _AuthenticatedRoutes {
         onOpenPos: guardedAction(
           AppCapability.accessPos,
           () => openPos(routeContext),
+        ),
+        onOpenInvoices: guardedAction(
+          AppCapability.viewInvoices,
+          () => replace(routeContext, invoicesRouteBuilder),
         ),
         onOpenCatalog: guardedAction(
           AppCapability.viewCatalogManagement,
@@ -1117,6 +1263,13 @@ class _AuthenticatedRoutes {
   ValueChanged<PurchaseOrder> guardedPurchaseOrderAction(
     AppCapability capability,
     ValueChanged<PurchaseOrder> action,
+  ) {
+    return capabilities.allows(capability) ? action : (_) {};
+  }
+
+  ValueChanged<SaleOrder> guardedSaleOrderAction(
+    AppCapability capability,
+    ValueChanged<SaleOrder> action,
   ) {
     return capabilities.allows(capability) ? action : (_) {};
   }

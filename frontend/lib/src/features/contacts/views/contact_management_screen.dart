@@ -24,6 +24,7 @@ class ContactManagementScreen extends StatelessWidget {
     required this.currentUser,
     required this.capabilities,
     required this.onOpenPos,
+    required this.onOpenInvoices,
     required this.onOpenPurchasing,
     required this.onOpenCatalog,
     required this.onOpenCategories,
@@ -43,6 +44,7 @@ class ContactManagementScreen extends StatelessWidget {
   final PosUser currentUser;
   final AuthorizationCapabilities capabilities;
   final VoidCallback onOpenPos;
+  final VoidCallback onOpenInvoices;
   final VoidCallback onOpenPurchasing;
   final VoidCallback onOpenCatalog;
   final VoidCallback onOpenCategories;
@@ -72,6 +74,7 @@ class ContactManagementScreen extends StatelessWidget {
               capabilities: capabilities,
               onOpenDashboard: onOpenDashboard,
               onOpenPos: onOpenPos,
+              onOpenInvoices: onOpenInvoices,
               onOpenPurchasing: onOpenPurchasing,
               onOpenContacts: () {},
               onOpenCatalog: onOpenCatalog,

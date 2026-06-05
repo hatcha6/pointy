@@ -150,6 +150,7 @@ class _ReportsTestApp extends StatelessWidget {
         currentUser: user,
         capabilities: AuthorizationCapabilities.forUser(user),
         onOpenPos: () {},
+        onOpenInvoices: () {},
         onOpenCatalog: () {},
         onOpenCategories: () {},
         onOpenPurchasing: () {},

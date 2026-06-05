@@ -18,6 +18,7 @@ class CategoryManagementScreen extends StatelessWidget {
     required this.currentUser,
     required this.capabilities,
     required this.onOpenPos,
+    required this.onOpenInvoices,
     required this.onOpenPurchasing,
     required this.onOpenContacts,
     required this.onOpenCatalog,
@@ -36,6 +37,7 @@ class CategoryManagementScreen extends StatelessWidget {
   final PosUser currentUser;
   final AuthorizationCapabilities capabilities;
   final VoidCallback onOpenPos;
+  final VoidCallback onOpenInvoices;
   final VoidCallback onOpenPurchasing;
   final VoidCallback onOpenContacts;
   final VoidCallback onOpenCatalog;
@@ -63,6 +65,7 @@ class CategoryManagementScreen extends StatelessWidget {
             capabilities: capabilities,
             onOpenDashboard: onOpenDashboard,
             onOpenPos: onOpenPos,
+            onOpenInvoices: onOpenInvoices,
             onOpenPurchasing: onOpenPurchasing,
             onOpenContacts: onOpenContacts,
             onOpenCatalog: onOpenCatalog,

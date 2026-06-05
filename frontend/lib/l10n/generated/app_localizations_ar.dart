@@ -124,6 +124,9 @@ class AppLocalizationsAr extends AppLocalizations {
   String get registerSessionsDrawerLabel => 'جلسات الدرج';
 
   @override
+  String get invoicesDrawerLabel => 'الفواتير';
+
+  @override
   String get deviceSettingsDrawerLabel => 'إعدادات الجهاز';
 
   @override
@@ -5009,6 +5012,125 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get cashMovementPayOutLabel => 'سحب نقدية';
+
+  @override
+  String get invoicesTitle => 'الفواتير';
+
+  @override
+  String get refreshInvoicesTooltip => 'تحديث الفواتير';
+
+  @override
+  String get searchInvoicesHint =>
+      'ابحث برقم الفاتورة أو المنتج أو SKU أو الباركود';
+
+  @override
+  String get invoicesLoadError => 'تعذر تحميل الفواتير.';
+
+  @override
+  String get emptyInvoices => 'لا توجد فواتير تطابق الفلاتر الحالية.';
+
+  @override
+  String invoiceDetailsTitle(String receiptNumber) {
+    return 'فاتورة $receiptNumber';
+  }
+
+  @override
+  String get refreshInvoiceDetailsTooltip => 'تحديث تفاصيل الفاتورة';
+
+  @override
+  String get invoiceDetailsLoadError => 'تعذر تحميل تفاصيل الفاتورة.';
+
+  @override
+  String get invoiceActionsTitle => 'الإجراءات';
+
+  @override
+  String get invoiceSummaryTitle => 'ملخص الفاتورة';
+
+  @override
+  String get invoiceNumberLabel => 'رقم الفاتورة';
+
+  @override
+  String invoiceNumberValue(String receiptNumber) {
+    return 'فاتورة $receiptNumber';
+  }
+
+  @override
+  String get invoiceStatusLabel => 'الحالة';
+
+  @override
+  String get invoiceStatusFilterTitle => 'حالة الفاتورة';
+
+  @override
+  String get invoiceStatusAll => 'كل الحالات';
+
+  @override
+  String get invoiceStatusOpen => 'مفتوحة';
+
+  @override
+  String get invoiceStatusPaid => 'مدفوعة';
+
+  @override
+  String get invoiceStatusVoid => 'ملغاة';
+
+  @override
+  String get invoiceCustomerFilterTitle => 'العميل';
+
+  @override
+  String get invoiceCustomerLabel => 'العميل';
+
+  @override
+  String get invoiceRegisterSessionLabel => 'جلسة الدرج';
+
+  @override
+  String invoiceRegisterSessionValue(String sessionNumber) {
+    return 'جلسة $sessionNumber';
+  }
+
+  @override
+  String get invoiceLineCountLabel => 'العناصر';
+
+  @override
+  String get invoiceCreatedAtLabel => 'تاريخ الإصدار';
+
+  @override
+  String get invoiceUpdatedAtLabel => 'آخر تحديث';
+
+  @override
+  String get invoiceLinesTitle => 'المنتجات';
+
+  @override
+  String get invoiceLinesEmpty => 'لا توجد منتجات في هذه الفاتورة.';
+
+  @override
+  String get invoicePaymentsEmpty => 'لا توجد مدفوعات مسجلة لهذه الفاتورة.';
+
+  @override
+  String get invoiceTotalsTitle => 'الإجماليات';
+
+  @override
+  String get invoiceOrderingNewest => 'الأحدث أولًا';
+
+  @override
+  String get invoiceOrderingUpdated => 'آخر تحديث أولًا';
+
+  @override
+  String get invoiceOrderingTotalDesc => 'الإجمالي: من الأعلى إلى الأقل';
+
+  @override
+  String get invoiceOrderingReceiptNumber => 'رقم الفاتورة';
+
+  @override
+  String get invoiceReprintButton => 'إعادة طباعة الفاتورة';
+
+  @override
+  String get invoiceReprintInProgressButton => 'جار طلب الطباعة...';
+
+  @override
+  String get invoiceReprintQueuedMessage =>
+      'تم إرسال طلب إعادة طباعة الفاتورة.';
+
+  @override
+  String get invoiceReprintError => 'تعذر إرسال طلب إعادة طباعة الفاتورة.';
 
   @override
   String get saleReceiptFallback => 'بدون رقم';

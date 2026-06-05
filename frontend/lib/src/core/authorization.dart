@@ -15,6 +15,7 @@ enum AppCapability {
   viewReports,
   viewActivityLog,
   accessPos,
+  viewInvoices,
   accessPurchasing,
   createPurchaseOrder,
   editDraftPurchaseOrder,
@@ -231,6 +232,7 @@ class AuthorizationCapabilities {
         capabilities
           ..add(AppCapability.viewDashboard)
           ..add(AppCapability.viewSalesDashboard)
+          ..add(AppCapability.viewInvoices)
           ..add(AppCapability.viewRegisterSessions)
           ..add(AppCapability.viewRegisterSessionOrders);
       }
@@ -385,6 +387,7 @@ class AuthorizationCapabilities {
   bool get canViewReports => allows(AppCapability.viewReports);
   bool get canViewActivityLog => allows(AppCapability.viewActivityLog);
   bool get canAccessPos => allows(AppCapability.accessPos);
+  bool get canViewInvoices => allows(AppCapability.viewInvoices);
   bool get canAccessPurchasing => allows(AppCapability.accessPurchasing);
   bool get canCreatePurchaseOrder => allows(AppCapability.createPurchaseOrder);
   bool get canEditDraftPurchaseOrder =>

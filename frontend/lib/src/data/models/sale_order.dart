@@ -1,6 +1,7 @@
 import 'cart_line.dart';
 import 'print_job.dart';
 import 'printer_config.dart';
+import 'query.dart';
 
 class SaleCheckoutDraft {
   const SaleCheckoutDraft({
@@ -465,39 +466,134 @@ class SaleOrderLine {
   }
 }
 
-class SaleOrderQuery {
+enum SaleOrderStatusFilter implements QueryFilterSet {
+  all(null),
+  open(QueryFilter(parameter: 'status', value: 'open')),
+  paid(QueryFilter(parameter: 'status', value: 'paid')),
+  voided(QueryFilter(parameter: 'status', value: 'void'));
+
+  const SaleOrderStatusFilter(this._filter);
+
+  final QueryFilter? _filter;
+
+  @override
+  Iterable<QueryFilter> get filters {
+    final filter = _filter;
+    return filter == null ? const [] : [filter];
+  }
+}
+
+enum SaleOrderOrdering implements QueryOrdering {
+  newest('-created_at'),
+  updated('-updated_at'),
+  totalDesc('-total'),
+  receiptNumber('receipt_number');
+
+  const SaleOrderOrdering(this.apiValue);
+
+  @override
+  final String apiValue;
+}
+
+class SaleOrderQuery extends ModelQuery {
   const SaleOrderQuery({
+    this.search = '',
+    this.status = SaleOrderStatusFilter.all,
+    this.ordering = SaleOrderOrdering.newest,
     this.customerId,
     this.customerName,
     this.productId,
     this.variantId,
   });
 
+  @override
+  final String search;
+  final SaleOrderStatusFilter status;
   final int? customerId;
   final String? customerName;
   final int? productId;
   final int? variantId;
+  @override
+  final SaleOrderOrdering ordering;
 
   bool get hasCustomerFilter => customerId != null;
 
-  Map<String, String> toQueryParameters({required int page}) {
-    return {
-      'page': '$page',
-      if (customerId != null) 'customer': '$customerId',
-      if (productId != null) 'product': '$productId',
-      if (variantId != null) 'variant': '$variantId',
-    };
-  }
+  @override
+  Iterable<QueryFilter> get filters => [
+    ...status.filters,
+    if (customerId != null)
+      QueryFilter(parameter: 'customer', value: '$customerId'),
+    if (productId != null)
+      QueryFilter(parameter: 'product', value: '$productId'),
+    if (variantId != null)
+      QueryFilter(parameter: 'variant', value: '$variantId'),
+  ];
 
   SaleOrderQuery withCustomer({int? id, String? name}) {
     return SaleOrderQuery(
+      search: search,
+      status: status,
+      ordering: ordering,
       customerId: id,
       customerName: name,
       productId: productId,
       variantId: variantId,
     );
   }
+
+  SaleOrderQuery copyWith({
+    String? search,
+    SaleOrderStatusFilter? status,
+    SaleOrderOrdering? ordering,
+    Object? customerId = _unset,
+    Object? customerName = _unset,
+    Object? productId = _unset,
+    Object? variantId = _unset,
+  }) {
+    return SaleOrderQuery(
+      search: search ?? this.search,
+      status: status ?? this.status,
+      ordering: ordering ?? this.ordering,
+      customerId: identical(customerId, _unset)
+          ? this.customerId
+          : customerId as int?,
+      customerName: identical(customerName, _unset)
+          ? this.customerName
+          : customerName as String?,
+      productId: identical(productId, _unset)
+          ? this.productId
+          : productId as int?,
+      variantId: identical(variantId, _unset)
+          ? this.variantId
+          : variantId as int?,
+    );
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return other is SaleOrderQuery &&
+        other.search == search &&
+        other.status == status &&
+        other.ordering == ordering &&
+        other.customerId == customerId &&
+        other.customerName == customerName &&
+        other.productId == productId &&
+        other.variantId == variantId;
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    search,
+    status,
+    ordering,
+    customerId,
+    customerName,
+    productId,
+    variantId,
+  );
 }
+
+const Object _unset = Object();
 
 class SaleVoidDraft {
   const SaleVoidDraft({this.reason = ''});

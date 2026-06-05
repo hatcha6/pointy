@@ -27,6 +27,7 @@ class PurchaseOrderListScreen extends StatelessWidget {
     required this.onCreatePurchaseOrder,
     required this.onOpenPurchaseOrder,
     required this.onOpenPos,
+    required this.onOpenInvoices,
     required this.onOpenCatalog,
     required this.onOpenCategories,
     required this.onOpenContacts,
@@ -48,6 +49,7 @@ class PurchaseOrderListScreen extends StatelessWidget {
   final VoidCallback onCreatePurchaseOrder;
   final ValueChanged<PurchaseOrder> onOpenPurchaseOrder;
   final VoidCallback onOpenPos;
+  final VoidCallback onOpenInvoices;
   final VoidCallback onOpenCatalog;
   final VoidCallback onOpenCategories;
   final VoidCallback onOpenContacts;
@@ -75,6 +77,7 @@ class PurchaseOrderListScreen extends StatelessWidget {
             capabilities: capabilities,
             onOpenDashboard: onOpenDashboard,
             onOpenPos: onOpenPos,
+            onOpenInvoices: onOpenInvoices,
             onOpenPurchasing: () {},
             onOpenContacts: onOpenContacts,
             onOpenCatalog: onOpenCatalog,

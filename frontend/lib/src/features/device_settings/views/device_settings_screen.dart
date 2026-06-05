@@ -21,6 +21,7 @@ class DeviceSettingsScreen extends StatelessWidget {
     required this.currentUser,
     required this.capabilities,
     required this.onOpenPos,
+    required this.onOpenInvoices,
     required this.onOpenCatalog,
     required this.onOpenCategories,
     required this.onOpenPurchasing,
@@ -40,6 +41,7 @@ class DeviceSettingsScreen extends StatelessWidget {
   final PosUser currentUser;
   final AuthorizationCapabilities capabilities;
   final VoidCallback onOpenPos;
+  final VoidCallback onOpenInvoices;
   final VoidCallback onOpenCatalog;
   final VoidCallback onOpenCategories;
   final VoidCallback onOpenPurchasing;
@@ -74,6 +76,7 @@ class DeviceSettingsScreen extends StatelessWidget {
                 capabilities: capabilities,
                 onOpenDashboard: onOpenDashboard,
                 onOpenPos: onOpenPos,
+                onOpenInvoices: onOpenInvoices,
                 onOpenPurchasing: onOpenPurchasing,
                 onOpenContacts: onOpenContacts,
                 onOpenCatalog: onOpenCatalog,

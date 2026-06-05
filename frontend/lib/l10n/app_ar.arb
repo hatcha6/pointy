@@ -46,6 +46,7 @@
   "catalogDrawerLabel": "المنتجات",
   "categoriesDrawerLabel": "التصنيفات",
   "registerSessionsDrawerLabel": "جلسات الدرج",
+  "invoicesDrawerLabel": "الفواتير",
   "deviceSettingsDrawerLabel": "إعدادات الجهاز",
   "usersDrawerLabel": "المستخدمون",
   "settingsDrawerLabel": "إعدادات المتجر",
@@ -2994,6 +2995,67 @@
   "emptySessionCashMovements": "لا توجد حركات نقد مسجلة في هذه الجلسة.",
   "cashMovementPayInLabel": "إضافة نقدية",
   "cashMovementPayOutLabel": "سحب نقدية",
+  "invoicesTitle": "الفواتير",
+  "refreshInvoicesTooltip": "تحديث الفواتير",
+  "searchInvoicesHint": "ابحث برقم الفاتورة أو المنتج أو SKU أو الباركود",
+  "invoicesLoadError": "تعذر تحميل الفواتير.",
+  "emptyInvoices": "لا توجد فواتير تطابق الفلاتر الحالية.",
+  "invoiceDetailsTitle": "فاتورة {receiptNumber}",
+  "@invoiceDetailsTitle": {
+    "description": "Invoice details title.",
+    "placeholders": {
+      "receiptNumber": {
+        "type": "String"
+      }
+    }
+  },
+  "refreshInvoiceDetailsTooltip": "تحديث تفاصيل الفاتورة",
+  "invoiceDetailsLoadError": "تعذر تحميل تفاصيل الفاتورة.",
+  "invoiceActionsTitle": "الإجراءات",
+  "invoiceSummaryTitle": "ملخص الفاتورة",
+  "invoiceNumberLabel": "رقم الفاتورة",
+  "invoiceNumberValue": "فاتورة {receiptNumber}",
+  "@invoiceNumberValue": {
+    "description": "Invoice number displayed in a list row.",
+    "placeholders": {
+      "receiptNumber": {
+        "type": "String"
+      }
+    }
+  },
+  "invoiceStatusLabel": "الحالة",
+  "invoiceStatusFilterTitle": "حالة الفاتورة",
+  "invoiceStatusAll": "كل الحالات",
+  "invoiceStatusOpen": "مفتوحة",
+  "invoiceStatusPaid": "مدفوعة",
+  "invoiceStatusVoid": "ملغاة",
+  "invoiceCustomerFilterTitle": "العميل",
+  "invoiceCustomerLabel": "العميل",
+  "invoiceRegisterSessionLabel": "جلسة الدرج",
+  "invoiceRegisterSessionValue": "جلسة {sessionNumber}",
+  "@invoiceRegisterSessionValue": {
+    "description": "Register session value shown in an invoice row.",
+    "placeholders": {
+      "sessionNumber": {
+        "type": "String"
+      }
+    }
+  },
+  "invoiceLineCountLabel": "العناصر",
+  "invoiceCreatedAtLabel": "تاريخ الإصدار",
+  "invoiceUpdatedAtLabel": "آخر تحديث",
+  "invoiceLinesTitle": "المنتجات",
+  "invoiceLinesEmpty": "لا توجد منتجات في هذه الفاتورة.",
+  "invoicePaymentsEmpty": "لا توجد مدفوعات مسجلة لهذه الفاتورة.",
+  "invoiceTotalsTitle": "الإجماليات",
+  "invoiceOrderingNewest": "الأحدث أولًا",
+  "invoiceOrderingUpdated": "آخر تحديث أولًا",
+  "invoiceOrderingTotalDesc": "الإجمالي: من الأعلى إلى الأقل",
+  "invoiceOrderingReceiptNumber": "رقم الفاتورة",
+  "invoiceReprintButton": "إعادة طباعة الفاتورة",
+  "invoiceReprintInProgressButton": "جار طلب الطباعة...",
+  "invoiceReprintQueuedMessage": "تم إرسال طلب إعادة طباعة الفاتورة.",
+  "invoiceReprintError": "تعذر إرسال طلب إعادة طباعة الفاتورة.",
   "saleReceiptFallback": "بدون رقم",
   "saleReceiptTitle": "إيصال {receiptNumber}",
   "@saleReceiptTitle": {
