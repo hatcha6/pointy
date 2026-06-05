@@ -10,6 +10,7 @@ import '../../../data/repositories/inventory_repository.dart';
 import '../../../data/repositories/printing_repository.dart';
 import '../../../data/repositories/purchase_repository.dart';
 import '../../../data/repositories/sale_repository.dart';
+import '../../../data/repositories/shop_settings_repository.dart';
 import '../../../shared/app_navigation_drawer.dart';
 import '../../../shared/authorization_guards.dart';
 import '../../../shared/barcode/camera_barcode_scanner_sheet.dart';
@@ -28,6 +29,7 @@ class CatalogScreen extends StatelessWidget {
     required this.printingRepository,
     required this.purchaseRepository,
     required this.saleRepository,
+    required this.shopSettingsRepository,
     required this.currentUser,
     required this.capabilities,
     this.analyticsEngine,
@@ -52,6 +54,7 @@ class CatalogScreen extends StatelessWidget {
   final PrintingRepository printingRepository;
   final PurchaseRepository purchaseRepository;
   final SaleRepository saleRepository;
+  final ShopSettingsRepository shopSettingsRepository;
   final PosUser currentUser;
   final AuthorizationCapabilities capabilities;
   final AnalyticsEngine? analyticsEngine;
@@ -125,6 +128,7 @@ class CatalogScreen extends StatelessWidget {
                 printingRepository: printingRepository,
                 purchaseRepository: purchaseRepository,
                 saleRepository: saleRepository,
+                shopSettingsRepository: shopSettingsRepository,
                 capabilities: capabilities,
                 analyticsEngine: analyticsEngine,
                 onBarcodeSubmitted: (barcode) {
@@ -166,6 +170,7 @@ class CatalogScreen extends StatelessWidget {
           printingRepository: printingRepository,
           purchaseRepository: purchaseRepository,
           saleRepository: saleRepository,
+          shopSettingsRepository: shopSettingsRepository,
           capabilities: capabilities,
           analyticsEngine: analyticsEngine,
           onChanged: viewModel.loadProducts,
@@ -199,6 +204,7 @@ class CatalogScreen extends StatelessWidget {
       printingRepository: printingRepository,
       purchaseRepository: purchaseRepository,
       saleRepository: saleRepository,
+      shopSettingsRepository: shopSettingsRepository,
       capabilities: capabilities,
       analyticsEngine: analyticsEngine,
       onChanged: viewModel.loadProducts,

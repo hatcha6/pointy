@@ -1,4 +1,6 @@
-enum PrintTransportKind { serial, bluetooth, wifi, fake }
+enum PrintTransportKind { serial, bluetooth, wifi, system, fake }
+
+enum PrinterOutputMode { escPos, pdfA4 }
 
 enum PrinterRole { posReceipt }
 
@@ -25,6 +27,7 @@ class PrinterEndpoint {
     this.paperWidthMm = 80,
     this.codeTable = 'CP864',
     this.timeoutMs = 5000,
+    this.outputMode = PrinterOutputMode.escPos,
   });
 
   final PrintTransportKind kind;
@@ -35,6 +38,11 @@ class PrinterEndpoint {
   final int paperWidthMm;
   final String codeTable;
   final int timeoutMs;
+  final PrinterOutputMode outputMode;
+
+  bool get usesThermalReceipt => outputMode == PrinterOutputMode.escPos;
+
+  bool get usesDocumentInvoice => outputMode == PrinterOutputMode.pdfA4;
 
   factory PrinterEndpoint.fromJson(Map<String, Object?> json) {
     return PrinterEndpoint(
@@ -49,6 +57,12 @@ class PrinterEndpoint {
       ),
       codeTable: json['code_table']?.toString() ?? 'CP864',
       timeoutMs: _intFromJson(json['timeout_ms'], fallback: 5000),
+      outputMode: _outputModeFromJson(
+        json['output_mode'] ?? json['printer_type'] ?? json['layout'],
+        fallback: _defaultOutputModeForKind(
+          _transportKindFromJson(json['kind'] ?? json['transport']),
+        ),
+      ),
     );
   }
 
@@ -62,6 +76,7 @@ class PrinterEndpoint {
       'paper_width_mm': paperWidthMm,
       'code_table': codeTable,
       'timeout_ms': timeoutMs,
+      'output_mode': outputMode.name,
     };
   }
 
@@ -74,6 +89,7 @@ class PrinterEndpoint {
     int? paperWidthMm,
     String? codeTable,
     int? timeoutMs,
+    PrinterOutputMode? outputMode,
   }) {
     return PrinterEndpoint(
       kind: kind ?? this.kind,
@@ -84,6 +100,7 @@ class PrinterEndpoint {
       paperWidthMm: paperWidthMm ?? this.paperWidthMm,
       codeTable: codeTable ?? this.codeTable,
       timeoutMs: timeoutMs ?? this.timeoutMs,
+      outputMode: outputMode ?? this.outputMode,
     );
   }
 }
@@ -151,8 +168,34 @@ PrintTransportKind _transportKindFromJson(Object? value) {
   return switch (value?.toString()) {
     'bluetooth' => PrintTransportKind.bluetooth,
     'wifi' || 'network' => PrintTransportKind.wifi,
+    'system' || 'pdf' || 'document' => PrintTransportKind.system,
     'fake' => PrintTransportKind.fake,
     _ => PrintTransportKind.serial,
+  };
+}
+
+PrinterOutputMode _outputModeFromJson(
+  Object? value, {
+  required PrinterOutputMode fallback,
+}) {
+  return switch (value?.toString()) {
+    'pdfA4' ||
+    'pdf_a4' ||
+    'a4' ||
+    'document' ||
+    'normal' => PrinterOutputMode.pdfA4,
+    'escPos' || 'esc_pos' || 'thermal' || 'receipt' => PrinterOutputMode.escPos,
+    _ => fallback,
+  };
+}
+
+PrinterOutputMode _defaultOutputModeForKind(PrintTransportKind kind) {
+  return switch (kind) {
+    PrintTransportKind.system => PrinterOutputMode.pdfA4,
+    PrintTransportKind.serial ||
+    PrintTransportKind.bluetooth ||
+    PrintTransportKind.wifi ||
+    PrintTransportKind.fake => PrinterOutputMode.escPos,
   };
 }
 

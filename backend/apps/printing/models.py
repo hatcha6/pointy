@@ -3,6 +3,7 @@ from django.db import models
 from django.db.models import Q
 
 from apps.core.models import TimeStampedModel
+from apps.purchasing.models import PurchaseOrder
 from apps.sales.models import Order
 
 
@@ -218,3 +219,86 @@ class PrintJobEvent(models.Model):
 
     def __str__(self) -> str:
         return f"{self.event_type} for job {self.job_id}"
+
+
+class PrintAuditEvent(TimeStampedModel):
+    class DocumentType(models.TextChoices):
+        SALE_ORDER = "sale_order", "Sale order"
+        PURCHASE_ORDER = "purchase_order", "Purchase order"
+
+    class Action(models.TextChoices):
+        PRINT = "print", "Print"
+        SHARE = "share", "Share"
+
+    class Status(models.TextChoices):
+        REQUESTED = "requested", "Requested"
+        COMPLETED = "completed", "Completed"
+        CANCELED = "canceled", "Canceled"
+        FAILED = "failed", "Failed"
+
+    document_type = models.CharField(max_length=32, choices=DocumentType.choices)
+    action = models.CharField(max_length=16, choices=Action.choices)
+    status = models.CharField(
+        max_length=16,
+        choices=Status.choices,
+        default=Status.REQUESTED,
+        db_index=True,
+    )
+    sale_order = models.ForeignKey(
+        Order,
+        on_delete=models.SET_NULL,
+        related_name="print_audit_events",
+        blank=True,
+        null=True,
+    )
+    purchase_order = models.ForeignKey(
+        PurchaseOrder,
+        on_delete=models.SET_NULL,
+        related_name="print_audit_events",
+        blank=True,
+        null=True,
+    )
+    document_number = models.CharField(max_length=64, db_index=True)
+    print_job = models.ForeignKey(
+        PrintJob,
+        on_delete=models.SET_NULL,
+        related_name="document_audit_events",
+        blank=True,
+        null=True,
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="print_audit_events",
+        blank=True,
+        null=True,
+    )
+    agent = models.ForeignKey(
+        PrintAgent,
+        on_delete=models.SET_NULL,
+        related_name="audit_events",
+        blank=True,
+        null=True,
+    )
+    agent_identifier = models.CharField(max_length=120, blank=True)
+    device_name = models.CharField(max_length=160, blank=True)
+    printer_name = models.CharField(max_length=160, blank=True)
+    printer_endpoint = models.JSONField(default=dict, blank=True)
+    message = models.TextField(blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+        indexes = [
+            models.Index(
+                fields=["document_type", "sale_order", "-created_at"],
+                name="print_audit_sale_doc_idx",
+            ),
+            models.Index(
+                fields=["document_type", "purchase_order", "-created_at"],
+                name="print_audit_purchase_idx",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.action} {self.status} {self.document_number}"

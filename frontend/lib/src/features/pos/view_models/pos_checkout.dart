@@ -113,12 +113,16 @@ extension PosCheckoutActions on PosViewModel {
           invoicePrinterConfig = null;
       }
     }
+    final backendInvoicePrinterConfig =
+        invoicePrinterConfig?.endpoint.usesThermalReceipt == true
+        ? invoicePrinterConfig
+        : null;
 
     final result = await _saleRepository.checkout(
       SaleCheckoutDraft.fromCart(
         cart: cartSnapshot,
         payments: payments,
-        invoicePrinterConfig: invoicePrinterConfig,
+        invoicePrinterConfig: backendInvoicePrinterConfig,
         customerId: _selectedCustomer?.id,
         couponCode: _couponCode,
       ),
@@ -136,6 +140,7 @@ extension PosCheckoutActions on PosViewModel {
         _discountPreview = null;
         _hasDiscountPreviewError = false;
         _printInvoiceAfterPayment = false;
+        _shareInvoiceAfterPayment = false;
         _isCheckingOut = false;
         _notifyChanged();
         unawaited(
@@ -301,19 +306,39 @@ extension PosCheckoutActions on PosViewModel {
     SaleOrder order,
     PrinterConfig? config,
   ) async {
-    final job = order.invoicePrintJob;
-    if (config == null || job == null) {
+    if (config == null) {
       return InvoicePrintStatus.failed;
     }
 
-    final result = await _printingRepository.printAndReportJob(
-      job: job,
-      config: config,
+    if (config.endpoint.usesDocumentInvoice) {
+      final result = await _printingRepository.printSaleInvoice(
+        order: order,
+        shopSettings: _checkoutSettings,
+      );
+      return result.isSuccess
+          ? InvoicePrintStatus.printed
+          : InvoicePrintStatus.failed;
+    }
+
+    final job = order.invoicePrintJob;
+    if (job != null) {
+      final result = await _printingRepository.printAndReportJob(
+        job: job,
+        config: config,
+      );
+      return switch (result) {
+        Ok<PrintJob>() => InvoicePrintStatus.printed,
+        Error<PrintJob>() => InvoicePrintStatus.failed,
+      };
+    }
+
+    final result = await _printingRepository.printSaleInvoice(
+      order: order,
+      shopSettings: _checkoutSettings,
     );
-    return switch (result) {
-      Ok<PrintJob>() => InvoicePrintStatus.printed,
-      Error<PrintJob>() => InvoicePrintStatus.failed,
-    };
+    return result.isSuccess
+        ? InvoicePrintStatus.printed
+        : InvoicePrintStatus.failed;
   }
 
   void _applySoldQuantities(List<CartLine> soldLines) {

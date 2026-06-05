@@ -5,6 +5,7 @@ import '../../../core/authorization.dart';
 import '../../../data/models/pos_user.dart';
 import '../../../data/models/purchase_submission.dart';
 import '../../../data/repositories/contact_repository.dart';
+import '../../../data/services/order_document_service.dart';
 import '../../../shared/app_navigation_drawer.dart';
 import '../../../shared/authorization_guards.dart';
 import '../../../shared/components/components.dart';
@@ -194,6 +195,8 @@ class _PurchaseOrderListBody extends StatelessWidget {
                 return PurchaseOrderTile(
                   order: order,
                   onTap: () => onOpenPurchaseOrder(order),
+                  onPrint: () => _printOrder(context, order),
+                  onShare: () => _shareOrder(context, order),
                 );
               },
             ),
@@ -201,6 +204,54 @@ class _PurchaseOrderListBody extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  Future<void> _printOrder(BuildContext context, PurchaseOrder order) async {
+    final l10n = AppLocalizations.of(context)!;
+    final messenger = ScaffoldMessenger.of(context);
+    final didPrint = await viewModel.printOrder(order);
+    if (!context.mounted) {
+      return;
+    }
+    messenger
+      ..clearSnackBars()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(
+            didPrint
+                ? l10n.purchaseOrderPrintSuccess(
+                    order.orderNumber.isEmpty
+                        ? l10n.purchaseOrderFallbackTitle(order.id)
+                        : order.orderNumber,
+                  )
+                : l10n.purchaseOrderPrintError,
+          ),
+        ),
+      );
+  }
+
+  Future<void> _shareOrder(BuildContext context, PurchaseOrder order) async {
+    final l10n = AppLocalizations.of(context)!;
+    final messenger = ScaffoldMessenger.of(context);
+    final status = await viewModel.shareOrder(order);
+    if (!context.mounted || status == OrderDocumentActionStatus.canceled) {
+      return;
+    }
+    messenger
+      ..clearSnackBars()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(
+            status == OrderDocumentActionStatus.completed
+                ? l10n.purchaseOrderShareSuccess(
+                    order.orderNumber.isEmpty
+                        ? l10n.purchaseOrderFallbackTitle(order.id)
+                        : order.orderNumber,
+                  )
+                : l10n.purchaseOrderShareError,
+          ),
+        ),
+      );
   }
 }
 
@@ -334,10 +385,18 @@ class _OutstandingPurchasesSection extends StatelessWidget {
 }
 
 class PurchaseOrderTile extends StatelessWidget {
-  const PurchaseOrderTile({super.key, required this.order, this.onTap});
+  const PurchaseOrderTile({
+    super.key,
+    required this.order,
+    this.onTap,
+    this.onPrint,
+    this.onShare,
+  });
 
   final PurchaseOrder order;
   final VoidCallback? onTap;
+  final VoidCallback? onPrint;
+  final VoidCallback? onShare;
 
   @override
   Widget build(BuildContext context) {
@@ -373,6 +432,43 @@ class PurchaseOrderTile extends StatelessWidget {
           icon: _statusIcon(order.status),
         ),
       ],
+      actions: [
+        if (onPrint != null || onShare != null)
+          PopupMenuButton<_PurchaseOrderRowAction>(
+            tooltip: l10n.purchaseOrderRowActionsTooltip,
+            icon: const Icon(Icons.more_vert),
+            onSelected: (action) {
+              switch (action) {
+                case _PurchaseOrderRowAction.print:
+                  onPrint?.call();
+                case _PurchaseOrderRowAction.share:
+                  onShare?.call();
+              }
+            },
+            itemBuilder: (context) => [
+              if (onPrint != null)
+                PopupMenuItem<_PurchaseOrderRowAction>(
+                  value: _PurchaseOrderRowAction.print,
+                  child: ListTile(
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.print_outlined),
+                    title: Text(l10n.purchaseOrderPrintAction),
+                  ),
+                ),
+              if (onShare != null)
+                PopupMenuItem<_PurchaseOrderRowAction>(
+                  value: _PurchaseOrderRowAction.share,
+                  child: ListTile(
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.ios_share_outlined),
+                    title: Text(l10n.purchaseOrderShareAction),
+                  ),
+                ),
+            ],
+          ),
+      ],
       trailing: Text(
         order.balanceDue > 0
             ? formatMoney(order.balanceDue)
@@ -398,6 +494,8 @@ class PurchaseOrderTile extends StatelessWidget {
     };
   }
 }
+
+enum _PurchaseOrderRowAction { print, share }
 
 String _paymentStatusLabel(AppLocalizations l10n, String status) {
   return switch (status) {

@@ -2,14 +2,24 @@ import 'package:flutter/foundation.dart';
 
 import '../../../core/result.dart';
 import '../../../data/models/purchase_submission.dart';
+import '../../../data/models/shop_settings.dart';
+import '../../../data/repositories/printing_repository.dart';
 import '../../../data/repositories/purchase_repository.dart';
+import '../../../data/repositories/shop_settings_repository.dart';
+import '../../../data/services/order_document_service.dart';
 
 class PurchaseOrderListViewModel extends ChangeNotifier {
-  PurchaseOrderListViewModel(this._purchaseRepository) {
+  PurchaseOrderListViewModel(
+    this._purchaseRepository,
+    this._printingRepository,
+    this._shopSettingsRepository,
+  ) {
     loadOrders();
   }
 
   final PurchaseRepository _purchaseRepository;
+  final PrintingRepository _printingRepository;
+  final ShopSettingsRepository _shopSettingsRepository;
 
   List<PurchaseOrder> _orders = [];
   List<PurchaseOrder> _outstandingReceivedNotPaid = [];
@@ -152,5 +162,44 @@ class PurchaseOrderListViewModel extends ChangeNotifier {
     }
     _query = query;
     await loadOrders();
+  }
+
+  Future<bool> printOrder(PurchaseOrder order) async {
+    final completeOrder = await _loadCompleteOrder(order);
+    if (completeOrder == null) {
+      return false;
+    }
+    final result = await _printingRepository.printPurchaseOrder(
+      order: completeOrder,
+      shopSettings: await _loadShopSettings(),
+    );
+    return result.isSuccess;
+  }
+
+  Future<OrderDocumentActionStatus> shareOrder(PurchaseOrder order) async {
+    final completeOrder = await _loadCompleteOrder(order);
+    if (completeOrder == null) {
+      return OrderDocumentActionStatus.failed;
+    }
+    return _printingRepository.sharePurchaseOrder(
+      order: completeOrder,
+      shopSettings: await _loadShopSettings(),
+    );
+  }
+
+  Future<PurchaseOrder?> _loadCompleteOrder(PurchaseOrder order) async {
+    final result = await _purchaseRepository.loadPurchaseOrder(order.id);
+    return switch (result) {
+      Ok<PurchaseOrder>(value: final loadedOrder) => loadedOrder,
+      Error<PurchaseOrder>() => null,
+    };
+  }
+
+  Future<ShopSettings?> _loadShopSettings() async {
+    final result = await _shopSettingsRepository.loadSettings();
+    return switch (result) {
+      Ok<ShopSettings>(value: final settings) => settings,
+      Error<ShopSettings>() => null,
+    };
   }
 }

@@ -5,6 +5,7 @@ import '../../../core/authorization.dart';
 import '../../../data/models/pos_user.dart';
 import '../../../data/models/sale_order.dart';
 import '../../../data/repositories/contact_repository.dart';
+import '../../../data/services/order_document_service.dart';
 import '../../../shared/app_navigation_drawer.dart';
 import '../../../shared/authorization_denied_view.dart';
 import '../../../shared/authorization_guards.dart';
@@ -170,6 +171,8 @@ class _InvoiceListBody extends StatelessWidget {
                 return InvoiceTile(
                   invoice: invoice,
                   onTap: () => onOpenInvoice(invoice),
+                  onPrint: () => _printInvoice(context, invoice),
+                  onShare: () => _shareInvoice(context, invoice),
                 );
               },
             ),
@@ -178,13 +181,59 @@ class _InvoiceListBody extends StatelessWidget {
       ),
     );
   }
+
+  Future<void> _printInvoice(BuildContext context, SaleOrder invoice) async {
+    final l10n = AppLocalizations.of(context)!;
+    final messenger = ScaffoldMessenger.of(context);
+    final didPrint = await viewModel.printInvoice(invoice);
+    if (!context.mounted) {
+      return;
+    }
+    messenger
+      ..clearSnackBars()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(
+            didPrint ? l10n.invoicePrintSuccess : l10n.invoicePrintError,
+          ),
+        ),
+      );
+  }
+
+  Future<void> _shareInvoice(BuildContext context, SaleOrder invoice) async {
+    final l10n = AppLocalizations.of(context)!;
+    final messenger = ScaffoldMessenger.of(context);
+    final status = await viewModel.shareInvoice(invoice);
+    if (!context.mounted || status == OrderDocumentActionStatus.canceled) {
+      return;
+    }
+    messenger
+      ..clearSnackBars()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(
+            status == OrderDocumentActionStatus.completed
+                ? l10n.invoiceShareSuccess
+                : l10n.invoiceShareError,
+          ),
+        ),
+      );
+  }
 }
 
 class InvoiceTile extends StatelessWidget {
-  const InvoiceTile({super.key, required this.invoice, this.onTap});
+  const InvoiceTile({
+    super.key,
+    required this.invoice,
+    this.onTap,
+    this.onPrint,
+    this.onShare,
+  });
 
   final SaleOrder invoice;
   final VoidCallback? onTap;
+  final VoidCallback? onPrint;
+  final VoidCallback? onShare;
 
   @override
   Widget build(BuildContext context) {
@@ -212,6 +261,43 @@ class InvoiceTile extends StatelessWidget {
           label: saleOrderStatusLabel(l10n, invoice.status),
           icon: saleOrderStatusIcon(invoice.status),
         ),
+      ],
+      actions: [
+        if (onPrint != null || onShare != null)
+          PopupMenuButton<_InvoiceRowAction>(
+            tooltip: l10n.invoiceRowActionsTooltip,
+            icon: const Icon(Icons.more_vert),
+            onSelected: (action) {
+              switch (action) {
+                case _InvoiceRowAction.print:
+                  onPrint?.call();
+                case _InvoiceRowAction.share:
+                  onShare?.call();
+              }
+            },
+            itemBuilder: (context) => [
+              if (onPrint != null)
+                PopupMenuItem<_InvoiceRowAction>(
+                  value: _InvoiceRowAction.print,
+                  child: ListTile(
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.print_outlined),
+                    title: Text(l10n.invoiceReprintButton),
+                  ),
+                ),
+              if (onShare != null)
+                PopupMenuItem<_InvoiceRowAction>(
+                  value: _InvoiceRowAction.share,
+                  child: ListTile(
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.ios_share_outlined),
+                    title: Text(l10n.invoiceShareButton),
+                  ),
+                ),
+            ],
+          ),
       ],
       trailing: Column(
         mainAxisSize: MainAxisSize.min,
@@ -242,3 +328,5 @@ class InvoiceTile extends StatelessWidget {
     );
   }
 }
+
+enum _InvoiceRowAction { print, share }

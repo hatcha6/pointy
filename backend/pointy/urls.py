@@ -37,6 +37,7 @@ from apps.payments.views import PaymentViewSet
 from apps.printing.views import (
     PrinterProfileViewSet,
     PrintAgentViewSet,
+    PrintAuditEventViewSet,
     PrintJobViewSet,
     PrintTemplateVersionViewSet,
     PrintTemplateViewSet,
@@ -76,6 +77,7 @@ router.register("print-templates", PrintTemplateViewSet)
 router.register("print-template-versions", PrintTemplateVersionViewSet)
 router.register("printer-profiles", PrinterProfileViewSet)
 router.register("print-agents", PrintAgentViewSet)
+router.register("print-audit-events", PrintAuditEventViewSet)
 router.register("print-jobs", PrintJobViewSet)
 router.register("reports", ReportRunViewSet, basename="report")
 router.register(

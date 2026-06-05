@@ -46,6 +46,9 @@ CASHIER_PERMISSION_CODES = (
     "printing.change_printjob",
     "printing.view_printjob",
     "printing.view_printjobevent",
+    "printing.add_printauditevent",
+    "printing.change_printauditevent",
+    "printing.view_printauditevent",
     "analytics.add_analyticsevent",
 )
 

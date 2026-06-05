@@ -246,6 +246,7 @@ class _AuthenticatedRoutes {
         printingRepository: dependencies.printingRepository,
         purchaseRepository: dependencies.purchaseRepository,
         saleRepository: dependencies.saleRepository,
+        shopSettingsRepository: dependencies.shopSettingsRepository,
         currentUser: currentUser,
         capabilities: capabilities,
         analyticsEngine: dependencies.analyticsEngine,
@@ -462,6 +463,8 @@ class _AuthenticatedRoutes {
             routeContext,
             (context) => InvoiceDetailsScreen(
               saleRepository: dependencies.saleRepository,
+              printingRepository: dependencies.printingRepository,
+              shopSettingsRepository: dependencies.shopSettingsRepository,
               initialOrder: order,
               capabilities: capabilities,
               analyticsEngine: dependencies.analyticsEngine,
@@ -906,6 +909,8 @@ class _AuthenticatedRoutes {
               MaterialPageRoute<void>(
                 builder: (_) => InvoiceDetailsScreen(
                   saleRepository: dependencies.saleRepository,
+                  printingRepository: dependencies.printingRepository,
+                  shopSettingsRepository: dependencies.shopSettingsRepository,
                   initialOrder: result.value,
                   capabilities: capabilities,
                   analyticsEngine: dependencies.analyticsEngine,
@@ -930,6 +935,8 @@ class _AuthenticatedRoutes {
               MaterialPageRoute<void>(
                 builder: (_) => PurchaseOrderDetailsScreen(
                   purchaseRepository: dependencies.purchaseRepository,
+                  printingRepository: dependencies.printingRepository,
+                  shopSettingsRepository: dependencies.shopSettingsRepository,
                   initialOrder: result.value,
                   capabilities: capabilities,
                 ),
@@ -1014,6 +1021,8 @@ class _AuthenticatedRoutes {
       ContactManagementScreen(
         viewModel: dependencies.contactManagementViewModel,
         purchaseRepository: dependencies.purchaseRepository,
+        printingRepository: dependencies.printingRepository,
+        shopSettingsRepository: dependencies.shopSettingsRepository,
         currentUser: currentUser,
         capabilities: capabilities,
         onOpenDashboard: guardedAction(
@@ -1101,6 +1110,8 @@ class _AuthenticatedRoutes {
               routeContext,
               (context) => PurchaseOrderDetailsScreen(
                 purchaseRepository: dependencies.purchaseRepository,
+                printingRepository: dependencies.printingRepository,
+                shopSettingsRepository: dependencies.shopSettingsRepository,
                 initialOrder: order,
                 capabilities: capabilities,
               ),

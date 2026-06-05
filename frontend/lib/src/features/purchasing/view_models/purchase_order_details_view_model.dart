@@ -3,8 +3,12 @@ import 'package:flutter/foundation.dart';
 import '../../../core/authorization.dart';
 import '../../../core/result.dart';
 import '../../../data/models/purchase_submission.dart';
+import '../../../data/models/shop_settings.dart';
+import '../../../data/repositories/printing_repository.dart';
 import '../../../data/repositories/purchase_repository.dart';
+import '../../../data/repositories/shop_settings_repository.dart';
 import '../../../data/services/api_session.dart';
+import '../../../data/services/order_document_service.dart';
 
 enum PurchaseOrderActionError {
   generic,
@@ -16,14 +20,20 @@ enum PurchaseOrderActionError {
 class PurchaseOrderDetailsViewModel extends ChangeNotifier {
   PurchaseOrderDetailsViewModel(
     this._purchaseRepository, {
+    required PrintingRepository printingRepository,
+    required ShopSettingsRepository shopSettingsRepository,
     required PurchaseOrder initialOrder,
     required AuthorizationCapabilities capabilities,
-  }) : _order = initialOrder,
+  }) : _printingRepository = printingRepository,
+       _shopSettingsRepository = shopSettingsRepository,
+       _order = initialOrder,
        _capabilities = capabilities {
     loadOrder();
   }
 
   final PurchaseRepository _purchaseRepository;
+  final PrintingRepository _printingRepository;
+  final ShopSettingsRepository _shopSettingsRepository;
   final AuthorizationCapabilities _capabilities;
 
   PurchaseOrder _order;
@@ -31,6 +41,8 @@ class PurchaseOrderDetailsViewModel extends ChangeNotifier {
   bool _isChangingStatus = false;
   bool _isAdjusting = false;
   bool _isRecordingPayment = false;
+  bool _isPrinting = false;
+  bool _isSharing = false;
   bool _hasLoadError = false;
   bool _hasStatusError = false;
   bool _hasAdjustmentError = false;
@@ -43,6 +55,8 @@ class PurchaseOrderDetailsViewModel extends ChangeNotifier {
   bool get isChangingStatus => _isChangingStatus;
   bool get isAdjusting => _isAdjusting;
   bool get isRecordingPayment => _isRecordingPayment;
+  bool get isPrinting => _isPrinting;
+  bool get isSharing => _isSharing;
   bool get hasLoadError => _hasLoadError;
   bool get hasStatusError => _hasStatusError;
   bool get hasAdjustmentError => _hasAdjustmentError;
@@ -69,6 +83,40 @@ class PurchaseOrderDetailsViewModel extends ChangeNotifier {
       _capabilities.canAdjustPurchaseOrder && _order.canExchange;
   bool get canRecordPayment =>
       _order.supplierId != null && _order.balanceDue > 0.005;
+
+  Future<bool> printOrder() async {
+    if (_isPrinting) {
+      return false;
+    }
+    _isPrinting = true;
+    notifyListeners();
+
+    final result = await _printingRepository.printPurchaseOrder(
+      order: _order,
+      shopSettings: await _loadShopSettings(),
+    );
+
+    _isPrinting = false;
+    notifyListeners();
+    return result.isSuccess;
+  }
+
+  Future<OrderDocumentActionStatus> shareOrder() async {
+    if (_isSharing) {
+      return OrderDocumentActionStatus.failed;
+    }
+    _isSharing = true;
+    notifyListeners();
+
+    final result = await _printingRepository.sharePurchaseOrder(
+      order: _order,
+      shopSettings: await _loadShopSettings(),
+    );
+
+    _isSharing = false;
+    notifyListeners();
+    return result;
+  }
 
   Future<void> loadOrder() async {
     _isLoading = true;
@@ -286,6 +334,14 @@ class PurchaseOrderDetailsViewModel extends ChangeNotifier {
               value.contains('stock') &&
               (value.contains('not') || value.contains('insufficient')));
     });
+  }
+
+  Future<ShopSettings?> _loadShopSettings() async {
+    final result = await _shopSettingsRepository.loadSettings();
+    return switch (result) {
+      Ok<ShopSettings>(value: final settings) => settings,
+      Error<ShopSettings>() => null,
+    };
   }
 
   Iterable<String> _flattenErrorValues(Object? value) sync* {

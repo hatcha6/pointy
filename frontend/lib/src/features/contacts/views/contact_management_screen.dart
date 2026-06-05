@@ -4,7 +4,9 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 import '../../../core/authorization.dart';
 import '../../../data/models/contact.dart';
 import '../../../data/models/pos_user.dart';
+import '../../../data/repositories/printing_repository.dart';
 import '../../../data/repositories/purchase_repository.dart';
+import '../../../data/repositories/shop_settings_repository.dart';
 import '../../../shared/app_navigation_drawer.dart';
 import '../../../shared/authorization_guards.dart';
 import '../../../shared/components/components.dart';
@@ -21,6 +23,8 @@ class ContactManagementScreen extends StatelessWidget {
     super.key,
     required this.viewModel,
     required this.purchaseRepository,
+    required this.printingRepository,
+    required this.shopSettingsRepository,
     required this.currentUser,
     required this.capabilities,
     required this.onOpenPos,
@@ -41,6 +45,8 @@ class ContactManagementScreen extends StatelessWidget {
 
   final ContactManagementViewModel viewModel;
   final PurchaseRepository purchaseRepository;
+  final PrintingRepository printingRepository;
+  final ShopSettingsRepository shopSettingsRepository;
   final PosUser currentUser;
   final AuthorizationCapabilities capabilities;
   final VoidCallback onOpenPos;
@@ -116,6 +122,8 @@ class ContactManagementScreen extends StatelessWidget {
               child: _ContactManagementBody(
                 viewModel: viewModel,
                 purchaseRepository: purchaseRepository,
+                printingRepository: printingRepository,
+                shopSettingsRepository: shopSettingsRepository,
                 capabilities: capabilities,
               ),
             ),
@@ -130,11 +138,15 @@ class _ContactManagementBody extends StatelessWidget {
   const _ContactManagementBody({
     required this.viewModel,
     required this.purchaseRepository,
+    required this.printingRepository,
+    required this.shopSettingsRepository,
     required this.capabilities,
   });
 
   final ContactManagementViewModel viewModel;
   final PurchaseRepository purchaseRepository;
+  final PrintingRepository printingRepository;
+  final ShopSettingsRepository shopSettingsRepository;
   final AuthorizationCapabilities capabilities;
 
   @override
@@ -165,6 +177,8 @@ class _ContactManagementBody extends StatelessWidget {
                     _SupplierList(
                       viewModel: viewModel,
                       purchaseRepository: purchaseRepository,
+                      printingRepository: printingRepository,
+                      shopSettingsRepository: shopSettingsRepository,
                       capabilities: capabilities,
                     ),
                   ],
@@ -311,11 +325,15 @@ class _SupplierList extends StatelessWidget {
   const _SupplierList({
     required this.viewModel,
     required this.purchaseRepository,
+    required this.printingRepository,
+    required this.shopSettingsRepository,
     required this.capabilities,
   });
 
   final ContactManagementViewModel viewModel;
   final PurchaseRepository purchaseRepository;
+  final PrintingRepository printingRepository;
+  final ShopSettingsRepository shopSettingsRepository;
   final AuthorizationCapabilities capabilities;
 
   @override
@@ -363,6 +381,8 @@ class _SupplierList extends StatelessWidget {
                 supplier: supplier,
                 contactRepository: viewModel.repository,
                 purchaseRepository: purchaseRepository,
+                printingRepository: printingRepository,
+                shopSettingsRepository: shopSettingsRepository,
                 capabilities: capabilities,
               ),
             ),

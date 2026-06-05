@@ -1,9 +1,13 @@
 part of 'purchase_order_details_screen.dart';
 
 class _PurchaseOrderActions extends StatelessWidget {
-  const _PurchaseOrderActions({required this.viewModel});
+  const _PurchaseOrderActions({
+    required this.viewModel,
+    required this.printingRepository,
+  });
 
   final PurchaseOrderDetailsViewModel viewModel;
+  final PrintingRepository printingRepository;
 
   @override
   Widget build(BuildContext context) {
@@ -42,6 +46,45 @@ class _PurchaseOrderActions extends StatelessWidget {
             spacing: 8,
             runSpacing: 8,
             actions: [
+              OutlinedButton.icon(
+                onPressed: viewModel.isPrinting
+                    ? null
+                    : () => _printOrder(context),
+                icon: viewModel.isPrinting
+                    ? const SizedBox.square(
+                        dimension: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.print_outlined),
+                label: Text(
+                  viewModel.isPrinting
+                      ? l10n.purchaseOrderPrintInProgressAction
+                      : l10n.purchaseOrderPrintAction,
+                ),
+              ),
+              OutlinedButton.icon(
+                onPressed: viewModel.isSharing
+                    ? null
+                    : () => _shareOrder(context),
+                icon: viewModel.isSharing
+                    ? const SizedBox.square(
+                        dimension: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.ios_share_outlined),
+                label: Text(
+                  viewModel.isSharing
+                      ? l10n.purchaseOrderShareInProgressAction
+                      : l10n.purchaseOrderShareAction,
+                ),
+              ),
+              OutlinedButton.icon(
+                onPressed: viewModel.isPrinting || viewModel.isSharing
+                    ? null
+                    : () => _showPrintAudit(context),
+                icon: const Icon(Icons.manage_search_outlined),
+                label: Text(l10n.printAuditButton),
+              ),
               if (viewModel.canRecordPayment)
                 FilledButton.icon(
                   onPressed: viewModel.isRecordingPayment
@@ -185,6 +228,61 @@ class _PurchaseOrderActions extends StatelessWidget {
           ),
         ),
       );
+  }
+
+  Future<void> _printOrder(BuildContext context) async {
+    final l10n = AppLocalizations.of(context)!;
+    final messenger = ScaffoldMessenger.of(context);
+    final didPrint = await viewModel.printOrder();
+    if (!context.mounted) {
+      return;
+    }
+    messenger
+      ..clearSnackBars()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(
+            didPrint
+                ? l10n.purchaseOrderPrintSuccess(viewModel.order.orderNumber)
+                : l10n.purchaseOrderPrintError,
+          ),
+        ),
+      );
+  }
+
+  Future<void> _shareOrder(BuildContext context) async {
+    final l10n = AppLocalizations.of(context)!;
+    final messenger = ScaffoldMessenger.of(context);
+    final status = await viewModel.shareOrder();
+    if (!context.mounted || status == OrderDocumentActionStatus.canceled) {
+      return;
+    }
+    messenger
+      ..clearSnackBars()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(
+            status == OrderDocumentActionStatus.completed
+                ? l10n.purchaseOrderShareSuccess(viewModel.order.orderNumber)
+                : l10n.purchaseOrderShareError,
+          ),
+        ),
+      );
+  }
+
+  Future<void> _showPrintAudit(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final order = viewModel.order;
+    final documentNumber = order.orderNumber.isEmpty
+        ? l10n.purchaseOrderFallbackTitle(order.id)
+        : order.orderNumber;
+    return showPrintAuditSheet(
+      context: context,
+      printingRepository: printingRepository,
+      documentType: PrintAuditDocumentType.purchaseOrder,
+      documentId: order.id,
+      documentNumber: documentNumber,
+    );
   }
 
   Future<void> _runAction(

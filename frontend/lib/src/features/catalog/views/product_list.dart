@@ -12,6 +12,7 @@ import '../../../data/repositories/inventory_repository.dart';
 import '../../../data/repositories/printing_repository.dart';
 import '../../../data/repositories/purchase_repository.dart';
 import '../../../data/repositories/sale_repository.dart';
+import '../../../data/repositories/shop_settings_repository.dart';
 import '../../../shared/catalog/catalog.dart';
 import '../../../shared/components/components.dart';
 import '../../../shared/product_query_controls.dart';
@@ -28,6 +29,7 @@ class ProductList extends StatelessWidget {
     required this.printingRepository,
     required this.purchaseRepository,
     required this.saleRepository,
+    required this.shopSettingsRepository,
     required this.capabilities,
     this.analyticsEngine,
     required this.onBarcodeSubmitted,
@@ -40,6 +42,7 @@ class ProductList extends StatelessWidget {
   final PrintingRepository printingRepository;
   final PurchaseRepository purchaseRepository;
   final SaleRepository saleRepository;
+  final ShopSettingsRepository shopSettingsRepository;
   final AuthorizationCapabilities capabilities;
   final AnalyticsEngine? analyticsEngine;
   final FutureOr<bool> Function(String barcode) onBarcodeSubmitted;
@@ -112,6 +115,7 @@ class ProductList extends StatelessWidget {
       printingRepository: printingRepository,
       purchaseRepository: purchaseRepository,
       saleRepository: saleRepository,
+      shopSettingsRepository: shopSettingsRepository,
       capabilities: capabilities,
       analyticsEngine: analyticsEngine,
       onChanged: viewModel.loadProducts,
@@ -195,6 +199,7 @@ Future<void> openProductDetails(
   required PrintingRepository printingRepository,
   required PurchaseRepository purchaseRepository,
   required SaleRepository saleRepository,
+  required ShopSettingsRepository shopSettingsRepository,
   required AuthorizationCapabilities capabilities,
   AnalyticsEngine? analyticsEngine,
   VoidCallback? onChanged,
@@ -214,6 +219,7 @@ Future<void> openProductDetails(
         inventoryRepository: inventoryRepository,
         printingRepository: printingRepository,
         purchaseRepository: purchaseRepository,
+        shopSettingsRepository: shopSettingsRepository,
         capabilities: capabilities,
         analyticsEngine: analyticsEngine,
         onChanged: onChanged,

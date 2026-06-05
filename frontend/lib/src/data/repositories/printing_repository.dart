@@ -1,9 +1,15 @@
 import '../../core/result.dart';
 import '../models/barcode_label.dart';
+import '../models/print_audit_event.dart';
 import '../models/print_job.dart';
 import '../models/printer_config.dart';
+import '../models/purchase_submission.dart';
+import '../models/sale_order.dart';
+import '../models/shop_settings.dart';
 import '../services/device_settings_storage_service.dart';
 import '../services/esc_pos_barcode_label_encoder.dart';
+import '../services/esc_pos_receipt_encoder.dart';
+import '../services/order_document_service.dart';
 import '../services/pos_api_service.dart';
 import '../services/print_transport.dart';
 import '../services/print_transports.dart';
@@ -17,6 +23,8 @@ class PrintingRepository {
     PrintTransport fakeTransport = const FakePrintTransport(),
     EscPosBarcodeLabelEncoder barcodeLabelEncoder =
         const EscPosBarcodeLabelEncoder(),
+    EscPosReceiptEncoder receiptEncoder = const EscPosReceiptEncoder(),
+    OrderDocumentService documentService = const OrderDocumentService(),
     DeviceSettingsStorageService storageService =
         const DeviceSettingsStorageService(),
   }) : _serialTransport = serialTransport ?? SerialPrintTransport(),
@@ -24,6 +32,8 @@ class PrintingRepository {
        _wifiTransport = wifiTransport ?? WifiPrintTransport(),
        _fakeTransport = fakeTransport,
        _barcodeLabelEncoder = barcodeLabelEncoder,
+       _receiptEncoder = receiptEncoder,
+       _documentService = documentService,
        _storageService = storageService;
 
   final PosApiService _service;
@@ -32,6 +42,8 @@ class PrintingRepository {
   final PrintTransport _wifiTransport;
   final PrintTransport _fakeTransport;
   final EscPosBarcodeLabelEncoder _barcodeLabelEncoder;
+  final EscPosReceiptEncoder _receiptEncoder;
+  final OrderDocumentService _documentService;
   final DeviceSettingsStorageService _storageService;
 
   Future<Result<List<PrintJob>>> loadPrintJobs({
@@ -40,6 +52,20 @@ class PrintingRepository {
   }) async {
     return Result.guard(
       () => _service.fetchPrintJobs(status: status, page: page),
+    );
+  }
+
+  Future<Result<List<PrintAuditEvent>>> loadPrintAuditEvents({
+    required PrintAuditDocumentType documentType,
+    required int documentId,
+    int page = 1,
+  }) async {
+    return Result.guard(
+      () => _service.fetchPrintAuditEvents(
+        documentType: documentType,
+        documentId: documentId,
+        page: page,
+      ),
     );
   }
 
@@ -78,6 +104,9 @@ class PrintingRepository {
     required PrintJob job,
     required PrinterConfig config,
   }) async {
+    if (config.endpoint.usesDocumentInvoice) {
+      return Error(Exception('document printers require order-level printing'));
+    }
     final printResult = await _transportFor(
       config.endpoint,
     ).printJob(job: job, endpoint: config.endpoint);
@@ -100,6 +129,10 @@ class PrintingRepository {
   Future<Result<List<PrinterEndpoint>>> discoverPrinters() async {
     return Result.guard(() async {
       final discovered = <String, PrinterEndpoint>{};
+      for (final endpoint
+          in await _documentService.discoverDocumentPrinters()) {
+        discovered[_endpointKey(endpoint)] = endpoint;
+      }
       for (final transport in [
         _serialTransport,
         _bluetoothTransport,
@@ -144,10 +177,16 @@ class PrintingRepository {
   }
 
   Future<PrintTransportStatus> printerStatus(PrinterConfig config) {
+    if (config.endpoint.usesDocumentInvoice) {
+      return _documentService.printerStatus(config.endpoint);
+    }
     return _transportFor(config.endpoint).status(config.endpoint);
   }
 
   Future<PrintTransportResult> testPrinter(PrinterConfig config) {
+    if (config.endpoint.usesDocumentInvoice) {
+      return _documentService.printTest(config.endpoint);
+    }
     return _transportFor(config.endpoint).printTest(config.endpoint);
   }
 
@@ -170,6 +209,11 @@ class PrintingRepository {
     if (config == null) {
       return const PrintTransportResult.failure('printer config unavailable');
     }
+    if (!config.endpoint.usesThermalReceipt) {
+      return const PrintTransportResult.failure(
+        'barcode labels require a thermal printer',
+      );
+    }
 
     try {
       final bytes = await _barcodeLabelEncoder.encodeLabels(
@@ -184,20 +228,352 @@ class PrintingRepository {
     }
   }
 
+  Future<PrintTransportResult> printSaleInvoice({
+    required SaleOrder order,
+    ShopSettings? shopSettings,
+  }) async {
+    final configResult = await loadDefaultPrinterConfig();
+    final config = switch (configResult) {
+      Ok<PrinterConfig>() => configResult.value,
+      Error<PrinterConfig>() => null,
+    };
+    if (config == null) {
+      return const PrintTransportResult.failure('printer config unavailable');
+    }
+
+    if (config.endpoint.usesDocumentInvoice) {
+      final auditEvent = await _beginPrintAudit(
+        documentType: PrintAuditDocumentType.saleOrder,
+        documentId: order.id,
+        action: PrintAuditAction.print,
+        config: config,
+      );
+      if (auditEvent == null) {
+        return const PrintTransportResult.failure('print audit unavailable');
+      }
+      final result = await _printDocument(() {
+        return _documentService.printSaleInvoice(
+          order: order,
+          shopSettings: shopSettings,
+          endpoint: config.endpoint,
+        );
+      });
+      await _reportPrintAudit(
+        auditEvent,
+        _auditStatusForPrintResult(result),
+        message: result.message,
+      );
+      return result;
+    }
+
+    final jobResult = await requestSaleReprint(order.id);
+    switch (jobResult) {
+      case Ok<PrintJob>(value: final printJob):
+        final result = await printAndReportJob(job: printJob, config: config);
+        return switch (result) {
+          Ok<PrintJob>() => const PrintTransportResult.success(
+            'sale invoice printed',
+          ),
+          Error<PrintJob>(:final exception) => PrintTransportResult.failure(
+            exception.toString(),
+          ),
+        };
+      case Error<PrintJob>(:final exception):
+        return PrintTransportResult.failure(
+          'sale print audit unavailable: $exception',
+        );
+    }
+  }
+
+  Future<PrintTransportResult> printPurchaseOrder({
+    required PurchaseOrder order,
+    ShopSettings? shopSettings,
+  }) async {
+    final configResult = await loadDefaultPrinterConfig();
+    final config = switch (configResult) {
+      Ok<PrinterConfig>() => configResult.value,
+      Error<PrinterConfig>() => null,
+    };
+    if (config == null) {
+      return const PrintTransportResult.failure('printer config unavailable');
+    }
+
+    final auditEvent = await _beginPrintAudit(
+      documentType: PrintAuditDocumentType.purchaseOrder,
+      documentId: order.id,
+      action: PrintAuditAction.print,
+      config: config,
+    );
+    if (auditEvent == null) {
+      return const PrintTransportResult.failure('print audit unavailable');
+    }
+
+    final result = config.endpoint.usesDocumentInvoice
+        ? await _printDocument(() {
+            return _documentService.printPurchaseOrder(
+              order: order,
+              shopSettings: shopSettings,
+              endpoint: config.endpoint,
+            );
+          })
+        : await _printThermalPayload(
+            _purchaseReceiptPayload(order: order, shopSettings: shopSettings),
+            config,
+          );
+    await _reportPrintAudit(
+      auditEvent,
+      _auditStatusForPrintResult(result),
+      message: result.message,
+    );
+    return result;
+  }
+
+  Future<OrderDocumentActionStatus> shareSaleInvoice({
+    required SaleOrder order,
+    ShopSettings? shopSettings,
+  }) async {
+    final auditEvent = await _beginShareAudit(
+      documentType: PrintAuditDocumentType.saleOrder,
+      documentId: order.id,
+    );
+    if (auditEvent == null) {
+      return OrderDocumentActionStatus.failed;
+    }
+    final status = await _documentService.shareSaleInvoice(
+      order: order,
+      shopSettings: shopSettings,
+    );
+    await _reportPrintAudit(auditEvent, _auditStatusForDocumentAction(status));
+    return status;
+  }
+
+  Future<OrderDocumentActionStatus> sharePurchaseOrder({
+    required PurchaseOrder order,
+    ShopSettings? shopSettings,
+  }) async {
+    final auditEvent = await _beginShareAudit(
+      documentType: PrintAuditDocumentType.purchaseOrder,
+      documentId: order.id,
+    );
+    if (auditEvent == null) {
+      return OrderDocumentActionStatus.failed;
+    }
+    final status = await _documentService.sharePurchaseOrder(
+      order: order,
+      shopSettings: shopSettings,
+    );
+    await _reportPrintAudit(auditEvent, _auditStatusForDocumentAction(status));
+    return status;
+  }
+
+  Future<PrintAuditEvent?> _beginPrintAudit({
+    required PrintAuditDocumentType documentType,
+    required int documentId,
+    required PrintAuditAction action,
+    required PrinterConfig config,
+  }) {
+    return _recordPrintAuditEvent(
+      PrintAuditEventDraft(
+        documentType: documentType,
+        documentId: documentId,
+        action: action,
+        agentId: config.agentId,
+        printerEndpoint: config.endpoint.toJson(),
+        deviceName: config.agentId,
+        printerName: _endpointDisplayName(config.endpoint),
+        metadata: {
+          'output_mode': config.endpoint.outputMode.name,
+          'transport_kind': config.endpoint.kind.name,
+        },
+      ),
+    );
+  }
+
+  Future<PrintAuditEvent?> _beginShareAudit({
+    required PrintAuditDocumentType documentType,
+    required int documentId,
+  }) async {
+    final config = await _loadAuditPrinterConfig();
+    final deliveryChannel = _documentService.deliveryChannel;
+    return _recordPrintAuditEvent(
+      PrintAuditEventDraft(
+        documentType: documentType,
+        documentId: documentId,
+        action: PrintAuditAction.share,
+        agentId: config.agentId,
+        printerEndpoint: {
+          'kind': deliveryChannel,
+          'name': 'PDF',
+          'output_mode': PrinterOutputMode.pdfA4.name,
+        },
+        deviceName: config.agentId,
+        printerName: 'PDF',
+        metadata: {
+          'delivery_channel': deliveryChannel,
+          'default_printer_endpoint': config.endpoint.toJson(),
+        },
+      ),
+    );
+  }
+
+  Future<PrinterConfig> _loadAuditPrinterConfig() async {
+    final result = await loadDefaultPrinterConfig();
+    return switch (result) {
+      Ok<PrinterConfig>(value: final config) => config,
+      Error<PrinterConfig>() => PrinterConfig.defaultConfig(),
+    };
+  }
+
+  Future<PrintAuditEvent?> _recordPrintAuditEvent(
+    PrintAuditEventDraft draft,
+  ) async {
+    try {
+      return _service.recordPrintAuditEvent(draft);
+    } on Exception {
+      return null;
+    }
+  }
+
+  Future<void> _reportPrintAudit(
+    PrintAuditEvent auditEvent,
+    PrintAuditStatus status, {
+    String message = '',
+  }) async {
+    try {
+      await _service.reportPrintAuditEvent(
+        eventId: auditEvent.id,
+        report: PrintAuditEventReportDraft(status: status, message: message),
+      );
+    } on Exception {
+      return;
+    }
+  }
+
+  PrintAuditStatus _auditStatusForPrintResult(PrintTransportResult result) {
+    if (result.isSuccess) {
+      return PrintAuditStatus.completed;
+    }
+    final normalizedMessage = result.message.toLowerCase();
+    if (normalizedMessage.contains('cancel')) {
+      return PrintAuditStatus.canceled;
+    }
+    return PrintAuditStatus.failed;
+  }
+
+  PrintAuditStatus _auditStatusForDocumentAction(
+    OrderDocumentActionStatus status,
+  ) {
+    return switch (status) {
+      OrderDocumentActionStatus.completed => PrintAuditStatus.completed,
+      OrderDocumentActionStatus.canceled => PrintAuditStatus.canceled,
+      OrderDocumentActionStatus.failed => PrintAuditStatus.failed,
+    };
+  }
+
+  String _endpointDisplayName(PrinterEndpoint endpoint) {
+    final name = endpoint.name.trim();
+    if (name.isNotEmpty) {
+      return name;
+    }
+    final address = endpoint.address.trim();
+    if (address.isNotEmpty) {
+      return address;
+    }
+    return endpoint.kind.name;
+  }
+
   PrintTransport _transportFor(PrinterEndpoint endpoint) {
     return switch (endpoint.kind) {
       PrintTransportKind.serial => _serialTransport,
       PrintTransportKind.bluetooth => _bluetoothTransport,
       PrintTransportKind.wifi => _wifiTransport,
+      PrintTransportKind.system => throw StateError(
+        'system printers use document printing',
+      ),
       PrintTransportKind.fake => _fakeTransport,
     };
   }
 
   String _endpointKey(PrinterEndpoint endpoint) {
-    return '${endpoint.kind.name}:${endpoint.address}:${endpoint.port}';
+    return '${endpoint.kind.name}:${endpoint.outputMode.name}:${endpoint.address}:${endpoint.port}';
   }
 
   PrinterConfig _devicePrintableConfig(PrinterConfig config) {
     return config.copyWith(isEnabled: true, autoClaimJobs: true);
+  }
+
+  Future<PrintTransportResult> _printDocument(
+    Future<bool> Function() printDocument,
+  ) async {
+    try {
+      final printed = await printDocument();
+      return printed
+          ? const PrintTransportResult.success('document print sent')
+          : const PrintTransportResult.failure('document print canceled');
+    } on Object catch (error) {
+      return PrintTransportResult.failure('document print failed: $error');
+    }
+  }
+
+  Future<PrintTransportResult> _printThermalPayload(
+    Map<String, Object?> payload,
+    PrinterConfig config,
+  ) async {
+    try {
+      final bytes = await _receiptEncoder.encodePayload(
+        payload: payload,
+        endpoint: config.endpoint,
+      );
+      return _transportFor(
+        config.endpoint,
+      ).printBytes(bytes: bytes, endpoint: config.endpoint);
+    } on Object catch (error) {
+      return PrintTransportResult.failure('thermal print failed: $error');
+    }
+  }
+
+  Map<String, Object?> _purchaseReceiptPayload({
+    required PurchaseOrder order,
+    ShopSettings? shopSettings,
+  }) {
+    return {
+      'shop': _shopPayload(shopSettings),
+      'order': {
+        'document_title': 'أمر شراء',
+        'total_label': 'الإجمالي',
+        'receipt_number': _purchaseReference(order),
+        if (order.createdAt != null) 'created_at': order.createdAt!.toString(),
+        'total': order.total.toStringAsFixed(2),
+        'lines': [
+          for (final line in order.lines)
+            {
+              'name': line.displayName.trim().isEmpty
+                  ? 'منتج'
+                  : line.displayName.trim(),
+              'quantity': line.quantity,
+              'unit_price': line.unitCost.toStringAsFixed(2),
+              'line_total': (line.landedLineTotal ?? line.total)
+                  .toStringAsFixed(2),
+            },
+        ],
+      },
+    };
+  }
+
+  Map<String, Object?> _shopPayload(ShopSettings? settings) {
+    return {
+      'name': settings?.shopName.trim().isNotEmpty == true
+          ? settings!.shopName.trim()
+          : 'Pointy',
+      if (settings?.receiptHeader.trim().isNotEmpty == true)
+        'receipt_header': settings!.receiptHeader.trim(),
+      if (settings?.receiptFooter.trim().isNotEmpty == true)
+        'receipt_footer': settings!.receiptFooter.trim(),
+    };
+  }
+
+  String _purchaseReference(PurchaseOrder order) {
+    final orderNumber = order.orderNumber.trim();
+    return orderNumber.isEmpty ? '${order.id}' : orderNumber;
   }
 }

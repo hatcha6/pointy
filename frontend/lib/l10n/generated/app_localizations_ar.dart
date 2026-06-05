@@ -2536,7 +2536,19 @@ class AppLocalizationsAr extends AppLocalizations {
   String get printerTransportWifi => 'شبكة';
 
   @override
+  String get printerTransportSystem => 'طابعة النظام';
+
+  @override
   String get printerTransportFake => 'محاكاة';
+
+  @override
+  String get printerOutputThermalReceipt => 'إخراج حراري ESC/POS';
+
+  @override
+  String get printerOutputA4Pdf => 'إخراج PDF بحجم A4';
+
+  @override
+  String get systemDefaultPrinterLabel => 'طابعة النظام الافتراضية';
 
   @override
   String get posReceiptPrinterRoleTitle => 'إيصال نقطة البيع';
@@ -3672,6 +3684,38 @@ class AppLocalizationsAr extends AppLocalizations {
   String get purchaseOrderActionsTitle => 'إجراءات الحالة';
 
   @override
+  String get purchaseOrderPrintAction => 'طباعة';
+
+  @override
+  String get purchaseOrderPrintInProgressAction => 'جار الطباعة...';
+
+  @override
+  String get purchaseOrderShareAction => 'مشاركة PDF';
+
+  @override
+  String get purchaseOrderShareInProgressAction => 'جار تجهيز PDF...';
+
+  @override
+  String get purchaseOrderRowActionsTooltip => 'إجراءات أمر الشراء';
+
+  @override
+  String purchaseOrderPrintSuccess(String orderNumber) {
+    return 'تم إرسال أمر الشراء رقم $orderNumber للطابعة.';
+  }
+
+  @override
+  String get purchaseOrderPrintError =>
+      'تعذرت طباعة أمر الشراء. راجع الطابعة وحاول مرة أخرى.';
+
+  @override
+  String purchaseOrderShareSuccess(String orderNumber) {
+    return 'تم تجهيز ملف PDF لأمر الشراء رقم $orderNumber.';
+  }
+
+  @override
+  String get purchaseOrderShareError => 'تعذر تجهيز ملف PDF لأمر الشراء.';
+
+  @override
   String get submitPurchaseOrderAction => 'إرسال';
 
   @override
@@ -4685,6 +4729,16 @@ class AppLocalizationsAr extends AppLocalizations {
   String get receiptToggleTooltip => 'تبديل طباعة الفاتورة';
 
   @override
+  String get shareInvoiceAfterPaymentLabel => 'مشاركة PDF بعد الدفع';
+
+  @override
+  String get shareInvoiceToggleSubtitle =>
+      'سيتم فتح ورقة المشاركة على الجوال أو نافذة الحفظ على سطح المكتب.';
+
+  @override
+  String get shareInvoiceToggleTooltip => 'تبديل مشاركة ملف PDF للفاتورة';
+
+  @override
   String get paidAmountLabel => 'المدفوع';
 
   @override
@@ -4720,6 +4774,12 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get invoicePrintError => 'تم تسجيل البيع، لكن تعذرت طباعة الفاتورة.';
+
+  @override
+  String get invoiceShareSuccess => 'تم تجهيز ملف PDF للفاتورة.';
+
+  @override
+  String get invoiceShareError => 'تعذر تجهيز ملف PDF للفاتورة.';
 
   @override
   String get invoiceProfitLabel => 'الربح';
@@ -5123,14 +5183,22 @@ class AppLocalizationsAr extends AppLocalizations {
   String get invoiceReprintButton => 'إعادة طباعة الفاتورة';
 
   @override
-  String get invoiceReprintInProgressButton => 'جار طلب الطباعة...';
+  String get invoiceReprintInProgressButton => 'جار الطباعة...';
 
   @override
-  String get invoiceReprintQueuedMessage =>
-      'تم إرسال طلب إعادة طباعة الفاتورة.';
+  String get invoiceReprintQueuedMessage => 'تم إرسال الفاتورة للطابعة.';
 
   @override
-  String get invoiceReprintError => 'تعذر إرسال طلب إعادة طباعة الفاتورة.';
+  String get invoiceReprintError => 'تعذرت طباعة الفاتورة.';
+
+  @override
+  String get invoiceShareButton => 'مشاركة PDF';
+
+  @override
+  String get invoiceShareInProgressButton => 'جار تجهيز PDF...';
+
+  @override
+  String get invoiceRowActionsTooltip => 'إجراءات الفاتورة';
 
   @override
   String get saleReceiptFallback => 'بدون رقم';
@@ -5139,6 +5207,18 @@ class AppLocalizationsAr extends AppLocalizations {
   String saleReceiptTitle(String receiptNumber) {
     return 'إيصال $receiptNumber';
   }
+
+  @override
+  String get saleReceiptShareButton => 'مشاركة PDF';
+
+  @override
+  String get saleReceiptShareInProgressButton => 'جار تجهيز PDF...';
+
+  @override
+  String get saleReceiptShareSuccess => 'تم تجهيز ملف PDF للإيصال.';
+
+  @override
+  String get saleReceiptShareError => 'تعذر تجهيز ملف PDF للإيصال.';
 
   @override
   String saleProductFallback(int productId) {
@@ -5657,6 +5737,105 @@ class AppLocalizationsAr extends AppLocalizations {
   String discountSupplierConstraintSummary(int count) {
     return '$count موردين';
   }
+
+  @override
+  String get printAuditButton => 'سجل الطباعة والمشاركة';
+
+  @override
+  String printAuditSheetTitle(String documentNumber) {
+    return 'سجل الطباعة والمشاركة $documentNumber';
+  }
+
+  @override
+  String get printAuditRefreshTooltip => 'تحديث سجل الطباعة والمشاركة';
+
+  @override
+  String get printAuditLoading => 'جار تحميل سجل الطباعة والمشاركة...';
+
+  @override
+  String get printAuditLoadError => 'تعذر تحميل سجل الطباعة والمشاركة.';
+
+  @override
+  String get printAuditEmptyTitle => 'لا توجد عمليات مسجلة';
+
+  @override
+  String get printAuditEmptyMessage =>
+      'ستظهر هنا عمليات الطباعة والمشاركة التي تمر عبر الخادم.';
+
+  @override
+  String printAuditEventTitle(String action, String status) {
+    return '$action - $status';
+  }
+
+  @override
+  String get printAuditActionPrint => 'طباعة';
+
+  @override
+  String get printAuditActionShare => 'مشاركة PDF';
+
+  @override
+  String get printAuditStatusRequested => 'قيد الطلب';
+
+  @override
+  String get printAuditStatusCompleted => 'مكتمل';
+
+  @override
+  String get printAuditStatusCanceled => 'ملغى';
+
+  @override
+  String get printAuditStatusFailed => 'فشل';
+
+  @override
+  String get printAuditUnknownActor => 'مستخدم غير معروف';
+
+  @override
+  String printAuditTimeValue(String time) {
+    return 'الوقت $time';
+  }
+
+  @override
+  String printAuditActorValue(String actor) {
+    return 'المنفذ $actor';
+  }
+
+  @override
+  String printAuditDeviceValue(String device) {
+    return 'الجهاز $device';
+  }
+
+  @override
+  String printAuditPrinterValue(String printer) {
+    return 'الطابعة $printer';
+  }
+
+  @override
+  String printAuditChannelValue(String channel) {
+    return 'القناة $channel';
+  }
+
+  @override
+  String printAuditEndpointValue(String endpoint) {
+    return 'نقطة الاتصال $endpoint';
+  }
+
+  @override
+  String printAuditJobValue(int jobId) {
+    return 'مهمة الطباعة #$jobId';
+  }
+
+  @override
+  String printAuditMessageValue(String message) {
+    return 'الرسالة $message';
+  }
+
+  @override
+  String get printAuditChannelNativeShare => 'ورقة المشاركة';
+
+  @override
+  String get printAuditChannelFileSave => 'حفظ ملف';
+
+  @override
+  String get printAuditChannelBrowserDownload => 'تنزيل المتصفح';
 
   @override
   String get confirmButton => 'تأكيد';

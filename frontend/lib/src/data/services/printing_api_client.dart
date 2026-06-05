@@ -1,3 +1,4 @@
+import '../models/print_audit_event.dart';
 import '../models/print_job.dart';
 import '../models/printer_config.dart';
 import 'api_session.dart';
@@ -65,6 +66,63 @@ class PrintingApiClient {
     );
     _session.ensureSuccess(response, 'Print job report failed with status');
     return PrintJob.fromJson(
+      _session.decodedBody(response) as Map<String, Object?>,
+    );
+  }
+
+  Future<List<PrintAuditEvent>> fetchPrintAuditEvents({
+    required PrintAuditDocumentType documentType,
+    required int documentId,
+    int page = 1,
+  }) async {
+    final documentField = switch (documentType) {
+      PrintAuditDocumentType.saleOrder => 'sale_order',
+      PrintAuditDocumentType.purchaseOrder => 'purchase_order',
+    };
+    final response = await _session.get(
+      'print-audit-events/',
+      query: {
+        'page': '$page',
+        'document_type': printAuditDocumentTypeToJson(documentType),
+        documentField: '$documentId',
+      },
+    );
+    _session.ensureSuccess(
+      response,
+      'Print audit events request failed with status',
+    );
+    return printAuditEventsFromResponse(_session.decodedBody(response));
+  }
+
+  Future<PrintAuditEvent> recordPrintAuditEvent(
+    PrintAuditEventDraft draft,
+  ) async {
+    final response = await _session.post(
+      'print-audit-events/record/',
+      body: draft.toJson(),
+    );
+    _session.ensureSuccess(
+      response,
+      'Print audit event record failed with status',
+    );
+    return PrintAuditEvent.fromJson(
+      _session.decodedBody(response) as Map<String, Object?>,
+    );
+  }
+
+  Future<PrintAuditEvent> reportPrintAuditEvent({
+    required int eventId,
+    required PrintAuditEventReportDraft report,
+  }) async {
+    final response = await _session.post(
+      'print-audit-events/$eventId/report/',
+      body: report.toJson(),
+    );
+    _session.ensureSuccess(
+      response,
+      'Print audit event report failed with status',
+    );
+    return PrintAuditEvent.fromJson(
       _session.decodedBody(response) as Map<String, Object?>,
     );
   }

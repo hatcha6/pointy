@@ -4,7 +4,9 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 import '../../../core/authorization.dart';
 import '../../../data/models/purchase_submission.dart';
 import '../../../data/models/sale_order.dart';
+import '../../../data/repositories/printing_repository.dart';
 import '../../../data/repositories/purchase_repository.dart';
+import '../../../data/repositories/shop_settings_repository.dart';
 import '../../../shared/components/components.dart';
 import '../../purchasing/views/purchase_order_details_screen.dart';
 import '../../purchasing/views/purchase_order_list_screen.dart';
@@ -16,11 +18,15 @@ class ProductDocumentHistorySection extends StatelessWidget {
     super.key,
     required this.viewModel,
     required this.purchaseRepository,
+    required this.printingRepository,
+    required this.shopSettingsRepository,
     required this.capabilities,
   });
 
   final ProductDetailsViewModel viewModel;
   final PurchaseRepository purchaseRepository;
+  final PrintingRepository printingRepository;
+  final ShopSettingsRepository shopSettingsRepository;
   final AuthorizationCapabilities capabilities;
 
   @override
@@ -46,6 +52,8 @@ class ProductDocumentHistorySection extends StatelessWidget {
               viewModel: viewModel,
               title: l10n.productRecentPurchaseBillsTitle,
               purchaseRepository: purchaseRepository,
+              printingRepository: printingRepository,
+              shopSettingsRepository: shopSettingsRepository,
               capabilities: capabilities,
             ),
         ],
@@ -102,12 +110,16 @@ class _RecentPurchaseOrdersList extends StatelessWidget {
     required this.viewModel,
     required this.title,
     required this.purchaseRepository,
+    required this.printingRepository,
+    required this.shopSettingsRepository,
     required this.capabilities,
   });
 
   final ProductDetailsViewModel viewModel;
   final String title;
   final PurchaseRepository purchaseRepository;
+  final PrintingRepository printingRepository;
+  final ShopSettingsRepository shopSettingsRepository;
   final AuthorizationCapabilities capabilities;
 
   @override
@@ -157,6 +169,8 @@ class _RecentPurchaseOrdersList extends StatelessWidget {
       MaterialPageRoute<void>(
         builder: (_) => PurchaseOrderDetailsScreen(
           purchaseRepository: purchaseRepository,
+          printingRepository: printingRepository,
+          shopSettingsRepository: shopSettingsRepository,
           initialOrder: order,
           capabilities: capabilities,
         ),

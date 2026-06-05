@@ -109,6 +109,13 @@ class PrintingSettingsViewModel extends ChangeNotifier {
         kind: kind,
         address: _looksLikeNetworkHost(current.address) ? current.address : '',
         port: current.port == 0 ? 9100 : current.port,
+        outputMode: PrinterOutputMode.escPos,
+      ),
+      PrintTransportKind.system => current.copyWith(
+        kind: kind,
+        name: '',
+        address: '',
+        outputMode: PrinterOutputMode.pdfA4,
       ),
       PrintTransportKind.fake => current.copyWith(kind: kind),
     };
@@ -347,6 +354,10 @@ class PrintingSettingsViewModel extends ChangeNotifier {
   bool _hasConfiguredEndpoint(PrinterEndpoint endpoint) {
     final name = endpoint.name.trim();
     final address = endpoint.address.trim();
+    if (endpoint.kind == PrintTransportKind.system ||
+        endpoint.usesDocumentInvoice) {
+      return true;
+    }
     if (endpoint.kind == PrintTransportKind.fake) {
       return name.isNotEmpty || address.isNotEmpty;
     }

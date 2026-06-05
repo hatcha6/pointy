@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../data/models/sale_order.dart';
+import '../../data/services/order_document_service.dart';
 import '../components/components.dart';
 import '../formatters.dart';
 import '../order_totals.dart';
@@ -10,6 +11,8 @@ import '../responsive/responsive.dart';
 import '../date_formatters.dart';
 
 typedef SaleOrderReprintAction = Future<bool> Function(SaleOrder order);
+typedef SaleOrderShareAction =
+    Future<OrderDocumentActionStatus> Function(SaleOrder order);
 typedef SaleOrderVoidAction =
     Future<bool> Function(SaleOrder order, String reason);
 typedef SaleOrderReturnAction =
@@ -24,6 +27,8 @@ class SaleOrderDetailsContent extends StatefulWidget {
     super.key,
     required this.order,
     this.onReprint,
+    this.onShare,
+    this.onPrintAudit,
     this.onVoid,
     this.onReturn,
     this.showTitle = true,
@@ -34,6 +39,8 @@ class SaleOrderDetailsContent extends StatefulWidget {
 
   final SaleOrder order;
   final SaleOrderReprintAction? onReprint;
+  final SaleOrderShareAction? onShare;
+  final VoidCallback? onPrintAudit;
   final SaleOrderVoidAction? onVoid;
   final SaleOrderReturnAction? onReturn;
   final bool showTitle;
@@ -48,6 +55,7 @@ class SaleOrderDetailsContent extends StatefulWidget {
 
 class _SaleOrderDetailsContentState extends State<SaleOrderDetailsContent> {
   bool _isReprinting = false;
+  bool _isSharing = false;
   bool _isAdjusting = false;
 
   @override
@@ -73,10 +81,13 @@ class _SaleOrderDetailsContentState extends State<SaleOrderDetailsContent> {
             _ActionsSection(
               isBusy: _isBusy,
               isReprinting: _isReprinting,
+              isSharing: _isSharing,
               isAdjusting: _isAdjusting,
               canReturn: _canReturn,
               canVoid: _canVoid,
               onReprint: widget.onReprint == null ? null : _requestReprint,
+              onShare: widget.onShare == null ? null : _shareInvoice,
+              onPrintAudit: widget.onPrintAudit,
               onReturn: _canReturn ? _showReturnDialog : null,
               onVoid: _canVoid ? _showVoidDialog : null,
               useInvoiceLabels: widget.useInvoiceLabels,
@@ -95,7 +106,7 @@ class _SaleOrderDetailsContentState extends State<SaleOrderDetailsContent> {
     );
   }
 
-  bool get _isBusy => _isReprinting || _isAdjusting;
+  bool get _isBusy => _isReprinting || _isSharing || _isAdjusting;
 
   bool get _hasReturnableItems {
     return widget.order.lines.any((line) => line.returnableQuantity > 0);
@@ -114,7 +125,11 @@ class _SaleOrderDetailsContentState extends State<SaleOrderDetailsContent> {
   }
 
   bool get _hasVisibleActions {
-    return widget.onReprint != null || _canReturn || _canVoid;
+    return widget.onReprint != null ||
+        widget.onShare != null ||
+        widget.onPrintAudit != null ||
+        _canReturn ||
+        _canVoid;
   }
 
   Future<void> _requestReprint() async {
@@ -143,6 +158,30 @@ class _SaleOrderDetailsContentState extends State<SaleOrderDetailsContent> {
           ),
         ),
       );
+  }
+
+  Future<void> _shareInvoice() async {
+    final l10n = AppLocalizations.of(context)!;
+
+    setState(() => _isSharing = true);
+    final status = await widget.onShare!(widget.order);
+    if (!mounted) {
+      return;
+    }
+
+    setState(() => _isSharing = false);
+    if (status == OrderDocumentActionStatus.canceled) {
+      return;
+    }
+    _showMessage(
+      status == OrderDocumentActionStatus.completed
+          ? widget.useInvoiceLabels
+                ? l10n.invoiceShareSuccess
+                : l10n.saleReceiptShareSuccess
+          : widget.useInvoiceLabels
+          ? l10n.invoiceShareError
+          : l10n.saleReceiptShareError,
+    );
   }
 
   Future<void> _showVoidDialog() async {
@@ -245,10 +284,13 @@ class _ActionsSection extends StatelessWidget {
   const _ActionsSection({
     required this.isBusy,
     required this.isReprinting,
+    required this.isSharing,
     required this.isAdjusting,
     required this.canReturn,
     required this.canVoid,
     this.onReprint,
+    this.onShare,
+    this.onPrintAudit,
     this.onReturn,
     this.onVoid,
     required this.useInvoiceLabels,
@@ -256,10 +298,13 @@ class _ActionsSection extends StatelessWidget {
 
   final bool isBusy;
   final bool isReprinting;
+  final bool isSharing;
   final bool isAdjusting;
   final bool canReturn;
   final bool canVoid;
   final VoidCallback? onReprint;
+  final VoidCallback? onShare;
+  final VoidCallback? onPrintAudit;
   final VoidCallback? onReturn;
   final VoidCallback? onVoid;
   final bool useInvoiceLabels;
@@ -295,6 +340,31 @@ class _ActionsSection extends StatelessWidget {
                     ? l10n.invoiceReprintButton
                     : l10n.saleReprintButton,
               ),
+            ),
+          if (onShare != null)
+            OutlinedButton.icon(
+              onPressed: isBusy ? null : onShare,
+              icon: isSharing
+                  ? const SizedBox.square(
+                      dimension: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.ios_share_outlined),
+              label: Text(
+                isSharing
+                    ? useInvoiceLabels
+                          ? l10n.invoiceShareInProgressButton
+                          : l10n.saleReceiptShareInProgressButton
+                    : useInvoiceLabels
+                    ? l10n.invoiceShareButton
+                    : l10n.saleReceiptShareButton,
+              ),
+            ),
+          if (onPrintAudit != null)
+            OutlinedButton.icon(
+              onPressed: isBusy ? null : onPrintAudit,
+              icon: const Icon(Icons.manage_search_outlined),
+              label: Text(l10n.printAuditButton),
             ),
           if (canReturn)
             OutlinedButton.icon(

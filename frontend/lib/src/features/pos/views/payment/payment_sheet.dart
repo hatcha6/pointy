@@ -19,9 +19,13 @@ import 'receipt_toggle_row.dart';
 import 'tender_line_editor.dart';
 
 class PaymentSheetResult {
-  const PaymentSheetResult({required this.payments});
+  const PaymentSheetResult({
+    required this.payments,
+    required this.shareInvoiceAfterPayment,
+  });
 
   final List<SaleCheckoutPaymentDraft> payments;
+  final bool shareInvoiceAfterPayment;
 }
 
 Future<PaymentSheetResult?> showPosPaymentSheet({
@@ -35,6 +39,9 @@ Future<PaymentSheetResult?> showPosPaymentSheet({
   required bool showPrintInvoiceToggle,
   required bool printInvoiceAfterPayment,
   required ValueChanged<bool> onPrintInvoiceChanged,
+  required bool showShareInvoiceToggle,
+  required bool shareInvoiceAfterPayment,
+  required ValueChanged<bool> onShareInvoiceChanged,
 }) {
   final width = MediaQuery.sizeOf(context).width;
   Widget childBuilder(BuildContext modalContext) {
@@ -48,6 +55,9 @@ Future<PaymentSheetResult?> showPosPaymentSheet({
       showPrintInvoiceToggle: showPrintInvoiceToggle,
       printInvoiceAfterPayment: printInvoiceAfterPayment,
       onPrintInvoiceChanged: onPrintInvoiceChanged,
+      showShareInvoiceToggle: showShareInvoiceToggle,
+      shareInvoiceAfterPayment: shareInvoiceAfterPayment,
+      onShareInvoiceChanged: onShareInvoiceChanged,
       onCancel: () => Navigator.of(modalContext).pop(),
       onSubmit: (result) => Navigator.of(modalContext).pop(result),
     );
@@ -87,6 +97,9 @@ class PaymentSheet extends StatefulWidget {
     required this.showPrintInvoiceToggle,
     required this.printInvoiceAfterPayment,
     required this.onPrintInvoiceChanged,
+    required this.showShareInvoiceToggle,
+    required this.shareInvoiceAfterPayment,
+    required this.onShareInvoiceChanged,
     required this.onSubmit,
     required this.onCancel,
   });
@@ -100,6 +113,9 @@ class PaymentSheet extends StatefulWidget {
   final bool showPrintInvoiceToggle;
   final bool printInvoiceAfterPayment;
   final ValueChanged<bool> onPrintInvoiceChanged;
+  final bool showShareInvoiceToggle;
+  final bool shareInvoiceAfterPayment;
+  final ValueChanged<bool> onShareInvoiceChanged;
   final ValueChanged<PaymentSheetResult> onSubmit;
   final VoidCallback onCancel;
 
@@ -115,6 +131,7 @@ class _PaymentSheetState extends State<PaymentSheet> {
   var _showPaymentError = false;
   var _isBalancingTender = false;
   late var _printInvoiceAfterPayment = widget.printInvoiceAfterPayment;
+  late var _shareInvoiceAfterPayment = widget.shareInvoiceAfterPayment;
 
   @override
   void initState() {
@@ -317,6 +334,19 @@ class _PaymentSheetState extends State<PaymentSheet> {
             },
           ),
         ],
+        if (widget.showShareInvoiceToggle) ...[
+          SizedBox(height: spacing.sm),
+          ReceiptToggleRow(
+            label: l10n.shareInvoiceAfterPaymentLabel,
+            subtitle: l10n.shareInvoiceToggleSubtitle,
+            tooltip: l10n.shareInvoiceToggleTooltip,
+            value: _shareInvoiceAfterPayment,
+            onChanged: (value) {
+              setState(() => _shareInvoiceAfterPayment = value);
+              widget.onShareInvoiceChanged(value);
+            },
+          ),
+        ],
       ],
     );
   }
@@ -390,7 +420,12 @@ class _PaymentSheetState extends State<PaymentSheet> {
       setState(() => _showPaymentError = true);
       return;
     }
-    widget.onSubmit(PaymentSheetResult(payments: payments));
+    widget.onSubmit(
+      PaymentSheetResult(
+        payments: payments,
+        shareInvoiceAfterPayment: _shareInvoiceAfterPayment,
+      ),
+    );
   }
 
   Future<void> _validateCardReceipt(int index) async {

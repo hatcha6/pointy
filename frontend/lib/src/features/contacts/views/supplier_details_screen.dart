@@ -5,7 +5,9 @@ import '../../../core/authorization.dart';
 import '../../../data/models/contact.dart';
 import '../../../data/models/purchase_submission.dart';
 import '../../../data/repositories/contact_repository.dart';
+import '../../../data/repositories/printing_repository.dart';
 import '../../../data/repositories/purchase_repository.dart';
+import '../../../data/repositories/shop_settings_repository.dart';
 import '../../../shared/components/components.dart';
 import '../../../shared/date_formatters.dart';
 import '../../../shared/formatters.dart';
@@ -20,12 +22,16 @@ class SupplierDetailsScreen extends StatefulWidget {
     required this.supplier,
     required this.contactRepository,
     required this.purchaseRepository,
+    required this.printingRepository,
+    required this.shopSettingsRepository,
     required this.capabilities,
   });
 
   final SupplierContact supplier;
   final ContactRepository contactRepository;
   final PurchaseRepository purchaseRepository;
+  final PrintingRepository printingRepository;
+  final ShopSettingsRepository shopSettingsRepository;
   final AuthorizationCapabilities capabilities;
 
   @override
@@ -106,6 +112,8 @@ class _SupplierDetailsScreenState extends State<SupplierDetailsScreen> {
       MaterialPageRoute<void>(
         builder: (_) => PurchaseOrderDetailsScreen(
           purchaseRepository: widget.purchaseRepository,
+          printingRepository: widget.printingRepository,
+          shopSettingsRepository: widget.shopSettingsRepository,
           initialOrder: order,
           capabilities: widget.capabilities,
         ),

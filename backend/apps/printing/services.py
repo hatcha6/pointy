@@ -16,6 +16,7 @@ from apps.discounts.models import AppliedDiscount
 from apps.sales.models import Order
 from .models import (
     PrintAgent,
+    PrintAuditEvent,
     PrinterProfile,
     PrintJob,
     PrintJobEvent,
@@ -213,14 +214,126 @@ def order_applied_discounts(order):
 
 
 def create_job_event(job, event_type, *, user=None, agent=None, message="", metadata=None):
-    return PrintJobEvent.objects.create(
+    event_metadata = metadata or {}
+    event = PrintJobEvent.objects.create(
         job=job,
         event_type=event_type,
         user=user if user and user.is_authenticated else None,
         agent=agent,
         message=message,
-        metadata=metadata or {},
+        metadata=event_metadata,
     )
+    create_print_audit_event_for_job_event(event)
+    return event
+
+
+def create_print_audit_event_for_job_event(event):
+    if event.job.order_id is None:
+        return None
+
+    status_by_event_type = {
+        PrintJobEvent.Type.PRINTED: PrintAuditEvent.Status.COMPLETED,
+        PrintJobEvent.Type.FAILED: PrintAuditEvent.Status.FAILED,
+        PrintJobEvent.Type.CANCELED: PrintAuditEvent.Status.CANCELED,
+    }
+    audit_status = status_by_event_type.get(event.event_type)
+    if audit_status is None:
+        return None
+
+    metadata = {
+        **(event.metadata or {}),
+        "print_job_event_id": event.pk,
+    }
+    return create_print_audit_event(
+        document_type=PrintAuditEvent.DocumentType.SALE_ORDER,
+        action=PrintAuditEvent.Action.PRINT,
+        status=audit_status,
+        sale_order=event.job.order,
+        user=event.user,
+        agent=event.agent,
+        printer_endpoint=(event.metadata or {}).get("printer_endpoint", {}),
+        print_job=event.job,
+        message=event.message,
+        metadata=metadata,
+    )
+
+
+def create_print_audit_event(
+    *,
+    document_type,
+    action,
+    status=PrintAuditEvent.Status.REQUESTED,
+    sale_order=None,
+    purchase_order=None,
+    user=None,
+    agent=None,
+    agent_identifier="",
+    printer_endpoint=None,
+    device_name="",
+    printer_name="",
+    print_job=None,
+    message="",
+    metadata=None,
+):
+    endpoint = printer_endpoint if isinstance(printer_endpoint, dict) else {}
+    event_metadata = metadata or {}
+    agent_identifier = agent_identifier or (agent.identifier if agent else "")
+    return PrintAuditEvent.objects.create(
+        document_type=document_type,
+        action=action,
+        status=status,
+        sale_order=sale_order,
+        purchase_order=purchase_order,
+        document_number=print_audit_document_number(
+            document_type,
+            sale_order=sale_order,
+            purchase_order=purchase_order,
+        ),
+        print_job=print_job,
+        user=user if user and user.is_authenticated else None,
+        agent=agent,
+        agent_identifier=agent_identifier,
+        device_name=device_name or event_metadata.get("device_name", "") or agent_identifier,
+        printer_name=printer_name or printer_name_from_endpoint(endpoint),
+        printer_endpoint=endpoint,
+        message=message,
+        metadata=event_metadata,
+    )
+
+
+def report_print_audit_event(audit_event, *, status, message="", metadata=None):
+    audit_event.status = status
+    if message:
+        audit_event.message = message
+    if metadata:
+        audit_event.metadata = {
+            **(audit_event.metadata or {}),
+            **metadata,
+        }
+    audit_event.save(update_fields=["status", "message", "metadata", "updated_at"])
+    return audit_event
+
+
+def print_audit_document_number(document_type, *, sale_order=None, purchase_order=None):
+    if document_type == PrintAuditEvent.DocumentType.SALE_ORDER and sale_order is not None:
+        return sale_order.receipt_number or str(sale_order.pk)
+    if (
+        document_type == PrintAuditEvent.DocumentType.PURCHASE_ORDER
+        and purchase_order is not None
+    ):
+        return purchase_order.order_number or str(purchase_order.pk)
+    return ""
+
+
+def printer_name_from_endpoint(endpoint):
+    if not isinstance(endpoint, dict):
+        return ""
+    for key in ("name", "printer_name", "address", "path"):
+        value = endpoint.get(key)
+        if value:
+            return str(value)
+    kind = endpoint.get("kind") or endpoint.get("transport")
+    return "" if kind is None else str(kind)
 
 
 def get_or_create_print_agent(identifier):

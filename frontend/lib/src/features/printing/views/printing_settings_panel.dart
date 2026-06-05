@@ -312,7 +312,7 @@ class _DiscoveredPrinterDropdown extends StatelessWidget {
                           Icon(_transportIcon(printer.kind), size: 20),
                           const SizedBox(width: 8),
                           Text(
-                            _printerLabel(printer),
+                            _printerLabel(printer, l10n),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -382,7 +382,7 @@ class _SelectedPrinterSummary extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final title = hasConfiguredPrinter
-        ? _printerLabel(endpoint)
+        ? _printerLabel(endpoint, l10n)
         : l10n.noSelectedPrinter;
     final details = hasConfiguredPrinter ? _endpointDetails(context) : '';
 
@@ -397,7 +397,7 @@ class _SelectedPrinterSummary extends StatelessWidget {
 
   String _endpointDetails(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    return switch (endpoint.kind) {
+    final transport = switch (endpoint.kind) {
       PrintTransportKind.serial =>
         '${l10n.printerTransportSerial} - ${endpoint.address}',
       PrintTransportKind.bluetooth =>
@@ -406,8 +406,16 @@ class _SelectedPrinterSummary extends StatelessWidget {
         endpoint.address.isEmpty
             ? l10n.printerTransportWifi
             : '${l10n.printerTransportWifi} - ${endpoint.address}:${endpoint.port}',
+      PrintTransportKind.system =>
+        endpoint.address.isEmpty
+            ? l10n.printerTransportSystem
+            : '${l10n.printerTransportSystem} - ${endpoint.address}',
       PrintTransportKind.fake => l10n.printerTransportFake,
     };
+    final outputMode = endpoint.usesDocumentInvoice
+        ? l10n.printerOutputA4Pdf
+        : l10n.printerOutputThermalReceipt;
+    return '$transport\n$outputMode';
   }
 }
 
@@ -488,15 +496,20 @@ class _PrinterTestMessage extends StatelessWidget {
 }
 
 String _endpointKey(PrinterEndpoint endpoint) {
-  return '${endpoint.kind.name}:${endpoint.address}:${endpoint.port}';
+  return '${endpoint.kind.name}:${endpoint.outputMode.name}:${endpoint.address}:${endpoint.port}';
 }
 
-String _printerLabel(PrinterEndpoint printer) {
-  final name = printer.name.trim().isEmpty ? printer.address : printer.name;
+String _printerLabel(PrinterEndpoint printer, AppLocalizations l10n) {
+  final name = printer.name.trim().isEmpty
+      ? printer.kind == PrintTransportKind.system
+            ? l10n.systemDefaultPrinterLabel
+            : printer.address
+      : printer.name;
   final details = switch (printer.kind) {
     PrintTransportKind.serial => printer.address,
     PrintTransportKind.bluetooth => printer.address,
     PrintTransportKind.wifi => '${printer.address}:${printer.port}',
+    PrintTransportKind.system => printer.address,
     PrintTransportKind.fake => printer.address,
   };
   if (details.isEmpty || details == name) {
@@ -510,6 +523,7 @@ IconData _transportIcon(PrintTransportKind kind) {
     PrintTransportKind.serial => Icons.usb_outlined,
     PrintTransportKind.bluetooth => Icons.bluetooth_outlined,
     PrintTransportKind.wifi => Icons.wifi_outlined,
+    PrintTransportKind.system => Icons.print_outlined,
     PrintTransportKind.fake => Icons.science_outlined,
   };
 }

@@ -16,8 +16,16 @@ from apps.core.roles import CASHIER_GROUP, MANAGER_GROUP, ensure_role_groups
 from apps.discounts.models import DiscountRule
 from apps.inventory.models import StockItem
 from apps.payments.models import Payment
+from apps.purchasing.models import PurchaseOrder, Supplier
 from apps.sales.models import Order
-from .models import PrintAgent, PrintJob, PrintJobEvent, PrintTemplate, PrintTemplateVersion
+from .models import (
+    PrintAgent,
+    PrintAuditEvent,
+    PrintJob,
+    PrintJobEvent,
+    PrintTemplate,
+    PrintTemplateVersion,
+)
 from .services import enqueue_receipt_print_job, publish_template_version
 
 
@@ -55,6 +63,28 @@ class PrintingTestMixin:
             payload={"order": {"receipt_number": "R-TEST"}},
             idempotency_key="manual:test",
         )
+
+    def create_paid_sale_order(self):
+        ShopSettings.load()
+        product = create_product_with_default_variant(
+            sku=f"PRINT-{ProductVariant.objects.count() + 1}",
+            name="قهوة",
+            unit_price=Decimal("3.00"),
+        )
+        variant = product.default_variant
+        StockItem.objects.create(variant=variant, quantity_on_hand=5)
+        self.cashier_client.post(
+            reverse("register-session-start"),
+            {"opening_cash": "0.00"},
+            format="json",
+        )
+        response = self.cashier_client.post(
+            reverse("order-checkout"),
+            {"lines": [{"variant": variant.pk, "quantity": 1}]},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        return Order.objects.get(pk=response.data["id"])
 
 
 class ReceiptAutoPrintTests(PrintingTestMixin, TestCase):
@@ -414,6 +444,136 @@ class PrintJobAgentApiTests(PrintingTestMixin, TestCase):
         self.assertTrue(
             PrintAgent.objects.filter(identifier="pointy-local-agent").exists()
         )
+
+    def test_print_job_report_creates_document_audit_event(self):
+        order = self.create_paid_sale_order()
+        job = PrintJob.objects.create(
+            job_type=PrintJob.Type.RECEIPT,
+            template_version=self.create_published_template_version(),
+            payload={"order": {"receipt_number": order.receipt_number}},
+            idempotency_key="manual:audited-sale",
+            order=order,
+        )
+
+        self.cashier_client.post(
+            reverse("printjob-claim-next"),
+            {
+                "agent_id": "front-counter",
+                "printer_endpoint": {
+                    "kind": "serial",
+                    "name": "Counter printer",
+                    "address": "/dev/tty.usbserial",
+                },
+            },
+            format="json",
+        )
+        report_response = self.cashier_client.post(
+            reverse("printjob-report", args=[job.pk]),
+            {
+                "agent_id": "front-counter",
+                "status": "completed",
+                "printer_endpoint": {
+                    "kind": "serial",
+                    "name": "Counter printer",
+                    "address": "/dev/tty.usbserial",
+                },
+            },
+            format="json",
+        )
+
+        self.assertEqual(report_response.status_code, status.HTTP_200_OK)
+        audit_event = PrintAuditEvent.objects.get(print_job=job)
+        self.assertEqual(audit_event.document_type, PrintAuditEvent.DocumentType.SALE_ORDER)
+        self.assertEqual(audit_event.action, PrintAuditEvent.Action.PRINT)
+        self.assertEqual(audit_event.status, PrintAuditEvent.Status.COMPLETED)
+        self.assertEqual(audit_event.sale_order, order)
+        self.assertEqual(audit_event.document_number, order.receipt_number)
+        self.assertEqual(audit_event.user, self.cashier)
+        self.assertEqual(audit_event.agent_identifier, "front-counter")
+        self.assertEqual(audit_event.printer_name, "Counter printer")
+
+    def test_sale_document_share_can_be_recorded_and_reported(self):
+        order = self.create_paid_sale_order()
+
+        record_response = self.cashier_client.post(
+            reverse("printauditevent-record"),
+            {
+                "document_type": PrintAuditEvent.DocumentType.SALE_ORDER,
+                "document_id": order.pk,
+                "action": PrintAuditEvent.Action.SHARE,
+                "agent_id": "cashier-device",
+                "printer_endpoint": {
+                    "kind": "system",
+                    "name": "PDF share",
+                    "output_mode": "pdfA4",
+                },
+                "metadata": {"delivery_channel": "native_share_sheet"},
+            },
+            format="json",
+        )
+        report_response = self.cashier_client.post(
+            reverse("printauditevent-report", args=[record_response.data["id"]]),
+            {
+                "status": PrintAuditEvent.Status.COMPLETED,
+                "message": "PDF shared.",
+            },
+            format="json",
+        )
+        list_response = self.cashier_client.get(
+            reverse("printauditevent-list"),
+            {
+                "document_type": PrintAuditEvent.DocumentType.SALE_ORDER,
+                "sale_order": order.pk,
+            },
+        )
+
+        self.assertEqual(record_response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(record_response.data["status"], PrintAuditEvent.Status.REQUESTED)
+        self.assertEqual(report_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(report_response.data["status"], PrintAuditEvent.Status.COMPLETED)
+        self.assertEqual(list_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(list_response.data["results"][0]["id"], record_response.data["id"])
+        self.assertEqual(PrintAuditEvent.objects.get().user, self.cashier)
+
+    def test_purchase_document_audit_requires_purchase_visibility(self):
+        supplier = Supplier.objects.create(name="مورد")
+        purchase_order = PurchaseOrder.objects.create(
+            supplier=supplier,
+            status=PurchaseOrder.Status.RECEIVED,
+            total=Decimal("12.00"),
+        )
+
+        cashier_response = self.cashier_client.post(
+            reverse("printauditevent-record"),
+            {
+                "document_type": PrintAuditEvent.DocumentType.PURCHASE_ORDER,
+                "document_id": purchase_order.pk,
+                "action": PrintAuditEvent.Action.PRINT,
+                "status": PrintAuditEvent.Status.COMPLETED,
+            },
+            format="json",
+        )
+        manager_response = self.manager_client.post(
+            reverse("printauditevent-record"),
+            {
+                "document_type": PrintAuditEvent.DocumentType.PURCHASE_ORDER,
+                "document_id": purchase_order.pk,
+                "action": PrintAuditEvent.Action.PRINT,
+                "status": PrintAuditEvent.Status.COMPLETED,
+                "agent_id": "office-device",
+            },
+            format="json",
+        )
+
+        self.assertEqual(cashier_response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(manager_response.status_code, status.HTTP_201_CREATED)
+        audit_event = PrintAuditEvent.objects.get()
+        self.assertEqual(
+            audit_event.document_type,
+            PrintAuditEvent.DocumentType.PURCHASE_ORDER,
+        )
+        self.assertEqual(audit_event.purchase_order, purchase_order)
+        self.assertEqual(audit_event.document_number, purchase_order.order_number)
 
     def test_order_reprint_endpoint_queues_manual_receipt_job(self):
         ShopSettings.load()

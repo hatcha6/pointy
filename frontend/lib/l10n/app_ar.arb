@@ -1563,7 +1563,11 @@
   "printerTransportSerial": "تسلسلي",
   "printerTransportBluetooth": "بلوتوث",
   "printerTransportWifi": "شبكة",
+  "printerTransportSystem": "طابعة النظام",
   "printerTransportFake": "محاكاة",
+  "printerOutputThermalReceipt": "إخراج حراري ESC/POS",
+  "printerOutputA4Pdf": "إخراج PDF بحجم A4",
+  "systemDefaultPrinterLabel": "طابعة النظام الافتراضية",
   "posReceiptPrinterRoleTitle": "إيصال نقطة البيع",
   "posReceiptPrinterRoleDescription": "الطابعة الافتراضية لفواتير البيع وإعادة الطباعة من شاشة نقطة البيع.",
   "configurePrinterRoleButton": "اختيار طابعة الإيصال",
@@ -2094,6 +2098,31 @@
   "purchaseOrderAdjustmentCreditLabel": "رصيد من المرتجعات",
   "purchaseOrderBalanceDueLabel": "المتبقي للمورد",
   "purchaseOrderActionsTitle": "إجراءات الحالة",
+  "purchaseOrderPrintAction": "طباعة",
+  "purchaseOrderPrintInProgressAction": "جار الطباعة...",
+  "purchaseOrderShareAction": "مشاركة PDF",
+  "purchaseOrderShareInProgressAction": "جار تجهيز PDF...",
+  "purchaseOrderRowActionsTooltip": "إجراءات أمر الشراء",
+  "purchaseOrderPrintSuccess": "تم إرسال أمر الشراء رقم {orderNumber} للطابعة.",
+  "@purchaseOrderPrintSuccess": {
+    "description": "Message shown after a purchase order is sent to the printer.",
+    "placeholders": {
+      "orderNumber": {
+        "type": "String"
+      }
+    }
+  },
+  "purchaseOrderPrintError": "تعذرت طباعة أمر الشراء. راجع الطابعة وحاول مرة أخرى.",
+  "purchaseOrderShareSuccess": "تم تجهيز ملف PDF لأمر الشراء رقم {orderNumber}.",
+  "@purchaseOrderShareSuccess": {
+    "description": "Message shown after a purchase order PDF is shared or saved.",
+    "placeholders": {
+      "orderNumber": {
+        "type": "String"
+      }
+    }
+  },
+  "purchaseOrderShareError": "تعذر تجهيز ملف PDF لأمر الشراء.",
   "submitPurchaseOrderAction": "إرسال",
   "receivePurchaseOrderAction": "تحديد كمستلم",
   "receivePurchaseLinesAction": "استلام كميات",
@@ -2793,6 +2822,9 @@
   },
   "receiptToggleSubtitle": "سيتم إرسال الفاتورة إلى الطابعة بعد إتمام الدفع.",
   "receiptToggleTooltip": "تبديل طباعة الفاتورة",
+  "shareInvoiceAfterPaymentLabel": "مشاركة PDF بعد الدفع",
+  "shareInvoiceToggleSubtitle": "سيتم فتح ورقة المشاركة على الجوال أو نافذة الحفظ على سطح المكتب.",
+  "shareInvoiceToggleTooltip": "تبديل مشاركة ملف PDF للفاتورة",
   "paidAmountLabel": "المدفوع",
   "remainingAmountLabel": "المتبقي",
   "changeDueLabel": "الباقي للعميل",
@@ -2812,6 +2844,8 @@
   },
   "invoicePrintSuccess": "تم إرسال الفاتورة للطابعة.",
   "invoicePrintError": "تم تسجيل البيع، لكن تعذرت طباعة الفاتورة.",
+  "invoiceShareSuccess": "تم تجهيز ملف PDF للفاتورة.",
+  "invoiceShareError": "تعذر تجهيز ملف PDF للفاتورة.",
   "invoiceProfitLabel": "الربح",
   "invoiceProfitValue": "الربح {amount}",
   "@invoiceProfitValue": {
@@ -3053,9 +3087,12 @@
   "invoiceOrderingTotalDesc": "الإجمالي: من الأعلى إلى الأقل",
   "invoiceOrderingReceiptNumber": "رقم الفاتورة",
   "invoiceReprintButton": "إعادة طباعة الفاتورة",
-  "invoiceReprintInProgressButton": "جار طلب الطباعة...",
-  "invoiceReprintQueuedMessage": "تم إرسال طلب إعادة طباعة الفاتورة.",
-  "invoiceReprintError": "تعذر إرسال طلب إعادة طباعة الفاتورة.",
+  "invoiceReprintInProgressButton": "جار الطباعة...",
+  "invoiceReprintQueuedMessage": "تم إرسال الفاتورة للطابعة.",
+  "invoiceReprintError": "تعذرت طباعة الفاتورة.",
+  "invoiceShareButton": "مشاركة PDF",
+  "invoiceShareInProgressButton": "جار تجهيز PDF...",
+  "invoiceRowActionsTooltip": "إجراءات الفاتورة",
   "saleReceiptFallback": "بدون رقم",
   "saleReceiptTitle": "إيصال {receiptNumber}",
   "@saleReceiptTitle": {
@@ -3066,6 +3103,10 @@
       }
     }
   },
+  "saleReceiptShareButton": "مشاركة PDF",
+  "saleReceiptShareInProgressButton": "جار تجهيز PDF...",
+  "saleReceiptShareSuccess": "تم تجهيز ملف PDF للإيصال.",
+  "saleReceiptShareError": "تعذر تجهيز ملف PDF للإيصال.",
   "saleProductFallback": "منتج رقم {productId}",
   "@saleProductFallback": {
     "description": "Fallback product label in a sale line.",
@@ -3449,5 +3490,114 @@
       }
     }
   },
+  "printAuditButton": "سجل الطباعة والمشاركة",
+  "printAuditSheetTitle": "سجل الطباعة والمشاركة {documentNumber}",
+  "@printAuditSheetTitle": {
+    "description": "Print/share audit sheet title.",
+    "placeholders": {
+      "documentNumber": {
+        "type": "String"
+      }
+    }
+  },
+  "printAuditRefreshTooltip": "تحديث سجل الطباعة والمشاركة",
+  "printAuditLoading": "جار تحميل سجل الطباعة والمشاركة...",
+  "printAuditLoadError": "تعذر تحميل سجل الطباعة والمشاركة.",
+  "printAuditEmptyTitle": "لا توجد عمليات مسجلة",
+  "printAuditEmptyMessage": "ستظهر هنا عمليات الطباعة والمشاركة التي تمر عبر الخادم.",
+  "printAuditEventTitle": "{action} - {status}",
+  "@printAuditEventTitle": {
+    "description": "Print audit event row title.",
+    "placeholders": {
+      "action": {
+        "type": "String"
+      },
+      "status": {
+        "type": "String"
+      }
+    }
+  },
+  "printAuditActionPrint": "طباعة",
+  "printAuditActionShare": "مشاركة PDF",
+  "printAuditStatusRequested": "قيد الطلب",
+  "printAuditStatusCompleted": "مكتمل",
+  "printAuditStatusCanceled": "ملغى",
+  "printAuditStatusFailed": "فشل",
+  "printAuditUnknownActor": "مستخدم غير معروف",
+  "printAuditTimeValue": "الوقت {time}",
+  "@printAuditTimeValue": {
+    "description": "Print audit event time.",
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "printAuditActorValue": "المنفذ {actor}",
+  "@printAuditActorValue": {
+    "description": "Print audit event actor.",
+    "placeholders": {
+      "actor": {
+        "type": "String"
+      }
+    }
+  },
+  "printAuditDeviceValue": "الجهاز {device}",
+  "@printAuditDeviceValue": {
+    "description": "Print audit event device.",
+    "placeholders": {
+      "device": {
+        "type": "String"
+      }
+    }
+  },
+  "printAuditPrinterValue": "الطابعة {printer}",
+  "@printAuditPrinterValue": {
+    "description": "Print audit event printer.",
+    "placeholders": {
+      "printer": {
+        "type": "String"
+      }
+    }
+  },
+  "printAuditChannelValue": "القناة {channel}",
+  "@printAuditChannelValue": {
+    "description": "Print audit event delivery channel.",
+    "placeholders": {
+      "channel": {
+        "type": "String"
+      }
+    }
+  },
+  "printAuditEndpointValue": "نقطة الاتصال {endpoint}",
+  "@printAuditEndpointValue": {
+    "description": "Print audit event printer endpoint.",
+    "placeholders": {
+      "endpoint": {
+        "type": "String"
+      }
+    }
+  },
+  "printAuditJobValue": "مهمة الطباعة #{jobId}",
+  "@printAuditJobValue": {
+    "description": "Print job id in audit event.",
+    "placeholders": {
+      "jobId": {
+        "type": "int"
+      }
+    }
+  },
+  "printAuditMessageValue": "الرسالة {message}",
+  "@printAuditMessageValue": {
+    "description": "Print audit event message.",
+    "placeholders": {
+      "message": {
+        "type": "String"
+      }
+    }
+  },
+  "printAuditChannelNativeShare": "ورقة المشاركة",
+  "printAuditChannelFileSave": "حفظ ملف",
+  "printAuditChannelBrowserDownload": "تنزيل المتصفح",
   "confirmButton": "تأكيد"
 }

@@ -24,6 +24,7 @@ import '../../../data/repositories/printing_repository.dart';
 import '../../../data/repositories/register_session_repository.dart';
 import '../../../data/repositories/sale_repository.dart';
 import '../../../data/repositories/shop_settings_repository.dart';
+import '../../../data/services/order_document_service.dart';
 
 part 'pos_cart_actions.dart';
 part 'pos_catalog_actions.dart';
@@ -99,6 +100,7 @@ class PosViewModel extends ChangeNotifier {
   bool _isCheckingOut = false;
   BarcodeScanStatus _barcodeScanStatus = BarcodeScanStatus.idle;
   bool _printInvoiceAfterPayment = false;
+  bool _shareInvoiceAfterPayment = false;
   Customer? _selectedCustomer;
   bool _hasMoreProducts = true;
   int _nextProductPage = 1;
@@ -137,6 +139,7 @@ class PosViewModel extends ChangeNotifier {
   bool get isResolvingBarcode =>
       _barcodeScanStatus == BarcodeScanStatus.resolving;
   bool get printInvoiceAfterPayment => _printInvoiceAfterPayment;
+  bool get shareInvoiceAfterPayment => _shareInvoiceAfterPayment;
   Customer? get selectedCustomer => _selectedCustomer;
   bool get hasMoreProducts => _hasMoreProducts;
   String? get errorMessage => _errorMessage;
@@ -162,6 +165,7 @@ class PosViewModel extends ChangeNotifier {
       _checkoutSettings?.preventSellingAtLoss ?? true;
   bool get shouldShowPrintInvoiceCheckbox =>
       _checkoutSettings != null && !_checkoutSettings!.autoPrintReceipts;
+  bool get shouldShowShareInvoiceCheckbox => shouldShowPrintInvoiceCheckbox;
   bool get enableCashPayments => _checkoutSettings?.enableCashPayments ?? true;
   bool get enableCardPayments => _checkoutSettings?.enableCardPayments ?? true;
   bool get enableTransferPayments =>
@@ -217,10 +221,12 @@ class PosViewModel extends ChangeNotifier {
         _checkoutSettings = result.value;
         if (result.value.autoPrintReceipts) {
           _printInvoiceAfterPayment = false;
+          _shareInvoiceAfterPayment = false;
         }
       case Error<ShopSettings>():
         _checkoutSettings = null;
         _printInvoiceAfterPayment = false;
+        _shareInvoiceAfterPayment = false;
         _hasCheckoutSettingsError = true;
     }
 
@@ -236,6 +242,23 @@ class PosViewModel extends ChangeNotifier {
     }
     _printInvoiceAfterPayment = value;
     _notifyChanged();
+  }
+
+  void updateShareInvoiceAfterPayment(bool value) {
+    if (!shouldShowShareInvoiceCheckbox ||
+        _isCheckingOut ||
+        value == _shareInvoiceAfterPayment) {
+      return;
+    }
+    _shareInvoiceAfterPayment = value;
+    _notifyChanged();
+  }
+
+  Future<OrderDocumentActionStatus> sharePaidInvoice(SaleOrder order) {
+    return _printingRepository.shareSaleInvoice(
+      order: order,
+      shopSettings: _checkoutSettings,
+    );
   }
 
   void selectCustomer(Customer? customer) {

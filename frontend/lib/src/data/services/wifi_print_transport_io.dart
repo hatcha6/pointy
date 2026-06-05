@@ -141,6 +141,7 @@ class WifiPrintTransport extends PrintTransport {
         final addresses = await _resolveHost(client, srv.target);
         if (addresses.isEmpty) {
           endpoints['${srv.target}:${srv.port}'] = _endpointFromService(
+            serviceType: serviceType,
             name: ptr.domainName,
             host: srv.target,
             port: _printerPort(srv.port),
@@ -148,6 +149,7 @@ class WifiPrintTransport extends PrintTransport {
         } else {
           for (final address in addresses) {
             endpoints['${address.address}:${srv.port}'] = _endpointFromService(
+              serviceType: serviceType,
               name: ptr.domainName,
               host: address.address,
               port: _printerPort(srv.port),
@@ -173,15 +175,21 @@ class WifiPrintTransport extends PrintTransport {
   }
 
   PrinterEndpoint _endpointFromService({
+    required String serviceType,
     required String name,
     required String host,
     required int port,
   }) {
+    final isDocumentPrinter =
+        serviceType.contains('_ipp') || serviceType.contains('_printer');
     return PrinterEndpoint(
       kind: PrintTransportKind.wifi,
       name: _cleanServiceName(name),
       address: host,
       port: port,
+      outputMode: isDocumentPrinter
+          ? PrinterOutputMode.pdfA4
+          : PrinterOutputMode.escPos,
     );
   }
 

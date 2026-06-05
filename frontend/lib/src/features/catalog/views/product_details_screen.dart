@@ -8,6 +8,7 @@ import '../../../data/models/product_variant.dart';
 import '../../../data/repositories/inventory_repository.dart';
 import '../../../data/repositories/printing_repository.dart';
 import '../../../data/repositories/purchase_repository.dart';
+import '../../../data/repositories/shop_settings_repository.dart';
 import '../../../shared/authorization_guards.dart';
 import '../../../shared/components/components.dart';
 import '../../../shared/formatters.dart';
@@ -29,6 +30,7 @@ class ProductDetailsScreen extends StatelessWidget {
     required this.inventoryRepository,
     required this.printingRepository,
     required this.purchaseRepository,
+    required this.shopSettingsRepository,
     required this.capabilities,
     this.analyticsEngine,
     this.onChanged,
@@ -38,6 +40,7 @@ class ProductDetailsScreen extends StatelessWidget {
   final InventoryRepository inventoryRepository;
   final PrintingRepository printingRepository;
   final PurchaseRepository purchaseRepository;
+  final ShopSettingsRepository shopSettingsRepository;
   final AuthorizationCapabilities capabilities;
   final AnalyticsEngine? analyticsEngine;
   final VoidCallback? onChanged;
@@ -104,6 +107,8 @@ class ProductDetailsScreen extends StatelessWidget {
                   ProductDocumentHistorySection(
                     viewModel: viewModel,
                     purchaseRepository: purchaseRepository,
+                    printingRepository: printingRepository,
+                    shopSettingsRepository: shopSettingsRepository,
                     capabilities: capabilities,
                   ),
                 ],

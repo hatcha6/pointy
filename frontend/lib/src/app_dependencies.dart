@@ -170,7 +170,11 @@ class PointyAppDependencies {
       );
 
   InvoiceListViewModel get invoiceListViewModel =>
-      _invoiceListViewModel ??= InvoiceListViewModel(saleRepository);
+      _invoiceListViewModel ??= InvoiceListViewModel(
+        saleRepository,
+        printingRepository,
+        shopSettingsRepository,
+      );
 
   PurchaseViewModel get purchaseViewModel =>
       _purchaseViewModel ??= PurchaseViewModel(
@@ -182,6 +186,8 @@ class PointyAppDependencies {
   PurchaseOrderListViewModel get purchaseOrderListViewModel =>
       _purchaseOrderListViewModel ??= PurchaseOrderListViewModel(
         purchaseRepository,
+        printingRepository,
+        shopSettingsRepository,
       );
 
   void handleAuthChanged() {

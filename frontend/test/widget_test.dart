@@ -26,6 +26,7 @@ import 'package:pointy_frontend/src/data/repositories/device_settings_repository
 import 'package:pointy_frontend/src/data/repositories/printing_repository.dart';
 import 'package:pointy_frontend/src/data/repositories/inventory_repository.dart';
 import 'package:pointy_frontend/src/data/repositories/purchase_repository.dart';
+import 'package:pointy_frontend/src/data/repositories/shop_settings_repository.dart';
 import 'package:pointy_frontend/src/data/repositories/user_repository.dart';
 import 'package:pointy_frontend/src/data/services/esc_pos_barcode_label_encoder.dart';
 import 'package:pointy_frontend/src/data/services/esc_pos_receipt_encoder.dart';
@@ -71,10 +72,17 @@ void main() {
       expect(endpoint.paperWidthMm, 58);
       expect(endpoint.codeTable, 'CP1256');
       expect(endpoint.timeoutMs, 3000);
+      expect(endpoint.outputMode, PrinterOutputMode.escPos);
       expect(
         PrinterEndpoint.fromJson({'kind': 'bluetooth'}).kind,
         PrintTransportKind.bluetooth,
       );
+      final systemPrinter = PrinterEndpoint.fromJson({
+        'kind': 'system',
+        'output_mode': 'pdf_a4',
+      });
+      expect(systemPrinter.kind, PrintTransportKind.system);
+      expect(systemPrinter.outputMode, PrinterOutputMode.pdfA4);
     },
   );
 
@@ -517,6 +525,9 @@ void main() {
           showPrintInvoiceToggle: false,
           printInvoiceAfterPayment: false,
           onPrintInvoiceChanged: (_) {},
+          showShareInvoiceToggle: false,
+          shareInvoiceAfterPayment: false,
+          onShareInvoiceChanged: (_) {},
           onSubmit: (submitted) => result = submitted,
           onCancel: () {},
         ),
@@ -1747,6 +1758,8 @@ void main() {
         supportedLocales: AppLocalizations.supportedLocales,
         home: PurchaseOrderDetailsScreen(
           purchaseRepository: repository,
+          printingRepository: PrintingRepository(_mockApiService()),
+          shopSettingsRepository: ShopSettingsRepository(_mockApiService()),
           initialOrder: PurchaseOrder.fromJson(
             _purchaseOrderJson(
               status: 'received',
@@ -1813,6 +1826,8 @@ void main() {
           supportedLocales: AppLocalizations.supportedLocales,
           home: PurchaseOrderDetailsScreen(
             purchaseRepository: repository,
+            printingRepository: PrintingRepository(_mockApiService()),
+            shopSettingsRepository: ShopSettingsRepository(_mockApiService()),
             initialOrder: PurchaseOrder.fromJson(
               _purchaseOrderJson(
                 status: 'received',
@@ -1861,6 +1876,8 @@ void main() {
         supportedLocales: AppLocalizations.supportedLocales,
         home: PurchaseOrderDetailsScreen(
           purchaseRepository: repository,
+          printingRepository: PrintingRepository(_mockApiService()),
+          shopSettingsRepository: ShopSettingsRepository(_mockApiService()),
           initialOrder: PurchaseOrder.fromJson(
             _purchaseOrderJson(
               status: 'received',
@@ -3285,6 +3302,8 @@ PosApiService _mockApiService({
   void Function(http.Request request)? onReturn,
   void Function(http.Request request)? onVoid,
   void Function(http.Request request)? onPrintJobReport,
+  void Function(http.Request request)? onPrintAuditRecord,
+  void Function(http.Request request)? onPrintAuditReport,
   void Function(http.Request request)? onStockMovement,
   void Function(int page)? onOrderPage,
   void Function(http.Request request)? onShopSettingsUpdate,
@@ -4257,6 +4276,32 @@ PosApiService _mockApiService({
         return _jsonResponse(_printJobJson(status: 'printed'));
       }
 
+      if (path.endsWith('/print-audit-events/record/')) {
+        onPrintAuditRecord?.call(request);
+        final body = jsonDecode(request.body) as Map<String, Object?>;
+        return _jsonResponse(_printAuditEventJson(body));
+      }
+
+      if (RegExp(r'/print-audit-events/\d+/report/$').hasMatch(path)) {
+        onPrintAuditReport?.call(request);
+        final body = jsonDecode(request.body) as Map<String, Object?>;
+        return _jsonResponse(
+          _printAuditEventJson({
+            'status': body['status'] ?? 'completed',
+            'message': body['message'] ?? '',
+          }),
+        );
+      }
+
+      if (path.endsWith('/print-audit-events/')) {
+        return _jsonResponse({
+          'count': 0,
+          'next': null,
+          'previous': null,
+          'results': <Object?>[],
+        });
+      }
+
       return http.Response('not found', 404);
     }),
   );
@@ -5163,6 +5208,33 @@ Map<String, Object?> _printJobJson({String status = 'queued'}) {
     'payload': {'receipt_number': 'R-100'},
     'created_at': '2026-05-15T09:11:00Z',
     'updated_at': '2026-05-15T09:11:00Z',
+  };
+}
+
+Map<String, Object?> _printAuditEventJson(Map<String, Object?> body) {
+  final documentType = body['document_type']?.toString() ?? 'sale_order';
+  final documentId =
+      body['document_id'] ?? (documentType == 'sale_order' ? 100 : 77);
+  return {
+    'id': 701,
+    'document_type': documentType,
+    'action': body['action'] ?? 'print',
+    'status': body['status'] ?? 'requested',
+    'sale_order': documentType == 'sale_order' ? documentId : null,
+    'purchase_order': documentType == 'purchase_order' ? documentId : null,
+    'document_number': documentType == 'sale_order' ? 'R-100' : 'P-77',
+    'print_job': body['print_job'],
+    'user': 1,
+    'username': 'admin',
+    'agent': 1,
+    'agent_identifier': body['agent_id'] ?? 'pointy-local-agent',
+    'device_name': body['device_name'] ?? 'pointy-local-agent',
+    'printer_name': body['printer_name'] ?? 'محاكاة الطابعة',
+    'printer_endpoint': body['printer_endpoint'] ?? const <String, Object?>{},
+    'message': body['message'] ?? '',
+    'metadata': body['metadata'] ?? const <String, Object?>{},
+    'created_at': '2026-05-15T09:11:00Z',
+    'updated_at': '2026-05-15T09:12:00Z',
   };
 }
 

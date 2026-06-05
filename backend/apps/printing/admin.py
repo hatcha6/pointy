@@ -3,6 +3,7 @@ from django.contrib import admin
 from .models import (
     PrinterProfile,
     PrintAgent,
+    PrintAuditEvent,
     PrintJob,
     PrintJobEvent,
     PrintTemplate,
@@ -73,3 +74,26 @@ class PrintJobEventAdmin(admin.ModelAdmin):
     list_display = ("job", "event_type", "user", "agent", "created_at")
     list_filter = ("event_type",)
     search_fields = ("job__idempotency_key", "message")
+
+
+@admin.register(PrintAuditEvent)
+class PrintAuditEventAdmin(admin.ModelAdmin):
+    list_display = (
+        "document_number",
+        "document_type",
+        "action",
+        "status",
+        "user",
+        "agent_identifier",
+        "printer_name",
+        "created_at",
+    )
+    list_filter = ("document_type", "action", "status")
+    search_fields = (
+        "document_number",
+        "agent_identifier",
+        "device_name",
+        "printer_name",
+        "message",
+    )
+    readonly_fields = ("created_at", "updated_at")

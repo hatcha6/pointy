@@ -47,6 +47,8 @@ class EscPosReceiptEncoder {
     final order = _map(payload['order']);
     final shop = _map(payload['shop']);
     final receiptNumber = _string(order['receipt_number'], fallback: '-');
+    final documentTitle = _string(order['document_title'], fallback: 'إيصال');
+    final totalLabel = _string(order['total_label'], fallback: 'الإجمالي');
     final createdAt = _string(order['created_at'], fallback: '');
     final lines = _list(order['lines']);
 
@@ -83,7 +85,7 @@ class EscPosReceiptEncoder {
     bytes.addAll(
       _text(
         generator,
-        'إيصال: $receiptNumber',
+        '$documentTitle: $receiptNumber',
         styles: PosStyles(align: PosAlign.right, codeTable: codeTable),
       ),
     );
@@ -143,7 +145,7 @@ class EscPosReceiptEncoder {
     bytes.addAll(
       _text(
         generator,
-        'الإجمالي ${_money(order['total'])}',
+        '$totalLabel ${_money(order['total'])}',
         styles: PosStyles(
           align: PosAlign.right,
           bold: true,

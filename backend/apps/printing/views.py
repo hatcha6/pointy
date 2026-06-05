@@ -1,4 +1,5 @@
 from django.db import transaction
+from django.db.models import Q
 from django.utils import timezone
 from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
@@ -6,9 +7,11 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from apps.core.permissions import HasPointyPermission
+from apps.core.roles import user_is_manager
 from .models import (
     PrinterProfile,
     PrintAgent,
+    PrintAuditEvent,
     PrintJob,
     PrintJobEvent,
     PrintTemplate,
@@ -17,6 +20,9 @@ from .models import (
 from .serializers import (
     PrinterProfileSerializer,
     PrintAgentSerializer,
+    PrintAuditEventRecordSerializer,
+    PrintAuditEventReportSerializer,
+    PrintAuditEventSerializer,
     PrintJobAgentActionSerializer,
     PrintJobEventSerializer,
     PrintJobFailureSerializer,
@@ -108,6 +114,98 @@ class PrintAgentViewSet(viewsets.ModelViewSet):
     filterset_fields = ("printer_profile", "is_active")
     search_fields = ("name", "identifier")
     ordering_fields = ("name", "created_at", "updated_at", "last_seen_at")
+
+
+class PrintAuditEventViewSet(
+    mixins.ListModelMixin,
+    mixins.RetrieveModelMixin,
+    viewsets.GenericViewSet,
+):
+    serializer_class = PrintAuditEventSerializer
+    permission_classes = [IsAuthenticated, HasPointyPermission]
+    permission_map = {
+        "list": ("printing.view_printauditevent",),
+        "retrieve": ("printing.view_printauditevent",),
+        "record": ("printing.add_printauditevent",),
+        "report": ("printing.change_printauditevent",),
+    }
+    queryset = PrintAuditEvent.objects.select_related(
+        "sale_order",
+        "purchase_order",
+        "print_job",
+        "user",
+        "agent",
+    )
+    filterset_fields = (
+        "document_type",
+        "action",
+        "status",
+        "sale_order",
+        "purchase_order",
+        "print_job",
+        "agent",
+        "user",
+    )
+    search_fields = (
+        "document_number",
+        "agent_identifier",
+        "device_name",
+        "printer_name",
+        "message",
+    )
+    ordering_fields = ("created_at", "updated_at", "document_number")
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        user = self.request.user
+        if not user.has_perm("sales.view_order"):
+            queryset = queryset.exclude(
+                document_type=PrintAuditEvent.DocumentType.SALE_ORDER,
+            )
+        elif not user_is_manager(user):
+            queryset = queryset.filter(
+                ~Q(document_type=PrintAuditEvent.DocumentType.SALE_ORDER)
+                | Q(
+                    document_type=PrintAuditEvent.DocumentType.SALE_ORDER,
+                    sale_order__register_session__owner_key=(
+                        self._register_session_owner_key()
+                    ),
+                )
+            )
+        if not user.has_perm("purchasing.view_purchaseorder"):
+            queryset = queryset.exclude(
+                document_type=PrintAuditEvent.DocumentType.PURCHASE_ORDER,
+            )
+        return queryset
+
+    def _register_session_owner_key(self):
+        if self.request.user.is_authenticated:
+            return f"user:{self.request.user.pk}"
+        return "anonymous"
+
+    @action(detail=False, methods=["post"])
+    def record(self, request):
+        serializer = PrintAuditEventRecordSerializer(
+            data=request.data,
+            context=self.get_serializer_context(),
+        )
+        serializer.is_valid(raise_exception=True)
+        audit_event = serializer.save()
+        return Response(
+            self.get_serializer(audit_event).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+    @action(detail=True, methods=["post"])
+    def report(self, request, pk=None):
+        serializer = PrintAuditEventReportSerializer(
+            self.get_object(),
+            data=request.data,
+            context=self.get_serializer_context(),
+        )
+        serializer.is_valid(raise_exception=True)
+        audit_event = serializer.save()
+        return Response(self.get_serializer(audit_event).data)
 
 
 class PrintJobViewSet(
@@ -308,6 +406,12 @@ class PrintJobViewSet(
             user=request.user,
             agent=agent,
             message="Print job completed.",
+            metadata={
+                "printer_endpoint": serializer.validated_data.get(
+                    "printer_endpoint",
+                    {},
+                ),
+            },
         )
         return Response(self.get_serializer(job).data)
 
@@ -345,6 +449,12 @@ class PrintJobViewSet(
             user=request.user,
             agent=agent,
             message=job.error_message,
+            metadata={
+                "printer_endpoint": serializer.validated_data.get(
+                    "printer_endpoint",
+                    {},
+                ),
+            },
         )
         return Response(self.get_serializer(job).data)
 

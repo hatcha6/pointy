@@ -5,6 +5,7 @@ import '../../../core/authorization.dart';
 import '../../../data/models/sale_order.dart';
 import '../../../data/repositories/contact_repository.dart';
 import '../../../data/repositories/sale_repository.dart';
+import '../../../data/services/order_document_service.dart';
 import '../../../shared/authorization_guards.dart';
 import '../../../shared/contact_picker_sheet.dart';
 import '../../../shared/components/components.dart';
@@ -176,6 +177,23 @@ class PosCartPane extends StatelessWidget {
               ? l10n.saleCheckoutSuccess
               : l10n.saleCheckoutSuccessWithReceipt(receiptNumber)
         : l10n.saleCheckoutError;
+    if (outcome.isSuccess && payment.shareInvoiceAfterPayment) {
+      final order = outcome.order;
+      final shareStatus = order == null
+          ? OrderDocumentActionStatus.failed
+          : await viewModel.sharePaidInvoice(order);
+      if (!context.mounted) {
+        return;
+      }
+      message = switch (shareStatus) {
+        OrderDocumentActionStatus.completed =>
+          '$message ${l10n.invoiceShareSuccess}',
+        OrderDocumentActionStatus.failed =>
+          '$message ${l10n.invoiceShareError}',
+        OrderDocumentActionStatus.canceled => message,
+      };
+    }
+
     if (outcome.isSuccess) {
       message = switch (outcome.printStatus) {
         InvoicePrintStatus.printed => '$message ${l10n.invoicePrintSuccess}',
@@ -326,6 +344,9 @@ class PosCartPane extends StatelessWidget {
       showPrintInvoiceToggle: viewModel.shouldShowPrintInvoiceCheckbox,
       printInvoiceAfterPayment: viewModel.printInvoiceAfterPayment,
       onPrintInvoiceChanged: viewModel.updatePrintInvoiceAfterPayment,
+      showShareInvoiceToggle: viewModel.shouldShowShareInvoiceCheckbox,
+      shareInvoiceAfterPayment: viewModel.shareInvoiceAfterPayment,
+      onShareInvoiceChanged: viewModel.updateShareInvoiceAfterPayment,
     );
   }
 }

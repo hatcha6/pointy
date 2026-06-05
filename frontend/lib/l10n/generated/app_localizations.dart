@@ -4431,11 +4431,35 @@ abstract class AppLocalizations {
   /// **'شبكة'**
   String get printerTransportWifi;
 
+  /// No description provided for @printerTransportSystem.
+  ///
+  /// In ar, this message translates to:
+  /// **'طابعة النظام'**
+  String get printerTransportSystem;
+
   /// No description provided for @printerTransportFake.
   ///
   /// In ar, this message translates to:
   /// **'محاكاة'**
   String get printerTransportFake;
+
+  /// No description provided for @printerOutputThermalReceipt.
+  ///
+  /// In ar, this message translates to:
+  /// **'إخراج حراري ESC/POS'**
+  String get printerOutputThermalReceipt;
+
+  /// No description provided for @printerOutputA4Pdf.
+  ///
+  /// In ar, this message translates to:
+  /// **'إخراج PDF بحجم A4'**
+  String get printerOutputA4Pdf;
+
+  /// No description provided for @systemDefaultPrinterLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'طابعة النظام الافتراضية'**
+  String get systemDefaultPrinterLabel;
 
   /// No description provided for @posReceiptPrinterRoleTitle.
   ///
@@ -6459,6 +6483,60 @@ abstract class AppLocalizations {
   /// **'إجراءات الحالة'**
   String get purchaseOrderActionsTitle;
 
+  /// No description provided for @purchaseOrderPrintAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'طباعة'**
+  String get purchaseOrderPrintAction;
+
+  /// No description provided for @purchaseOrderPrintInProgressAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'جار الطباعة...'**
+  String get purchaseOrderPrintInProgressAction;
+
+  /// No description provided for @purchaseOrderShareAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'مشاركة PDF'**
+  String get purchaseOrderShareAction;
+
+  /// No description provided for @purchaseOrderShareInProgressAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'جار تجهيز PDF...'**
+  String get purchaseOrderShareInProgressAction;
+
+  /// No description provided for @purchaseOrderRowActionsTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'إجراءات أمر الشراء'**
+  String get purchaseOrderRowActionsTooltip;
+
+  /// Message shown after a purchase order is sent to the printer.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم إرسال أمر الشراء رقم {orderNumber} للطابعة.'**
+  String purchaseOrderPrintSuccess(String orderNumber);
+
+  /// No description provided for @purchaseOrderPrintError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذرت طباعة أمر الشراء. راجع الطابعة وحاول مرة أخرى.'**
+  String get purchaseOrderPrintError;
+
+  /// Message shown after a purchase order PDF is shared or saved.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم تجهيز ملف PDF لأمر الشراء رقم {orderNumber}.'**
+  String purchaseOrderShareSuccess(String orderNumber);
+
+  /// No description provided for @purchaseOrderShareError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر تجهيز ملف PDF لأمر الشراء.'**
+  String get purchaseOrderShareError;
+
   /// No description provided for @submitPurchaseOrderAction.
   ///
   /// In ar, this message translates to:
@@ -8071,6 +8149,24 @@ abstract class AppLocalizations {
   /// **'تبديل طباعة الفاتورة'**
   String get receiptToggleTooltip;
 
+  /// No description provided for @shareInvoiceAfterPaymentLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'مشاركة PDF بعد الدفع'**
+  String get shareInvoiceAfterPaymentLabel;
+
+  /// No description provided for @shareInvoiceToggleSubtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'سيتم فتح ورقة المشاركة على الجوال أو نافذة الحفظ على سطح المكتب.'**
+  String get shareInvoiceToggleSubtitle;
+
+  /// No description provided for @shareInvoiceToggleTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'تبديل مشاركة ملف PDF للفاتورة'**
+  String get shareInvoiceToggleTooltip;
+
   /// No description provided for @paidAmountLabel.
   ///
   /// In ar, this message translates to:
@@ -8136,6 +8232,18 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'تم تسجيل البيع، لكن تعذرت طباعة الفاتورة.'**
   String get invoicePrintError;
+
+  /// No description provided for @invoiceShareSuccess.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم تجهيز ملف PDF للفاتورة.'**
+  String get invoiceShareSuccess;
+
+  /// No description provided for @invoiceShareError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر تجهيز ملف PDF للفاتورة.'**
+  String get invoiceShareError;
 
   /// No description provided for @invoiceProfitLabel.
   ///
@@ -8860,20 +8968,38 @@ abstract class AppLocalizations {
   /// No description provided for @invoiceReprintInProgressButton.
   ///
   /// In ar, this message translates to:
-  /// **'جار طلب الطباعة...'**
+  /// **'جار الطباعة...'**
   String get invoiceReprintInProgressButton;
 
   /// No description provided for @invoiceReprintQueuedMessage.
   ///
   /// In ar, this message translates to:
-  /// **'تم إرسال طلب إعادة طباعة الفاتورة.'**
+  /// **'تم إرسال الفاتورة للطابعة.'**
   String get invoiceReprintQueuedMessage;
 
   /// No description provided for @invoiceReprintError.
   ///
   /// In ar, this message translates to:
-  /// **'تعذر إرسال طلب إعادة طباعة الفاتورة.'**
+  /// **'تعذرت طباعة الفاتورة.'**
   String get invoiceReprintError;
+
+  /// No description provided for @invoiceShareButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'مشاركة PDF'**
+  String get invoiceShareButton;
+
+  /// No description provided for @invoiceShareInProgressButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'جار تجهيز PDF...'**
+  String get invoiceShareInProgressButton;
+
+  /// No description provided for @invoiceRowActionsTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'إجراءات الفاتورة'**
+  String get invoiceRowActionsTooltip;
 
   /// No description provided for @saleReceiptFallback.
   ///
@@ -8886,6 +9012,30 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'إيصال {receiptNumber}'**
   String saleReceiptTitle(String receiptNumber);
+
+  /// No description provided for @saleReceiptShareButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'مشاركة PDF'**
+  String get saleReceiptShareButton;
+
+  /// No description provided for @saleReceiptShareInProgressButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'جار تجهيز PDF...'**
+  String get saleReceiptShareInProgressButton;
+
+  /// No description provided for @saleReceiptShareSuccess.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم تجهيز ملف PDF للإيصال.'**
+  String get saleReceiptShareSuccess;
+
+  /// No description provided for @saleReceiptShareError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر تجهيز ملف PDF للإيصال.'**
+  String get saleReceiptShareError;
 
   /// Fallback product label in a sale line.
   ///
@@ -9798,6 +9948,162 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'{count} موردين'**
   String discountSupplierConstraintSummary(int count);
+
+  /// No description provided for @printAuditButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'سجل الطباعة والمشاركة'**
+  String get printAuditButton;
+
+  /// Print/share audit sheet title.
+  ///
+  /// In ar, this message translates to:
+  /// **'سجل الطباعة والمشاركة {documentNumber}'**
+  String printAuditSheetTitle(String documentNumber);
+
+  /// No description provided for @printAuditRefreshTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحديث سجل الطباعة والمشاركة'**
+  String get printAuditRefreshTooltip;
+
+  /// No description provided for @printAuditLoading.
+  ///
+  /// In ar, this message translates to:
+  /// **'جار تحميل سجل الطباعة والمشاركة...'**
+  String get printAuditLoading;
+
+  /// No description provided for @printAuditLoadError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر تحميل سجل الطباعة والمشاركة.'**
+  String get printAuditLoadError;
+
+  /// No description provided for @printAuditEmptyTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد عمليات مسجلة'**
+  String get printAuditEmptyTitle;
+
+  /// No description provided for @printAuditEmptyMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'ستظهر هنا عمليات الطباعة والمشاركة التي تمر عبر الخادم.'**
+  String get printAuditEmptyMessage;
+
+  /// Print audit event row title.
+  ///
+  /// In ar, this message translates to:
+  /// **'{action} - {status}'**
+  String printAuditEventTitle(String action, String status);
+
+  /// No description provided for @printAuditActionPrint.
+  ///
+  /// In ar, this message translates to:
+  /// **'طباعة'**
+  String get printAuditActionPrint;
+
+  /// No description provided for @printAuditActionShare.
+  ///
+  /// In ar, this message translates to:
+  /// **'مشاركة PDF'**
+  String get printAuditActionShare;
+
+  /// No description provided for @printAuditStatusRequested.
+  ///
+  /// In ar, this message translates to:
+  /// **'قيد الطلب'**
+  String get printAuditStatusRequested;
+
+  /// No description provided for @printAuditStatusCompleted.
+  ///
+  /// In ar, this message translates to:
+  /// **'مكتمل'**
+  String get printAuditStatusCompleted;
+
+  /// No description provided for @printAuditStatusCanceled.
+  ///
+  /// In ar, this message translates to:
+  /// **'ملغى'**
+  String get printAuditStatusCanceled;
+
+  /// No description provided for @printAuditStatusFailed.
+  ///
+  /// In ar, this message translates to:
+  /// **'فشل'**
+  String get printAuditStatusFailed;
+
+  /// No description provided for @printAuditUnknownActor.
+  ///
+  /// In ar, this message translates to:
+  /// **'مستخدم غير معروف'**
+  String get printAuditUnknownActor;
+
+  /// Print audit event time.
+  ///
+  /// In ar, this message translates to:
+  /// **'الوقت {time}'**
+  String printAuditTimeValue(String time);
+
+  /// Print audit event actor.
+  ///
+  /// In ar, this message translates to:
+  /// **'المنفذ {actor}'**
+  String printAuditActorValue(String actor);
+
+  /// Print audit event device.
+  ///
+  /// In ar, this message translates to:
+  /// **'الجهاز {device}'**
+  String printAuditDeviceValue(String device);
+
+  /// Print audit event printer.
+  ///
+  /// In ar, this message translates to:
+  /// **'الطابعة {printer}'**
+  String printAuditPrinterValue(String printer);
+
+  /// Print audit event delivery channel.
+  ///
+  /// In ar, this message translates to:
+  /// **'القناة {channel}'**
+  String printAuditChannelValue(String channel);
+
+  /// Print audit event printer endpoint.
+  ///
+  /// In ar, this message translates to:
+  /// **'نقطة الاتصال {endpoint}'**
+  String printAuditEndpointValue(String endpoint);
+
+  /// Print job id in audit event.
+  ///
+  /// In ar, this message translates to:
+  /// **'مهمة الطباعة #{jobId}'**
+  String printAuditJobValue(int jobId);
+
+  /// Print audit event message.
+  ///
+  /// In ar, this message translates to:
+  /// **'الرسالة {message}'**
+  String printAuditMessageValue(String message);
+
+  /// No description provided for @printAuditChannelNativeShare.
+  ///
+  /// In ar, this message translates to:
+  /// **'ورقة المشاركة'**
+  String get printAuditChannelNativeShare;
+
+  /// No description provided for @printAuditChannelFileSave.
+  ///
+  /// In ar, this message translates to:
+  /// **'حفظ ملف'**
+  String get printAuditChannelFileSave;
+
+  /// No description provided for @printAuditChannelBrowserDownload.
+  ///
+  /// In ar, this message translates to:
+  /// **'تنزيل المتصفح'**
+  String get printAuditChannelBrowserDownload;
 
   /// No description provided for @confirmButton.
   ///

@@ -4,19 +4,28 @@ import '../../../core/analytics_audit.dart';
 import '../../../core/analytics_engine.dart';
 import '../../../core/result.dart';
 import '../../../data/models/analytics_event.dart';
-import '../../../data/models/print_job.dart';
 import '../../../data/models/sale_order.dart';
+import '../../../data/models/shop_settings.dart';
+import '../../../data/repositories/printing_repository.dart';
 import '../../../data/repositories/sale_repository.dart';
+import '../../../data/repositories/shop_settings_repository.dart';
+import '../../../data/services/order_document_service.dart';
 
 class InvoiceDetailsViewModel extends ChangeNotifier {
   InvoiceDetailsViewModel(
     this._saleRepository, {
+    required PrintingRepository printingRepository,
+    required ShopSettingsRepository shopSettingsRepository,
     required SaleOrder initialOrder,
     AnalyticsEngine? analyticsEngine,
-  }) : _order = initialOrder,
+  }) : _printingRepository = printingRepository,
+       _shopSettingsRepository = shopSettingsRepository,
+       _order = initialOrder,
        _analyticsEngine = analyticsEngine;
 
   final SaleRepository _saleRepository;
+  final PrintingRepository _printingRepository;
+  final ShopSettingsRepository _shopSettingsRepository;
   final AnalyticsEngine? _analyticsEngine;
 
   SaleOrder _order;
@@ -45,15 +54,27 @@ class InvoiceDetailsViewModel extends ChangeNotifier {
   }
 
   Future<bool> requestReprint(SaleOrder order) async {
-    final result = await _saleRepository.requestReprint(order.id);
-    switch (result) {
-      case Ok<PrintJob>(value: final printJob):
-        _trackReceiptReprintQueued(order, printJob);
-        return true;
-      case Error<PrintJob>():
-        _trackReceiptReprintFailed(order);
-        return false;
+    final result = await _printingRepository.printSaleInvoice(
+      order: order,
+      shopSettings: await _loadShopSettings(),
+    );
+    if (result.isSuccess) {
+      _trackReceiptReprintCompleted(order);
+      return true;
     }
+    _trackReceiptReprintFailed(order);
+    return false;
+  }
+
+  Future<OrderDocumentActionStatus> shareInvoice(SaleOrder order) async {
+    final status = await _printingRepository.shareSaleInvoice(
+      order: order,
+      shopSettings: await _loadShopSettings(),
+    );
+    if (status == OrderDocumentActionStatus.completed) {
+      _trackInvoiceShared(order);
+    }
+    return status;
   }
 
   Future<bool> voidInvoice(SaleOrder order, String reason) async {
@@ -117,17 +138,38 @@ class InvoiceDetailsViewModel extends ChangeNotifier {
     }
   }
 
-  void _trackReceiptReprintQueued(SaleOrder order, PrintJob printJob) {
+  Future<ShopSettings?> _loadShopSettings() async {
+    final result = await _shopSettingsRepository.loadSettings();
+    return switch (result) {
+      Ok<ShopSettings>(value: final settings) => settings,
+      Error<ShopSettings>() => null,
+    };
+  }
+
+  void _trackReceiptReprintCompleted(SaleOrder order) {
     trackAuditEvent(
       _analyticsEngine,
-      name: 'sales.receipt.reprint.queued',
+      name: 'sales.receipt.reprint.completed',
       sessionId: _orderSessionId(order),
       entityType: 'sale_order',
       entityId: order.id,
       attributes: {
         ..._orderAttributes(order),
-        'print_job_id': printJob.id,
-        'print_job_status': printJob.status.name,
+        'source': 'invoice_details_screen',
+      },
+      metrics: {'total': order.total, 'line_count': order.lines.length},
+    );
+  }
+
+  void _trackInvoiceShared(SaleOrder order) {
+    trackAuditEvent(
+      _analyticsEngine,
+      name: 'sales.invoice.pdf.shared',
+      sessionId: _orderSessionId(order),
+      entityType: 'sale_order',
+      entityId: order.id,
+      attributes: {
+        ..._orderAttributes(order),
         'source': 'invoice_details_screen',
       },
       metrics: {'total': order.total, 'line_count': order.lines.length},

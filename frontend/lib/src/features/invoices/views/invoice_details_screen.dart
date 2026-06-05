@@ -3,22 +3,30 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../core/analytics_engine.dart';
 import '../../../core/authorization.dart';
+import '../../../data/models/print_audit_event.dart';
 import '../../../data/models/sale_order.dart';
+import '../../../data/repositories/printing_repository.dart';
 import '../../../data/repositories/sale_repository.dart';
+import '../../../data/repositories/shop_settings_repository.dart';
 import '../../../shared/order/sale_order_details_content.dart';
 import '../../../shared/responsive/responsive.dart';
+import '../../printing/views/print_audit_sheet.dart';
 import '../view_models/invoice_details_view_model.dart';
 
 class InvoiceDetailsScreen extends StatefulWidget {
   const InvoiceDetailsScreen({
     super.key,
     required this.saleRepository,
+    required this.printingRepository,
+    required this.shopSettingsRepository,
     required this.initialOrder,
     required this.capabilities,
     this.analyticsEngine,
   });
 
   final SaleRepository saleRepository;
+  final PrintingRepository printingRepository;
+  final ShopSettingsRepository shopSettingsRepository;
   final SaleOrder initialOrder;
   final AuthorizationCapabilities capabilities;
   final AnalyticsEngine? analyticsEngine;
@@ -30,6 +38,8 @@ class InvoiceDetailsScreen extends StatefulWidget {
 class _InvoiceDetailsScreenState extends State<InvoiceDetailsScreen> {
   late final InvoiceDetailsViewModel _viewModel = InvoiceDetailsViewModel(
     widget.saleRepository,
+    printingRepository: widget.printingRepository,
+    shopSettingsRepository: widget.shopSettingsRepository,
     initialOrder: widget.initialOrder,
     analyticsEngine: widget.analyticsEngine,
   );
@@ -71,6 +81,8 @@ class _InvoiceDetailsScreenState extends State<InvoiceDetailsScreen> {
                       popOnSuccessfulAdjustment: false,
                       padding: const EdgeInsets.all(16),
                       onReprint: _viewModel.requestReprint,
+                      onShare: _viewModel.shareInvoice,
+                      onPrintAudit: () => _showPrintAudit(order),
                       onVoid: _canVoid(order) ? _viewModel.voidInvoice : null,
                       onReturn: _canReturn(order)
                           ? _viewModel.returnItems
@@ -103,5 +115,16 @@ class _InvoiceDetailsScreenState extends State<InvoiceDetailsScreen> {
       return l10n.saleReceiptFallback;
     }
     return receiptNumber;
+  }
+
+  Future<void> _showPrintAudit(SaleOrder order) {
+    final l10n = AppLocalizations.of(context)!;
+    return showPrintAuditSheet(
+      context: context,
+      printingRepository: widget.printingRepository,
+      documentType: PrintAuditDocumentType.saleOrder,
+      documentId: order.id,
+      documentNumber: _receiptNumber(l10n, order),
+    );
   }
 }

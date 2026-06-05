@@ -3,13 +3,18 @@ import 'package:flutter/services.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../core/authorization.dart';
+import '../../../data/models/print_audit_event.dart';
 import '../../../data/models/purchase_submission.dart';
+import '../../../data/repositories/printing_repository.dart';
 import '../../../data/repositories/purchase_repository.dart';
+import '../../../data/repositories/shop_settings_repository.dart';
+import '../../../data/services/order_document_service.dart';
 import '../../../shared/components/components.dart';
 import '../../../shared/date_formatters.dart';
 import '../../../shared/formatters.dart';
 import '../../../shared/order_totals.dart';
 import '../../../shared/responsive/responsive.dart';
+import '../../printing/views/print_audit_sheet.dart';
 import '../view_models/purchase_order_details_view_model.dart';
 import 'purchase_order_filter_sheet.dart';
 
@@ -22,11 +27,15 @@ class PurchaseOrderDetailsScreen extends StatefulWidget {
   const PurchaseOrderDetailsScreen({
     super.key,
     required this.purchaseRepository,
+    required this.printingRepository,
+    required this.shopSettingsRepository,
     required this.initialOrder,
     required this.capabilities,
   });
 
   final PurchaseRepository purchaseRepository;
+  final PrintingRepository printingRepository;
+  final ShopSettingsRepository shopSettingsRepository;
   final PurchaseOrder initialOrder;
   final AuthorizationCapabilities capabilities;
 
@@ -40,6 +49,8 @@ class _PurchaseOrderDetailsScreenState
   late final PurchaseOrderDetailsViewModel _viewModel =
       PurchaseOrderDetailsViewModel(
         widget.purchaseRepository,
+        printingRepository: widget.printingRepository,
+        shopSettingsRepository: widget.shopSettingsRepository,
         initialOrder: widget.initialOrder,
         capabilities: widget.capabilities,
       );
@@ -76,7 +87,10 @@ class _PurchaseOrderDetailsScreenState
           body: SafeArea(
             child: _viewModel.hasLoadError
                 ? Center(child: Text(l10n.purchaseOrderDetailsLoadError))
-                : _PurchaseOrderDetailsBody(viewModel: _viewModel),
+                : _PurchaseOrderDetailsBody(
+                    viewModel: _viewModel,
+                    printingRepository: widget.printingRepository,
+                  ),
           ),
         );
       },
@@ -85,9 +99,13 @@ class _PurchaseOrderDetailsScreenState
 }
 
 class _PurchaseOrderDetailsBody extends StatelessWidget {
-  const _PurchaseOrderDetailsBody({required this.viewModel});
+  const _PurchaseOrderDetailsBody({
+    required this.viewModel,
+    required this.printingRepository,
+  });
 
   final PurchaseOrderDetailsViewModel viewModel;
+  final PrintingRepository printingRepository;
 
   @override
   Widget build(BuildContext context) {
@@ -98,7 +116,10 @@ class _PurchaseOrderDetailsBody extends StatelessWidget {
       child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          _PurchaseOrderActions(viewModel: viewModel),
+          _PurchaseOrderActions(
+            viewModel: viewModel,
+            printingRepository: printingRepository,
+          ),
           const SizedBox(height: 12),
           _PurchaseOrderSummary(order: order),
           const SizedBox(height: 16),

@@ -5,6 +5,7 @@ import '../models/pos_user.dart';
 import '../models/analytics_export.dart';
 import '../models/analytics_event.dart';
 import '../models/business_alert.dart';
+import '../models/print_audit_event.dart';
 import '../models/print_job.dart';
 import '../models/printer_config.dart';
 import '../models/product.dart';
@@ -730,5 +731,28 @@ class PosApiService {
     required PrintJobReportDraft report,
   }) {
     return _printing.reportPrintJob(jobId: jobId, report: report);
+  }
+
+  Future<List<PrintAuditEvent>> fetchPrintAuditEvents({
+    required PrintAuditDocumentType documentType,
+    required int documentId,
+    int page = 1,
+  }) {
+    return _printing.fetchPrintAuditEvents(
+      documentType: documentType,
+      documentId: documentId,
+      page: page,
+    );
+  }
+
+  Future<PrintAuditEvent> recordPrintAuditEvent(PrintAuditEventDraft draft) {
+    return _printing.recordPrintAuditEvent(draft);
+  }
+
+  Future<PrintAuditEvent> reportPrintAuditEvent({
+    required int eventId,
+    required PrintAuditEventReportDraft report,
+  }) {
+    return _printing.reportPrintAuditEvent(eventId: eventId, report: report);
   }
 }
