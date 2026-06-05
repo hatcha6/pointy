@@ -91,9 +91,11 @@ class PurchaseOrderDetailsViewModel extends ChangeNotifier {
     _isPrinting = true;
     notifyListeners();
 
+    final shopSettings = await _loadShopSettings();
     final result = await _printingRepository.printPurchaseOrder(
       order: _order,
-      shopSettings: await _loadShopSettings(),
+      shopSettings: shopSettings,
+      shopLogoBytes: await _loadShopLogoBytes(shopSettings),
     );
 
     _isPrinting = false;
@@ -108,9 +110,11 @@ class PurchaseOrderDetailsViewModel extends ChangeNotifier {
     _isSharing = true;
     notifyListeners();
 
+    final shopSettings = await _loadShopSettings();
     final result = await _printingRepository.sharePurchaseOrder(
       order: _order,
-      shopSettings: await _loadShopSettings(),
+      shopSettings: shopSettings,
+      shopLogoBytes: await _loadShopLogoBytes(shopSettings),
     );
 
     _isSharing = false;
@@ -341,6 +345,14 @@ class PurchaseOrderDetailsViewModel extends ChangeNotifier {
     return switch (result) {
       Ok<ShopSettings>(value: final settings) => settings,
       Error<ShopSettings>() => null,
+    };
+  }
+
+  Future<Uint8List?> _loadShopLogoBytes(ShopSettings? settings) async {
+    final result = await _shopSettingsRepository.loadLogoBytes(settings);
+    return switch (result) {
+      Ok<Uint8List?>(value: final bytes) => bytes,
+      Error<Uint8List?>() => null,
     };
   }
 

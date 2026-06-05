@@ -54,9 +54,11 @@ class InvoiceDetailsViewModel extends ChangeNotifier {
   }
 
   Future<bool> requestReprint(SaleOrder order) async {
+    final shopSettings = await _loadShopSettings();
     final result = await _printingRepository.printSaleInvoice(
       order: order,
-      shopSettings: await _loadShopSettings(),
+      shopSettings: shopSettings,
+      shopLogoBytes: await _loadShopLogoBytes(shopSettings),
     );
     if (result.isSuccess) {
       _trackReceiptReprintCompleted(order);
@@ -67,9 +69,11 @@ class InvoiceDetailsViewModel extends ChangeNotifier {
   }
 
   Future<OrderDocumentActionStatus> shareInvoice(SaleOrder order) async {
+    final shopSettings = await _loadShopSettings();
     final status = await _printingRepository.shareSaleInvoice(
       order: order,
-      shopSettings: await _loadShopSettings(),
+      shopSettings: shopSettings,
+      shopLogoBytes: await _loadShopLogoBytes(shopSettings),
     );
     if (status == OrderDocumentActionStatus.completed) {
       _trackInvoiceShared(order);
@@ -143,6 +147,14 @@ class InvoiceDetailsViewModel extends ChangeNotifier {
     return switch (result) {
       Ok<ShopSettings>(value: final settings) => settings,
       Error<ShopSettings>() => null,
+    };
+  }
+
+  Future<Uint8List?> _loadShopLogoBytes(ShopSettings? settings) async {
+    final result = await _shopSettingsRepository.loadLogoBytes(settings);
+    return switch (result) {
+      Ok<Uint8List?>(value: final bytes) => bytes,
+      Error<Uint8List?>() => null,
     };
   }
 

@@ -29,11 +29,17 @@ BusinessReportPdfDocument buildBusinessReportPdfDocument({
         : l10n.appTitle,
     generatedAt: run.completedAt ?? run.createdAt,
     businessLogoBytes: shopLogoBytes,
+    businessHeader: _trimmedOrNull(shopSettings?.receiptHeader),
+    businessFooter: _trimmedOrNull(shopSettings?.receiptFooter),
     generatedBy: includePreparedBy ? currentUser.label : null,
     reference: run.checksum.isEmpty
-        ? 'RPT-${run.id}'
+        ? 'تقرير-${run.id}'
         : run.checksum.substring(0, 12),
     period: period,
+    shopSettingFields: _shopSettingFieldsForReport(
+      run.reportType,
+      shopSettings,
+    ),
     metrics: _metricsFromSummary(summary),
     sections: sections,
     auditTrail: includeAuditTrail
@@ -86,7 +92,7 @@ List<ReportPdfMetric> _metricsFromSummary(Map<String, Object?> summary) {
     for (final entry in summary.entries.take(8))
       ReportPdfMetric(
         label: _labelFor(entry.key),
-        value: _stringValue(entry.value),
+        value: _displayValueForKey(entry.key, entry.value),
       ),
   ];
 }
@@ -115,7 +121,7 @@ ReportPdfTable _tableFromSection(Map<String, Object?> section) {
       .map(
         (row) => [
           for (final column in (section['columns'] as List? ?? const []))
-            _stringValue(row[column.toString()]),
+            _displayValueForKey(column.toString(), row[column.toString()]),
         ],
       )
       .toList(growable: false);
@@ -138,6 +144,172 @@ DateTime? _dateOrNull(Object? value) {
     return null;
   }
   return DateTime.tryParse(value);
+}
+
+List<ReportPdfField> _shopSettingFieldsForReport(
+  ReportRunType type,
+  ShopSettings? settings,
+) {
+  if (settings == null) {
+    return const [];
+  }
+
+  return switch (type) {
+    ReportRunType.salesSummary => [
+      ReportPdfField(
+        label: 'منع البيع بخسارة',
+        value: _boolLabel(settings.preventSellingAtLoss),
+      ),
+      ReportPdfField(
+        label: 'نافذة إرجاع الكاشير',
+        value: '${settings.cashierReturnWindowHours} ساعة',
+      ),
+      ReportPdfField(
+        label: 'السماح بالبيع دون مخزون',
+        value: _boolLabel(settings.allowOverselling),
+      ),
+    ],
+    ReportRunType.paymentMethods => [
+      ReportPdfField(
+        label: 'طرق الدفع المفعلة',
+        value: _enabledPaymentMethods(settings),
+      ),
+      ReportPdfField(
+        label: 'إيصال البطاقة مطلوب',
+        value: _boolLabel(settings.requireCardPaymentReceipt),
+      ),
+      if (settings.enableCardPayments)
+        ReportPdfField(
+          label: 'عمولة البطاقة',
+          value: _formatPercent(settings.cardCommissionPercent),
+        ),
+      if (settings.enableTransferPayments)
+        ReportPdfField(
+          label: 'عمولة التحويل',
+          value: _formatPercent(settings.transferCommissionPercent),
+        ),
+      if (settings.trustedCardTerminalIds.isNotEmpty)
+        ReportPdfField(
+          label: 'محطات البطاقة المعتمدة',
+          value: settings.trustedCardTerminalIds.join('، '),
+        ),
+    ],
+    ReportRunType.registerClosure => [
+      ReportPdfField(
+        label: 'نقدية البداية مطلوبة',
+        value: _boolLabel(settings.requireOpeningCash),
+      ),
+      ReportPdfField(
+        label: 'الطباعة التلقائية للإيصالات',
+        value: _boolLabel(settings.autoPrintReceipts),
+      ),
+      ReportPdfField(
+        label: 'نافذة إرجاع الكاشير',
+        value: '${settings.cashierReturnWindowHours} ساعة',
+      ),
+    ],
+    ReportRunType.inventoryStatus || ReportRunType.stockMovements => [
+      ReportPdfField(
+        label: 'حد تنبيه المخزون المنخفض',
+        value: '${settings.lowStockThreshold}',
+      ),
+      ReportPdfField(
+        label: 'السماح بالبيع دون مخزون',
+        value: _boolLabel(settings.allowOverselling),
+      ),
+      ReportPdfField(
+        label: 'منع البيع بخسارة',
+        value: _boolLabel(settings.preventSellingAtLoss),
+      ),
+    ],
+    ReportRunType.purchasingSummary => [
+      ReportPdfField(
+        label: 'حد تنبيه المخزون المنخفض',
+        value: '${settings.lowStockThreshold}',
+      ),
+      if (settings.enableTransferPayments)
+        ReportPdfField(
+          label: 'عمولة التحويل',
+          value: _formatPercent(settings.transferCommissionPercent),
+        ),
+    ],
+  };
+}
+
+String? _trimmedOrNull(String? value) {
+  final trimmed = value?.trim() ?? '';
+  return trimmed.isEmpty ? null : trimmed;
+}
+
+String _enabledPaymentMethods(ShopSettings settings) {
+  final methods = [
+    if (settings.enableCashPayments) 'نقدًا',
+    if (settings.enableCardPayments) 'بطاقة',
+    if (settings.enableTransferPayments) 'تحويل',
+  ];
+  return methods.isEmpty ? 'لا توجد طرق دفع مفعلة' : methods.join('، ');
+}
+
+String _displayValueForKey(String key, Object? value) {
+  if (value == null || value == '') {
+    return '-';
+  }
+
+  final raw = value.toString();
+  final translatedValue = _valueLabel(raw);
+  if (translatedValue != null) {
+    return translatedValue;
+  }
+  if (value is bool) {
+    return _boolLabel(value);
+  }
+  if (_moneyKeys.contains(key)) {
+    return _formatMoney(raw);
+  }
+  if (_percentKeys.contains(key)) {
+    return _formatPercent(raw);
+  }
+  return _stringValue(value);
+}
+
+String _boolLabel(bool value) => value ? 'نعم' : 'لا';
+
+String? _valueLabel(String value) {
+  final normalized = value.trim();
+  if (normalized.isEmpty) {
+    return null;
+  }
+  return _arabicValueLabels[normalized];
+}
+
+String _formatMoney(Object? value) {
+  final normalized = value?.toString().trim() ?? '';
+  if (normalized.isEmpty) {
+    return '-';
+  }
+  if (normalized.contains('د.ل')) {
+    return normalized;
+  }
+  final amount = num.tryParse(normalized);
+  if (amount == null) {
+    return _compactCellValue(normalized);
+  }
+  return '${amount.toStringAsFixed(2)} د.ل';
+}
+
+String _formatPercent(Object? value) {
+  final normalized = value?.toString().trim() ?? '';
+  if (normalized.isEmpty) {
+    return '-';
+  }
+  if (normalized.endsWith('%')) {
+    return normalized;
+  }
+  final percent = num.tryParse(normalized);
+  if (percent == null) {
+    return _compactCellValue(normalized);
+  }
+  return '${percent.toStringAsFixed(2)}%';
 }
 
 String _stringValue(Object? value) {
@@ -171,8 +343,72 @@ String _compactCellValue(String value) {
 }
 
 String _labelFor(String key) {
-  return _arabicLabels[key] ?? key.replaceAll('_', ' ');
+  final label = _arabicLabels[key];
+  if (label != null) {
+    return label;
+  }
+  final fallback = key
+      .split('_')
+      .map((part) => _arabicLabelTokens[part])
+      .whereType<String>()
+      .join(' ');
+  return fallback.isEmpty ? 'بيان' : fallback;
 }
+
+const _moneyKeys = {
+  'gross_sales',
+  'discount_total',
+  'refund_total',
+  'net_sales',
+  'gross_profit',
+  'revenue',
+  'profit',
+  'total',
+  'payment_total',
+  'commission_total',
+  'commission',
+  'opening_cash',
+  'closing_cash',
+  'expected_cash',
+  'cash_variance',
+  'variance_total',
+  'retail_stock_value',
+  'retail_value',
+  'purchase_total',
+  'balance_due',
+  'payable_balance',
+  'credit_balance',
+  'net_balance',
+};
+
+const _percentKeys = {'profit_margin_percent'};
+
+const _arabicValueLabels = {
+  'open': 'مفتوحة',
+  'closed': 'مغلقة',
+  'paid': 'مدفوعة',
+  'void': 'ملغاة',
+  'voided': 'ملغاة',
+  'draft': 'مسودة',
+  'submitted': 'مرسلة',
+  'partial': 'مستلمة جزئيًا',
+  'partially_received': 'مستلمة جزئيًا',
+  'received': 'مستلمة',
+  'cancelled': 'ملغاة',
+  'canceled': 'ملغاة',
+  'cash': 'نقدًا',
+  'card': 'بطاقة',
+  'transfer': 'تحويل',
+  'pay_in': 'إيداع نقدي',
+  'pay_out': 'سحب نقدي',
+  'increase': 'زيادة مخزون',
+  'decrease': 'نقص مخزون',
+  'damaged': 'مخزون تالف',
+  'expected': 'مخزون متوقع',
+  'receive_expected': 'استلام مخزون متوقع',
+  'receive_damaged': 'استلام تالف',
+  'cancel_expected': 'إلغاء مخزون متوقع',
+};
 
 const _arabicLabels = {
   'summary': 'الملخص',
@@ -227,12 +463,14 @@ const _arabicLabels = {
   'low_stock_count': 'مخزون منخفض',
   'out_of_stock_count': 'نافد',
   'retail_stock_value': 'قيمة البيع',
-  'sku': 'SKU',
+  'sku': 'رمز المنتج',
   'quantity_on_hand': 'المتوفر',
   'quantity_committed': 'المحجوز',
   'quantity_expected': 'المتوقع',
   'reorder_level': 'حد الطلب',
   'retail_value': 'قيمة البيع',
+  'pay_in_total': 'إجمالي الإيداعات',
+  'pay_out_total': 'إجمالي السحوبات',
   'movement_count': 'عدد الحركات',
   'quantity_moved': 'الكمية المتحركة',
   'movement_type': 'نوع الحركة',
@@ -251,4 +489,71 @@ const _arabicLabels = {
   'payable_balance': 'رصيد مستحق',
   'credit_balance': 'رصيد دائن',
   'net_balance': 'الصافي',
+  'returned_count': 'المعروض',
+  'total_count': 'إجمالي الصفوف',
+  'omitted_count': 'غير معروض',
+  'truncated': 'مختصر',
+};
+
+const _arabicLabelTokens = {
+  'id': 'المعرف',
+  'number': 'الرقم',
+  'name': 'الاسم',
+  'date': 'التاريخ',
+  'time': 'الوقت',
+  'status': 'الحالة',
+  'created': 'الإنشاء',
+  'updated': 'التحديث',
+  'closed': 'الإغلاق',
+  'opened': 'الافتتاح',
+  'submitted': 'الإرسال',
+  'received': 'الاستلام',
+  'due': 'الاستحقاق',
+  'product': 'المنتج',
+  'variant': 'الصنف',
+  'supplier': 'المورد',
+  'customer': 'العميل',
+  'order': 'الطلب',
+  'receipt': 'الإيصال',
+  'session': 'الجلسة',
+  'register': 'الدرج',
+  'payment': 'الدفع',
+  'method': 'الطريقة',
+  'movement': 'الحركة',
+  'type': 'النوع',
+  'quantity': 'الكمية',
+  'count': 'العدد',
+  'total': 'الإجمالي',
+  'subtotal': 'المجموع',
+  'discount': 'الخصم',
+  'refund': 'المرتجع',
+  'balance': 'الرصيد',
+  'cash': 'النقدية',
+  'profit': 'الربح',
+  'margin': 'الهامش',
+  'percent': 'النسبة',
+  'value': 'القيمة',
+  'retail': 'البيع',
+  'stock': 'المخزون',
+  'inventory': 'المخزون',
+  'sku': 'رمز المنتج',
+  'note': 'الملاحظة',
+  'by': 'بواسطة',
+  'before': 'قبل',
+  'after': 'بعد',
+  'on': 'على',
+  'hand': 'المتوفر',
+  'expected': 'المتوقع',
+  'committed': 'المحجوز',
+  'reorder': 'إعادة الطلب',
+  'level': 'الحد',
+  'commission': 'العمولة',
+  'gross': 'الإجمالي',
+  'net': 'الصافي',
+  'sales': 'المبيعات',
+  'purchase': 'الشراء',
+  'purchasing': 'المشتريات',
+  'payable': 'المستحق',
+  'credit': 'الدائن',
+  'open': 'المفتوح',
 };

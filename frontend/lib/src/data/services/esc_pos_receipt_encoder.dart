@@ -17,9 +17,9 @@ class EscPosReceiptEncoder {
 
   Future<List<int>> encodeTest(PrinterEndpoint endpoint) async {
     final payload = <String, Object?>{
-      'shop': {'name': 'Pointy'},
+      'shop': {'name': 'نقطة البيع'},
       'order': {
-        'receipt_number': 'TEST',
+        'receipt_number': 'اختبار',
         'created_at': DateTime.now().toIso8601String(),
         'total': '0.00',
         'lines': [
@@ -49,7 +49,7 @@ class EscPosReceiptEncoder {
     final receiptNumber = _string(order['receipt_number'], fallback: '-');
     final documentTitle = _string(order['document_title'], fallback: 'إيصال');
     final totalLabel = _string(order['total_label'], fallback: 'الإجمالي');
-    final createdAt = _string(order['created_at'], fallback: '');
+    final createdAt = _formatDateTime(order['created_at']);
     final lines = _list(order['lines']);
 
     final bytes = <int>[];
@@ -57,7 +57,7 @@ class EscPosReceiptEncoder {
     bytes.addAll(
       _text(
         generator,
-        _string(shop['name'], fallback: 'Pointy'),
+        _string(shop['name'], fallback: 'نقطة البيع'),
         styles: PosStyles(
           align: PosAlign.center,
           bold: true,
@@ -107,7 +107,6 @@ class EscPosReceiptEncoder {
         fallback: _string(line['name'], fallback: 'منتج'),
       );
       final quantity = _string(line['quantity'], fallback: '1');
-      final total = _money(line['line_total']);
       for (final wrappedName in _wrap(
         name,
         _charsPerLine(endpoint.paperWidthMm),
@@ -120,32 +119,27 @@ class EscPosReceiptEncoder {
           ),
         );
       }
-      bytes.addAll(
-        generator.row([
-          PosColumn(
-            text: total,
-            width: 4,
-            styles: PosStyles(align: PosAlign.left, codeTable: codeTable),
-          ),
-          PosColumn(
-            text: 'x$quantity',
-            width: 2,
-            styles: PosStyles(align: PosAlign.center, codeTable: codeTable),
-          ),
-          PosColumn(
-            text: _money(line['unit_price']),
-            width: 6,
+      final lineDetails =
+          'الكمية: $quantity، سعر الوحدة: ${_money(line['unit_price'])}، الإجمالي: ${_money(line['line_total'])}';
+      for (final wrappedDetail in _wrap(
+        lineDetails,
+        _charsPerLine(endpoint.paperWidthMm),
+      )) {
+        bytes.addAll(
+          _text(
+            generator,
+            wrappedDetail,
             styles: PosStyles(align: PosAlign.right, codeTable: codeTable),
           ),
-        ]),
-      );
+        );
+      }
     }
 
     bytes.addAll(generator.hr());
     bytes.addAll(
       _text(
         generator,
-        '$totalLabel ${_money(order['total'])}',
+        '$totalLabel: ${_money(order['total'])}',
         styles: PosStyles(
           align: PosAlign.right,
           bold: true,
@@ -262,7 +256,24 @@ String _string(Object? value, {String fallback = ''}) {
 String _money(Object? value) {
   final number = num.tryParse(value?.toString() ?? '');
   if (number == null) {
-    return _string(value, fallback: '0.00');
+    final fallback = _string(value, fallback: '0.00');
+    return fallback.contains('د.ل') ? fallback : '$fallback د.ل';
   }
-  return number.toStringAsFixed(2);
+  return '${number.toStringAsFixed(2)} د.ل';
 }
+
+String _formatDateTime(Object? value) {
+  final raw = value?.toString().trim() ?? '';
+  if (raw.isEmpty) {
+    return '';
+  }
+  final parsed = DateTime.tryParse(raw);
+  if (parsed == null) {
+    return raw;
+  }
+  final local = parsed.toLocal();
+  return '${local.year}/${_two(local.month)}/${_two(local.day)} '
+      '${_two(local.hour)}:${_two(local.minute)}';
+}
+
+String _two(int value) => value.toString().padLeft(2, '0');

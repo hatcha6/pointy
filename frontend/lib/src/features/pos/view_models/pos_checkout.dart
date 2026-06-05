@@ -314,6 +314,7 @@ extension PosCheckoutActions on PosViewModel {
       final result = await _printingRepository.printSaleInvoice(
         order: order,
         shopSettings: _checkoutSettings,
+        shopLogoBytes: _checkoutShopLogoBytes,
       );
       return result.isSuccess
           ? InvoicePrintStatus.printed
@@ -335,6 +336,7 @@ extension PosCheckoutActions on PosViewModel {
     final result = await _printingRepository.printSaleInvoice(
       order: order,
       shopSettings: _checkoutSettings,
+      shopLogoBytes: _checkoutShopLogoBytes,
     );
     return result.isSuccess
         ? InvoicePrintStatus.printed

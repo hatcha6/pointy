@@ -48,9 +48,17 @@ class ReportPdfGenerator {
           textDirection: pw.TextDirection.rtl,
         ),
         header: (context) => _Header(report: report, labels: labels),
-        footer: (context) => _Footer(context: context, labels: labels),
+        footer: (context) => _Footer(report: report, labels: labels),
         build: (context) => [
           _MetadataPanel(report: report, labels: labels),
+          if (report.shopSettingFields.isNotEmpty) ...[
+            pw.SizedBox(height: 10),
+            _FieldSection(
+              title: labels.shopSettings,
+              fields: report.shopSettingFields,
+              compact: true,
+            ),
+          ],
           if (report.metrics.isNotEmpty) ...[
             pw.SizedBox(height: 12),
             _MetricGrid(metrics: report.metrics),
@@ -80,11 +88,14 @@ class ReportPdfGenerator {
 }
 
 class _ReportColors {
-  static const ink = PdfColor.fromInt(0xff202124);
-  static const muted = PdfColor.fromInt(0xff5f6368);
-  static const border = PdfColor.fromInt(0xffdadce0);
-  static const fill = PdfColor.fromInt(0xfff8f9fa);
-  static const accent = PdfColor.fromInt(0xff0b57d0);
+  static const ink = PdfColor.fromInt(0xff172026);
+  static const muted = PdfColor.fromInt(0xff64717a);
+  static const border = PdfColor.fromInt(0xffd6dde2);
+  static const fill = PdfColor.fromInt(0xfff7f8f6);
+  static const fillAlt = PdfColor.fromInt(0xfffbfcfb);
+  static const accent = PdfColor.fromInt(0xff0b6b64);
+  static const accentSoft = PdfColor.fromInt(0xffe8f4f1);
+  static const white = PdfColor.fromInt(0xffffffff);
 }
 
 const _rowsPerTableChunk = 18;
@@ -101,6 +112,7 @@ List<pw.Widget> _reportSectionWidgets(ReportPdfSection section) {
           fontSize: 10,
           lineSpacing: 3,
         ),
+        textAlign: pw.TextAlign.right,
       ),
     ],
     if (section.fields.isNotEmpty) ...[
@@ -149,9 +161,11 @@ pw.Widget _buildTableChunk({
       for (final row in rows) row.map(_pdfTableValue).toList(growable: false),
     ],
     border: pw.TableBorder.all(color: _ReportColors.border, width: 0.5),
-    headerDecoration: const pw.BoxDecoration(color: _ReportColors.fill),
+    headerDecoration: const pw.BoxDecoration(color: _ReportColors.accentSoft),
+    rowDecoration: const pw.BoxDecoration(color: _ReportColors.white),
+    oddRowDecoration: const pw.BoxDecoration(color: _ReportColors.fillAlt),
     headerStyle: pw.TextStyle(
-      color: _ReportColors.ink,
+      color: _ReportColors.accent,
       fontSize: 9,
       fontWeight: pw.FontWeight.bold,
     ),
@@ -223,73 +237,114 @@ class _Header extends pw.StatelessWidget {
   @override
   pw.Widget build(pw.Context context) {
     final logoProvider = _logoProvider(report.businessLogoBytes);
+    final headerText = _compactText(report.businessHeader, maxCharacters: 110);
 
     return pw.Container(
-      padding: const pw.EdgeInsets.only(bottom: 10),
-      decoration: const pw.BoxDecoration(
-        border: pw.Border(bottom: pw.BorderSide(color: _ReportColors.border)),
+      padding: const pw.EdgeInsets.all(12),
+      decoration: pw.BoxDecoration(
+        color: _ReportColors.fill,
+        border: pw.Border.all(color: _ReportColors.border, width: 0.5),
+        borderRadius: const pw.BorderRadius.all(pw.Radius.circular(6)),
       ),
       child: pw.Row(
         crossAxisAlignment: pw.CrossAxisAlignment.start,
         children: [
-          if (logoProvider != null) ...[
-            pw.Container(
-              width: 48,
-              height: 48,
-              padding: const pw.EdgeInsets.all(4),
-              decoration: pw.BoxDecoration(
-                color: _ReportColors.fill,
-                border: pw.Border.all(color: _ReportColors.border),
-                borderRadius: const pw.BorderRadius.all(pw.Radius.circular(4)),
-              ),
-              child: pw.Image(logoProvider, fit: pw.BoxFit.contain),
-            ),
-            pw.SizedBox(width: 10),
-          ],
           pw.Expanded(
             child: pw.Column(
-              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              crossAxisAlignment: pw.CrossAxisAlignment.end,
               children: [
                 pw.Text(
                   report.businessName,
                   style: pw.TextStyle(
-                    color: _ReportColors.muted,
-                    fontSize: 10,
+                    color: _ReportColors.accent,
+                    fontSize: 11,
                     fontWeight: pw.FontWeight.bold,
                   ),
+                  textAlign: pw.TextAlign.right,
                 ),
-                pw.SizedBox(height: 4),
+                if (headerText != null) ...[
+                  pw.SizedBox(height: 3),
+                  pw.Text(
+                    headerText,
+                    style: const pw.TextStyle(
+                      color: _ReportColors.muted,
+                      fontSize: 8.5,
+                      lineSpacing: 2,
+                    ),
+                    textAlign: pw.TextAlign.right,
+                  ),
+                ],
+                pw.SizedBox(height: 6),
                 pw.Text(
                   report.title,
                   style: pw.TextStyle(
                     color: _ReportColors.ink,
-                    fontSize: 20,
+                    fontSize: 21,
                     fontWeight: pw.FontWeight.bold,
                   ),
+                  textAlign: pw.TextAlign.right,
                 ),
               ],
             ),
           ),
-          pw.Container(
-            padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-            decoration: pw.BoxDecoration(
-              color: _ReportColors.fill,
-              border: pw.Border.all(color: _ReportColors.border),
-              borderRadius: const pw.BorderRadius.all(pw.Radius.circular(4)),
-            ),
-            child: pw.Text(
-              labels.typeLabel(report.type),
-              style: pw.TextStyle(
-                color: _ReportColors.accent,
-                fontSize: 9,
-                fontWeight: pw.FontWeight.bold,
+          pw.SizedBox(width: 12),
+          pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.end,
+            children: [
+              if (logoProvider != null) ...[
+                pw.Container(
+                  width: 48,
+                  height: 48,
+                  padding: const pw.EdgeInsets.all(5),
+                  decoration: pw.BoxDecoration(
+                    color: _ReportColors.white,
+                    border: pw.Border.all(color: _ReportColors.border),
+                    borderRadius: const pw.BorderRadius.all(
+                      pw.Radius.circular(5),
+                    ),
+                  ),
+                  child: pw.Image(logoProvider, fit: pw.BoxFit.contain),
+                ),
+                pw.SizedBox(height: 8),
+              ],
+              pw.Container(
+                padding: const pw.EdgeInsets.symmetric(
+                  horizontal: 9,
+                  vertical: 5,
+                ),
+                decoration: pw.BoxDecoration(
+                  color: _ReportColors.accentSoft,
+                  border: pw.Border.all(color: _ReportColors.border),
+                  borderRadius: const pw.BorderRadius.all(
+                    pw.Radius.circular(4),
+                  ),
+                ),
+                child: pw.Text(
+                  labels.typeLabel(report.type),
+                  style: pw.TextStyle(
+                    color: _ReportColors.accent,
+                    fontSize: 9,
+                    fontWeight: pw.FontWeight.bold,
+                  ),
+                ),
               ),
-            ),
+            ],
           ),
         ],
       ),
     );
   }
+}
+
+String? _compactText(String? value, {required int maxCharacters}) {
+  final normalized = value?.replaceAll(RegExp(r'\s+'), ' ').trim() ?? '';
+  if (normalized.isEmpty) {
+    return null;
+  }
+  if (normalized.length <= maxCharacters) {
+    return normalized;
+  }
+  return '${normalized.substring(0, maxCharacters - 3)}...';
 }
 
 pw.ImageProvider? _logoProvider(Uint8List? bytes) {
@@ -304,24 +359,41 @@ pw.ImageProvider? _logoProvider(Uint8List? bytes) {
 }
 
 class _Footer extends pw.StatelessWidget {
-  _Footer({required this.context, required this.labels});
+  _Footer({required this.report, required this.labels});
 
-  final pw.Context context;
+  final BusinessReportPdfDocument report;
   final ReportPdfLabels labels;
 
   @override
   pw.Widget build(pw.Context context) {
+    final footerText = _compactText(report.businessFooter, maxCharacters: 150);
+
     return pw.Container(
       padding: const pw.EdgeInsets.only(top: 8),
       decoration: const pw.BoxDecoration(
         border: pw.Border(top: pw.BorderSide(color: _ReportColors.border)),
       ),
-      child: pw.Align(
-        alignment: pw.Alignment.centerLeft,
-        child: pw.Text(
-          '${labels.page} ${this.context.pageNumber} ${labels.ofPages} ${this.context.pagesCount}',
-          style: const pw.TextStyle(color: _ReportColors.muted, fontSize: 9),
-        ),
+      child: pw.Row(
+        crossAxisAlignment: pw.CrossAxisAlignment.center,
+        children: [
+          pw.Text(
+            '${labels.page} ${context.pageNumber} ${labels.ofPages} ${context.pagesCount}',
+            style: const pw.TextStyle(color: _ReportColors.muted, fontSize: 8),
+          ),
+          if (footerText != null) ...[
+            pw.SizedBox(width: 10),
+            pw.Expanded(
+              child: pw.Text(
+                footerText,
+                style: const pw.TextStyle(
+                  color: _ReportColors.muted,
+                  fontSize: 8,
+                ),
+                textAlign: pw.TextAlign.right,
+              ),
+            ),
+          ],
+        ],
       ),
     );
   }
@@ -349,11 +421,11 @@ class _MetadataPanel extends pw.StatelessWidget {
 
     return pw.Container(
       margin: const pw.EdgeInsets.only(top: 12),
-      padding: const pw.EdgeInsets.all(10),
+      padding: const pw.EdgeInsets.all(11),
       decoration: pw.BoxDecoration(
-        color: _ReportColors.fill,
+        color: _ReportColors.accentSoft,
         border: pw.Border.all(color: _ReportColors.border),
-        borderRadius: const pw.BorderRadius.all(pw.Radius.circular(4)),
+        borderRadius: const pw.BorderRadius.all(pw.Radius.circular(6)),
       ),
       child: _FieldWrap(fields: fields),
     );
@@ -374,13 +446,14 @@ class _MetricGrid extends pw.StatelessWidget {
         for (final metric in metrics)
           pw.Container(
             width: 128,
-            padding: const pw.EdgeInsets.all(9),
+            padding: const pw.EdgeInsets.all(10),
             decoration: pw.BoxDecoration(
+              color: _ReportColors.white,
               border: pw.Border.all(color: _ReportColors.border),
-              borderRadius: const pw.BorderRadius.all(pw.Radius.circular(4)),
+              borderRadius: const pw.BorderRadius.all(pw.Radius.circular(5)),
             ),
             child: pw.Column(
-              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              crossAxisAlignment: pw.CrossAxisAlignment.end,
               children: [
                 pw.Text(
                   metric.label,
@@ -388,6 +461,7 @@ class _MetricGrid extends pw.StatelessWidget {
                     color: _ReportColors.muted,
                     fontSize: 9,
                   ),
+                  textAlign: pw.TextAlign.right,
                 ),
                 pw.SizedBox(height: 4),
                 pw.Text(
@@ -397,6 +471,7 @@ class _MetricGrid extends pw.StatelessWidget {
                     fontSize: 15,
                     fontWeight: pw.FontWeight.bold,
                   ),
+                  textAlign: pw.TextAlign.right,
                 ),
                 if (metric.note != null) ...[
                   pw.SizedBox(height: 3),
@@ -406,6 +481,7 @@ class _MetricGrid extends pw.StatelessWidget {
                       color: _ReportColors.muted,
                       fontSize: 8,
                     ),
+                    textAlign: pw.TextAlign.right,
                   ),
                 ],
               ],
@@ -417,28 +493,34 @@ class _MetricGrid extends pw.StatelessWidget {
 }
 
 class _FieldSection extends pw.StatelessWidget {
-  _FieldSection({required this.title, required this.fields});
+  _FieldSection({
+    required this.title,
+    required this.fields,
+    this.compact = false,
+  });
 
   final String title;
   final List<ReportPdfField> fields;
+  final bool compact;
 
   @override
   pw.Widget build(pw.Context context) {
     return pw.Column(
-      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      crossAxisAlignment: pw.CrossAxisAlignment.end,
       children: [
         _SectionTitle(title),
         pw.SizedBox(height: 6),
-        _FieldWrap(fields: fields),
+        _FieldWrap(fields: fields, compact: compact),
       ],
     );
   }
 }
 
 class _FieldWrap extends pw.StatelessWidget {
-  _FieldWrap({required this.fields});
+  _FieldWrap({required this.fields, this.compact = false});
 
   final List<ReportPdfField> fields;
+  final bool compact;
 
   @override
   pw.Widget build(pw.Context context) {
@@ -448,9 +530,9 @@ class _FieldWrap extends pw.StatelessWidget {
       children: [
         for (final field in fields)
           pw.SizedBox(
-            width: 150,
+            width: compact ? 124 : 150,
             child: pw.Column(
-              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              crossAxisAlignment: pw.CrossAxisAlignment.end,
               children: [
                 pw.Text(
                   field.label,
@@ -459,6 +541,7 @@ class _FieldWrap extends pw.StatelessWidget {
                     fontSize: 8,
                     fontWeight: pw.FontWeight.bold,
                   ),
+                  textAlign: pw.TextAlign.right,
                 ),
                 pw.SizedBox(height: 2),
                 pw.Text(
@@ -467,6 +550,7 @@ class _FieldWrap extends pw.StatelessWidget {
                     color: _ReportColors.ink,
                     fontSize: 10,
                   ),
+                  textAlign: pw.TextAlign.right,
                 ),
               ],
             ),
@@ -491,6 +575,7 @@ class _SectionTitle extends pw.StatelessWidget {
         fontSize: fontSize,
         fontWeight: pw.FontWeight.bold,
       ),
+      textAlign: pw.TextAlign.right,
     );
   }
 }

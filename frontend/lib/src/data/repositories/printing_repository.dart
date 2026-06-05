@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import '../../core/result.dart';
 import '../models/barcode_label.dart';
 import '../models/print_audit_event.dart';
@@ -231,6 +233,7 @@ class PrintingRepository {
   Future<PrintTransportResult> printSaleInvoice({
     required SaleOrder order,
     ShopSettings? shopSettings,
+    Uint8List? shopLogoBytes,
   }) async {
     final configResult = await loadDefaultPrinterConfig();
     final config = switch (configResult) {
@@ -255,6 +258,7 @@ class PrintingRepository {
         return _documentService.printSaleInvoice(
           order: order,
           shopSettings: shopSettings,
+          shopLogoBytes: shopLogoBytes,
           endpoint: config.endpoint,
         );
       });
@@ -288,6 +292,7 @@ class PrintingRepository {
   Future<PrintTransportResult> printPurchaseOrder({
     required PurchaseOrder order,
     ShopSettings? shopSettings,
+    Uint8List? shopLogoBytes,
   }) async {
     final configResult = await loadDefaultPrinterConfig();
     final config = switch (configResult) {
@@ -313,6 +318,7 @@ class PrintingRepository {
             return _documentService.printPurchaseOrder(
               order: order,
               shopSettings: shopSettings,
+              shopLogoBytes: shopLogoBytes,
               endpoint: config.endpoint,
             );
           })
@@ -331,6 +337,7 @@ class PrintingRepository {
   Future<OrderDocumentActionStatus> shareSaleInvoice({
     required SaleOrder order,
     ShopSettings? shopSettings,
+    Uint8List? shopLogoBytes,
   }) async {
     final auditEvent = await _beginShareAudit(
       documentType: PrintAuditDocumentType.saleOrder,
@@ -342,6 +349,7 @@ class PrintingRepository {
     final status = await _documentService.shareSaleInvoice(
       order: order,
       shopSettings: shopSettings,
+      shopLogoBytes: shopLogoBytes,
     );
     await _reportPrintAudit(auditEvent, _auditStatusForDocumentAction(status));
     return status;
@@ -350,6 +358,7 @@ class PrintingRepository {
   Future<OrderDocumentActionStatus> sharePurchaseOrder({
     required PurchaseOrder order,
     ShopSettings? shopSettings,
+    Uint8List? shopLogoBytes,
   }) async {
     final auditEvent = await _beginShareAudit(
       documentType: PrintAuditDocumentType.purchaseOrder,
@@ -361,6 +370,7 @@ class PrintingRepository {
     final status = await _documentService.sharePurchaseOrder(
       order: order,
       shopSettings: shopSettings,
+      shopLogoBytes: shopLogoBytes,
     );
     await _reportPrintAudit(auditEvent, _auditStatusForDocumentAction(status));
     return status;
@@ -539,7 +549,7 @@ class PrintingRepository {
     return {
       'shop': _shopPayload(shopSettings),
       'order': {
-        'document_title': 'أمر شراء',
+        'document_title': 'فاتورة مشتريات',
         'total_label': 'الإجمالي',
         'receipt_number': _purchaseReference(order),
         if (order.createdAt != null) 'created_at': order.createdAt!.toString(),
@@ -564,7 +574,7 @@ class PrintingRepository {
     return {
       'name': settings?.shopName.trim().isNotEmpty == true
           ? settings!.shopName.trim()
-          : 'Pointy',
+          : 'نقطة البيع',
       if (settings?.receiptHeader.trim().isNotEmpty == true)
         'receipt_header': settings!.receiptHeader.trim(),
       if (settings?.receiptFooter.trim().isNotEmpty == true)

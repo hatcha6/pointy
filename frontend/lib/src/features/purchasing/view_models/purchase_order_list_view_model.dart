@@ -169,9 +169,11 @@ class PurchaseOrderListViewModel extends ChangeNotifier {
     if (completeOrder == null) {
       return false;
     }
+    final shopSettings = await _loadShopSettings();
     final result = await _printingRepository.printPurchaseOrder(
       order: completeOrder,
-      shopSettings: await _loadShopSettings(),
+      shopSettings: shopSettings,
+      shopLogoBytes: await _loadShopLogoBytes(shopSettings),
     );
     return result.isSuccess;
   }
@@ -181,9 +183,11 @@ class PurchaseOrderListViewModel extends ChangeNotifier {
     if (completeOrder == null) {
       return OrderDocumentActionStatus.failed;
     }
+    final shopSettings = await _loadShopSettings();
     return _printingRepository.sharePurchaseOrder(
       order: completeOrder,
-      shopSettings: await _loadShopSettings(),
+      shopSettings: shopSettings,
+      shopLogoBytes: await _loadShopLogoBytes(shopSettings),
     );
   }
 
@@ -200,6 +204,14 @@ class PurchaseOrderListViewModel extends ChangeNotifier {
     return switch (result) {
       Ok<ShopSettings>(value: final settings) => settings,
       Error<ShopSettings>() => null,
+    };
+  }
+
+  Future<Uint8List?> _loadShopLogoBytes(ShopSettings? settings) async {
+    final result = await _shopSettingsRepository.loadLogoBytes(settings);
+    return switch (result) {
+      Ok<Uint8List?>(value: final bytes) => bytes,
+      Error<Uint8List?>() => null,
     };
   }
 }

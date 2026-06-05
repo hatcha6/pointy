@@ -87,6 +87,25 @@ class PosApiSession {
     ).replace(queryParameters: queryParameters);
   }
 
+  Uri? resolveUri(String rawUrl) {
+    final uri = Uri.tryParse(rawUrl);
+    if (uri == null) {
+      return null;
+    }
+    if (uri.hasScheme) {
+      return uri;
+    }
+
+    final baseUri = Uri.tryParse(baseUrl);
+    if (baseUri == null) {
+      return null;
+    }
+    final directoryBase = baseUri.path.endsWith('/')
+        ? baseUri
+        : baseUri.replace(path: '${baseUri.path}/');
+    return directoryBase.resolveUri(uri);
+  }
+
   void configureConnectionTarget({
     required String baseUrl,
     String relayToken = '',
@@ -103,6 +122,14 @@ class PosApiSession {
       path: path,
       request: () =>
           client.get(uri(path, queryParameters: query), headers: headers()),
+    );
+  }
+
+  Future<http.Response> getUri(Uri uri, {String performancePath = 'resource'}) {
+    return _send(
+      method: 'GET',
+      path: performancePath,
+      request: () => client.get(uri, headers: headers()),
     );
   }
 

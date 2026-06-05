@@ -90,6 +90,7 @@ class PosViewModel extends ChangeNotifier {
   List<Product> _products = [];
   final List<CartLine> _cart = [];
   ShopSettings? _checkoutSettings;
+  Uint8List? _checkoutShopLogoBytes;
   bool _isLoading = false;
   bool _isLoadingMore = false;
   bool _isLoadingRegisterSession = false;
@@ -219,12 +220,14 @@ class PosViewModel extends ChangeNotifier {
     switch (result) {
       case Ok<ShopSettings>():
         _checkoutSettings = result.value;
+        _checkoutShopLogoBytes = await _loadShopLogoBytes(result.value);
         if (result.value.autoPrintReceipts) {
           _printInvoiceAfterPayment = false;
           _shareInvoiceAfterPayment = false;
         }
       case Error<ShopSettings>():
         _checkoutSettings = null;
+        _checkoutShopLogoBytes = null;
         _printInvoiceAfterPayment = false;
         _shareInvoiceAfterPayment = false;
         _hasCheckoutSettingsError = true;
@@ -232,6 +235,14 @@ class PosViewModel extends ChangeNotifier {
 
     _isLoadingCheckoutSettings = false;
     _notifyChanged();
+  }
+
+  Future<Uint8List?> _loadShopLogoBytes(ShopSettings? settings) async {
+    final result = await _shopSettingsRepository.loadLogoBytes(settings);
+    return switch (result) {
+      Ok<Uint8List?>(value: final bytes) => bytes,
+      Error<Uint8List?>() => null,
+    };
   }
 
   void updatePrintInvoiceAfterPayment(bool value) {
@@ -258,6 +269,7 @@ class PosViewModel extends ChangeNotifier {
     return _printingRepository.shareSaleInvoice(
       order: order,
       shopSettings: _checkoutSettings,
+      shopLogoBytes: _checkoutShopLogoBytes,
     );
   }
 

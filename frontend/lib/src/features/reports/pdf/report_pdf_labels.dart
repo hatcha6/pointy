@@ -6,6 +6,7 @@ class ReportPdfLabels {
     required this.generatedBy,
     required this.reference,
     required this.period,
+    required this.shopSettings,
     required this.fromDate,
     required this.toDate,
     required this.summary,
@@ -25,6 +26,7 @@ class ReportPdfLabels {
       generatedBy = 'أنشئ بواسطة',
       reference = 'المرجع',
       period = 'الفترة',
+      shopSettings = 'إعدادات المتجر',
       fromDate = 'من',
       toDate = 'إلى',
       summary = 'الملخص',
@@ -53,6 +55,7 @@ class ReportPdfLabels {
   final String generatedBy;
   final String reference;
   final String period;
+  final String shopSettings;
   final String fromDate;
   final String toDate;
   final String summary;

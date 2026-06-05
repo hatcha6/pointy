@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import '../../core/result.dart';
 import '../models/analytics_export.dart';
 import '../models/shop_settings.dart';
@@ -10,6 +12,10 @@ class ShopSettingsRepository {
 
   Future<Result<ShopSettings>> loadSettings() async {
     return Result.guard(_service.fetchShopSettings);
+  }
+
+  Future<Result<Uint8List?>> loadLogoBytes(ShopSettings? settings) {
+    return Result.guard(() => _service.fetchShopLogoBytes(settings));
   }
 
   Future<Result<ShopSettings>> updateSettings(ShopSettingsDraft draft) async {

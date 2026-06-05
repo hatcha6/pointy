@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:http/http.dart' as http;
 
 import '../models/attachment_summary.dart';
@@ -202,6 +204,31 @@ class PosApiService {
 
   Future<ShopSettings> fetchShopSettings() {
     return _shopSettings.fetchShopSettings();
+  }
+
+  Future<Uint8List?> fetchShopLogoBytes(ShopSettings? settings) async {
+    final attachment = settings?.logoAttachment;
+    final logoUrl = attachment?.contentUrl.trim();
+    final contentType = attachment?.contentType.toLowerCase() ?? '';
+    if (logoUrl == null ||
+        logoUrl.isEmpty ||
+        !_shopLogoPdfContentTypes.contains(contentType)) {
+      return null;
+    }
+
+    final uri = _session.resolveUri(logoUrl);
+    if (uri == null) {
+      return null;
+    }
+
+    final response = await _session.getUri(
+      uri,
+      performancePath: 'shop-settings/logo-content/',
+    );
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      return null;
+    }
+    return response.bodyBytes;
   }
 
   Future<ShopSettings> updateShopSettings(ShopSettingsDraft draft) {
@@ -756,3 +783,5 @@ class PosApiService {
     return _printing.reportPrintAuditEvent(eventId: eventId, report: report);
   }
 }
+
+const _shopLogoPdfContentTypes = {'image/jpeg', 'image/jpg', 'image/png'};

@@ -89,9 +89,12 @@ class BusinessReportPdfDocument {
     required this.businessName,
     required this.generatedAt,
     this.businessLogoBytes,
+    this.businessHeader,
+    this.businessFooter,
     this.generatedBy,
     this.reference,
     this.period,
+    this.shopSettingFields = const [],
     this.metrics = const [],
     this.summaryFields = const [],
     this.sections = const [],
@@ -104,9 +107,12 @@ class BusinessReportPdfDocument {
   final String businessName;
   final DateTime generatedAt;
   final Uint8List? businessLogoBytes;
+  final String? businessHeader;
+  final String? businessFooter;
   final String? generatedBy;
   final String? reference;
   final ReportPdfPeriod? period;
+  final List<ReportPdfField> shopSettingFields;
   final List<ReportPdfMetric> metrics;
   final List<ReportPdfField> summaryFields;
   final List<ReportPdfSection> sections;

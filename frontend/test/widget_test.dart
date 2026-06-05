@@ -183,6 +183,7 @@ void main() {
 
     expect(bytes, isNotEmpty);
     expect(bytes.first, 27);
+    expect(utf8.decode(bytes, allowMalformed: true), isNot(contains('x1')));
   });
 
   test('ESC/POS barcode label encoder prints repeated labels', () async {

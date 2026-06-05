@@ -117,11 +117,15 @@ class OrderDocumentService {
   Future<bool> printSaleInvoice({
     required SaleOrder order,
     ShopSettings? shopSettings,
+    Uint8List? shopLogoBytes,
     PrinterEndpoint? endpoint,
   }) {
     return _printPdf(
-      bytesBuilder: () =>
-          buildSaleInvoiceBytes(order: order, shopSettings: shopSettings),
+      bytesBuilder: () => buildSaleInvoiceBytes(
+        order: order,
+        shopSettings: shopSettings,
+        shopLogoBytes: shopLogoBytes,
+      ),
       jobName: saleInvoiceFileName(order),
       endpoint: endpoint,
     );
@@ -130,11 +134,15 @@ class OrderDocumentService {
   Future<bool> printPurchaseOrder({
     required PurchaseOrder order,
     ShopSettings? shopSettings,
+    Uint8List? shopLogoBytes,
     PrinterEndpoint? endpoint,
   }) {
     return _printPdf(
-      bytesBuilder: () =>
-          buildPurchaseOrderBytes(order: order, shopSettings: shopSettings),
+      bytesBuilder: () => buildPurchaseOrderBytes(
+        order: order,
+        shopSettings: shopSettings,
+        shopLogoBytes: shopLogoBytes,
+      ),
       jobName: purchaseOrderFileName(order),
       endpoint: endpoint,
     );
@@ -143,12 +151,14 @@ class OrderDocumentService {
   Future<OrderDocumentActionStatus> shareSaleInvoice({
     required SaleOrder order,
     ShopSettings? shopSettings,
+    Uint8List? shopLogoBytes,
     Rect? bounds,
   }) async {
     try {
       final bytes = await buildSaleInvoiceBytes(
         order: order,
         shopSettings: shopSettings,
+        shopLogoBytes: shopLogoBytes,
       );
       return _deliverPdf(
         bytes: bytes,
@@ -164,12 +174,14 @@ class OrderDocumentService {
   Future<OrderDocumentActionStatus> sharePurchaseOrder({
     required PurchaseOrder order,
     ShopSettings? shopSettings,
+    Uint8List? shopLogoBytes,
     Rect? bounds,
   }) async {
     try {
       final bytes = await buildPurchaseOrderBytes(
         order: order,
         shopSettings: shopSettings,
+        shopLogoBytes: shopLogoBytes,
       );
       return _deliverPdf(
         bytes: bytes,
@@ -185,12 +197,14 @@ class OrderDocumentService {
   Future<Uint8List> buildSaleInvoiceBytes({
     required SaleOrder order,
     ShopSettings? shopSettings,
+    Uint8List? shopLogoBytes,
   }) async {
     final fonts = await fontLoader.load();
     final document = _DocumentFrame(
       title: labels.saleInvoiceTitle,
       reference: _saleReference(order),
       shopSettings: shopSettings,
+      shopLogoBytes: shopLogoBytes,
       labels: labels,
       fonts: fonts,
       sections: [
@@ -273,12 +287,14 @@ class OrderDocumentService {
   Future<Uint8List> buildPurchaseOrderBytes({
     required PurchaseOrder order,
     ShopSettings? shopSettings,
+    Uint8List? shopLogoBytes,
   }) async {
     final fonts = await fontLoader.load();
     final document = _DocumentFrame(
       title: labels.purchaseOrderTitle,
       reference: _purchaseReference(order),
       shopSettings: shopSettings,
+      shopLogoBytes: shopLogoBytes,
       labels: labels,
       fonts: fonts,
       sections: [
@@ -376,11 +392,11 @@ class OrderDocumentService {
   }
 
   String saleInvoiceFileName(SaleOrder order) {
-    return 'sale-invoice-${_safeReference(_saleReference(order))}.pdf';
+    return 'فاتورة-بيع-${_safeReference(_saleReference(order))}.pdf';
   }
 
   String purchaseOrderFileName(PurchaseOrder order) {
-    return 'purchase-order-${_safeReference(_purchaseReference(order))}.pdf';
+    return 'فاتورة-مشتريات-${_safeReference(_purchaseReference(order))}.pdf';
   }
 
   Future<bool> _printPdf({
@@ -541,7 +557,7 @@ class OrderDocumentLabels {
     : saleInvoiceTitle = 'فاتورة بيع',
       purchaseOrderTitle = 'فاتورة مشتريات',
       testPrintTitle = 'اختبار طباعة الفواتير',
-      testPrintReference = 'TEST',
+      testPrintReference = 'اختبار',
       savePdfDialogTitle = 'حفظ ملف PDF',
       summary = 'الملخص',
       items = 'العناصر',
@@ -688,11 +704,13 @@ class _DocumentFrame {
     required this.fonts,
     required this.sections,
     this.shopSettings,
+    this.shopLogoBytes,
   });
 
   final String title;
   final String reference;
   final ShopSettings? shopSettings;
+  final Uint8List? shopLogoBytes;
   final OrderDocumentLabels labels;
   final OrderDocumentFonts fonts;
   final List<_DocumentSection> sections;
@@ -741,7 +759,7 @@ class _DocumentFrame {
 
   String get _shopName {
     final name = shopSettings?.shopName.trim() ?? '';
-    return name.isEmpty ? 'Pointy' : name;
+    return name.isEmpty ? 'نقطة البيع' : name;
   }
 
   String get _headerText => shopSettings?.receiptHeader.trim() ?? '';
@@ -749,66 +767,93 @@ class _DocumentFrame {
   String get _footerText => shopSettings?.receiptFooter.trim() ?? '';
 
   pw.Widget _header() {
+    final logoProvider = _logoProvider(shopLogoBytes);
     return pw.Container(
-      padding: const pw.EdgeInsets.only(bottom: 10),
-      decoration: const pw.BoxDecoration(
-        border: pw.Border(bottom: pw.BorderSide(color: _PdfColors.border)),
+      padding: const pw.EdgeInsets.all(12),
+      decoration: pw.BoxDecoration(
+        color: _PdfColors.fill,
+        border: pw.Border.all(color: _PdfColors.border, width: 0.5),
+        borderRadius: const pw.BorderRadius.all(pw.Radius.circular(6)),
       ),
-      child: pw.Column(
-        crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+      child: pw.Row(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
         children: [
-          pw.Row(
-            crossAxisAlignment: pw.CrossAxisAlignment.start,
-            children: [
-              pw.Expanded(
-                child: pw.Column(
-                  crossAxisAlignment: pw.CrossAxisAlignment.start,
-                  children: [
-                    pw.Text(
-                      _shopName,
-                      style: pw.TextStyle(
-                        fontSize: 11,
-                        color: _PdfColors.muted,
-                        fontWeight: pw.FontWeight.bold,
-                      ),
-                    ),
-                    if (_headerText.isNotEmpty) ...[
-                      pw.SizedBox(height: 3),
-                      pw.Text(
-                        _headerText,
-                        style: const pw.TextStyle(
-                          fontSize: 9,
-                          color: _PdfColors.muted,
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-              pw.SizedBox(width: 16),
-              pw.Column(
-                crossAxisAlignment: pw.CrossAxisAlignment.end,
-                children: [
-                  pw.Text(
-                    title,
-                    style: pw.TextStyle(
-                      fontSize: 18,
-                      fontWeight: pw.FontWeight.bold,
-                      color: _PdfColors.ink,
-                    ),
+          pw.Container(
+            width: 150,
+            padding: const pw.EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            decoration: pw.BoxDecoration(
+              color: _PdfColors.accentSoft,
+              border: pw.Border.all(color: _PdfColors.border, width: 0.5),
+              borderRadius: const pw.BorderRadius.all(pw.Radius.circular(5)),
+            ),
+            child: pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.end,
+              children: [
+                pw.Text(
+                  title,
+                  style: pw.TextStyle(
+                    fontSize: 17,
+                    fontWeight: pw.FontWeight.bold,
+                    color: _PdfColors.ink,
                   ),
+                  textAlign: pw.TextAlign.right,
+                ),
+                pw.SizedBox(height: 4),
+                pw.Text(
+                  reference,
+                  style: pw.TextStyle(
+                    fontSize: 11,
+                    color: _PdfColors.accent,
+                    fontWeight: pw.FontWeight.bold,
+                  ),
+                  textAlign: pw.TextAlign.right,
+                ),
+              ],
+            ),
+          ),
+          pw.SizedBox(width: 12),
+          pw.Expanded(
+            child: pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.end,
+              children: [
+                pw.Text(
+                  _shopName,
+                  style: pw.TextStyle(
+                    fontSize: 13,
+                    color: _PdfColors.accent,
+                    fontWeight: pw.FontWeight.bold,
+                  ),
+                  textAlign: pw.TextAlign.right,
+                ),
+                if (_headerText.isNotEmpty) ...[
                   pw.SizedBox(height: 4),
                   pw.Text(
-                    reference,
+                    _headerText,
                     style: const pw.TextStyle(
-                      fontSize: 11,
+                      fontSize: 9,
                       color: _PdfColors.muted,
+                      lineSpacing: 2,
                     ),
+                    textAlign: pw.TextAlign.right,
                   ),
                 ],
-              ),
-            ],
+              ],
+            ),
           ),
+          if (logoProvider != null) ...[
+            pw.SizedBox(width: 10),
+            pw.Container(
+              width: 46,
+              height: 46,
+              padding: const pw.EdgeInsets.all(5),
+              decoration: pw.BoxDecoration(
+                color: _PdfColors.white,
+                border: pw.Border.all(color: _PdfColors.border, width: 0.5),
+                borderRadius: const pw.BorderRadius.all(pw.Radius.circular(5)),
+              ),
+              child: pw.Image(logoProvider, fit: pw.BoxFit.contain),
+            ),
+          ],
         ],
       ),
     );
@@ -821,13 +866,24 @@ class _DocumentFrame {
         border: pw.Border(top: pw.BorderSide(color: _PdfColors.border)),
       ),
       child: pw.Align(
-        alignment: pw.Alignment.centerLeft,
+        alignment: pw.Alignment.centerRight,
         child: pw.Text(
           '${labels.page} ${context.pageNumber} ${labels.ofPages} ${context.pagesCount}',
           style: const pw.TextStyle(fontSize: 8, color: _PdfColors.muted),
         ),
       ),
     );
+  }
+}
+
+pw.ImageProvider? _logoProvider(Uint8List? bytes) {
+  if (bytes == null || bytes.isEmpty) {
+    return null;
+  }
+  try {
+    return pw.MemoryImage(bytes);
+  } on Object {
+    return null;
   }
 }
 
@@ -853,6 +909,7 @@ class _DocumentSection {
             fontWeight: pw.FontWeight.bold,
             color: _PdfColors.ink,
           ),
+          textAlign: pw.TextAlign.right,
         ),
         pw.SizedBox(height: 6),
         if (rows.isNotEmpty) _fieldGrid(rows),
@@ -869,14 +926,14 @@ class _DocumentSection {
         for (final row in rows)
           pw.Container(
             width: 240,
-            padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+            padding: const pw.EdgeInsets.symmetric(horizontal: 9, vertical: 7),
             decoration: pw.BoxDecoration(
-              color: _PdfColors.fill,
+              color: row.strong ? _PdfColors.accentSoft : _PdfColors.fill,
               border: pw.Border.all(color: _PdfColors.border, width: 0.5),
-              borderRadius: const pw.BorderRadius.all(pw.Radius.circular(3)),
+              borderRadius: const pw.BorderRadius.all(pw.Radius.circular(5)),
             ),
             child: pw.Column(
-              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              crossAxisAlignment: pw.CrossAxisAlignment.end,
               children: [
                 pw.Text(
                   row.label,
@@ -884,6 +941,7 @@ class _DocumentSection {
                     fontSize: 8,
                     color: _PdfColors.muted,
                   ),
+                  textAlign: pw.TextAlign.right,
                 ),
                 pw.SizedBox(height: 2),
                 pw.Text(
@@ -893,6 +951,7 @@ class _DocumentSection {
                     color: _PdfColors.ink,
                     fontWeight: row.strong ? pw.FontWeight.bold : null,
                   ),
+                  textAlign: pw.TextAlign.right,
                 ),
               ],
             ),
@@ -929,9 +988,11 @@ class _DocumentTable {
                 row.map(_tableValue).toList(growable: false),
             ],
       border: pw.TableBorder.all(color: _PdfColors.border, width: 0.5),
-      headerDecoration: const pw.BoxDecoration(color: _PdfColors.fill),
+      headerDecoration: const pw.BoxDecoration(color: _PdfColors.accentSoft),
+      rowDecoration: const pw.BoxDecoration(color: _PdfColors.white),
+      oddRowDecoration: const pw.BoxDecoration(color: _PdfColors.fillAlt),
       headerStyle: pw.TextStyle(
-        color: _PdfColors.ink,
+        color: _PdfColors.accent,
         fontSize: 9,
         fontWeight: pw.FontWeight.bold,
       ),
@@ -964,10 +1025,14 @@ class _DocumentField {
 }
 
 class _PdfColors {
-  static const ink = PdfColor.fromInt(0xff202124);
-  static const muted = PdfColor.fromInt(0xff5f6368);
-  static const border = PdfColor.fromInt(0xffdadce0);
-  static const fill = PdfColor.fromInt(0xfff8f9fa);
+  static const ink = PdfColor.fromInt(0xff172026);
+  static const muted = PdfColor.fromInt(0xff64717a);
+  static const border = PdfColor.fromInt(0xffd6dde2);
+  static const fill = PdfColor.fromInt(0xfff7f8f6);
+  static const fillAlt = PdfColor.fromInt(0xfffbfcfb);
+  static const accent = PdfColor.fromInt(0xff0b6b64);
+  static const accentSoft = PdfColor.fromInt(0xffe8f4f1);
+  static const white = PdfColor.fromInt(0xffffffff);
 }
 
 String _saleReference(SaleOrder order) {
@@ -1006,9 +1071,27 @@ String _formatDate(DateTime value) {
 }
 
 String _safeReference(String value) {
-  final normalized = value
-      .replaceAll(RegExp(r'[^A-Za-z0-9._-]+'), '-')
+  final buffer = StringBuffer();
+  var lastWasSeparator = false;
+  for (final rune in value.runes) {
+    final isAsciiLetter =
+        (rune >= 65 && rune <= 90) || (rune >= 97 && rune <= 122);
+    final isDigit = rune >= 48 && rune <= 57;
+    final isArabic = rune >= 0x0600 && rune <= 0x06ff;
+    final isSafePunctuation = rune == 45 || rune == 46 || rune == 95;
+    if (isAsciiLetter || isDigit || isArabic || isSafePunctuation) {
+      buffer.write(String.fromCharCode(rune));
+      lastWasSeparator = false;
+      continue;
+    }
+    if (!lastWasSeparator && buffer.isNotEmpty) {
+      buffer.write('-');
+      lastWasSeparator = true;
+    }
+  }
+  final normalized = buffer
+      .toString()
       .replaceAll(RegExp(r'-+'), '-')
       .replaceAll(RegExp(r'^-|-$'), '');
-  return normalized.isEmpty ? 'document' : normalized;
+  return normalized.isEmpty ? 'مستند' : normalized;
 }
