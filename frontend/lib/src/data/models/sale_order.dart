@@ -246,7 +246,10 @@ class SaleOrder {
     this.registerSession,
     this.registerSessionNumber,
     this.customer,
+    this.customerNumber,
     this.customerName,
+    this.customerPhone,
+    this.customerEmail,
     this.profit,
     this.profitMarginPercent,
     this.invoicePrintJob,
@@ -265,7 +268,10 @@ class SaleOrder {
   final int? registerSession;
   final String? registerSessionNumber;
   final int? customer;
+  final String? customerNumber;
   final String? customerName;
+  final String? customerPhone;
+  final String? customerEmail;
   final double? profit;
   final double? profitMarginPercent;
   final PrintJob? invoicePrintJob;
@@ -292,7 +298,10 @@ class SaleOrder {
       registerSession: _nullableIntFromJson(json['register_session']),
       registerSessionNumber: json['register_session_number']?.toString(),
       customer: _nullableIntFromJson(json['customer']),
+      customerNumber: json['customer_number']?.toString(),
       customerName: json['customer_name']?.toString(),
+      customerPhone: json['customer_phone']?.toString(),
+      customerEmail: json['customer_email']?.toString(),
       profit: _nullableMoneyFromJson(
         json['profit'] ?? json['gross_profit'] ?? json['total_profit'],
       ),

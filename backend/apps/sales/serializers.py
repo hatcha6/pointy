@@ -281,7 +281,13 @@ class OrderPaymentSerializer(serializers.Serializer):
 class OrderSerializer(serializers.ModelSerializer):
     lines = OrderLineSerializer(many=True, allow_empty=False)
     payments = OrderPaymentSerializer(many=True, read_only=True)
+    customer_number = serializers.CharField(
+        source="customer.customer_number",
+        read_only=True,
+    )
     customer_name = serializers.CharField(source="customer.full_name", read_only=True)
+    customer_phone = serializers.CharField(source="customer.phone", read_only=True)
+    customer_email = serializers.CharField(source="customer.email", read_only=True)
     register_session_number = serializers.CharField(
         source="register_session.session_number",
         read_only=True,
@@ -306,7 +312,10 @@ class OrderSerializer(serializers.ModelSerializer):
             "register_session",
             "register_session_number",
             "customer",
+            "customer_number",
             "customer_name",
+            "customer_phone",
+            "customer_email",
             "lines",
             "payments",
             "subtotal",
@@ -325,7 +334,10 @@ class OrderSerializer(serializers.ModelSerializer):
             "receipt_number",
             "register_session",
             "register_session_number",
+            "customer_number",
             "customer_name",
+            "customer_phone",
+            "customer_email",
             "subtotal",
             "discount_total",
             "total",

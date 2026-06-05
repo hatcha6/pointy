@@ -14,6 +14,7 @@ import '../models/shop_settings.dart';
 import 'order_document_action.dart';
 import 'order_document_web_delivery.dart';
 import 'print_transport.dart';
+import '../../shared/pdf/pointy_pdf_table.dart';
 
 export 'order_document_action.dart';
 
@@ -201,85 +202,10 @@ class OrderDocumentService {
   }) async {
     final fonts = await fontLoader.load();
     final document = _DocumentFrame(
-      title: labels.saleInvoiceTitle,
-      reference: _saleReference(order),
-      shopSettings: shopSettings,
+      template: saleInvoiceTemplate(order: order, shopSettings: shopSettings),
       shopLogoBytes: shopLogoBytes,
       labels: labels,
       fonts: fonts,
-      sections: [
-        _DocumentSection(
-          title: labels.summary,
-          rows: [
-            _DocumentField(labels.invoiceNumber, _saleReference(order)),
-            _DocumentField(labels.status, labels.saleStatus(order.status)),
-            if (order.customerName?.trim().isNotEmpty == true)
-              _DocumentField(labels.customer, order.customerName!.trim()),
-            if (order.registerSessionNumber?.trim().isNotEmpty == true)
-              _DocumentField(
-                labels.registerSession,
-                order.registerSessionNumber!.trim(),
-              ),
-            if (order.createdAt != null)
-              _DocumentField(
-                labels.issueDate,
-                _formatDateTime(order.createdAt!),
-              ),
-          ],
-        ),
-        _DocumentSection(
-          title: labels.items,
-          table: _DocumentTable(
-            columns: [
-              labels.product,
-              labels.quantity,
-              labels.unitPrice,
-              labels.lineTotal,
-            ],
-            rows: [
-              for (final line in order.lines)
-                [
-                  _saleLineName(line),
-                  '${line.quantity}',
-                  _formatMoney(line.unitPrice),
-                  _formatMoney(line.total),
-                ],
-            ],
-            columnFlex: const [2.8, 0.8, 1.1, 1.1],
-          ),
-        ),
-        if (order.payments.isNotEmpty)
-          _DocumentSection(
-            title: labels.payments,
-            table: _DocumentTable(
-              columns: [labels.paymentMethod, labels.amount],
-              rows: [
-                for (final payment in order.payments)
-                  [
-                    labels.paymentMethodLabel(payment.method),
-                    _formatMoney(payment.amount),
-                  ],
-              ],
-              columnFlex: const [2, 1],
-            ),
-          ),
-        _DocumentSection(
-          title: labels.totals,
-          rows: [
-            _DocumentField(labels.subtotal, _formatMoney(order.subtotal)),
-            if (order.discountTotal > 0)
-              _DocumentField(
-                labels.discount,
-                _formatMoney(order.discountTotal),
-              ),
-            _DocumentField(
-              labels.total,
-              _formatMoney(order.total),
-              strong: true,
-            ),
-          ],
-        ),
-      ],
     );
     return document.build();
   }
@@ -291,104 +217,165 @@ class OrderDocumentService {
   }) async {
     final fonts = await fontLoader.load();
     final document = _DocumentFrame(
-      title: labels.purchaseOrderTitle,
-      reference: _purchaseReference(order),
-      shopSettings: shopSettings,
+      template: purchaseOrderTemplate(order: order, shopSettings: shopSettings),
       shopLogoBytes: shopLogoBytes,
       labels: labels,
       fonts: fonts,
-      sections: [
-        _DocumentSection(
-          title: labels.summary,
-          rows: [
-            _DocumentField(
-              labels.purchaseOrderNumber,
-              _purchaseReference(order),
-            ),
-            if (order.supplierInvoiceNumber.trim().isNotEmpty)
-              _DocumentField(
-                labels.supplierInvoiceNumber,
-                order.supplierInvoiceNumber.trim(),
-              ),
-            if (order.supplierName?.trim().isNotEmpty == true)
-              _DocumentField(labels.supplier, order.supplierName!.trim()),
-            _DocumentField(labels.status, labels.purchaseStatus(order.status)),
-            if (order.createdAt != null)
-              _DocumentField(
-                labels.createdAt,
-                _formatDateTime(order.createdAt!),
-              ),
-            if (order.submittedAt != null)
-              _DocumentField(
-                labels.submittedAt,
-                _formatDateTime(order.submittedAt!),
-              ),
-            if (order.receivedAt != null)
-              _DocumentField(
-                labels.receivedAt,
-                _formatDateTime(order.receivedAt!),
-              ),
-            if (order.dueDate != null)
-              _DocumentField(labels.dueDate, _formatDate(order.dueDate!)),
-          ],
-        ),
-        _DocumentSection(
-          title: labels.items,
-          table: _DocumentTable(
-            columns: [
-              labels.product,
-              labels.quantity,
-              labels.received,
-              labels.unitCost,
-              labels.lineTotal,
-            ],
-            rows: [
-              for (final line in order.lines)
-                [
-                  line.displayName.trim().isEmpty
-                      ? labels.unknownProduct
-                      : line.displayName.trim(),
-                  '${line.quantity}',
-                  '${line.receivedQuantity}',
-                  _formatMoney(line.effectiveUnitCost ?? line.unitCost),
-                  _formatMoney(line.landedLineTotal ?? line.total),
-                ],
-            ],
-            columnFlex: const [2.5, 0.7, 0.8, 1, 1],
-          ),
-        ),
-        _DocumentSection(
-          title: labels.totals,
-          rows: [
-            _DocumentField(labels.subtotal, _formatMoney(order.subtotal)),
-            if (order.discountTotal > 0)
-              _DocumentField(
-                labels.discount,
-                _formatMoney(order.discountTotal),
-              ),
-            if (order.landedCostTotal > 0)
-              _DocumentField(
-                labels.landedCost,
-                _formatMoney(order.landedCostTotal),
-              ),
-            _DocumentField(
-              labels.total,
-              _formatMoney(order.total),
-              strong: true,
-            ),
-            if (order.paidTotal > 0)
-              _DocumentField(labels.paid, _formatMoney(order.paidTotal)),
-            if (order.balanceDue > 0)
-              _DocumentField(
-                labels.balanceDue,
-                _formatMoney(order.balanceDue),
-                strong: true,
-              ),
-          ],
-        ),
-      ],
     );
     return document.build();
+  }
+
+  OrderDocumentTemplate saleInvoiceTemplate({
+    required SaleOrder order,
+    ShopSettings? shopSettings,
+  }) {
+    final paidTotal = order.payments.fold<double>(
+      0,
+      (sum, payment) => sum + payment.amount,
+    );
+    final balanceDue = _balanceDue(total: order.total, paid: paidTotal);
+    return OrderDocumentTemplate(
+      title: labels.saleInvoiceTitle,
+      reference: _saleReference(order),
+      shopName: _shopName(shopSettings),
+      shopHeaderLines: _shopHeaderLines(shopSettings),
+      recipientTitle: labels.billTo,
+      recipientLines: _nonBlankStrings([
+        order.customerName,
+        order.customerNumber,
+        order.customerPhone,
+        order.customerEmail,
+      ]),
+      details: [
+        if (order.createdAt != null)
+          OrderDocumentField(labels.issueDate, _formatDate(order.createdAt!)),
+        if (balanceDue > 0)
+          OrderDocumentField(
+            labels.balanceDue,
+            _formatMoney(balanceDue),
+            strong: true,
+            highlight: true,
+          ),
+      ],
+      itemsTable: OrderDocumentTable(
+        columns: [
+          labels.product,
+          labels.quantity,
+          labels.unitPrice,
+          labels.lineTotal,
+        ],
+        rows: [
+          for (final line in order.lines)
+            [
+              _saleLineName(line),
+              '${line.quantity}',
+              _formatMoney(line.unitPrice),
+              _formatMoney(line.total),
+            ],
+        ],
+        columnFlex: const [2.8, 0.8, 1.1, 1.1],
+      ),
+      totals: [
+        OrderDocumentField(labels.subtotal, _formatMoney(order.subtotal)),
+        if (order.discountTotal > 0)
+          OrderDocumentField(
+            labels.discount,
+            _formatMoney(order.discountTotal),
+          ),
+        OrderDocumentField(
+          labels.total,
+          _formatMoney(order.total),
+          strong: true,
+        ),
+        if (paidTotal > 0)
+          OrderDocumentField(labels.paid, _formatMoney(paidTotal)),
+      ],
+      notes: _shopFooterNote(shopSettings),
+    );
+  }
+
+  OrderDocumentTemplate purchaseOrderTemplate({
+    required PurchaseOrder order,
+    ShopSettings? shopSettings,
+  }) {
+    return OrderDocumentTemplate(
+      title: labels.purchaseOrderTitle,
+      reference: _purchaseReference(order),
+      shopName: _shopName(shopSettings),
+      shopHeaderLines: _shopHeaderLines(shopSettings),
+      recipientTitle: labels.billFrom,
+      recipientLines: _nonBlankStrings([
+        order.supplierName,
+        order.supplierContactName,
+        order.supplierPhone,
+        order.supplierEmail,
+        order.supplierAddress,
+      ]),
+      details: [
+        if (order.createdAt != null)
+          OrderDocumentField(labels.issueDate, _formatDate(order.createdAt!)),
+        if (order.supplierInvoiceDate != null)
+          OrderDocumentField(
+            labels.supplierInvoiceDate,
+            _formatDate(order.supplierInvoiceDate!),
+          ),
+        if (order.supplierInvoiceNumber.trim().isNotEmpty)
+          OrderDocumentField(
+            labels.supplierInvoiceNumber,
+            order.supplierInvoiceNumber.trim(),
+          ),
+        if (order.dueDate != null)
+          OrderDocumentField(labels.dueDate, _formatDate(order.dueDate!)),
+        if (order.balanceDue > 0)
+          OrderDocumentField(
+            labels.balanceDue,
+            _formatMoney(order.balanceDue),
+            strong: true,
+            highlight: true,
+          ),
+      ],
+      itemsTable: OrderDocumentTable(
+        columns: [
+          labels.product,
+          labels.quantity,
+          labels.unitCost,
+          labels.lineTotal,
+        ],
+        rows: [
+          for (final line in order.lines)
+            [
+              line.displayName.trim().isEmpty
+                  ? labels.unknownProduct
+                  : line.displayName.trim(),
+              '${line.quantity}',
+              _formatMoney(line.effectiveUnitCost ?? line.unitCost),
+              _formatMoney(line.landedLineTotal ?? line.total),
+            ],
+        ],
+        columnFlex: const [2.8, 0.8, 1.1, 1.1],
+      ),
+      totals: [
+        OrderDocumentField(labels.subtotal, _formatMoney(order.subtotal)),
+        if (order.discountTotal > 0)
+          OrderDocumentField(
+            labels.discount,
+            _formatMoney(order.discountTotal),
+          ),
+        if (order.landedCostTotal > 0)
+          OrderDocumentField(
+            labels.landedCost,
+            _formatMoney(order.landedCostTotal),
+          ),
+        OrderDocumentField(
+          labels.total,
+          _formatMoney(order.total),
+          strong: true,
+        ),
+        if (order.paidTotal > 0)
+          OrderDocumentField(labels.paid, _formatMoney(order.paidTotal)),
+      ],
+      notes: _shopFooterNote(shopSettings),
+    );
   }
 
   String saleInvoiceFileName(SaleOrder order) {
@@ -492,19 +479,32 @@ class OrderDocumentService {
   Future<Uint8List> _buildTestPdf() async {
     final fonts = await fontLoader.load();
     return _DocumentFrame(
-      title: labels.testPrintTitle,
-      reference: labels.testPrintReference,
+      template: OrderDocumentTemplate(
+        title: labels.testPrintTitle,
+        reference: labels.testPrintReference,
+        shopName: _shopName(null),
+        shopHeaderLines: const [],
+        recipientTitle: labels.billTo,
+        recipientLines: const [],
+        details: [
+          OrderDocumentField(labels.issueDate, _formatDateTime(DateTime.now())),
+        ],
+        itemsTable: OrderDocumentTable(
+          columns: [
+            labels.product,
+            labels.quantity,
+            labels.unitPrice,
+            labels.lineTotal,
+          ],
+          rows: const [],
+          columnFlex: const [2.8, 0.8, 1.1, 1.1],
+        ),
+        totals: [
+          OrderDocumentField(labels.total, _formatMoney(0), strong: true),
+        ],
+      ),
       labels: labels,
       fonts: fonts,
-      sections: [
-        _DocumentSection(
-          title: labels.summary,
-          rows: [
-            _DocumentField(labels.issueDate, _formatDateTime(DateTime.now())),
-            _DocumentField(labels.total, _formatMoney(0), strong: true),
-          ],
-        ),
-      ],
     ).build();
   }
 }
@@ -523,6 +523,9 @@ class OrderDocumentLabels {
     required this.invoiceNumber,
     required this.purchaseOrderNumber,
     required this.supplierInvoiceNumber,
+    required this.supplierInvoiceDate,
+    required this.billTo,
+    required this.billFrom,
     required this.customer,
     required this.supplier,
     required this.registerSession,
@@ -546,6 +549,8 @@ class OrderDocumentLabels {
     required this.total,
     required this.paid,
     required this.balanceDue,
+    required this.notes,
+    required this.terms,
     required this.unknownProduct,
     required this.walkInCustomer,
     required this.emptyValue,
@@ -566,6 +571,9 @@ class OrderDocumentLabels {
       invoiceNumber = 'رقم الفاتورة',
       purchaseOrderNumber = 'رقم أمر الشراء',
       supplierInvoiceNumber = 'رقم فاتورة المورد',
+      supplierInvoiceDate = 'تاريخ فاتورة المورد',
+      billTo = 'فاتورة إلى:',
+      billFrom = 'فاتورة من:',
       customer = 'العميل',
       supplier = 'المورد',
       registerSession = 'جلسة الدرج',
@@ -575,11 +583,11 @@ class OrderDocumentLabels {
       submittedAt = 'تاريخ الإرسال',
       receivedAt = 'تاريخ الاستلام',
       dueDate = 'تاريخ الاستحقاق',
-      product = 'المنتج',
+      product = 'الصنف',
       quantity = 'الكمية',
       received = 'المستلم',
-      unitPrice = 'سعر الوحدة',
-      unitCost = 'تكلفة الوحدة',
+      unitPrice = 'السعر',
+      unitCost = 'السعر',
       lineTotal = 'الإجمالي',
       paymentMethod = 'طريقة الدفع',
       amount = 'المبلغ',
@@ -589,6 +597,8 @@ class OrderDocumentLabels {
       total = 'الإجمالي',
       paid = 'المدفوع',
       balanceDue = 'المتبقي',
+      notes = 'ملاحظات',
+      terms = 'الشروط',
       unknownProduct = 'منتج غير معروف',
       walkInCustomer = 'عميل نقدي',
       emptyValue = '-',
@@ -607,6 +617,9 @@ class OrderDocumentLabels {
   final String invoiceNumber;
   final String purchaseOrderNumber;
   final String supplierInvoiceNumber;
+  final String supplierInvoiceDate;
+  final String billTo;
+  final String billFrom;
   final String customer;
   final String supplier;
   final String registerSession;
@@ -630,6 +643,8 @@ class OrderDocumentLabels {
   final String total;
   final String paid;
   final String balanceDue;
+  final String notes;
+  final String terms;
   final String unknownProduct;
   final String walkInCustomer;
   final String emptyValue;
@@ -683,6 +698,13 @@ class OrderDocumentFonts {
     this.fallback = const [],
   });
 
+  factory OrderDocumentFonts.type1ForTests() {
+    return OrderDocumentFonts(
+      base: pw.Font.helvetica(),
+      bold: pw.Font.helveticaBold(),
+    );
+  }
+
   final pw.Font base;
   final pw.Font bold;
   final List<pw.Font> fallback;
@@ -696,31 +718,54 @@ class OrderDocumentFonts {
   }
 }
 
-class _DocumentFrame {
-  const _DocumentFrame({
+@immutable
+class OrderDocumentTemplate {
+  const OrderDocumentTemplate({
     required this.title,
     required this.reference,
-    required this.labels,
-    required this.fonts,
-    required this.sections,
-    this.shopSettings,
-    this.shopLogoBytes,
+    required this.shopName,
+    required this.shopHeaderLines,
+    required this.recipientTitle,
+    required this.recipientLines,
+    required this.details,
+    required this.itemsTable,
+    required this.totals,
+    this.notes,
+    this.terms,
   });
 
   final String title;
   final String reference;
-  final ShopSettings? shopSettings;
+  final String shopName;
+  final List<String> shopHeaderLines;
+  final String recipientTitle;
+  final List<String> recipientLines;
+  final List<OrderDocumentField> details;
+  final OrderDocumentTable itemsTable;
+  final List<OrderDocumentField> totals;
+  final String? notes;
+  final String? terms;
+}
+
+class _DocumentFrame {
+  const _DocumentFrame({
+    required this.template,
+    required this.labels,
+    required this.fonts,
+    this.shopLogoBytes,
+  });
+
+  final OrderDocumentTemplate template;
   final Uint8List? shopLogoBytes;
   final OrderDocumentLabels labels;
   final OrderDocumentFonts fonts;
-  final List<_DocumentSection> sections;
 
   Future<Uint8List> build() async {
     final pdf = pw.Document(
-      title: '$title $reference',
-      author: _shopName,
+      title: '${template.title} ${template.reference}',
+      author: template.shopName,
       creator: 'Pointy',
-      subject: title,
+      subject: template.title,
     );
 
     pdf.addPage(
@@ -728,28 +773,22 @@ class _DocumentFrame {
         pageTheme: pw.PageTheme(
           pageFormat: PdfPageFormat.a4.applyMargin(
             left: 16 * PdfPageFormat.mm,
-            top: 14 * PdfPageFormat.mm,
+            top: 16 * PdfPageFormat.mm,
             right: 16 * PdfPageFormat.mm,
-            bottom: 14 * PdfPageFormat.mm,
+            bottom: 16 * PdfPageFormat.mm,
           ),
           theme: fonts.toThemeData(),
           textDirection: pw.TextDirection.rtl,
         ),
-        header: (_) => _header(),
         footer: (context) => _footer(context),
         build: (_) => [
-          for (final section in sections) ...[
-            section.build(labels),
-            pw.SizedBox(height: 12),
-          ],
-          if (_footerText.isNotEmpty) ...[
-            pw.SizedBox(height: 4),
-            pw.Text(
-              _footerText,
-              style: const pw.TextStyle(fontSize: 9, color: _PdfColors.muted),
-              textAlign: pw.TextAlign.center,
-            ),
-          ],
+          _hero(),
+          pw.SizedBox(height: 32),
+          _documentParties(),
+          pw.SizedBox(height: 24),
+          template.itemsTable.build(labels),
+          pw.SizedBox(height: 24),
+          _bottomSection(),
         ],
       ),
     );
@@ -757,103 +796,256 @@ class _DocumentFrame {
     return pdf.save();
   }
 
-  String get _shopName {
-    final name = shopSettings?.shopName.trim() ?? '';
-    return name.isEmpty ? 'نقطة البيع' : name;
-  }
-
-  String get _headerText => shopSettings?.receiptHeader.trim() ?? '';
-
-  String get _footerText => shopSettings?.receiptFooter.trim() ?? '';
-
-  pw.Widget _header() {
+  pw.Widget _hero() {
     final logoProvider = _logoProvider(shopLogoBytes);
-    return pw.Container(
-      padding: const pw.EdgeInsets.all(12),
-      decoration: pw.BoxDecoration(
-        color: _PdfColors.fill,
-        border: pw.Border.all(color: _PdfColors.border, width: 0.5),
-        borderRadius: const pw.BorderRadius.all(pw.Radius.circular(6)),
-      ),
+    return pw.Directionality(
+      textDirection: pw.TextDirection.ltr,
       child: pw.Row(
+        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
         crossAxisAlignment: pw.CrossAxisAlignment.start,
         children: [
-          pw.Container(
-            width: 150,
-            padding: const pw.EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-            decoration: pw.BoxDecoration(
-              color: _PdfColors.accentSoft,
-              border: pw.Border.all(color: _PdfColors.border, width: 0.5),
-              borderRadius: const pw.BorderRadius.all(pw.Radius.circular(5)),
+          pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              pw.Text(
+                template.title,
+                style: pw.TextStyle(
+                  fontSize: 32,
+                  fontWeight: pw.FontWeight.bold,
+                  color: _PdfColors.ink,
+                ),
+                textDirection: pw.TextDirection.rtl,
+              ),
+              pw.SizedBox(height: 4),
+              pw.Text(
+                '# ${template.reference}',
+                style: const pw.TextStyle(
+                  fontSize: 14,
+                  color: _PdfColors.muted,
+                ),
+                textDirection: pw.TextDirection.ltr,
+              ),
+            ],
+          ),
+          if (logoProvider != null)
+            pw.Container(
+              height: 50,
+              alignment: pw.Alignment.topRight,
+              child: pw.Image(logoProvider, fit: pw.BoxFit.contain),
             ),
+        ],
+      ),
+    );
+  }
+
+  pw.Widget _documentParties() {
+    return pw.Directionality(
+      textDirection: pw.TextDirection.ltr,
+      child: pw.Row(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+        children: [
+          pw.SizedBox(width: 220, child: _detailRows(template.details)),
+          pw.SizedBox(
+            width: 250,
             child: pw.Column(
               crossAxisAlignment: pw.CrossAxisAlignment.end,
               children: [
                 pw.Text(
-                  title,
+                  template.shopName,
                   style: pw.TextStyle(
-                    fontSize: 17,
-                    fontWeight: pw.FontWeight.bold,
+                    fontSize: 14,
                     color: _PdfColors.ink,
+                    fontWeight: pw.FontWeight.bold,
                   ),
-                  textAlign: pw.TextAlign.right,
+                  textDirection: pw.TextDirection.rtl,
                 ),
                 pw.SizedBox(height: 4),
-                pw.Text(
-                  reference,
-                  style: pw.TextStyle(
-                    fontSize: 11,
-                    color: _PdfColors.accent,
-                    fontWeight: pw.FontWeight.bold,
+                for (final line in template.shopHeaderLines) ...[
+                  pw.Text(
+                    line,
+                    style: const pw.TextStyle(
+                      fontSize: 11,
+                      color: _PdfColors.ink,
+                    ),
+                    textDirection: pw.TextDirection.rtl,
                   ),
-                  textAlign: pw.TextAlign.right,
-                ),
+                  pw.SizedBox(height: 2),
+                ],
+                if (template.recipientLines.isNotEmpty) ...[
+                  pw.SizedBox(height: 24),
+                  pw.Text(
+                    template.recipientTitle,
+                    style: const pw.TextStyle(
+                      fontSize: 11,
+                      color: _PdfColors.ink,
+                    ),
+                    textDirection: pw.TextDirection.rtl,
+                  ),
+                  pw.SizedBox(height: 4),
+                  pw.Text(
+                    template.recipientLines.first,
+                    style: pw.TextStyle(
+                      fontSize: 12,
+                      color: _PdfColors.ink,
+                      fontWeight: pw.FontWeight.bold,
+                    ),
+                    textDirection: pw.TextDirection.rtl,
+                  ),
+                  pw.SizedBox(height: 4),
+                  for (final line in template.recipientLines.skip(1)) ...[
+                    pw.Text(
+                      line,
+                      style: const pw.TextStyle(
+                        fontSize: 11,
+                        color: _PdfColors.ink,
+                      ),
+                      textDirection: pw.TextDirection.rtl,
+                    ),
+                    pw.SizedBox(height: 2),
+                  ],
+                ],
               ],
             ),
           ),
-          pw.SizedBox(width: 12),
+        ],
+      ),
+    );
+  }
+
+  pw.Widget _detailRows(List<OrderDocumentField> rows) {
+    if (rows.isEmpty) {
+      return pw.SizedBox();
+    }
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        for (final row in rows)
+          pw.Container(
+            margin: const pw.EdgeInsets.only(bottom: 8),
+            padding: row.highlight
+                ? const pw.EdgeInsets.symmetric(horizontal: 12, vertical: 10)
+                : pw.EdgeInsets.zero,
+            decoration: row.highlight
+                ? const pw.BoxDecoration(
+                    color: _PdfColors.highlight,
+                    borderRadius: pw.BorderRadius.all(pw.Radius.circular(6)),
+                  )
+                : null,
+            child: pw.Directionality(
+              textDirection: pw.TextDirection.rtl,
+              child: pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Text(
+                    '${row.label}:',
+                    style: pw.TextStyle(
+                      fontSize: row.highlight ? 12 : 11,
+                      fontWeight: row.highlight
+                          ? pw.FontWeight.bold
+                          : pw.FontWeight.normal,
+                      color: _PdfColors.ink,
+                    ),
+                  ),
+                  pw.Text(
+                    row.value,
+                    style: pw.TextStyle(
+                      fontSize: row.highlight ? 12 : 11,
+                      fontWeight: row.highlight
+                          ? pw.FontWeight.bold
+                          : pw.FontWeight.normal,
+                      color: _PdfColors.ink,
+                    ),
+                    textDirection: pw.TextDirection.ltr,
+                  ),
+                ],
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  pw.Widget _bottomSection() {
+    return pw.Directionality(
+      textDirection: pw.TextDirection.rtl,
+      child: pw.Row(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: [
           pw.Expanded(
             child: pw.Column(
-              crossAxisAlignment: pw.CrossAxisAlignment.end,
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
               children: [
-                pw.Text(
-                  _shopName,
-                  style: pw.TextStyle(
-                    fontSize: 13,
-                    color: _PdfColors.accent,
-                    fontWeight: pw.FontWeight.bold,
+                if (template.notes != null) ...[
+                  pw.Text(
+                    '${labels.notes}:',
+                    style: pw.TextStyle(
+                      fontWeight: pw.FontWeight.bold,
+                      fontSize: 11,
+                    ),
                   ),
-                  textAlign: pw.TextAlign.right,
-                ),
-                if (_headerText.isNotEmpty) ...[
                   pw.SizedBox(height: 4),
                   pw.Text(
-                    _headerText,
-                    style: const pw.TextStyle(
-                      fontSize: 9,
-                      color: _PdfColors.muted,
-                      lineSpacing: 2,
+                    template.notes!,
+                    style: const pw.TextStyle(fontSize: 11),
+                  ),
+                  pw.SizedBox(height: 16),
+                ],
+                if (template.terms != null) ...[
+                  pw.Text(
+                    '${labels.terms}:',
+                    style: pw.TextStyle(
+                      fontWeight: pw.FontWeight.bold,
+                      fontSize: 11,
                     ),
-                    textAlign: pw.TextAlign.right,
+                  ),
+                  pw.SizedBox(height: 4),
+                  pw.Text(
+                    template.terms!,
+                    style: const pw.TextStyle(fontSize: 11),
                   ),
                 ],
               ],
             ),
           ),
-          if (logoProvider != null) ...[
-            pw.SizedBox(width: 10),
-            pw.Container(
-              width: 46,
-              height: 46,
-              padding: const pw.EdgeInsets.all(5),
-              decoration: pw.BoxDecoration(
-                color: _PdfColors.white,
-                border: pw.Border.all(color: _PdfColors.border, width: 0.5),
-                borderRadius: const pw.BorderRadius.all(pw.Radius.circular(5)),
-              ),
-              child: pw.Image(logoProvider, fit: pw.BoxFit.contain),
+          pw.SizedBox(width: 24),
+          pw.SizedBox(
+            width: 250,
+            child: pw.Column(
+              children: [
+                for (final row in template.totals)
+                  pw.Padding(
+                    padding: const pw.EdgeInsets.only(bottom: 10),
+                    child: pw.Row(
+                      mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                      children: [
+                        pw.Text(
+                          '${row.label}:',
+                          style: pw.TextStyle(
+                            fontSize: row.strong ? 12 : 11,
+                            color: _PdfColors.ink,
+                            fontWeight: row.strong
+                                ? pw.FontWeight.bold
+                                : pw.FontWeight.normal,
+                          ),
+                        ),
+                        pw.Text(
+                          row.value,
+                          style: pw.TextStyle(
+                            fontSize: row.strong ? 12 : 11,
+                            color: _PdfColors.ink,
+                            fontWeight: row.strong
+                                ? pw.FontWeight.bold
+                                : pw.FontWeight.normal,
+                          ),
+                          textDirection: pw.TextDirection.ltr,
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
             ),
-          ],
+          ),
         ],
       ),
     );
@@ -866,10 +1058,10 @@ class _DocumentFrame {
         border: pw.Border(top: pw.BorderSide(color: _PdfColors.border)),
       ),
       child: pw.Align(
-        alignment: pw.Alignment.centerRight,
+        alignment: pw.Alignment.centerLeft,
         child: pw.Text(
           '${labels.page} ${context.pageNumber} ${labels.ofPages} ${context.pagesCount}',
-          style: const pw.TextStyle(fontSize: 8, color: _PdfColors.muted),
+          style: const pw.TextStyle(fontSize: 9, color: _PdfColors.muted),
         ),
       ),
     );
@@ -887,82 +1079,8 @@ pw.ImageProvider? _logoProvider(Uint8List? bytes) {
   }
 }
 
-class _DocumentSection {
-  const _DocumentSection({
-    required this.title,
-    this.rows = const [],
-    this.table,
-  });
-
-  final String title;
-  final List<_DocumentField> rows;
-  final _DocumentTable? table;
-
-  pw.Widget build(OrderDocumentLabels labels) {
-    return pw.Column(
-      crossAxisAlignment: pw.CrossAxisAlignment.stretch,
-      children: [
-        pw.Text(
-          title,
-          style: pw.TextStyle(
-            fontSize: 12,
-            fontWeight: pw.FontWeight.bold,
-            color: _PdfColors.ink,
-          ),
-          textAlign: pw.TextAlign.right,
-        ),
-        pw.SizedBox(height: 6),
-        if (rows.isNotEmpty) _fieldGrid(rows),
-        if (table != null) table!.build(labels),
-      ],
-    );
-  }
-
-  pw.Widget _fieldGrid(List<_DocumentField> rows) {
-    return pw.Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      children: [
-        for (final row in rows)
-          pw.Container(
-            width: 240,
-            padding: const pw.EdgeInsets.symmetric(horizontal: 9, vertical: 7),
-            decoration: pw.BoxDecoration(
-              color: row.strong ? _PdfColors.accentSoft : _PdfColors.fill,
-              border: pw.Border.all(color: _PdfColors.border, width: 0.5),
-              borderRadius: const pw.BorderRadius.all(pw.Radius.circular(5)),
-            ),
-            child: pw.Column(
-              crossAxisAlignment: pw.CrossAxisAlignment.end,
-              children: [
-                pw.Text(
-                  row.label,
-                  style: const pw.TextStyle(
-                    fontSize: 8,
-                    color: _PdfColors.muted,
-                  ),
-                  textAlign: pw.TextAlign.right,
-                ),
-                pw.SizedBox(height: 2),
-                pw.Text(
-                  row.value,
-                  style: pw.TextStyle(
-                    fontSize: 10,
-                    color: _PdfColors.ink,
-                    fontWeight: row.strong ? pw.FontWeight.bold : null,
-                  ),
-                  textAlign: pw.TextAlign.right,
-                ),
-              ],
-            ),
-          ),
-      ],
-    );
-  }
-}
-
-class _DocumentTable {
-  const _DocumentTable({
+class OrderDocumentTable {
+  const OrderDocumentTable({
     required this.columns,
     required this.rows,
     this.columnFlex = const [],
@@ -973,38 +1091,13 @@ class _DocumentTable {
   final List<double> columnFlex;
 
   pw.Widget build(OrderDocumentLabels labels) {
-    final widths = <int, pw.TableColumnWidth>{};
-    for (var index = 0; index < columnFlex.length; index += 1) {
-      widths[index] = pw.FlexColumnWidth(columnFlex[index]);
-    }
-    return pw.TableHelper.fromTextArray(
-      headers: columns.map(_tableValue).toList(growable: false),
-      data: rows.isEmpty
-          ? [
-              [labels.emptyValue, ...List.filled(columns.length - 1, '')],
-            ]
-          : [
-              for (final row in rows)
-                row.map(_tableValue).toList(growable: false),
-            ],
-      border: pw.TableBorder.all(color: _PdfColors.border, width: 0.5),
-      headerDecoration: const pw.BoxDecoration(color: _PdfColors.accentSoft),
-      rowDecoration: const pw.BoxDecoration(color: _PdfColors.white),
-      oddRowDecoration: const pw.BoxDecoration(color: _PdfColors.fillAlt),
-      headerStyle: pw.TextStyle(
-        color: _PdfColors.accent,
-        fontSize: 9,
-        fontWeight: pw.FontWeight.bold,
-      ),
-      cellStyle: const pw.TextStyle(color: _PdfColors.ink, fontSize: 9),
-      cellPadding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5),
-      headerPadding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 6),
-      cellAlignment: pw.Alignment.centerRight,
-      headerAlignment: pw.Alignment.centerRight,
-      columnWidths: widths.isEmpty ? null : widths,
-      tableDirection: pw.TextDirection.rtl,
-      headerDirection: pw.TextDirection.rtl,
-    );
+    return PointyPdfTable.invoice(
+      columns: columns,
+      rows: rows,
+      columnFlex: columnFlex,
+      emptyValue: labels.emptyValue,
+      valueFormatter: _tableValue,
+    ).build();
   }
 
   String _tableValue(String value) {
@@ -1016,23 +1109,25 @@ class _DocumentTable {
   }
 }
 
-class _DocumentField {
-  const _DocumentField(this.label, this.value, {this.strong = false});
+class OrderDocumentField {
+  const OrderDocumentField(
+    this.label,
+    this.value, {
+    this.strong = false,
+    this.highlight = false,
+  });
 
   final String label;
   final String value;
   final bool strong;
+  final bool highlight;
 }
 
 class _PdfColors {
   static const ink = PdfColor.fromInt(0xff172026);
   static const muted = PdfColor.fromInt(0xff64717a);
   static const border = PdfColor.fromInt(0xffd6dde2);
-  static const fill = PdfColor.fromInt(0xfff7f8f6);
-  static const fillAlt = PdfColor.fromInt(0xfffbfcfb);
-  static const accent = PdfColor.fromInt(0xff0b6b64);
-  static const accentSoft = PdfColor.fromInt(0xffe8f4f1);
-  static const white = PdfColor.fromInt(0xffffffff);
+  static const highlight = PdfColor.fromInt(0xfff1f3f4);
 }
 
 String _saleReference(SaleOrder order) {
@@ -1043,6 +1138,42 @@ String _saleReference(SaleOrder order) {
 String _purchaseReference(PurchaseOrder order) {
   final orderNumber = order.orderNumber.trim();
   return orderNumber.isEmpty ? '${order.id}' : orderNumber;
+}
+
+String _shopName(ShopSettings? settings) {
+  final name = settings?.shopName.trim() ?? '';
+  return name.isEmpty ? 'نقطة البيع' : name;
+}
+
+List<String> _shopHeaderLines(ShopSettings? settings) {
+  final header = settings?.receiptHeader.trim() ?? '';
+  if (header.isEmpty) {
+    return const [];
+  }
+  return _nonBlankStrings(header.split(RegExp(r'\r?\n')));
+}
+
+String? _shopFooterNote(ShopSettings? settings) {
+  final footer = settings?.receiptFooter.trim() ?? '';
+  return footer.isEmpty ? null : footer;
+}
+
+double _balanceDue({required double total, required double paid}) {
+  final due = total - paid;
+  return due <= 0 ? 0 : due;
+}
+
+List<String> _nonBlankStrings(Iterable<Object?> values) {
+  final lines = <String>[];
+  final seen = <String>{};
+  for (final value in values) {
+    final normalized = value?.toString().replaceAll(RegExp(r'\s+'), ' ').trim();
+    if (normalized == null || normalized.isEmpty || !seen.add(normalized)) {
+      continue;
+    }
+    lines.add(normalized);
+  }
+  return List.unmodifiable(lines);
 }
 
 String _saleLineName(SaleOrderLine line) {

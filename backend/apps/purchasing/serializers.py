@@ -923,6 +923,13 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
         allow_empty=True,
     )
     supplier_name = serializers.CharField(source="supplier.name", read_only=True)
+    supplier_contact_name = serializers.CharField(
+        source="supplier.contact_name",
+        read_only=True,
+    )
+    supplier_phone = serializers.CharField(source="supplier.phone", read_only=True)
+    supplier_email = serializers.CharField(source="supplier.email", read_only=True)
+    supplier_address = serializers.CharField(source="supplier.address", read_only=True)
     landed_cost_total = serializers.DecimalField(
         max_digits=10,
         decimal_places=2,
@@ -971,6 +978,10 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
             "order_number",
             "supplier",
             "supplier_name",
+            "supplier_contact_name",
+            "supplier_phone",
+            "supplier_email",
+            "supplier_address",
             "supplier_invoice_number",
             "supplier_invoice_date",
             "supplier_reference",
@@ -1009,6 +1020,10 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
             "id",
             "order_number",
             "supplier_name",
+            "supplier_contact_name",
+            "supplier_phone",
+            "supplier_email",
+            "supplier_address",
             "status",
             "adjustments",
             "audit_events",

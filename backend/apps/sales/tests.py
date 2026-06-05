@@ -685,6 +685,7 @@ class OrderCheckoutApiTests(TestCase):
         customer = Customer.objects.create(
             full_name="Layla Ahmed",
             phone="+218911234567",
+            email="layla@example.com",
         )
 
         response = self.client.post(
@@ -697,7 +698,10 @@ class OrderCheckoutApiTests(TestCase):
         self.assertEqual(response.data["register_session"], session["id"])
         self.assertEqual(response.data["register_session_number"], session["session_number"])
         self.assertEqual(response.data["customer"], customer.pk)
+        self.assertEqual(response.data["customer_number"], customer.customer_number)
         self.assertEqual(response.data["customer_name"], "Layla Ahmed")
+        self.assertEqual(response.data["customer_phone"], "+218911234567")
+        self.assertEqual(response.data["customer_email"], "layla@example.com")
         self.assertEqual(response.data["subtotal"], "7.00")
         self.assertEqual(response.data["discount_total"], "0.00")
         self.assertEqual(response.data["total"], "7.00")

@@ -703,6 +703,10 @@ class PurchaseOrder {
     this.landedCostAllocationMethod = LandedCostAllocationMethod.byLineValue,
     this.supplierId,
     this.supplierName,
+    this.supplierContactName,
+    this.supplierPhone,
+    this.supplierEmail,
+    this.supplierAddress,
     this.supplierInvoiceNumber = '',
     this.supplierInvoiceDate,
     this.dueDate,
@@ -737,6 +741,10 @@ class PurchaseOrder {
   final bool canExchange;
   final int? supplierId;
   final String? supplierName;
+  final String? supplierContactName;
+  final String? supplierPhone;
+  final String? supplierEmail;
+  final String? supplierAddress;
   final String supplierInvoiceNumber;
   final DateTime? supplierInvoiceDate;
   final DateTime? dueDate;
@@ -798,6 +806,10 @@ class PurchaseOrder {
       status: status,
       supplierId: _nullableIntFromJson(json['supplier']),
       supplierName: json['supplier_name']?.toString(),
+      supplierContactName: json['supplier_contact_name']?.toString(),
+      supplierPhone: json['supplier_phone']?.toString(),
+      supplierEmail: json['supplier_email']?.toString(),
+      supplierAddress: json['supplier_address']?.toString(),
       supplierInvoiceNumber: _firstNonEmptyString([
         json['supplier_invoice_number'],
         json['supplier_reference'],

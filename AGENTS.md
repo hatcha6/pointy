@@ -20,6 +20,7 @@ These rules apply to AI agents working anywhere in this repository.
 - Keep widgets small and purposeful. Look for existing reusable code before adding new code.
 - Prefer simple, DRY implementations over large files, duplicated UI, or clever abstractions.
 - Avoid large files and mixed-responsibility files. Split unrelated behavior into focused files, and extract reusable widgets, helpers, models, or view-model actions when a file starts to bundle multiple concepts.
+- When using the Flutter `pdf` package for RTL tables, keep visual column metadata in the same order as rendered cells: if headers/rows are reversed for correct RTL visual order, reverse the matching column widths and alignments at that same render boundary, or use a shared helper that does all of them together.
 
 ## Backend
 

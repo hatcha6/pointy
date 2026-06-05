@@ -1349,6 +1349,25 @@ void main() {
     expect(find.text('تسجيل الخروج'), findsOneWidget);
   });
 
+  testWidgets('dashboard navigation returns from a pushed destination', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(PointyApp(apiService: _mockApiService()));
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+
+    expect(find.byTooltip('تحديث لوحة التحكم'), findsOneWidget);
+
+    await _openNavigationDestination(tester, 'المنتجات');
+
+    expect(find.text('إدارة المنتجات'), findsOneWidget);
+    expect(find.byTooltip('تحديث لوحة التحكم'), findsNothing);
+
+    await _openNavigationDestination(tester, 'لوحة التحكم');
+
+    expect(find.byTooltip('تحديث لوحة التحكم'), findsOneWidget);
+    expect(find.text('إدارة المنتجات'), findsNothing);
+  });
+
   testWidgets('contacts drawer opens customers and suppliers management', (
     WidgetTester tester,
   ) async {

@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
+import '../../../shared/pdf/pointy_pdf_table.dart';
 import 'report_pdf_fonts.dart';
 import 'report_pdf_labels.dart';
 import 'report_pdf_models.dart';
@@ -92,7 +93,6 @@ class _ReportColors {
   static const muted = PdfColor.fromInt(0xff64717a);
   static const border = PdfColor.fromInt(0xffd6dde2);
   static const fill = PdfColor.fromInt(0xfff7f8f6);
-  static const fillAlt = PdfColor.fromInt(0xfffbfcfb);
   static const accent = PdfColor.fromInt(0xff0b6b64);
   static const accentSoft = PdfColor.fromInt(0xffe8f4f1);
   static const white = PdfColor.fromInt(0xffffffff);
@@ -127,7 +127,6 @@ List<pw.Widget> _reportSectionWidgets(ReportPdfSection section) {
 }
 
 List<pw.Widget> _reportTableWidgets(ReportPdfTable table) {
-  final widths = _columnWidths(table);
   final rowChunks = _chunkRows(table.rows);
 
   return [
@@ -137,47 +136,21 @@ List<pw.Widget> _reportTableWidgets(ReportPdfTable table) {
     ],
     for (var index = 0; index < rowChunks.length; index += 1) ...[
       if (index > 0) pw.SizedBox(height: 8),
-      _buildTableChunk(table: table, widths: widths, rows: rowChunks[index]),
+      _buildTableChunk(table: table, rows: rowChunks[index]),
     ],
   ];
 }
 
-Map<int, pw.TableColumnWidth> _columnWidths(ReportPdfTable table) {
-  final widths = <int, pw.TableColumnWidth>{};
-  for (var index = 0; index < table.columnFlex.length; index += 1) {
-    widths[index] = pw.FlexColumnWidth(table.columnFlex[index]);
-  }
-  return widths;
-}
-
 pw.Widget _buildTableChunk({
   required ReportPdfTable table,
-  required Map<int, pw.TableColumnWidth> widths,
   required List<List<String>> rows,
 }) {
-  return pw.TableHelper.fromTextArray(
-    headers: table.columns.map(_pdfTableValue).toList(growable: false),
-    data: [
-      for (final row in rows) row.map(_pdfTableValue).toList(growable: false),
-    ],
-    border: pw.TableBorder.all(color: _ReportColors.border, width: 0.5),
-    headerDecoration: const pw.BoxDecoration(color: _ReportColors.accentSoft),
-    rowDecoration: const pw.BoxDecoration(color: _ReportColors.white),
-    oddRowDecoration: const pw.BoxDecoration(color: _ReportColors.fillAlt),
-    headerStyle: pw.TextStyle(
-      color: _ReportColors.accent,
-      fontSize: 9,
-      fontWeight: pw.FontWeight.bold,
-    ),
-    cellStyle: const pw.TextStyle(color: _ReportColors.ink, fontSize: 9),
-    cellPadding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5),
-    headerPadding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 6),
-    cellAlignment: pw.Alignment.centerRight,
-    headerAlignment: pw.Alignment.centerRight,
-    columnWidths: widths.isEmpty ? null : widths,
-    tableDirection: pw.TextDirection.rtl,
-    headerDirection: pw.TextDirection.rtl,
-  );
+  return PointyPdfTable.invoice(
+    columns: table.columns,
+    rows: rows,
+    columnFlex: table.columnFlex,
+    valueFormatter: _pdfTableValue,
+  ).build();
 }
 
 String _pdfTableValue(String value) {

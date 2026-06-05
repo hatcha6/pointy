@@ -179,51 +179,51 @@ class _AuthenticatedRoutes {
         ),
         onOpenInvoices: guardedAction(
           AppCapability.viewInvoices,
-          () => replace(routeContext, invoicesRouteBuilder),
+          () => push(routeContext, invoicesRouteBuilder),
         ),
         onOpenCatalog: guardedAction(
           AppCapability.viewCatalogManagement,
-          () => replace(routeContext, catalogRouteBuilder),
+          () => push(routeContext, catalogRouteBuilder),
         ),
         onOpenCategories: guardedAction(
           AppCapability.manageCategories,
-          () => replace(routeContext, categoryRouteBuilder),
+          () => push(routeContext, categoryRouteBuilder),
         ),
         onOpenPurchasing: guardedAction(
           AppCapability.accessPurchasing,
-          () => replace(routeContext, purchasingRouteBuilder),
+          () => push(routeContext, purchasingRouteBuilder),
         ),
         onOpenContacts: guardedAction(
           AppCapability.manageContacts,
-          () => replace(routeContext, contactsRouteBuilder),
+          () => push(routeContext, contactsRouteBuilder),
         ),
         onOpenRegisterSessions: guardedAction(
           AppCapability.viewRegisterSessions,
-          () => replace(routeContext, registerSessionsRouteBuilder),
+          () => push(routeContext, registerSessionsRouteBuilder),
         ),
         onOpenDiscounts: guardedAction(
           AppCapability.viewDiscountRules,
-          () => replace(routeContext, discountsRouteBuilder),
+          () => push(routeContext, discountsRouteBuilder),
         ),
         onOpenReports: guardedAction(
           AppCapability.viewReports,
-          () => replace(routeContext, reportsRouteBuilder),
+          () => push(routeContext, reportsRouteBuilder),
         ),
         onOpenActivityLog: guardedAction(
           AppCapability.viewActivityLog,
-          () => replace(routeContext, activityLogRouteBuilder),
+          () => push(routeContext, activityLogRouteBuilder),
         ),
         onOpenDeviceSettings: guardedAction(
           AppCapability.manageDeviceSettings,
-          () => replace(routeContext, deviceSettingsRouteBuilder),
+          () => push(routeContext, deviceSettingsRouteBuilder),
         ),
         onOpenUsers: capabilities.actionFor(
           AppCapability.manageUsers,
-          () => replace(routeContext, usersRouteBuilder),
+          () => push(routeContext, usersRouteBuilder),
         ),
         onOpenShopSettings: capabilities.actionFor(
           AppCapability.manageShopSettings,
-          () => replace(routeContext, shopSettingsRouteBuilder),
+          () => push(routeContext, shopSettingsRouteBuilder),
         ),
         onLogout: () => logout(routeContext),
       ),

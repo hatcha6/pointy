@@ -2791,7 +2791,13 @@ class SupplierPaymentApiTests(TestCase):
             unit_price=Decimal("4.00"),
         )
         self.variant = self.product.default_variant
-        self.supplier = Supplier.objects.create(name="Payment supplier")
+        self.supplier = Supplier.objects.create(
+            name="Payment supplier",
+            contact_name="Mona",
+            phone="+21891222333",
+            email="payables@example.com",
+            address="Tripoli",
+        )
 
     def create_order(self, total=Decimal("7.50")):
         order = PurchaseOrder.objects.create(
@@ -2828,6 +2834,10 @@ class SupplierPaymentApiTests(TestCase):
         self.assertEqual(response.data["created_by_username"], self.user.username)
 
         detail = self.client.get(reverse("purchaseorder-detail", args=[order.pk]))
+        self.assertEqual(detail.data["supplier_contact_name"], "Mona")
+        self.assertEqual(detail.data["supplier_phone"], "+21891222333")
+        self.assertEqual(detail.data["supplier_email"], "payables@example.com")
+        self.assertEqual(detail.data["supplier_address"], "Tripoli")
         self.assertEqual(detail.data["paid_total"], "3.00")
         self.assertEqual(detail.data["balance_due"], "4.50")
         self.assertEqual(detail.data["payment_status"], "partial")
