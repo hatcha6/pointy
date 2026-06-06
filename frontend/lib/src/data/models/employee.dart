@@ -121,6 +121,7 @@ class CompensationPlan {
     required this.payType,
     required this.amount,
     required this.effectiveFrom,
+    this.commissionPercent = 0,
     this.currency = 'LYD',
     this.expectedUnitsPerPeriod = 1,
     this.effectiveTo,
@@ -131,6 +132,7 @@ class CompensationPlan {
   final int employeeId;
   final PayType payType;
   final double amount;
+  final double commissionPercent;
   final String currency;
   final double expectedUnitsPerPeriod;
   final DateTime? effectiveFrom;
@@ -143,6 +145,7 @@ class CompensationPlan {
       employeeId: _intFromJson(json['employee']),
       payType: PayType.fromJson(json['pay_type']),
       amount: _doubleFromJson(json['amount']),
+      commissionPercent: _doubleFromJson(json['commission_percent']),
       currency: json['currency']?.toString() ?? 'LYD',
       expectedUnitsPerPeriod: _doubleFromJson(
         json['expected_units_per_period'],
@@ -352,27 +355,42 @@ class EmployeeDraft {
 class CompensationPlanDraft {
   const CompensationPlanDraft({
     required this.employeeId,
-    required this.payType,
     required this.amount,
-    required this.effectiveFrom,
+    this.payType = PayType.monthlySalary,
+    this.commissionPercent = '0.00',
     this.expectedUnitsPerPeriod = '1.00',
   });
 
   final int employeeId;
   final PayType payType;
   final String amount;
+  final String commissionPercent;
   final String expectedUnitsPerPeriod;
-  final String effectiveFrom;
 
   Map<String, Object?> toJson() {
     return {
       'employee': employeeId,
       'pay_type': payType.toJson(),
       'amount': amount,
+      'commission_percent': commissionPercent,
       'expected_units_per_period': expectedUnitsPerPeriod,
-      'effective_from': effectiveFrom,
       'is_active': true,
     };
+  }
+}
+
+class PayrollDraftResult {
+  const PayrollDraftResult({required this.created, this.payrollRun});
+
+  final bool created;
+  final PayrollRun? payrollRun;
+
+  factory PayrollDraftResult.fromJson(Map<String, Object?> json) {
+    final run = json['payroll_run'];
+    return PayrollDraftResult(
+      created: json['created'] == true,
+      payrollRun: run is Map<String, Object?> ? PayrollRun.fromJson(run) : null,
+    );
   }
 }
 

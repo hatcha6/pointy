@@ -1134,6 +1134,34 @@
       }
     }
   },
+  "smartNotificationPayrollReadyTitle": "مسودة رواتب جاهزة للاعتماد",
+  "smartNotificationPayrollReadyMessage": "{count, plural, =1{مسودة راتب لموظف واحد جاهزة بإجمالي {amount}.} =2{مسودة رواتب لموظفين جاهزة بإجمالي {amount}.} other{مسودة رواتب لـ {count} موظفين جاهزة بإجمالي {amount}.}}",
+  "@smartNotificationPayrollReadyMessage": {
+    "description": "Payroll ready notification message.",
+    "placeholders": {
+      "count": {
+        "type": "num"
+      },
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "smartNotificationPayrollReadyDetail": "{runNumber}: من {start} إلى {end}",
+  "@smartNotificationPayrollReadyDetail": {
+    "description": "Payroll ready notification detail.",
+    "placeholders": {
+      "runNumber": {
+        "type": "String"
+      },
+      "start": {
+        "type": "String"
+      },
+      "end": {
+        "type": "String"
+      }
+    }
+  },
   "smartNotificationOperationsErrorTitle": "خطأ تشغيلي يحتاج متابعة",
   "smartNotificationOperationsErrorMessage": "{name} من {source}",
   "@smartNotificationOperationsErrorMessage": {
@@ -3608,6 +3636,7 @@
   "employeePayrollOverviewTitle": "إدارة الموظفين والرواتب",
   "employeePayrollOverviewSubtitle": "سجلات الموظفين وخطط الأجر ومسيرات الرواتب",
   "addEmployeeButton": "إضافة موظف",
+  "draftMonthlyPayrollButton": "مسودة رواتب الشهر",
   "createPayrollRunButton": "إنشاء مسير رواتب",
   "employeePayrollSaveError": "تعذر حفظ التغيير. راجع البيانات والصلاحيات ثم حاول مرة أخرى.",
   "employeesTabLabel": "الموظفون",
@@ -3631,6 +3660,18 @@
         "type": "String"
       },
       "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "employeePayPlanWithCommissionLabel": "{baseLabel} + {percent}% مبيعات",
+  "@employeePayPlanWithCommissionLabel": {
+    "description": "Active employee pay plan label with sales commission.",
+    "placeholders": {
+      "baseLabel": {
+        "type": "String"
+      },
+      "percent": {
         "type": "String"
       }
     }
@@ -3668,6 +3709,25 @@
   "employeeDepartmentField": "القسم",
   "employeePhoneField": "الهاتف",
   "employeeHireDateField": "تاريخ التعيين",
+  "employeeUserField": "مستخدم نقطة البيع",
+  "employeeUserEmpty": "غير مرتبط بمستخدم",
+  "employeeUserHelper": "اربط الموظف بمستخدم إذا كان يعمل على النظام مثل الكاشير.",
+  "employeeUserClearTooltip": "إزالة المستخدم المرتبط",
+  "employeeUserOpenPickerTooltip": "اختيار مستخدم",
+  "employeeUserPickerTitle": "اختيار مستخدم",
+  "employeeUserPickerSearchHint": "ابحث باسم المستخدم أو البريد",
+  "employeeUserPickerEmpty": "لا توجد مستخدمون مطابقون.",
+  "employeeUserPickerClear": "مسح الاختيار",
+  "employeeUserPickerLoadError": "تعذر تحميل المستخدمين.",
+  "userFallbackLabel": "مستخدم #{id}",
+  "@userFallbackLabel": {
+    "description": "Fallback label for a user id when the username is not loaded.",
+    "placeholders": {
+      "id": {
+        "type": "int"
+      }
+    }
+  },
   "employeeTypeField": "نوع التوظيف",
   "employeeStatusActive": "نشط",
   "employeeStatusOnLeave": "في إجازة",
@@ -3692,6 +3752,11 @@
   "payAmountField": "المبلغ",
   "payUnitsField": "الوحدات",
   "payEffectiveFromField": "يبدأ من",
+  "monthlyBaseSalaryField": "الراتب الشهري الثابت",
+  "monthlyBaseSalaryHelper": "المبلغ الأساسي الذي يستحقه الموظف كل شهر.",
+  "salesCommissionPercentField": "نسبة عمولة المبيعات",
+  "salesCommissionPercentHelper": "تُحسب من المبيعات المدفوعة للمستخدم المرتبط بالموظف. اتركها 0 إذا لا توجد عمولة.",
+  "compensationPlanActivationNote": "ستصبح هذه الخطة هي الراتب الحالي للموظف، وسيتم تعطيل الخطط النشطة السابقة.",
   "payTypeMonthlySalary": "راتب شهري",
   "payTypeWeeklySalary": "راتب أسبوعي",
   "payTypeDailyRate": "أجر يومي",

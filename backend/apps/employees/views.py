@@ -15,6 +15,7 @@ from .serializers import (
 )
 from .services import (
     approve_payroll_run,
+    draft_monthly_payroll_run,
     mark_payroll_run_paid,
     record_employee_event,
     void_payroll_run,
@@ -164,6 +165,7 @@ class PayrollRunViewSet(viewsets.ModelViewSet):
         "partial_update": ("employees.change_payrollrun",),
         "destroy": ("employees.delete_payrollrun",),
         "approve": ("employees.approve_payrollrun",),
+        "draft_monthly": ("employees.add_payrollrun", "employees.view_employee"),
         "mark_paid": ("employees.mark_payrollrun_paid",),
         "void": ("employees.void_payrollrun",),
     }
@@ -206,6 +208,34 @@ class PayrollRunViewSet(viewsets.ModelViewSet):
     def approve(self, request, pk=None):
         payroll_run = approve_payroll_run(self.get_object(), request=request)
         return Response(PayrollRunSerializer(payroll_run, context=self.get_serializer_context()).data)
+
+    @action(detail=False, methods=["post"], url_path="draft-monthly")
+    def draft_monthly(self, request):
+        date_field = serializers.DateField()
+        period_start = None
+        period_end = None
+        if request.data.get("period_start"):
+            period_start = date_field.to_internal_value(request.data["period_start"])
+        if request.data.get("period_end"):
+            period_end = date_field.to_internal_value(request.data["period_end"])
+        payroll_run, created = draft_monthly_payroll_run(
+            period_start=period_start,
+            period_end=period_end,
+            request=request,
+        )
+        return Response(
+            {
+                "created": created,
+                "payroll_run": (
+                    PayrollRunSerializer(
+                        payroll_run,
+                        context=self.get_serializer_context(),
+                    ).data
+                    if payroll_run is not None
+                    else None
+                ),
+            }
+        )
 
     @action(detail=True, methods=["post"], url_path="mark-paid")
     def mark_paid(self, request, pk=None):

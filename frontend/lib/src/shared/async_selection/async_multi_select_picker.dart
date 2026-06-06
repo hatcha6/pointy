@@ -80,6 +80,7 @@ showAsyncMultiSelectPicker<T extends Object>({
   Key applyButtonKey = const ValueKey('async_selection_apply_button'),
   Key Function(T id)? optionKeyForId,
   double heightFactor = 0.82,
+  bool singleSelection = false,
 }) {
   return showAdaptiveModalBottomSheet<List<AsyncSelectionOption<T>>>(
     context: context,
@@ -93,6 +94,7 @@ showAsyncMultiSelectPicker<T extends Object>({
         searchFieldKey: searchFieldKey,
         applyButtonKey: applyButtonKey,
         optionKeyForId: optionKeyForId,
+        singleSelection: singleSelection,
       );
     },
   );
@@ -106,6 +108,7 @@ class _AsyncMultiSelectPickerSheet<T extends Object> extends StatefulWidget {
     required this.searchFieldKey,
     required this.applyButtonKey,
     required this.optionKeyForId,
+    required this.singleSelection,
   });
 
   final AsyncSelectionPickerStrings<T> strings;
@@ -114,6 +117,7 @@ class _AsyncMultiSelectPickerSheet<T extends Object> extends StatefulWidget {
   final Key searchFieldKey;
   final Key applyButtonKey;
   final Key Function(T id)? optionKeyForId;
+  final bool singleSelection;
 
   @override
   State<_AsyncMultiSelectPickerSheet<T>> createState() =>
@@ -302,6 +306,9 @@ class _AsyncMultiSelectPickerSheetState<T extends Object>
       if (_selected.containsKey(option.id)) {
         _selected.remove(option.id);
       } else {
+        if (widget.singleSelection) {
+          _selected = {};
+        }
         _selected[option.id] = option;
       }
     });

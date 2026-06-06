@@ -620,6 +620,7 @@ class _AuthenticatedRoutes {
       'employees',
       EmployeePayrollScreen(
         viewModel: dependencies.employeePayrollViewModel,
+        userRepository: dependencies.userRepository,
         currentUser: currentUser,
         capabilities: capabilities,
         onOpenDashboard: guardedAction(
@@ -951,6 +952,18 @@ class _AuthenticatedRoutes {
     BuildContext context,
     BusinessAlert alert,
   ) async {
+    if (alert.type == BusinessAlertType.payrollReady) {
+      if (!capabilities.canViewPayroll) {
+        return;
+      }
+      final navigator = Navigator.of(context);
+      navigator.pop();
+      navigator.pushReplacement(
+        MaterialPageRoute<void>(builder: employeePayrollRouteBuilder),
+      );
+      return;
+    }
+
     final query = alert.investigationActivityQuery();
     if (query == null || !capabilities.canViewActivityLog) {
       return;

@@ -4,10 +4,14 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 import '../../../core/authorization.dart';
 import '../../../data/models/employee.dart';
 import '../../../data/models/pos_user.dart';
+import '../../../data/repositories/user_repository.dart';
+import '../../../core/result.dart';
 import '../../../shared/app_navigation_drawer.dart';
+import '../../../shared/async_selection/async_selection.dart';
 import '../../../shared/authorization_guards.dart';
 import '../../../shared/components/components.dart';
 import '../../../shared/date_formatters.dart';
+import '../../../shared/decimal_text_input_formatter.dart';
 import '../../../shared/formatters.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../../../shared/shell/shell.dart';
@@ -17,6 +21,7 @@ class EmployeePayrollScreen extends StatelessWidget {
   const EmployeePayrollScreen({
     super.key,
     required this.viewModel,
+    required this.userRepository,
     required this.currentUser,
     required this.capabilities,
     required this.onOpenPos,
@@ -37,6 +42,7 @@ class EmployeePayrollScreen extends StatelessWidget {
   });
 
   final EmployeePayrollViewModel viewModel;
+  final UserRepository userRepository;
   final PosUser currentUser;
   final AuthorizationCapabilities capabilities;
   final VoidCallback onOpenPos;
@@ -108,6 +114,7 @@ class EmployeePayrollScreen extends StatelessWidget {
             capabilities: capabilities,
             child: _EmployeePayrollBody(
               viewModel: viewModel,
+              userRepository: userRepository,
               capabilities: capabilities,
             ),
           ),
@@ -120,10 +127,12 @@ class EmployeePayrollScreen extends StatelessWidget {
 class _EmployeePayrollBody extends StatelessWidget {
   const _EmployeePayrollBody({
     required this.viewModel,
+    required this.userRepository,
     required this.capabilities,
   });
 
   final EmployeePayrollViewModel viewModel;
+  final UserRepository userRepository;
   final AuthorizationCapabilities capabilities;
 
   @override
@@ -152,6 +161,14 @@ class _EmployeePayrollBody extends StatelessWidget {
                         : null,
                     icon: const Icon(Icons.person_add_alt_1),
                     label: Text(l10n.addEmployeeButton),
+                  ),
+                  FilledButton.tonalIcon(
+                    onPressed:
+                        capabilities.canManagePayroll && !viewModel.isSaving
+                        ? viewModel.draftMonthlyPayrollRun
+                        : null,
+                    icon: const Icon(Icons.event_repeat_outlined),
+                    label: Text(l10n.draftMonthlyPayrollButton),
                   ),
                   FilledButton.tonalIcon(
                     onPressed:
@@ -206,6 +223,7 @@ class _EmployeePayrollBody extends StatelessWidget {
       maxHeightFactor: 0.94,
       builder: (sheetContext) => _CreateEmployeeForm(
         viewModel: viewModel,
+        userRepository: userRepository,
         onCreated: () => Navigator.of(sheetContext).pop(),
       ),
     );
@@ -274,10 +292,7 @@ class _EmployeeList extends StatelessWidget {
               ),
             if (plan != null)
               PointyStatusPill(
-                label: l10n.employeePayPlanLabel(
-                  _payTypeLabel(l10n, plan.payType),
-                  formatMoney(plan.amount),
-                ),
+                label: _compensationPlanLabel(l10n, plan),
                 icon: Icons.payments_outlined,
               ),
           ],
@@ -402,9 +417,14 @@ class _PayrollRunList extends StatelessWidget {
 }
 
 class _CreateEmployeeForm extends StatefulWidget {
-  const _CreateEmployeeForm({required this.viewModel, required this.onCreated});
+  const _CreateEmployeeForm({
+    required this.viewModel,
+    required this.userRepository,
+    required this.onCreated,
+  });
 
   final EmployeePayrollViewModel viewModel;
+  final UserRepository userRepository;
   final VoidCallback onCreated;
 
   @override
@@ -416,8 +436,9 @@ class _CreateEmployeeFormState extends State<_CreateEmployeeForm> {
   final _jobController = TextEditingController();
   final _departmentController = TextEditingController();
   final _phoneController = TextEditingController();
-  final _hireDateController = TextEditingController(text: _todayIso());
+  DateTime _hireDate = DateTime.now();
   EmploymentType _employmentType = EmploymentType.fullTime;
+  AsyncSelectionOption<int>? _selectedUser;
 
   @override
   void dispose() {
@@ -425,7 +446,6 @@ class _CreateEmployeeFormState extends State<_CreateEmployeeForm> {
     _jobController.dispose();
     _departmentController.dispose();
     _phoneController.dispose();
-    _hireDateController.dispose();
     super.dispose();
   }
 
@@ -456,10 +476,27 @@ class _CreateEmployeeFormState extends State<_CreateEmployeeForm> {
           keyboardType: TextInputType.phone,
           textInputAction: TextInputAction.next,
         ),
-        TextField(
-          controller: _hireDateController,
-          decoration: InputDecoration(labelText: l10n.employeeHireDateField),
-          keyboardType: TextInputType.datetime,
+        _DatePickerField(
+          label: l10n.employeeHireDateField,
+          value: _hireDate,
+          onChanged: (value) => setState(() => _hireDate = value),
+        ),
+        AsyncSelectionField<int>(
+          fieldKey: const ValueKey('employee_user_field'),
+          strings: AsyncSelectionFieldStrings<int>(
+            label: l10n.employeeUserField,
+            emptyText: l10n.employeeUserEmpty,
+            helperText: l10n.employeeUserHelper,
+            clearTooltip: l10n.employeeUserClearTooltip,
+            openPickerTooltip: l10n.employeeUserOpenPickerTooltip,
+            fallbackLabelForId: (id) => l10n.userFallbackLabel(id),
+          ),
+          selected: [?_selectedUser],
+          onPick: _pickUser,
+          onClear: _selectedUser == null
+              ? null
+              : () => setState(() => _selectedUser = null),
+          validator: (_) => null,
         ),
         DropdownButtonFormField<EmploymentType>(
           initialValue: _employmentType,
@@ -497,12 +534,64 @@ class _CreateEmployeeFormState extends State<_CreateEmployeeForm> {
         jobTitle: _jobController.text.trim(),
         department: _departmentController.text.trim(),
         phone: _phoneController.text.trim(),
-        hireDate: _hireDateController.text.trim(),
+        hireDate: _dateIso(_hireDate),
         employmentType: _employmentType,
+        userId: _selectedUser?.id,
       ),
     );
     if (saved && mounted) {
       widget.onCreated();
+    }
+  }
+
+  Future<void> _pickUser() async {
+    final l10n = AppLocalizations.of(context)!;
+    final picked = await showAsyncMultiSelectPicker<int>(
+      context: context,
+      strings: AsyncSelectionPickerStrings<int>(
+        title: l10n.employeeUserPickerTitle,
+        searchHint: l10n.employeeUserPickerSearchHint,
+        emptyText: l10n.employeeUserPickerEmpty,
+        clearText: l10n.employeeUserPickerClear,
+        clearSearchTooltip: l10n.clearSearchTooltip,
+        loadErrorText: l10n.employeeUserPickerLoadError,
+        confirmText: l10n.confirmButton,
+        fallbackLabelForId: (id) => l10n.userFallbackLabel(id),
+      ),
+      selected: [?_selectedUser],
+      loadPage: _loadUserSelectionPage,
+      optionKeyForId: (id) => ValueKey('employee_user_option_$id'),
+      heightFactor: 0.74,
+      singleSelection: true,
+    );
+    if (picked == null) {
+      return;
+    }
+    final selected = picked.isEmpty ? null : picked.last;
+    setState(() {
+      _selectedUser = selected;
+      if (selected != null && _nameController.text.trim().isEmpty) {
+        _nameController.text = selected.label;
+      }
+    });
+  }
+
+  Future<AsyncSelectionPage<int>> _loadUserSelectionPage(
+    String search,
+    int page,
+  ) async {
+    final result = await widget.userRepository.loadUsers(
+      search: search,
+      page: page,
+    );
+    switch (result) {
+      case Ok<PosUserPage>(value: final userPage):
+        return AsyncSelectionPage<int>(
+          options: userPage.users.map(_userOption).toList(growable: false),
+          hasMore: userPage.hasMore,
+        );
+      case Error<PosUserPage>():
+        throw Exception('Failed to load users');
     }
   }
 }
@@ -523,16 +612,13 @@ class _CompensationPlanForm extends StatefulWidget {
 }
 
 class _CompensationPlanFormState extends State<_CompensationPlanForm> {
-  final _amountController = TextEditingController();
-  final _unitsController = TextEditingController(text: '1.00');
-  final _effectiveFromController = TextEditingController(text: _todayIso());
-  PayType _payType = PayType.monthlySalary;
+  final _baseSalaryController = TextEditingController();
+  final _commissionController = TextEditingController(text: '0.00');
 
   @override
   void dispose() {
-    _amountController.dispose();
-    _unitsController.dispose();
-    _effectiveFromController.dispose();
+    _baseSalaryController.dispose();
+    _commissionController.dispose();
     super.dispose();
   }
 
@@ -542,36 +628,29 @@ class _CompensationPlanFormState extends State<_CompensationPlanForm> {
     return _SheetFrame(
       title: l10n.addCompensationPlanTitle(widget.employee.fullName),
       children: [
-        DropdownButtonFormField<PayType>(
-          initialValue: _payType,
-          decoration: InputDecoration(labelText: l10n.payTypeField),
-          items: [
-            for (final type in PayType.values)
-              DropdownMenuItem(
-                value: type,
-                child: Text(_payTypeLabel(l10n, type)),
-              ),
-          ],
-          onChanged: (value) {
-            if (value != null) {
-              setState(() => _payType = value);
-            }
-          },
-        ),
         TextField(
-          controller: _amountController,
-          decoration: InputDecoration(labelText: l10n.payAmountField),
+          controller: _baseSalaryController,
+          decoration: InputDecoration(
+            labelText: l10n.monthlyBaseSalaryField,
+            helperText: l10n.monthlyBaseSalaryHelper,
+          ),
           keyboardType: TextInputType.number,
+          inputFormatters: [DecimalTextInputFormatter()],
         ),
         TextField(
-          controller: _unitsController,
-          decoration: InputDecoration(labelText: l10n.payUnitsField),
+          controller: _commissionController,
+          decoration: InputDecoration(
+            labelText: l10n.salesCommissionPercentField,
+            helperText: l10n.salesCommissionPercentHelper,
+            suffixText: '%',
+          ),
           keyboardType: TextInputType.number,
+          inputFormatters: [DecimalTextInputFormatter()],
         ),
-        TextField(
-          controller: _effectiveFromController,
-          decoration: InputDecoration(labelText: l10n.payEffectiveFromField),
-          keyboardType: TextInputType.datetime,
+        PointyInlineMessage(
+          message: l10n.compensationPlanActivationNote,
+          icon: Icons.info_outline,
+          compact: true,
         ),
         FilledButton.icon(
           onPressed: widget.viewModel.isSaving ? null : _submit,
@@ -583,16 +662,16 @@ class _CompensationPlanFormState extends State<_CompensationPlanForm> {
   }
 
   Future<void> _submit() async {
-    if (_amountController.text.trim().isEmpty) {
+    if (_baseSalaryController.text.trim().isEmpty) {
       return;
     }
     final saved = await widget.viewModel.createCompensationPlan(
       CompensationPlanDraft(
         employeeId: widget.employee.id,
-        payType: _payType,
-        amount: _amountController.text.trim(),
-        expectedUnitsPerPeriod: _unitsController.text.trim(),
-        effectiveFrom: _effectiveFromController.text.trim(),
+        amount: _baseSalaryController.text.trim(),
+        commissionPercent: _commissionController.text.trim().isEmpty
+            ? '0.00'
+            : _commissionController.text.trim(),
       ),
     );
     if (saved && mounted) {
@@ -615,15 +694,21 @@ class _CreatePayrollRunForm extends StatefulWidget {
 }
 
 class _CreatePayrollRunFormState extends State<_CreatePayrollRunForm> {
-  final _periodStartController = TextEditingController(text: _todayIso());
-  final _periodEndController = TextEditingController(text: _todayIso());
   final _unitsController = TextEditingController(text: '1.00');
+  late DateTime _periodStart;
+  late DateTime _periodEnd;
   Employee? _employee;
 
   @override
+  void initState() {
+    super.initState();
+    final now = DateTime.now();
+    _periodStart = DateTime(now.year, now.month);
+    _periodEnd = now;
+  }
+
+  @override
   void dispose() {
-    _periodStartController.dispose();
-    _periodEndController.dispose();
     _unitsController.dispose();
     super.dispose();
   }
@@ -659,20 +744,29 @@ class _CreatePayrollRunFormState extends State<_CreatePayrollRunForm> {
             ],
             onChanged: (value) => setState(() => _employee = value),
           ),
-        TextField(
-          controller: _periodStartController,
-          decoration: InputDecoration(labelText: l10n.payrollPeriodStartField),
-          keyboardType: TextInputType.datetime,
+        _DatePickerField(
+          label: l10n.payrollPeriodStartField,
+          value: _periodStart,
+          onChanged: (value) {
+            setState(() {
+              _periodStart = value;
+              if (_periodEnd.isBefore(value)) {
+                _periodEnd = value;
+              }
+            });
+          },
         ),
-        TextField(
-          controller: _periodEndController,
-          decoration: InputDecoration(labelText: l10n.payrollPeriodEndField),
-          keyboardType: TextInputType.datetime,
+        _DatePickerField(
+          label: l10n.payrollPeriodEndField,
+          value: _periodEnd,
+          firstDate: _periodStart,
+          onChanged: (value) => setState(() => _periodEnd = value),
         ),
         TextField(
           controller: _unitsController,
           decoration: InputDecoration(labelText: l10n.payUnitsField),
           keyboardType: TextInputType.number,
+          inputFormatters: [DecimalTextInputFormatter()],
         ),
         FilledButton.icon(
           onPressed: widget.viewModel.isSaving || _employee == null
@@ -693,8 +787,8 @@ class _CreatePayrollRunFormState extends State<_CreatePayrollRunForm> {
     }
     final saved = await widget.viewModel.createPayrollRun(
       PayrollRunDraft(
-        periodStart: _periodStartController.text.trim(),
-        periodEnd: _periodEndController.text.trim(),
+        periodStart: _dateIso(_periodStart),
+        periodEnd: _dateIso(_periodEnd),
         lines: [
           PayrollLineDraft(
             employeeId: employee.id,
@@ -746,11 +840,61 @@ class _SheetFrame extends StatelessWidget {
   }
 }
 
-String _todayIso() {
-  final now = DateTime.now();
-  return '${now.year.toString().padLeft(4, '0')}-'
-      '${now.month.toString().padLeft(2, '0')}-'
-      '${now.day.toString().padLeft(2, '0')}';
+class _DatePickerField extends StatelessWidget {
+  const _DatePickerField({
+    required this.label,
+    required this.value,
+    required this.onChanged,
+    this.firstDate,
+  });
+
+  final String label;
+  final DateTime value;
+  final ValueChanged<DateTime> onChanged;
+  final DateTime? firstDate;
+
+  @override
+  Widget build(BuildContext context) {
+    return TextFormField(
+      key: ValueKey('$label-${_dateIso(value)}'),
+      initialValue: formatDate(value),
+      readOnly: true,
+      decoration: InputDecoration(
+        labelText: label,
+        suffixIcon: const Icon(Icons.event_outlined),
+      ),
+      onTap: () async {
+        final now = DateTime.now();
+        final selected = await showDatePicker(
+          context: context,
+          initialDate: value,
+          firstDate: firstDate ?? DateTime(now.year - 10),
+          lastDate: DateTime(now.year + 5, 12, 31),
+        );
+        if (selected != null) {
+          onChanged(selected);
+        }
+      },
+    );
+  }
+}
+
+AsyncSelectionOption<int> _userOption(PosUser user) {
+  final subtitleParts = [
+    user.username,
+    if (user.email.trim().isNotEmpty) user.email.trim(),
+  ].where((value) => value.trim().isNotEmpty).toList(growable: false);
+  return AsyncSelectionOption<int>(
+    id: user.id,
+    label: user.label,
+    subtitle: subtitleParts.join(' - '),
+  );
+}
+
+String _dateIso(DateTime date) {
+  return '${date.year.toString().padLeft(4, '0')}-'
+      '${date.month.toString().padLeft(2, '0')}-'
+      '${date.day.toString().padLeft(2, '0')}';
 }
 
 String _employeeStatusLabel(AppLocalizations l10n, EmployeeStatus status) {
@@ -784,6 +928,20 @@ String _payTypeLabel(AppLocalizations l10n, PayType type) {
     PayType.contract => l10n.payTypeContract,
     PayType.other => l10n.payTypeOther,
   };
+}
+
+String _compensationPlanLabel(AppLocalizations l10n, CompensationPlan plan) {
+  final baseLabel = l10n.employeePayPlanLabel(
+    _payTypeLabel(l10n, plan.payType),
+    formatMoney(plan.amount),
+  );
+  if (plan.commissionPercent <= 0) {
+    return baseLabel;
+  }
+  return l10n.employeePayPlanWithCommissionLabel(
+    baseLabel,
+    plan.commissionPercent.toStringAsFixed(2),
+  );
 }
 
 String _payrollStatusLabel(AppLocalizations l10n, PayrollStatus status) {

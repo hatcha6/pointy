@@ -33,6 +33,7 @@ enum BusinessAlertType {
   registerVariance,
   lowProfitMargin,
   expiringDiscounts,
+  payrollReady,
   operationsError,
   unknown,
 }
@@ -208,6 +209,7 @@ BusinessAlertType _typeFromCode(String code) {
     'sales.register_variance' => BusinessAlertType.registerVariance,
     'sales.negative_margin' => BusinessAlertType.lowProfitMargin,
     'discounts.expiring_rule' => BusinessAlertType.expiringDiscounts,
+    'employees.payroll_ready' => BusinessAlertType.payrollReady,
     'operations.backend_error' => BusinessAlertType.operationsError,
     _ => BusinessAlertType.unknown,
   };
@@ -245,6 +247,7 @@ int _sortScore(BusinessAlertType type) {
     BusinessAlertType.registerVariance => 25,
     BusinessAlertType.lowProfitMargin => 28,
     BusinessAlertType.lowStock => 30,
+    BusinessAlertType.payrollReady => 32,
     BusinessAlertType.operationsError => 35,
     BusinessAlertType.expiringDiscounts => 60,
     BusinessAlertType.unknown => 100,
@@ -279,6 +282,7 @@ String _primaryLabel(BusinessAlertType type, Map<String, Object?> payload) {
       payload['session_number']?.toString() ?? '',
     BusinessAlertType.expiringDiscounts =>
       payload['rule_name']?.toString() ?? '',
+    BusinessAlertType.payrollReady => payload['run_number']?.toString() ?? '',
     BusinessAlertType.operationsError => payload['name']?.toString() ?? '',
     BusinessAlertType.lowProfitMargin || BusinessAlertType.unknown => '',
   };
@@ -293,6 +297,7 @@ String _secondaryLabel(BusinessAlertType type, Map<String, Object?> payload) {
       payload['supplier_name']?.toString() ?? '',
     BusinessAlertType.printFailures => payload['message']?.toString() ?? '',
     BusinessAlertType.expiringDiscounts => payload['channel']?.toString() ?? '',
+    BusinessAlertType.payrollReady => payload['period_start']?.toString() ?? '',
     BusinessAlertType.suspectedCashierActivity =>
       payload['rule_title']?.toString() ?? '',
     BusinessAlertType.operationsError => payload['source']?.toString() ?? '',
@@ -305,6 +310,7 @@ String _detailLabel(BusinessAlertType type, Map<String, Object?> payload) {
     BusinessAlertType.expiringStock => _stockBatchDetail(payload),
     BusinessAlertType.suspectedCashierActivity =>
       payload['headline']?.toString() ?? '',
+    BusinessAlertType.payrollReady => payload['period_end']?.toString() ?? '',
     BusinessAlertType.operationsError => payload['message']?.toString() ?? '',
     _ => '',
   };

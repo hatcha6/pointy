@@ -187,6 +187,38 @@ class EmployeePayrollViewModel extends ChangeNotifier {
     });
   }
 
+  Future<bool> draftMonthlyPayrollRun() async {
+    return _save(() async {
+      final result = await _repository.draftMonthlyPayrollRun();
+      switch (result) {
+        case Ok<PayrollDraftResult>(value: final draft):
+          final run = draft.payrollRun;
+          if (run != null) {
+            final existingIndex = _payrollRuns.indexWhere(
+              (existing) => existing.id == run.id,
+            );
+            if (existingIndex >= 0) {
+              _payrollRuns = [
+                for (final existing in _payrollRuns)
+                  if (existing.id == run.id) run else existing,
+              ];
+            } else {
+              _payrollRuns = [run, ..._payrollRuns];
+            }
+            _track(
+              'employees.management.payroll_run.monthly_drafted',
+              'payroll_run',
+              run.id,
+              {'created': draft.created},
+            );
+          }
+          return run != null;
+        case Error<PayrollDraftResult>():
+          return false;
+      }
+    });
+  }
+
   Future<bool> approvePayrollRun(PayrollRun run) {
     return _updatePayrollRun(
       run,

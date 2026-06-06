@@ -54,6 +54,7 @@ CASHIER_PERMISSION_CODES = (
     "analytics.add_analyticsevent",
 )
 ACCOUNTANT_PERMISSION_CODES = (
+    "auth.view_user",
     "core.view_shopsettings",
     "analytics.view_analyticsevent",
     "customers.view_customer",

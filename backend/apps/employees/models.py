@@ -2,7 +2,7 @@ from decimal import Decimal
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
-from django.core.validators import MinValueValidator
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.db.models import Q, Sum
 from django.utils.crypto import get_random_string
@@ -84,9 +84,9 @@ class Employee(TimeStampedModel):
         today = timezone.localdate()
         return (
             self.compensation_plans.filter(
+                is_active=True,
                 effective_from__lte=today,
             )
-            .filter(Q(effective_to__isnull=True) | Q(effective_to__gte=today))
             .order_by("-effective_from", "-id")
             .first()
         )
@@ -133,6 +133,15 @@ class CompensationPlan(TimeStampedModel):
         decimal_places=2,
         validators=[MinValueValidator(Decimal("0.00"))],
     )
+    commission_percent = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=Decimal("0.00"),
+        validators=[
+            MinValueValidator(Decimal("0.00")),
+            MaxValueValidator(Decimal("100.00")),
+        ],
+    )
     currency = models.CharField(max_length=8, default="LYD")
     expected_units_per_period = models.DecimalField(
         max_digits=8,
@@ -151,12 +160,7 @@ class CompensationPlan(TimeStampedModel):
             models.Index(fields=["employee", "is_active", "effective_from"]),
             models.Index(fields=["pay_type", "effective_from"]),
         ]
-        constraints = [
-            models.UniqueConstraint(
-                fields=["employee", "effective_from", "pay_type"],
-                name="unique_employee_pay_type_start",
-            )
-        ]
+        constraints = []
 
     def __str__(self):
         return f"{self.employee} - {self.pay_type} {self.amount}"

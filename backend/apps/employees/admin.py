@@ -37,9 +37,9 @@ class CompensationPlanAdmin(admin.ModelAdmin):
         "employee",
         "pay_type",
         "amount",
+        "commission_percent",
         "currency",
         "effective_from",
-        "effective_to",
         "is_active",
     )
     list_filter = ("pay_type", "is_active", "currency")

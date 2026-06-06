@@ -3257,6 +3257,28 @@ abstract class AppLocalizations {
   /// **'{name}'**
   String smartNotificationDiscountDetail(String name);
 
+  /// No description provided for @smartNotificationPayrollReadyTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'مسودة رواتب جاهزة للاعتماد'**
+  String get smartNotificationPayrollReadyTitle;
+
+  /// Payroll ready notification message.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, =1{مسودة راتب لموظف واحد جاهزة بإجمالي {amount}.} =2{مسودة رواتب لموظفين جاهزة بإجمالي {amount}.} other{مسودة رواتب لـ {count} موظفين جاهزة بإجمالي {amount}.}}'**
+  String smartNotificationPayrollReadyMessage(num count, String amount);
+
+  /// Payroll ready notification detail.
+  ///
+  /// In ar, this message translates to:
+  /// **'{runNumber}: من {start} إلى {end}'**
+  String smartNotificationPayrollReadyDetail(
+    String runNumber,
+    String start,
+    String end,
+  );
+
   /// No description provided for @smartNotificationOperationsErrorTitle.
   ///
   /// In ar, this message translates to:
@@ -10159,6 +10181,12 @@ abstract class AppLocalizations {
   /// **'إضافة موظف'**
   String get addEmployeeButton;
 
+  /// No description provided for @draftMonthlyPayrollButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'مسودة رواتب الشهر'**
+  String get draftMonthlyPayrollButton;
+
   /// No description provided for @createPayrollRunButton.
   ///
   /// In ar, this message translates to:
@@ -10206,6 +10234,12 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'{payType} - {amount}'**
   String employeePayPlanLabel(String payType, String amount);
+
+  /// Active employee pay plan label with sales commission.
+  ///
+  /// In ar, this message translates to:
+  /// **'{baseLabel} + {percent}% مبيعات'**
+  String employeePayPlanWithCommissionLabel(String baseLabel, String percent);
 
   /// No description provided for @employeeNoDetails.
   ///
@@ -10290,6 +10324,72 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'تاريخ التعيين'**
   String get employeeHireDateField;
+
+  /// No description provided for @employeeUserField.
+  ///
+  /// In ar, this message translates to:
+  /// **'مستخدم نقطة البيع'**
+  String get employeeUserField;
+
+  /// No description provided for @employeeUserEmpty.
+  ///
+  /// In ar, this message translates to:
+  /// **'غير مرتبط بمستخدم'**
+  String get employeeUserEmpty;
+
+  /// No description provided for @employeeUserHelper.
+  ///
+  /// In ar, this message translates to:
+  /// **'اربط الموظف بمستخدم إذا كان يعمل على النظام مثل الكاشير.'**
+  String get employeeUserHelper;
+
+  /// No description provided for @employeeUserClearTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'إزالة المستخدم المرتبط'**
+  String get employeeUserClearTooltip;
+
+  /// No description provided for @employeeUserOpenPickerTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختيار مستخدم'**
+  String get employeeUserOpenPickerTooltip;
+
+  /// No description provided for @employeeUserPickerTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختيار مستخدم'**
+  String get employeeUserPickerTitle;
+
+  /// No description provided for @employeeUserPickerSearchHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'ابحث باسم المستخدم أو البريد'**
+  String get employeeUserPickerSearchHint;
+
+  /// No description provided for @employeeUserPickerEmpty.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد مستخدمون مطابقون.'**
+  String get employeeUserPickerEmpty;
+
+  /// No description provided for @employeeUserPickerClear.
+  ///
+  /// In ar, this message translates to:
+  /// **'مسح الاختيار'**
+  String get employeeUserPickerClear;
+
+  /// No description provided for @employeeUserPickerLoadError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر تحميل المستخدمين.'**
+  String get employeeUserPickerLoadError;
+
+  /// Fallback label for a user id when the username is not loaded.
+  ///
+  /// In ar, this message translates to:
+  /// **'مستخدم #{id}'**
+  String userFallbackLabel(int id);
 
   /// No description provided for @employeeTypeField.
   ///
@@ -10386,6 +10486,36 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'يبدأ من'**
   String get payEffectiveFromField;
+
+  /// No description provided for @monthlyBaseSalaryField.
+  ///
+  /// In ar, this message translates to:
+  /// **'الراتب الشهري الثابت'**
+  String get monthlyBaseSalaryField;
+
+  /// No description provided for @monthlyBaseSalaryHelper.
+  ///
+  /// In ar, this message translates to:
+  /// **'المبلغ الأساسي الذي يستحقه الموظف كل شهر.'**
+  String get monthlyBaseSalaryHelper;
+
+  /// No description provided for @salesCommissionPercentField.
+  ///
+  /// In ar, this message translates to:
+  /// **'نسبة عمولة المبيعات'**
+  String get salesCommissionPercentField;
+
+  /// No description provided for @salesCommissionPercentHelper.
+  ///
+  /// In ar, this message translates to:
+  /// **'تُحسب من المبيعات المدفوعة للمستخدم المرتبط بالموظف. اتركها 0 إذا لا توجد عمولة.'**
+  String get salesCommissionPercentHelper;
+
+  /// No description provided for @compensationPlanActivationNote.
+  ///
+  /// In ar, this message translates to:
+  /// **'ستصبح هذه الخطة هي الراتب الحالي للموظف، وسيتم تعطيل الخطط النشطة السابقة.'**
+  String get compensationPlanActivationNote;
 
   /// No description provided for @payTypeMonthlySalary.
   ///

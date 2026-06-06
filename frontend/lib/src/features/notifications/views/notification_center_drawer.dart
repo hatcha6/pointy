@@ -294,7 +294,7 @@ class _NotificationAlertRow extends StatelessWidget {
             SizedBox(height: spacing.sm),
             Row(
               children: [
-                if (alert.hasInvestigationQuery && onReview != null) ...[
+                if (_canReview && onReview != null) ...[
                   FilledButton.tonalIcon(
                     onPressed: onReview,
                     icon: const Icon(Icons.manage_search_outlined),
@@ -342,6 +342,11 @@ class _NotificationAlertRow extends StatelessWidget {
     };
   }
 
+  bool get _canReview {
+    return alert.hasInvestigationQuery ||
+        alert.type == BusinessAlertType.payrollReady;
+  }
+
   IconData _icon() {
     return switch (alert.type) {
       BusinessAlertType.outOfStock => Icons.inventory_2_outlined,
@@ -355,6 +360,7 @@ class _NotificationAlertRow extends StatelessWidget {
       BusinessAlertType.registerVariance => Icons.point_of_sale_outlined,
       BusinessAlertType.lowProfitMargin => Icons.warning_amber_outlined,
       BusinessAlertType.expiringDiscounts => Icons.local_offer_outlined,
+      BusinessAlertType.payrollReady => Icons.payments_outlined,
       BusinessAlertType.operationsError => Icons.error_outline,
       BusinessAlertType.unknown => Icons.notifications_outlined,
     };
@@ -404,6 +410,7 @@ class _NotificationAlertRow extends StatelessWidget {
         l10n.smartNotificationLowProfitMarginTitle,
       BusinessAlertType.expiringDiscounts =>
         l10n.smartNotificationExpiringDiscountsTitle,
+      BusinessAlertType.payrollReady => l10n.smartNotificationPayrollReadyTitle,
       BusinessAlertType.operationsError =>
         l10n.smartNotificationOperationsErrorTitle,
       BusinessAlertType.unknown => l10n.smartNotificationUnknownTitle,
@@ -449,6 +456,11 @@ class _NotificationAlertRow extends StatelessWidget {
         ),
       BusinessAlertType.expiringDiscounts =>
         l10n.smartNotificationExpiringDiscountsMessage(alert.count, alert.days),
+      BusinessAlertType.payrollReady =>
+        l10n.smartNotificationPayrollReadyMessage(
+          alert.count,
+          formatMoney(alert.amount),
+        ),
       BusinessAlertType.operationsError =>
         l10n.smartNotificationOperationsErrorMessage(
           alert.primaryLabel,
@@ -485,6 +497,14 @@ class _NotificationAlertRow extends StatelessWidget {
         alert.primaryLabel.isEmpty
             ? ''
             : l10n.smartNotificationDiscountDetail(alert.primaryLabel),
+      BusinessAlertType.payrollReady =>
+        alert.primaryLabel.isEmpty
+            ? ''
+            : l10n.smartNotificationPayrollReadyDetail(
+                alert.primaryLabel,
+                alert.secondaryLabel,
+                alert.detailLabel,
+              ),
       BusinessAlertType.operationsError => alert.detailLabel,
       BusinessAlertType.stalePrintAgents ||
       BusinessAlertType.registerVariance ||

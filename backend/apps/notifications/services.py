@@ -3,7 +3,7 @@ from decimal import Decimal
 
 from django.conf import settings
 from django.db import transaction
-from django.db.models import DecimalField, F, Q, Sum, Value
+from django.db.models import Count, DecimalField, F, Q, Sum, Value
 from django.db.models.functions import Coalesce
 from django.utils import timezone
 
@@ -27,6 +27,7 @@ MANAGED_CODES = (
     "sales.negative_margin",
     "fraud.suspected_cashier_activity",
     "discounts.expiring_rule",
+    "employees.payroll_ready",
     "operations.backend_error",
 )
 MONEY_FIELD = DecimalField(max_digits=12, decimal_places=2)
@@ -71,6 +72,10 @@ NOTIFICATION_AUDIENCE_RULES = {
         "permissions": ("discounts.view_discountrule",),
         "manager_only": True,
     },
+    "employees.payroll_ready": {
+        "permissions": ("employees.view_payrollrun", "employees.approve_payrollrun"),
+        "manager_only": True,
+    },
 }
 
 
@@ -84,6 +89,7 @@ def sync_business_notifications(now=None):
     desired.extend(_sales_notifications(now))
     desired.extend(_fraud_notifications(now))
     desired.extend(_discount_notifications(now))
+    desired.extend(_payroll_notifications(now))
 
     fingerprints = set()
     with transaction.atomic():
@@ -509,6 +515,37 @@ def _fraud_notifications(now):
     from apps.fraud.services import suspected_fraud_notification_specs
 
     return suspected_fraud_notification_specs(now=now)
+
+
+def _payroll_notifications(now):
+    from apps.employees.models import PayrollRun
+
+    runs = (
+        PayrollRun.objects.filter(status=PayrollRun.Status.DRAFT)
+        .annotate(notification_line_count=Count("lines"))
+        .filter(notification_line_count__gt=0)
+        .order_by("-period_end", "-created_at")
+    )
+    specs = []
+    for run in runs:
+        specs.append(
+            _spec(
+                code="employees.payroll_ready",
+                category=BusinessNotification.Category.OPERATIONS,
+                severity=BusinessNotification.Severity.INFO,
+                fingerprint=f"employees.payroll_ready:{run.pk}",
+                entity_type="employees.payrollrun",
+                entity_id=str(run.pk),
+                payload={
+                    "run_number": run.run_number,
+                    "period_start": run.period_start.isoformat(),
+                    "period_end": run.period_end.isoformat(),
+                    "amount": _money(run.net_total),
+                    "count": run.notification_line_count,
+                },
+            )
+        )
+    return specs
 
 
 def _upsert_notification(spec, now):

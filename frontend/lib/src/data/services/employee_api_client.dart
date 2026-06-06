@@ -68,6 +68,17 @@ class EmployeeApiClient {
     );
   }
 
+  Future<PayrollDraftResult> draftMonthlyPayrollRun() async {
+    final response = await _session.post('payroll-runs/draft-monthly/');
+    _session.ensureSuccess(
+      response,
+      'Monthly payroll draft failed with status',
+    );
+    return PayrollDraftResult.fromJson(
+      _session.decodedBody(response) as Map<String, Object?>,
+    );
+  }
+
   Future<PayrollRun> approvePayrollRun(int id) async {
     final response = await _session.post('payroll-runs/$id/approve/');
     _session.ensureSuccess(response, 'Payroll approve failed with status');

@@ -1,6 +1,7 @@
 from datetime import timedelta
 from pathlib import Path
 
+from celery.schedules import crontab
 import environ
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -152,6 +153,10 @@ CELERY_BEAT_SCHEDULE = {
     "fraud.sync-suspected-fraud-findings": {
         "task": "fraud.sync_suspected_fraud_findings",
         "schedule": timedelta(minutes=POINTY_FRAUD_DETECTION_INTERVAL_MINUTES),
+    },
+    "employees.draft-monthly-payroll": {
+        "task": "employees.draft_monthly_payroll",
+        "schedule": crontab(minute=10, hour=0, day_of_month="1"),
     },
 }
 

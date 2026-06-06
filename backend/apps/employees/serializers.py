@@ -1,6 +1,7 @@
 from decimal import Decimal
 
 from django.contrib.auth import get_user_model
+from django.db import transaction
 from rest_framework import serializers
 
 from .models import (
@@ -48,16 +49,22 @@ class CompensationPlanSerializer(serializers.ModelSerializer):
             "employee_name",
             "pay_type",
             "amount",
+            "commission_percent",
             "currency",
             "expected_units_per_period",
             "effective_from",
-            "effective_to",
             "notes",
             "is_active",
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ["id", "employee_name", "created_at", "updated_at"]
+        read_only_fields = [
+            "id",
+            "employee_name",
+            "effective_from",
+            "created_at",
+            "updated_at",
+        ]
 
     def validate(self, attrs):
         employee = attrs.get("employee", getattr(self.instance, "employee", None))
@@ -75,6 +82,26 @@ class CompensationPlanSerializer(serializers.ModelSerializer):
                 {"employee": "Cannot create compensation for a terminated employee."}
             )
         return attrs
+
+    @transaction.atomic
+    def create(self, validated_data):
+        plan = super().create(validated_data)
+        self._deactivate_other_active_plans(plan)
+        return plan
+
+    @transaction.atomic
+    def update(self, instance, validated_data):
+        plan = super().update(instance, validated_data)
+        self._deactivate_other_active_plans(plan)
+        return plan
+
+    def _deactivate_other_active_plans(self, plan):
+        if not plan.is_active:
+            return
+        CompensationPlan.objects.filter(
+            employee=plan.employee,
+            is_active=True,
+        ).exclude(pk=plan.pk).update(is_active=False)
 
 
 class EmployeeSerializer(serializers.ModelSerializer):
@@ -155,6 +182,15 @@ class EmployeeSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(
                 {"termination_date": "Termination date is required."}
             )
+        user = attrs.get("user", getattr(self.instance, "user", None))
+        if user is not None:
+            existing = Employee.objects.filter(user=user)
+            if self.instance is not None:
+                existing = existing.exclude(pk=self.instance.pk)
+            if existing.exists():
+                raise serializers.ValidationError(
+                    {"user": "This user is already linked to another employee."}
+                )
         return attrs
 
 

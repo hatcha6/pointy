@@ -1856,6 +1856,30 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
+  String get smartNotificationPayrollReadyTitle => 'مسودة رواتب جاهزة للاعتماد';
+
+  @override
+  String smartNotificationPayrollReadyMessage(num count, String amount) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'مسودة رواتب لـ $count موظفين جاهزة بإجمالي $amount.',
+      two: 'مسودة رواتب لموظفين جاهزة بإجمالي $amount.',
+      one: 'مسودة راتب لموظف واحد جاهزة بإجمالي $amount.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String smartNotificationPayrollReadyDetail(
+    String runNumber,
+    String start,
+    String end,
+  ) {
+    return '$runNumber: من $start إلى $end';
+  }
+
+  @override
   String get smartNotificationOperationsErrorTitle => 'خطأ تشغيلي يحتاج متابعة';
 
   @override
@@ -5866,6 +5890,9 @@ class AppLocalizationsAr extends AppLocalizations {
   String get addEmployeeButton => 'إضافة موظف';
 
   @override
+  String get draftMonthlyPayrollButton => 'مسودة رواتب الشهر';
+
+  @override
   String get createPayrollRunButton => 'إنشاء مسير رواتب';
 
   @override
@@ -5892,6 +5919,11 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String employeePayPlanLabel(String payType, String amount) {
     return '$payType - $amount';
+  }
+
+  @override
+  String employeePayPlanWithCommissionLabel(String baseLabel, String percent) {
+    return '$baseLabel + $percent% مبيعات';
   }
 
   @override
@@ -5949,6 +5981,42 @@ class AppLocalizationsAr extends AppLocalizations {
   String get employeeHireDateField => 'تاريخ التعيين';
 
   @override
+  String get employeeUserField => 'مستخدم نقطة البيع';
+
+  @override
+  String get employeeUserEmpty => 'غير مرتبط بمستخدم';
+
+  @override
+  String get employeeUserHelper =>
+      'اربط الموظف بمستخدم إذا كان يعمل على النظام مثل الكاشير.';
+
+  @override
+  String get employeeUserClearTooltip => 'إزالة المستخدم المرتبط';
+
+  @override
+  String get employeeUserOpenPickerTooltip => 'اختيار مستخدم';
+
+  @override
+  String get employeeUserPickerTitle => 'اختيار مستخدم';
+
+  @override
+  String get employeeUserPickerSearchHint => 'ابحث باسم المستخدم أو البريد';
+
+  @override
+  String get employeeUserPickerEmpty => 'لا توجد مستخدمون مطابقون.';
+
+  @override
+  String get employeeUserPickerClear => 'مسح الاختيار';
+
+  @override
+  String get employeeUserPickerLoadError => 'تعذر تحميل المستخدمين.';
+
+  @override
+  String userFallbackLabel(int id) {
+    return 'مستخدم #$id';
+  }
+
+  @override
   String get employeeTypeField => 'نوع التوظيف';
 
   @override
@@ -5997,6 +6065,24 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get payEffectiveFromField => 'يبدأ من';
+
+  @override
+  String get monthlyBaseSalaryField => 'الراتب الشهري الثابت';
+
+  @override
+  String get monthlyBaseSalaryHelper =>
+      'المبلغ الأساسي الذي يستحقه الموظف كل شهر.';
+
+  @override
+  String get salesCommissionPercentField => 'نسبة عمولة المبيعات';
+
+  @override
+  String get salesCommissionPercentHelper =>
+      'تُحسب من المبيعات المدفوعة للمستخدم المرتبط بالموظف. اتركها 0 إذا لا توجد عمولة.';
+
+  @override
+  String get compensationPlanActivationNote =>
+      'ستصبح هذه الخطة هي الراتب الحالي للموظف، وسيتم تعطيل الخطط النشطة السابقة.';
 
   @override
   String get payTypeMonthlySalary => 'راتب شهري';

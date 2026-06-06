@@ -226,6 +226,10 @@ class PosApiService {
     return _employees.createPayrollRun(draft);
   }
 
+  Future<PayrollDraftResult> draftMonthlyPayrollRun() {
+    return _employees.draftMonthlyPayrollRun();
+  }
+
   Future<PayrollRun> approvePayrollRun(int id) {
     return _employees.approvePayrollRun(id);
   }

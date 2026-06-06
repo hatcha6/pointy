@@ -3,6 +3,7 @@ from decimal import Decimal
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
+from django.conf import settings
 from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
@@ -10,10 +11,13 @@ from rest_framework import status
 from rest_framework.test import APIClient
 
 from apps.catalog.testing import create_product_with_default_variant
+from apps.notifications.models import BusinessNotification
+from apps.notifications.services import sync_business_notifications
 from apps.core.roles import ACCOUNTANT_GROUP, CASHIER_GROUP, MANAGER_GROUP, ensure_role_groups
 from apps.sales.models import Order, OrderLine, RegisterSession
 
 from .models import CompensationPlan, Employee, PayrollRun
+from .services import draft_monthly_payroll_run
 
 
 class EmployeePayrollApiTests(TestCase):
@@ -102,6 +106,121 @@ class EmployeePayrollApiTests(TestCase):
         self.assertEqual(payroll_response.data["additions_total"], "25.00")
         self.assertEqual(payroll_response.data["deductions_total"], "10.00")
         self.assertEqual(payroll_response.data["net_total"], "915.00")
+
+    def test_employee_user_link_must_be_unique(self):
+        Employee.objects.create(full_name="موظف مرتبط", user=self.cashier)
+
+        response = self.authenticated_client(self.accountant).post(
+            reverse("employee-list"),
+            {
+                "full_name": "موظف آخر",
+                "hire_date": timezone.localdate().isoformat(),
+                "user": self.cashier.pk,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("user", response.data)
+
+    def test_monthly_payroll_draft_uses_base_salary_and_sales_commission(self):
+        employee = Employee.objects.create(
+            full_name="كاشير عمولة",
+            user=self.cashier,
+        )
+        plan = CompensationPlan.objects.create(
+            employee=employee,
+            pay_type=CompensationPlan.PayType.MONTHLY_SALARY,
+            amount=Decimal("900.00"),
+            commission_percent=Decimal("10.00"),
+        )
+        session = RegisterSession.objects.create(
+            owner=self.cashier,
+            owner_key=f"user:{self.cashier.pk}",
+        )
+        Order.objects.create(
+            register_session=session,
+            status=Order.Status.PAID,
+            subtotal=Decimal("200.00"),
+            total=Decimal("200.00"),
+        )
+        today = timezone.localdate()
+        period_start = today.replace(day=1)
+
+        payroll, created = draft_monthly_payroll_run(
+            period_start=period_start,
+            period_end=today,
+        )
+
+        self.assertTrue(created)
+        self.assertEqual(payroll.lines.count(), 1)
+        line = payroll.lines.get()
+        self.assertEqual(line.compensation_plan, plan)
+        self.assertEqual(line.gross_amount, Decimal("900.00"))
+        self.assertEqual(line.additions_amount, Decimal("20.00"))
+        self.assertEqual(line.net_amount, Decimal("920.00"))
+        self.assertEqual(payroll.net_total, Decimal("920.00"))
+
+    def test_monthly_payroll_draft_is_idempotent_for_period(self):
+        Employee.objects.create(full_name="موظف ثابت")
+        employee = Employee.objects.get(full_name="موظف ثابت")
+        CompensationPlan.objects.create(
+            employee=employee,
+            pay_type=CompensationPlan.PayType.MONTHLY_SALARY,
+            amount=Decimal("500.00"),
+        )
+        today = timezone.localdate()
+        period_start = today.replace(day=1)
+
+        first, first_created = draft_monthly_payroll_run(
+            period_start=period_start,
+            period_end=today,
+        )
+        second, second_created = draft_monthly_payroll_run(
+            period_start=period_start,
+            period_end=today,
+        )
+
+        self.assertTrue(first_created)
+        self.assertFalse(second_created)
+        self.assertEqual(first.pk, second.pk)
+        self.assertEqual(
+            PayrollRun.objects.filter(
+                period_start=period_start,
+                period_end=today,
+            ).count(),
+            1,
+        )
+
+    def test_draft_payroll_run_generates_admin_notification(self):
+        employee = Employee.objects.create(full_name="تنبيه الرواتب")
+        CompensationPlan.objects.create(
+            employee=employee,
+            pay_type=CompensationPlan.PayType.MONTHLY_SALARY,
+            amount=Decimal("700.00"),
+        )
+        today = timezone.localdate()
+        period_start = today.replace(day=1)
+        payroll, _ = draft_monthly_payroll_run(
+            period_start=period_start,
+            period_end=today,
+        )
+
+        sync_business_notifications()
+        notification = BusinessNotification.objects.get(
+            code="employees.payroll_ready"
+        )
+
+        self.assertEqual(notification.entity_id, str(payroll.pk))
+        self.assertEqual(notification.payload["amount"], "700.00")
+        self.assertEqual(notification.payload["count"], 1)
+
+    def test_monthly_payroll_draft_is_scheduled_in_celery_beat(self):
+        schedule = settings.CELERY_BEAT_SCHEDULE[
+            "employees.draft-monthly-payroll"
+        ]
+
+        self.assertEqual(schedule["task"], "employees.draft_monthly_payroll")
 
     def test_payroll_run_transitions_are_guarded_and_audited_by_status(self):
         employee = Employee.objects.create(full_name="أحمد محمود")
