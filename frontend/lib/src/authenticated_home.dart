@@ -25,6 +25,7 @@ import 'features/contacts/views/contact_management_screen.dart';
 import 'features/dashboard/views/dashboard_screen.dart';
 import 'features/device_settings/views/device_settings_screen.dart';
 import 'features/discounts/views/discount_management_screen.dart';
+import 'features/employees/views/employee_payroll_screen.dart';
 import 'features/invoices/views/invoice_details_screen.dart';
 import 'features/invoices/views/invoice_list_screen.dart';
 import 'features/notifications/views/notification_center_host.dart';
@@ -144,6 +145,10 @@ class _AuthenticatedRoutes {
           AppCapability.viewActivityLog,
           () => push(context, activityLogRouteBuilder),
         ),
+        onOpenEmployees: guardedAction(
+          AppCapability.viewEmployees,
+          () => push(context, employeePayrollRouteBuilder),
+        ),
         onOpenDeviceSettings: guardedAction(
           AppCapability.manageDeviceSettings,
           () => push(context, deviceSettingsRouteBuilder),
@@ -212,6 +217,10 @@ class _AuthenticatedRoutes {
         onOpenActivityLog: guardedAction(
           AppCapability.viewActivityLog,
           () => push(routeContext, activityLogRouteBuilder),
+        ),
+        onOpenEmployees: guardedAction(
+          AppCapability.viewEmployees,
+          () => push(routeContext, employeePayrollRouteBuilder),
         ),
         onOpenDeviceSettings: guardedAction(
           AppCapability.manageDeviceSettings,
@@ -597,6 +606,74 @@ class _AuthenticatedRoutes {
             ),
           );
         }),
+        onOpenShopSettings: capabilities.actionFor(
+          AppCapability.manageShopSettings,
+          () => replace(routeContext, shopSettingsRouteBuilder),
+        ),
+        onLogout: () => logout(routeContext),
+      ),
+    );
+  }
+
+  Widget employeePayrollRouteBuilder(BuildContext routeContext) {
+    return _screen(
+      'employees',
+      EmployeePayrollScreen(
+        viewModel: dependencies.employeePayrollViewModel,
+        currentUser: currentUser,
+        capabilities: capabilities,
+        onOpenDashboard: guardedAction(
+          AppCapability.viewDashboard,
+          () => openDashboard(routeContext),
+        ),
+        onOpenPos: guardedAction(
+          AppCapability.accessPos,
+          () => openPos(routeContext),
+        ),
+        onOpenInvoices: guardedAction(
+          AppCapability.viewInvoices,
+          () => replace(routeContext, invoicesRouteBuilder),
+        ),
+        onOpenCatalog: guardedAction(
+          AppCapability.viewCatalogManagement,
+          () => replace(routeContext, catalogRouteBuilder),
+        ),
+        onOpenCategories: guardedAction(
+          AppCapability.manageCategories,
+          () => replace(routeContext, categoryRouteBuilder),
+        ),
+        onOpenPurchasing: guardedAction(
+          AppCapability.accessPurchasing,
+          () => replace(routeContext, purchasingRouteBuilder),
+        ),
+        onOpenContacts: guardedAction(
+          AppCapability.manageContacts,
+          () => replace(routeContext, contactsRouteBuilder),
+        ),
+        onOpenRegisterSessions: guardedAction(
+          AppCapability.viewRegisterSessions,
+          () => replace(routeContext, registerSessionsRouteBuilder),
+        ),
+        onOpenDiscounts: guardedAction(
+          AppCapability.viewDiscountRules,
+          () => replace(routeContext, discountsRouteBuilder),
+        ),
+        onOpenReports: guardedAction(
+          AppCapability.viewReports,
+          () => replace(routeContext, reportsRouteBuilder),
+        ),
+        onOpenActivityLog: guardedAction(
+          AppCapability.viewActivityLog,
+          () => replace(routeContext, activityLogRouteBuilder),
+        ),
+        onOpenDeviceSettings: guardedAction(
+          AppCapability.manageDeviceSettings,
+          () => replace(routeContext, deviceSettingsRouteBuilder),
+        ),
+        onOpenUsers: capabilities.actionFor(
+          AppCapability.manageUsers,
+          () => replace(routeContext, usersRouteBuilder),
+        ),
         onOpenShopSettings: capabilities.actionFor(
           AppCapability.manageShopSettings,
           () => replace(routeContext, shopSettingsRouteBuilder),

@@ -12,6 +12,7 @@ import 'data/repositories/contact_repository.dart';
 import 'data/repositories/dashboard_repository.dart';
 import 'data/repositories/device_settings_repository.dart';
 import 'data/repositories/discount_repository.dart';
+import 'data/repositories/employee_repository.dart';
 import 'data/repositories/inventory_repository.dart';
 import 'data/repositories/printing_repository.dart';
 import 'data/repositories/purchase_repository.dart';
@@ -31,6 +32,7 @@ import 'features/contacts/view_models/contact_management_view_model.dart';
 import 'features/dashboard/view_models/dashboard_view_model.dart';
 import 'features/device_settings/view_models/device_settings_view_model.dart';
 import 'features/discounts/view_models/discount_management_view_model.dart';
+import 'features/employees/view_models/employee_payroll_view_model.dart';
 import 'features/notifications/view_models/notification_center_view_model.dart';
 import 'features/pos/view_models/pos_view_model.dart';
 import 'features/printing/view_models/printing_settings_view_model.dart';
@@ -55,6 +57,7 @@ class PointyAppDependencies {
     deviceSettingsRepository = const DeviceSettingsRepository();
     businessAlertRepository = BusinessAlertRepository(service);
     discountRepository = DiscountRepository(service);
+    employeeRepository = EmployeeRepository(service);
     inventoryRepository = InventoryRepository(service);
     registerSessionRepository = RegisterSessionRepository(service);
     reportRepository = ReportRepository(service);
@@ -97,6 +100,7 @@ class PointyAppDependencies {
   late final DeviceSettingsRepository deviceSettingsRepository;
   late final BusinessAlertRepository businessAlertRepository;
   late final DiscountRepository discountRepository;
+  late final EmployeeRepository employeeRepository;
   late final InventoryRepository inventoryRepository;
   late final RegisterSessionRepository registerSessionRepository;
   late final ReportRepository reportRepository;
@@ -112,6 +116,7 @@ class PointyAppDependencies {
   PrintingSettingsViewModel? _printingSettingsViewModel;
   ContactManagementViewModel? _contactManagementViewModel;
   DiscountManagementViewModel? _discountManagementViewModel;
+  EmployeePayrollViewModel? _employeePayrollViewModel;
   NotificationCenterViewModel? _notificationCenterViewModel;
   ActivityLogViewModel? _activityLogViewModel;
   DashboardViewModel? _dashboardViewModel;
@@ -155,6 +160,12 @@ class PointyAppDependencies {
   DiscountManagementViewModel get discountManagementViewModel =>
       _discountManagementViewModel ??= DiscountManagementViewModel(
         discountRepository,
+        analyticsEngine: analyticsEngine,
+      );
+
+  EmployeePayrollViewModel get employeePayrollViewModel =>
+      _employeePayrollViewModel ??= EmployeePayrollViewModel(
+        employeeRepository,
         analyticsEngine: analyticsEngine,
       );
 
@@ -215,6 +226,8 @@ class PointyAppDependencies {
       _purchaseOrderListViewModel?.loadOrders();
       _contactManagementViewModel?.loadContacts();
       _discountManagementViewModel?.loadRules();
+      _employeePayrollViewModel?.loadEmployees();
+      _employeePayrollViewModel?.loadPayrollRuns();
       _activityLogViewModel?.loadEvents();
       _activityLogViewModel?.loadUsers();
     }
@@ -241,6 +254,8 @@ class PointyAppDependencies {
     _contactManagementViewModel = null;
     _discountManagementViewModel?.dispose();
     _discountManagementViewModel = null;
+    _employeePayrollViewModel?.dispose();
+    _employeePayrollViewModel = null;
     _notificationCenterViewModel?.dispose();
     _notificationCenterViewModel = null;
     _activityLogViewModel?.dispose();

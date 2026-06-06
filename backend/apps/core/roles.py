@@ -5,7 +5,8 @@ from django.utils.crypto import get_random_string
 
 MANAGER_GROUP = "manager"
 CASHIER_GROUP = "cashier"
-ROLE_GROUPS = (MANAGER_GROUP, CASHIER_GROUP)
+ACCOUNTANT_GROUP = "accountant"
+ROLE_GROUPS = (MANAGER_GROUP, CASHIER_GROUP, ACCOUNTANT_GROUP)
 
 MANAGER_PERMISSION_DOMAINS = (
     "catalog",
@@ -22,6 +23,7 @@ MANAGER_PERMISSION_DOMAINS = (
     "reports",
     "notifications",
     "attachments",
+    "employees",
 )
 USER_PERMISSION_CODES = (
     "auth.add_user",
@@ -51,6 +53,31 @@ CASHIER_PERMISSION_CODES = (
     "printing.view_printauditevent",
     "analytics.add_analyticsevent",
 )
+ACCOUNTANT_PERMISSION_CODES = (
+    "core.view_shopsettings",
+    "analytics.view_analyticsevent",
+    "customers.view_customer",
+    "discounts.view_discountrule",
+    "employees.add_compensationplan",
+    "employees.change_compensationplan",
+    "employees.view_compensationplan",
+    "employees.add_employee",
+    "employees.change_employee",
+    "employees.view_employee",
+    "employees.add_payrollrun",
+    "employees.change_payrollrun",
+    "employees.view_payrollrun",
+    "employees.approve_payrollrun",
+    "employees.mark_payrollrun_paid",
+    "employees.void_payrollrun",
+    "payments.view_payment",
+    "purchasing.view_purchaseorder",
+    "purchasing.view_supplier",
+    "purchasing.view_supplierpayment",
+    "reports.view_reportrun",
+    "sales.view_order",
+    "sales.view_registersession",
+)
 
 
 def _permissions_for_codes(permission_codes):
@@ -77,9 +104,11 @@ def ensure_role_groups():
     )
     manager_user_permissions = _permissions_for_codes(USER_PERMISSION_CODES)
     cashier_permissions = _permissions_for_codes(CASHIER_PERMISSION_CODES)
+    accountant_permissions = _permissions_for_codes(ACCOUNTANT_PERMISSION_CODES)
 
     groups[MANAGER_GROUP].permissions.add(*manager_permissions, *manager_user_permissions)
     groups[CASHIER_GROUP].permissions.add(*cashier_permissions)
+    groups[ACCOUNTANT_GROUP].permissions.add(*accountant_permissions)
     return groups
 
 

@@ -52,6 +52,8 @@ class DashboardSections {
     this.payments,
     this.inventory,
     this.purchasing,
+    this.payroll,
+    this.profitability,
     this.customers,
     this.discounts,
     this.printing,
@@ -61,6 +63,8 @@ class DashboardSections {
   final DashboardPaymentsSection? payments;
   final DashboardInventorySection? inventory;
   final DashboardPurchasingSection? purchasing;
+  final DashboardPayrollSection? payroll;
+  final DashboardProfitabilitySection? profitability;
   final DashboardCustomersSection? customers;
   final DashboardDiscountsSection? discounts;
   final DashboardPrintingSection? printing;
@@ -70,6 +74,8 @@ class DashboardSections {
       payments != null ||
       inventory != null ||
       purchasing != null ||
+      payroll != null ||
+      profitability != null ||
       customers != null ||
       discounts != null ||
       printing != null;
@@ -94,6 +100,16 @@ class DashboardSections {
       purchasing: json['purchasing'] is Map<String, Object?>
           ? DashboardPurchasingSection.fromJson(
               json['purchasing'] as Map<String, Object?>,
+            )
+          : null,
+      payroll: json['payroll'] is Map<String, Object?>
+          ? DashboardPayrollSection.fromJson(
+              json['payroll'] as Map<String, Object?>,
+            )
+          : null,
+      profitability: json['profitability'] is Map<String, Object?>
+          ? DashboardProfitabilitySection.fromJson(
+              json['profitability'] as Map<String, Object?>,
             )
           : null,
       customers: json['customers'] is Map<String, Object?>
@@ -726,6 +742,130 @@ class PurchasingDashboardSummary {
       dueTotal: _moneyFromJson(json['due_total']),
       overdueOrderCount: _intFromJson(json['overdue_order_count']),
       supplierCount: _intFromJson(json['supplier_count']),
+    );
+  }
+}
+
+class DashboardPayrollSection {
+  const DashboardPayrollSection({
+    required this.summary,
+    this.recentRuns = const [],
+  });
+
+  final PayrollDashboardSummary summary;
+  final List<RecentPayrollRunInsight> recentRuns;
+
+  factory DashboardPayrollSection.fromJson(Map<String, Object?> json) {
+    return DashboardPayrollSection(
+      summary: PayrollDashboardSummary.fromJson(_mapFromJson(json['summary'])),
+      recentRuns: _listFromJson(json['recent_runs'])
+          .whereType<Map<String, Object?>>()
+          .map(RecentPayrollRunInsight.fromJson)
+          .toList(growable: false),
+    );
+  }
+}
+
+class PayrollDashboardSummary {
+  const PayrollDashboardSummary({
+    required this.salaryExpense,
+    required this.paidTotal,
+    required this.pendingTotal,
+    required this.activeEmployeeCount,
+    required this.payrollRunCount,
+  });
+
+  final double salaryExpense;
+  final double paidTotal;
+  final double pendingTotal;
+  final int activeEmployeeCount;
+  final int payrollRunCount;
+
+  factory PayrollDashboardSummary.fromJson(Map<String, Object?> json) {
+    return PayrollDashboardSummary(
+      salaryExpense: _moneyFromJson(json['salary_expense']),
+      paidTotal: _moneyFromJson(json['paid_total']),
+      pendingTotal: _moneyFromJson(json['pending_total']),
+      activeEmployeeCount: _intFromJson(json['active_employee_count']),
+      payrollRunCount: _intFromJson(json['payroll_run_count']),
+    );
+  }
+}
+
+class RecentPayrollRunInsight {
+  const RecentPayrollRunInsight({
+    required this.id,
+    required this.runNumber,
+    required this.status,
+    required this.netTotal,
+    this.periodStart,
+    this.periodEnd,
+    this.paymentDate,
+  });
+
+  final int id;
+  final String runNumber;
+  final String status;
+  final DateTime? periodStart;
+  final DateTime? periodEnd;
+  final DateTime? paymentDate;
+  final double netTotal;
+
+  factory RecentPayrollRunInsight.fromJson(Map<String, Object?> json) {
+    return RecentPayrollRunInsight(
+      id: _intFromJson(json['id']),
+      runNumber: json['run_number']?.toString() ?? '',
+      status: json['status']?.toString() ?? '',
+      periodStart: _dateTimeFromJson(json['period_start']),
+      periodEnd: _dateTimeFromJson(json['period_end']),
+      paymentDate: _dateTimeFromJson(json['payment_date']),
+      netTotal: _moneyFromJson(json['net_total']),
+    );
+  }
+}
+
+class DashboardProfitabilitySection {
+  const DashboardProfitabilitySection({required this.summary});
+
+  final ProfitabilityDashboardSummary summary;
+
+  factory DashboardProfitabilitySection.fromJson(Map<String, Object?> json) {
+    return DashboardProfitabilitySection(
+      summary: ProfitabilityDashboardSummary.fromJson(
+        _mapFromJson(json['summary']),
+      ),
+    );
+  }
+}
+
+class ProfitabilityDashboardSummary {
+  const ProfitabilityDashboardSummary({
+    required this.grossProfit,
+    required this.payrollPaidTotal,
+    required this.payrollAccruedTotal,
+    required this.paymentCommissionTotal,
+    required this.purchaseSpendTotal,
+    required this.operatingExpenseTotal,
+    required this.netOperatingProfit,
+  });
+
+  final double grossProfit;
+  final double payrollPaidTotal;
+  final double payrollAccruedTotal;
+  final double paymentCommissionTotal;
+  final double purchaseSpendTotal;
+  final double operatingExpenseTotal;
+  final double netOperatingProfit;
+
+  factory ProfitabilityDashboardSummary.fromJson(Map<String, Object?> json) {
+    return ProfitabilityDashboardSummary(
+      grossProfit: _moneyFromJson(json['gross_profit']),
+      payrollPaidTotal: _moneyFromJson(json['payroll_paid_total']),
+      payrollAccruedTotal: _moneyFromJson(json['payroll_accrued_total']),
+      paymentCommissionTotal: _moneyFromJson(json['payment_commission_total']),
+      purchaseSpendTotal: _moneyFromJson(json['purchase_spend_total']),
+      operatingExpenseTotal: _moneyFromJson(json['operating_expense_total']),
+      netOperatingProfit: _moneyFromJson(json['net_operating_profit']),
     );
   }
 }

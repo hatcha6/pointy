@@ -33,6 +33,7 @@ class DashboardScreen extends StatelessWidget {
     this.onOpenDiscounts,
     this.onOpenReports,
     this.onOpenActivityLog,
+    this.onOpenEmployees,
     this.onOpenUsers,
     this.onOpenShopSettings,
   });
@@ -51,6 +52,7 @@ class DashboardScreen extends StatelessWidget {
   final VoidCallback? onOpenDiscounts;
   final VoidCallback? onOpenReports;
   final VoidCallback? onOpenActivityLog;
+  final VoidCallback? onOpenEmployees;
   final VoidCallback? onOpenUsers;
   final VoidCallback? onOpenShopSettings;
   final VoidCallback onLogout;
@@ -79,6 +81,7 @@ class DashboardScreen extends StatelessWidget {
             onOpenDiscounts: onOpenDiscounts,
             onOpenReports: onOpenReports,
             onOpenActivityLog: onOpenActivityLog,
+            onOpenEmployees: onOpenEmployees,
             onOpenUsers: onOpenUsers,
             onOpenShopSettings: onOpenShopSettings,
             onLogout: onLogout,
@@ -274,6 +277,24 @@ class _DashboardSections extends StatelessWidget {
             capability: AppCapability.viewPurchasingDashboard,
             child: _PurchasingSection(
               section: sections.purchasing!,
+              maxWidth: maxWidth,
+            ),
+          ),
+        if (sections.payroll != null)
+          DashboardWidgetGuard(
+            capabilities: capabilities,
+            capability: AppCapability.viewPayroll,
+            child: _PayrollSection(
+              section: sections.payroll!,
+              maxWidth: maxWidth,
+            ),
+          ),
+        if (sections.profitability != null)
+          DashboardWidgetGuard(
+            capabilities: capabilities,
+            capability: AppCapability.viewSalesDashboard,
+            child: _ProfitabilitySection(
+              section: sections.profitability!,
               maxWidth: maxWidth,
             ),
           ),
@@ -636,6 +657,113 @@ class _PurchasingSection extends StatelessWidget {
               child: _SupplierBalanceList(
                 balances: section.topSupplierBalances,
               ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _PayrollSection extends StatelessWidget {
+  const _PayrollSection({required this.section, required this.maxWidth});
+
+  final DashboardPayrollSection section;
+  final double maxWidth;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final summary = section.summary;
+    return _DashboardSection(
+      title: l10n.dashboardPayrollSectionTitle,
+      icon: Icons.badge,
+      children: [
+        PointyMetricGrid(
+          maxWidth: maxWidth,
+          minTileWidth: 180,
+          maxColumns: 4,
+          includeBottomSpacing: true,
+          metrics: [
+            PointyMetricGridItem(
+              label: l10n.dashboardSalaryExpenseMetric,
+              value: formatMoney(summary.salaryExpense),
+              icon: Icons.payments_outlined,
+            ),
+            PointyMetricGridItem(
+              label: l10n.dashboardPayrollPaidMetric,
+              value: formatMoney(summary.paidTotal),
+              icon: Icons.price_check_outlined,
+            ),
+            PointyMetricGridItem(
+              label: l10n.dashboardPayrollPendingMetric,
+              value: formatMoney(summary.pendingTotal),
+              icon: Icons.pending_actions_outlined,
+            ),
+            PointyMetricGridItem(
+              label: l10n.dashboardActiveEmployeesMetric,
+              value: _formatNumber(summary.activeEmployeeCount),
+              icon: Icons.groups_outlined,
+            ),
+          ],
+        ),
+        _ResponsiveWrap(
+          maxWidth: maxWidth,
+          children: [
+            PointyDetailSection(
+              title: l10n.dashboardRecentPayrollRunsTitle,
+              icon: Icons.history,
+              child: _RecentPayrollRunList(runs: section.recentRuns),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _ProfitabilitySection extends StatelessWidget {
+  const _ProfitabilitySection({required this.section, required this.maxWidth});
+
+  final DashboardProfitabilitySection section;
+  final double maxWidth;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final summary = section.summary;
+    return _DashboardSection(
+      title: l10n.dashboardProfitabilitySectionTitle,
+      icon: Icons.trending_up,
+      children: [
+        PointyMetricGrid(
+          maxWidth: maxWidth,
+          minTileWidth: 180,
+          maxColumns: 4,
+          includeBottomSpacing: false,
+          metrics: [
+            PointyMetricGridItem(
+              label: l10n.dashboardGrossProfitMetric,
+              value: formatMoney(summary.grossProfit),
+              icon: Icons.storefront_outlined,
+            ),
+            PointyMetricGridItem(
+              label: l10n.dashboardPayrollPaidMetric,
+              value: formatMoney(summary.payrollPaidTotal),
+              icon: Icons.badge_outlined,
+            ),
+            PointyMetricGridItem(
+              label: l10n.dashboardPaymentCommissionsMetric,
+              value: formatMoney(summary.paymentCommissionTotal),
+              icon: Icons.credit_card_outlined,
+            ),
+            PointyMetricGridItem(
+              label: l10n.dashboardNetOperatingProfitMetric,
+              value: formatMoney(summary.netOperatingProfit),
+              icon: Icons.account_balance_wallet_outlined,
+              accentColor: summary.netOperatingProfit < 0
+                  ? Theme.of(context).colorScheme.error
+                  : Theme.of(context).colorScheme.primary,
             ),
           ],
         ),
@@ -1335,6 +1463,35 @@ class _SupplierBalanceList extends StatelessWidget {
   }
 }
 
+class _RecentPayrollRunList extends StatelessWidget {
+  const _RecentPayrollRunList({required this.runs});
+
+  final List<RecentPayrollRunInsight> runs;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    if (runs.isEmpty) {
+      return const _EmptyWidgetData();
+    }
+    return _InsightRows(
+      rows: [
+        for (final run in runs)
+          _InsightRowData(
+            title: run.runNumber,
+            subtitle: run.periodStart == null || run.periodEnd == null
+                ? _payrollRunStatusLabel(l10n, run.status)
+                : l10n.payrollPeriodSubtitle(
+                    formatDate(run.periodStart!),
+                    formatDate(run.periodEnd!),
+                  ),
+            trailing: formatMoney(run.netTotal),
+          ),
+      ],
+    );
+  }
+}
+
 class _TopCustomerList extends StatelessWidget {
   const _TopCustomerList({required this.customers});
 
@@ -1648,6 +1805,16 @@ String _stockMovementLabel(AppLocalizations l10n, String movementType) {
     'receive_damaged' => l10n.stockMovementReceiveDamaged,
     'cancel_expected' => l10n.stockMovementCancelExpected,
     _ => movementType,
+  };
+}
+
+String _payrollRunStatusLabel(AppLocalizations l10n, String status) {
+  return switch (status) {
+    'draft' => l10n.payrollStatusDraft,
+    'approved' => l10n.payrollStatusApproved,
+    'paid' => l10n.payrollStatusPaid,
+    'void' => l10n.payrollStatusVoid,
+    _ => status,
   };
 }
 

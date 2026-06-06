@@ -1,0 +1,201 @@
+from datetime import timedelta
+from decimal import Decimal
+
+from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group
+from django.test import TestCase
+from django.urls import reverse
+from django.utils import timezone
+from rest_framework import status
+from rest_framework.test import APIClient
+
+from apps.catalog.testing import create_product_with_default_variant
+from apps.core.roles import ACCOUNTANT_GROUP, CASHIER_GROUP, MANAGER_GROUP, ensure_role_groups
+from apps.sales.models import Order, OrderLine, RegisterSession
+
+from .models import CompensationPlan, Employee, PayrollRun
+
+
+class EmployeePayrollApiTests(TestCase):
+    def setUp(self):
+        ensure_role_groups()
+        User = get_user_model()
+        self.manager = User.objects.create_user(username="owner", password="pass")
+        self.manager.groups.add(Group.objects.get(name=MANAGER_GROUP))
+        self.accountant = User.objects.create_user(username="accountant", password="pass")
+        self.accountant.groups.add(Group.objects.get(name=ACCOUNTANT_GROUP))
+        self.cashier = User.objects.create_user(username="cashier", password="pass")
+        self.cashier.groups.add(Group.objects.get(name=CASHIER_GROUP))
+
+    def authenticated_client(self, user):
+        client = APIClient()
+        client.force_authenticate(user=user)
+        return client
+
+    def test_cashier_cannot_read_employee_records(self):
+        response = self.authenticated_client(self.cashier).get(reverse("employee-list"))
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_accountant_can_create_employee_and_payroll_run(self):
+        client = self.authenticated_client(self.accountant)
+        employee_response = client.post(
+            reverse("employee-list"),
+            {
+                "full_name": "سارة علي",
+                "job_title": "محاسبة",
+                "department": "الإدارة",
+                "employment_type": Employee.EmploymentType.FULL_TIME,
+                "hire_date": timezone.localdate().isoformat(),
+            },
+            format="json",
+        )
+
+        self.assertEqual(employee_response.status_code, status.HTTP_201_CREATED)
+        employee_id = employee_response.data["id"]
+        self.assertTrue(employee_response.data["employee_number"].startswith("E"))
+
+        plan_response = client.post(
+            reverse("compensation-plan-list"),
+            {
+                "employee": employee_id,
+                "pay_type": CompensationPlan.PayType.MONTHLY_SALARY,
+                "amount": "900.00",
+                "effective_from": timezone.localdate().isoformat(),
+            },
+            format="json",
+        )
+
+        self.assertEqual(plan_response.status_code, status.HTTP_201_CREATED)
+
+        payroll_response = client.post(
+            reverse("payroll-run-list"),
+            {
+                "period_start": timezone.localdate().replace(day=1).isoformat(),
+                "period_end": timezone.localdate().isoformat(),
+                "lines": [
+                    {
+                        "employee": employee_id,
+                        "compensation_plan": plan_response.data["id"],
+                        "units": "1.00",
+                        "adjustments": [
+                            {
+                                "direction": "addition",
+                                "adjustment_type": "bonus",
+                                "amount": "25.00",
+                            },
+                            {
+                                "direction": "deduction",
+                                "adjustment_type": "advance",
+                                "amount": "10.00",
+                            },
+                        ],
+                    }
+                ],
+            },
+            format="json",
+        )
+
+        self.assertEqual(payroll_response.status_code, status.HTTP_201_CREATED)
+        self.assertTrue(payroll_response.data["run_number"].startswith("PR"))
+        self.assertEqual(payroll_response.data["gross_total"], "900.00")
+        self.assertEqual(payroll_response.data["additions_total"], "25.00")
+        self.assertEqual(payroll_response.data["deductions_total"], "10.00")
+        self.assertEqual(payroll_response.data["net_total"], "915.00")
+
+    def test_payroll_run_transitions_are_guarded_and_audited_by_status(self):
+        employee = Employee.objects.create(full_name="أحمد محمود")
+        plan = CompensationPlan.objects.create(
+            employee=employee,
+            pay_type=CompensationPlan.PayType.DAILY_RATE,
+            amount=Decimal("50.00"),
+        )
+        payroll = PayrollRun.objects.create(
+            period_start=timezone.localdate() - timedelta(days=7),
+            period_end=timezone.localdate(),
+        )
+        line = payroll.lines.create(
+            employee=employee,
+            compensation_plan=plan,
+            units=Decimal("5.00"),
+        )
+        line.recalculate(save=True)
+        payroll.recalculate()
+        payroll.save()
+
+        client = self.authenticated_client(self.manager)
+        approve_response = client.post(reverse("payroll-run-approve", args=[payroll.pk]))
+        paid_response = client.post(
+            reverse("payroll-run-mark-paid", args=[payroll.pk]),
+            {"payment_date": timezone.localdate().isoformat()},
+            format="json",
+        )
+        void_response = client.post(reverse("payroll-run-void", args=[payroll.pk]))
+
+        self.assertEqual(approve_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(approve_response.data["status"], PayrollRun.Status.APPROVED)
+        self.assertEqual(approve_response.data["net_total"], "250.00")
+        self.assertEqual(paid_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(paid_response.data["status"], PayrollRun.Status.PAID)
+        self.assertEqual(void_response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_dashboard_shows_payroll_to_manager_and_hides_from_cashier(self):
+        employee = Employee.objects.create(full_name="منى سالم")
+        payroll = PayrollRun.objects.create(
+            status=PayrollRun.Status.PAID,
+            period_start=timezone.localdate() - timedelta(days=2),
+            period_end=timezone.localdate(),
+            payment_date=timezone.localdate(),
+            net_total=Decimal("120.00"),
+        )
+        payroll.lines.create(employee=employee, units=1, rate=Decimal("120.00"), net_amount=Decimal("120.00"))
+
+        product = create_product_with_default_variant(
+            sku="PAY-DASH",
+            barcode="",
+            name="Payroll dashboard product",
+            unit_price=Decimal("20.00"),
+        )
+        session = RegisterSession.objects.create(
+            owner=self.cashier,
+            owner_key=f"user:{self.cashier.pk}",
+        )
+        order = Order.objects.create(
+            register_session=session,
+            status=Order.Status.PAID,
+            subtotal=Decimal("200.00"),
+            total=Decimal("200.00"),
+        )
+        OrderLine.objects.create(
+            order=order,
+            variant=product.default_variant,
+            quantity=10,
+            unit_price=Decimal("20.00"),
+            unit_cost=Decimal("8.00"),
+        )
+
+        manager_response = self.authenticated_client(self.manager).get(
+            reverse("dashboard"),
+            {"days": 7},
+        )
+        cashier_response = self.authenticated_client(self.cashier).get(
+            reverse("dashboard"),
+            {"days": 7},
+        )
+
+        self.assertEqual(manager_response.status_code, status.HTTP_200_OK)
+        manager_sections = manager_response.data["sections"]
+        self.assertEqual(
+            manager_sections["payroll"]["summary"]["paid_total"],
+            "120.00",
+        )
+        self.assertEqual(
+            manager_sections["profitability"]["summary"]["payroll_paid_total"],
+            "120.00",
+        )
+        self.assertEqual(
+            manager_sections["profitability"]["summary"]["net_operating_profit"],
+            "0.00",
+        )
+        self.assertEqual(cashier_response.status_code, status.HTTP_200_OK)
+        self.assertNotIn("payroll", cashier_response.data["sections"])

@@ -5839,4 +5839,238 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get confirmButton => 'تأكيد';
+
+  @override
+  String get saveButton => 'حفظ';
+
+  @override
+  String get accountantRoleLabel => 'محاسب';
+
+  @override
+  String get employeesDrawerLabel => 'الموظفون والرواتب';
+
+  @override
+  String get employeePayrollTitle => 'الموظفون والرواتب';
+
+  @override
+  String get refreshEmployeePayrollTooltip => 'تحديث الموظفين والرواتب';
+
+  @override
+  String get employeePayrollOverviewTitle => 'إدارة الموظفين والرواتب';
+
+  @override
+  String get employeePayrollOverviewSubtitle =>
+      'سجلات الموظفين وخطط الأجر ومسيرات الرواتب';
+
+  @override
+  String get addEmployeeButton => 'إضافة موظف';
+
+  @override
+  String get createPayrollRunButton => 'إنشاء مسير رواتب';
+
+  @override
+  String get employeePayrollSaveError =>
+      'تعذر حفظ التغيير. راجع البيانات والصلاحيات ثم حاول مرة أخرى.';
+
+  @override
+  String get employeesTabLabel => 'الموظفون';
+
+  @override
+  String get payrollRunsTabLabel => 'مسيرات الرواتب';
+
+  @override
+  String get employeesLoadError => 'تعذر تحميل الموظفين.';
+
+  @override
+  String get emptyEmployees => 'لا توجد سجلات موظفين بعد.';
+
+  @override
+  String employeeSystemAccessLabel(String username) {
+    return 'دخول للنظام: $username';
+  }
+
+  @override
+  String employeePayPlanLabel(String payType, String amount) {
+    return '$payType - $amount';
+  }
+
+  @override
+  String get employeeNoDetails => 'لا توجد تفاصيل إضافية';
+
+  @override
+  String get addCompensationPlanTooltip => 'إضافة خطة أجر';
+
+  @override
+  String get payrollRunsLoadError => 'تعذر تحميل مسيرات الرواتب.';
+
+  @override
+  String get emptyPayrollRuns => 'لا توجد مسيرات رواتب بعد.';
+
+  @override
+  String payrollLineCount(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count موظفين',
+      two: 'موظفان',
+      one: 'موظف واحد',
+      zero: 'لا موظفين',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String payrollPeriodSubtitle(String start, String end) {
+    return '$start إلى $end';
+  }
+
+  @override
+  String get approvePayrollRunTooltip => 'اعتماد مسير الرواتب';
+
+  @override
+  String get markPayrollRunPaidTooltip => 'تسجيل المسير كمدفوع';
+
+  @override
+  String get missingDateLabel => 'تاريخ غير محدد';
+
+  @override
+  String get employeeNameField => 'اسم الموظف';
+
+  @override
+  String get employeeJobTitleField => 'المسمى الوظيفي';
+
+  @override
+  String get employeeDepartmentField => 'القسم';
+
+  @override
+  String get employeePhoneField => 'الهاتف';
+
+  @override
+  String get employeeHireDateField => 'تاريخ التعيين';
+
+  @override
+  String get employeeTypeField => 'نوع التوظيف';
+
+  @override
+  String get employeeStatusActive => 'نشط';
+
+  @override
+  String get employeeStatusOnLeave => 'في إجازة';
+
+  @override
+  String get employeeStatusInactive => 'متوقف';
+
+  @override
+  String get employeeStatusTerminated => 'منتهي الخدمة';
+
+  @override
+  String get employmentTypeFullTime => 'دوام كامل';
+
+  @override
+  String get employmentTypePartTime => 'دوام جزئي';
+
+  @override
+  String get employmentTypeContractor => 'متعاقد';
+
+  @override
+  String get employmentTypeSeasonal => 'موسمي';
+
+  @override
+  String get employmentTypeIntern => 'متدرب';
+
+  @override
+  String get employmentTypeOther => 'آخر';
+
+  @override
+  String addCompensationPlanTitle(String employee) {
+    return 'خطة أجر $employee';
+  }
+
+  @override
+  String get payTypeField => 'نوع الأجر';
+
+  @override
+  String get payAmountField => 'المبلغ';
+
+  @override
+  String get payUnitsField => 'الوحدات';
+
+  @override
+  String get payEffectiveFromField => 'يبدأ من';
+
+  @override
+  String get payTypeMonthlySalary => 'راتب شهري';
+
+  @override
+  String get payTypeWeeklySalary => 'راتب أسبوعي';
+
+  @override
+  String get payTypeDailyRate => 'أجر يومي';
+
+  @override
+  String get payTypeHourly => 'أجر بالساعة';
+
+  @override
+  String get payTypePerShift => 'أجر بالوردية';
+
+  @override
+  String get payTypeCommission => 'عمولة';
+
+  @override
+  String get payTypeContract => 'عقد';
+
+  @override
+  String get payTypeOther => 'آخر';
+
+  @override
+  String get noEmployeesWithPayPlan =>
+      'أضف خطة أجر لموظف واحد على الأقل قبل إنشاء مسير رواتب.';
+
+  @override
+  String get payrollEmployeeField => 'الموظف';
+
+  @override
+  String get payrollPeriodStartField => 'بداية الفترة';
+
+  @override
+  String get payrollPeriodEndField => 'نهاية الفترة';
+
+  @override
+  String get payrollStatusDraft => 'مسودة';
+
+  @override
+  String get payrollStatusApproved => 'معتمد';
+
+  @override
+  String get payrollStatusPaid => 'مدفوع';
+
+  @override
+  String get payrollStatusVoid => 'ملغى';
+
+  @override
+  String get dashboardPayrollSectionTitle => 'الرواتب';
+
+  @override
+  String get dashboardProfitabilitySectionTitle => 'الربحية بعد المصاريف';
+
+  @override
+  String get dashboardSalaryExpenseMetric => 'مصروف الرواتب';
+
+  @override
+  String get dashboardPayrollPaidMetric => 'الرواتب المدفوعة';
+
+  @override
+  String get dashboardPayrollPendingMetric => 'رواتب معتمدة غير مدفوعة';
+
+  @override
+  String get dashboardActiveEmployeesMetric => 'موظفون نشطون';
+
+  @override
+  String get dashboardRecentPayrollRunsTitle => 'آخر مسيرات الرواتب';
+
+  @override
+  String get dashboardPaymentCommissionsMetric => 'عمولات الدفع';
+
+  @override
+  String get dashboardNetOperatingProfitMetric => 'صافي الربح التشغيلي';
 }

@@ -21,6 +21,7 @@ from apps.core.permissions import HasPointyPermission
 from apps.core.roles import user_is_manager
 from apps.customers.models import Customer
 from apps.discounts.models import DiscountRedemption, DiscountRule
+from apps.employees.models import Employee, PayrollRun
 from apps.inventory.models import StockItem, StockMovement
 from apps.payments.models import Payment
 from apps.printing.models import PrintAgent, PrintJob
@@ -59,6 +60,10 @@ class DashboardView(APIView):
             data["sections"]["inventory"] = _inventory_section(period)
         if _can_any(request.user, ("purchasing.view_purchaseorder", "purchasing.view_supplier")):
             data["sections"]["purchasing"] = _purchasing_section(period)
+        if _can(request.user, "employees.view_payrollrun"):
+            data["sections"]["payroll"] = _payroll_section(period)
+        if _can(request.user, "sales.view_order"):
+            data["sections"]["profitability"] = _profitability_section(request, period)
         if _can(request.user, "customers.view_customer"):
             data["sections"]["customers"] = _customers_section(period)
         if _can(request.user, "discounts.view_discountrule"):
@@ -329,6 +334,128 @@ def _purchasing_section(period):
             for order, balance in overdue_orders[:6]
         ],
         "top_supplier_balances": _top_supplier_balances(),
+    }
+
+
+def _payroll_section(period):
+    period_start = period["start"].date()
+    period_end = period["end"].date()
+    payroll_runs = PayrollRun.objects.exclude(status=PayrollRun.Status.VOID)
+    period_runs = payroll_runs.filter(
+        period_end__gte=period_start,
+        period_start__lte=period_end,
+    )
+    paid_runs = payroll_runs.filter(
+        status=PayrollRun.Status.PAID,
+        payment_date__gte=period_start,
+        payment_date__lte=period_end,
+    )
+    pending_runs = payroll_runs.filter(status=PayrollRun.Status.APPROVED)
+
+    salary_expense = period_runs.filter(
+        status__in=(PayrollRun.Status.APPROVED, PayrollRun.Status.PAID),
+    ).aggregate(
+        total=Coalesce(Sum("net_total"), Value(Decimal("0.00")), output_field=MONEY_FIELD)
+    )["total"]
+    paid_total = paid_runs.aggregate(
+        total=Coalesce(Sum("net_total"), Value(Decimal("0.00")), output_field=MONEY_FIELD)
+    )["total"]
+    pending_total = pending_runs.aggregate(
+        total=Coalesce(Sum("net_total"), Value(Decimal("0.00")), output_field=MONEY_FIELD)
+    )["total"]
+
+    return {
+        "summary": {
+            "salary_expense": _money(salary_expense),
+            "paid_total": _money(paid_total),
+            "pending_total": _money(pending_total),
+            "active_employee_count": Employee.objects.filter(
+                status=Employee.Status.ACTIVE,
+            ).count(),
+            "payroll_run_count": period_runs.count(),
+        },
+        "recent_runs": [
+            {
+                "id": run.pk,
+                "run_number": run.run_number,
+                "status": run.status,
+                "period_start": run.period_start.isoformat(),
+                "period_end": run.period_end.isoformat(),
+                "payment_date": run.payment_date.isoformat() if run.payment_date else None,
+                "net_total": _money(run.net_total),
+            }
+            for run in payroll_runs.order_by("-period_end", "-created_at")[:6]
+        ],
+    }
+
+
+def _profitability_section(request, period):
+    current_orders = _settled_orders(request).filter(
+        created_at__gte=period["start"],
+        created_at__lt=period["end"],
+    )
+    current_adjustments = _order_adjustments(request).filter(
+        created_at__gte=period["start"],
+        created_at__lt=period["end"],
+    )
+    sales_summary = _sales_summary(current_orders, current_adjustments)
+    gross_profit = _decimal_from(sales_summary["gross_profit"])
+
+    payroll_paid = Decimal("0.00")
+    payroll_accrued = Decimal("0.00")
+    if _can(request.user, "employees.view_payrollrun"):
+        period_start = period["start"].date()
+        period_end = period["end"].date()
+        payroll_paid = PayrollRun.objects.filter(
+            status=PayrollRun.Status.PAID,
+            payment_date__gte=period_start,
+            payment_date__lte=period_end,
+        ).aggregate(
+            total=Coalesce(Sum("net_total"), Value(Decimal("0.00")), output_field=MONEY_FIELD)
+        )["total"]
+        payroll_accrued = PayrollRun.objects.filter(
+            status__in=(PayrollRun.Status.APPROVED, PayrollRun.Status.PAID),
+            period_end__gte=period_start,
+            period_start__lte=period_end,
+        ).aggregate(
+            total=Coalesce(Sum("net_total"), Value(Decimal("0.00")), output_field=MONEY_FIELD)
+        )["total"]
+
+    payment_commissions = Decimal("0.00")
+    if _can(request.user, "payments.view_payment"):
+        payment_commissions = _payments(request).filter(
+            created_at__gte=period["start"],
+            created_at__lt=period["end"],
+        ).aggregate(
+            total=Coalesce(
+                Sum("commission_amount"),
+                Value(Decimal("0.00")),
+                output_field=MONEY_FIELD,
+            )
+        )["total"]
+
+    purchase_spend = Decimal("0.00")
+    if _can(request.user, "purchasing.view_purchaseorder"):
+        purchase_spend = PurchaseOrder.objects.exclude(
+            status=PurchaseOrder.Status.CANCELLED,
+        ).filter(
+            created_at__gte=period["start"],
+            created_at__lt=period["end"],
+        ).aggregate(
+            total=Coalesce(Sum("total"), Value(Decimal("0.00")), output_field=MONEY_FIELD)
+        )["total"]
+
+    operating_expenses = payroll_paid + payment_commissions
+    return {
+        "summary": {
+            "gross_profit": _money(gross_profit),
+            "payroll_paid_total": _money(payroll_paid),
+            "payroll_accrued_total": _money(payroll_accrued),
+            "payment_commission_total": _money(payment_commissions),
+            "purchase_spend_total": _money(purchase_spend),
+            "operating_expense_total": _money(operating_expenses),
+            "net_operating_profit": _money(gross_profit - operating_expenses),
+        }
     }
 
 

@@ -10110,6 +10110,432 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'تأكيد'**
   String get confirmButton;
+
+  /// No description provided for @saveButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'حفظ'**
+  String get saveButton;
+
+  /// No description provided for @accountantRoleLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'محاسب'**
+  String get accountantRoleLabel;
+
+  /// No description provided for @employeesDrawerLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الموظفون والرواتب'**
+  String get employeesDrawerLabel;
+
+  /// No description provided for @employeePayrollTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'الموظفون والرواتب'**
+  String get employeePayrollTitle;
+
+  /// No description provided for @refreshEmployeePayrollTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحديث الموظفين والرواتب'**
+  String get refreshEmployeePayrollTooltip;
+
+  /// No description provided for @employeePayrollOverviewTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'إدارة الموظفين والرواتب'**
+  String get employeePayrollOverviewTitle;
+
+  /// No description provided for @employeePayrollOverviewSubtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'سجلات الموظفين وخطط الأجر ومسيرات الرواتب'**
+  String get employeePayrollOverviewSubtitle;
+
+  /// No description provided for @addEmployeeButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'إضافة موظف'**
+  String get addEmployeeButton;
+
+  /// No description provided for @createPayrollRunButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'إنشاء مسير رواتب'**
+  String get createPayrollRunButton;
+
+  /// No description provided for @employeePayrollSaveError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر حفظ التغيير. راجع البيانات والصلاحيات ثم حاول مرة أخرى.'**
+  String get employeePayrollSaveError;
+
+  /// No description provided for @employeesTabLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الموظفون'**
+  String get employeesTabLabel;
+
+  /// No description provided for @payrollRunsTabLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'مسيرات الرواتب'**
+  String get payrollRunsTabLabel;
+
+  /// No description provided for @employeesLoadError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر تحميل الموظفين.'**
+  String get employeesLoadError;
+
+  /// No description provided for @emptyEmployees.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد سجلات موظفين بعد.'**
+  String get emptyEmployees;
+
+  /// Employee linked system user label.
+  ///
+  /// In ar, this message translates to:
+  /// **'دخول للنظام: {username}'**
+  String employeeSystemAccessLabel(String username);
+
+  /// Active employee pay plan label.
+  ///
+  /// In ar, this message translates to:
+  /// **'{payType} - {amount}'**
+  String employeePayPlanLabel(String payType, String amount);
+
+  /// No description provided for @employeeNoDetails.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد تفاصيل إضافية'**
+  String get employeeNoDetails;
+
+  /// No description provided for @addCompensationPlanTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'إضافة خطة أجر'**
+  String get addCompensationPlanTooltip;
+
+  /// No description provided for @payrollRunsLoadError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر تحميل مسيرات الرواتب.'**
+  String get payrollRunsLoadError;
+
+  /// No description provided for @emptyPayrollRuns.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد مسيرات رواتب بعد.'**
+  String get emptyPayrollRuns;
+
+  /// Payroll run employee line count.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, =0{لا موظفين} =1{موظف واحد} =2{موظفان} other{{count} موظفين}}'**
+  String payrollLineCount(num count);
+
+  /// Payroll period range.
+  ///
+  /// In ar, this message translates to:
+  /// **'{start} إلى {end}'**
+  String payrollPeriodSubtitle(String start, String end);
+
+  /// No description provided for @approvePayrollRunTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'اعتماد مسير الرواتب'**
+  String get approvePayrollRunTooltip;
+
+  /// No description provided for @markPayrollRunPaidTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'تسجيل المسير كمدفوع'**
+  String get markPayrollRunPaidTooltip;
+
+  /// No description provided for @missingDateLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'تاريخ غير محدد'**
+  String get missingDateLabel;
+
+  /// No description provided for @employeeNameField.
+  ///
+  /// In ar, this message translates to:
+  /// **'اسم الموظف'**
+  String get employeeNameField;
+
+  /// No description provided for @employeeJobTitleField.
+  ///
+  /// In ar, this message translates to:
+  /// **'المسمى الوظيفي'**
+  String get employeeJobTitleField;
+
+  /// No description provided for @employeeDepartmentField.
+  ///
+  /// In ar, this message translates to:
+  /// **'القسم'**
+  String get employeeDepartmentField;
+
+  /// No description provided for @employeePhoneField.
+  ///
+  /// In ar, this message translates to:
+  /// **'الهاتف'**
+  String get employeePhoneField;
+
+  /// No description provided for @employeeHireDateField.
+  ///
+  /// In ar, this message translates to:
+  /// **'تاريخ التعيين'**
+  String get employeeHireDateField;
+
+  /// No description provided for @employeeTypeField.
+  ///
+  /// In ar, this message translates to:
+  /// **'نوع التوظيف'**
+  String get employeeTypeField;
+
+  /// No description provided for @employeeStatusActive.
+  ///
+  /// In ar, this message translates to:
+  /// **'نشط'**
+  String get employeeStatusActive;
+
+  /// No description provided for @employeeStatusOnLeave.
+  ///
+  /// In ar, this message translates to:
+  /// **'في إجازة'**
+  String get employeeStatusOnLeave;
+
+  /// No description provided for @employeeStatusInactive.
+  ///
+  /// In ar, this message translates to:
+  /// **'متوقف'**
+  String get employeeStatusInactive;
+
+  /// No description provided for @employeeStatusTerminated.
+  ///
+  /// In ar, this message translates to:
+  /// **'منتهي الخدمة'**
+  String get employeeStatusTerminated;
+
+  /// No description provided for @employmentTypeFullTime.
+  ///
+  /// In ar, this message translates to:
+  /// **'دوام كامل'**
+  String get employmentTypeFullTime;
+
+  /// No description provided for @employmentTypePartTime.
+  ///
+  /// In ar, this message translates to:
+  /// **'دوام جزئي'**
+  String get employmentTypePartTime;
+
+  /// No description provided for @employmentTypeContractor.
+  ///
+  /// In ar, this message translates to:
+  /// **'متعاقد'**
+  String get employmentTypeContractor;
+
+  /// No description provided for @employmentTypeSeasonal.
+  ///
+  /// In ar, this message translates to:
+  /// **'موسمي'**
+  String get employmentTypeSeasonal;
+
+  /// No description provided for @employmentTypeIntern.
+  ///
+  /// In ar, this message translates to:
+  /// **'متدرب'**
+  String get employmentTypeIntern;
+
+  /// No description provided for @employmentTypeOther.
+  ///
+  /// In ar, this message translates to:
+  /// **'آخر'**
+  String get employmentTypeOther;
+
+  /// Compensation plan sheet title.
+  ///
+  /// In ar, this message translates to:
+  /// **'خطة أجر {employee}'**
+  String addCompensationPlanTitle(String employee);
+
+  /// No description provided for @payTypeField.
+  ///
+  /// In ar, this message translates to:
+  /// **'نوع الأجر'**
+  String get payTypeField;
+
+  /// No description provided for @payAmountField.
+  ///
+  /// In ar, this message translates to:
+  /// **'المبلغ'**
+  String get payAmountField;
+
+  /// No description provided for @payUnitsField.
+  ///
+  /// In ar, this message translates to:
+  /// **'الوحدات'**
+  String get payUnitsField;
+
+  /// No description provided for @payEffectiveFromField.
+  ///
+  /// In ar, this message translates to:
+  /// **'يبدأ من'**
+  String get payEffectiveFromField;
+
+  /// No description provided for @payTypeMonthlySalary.
+  ///
+  /// In ar, this message translates to:
+  /// **'راتب شهري'**
+  String get payTypeMonthlySalary;
+
+  /// No description provided for @payTypeWeeklySalary.
+  ///
+  /// In ar, this message translates to:
+  /// **'راتب أسبوعي'**
+  String get payTypeWeeklySalary;
+
+  /// No description provided for @payTypeDailyRate.
+  ///
+  /// In ar, this message translates to:
+  /// **'أجر يومي'**
+  String get payTypeDailyRate;
+
+  /// No description provided for @payTypeHourly.
+  ///
+  /// In ar, this message translates to:
+  /// **'أجر بالساعة'**
+  String get payTypeHourly;
+
+  /// No description provided for @payTypePerShift.
+  ///
+  /// In ar, this message translates to:
+  /// **'أجر بالوردية'**
+  String get payTypePerShift;
+
+  /// No description provided for @payTypeCommission.
+  ///
+  /// In ar, this message translates to:
+  /// **'عمولة'**
+  String get payTypeCommission;
+
+  /// No description provided for @payTypeContract.
+  ///
+  /// In ar, this message translates to:
+  /// **'عقد'**
+  String get payTypeContract;
+
+  /// No description provided for @payTypeOther.
+  ///
+  /// In ar, this message translates to:
+  /// **'آخر'**
+  String get payTypeOther;
+
+  /// No description provided for @noEmployeesWithPayPlan.
+  ///
+  /// In ar, this message translates to:
+  /// **'أضف خطة أجر لموظف واحد على الأقل قبل إنشاء مسير رواتب.'**
+  String get noEmployeesWithPayPlan;
+
+  /// No description provided for @payrollEmployeeField.
+  ///
+  /// In ar, this message translates to:
+  /// **'الموظف'**
+  String get payrollEmployeeField;
+
+  /// No description provided for @payrollPeriodStartField.
+  ///
+  /// In ar, this message translates to:
+  /// **'بداية الفترة'**
+  String get payrollPeriodStartField;
+
+  /// No description provided for @payrollPeriodEndField.
+  ///
+  /// In ar, this message translates to:
+  /// **'نهاية الفترة'**
+  String get payrollPeriodEndField;
+
+  /// No description provided for @payrollStatusDraft.
+  ///
+  /// In ar, this message translates to:
+  /// **'مسودة'**
+  String get payrollStatusDraft;
+
+  /// No description provided for @payrollStatusApproved.
+  ///
+  /// In ar, this message translates to:
+  /// **'معتمد'**
+  String get payrollStatusApproved;
+
+  /// No description provided for @payrollStatusPaid.
+  ///
+  /// In ar, this message translates to:
+  /// **'مدفوع'**
+  String get payrollStatusPaid;
+
+  /// No description provided for @payrollStatusVoid.
+  ///
+  /// In ar, this message translates to:
+  /// **'ملغى'**
+  String get payrollStatusVoid;
+
+  /// No description provided for @dashboardPayrollSectionTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'الرواتب'**
+  String get dashboardPayrollSectionTitle;
+
+  /// No description provided for @dashboardProfitabilitySectionTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'الربحية بعد المصاريف'**
+  String get dashboardProfitabilitySectionTitle;
+
+  /// No description provided for @dashboardSalaryExpenseMetric.
+  ///
+  /// In ar, this message translates to:
+  /// **'مصروف الرواتب'**
+  String get dashboardSalaryExpenseMetric;
+
+  /// No description provided for @dashboardPayrollPaidMetric.
+  ///
+  /// In ar, this message translates to:
+  /// **'الرواتب المدفوعة'**
+  String get dashboardPayrollPaidMetric;
+
+  /// No description provided for @dashboardPayrollPendingMetric.
+  ///
+  /// In ar, this message translates to:
+  /// **'رواتب معتمدة غير مدفوعة'**
+  String get dashboardPayrollPendingMetric;
+
+  /// No description provided for @dashboardActiveEmployeesMetric.
+  ///
+  /// In ar, this message translates to:
+  /// **'موظفون نشطون'**
+  String get dashboardActiveEmployeesMetric;
+
+  /// No description provided for @dashboardRecentPayrollRunsTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'آخر مسيرات الرواتب'**
+  String get dashboardRecentPayrollRunsTitle;
+
+  /// No description provided for @dashboardPaymentCommissionsMetric.
+  ///
+  /// In ar, this message translates to:
+  /// **'عمولات الدفع'**
+  String get dashboardPaymentCommissionsMetric;
+
+  /// No description provided for @dashboardNetOperatingProfitMetric.
+  ///
+  /// In ar, this message translates to:
+  /// **'صافي الربح التشغيلي'**
+  String get dashboardNetOperatingProfitMetric;
 }
 
 class _AppLocalizationsDelegate

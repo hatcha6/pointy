@@ -543,6 +543,29 @@ class UserManagementGuard extends StatelessWidget {
   }
 }
 
+class EmployeePayrollGuard extends StatelessWidget {
+  const EmployeePayrollGuard({
+    super.key,
+    required this.capabilities,
+    required this.child,
+    this.fallback = const AuthorizationDeniedView(),
+  });
+
+  final AuthorizationCapabilities capabilities;
+  final Widget child;
+  final Widget fallback;
+
+  @override
+  Widget build(BuildContext context) {
+    return AuthorizationGuard(
+      capabilities: capabilities,
+      capability: AppCapability.viewEmployees,
+      fallback: fallback,
+      child: child,
+    );
+  }
+}
+
 class ShopSettingsGuard extends StatelessWidget {
   const ShopSettingsGuard({
     super.key,

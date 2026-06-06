@@ -3599,5 +3599,122 @@
   "printAuditChannelNativeShare": "ورقة المشاركة",
   "printAuditChannelFileSave": "حفظ ملف",
   "printAuditChannelBrowserDownload": "تنزيل المتصفح",
-  "confirmButton": "تأكيد"
+  "confirmButton": "تأكيد",
+  "saveButton": "حفظ",
+  "accountantRoleLabel": "محاسب",
+  "employeesDrawerLabel": "الموظفون والرواتب",
+  "employeePayrollTitle": "الموظفون والرواتب",
+  "refreshEmployeePayrollTooltip": "تحديث الموظفين والرواتب",
+  "employeePayrollOverviewTitle": "إدارة الموظفين والرواتب",
+  "employeePayrollOverviewSubtitle": "سجلات الموظفين وخطط الأجر ومسيرات الرواتب",
+  "addEmployeeButton": "إضافة موظف",
+  "createPayrollRunButton": "إنشاء مسير رواتب",
+  "employeePayrollSaveError": "تعذر حفظ التغيير. راجع البيانات والصلاحيات ثم حاول مرة أخرى.",
+  "employeesTabLabel": "الموظفون",
+  "payrollRunsTabLabel": "مسيرات الرواتب",
+  "employeesLoadError": "تعذر تحميل الموظفين.",
+  "emptyEmployees": "لا توجد سجلات موظفين بعد.",
+  "employeeSystemAccessLabel": "دخول للنظام: {username}",
+  "@employeeSystemAccessLabel": {
+    "description": "Employee linked system user label.",
+    "placeholders": {
+      "username": {
+        "type": "String"
+      }
+    }
+  },
+  "employeePayPlanLabel": "{payType} - {amount}",
+  "@employeePayPlanLabel": {
+    "description": "Active employee pay plan label.",
+    "placeholders": {
+      "payType": {
+        "type": "String"
+      },
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "employeeNoDetails": "لا توجد تفاصيل إضافية",
+  "addCompensationPlanTooltip": "إضافة خطة أجر",
+  "payrollRunsLoadError": "تعذر تحميل مسيرات الرواتب.",
+  "emptyPayrollRuns": "لا توجد مسيرات رواتب بعد.",
+  "payrollLineCount": "{count, plural, =0{لا موظفين} =1{موظف واحد} =2{موظفان} other{{count} موظفين}}",
+  "@payrollLineCount": {
+    "description": "Payroll run employee line count.",
+    "placeholders": {
+      "count": {
+        "type": "num"
+      }
+    }
+  },
+  "payrollPeriodSubtitle": "{start} إلى {end}",
+  "@payrollPeriodSubtitle": {
+    "description": "Payroll period range.",
+    "placeholders": {
+      "start": {
+        "type": "String"
+      },
+      "end": {
+        "type": "String"
+      }
+    }
+  },
+  "approvePayrollRunTooltip": "اعتماد مسير الرواتب",
+  "markPayrollRunPaidTooltip": "تسجيل المسير كمدفوع",
+  "missingDateLabel": "تاريخ غير محدد",
+  "employeeNameField": "اسم الموظف",
+  "employeeJobTitleField": "المسمى الوظيفي",
+  "employeeDepartmentField": "القسم",
+  "employeePhoneField": "الهاتف",
+  "employeeHireDateField": "تاريخ التعيين",
+  "employeeTypeField": "نوع التوظيف",
+  "employeeStatusActive": "نشط",
+  "employeeStatusOnLeave": "في إجازة",
+  "employeeStatusInactive": "متوقف",
+  "employeeStatusTerminated": "منتهي الخدمة",
+  "employmentTypeFullTime": "دوام كامل",
+  "employmentTypePartTime": "دوام جزئي",
+  "employmentTypeContractor": "متعاقد",
+  "employmentTypeSeasonal": "موسمي",
+  "employmentTypeIntern": "متدرب",
+  "employmentTypeOther": "آخر",
+  "addCompensationPlanTitle": "خطة أجر {employee}",
+  "@addCompensationPlanTitle": {
+    "description": "Compensation plan sheet title.",
+    "placeholders": {
+      "employee": {
+        "type": "String"
+      }
+    }
+  },
+  "payTypeField": "نوع الأجر",
+  "payAmountField": "المبلغ",
+  "payUnitsField": "الوحدات",
+  "payEffectiveFromField": "يبدأ من",
+  "payTypeMonthlySalary": "راتب شهري",
+  "payTypeWeeklySalary": "راتب أسبوعي",
+  "payTypeDailyRate": "أجر يومي",
+  "payTypeHourly": "أجر بالساعة",
+  "payTypePerShift": "أجر بالوردية",
+  "payTypeCommission": "عمولة",
+  "payTypeContract": "عقد",
+  "payTypeOther": "آخر",
+  "noEmployeesWithPayPlan": "أضف خطة أجر لموظف واحد على الأقل قبل إنشاء مسير رواتب.",
+  "payrollEmployeeField": "الموظف",
+  "payrollPeriodStartField": "بداية الفترة",
+  "payrollPeriodEndField": "نهاية الفترة",
+  "payrollStatusDraft": "مسودة",
+  "payrollStatusApproved": "معتمد",
+  "payrollStatusPaid": "مدفوع",
+  "payrollStatusVoid": "ملغى",
+  "dashboardPayrollSectionTitle": "الرواتب",
+  "dashboardProfitabilitySectionTitle": "الربحية بعد المصاريف",
+  "dashboardSalaryExpenseMetric": "مصروف الرواتب",
+  "dashboardPayrollPaidMetric": "الرواتب المدفوعة",
+  "dashboardPayrollPendingMetric": "رواتب معتمدة غير مدفوعة",
+  "dashboardActiveEmployeesMetric": "موظفون نشطون",
+  "dashboardRecentPayrollRunsTitle": "آخر مسيرات الرواتب",
+  "dashboardPaymentCommissionsMetric": "عمولات الدفع",
+  "dashboardNetOperatingProfitMetric": "صافي الربح التشغيلي"
 }

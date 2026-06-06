@@ -90,6 +90,18 @@ ANALYTICS_EVENT_ACTIONS = {
         "users.management.user.role_changed",
         "users.management.user.active_changed",
     ),
+    "employee_changed": (
+        "employees.employee.created",
+        "employees.employee.updated",
+        "employees.employee.deleted",
+    ),
+    "payroll_activity": (
+        "employees.payroll_run.created",
+        "employees.payroll_run.updated",
+        "employees.payroll_run.approved",
+        "employees.payroll_run.paid",
+        "employees.payroll_run.voided",
+    ),
     "settings_changed": (
         "settings.shop.updated",
         "settings.shop.logo_uploaded",

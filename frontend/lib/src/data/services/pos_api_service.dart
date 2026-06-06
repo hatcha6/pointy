@@ -24,6 +24,7 @@ import '../models/contact.dart';
 import '../models/customer_activity.dart';
 import '../models/dashboard.dart';
 import '../models/discount_rule.dart';
+import '../models/employee.dart';
 import '../models/purchase_submission.dart';
 import '../models/query.dart';
 import '../models/register_cash_movement.dart';
@@ -54,6 +55,7 @@ import 'catalog_api_client.dart';
 import 'customer_api_client.dart';
 import 'dashboard_api_client.dart';
 import 'discount_api_client.dart';
+import 'employee_api_client.dart';
 import 'inventory_api_client.dart';
 import 'pos_http_client.dart';
 import 'printing_api_client.dart';
@@ -85,6 +87,7 @@ class PosApiService {
     _customers = CustomerApiClient(_session);
     _dashboard = DashboardApiClient(_session);
     _discounts = DiscountApiClient(_session);
+    _employees = EmployeeApiClient(_session);
     _inventory = InventoryApiClient(_session);
     _registerSessions = RegisterSessionApiClient(_session);
     _relay = RelayApiClient(_session);
@@ -107,6 +110,7 @@ class PosApiService {
   late final CustomerApiClient _customers;
   late final DashboardApiClient _dashboard;
   late final DiscountApiClient _discounts;
+  late final EmployeeApiClient _employees;
   late final InventoryApiClient _inventory;
   late final RegisterSessionApiClient _registerSessions;
   late final RelayApiClient _relay;
@@ -200,6 +204,34 @@ class PosApiService {
 
   Future<UserActivityOverview> fetchUserActivity(int id) {
     return _users.fetchUserActivity(id);
+  }
+
+  Future<EmployeePage> fetchEmployees({int page = 1, String search = ''}) {
+    return _employees.fetchEmployees(page: page, search: search);
+  }
+
+  Future<Employee> createEmployee(EmployeeDraft draft) {
+    return _employees.createEmployee(draft);
+  }
+
+  Future<CompensationPlan> createCompensationPlan(CompensationPlanDraft draft) {
+    return _employees.createCompensationPlan(draft);
+  }
+
+  Future<PayrollRunPage> fetchPayrollRuns({int page = 1, String search = ''}) {
+    return _employees.fetchPayrollRuns(page: page, search: search);
+  }
+
+  Future<PayrollRun> createPayrollRun(PayrollRunDraft draft) {
+    return _employees.createPayrollRun(draft);
+  }
+
+  Future<PayrollRun> approvePayrollRun(int id) {
+    return _employees.approvePayrollRun(id);
+  }
+
+  Future<PayrollRun> markPayrollRunPaid(int id) {
+    return _employees.markPayrollRunPaid(id);
   }
 
   Future<ShopSettings> fetchShopSettings() {

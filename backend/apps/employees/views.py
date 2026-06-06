@@ -1,0 +1,227 @@
+from django.db.models import Count, Prefetch, Q
+from rest_framework import mixins, serializers, viewsets
+from rest_framework.decorators import action
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+
+from apps.analytics.models import AnalyticsEvent
+from apps.core.permissions import HasPointyPermission
+
+from .models import CompensationPlan, Employee, PayrollLine, PayrollRun
+from .serializers import (
+    CompensationPlanSerializer,
+    EmployeeSerializer,
+    PayrollRunSerializer,
+)
+from .services import (
+    approve_payroll_run,
+    mark_payroll_run_paid,
+    record_employee_event,
+    void_payroll_run,
+)
+
+
+class EmployeeViewSet(viewsets.ModelViewSet):
+    serializer_class = EmployeeSerializer
+    permission_classes = [IsAuthenticated, HasPointyPermission]
+    permission_map = {
+        "list": ("employees.view_employee",),
+        "retrieve": ("employees.view_employee",),
+        "compensation_history": ("employees.view_employee", "employees.view_compensationplan"),
+        "payroll_history": ("employees.view_employee", "employees.view_payrollrun"),
+        "create": ("employees.add_employee",),
+        "update": ("employees.change_employee",),
+        "partial_update": ("employees.change_employee",),
+        "destroy": ("employees.delete_employee",),
+    }
+    queryset = Employee.objects.select_related("user").prefetch_related(
+        Prefetch(
+            "compensation_plans",
+            queryset=CompensationPlan.objects.order_by("-effective_from", "-id"),
+        )
+    )
+    filterset_fields = ("status", "employment_type", "department", "user")
+    search_fields = (
+        "employee_number",
+        "full_name",
+        "phone",
+        "email",
+        "job_title",
+        "department",
+        "user__username",
+    )
+    ordering_fields = (
+        "full_name",
+        "employee_number",
+        "hire_date",
+        "created_at",
+        "updated_at",
+    )
+
+    def perform_create(self, serializer):
+        employee = serializer.save()
+        record_employee_event(
+            name="employees.employee.created",
+            user=self.request.user,
+            entity_type="employee",
+            entity_id=employee.pk,
+            attributes={
+                "employee_number": employee.employee_number,
+                "status": employee.status,
+                "has_system_access": employee.has_system_access,
+            },
+        )
+
+    def perform_update(self, serializer):
+        changed_fields = sorted(serializer.validated_data.keys())
+        employee = serializer.save()
+        record_employee_event(
+            name="employees.employee.updated",
+            user=self.request.user,
+            entity_type="employee",
+            entity_id=employee.pk,
+            attributes={
+                "employee_number": employee.employee_number,
+                "status": employee.status,
+                "changed_fields": changed_fields,
+                "has_system_access": employee.has_system_access,
+            },
+        )
+
+    def perform_destroy(self, instance):
+        employee_id = instance.pk
+        employee_number = instance.employee_number
+        instance.delete()
+        record_employee_event(
+            name="employees.employee.deleted",
+            user=self.request.user,
+            entity_type="employee",
+            entity_id=employee_id,
+            severity=AnalyticsEvent.Severity.WARNING,
+            attributes={"employee_number": employee_number},
+        )
+
+    @action(detail=True, methods=["get"], url_path="compensation-history")
+    def compensation_history(self, request, pk=None):
+        employee = self.get_object()
+        queryset = employee.compensation_plans.order_by("-effective_from", "-id")
+        page = self.paginate_queryset(queryset)
+        serializer = CompensationPlanSerializer(
+            page if page is not None else queryset,
+            many=True,
+            context=self.get_serializer_context(),
+        )
+        if page is not None:
+            return self.get_paginated_response(serializer.data)
+        return Response(serializer.data)
+
+    @action(detail=True, methods=["get"], url_path="payroll-history")
+    def payroll_history(self, request, pk=None):
+        employee = self.get_object()
+        queryset = (
+            PayrollRun.objects.filter(lines__employee=employee)
+            .annotate(line_count=Count("lines"))
+            .prefetch_related("lines__employee", "lines__compensation_plan", "lines__adjustments")
+            .order_by("-period_end", "-created_at")
+            .distinct()
+        )
+        page = self.paginate_queryset(queryset)
+        serializer = PayrollRunSerializer(
+            page if page is not None else queryset,
+            many=True,
+            context=self.get_serializer_context(),
+        )
+        if page is not None:
+            return self.get_paginated_response(serializer.data)
+        return Response(serializer.data)
+
+
+class CompensationPlanViewSet(viewsets.ModelViewSet):
+    serializer_class = CompensationPlanSerializer
+    permission_classes = [IsAuthenticated, HasPointyPermission]
+    permission_map = {
+        "list": ("employees.view_compensationplan",),
+        "retrieve": ("employees.view_compensationplan",),
+        "create": ("employees.add_compensationplan",),
+        "update": ("employees.change_compensationplan",),
+        "partial_update": ("employees.change_compensationplan",),
+        "destroy": ("employees.delete_compensationplan",),
+    }
+    queryset = CompensationPlan.objects.select_related("employee")
+    filterset_fields = ("employee", "pay_type", "is_active")
+    search_fields = ("employee__full_name", "employee__employee_number", "notes")
+    ordering_fields = ("effective_from", "effective_to", "amount", "created_at")
+
+
+class PayrollRunViewSet(viewsets.ModelViewSet):
+    serializer_class = PayrollRunSerializer
+    permission_classes = [IsAuthenticated, HasPointyPermission]
+    permission_map = {
+        "list": ("employees.view_payrollrun",),
+        "retrieve": ("employees.view_payrollrun",),
+        "create": ("employees.add_payrollrun", "employees.view_employee"),
+        "update": ("employees.change_payrollrun",),
+        "partial_update": ("employees.change_payrollrun",),
+        "destroy": ("employees.delete_payrollrun",),
+        "approve": ("employees.approve_payrollrun",),
+        "mark_paid": ("employees.mark_payrollrun_paid",),
+        "void": ("employees.void_payrollrun",),
+    }
+    queryset = PayrollRun.objects.annotate(line_count=Count("lines")).prefetch_related(
+        "lines__employee",
+        "lines__compensation_plan",
+        "lines__adjustments",
+    )
+    filterset_fields = ("status",)
+    search_fields = ("run_number", "notes", "lines__employee__full_name")
+    ordering_fields = (
+        "period_start",
+        "period_end",
+        "payment_date",
+        "net_total",
+        "created_at",
+    )
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        employee_id = self.request.query_params.get("employee")
+        if employee_id:
+            queryset = queryset.filter(lines__employee_id=employee_id).distinct()
+        start = self.request.query_params.get("period_start")
+        end = self.request.query_params.get("period_end")
+        if start:
+            queryset = queryset.filter(period_end__gte=start)
+        if end:
+            queryset = queryset.filter(period_start__lte=end)
+        return queryset
+
+    def perform_destroy(self, instance):
+        if instance.status != PayrollRun.Status.DRAFT:
+            raise serializers.ValidationError(
+                {"detail": "Only draft payroll runs can be deleted."}
+            )
+        return super().perform_destroy(instance)
+
+    @action(detail=True, methods=["post"])
+    def approve(self, request, pk=None):
+        payroll_run = approve_payroll_run(self.get_object(), request=request)
+        return Response(PayrollRunSerializer(payroll_run, context=self.get_serializer_context()).data)
+
+    @action(detail=True, methods=["post"], url_path="mark-paid")
+    def mark_paid(self, request, pk=None):
+        payment_date = None
+        if "payment_date" in request.data and request.data.get("payment_date") not in ("", None):
+            payment_date = serializers.DateField().to_internal_value(
+                request.data.get("payment_date")
+            )
+        payroll_run = mark_payroll_run_paid(
+            self.get_object(),
+            payment_date=payment_date,
+            request=request,
+        )
+        return Response(PayrollRunSerializer(payroll_run, context=self.get_serializer_context()).data)
+
+    @action(detail=True, methods=["post"])
+    def void(self, request, pk=None):
+        payroll_run = void_payroll_run(self.get_object(), request=request)
+        return Response(PayrollRunSerializer(payroll_run, context=self.get_serializer_context()).data)

@@ -14,6 +14,11 @@ from apps.catalog.views import (
 )
 from apps.customers.views import CustomerViewSet
 from apps.discounts.views import DiscountRuleViewSet
+from apps.employees.views import (
+    CompensationPlanViewSet,
+    EmployeeViewSet,
+    PayrollRunViewSet,
+)
 from apps.fraud.views import FraudFindingViewSet
 from apps.core.views import (
     PosUserViewSet,
@@ -53,6 +58,13 @@ from apps.sales.views import OrderViewSet, RegisterSessionViewSet
 router = DefaultRouter()
 router.register("analytics-events", AnalyticsEventViewSet, basename="analytics-event")
 router.register("users", PosUserViewSet, basename="pos-user")
+router.register("employees", EmployeeViewSet, basename="employee")
+router.register(
+    "compensation-plans",
+    CompensationPlanViewSet,
+    basename="compensation-plan",
+)
+router.register("payroll-runs", PayrollRunViewSet, basename="payroll-run")
 router.register("products", ProductViewSet)
 router.register(
     "product-variants",

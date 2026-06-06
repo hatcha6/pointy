@@ -17,6 +17,7 @@ enum AppNavigationDestination {
   catalog,
   categories,
   registerSessions,
+  employees,
   discounts,
   reports,
   activityLog,
@@ -44,6 +45,7 @@ class AppNavigationDrawer extends StatelessWidget {
     this.onOpenReports,
     this.onOpenActivityLog,
     this.onOpenCategories,
+    this.onOpenEmployees,
     this.onOpenUsers,
     this.onOpenShopSettings,
   });
@@ -63,6 +65,7 @@ class AppNavigationDrawer extends StatelessWidget {
   final VoidCallback? onOpenReports;
   final VoidCallback? onOpenActivityLog;
   final VoidCallback? onOpenCategories;
+  final VoidCallback? onOpenEmployees;
   final VoidCallback? onOpenUsers;
   final VoidCallback? onOpenShopSettings;
   final VoidCallback onLogout;
@@ -90,12 +93,16 @@ class AppNavigationDrawer extends StatelessWidget {
           NavigationDrawerDestination(
             icon: destination.icon,
             selectedIcon: destination.selectedIcon,
-            label: Text(destination.label),
+            label: _NavigationLabel(destination.label),
           ),
       ],
       logoutTile: ListTile(
         leading: const Icon(Icons.logout),
-        title: Text(l10n.logoutButton),
+        title: Text(
+          l10n.logoutButton,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
         onTap: () {
           _logout(context, target: 'navigation_drawer', closeDrawer: true);
         },
@@ -227,6 +234,14 @@ class AppNavigationDrawer extends StatelessWidget {
         onTap: onOpenReports,
       ),
       _DrawerDestination(
+        destination: AppNavigationDestination.employees,
+        capability: AppCapability.viewEmployees,
+        icon: const Icon(Icons.badge_outlined),
+        selectedIcon: const Icon(Icons.badge),
+        label: l10n.employeesDrawerLabel,
+        onTap: onOpenEmployees,
+      ),
+      _DrawerDestination(
         destination: AppNavigationDestination.activityLog,
         capability: AppCapability.viewActivityLog,
         icon: const Icon(Icons.manage_search_outlined),
@@ -311,7 +326,22 @@ class AppNavigationDrawer extends StatelessWidget {
     return switch (role) {
       UserRole.manager => l10n.managerRoleLabel,
       UserRole.cashier => l10n.cashierRoleLabel,
+      UserRole.accountant => l10n.accountantRoleLabel,
     };
+  }
+}
+
+class _NavigationLabel extends StatelessWidget {
+  const _NavigationLabel(this.label);
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 176,
+      child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
+    );
   }
 }
 

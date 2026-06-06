@@ -14,6 +14,10 @@ enum AppCapability {
   viewPrintingDashboard,
   viewReports,
   viewActivityLog,
+  viewEmployees,
+  manageEmployees,
+  viewPayroll,
+  managePayroll,
   accessPos,
   viewInvoices,
   accessPurchasing,
@@ -276,6 +280,56 @@ class AuthorizationCapabilities {
           ..add(AppCapability.viewDashboard)
           ..add(AppCapability.viewPrintingDashboard);
       }
+      if (_hasAny(user, const ['view_employee', 'employees.view_employee'])) {
+        capabilities
+          ..add(AppCapability.viewDashboard)
+          ..add(AppCapability.viewEmployees);
+      }
+      if (_hasAny(user, const [
+        'add_employee',
+        'change_employee',
+        'delete_employee',
+        'add_compensationplan',
+        'change_compensationplan',
+        'employees.add_employee',
+        'employees.change_employee',
+        'employees.delete_employee',
+        'employees.add_compensationplan',
+        'employees.change_compensationplan',
+      ])) {
+        capabilities
+          ..add(AppCapability.viewDashboard)
+          ..add(AppCapability.viewEmployees)
+          ..add(AppCapability.manageEmployees);
+      }
+      if (_hasAny(user, const [
+        'view_payrollrun',
+        'employees.view_payrollrun',
+      ])) {
+        capabilities
+          ..add(AppCapability.viewDashboard)
+          ..add(AppCapability.viewPayroll);
+      }
+      if (_hasAny(user, const [
+        'add_payrollrun',
+        'change_payrollrun',
+        'delete_payrollrun',
+        'approve_payrollrun',
+        'mark_payrollrun_paid',
+        'void_payrollrun',
+        'employees.add_payrollrun',
+        'employees.change_payrollrun',
+        'employees.delete_payrollrun',
+        'employees.approve_payrollrun',
+        'employees.mark_payrollrun_paid',
+        'employees.void_payrollrun',
+      ])) {
+        capabilities
+          ..add(AppCapability.viewDashboard)
+          ..add(AppCapability.viewEmployees)
+          ..add(AppCapability.viewPayroll)
+          ..add(AppCapability.managePayroll);
+      }
       if (_hasAny(user, const [
         'add_user',
         'change_user',
@@ -386,6 +440,10 @@ class AuthorizationCapabilities {
       allows(AppCapability.viewPrintingDashboard);
   bool get canViewReports => allows(AppCapability.viewReports);
   bool get canViewActivityLog => allows(AppCapability.viewActivityLog);
+  bool get canViewEmployees => allows(AppCapability.viewEmployees);
+  bool get canManageEmployees => allows(AppCapability.manageEmployees);
+  bool get canViewPayroll => allows(AppCapability.viewPayroll);
+  bool get canManagePayroll => allows(AppCapability.managePayroll);
   bool get canAccessPos => allows(AppCapability.accessPos);
   bool get canViewInvoices => allows(AppCapability.viewInvoices);
   bool get canAccessPurchasing => allows(AppCapability.accessPurchasing);

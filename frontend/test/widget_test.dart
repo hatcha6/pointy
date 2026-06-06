@@ -1340,8 +1340,9 @@ void main() {
     expect(find.text('جلسات الدرج'), findsOneWidget);
     expect(find.text('الخصومات'), findsOneWidget);
     expect(find.text('التقارير'), findsOneWidget);
-    await tester.drag(find.byType(NavigationDrawer), const Offset(0, -320));
+    await tester.drag(find.byType(NavigationDrawer), const Offset(0, -420));
     await tester.pumpAndSettle();
+    expect(find.text('الموظفون والرواتب'), findsOneWidget);
     expect(find.text('سجل النشاط'), findsOneWidget);
     expect(find.text('إعدادات الجهاز'), findsOneWidget);
     expect(find.text('المستخدمون'), findsOneWidget);

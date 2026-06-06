@@ -1,12 +1,15 @@
 enum UserRole {
   manager,
-  cashier;
+  cashier,
+  accountant;
 
   bool get isManager => this == UserRole.manager;
+  bool get isAccountant => this == UserRole.accountant;
 
   static UserRole fromJson(Object? value) {
     return switch (value?.toString().toLowerCase()) {
       'manager' => UserRole.manager,
+      'accountant' => UserRole.accountant,
       'cashier' => UserRole.cashier,
       _ => UserRole.cashier,
     };
@@ -16,6 +19,7 @@ enum UserRole {
     return switch (this) {
       UserRole.manager => 'manager',
       UserRole.cashier => 'cashier',
+      UserRole.accountant => 'accountant',
     };
   }
 }

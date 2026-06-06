@@ -1,0 +1,316 @@
+from decimal import Decimal
+
+from django.contrib.auth import get_user_model
+from rest_framework import serializers
+
+from .models import (
+    CompensationPlan,
+    Employee,
+    PayrollAdjustment,
+    PayrollLine,
+    PayrollRun,
+)
+from .services import save_payroll_run_with_lines
+
+
+def money_string(value):
+    return str((value or Decimal("0.00")).quantize(Decimal("0.01")))
+
+
+class EmployeeSummarySerializer(serializers.ModelSerializer):
+    user_username = serializers.CharField(source="user.username", read_only=True)
+    has_system_access = serializers.BooleanField(read_only=True)
+
+    class Meta:
+        model = Employee
+        fields = [
+            "id",
+            "employee_number",
+            "full_name",
+            "job_title",
+            "department",
+            "status",
+            "user",
+            "user_username",
+            "has_system_access",
+        ]
+        read_only_fields = ["id", "user_username", "has_system_access"]
+
+
+class CompensationPlanSerializer(serializers.ModelSerializer):
+    employee_name = serializers.CharField(source="employee.full_name", read_only=True)
+
+    class Meta:
+        model = CompensationPlan
+        fields = [
+            "id",
+            "employee",
+            "employee_name",
+            "pay_type",
+            "amount",
+            "currency",
+            "expected_units_per_period",
+            "effective_from",
+            "effective_to",
+            "notes",
+            "is_active",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "employee_name", "created_at", "updated_at"]
+
+    def validate(self, attrs):
+        employee = attrs.get("employee", getattr(self.instance, "employee", None))
+        effective_from = attrs.get(
+            "effective_from",
+            getattr(self.instance, "effective_from", None),
+        )
+        effective_to = attrs.get("effective_to", getattr(self.instance, "effective_to", None))
+        if effective_to and effective_from and effective_to < effective_from:
+            raise serializers.ValidationError(
+                {"effective_to": "Effective end cannot be before effective start."}
+            )
+        if employee is not None and employee.status == Employee.Status.TERMINATED:
+            raise serializers.ValidationError(
+                {"employee": "Cannot create compensation for a terminated employee."}
+            )
+        return attrs
+
+
+class EmployeeSerializer(serializers.ModelSerializer):
+    user_username = serializers.CharField(source="user.username", read_only=True)
+    has_system_access = serializers.BooleanField(read_only=True)
+    active_compensation_plan = serializers.SerializerMethodField()
+    payroll_total = serializers.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        read_only=True,
+    )
+
+    class Meta:
+        model = Employee
+        fields = [
+            "id",
+            "employee_number",
+            "full_name",
+            "phone",
+            "email",
+            "job_title",
+            "department",
+            "employment_type",
+            "status",
+            "hire_date",
+            "termination_date",
+            "user",
+            "user_username",
+            "has_system_access",
+            "emergency_contact_name",
+            "emergency_contact_phone",
+            "notes",
+            "active_compensation_plan",
+            "payroll_total",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = [
+            "id",
+            "user_username",
+            "has_system_access",
+            "active_compensation_plan",
+            "payroll_total",
+            "created_at",
+            "updated_at",
+        ]
+        extra_kwargs = {
+            "user": {"queryset": get_user_model().objects.all(), "required": False},
+        }
+
+    def get_active_compensation_plan(self, employee):
+        plan = employee.active_compensation_plan
+        if plan is None:
+            return None
+        return CompensationPlanSerializer(plan).data
+
+    def validate_employee_number(self, value):
+        return value.strip().upper()
+
+    def validate_full_name(self, value):
+        value = value.strip()
+        if not value:
+            raise serializers.ValidationError("Employee name is required.")
+        return value
+
+    def validate(self, attrs):
+        hire_date = attrs.get("hire_date", getattr(self.instance, "hire_date", None))
+        termination_date = attrs.get(
+            "termination_date",
+            getattr(self.instance, "termination_date", None),
+        )
+        status = attrs.get("status", getattr(self.instance, "status", None))
+        if hire_date and termination_date and termination_date < hire_date:
+            raise serializers.ValidationError(
+                {"termination_date": "Termination date cannot be before hire date."}
+            )
+        if status == Employee.Status.TERMINATED and termination_date is None:
+            raise serializers.ValidationError(
+                {"termination_date": "Termination date is required."}
+            )
+        return attrs
+
+
+class PayrollAdjustmentSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PayrollAdjustment
+        fields = [
+            "id",
+            "direction",
+            "adjustment_type",
+            "amount",
+            "notes",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "created_at", "updated_at"]
+
+
+class PayrollLineSerializer(serializers.ModelSerializer):
+    employee_name = serializers.CharField(source="employee.full_name", read_only=True)
+    employee_number = serializers.CharField(
+        source="employee.employee_number",
+        read_only=True,
+    )
+    pay_type = serializers.CharField(source="compensation_plan.pay_type", read_only=True)
+    adjustments = PayrollAdjustmentSerializer(many=True, required=False)
+
+    class Meta:
+        model = PayrollLine
+        fields = [
+            "id",
+            "employee",
+            "employee_name",
+            "employee_number",
+            "compensation_plan",
+            "pay_type",
+            "description",
+            "units",
+            "rate",
+            "gross_amount",
+            "additions_amount",
+            "deductions_amount",
+            "net_amount",
+            "adjustments",
+            "notes",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = [
+            "id",
+            "employee_name",
+            "employee_number",
+            "pay_type",
+            "gross_amount",
+            "additions_amount",
+            "deductions_amount",
+            "net_amount",
+            "created_at",
+            "updated_at",
+        ]
+
+    def validate(self, attrs):
+        employee = attrs.get("employee", getattr(self.instance, "employee", None))
+        plan = attrs.get("compensation_plan", getattr(self.instance, "compensation_plan", None))
+        if plan is not None and employee is not None and plan.employee_id != employee.pk:
+            raise serializers.ValidationError(
+                {"compensation_plan": "Compensation plan must belong to the employee."}
+            )
+        return attrs
+
+
+class PayrollRunSerializer(serializers.ModelSerializer):
+    lines = PayrollLineSerializer(many=True, required=False)
+    line_count = serializers.SerializerMethodField()
+    approved_by_username = serializers.CharField(
+        source="approved_by.username",
+        read_only=True,
+    )
+    paid_by_username = serializers.CharField(source="paid_by.username", read_only=True)
+
+    class Meta:
+        model = PayrollRun
+        fields = [
+            "id",
+            "run_number",
+            "status",
+            "period_start",
+            "period_end",
+            "payment_date",
+            "notes",
+            "gross_total",
+            "additions_total",
+            "deductions_total",
+            "net_total",
+            "line_count",
+            "lines",
+            "approved_at",
+            "approved_by",
+            "approved_by_username",
+            "paid_at",
+            "paid_by",
+            "paid_by_username",
+            "voided_at",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = [
+            "id",
+            "status",
+            "gross_total",
+            "additions_total",
+            "deductions_total",
+            "net_total",
+            "line_count",
+            "approved_at",
+            "approved_by",
+            "approved_by_username",
+            "paid_at",
+            "paid_by",
+            "paid_by_username",
+            "voided_at",
+            "created_at",
+            "updated_at",
+        ]
+
+    def get_line_count(self, payroll_run):
+        line_count = getattr(payroll_run, "line_count", None)
+        if line_count is not None:
+            return line_count
+        return payroll_run.lines.count()
+
+    def validate(self, attrs):
+        period_start = attrs.get(
+            "period_start",
+            getattr(self.instance, "period_start", None),
+        )
+        period_end = attrs.get("period_end", getattr(self.instance, "period_end", None))
+        if period_start and period_end and period_end < period_start:
+            raise serializers.ValidationError(
+                {"period_end": "Period end cannot be before start."}
+            )
+        return attrs
+
+    def create(self, validated_data):
+        lines_data = validated_data.pop("lines", None)
+        return save_payroll_run_with_lines(
+            lines_data=lines_data,
+            request=self.context.get("request"),
+            **validated_data,
+        )
+
+    def update(self, instance, validated_data):
+        lines_data = validated_data.pop("lines", None)
+        return save_payroll_run_with_lines(
+            payroll_run=instance,
+            lines_data=lines_data,
+            request=self.context.get("request"),
+            **validated_data,
+        )

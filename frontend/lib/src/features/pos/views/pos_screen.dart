@@ -39,6 +39,7 @@ class PosScreen extends StatelessWidget {
     this.onOpenDiscounts,
     this.onOpenReports,
     this.onOpenActivityLog,
+    this.onOpenEmployees,
     this.onOpenUsers,
     this.onOpenShopSettings,
   });
@@ -58,6 +59,7 @@ class PosScreen extends StatelessWidget {
   final VoidCallback? onOpenDiscounts;
   final VoidCallback? onOpenReports;
   final VoidCallback? onOpenActivityLog;
+  final VoidCallback? onOpenEmployees;
   final VoidCallback? onOpenUsers;
   final VoidCallback? onOpenShopSettings;
   final VoidCallback onLogout;
@@ -86,6 +88,7 @@ class PosScreen extends StatelessWidget {
             onOpenDiscounts: onOpenDiscounts,
             onOpenReports: onOpenReports,
             onOpenActivityLog: onOpenActivityLog,
+            onOpenEmployees: onOpenEmployees,
             onOpenUsers: onOpenUsers,
             onOpenShopSettings: onOpenShopSettings,
             onLogout: onLogout,

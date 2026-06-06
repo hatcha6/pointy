@@ -465,6 +465,7 @@ String _roleLabel(AppLocalizations l10n, UserRole role) {
   return switch (role) {
     UserRole.manager => l10n.managerRoleLabel,
     UserRole.cashier => l10n.cashierRoleLabel,
+    UserRole.accountant => l10n.accountantRoleLabel,
   };
 }
 
