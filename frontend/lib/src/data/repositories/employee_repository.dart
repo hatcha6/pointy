@@ -35,6 +35,10 @@ class EmployeeRepository {
     );
   }
 
+  Future<Result<PayrollRun>> loadPayrollRun(int id) {
+    return Result.guard(() => _service.fetchPayrollRun(id));
+  }
+
   Future<Result<PayrollRun>> createPayrollRun(PayrollRunDraft draft) {
     return Result.guard(() => _service.createPayrollRun(draft));
   }

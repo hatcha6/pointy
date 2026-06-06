@@ -2,7 +2,7 @@ from datetime import timedelta
 from decimal import Decimal
 
 from django.db import transaction
-from django.db.models import Sum
+from django.db.models import Q, Sum
 from django.utils import timezone
 from rest_framework import serializers
 
@@ -10,7 +10,7 @@ from apps.analytics.models import AnalyticsEvent
 from apps.analytics.services import record_domain_event
 from apps.sales.models import Order
 
-from .models import Employee, PayrollAdjustment, PayrollLine, PayrollRun
+from .models import CompensationPlan, Employee, PayrollAdjustment, PayrollLine, PayrollRun
 
 
 MONEY_PLACES = Decimal("0.01")
@@ -204,11 +204,15 @@ def _monthly_payroll_line_inputs(period_start, period_end):
         plan = _plan_for_period(employee, period_end)
         if plan is None:
             continue
-        sales_total = _commissionable_sales_total(employee, period_start, period_end)
-        commission_percent = Decimal(plan.commission_percent or "0.00")
-        commission_amount = (
-            sales_total * commission_percent / Decimal("100")
-        ).quantize(MONEY_PLACES)
+        sales_total = Decimal("0.00")
+        commission_percent = Decimal("0.00")
+        commission_amount = Decimal("0.00")
+        if plan.uses_sales_commission:
+            sales_total = _commissionable_sales_total(employee, period_start, period_end)
+            commission_percent = Decimal(plan.commission_percent or "0.00")
+            commission_amount = (
+                sales_total * commission_percent / Decimal("100")
+            ).quantize(MONEY_PLACES)
         line_inputs.append(
             {
                 "employee": employee,
@@ -230,6 +234,23 @@ def _plan_for_period(employee, period_end):
         employee.compensation_plans.filter(
             is_active=True,
             effective_from__lte=period_end,
+        )
+        .filter(Q(effective_to__isnull=True) | Q(effective_to__gte=period_end))
+        .filter(
+            Q(
+                salary_type__in=[
+                    CompensationPlan.SalaryType.MONTHLY_FIXED,
+                    CompensationPlan.SalaryType.SALES_COMMISSION_ONLY,
+                    CompensationPlan.SalaryType.MONTHLY_FIXED_PLUS_SALES_COMMISSION,
+                ]
+            )
+            | Q(salary_type="", pay_type=CompensationPlan.PayType.MONTHLY_SALARY)
+            | Q(
+                salary_type="",
+                pay_type=CompensationPlan.PayType.COMMISSION,
+                amount=Decimal("0.00"),
+                commission_percent__gt=Decimal("0.00"),
+            )
         )
         .order_by("-effective_from", "-id")
         .first()

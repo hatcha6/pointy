@@ -149,7 +149,7 @@ class CompensationPlanViewSet(viewsets.ModelViewSet):
         "destroy": ("employees.delete_compensationplan",),
     }
     queryset = CompensationPlan.objects.select_related("employee")
-    filterset_fields = ("employee", "pay_type", "is_active")
+    filterset_fields = ("employee", "pay_type", "salary_type", "is_active")
     search_fields = ("employee__full_name", "employee__employee_number", "notes")
     ordering_fields = ("effective_from", "effective_to", "amount", "created_at")
 
@@ -195,7 +195,7 @@ class PayrollRunViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(period_end__gte=start)
         if end:
             queryset = queryset.filter(period_start__lte=end)
-        return queryset
+        return queryset.order_by("-period_end", "-created_at", "-id")
 
     def perform_destroy(self, instance):
         if instance.status != PayrollRun.Status.DRAFT:

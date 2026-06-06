@@ -48,6 +48,7 @@ void main() {
     expect(employee.userId, 14);
     expect(employee.payrollTotal, 1250.50);
     expect(employee.activeCompensationPlan?.payType, PayType.hourly);
+    expect(employee.activeCompensationPlan?.salaryType, isNull);
     expect(employee.activeCompensationPlan?.amount, 12.75);
     expect(employee.activeCompensationPlan?.expectedUnitsPerPeriod, 120);
   });
@@ -82,6 +83,67 @@ void main() {
     expect(run.deductionsTotal, 25);
     expect(run.netTotal, 1825);
     expect(run.lineCount, 3);
+  });
+
+  test('payroll run parses detail lines and adjustments', () {
+    final run = PayrollRun.fromJson({
+      'id': 10,
+      'run_number': 'PAY-202606-0010',
+      'status': 'draft',
+      'period_start': '2026-06-01',
+      'period_end': '2026-06-30',
+      'payment_date': null,
+      'notes': 'مسير تلقائي',
+      'gross_total': '900.00',
+      'additions_total': '20.00',
+      'deductions_total': '0.00',
+      'net_total': '920.00',
+      'line_count': 1,
+      'created_at': '2026-06-30T23:10:00Z',
+      'lines': [
+        {
+          'id': 41,
+          'employee': 7,
+          'employee_name': 'سارة أحمد',
+          'employee_number': 'EMP-0007',
+          'compensation_plan': 33,
+          'pay_type': 'monthly_salary',
+          'salary_type': 'monthly_fixed_plus_sales_commission',
+          'description': 'راتب شهر يونيو',
+          'units': '1.00',
+          'rate': '900.00',
+          'gross_amount': '900.00',
+          'additions_amount': '20.00',
+          'deductions_amount': '0.00',
+          'net_amount': '920.00',
+          'notes': '',
+          'adjustments': [
+            {
+              'id': 5,
+              'direction': 'addition',
+              'adjustment_type': 'commission',
+              'amount': '20.00',
+              'notes': '10.00% commission on 200.00 sales',
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(run.lines, hasLength(1));
+    expect(run.notes, 'مسير تلقائي');
+    expect(run.createdAt, isNotNull);
+
+    final line = run.lines.single;
+    expect(line.employeeName, 'سارة أحمد');
+    expect(line.employeeNumber, 'EMP-0007');
+    expect(line.salaryType, SalaryType.monthlyFixedPlusSalesCommission);
+    expect(line.payType, PayType.monthlySalary);
+    expect(line.grossAmount, 900);
+    expect(line.additionsAmount, 20);
+    expect(line.netAmount, 920);
+    expect(line.adjustments.single.adjustmentType, 'commission');
+    expect(line.adjustments.single.amount, 20);
   });
 
   test('employee and payroll drafts serialize backend field names', () {
@@ -120,5 +182,40 @@ void main() {
         'description': 'وردية إضافية',
       },
     ]);
+
+    final fixedSalary = const CompensationPlanDraft(
+      employeeId: 7,
+      salaryType: SalaryType.monthlyFixed,
+      amount: '900.00',
+    ).toJson();
+    expect(fixedSalary['pay_type'], 'monthly_salary');
+    expect(fixedSalary['salary_type'], 'monthly_fixed');
+    expect(fixedSalary['amount'], '900.00');
+    expect(fixedSalary['commission_percent'], '0.00');
+
+    final commissionOnlySalary = const CompensationPlanDraft(
+      employeeId: 7,
+      salaryType: SalaryType.salesCommissionOnly,
+      amount: '0.00',
+      commissionPercent: '8.50',
+    ).toJson();
+    expect(commissionOnlySalary['pay_type'], 'commission');
+    expect(commissionOnlySalary['salary_type'], 'sales_commission_only');
+    expect(commissionOnlySalary['amount'], '0.00');
+    expect(commissionOnlySalary['commission_percent'], '8.50');
+
+    final fixedPlusCommissionSalary = const CompensationPlanDraft(
+      employeeId: 7,
+      salaryType: SalaryType.monthlyFixedPlusSalesCommission,
+      amount: '900.00',
+      commissionPercent: '10.00',
+    ).toJson();
+    expect(fixedPlusCommissionSalary['pay_type'], 'monthly_salary');
+    expect(
+      fixedPlusCommissionSalary['salary_type'],
+      'monthly_fixed_plus_sales_commission',
+    );
+    expect(fixedPlusCommissionSalary['amount'], '900.00');
+    expect(fixedPlusCommissionSalary['commission_percent'], '10.00');
   });
 }

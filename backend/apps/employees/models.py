@@ -87,6 +87,7 @@ class Employee(TimeStampedModel):
                 is_active=True,
                 effective_from__lte=today,
             )
+            .filter(Q(effective_to__isnull=True) | Q(effective_to__gte=today))
             .order_by("-effective_from", "-id")
             .first()
         )
@@ -122,12 +123,27 @@ class CompensationPlan(TimeStampedModel):
         CONTRACT = "contract", "Contract"
         OTHER = "other", "Other"
 
+    class SalaryType(models.TextChoices):
+        MONTHLY_FIXED = "monthly_fixed", "Monthly fixed"
+        SALES_COMMISSION_ONLY = "sales_commission_only", "Sales commission only"
+        MONTHLY_FIXED_PLUS_SALES_COMMISSION = (
+            "monthly_fixed_plus_sales_commission",
+            "Monthly fixed plus sales commission",
+        )
+
     employee = models.ForeignKey(
         Employee,
         on_delete=models.CASCADE,
         related_name="compensation_plans",
     )
     pay_type = models.CharField(max_length=32, choices=PayType.choices)
+    salary_type = models.CharField(
+        max_length=48,
+        choices=SalaryType.choices,
+        blank=True,
+        default="",
+        db_index=True,
+    )
     amount = models.DecimalField(
         max_digits=12,
         decimal_places=2,
@@ -159,20 +175,94 @@ class CompensationPlan(TimeStampedModel):
         indexes = [
             models.Index(fields=["employee", "is_active", "effective_from"]),
             models.Index(fields=["pay_type", "effective_from"]),
+            models.Index(fields=["salary_type", "effective_from"]),
         ]
         constraints = []
 
     def __str__(self):
         return f"{self.employee} - {self.pay_type} {self.amount}"
 
+    @property
+    def resolved_salary_type(self):
+        if self.salary_type:
+            return self.salary_type
+        if self.pay_type == self.PayType.MONTHLY_SALARY:
+            if Decimal(self.commission_percent or "0.00") > Decimal("0.00"):
+                return self.SalaryType.MONTHLY_FIXED_PLUS_SALES_COMMISSION
+            return self.SalaryType.MONTHLY_FIXED
+        if (
+            self.pay_type == self.PayType.COMMISSION
+            and Decimal(self.amount or "0.00") == Decimal("0.00")
+            and Decimal(self.commission_percent or "0.00") > Decimal("0.00")
+        ):
+            return self.SalaryType.SALES_COMMISSION_ONLY
+        return ""
+
+    @property
+    def has_fixed_monthly_amount(self):
+        return self.resolved_salary_type in {
+            self.SalaryType.MONTHLY_FIXED,
+            self.SalaryType.MONTHLY_FIXED_PLUS_SALES_COMMISSION,
+        }
+
+    @property
+    def uses_sales_commission(self):
+        return self.resolved_salary_type in {
+            self.SalaryType.SALES_COMMISSION_ONLY,
+            self.SalaryType.MONTHLY_FIXED_PLUS_SALES_COMMISSION,
+        }
+
+    @property
+    def is_automatic_monthly_salary(self):
+        return self.resolved_salary_type in {
+            self.SalaryType.MONTHLY_FIXED,
+            self.SalaryType.SALES_COMMISSION_ONLY,
+            self.SalaryType.MONTHLY_FIXED_PLUS_SALES_COMMISSION,
+        }
+
     def clean(self):
         if self.effective_to and self.effective_to < self.effective_from:
             raise ValidationError(
                 {"effective_to": "Effective end cannot be before effective start."}
             )
+        salary_type = self.resolved_salary_type
+        if not salary_type:
+            return
+        amount = Decimal(self.amount or "0.00")
+        commission_percent = Decimal(self.commission_percent or "0.00")
+        errors = {}
+        if salary_type == self.SalaryType.MONTHLY_FIXED:
+            if amount <= Decimal("0.00"):
+                errors["amount"] = "Monthly fixed salary requires an amount greater than zero."
+            if commission_percent != Decimal("0.00"):
+                errors["commission_percent"] = (
+                    "Monthly fixed salary cannot include a commission percentage."
+                )
+        elif salary_type == self.SalaryType.SALES_COMMISSION_ONLY:
+            if amount != Decimal("0.00"):
+                errors["amount"] = "Commission-only salary must use a zero fixed amount."
+            if commission_percent <= Decimal("0.00"):
+                errors["commission_percent"] = (
+                    "Commission-only salary requires a commission percentage greater than zero."
+                )
+        elif salary_type == self.SalaryType.MONTHLY_FIXED_PLUS_SALES_COMMISSION:
+            if amount <= Decimal("0.00"):
+                errors["amount"] = (
+                    "Monthly fixed plus commission salary requires an amount greater than zero."
+                )
+            if commission_percent <= Decimal("0.00"):
+                errors["commission_percent"] = (
+                    "Monthly fixed plus commission salary requires a commission percentage."
+                )
+        if errors:
+            raise ValidationError(errors)
 
     def amount_for_units(self, units):
         units = Decimal(units or "0.00")
+        if self.resolved_salary_type == self.SalaryType.SALES_COMMISSION_ONLY:
+            return Decimal("0.00").quantize(self.MONEY_PLACES)
+        if self.has_fixed_monthly_amount:
+            return self.amount.quantize(self.MONEY_PLACES)
         if self.pay_type in {
             self.PayType.MONTHLY_SALARY,
             self.PayType.WEEKLY_SALARY,

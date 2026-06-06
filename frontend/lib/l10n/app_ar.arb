@@ -3676,6 +3676,36 @@
       }
     }
   },
+  "employeeMonthlyFixedPlanLabel": "راتب شهري ثابت - {amount}",
+  "@employeeMonthlyFixedPlanLabel": {
+    "description": "Active employee monthly fixed salary label.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "employeeCommissionOnlyPlanLabel": "عمولة مبيعات فقط - {percent}%",
+  "@employeeCommissionOnlyPlanLabel": {
+    "description": "Active employee commission-only salary label.",
+    "placeholders": {
+      "percent": {
+        "type": "String"
+      }
+    }
+  },
+  "employeeMonthlyFixedPlusCommissionPlanLabel": "راتب شهري ثابت {amount} + {percent}% مبيعات",
+  "@employeeMonthlyFixedPlusCommissionPlanLabel": {
+    "description": "Active employee monthly fixed plus sales commission salary label.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      },
+      "percent": {
+        "type": "String"
+      }
+    }
+  },
   "employeeNoDetails": "لا توجد تفاصيل إضافية",
   "addCompensationPlanTooltip": "إضافة خطة أجر",
   "payrollRunsLoadError": "تعذر تحميل مسيرات الرواتب.",
@@ -3701,6 +3731,108 @@
       }
     }
   },
+  "payrollRunDetailsTooltip": "عرض تفاصيل المسير",
+  "payrollRunDetailsTitle": "تفاصيل مسير {runNumber}",
+  "@payrollRunDetailsTitle": {
+    "description": "Payroll run details sheet title.",
+    "placeholders": {
+      "runNumber": {
+        "type": "String"
+      }
+    }
+  },
+  "payrollRunDetailsLoadError": "تعذر تحميل تفاصيل مسير الرواتب.",
+  "payrollRunSummarySection": "ملخص المسير",
+  "payrollRunEmployeesSection": "الموظفون في المسير",
+  "payrollRunGrossTotalLabel": "الإجمالي الأساسي",
+  "payrollRunAdditionsTotalLabel": "الإضافات",
+  "payrollRunDeductionsTotalLabel": "الخصومات",
+  "payrollRunNetTotalLabel": "الصافي",
+  "payrollRunPeriodLabel": "الفترة",
+  "payrollRunPaymentDateLabel": "تاريخ الدفع",
+  "payrollRunNotesLabel": "الملاحظات",
+  "payrollRunNoNotes": "لا توجد ملاحظات",
+  "payrollRunCreatedAtLabel": "أُنشئ في",
+  "payrollRunApprovedByLabel": "اعتمده",
+  "payrollRunPaidByLabel": "سجله كمدفوع",
+  "payrollRunActorWithDate": "{actor} - {date}",
+  "@payrollRunActorWithDate": {
+    "description": "Payroll actor and timestamp detail.",
+    "placeholders": {
+      "actor": {
+        "type": "String"
+      },
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "payrollRunNoEmployees": "لا توجد بنود موظفين في هذا المسير.",
+  "payrollLineManualPayLabel": "أجر يدوي",
+  "payrollEmployeeFallbackLabel": "موظف #{id}",
+  "@payrollEmployeeFallbackLabel": {
+    "description": "Fallback payroll employee label.",
+    "placeholders": {
+      "id": {
+        "type": "int"
+      }
+    }
+  },
+  "payrollLineUnitsLabel": "الوحدات",
+  "payrollLineRateLabel": "الأجر",
+  "payrollLineGrossLabel": "الأساسي",
+  "payrollLineAdditionsLabel": "الإضافات",
+  "payrollLineDeductionsLabel": "الخصومات",
+  "payrollLineNetLabel": "الصافي",
+  "payrollLineDescriptionLabel": "الوصف",
+  "payrollLineNotesLabel": "ملاحظات البند",
+  "payrollLineAdjustmentsLabel": "التعديلات",
+  "payrollLineAmountDetail": "{label}: {value}",
+  "@payrollLineAmountDetail": {
+    "description": "Compact payroll line amount detail.",
+    "placeholders": {
+      "label": {
+        "type": "String"
+      },
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "payrollAdjustmentDetailLabel": "{direction} - {type}",
+  "@payrollAdjustmentDetailLabel": {
+    "description": "Payroll adjustment direction and type label.",
+    "placeholders": {
+      "direction": {
+        "type": "String"
+      },
+      "type": {
+        "type": "String"
+      }
+    }
+  },
+  "payrollAdjustmentAmountWithNotes": "{amount} - {notes}",
+  "@payrollAdjustmentAmountWithNotes": {
+    "description": "Payroll adjustment amount with notes.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      },
+      "notes": {
+        "type": "String"
+      }
+    }
+  },
+  "payrollAdjustmentAddition": "إضافة",
+  "payrollAdjustmentDeduction": "خصم",
+  "payrollAdjustmentBonus": "مكافأة",
+  "payrollAdjustmentCommission": "عمولة",
+  "payrollAdjustmentOvertime": "وقت إضافي",
+  "payrollAdjustmentReimbursement": "تعويض",
+  "payrollAdjustmentAdvance": "سلفة",
+  "payrollAdjustmentAbsence": "غياب",
+  "payrollAdjustmentPenalty": "جزاء",
+  "payrollAdjustmentOther": "تعديل آخر",
   "approvePayrollRunTooltip": "اعتماد مسير الرواتب",
   "markPayrollRunPaidTooltip": "تسجيل المسير كمدفوع",
   "missingDateLabel": "تاريخ غير محدد",
@@ -3752,10 +3884,20 @@
   "payAmountField": "المبلغ",
   "payUnitsField": "الوحدات",
   "payEffectiveFromField": "يبدأ من",
+  "salaryTypeField": "نوع الراتب",
+  "salaryTypeMonthlyFixed": "راتب شهري ثابت",
+  "salaryTypeSalesCommissionOnly": "عمولة مبيعات فقط",
+  "salaryTypeMonthlyFixedPlusSalesCommission": "راتب شهري + عمولة مبيعات",
+  "salaryTypeMonthlyFixedHelper": "يدفع مبلغًا ثابتًا كل شهر دون احتساب عمولة مبيعات.",
+  "salaryTypeSalesCommissionOnlyHelper": "يدفع نسبة من المبيعات المدفوعة للمستخدم المرتبط بالموظف فقط.",
+  "salaryTypeMonthlyFixedPlusSalesCommissionHelper": "يدفع الراتب الشهري الثابت ويضيف نسبة من مبيعات المستخدم المرتبط.",
   "monthlyBaseSalaryField": "الراتب الشهري الثابت",
   "monthlyBaseSalaryHelper": "المبلغ الأساسي الذي يستحقه الموظف كل شهر.",
   "salesCommissionPercentField": "نسبة عمولة المبيعات",
-  "salesCommissionPercentHelper": "تُحسب من المبيعات المدفوعة للمستخدم المرتبط بالموظف. اتركها 0 إذا لا توجد عمولة.",
+  "salesCommissionPercentHelper": "تُحسب من المبيعات المدفوعة للمستخدم المرتبط بالموظف.",
+  "baseSalaryRequiredError": "أدخل راتبًا شهريًا أكبر من صفر.",
+  "commissionRequiredError": "أدخل نسبة عمولة أكبر من صفر.",
+  "salesCommissionNeedsLinkedUserWarning": "عمولة المبيعات تحتاج ربط الموظف بمستخدم نقطة بيع حتى تُحسب المبيعات تلقائيًا.",
   "compensationPlanActivationNote": "ستصبح هذه الخطة هي الراتب الحالي للموظف، وسيتم تعطيل الخطط النشطة السابقة.",
   "payTypeMonthlySalary": "راتب شهري",
   "payTypeWeeklySalary": "راتب أسبوعي",

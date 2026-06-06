@@ -94,6 +94,39 @@ enum PayType {
   }
 }
 
+enum SalaryType {
+  monthlyFixed,
+  salesCommissionOnly,
+  monthlyFixedPlusSalesCommission;
+
+  static SalaryType? fromJson(Object? value) {
+    return switch (value?.toString()) {
+      'monthly_fixed' => SalaryType.monthlyFixed,
+      'sales_commission_only' => SalaryType.salesCommissionOnly,
+      'monthly_fixed_plus_sales_commission' =>
+        SalaryType.monthlyFixedPlusSalesCommission,
+      _ => null,
+    };
+  }
+
+  String toJson() {
+    return switch (this) {
+      SalaryType.monthlyFixed => 'monthly_fixed',
+      SalaryType.salesCommissionOnly => 'sales_commission_only',
+      SalaryType.monthlyFixedPlusSalesCommission =>
+        'monthly_fixed_plus_sales_commission',
+    };
+  }
+
+  PayType get payType {
+    return switch (this) {
+      SalaryType.salesCommissionOnly => PayType.commission,
+      SalaryType.monthlyFixed => PayType.monthlySalary,
+      SalaryType.monthlyFixedPlusSalesCommission => PayType.monthlySalary,
+    };
+  }
+}
+
 enum PayrollStatus {
   draft,
   approved,
@@ -119,6 +152,7 @@ class CompensationPlan {
     required this.id,
     required this.employeeId,
     required this.payType,
+    this.salaryType,
     required this.amount,
     required this.effectiveFrom,
     this.commissionPercent = 0,
@@ -131,6 +165,7 @@ class CompensationPlan {
   final int id;
   final int employeeId;
   final PayType payType;
+  final SalaryType? salaryType;
   final double amount;
   final double commissionPercent;
   final String currency;
@@ -144,6 +179,7 @@ class CompensationPlan {
       id: _intFromJson(json['id']),
       employeeId: _intFromJson(json['employee']),
       payType: PayType.fromJson(json['pay_type']),
+      salaryType: SalaryType.fromJson(json['salary_type']),
       amount: _doubleFromJson(json['amount']),
       commissionPercent: _doubleFromJson(json['commission_percent']),
       currency: json['currency']?.toString() ?? 'LYD',
@@ -256,10 +292,18 @@ class PayrollRun {
     required this.periodEnd,
     required this.netTotal,
     this.paymentDate,
+    this.notes = '',
     this.grossTotal = 0,
     this.additionsTotal = 0,
     this.deductionsTotal = 0,
     this.lineCount = 0,
+    this.lines = const [],
+    this.approvedByUsername = '',
+    this.paidByUsername = '',
+    this.approvedAt,
+    this.paidAt,
+    this.createdAt,
+    this.updatedAt,
   });
 
   final int id;
@@ -268,13 +312,22 @@ class PayrollRun {
   final DateTime? periodStart;
   final DateTime? periodEnd;
   final DateTime? paymentDate;
+  final String notes;
   final double grossTotal;
   final double additionsTotal;
   final double deductionsTotal;
   final double netTotal;
   final int lineCount;
+  final List<PayrollLine> lines;
+  final String approvedByUsername;
+  final String paidByUsername;
+  final DateTime? approvedAt;
+  final DateTime? paidAt;
+  final DateTime? createdAt;
+  final DateTime? updatedAt;
 
   factory PayrollRun.fromJson(Map<String, Object?> json) {
+    final lines = json['lines'];
     return PayrollRun(
       id: _intFromJson(json['id']),
       runNumber: json['run_number']?.toString() ?? '',
@@ -282,11 +335,119 @@ class PayrollRun {
       periodStart: _dateFromJson(json['period_start']),
       periodEnd: _dateFromJson(json['period_end']),
       paymentDate: _dateFromJson(json['payment_date']),
+      notes: json['notes']?.toString() ?? '',
       grossTotal: _doubleFromJson(json['gross_total']),
       additionsTotal: _doubleFromJson(json['additions_total']),
       deductionsTotal: _doubleFromJson(json['deductions_total']),
       netTotal: _doubleFromJson(json['net_total']),
       lineCount: _intFromJson(json['line_count']),
+      lines: lines is List<Object?>
+          ? lines
+                .whereType<Map<String, Object?>>()
+                .map(PayrollLine.fromJson)
+                .toList(growable: false)
+          : const [],
+      approvedByUsername: json['approved_by_username']?.toString() ?? '',
+      paidByUsername: json['paid_by_username']?.toString() ?? '',
+      approvedAt: _dateFromJson(json['approved_at']),
+      paidAt: _dateFromJson(json['paid_at']),
+      createdAt: _dateFromJson(json['created_at']),
+      updatedAt: _dateFromJson(json['updated_at']),
+    );
+  }
+}
+
+class PayrollLine {
+  const PayrollLine({
+    required this.id,
+    required this.employeeId,
+    this.employeeName = '',
+    this.employeeNumber = '',
+    this.compensationPlanId,
+    this.payType,
+    this.salaryType,
+    this.description = '',
+    this.units = 0,
+    this.rate = 0,
+    this.grossAmount = 0,
+    this.additionsAmount = 0,
+    this.deductionsAmount = 0,
+    this.netAmount = 0,
+    this.notes = '',
+    this.adjustments = const [],
+  });
+
+  final int id;
+  final int employeeId;
+  final String employeeName;
+  final String employeeNumber;
+  final int? compensationPlanId;
+  final PayType? payType;
+  final SalaryType? salaryType;
+  final String description;
+  final double units;
+  final double rate;
+  final double grossAmount;
+  final double additionsAmount;
+  final double deductionsAmount;
+  final double netAmount;
+  final String notes;
+  final List<PayrollAdjustment> adjustments;
+
+  factory PayrollLine.fromJson(Map<String, Object?> json) {
+    final adjustments = json['adjustments'];
+    return PayrollLine(
+      id: _intFromJson(json['id']),
+      employeeId: _intFromJson(json['employee']),
+      employeeName: json['employee_name']?.toString() ?? '',
+      employeeNumber: json['employee_number']?.toString() ?? '',
+      compensationPlanId: json['compensation_plan'] == null
+          ? null
+          : _intFromJson(json['compensation_plan']),
+      payType: json['pay_type'] == null
+          ? null
+          : PayType.fromJson(json['pay_type']),
+      salaryType: SalaryType.fromJson(json['salary_type']),
+      description: json['description']?.toString() ?? '',
+      units: _doubleFromJson(json['units']),
+      rate: _doubleFromJson(json['rate']),
+      grossAmount: _doubleFromJson(json['gross_amount']),
+      additionsAmount: _doubleFromJson(json['additions_amount']),
+      deductionsAmount: _doubleFromJson(json['deductions_amount']),
+      netAmount: _doubleFromJson(json['net_amount']),
+      notes: json['notes']?.toString() ?? '',
+      adjustments: adjustments is List<Object?>
+          ? adjustments
+                .whereType<Map<String, Object?>>()
+                .map(PayrollAdjustment.fromJson)
+                .toList(growable: false)
+          : const [],
+    );
+  }
+}
+
+class PayrollAdjustment {
+  const PayrollAdjustment({
+    required this.id,
+    required this.direction,
+    required this.adjustmentType,
+    required this.amount,
+    this.notes = '',
+  });
+
+  final int id;
+  final String direction;
+  final String adjustmentType;
+  final double amount;
+  final String notes;
+
+  factory PayrollAdjustment.fromJson(Map<String, Object?> json) {
+    return PayrollAdjustment(
+      id: _intFromJson(json['id']),
+      direction: json['direction']?.toString() ?? '',
+      adjustmentType: json['adjustment_type']?.toString() ?? '',
+      amount: _doubleFromJson(json['amount']),
+      notes: json['notes']?.toString() ?? '',
     );
   }
 }
@@ -355,22 +516,24 @@ class EmployeeDraft {
 class CompensationPlanDraft {
   const CompensationPlanDraft({
     required this.employeeId,
+    required this.salaryType,
     required this.amount,
-    this.payType = PayType.monthlySalary,
     this.commissionPercent = '0.00',
     this.expectedUnitsPerPeriod = '1.00',
   });
 
   final int employeeId;
-  final PayType payType;
+  final SalaryType salaryType;
   final String amount;
   final String commissionPercent;
   final String expectedUnitsPerPeriod;
+  PayType get payType => salaryType.payType;
 
   Map<String, Object?> toJson() {
     return {
       'employee': employeeId,
       'pay_type': payType.toJson(),
+      'salary_type': salaryType.toJson(),
       'amount': amount,
       'commission_percent': commissionPercent,
       'expected_units_per_period': expectedUnitsPerPeriod,

@@ -40,6 +40,28 @@ class EmployeeSummarySerializer(serializers.ModelSerializer):
 
 class CompensationPlanSerializer(serializers.ModelSerializer):
     employee_name = serializers.CharField(source="employee.full_name", read_only=True)
+    pay_type = serializers.ChoiceField(
+        choices=CompensationPlan.PayType.choices,
+        required=False,
+    )
+    salary_type = serializers.ChoiceField(
+        choices=CompensationPlan.SalaryType.choices,
+        allow_blank=True,
+        required=False,
+    )
+    amount = serializers.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        min_value=Decimal("0.00"),
+        required=False,
+    )
+    commission_percent = serializers.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        min_value=Decimal("0.00"),
+        max_value=Decimal("100.00"),
+        required=False,
+    )
 
     class Meta:
         model = CompensationPlan
@@ -48,6 +70,7 @@ class CompensationPlanSerializer(serializers.ModelSerializer):
             "employee",
             "employee_name",
             "pay_type",
+            "salary_type",
             "amount",
             "commission_percent",
             "currency",
@@ -81,7 +104,90 @@ class CompensationPlanSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(
                 {"employee": "Cannot create compensation for a terminated employee."}
             )
+        self._validate_salary_type(attrs)
         return attrs
+
+    def _validate_salary_type(self, attrs):
+        salary_type = attrs.get(
+            "salary_type",
+            getattr(self.instance, "salary_type", ""),
+        )
+        amount = attrs.get("amount", getattr(self.instance, "amount", Decimal("0.00")))
+        commission_percent = attrs.get(
+            "commission_percent",
+            getattr(self.instance, "commission_percent", Decimal("0.00")),
+        )
+        amount = Decimal(amount or "0.00")
+        commission_percent = Decimal(commission_percent or "0.00")
+
+        if not salary_type:
+            salary_type = self._infer_salary_type(attrs, amount, commission_percent)
+            if salary_type:
+                attrs["salary_type"] = salary_type
+
+        if not salary_type:
+            errors = {}
+            if self.instance is None and "pay_type" not in attrs:
+                errors["pay_type"] = "This field is required for manual compensation plans."
+            if self.instance is None and "amount" not in attrs:
+                errors["amount"] = "This field is required for manual compensation plans."
+            if errors:
+                raise serializers.ValidationError(errors)
+            return
+
+        attrs["pay_type"] = self._pay_type_for_salary_type(salary_type)
+        errors = {}
+        if salary_type == CompensationPlan.SalaryType.MONTHLY_FIXED:
+            if "commission_percent" not in attrs and self.instance is None:
+                attrs["commission_percent"] = Decimal("0.00")
+                commission_percent = Decimal("0.00")
+            if amount <= Decimal("0.00"):
+                errors["amount"] = "Monthly fixed salary requires an amount greater than zero."
+            if commission_percent != Decimal("0.00"):
+                errors["commission_percent"] = (
+                    "Monthly fixed salary cannot include a commission percentage."
+                )
+        elif salary_type == CompensationPlan.SalaryType.SALES_COMMISSION_ONLY:
+            if "amount" not in attrs and self.instance is None:
+                attrs["amount"] = Decimal("0.00")
+                amount = Decimal("0.00")
+            if amount != Decimal("0.00"):
+                errors["amount"] = "Commission-only salary must use a zero fixed amount."
+            if commission_percent <= Decimal("0.00"):
+                errors["commission_percent"] = (
+                    "Commission-only salary requires a commission percentage greater than zero."
+                )
+        elif salary_type == CompensationPlan.SalaryType.MONTHLY_FIXED_PLUS_SALES_COMMISSION:
+            if amount <= Decimal("0.00"):
+                errors["amount"] = (
+                    "Monthly fixed plus commission salary requires an amount greater than zero."
+                )
+            if commission_percent <= Decimal("0.00"):
+                errors["commission_percent"] = (
+                    "Monthly fixed plus commission salary requires a commission percentage."
+                )
+
+        if errors:
+            raise serializers.ValidationError(errors)
+
+    def _infer_salary_type(self, attrs, amount, commission_percent):
+        pay_type = attrs.get("pay_type", getattr(self.instance, "pay_type", ""))
+        if pay_type == CompensationPlan.PayType.MONTHLY_SALARY:
+            if commission_percent > Decimal("0.00"):
+                return CompensationPlan.SalaryType.MONTHLY_FIXED_PLUS_SALES_COMMISSION
+            return CompensationPlan.SalaryType.MONTHLY_FIXED
+        if (
+            pay_type == CompensationPlan.PayType.COMMISSION
+            and amount == Decimal("0.00")
+            and commission_percent > Decimal("0.00")
+        ):
+            return CompensationPlan.SalaryType.SALES_COMMISSION_ONLY
+        return ""
+
+    def _pay_type_for_salary_type(self, salary_type):
+        if salary_type == CompensationPlan.SalaryType.SALES_COMMISSION_ONLY:
+            return CompensationPlan.PayType.COMMISSION
+        return CompensationPlan.PayType.MONTHLY_SALARY
 
     @transaction.atomic
     def create(self, validated_data):
@@ -216,6 +322,10 @@ class PayrollLineSerializer(serializers.ModelSerializer):
         read_only=True,
     )
     pay_type = serializers.CharField(source="compensation_plan.pay_type", read_only=True)
+    salary_type = serializers.CharField(
+        source="compensation_plan.resolved_salary_type",
+        read_only=True,
+    )
     adjustments = PayrollAdjustmentSerializer(many=True, required=False)
 
     class Meta:
@@ -227,6 +337,7 @@ class PayrollLineSerializer(serializers.ModelSerializer):
             "employee_number",
             "compensation_plan",
             "pay_type",
+            "salary_type",
             "description",
             "units",
             "rate",
@@ -244,6 +355,7 @@ class PayrollLineSerializer(serializers.ModelSerializer):
             "employee_name",
             "employee_number",
             "pay_type",
+            "salary_type",
             "gross_amount",
             "additions_amount",
             "deductions_amount",

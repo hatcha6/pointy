@@ -1,9 +1,11 @@
+import warnings
 from datetime import timedelta
 from decimal import Decimal
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.conf import settings
+from django.core.paginator import UnorderedObjectListWarning
 from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
@@ -16,7 +18,7 @@ from apps.notifications.services import sync_business_notifications
 from apps.core.roles import ACCOUNTANT_GROUP, CASHIER_GROUP, MANAGER_GROUP, ensure_role_groups
 from apps.sales.models import Order, OrderLine, RegisterSession
 
-from .models import CompensationPlan, Employee, PayrollRun
+from .models import CompensationPlan, Employee, PayrollAdjustment, PayrollRun
 from .services import draft_monthly_payroll_run
 
 
@@ -64,6 +66,7 @@ class EmployeePayrollApiTests(TestCase):
             {
                 "employee": employee_id,
                 "pay_type": CompensationPlan.PayType.MONTHLY_SALARY,
+                "salary_type": CompensationPlan.SalaryType.MONTHLY_FIXED,
                 "amount": "900.00",
                 "effective_from": timezone.localdate().isoformat(),
             },
@@ -71,6 +74,10 @@ class EmployeePayrollApiTests(TestCase):
         )
 
         self.assertEqual(plan_response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(
+            plan_response.data["salary_type"],
+            CompensationPlan.SalaryType.MONTHLY_FIXED,
+        )
 
         payroll_response = client.post(
             reverse("payroll-run-list"),
@@ -107,6 +114,75 @@ class EmployeePayrollApiTests(TestCase):
         self.assertEqual(payroll_response.data["deductions_total"], "10.00")
         self.assertEqual(payroll_response.data["net_total"], "915.00")
 
+    def test_payroll_run_detail_returns_employee_lines(self):
+        employee = Employee.objects.create(full_name="سارة أحمد")
+        plan = CompensationPlan.objects.create(
+            employee=employee,
+            pay_type=CompensationPlan.PayType.MONTHLY_SALARY,
+            salary_type=CompensationPlan.SalaryType.MONTHLY_FIXED_PLUS_SALES_COMMISSION,
+            amount=Decimal("900.00"),
+            commission_percent=Decimal("10.00"),
+        )
+        payroll = PayrollRun.objects.create(
+            period_start=timezone.localdate().replace(day=1),
+            period_end=timezone.localdate(),
+            notes="Monthly draft",
+        )
+        line = payroll.lines.create(
+            employee=employee,
+            compensation_plan=plan,
+            units=Decimal("1.00"),
+        )
+        line.adjustments.create(
+            direction=PayrollAdjustment.Direction.ADDITION,
+            adjustment_type=PayrollAdjustment.AdjustmentType.COMMISSION,
+            amount=Decimal("20.00"),
+            notes="10.00% commission on 200.00 sales",
+        )
+        payroll.recalculate(save_lines=True)
+        payroll.save()
+
+        response = self.authenticated_client(self.accountant).get(
+            reverse("payroll-run-detail", args=[payroll.pk])
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["line_count"], 1)
+        self.assertEqual(response.data["gross_total"], "900.00")
+        self.assertEqual(response.data["additions_total"], "20.00")
+        self.assertEqual(response.data["net_total"], "920.00")
+        self.assertEqual(response.data["lines"][0]["employee_name"], "سارة أحمد")
+        self.assertEqual(
+            response.data["lines"][0]["salary_type"],
+            CompensationPlan.SalaryType.MONTHLY_FIXED_PLUS_SALES_COMMISSION,
+        )
+        self.assertEqual(
+            response.data["lines"][0]["adjustments"][0]["adjustment_type"],
+            PayrollAdjustment.AdjustmentType.COMMISSION,
+        )
+
+    def test_payroll_run_list_paginates_with_stable_ordering(self):
+        older = PayrollRun.objects.create(
+            period_start=timezone.localdate() - timedelta(days=60),
+            period_end=timezone.localdate() - timedelta(days=30),
+            net_total=Decimal("500.00"),
+        )
+        newer = PayrollRun.objects.create(
+            period_start=timezone.localdate() - timedelta(days=29),
+            period_end=timezone.localdate(),
+            net_total=Decimal("700.00"),
+        )
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", UnorderedObjectListWarning)
+            response = self.authenticated_client(self.accountant).get(
+                reverse("payroll-run-list")
+            )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["results"][0]["id"], newer.pk)
+        self.assertEqual(response.data["results"][1]["id"], older.pk)
+
     def test_employee_user_link_must_be_unique(self):
         Employee.objects.create(full_name="موظف مرتبط", user=self.cashier)
 
@@ -131,6 +207,7 @@ class EmployeePayrollApiTests(TestCase):
         plan = CompensationPlan.objects.create(
             employee=employee,
             pay_type=CompensationPlan.PayType.MONTHLY_SALARY,
+            salary_type=CompensationPlan.SalaryType.MONTHLY_FIXED_PLUS_SALES_COMMISSION,
             amount=Decimal("900.00"),
             commission_percent=Decimal("10.00"),
         )
@@ -161,12 +238,113 @@ class EmployeePayrollApiTests(TestCase):
         self.assertEqual(line.net_amount, Decimal("920.00"))
         self.assertEqual(payroll.net_total, Decimal("920.00"))
 
+    def test_monthly_payroll_draft_uses_commission_only_salary(self):
+        employee = Employee.objects.create(
+            full_name="مندوب عمولة",
+            user=self.cashier,
+        )
+        CompensationPlan.objects.create(
+            employee=employee,
+            pay_type=CompensationPlan.PayType.COMMISSION,
+            salary_type=CompensationPlan.SalaryType.SALES_COMMISSION_ONLY,
+            amount=Decimal("0.00"),
+            commission_percent=Decimal("12.50"),
+        )
+        session = RegisterSession.objects.create(
+            owner=self.cashier,
+            owner_key=f"user:{self.cashier.pk}",
+        )
+        Order.objects.create(
+            register_session=session,
+            status=Order.Status.PAID,
+            subtotal=Decimal("400.00"),
+            total=Decimal("400.00"),
+        )
+        today = timezone.localdate()
+
+        payroll, created = draft_monthly_payroll_run(
+            period_start=today.replace(day=1),
+            period_end=today,
+        )
+
+        self.assertTrue(created)
+        line = payroll.lines.get()
+        self.assertEqual(line.gross_amount, Decimal("0.00"))
+        self.assertEqual(line.additions_amount, Decimal("50.00"))
+        self.assertEqual(line.net_amount, Decimal("50.00"))
+        self.assertEqual(payroll.net_total, Decimal("50.00"))
+
+    def test_compensation_plan_salary_type_validation(self):
+        employee = Employee.objects.create(full_name="تحقق الراتب")
+        client = self.authenticated_client(self.accountant)
+        invalid_cases = [
+            {
+                "salary_type": CompensationPlan.SalaryType.MONTHLY_FIXED,
+                "amount": "800.00",
+                "commission_percent": "5.00",
+                "error_field": "commission_percent",
+            },
+            {
+                "salary_type": CompensationPlan.SalaryType.SALES_COMMISSION_ONLY,
+                "amount": "100.00",
+                "commission_percent": "5.00",
+                "error_field": "amount",
+            },
+            {
+                "salary_type": CompensationPlan.SalaryType.MONTHLY_FIXED_PLUS_SALES_COMMISSION,
+                "amount": "800.00",
+                "commission_percent": "0.00",
+                "error_field": "commission_percent",
+            },
+        ]
+
+        for payload in invalid_cases:
+            error_field = payload.pop("error_field")
+            response = client.post(
+                reverse("compensation-plan-list"),
+                {
+                    "employee": employee.pk,
+                    **payload,
+                },
+                format="json",
+            )
+
+            self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+            self.assertIn(error_field, response.data)
+
+    def test_monthly_payroll_draft_skips_manual_and_expired_plans(self):
+        daily_employee = Employee.objects.create(full_name="عامل يومي")
+        expired_employee = Employee.objects.create(full_name="راتب منتهي")
+        today = timezone.localdate()
+        CompensationPlan.objects.create(
+            employee=daily_employee,
+            pay_type=CompensationPlan.PayType.DAILY_RATE,
+            amount=Decimal("50.00"),
+        )
+        CompensationPlan.objects.create(
+            employee=expired_employee,
+            pay_type=CompensationPlan.PayType.MONTHLY_SALARY,
+            salary_type=CompensationPlan.SalaryType.MONTHLY_FIXED,
+            amount=Decimal("700.00"),
+            effective_from=today - timedelta(days=40),
+            effective_to=today - timedelta(days=1),
+        )
+
+        payroll, created = draft_monthly_payroll_run(
+            period_start=today.replace(day=1),
+            period_end=today,
+        )
+
+        self.assertFalse(created)
+        self.assertIsNone(payroll)
+
     def test_monthly_payroll_draft_is_idempotent_for_period(self):
         Employee.objects.create(full_name="موظف ثابت")
         employee = Employee.objects.get(full_name="موظف ثابت")
         CompensationPlan.objects.create(
             employee=employee,
             pay_type=CompensationPlan.PayType.MONTHLY_SALARY,
+            salary_type=CompensationPlan.SalaryType.MONTHLY_FIXED,
             amount=Decimal("500.00"),
         )
         today = timezone.localdate()
@@ -197,6 +375,7 @@ class EmployeePayrollApiTests(TestCase):
         CompensationPlan.objects.create(
             employee=employee,
             pay_type=CompensationPlan.PayType.MONTHLY_SALARY,
+            salary_type=CompensationPlan.SalaryType.MONTHLY_FIXED,
             amount=Decimal("700.00"),
         )
         today = timezone.localdate()

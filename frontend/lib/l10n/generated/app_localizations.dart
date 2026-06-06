@@ -10241,6 +10241,27 @@ abstract class AppLocalizations {
   /// **'{baseLabel} + {percent}% مبيعات'**
   String employeePayPlanWithCommissionLabel(String baseLabel, String percent);
 
+  /// Active employee monthly fixed salary label.
+  ///
+  /// In ar, this message translates to:
+  /// **'راتب شهري ثابت - {amount}'**
+  String employeeMonthlyFixedPlanLabel(String amount);
+
+  /// Active employee commission-only salary label.
+  ///
+  /// In ar, this message translates to:
+  /// **'عمولة مبيعات فقط - {percent}%'**
+  String employeeCommissionOnlyPlanLabel(String percent);
+
+  /// Active employee monthly fixed plus sales commission salary label.
+  ///
+  /// In ar, this message translates to:
+  /// **'راتب شهري ثابت {amount} + {percent}% مبيعات'**
+  String employeeMonthlyFixedPlusCommissionPlanLabel(
+    String amount,
+    String percent,
+  );
+
   /// No description provided for @employeeNoDetails.
   ///
   /// In ar, this message translates to:
@@ -10276,6 +10297,258 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'{start} إلى {end}'**
   String payrollPeriodSubtitle(String start, String end);
+
+  /// No description provided for @payrollRunDetailsTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'عرض تفاصيل المسير'**
+  String get payrollRunDetailsTooltip;
+
+  /// Payroll run details sheet title.
+  ///
+  /// In ar, this message translates to:
+  /// **'تفاصيل مسير {runNumber}'**
+  String payrollRunDetailsTitle(String runNumber);
+
+  /// No description provided for @payrollRunDetailsLoadError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر تحميل تفاصيل مسير الرواتب.'**
+  String get payrollRunDetailsLoadError;
+
+  /// No description provided for @payrollRunSummarySection.
+  ///
+  /// In ar, this message translates to:
+  /// **'ملخص المسير'**
+  String get payrollRunSummarySection;
+
+  /// No description provided for @payrollRunEmployeesSection.
+  ///
+  /// In ar, this message translates to:
+  /// **'الموظفون في المسير'**
+  String get payrollRunEmployeesSection;
+
+  /// No description provided for @payrollRunGrossTotalLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الإجمالي الأساسي'**
+  String get payrollRunGrossTotalLabel;
+
+  /// No description provided for @payrollRunAdditionsTotalLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الإضافات'**
+  String get payrollRunAdditionsTotalLabel;
+
+  /// No description provided for @payrollRunDeductionsTotalLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الخصومات'**
+  String get payrollRunDeductionsTotalLabel;
+
+  /// No description provided for @payrollRunNetTotalLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الصافي'**
+  String get payrollRunNetTotalLabel;
+
+  /// No description provided for @payrollRunPeriodLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الفترة'**
+  String get payrollRunPeriodLabel;
+
+  /// No description provided for @payrollRunPaymentDateLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'تاريخ الدفع'**
+  String get payrollRunPaymentDateLabel;
+
+  /// No description provided for @payrollRunNotesLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الملاحظات'**
+  String get payrollRunNotesLabel;
+
+  /// No description provided for @payrollRunNoNotes.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد ملاحظات'**
+  String get payrollRunNoNotes;
+
+  /// No description provided for @payrollRunCreatedAtLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'أُنشئ في'**
+  String get payrollRunCreatedAtLabel;
+
+  /// No description provided for @payrollRunApprovedByLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'اعتمده'**
+  String get payrollRunApprovedByLabel;
+
+  /// No description provided for @payrollRunPaidByLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'سجله كمدفوع'**
+  String get payrollRunPaidByLabel;
+
+  /// Payroll actor and timestamp detail.
+  ///
+  /// In ar, this message translates to:
+  /// **'{actor} - {date}'**
+  String payrollRunActorWithDate(String actor, String date);
+
+  /// No description provided for @payrollRunNoEmployees.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد بنود موظفين في هذا المسير.'**
+  String get payrollRunNoEmployees;
+
+  /// No description provided for @payrollLineManualPayLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'أجر يدوي'**
+  String get payrollLineManualPayLabel;
+
+  /// Fallback payroll employee label.
+  ///
+  /// In ar, this message translates to:
+  /// **'موظف #{id}'**
+  String payrollEmployeeFallbackLabel(int id);
+
+  /// No description provided for @payrollLineUnitsLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الوحدات'**
+  String get payrollLineUnitsLabel;
+
+  /// No description provided for @payrollLineRateLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الأجر'**
+  String get payrollLineRateLabel;
+
+  /// No description provided for @payrollLineGrossLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الأساسي'**
+  String get payrollLineGrossLabel;
+
+  /// No description provided for @payrollLineAdditionsLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الإضافات'**
+  String get payrollLineAdditionsLabel;
+
+  /// No description provided for @payrollLineDeductionsLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الخصومات'**
+  String get payrollLineDeductionsLabel;
+
+  /// No description provided for @payrollLineNetLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الصافي'**
+  String get payrollLineNetLabel;
+
+  /// No description provided for @payrollLineDescriptionLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الوصف'**
+  String get payrollLineDescriptionLabel;
+
+  /// No description provided for @payrollLineNotesLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'ملاحظات البند'**
+  String get payrollLineNotesLabel;
+
+  /// No description provided for @payrollLineAdjustmentsLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'التعديلات'**
+  String get payrollLineAdjustmentsLabel;
+
+  /// Compact payroll line amount detail.
+  ///
+  /// In ar, this message translates to:
+  /// **'{label}: {value}'**
+  String payrollLineAmountDetail(String label, String value);
+
+  /// Payroll adjustment direction and type label.
+  ///
+  /// In ar, this message translates to:
+  /// **'{direction} - {type}'**
+  String payrollAdjustmentDetailLabel(String direction, String type);
+
+  /// Payroll adjustment amount with notes.
+  ///
+  /// In ar, this message translates to:
+  /// **'{amount} - {notes}'**
+  String payrollAdjustmentAmountWithNotes(String amount, String notes);
+
+  /// No description provided for @payrollAdjustmentAddition.
+  ///
+  /// In ar, this message translates to:
+  /// **'إضافة'**
+  String get payrollAdjustmentAddition;
+
+  /// No description provided for @payrollAdjustmentDeduction.
+  ///
+  /// In ar, this message translates to:
+  /// **'خصم'**
+  String get payrollAdjustmentDeduction;
+
+  /// No description provided for @payrollAdjustmentBonus.
+  ///
+  /// In ar, this message translates to:
+  /// **'مكافأة'**
+  String get payrollAdjustmentBonus;
+
+  /// No description provided for @payrollAdjustmentCommission.
+  ///
+  /// In ar, this message translates to:
+  /// **'عمولة'**
+  String get payrollAdjustmentCommission;
+
+  /// No description provided for @payrollAdjustmentOvertime.
+  ///
+  /// In ar, this message translates to:
+  /// **'وقت إضافي'**
+  String get payrollAdjustmentOvertime;
+
+  /// No description provided for @payrollAdjustmentReimbursement.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعويض'**
+  String get payrollAdjustmentReimbursement;
+
+  /// No description provided for @payrollAdjustmentAdvance.
+  ///
+  /// In ar, this message translates to:
+  /// **'سلفة'**
+  String get payrollAdjustmentAdvance;
+
+  /// No description provided for @payrollAdjustmentAbsence.
+  ///
+  /// In ar, this message translates to:
+  /// **'غياب'**
+  String get payrollAdjustmentAbsence;
+
+  /// No description provided for @payrollAdjustmentPenalty.
+  ///
+  /// In ar, this message translates to:
+  /// **'جزاء'**
+  String get payrollAdjustmentPenalty;
+
+  /// No description provided for @payrollAdjustmentOther.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعديل آخر'**
+  String get payrollAdjustmentOther;
 
   /// No description provided for @approvePayrollRunTooltip.
   ///
@@ -10487,6 +10760,48 @@ abstract class AppLocalizations {
   /// **'يبدأ من'**
   String get payEffectiveFromField;
 
+  /// No description provided for @salaryTypeField.
+  ///
+  /// In ar, this message translates to:
+  /// **'نوع الراتب'**
+  String get salaryTypeField;
+
+  /// No description provided for @salaryTypeMonthlyFixed.
+  ///
+  /// In ar, this message translates to:
+  /// **'راتب شهري ثابت'**
+  String get salaryTypeMonthlyFixed;
+
+  /// No description provided for @salaryTypeSalesCommissionOnly.
+  ///
+  /// In ar, this message translates to:
+  /// **'عمولة مبيعات فقط'**
+  String get salaryTypeSalesCommissionOnly;
+
+  /// No description provided for @salaryTypeMonthlyFixedPlusSalesCommission.
+  ///
+  /// In ar, this message translates to:
+  /// **'راتب شهري + عمولة مبيعات'**
+  String get salaryTypeMonthlyFixedPlusSalesCommission;
+
+  /// No description provided for @salaryTypeMonthlyFixedHelper.
+  ///
+  /// In ar, this message translates to:
+  /// **'يدفع مبلغًا ثابتًا كل شهر دون احتساب عمولة مبيعات.'**
+  String get salaryTypeMonthlyFixedHelper;
+
+  /// No description provided for @salaryTypeSalesCommissionOnlyHelper.
+  ///
+  /// In ar, this message translates to:
+  /// **'يدفع نسبة من المبيعات المدفوعة للمستخدم المرتبط بالموظف فقط.'**
+  String get salaryTypeSalesCommissionOnlyHelper;
+
+  /// No description provided for @salaryTypeMonthlyFixedPlusSalesCommissionHelper.
+  ///
+  /// In ar, this message translates to:
+  /// **'يدفع الراتب الشهري الثابت ويضيف نسبة من مبيعات المستخدم المرتبط.'**
+  String get salaryTypeMonthlyFixedPlusSalesCommissionHelper;
+
   /// No description provided for @monthlyBaseSalaryField.
   ///
   /// In ar, this message translates to:
@@ -10508,8 +10823,26 @@ abstract class AppLocalizations {
   /// No description provided for @salesCommissionPercentHelper.
   ///
   /// In ar, this message translates to:
-  /// **'تُحسب من المبيعات المدفوعة للمستخدم المرتبط بالموظف. اتركها 0 إذا لا توجد عمولة.'**
+  /// **'تُحسب من المبيعات المدفوعة للمستخدم المرتبط بالموظف.'**
   String get salesCommissionPercentHelper;
+
+  /// No description provided for @baseSalaryRequiredError.
+  ///
+  /// In ar, this message translates to:
+  /// **'أدخل راتبًا شهريًا أكبر من صفر.'**
+  String get baseSalaryRequiredError;
+
+  /// No description provided for @commissionRequiredError.
+  ///
+  /// In ar, this message translates to:
+  /// **'أدخل نسبة عمولة أكبر من صفر.'**
+  String get commissionRequiredError;
+
+  /// No description provided for @salesCommissionNeedsLinkedUserWarning.
+  ///
+  /// In ar, this message translates to:
+  /// **'عمولة المبيعات تحتاج ربط الموظف بمستخدم نقطة بيع حتى تُحسب المبيعات تلقائيًا.'**
+  String get salesCommissionNeedsLinkedUserWarning;
 
   /// No description provided for @compensationPlanActivationNote.
   ///

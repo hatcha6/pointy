@@ -159,7 +159,10 @@ class EmployeePayrollViewModel extends ChangeNotifier {
             'employees.management.compensation_plan.created',
             'employee',
             draft.employeeId,
-            {'pay_type': draft.payType.toJson()},
+            {
+              'pay_type': draft.payType.toJson(),
+              'salary_type': draft.salaryType.toJson(),
+            },
           );
           return true;
         case Error<CompensationPlan>():
@@ -235,6 +238,18 @@ class EmployeePayrollViewModel extends ChangeNotifier {
     );
   }
 
+  Future<PayrollRun?> loadPayrollRunDetail(PayrollRun run) async {
+    final result = await _repository.loadPayrollRun(run.id);
+    switch (result) {
+      case Ok<PayrollRun>(value: final detailedRun):
+        _upsertPayrollRun(detailedRun);
+        notifyListeners();
+        return detailedRun;
+      case Error<PayrollRun>():
+        return null;
+    }
+  }
+
   Future<bool> _updatePayrollRun(
     PayrollRun run,
     Future<Result<PayrollRun>> Function() action, {
@@ -244,10 +259,7 @@ class EmployeePayrollViewModel extends ChangeNotifier {
       final result = await action();
       switch (result) {
         case Ok<PayrollRun>(value: final updatedRun):
-          _payrollRuns = [
-            for (final existing in _payrollRuns)
-              if (existing.id == updatedRun.id) updatedRun else existing,
-          ];
+          _upsertPayrollRun(updatedRun);
           _track(eventName, 'payroll_run', updatedRun.id, {
             'previous_status': run.status.name,
             'new_status': updatedRun.status.name,
@@ -269,6 +281,18 @@ class EmployeePayrollViewModel extends ChangeNotifier {
     _isSaving = false;
     notifyListeners();
     return saved;
+  }
+
+  void _upsertPayrollRun(PayrollRun run) {
+    final exists = _payrollRuns.any((existing) => existing.id == run.id);
+    if (exists) {
+      _payrollRuns = [
+        for (final existing in _payrollRuns)
+          if (existing.id == run.id) run else existing,
+      ];
+    } else {
+      _payrollRuns = [run, ..._payrollRuns];
+    }
   }
 
   void _track(

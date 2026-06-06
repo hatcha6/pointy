@@ -35,6 +35,7 @@ class EmployeeAdmin(admin.ModelAdmin):
 class CompensationPlanAdmin(admin.ModelAdmin):
     list_display = (
         "employee",
+        "salary_type",
         "pay_type",
         "amount",
         "commission_percent",
@@ -42,7 +43,7 @@ class CompensationPlanAdmin(admin.ModelAdmin):
         "effective_from",
         "is_active",
     )
-    list_filter = ("pay_type", "is_active", "currency")
+    list_filter = ("salary_type", "pay_type", "is_active", "currency")
     search_fields = ("employee__full_name", "employee__employee_number", "notes")
 
 
@@ -83,6 +84,10 @@ class PayrollRunAdmin(admin.ModelAdmin):
 @admin.register(PayrollLine)
 class PayrollLineAdmin(admin.ModelAdmin):
     list_display = ("payroll_run", "employee", "units", "rate", "net_amount")
-    list_filter = ("payroll_run__status", "compensation_plan__pay_type")
+    list_filter = (
+        "payroll_run__status",
+        "compensation_plan__salary_type",
+        "compensation_plan__pay_type",
+    )
     search_fields = ("employee__full_name", "employee__employee_number", "description")
     inlines = [PayrollAdjustmentInline]

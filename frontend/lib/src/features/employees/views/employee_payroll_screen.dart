@@ -364,6 +364,7 @@ class _PayrollRunList extends StatelessWidget {
           leading: const CircleAvatar(child: Icon(Icons.payments_outlined)),
           title: run.runNumber,
           subtitle: _payrollSubtitle(l10n, run),
+          onTap: () => _showPayrollRunDetails(context, run),
           trailing: Text(
             formatMoney(run.netTotal),
             style: Theme.of(context).textTheme.titleMedium,
@@ -379,6 +380,11 @@ class _PayrollRunList extends StatelessWidget {
             ),
           ],
           actions: [
+            IconButton(
+              tooltip: l10n.payrollRunDetailsTooltip,
+              onPressed: () => _showPayrollRunDetails(context, run),
+              icon: const Icon(Icons.visibility_outlined),
+            ),
             IconButton(
               tooltip: l10n.approvePayrollRunTooltip,
               onPressed:
@@ -405,14 +411,450 @@ class _PayrollRunList extends StatelessWidget {
     );
   }
 
+  Future<void> _showPayrollRunDetails(BuildContext context, PayrollRun run) {
+    return showAdaptiveModalBottomSheet<void>(
+      context: context,
+      size: AdaptiveModalSize.expanded,
+      maxHeightFactor: 0.94,
+      builder: (sheetContext) => _PayrollRunDetailSheet(
+        viewModel: viewModel,
+        capabilities: capabilities,
+        initialRun: run,
+      ),
+    );
+  }
+
   String _payrollSubtitle(AppLocalizations l10n, PayrollRun run) {
-    final start = run.periodStart == null
-        ? l10n.missingDateLabel
-        : formatDate(run.periodStart!);
-    final end = run.periodEnd == null
-        ? l10n.missingDateLabel
-        : formatDate(run.periodEnd!);
-    return l10n.payrollPeriodSubtitle(start, end);
+    return _payrollPeriodLabel(l10n, run);
+  }
+}
+
+class _PayrollRunDetailSheet extends StatefulWidget {
+  const _PayrollRunDetailSheet({
+    required this.viewModel,
+    required this.capabilities,
+    required this.initialRun,
+  });
+
+  final EmployeePayrollViewModel viewModel;
+  final AuthorizationCapabilities capabilities;
+  final PayrollRun initialRun;
+
+  @override
+  State<_PayrollRunDetailSheet> createState() => _PayrollRunDetailSheetState();
+}
+
+class _PayrollRunDetailSheetState extends State<_PayrollRunDetailSheet> {
+  late Future<PayrollRun?> _future;
+  PayrollRun? _run;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = _load();
+  }
+
+  Future<PayrollRun?> _load() async {
+    final run = await widget.viewModel.loadPayrollRunDetail(widget.initialRun);
+    if (mounted && run != null) {
+      setState(() {
+        _run = run;
+      });
+    }
+    return run;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final spacing = AdaptiveSpacing.of(context);
+    final activeRun = _run ?? widget.initialRun;
+
+    return Padding(
+      padding: EdgeInsets.only(
+        left: 16,
+        right: 16,
+        top: 16,
+        bottom: MediaQuery.viewInsetsOf(context).bottom + 16,
+      ),
+      child: FutureBuilder<PayrollRun?>(
+        future: _future,
+        builder: (context, snapshot) {
+          final loadedRun = snapshot.data;
+          return SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ListenableBuilder(
+                  listenable: widget.viewModel,
+                  builder: (context, _) {
+                    return PointySectionHeader(
+                      title: l10n.payrollRunDetailsTitle(activeRun.runNumber),
+                      subtitle: _payrollPeriodLabel(l10n, activeRun),
+                      leading: const Icon(Icons.receipt_long_outlined),
+                      trailing: PointyStatusPill(
+                        label: _payrollStatusLabel(l10n, activeRun.status),
+                        icon: Icons.circle_outlined,
+                      ),
+                      actions: [
+                        FilledButton.icon(
+                          onPressed:
+                              widget.capabilities.canManagePayroll &&
+                                  activeRun.status.canApprove &&
+                                  !widget.viewModel.isSaving
+                              ? _approveRun
+                              : null,
+                          icon: const Icon(Icons.verified_outlined),
+                          label: Text(l10n.approvePayrollRunTooltip),
+                        ),
+                        OutlinedButton.icon(
+                          onPressed:
+                              widget.capabilities.canManagePayroll &&
+                                  activeRun.status.canPay &&
+                                  !widget.viewModel.isSaving
+                              ? _markRunPaid
+                              : null,
+                          icon: const Icon(Icons.price_check_outlined),
+                          label: Text(l10n.markPayrollRunPaidTooltip),
+                        ),
+                      ],
+                    );
+                  },
+                ),
+                SizedBox(height: spacing.sm),
+                if (snapshot.connectionState == ConnectionState.waiting &&
+                    loadedRun == null)
+                  const PointyLoadingArea(minHeight: 260)
+                else if (loadedRun == null)
+                  PointyErrorState(
+                    title: l10n.payrollRunDetailsLoadError,
+                    icon: Icons.warning_amber_outlined,
+                  )
+                else
+                  _PayrollRunDetailContent(run: loadedRun),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Future<void> _approveRun() async {
+    final run = _run ?? widget.initialRun;
+    final saved = await widget.viewModel.approvePayrollRun(run);
+    if (saved && mounted) {
+      setState(() {
+        _future = _load();
+      });
+    }
+  }
+
+  Future<void> _markRunPaid() async {
+    final run = _run ?? widget.initialRun;
+    final saved = await widget.viewModel.markPayrollRunPaid(run);
+    if (saved && mounted) {
+      setState(() {
+        _future = _load();
+      });
+    }
+  }
+}
+
+class _PayrollRunDetailContent extends StatelessWidget {
+  const _PayrollRunDetailContent({required this.run});
+
+  final PayrollRun run;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final spacing = AdaptiveSpacing.of(context);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        PointyMetricGrid(
+          maxColumns: 4,
+          minTileWidth: 180,
+          metrics: [
+            PointyMetricGridItem(
+              label: l10n.payrollRunGrossTotalLabel,
+              value: formatMoney(run.grossTotal),
+              icon: Icons.account_balance_wallet_outlined,
+            ),
+            PointyMetricGridItem(
+              label: l10n.payrollRunAdditionsTotalLabel,
+              value: formatMoney(run.additionsTotal),
+              icon: Icons.add_circle_outline,
+            ),
+            PointyMetricGridItem(
+              label: l10n.payrollRunDeductionsTotalLabel,
+              value: formatMoney(run.deductionsTotal),
+              icon: Icons.remove_circle_outline,
+            ),
+            PointyMetricGridItem(
+              label: l10n.payrollRunNetTotalLabel,
+              value: formatMoney(run.netTotal),
+              icon: Icons.payments_outlined,
+            ),
+          ],
+        ),
+        SizedBox(height: spacing.md),
+        PointyDetailSection(
+          title: l10n.payrollRunSummarySection,
+          icon: Icons.summarize_outlined,
+          child: Column(
+            children: [
+              PointyDetailRow(
+                label: l10n.payrollRunPeriodLabel,
+                value: _payrollPeriodLabel(l10n, run),
+              ),
+              PointyDetailRow(
+                label: l10n.payrollRunEmployeesSection,
+                value: l10n.payrollLineCount(run.lineCount),
+              ),
+              PointyDetailRow(
+                label: l10n.payrollRunPaymentDateLabel,
+                value: run.paymentDate == null
+                    ? l10n.missingDateLabel
+                    : formatDate(run.paymentDate!),
+              ),
+              PointyDetailRow(
+                label: l10n.payrollRunCreatedAtLabel,
+                value: run.createdAt == null
+                    ? l10n.missingDateLabel
+                    : formatDateTime(run.createdAt!),
+              ),
+              if (run.approvedAt != null)
+                PointyDetailRow(
+                  label: l10n.payrollRunApprovedByLabel,
+                  value: _actorWithDate(
+                    l10n,
+                    run.approvedByUsername,
+                    run.approvedAt!,
+                  ),
+                ),
+              if (run.paidAt != null)
+                PointyDetailRow(
+                  label: l10n.payrollRunPaidByLabel,
+                  value: _actorWithDate(l10n, run.paidByUsername, run.paidAt!),
+                ),
+              PointyDetailRow(
+                label: l10n.payrollRunNotesLabel,
+                value: run.notes.trim().isEmpty
+                    ? l10n.payrollRunNoNotes
+                    : run.notes.trim(),
+              ),
+            ],
+          ),
+        ),
+        SizedBox(height: spacing.md),
+        PointyDetailSection(
+          title: l10n.payrollRunEmployeesSection,
+          icon: Icons.groups_outlined,
+          child: run.lines.isEmpty
+              ? PointyEmptyState(
+                  icon: Icons.groups_outlined,
+                  title: l10n.payrollRunNoEmployees,
+                )
+              : Column(
+                  children: [
+                    for (final line in run.lines) ...[
+                      _PayrollLineCard(line: line),
+                      SizedBox(height: spacing.sm),
+                    ],
+                  ],
+                ),
+        ),
+      ],
+    );
+  }
+
+  String _actorWithDate(AppLocalizations l10n, String actor, DateTime date) {
+    final formattedDate = formatDateTime(date);
+    if (actor.trim().isEmpty) {
+      return formattedDate;
+    }
+    return l10n.payrollRunActorWithDate(actor.trim(), formattedDate);
+  }
+}
+
+class _PayrollLineCard extends StatelessWidget {
+  const _PayrollLineCard({required this.line});
+
+  final PayrollLine line;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final spacing = AdaptiveSpacing.of(context);
+    final theme = Theme.of(context);
+
+    return Card(
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: spacing.compactPadding,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              children: [
+                CircleAvatar(child: Text(_employeeInitial(l10n, line))),
+                SizedBox(width: spacing.sm),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        _employeeLineTitle(l10n, line),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      SizedBox(height: spacing.xs),
+                      Text(
+                        _employeeLineSubtitle(l10n, line),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodySmall,
+                      ),
+                    ],
+                  ),
+                ),
+                SizedBox(width: spacing.sm),
+                Text(
+                  formatMoney(line.netAmount),
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+            ),
+            SizedBox(height: spacing.sm),
+            Wrap(
+              spacing: spacing.sm,
+              runSpacing: spacing.sm,
+              children: [
+                _PayrollAmountChip(
+                  label: l10n.payrollLineUnitsLabel,
+                  value: line.units.toStringAsFixed(2),
+                ),
+                _PayrollAmountChip(
+                  label: l10n.payrollLineRateLabel,
+                  value: formatMoney(line.rate),
+                ),
+                _PayrollAmountChip(
+                  label: l10n.payrollLineGrossLabel,
+                  value: formatMoney(line.grossAmount),
+                ),
+                _PayrollAmountChip(
+                  label: l10n.payrollLineAdditionsLabel,
+                  value: formatMoney(line.additionsAmount),
+                ),
+                _PayrollAmountChip(
+                  label: l10n.payrollLineDeductionsLabel,
+                  value: formatMoney(line.deductionsAmount),
+                ),
+              ],
+            ),
+            if (line.description.trim().isNotEmpty ||
+                line.notes.trim().isNotEmpty ||
+                line.adjustments.isNotEmpty) ...[
+              Divider(height: spacing.lg),
+              if (line.description.trim().isNotEmpty)
+                PointyDetailRow(
+                  label: l10n.payrollLineDescriptionLabel,
+                  value: line.description.trim(),
+                ),
+              if (line.notes.trim().isNotEmpty)
+                PointyDetailRow(
+                  label: l10n.payrollLineNotesLabel,
+                  value: line.notes.trim(),
+                ),
+              if (line.adjustments.isNotEmpty) ...[
+                Align(
+                  alignment: AlignmentDirectional.centerStart,
+                  child: Text(
+                    l10n.payrollLineAdjustmentsLabel,
+                    style: theme.textTheme.labelLarge,
+                  ),
+                ),
+                SizedBox(height: spacing.xs),
+                for (final adjustment in line.adjustments)
+                  _PayrollAdjustmentRow(adjustment: adjustment),
+              ],
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _employeeInitial(AppLocalizations l10n, PayrollLine line) {
+    final title = _employeeLineTitle(l10n, line).trim();
+    return title.isEmpty ? '#' : title.characters.first;
+  }
+
+  String _employeeLineTitle(AppLocalizations l10n, PayrollLine line) {
+    return line.employeeName.trim().isEmpty
+        ? l10n.payrollEmployeeFallbackLabel(line.employeeId)
+        : line.employeeName.trim();
+  }
+
+  String _employeeLineSubtitle(AppLocalizations l10n, PayrollLine line) {
+    final parts = [
+      if (line.employeeNumber.trim().isNotEmpty) line.employeeNumber.trim(),
+      _payrollLinePayLabel(l10n, line),
+    ];
+    return parts.join(' - ');
+  }
+}
+
+class _PayrollAmountChip extends StatelessWidget {
+  const _PayrollAmountChip({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    return Chip(
+      label: Text(l10n.payrollLineAmountDetail(label, value)),
+      visualDensity: VisualDensity.compact,
+    );
+  }
+}
+
+class _PayrollAdjustmentRow extends StatelessWidget {
+  const _PayrollAdjustmentRow({required this.adjustment});
+
+  final PayrollAdjustment adjustment;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final direction = _payrollAdjustmentDirectionLabel(
+      l10n,
+      adjustment.direction,
+    );
+    final type = _payrollAdjustmentTypeLabel(l10n, adjustment.adjustmentType);
+    final notes = adjustment.notes.trim();
+
+    final amount = formatMoney(adjustment.amount);
+    return PointyDetailRow(
+      label: l10n.payrollAdjustmentDetailLabel(direction, type),
+      value: notes.isEmpty
+          ? amount
+          : l10n.payrollAdjustmentAmountWithNotes(amount, notes),
+    );
   }
 }
 
@@ -614,6 +1056,8 @@ class _CompensationPlanForm extends StatefulWidget {
 class _CompensationPlanFormState extends State<_CompensationPlanForm> {
   final _baseSalaryController = TextEditingController();
   final _commissionController = TextEditingController(text: '0.00');
+  SalaryType _salaryType = SalaryType.monthlyFixed;
+  bool _submitted = false;
 
   @override
   void dispose() {
@@ -628,25 +1072,66 @@ class _CompensationPlanFormState extends State<_CompensationPlanForm> {
     return _SheetFrame(
       title: l10n.addCompensationPlanTitle(widget.employee.fullName),
       children: [
-        TextField(
-          controller: _baseSalaryController,
-          decoration: InputDecoration(
-            labelText: l10n.monthlyBaseSalaryField,
-            helperText: l10n.monthlyBaseSalaryHelper,
-          ),
-          keyboardType: TextInputType.number,
-          inputFormatters: [DecimalTextInputFormatter()],
+        DropdownButtonFormField<SalaryType>(
+          initialValue: _salaryType,
+          decoration: InputDecoration(labelText: l10n.salaryTypeField),
+          items: SalaryType.values
+              .map(
+                (type) => DropdownMenuItem(
+                  value: type,
+                  child: Text(_salaryTypeLabel(l10n, type)),
+                ),
+              )
+              .toList(),
+          onChanged: widget.viewModel.isSaving
+              ? null
+              : (value) {
+                  if (value == null) {
+                    return;
+                  }
+                  setState(() {
+                    _salaryType = value;
+                  });
+                },
         ),
-        TextField(
-          controller: _commissionController,
-          decoration: InputDecoration(
-            labelText: l10n.salesCommissionPercentField,
-            helperText: l10n.salesCommissionPercentHelper,
-            suffixText: '%',
-          ),
-          keyboardType: TextInputType.number,
-          inputFormatters: [DecimalTextInputFormatter()],
+        PointyInlineMessage(
+          message: _salaryTypeHelper(l10n, _salaryType),
+          icon: Icons.payments_outlined,
+          compact: true,
         ),
+        if (_requiresBaseSalary)
+          TextField(
+            controller: _baseSalaryController,
+            decoration: InputDecoration(
+              labelText: l10n.monthlyBaseSalaryField,
+              helperText: l10n.monthlyBaseSalaryHelper,
+              errorText: _submitted && !_hasPositiveValue(_baseSalaryController)
+                  ? l10n.baseSalaryRequiredError
+                  : null,
+            ),
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            inputFormatters: [DecimalTextInputFormatter()],
+          ),
+        if (_requiresCommission)
+          TextField(
+            controller: _commissionController,
+            decoration: InputDecoration(
+              labelText: l10n.salesCommissionPercentField,
+              helperText: l10n.salesCommissionPercentHelper,
+              errorText: _submitted && !_hasPositiveValue(_commissionController)
+                  ? l10n.commissionRequiredError
+                  : null,
+              suffixText: '%',
+            ),
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            inputFormatters: [DecimalTextInputFormatter()],
+          ),
+        if (_requiresCommission && !widget.employee.hasSystemAccess)
+          PointyInlineMessage(
+            message: l10n.salesCommissionNeedsLinkedUserWarning,
+            icon: Icons.link_off_outlined,
+            compact: true,
+          ),
         PointyInlineMessage(
           message: l10n.compensationPlanActivationNote,
           icon: Icons.info_outline,
@@ -662,21 +1147,47 @@ class _CompensationPlanFormState extends State<_CompensationPlanForm> {
   }
 
   Future<void> _submit() async {
-    if (_baseSalaryController.text.trim().isEmpty) {
+    setState(() {
+      _submitted = true;
+    });
+    if (_hasInputErrors) {
       return;
     }
     final saved = await widget.viewModel.createCompensationPlan(
       CompensationPlanDraft(
         employeeId: widget.employee.id,
-        amount: _baseSalaryController.text.trim(),
-        commissionPercent: _commissionController.text.trim().isEmpty
-            ? '0.00'
-            : _commissionController.text.trim(),
+        salaryType: _salaryType,
+        amount: _requiresBaseSalary
+            ? _baseSalaryController.text.trim()
+            : '0.00',
+        commissionPercent: _requiresCommission
+            ? _commissionController.text.trim()
+            : '0.00',
       ),
     );
     if (saved && mounted) {
       widget.onCreated();
     }
+  }
+
+  bool get _requiresBaseSalary {
+    return _salaryType == SalaryType.monthlyFixed ||
+        _salaryType == SalaryType.monthlyFixedPlusSalesCommission;
+  }
+
+  bool get _requiresCommission {
+    return _salaryType == SalaryType.salesCommissionOnly ||
+        _salaryType == SalaryType.monthlyFixedPlusSalesCommission;
+  }
+
+  bool get _hasInputErrors {
+    return (_requiresBaseSalary && !_hasPositiveValue(_baseSalaryController)) ||
+        (_requiresCommission && !_hasPositiveValue(_commissionController));
+  }
+
+  bool _hasPositiveValue(TextEditingController controller) {
+    final value = double.tryParse(controller.text.trim()) ?? 0;
+    return value > 0;
   }
 }
 
@@ -917,6 +1428,24 @@ String _employmentTypeLabel(AppLocalizations l10n, EmploymentType type) {
   };
 }
 
+String _salaryTypeLabel(AppLocalizations l10n, SalaryType type) {
+  return switch (type) {
+    SalaryType.monthlyFixed => l10n.salaryTypeMonthlyFixed,
+    SalaryType.salesCommissionOnly => l10n.salaryTypeSalesCommissionOnly,
+    SalaryType.monthlyFixedPlusSalesCommission =>
+      l10n.salaryTypeMonthlyFixedPlusSalesCommission,
+  };
+}
+
+String _salaryTypeHelper(AppLocalizations l10n, SalaryType type) {
+  return switch (type) {
+    SalaryType.monthlyFixed => l10n.salaryTypeMonthlyFixedHelper,
+    SalaryType.salesCommissionOnly => l10n.salaryTypeSalesCommissionOnlyHelper,
+    SalaryType.monthlyFixedPlusSalesCommission =>
+      l10n.salaryTypeMonthlyFixedPlusSalesCommissionHelper,
+  };
+}
+
 String _payTypeLabel(AppLocalizations l10n, PayType type) {
   return switch (type) {
     PayType.monthlySalary => l10n.payTypeMonthlySalary,
@@ -930,7 +1459,45 @@ String _payTypeLabel(AppLocalizations l10n, PayType type) {
   };
 }
 
+String _payrollPeriodLabel(AppLocalizations l10n, PayrollRun run) {
+  final start = run.periodStart == null
+      ? l10n.missingDateLabel
+      : formatDate(run.periodStart!);
+  final end = run.periodEnd == null
+      ? l10n.missingDateLabel
+      : formatDate(run.periodEnd!);
+  return l10n.payrollPeriodSubtitle(start, end);
+}
+
+String _payrollLinePayLabel(AppLocalizations l10n, PayrollLine line) {
+  final salaryType = line.salaryType;
+  if (salaryType != null) {
+    return _salaryTypeLabel(l10n, salaryType);
+  }
+  final payType = line.payType;
+  if (payType != null) {
+    return _payTypeLabel(l10n, payType);
+  }
+  return l10n.payrollLineManualPayLabel;
+}
+
 String _compensationPlanLabel(AppLocalizations l10n, CompensationPlan plan) {
+  final salaryType = plan.salaryType;
+  if (salaryType != null) {
+    return switch (salaryType) {
+      SalaryType.monthlyFixed => l10n.employeeMonthlyFixedPlanLabel(
+        formatMoney(plan.amount),
+      ),
+      SalaryType.salesCommissionOnly => l10n.employeeCommissionOnlyPlanLabel(
+        plan.commissionPercent.toStringAsFixed(2),
+      ),
+      SalaryType.monthlyFixedPlusSalesCommission =>
+        l10n.employeeMonthlyFixedPlusCommissionPlanLabel(
+          formatMoney(plan.amount),
+          plan.commissionPercent.toStringAsFixed(2),
+        ),
+    };
+  }
   final baseLabel = l10n.employeePayPlanLabel(
     _payTypeLabel(l10n, plan.payType),
     formatMoney(plan.amount),
@@ -950,5 +1517,29 @@ String _payrollStatusLabel(AppLocalizations l10n, PayrollStatus status) {
     PayrollStatus.approved => l10n.payrollStatusApproved,
     PayrollStatus.paid => l10n.payrollStatusPaid,
     PayrollStatus.voided => l10n.payrollStatusVoid,
+  };
+}
+
+String _payrollAdjustmentDirectionLabel(
+  AppLocalizations l10n,
+  String direction,
+) {
+  return switch (direction) {
+    'addition' => l10n.payrollAdjustmentAddition,
+    'deduction' => l10n.payrollAdjustmentDeduction,
+    _ => l10n.payrollAdjustmentOther,
+  };
+}
+
+String _payrollAdjustmentTypeLabel(AppLocalizations l10n, String type) {
+  return switch (type) {
+    'bonus' => l10n.payrollAdjustmentBonus,
+    'commission' => l10n.payrollAdjustmentCommission,
+    'overtime' => l10n.payrollAdjustmentOvertime,
+    'reimbursement' => l10n.payrollAdjustmentReimbursement,
+    'advance' => l10n.payrollAdjustmentAdvance,
+    'absence' => l10n.payrollAdjustmentAbsence,
+    'penalty' => l10n.payrollAdjustmentPenalty,
+    _ => l10n.payrollAdjustmentOther,
   };
 }

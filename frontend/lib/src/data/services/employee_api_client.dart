@@ -60,6 +60,17 @@ class EmployeeApiClient {
     return PayrollRunPage.fromAny(_session.decodedBody(response));
   }
 
+  Future<PayrollRun> fetchPayrollRun(int id) async {
+    final response = await _session.get('payroll-runs/$id/');
+    _session.ensureSuccess(
+      response,
+      'Payroll detail request failed with status',
+    );
+    return PayrollRun.fromJson(
+      _session.decodedBody(response) as Map<String, Object?>,
+    );
+  }
+
   Future<PayrollRun> createPayrollRun(PayrollRunDraft draft) async {
     final response = await _session.post('payroll-runs/', body: draft.toJson());
     _session.ensureSuccess(response, 'Payroll create failed with status');

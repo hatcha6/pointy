@@ -5927,6 +5927,24 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
+  String employeeMonthlyFixedPlanLabel(String amount) {
+    return 'راتب شهري ثابت - $amount';
+  }
+
+  @override
+  String employeeCommissionOnlyPlanLabel(String percent) {
+    return 'عمولة مبيعات فقط - $percent%';
+  }
+
+  @override
+  String employeeMonthlyFixedPlusCommissionPlanLabel(
+    String amount,
+    String percent,
+  ) {
+    return 'راتب شهري ثابت $amount + $percent% مبيعات';
+  }
+
+  @override
   String get employeeNoDetails => 'لا توجد تفاصيل إضافية';
 
   @override
@@ -5955,6 +5973,144 @@ class AppLocalizationsAr extends AppLocalizations {
   String payrollPeriodSubtitle(String start, String end) {
     return '$start إلى $end';
   }
+
+  @override
+  String get payrollRunDetailsTooltip => 'عرض تفاصيل المسير';
+
+  @override
+  String payrollRunDetailsTitle(String runNumber) {
+    return 'تفاصيل مسير $runNumber';
+  }
+
+  @override
+  String get payrollRunDetailsLoadError => 'تعذر تحميل تفاصيل مسير الرواتب.';
+
+  @override
+  String get payrollRunSummarySection => 'ملخص المسير';
+
+  @override
+  String get payrollRunEmployeesSection => 'الموظفون في المسير';
+
+  @override
+  String get payrollRunGrossTotalLabel => 'الإجمالي الأساسي';
+
+  @override
+  String get payrollRunAdditionsTotalLabel => 'الإضافات';
+
+  @override
+  String get payrollRunDeductionsTotalLabel => 'الخصومات';
+
+  @override
+  String get payrollRunNetTotalLabel => 'الصافي';
+
+  @override
+  String get payrollRunPeriodLabel => 'الفترة';
+
+  @override
+  String get payrollRunPaymentDateLabel => 'تاريخ الدفع';
+
+  @override
+  String get payrollRunNotesLabel => 'الملاحظات';
+
+  @override
+  String get payrollRunNoNotes => 'لا توجد ملاحظات';
+
+  @override
+  String get payrollRunCreatedAtLabel => 'أُنشئ في';
+
+  @override
+  String get payrollRunApprovedByLabel => 'اعتمده';
+
+  @override
+  String get payrollRunPaidByLabel => 'سجله كمدفوع';
+
+  @override
+  String payrollRunActorWithDate(String actor, String date) {
+    return '$actor - $date';
+  }
+
+  @override
+  String get payrollRunNoEmployees => 'لا توجد بنود موظفين في هذا المسير.';
+
+  @override
+  String get payrollLineManualPayLabel => 'أجر يدوي';
+
+  @override
+  String payrollEmployeeFallbackLabel(int id) {
+    return 'موظف #$id';
+  }
+
+  @override
+  String get payrollLineUnitsLabel => 'الوحدات';
+
+  @override
+  String get payrollLineRateLabel => 'الأجر';
+
+  @override
+  String get payrollLineGrossLabel => 'الأساسي';
+
+  @override
+  String get payrollLineAdditionsLabel => 'الإضافات';
+
+  @override
+  String get payrollLineDeductionsLabel => 'الخصومات';
+
+  @override
+  String get payrollLineNetLabel => 'الصافي';
+
+  @override
+  String get payrollLineDescriptionLabel => 'الوصف';
+
+  @override
+  String get payrollLineNotesLabel => 'ملاحظات البند';
+
+  @override
+  String get payrollLineAdjustmentsLabel => 'التعديلات';
+
+  @override
+  String payrollLineAmountDetail(String label, String value) {
+    return '$label: $value';
+  }
+
+  @override
+  String payrollAdjustmentDetailLabel(String direction, String type) {
+    return '$direction - $type';
+  }
+
+  @override
+  String payrollAdjustmentAmountWithNotes(String amount, String notes) {
+    return '$amount - $notes';
+  }
+
+  @override
+  String get payrollAdjustmentAddition => 'إضافة';
+
+  @override
+  String get payrollAdjustmentDeduction => 'خصم';
+
+  @override
+  String get payrollAdjustmentBonus => 'مكافأة';
+
+  @override
+  String get payrollAdjustmentCommission => 'عمولة';
+
+  @override
+  String get payrollAdjustmentOvertime => 'وقت إضافي';
+
+  @override
+  String get payrollAdjustmentReimbursement => 'تعويض';
+
+  @override
+  String get payrollAdjustmentAdvance => 'سلفة';
+
+  @override
+  String get payrollAdjustmentAbsence => 'غياب';
+
+  @override
+  String get payrollAdjustmentPenalty => 'جزاء';
+
+  @override
+  String get payrollAdjustmentOther => 'تعديل آخر';
 
   @override
   String get approvePayrollRunTooltip => 'اعتماد مسير الرواتب';
@@ -6067,6 +6223,31 @@ class AppLocalizationsAr extends AppLocalizations {
   String get payEffectiveFromField => 'يبدأ من';
 
   @override
+  String get salaryTypeField => 'نوع الراتب';
+
+  @override
+  String get salaryTypeMonthlyFixed => 'راتب شهري ثابت';
+
+  @override
+  String get salaryTypeSalesCommissionOnly => 'عمولة مبيعات فقط';
+
+  @override
+  String get salaryTypeMonthlyFixedPlusSalesCommission =>
+      'راتب شهري + عمولة مبيعات';
+
+  @override
+  String get salaryTypeMonthlyFixedHelper =>
+      'يدفع مبلغًا ثابتًا كل شهر دون احتساب عمولة مبيعات.';
+
+  @override
+  String get salaryTypeSalesCommissionOnlyHelper =>
+      'يدفع نسبة من المبيعات المدفوعة للمستخدم المرتبط بالموظف فقط.';
+
+  @override
+  String get salaryTypeMonthlyFixedPlusSalesCommissionHelper =>
+      'يدفع الراتب الشهري الثابت ويضيف نسبة من مبيعات المستخدم المرتبط.';
+
+  @override
   String get monthlyBaseSalaryField => 'الراتب الشهري الثابت';
 
   @override
@@ -6078,7 +6259,17 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get salesCommissionPercentHelper =>
-      'تُحسب من المبيعات المدفوعة للمستخدم المرتبط بالموظف. اتركها 0 إذا لا توجد عمولة.';
+      'تُحسب من المبيعات المدفوعة للمستخدم المرتبط بالموظف.';
+
+  @override
+  String get baseSalaryRequiredError => 'أدخل راتبًا شهريًا أكبر من صفر.';
+
+  @override
+  String get commissionRequiredError => 'أدخل نسبة عمولة أكبر من صفر.';
+
+  @override
+  String get salesCommissionNeedsLinkedUserWarning =>
+      'عمولة المبيعات تحتاج ربط الموظف بمستخدم نقطة بيع حتى تُحسب المبيعات تلقائيًا.';
 
   @override
   String get compensationPlanActivationNote =>

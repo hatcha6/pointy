@@ -222,6 +222,10 @@ class PosApiService {
     return _employees.fetchPayrollRuns(page: page, search: search);
   }
 
+  Future<PayrollRun> fetchPayrollRun(int id) {
+    return _employees.fetchPayrollRun(id);
+  }
+
   Future<PayrollRun> createPayrollRun(PayrollRunDraft draft) {
     return _employees.createPayrollRun(draft);
   }
