@@ -9,13 +9,13 @@ import '../../../data/repositories/contact_repository.dart';
 import '../../../shared/app_navigation_drawer.dart';
 import '../../../shared/authorization_guards.dart';
 import '../../../shared/components/components.dart';
-import '../../../shared/date_formatters.dart';
-import '../../../shared/formatters.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../../../shared/shell/shell.dart';
 import '../view_models/discount_management_view_model.dart';
+import 'discount_details_screen.dart';
 import 'discount_rule_query_controls.dart';
 import 'discount_rule_form.dart';
+import 'discount_rule_presenter.dart';
 
 class DiscountManagementScreen extends StatelessWidget {
   const DiscountManagementScreen({
@@ -220,6 +220,7 @@ class _DiscountManagementBody extends StatelessWidget {
                   viewModel: viewModel,
                   capabilities: capabilities,
                   onEdit: () => _openForm(context, rule),
+                  onOpenDetails: () => _openDetails(context, rule),
                 );
               },
             ),
@@ -250,6 +251,21 @@ class _DiscountManagementBody extends StatelessWidget {
       },
     );
   }
+
+  Future<void> _openDetails(BuildContext context, DiscountRule rule) {
+    return Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => DiscountDetailsScreen(
+          initialRule: rule,
+          discountRepository: viewModel.discountRepository,
+          managementViewModel: viewModel,
+          catalogRepository: catalogRepository,
+          contactRepository: contactRepository,
+          capabilities: capabilities,
+        ),
+      ),
+    );
+  }
 }
 
 class _DiscountRuleTile extends StatelessWidget {
@@ -258,12 +274,14 @@ class _DiscountRuleTile extends StatelessWidget {
     required this.viewModel,
     required this.capabilities,
     required this.onEdit,
+    required this.onOpenDetails,
   });
 
   final DiscountRule rule;
   final DiscountManagementViewModel viewModel;
   final AuthorizationCapabilities capabilities;
   final VoidCallback onEdit;
+  final VoidCallback onOpenDetails;
 
   @override
   Widget build(BuildContext context) {
@@ -273,10 +291,11 @@ class _DiscountRuleTile extends StatelessWidget {
     final canDelete = capabilities.canDeleteDiscountRule && !viewModel.isSaving;
     final facts = [
       if (rule.description.isNotEmpty) rule.description,
-      ..._ruleFacts(l10n, rule),
+      ...discountRuleFacts(l10n, rule),
     ];
 
     return PointyDataRow(
+      onTap: onOpenDetails,
       leading: CircleAvatar(
         backgroundColor: rule.isActive
             ? colorScheme.primaryContainer
@@ -302,15 +321,15 @@ class _DiscountRuleTile extends StatelessWidget {
               : Icons.pause_circle_outline,
         ),
         _StatusChip(
-          label: _channelLabel(l10n, rule.channel),
+          label: discountChannelLabel(l10n, rule.channel),
           icon: Icons.compare_arrows_outlined,
         ),
         _StatusChip(
-          label: _applicationLabel(l10n, rule.applicationType),
+          label: discountApplicationLabel(l10n, rule.applicationType),
           icon: Icons.rule_folder_outlined,
         ),
         _StatusChip(
-          label: _scopeLabel(l10n, rule.scope),
+          label: discountScopeLabel(l10n, rule.scope),
           icon: Icons.view_list_outlined,
         ),
         if (rule.exclusive)
@@ -394,89 +413,6 @@ class _DiscountRuleTile extends StatelessWidget {
       ),
     );
   }
-
-  String _channelLabel(AppLocalizations l10n, DiscountChannel channel) {
-    return switch (channel) {
-      DiscountChannel.sales => l10n.discountChannelSales,
-      DiscountChannel.purchasing => l10n.discountChannelPurchasing,
-      DiscountChannel.both => l10n.discountChannelBoth,
-    };
-  }
-
-  String _applicationLabel(
-    AppLocalizations l10n,
-    DiscountApplicationType type,
-  ) {
-    return switch (type) {
-      DiscountApplicationType.automatic => l10n.discountApplicationAutomatic,
-      DiscountApplicationType.couponCode => l10n.discountApplicationCoupon,
-    };
-  }
-
-  String _scopeLabel(AppLocalizations l10n, DiscountScope scope) {
-    return switch (scope) {
-      DiscountScope.document => l10n.discountScopeDocument,
-      DiscountScope.line => l10n.discountScopeLine,
-    };
-  }
-}
-
-List<String> _ruleFacts(AppLocalizations l10n, DiscountRule rule) {
-  return [
-    l10n.discountValueSummary(
-      _valueTypeLabel(l10n, rule.valueType),
-      _valueText(l10n, rule),
-    ),
-    l10n.discountPrioritySummary(rule.priority),
-    if (rule.couponCode.isNotEmpty) l10n.discountCouponSummary(rule.couponCode),
-    if (rule.minOrderSubtotal > 0)
-      l10n.discountMinSubtotalSummary(formatMoney(rule.minOrderSubtotal)),
-    if (rule.minLineQuantity != null)
-      l10n.discountMinLineQuantitySummary(rule.minLineQuantity!),
-    if (rule.maxDiscountAmount != null)
-      l10n.discountMaxAmountSummary(formatMoney(rule.maxDiscountAmount!)),
-    if (rule.usageLimit != null)
-      l10n.discountUsageSummary(rule.redemptionCount, rule.usageLimit!),
-    if (rule.usageLimit == null)
-      l10n.discountUsageCountSummary(rule.redemptionCount),
-    l10n.discountAppliedCountSummary(rule.appliedCount),
-    if (rule.startsAt != null)
-      l10n.discountStartsAtSummary(formatDateTime(rule.startsAt!)),
-    if (rule.endsAt != null)
-      l10n.discountEndsAtSummary(formatDateTime(rule.endsAt!)),
-    if (rule.products.isNotEmpty)
-      l10n.discountProductConstraintSummary(rule.products.length),
-    if (rule.variants.isNotEmpty)
-      l10n.discountVariantConstraintSummary(rule.variants.length),
-    if (rule.productCategories.isNotEmpty)
-      l10n.discountProductCategoryConstraintSummary(
-        rule.productCategories.length,
-      ),
-    if (rule.customers.isNotEmpty)
-      l10n.discountCustomerConstraintSummary(rule.customers.length),
-    if (rule.suppliers.isNotEmpty)
-      l10n.discountSupplierConstraintSummary(rule.suppliers.length),
-  ];
-}
-
-String _valueText(AppLocalizations l10n, DiscountRule rule) {
-  return switch (rule.valueType) {
-    DiscountValueType.percentage => l10n.discountPercentageValue(
-      rule.value.toStringAsFixed(2),
-    ),
-    DiscountValueType.fixedAmount ||
-    DiscountValueType.fixedUnitAmount ||
-    DiscountValueType.fixedPrice => formatMoney(rule.value),
-  };
-}
-
-String _valueTypeLabel(AppLocalizations l10n, DiscountValueType type) {
-  return switch (type) {
-    DiscountValueType.percentage => l10n.discountValueTypePercentage,
-    DiscountValueType.fixedAmount => l10n.discountValueTypeFixedAmount,
-    DiscountValueType.fixedUnitAmount => l10n.discountValueTypeFixedUnitAmount,
-    DiscountValueType.fixedPrice => l10n.discountValueTypeFixedPrice,
-  };
 }
 
 class _StatusChip extends StatelessWidget {

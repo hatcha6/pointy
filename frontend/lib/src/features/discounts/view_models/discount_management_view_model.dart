@@ -17,6 +17,8 @@ class DiscountManagementViewModel extends ChangeNotifier {
   final DiscountRepository _discountRepository;
   final AnalyticsEngine? _analyticsEngine;
 
+  DiscountRepository get discountRepository => _discountRepository;
+
   List<DiscountRule> _rules = [];
   bool _isLoading = false;
   bool _isLoadingMore = false;

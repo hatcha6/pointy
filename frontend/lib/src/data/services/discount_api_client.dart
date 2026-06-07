@@ -23,6 +23,45 @@ class DiscountApiClient {
     );
   }
 
+  Future<DiscountRule> fetchDiscountRule(int id) async {
+    final response = await _session.get('discount-rules/$id/');
+    _session.throwApiException(
+      response,
+      'Discount rule detail failed with status',
+    );
+    return DiscountRule.fromJson(
+      _session.decodedBody(response) as Map<String, Object?>,
+    );
+  }
+
+  Future<DiscountRulePerformance> fetchDiscountRulePerformance(int id) async {
+    final response = await _session.get('discount-rules/$id/performance/');
+    _session.throwApiException(
+      response,
+      'Discount rule performance failed with status',
+    );
+    return DiscountRulePerformance.fromJson(
+      _session.decodedBody(response) as Map<String, Object?>,
+    );
+  }
+
+  Future<DiscountBeneficiaryPage> fetchDiscountRuleBeneficiaries({
+    required int id,
+    int page = 1,
+  }) async {
+    final response = await _session.get(
+      'discount-rules/$id/beneficiaries/',
+      query: {'page': page.toString()},
+    );
+    _session.throwApiException(
+      response,
+      'Discount rule beneficiaries failed with status',
+    );
+    return DiscountBeneficiaryPage.fromJson(
+      _session.decodedBody(response) as Map<String, Object?>,
+    );
+  }
+
   Future<DiscountRule> createDiscountRule(DiscountRuleDraft draft) async {
     final response = await _session.post(
       'discount-rules/',

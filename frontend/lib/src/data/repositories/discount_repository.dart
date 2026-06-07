@@ -16,6 +16,25 @@ class DiscountRepository {
     );
   }
 
+  Future<Result<DiscountRule>> loadDiscountRule(int id) async {
+    return Result.guard(() => _service.fetchDiscountRule(id));
+  }
+
+  Future<Result<DiscountRulePerformance>> loadDiscountRulePerformance(
+    int id,
+  ) async {
+    return Result.guard(() => _service.fetchDiscountRulePerformance(id));
+  }
+
+  Future<Result<DiscountBeneficiaryPage>> loadDiscountRuleBeneficiaries({
+    required int id,
+    int page = 1,
+  }) async {
+    return Result.guard(
+      () => _service.fetchDiscountRuleBeneficiaries(id: id, page: page),
+    );
+  }
+
   Future<Result<DiscountRule>> createDiscountRule(
     DiscountRuleDraft draft,
   ) async {

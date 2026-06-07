@@ -5763,6 +5763,254 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
+  String get yesLabel => 'نعم';
+
+  @override
+  String get noLabel => 'لا';
+
+  @override
+  String discountDetailsTitle(String name) {
+    return 'تفاصيل $name';
+  }
+
+  @override
+  String get discountDetailsRefreshTooltip => 'تحديث تفاصيل الخصم';
+
+  @override
+  String get discountDetailsLoadError => 'تعذر تحميل تفاصيل الخصم.';
+
+  @override
+  String get discountDetailsPerformanceSection => 'أداء الخصم';
+
+  @override
+  String get discountDetailsConfigurationSection => 'إعدادات الخصم';
+
+  @override
+  String get discountDetailsConstraintsSection => 'الشروط والنطاق';
+
+  @override
+  String get discountDetailsImpactSection => 'الأثر التقديري';
+
+  @override
+  String get discountDetailsTrendSection => 'الاتجاه الشهري';
+
+  @override
+  String get discountDetailsChannelBreakdownSection => 'توزيع النطاق';
+
+  @override
+  String get discountDetailsBeneficiariesSection => 'المستفيدون';
+
+  @override
+  String get discountDetailsRedemptionsMetric => 'الاستخدامات';
+
+  @override
+  String discountDetailsApplicationsSubtitle(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count تطبيقات',
+      two: 'تطبيقان',
+      one: 'تطبيق واحد',
+      zero: 'لا توجد تطبيقات',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get discountDetailsBeneficiariesMetric => 'المستفيدون';
+
+  @override
+  String discountDetailsBeneficiariesSubtitle(int customers, int suppliers) {
+    return '$customers عملاء • $suppliers موردون';
+  }
+
+  @override
+  String get discountDetailsGrossInfluencedMetric => 'قيمة متأثرة';
+
+  @override
+  String get discountDetailsNetInfluencedMetric => 'صافي متأثر';
+
+  @override
+  String get discountDetailsDiscountCostMetric => 'تكلفة الخصم';
+
+  @override
+  String discountDetailsDiscountRateSubtitle(String rate) {
+    return 'معدل الخصم $rate';
+  }
+
+  @override
+  String get discountDetailsAverageDocumentMetric => 'متوسط المستند';
+
+  @override
+  String discountDetailsAverageDiscountSubtitle(String amount) {
+    return 'متوسط الخصم $amount';
+  }
+
+  @override
+  String get discountDetailsIncrementalNetMetric => 'قيمة صافية مقدرة';
+
+  @override
+  String get discountDetailsLiftUnavailable => 'لا يوجد خط أساس كاف';
+
+  @override
+  String discountDetailsLiftSubtitle(String rate) {
+    return 'رفع مقدر $rate';
+  }
+
+  @override
+  String get discountDetailsUsageLimitMetric => 'حد الاستخدام';
+
+  @override
+  String get discountDetailsUnlimitedUsage => 'غير محدود';
+
+  @override
+  String get discountDetailsNoUsageLimit => 'بدون حد استخدام';
+
+  @override
+  String discountDetailsUsageRemaining(int remaining, int limit) {
+    return 'متبقٍ $remaining من $limit';
+  }
+
+  @override
+  String get discountDetailsImpactMethodNote =>
+      'التقدير يقارن الاستخدام الفعلي بآخر 90 يومًا من المستندات التاريخية المطابقة لشروط الخصم، لذلك هو مؤشر عملي وليس تجربة عزل كاملة.';
+
+  @override
+  String get discountDetailsExpectedDocumentsLabel =>
+      'مستندات متوقعة بدون الخصم';
+
+  @override
+  String get discountDetailsExpectedGrossLabel => 'قيمة متوقعة بدون الخصم';
+
+  @override
+  String get discountDetailsIncrementalDocumentsLabel => 'مستندات إضافية مقدرة';
+
+  @override
+  String get discountDetailsIncrementalGrossLabel => 'قيمة إضافية مقدرة';
+
+  @override
+  String get discountDetailsBaselinePeriodLabel => 'فترة الخط الأساسي';
+
+  @override
+  String get discountDetailsBaselineDocumentsLabel => 'مستندات الخط الأساسي';
+
+  @override
+  String discountDetailsBaselineDocumentsValue(int count, String amount) {
+    return '$count مستند • $amount';
+  }
+
+  @override
+  String get discountDetailsConfidenceLabel => 'ثقة التقدير';
+
+  @override
+  String get discountDetailsConfidenceHigh => 'عالية';
+
+  @override
+  String get discountDetailsConfidenceMedium => 'متوسطة';
+
+  @override
+  String get discountDetailsConfidenceLow => 'منخفضة';
+
+  @override
+  String get discountDetailsConfidenceInsufficient => 'بيانات غير كافية';
+
+  @override
+  String discountDetailsPeriodValue(String start, String end) {
+    return '$start إلى $end';
+  }
+
+  @override
+  String get discountDetailsTrendEmpty =>
+      'لا توجد استخدامات شهرية لهذا الخصم بعد.';
+
+  @override
+  String get discountDetailsTrendGrossHint =>
+      'يعرض الشريط قيمة المستندات المتأثرة قبل الخصم.';
+
+  @override
+  String discountDetailsTrendValue(int count, String amount) {
+    return '$count استخدام • $amount';
+  }
+
+  @override
+  String get discountDetailsChannelBreakdownEmpty =>
+      'لا توجد استخدامات موزعة حسب النطاق بعد.';
+
+  @override
+  String discountDetailsChannelBreakdownValue(
+    int redemptions,
+    int documents,
+    String amount,
+  ) {
+    return '$redemptions استخدام • $documents مستند • صافي $amount';
+  }
+
+  @override
+  String get discountDetailsBeneficiariesEmpty =>
+      'لم يستخدم أي عميل أو مورد هذا الخصم بعد.';
+
+  @override
+  String get discountDetailsBeneficiariesLoadError =>
+      'تعذر تحميل المستفيدين من الخصم.';
+
+  @override
+  String discountDetailsUseCountValue(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count استخدامات',
+      two: 'استخدامان',
+      one: 'استخدام واحد',
+      zero: 'بدون استخدام',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String discountDetailsDocumentCountValue(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count مستندات',
+      two: 'مستندان',
+      one: 'مستند واحد',
+      zero: 'بدون مستندات',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String discountDetailsBeneficiaryDiscountSummary(String amount) {
+    return 'خصم $amount';
+  }
+
+  @override
+  String discountDetailsBeneficiaryGrossSummary(String amount) {
+    return 'قيمة $amount';
+  }
+
+  @override
+  String discountDetailsLastUsedSummary(String date) {
+    return 'آخر استخدام $date';
+  }
+
+  @override
+  String discountDetailsFirstUsedSummary(String date) {
+    return 'أول استخدام $date';
+  }
+
+  @override
+  String get discountDetailsWalkInCustomer => 'عميل نقدي';
+
+  @override
+  String get discountDetailsUnknownSupplier => 'مورد غير محدد';
+
+  @override
+  String discountDetailsCountValue(int count) {
+    return '$count';
+  }
+
+  @override
   String get printAuditButton => 'سجل الطباعة والمشاركة';
 
   @override

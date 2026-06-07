@@ -471,6 +471,21 @@ class PosApiService {
     return _discounts.fetchDiscountRules(query: query, page: page);
   }
 
+  Future<DiscountRule> fetchDiscountRule(int id) {
+    return _discounts.fetchDiscountRule(id);
+  }
+
+  Future<DiscountRulePerformance> fetchDiscountRulePerformance(int id) {
+    return _discounts.fetchDiscountRulePerformance(id);
+  }
+
+  Future<DiscountBeneficiaryPage> fetchDiscountRuleBeneficiaries({
+    required int id,
+    int page = 1,
+  }) {
+    return _discounts.fetchDiscountRuleBeneficiaries(id: id, page: page);
+  }
+
   Future<DiscountRule> createDiscountRule(DiscountRuleDraft draft) {
     return _discounts.createDiscountRule(draft);
   }

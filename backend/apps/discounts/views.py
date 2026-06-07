@@ -8,6 +8,7 @@ from rest_framework.response import Response
 from apps.analytics.models import AnalyticsEvent
 from apps.analytics.services import record_domain_event
 from apps.core.permissions import HasPointyPermission
+from .analytics import discount_rule_beneficiaries, discount_rule_performance
 from .models import DiscountRule
 from .serializers import DiscountRuleSerializer
 
@@ -23,6 +24,8 @@ class DiscountRuleViewSet(viewsets.ModelViewSet):
         "partial_update": ("discounts.change_discountrule",),
         "enable": ("discounts.change_discountrule",),
         "disable": ("discounts.change_discountrule",),
+        "beneficiaries": ("discounts.view_discountrule",),
+        "performance": ("discounts.view_discountrule",),
         "destroy": ("discounts.delete_discountrule",),
     }
     queryset = DiscountRule.objects.all()
@@ -90,6 +93,20 @@ class DiscountRuleViewSet(viewsets.ModelViewSet):
         rule.save(update_fields=["is_active", "updated_at"])
         self._record_rule_event("discounts.rule.disabled", rule)
         return Response(self.get_serializer(rule).data)
+
+    @action(detail=True, methods=["get"])
+    def performance(self, request, pk=None):
+        rule = self.get_object()
+        return Response(discount_rule_performance(rule))
+
+    @action(detail=True, methods=["get"])
+    def beneficiaries(self, request, pk=None):
+        rule = self.get_object()
+        beneficiaries = discount_rule_beneficiaries(rule)
+        page = self.paginate_queryset(beneficiaries)
+        if page is not None:
+            return self.get_paginated_response(page)
+        return Response(beneficiaries)
 
     def perform_destroy(self, instance):
         metadata = dict(instance.metadata or {})

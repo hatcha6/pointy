@@ -1,5 +1,7 @@
+from datetime import timedelta
 from decimal import Decimal
 
+from django.contrib.contenttypes.models import ContentType
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Permission
 from django.test import TestCase
@@ -490,6 +492,62 @@ class DiscountRuleApiTests(TestCase):
             unit_price=Decimal("14.00"),
         )
 
+    def create_discounted_order(
+        self,
+        rule,
+        *,
+        customer=None,
+        subtotal=Decimal("40.00"),
+        discount_amount=Decimal("5.00"),
+        redeemed_at=None,
+    ):
+        order = Order.objects.create(
+            customer=customer,
+            status=Order.Status.PAID,
+            subtotal=subtotal,
+            discount_total=discount_amount,
+            total=subtotal - discount_amount,
+        )
+        document_content_type = ContentType.objects.get_for_model(
+            Order,
+            for_concrete_model=False,
+        )
+        applied_discount = AppliedDiscount.objects.create(
+            rule=rule,
+            rule_name=rule.name,
+            coupon_code=rule.coupon_code,
+            source=rule.application_type,
+            channel=DiscountRule.Channel.SALES,
+            scope=rule.scope,
+            value_type=rule.value_type,
+            value=rule.value,
+            priority=rule.priority,
+            exclusive=rule.exclusive,
+            source_subtotal=subtotal,
+            discount_amount=discount_amount,
+            document_content_type=document_content_type,
+            document_object_id=order.pk,
+        )
+        redemption = DiscountRedemption.objects.create(
+            rule=rule,
+            applied_discount=applied_discount,
+            coupon_code=rule.coupon_code,
+            channel=DiscountRule.Channel.SALES,
+            customer=customer,
+            discount_amount=discount_amount,
+            document_content_type=document_content_type,
+            document_object_id=order.pk,
+        )
+        if redeemed_at is not None:
+            DiscountRedemption.objects.filter(pk=redemption.pk).update(
+                created_at=redeemed_at,
+            )
+            AppliedDiscount.objects.filter(pk=applied_discount.pk).update(
+                created_at=redeemed_at,
+            )
+            redemption.refresh_from_db()
+        return order, applied_discount, redemption
+
     def test_create_update_disable_and_archive_discount_rule(self):
         with self.captureOnCommitCallbacks(execute=True):
             response = self.client.post(
@@ -700,6 +758,92 @@ class DiscountRuleApiTests(TestCase):
 
         self.assertEqual(response.status_code, 400, response.data)
         self.assertIn("coupon_code", response.data)
+
+    def test_discount_rule_performance_reports_usage_and_baseline(self):
+        rule = DiscountRule.objects.create(
+            name="Weekend coupon",
+            application_type=DiscountRule.ApplicationType.COUPON_CODE,
+            coupon_code="WEEKEND",
+            channel=DiscountRule.Channel.SALES,
+            scope=DiscountRule.Scope.DOCUMENT,
+            value_type=DiscountRule.ValueType.FIXED_AMOUNT,
+            value=Decimal("5.00"),
+            usage_limit=10,
+        )
+        now = timezone.now()
+        baseline_order = Order.objects.create(
+            customer=self.customer,
+            status=Order.Status.PAID,
+            subtotal=Decimal("30.00"),
+            discount_total=Decimal("0.00"),
+            total=Decimal("30.00"),
+        )
+        Order.objects.filter(pk=baseline_order.pk).update(
+            created_at=now - timedelta(days=20),
+        )
+        self.create_discounted_order(
+            rule,
+            customer=self.customer,
+            subtotal=Decimal("40.00"),
+            discount_amount=Decimal("5.00"),
+            redeemed_at=now,
+        )
+
+        response = self.client.get(f"/api/discount-rules/{rule.pk}/performance/")
+
+        self.assertEqual(response.status_code, 200, response.data)
+        summary = response.data["summary"]
+        self.assertEqual(summary["redemption_count"], 1)
+        self.assertEqual(summary["document_count"], 1)
+        self.assertEqual(summary["unique_customer_count"], 1)
+        self.assertEqual(summary["beneficiary_count"], 1)
+        self.assertEqual(summary["influenced_gross"], "40.00")
+        self.assertEqual(summary["discount_amount"], "5.00")
+        self.assertEqual(summary["influenced_net"], "35.00")
+        self.assertEqual(summary["remaining_usage"], 9)
+        self.assertEqual(response.data["channel_breakdown"][0]["channel"], "sales")
+        self.assertEqual(response.data["monthly_trend"][0]["redemption_count"], 1)
+        incrementality = response.data["incrementality"]
+        self.assertEqual(incrementality["baseline_document_count"], 1)
+        self.assertEqual(incrementality["baseline_gross"], "30.00")
+        self.assertEqual(incrementality["confidence"], "low")
+
+    def test_discount_rule_beneficiaries_are_grouped_and_paginated(self):
+        rule = DiscountRule.objects.create(
+            name="Customer coupon",
+            application_type=DiscountRule.ApplicationType.COUPON_CODE,
+            coupon_code="CUSTOMER",
+            channel=DiscountRule.Channel.SALES,
+            scope=DiscountRule.Scope.DOCUMENT,
+            value_type=DiscountRule.ValueType.FIXED_AMOUNT,
+            value=Decimal("2.00"),
+        )
+        self.create_discounted_order(
+            rule,
+            customer=self.customer,
+            subtotal=Decimal("20.00"),
+            discount_amount=Decimal("2.00"),
+        )
+        self.create_discounted_order(
+            rule,
+            customer=self.customer,
+            subtotal=Decimal("30.00"),
+            discount_amount=Decimal("2.00"),
+        )
+
+        response = self.client.get(f"/api/discount-rules/{rule.pk}/beneficiaries/")
+
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(response.data["count"], 1)
+        beneficiary = response.data["results"][0]
+        self.assertEqual(beneficiary["party_type"], "customer")
+        self.assertEqual(beneficiary["party_id"], self.customer.pk)
+        self.assertEqual(beneficiary["name"], self.customer.full_name)
+        self.assertEqual(beneficiary["redemption_count"], 2)
+        self.assertEqual(beneficiary["document_count"], 2)
+        self.assertEqual(beneficiary["discount_amount"], "4.00")
+        self.assertEqual(beneficiary["influenced_gross"], "50.00")
+        self.assertEqual(beneficiary["influenced_net"], "46.00")
 
     def test_sales_discount_preview_reports_automatic_and_coupon_applications(self):
         DiscountRule.objects.create(

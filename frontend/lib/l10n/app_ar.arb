@@ -3518,6 +3518,230 @@
       }
     }
   },
+  "yesLabel": "نعم",
+  "noLabel": "لا",
+  "discountDetailsTitle": "تفاصيل {name}",
+  "@discountDetailsTitle": {
+    "description": "Discount details screen title.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "discountDetailsRefreshTooltip": "تحديث تفاصيل الخصم",
+  "discountDetailsLoadError": "تعذر تحميل تفاصيل الخصم.",
+  "discountDetailsPerformanceSection": "أداء الخصم",
+  "discountDetailsConfigurationSection": "إعدادات الخصم",
+  "discountDetailsConstraintsSection": "الشروط والنطاق",
+  "discountDetailsImpactSection": "الأثر التقديري",
+  "discountDetailsTrendSection": "الاتجاه الشهري",
+  "discountDetailsChannelBreakdownSection": "توزيع النطاق",
+  "discountDetailsBeneficiariesSection": "المستفيدون",
+  "discountDetailsRedemptionsMetric": "الاستخدامات",
+  "discountDetailsApplicationsSubtitle": "{count, plural, =0{لا توجد تطبيقات} =1{تطبيق واحد} =2{تطبيقان} other{{count} تطبيقات}}",
+  "@discountDetailsApplicationsSubtitle": {
+    "description": "Applied discount count subtitle.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "discountDetailsBeneficiariesMetric": "المستفيدون",
+  "discountDetailsBeneficiariesSubtitle": "{customers} عملاء • {suppliers} موردون",
+  "@discountDetailsBeneficiariesSubtitle": {
+    "description": "Beneficiary split subtitle.",
+    "placeholders": {
+      "customers": {
+        "type": "int"
+      },
+      "suppliers": {
+        "type": "int"
+      }
+    }
+  },
+  "discountDetailsGrossInfluencedMetric": "قيمة متأثرة",
+  "discountDetailsNetInfluencedMetric": "صافي متأثر",
+  "discountDetailsDiscountCostMetric": "تكلفة الخصم",
+  "discountDetailsDiscountRateSubtitle": "معدل الخصم {rate}",
+  "@discountDetailsDiscountRateSubtitle": {
+    "description": "Discount rate subtitle.",
+    "placeholders": {
+      "rate": {
+        "type": "String"
+      }
+    }
+  },
+  "discountDetailsAverageDocumentMetric": "متوسط المستند",
+  "discountDetailsAverageDiscountSubtitle": "متوسط الخصم {amount}",
+  "@discountDetailsAverageDiscountSubtitle": {
+    "description": "Average discount subtitle.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "discountDetailsIncrementalNetMetric": "قيمة صافية مقدرة",
+  "discountDetailsLiftUnavailable": "لا يوجد خط أساس كاف",
+  "discountDetailsLiftSubtitle": "رفع مقدر {rate}",
+  "@discountDetailsLiftSubtitle": {
+    "description": "Estimated lift subtitle.",
+    "placeholders": {
+      "rate": {
+        "type": "String"
+      }
+    }
+  },
+  "discountDetailsUsageLimitMetric": "حد الاستخدام",
+  "discountDetailsUnlimitedUsage": "غير محدود",
+  "discountDetailsNoUsageLimit": "بدون حد استخدام",
+  "discountDetailsUsageRemaining": "متبقٍ {remaining} من {limit}",
+  "@discountDetailsUsageRemaining": {
+    "description": "Remaining discount usage.",
+    "placeholders": {
+      "remaining": {
+        "type": "int"
+      },
+      "limit": {
+        "type": "int"
+      }
+    }
+  },
+  "discountDetailsImpactMethodNote": "التقدير يقارن الاستخدام الفعلي بآخر 90 يومًا من المستندات التاريخية المطابقة لشروط الخصم، لذلك هو مؤشر عملي وليس تجربة عزل كاملة.",
+  "discountDetailsExpectedDocumentsLabel": "مستندات متوقعة بدون الخصم",
+  "discountDetailsExpectedGrossLabel": "قيمة متوقعة بدون الخصم",
+  "discountDetailsIncrementalDocumentsLabel": "مستندات إضافية مقدرة",
+  "discountDetailsIncrementalGrossLabel": "قيمة إضافية مقدرة",
+  "discountDetailsBaselinePeriodLabel": "فترة الخط الأساسي",
+  "discountDetailsBaselineDocumentsLabel": "مستندات الخط الأساسي",
+  "discountDetailsBaselineDocumentsValue": "{count} مستند • {amount}",
+  "@discountDetailsBaselineDocumentsValue": {
+    "description": "Baseline document count and amount.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "discountDetailsConfidenceLabel": "ثقة التقدير",
+  "discountDetailsConfidenceHigh": "عالية",
+  "discountDetailsConfidenceMedium": "متوسطة",
+  "discountDetailsConfidenceLow": "منخفضة",
+  "discountDetailsConfidenceInsufficient": "بيانات غير كافية",
+  "discountDetailsPeriodValue": "{start} إلى {end}",
+  "@discountDetailsPeriodValue": {
+    "description": "Date period value.",
+    "placeholders": {
+      "start": {
+        "type": "String"
+      },
+      "end": {
+        "type": "String"
+      }
+    }
+  },
+  "discountDetailsTrendEmpty": "لا توجد استخدامات شهرية لهذا الخصم بعد.",
+  "discountDetailsTrendGrossHint": "يعرض الشريط قيمة المستندات المتأثرة قبل الخصم.",
+  "discountDetailsTrendValue": "{count} استخدام • {amount}",
+  "@discountDetailsTrendValue": {
+    "description": "Trend row value.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "discountDetailsChannelBreakdownEmpty": "لا توجد استخدامات موزعة حسب النطاق بعد.",
+  "discountDetailsChannelBreakdownValue": "{redemptions} استخدام • {documents} مستند • صافي {amount}",
+  "@discountDetailsChannelBreakdownValue": {
+    "description": "Channel breakdown row value.",
+    "placeholders": {
+      "redemptions": {
+        "type": "int"
+      },
+      "documents": {
+        "type": "int"
+      },
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "discountDetailsBeneficiariesEmpty": "لم يستخدم أي عميل أو مورد هذا الخصم بعد.",
+  "discountDetailsBeneficiariesLoadError": "تعذر تحميل المستفيدين من الخصم.",
+  "discountDetailsUseCountValue": "{count, plural, =0{بدون استخدام} =1{استخدام واحد} =2{استخدامان} other{{count} استخدامات}}",
+  "@discountDetailsUseCountValue": {
+    "description": "Beneficiary usage count.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "discountDetailsDocumentCountValue": "{count, plural, =0{بدون مستندات} =1{مستند واحد} =2{مستندان} other{{count} مستندات}}",
+  "@discountDetailsDocumentCountValue": {
+    "description": "Beneficiary document count.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "discountDetailsBeneficiaryDiscountSummary": "خصم {amount}",
+  "@discountDetailsBeneficiaryDiscountSummary": {
+    "description": "Beneficiary discount amount summary.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "discountDetailsBeneficiaryGrossSummary": "قيمة {amount}",
+  "@discountDetailsBeneficiaryGrossSummary": {
+    "description": "Beneficiary gross amount summary.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "discountDetailsLastUsedSummary": "آخر استخدام {date}",
+  "@discountDetailsLastUsedSummary": {
+    "description": "Beneficiary last usage summary.",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "discountDetailsFirstUsedSummary": "أول استخدام {date}",
+  "@discountDetailsFirstUsedSummary": {
+    "description": "Beneficiary first usage summary.",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "discountDetailsWalkInCustomer": "عميل نقدي",
+  "discountDetailsUnknownSupplier": "مورد غير محدد",
+  "discountDetailsCountValue": "{count}",
+  "@discountDetailsCountValue": {
+    "description": "Generic count value.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "printAuditButton": "سجل الطباعة والمشاركة",
   "printAuditSheetTitle": "سجل الطباعة والمشاركة {documentNumber}",
   "@printAuditSheetTitle": {

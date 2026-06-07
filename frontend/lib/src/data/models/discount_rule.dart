@@ -192,6 +192,306 @@ class DiscountRulePage {
   }
 }
 
+class DiscountRulePerformance {
+  const DiscountRulePerformance({
+    required this.summary,
+    required this.incrementality,
+    required this.channelBreakdown,
+    required this.monthlyTrend,
+  });
+
+  final DiscountPerformanceSummary summary;
+  final DiscountIncrementality incrementality;
+  final List<DiscountChannelPerformance> channelBreakdown;
+  final List<DiscountTrendPoint> monthlyTrend;
+
+  factory DiscountRulePerformance.fromJson(Map<String, Object?> json) {
+    return DiscountRulePerformance(
+      summary: DiscountPerformanceSummary.fromJson(
+        _mapFromJson(json['summary']),
+      ),
+      incrementality: DiscountIncrementality.fromJson(
+        _mapFromJson(json['incrementality']),
+      ),
+      channelBreakdown:
+          (json['channel_breakdown'] as List<Object?>? ?? const [])
+              .whereType<Map<String, Object?>>()
+              .map(DiscountChannelPerformance.fromJson)
+              .toList(growable: false),
+      monthlyTrend: (json['monthly_trend'] as List<Object?>? ?? const [])
+          .whereType<Map<String, Object?>>()
+          .map(DiscountTrendPoint.fromJson)
+          .toList(growable: false),
+    );
+  }
+}
+
+class DiscountPerformanceSummary {
+  const DiscountPerformanceSummary({
+    required this.redemptionCount,
+    required this.applicationCount,
+    required this.documentCount,
+    required this.salesDocumentCount,
+    required this.purchaseDocumentCount,
+    required this.uniqueCustomerCount,
+    required this.uniqueSupplierCount,
+    required this.anonymousBeneficiaryCount,
+    required this.beneficiaryCount,
+    required this.influencedGross,
+    required this.discountAmount,
+    required this.influencedNet,
+    required this.averageDiscountAmount,
+    required this.averageDocumentValue,
+    required this.discountRatePercent,
+    required this.usageLimit,
+    required this.remainingUsage,
+    required this.usagePercent,
+  });
+
+  final int redemptionCount;
+  final int applicationCount;
+  final int documentCount;
+  final int salesDocumentCount;
+  final int purchaseDocumentCount;
+  final int uniqueCustomerCount;
+  final int uniqueSupplierCount;
+  final int anonymousBeneficiaryCount;
+  final int beneficiaryCount;
+  final double influencedGross;
+  final double discountAmount;
+  final double influencedNet;
+  final double averageDiscountAmount;
+  final double averageDocumentValue;
+  final double discountRatePercent;
+  final int? usageLimit;
+  final int? remainingUsage;
+  final double? usagePercent;
+
+  factory DiscountPerformanceSummary.fromJson(Map<String, Object?> json) {
+    return DiscountPerformanceSummary(
+      redemptionCount: _intFromJson(json['redemption_count']),
+      applicationCount: _intFromJson(json['application_count']),
+      documentCount: _intFromJson(json['document_count']),
+      salesDocumentCount: _intFromJson(json['sales_document_count']),
+      purchaseDocumentCount: _intFromJson(json['purchase_document_count']),
+      uniqueCustomerCount: _intFromJson(json['unique_customer_count']),
+      uniqueSupplierCount: _intFromJson(json['unique_supplier_count']),
+      anonymousBeneficiaryCount: _intFromJson(
+        json['anonymous_beneficiary_count'],
+      ),
+      beneficiaryCount: _intFromJson(json['beneficiary_count']),
+      influencedGross: _doubleFromJson(json['influenced_gross']),
+      discountAmount: _doubleFromJson(json['discount_amount']),
+      influencedNet: _doubleFromJson(json['influenced_net']),
+      averageDiscountAmount: _doubleFromJson(json['average_discount_amount']),
+      averageDocumentValue: _doubleFromJson(json['average_document_value']),
+      discountRatePercent: _doubleFromJson(json['discount_rate_percent']),
+      usageLimit: _nullableIntFromJson(json['usage_limit']),
+      remainingUsage: _nullableIntFromJson(json['remaining_usage']),
+      usagePercent: _nullableDoubleFromJson(json['usage_percent']),
+    );
+  }
+}
+
+class DiscountIncrementality {
+  const DiscountIncrementality({
+    required this.method,
+    required this.confidence,
+    required this.baselinePeriodStart,
+    required this.baselinePeriodEnd,
+    required this.campaignPeriodStart,
+    required this.campaignPeriodEnd,
+    required this.baselineDays,
+    required this.activeDays,
+    required this.baselineDocumentCount,
+    required this.baselineGross,
+    required this.baselineAverageDocumentValue,
+    required this.expectedDocumentsWithoutDiscount,
+    required this.expectedGrossWithoutDiscount,
+    required this.incrementalDocuments,
+    required this.incrementalGross,
+    required this.estimatedIncrementalNetValue,
+    required this.liftPercent,
+  });
+
+  final String method;
+  final String confidence;
+  final DateTime? baselinePeriodStart;
+  final DateTime? baselinePeriodEnd;
+  final DateTime? campaignPeriodStart;
+  final DateTime? campaignPeriodEnd;
+  final int baselineDays;
+  final int activeDays;
+  final int baselineDocumentCount;
+  final double baselineGross;
+  final double baselineAverageDocumentValue;
+  final double expectedDocumentsWithoutDiscount;
+  final double expectedGrossWithoutDiscount;
+  final double incrementalDocuments;
+  final double incrementalGross;
+  final double estimatedIncrementalNetValue;
+  final double? liftPercent;
+
+  factory DiscountIncrementality.fromJson(Map<String, Object?> json) {
+    return DiscountIncrementality(
+      method: json['method']?.toString() ?? '',
+      confidence: json['confidence']?.toString() ?? '',
+      baselinePeriodStart: _dateTimeFromJson(json['baseline_period_start']),
+      baselinePeriodEnd: _dateTimeFromJson(json['baseline_period_end']),
+      campaignPeriodStart: _dateTimeFromJson(json['campaign_period_start']),
+      campaignPeriodEnd: _dateTimeFromJson(json['campaign_period_end']),
+      baselineDays: _intFromJson(json['baseline_days']),
+      activeDays: _intFromJson(json['active_days']),
+      baselineDocumentCount: _intFromJson(json['baseline_document_count']),
+      baselineGross: _doubleFromJson(json['baseline_gross']),
+      baselineAverageDocumentValue: _doubleFromJson(
+        json['baseline_average_document_value'],
+      ),
+      expectedDocumentsWithoutDiscount: _doubleFromJson(
+        json['expected_documents_without_discount'],
+      ),
+      expectedGrossWithoutDiscount: _doubleFromJson(
+        json['expected_gross_without_discount'],
+      ),
+      incrementalDocuments: _doubleFromJson(json['incremental_documents']),
+      incrementalGross: _doubleFromJson(json['incremental_gross']),
+      estimatedIncrementalNetValue: _doubleFromJson(
+        json['estimated_incremental_net_value'],
+      ),
+      liftPercent: _nullableDoubleFromJson(json['lift_percent']),
+    );
+  }
+}
+
+class DiscountChannelPerformance {
+  const DiscountChannelPerformance({
+    required this.channel,
+    required this.redemptionCount,
+    required this.documentCount,
+    required this.discountAmount,
+    required this.influencedGross,
+    required this.influencedNet,
+  });
+
+  final DiscountChannel channel;
+  final int redemptionCount;
+  final int documentCount;
+  final double discountAmount;
+  final double influencedGross;
+  final double influencedNet;
+
+  factory DiscountChannelPerformance.fromJson(Map<String, Object?> json) {
+    return DiscountChannelPerformance(
+      channel: DiscountChannel.fromApi(json['channel']?.toString() ?? ''),
+      redemptionCount: _intFromJson(json['redemption_count']),
+      documentCount: _intFromJson(json['document_count']),
+      discountAmount: _doubleFromJson(json['discount_amount']),
+      influencedGross: _doubleFromJson(json['influenced_gross']),
+      influencedNet: _doubleFromJson(json['influenced_net']),
+    );
+  }
+}
+
+class DiscountTrendPoint {
+  const DiscountTrendPoint({
+    required this.period,
+    required this.redemptionCount,
+    required this.documentCount,
+    required this.discountAmount,
+    required this.influencedGross,
+    required this.influencedNet,
+  });
+
+  final String period;
+  final int redemptionCount;
+  final int documentCount;
+  final double discountAmount;
+  final double influencedGross;
+  final double influencedNet;
+
+  factory DiscountTrendPoint.fromJson(Map<String, Object?> json) {
+    return DiscountTrendPoint(
+      period: json['period']?.toString() ?? '',
+      redemptionCount: _intFromJson(json['redemption_count']),
+      documentCount: _intFromJson(json['document_count']),
+      discountAmount: _doubleFromJson(json['discount_amount']),
+      influencedGross: _doubleFromJson(json['influenced_gross']),
+      influencedNet: _doubleFromJson(json['influenced_net']),
+    );
+  }
+}
+
+class DiscountBeneficiaryPage {
+  const DiscountBeneficiaryPage({
+    required this.beneficiaries,
+    required this.hasMore,
+  });
+
+  final List<DiscountBeneficiary> beneficiaries;
+  final bool hasMore;
+
+  factory DiscountBeneficiaryPage.fromJson(Map<String, Object?> json) {
+    final results = (json['results'] as List<Object?>? ?? const [])
+        .whereType<Map<String, Object?>>()
+        .map(DiscountBeneficiary.fromJson)
+        .toList(growable: false);
+    return DiscountBeneficiaryPage(
+      beneficiaries: results,
+      hasMore: json['next'] != null,
+    );
+  }
+}
+
+class DiscountBeneficiary {
+  const DiscountBeneficiary({
+    required this.id,
+    required this.partyType,
+    required this.partyId,
+    required this.name,
+    required this.secondary,
+    required this.channel,
+    required this.redemptionCount,
+    required this.documentCount,
+    required this.discountAmount,
+    required this.influencedGross,
+    required this.influencedNet,
+    required this.firstRedeemedAt,
+    required this.lastRedeemedAt,
+  });
+
+  final String id;
+  final String partyType;
+  final int? partyId;
+  final String name;
+  final String secondary;
+  final DiscountChannel channel;
+  final int redemptionCount;
+  final int documentCount;
+  final double discountAmount;
+  final double influencedGross;
+  final double influencedNet;
+  final DateTime? firstRedeemedAt;
+  final DateTime? lastRedeemedAt;
+
+  factory DiscountBeneficiary.fromJson(Map<String, Object?> json) {
+    return DiscountBeneficiary(
+      id: json['id']?.toString() ?? '',
+      partyType: json['party_type']?.toString() ?? '',
+      partyId: _nullableIntFromJson(json['party_id']),
+      name: json['name']?.toString() ?? '',
+      secondary: json['secondary']?.toString() ?? '',
+      channel: DiscountChannel.fromApi(json['channel']?.toString() ?? ''),
+      redemptionCount: _intFromJson(json['redemption_count']),
+      documentCount: _intFromJson(json['document_count']),
+      discountAmount: _doubleFromJson(json['discount_amount']),
+      influencedGross: _doubleFromJson(json['influenced_gross']),
+      influencedNet: _doubleFromJson(json['influenced_net']),
+      firstRedeemedAt: _dateTimeFromJson(json['first_redeemed_at']),
+      lastRedeemedAt: _dateTimeFromJson(json['last_redeemed_at']),
+    );
+  }
+}
+
 class DiscountRule {
   const DiscountRule({
     required this.id,
@@ -432,6 +732,16 @@ List<int> _intListFromJson(Object? value) {
       .map(_nullableIntFromJson)
       .whereType<int>()
       .toList(growable: false);
+}
+
+Map<String, Object?> _mapFromJson(Object? value) {
+  if (value is Map<String, Object?>) {
+    return value;
+  }
+  if (value is Map) {
+    return Map<String, Object?>.from(value);
+  }
+  return const {};
 }
 
 DateTime? _dateTimeFromJson(Object? value) {

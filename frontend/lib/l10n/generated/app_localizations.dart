@@ -9971,6 +9971,364 @@ abstract class AppLocalizations {
   /// **'{count} موردين'**
   String discountSupplierConstraintSummary(int count);
 
+  /// No description provided for @yesLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'نعم'**
+  String get yesLabel;
+
+  /// No description provided for @noLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا'**
+  String get noLabel;
+
+  /// Discount details screen title.
+  ///
+  /// In ar, this message translates to:
+  /// **'تفاصيل {name}'**
+  String discountDetailsTitle(String name);
+
+  /// No description provided for @discountDetailsRefreshTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحديث تفاصيل الخصم'**
+  String get discountDetailsRefreshTooltip;
+
+  /// No description provided for @discountDetailsLoadError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر تحميل تفاصيل الخصم.'**
+  String get discountDetailsLoadError;
+
+  /// No description provided for @discountDetailsPerformanceSection.
+  ///
+  /// In ar, this message translates to:
+  /// **'أداء الخصم'**
+  String get discountDetailsPerformanceSection;
+
+  /// No description provided for @discountDetailsConfigurationSection.
+  ///
+  /// In ar, this message translates to:
+  /// **'إعدادات الخصم'**
+  String get discountDetailsConfigurationSection;
+
+  /// No description provided for @discountDetailsConstraintsSection.
+  ///
+  /// In ar, this message translates to:
+  /// **'الشروط والنطاق'**
+  String get discountDetailsConstraintsSection;
+
+  /// No description provided for @discountDetailsImpactSection.
+  ///
+  /// In ar, this message translates to:
+  /// **'الأثر التقديري'**
+  String get discountDetailsImpactSection;
+
+  /// No description provided for @discountDetailsTrendSection.
+  ///
+  /// In ar, this message translates to:
+  /// **'الاتجاه الشهري'**
+  String get discountDetailsTrendSection;
+
+  /// No description provided for @discountDetailsChannelBreakdownSection.
+  ///
+  /// In ar, this message translates to:
+  /// **'توزيع النطاق'**
+  String get discountDetailsChannelBreakdownSection;
+
+  /// No description provided for @discountDetailsBeneficiariesSection.
+  ///
+  /// In ar, this message translates to:
+  /// **'المستفيدون'**
+  String get discountDetailsBeneficiariesSection;
+
+  /// No description provided for @discountDetailsRedemptionsMetric.
+  ///
+  /// In ar, this message translates to:
+  /// **'الاستخدامات'**
+  String get discountDetailsRedemptionsMetric;
+
+  /// Applied discount count subtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, =0{لا توجد تطبيقات} =1{تطبيق واحد} =2{تطبيقان} other{{count} تطبيقات}}'**
+  String discountDetailsApplicationsSubtitle(int count);
+
+  /// No description provided for @discountDetailsBeneficiariesMetric.
+  ///
+  /// In ar, this message translates to:
+  /// **'المستفيدون'**
+  String get discountDetailsBeneficiariesMetric;
+
+  /// Beneficiary split subtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'{customers} عملاء • {suppliers} موردون'**
+  String discountDetailsBeneficiariesSubtitle(int customers, int suppliers);
+
+  /// No description provided for @discountDetailsGrossInfluencedMetric.
+  ///
+  /// In ar, this message translates to:
+  /// **'قيمة متأثرة'**
+  String get discountDetailsGrossInfluencedMetric;
+
+  /// No description provided for @discountDetailsNetInfluencedMetric.
+  ///
+  /// In ar, this message translates to:
+  /// **'صافي متأثر'**
+  String get discountDetailsNetInfluencedMetric;
+
+  /// No description provided for @discountDetailsDiscountCostMetric.
+  ///
+  /// In ar, this message translates to:
+  /// **'تكلفة الخصم'**
+  String get discountDetailsDiscountCostMetric;
+
+  /// Discount rate subtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'معدل الخصم {rate}'**
+  String discountDetailsDiscountRateSubtitle(String rate);
+
+  /// No description provided for @discountDetailsAverageDocumentMetric.
+  ///
+  /// In ar, this message translates to:
+  /// **'متوسط المستند'**
+  String get discountDetailsAverageDocumentMetric;
+
+  /// Average discount subtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'متوسط الخصم {amount}'**
+  String discountDetailsAverageDiscountSubtitle(String amount);
+
+  /// No description provided for @discountDetailsIncrementalNetMetric.
+  ///
+  /// In ar, this message translates to:
+  /// **'قيمة صافية مقدرة'**
+  String get discountDetailsIncrementalNetMetric;
+
+  /// No description provided for @discountDetailsLiftUnavailable.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا يوجد خط أساس كاف'**
+  String get discountDetailsLiftUnavailable;
+
+  /// Estimated lift subtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'رفع مقدر {rate}'**
+  String discountDetailsLiftSubtitle(String rate);
+
+  /// No description provided for @discountDetailsUsageLimitMetric.
+  ///
+  /// In ar, this message translates to:
+  /// **'حد الاستخدام'**
+  String get discountDetailsUsageLimitMetric;
+
+  /// No description provided for @discountDetailsUnlimitedUsage.
+  ///
+  /// In ar, this message translates to:
+  /// **'غير محدود'**
+  String get discountDetailsUnlimitedUsage;
+
+  /// No description provided for @discountDetailsNoUsageLimit.
+  ///
+  /// In ar, this message translates to:
+  /// **'بدون حد استخدام'**
+  String get discountDetailsNoUsageLimit;
+
+  /// Remaining discount usage.
+  ///
+  /// In ar, this message translates to:
+  /// **'متبقٍ {remaining} من {limit}'**
+  String discountDetailsUsageRemaining(int remaining, int limit);
+
+  /// No description provided for @discountDetailsImpactMethodNote.
+  ///
+  /// In ar, this message translates to:
+  /// **'التقدير يقارن الاستخدام الفعلي بآخر 90 يومًا من المستندات التاريخية المطابقة لشروط الخصم، لذلك هو مؤشر عملي وليس تجربة عزل كاملة.'**
+  String get discountDetailsImpactMethodNote;
+
+  /// No description provided for @discountDetailsExpectedDocumentsLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'مستندات متوقعة بدون الخصم'**
+  String get discountDetailsExpectedDocumentsLabel;
+
+  /// No description provided for @discountDetailsExpectedGrossLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'قيمة متوقعة بدون الخصم'**
+  String get discountDetailsExpectedGrossLabel;
+
+  /// No description provided for @discountDetailsIncrementalDocumentsLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'مستندات إضافية مقدرة'**
+  String get discountDetailsIncrementalDocumentsLabel;
+
+  /// No description provided for @discountDetailsIncrementalGrossLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'قيمة إضافية مقدرة'**
+  String get discountDetailsIncrementalGrossLabel;
+
+  /// No description provided for @discountDetailsBaselinePeriodLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'فترة الخط الأساسي'**
+  String get discountDetailsBaselinePeriodLabel;
+
+  /// No description provided for @discountDetailsBaselineDocumentsLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'مستندات الخط الأساسي'**
+  String get discountDetailsBaselineDocumentsLabel;
+
+  /// Baseline document count and amount.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count} مستند • {amount}'**
+  String discountDetailsBaselineDocumentsValue(int count, String amount);
+
+  /// No description provided for @discountDetailsConfidenceLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'ثقة التقدير'**
+  String get discountDetailsConfidenceLabel;
+
+  /// No description provided for @discountDetailsConfidenceHigh.
+  ///
+  /// In ar, this message translates to:
+  /// **'عالية'**
+  String get discountDetailsConfidenceHigh;
+
+  /// No description provided for @discountDetailsConfidenceMedium.
+  ///
+  /// In ar, this message translates to:
+  /// **'متوسطة'**
+  String get discountDetailsConfidenceMedium;
+
+  /// No description provided for @discountDetailsConfidenceLow.
+  ///
+  /// In ar, this message translates to:
+  /// **'منخفضة'**
+  String get discountDetailsConfidenceLow;
+
+  /// No description provided for @discountDetailsConfidenceInsufficient.
+  ///
+  /// In ar, this message translates to:
+  /// **'بيانات غير كافية'**
+  String get discountDetailsConfidenceInsufficient;
+
+  /// Date period value.
+  ///
+  /// In ar, this message translates to:
+  /// **'{start} إلى {end}'**
+  String discountDetailsPeriodValue(String start, String end);
+
+  /// No description provided for @discountDetailsTrendEmpty.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد استخدامات شهرية لهذا الخصم بعد.'**
+  String get discountDetailsTrendEmpty;
+
+  /// No description provided for @discountDetailsTrendGrossHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'يعرض الشريط قيمة المستندات المتأثرة قبل الخصم.'**
+  String get discountDetailsTrendGrossHint;
+
+  /// Trend row value.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count} استخدام • {amount}'**
+  String discountDetailsTrendValue(int count, String amount);
+
+  /// No description provided for @discountDetailsChannelBreakdownEmpty.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد استخدامات موزعة حسب النطاق بعد.'**
+  String get discountDetailsChannelBreakdownEmpty;
+
+  /// Channel breakdown row value.
+  ///
+  /// In ar, this message translates to:
+  /// **'{redemptions} استخدام • {documents} مستند • صافي {amount}'**
+  String discountDetailsChannelBreakdownValue(
+    int redemptions,
+    int documents,
+    String amount,
+  );
+
+  /// No description provided for @discountDetailsBeneficiariesEmpty.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم يستخدم أي عميل أو مورد هذا الخصم بعد.'**
+  String get discountDetailsBeneficiariesEmpty;
+
+  /// No description provided for @discountDetailsBeneficiariesLoadError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر تحميل المستفيدين من الخصم.'**
+  String get discountDetailsBeneficiariesLoadError;
+
+  /// Beneficiary usage count.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, =0{بدون استخدام} =1{استخدام واحد} =2{استخدامان} other{{count} استخدامات}}'**
+  String discountDetailsUseCountValue(int count);
+
+  /// Beneficiary document count.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, =0{بدون مستندات} =1{مستند واحد} =2{مستندان} other{{count} مستندات}}'**
+  String discountDetailsDocumentCountValue(int count);
+
+  /// Beneficiary discount amount summary.
+  ///
+  /// In ar, this message translates to:
+  /// **'خصم {amount}'**
+  String discountDetailsBeneficiaryDiscountSummary(String amount);
+
+  /// Beneficiary gross amount summary.
+  ///
+  /// In ar, this message translates to:
+  /// **'قيمة {amount}'**
+  String discountDetailsBeneficiaryGrossSummary(String amount);
+
+  /// Beneficiary last usage summary.
+  ///
+  /// In ar, this message translates to:
+  /// **'آخر استخدام {date}'**
+  String discountDetailsLastUsedSummary(String date);
+
+  /// Beneficiary first usage summary.
+  ///
+  /// In ar, this message translates to:
+  /// **'أول استخدام {date}'**
+  String discountDetailsFirstUsedSummary(String date);
+
+  /// No description provided for @discountDetailsWalkInCustomer.
+  ///
+  /// In ar, this message translates to:
+  /// **'عميل نقدي'**
+  String get discountDetailsWalkInCustomer;
+
+  /// No description provided for @discountDetailsUnknownSupplier.
+  ///
+  /// In ar, this message translates to:
+  /// **'مورد غير محدد'**
+  String get discountDetailsUnknownSupplier;
+
+  /// Generic count value.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count}'**
+  String discountDetailsCountValue(int count);
+
   /// No description provided for @printAuditButton.
   ///
   /// In ar, this message translates to:
