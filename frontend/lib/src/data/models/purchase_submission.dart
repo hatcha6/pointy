@@ -876,6 +876,10 @@ class AppliedPurchaseDiscount {
     required this.valueType,
     required this.discountAmount,
     this.couponCode = '',
+    this.roundingMode = '',
+    this.roundingIncrement,
+    this.unroundedDiscountAmount,
+    this.roundingAdjustment,
   });
 
   final String ruleName;
@@ -884,6 +888,10 @@ class AppliedPurchaseDiscount {
   final String scope;
   final String valueType;
   final double discountAmount;
+  final String roundingMode;
+  final double? roundingIncrement;
+  final double? unroundedDiscountAmount;
+  final double? roundingAdjustment;
 
   factory AppliedPurchaseDiscount.fromJson(Map<String, Object?> json) {
     return AppliedPurchaseDiscount(
@@ -893,6 +901,12 @@ class AppliedPurchaseDiscount {
       scope: json['scope']?.toString() ?? '',
       valueType: json['value_type']?.toString() ?? '',
       discountAmount: _moneyFromJson(json['discount_amount']),
+      roundingMode: json['rounding_mode']?.toString() ?? '',
+      roundingIncrement: _nullableMoneyFromJson(json['rounding_increment']),
+      unroundedDiscountAmount: _nullableMoneyFromJson(
+        json['unrounded_discount_amount'],
+      ),
+      roundingAdjustment: _nullableMoneyFromJson(json['rounding_adjustment']),
     );
   }
 }

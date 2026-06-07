@@ -8,6 +8,7 @@ from apps.core.models import ShopSettings
 from apps.core.roles import user_is_manager
 from apps.customers.models import Customer
 from apps.discounts.models import AppliedDiscount
+from apps.discounts.services import rounding_metadata_payload
 from .models import (
     Order,
     OrderLine,
@@ -384,6 +385,7 @@ class OrderSerializer(serializers.ModelSerializer):
                 "value": f"{discount.value:.4f}",
                 "discount_amount": f"{discount.discount_amount:.2f}",
                 "allocations": discount.allocations,
+                **rounding_metadata_payload(discount.metadata),
             }
             for discount in discounts
         ]
@@ -600,6 +602,7 @@ class DiscountPreviewSerializer(serializers.Serializer):
                     "value_type": application.value_type,
                     "value": f"{application.value:.4f}",
                     "discount_amount": f"{application.amount:.2f}",
+                    **application.metadata_dict(),
                     "allocations": preview_allocation_dicts(
                         application,
                         lines_by_key,

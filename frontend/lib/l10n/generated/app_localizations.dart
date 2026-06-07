@@ -9299,6 +9299,120 @@ abstract class AppLocalizations {
   /// **'تعديل خصم'**
   String get discountEditTitle;
 
+  /// Current discount wizard step out of total steps.
+  ///
+  /// In ar, this message translates to:
+  /// **'{step} من {total}'**
+  String discountWizardStepLabel(int step, int total);
+
+  /// No description provided for @discountWizardStepBasics.
+  ///
+  /// In ar, this message translates to:
+  /// **'الأساسيات'**
+  String get discountWizardStepBasics;
+
+  /// No description provided for @discountWizardStepValue.
+  ///
+  /// In ar, this message translates to:
+  /// **'قيمة الخصم'**
+  String get discountWizardStepValue;
+
+  /// No description provided for @discountWizardStepEligibility.
+  ///
+  /// In ar, this message translates to:
+  /// **'ينطبق على'**
+  String get discountWizardStepEligibility;
+
+  /// No description provided for @discountWizardStepLimits.
+  ///
+  /// In ar, this message translates to:
+  /// **'الحدود'**
+  String get discountWizardStepLimits;
+
+  /// No description provided for @discountWizardStepReview.
+  ///
+  /// In ar, this message translates to:
+  /// **'المراجعة'**
+  String get discountWizardStepReview;
+
+  /// No description provided for @discountWizardDescriptionToggle.
+  ///
+  /// In ar, this message translates to:
+  /// **'إضافة وصف داخلي'**
+  String get discountWizardDescriptionToggle;
+
+  /// No description provided for @discountWizardMaximumDiscountToggle.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحديد أقصى خصم'**
+  String get discountWizardMaximumDiscountToggle;
+
+  /// No description provided for @discountWizardRoundingToggle.
+  ///
+  /// In ar, this message translates to:
+  /// **'تنظيف السعر بعد الخصم'**
+  String get discountWizardRoundingToggle;
+
+  /// No description provided for @discountWizardMinimumSubtotalToggle.
+  ///
+  /// In ar, this message translates to:
+  /// **'اشتراط أقل إجمالي'**
+  String get discountWizardMinimumSubtotalToggle;
+
+  /// No description provided for @discountWizardMinimumLineQuantityToggle.
+  ///
+  /// In ar, this message translates to:
+  /// **'اشتراط أقل كمية'**
+  String get discountWizardMinimumLineQuantityToggle;
+
+  /// No description provided for @discountWizardProductScopeToggle.
+  ///
+  /// In ar, this message translates to:
+  /// **'تطبيقه على منتجات محددة'**
+  String get discountWizardProductScopeToggle;
+
+  /// No description provided for @discountWizardContactScopeToggle.
+  ///
+  /// In ar, this message translates to:
+  /// **'تطبيقه على عملاء أو موردين محددين'**
+  String get discountWizardContactScopeToggle;
+
+  /// No description provided for @discountWizardScheduleToggle.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحديد فترة للخصم'**
+  String get discountWizardScheduleToggle;
+
+  /// No description provided for @discountWizardUsageLimitsToggle.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحديد مرات الاستخدام'**
+  String get discountWizardUsageLimitsToggle;
+
+  /// No description provided for @discountWizardAdvancedToggle.
+  ///
+  /// In ar, this message translates to:
+  /// **'إظهار خيارات متقدمة'**
+  String get discountWizardAdvancedToggle;
+
+  /// No description provided for @discountWizardFixStepError.
+  ///
+  /// In ar, this message translates to:
+  /// **'راجع الخطوة المحددة وأكمل البيانات المطلوبة.'**
+  String get discountWizardFixStepError;
+
+  /// No description provided for @discountWizardNoExtraRules.
+  ///
+  /// In ar, this message translates to:
+  /// **'بدون شروط إضافية'**
+  String get discountWizardNoExtraRules;
+
+  /// No description provided for @discountWizardNoLimits.
+  ///
+  /// In ar, this message translates to:
+  /// **'بدون حدود'**
+  String get discountWizardNoLimits;
+
   /// No description provided for @discountLoadError.
   ///
   /// In ar, this message translates to:
@@ -9514,6 +9628,54 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'أقصى خصم'**
   String get discountMaxAmountLabel;
+
+  /// No description provided for @discountRoundingModeLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'طريقة تنظيف السعر'**
+  String get discountRoundingModeLabel;
+
+  /// No description provided for @discountRoundingModeNone.
+  ///
+  /// In ar, this message translates to:
+  /// **'بدون تنظيف'**
+  String get discountRoundingModeNone;
+
+  /// No description provided for @discountRoundingModeDown.
+  ///
+  /// In ar, this message translates to:
+  /// **'نزولاً'**
+  String get discountRoundingModeDown;
+
+  /// No description provided for @discountRoundingModeNearest.
+  ///
+  /// In ar, this message translates to:
+  /// **'لأقرب قيمة'**
+  String get discountRoundingModeNearest;
+
+  /// No description provided for @discountRoundingModeUp.
+  ///
+  /// In ar, this message translates to:
+  /// **'صعوداً'**
+  String get discountRoundingModeUp;
+
+  /// No description provided for @discountRoundingIncrementLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'قيمة التقريب'**
+  String get discountRoundingIncrementLabel;
+
+  /// No description provided for @discountRoundingIncrementError.
+  ///
+  /// In ar, this message translates to:
+  /// **'أدخل قيمة تقريب صحيحة.'**
+  String get discountRoundingIncrementError;
+
+  /// Summary for discount result rounding mode and increment.
+  ///
+  /// In ar, this message translates to:
+  /// **'{mode} إلى {increment}'**
+  String discountRoundingSummary(String mode, String increment);
 
   /// No description provided for @discountPriorityLabel.
   ///

@@ -13,6 +13,7 @@ from apps.discounts.services import (
     DiscountEngine,
     DiscountLineInput,
     allocate_discount_amount,
+    rounding_metadata_payload,
 )
 from .models import (
     PurchaseLine,
@@ -739,6 +740,7 @@ class PurchaseDiscountPreviewSerializer(serializers.Serializer):
                     "value_type": application.value_type,
                     "value": f"{application.value:.4f}",
                     "discount_amount": f"{application.amount:.2f}",
+                    **application.metadata_dict(),
                     "allocations": application.allocation_dicts(),
                 }
                 for application in discount_result.applications
@@ -1132,6 +1134,7 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
                 "value": f"{discount.value:.4f}",
                 "discount_amount": f"{discount.discount_amount:.2f}",
                 "allocations": discount.allocations,
+                **rounding_metadata_payload(discount.metadata),
             }
             for discount in discounts
         ]

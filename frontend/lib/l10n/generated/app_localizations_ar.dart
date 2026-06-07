@@ -5382,6 +5382,67 @@ class AppLocalizationsAr extends AppLocalizations {
   String get discountEditTitle => 'تعديل خصم';
 
   @override
+  String discountWizardStepLabel(int step, int total) {
+    return '$step من $total';
+  }
+
+  @override
+  String get discountWizardStepBasics => 'الأساسيات';
+
+  @override
+  String get discountWizardStepValue => 'قيمة الخصم';
+
+  @override
+  String get discountWizardStepEligibility => 'ينطبق على';
+
+  @override
+  String get discountWizardStepLimits => 'الحدود';
+
+  @override
+  String get discountWizardStepReview => 'المراجعة';
+
+  @override
+  String get discountWizardDescriptionToggle => 'إضافة وصف داخلي';
+
+  @override
+  String get discountWizardMaximumDiscountToggle => 'تحديد أقصى خصم';
+
+  @override
+  String get discountWizardRoundingToggle => 'تنظيف السعر بعد الخصم';
+
+  @override
+  String get discountWizardMinimumSubtotalToggle => 'اشتراط أقل إجمالي';
+
+  @override
+  String get discountWizardMinimumLineQuantityToggle => 'اشتراط أقل كمية';
+
+  @override
+  String get discountWizardProductScopeToggle => 'تطبيقه على منتجات محددة';
+
+  @override
+  String get discountWizardContactScopeToggle =>
+      'تطبيقه على عملاء أو موردين محددين';
+
+  @override
+  String get discountWizardScheduleToggle => 'تحديد فترة للخصم';
+
+  @override
+  String get discountWizardUsageLimitsToggle => 'تحديد مرات الاستخدام';
+
+  @override
+  String get discountWizardAdvancedToggle => 'إظهار خيارات متقدمة';
+
+  @override
+  String get discountWizardFixStepError =>
+      'راجع الخطوة المحددة وأكمل البيانات المطلوبة.';
+
+  @override
+  String get discountWizardNoExtraRules => 'بدون شروط إضافية';
+
+  @override
+  String get discountWizardNoLimits => 'بدون حدود';
+
+  @override
   String get discountLoadError => 'تعذر تحميل الخصومات.';
 
   @override
@@ -5489,6 +5550,32 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get discountMaxAmountLabel => 'أقصى خصم';
+
+  @override
+  String get discountRoundingModeLabel => 'طريقة تنظيف السعر';
+
+  @override
+  String get discountRoundingModeNone => 'بدون تنظيف';
+
+  @override
+  String get discountRoundingModeDown => 'نزولاً';
+
+  @override
+  String get discountRoundingModeNearest => 'لأقرب قيمة';
+
+  @override
+  String get discountRoundingModeUp => 'صعوداً';
+
+  @override
+  String get discountRoundingIncrementLabel => 'قيمة التقريب';
+
+  @override
+  String get discountRoundingIncrementError => 'أدخل قيمة تقريب صحيحة.';
+
+  @override
+  String discountRoundingSummary(String mode, String increment) {
+    return '$mode إلى $increment';
+  }
 
   @override
   String get discountPriorityLabel => 'الأولوية';

@@ -3248,6 +3248,36 @@
   "discountCreateButton": "خصم جديد",
   "discountCreateTitle": "إضافة خصم",
   "discountEditTitle": "تعديل خصم",
+  "discountWizardStepLabel": "{step} من {total}",
+  "@discountWizardStepLabel": {
+    "description": "Current discount wizard step out of total steps.",
+    "placeholders": {
+      "step": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "discountWizardStepBasics": "الأساسيات",
+  "discountWizardStepValue": "قيمة الخصم",
+  "discountWizardStepEligibility": "ينطبق على",
+  "discountWizardStepLimits": "الحدود",
+  "discountWizardStepReview": "المراجعة",
+  "discountWizardDescriptionToggle": "إضافة وصف داخلي",
+  "discountWizardMaximumDiscountToggle": "تحديد أقصى خصم",
+  "discountWizardRoundingToggle": "تنظيف السعر بعد الخصم",
+  "discountWizardMinimumSubtotalToggle": "اشتراط أقل إجمالي",
+  "discountWizardMinimumLineQuantityToggle": "اشتراط أقل كمية",
+  "discountWizardProductScopeToggle": "تطبيقه على منتجات محددة",
+  "discountWizardContactScopeToggle": "تطبيقه على عملاء أو موردين محددين",
+  "discountWizardScheduleToggle": "تحديد فترة للخصم",
+  "discountWizardUsageLimitsToggle": "تحديد مرات الاستخدام",
+  "discountWizardAdvancedToggle": "إظهار خيارات متقدمة",
+  "discountWizardFixStepError": "راجع الخطوة المحددة وأكمل البيانات المطلوبة.",
+  "discountWizardNoExtraRules": "بدون شروط إضافية",
+  "discountWizardNoLimits": "بدون حدود",
   "discountLoadError": "تعذر تحميل الخصومات.",
   "discountSaveError": "تعذر حفظ الخصم. راجع البيانات وحاول مرة أخرى.",
   "discountEmptyRules": "لا توجد خصومات مطابقة.",
@@ -3284,6 +3314,25 @@
   "discountValueTypeFixedPrice": "سعر ثابت",
   "discountValueLabel": "قيمة الخصم",
   "discountMaxAmountLabel": "أقصى خصم",
+  "discountRoundingModeLabel": "طريقة تنظيف السعر",
+  "discountRoundingModeNone": "بدون تنظيف",
+  "discountRoundingModeDown": "نزولاً",
+  "discountRoundingModeNearest": "لأقرب قيمة",
+  "discountRoundingModeUp": "صعوداً",
+  "discountRoundingIncrementLabel": "قيمة التقريب",
+  "discountRoundingIncrementError": "أدخل قيمة تقريب صحيحة.",
+  "discountRoundingSummary": "{mode} إلى {increment}",
+  "@discountRoundingSummary": {
+    "description": "Summary for discount result rounding mode and increment.",
+    "placeholders": {
+      "mode": {
+        "type": "String"
+      },
+      "increment": {
+        "type": "String"
+      }
+    }
+  },
   "discountPriorityLabel": "الأولوية",
   "discountExclusiveLabel": "يمنع الخصومات الأقل أولوية",
   "discountExclusiveHelper": "عند تفعيله لا تطبق القواعد التالية بعد هذا الخصم.",

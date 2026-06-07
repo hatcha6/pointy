@@ -302,6 +302,100 @@ class DiscountEngineTests(TestCase):
             {"line_key": "line-1", "amount": "5.00"},
         ])
 
+    def test_document_discount_can_round_discounted_total_down_to_increment(self):
+        DiscountRule.objects.create(
+            name="Round document total",
+            channel=DiscountRule.Channel.SALES,
+            value_type=DiscountRule.ValueType.PERCENTAGE,
+            value=Decimal("10.00"),
+            rounding_mode=DiscountRule.RoundingMode.DOWN,
+            rounding_increment=Decimal("5.00"),
+        )
+
+        result = self.engine.calculate(self.context())
+
+        self.assertEqual(result.discount_total, Decimal("5.00"))
+        self.assertEqual(result.total, Decimal("35.00"))
+        self.assertEqual(result.applications[0].allocation_dicts(), [
+            {"line_key": "line-1", "amount": "2.50"},
+            {"line_key": "line-2", "amount": "2.50"},
+        ])
+        self.assertEqual(
+            result.applications[0].metadata_dict(),
+            {
+                "rounding_mode": DiscountRule.RoundingMode.DOWN,
+                "rounding_increment": "5.00",
+                "unrounded_discount_amount": "4.00",
+                "rounding_adjustment": "1.00",
+            },
+        )
+
+    def test_line_discount_rounds_each_discounted_line_to_increment(self):
+        rule = DiscountRule.objects.create(
+            name="Round line total",
+            channel=DiscountRule.Channel.SALES,
+            scope=DiscountRule.Scope.LINE,
+            value_type=DiscountRule.ValueType.PERCENTAGE,
+            value=Decimal("10.00"),
+            rounding_mode=DiscountRule.RoundingMode.DOWN,
+            rounding_increment=Decimal("0.25"),
+        )
+        rule.products.add(self.product)
+
+        result = self.engine.calculate(
+            self.context(
+                lines=(
+                    DiscountLineInput(
+                        key="line-1",
+                        product_id=self.product.pk,
+                        quantity=1,
+                        unit_amount=Decimal("10.10"),
+                    ),
+                    DiscountLineInput(
+                        key="line-2",
+                        product_id=self.other_product.pk,
+                        quantity=1,
+                        unit_amount=Decimal("10.10"),
+                    ),
+                )
+            )
+        )
+
+        self.assertEqual(result.discount_total, Decimal("1.10"))
+        self.assertEqual(result.total, Decimal("19.10"))
+        self.assertEqual(result.applications[0].allocation_dicts(), [
+            {"line_key": "line-1", "amount": "1.10"},
+        ])
+
+    def test_rounding_respects_maximum_discount_cap(self):
+        DiscountRule.objects.create(
+            name="Rounded capped document",
+            channel=DiscountRule.Channel.SALES,
+            value_type=DiscountRule.ValueType.PERCENTAGE,
+            value=Decimal("10.00"),
+            max_discount_amount=Decimal("4.50"),
+            rounding_mode=DiscountRule.RoundingMode.DOWN,
+            rounding_increment=Decimal("5.00"),
+        )
+
+        result = self.engine.calculate(self.context())
+
+        self.assertEqual(result.discount_total, Decimal("4.50"))
+        self.assertEqual(result.total, Decimal("35.50"))
+        self.assertEqual(result.applications[0].allocation_dicts(), [
+            {"line_key": "line-1", "amount": "2.25"},
+            {"line_key": "line-2", "amount": "2.25"},
+        ])
+        self.assertEqual(
+            result.applications[0].metadata_dict(),
+            {
+                "rounding_mode": DiscountRule.RoundingMode.DOWN,
+                "rounding_increment": "5.00",
+                "unrounded_discount_amount": "4.00",
+                "rounding_adjustment": "1.00",
+            },
+        )
+
     def test_disabled_future_and_expired_automatic_rules_are_ignored(self):
         DiscountRule.objects.create(
             name="Disabled",
@@ -393,6 +487,8 @@ class DiscountEngineTests(TestCase):
             coupon_code="SNAP",
             value_type=DiscountRule.ValueType.FIXED_AMOUNT,
             value=Decimal("4.00"),
+            rounding_mode=DiscountRule.RoundingMode.DOWN,
+            rounding_increment=Decimal("5.00"),
         )
         order = Order.objects.create()
         result = self.engine.calculate(self.context(coupon_codes=("SNAP",)))
@@ -405,9 +501,18 @@ class DiscountEngineTests(TestCase):
         self.assertEqual(snapshot.rule, rule)
         self.assertEqual(snapshot.rule_name, "Snapshot coupon")
         self.assertEqual(snapshot.source, DiscountRule.ApplicationType.COUPON_CODE)
-        self.assertEqual(snapshot.discount_amount, Decimal("4.00"))
+        self.assertEqual(snapshot.discount_amount, Decimal("5.00"))
         self.assertEqual(snapshot.document, order)
-        self.assertEqual(snapshot.allocations[0]["amount"], "2.00")
+        self.assertEqual(snapshot.allocations[0]["amount"], "2.50")
+        self.assertEqual(
+            snapshot.metadata,
+            {
+                "rounding_mode": DiscountRule.RoundingMode.DOWN,
+                "rounding_increment": "5.00",
+                "unrounded_discount_amount": "4.00",
+                "rounding_adjustment": "1.00",
+            },
+        )
         self.assertEqual(redemption.applied_discount, snapshot)
         self.assertEqual(redemption.document, order)
 
@@ -561,6 +666,8 @@ class DiscountRuleApiTests(TestCase):
                     "value_type": DiscountRule.ValueType.PERCENTAGE,
                     "value": "10.0000",
                     "max_discount_amount": "5.00",
+                    "rounding_mode": DiscountRule.RoundingMode.DOWN,
+                    "rounding_increment": "0.25",
                     "min_order_subtotal": "20.00",
                     "priority": 10,
                     "exclusive": False,
@@ -575,6 +682,8 @@ class DiscountRuleApiTests(TestCase):
             rule_id = response.data["id"]
             self.assertEqual(response.data["coupon_code"], "SAVE10")
             self.assertTrue(response.data["is_active"])
+            self.assertEqual(response.data["rounding_mode"], "down")
+            self.assertEqual(response.data["rounding_increment"], "0.25")
             self.assertEqual(response.data["products"], [self.product.pk])
             self.assertEqual(response.data["variants"], [self.variant.pk])
             self.assertEqual(response.data["product_variants"], [self.variant.pk])
@@ -720,6 +829,16 @@ class DiscountRuleApiTests(TestCase):
                     "suppliers": [self.supplier.pk],
                 },
                 "suppliers",
+            ),
+            (
+                {
+                    "name": "Missing rounding increment",
+                    "scope": DiscountRule.Scope.DOCUMENT,
+                    "value_type": DiscountRule.ValueType.FIXED_AMOUNT,
+                    "value": "1.0000",
+                    "rounding_mode": DiscountRule.RoundingMode.DOWN,
+                },
+                "rounding_increment",
             ),
         ]
 
@@ -885,6 +1004,35 @@ class DiscountRuleApiTests(TestCase):
             [discount["rule_name"] for discount in response.data["applied_discounts"]],
             ["Automatic sales", "Coupon sales"],
         )
+
+    def test_sales_discount_preview_reports_rounding_metadata(self):
+        DiscountRule.objects.create(
+            name="Rounded sales",
+            channel=DiscountRule.Channel.SALES,
+            scope=DiscountRule.Scope.DOCUMENT,
+            value_type=DiscountRule.ValueType.PERCENTAGE,
+            value=Decimal("10.00"),
+            rounding_mode=DiscountRule.RoundingMode.DOWN,
+            rounding_increment=Decimal("5.00"),
+        )
+
+        response = self.client.post(
+            "/api/orders/discount-preview/",
+            {
+                "lines": [{"variant": self.product.default_variant.pk, "quantity": 2}],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(response.data["subtotal"], "24.00")
+        self.assertEqual(response.data["discount_total"], "4.00")
+        self.assertEqual(response.data["total"], "20.00")
+        discount = response.data["applied_discounts"][0]
+        self.assertEqual(discount["rounding_mode"], "down")
+        self.assertEqual(discount["rounding_increment"], "5.00")
+        self.assertEqual(discount["unrounded_discount_amount"], "2.40")
+        self.assertEqual(discount["rounding_adjustment"], "1.60")
 
     def test_sales_discount_preview_reports_unapplied_coupon_codes(self):
         response = self.client.post(

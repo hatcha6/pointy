@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from decimal import Decimal, ROUND_DOWN, ROUND_HALF_UP
+from decimal import Decimal, ROUND_CEILING, ROUND_DOWN, ROUND_FLOOR, ROUND_HALF_UP
 from typing import Iterable
 
 from django.contrib.contenttypes.models import ContentType
@@ -79,9 +79,25 @@ class DiscountApplication:
     source_subtotal: Decimal
     amount: Decimal
     allocations: tuple[DiscountAllocation, ...]
+    unrounded_amount: Decimal | None = None
+    rounding_mode: str = DiscountRule.RoundingMode.NONE
+    rounding_increment: Decimal | None = None
+    rounding_adjustment: Decimal = Decimal("0.00")
 
     def allocation_dicts(self) -> list[dict]:
         return [allocation.as_dict() for allocation in self.allocations]
+
+    def metadata_dict(self) -> dict:
+        if self.rounding_mode == DiscountRule.RoundingMode.NONE:
+            return {}
+        return {
+            "rounding_mode": self.rounding_mode,
+            "rounding_increment": str(money(self.rounding_increment or Decimal("0.00"))),
+            "unrounded_discount_amount": str(
+                money(self.unrounded_amount or self.amount)
+            ),
+            "rounding_adjustment": str(money(self.rounding_adjustment)),
+        }
 
 
 @dataclass(frozen=True, slots=True)
@@ -290,8 +306,19 @@ class DiscountEngine:
         if source_subtotal <= Decimal("0.00"):
             return None
 
-        allocations = self._rule_allocations(rule, matching_lines, remaining_by_line)
+        base_allocations = self._rule_allocations(rule, matching_lines, remaining_by_line)
+        base_amount = money(
+            sum((allocation.amount for allocation in base_allocations), Decimal("0.00"))
+        )
+        allocations = self._apply_rounding(
+            rule,
+            matching_lines,
+            remaining_by_line,
+            base_allocations,
+            source_subtotal,
+        )
         amount = money(sum((allocation.amount for allocation in allocations), Decimal("0.00")))
+        rounding_adjustment = money(amount - base_amount)
         if rule.max_discount_amount is not None and amount > rule.max_discount_amount:
             allocations = allocate_discount_amount(
                 money(rule.max_discount_amount),
@@ -312,6 +339,73 @@ class DiscountEngine:
             source_subtotal=source_subtotal,
             amount=amount,
             allocations=tuple(allocations),
+            unrounded_amount=base_amount,
+            rounding_mode=rule.rounding_mode,
+            rounding_increment=rule.rounding_increment,
+            rounding_adjustment=rounding_adjustment,
+        )
+
+    def _apply_rounding(
+        self,
+        rule: DiscountRule,
+        matching_lines: list[DiscountLineInput],
+        remaining_by_line: dict[str, Decimal],
+        base_allocations: tuple[DiscountAllocation, ...],
+        source_subtotal: Decimal,
+    ) -> tuple[DiscountAllocation, ...]:
+        if (
+            rule.rounding_mode == DiscountRule.RoundingMode.NONE
+            or rule.rounding_increment is None
+        ):
+            return base_allocations
+
+        base_by_line = {
+            allocation.line_key: allocation.amount
+            for allocation in base_allocations
+        }
+        if rule.scope == DiscountRule.Scope.LINE:
+            rounded_allocations = []
+            for line in matching_lines:
+                source_amount = remaining_by_line[line.key]
+                discounted_amount = money(
+                    source_amount - base_by_line.get(line.key, Decimal("0.00"))
+                )
+                rounded_amount = rounded_price(
+                    discounted_amount,
+                    rule.rounding_increment,
+                    rule.rounding_mode,
+                )
+                target_discount = clamp_discount_amount(
+                    money(source_amount - rounded_amount),
+                    source_amount,
+                )
+                if target_discount > Decimal("0.00"):
+                    rounded_allocations.append(
+                        DiscountAllocation(
+                            line_key=line.key,
+                            amount=target_discount,
+                        )
+                    )
+            return tuple(rounded_allocations)
+
+        base_amount = money(
+            sum((allocation.amount for allocation in base_allocations), Decimal("0.00"))
+        )
+        discounted_amount = money(source_subtotal - base_amount)
+        rounded_amount = rounded_price(
+            discounted_amount,
+            rule.rounding_increment,
+            rule.rounding_mode,
+        )
+        target_discount = clamp_discount_amount(
+            money(source_subtotal - rounded_amount),
+            source_subtotal,
+        )
+        return tuple(
+            allocate_discount_amount(
+                target_discount,
+                {line.key: remaining_by_line[line.key] for line in matching_lines},
+            )
         )
 
     def _rule_allocations(
@@ -410,6 +504,39 @@ def allocate_discount_amount(
     )
 
 
+def rounded_price(amount: Decimal, increment: Decimal, mode: str) -> Decimal:
+    amount = money(amount)
+    increment = money(increment)
+    if amount <= Decimal("0.00") or increment <= Decimal("0.00"):
+        return money(amount)
+
+    units = amount / increment
+    if mode == DiscountRule.RoundingMode.DOWN:
+        rounded_units = units.to_integral_value(rounding=ROUND_FLOOR)
+    elif mode == DiscountRule.RoundingMode.UP:
+        rounded_units = units.to_integral_value(rounding=ROUND_CEILING)
+    else:
+        rounded_units = units.to_integral_value(rounding=ROUND_HALF_UP)
+    return money(rounded_units * increment)
+
+
+def clamp_discount_amount(amount: Decimal, source_amount: Decimal) -> Decimal:
+    return min(max(money(amount), Decimal("0.00")), money(source_amount))
+
+
+def rounding_metadata_payload(metadata: dict | None) -> dict:
+    metadata = metadata or {}
+    mode = metadata.get("rounding_mode")
+    if not mode or mode == DiscountRule.RoundingMode.NONE:
+        return {}
+    return {
+        "rounding_mode": mode,
+        "rounding_increment": metadata.get("rounding_increment"),
+        "unrounded_discount_amount": metadata.get("unrounded_discount_amount"),
+        "rounding_adjustment": metadata.get("rounding_adjustment"),
+    }
+
+
 @transaction.atomic
 def persist_applied_discounts(
     *,
@@ -457,6 +584,7 @@ def persist_applied_discounts(
             line_content_type=line_content_type,
             line_object_id=line_object_id,
             allocations=allocation_dicts(application, line_objects_by_key),
+            metadata=application.metadata_dict(),
         )
         DiscountRedemption.objects.create(
             rule_id=application.rule_id,

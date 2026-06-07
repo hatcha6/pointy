@@ -50,6 +50,8 @@ class DiscountRuleSerializer(serializers.ModelSerializer):
             "value_type",
             "value",
             "max_discount_amount",
+            "rounding_mode",
+            "rounding_increment",
             "min_order_subtotal",
             "min_line_quantity",
             "priority",

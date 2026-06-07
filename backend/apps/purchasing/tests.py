@@ -582,6 +582,41 @@ class PurchaseOrderApiTests(TestCase):
         self.assertEqual(lines[0]["allocated_landed_cost"], "0.25")
         self.assertEqual(lines[1]["allocated_landed_cost"], "0.75")
 
+    def test_purchase_discount_preview_reports_rounding_metadata(self):
+        DiscountRule.objects.create(
+            name="Rounded supplier preview",
+            channel=DiscountRule.Channel.PURCHASING,
+            value_type=DiscountRule.ValueType.PERCENTAGE,
+            value=Decimal("10.00"),
+            rounding_mode=DiscountRule.RoundingMode.DOWN,
+            rounding_increment=Decimal("0.25"),
+        )
+
+        response = self.client.post(
+            reverse("purchaseorder-discount-preview"),
+            {
+                "supplier": self.supplier.pk,
+                "lines": [
+                    {
+                        "variant": self.variant.pk,
+                        "quantity": 1,
+                        "unit_cost": "10.10",
+                    }
+                ],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.assertEqual(response.data["subtotal"], "10.10")
+        self.assertEqual(response.data["discount_total"], "1.10")
+        self.assertEqual(response.data["total"], "9.00")
+        discount = response.data["applied_discounts"][0]
+        self.assertEqual(discount["rounding_mode"], "down")
+        self.assertEqual(discount["rounding_increment"], "0.25")
+        self.assertEqual(discount["unrounded_discount_amount"], "1.01")
+        self.assertEqual(discount["rounding_adjustment"], "0.09")
+
     def test_purchase_discount_preview_reports_unapplied_code(self):
         response = self.client.post(
             reverse("purchaseorder-discount-preview"),

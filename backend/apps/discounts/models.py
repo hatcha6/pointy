@@ -37,6 +37,12 @@ class DiscountRule(TimeStampedModel):
         FIXED_UNIT_AMOUNT = "fixed_unit_amount", "Fixed unit amount"
         FIXED_PRICE = "fixed_price", "Fixed price"
 
+    class RoundingMode(models.TextChoices):
+        NONE = "none", "No rounding"
+        DOWN = "down", "Round down"
+        NEAREST = "nearest", "Round to nearest"
+        UP = "up", "Round up"
+
     name = models.CharField(max_length=160)
     description = models.TextField(blank=True)
     channel = models.CharField(
@@ -67,6 +73,18 @@ class DiscountRule(TimeStampedModel):
         blank=True,
         null=True,
         validators=[MinValueValidator(Decimal("0.00"))],
+    )
+    rounding_mode = models.CharField(
+        max_length=16,
+        choices=RoundingMode.choices,
+        default=RoundingMode.NONE,
+    )
+    rounding_increment = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        blank=True,
+        null=True,
+        validators=[MinValueValidator(Decimal("0.01"))],
     )
     min_order_subtotal = models.DecimalField(
         max_digits=10,
@@ -154,6 +172,16 @@ class DiscountRule(TimeStampedModel):
         ):
             raise ValidationError(
                 {"max_discount_amount": "Maximum discount must be greater than zero."}
+            )
+        if self.rounding_mode == self.RoundingMode.NONE:
+            self.rounding_increment = None
+        elif self.rounding_increment is None:
+            raise ValidationError(
+                {"rounding_increment": "Rounding requires an increment."}
+            )
+        elif self.rounding_increment <= Decimal("0.00"):
+            raise ValidationError(
+                {"rounding_increment": "Rounding increment must be greater than zero."}
             )
         if (
             self.min_line_quantity is not None

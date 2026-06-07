@@ -13,6 +13,7 @@ from apps.attachments.services import (
 )
 from apps.core.models import ShopSettings
 from apps.discounts.models import AppliedDiscount
+from apps.discounts.services import rounding_metadata_payload
 from apps.sales.models import Order
 from .models import (
     PrintAgent,
@@ -205,6 +206,7 @@ def order_applied_discounts(order):
             "scope": discount.scope,
             "discount_amount": money(discount.discount_amount),
             "allocations": discount.allocations,
+            **rounding_metadata_payload(discount.metadata),
         }
         for discount in AppliedDiscount.objects.filter(
             document_content_type=document_content_type,

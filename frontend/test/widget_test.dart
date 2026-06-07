@@ -2060,13 +2060,19 @@ void main() {
       find.widgetWithText(TextFormField, 'اسم الخصم'),
       'خصم الافتتاح',
     );
-    await tester.ensureVisible(
-      find.widgetWithText(TextFormField, 'قيمة الخصم'),
+    final wizardAction = find.byKey(
+      const ValueKey('discount_rule_save_button'),
     );
+    await tester.tap(wizardAction);
+    await tester.pumpAndSettle();
     await tester.enterText(
       find.widgetWithText(TextFormField, 'قيمة الخصم'),
       '10',
     );
+    await tester.tap(wizardAction);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('تطبيقه على منتجات محددة'));
+    await tester.pumpAndSettle();
     final productPicker = find.byKey(
       const ValueKey('discount_product_picker_field'),
     );
@@ -2091,18 +2097,11 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    final saveButton = find.byKey(const ValueKey('discount_rule_save_button'));
-    await tester.dragUntilVisible(
-      saveButton,
-      find.byKey(const ValueKey('discount_rule_form_scroll')),
-      const Offset(0, -400),
-    );
-    await tester.drag(
-      find.byKey(const ValueKey('discount_rule_form_scroll')),
-      const Offset(0, -160),
-    );
+    await tester.tap(wizardAction);
     await tester.pumpAndSettle();
-    await tester.tap(saveButton);
+    await tester.tap(wizardAction);
+    await tester.pumpAndSettle();
+    await tester.tap(wizardAction);
     await tester.pumpAndSettle(const Duration(seconds: 1));
 
     expect(discountBody?['name'], 'خصم الافتتاح');
@@ -2111,6 +2110,8 @@ void main() {
     expect(discountBody?['scope'], 'document');
     expect(discountBody?['value_type'], 'percentage');
     expect(discountBody?['value'], '10');
+    expect(discountBody?['rounding_mode'], 'none');
+    expect(discountBody?['rounding_increment'], isNull);
     expect(discountBody?['products'], [1]);
   });
 

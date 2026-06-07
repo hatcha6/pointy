@@ -67,6 +67,24 @@ enum DiscountValueType {
   }
 }
 
+enum DiscountRoundingMode {
+  none('none'),
+  down('down'),
+  nearest('nearest'),
+  up('up');
+
+  const DiscountRoundingMode(this.apiValue);
+
+  final String apiValue;
+
+  static DiscountRoundingMode fromApi(String value) {
+    return DiscountRoundingMode.values.firstWhere(
+      (mode) => mode.apiValue == value,
+      orElse: () => DiscountRoundingMode.none,
+    );
+  }
+}
+
 enum DiscountRuleStatusFilter implements QueryFilterSet {
   all(null),
   active(QueryFilter(parameter: 'is_active', value: 'true')),
@@ -504,6 +522,8 @@ class DiscountRule {
     required this.valueType,
     required this.value,
     required this.maxDiscountAmount,
+    required this.roundingMode,
+    required this.roundingIncrement,
     required this.minOrderSubtotal,
     required this.minLineQuantity,
     required this.priority,
@@ -536,6 +556,8 @@ class DiscountRule {
   final DiscountValueType valueType;
   final double value;
   final double? maxDiscountAmount;
+  final DiscountRoundingMode roundingMode;
+  final double? roundingIncrement;
   final double minOrderSubtotal;
   final int? minLineQuantity;
   final int priority;
@@ -573,6 +595,10 @@ class DiscountRule {
       ),
       value: _doubleFromJson(json['value']),
       maxDiscountAmount: _nullableDoubleFromJson(json['max_discount_amount']),
+      roundingMode: DiscountRoundingMode.fromApi(
+        json['rounding_mode']?.toString() ?? '',
+      ),
+      roundingIncrement: _nullableDoubleFromJson(json['rounding_increment']),
       minOrderSubtotal: _doubleFromJson(json['min_order_subtotal']),
       minLineQuantity: _nullableIntFromJson(json['min_line_quantity']),
       priority: _intFromJson(json['priority']),
@@ -616,6 +642,8 @@ class DiscountRuleDraft {
     required this.valueType,
     required this.value,
     required this.maxDiscountAmount,
+    required this.roundingMode,
+    required this.roundingIncrement,
     required this.minOrderSubtotal,
     required this.minLineQuantity,
     required this.priority,
@@ -643,6 +671,8 @@ class DiscountRuleDraft {
   final DiscountValueType valueType;
   final String value;
   final String maxDiscountAmount;
+  final DiscountRoundingMode roundingMode;
+  final String roundingIncrement;
   final String minOrderSubtotal;
   final String minLineQuantity;
   final String priority;
@@ -674,6 +704,10 @@ class DiscountRuleDraft {
       'value_type': valueType.apiValue,
       'value': value.trim(),
       'max_discount_amount': _nullableDecimal(maxDiscountAmount),
+      'rounding_mode': roundingMode.apiValue,
+      'rounding_increment': roundingMode == DiscountRoundingMode.none
+          ? null
+          : _nullableDecimal(roundingIncrement),
       'min_order_subtotal': minOrderSubtotal.trim().isEmpty
           ? '0.00'
           : minOrderSubtotal.trim(),

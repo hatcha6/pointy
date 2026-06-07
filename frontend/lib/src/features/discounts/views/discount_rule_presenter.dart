@@ -38,6 +38,18 @@ String discountValueTypeLabel(AppLocalizations l10n, DiscountValueType type) {
   };
 }
 
+String discountRoundingModeLabel(
+  AppLocalizations l10n,
+  DiscountRoundingMode mode,
+) {
+  return switch (mode) {
+    DiscountRoundingMode.none => l10n.discountRoundingModeNone,
+    DiscountRoundingMode.down => l10n.discountRoundingModeDown,
+    DiscountRoundingMode.nearest => l10n.discountRoundingModeNearest,
+    DiscountRoundingMode.up => l10n.discountRoundingModeUp,
+  };
+}
+
 String discountValueText(AppLocalizations l10n, DiscountRule rule) {
   return switch (rule.valueType) {
     DiscountValueType.percentage => l10n.discountPercentageValue(
@@ -63,6 +75,12 @@ List<String> discountRuleFacts(AppLocalizations l10n, DiscountRule rule) {
       l10n.discountMinLineQuantitySummary(rule.minLineQuantity!),
     if (rule.maxDiscountAmount != null)
       l10n.discountMaxAmountSummary(formatMoney(rule.maxDiscountAmount!)),
+    if (rule.roundingMode != DiscountRoundingMode.none &&
+        rule.roundingIncrement != null)
+      l10n.discountRoundingSummary(
+        discountRoundingModeLabel(l10n, rule.roundingMode),
+        formatMoney(rule.roundingIncrement!),
+      ),
     if (rule.usageLimit != null)
       l10n.discountUsageSummary(rule.redemptionCount, rule.usageLimit!),
     if (rule.usageLimit == null)
