@@ -41,11 +41,17 @@ class Migration(migrations.Migration):
                 blank=True,
                 choices=[
                     ("monthly_fixed", "Monthly fixed"),
+                    ("weekly_fixed", "Weekly fixed"),
+                    ("daily_rate", "Daily rate"),
+                    ("hourly_rate", "Hourly rate"),
+                    ("per_shift", "Per shift"),
                     ("sales_commission_only", "Sales commission only"),
                     (
                         "monthly_fixed_plus_sales_commission",
                         "Monthly fixed plus sales commission",
                     ),
+                    ("contract_fixed", "Contract fixed"),
+                    ("custom_fixed", "Custom fixed"),
                 ],
                 db_index=True,
                 default="",

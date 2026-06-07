@@ -5945,6 +5945,15 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
+  String employeeUnitBasedPlanLabel(
+    String salaryType,
+    String amount,
+    String units,
+  ) {
+    return '$salaryType - $amount × $units';
+  }
+
+  @override
   String get employeeNoDetails => 'لا توجد تفاصيل إضافية';
 
   @override
@@ -6036,6 +6045,68 @@ class AppLocalizationsAr extends AppLocalizations {
   String get payrollLineManualPayLabel => 'أجر يدوي';
 
   @override
+  String get editPayrollLineAdjustmentsTooltip => 'تعديل غياب وإضافات الموظف';
+
+  @override
+  String payrollLineAdjustmentTitle(String employee) {
+    return 'تعديل راتب $employee';
+  }
+
+  @override
+  String get payrollLineAdjustmentSubtitle =>
+      'أدخل الغياب أو الزيادة أو أي إضافة وخصم يدوي لهذا المسير فقط.';
+
+  @override
+  String get absenceDaysField => 'أيام الغياب';
+
+  @override
+  String absenceDaysHelper(String rate) {
+    return 'يُحسب الخصم تلقائيًا حسب قيمة اليوم: $rate';
+  }
+
+  @override
+  String absenceDaysExceedPeriodError(int days) {
+    return 'لا يمكن أن تتجاوز أيام الغياب $days يومًا.';
+  }
+
+  @override
+  String get raiseAmountField => 'زيادة هذا الشهر';
+
+  @override
+  String get raiseAmountHelper =>
+      'مبلغ إضافي مؤقت يُضاف لصافي هذا الموظف في هذا المسير.';
+
+  @override
+  String get manualAdditionAmountField => 'إضافة يدوية';
+
+  @override
+  String get manualAdditionAmountHelper =>
+      'أي مبلغ إضافي يقرره المدير لهذا الموظف.';
+
+  @override
+  String get manualDeductionAmountField => 'خصم يدوي';
+
+  @override
+  String get manualDeductionAmountHelper =>
+      'أي مبلغ خصم إضافي يقرره المدير لهذا الموظف.';
+
+  @override
+  String get payrollAdjustmentPreviewSection => 'المجموع المتوقع';
+
+  @override
+  String get payrollLineProjectedNetLabel => 'الصافي المتوقع';
+
+  @override
+  String get payrollLineAdjustmentSaveButton => 'حفظ التعديل';
+
+  @override
+  String get payrollLineAdjustmentSaveError => 'تعذر حفظ تعديل راتب الموظف.';
+
+  @override
+  String get negativeNetPayrollLineError =>
+      'الصافي المتوقع لا يمكن أن يكون أقل من صفر.';
+
+  @override
   String payrollEmployeeFallbackLabel(int id) {
     return 'موظف #$id';
   }
@@ -6048,6 +6119,15 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get payrollLineGrossLabel => 'الأساسي';
+
+  @override
+  String get payrollLineAbsenceDaysLabel => 'أيام الغياب';
+
+  @override
+  String get payrollLineAbsenceDeductionLabel => 'خصم الغياب';
+
+  @override
+  String get payrollLineRaiseLabel => 'الزيادة';
 
   @override
   String get payrollLineAdditionsLabel => 'الإضافات';
@@ -6229,6 +6309,18 @@ class AppLocalizationsAr extends AppLocalizations {
   String get salaryTypeMonthlyFixed => 'راتب شهري ثابت';
 
   @override
+  String get salaryTypeWeeklyFixed => 'أجر أسبوعي ثابت';
+
+  @override
+  String get salaryTypeDailyRate => 'أجر يومي';
+
+  @override
+  String get salaryTypeHourlyRate => 'أجر بالساعة';
+
+  @override
+  String get salaryTypePerShift => 'أجر بالوردية';
+
+  @override
   String get salaryTypeSalesCommissionOnly => 'عمولة مبيعات فقط';
 
   @override
@@ -6236,8 +6328,30 @@ class AppLocalizationsAr extends AppLocalizations {
       'راتب شهري + عمولة مبيعات';
 
   @override
+  String get salaryTypeContractFixed => 'مبلغ عقد ثابت';
+
+  @override
+  String get salaryTypeCustomFixed => 'نوع مخصص';
+
+  @override
   String get salaryTypeMonthlyFixedHelper =>
       'يدفع مبلغًا ثابتًا كل شهر دون احتساب عمولة مبيعات.';
+
+  @override
+  String get salaryTypeWeeklyFixedHelper =>
+      'يدفع مبلغًا ثابتًا لكل أسبوع. أدخل عدد الأسابيع المتوقع في مسير الشهر.';
+
+  @override
+  String get salaryTypeDailyRateHelper =>
+      'يدفع أجرًا لكل يوم عمل. أدخل عدد الأيام المتوقع في مسير الشهر.';
+
+  @override
+  String get salaryTypeHourlyRateHelper =>
+      'يدفع أجرًا لكل ساعة. أدخل عدد الساعات المتوقع في مسير الشهر.';
+
+  @override
+  String get salaryTypePerShiftHelper =>
+      'يدفع أجرًا لكل وردية. أدخل عدد الورديات المتوقع في مسير الشهر.';
 
   @override
   String get salaryTypeSalesCommissionOnlyHelper =>
@@ -6248,11 +6362,66 @@ class AppLocalizationsAr extends AppLocalizations {
       'يدفع الراتب الشهري الثابت ويضيف نسبة من مبيعات المستخدم المرتبط.';
 
   @override
+  String get salaryTypeContractFixedHelper =>
+      'يدفع مبلغ عقد ثابت في كل مسير رواتب إلى أن يتم تعطيل الخطة.';
+
+  @override
+  String get salaryTypeCustomFixedHelper =>
+      'استخدمه عندما لا يناسب الموظف أي نوع جاهز. أضف ملاحظة توضّح طريقة الدفع.';
+
+  @override
   String get monthlyBaseSalaryField => 'الراتب الشهري الثابت';
 
   @override
   String get monthlyBaseSalaryHelper =>
       'المبلغ الأساسي الذي يستحقه الموظف كل شهر.';
+
+  @override
+  String get compensationAmountField => 'المبلغ';
+
+  @override
+  String get weeklyAmountField => 'المبلغ الأسبوعي';
+
+  @override
+  String get dailyRateField => 'الأجر اليومي';
+
+  @override
+  String get hourlyRateField => 'أجر الساعة';
+
+  @override
+  String get shiftRateField => 'أجر الوردية';
+
+  @override
+  String get contractAmountField => 'مبلغ العقد';
+
+  @override
+  String get customAmountField => 'المبلغ المخصص';
+
+  @override
+  String get expectedUnitsPerPeriodField => 'الوحدات المتوقعة في الشهر';
+
+  @override
+  String get expectedWeeksPerPeriodHelper =>
+      'عدد الأسابيع التي تُحتسب عادة في مسير الشهر.';
+
+  @override
+  String get expectedDaysPerPeriodHelper =>
+      'عدد أيام العمل المتوقع احتسابها في مسير الشهر.';
+
+  @override
+  String get expectedHoursPerPeriodHelper =>
+      'عدد الساعات المتوقع احتسابها في مسير الشهر.';
+
+  @override
+  String get expectedShiftsPerPeriodHelper =>
+      'عدد الورديات المتوقع احتسابها في مسير الشهر.';
+
+  @override
+  String get compensationNotesField => 'ملاحظات طريقة الدفع';
+
+  @override
+  String get compensationNotesHelper =>
+      'اختياري، لكنه مفيد للأنواع المخصصة أو العقود.';
 
   @override
   String get salesCommissionPercentField => 'نسبة عمولة المبيعات';
@@ -6262,7 +6431,10 @@ class AppLocalizationsAr extends AppLocalizations {
       'تُحسب من المبيعات المدفوعة للمستخدم المرتبط بالموظف.';
 
   @override
-  String get baseSalaryRequiredError => 'أدخل راتبًا شهريًا أكبر من صفر.';
+  String get baseSalaryRequiredError => 'أدخل مبلغًا أكبر من صفر.';
+
+  @override
+  String get expectedUnitsRequiredError => 'أدخل عدد وحدات أكبر من صفر.';
 
   @override
   String get commissionRequiredError => 'أدخل نسبة عمولة أكبر من صفر.';

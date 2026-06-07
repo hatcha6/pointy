@@ -96,15 +96,27 @@ enum PayType {
 
 enum SalaryType {
   monthlyFixed,
+  weeklyFixed,
+  dailyRate,
+  hourlyRate,
+  perShift,
   salesCommissionOnly,
-  monthlyFixedPlusSalesCommission;
+  monthlyFixedPlusSalesCommission,
+  contractFixed,
+  customFixed;
 
   static SalaryType? fromJson(Object? value) {
     return switch (value?.toString()) {
       'monthly_fixed' => SalaryType.monthlyFixed,
+      'weekly_fixed' => SalaryType.weeklyFixed,
+      'daily_rate' => SalaryType.dailyRate,
+      'hourly_rate' => SalaryType.hourlyRate,
+      'per_shift' => SalaryType.perShift,
       'sales_commission_only' => SalaryType.salesCommissionOnly,
       'monthly_fixed_plus_sales_commission' =>
         SalaryType.monthlyFixedPlusSalesCommission,
+      'contract_fixed' => SalaryType.contractFixed,
+      'custom_fixed' => SalaryType.customFixed,
       _ => null,
     };
   }
@@ -112,9 +124,15 @@ enum SalaryType {
   String toJson() {
     return switch (this) {
       SalaryType.monthlyFixed => 'monthly_fixed',
+      SalaryType.weeklyFixed => 'weekly_fixed',
+      SalaryType.dailyRate => 'daily_rate',
+      SalaryType.hourlyRate => 'hourly_rate',
+      SalaryType.perShift => 'per_shift',
       SalaryType.salesCommissionOnly => 'sales_commission_only',
       SalaryType.monthlyFixedPlusSalesCommission =>
         'monthly_fixed_plus_sales_commission',
+      SalaryType.contractFixed => 'contract_fixed',
+      SalaryType.customFixed => 'custom_fixed',
     };
   }
 
@@ -122,7 +140,13 @@ enum SalaryType {
     return switch (this) {
       SalaryType.salesCommissionOnly => PayType.commission,
       SalaryType.monthlyFixed => PayType.monthlySalary,
+      SalaryType.weeklyFixed => PayType.weeklySalary,
+      SalaryType.dailyRate => PayType.dailyRate,
+      SalaryType.hourlyRate => PayType.hourly,
+      SalaryType.perShift => PayType.perShift,
       SalaryType.monthlyFixedPlusSalesCommission => PayType.monthlySalary,
+      SalaryType.contractFixed => PayType.contract,
+      SalaryType.customFixed => PayType.other,
     };
   }
 }
@@ -370,6 +394,12 @@ class PayrollLine {
     this.units = 0,
     this.rate = 0,
     this.grossAmount = 0,
+    this.absenceDays = 0,
+    this.absenceDayRate = 0,
+    this.absenceDeductionAmount = 0,
+    this.raiseAmount = 0,
+    this.manualAdditionAmount = 0,
+    this.manualDeductionAmount = 0,
     this.additionsAmount = 0,
     this.deductionsAmount = 0,
     this.netAmount = 0,
@@ -388,6 +418,12 @@ class PayrollLine {
   final double units;
   final double rate;
   final double grossAmount;
+  final double absenceDays;
+  final double absenceDayRate;
+  final double absenceDeductionAmount;
+  final double raiseAmount;
+  final double manualAdditionAmount;
+  final double manualDeductionAmount;
   final double additionsAmount;
   final double deductionsAmount;
   final double netAmount;
@@ -412,6 +448,12 @@ class PayrollLine {
       units: _doubleFromJson(json['units']),
       rate: _doubleFromJson(json['rate']),
       grossAmount: _doubleFromJson(json['gross_amount']),
+      absenceDays: _doubleFromJson(json['absence_days']),
+      absenceDayRate: _doubleFromJson(json['absence_day_rate']),
+      absenceDeductionAmount: _doubleFromJson(json['absence_deduction_amount']),
+      raiseAmount: _doubleFromJson(json['raise_amount']),
+      manualAdditionAmount: _doubleFromJson(json['manual_addition_amount']),
+      manualDeductionAmount: _doubleFromJson(json['manual_deduction_amount']),
       additionsAmount: _doubleFromJson(json['additions_amount']),
       deductionsAmount: _doubleFromJson(json['deductions_amount']),
       netAmount: _doubleFromJson(json['net_amount']),
@@ -520,6 +562,7 @@ class CompensationPlanDraft {
     required this.amount,
     this.commissionPercent = '0.00',
     this.expectedUnitsPerPeriod = '1.00',
+    this.notes = '',
   });
 
   final int employeeId;
@@ -527,6 +570,7 @@ class CompensationPlanDraft {
   final String amount;
   final String commissionPercent;
   final String expectedUnitsPerPeriod;
+  final String notes;
   PayType get payType => salaryType.payType;
 
   Map<String, Object?> toJson() {
@@ -537,6 +581,7 @@ class CompensationPlanDraft {
       'amount': amount,
       'commission_percent': commissionPercent,
       'expected_units_per_period': expectedUnitsPerPeriod,
+      if (notes.trim().isNotEmpty) 'notes': notes.trim(),
       'is_active': true,
     };
   }
@@ -554,6 +599,32 @@ class PayrollDraftResult {
       created: json['created'] == true,
       payrollRun: run is Map<String, Object?> ? PayrollRun.fromJson(run) : null,
     );
+  }
+}
+
+class PayrollLineAdjustmentDraft {
+  const PayrollLineAdjustmentDraft({
+    this.absenceDays = '0.00',
+    this.raiseAmount = '0.00',
+    this.manualAdditionAmount = '0.00',
+    this.manualDeductionAmount = '0.00',
+    this.notes = '',
+  });
+
+  final String absenceDays;
+  final String raiseAmount;
+  final String manualAdditionAmount;
+  final String manualDeductionAmount;
+  final String notes;
+
+  Map<String, Object?> toJson() {
+    return {
+      'absence_days': absenceDays,
+      'raise_amount': raiseAmount,
+      'manual_addition_amount': manualAdditionAmount,
+      'manual_deduction_amount': manualDeductionAmount,
+      'notes': notes.trim(),
+    };
   }
 }
 

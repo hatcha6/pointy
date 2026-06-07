@@ -480,7 +480,7 @@ class _PayrollRunDetailSheetState extends State<_PayrollRunDetailSheet> {
       child: FutureBuilder<PayrollRun?>(
         future: _future,
         builder: (context, snapshot) {
-          final loadedRun = snapshot.data;
+          final loadedRun = _run ?? snapshot.data;
           return SingleChildScrollView(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -532,7 +532,16 @@ class _PayrollRunDetailSheetState extends State<_PayrollRunDetailSheet> {
                     icon: Icons.warning_amber_outlined,
                   )
                 else
-                  _PayrollRunDetailContent(run: loadedRun),
+                  _PayrollRunDetailContent(
+                    run: loadedRun,
+                    viewModel: widget.viewModel,
+                    capabilities: widget.capabilities,
+                    onRunChanged: (run) {
+                      setState(() {
+                        _run = run;
+                      });
+                    },
+                  ),
               ],
             ),
           );
@@ -563,9 +572,17 @@ class _PayrollRunDetailSheetState extends State<_PayrollRunDetailSheet> {
 }
 
 class _PayrollRunDetailContent extends StatelessWidget {
-  const _PayrollRunDetailContent({required this.run});
+  const _PayrollRunDetailContent({
+    required this.run,
+    required this.viewModel,
+    required this.capabilities,
+    required this.onRunChanged,
+  });
 
   final PayrollRun run;
+  final EmployeePayrollViewModel viewModel;
+  final AuthorizationCapabilities capabilities;
+  final ValueChanged<PayrollRun> onRunChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -663,7 +680,15 @@ class _PayrollRunDetailContent extends StatelessWidget {
               : Column(
                   children: [
                     for (final line in run.lines) ...[
-                      _PayrollLineCard(line: line),
+                      _PayrollLineCard(
+                        run: run,
+                        line: line,
+                        viewModel: viewModel,
+                        canEdit:
+                            capabilities.canManagePayroll &&
+                            run.status == PayrollStatus.draft,
+                        onRunChanged: onRunChanged,
+                      ),
                       SizedBox(height: spacing.sm),
                     ],
                   ],
@@ -683,9 +708,19 @@ class _PayrollRunDetailContent extends StatelessWidget {
 }
 
 class _PayrollLineCard extends StatelessWidget {
-  const _PayrollLineCard({required this.line});
+  const _PayrollLineCard({
+    required this.run,
+    required this.line,
+    required this.viewModel,
+    required this.canEdit,
+    required this.onRunChanged,
+  });
 
+  final PayrollRun run;
   final PayrollLine line;
+  final EmployeePayrollViewModel viewModel;
+  final bool canEdit;
+  final ValueChanged<PayrollRun> onRunChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -729,11 +764,26 @@ class _PayrollLineCard extends StatelessWidget {
                   ),
                 ),
                 SizedBox(width: spacing.sm),
-                Text(
-                  formatMoney(line.netAmount),
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w800,
-                  ),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      formatMoney(line.netAmount),
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    if (canEdit) ...[
+                      SizedBox(width: spacing.xs),
+                      IconButton(
+                        onPressed: viewModel.isSaving
+                            ? null
+                            : () => _showAdjustmentSheet(context),
+                        icon: const Icon(Icons.tune_outlined),
+                        tooltip: l10n.editPayrollLineAdjustmentsTooltip,
+                      ),
+                    ],
+                  ],
                 ),
               ],
             ),
@@ -754,6 +804,31 @@ class _PayrollLineCard extends StatelessWidget {
                   label: l10n.payrollLineGrossLabel,
                   value: formatMoney(line.grossAmount),
                 ),
+                if (line.absenceDays > 0)
+                  _PayrollAmountChip(
+                    label: l10n.payrollLineAbsenceDaysLabel,
+                    value: line.absenceDays.toStringAsFixed(2),
+                  ),
+                if (line.absenceDeductionAmount > 0)
+                  _PayrollAmountChip(
+                    label: l10n.payrollLineAbsenceDeductionLabel,
+                    value: formatMoney(line.absenceDeductionAmount),
+                  ),
+                if (line.raiseAmount > 0)
+                  _PayrollAmountChip(
+                    label: l10n.payrollLineRaiseLabel,
+                    value: formatMoney(line.raiseAmount),
+                  ),
+                if (line.manualAdditionAmount > 0)
+                  _PayrollAmountChip(
+                    label: l10n.manualAdditionAmountField,
+                    value: formatMoney(line.manualAdditionAmount),
+                  ),
+                if (line.manualDeductionAmount > 0)
+                  _PayrollAmountChip(
+                    label: l10n.manualDeductionAmountField,
+                    value: formatMoney(line.manualDeductionAmount),
+                  ),
                 _PayrollAmountChip(
                   label: l10n.payrollLineAdditionsLabel,
                   value: formatMoney(line.additionsAmount),
@@ -797,6 +872,22 @@ class _PayrollLineCard extends StatelessWidget {
     );
   }
 
+  Future<void> _showAdjustmentSheet(BuildContext context) async {
+    final updatedRun = await showModalBottomSheet<PayrollRun>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (sheetContext) => _PayrollLineAdjustmentSheet(
+        run: run,
+        line: line,
+        viewModel: viewModel,
+      ),
+    );
+    if (updatedRun != null) {
+      onRunChanged(updatedRun);
+    }
+  }
+
   String _employeeInitial(AppLocalizations l10n, PayrollLine line) {
     final title = _employeeLineTitle(l10n, line).trim();
     return title.isEmpty ? '#' : title.characters.first;
@@ -814,6 +905,328 @@ class _PayrollLineCard extends StatelessWidget {
       _payrollLinePayLabel(l10n, line),
     ];
     return parts.join(' - ');
+  }
+}
+
+class _PayrollLineAdjustmentSheet extends StatefulWidget {
+  const _PayrollLineAdjustmentSheet({
+    required this.run,
+    required this.line,
+    required this.viewModel,
+  });
+
+  final PayrollRun run;
+  final PayrollLine line;
+  final EmployeePayrollViewModel viewModel;
+
+  @override
+  State<_PayrollLineAdjustmentSheet> createState() =>
+      _PayrollLineAdjustmentSheetState();
+}
+
+class _PayrollLineAdjustmentSheetState
+    extends State<_PayrollLineAdjustmentSheet> {
+  late final TextEditingController _absenceDaysController;
+  late final TextEditingController _raiseAmountController;
+  late final TextEditingController _manualAdditionController;
+  late final TextEditingController _manualDeductionController;
+  late final TextEditingController _notesController;
+
+  @override
+  void initState() {
+    super.initState();
+    _absenceDaysController = TextEditingController(
+      text: _decimalInput(widget.line.absenceDays),
+    );
+    _raiseAmountController = TextEditingController(
+      text: _decimalInput(widget.line.raiseAmount),
+    );
+    _manualAdditionController = TextEditingController(
+      text: _decimalInput(widget.line.manualAdditionAmount),
+    );
+    _manualDeductionController = TextEditingController(
+      text: _decimalInput(widget.line.manualDeductionAmount),
+    );
+    _notesController = TextEditingController(text: widget.line.notes);
+    for (final controller in _amountControllers) {
+      controller.addListener(_refreshPreview);
+    }
+  }
+
+  List<TextEditingController> get _amountControllers => [
+    _absenceDaysController,
+    _raiseAmountController,
+    _manualAdditionController,
+    _manualDeductionController,
+  ];
+
+  @override
+  void dispose() {
+    for (final controller in _amountControllers) {
+      controller
+        ..removeListener(_refreshPreview)
+        ..dispose();
+    }
+    _notesController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final spacing = AdaptiveSpacing.of(context);
+    final periodDays = _payrollPeriodDays(widget.run);
+    final absenceDays = _decimalValue(_absenceDaysController.text);
+    final absenceDeduction = _absenceDeduction;
+    final projectedAdditions = _projectedAdditions;
+    final projectedDeductions = _projectedDeductions;
+    final projectedNet = _projectedNet;
+    final hasAbsenceError = periodDays > 0 && absenceDays > periodDays;
+    final hasNetError = projectedNet < 0;
+
+    return Padding(
+      padding: EdgeInsets.only(
+        left: 16,
+        right: 16,
+        top: 16,
+        bottom: MediaQuery.viewInsetsOf(context).bottom + 16,
+      ),
+      child: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            PointySectionHeader(
+              title: l10n.payrollLineAdjustmentTitle(
+                _employeeLineTitle(l10n, widget.line),
+              ),
+              subtitle: l10n.payrollLineAdjustmentSubtitle,
+              leading: const Icon(Icons.tune_outlined),
+            ),
+            SizedBox(height: spacing.md),
+            TextFormField(
+              controller: _absenceDaysController,
+              decoration: InputDecoration(
+                labelText: l10n.absenceDaysField,
+                helperText: l10n.absenceDaysHelper(
+                  formatMoney(_absenceDayRate),
+                ),
+                errorText: hasAbsenceError
+                    ? l10n.absenceDaysExceedPeriodError(periodDays)
+                    : null,
+              ),
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
+              inputFormatters: [DecimalTextInputFormatter()],
+            ),
+            SizedBox(height: spacing.sm),
+            TextFormField(
+              controller: _raiseAmountController,
+              decoration: InputDecoration(
+                labelText: l10n.raiseAmountField,
+                helperText: l10n.raiseAmountHelper,
+              ),
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
+              inputFormatters: [DecimalTextInputFormatter()],
+            ),
+            SizedBox(height: spacing.sm),
+            TextFormField(
+              controller: _manualAdditionController,
+              decoration: InputDecoration(
+                labelText: l10n.manualAdditionAmountField,
+                helperText: l10n.manualAdditionAmountHelper,
+              ),
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
+              inputFormatters: [DecimalTextInputFormatter()],
+            ),
+            SizedBox(height: spacing.sm),
+            TextFormField(
+              controller: _manualDeductionController,
+              decoration: InputDecoration(
+                labelText: l10n.manualDeductionAmountField,
+                helperText: l10n.manualDeductionAmountHelper,
+              ),
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
+              inputFormatters: [DecimalTextInputFormatter()],
+            ),
+            SizedBox(height: spacing.sm),
+            TextFormField(
+              controller: _notesController,
+              decoration: InputDecoration(
+                labelText: l10n.payrollLineNotesLabel,
+              ),
+              minLines: 2,
+              maxLines: 4,
+            ),
+            SizedBox(height: spacing.md),
+            PointyDetailSection(
+              title: l10n.payrollAdjustmentPreviewSection,
+              icon: Icons.calculate_outlined,
+              child: Column(
+                children: [
+                  PointyDetailRow(
+                    label: l10n.payrollLineGrossLabel,
+                    value: formatMoney(widget.line.grossAmount),
+                  ),
+                  PointyDetailRow(
+                    label: l10n.payrollLineAbsenceDeductionLabel,
+                    value: formatMoney(absenceDeduction),
+                  ),
+                  PointyDetailRow(
+                    label: l10n.payrollLineAdditionsLabel,
+                    value: formatMoney(projectedAdditions),
+                  ),
+                  PointyDetailRow(
+                    label: l10n.payrollLineDeductionsLabel,
+                    value: formatMoney(projectedDeductions),
+                  ),
+                  PointyDetailRow(
+                    label: l10n.payrollLineProjectedNetLabel,
+                    value: formatMoney(projectedNet),
+                  ),
+                ],
+              ),
+            ),
+            if (hasNetError) ...[
+              SizedBox(height: spacing.sm),
+              Text(
+                l10n.negativeNetPayrollLineError,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context).colorScheme.error,
+                ),
+              ),
+            ],
+            SizedBox(height: spacing.md),
+            ListenableBuilder(
+              listenable: widget.viewModel,
+              builder: (context, _) {
+                return Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: widget.viewModel.isSaving
+                            ? null
+                            : () => Navigator.of(context).pop(),
+                        child: Text(l10n.cancelButton),
+                      ),
+                    ),
+                    SizedBox(width: spacing.sm),
+                    Expanded(
+                      child: FilledButton.icon(
+                        onPressed:
+                            widget.viewModel.isSaving ||
+                                hasAbsenceError ||
+                                hasNetError
+                            ? null
+                            : _save,
+                        icon: const Icon(Icons.save_outlined),
+                        label: Text(l10n.payrollLineAdjustmentSaveButton),
+                      ),
+                    ),
+                  ],
+                );
+              },
+            ),
+            if (widget.viewModel.hasSaveError) ...[
+              SizedBox(height: spacing.sm),
+              Text(
+                l10n.payrollLineAdjustmentSaveError,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context).colorScheme.error,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  double get _absenceDayRate {
+    if (widget.line.absenceDayRate > 0) {
+      return widget.line.absenceDayRate;
+    }
+    final periodDays = _payrollPeriodDays(widget.run);
+    if (periodDays <= 0) {
+      return 0;
+    }
+    return widget.line.grossAmount / periodDays;
+  }
+
+  double get _absenceDeduction {
+    return _roundMoney(
+      _decimalValue(_absenceDaysController.text) * _absenceDayRate,
+    );
+  }
+
+  double get _projectedAdditions {
+    return _roundMoney(
+      _existingAdjustmentAdditions +
+          _decimalValue(_raiseAmountController.text) +
+          _decimalValue(_manualAdditionController.text),
+    );
+  }
+
+  double get _projectedDeductions {
+    return _roundMoney(
+      _existingAdjustmentDeductions +
+          _absenceDeduction +
+          _decimalValue(_manualDeductionController.text),
+    );
+  }
+
+  double get _projectedNet {
+    return _roundMoney(
+      widget.line.grossAmount + _projectedAdditions - _projectedDeductions,
+    );
+  }
+
+  double get _existingAdjustmentAdditions {
+    return widget.line.adjustments
+        .where((adjustment) => adjustment.direction == 'addition')
+        .fold<double>(0, (total, adjustment) => total + adjustment.amount);
+  }
+
+  double get _existingAdjustmentDeductions {
+    return widget.line.adjustments
+        .where((adjustment) => adjustment.direction == 'deduction')
+        .fold<double>(0, (total, adjustment) => total + adjustment.amount);
+  }
+
+  String _employeeLineTitle(AppLocalizations l10n, PayrollLine line) {
+    return line.employeeName.trim().isEmpty
+        ? l10n.payrollEmployeeFallbackLabel(line.employeeId)
+        : line.employeeName.trim();
+  }
+
+  Future<void> _save() async {
+    final updatedRun = await widget.viewModel.updatePayrollLineAdjustments(
+      widget.run,
+      widget.line,
+      PayrollLineAdjustmentDraft(
+        absenceDays: _decimalPayload(_absenceDaysController.text),
+        raiseAmount: _decimalPayload(_raiseAmountController.text),
+        manualAdditionAmount: _decimalPayload(_manualAdditionController.text),
+        manualDeductionAmount: _decimalPayload(_manualDeductionController.text),
+        notes: _notesController.text,
+      ),
+    );
+    if (mounted && updatedRun != null) {
+      Navigator.of(context).pop(updatedRun);
+    } else if (mounted) {
+      setState(() {});
+    }
+  }
+
+  void _refreshPreview() {
+    setState(() {});
   }
 }
 
@@ -1056,6 +1469,8 @@ class _CompensationPlanForm extends StatefulWidget {
 class _CompensationPlanFormState extends State<_CompensationPlanForm> {
   final _baseSalaryController = TextEditingController();
   final _commissionController = TextEditingController(text: '0.00');
+  final _expectedUnitsController = TextEditingController(text: '1.00');
+  final _notesController = TextEditingController();
   SalaryType _salaryType = SalaryType.monthlyFixed;
   bool _submitted = false;
 
@@ -1063,6 +1478,8 @@ class _CompensationPlanFormState extends State<_CompensationPlanForm> {
   void dispose() {
     _baseSalaryController.dispose();
     _commissionController.dispose();
+    _expectedUnitsController.dispose();
+    _notesController.dispose();
     super.dispose();
   }
 
@@ -1090,7 +1507,15 @@ class _CompensationPlanFormState extends State<_CompensationPlanForm> {
                     return;
                   }
                   setState(() {
+                    final previousDefault = _defaultUnitsForType(_salaryType);
                     _salaryType = value;
+                    if (_expectedUnitsController.text.trim().isEmpty ||
+                        _expectedUnitsController.text.trim() ==
+                            previousDefault) {
+                      _expectedUnitsController.text = _defaultUnitsForType(
+                        value,
+                      );
+                    }
                   });
                 },
         ),
@@ -1103,10 +1528,24 @@ class _CompensationPlanFormState extends State<_CompensationPlanForm> {
           TextField(
             controller: _baseSalaryController,
             decoration: InputDecoration(
-              labelText: l10n.monthlyBaseSalaryField,
-              helperText: l10n.monthlyBaseSalaryHelper,
+              labelText: _amountFieldLabel(l10n, _salaryType),
+              helperText: _amountFieldHelper(l10n, _salaryType),
               errorText: _submitted && !_hasPositiveValue(_baseSalaryController)
                   ? l10n.baseSalaryRequiredError
+                  : null,
+            ),
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            inputFormatters: [DecimalTextInputFormatter()],
+          ),
+        if (_requiresExpectedUnits)
+          TextField(
+            controller: _expectedUnitsController,
+            decoration: InputDecoration(
+              labelText: l10n.expectedUnitsPerPeriodField,
+              helperText: _expectedUnitsHelper(l10n, _salaryType),
+              errorText:
+                  _submitted && !_hasPositiveValue(_expectedUnitsController)
+                  ? l10n.expectedUnitsRequiredError
                   : null,
             ),
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
@@ -1131,6 +1570,17 @@ class _CompensationPlanFormState extends State<_CompensationPlanForm> {
             message: l10n.salesCommissionNeedsLinkedUserWarning,
             icon: Icons.link_off_outlined,
             compact: true,
+          ),
+        if (_showsNotes)
+          TextField(
+            controller: _notesController,
+            decoration: InputDecoration(
+              labelText: l10n.compensationNotesField,
+              helperText: l10n.compensationNotesHelper,
+            ),
+            minLines: 2,
+            maxLines: 4,
+            textInputAction: TextInputAction.newline,
           ),
         PointyInlineMessage(
           message: l10n.compensationPlanActivationNote,
@@ -1163,6 +1613,10 @@ class _CompensationPlanFormState extends State<_CompensationPlanForm> {
         commissionPercent: _requiresCommission
             ? _commissionController.text.trim()
             : '0.00',
+        expectedUnitsPerPeriod: _requiresExpectedUnits
+            ? _expectedUnitsController.text.trim()
+            : '1.00',
+        notes: _showsNotes ? _notesController.text.trim() : '',
       ),
     );
     if (saved && mounted) {
@@ -1171,8 +1625,7 @@ class _CompensationPlanFormState extends State<_CompensationPlanForm> {
   }
 
   bool get _requiresBaseSalary {
-    return _salaryType == SalaryType.monthlyFixed ||
-        _salaryType == SalaryType.monthlyFixedPlusSalesCommission;
+    return _salaryType != SalaryType.salesCommissionOnly;
   }
 
   bool get _requiresCommission {
@@ -1180,8 +1633,22 @@ class _CompensationPlanFormState extends State<_CompensationPlanForm> {
         _salaryType == SalaryType.monthlyFixedPlusSalesCommission;
   }
 
+  bool get _requiresExpectedUnits {
+    return _salaryType == SalaryType.weeklyFixed ||
+        _salaryType == SalaryType.dailyRate ||
+        _salaryType == SalaryType.hourlyRate ||
+        _salaryType == SalaryType.perShift;
+  }
+
+  bool get _showsNotes {
+    return _salaryType == SalaryType.contractFixed ||
+        _salaryType == SalaryType.customFixed;
+  }
+
   bool get _hasInputErrors {
     return (_requiresBaseSalary && !_hasPositiveValue(_baseSalaryController)) ||
+        (_requiresExpectedUnits &&
+            !_hasPositiveValue(_expectedUnitsController)) ||
         (_requiresCommission && !_hasPositiveValue(_commissionController));
   }
 
@@ -1431,18 +1898,72 @@ String _employmentTypeLabel(AppLocalizations l10n, EmploymentType type) {
 String _salaryTypeLabel(AppLocalizations l10n, SalaryType type) {
   return switch (type) {
     SalaryType.monthlyFixed => l10n.salaryTypeMonthlyFixed,
+    SalaryType.weeklyFixed => l10n.salaryTypeWeeklyFixed,
+    SalaryType.dailyRate => l10n.salaryTypeDailyRate,
+    SalaryType.hourlyRate => l10n.salaryTypeHourlyRate,
+    SalaryType.perShift => l10n.salaryTypePerShift,
     SalaryType.salesCommissionOnly => l10n.salaryTypeSalesCommissionOnly,
     SalaryType.monthlyFixedPlusSalesCommission =>
       l10n.salaryTypeMonthlyFixedPlusSalesCommission,
+    SalaryType.contractFixed => l10n.salaryTypeContractFixed,
+    SalaryType.customFixed => l10n.salaryTypeCustomFixed,
   };
 }
 
 String _salaryTypeHelper(AppLocalizations l10n, SalaryType type) {
   return switch (type) {
     SalaryType.monthlyFixed => l10n.salaryTypeMonthlyFixedHelper,
+    SalaryType.weeklyFixed => l10n.salaryTypeWeeklyFixedHelper,
+    SalaryType.dailyRate => l10n.salaryTypeDailyRateHelper,
+    SalaryType.hourlyRate => l10n.salaryTypeHourlyRateHelper,
+    SalaryType.perShift => l10n.salaryTypePerShiftHelper,
     SalaryType.salesCommissionOnly => l10n.salaryTypeSalesCommissionOnlyHelper,
     SalaryType.monthlyFixedPlusSalesCommission =>
       l10n.salaryTypeMonthlyFixedPlusSalesCommissionHelper,
+    SalaryType.contractFixed => l10n.salaryTypeContractFixedHelper,
+    SalaryType.customFixed => l10n.salaryTypeCustomFixedHelper,
+  };
+}
+
+String _amountFieldLabel(AppLocalizations l10n, SalaryType type) {
+  return switch (type) {
+    SalaryType.monthlyFixed => l10n.monthlyBaseSalaryField,
+    SalaryType.weeklyFixed => l10n.weeklyAmountField,
+    SalaryType.dailyRate => l10n.dailyRateField,
+    SalaryType.hourlyRate => l10n.hourlyRateField,
+    SalaryType.perShift => l10n.shiftRateField,
+    SalaryType.monthlyFixedPlusSalesCommission => l10n.monthlyBaseSalaryField,
+    SalaryType.contractFixed => l10n.contractAmountField,
+    SalaryType.customFixed => l10n.customAmountField,
+    SalaryType.salesCommissionOnly => l10n.compensationAmountField,
+  };
+}
+
+String _amountFieldHelper(AppLocalizations l10n, SalaryType type) {
+  return switch (type) {
+    SalaryType.monthlyFixed => l10n.monthlyBaseSalaryHelper,
+    SalaryType.monthlyFixedPlusSalesCommission => l10n.monthlyBaseSalaryHelper,
+    _ => _salaryTypeHelper(l10n, type),
+  };
+}
+
+String _expectedUnitsHelper(AppLocalizations l10n, SalaryType type) {
+  return switch (type) {
+    SalaryType.weeklyFixed => l10n.expectedWeeksPerPeriodHelper,
+    SalaryType.dailyRate => l10n.expectedDaysPerPeriodHelper,
+    SalaryType.hourlyRate => l10n.expectedHoursPerPeriodHelper,
+    SalaryType.perShift => l10n.expectedShiftsPerPeriodHelper,
+    _ => '',
+  };
+}
+
+String _defaultUnitsForType(SalaryType type) {
+  return switch (type) {
+    SalaryType.weeklyFixed => '4.00',
+    SalaryType.dailyRate => '22.00',
+    SalaryType.hourlyRate => '160.00',
+    SalaryType.perShift => '22.00',
+    _ => '1.00',
   };
 }
 
@@ -1469,6 +1990,31 @@ String _payrollPeriodLabel(AppLocalizations l10n, PayrollRun run) {
   return l10n.payrollPeriodSubtitle(start, end);
 }
 
+int _payrollPeriodDays(PayrollRun run) {
+  final start = run.periodStart;
+  final end = run.periodEnd;
+  if (start == null || end == null || end.isBefore(start)) {
+    return 0;
+  }
+  return end.difference(start).inDays + 1;
+}
+
+String _decimalInput(double value) {
+  return value.toStringAsFixed(2);
+}
+
+String _decimalPayload(String value) {
+  return _decimalValue(value).toStringAsFixed(2);
+}
+
+double _decimalValue(String value) {
+  return double.tryParse(value.trim().replaceAll(',', '.')) ?? 0;
+}
+
+double _roundMoney(double value) {
+  return double.parse(value.toStringAsFixed(2));
+}
+
 String _payrollLinePayLabel(AppLocalizations l10n, PayrollLine line) {
   final salaryType = line.salaryType;
   if (salaryType != null) {
@@ -1488,6 +2034,14 @@ String _compensationPlanLabel(AppLocalizations l10n, CompensationPlan plan) {
       SalaryType.monthlyFixed => l10n.employeeMonthlyFixedPlanLabel(
         formatMoney(plan.amount),
       ),
+      SalaryType.weeklyFixed ||
+      SalaryType.dailyRate ||
+      SalaryType.hourlyRate ||
+      SalaryType.perShift => l10n.employeeUnitBasedPlanLabel(
+        _salaryTypeLabel(l10n, salaryType),
+        formatMoney(plan.amount),
+        plan.expectedUnitsPerPeriod.toStringAsFixed(2),
+      ),
       SalaryType.salesCommissionOnly => l10n.employeeCommissionOnlyPlanLabel(
         plan.commissionPercent.toStringAsFixed(2),
       ),
@@ -1496,6 +2050,11 @@ String _compensationPlanLabel(AppLocalizations l10n, CompensationPlan plan) {
           formatMoney(plan.amount),
           plan.commissionPercent.toStringAsFixed(2),
         ),
+      SalaryType.contractFixed ||
+      SalaryType.customFixed => l10n.employeePayPlanLabel(
+        _salaryTypeLabel(l10n, salaryType),
+        formatMoney(plan.amount),
+      ),
     };
   }
   final baseLabel = l10n.employeePayPlanLabel(

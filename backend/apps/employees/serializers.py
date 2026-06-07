@@ -137,17 +137,7 @@ class CompensationPlanSerializer(serializers.ModelSerializer):
 
         attrs["pay_type"] = self._pay_type_for_salary_type(salary_type)
         errors = {}
-        if salary_type == CompensationPlan.SalaryType.MONTHLY_FIXED:
-            if "commission_percent" not in attrs and self.instance is None:
-                attrs["commission_percent"] = Decimal("0.00")
-                commission_percent = Decimal("0.00")
-            if amount <= Decimal("0.00"):
-                errors["amount"] = "Monthly fixed salary requires an amount greater than zero."
-            if commission_percent != Decimal("0.00"):
-                errors["commission_percent"] = (
-                    "Monthly fixed salary cannot include a commission percentage."
-                )
-        elif salary_type == CompensationPlan.SalaryType.SALES_COMMISSION_ONLY:
+        if salary_type == CompensationPlan.SalaryType.SALES_COMMISSION_ONLY:
             if "amount" not in attrs and self.instance is None:
                 attrs["amount"] = Decimal("0.00")
                 amount = Decimal("0.00")
@@ -166,6 +156,35 @@ class CompensationPlanSerializer(serializers.ModelSerializer):
                 errors["commission_percent"] = (
                     "Monthly fixed plus commission salary requires a commission percentage."
                 )
+        else:
+            if "commission_percent" not in attrs and self.instance is None:
+                attrs["commission_percent"] = Decimal("0.00")
+                commission_percent = Decimal("0.00")
+            if amount <= Decimal("0.00"):
+                errors["amount"] = "Compensation plan requires an amount greater than zero."
+            if commission_percent != Decimal("0.00"):
+                errors["commission_percent"] = (
+                    "This compensation type cannot include a commission percentage."
+                )
+
+        expected_units = attrs.get(
+            "expected_units_per_period",
+            getattr(self.instance, "expected_units_per_period", Decimal("1.00")),
+        )
+        expected_units = Decimal(expected_units or "0.00")
+        if (
+            salary_type
+            in {
+                CompensationPlan.SalaryType.WEEKLY_FIXED,
+                CompensationPlan.SalaryType.DAILY_RATE,
+                CompensationPlan.SalaryType.HOURLY_RATE,
+                CompensationPlan.SalaryType.PER_SHIFT,
+            }
+            and expected_units <= Decimal("0.00")
+        ):
+            errors["expected_units_per_period"] = (
+                "This compensation type requires expected units greater than zero."
+            )
 
         if errors:
             raise serializers.ValidationError(errors)
@@ -185,9 +204,19 @@ class CompensationPlanSerializer(serializers.ModelSerializer):
         return ""
 
     def _pay_type_for_salary_type(self, salary_type):
-        if salary_type == CompensationPlan.SalaryType.SALES_COMMISSION_ONLY:
-            return CompensationPlan.PayType.COMMISSION
-        return CompensationPlan.PayType.MONTHLY_SALARY
+        return {
+            CompensationPlan.SalaryType.MONTHLY_FIXED: CompensationPlan.PayType.MONTHLY_SALARY,
+            CompensationPlan.SalaryType.WEEKLY_FIXED: CompensationPlan.PayType.WEEKLY_SALARY,
+            CompensationPlan.SalaryType.DAILY_RATE: CompensationPlan.PayType.DAILY_RATE,
+            CompensationPlan.SalaryType.HOURLY_RATE: CompensationPlan.PayType.HOURLY,
+            CompensationPlan.SalaryType.PER_SHIFT: CompensationPlan.PayType.PER_SHIFT,
+            CompensationPlan.SalaryType.SALES_COMMISSION_ONLY: CompensationPlan.PayType.COMMISSION,
+            CompensationPlan.SalaryType.MONTHLY_FIXED_PLUS_SALES_COMMISSION: (
+                CompensationPlan.PayType.MONTHLY_SALARY
+            ),
+            CompensationPlan.SalaryType.CONTRACT_FIXED: CompensationPlan.PayType.CONTRACT,
+            CompensationPlan.SalaryType.CUSTOM_FIXED: CompensationPlan.PayType.OTHER,
+        }.get(salary_type, CompensationPlan.PayType.MONTHLY_SALARY)
 
     @transaction.atomic
     def create(self, validated_data):
@@ -326,6 +355,7 @@ class PayrollLineSerializer(serializers.ModelSerializer):
         source="compensation_plan.resolved_salary_type",
         read_only=True,
     )
+    absence_day_rate = serializers.SerializerMethodField()
     adjustments = PayrollAdjustmentSerializer(many=True, required=False)
 
     class Meta:
@@ -342,6 +372,12 @@ class PayrollLineSerializer(serializers.ModelSerializer):
             "units",
             "rate",
             "gross_amount",
+            "absence_days",
+            "absence_day_rate",
+            "absence_deduction_amount",
+            "raise_amount",
+            "manual_addition_amount",
+            "manual_deduction_amount",
             "additions_amount",
             "deductions_amount",
             "net_amount",
@@ -357,6 +393,8 @@ class PayrollLineSerializer(serializers.ModelSerializer):
             "pay_type",
             "salary_type",
             "gross_amount",
+            "absence_day_rate",
+            "absence_deduction_amount",
             "additions_amount",
             "deductions_amount",
             "net_amount",
@@ -372,6 +410,52 @@ class PayrollLineSerializer(serializers.ModelSerializer):
                 {"compensation_plan": "Compensation plan must belong to the employee."}
             )
         return attrs
+
+    def get_absence_day_rate(self, payroll_line):
+        return money_string(payroll_line.absence_day_rate)
+
+
+class PayrollLineAdjustmentUpdateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PayrollLine
+        fields = [
+            "absence_days",
+            "raise_amount",
+            "manual_addition_amount",
+            "manual_deduction_amount",
+            "notes",
+        ]
+
+    def validate_absence_days(self, value):
+        period_days = self.instance.period_days if self.instance is not None else None
+        if period_days and value > Decimal(period_days):
+            raise serializers.ValidationError(
+                "Absence days cannot exceed the payroll period."
+            )
+        return value
+
+    def update(self, instance, validated_data):
+        for field, value in validated_data.items():
+            setattr(instance, field, value)
+        instance.full_clean()
+        instance.recalculate(save=False)
+        instance.save(
+            update_fields=[
+                "rate",
+                "gross_amount",
+                "absence_days",
+                "absence_deduction_amount",
+                "raise_amount",
+                "manual_addition_amount",
+                "manual_deduction_amount",
+                "additions_amount",
+                "deductions_amount",
+                "net_amount",
+                "notes",
+                "updated_at",
+            ]
+        )
+        return instance
 
 
 class PayrollRunSerializer(serializers.ModelSerializer):

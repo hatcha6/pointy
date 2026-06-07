@@ -3706,6 +3706,21 @@
       }
     }
   },
+  "employeeUnitBasedPlanLabel": "{salaryType} - {amount} × {units}",
+  "@employeeUnitBasedPlanLabel": {
+    "description": "Active employee unit-based compensation plan label.",
+    "placeholders": {
+      "salaryType": {
+        "type": "String"
+      },
+      "amount": {
+        "type": "String"
+      },
+      "units": {
+        "type": "String"
+      }
+    }
+  },
   "employeeNoDetails": "لا توجد تفاصيل إضافية",
   "addCompensationPlanTooltip": "إضافة خطة أجر",
   "payrollRunsLoadError": "تعذر تحميل مسيرات الرواتب.",
@@ -3769,6 +3784,47 @@
   },
   "payrollRunNoEmployees": "لا توجد بنود موظفين في هذا المسير.",
   "payrollLineManualPayLabel": "أجر يدوي",
+  "editPayrollLineAdjustmentsTooltip": "تعديل غياب وإضافات الموظف",
+  "payrollLineAdjustmentTitle": "تعديل راتب {employee}",
+  "@payrollLineAdjustmentTitle": {
+    "description": "Payroll line adjustment sheet title.",
+    "placeholders": {
+      "employee": {
+        "type": "String"
+      }
+    }
+  },
+  "payrollLineAdjustmentSubtitle": "أدخل الغياب أو الزيادة أو أي إضافة وخصم يدوي لهذا المسير فقط.",
+  "absenceDaysField": "أيام الغياب",
+  "absenceDaysHelper": "يُحسب الخصم تلقائيًا حسب قيمة اليوم: {rate}",
+  "@absenceDaysHelper": {
+    "description": "Absence days helper with calculated daily rate.",
+    "placeholders": {
+      "rate": {
+        "type": "String"
+      }
+    }
+  },
+  "absenceDaysExceedPeriodError": "لا يمكن أن تتجاوز أيام الغياب {days} يومًا.",
+  "@absenceDaysExceedPeriodError": {
+    "description": "Shown when absence days exceed payroll period days.",
+    "placeholders": {
+      "days": {
+        "type": "int"
+      }
+    }
+  },
+  "raiseAmountField": "زيادة هذا الشهر",
+  "raiseAmountHelper": "مبلغ إضافي مؤقت يُضاف لصافي هذا الموظف في هذا المسير.",
+  "manualAdditionAmountField": "إضافة يدوية",
+  "manualAdditionAmountHelper": "أي مبلغ إضافي يقرره المدير لهذا الموظف.",
+  "manualDeductionAmountField": "خصم يدوي",
+  "manualDeductionAmountHelper": "أي مبلغ خصم إضافي يقرره المدير لهذا الموظف.",
+  "payrollAdjustmentPreviewSection": "المجموع المتوقع",
+  "payrollLineProjectedNetLabel": "الصافي المتوقع",
+  "payrollLineAdjustmentSaveButton": "حفظ التعديل",
+  "payrollLineAdjustmentSaveError": "تعذر حفظ تعديل راتب الموظف.",
+  "negativeNetPayrollLineError": "الصافي المتوقع لا يمكن أن يكون أقل من صفر.",
   "payrollEmployeeFallbackLabel": "موظف #{id}",
   "@payrollEmployeeFallbackLabel": {
     "description": "Fallback payroll employee label.",
@@ -3781,6 +3837,9 @@
   "payrollLineUnitsLabel": "الوحدات",
   "payrollLineRateLabel": "الأجر",
   "payrollLineGrossLabel": "الأساسي",
+  "payrollLineAbsenceDaysLabel": "أيام الغياب",
+  "payrollLineAbsenceDeductionLabel": "خصم الغياب",
+  "payrollLineRaiseLabel": "الزيادة",
   "payrollLineAdditionsLabel": "الإضافات",
   "payrollLineDeductionsLabel": "الخصومات",
   "payrollLineNetLabel": "الصافي",
@@ -3886,16 +3945,43 @@
   "payEffectiveFromField": "يبدأ من",
   "salaryTypeField": "نوع الراتب",
   "salaryTypeMonthlyFixed": "راتب شهري ثابت",
+  "salaryTypeWeeklyFixed": "أجر أسبوعي ثابت",
+  "salaryTypeDailyRate": "أجر يومي",
+  "salaryTypeHourlyRate": "أجر بالساعة",
+  "salaryTypePerShift": "أجر بالوردية",
   "salaryTypeSalesCommissionOnly": "عمولة مبيعات فقط",
   "salaryTypeMonthlyFixedPlusSalesCommission": "راتب شهري + عمولة مبيعات",
+  "salaryTypeContractFixed": "مبلغ عقد ثابت",
+  "salaryTypeCustomFixed": "نوع مخصص",
   "salaryTypeMonthlyFixedHelper": "يدفع مبلغًا ثابتًا كل شهر دون احتساب عمولة مبيعات.",
+  "salaryTypeWeeklyFixedHelper": "يدفع مبلغًا ثابتًا لكل أسبوع. أدخل عدد الأسابيع المتوقع في مسير الشهر.",
+  "salaryTypeDailyRateHelper": "يدفع أجرًا لكل يوم عمل. أدخل عدد الأيام المتوقع في مسير الشهر.",
+  "salaryTypeHourlyRateHelper": "يدفع أجرًا لكل ساعة. أدخل عدد الساعات المتوقع في مسير الشهر.",
+  "salaryTypePerShiftHelper": "يدفع أجرًا لكل وردية. أدخل عدد الورديات المتوقع في مسير الشهر.",
   "salaryTypeSalesCommissionOnlyHelper": "يدفع نسبة من المبيعات المدفوعة للمستخدم المرتبط بالموظف فقط.",
   "salaryTypeMonthlyFixedPlusSalesCommissionHelper": "يدفع الراتب الشهري الثابت ويضيف نسبة من مبيعات المستخدم المرتبط.",
+  "salaryTypeContractFixedHelper": "يدفع مبلغ عقد ثابت في كل مسير رواتب إلى أن يتم تعطيل الخطة.",
+  "salaryTypeCustomFixedHelper": "استخدمه عندما لا يناسب الموظف أي نوع جاهز. أضف ملاحظة توضّح طريقة الدفع.",
   "monthlyBaseSalaryField": "الراتب الشهري الثابت",
   "monthlyBaseSalaryHelper": "المبلغ الأساسي الذي يستحقه الموظف كل شهر.",
+  "compensationAmountField": "المبلغ",
+  "weeklyAmountField": "المبلغ الأسبوعي",
+  "dailyRateField": "الأجر اليومي",
+  "hourlyRateField": "أجر الساعة",
+  "shiftRateField": "أجر الوردية",
+  "contractAmountField": "مبلغ العقد",
+  "customAmountField": "المبلغ المخصص",
+  "expectedUnitsPerPeriodField": "الوحدات المتوقعة في الشهر",
+  "expectedWeeksPerPeriodHelper": "عدد الأسابيع التي تُحتسب عادة في مسير الشهر.",
+  "expectedDaysPerPeriodHelper": "عدد أيام العمل المتوقع احتسابها في مسير الشهر.",
+  "expectedHoursPerPeriodHelper": "عدد الساعات المتوقع احتسابها في مسير الشهر.",
+  "expectedShiftsPerPeriodHelper": "عدد الورديات المتوقع احتسابها في مسير الشهر.",
+  "compensationNotesField": "ملاحظات طريقة الدفع",
+  "compensationNotesHelper": "اختياري، لكنه مفيد للأنواع المخصصة أو العقود.",
   "salesCommissionPercentField": "نسبة عمولة المبيعات",
   "salesCommissionPercentHelper": "تُحسب من المبيعات المدفوعة للمستخدم المرتبط بالموظف.",
-  "baseSalaryRequiredError": "أدخل راتبًا شهريًا أكبر من صفر.",
+  "baseSalaryRequiredError": "أدخل مبلغًا أكبر من صفر.",
+  "expectedUnitsRequiredError": "أدخل عدد وحدات أكبر من صفر.",
   "commissionRequiredError": "أدخل نسبة عمولة أكبر من صفر.",
   "salesCommissionNeedsLinkedUserWarning": "عمولة المبيعات تحتاج ربط الموظف بمستخدم نقطة بيع حتى تُحسب المبيعات تلقائيًا.",
   "compensationPlanActivationNote": "ستصبح هذه الخطة هي الراتب الحالي للموظف، وسيتم تعطيل الخطط النشطة السابقة.",

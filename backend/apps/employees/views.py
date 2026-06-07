@@ -1,6 +1,7 @@
 from django.db.models import Count, Prefetch, Q
 from rest_framework import mixins, serializers, viewsets
 from rest_framework.decorators import action
+from rest_framework.exceptions import NotFound
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
@@ -11,6 +12,7 @@ from .models import CompensationPlan, Employee, PayrollLine, PayrollRun
 from .serializers import (
     CompensationPlanSerializer,
     EmployeeSerializer,
+    PayrollLineAdjustmentUpdateSerializer,
     PayrollRunSerializer,
 )
 from .services import (
@@ -167,6 +169,7 @@ class PayrollRunViewSet(viewsets.ModelViewSet):
         "approve": ("employees.approve_payrollrun",),
         "draft_monthly": ("employees.add_payrollrun", "employees.view_employee"),
         "mark_paid": ("employees.mark_payrollrun_paid",),
+        "update_line_adjustments": ("employees.change_payrollrun",),
         "void": ("employees.void_payrollrun",),
     }
     queryset = PayrollRun.objects.annotate(line_count=Count("lines")).prefetch_related(
@@ -208,6 +211,71 @@ class PayrollRunViewSet(viewsets.ModelViewSet):
     def approve(self, request, pk=None):
         payroll_run = approve_payroll_run(self.get_object(), request=request)
         return Response(PayrollRunSerializer(payroll_run, context=self.get_serializer_context()).data)
+
+    @action(
+        detail=True,
+        methods=["patch"],
+        url_path=r"lines/(?P<line_pk>[^/.]+)/adjustments",
+    )
+    def update_line_adjustments(self, request, pk=None, line_pk=None):
+        payroll_run = self.get_object()
+        if payroll_run.status != PayrollRun.Status.DRAFT:
+            raise serializers.ValidationError(
+                {"detail": "Only draft payroll runs can be changed."}
+            )
+        try:
+            line = payroll_run.lines.select_related(
+                "employee",
+                "compensation_plan",
+                "payroll_run",
+            ).get(pk=line_pk)
+        except PayrollLine.DoesNotExist as exc:
+            raise NotFound("Payroll line was not found.") from exc
+
+        serializer = PayrollLineAdjustmentUpdateSerializer(
+            line,
+            data=request.data,
+            partial=True,
+            context=self.get_serializer_context(),
+        )
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+
+        payroll_run = PayrollRun.objects.get(pk=payroll_run.pk)
+        payroll_run.recalculate(save_lines=True)
+        payroll_run.save(
+            update_fields=[
+                "gross_total",
+                "additions_total",
+                "deductions_total",
+                "net_total",
+                "updated_at",
+            ]
+        )
+        record_employee_event(
+            name="employees.payroll_line.adjustments_updated",
+            user=request.user if request.user.is_authenticated else None,
+            entity_type="payroll_line",
+            entity_id=line.pk,
+            attributes={
+                "payroll_run": payroll_run.pk,
+                "run_number": payroll_run.run_number,
+                "employee": line.employee_id,
+            },
+            metrics={
+                "absence_days": float(line.absence_days),
+                "raise_amount": float(line.raise_amount),
+                "manual_addition_amount": float(line.manual_addition_amount),
+                "manual_deduction_amount": float(line.manual_deduction_amount),
+            },
+        )
+        payroll_run = self.get_queryset().get(pk=payroll_run.pk)
+        return Response(
+            PayrollRunSerializer(
+                payroll_run,
+                context=self.get_serializer_context(),
+            ).data
+        )
 
     @action(detail=False, methods=["post"], url_path="draft-monthly")
     def draft_monthly(self, request):

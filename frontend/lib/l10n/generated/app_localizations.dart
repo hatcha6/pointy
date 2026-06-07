@@ -10262,6 +10262,16 @@ abstract class AppLocalizations {
     String percent,
   );
 
+  /// Active employee unit-based compensation plan label.
+  ///
+  /// In ar, this message translates to:
+  /// **'{salaryType} - {amount} × {units}'**
+  String employeeUnitBasedPlanLabel(
+    String salaryType,
+    String amount,
+    String units,
+  );
+
   /// No description provided for @employeeNoDetails.
   ///
   /// In ar, this message translates to:
@@ -10412,6 +10422,108 @@ abstract class AppLocalizations {
   /// **'أجر يدوي'**
   String get payrollLineManualPayLabel;
 
+  /// No description provided for @editPayrollLineAdjustmentsTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعديل غياب وإضافات الموظف'**
+  String get editPayrollLineAdjustmentsTooltip;
+
+  /// Payroll line adjustment sheet title.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعديل راتب {employee}'**
+  String payrollLineAdjustmentTitle(String employee);
+
+  /// No description provided for @payrollLineAdjustmentSubtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'أدخل الغياب أو الزيادة أو أي إضافة وخصم يدوي لهذا المسير فقط.'**
+  String get payrollLineAdjustmentSubtitle;
+
+  /// No description provided for @absenceDaysField.
+  ///
+  /// In ar, this message translates to:
+  /// **'أيام الغياب'**
+  String get absenceDaysField;
+
+  /// Absence days helper with calculated daily rate.
+  ///
+  /// In ar, this message translates to:
+  /// **'يُحسب الخصم تلقائيًا حسب قيمة اليوم: {rate}'**
+  String absenceDaysHelper(String rate);
+
+  /// Shown when absence days exceed payroll period days.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا يمكن أن تتجاوز أيام الغياب {days} يومًا.'**
+  String absenceDaysExceedPeriodError(int days);
+
+  /// No description provided for @raiseAmountField.
+  ///
+  /// In ar, this message translates to:
+  /// **'زيادة هذا الشهر'**
+  String get raiseAmountField;
+
+  /// No description provided for @raiseAmountHelper.
+  ///
+  /// In ar, this message translates to:
+  /// **'مبلغ إضافي مؤقت يُضاف لصافي هذا الموظف في هذا المسير.'**
+  String get raiseAmountHelper;
+
+  /// No description provided for @manualAdditionAmountField.
+  ///
+  /// In ar, this message translates to:
+  /// **'إضافة يدوية'**
+  String get manualAdditionAmountField;
+
+  /// No description provided for @manualAdditionAmountHelper.
+  ///
+  /// In ar, this message translates to:
+  /// **'أي مبلغ إضافي يقرره المدير لهذا الموظف.'**
+  String get manualAdditionAmountHelper;
+
+  /// No description provided for @manualDeductionAmountField.
+  ///
+  /// In ar, this message translates to:
+  /// **'خصم يدوي'**
+  String get manualDeductionAmountField;
+
+  /// No description provided for @manualDeductionAmountHelper.
+  ///
+  /// In ar, this message translates to:
+  /// **'أي مبلغ خصم إضافي يقرره المدير لهذا الموظف.'**
+  String get manualDeductionAmountHelper;
+
+  /// No description provided for @payrollAdjustmentPreviewSection.
+  ///
+  /// In ar, this message translates to:
+  /// **'المجموع المتوقع'**
+  String get payrollAdjustmentPreviewSection;
+
+  /// No description provided for @payrollLineProjectedNetLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الصافي المتوقع'**
+  String get payrollLineProjectedNetLabel;
+
+  /// No description provided for @payrollLineAdjustmentSaveButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'حفظ التعديل'**
+  String get payrollLineAdjustmentSaveButton;
+
+  /// No description provided for @payrollLineAdjustmentSaveError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر حفظ تعديل راتب الموظف.'**
+  String get payrollLineAdjustmentSaveError;
+
+  /// No description provided for @negativeNetPayrollLineError.
+  ///
+  /// In ar, this message translates to:
+  /// **'الصافي المتوقع لا يمكن أن يكون أقل من صفر.'**
+  String get negativeNetPayrollLineError;
+
   /// Fallback payroll employee label.
   ///
   /// In ar, this message translates to:
@@ -10435,6 +10547,24 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'الأساسي'**
   String get payrollLineGrossLabel;
+
+  /// No description provided for @payrollLineAbsenceDaysLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'أيام الغياب'**
+  String get payrollLineAbsenceDaysLabel;
+
+  /// No description provided for @payrollLineAbsenceDeductionLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'خصم الغياب'**
+  String get payrollLineAbsenceDeductionLabel;
+
+  /// No description provided for @payrollLineRaiseLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الزيادة'**
+  String get payrollLineRaiseLabel;
 
   /// No description provided for @payrollLineAdditionsLabel.
   ///
@@ -10772,6 +10902,30 @@ abstract class AppLocalizations {
   /// **'راتب شهري ثابت'**
   String get salaryTypeMonthlyFixed;
 
+  /// No description provided for @salaryTypeWeeklyFixed.
+  ///
+  /// In ar, this message translates to:
+  /// **'أجر أسبوعي ثابت'**
+  String get salaryTypeWeeklyFixed;
+
+  /// No description provided for @salaryTypeDailyRate.
+  ///
+  /// In ar, this message translates to:
+  /// **'أجر يومي'**
+  String get salaryTypeDailyRate;
+
+  /// No description provided for @salaryTypeHourlyRate.
+  ///
+  /// In ar, this message translates to:
+  /// **'أجر بالساعة'**
+  String get salaryTypeHourlyRate;
+
+  /// No description provided for @salaryTypePerShift.
+  ///
+  /// In ar, this message translates to:
+  /// **'أجر بالوردية'**
+  String get salaryTypePerShift;
+
   /// No description provided for @salaryTypeSalesCommissionOnly.
   ///
   /// In ar, this message translates to:
@@ -10784,11 +10938,47 @@ abstract class AppLocalizations {
   /// **'راتب شهري + عمولة مبيعات'**
   String get salaryTypeMonthlyFixedPlusSalesCommission;
 
+  /// No description provided for @salaryTypeContractFixed.
+  ///
+  /// In ar, this message translates to:
+  /// **'مبلغ عقد ثابت'**
+  String get salaryTypeContractFixed;
+
+  /// No description provided for @salaryTypeCustomFixed.
+  ///
+  /// In ar, this message translates to:
+  /// **'نوع مخصص'**
+  String get salaryTypeCustomFixed;
+
   /// No description provided for @salaryTypeMonthlyFixedHelper.
   ///
   /// In ar, this message translates to:
   /// **'يدفع مبلغًا ثابتًا كل شهر دون احتساب عمولة مبيعات.'**
   String get salaryTypeMonthlyFixedHelper;
+
+  /// No description provided for @salaryTypeWeeklyFixedHelper.
+  ///
+  /// In ar, this message translates to:
+  /// **'يدفع مبلغًا ثابتًا لكل أسبوع. أدخل عدد الأسابيع المتوقع في مسير الشهر.'**
+  String get salaryTypeWeeklyFixedHelper;
+
+  /// No description provided for @salaryTypeDailyRateHelper.
+  ///
+  /// In ar, this message translates to:
+  /// **'يدفع أجرًا لكل يوم عمل. أدخل عدد الأيام المتوقع في مسير الشهر.'**
+  String get salaryTypeDailyRateHelper;
+
+  /// No description provided for @salaryTypeHourlyRateHelper.
+  ///
+  /// In ar, this message translates to:
+  /// **'يدفع أجرًا لكل ساعة. أدخل عدد الساعات المتوقع في مسير الشهر.'**
+  String get salaryTypeHourlyRateHelper;
+
+  /// No description provided for @salaryTypePerShiftHelper.
+  ///
+  /// In ar, this message translates to:
+  /// **'يدفع أجرًا لكل وردية. أدخل عدد الورديات المتوقع في مسير الشهر.'**
+  String get salaryTypePerShiftHelper;
 
   /// No description provided for @salaryTypeSalesCommissionOnlyHelper.
   ///
@@ -10802,6 +10992,18 @@ abstract class AppLocalizations {
   /// **'يدفع الراتب الشهري الثابت ويضيف نسبة من مبيعات المستخدم المرتبط.'**
   String get salaryTypeMonthlyFixedPlusSalesCommissionHelper;
 
+  /// No description provided for @salaryTypeContractFixedHelper.
+  ///
+  /// In ar, this message translates to:
+  /// **'يدفع مبلغ عقد ثابت في كل مسير رواتب إلى أن يتم تعطيل الخطة.'**
+  String get salaryTypeContractFixedHelper;
+
+  /// No description provided for @salaryTypeCustomFixedHelper.
+  ///
+  /// In ar, this message translates to:
+  /// **'استخدمه عندما لا يناسب الموظف أي نوع جاهز. أضف ملاحظة توضّح طريقة الدفع.'**
+  String get salaryTypeCustomFixedHelper;
+
   /// No description provided for @monthlyBaseSalaryField.
   ///
   /// In ar, this message translates to:
@@ -10813,6 +11015,90 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'المبلغ الأساسي الذي يستحقه الموظف كل شهر.'**
   String get monthlyBaseSalaryHelper;
+
+  /// No description provided for @compensationAmountField.
+  ///
+  /// In ar, this message translates to:
+  /// **'المبلغ'**
+  String get compensationAmountField;
+
+  /// No description provided for @weeklyAmountField.
+  ///
+  /// In ar, this message translates to:
+  /// **'المبلغ الأسبوعي'**
+  String get weeklyAmountField;
+
+  /// No description provided for @dailyRateField.
+  ///
+  /// In ar, this message translates to:
+  /// **'الأجر اليومي'**
+  String get dailyRateField;
+
+  /// No description provided for @hourlyRateField.
+  ///
+  /// In ar, this message translates to:
+  /// **'أجر الساعة'**
+  String get hourlyRateField;
+
+  /// No description provided for @shiftRateField.
+  ///
+  /// In ar, this message translates to:
+  /// **'أجر الوردية'**
+  String get shiftRateField;
+
+  /// No description provided for @contractAmountField.
+  ///
+  /// In ar, this message translates to:
+  /// **'مبلغ العقد'**
+  String get contractAmountField;
+
+  /// No description provided for @customAmountField.
+  ///
+  /// In ar, this message translates to:
+  /// **'المبلغ المخصص'**
+  String get customAmountField;
+
+  /// No description provided for @expectedUnitsPerPeriodField.
+  ///
+  /// In ar, this message translates to:
+  /// **'الوحدات المتوقعة في الشهر'**
+  String get expectedUnitsPerPeriodField;
+
+  /// No description provided for @expectedWeeksPerPeriodHelper.
+  ///
+  /// In ar, this message translates to:
+  /// **'عدد الأسابيع التي تُحتسب عادة في مسير الشهر.'**
+  String get expectedWeeksPerPeriodHelper;
+
+  /// No description provided for @expectedDaysPerPeriodHelper.
+  ///
+  /// In ar, this message translates to:
+  /// **'عدد أيام العمل المتوقع احتسابها في مسير الشهر.'**
+  String get expectedDaysPerPeriodHelper;
+
+  /// No description provided for @expectedHoursPerPeriodHelper.
+  ///
+  /// In ar, this message translates to:
+  /// **'عدد الساعات المتوقع احتسابها في مسير الشهر.'**
+  String get expectedHoursPerPeriodHelper;
+
+  /// No description provided for @expectedShiftsPerPeriodHelper.
+  ///
+  /// In ar, this message translates to:
+  /// **'عدد الورديات المتوقع احتسابها في مسير الشهر.'**
+  String get expectedShiftsPerPeriodHelper;
+
+  /// No description provided for @compensationNotesField.
+  ///
+  /// In ar, this message translates to:
+  /// **'ملاحظات طريقة الدفع'**
+  String get compensationNotesField;
+
+  /// No description provided for @compensationNotesHelper.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختياري، لكنه مفيد للأنواع المخصصة أو العقود.'**
+  String get compensationNotesHelper;
 
   /// No description provided for @salesCommissionPercentField.
   ///
@@ -10829,8 +11115,14 @@ abstract class AppLocalizations {
   /// No description provided for @baseSalaryRequiredError.
   ///
   /// In ar, this message translates to:
-  /// **'أدخل راتبًا شهريًا أكبر من صفر.'**
+  /// **'أدخل مبلغًا أكبر من صفر.'**
   String get baseSalaryRequiredError;
+
+  /// No description provided for @expectedUnitsRequiredError.
+  ///
+  /// In ar, this message translates to:
+  /// **'أدخل عدد وحدات أكبر من صفر.'**
+  String get expectedUnitsRequiredError;
 
   /// No description provided for @commissionRequiredError.
   ///

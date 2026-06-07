@@ -153,7 +153,7 @@ def draft_monthly_payroll_run(
             payroll_run=payroll_run,
             employee=line_input["employee"],
             compensation_plan=line_input["plan"],
-            units=Decimal("1.00"),
+            units=line_input["units"],
             description=line_input["description"],
         )
         if line_input["commission_amount"] > Decimal("0.00"):
@@ -213,10 +213,16 @@ def _monthly_payroll_line_inputs(period_start, period_end):
             commission_amount = (
                 sales_total * commission_percent / Decimal("100")
             ).quantize(MONEY_PLACES)
+        units = (
+            Decimal(plan.expected_units_per_period or "0.00")
+            if plan.uses_expected_units
+            else Decimal("1.00")
+        )
         line_inputs.append(
             {
                 "employee": employee,
                 "plan": plan,
+                "units": units,
                 "sales_total": sales_total,
                 "commission_percent": commission_percent,
                 "commission_amount": commission_amount,
@@ -239,9 +245,7 @@ def _plan_for_period(employee, period_end):
         .filter(
             Q(
                 salary_type__in=[
-                    CompensationPlan.SalaryType.MONTHLY_FIXED,
-                    CompensationPlan.SalaryType.SALES_COMMISSION_ONLY,
-                    CompensationPlan.SalaryType.MONTHLY_FIXED_PLUS_SALES_COMMISSION,
+                    *CompensationPlan.SalaryType.values,
                 ]
             )
             | Q(salary_type="", pay_type=CompensationPlan.PayType.MONTHLY_SALARY)

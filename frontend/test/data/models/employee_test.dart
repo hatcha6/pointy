@@ -95,9 +95,9 @@ void main() {
       'payment_date': null,
       'notes': 'مسير تلقائي',
       'gross_total': '900.00',
-      'additions_total': '20.00',
-      'deductions_total': '0.00',
-      'net_total': '920.00',
+      'additions_total': '145.00',
+      'deductions_total': '70.00',
+      'net_total': '975.00',
       'line_count': 1,
       'created_at': '2026-06-30T23:10:00Z',
       'lines': [
@@ -113,9 +113,15 @@ void main() {
           'units': '1.00',
           'rate': '900.00',
           'gross_amount': '900.00',
-          'additions_amount': '20.00',
-          'deductions_amount': '0.00',
-          'net_amount': '920.00',
+          'absence_days': '2.00',
+          'absence_day_rate': '30.00',
+          'absence_deduction_amount': '60.00',
+          'raise_amount': '100.00',
+          'manual_addition_amount': '25.00',
+          'manual_deduction_amount': '10.00',
+          'additions_amount': '145.00',
+          'deductions_amount': '70.00',
+          'net_amount': '975.00',
           'notes': '',
           'adjustments': [
             {
@@ -140,8 +146,15 @@ void main() {
     expect(line.salaryType, SalaryType.monthlyFixedPlusSalesCommission);
     expect(line.payType, PayType.monthlySalary);
     expect(line.grossAmount, 900);
-    expect(line.additionsAmount, 20);
-    expect(line.netAmount, 920);
+    expect(line.absenceDays, 2);
+    expect(line.absenceDayRate, 30);
+    expect(line.absenceDeductionAmount, 60);
+    expect(line.raiseAmount, 100);
+    expect(line.manualAdditionAmount, 25);
+    expect(line.manualDeductionAmount, 10);
+    expect(line.additionsAmount, 145);
+    expect(line.deductionsAmount, 70);
+    expect(line.netAmount, 975);
     expect(line.adjustments.single.adjustmentType, 'commission');
     expect(line.adjustments.single.amount, 20);
   });
@@ -183,6 +196,21 @@ void main() {
       },
     ]);
 
+    final adjustment = const PayrollLineAdjustmentDraft(
+      absenceDays: '2.00',
+      raiseAmount: '100.00',
+      manualAdditionAmount: '25.00',
+      manualDeductionAmount: '10.00',
+      notes: 'تعديل شهر يونيو',
+    ).toJson();
+    expect(adjustment, {
+      'absence_days': '2.00',
+      'raise_amount': '100.00',
+      'manual_addition_amount': '25.00',
+      'manual_deduction_amount': '10.00',
+      'notes': 'تعديل شهر يونيو',
+    });
+
     final fixedSalary = const CompensationPlanDraft(
       employeeId: 7,
       salaryType: SalaryType.monthlyFixed,
@@ -217,5 +245,26 @@ void main() {
     );
     expect(fixedPlusCommissionSalary['amount'], '900.00');
     expect(fixedPlusCommissionSalary['commission_percent'], '10.00');
+
+    final hourlySalary = const CompensationPlanDraft(
+      employeeId: 7,
+      salaryType: SalaryType.hourlyRate,
+      amount: '15.00',
+      expectedUnitsPerPeriod: '120.00',
+    ).toJson();
+    expect(hourlySalary['pay_type'], 'hourly');
+    expect(hourlySalary['salary_type'], 'hourly_rate');
+    expect(hourlySalary['amount'], '15.00');
+    expect(hourlySalary['expected_units_per_period'], '120.00');
+
+    final customSalary = const CompensationPlanDraft(
+      employeeId: 7,
+      salaryType: SalaryType.customFixed,
+      amount: '450.00',
+      notes: 'بدل إدارة الفرع',
+    ).toJson();
+    expect(customSalary['pay_type'], 'other');
+    expect(customSalary['salary_type'], 'custom_fixed');
+    expect(customSalary['notes'], 'بدل إدارة الفرع');
   });
 }

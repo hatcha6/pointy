@@ -56,6 +56,7 @@ class PayrollLineInline(admin.TabularInline):
     model = PayrollLine
     extra = 0
     readonly_fields = (
+        "absence_deduction_amount",
         "gross_amount",
         "additions_amount",
         "deductions_amount",
@@ -83,7 +84,15 @@ class PayrollRunAdmin(admin.ModelAdmin):
 
 @admin.register(PayrollLine)
 class PayrollLineAdmin(admin.ModelAdmin):
-    list_display = ("payroll_run", "employee", "units", "rate", "net_amount")
+    list_display = (
+        "payroll_run",
+        "employee",
+        "units",
+        "rate",
+        "absence_days",
+        "raise_amount",
+        "net_amount",
+    )
     list_filter = (
         "payroll_run__status",
         "compensation_plan__salary_type",

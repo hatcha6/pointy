@@ -1,5 +1,5 @@
 import warnings
-from datetime import timedelta
+from datetime import date, timedelta
 from decimal import Decimal
 
 from django.contrib.auth import get_user_model
@@ -161,6 +161,76 @@ class EmployeePayrollApiTests(TestCase):
             PayrollAdjustment.AdjustmentType.COMMISSION,
         )
 
+    def test_payroll_run_detail_updates_line_absence_and_adjustment_totals(self):
+        employee = Employee.objects.create(full_name="خالد محمود")
+        plan = CompensationPlan.objects.create(
+            employee=employee,
+            pay_type=CompensationPlan.PayType.MONTHLY_SALARY,
+            salary_type=CompensationPlan.SalaryType.MONTHLY_FIXED,
+            amount=Decimal("900.00"),
+        )
+        payroll = PayrollRun.objects.create(
+            period_start=date(2026, 6, 1),
+            period_end=date(2026, 6, 30),
+        )
+        line = payroll.lines.create(
+            employee=employee,
+            compensation_plan=plan,
+            units=Decimal("1.00"),
+        )
+        payroll.recalculate(save_lines=True)
+        payroll.save()
+
+        response = self.authenticated_client(self.accountant).patch(
+            reverse("payroll-run-update-line-adjustments", args=[payroll.pk, line.pk]),
+            {
+                "absence_days": "2.00",
+                "raise_amount": "100.00",
+                "manual_addition_amount": "25.00",
+                "manual_deduction_amount": "10.00",
+                "notes": "خصم غياب مع زيادة هذا الشهر",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["gross_total"], "900.00")
+        self.assertEqual(response.data["additions_total"], "125.00")
+        self.assertEqual(response.data["deductions_total"], "70.00")
+        self.assertEqual(response.data["net_total"], "955.00")
+
+        updated_line = response.data["lines"][0]
+        self.assertEqual(updated_line["absence_days"], "2.00")
+        self.assertEqual(updated_line["absence_day_rate"], "30.00")
+        self.assertEqual(updated_line["absence_deduction_amount"], "60.00")
+        self.assertEqual(updated_line["raise_amount"], "100.00")
+        self.assertEqual(updated_line["manual_addition_amount"], "25.00")
+        self.assertEqual(updated_line["manual_deduction_amount"], "10.00")
+        self.assertEqual(updated_line["additions_amount"], "125.00")
+        self.assertEqual(updated_line["deductions_amount"], "70.00")
+        self.assertEqual(updated_line["net_amount"], "955.00")
+
+    def test_payroll_line_adjustments_are_locked_after_draft_status(self):
+        employee = Employee.objects.create(full_name="منى صالح")
+        payroll = PayrollRun.objects.create(
+            status=PayrollRun.Status.APPROVED,
+            period_start=date(2026, 6, 1),
+            period_end=date(2026, 6, 30),
+        )
+        line = payroll.lines.create(
+            employee=employee,
+            units=Decimal("1.00"),
+            rate=Decimal("300.00"),
+        )
+
+        response = self.authenticated_client(self.accountant).patch(
+            reverse("payroll-run-update-line-adjustments", args=[payroll.pk, line.pk]),
+            {"manual_addition_amount": "10.00"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
     def test_payroll_run_list_paginates_with_stable_ordering(self):
         older = PayrollRun.objects.create(
             period_start=timezone.localdate() - timedelta(days=60),
@@ -274,6 +344,29 @@ class EmployeePayrollApiTests(TestCase):
         self.assertEqual(line.net_amount, Decimal("50.00"))
         self.assertEqual(payroll.net_total, Decimal("50.00"))
 
+    def test_monthly_payroll_draft_uses_rate_based_salary_units(self):
+        employee = Employee.objects.create(full_name="موظف بالساعة")
+        CompensationPlan.objects.create(
+            employee=employee,
+            pay_type=CompensationPlan.PayType.HOURLY,
+            salary_type=CompensationPlan.SalaryType.HOURLY_RATE,
+            amount=Decimal("15.00"),
+            expected_units_per_period=Decimal("120.00"),
+        )
+        today = timezone.localdate()
+
+        payroll, created = draft_monthly_payroll_run(
+            period_start=today.replace(day=1),
+            period_end=today,
+        )
+
+        self.assertTrue(created)
+        line = payroll.lines.get()
+        self.assertEqual(line.units, Decimal("120.00"))
+        self.assertEqual(line.rate, Decimal("15.00"))
+        self.assertEqual(line.gross_amount, Decimal("1800.00"))
+        self.assertEqual(line.net_amount, Decimal("1800.00"))
+
     def test_compensation_plan_salary_type_validation(self):
         employee = Employee.objects.create(full_name="تحقق الراتب")
         client = self.authenticated_client(self.accountant)
@@ -295,6 +388,12 @@ class EmployeePayrollApiTests(TestCase):
                 "amount": "800.00",
                 "commission_percent": "0.00",
                 "error_field": "commission_percent",
+            },
+            {
+                "salary_type": CompensationPlan.SalaryType.HOURLY_RATE,
+                "amount": "15.00",
+                "expected_units_per_period": "0.00",
+                "error_field": "expected_units_per_period",
             },
         ]
 

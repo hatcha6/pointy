@@ -125,11 +125,17 @@ class CompensationPlan(TimeStampedModel):
 
     class SalaryType(models.TextChoices):
         MONTHLY_FIXED = "monthly_fixed", "Monthly fixed"
+        WEEKLY_FIXED = "weekly_fixed", "Weekly fixed"
+        DAILY_RATE = "daily_rate", "Daily rate"
+        HOURLY_RATE = "hourly_rate", "Hourly rate"
+        PER_SHIFT = "per_shift", "Per shift"
         SALES_COMMISSION_ONLY = "sales_commission_only", "Sales commission only"
         MONTHLY_FIXED_PLUS_SALES_COMMISSION = (
             "monthly_fixed_plus_sales_commission",
             "Monthly fixed plus sales commission",
         )
+        CONTRACT_FIXED = "contract_fixed", "Contract fixed"
+        CUSTOM_FIXED = "custom_fixed", "Custom fixed"
 
     employee = models.ForeignKey(
         Employee,
@@ -203,6 +209,17 @@ class CompensationPlan(TimeStampedModel):
         return self.resolved_salary_type in {
             self.SalaryType.MONTHLY_FIXED,
             self.SalaryType.MONTHLY_FIXED_PLUS_SALES_COMMISSION,
+            self.SalaryType.CONTRACT_FIXED,
+            self.SalaryType.CUSTOM_FIXED,
+        }
+
+    @property
+    def uses_expected_units(self):
+        return self.resolved_salary_type in {
+            self.SalaryType.WEEKLY_FIXED,
+            self.SalaryType.DAILY_RATE,
+            self.SalaryType.HOURLY_RATE,
+            self.SalaryType.PER_SHIFT,
         }
 
     @property
@@ -215,9 +232,7 @@ class CompensationPlan(TimeStampedModel):
     @property
     def is_automatic_monthly_salary(self):
         return self.resolved_salary_type in {
-            self.SalaryType.MONTHLY_FIXED,
-            self.SalaryType.SALES_COMMISSION_ONLY,
-            self.SalaryType.MONTHLY_FIXED_PLUS_SALES_COMMISSION,
+            *self.SalaryType.values,
         }
 
     def clean(self):
@@ -231,14 +246,7 @@ class CompensationPlan(TimeStampedModel):
         amount = Decimal(self.amount or "0.00")
         commission_percent = Decimal(self.commission_percent or "0.00")
         errors = {}
-        if salary_type == self.SalaryType.MONTHLY_FIXED:
-            if amount <= Decimal("0.00"):
-                errors["amount"] = "Monthly fixed salary requires an amount greater than zero."
-            if commission_percent != Decimal("0.00"):
-                errors["commission_percent"] = (
-                    "Monthly fixed salary cannot include a commission percentage."
-                )
-        elif salary_type == self.SalaryType.SALES_COMMISSION_ONLY:
+        if salary_type == self.SalaryType.SALES_COMMISSION_ONLY:
             if amount != Decimal("0.00"):
                 errors["amount"] = "Commission-only salary must use a zero fixed amount."
             if commission_percent <= Decimal("0.00"):
@@ -254,6 +262,17 @@ class CompensationPlan(TimeStampedModel):
                 errors["commission_percent"] = (
                     "Monthly fixed plus commission salary requires a commission percentage."
                 )
+        else:
+            if amount <= Decimal("0.00"):
+                errors["amount"] = "Compensation plan requires an amount greater than zero."
+            if commission_percent != Decimal("0.00"):
+                errors["commission_percent"] = (
+                    "This compensation type cannot include a commission percentage."
+                )
+        if self.uses_expected_units and self.expected_units_per_period <= Decimal("0.00"):
+            errors["expected_units_per_period"] = (
+                "This compensation type requires expected units greater than zero."
+            )
         if errors:
             raise ValidationError(errors)
 
@@ -263,6 +282,8 @@ class CompensationPlan(TimeStampedModel):
             return Decimal("0.00").quantize(self.MONEY_PLACES)
         if self.has_fixed_monthly_amount:
             return self.amount.quantize(self.MONEY_PLACES)
+        if self.uses_expected_units:
+            return (self.amount * units).quantize(self.MONEY_PLACES)
         if self.pay_type in {
             self.PayType.MONTHLY_SALARY,
             self.PayType.WEEKLY_SALARY,
@@ -402,6 +423,36 @@ class PayrollLine(TimeStampedModel):
         validators=[MinValueValidator(Decimal("0.00"))],
     )
     gross_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    absence_days = models.DecimalField(
+        max_digits=6,
+        decimal_places=2,
+        default=Decimal("0.00"),
+        validators=[MinValueValidator(Decimal("0.00"))],
+    )
+    absence_deduction_amount = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=Decimal("0.00"),
+        validators=[MinValueValidator(Decimal("0.00"))],
+    )
+    raise_amount = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=Decimal("0.00"),
+        validators=[MinValueValidator(Decimal("0.00"))],
+    )
+    manual_addition_amount = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=Decimal("0.00"),
+        validators=[MinValueValidator(Decimal("0.00"))],
+    )
+    manual_deduction_amount = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=Decimal("0.00"),
+        validators=[MinValueValidator(Decimal("0.00"))],
+    )
     additions_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     deductions_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     net_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
@@ -424,6 +475,24 @@ class PayrollLine(TimeStampedModel):
             raise ValidationError(
                 {"compensation_plan": "Compensation plan must belong to the employee."}
             )
+        period_days = self.period_days
+        if period_days and self.absence_days > Decimal(period_days):
+            raise ValidationError(
+                {"absence_days": "Absence days cannot exceed the payroll period."}
+            )
+
+    @property
+    def period_days(self):
+        if not self.payroll_run_id:
+            return None
+        return (self.payroll_run.period_end - self.payroll_run.period_start).days + 1
+
+    @property
+    def absence_day_rate(self):
+        period_days = self.period_days
+        if not period_days or period_days <= 0:
+            return Decimal("0.00").quantize(self.MONEY_PLACES)
+        return (self.gross_amount / Decimal(period_days)).quantize(self.MONEY_PLACES)
 
     def recalculate(self, *, save=False):
         if self.compensation_plan_id:
@@ -432,8 +501,15 @@ class PayrollLine(TimeStampedModel):
         else:
             self.gross_amount = (self.rate * self.units).quantize(self.MONEY_PLACES)
 
-        additions = Decimal("0.00")
-        deductions = Decimal("0.00")
+        self.absence_deduction_amount = (
+            self.absence_day_rate * Decimal(self.absence_days or "0.00")
+        ).quantize(self.MONEY_PLACES)
+        additions = Decimal(self.raise_amount or "0.00") + Decimal(
+            self.manual_addition_amount or "0.00"
+        )
+        deductions = Decimal(self.absence_deduction_amount or "0.00") + Decimal(
+            self.manual_deduction_amount or "0.00"
+        )
         if self.pk:
             for adjustment in self.adjustments.all():
                 if adjustment.direction == PayrollAdjustment.Direction.ADDITION:
@@ -452,6 +528,7 @@ class PayrollLine(TimeStampedModel):
                 update_fields=[
                     "rate",
                     "gross_amount",
+                    "absence_deduction_amount",
                     "additions_amount",
                     "deductions_amount",
                     "net_amount",
