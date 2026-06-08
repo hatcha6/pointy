@@ -70,6 +70,7 @@ extension PosCartActions on PosViewModel {
         source: source,
       );
     }
+    _touchActiveSaleSession();
     _notifyChanged();
     unawaited(refreshDiscountPreview());
   }
@@ -89,6 +90,7 @@ extension PosCartActions on PosViewModel {
 
     final line = _cart.removeAt(index);
     _trackCartLineDeleted(line, reason: 'remove_line', source: source);
+    _touchActiveSaleSession();
     _notifyChanged();
     unawaited(refreshDiscountPreview());
   }
@@ -106,6 +108,7 @@ extension PosCartActions on PosViewModel {
     _couponCode = '';
     _discountPreview = null;
     _hasDiscountPreviewError = false;
+    _touchActiveSaleSession();
     _notifyChanged();
   }
 
@@ -118,9 +121,10 @@ extension PosCartActions on PosViewModel {
     if (index == -1) {
       _cart.add(CartLine(variant: variant, quantity: quantity));
     } else {
-      final line = _cart[index];
-      _cart[index] = line.copyWith(quantity: line.quantity + quantity);
+      final line = _cart.removeAt(index);
+      _cart.add(line.copyWith(quantity: line.quantity + quantity));
     }
+    _touchActiveSaleSession();
     return true;
   }
 

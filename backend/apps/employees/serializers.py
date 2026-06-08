@@ -7,11 +7,12 @@ from rest_framework import serializers
 from .models import (
     CompensationPlan,
     Employee,
+    EmployeeLoan,
     PayrollAdjustment,
     PayrollLine,
     PayrollRun,
 )
-from .services import save_payroll_run_with_lines
+from .services import request_employee_loan, save_payroll_run_with_lines
 
 
 def money_string(value):
@@ -337,11 +338,135 @@ class PayrollAdjustmentSerializer(serializers.ModelSerializer):
             "direction",
             "adjustment_type",
             "amount",
+            "loan",
             "notes",
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ["id", "created_at", "updated_at"]
+        read_only_fields = ["id", "loan", "created_at", "updated_at"]
+
+
+class EmployeeLoanSerializer(serializers.ModelSerializer):
+    employee_name = serializers.CharField(source="employee.full_name", read_only=True)
+    employee_number = serializers.CharField(
+        source="employee.employee_number",
+        read_only=True,
+    )
+    requested_by_username = serializers.CharField(
+        source="requested_by.username",
+        read_only=True,
+    )
+    reviewed_by_username = serializers.CharField(
+        source="reviewed_by.username",
+        read_only=True,
+    )
+    deducted_amount = serializers.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        read_only=True,
+    )
+
+    class Meta:
+        model = EmployeeLoan
+        fields = [
+            "id",
+            "employee",
+            "employee_name",
+            "employee_number",
+            "requested_by",
+            "requested_by_username",
+            "reviewed_by",
+            "reviewed_by_username",
+            "status",
+            "amount",
+            "monthly_deduction",
+            "outstanding_balance",
+            "deducted_amount",
+            "purpose",
+            "review_notes",
+            "reviewed_at",
+            "paid_at",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = [
+            "id",
+            "employee_name",
+            "employee_number",
+            "requested_by",
+            "requested_by_username",
+            "reviewed_by",
+            "reviewed_by_username",
+            "status",
+            "outstanding_balance",
+            "deducted_amount",
+            "review_notes",
+            "reviewed_at",
+            "paid_at",
+            "created_at",
+            "updated_at",
+        ]
+
+    def validate(self, attrs):
+        amount = Decimal(attrs.get("amount", getattr(self.instance, "amount", "0.00")))
+        monthly_deduction = Decimal(
+            attrs.get(
+                "monthly_deduction",
+                getattr(self.instance, "monthly_deduction", "0.00"),
+            )
+        )
+        if monthly_deduction > amount:
+            raise serializers.ValidationError(
+                {"monthly_deduction": "Monthly deduction cannot exceed loan amount."}
+            )
+        return attrs
+
+    def create(self, validated_data):
+        if "outstanding_balance" not in validated_data:
+            validated_data["outstanding_balance"] = Decimal("0.00")
+        return super().create(validated_data)
+
+
+class EmployeeLoanRequestSerializer(serializers.Serializer):
+    amount = serializers.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        min_value=Decimal("0.01"),
+    )
+    monthly_deduction = serializers.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        min_value=Decimal("0.01"),
+    )
+    purpose = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        trim_whitespace=True,
+    )
+
+    def validate(self, attrs):
+        if attrs["monthly_deduction"] > attrs["amount"]:
+            raise serializers.ValidationError(
+                {"monthly_deduction": "Monthly deduction cannot exceed loan amount."}
+            )
+        return attrs
+
+    def save(self, **kwargs):
+        request = self.context["request"]
+        return request_employee_loan(
+            user=request.user,
+            amount=self.validated_data["amount"],
+            monthly_deduction=self.validated_data["monthly_deduction"],
+            purpose=self.validated_data.get("purpose", ""),
+        )
+
+
+class EmployeeLoanReviewSerializer(serializers.Serializer):
+    review_notes = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        trim_whitespace=True,
+    )
 
 
 class PayrollLineSerializer(serializers.ModelSerializer):

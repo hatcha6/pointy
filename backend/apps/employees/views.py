@@ -8,18 +8,24 @@ from rest_framework.response import Response
 from apps.analytics.models import AnalyticsEvent
 from apps.core.permissions import HasPointyPermission
 
-from .models import CompensationPlan, Employee, PayrollLine, PayrollRun
+from .models import CompensationPlan, Employee, EmployeeLoan, PayrollLine, PayrollRun
 from .serializers import (
     CompensationPlanSerializer,
     EmployeeSerializer,
+    EmployeeLoanRequestSerializer,
+    EmployeeLoanReviewSerializer,
+    EmployeeLoanSerializer,
+    EmployeeSummarySerializer,
     PayrollLineAdjustmentUpdateSerializer,
     PayrollRunSerializer,
 )
 from .services import (
+    approve_employee_loan,
     approve_payroll_run,
     draft_monthly_payroll_run,
     mark_payroll_run_paid,
     record_employee_event,
+    reject_employee_loan,
     void_payroll_run,
 )
 
@@ -154,6 +160,125 @@ class CompensationPlanViewSet(viewsets.ModelViewSet):
     filterset_fields = ("employee", "pay_type", "salary_type", "is_active")
     search_fields = ("employee__full_name", "employee__employee_number", "notes")
     ordering_fields = ("effective_from", "effective_to", "amount", "created_at")
+
+
+class EmployeeLoanViewSet(viewsets.ModelViewSet):
+    serializer_class = EmployeeLoanSerializer
+    permission_classes = [IsAuthenticated, HasPointyPermission]
+    permission_map = {
+        "list": ("employees.view_employeeloan",),
+        "retrieve": ("employees.view_employeeloan",),
+        "mine": (),
+        "request_loan": (),
+        "create": ("employees.add_employeeloan",),
+        "update": ("employees.change_employeeloan",),
+        "partial_update": ("employees.change_employeeloan",),
+        "destroy": ("employees.delete_employeeloan",),
+        "approve": ("employees.approve_employeeloan",),
+        "reject": ("employees.reject_employeeloan",),
+    }
+    queryset = EmployeeLoan.objects.select_related(
+        "employee",
+        "requested_by",
+        "reviewed_by",
+    )
+    filterset_fields = ("status", "employee")
+    search_fields = (
+        "employee__full_name",
+        "employee__employee_number",
+        "requested_by__username",
+        "purpose",
+        "review_notes",
+    )
+    ordering_fields = (
+        "amount",
+        "monthly_deduction",
+        "outstanding_balance",
+        "created_at",
+        "reviewed_at",
+    )
+
+    def get_queryset(self):
+        return super().get_queryset().order_by("-created_at", "-id")
+
+    def perform_create(self, serializer):
+        loan = serializer.save(requested_by=self.request.user)
+        record_employee_event(
+            name="employees.loan.created",
+            user=self.request.user,
+            entity_type="employee_loan",
+            entity_id=loan.pk,
+            attributes={"employee": loan.employee_id, "status": loan.status},
+            metrics={
+                "amount": float(loan.amount),
+                "monthly_deduction": float(loan.monthly_deduction),
+            },
+        )
+
+    @action(detail=False, methods=["get"])
+    def mine(self, request):
+        employee = Employee.objects.filter(user=request.user).first()
+        loans = (
+            self.get_queryset().filter(employee=employee)
+            if employee is not None
+            else EmployeeLoan.objects.none()
+        )
+        return Response(
+            {
+                "employee": (
+                    EmployeeSummarySerializer(
+                        employee,
+                        context=self.get_serializer_context(),
+                    ).data
+                    if employee is not None
+                    else None
+                ),
+                "loans": EmployeeLoanSerializer(
+                    loans,
+                    many=True,
+                    context=self.get_serializer_context(),
+                ).data,
+            }
+        )
+
+    @action(detail=False, methods=["post"], url_path="request", url_name="request")
+    def request_loan(self, request):
+        serializer = EmployeeLoanRequestSerializer(
+            data=request.data,
+            context=self.get_serializer_context(),
+        )
+        serializer.is_valid(raise_exception=True)
+        loan = serializer.save()
+        return Response(
+            EmployeeLoanSerializer(loan, context=self.get_serializer_context()).data,
+            status=201,
+        )
+
+    @action(detail=True, methods=["post"])
+    def approve(self, request, pk=None):
+        serializer = EmployeeLoanReviewSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        loan = approve_employee_loan(
+            self.get_object(),
+            request=request,
+            review_notes=serializer.validated_data.get("review_notes", ""),
+        )
+        return Response(
+            EmployeeLoanSerializer(loan, context=self.get_serializer_context()).data
+        )
+
+    @action(detail=True, methods=["post"])
+    def reject(self, request, pk=None):
+        serializer = EmployeeLoanReviewSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        loan = reject_employee_loan(
+            self.get_object(),
+            request=request,
+            review_notes=serializer.validated_data.get("review_notes", ""),
+        )
+        return Response(
+            EmployeeLoanSerializer(loan, context=self.get_serializer_context()).data
+        )
 
 
 class PayrollRunViewSet(viewsets.ModelViewSet):

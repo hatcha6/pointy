@@ -189,6 +189,91 @@ void main() {
     },
   );
 
+  test('re-adding an existing cart line makes it the newest line', () async {
+    final viewModel = _viewModel(_FakePosApiService());
+    addTearDown(viewModel.dispose);
+
+    viewModel.addVariant(_coffeeVariant);
+    viewModel.addVariant(_teaVariant);
+    viewModel.addVariant(_coffeeVariant);
+
+    expect(viewModel.cart.map((line) => line.variant.id), [
+      _teaVariant.id,
+      _coffeeVariant.id,
+    ]);
+    expect(viewModel.cart.last.quantity, 2);
+    expect(viewModel.cart.reversed.first.variant.id, _coffeeVariant.id);
+    await _settle();
+  });
+
+  test('checkout of a quick invoice returns to the parked invoice', () async {
+    final apiService = _FakePosApiService();
+    final viewModel = _viewModel(apiService);
+    addTearDown(viewModel.dispose);
+
+    await viewModel.loadCurrentRegisterSession();
+    await viewModel.resumeRegisterSession();
+
+    viewModel.addVariant(_coffeeVariant);
+
+    expect(viewModel.activeSaleSessionNumber, 1);
+    expect(viewModel.cart.single.variant.id, _coffeeVariant.id);
+    expect(viewModel.saleSessions, hasLength(1));
+
+    viewModel.startNewSaleSession();
+
+    expect(viewModel.activeSaleSessionNumber, 2);
+    expect(viewModel.cart, isEmpty);
+    expect(viewModel.saleSessions, hasLength(2));
+
+    viewModel.addVariant(_teaVariant);
+    await _settle();
+
+    final outcome = await viewModel.checkoutCurrentSale(
+      payments: const [
+        SaleCheckoutPaymentDraft(method: PaymentMethod.cash, amount: 2.75),
+      ],
+    );
+
+    expect(outcome.isSuccess, isTrue);
+    expect(apiService.capturedCheckoutDraft?.lines, hasLength(1));
+    expect(apiService.capturedCheckoutDraft?.lines.single.variantId, 102);
+    expect(viewModel.saleSessions, hasLength(1));
+    expect(viewModel.activeSaleSessionNumber, 1);
+    expect(viewModel.cart.single.variant.id, _coffeeVariant.id);
+    expect(viewModel.cart.single.quantity, 1);
+    await _settle();
+  });
+
+  test('switching invoices preserves coupon and lines', () async {
+    final apiService = _FakePosApiService();
+    final viewModel = _viewModel(apiService);
+    addTearDown(viewModel.dispose);
+
+    await viewModel.loadCurrentRegisterSession();
+    await viewModel.resumeRegisterSession();
+
+    viewModel.addVariant(_coffeeVariant);
+    viewModel.updateCouponCode('SAVE');
+    viewModel.startNewSaleSession();
+    viewModel.addVariant(_teaVariant);
+    await _settle();
+
+    expect(viewModel.activeSaleSessionNumber, 2);
+    expect(viewModel.couponCode, isEmpty);
+    expect(viewModel.cart.single.variant.id, _teaVariant.id);
+
+    final parkedSession = viewModel.saleSessions.firstWhere(
+      (session) => !session.isActive,
+    );
+    viewModel.switchSaleSession(parkedSession.id);
+
+    expect(viewModel.activeSaleSessionNumber, 1);
+    expect(viewModel.couponCode, 'SAVE');
+    expect(viewModel.cart.single.variant.id, _coffeeVariant.id);
+    await _settle();
+  });
+
   test(
     'cart audit tracking captures item, source, and cart snapshots',
     () async {

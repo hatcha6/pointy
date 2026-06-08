@@ -20,6 +20,16 @@ class AuthRepository {
     return Result.guard(_service.fetchCurrentUser);
   }
 
+  Future<Result<PosUser>> updateCurrentUser(
+    CurrentUserProfileDraft draft,
+  ) async {
+    return Result.guard(() => _service.updateCurrentUser(draft));
+  }
+
+  Future<Result<void>> changePassword(PasswordChangeDraft draft) async {
+    return Result.guard(() => _service.changePassword(draft));
+  }
+
   Future<Result<void>> forgetCurrentUser() async {
     return Result.guard(() async {
       try {

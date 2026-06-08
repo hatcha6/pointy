@@ -51,6 +51,13 @@
   "usersDrawerLabel": "المستخدمون",
   "settingsDrawerLabel": "إعدادات المتجر",
   "dashboardDrawerLabel": "لوحة التحكم",
+  "userSettingsDrawerLabel": "إعداداتي",
+  "navigationGroupPrimary": "الرئيسية",
+  "navigationGroupSales": "المبيعات",
+  "navigationGroupStock": "المخزون والمشتريات",
+  "navigationGroupPeople": "الأشخاص والرواتب",
+  "navigationGroupReports": "التقارير والمراجعة",
+  "navigationGroupSettings": "الإعدادات",
   "reportsDrawerLabel": "التقارير",
   "activityLogDrawerLabel": "سجل النشاط",
   "activityLogTitle": "سجل نشاط المستخدمين",
@@ -1206,8 +1213,50 @@
   "refreshUsersTooltip": "تحديث المستخدمين",
   "addUserButton": "إضافة مستخدم",
   "userCreateTitle": "مستخدم جديد",
+  "firstNameLabel": "الاسم الأول",
+  "lastNameLabel": "اسم العائلة",
   "displayNameLabel": "الاسم المعروض",
   "emailLabel": "البريد الإلكتروني",
+  "currentPasswordLabel": "كلمة المرور الحالية",
+  "newPasswordLabel": "كلمة المرور الجديدة",
+  "confirmPasswordLabel": "تأكيد كلمة المرور",
+  "saveChangesButton": "حفظ التغييرات",
+  "changePasswordButton": "تغيير كلمة المرور",
+  "passwordConfirmationMismatch": "تأكيد كلمة المرور غير مطابق.",
+  "userSettingsTitle": "إعداداتي",
+  "userSettingsRefreshLoansTooltip": "تحديث طلبات السلفة",
+  "userSettingsOverviewTitle": "إعدادات الحساب",
+  "userSettingsOverviewSubtitle": "بيانات الدخول وطلبات السلفة المرتبطة بسجل الموظف",
+  "userSettingsProfileSectionTitle": "البيانات الشخصية",
+  "userSettingsPasswordSectionTitle": "كلمة المرور",
+  "userSettingsLoansSectionTitle": "طلبات السلفة",
+  "userSettingsProfileSaveError": "تعذر حفظ بيانات الحساب. تحقق من اسم المستخدم ثم حاول مرة أخرى.",
+  "userSettingsProfileSaved": "تم حفظ بيانات الحساب.",
+  "userSettingsPasswordChangeError": "تعذر تغيير كلمة المرور. تحقق من كلمة المرور الحالية وشروط كلمة المرور الجديدة.",
+  "userSettingsPasswordChanged": "تم تغيير كلمة المرور.",
+  "userSettingsLoansLoadError": "تعذر تحميل طلبات السلفة.",
+  "userSettingsLoanNoEmployeeRecord": "لا يوجد سجل موظف مرتبط بهذا المستخدم، لذلك لا يمكن إرسال طلب سلفة.",
+  "loanAmountLabel": "مبلغ السلفة",
+  "loanMonthlyDeductionLabel": "الخصم الشهري",
+  "loanPurposeLabel": "سبب الطلب",
+  "loanMonthlyDeductionTooHigh": "لا يمكن أن يكون الخصم الشهري أكبر من مبلغ السلفة.",
+  "submitLoanRequestButton": "إرسال طلب السلفة",
+  "userSettingsLoanRequestError": "تعذر إرسال طلب السلفة. راجع المبلغ والخصم الشهري ثم حاول مرة أخرى.",
+  "userSettingsLoanRequested": "تم إرسال طلب السلفة للاعتماد.",
+  "userSettingsNoLoans": "لا توجد طلبات سلفة بعد.",
+  "userSettingsLoanHistoryTitle": "سجل طلبات السلفة",
+  "userSettingsLoanBalanceDetail": "المتبقي {balance}، الخصم الشهري {monthlyDeduction}",
+  "@userSettingsLoanBalanceDetail": {
+    "description": "Current employee loan remaining balance and monthly deduction.",
+    "placeholders": {
+      "balance": {
+        "type": "String"
+      },
+      "monthlyDeduction": {
+        "type": "String"
+      }
+    }
+  },
   "roleLabel": "الدور",
   "activeUserLabel": "مستخدم نشط",
   "createUserButton": "إنشاء المستخدم",
@@ -1998,6 +2047,31 @@
   "removeCartLineTooltip": "حذف العنصر من السلة",
   "emptyCart": "لا توجد عناصر في السلة",
   "openCartSheetButton": "مراجعة السلة",
+  "openSaleSessionsTitle": "الفواتير المفتوحة",
+  "newSaleSessionButton": "فاتورة جديدة",
+  "newSaleSessionTooltip": "بدء فاتورة جديدة",
+  "saleSessionSwitcherTooltip": "إدارة الفواتير المفتوحة",
+  "activeSaleSessionStatusLabel": "الحالية",
+  "parkedSaleSessionStatusLabel": "معلقة",
+  "saleSessionTitle": "فاتورة {number}",
+  "@saleSessionTitle": {
+    "description": "Temporary POS sale session title shown while multiple invoices are open.",
+    "placeholders": {
+      "number": {
+        "type": "int"
+      }
+    }
+  },
+  "saleSessionSwitchTooltip": "فتح {title}",
+  "@saleSessionSwitchTooltip": {
+    "description": "Tooltip for switching to another open POS sale session.",
+    "placeholders": {
+      "title": {
+        "type": "String"
+      }
+    }
+  },
+  "discardSaleSessionTooltip": "حذف الفاتورة المعلقة",
   "purchasingTitle": "المشتريات",
   "purchaseOrdersTitle": "فواتير المشتريات",
   "refreshPurchaseOrdersTooltip": "تحديث فواتير المشتريات",
@@ -2463,6 +2537,11 @@
   "purchaseDraftTitle": "مسودة الشراء",
   "openPurchaseDraftSheetButton": "مراجعة المسودة",
   "clearPurchaseDraftTooltip": "مسح مسودة الشراء",
+  "purchaseSupplierActionTooltip": "اختيار المورد",
+  "purchaseInvoiceDetailsActionTooltip": "بيانات فاتورة المورد",
+  "purchaseInvoiceDetailsDialogTitle": "بيانات فاتورة المورد",
+  "purchaseLandedCostActionTooltip": "تكاليف الوصول",
+  "purchaseDiscountActionTooltip": "كود خصم المورد",
   "emptyPurchaseDraft": "لا توجد عناصر في مسودة الشراء",
   "purchaseLineCostLabel": "التكلفة",
   "purchaseLineExpiryDateLabel": "تاريخ الانتهاء",
@@ -3204,6 +3283,7 @@
   "purchaseDiscountCodeHint": "أدخل كود خصم المورد",
   "clearCouponCodeTooltip": "مسح كود الخصم",
   "refreshDiscountPreviewTooltip": "تحديث الخصومات",
+  "applyDiscountCodeButton": "تطبيق الخصم",
   "discountPreviewUnavailable": "تعذر تحديث الخصومات الآن.",
   "discountCouponUnavailable": "الكود غير متاح: {code}",
   "@discountCouponUnavailable": {
@@ -3914,6 +3994,7 @@
   "employeePayrollSaveError": "تعذر حفظ التغيير. راجع البيانات والصلاحيات ثم حاول مرة أخرى.",
   "employeesTabLabel": "الموظفون",
   "payrollRunsTabLabel": "مسيرات الرواتب",
+  "employeeLoansTabLabel": "طلبات السلفة",
   "employeesLoadError": "تعذر تحميل الموظفين.",
   "emptyEmployees": "لا توجد سجلات موظفين بعد.",
   "employeeSystemAccessLabel": "دخول للنظام: {username}",
@@ -3998,6 +4079,33 @@
   "addCompensationPlanTooltip": "إضافة خطة أجر",
   "payrollRunsLoadError": "تعذر تحميل مسيرات الرواتب.",
   "emptyPayrollRuns": "لا توجد مسيرات رواتب بعد.",
+  "employeeLoansLoadError": "تعذر تحميل طلبات السلفة.",
+  "emptyEmployeeLoans": "لا توجد طلبات سلفة بعد.",
+  "employeeLoanStatusRequested": "بانتظار الاعتماد",
+  "employeeLoanStatusApproved": "معتمد",
+  "employeeLoanStatusRejected": "مرفوض",
+  "employeeLoanStatusCancelled": "ملغي",
+  "employeeLoanStatusPaid": "مسدد",
+  "employeeLoanAmountDetail": "المبلغ {amount}",
+  "@employeeLoanAmountDetail": {
+    "description": "Employee loan amount detail.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "employeeLoanMonthlyDeductionDetail": "شهريًا {amount}",
+  "@employeeLoanMonthlyDeductionDetail": {
+    "description": "Employee loan monthly deduction detail.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "approveEmployeeLoanTooltip": "اعتماد طلب السلفة",
+  "rejectEmployeeLoanTooltip": "رفض طلب السلفة",
   "payrollLineCount": "{count, plural, =0{لا موظفين} =1{موظف واحد} =2{موظفان} other{{count} موظفين}}",
   "@payrollLineCount": {
     "description": "Payroll run employee line count.",
@@ -4162,6 +4270,7 @@
   "payrollAdjustmentOvertime": "وقت إضافي",
   "payrollAdjustmentReimbursement": "تعويض",
   "payrollAdjustmentAdvance": "سلفة",
+  "payrollAdjustmentLoan": "خصم سلفة",
   "payrollAdjustmentAbsence": "غياب",
   "payrollAdjustmentPenalty": "جزاء",
   "payrollAdjustmentOther": "تعديل آخر",

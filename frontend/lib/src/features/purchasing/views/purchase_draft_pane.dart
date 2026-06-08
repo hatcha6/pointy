@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
@@ -6,9 +8,12 @@ import '../../../core/result.dart';
 import '../../../data/models/purchase_submission.dart';
 import '../../../data/repositories/contact_repository.dart';
 import '../../../shared/contact_picker_sheet.dart';
+import '../../../shared/components/components.dart';
 import '../../../shared/decimal_text_input_formatter.dart';
+import '../../../shared/design/design.dart';
 import '../../../shared/formatters.dart';
-import '../../../shared/order_totals.dart';
+import '../../../shared/order/order.dart';
+import '../../../shared/responsive/responsive.dart';
 import '../view_models/purchase_view_model.dart';
 
 class PurchaseDraftPane extends StatefulWidget {
@@ -74,255 +79,89 @@ class _PurchaseDraftPaneState extends State<PurchaseDraftPane> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    final spacing = AdaptiveSpacing.of(context);
+    final colors = context.pointyColors;
 
     return ColoredBox(
-      color: Colors.white,
+      color: colors.page,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+        padding: spacing.compactPadding,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Row(
-              children: [
-                Text(
-                  l10n.purchaseDraftTitle,
-                  style: Theme.of(context).textTheme.titleLarge,
+            Expanded(
+              child: PointyOrderPanel(
+                title: l10n.purchaseDraftTitle,
+                trailing: _PurchaseDraftHeaderActions(
+                  viewModel: viewModel,
+                  onSelectSupplier: () => _selectSupplier(context),
+                  onEditInvoiceDetails: () =>
+                      _showSupplierInvoiceDetailsDialog(context),
+                  onEditLandedCosts: () => _editLandedCosts(context),
+                  onEditDiscountCode: () => _showDiscountCodeDialog(context),
                 ),
-                const Spacer(),
-                IconButton(
-                  tooltip: l10n.clearPurchaseDraftTooltip,
-                  onPressed: viewModel.draft.isEmpty || viewModel.isSubmitting
-                      ? null
-                      : () => viewModel.clearDraft(
-                          source: 'purchase_draft_clear_button',
-                        ),
-                  icon: const Icon(Icons.delete_outline),
-                ),
-              ],
-            ),
-            const SizedBox(height: 4),
-            ContactSelectionTile(
-              label: l10n.selectedSupplierLabel,
-              value: viewModel.selectedSupplier?.name ?? '',
-              placeholder: l10n.noSupplierSelectedLabel,
-              icon: Icons.local_shipping_outlined,
-              enabled: !viewModel.isSubmitting,
-              onSelect: () => _selectSupplier(context),
-              onClear: () => viewModel.selectSupplier(null),
-              allowClear: false,
+                child: _PurchaseDraftScrollContent(viewModel: viewModel),
+              ),
             ),
             if (viewModel.selectedSupplier == null) ...[
-              const SizedBox(height: 6),
+              SizedBox(height: spacing.xs),
               Text(
                 l10n.purchaseSupplierRequiredHint,
-                style: TextStyle(color: Theme.of(context).colorScheme.error),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: colors.danger),
               ),
             ],
-            const SizedBox(height: 4),
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    key: const ValueKey('supplier_invoice_number_field'),
-                    controller: _supplierInvoiceNumberController,
-                    focusNode: _supplierInvoiceNumberFocusNode,
-                    enabled: !viewModel.isSubmitting,
-                    decoration: InputDecoration(
-                      labelText: l10n.supplierInvoiceNumberLabel,
-                      hintText: l10n.supplierInvoiceNumberHint,
-                      isDense: true,
-                      prefixIcon: const Icon(Icons.receipt_long_outlined),
-                    ),
-                    onChanged: viewModel.updateSupplierInvoiceNumber,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: TextField(
-                    key: const ValueKey('supplier_invoice_date_field'),
-                    controller: _supplierInvoiceDateController,
-                    focusNode: _supplierInvoiceDateFocusNode,
-                    enabled: !viewModel.isSubmitting,
-                    keyboardType: TextInputType.datetime,
-                    inputFormatters: const [_DateDashInputFormatter()],
-                    decoration: InputDecoration(
-                      labelText: l10n.supplierInvoiceDateLabel,
-                      hintText: l10n.supplierInvoiceDateHint,
-                      errorText: viewModel.hasInvalidSupplierInvoiceDate
-                          ? l10n.supplierInvoiceDateInvalid
-                          : null,
-                      isDense: true,
-                      prefixIcon: const Icon(Icons.event_outlined),
-                      suffixIcon: IconButton(
-                        tooltip: l10n.supplierInvoiceDatePickerTooltip,
-                        onPressed: viewModel.isSubmitting
-                            ? null
-                            : () => _pickSupplierInvoiceDate(context),
-                        icon: const Icon(Icons.calendar_month_outlined),
-                      ),
-                    ),
-                    onChanged: viewModel.updateSupplierInvoiceDateInput,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 4),
-            _buildLandedCostSection(l10n),
-            const SizedBox(height: 4),
-            TextField(
-              key: const ValueKey('purchase_discount_code_field'),
-              controller: _discountCodeController,
-              focusNode: _discountCodeFocusNode,
-              enabled: !viewModel.isSubmitting,
-              textCapitalization: TextCapitalization.characters,
-              decoration: InputDecoration(
-                labelText: l10n.discountCouponCodeLabel,
-                hintText: l10n.purchaseDiscountCodeHint,
-                isDense: true,
-                prefixIcon: const Icon(Icons.confirmation_number_outlined),
-                suffixIcon: viewModel.isLoadingDiscountPreview
-                    ? const Padding(
-                        padding: EdgeInsets.all(12),
-                        child: SizedBox.square(
-                          dimension: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        ),
-                      )
-                    : IconButton(
-                        tooltip: _discountCodeController.text.trim().isEmpty
-                            ? l10n.refreshDiscountPreviewTooltip
-                            : l10n.clearCouponCodeTooltip,
-                        onPressed: viewModel.isSubmitting
-                            ? null
-                            : () {
-                                if (_discountCodeController.text
-                                    .trim()
-                                    .isEmpty) {
-                                  viewModel.refreshDiscountPreview();
-                                } else {
-                                  _discountCodeController.clear();
-                                  viewModel.updateDiscountCode('');
-                                }
-                              },
-                        icon: Icon(
-                          _discountCodeController.text.trim().isEmpty
-                              ? Icons.sync
-                              : Icons.close,
-                        ),
-                      ),
-                errorText: viewModel.unappliedDiscountCodes.isNotEmpty
-                    ? l10n.discountCouponUnavailable(
-                        viewModel.unappliedDiscountCodes.join('، '),
-                      )
-                    : viewModel.hasDiscountPreviewError
-                    ? l10n.discountPreviewUnavailable
-                    : null,
-              ),
-              onChanged: (value) {
-                setState(() {});
-                viewModel.updateDiscountCode(value);
-              },
-              onSubmitted: (_) => viewModel.refreshDiscountPreview(),
-            ),
-            const SizedBox(height: 4),
-            Expanded(
-              child: viewModel.draft.isEmpty
-                  ? Center(child: Text(l10n.emptyPurchaseDraft))
-                  : ListView.separated(
-                      itemCount: viewModel.draft.length,
-                      separatorBuilder: (_, _) => const Divider(height: 1),
-                      itemBuilder: (context, index) {
-                        final line = viewModel.draft[index];
-                        return PurchaseDraftLineTile(
-                          line: line,
-                          previewLine: viewModel
-                              .discountPreviewLineForDraftIndex(index),
-                          enabled: !viewModel.isSubmitting,
-                          onAdd: () => viewModel.addVariant(
-                            line.variant,
-                            source: 'purchase_draft_quantity_button',
-                          ),
-                          onRemove: () => viewModel.decrementVariant(
-                            line.variant,
-                            source: 'purchase_draft_quantity_button',
-                          ),
-                          onCostChanged: (unitCost) {
-                            viewModel.updateLineCost(line.variant, unitCost);
-                          },
-                          onExpiryDateChanged: (expiryDate) {
-                            viewModel.updateLineExpiryDate(
-                              line.variant,
-                              expiryDate,
-                            );
-                          },
-                        );
-                      },
-                    ),
-            ),
             if (viewModel.hasMissingExpiryDates) ...[
-              const SizedBox(height: 6),
+              SizedBox(height: spacing.xs),
               Text(
                 l10n.purchaseExpiryDatesRequired,
-                style: TextStyle(color: Theme.of(context).colorScheme.error),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: colors.danger),
               ),
             ],
-            Column(
-              children: [
-                TotalRow(label: l10n.subtotal, value: viewModel.subtotal),
-                if (viewModel.discountTotal > 0)
-                  TotalRow(
-                    label: l10n.discountTotalLabel,
-                    value: -viewModel.discountTotal,
+            SizedBox(height: spacing.sm),
+            PointyStickyActionFooter(
+              padding: EdgeInsetsDirectional.fromSTEB(
+                spacing.sm,
+                6,
+                spacing.sm,
+                6,
+              ),
+              primaryActionHeight: 52,
+              summary: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _PurchaseDraftTotals(viewModel: viewModel),
+                  _ReceiveImmediatelyToggle(viewModel: viewModel),
+                ],
+              ),
+              primaryAction: FilledButton.icon(
+                onPressed: viewModel.canSubmitDraft
+                    ? () => _submitDraft(context)
+                    : null,
+                icon: viewModel.isSubmitting
+                    ? const SizedBox.square(
+                        dimension: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.inventory_outlined),
+                label: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    viewModel.isSubmitting
+                        ? l10n.purchaseSubmitInProgressButton
+                        : l10n.submitPurchaseDraftButton(
+                            formatMoney(viewModel.total),
+                          ),
+                    maxLines: 1,
                   ),
-                for (final discount in viewModel.appliedDiscounts)
-                  TotalRow(
-                    label: discount.couponCode.isEmpty
-                        ? discount.ruleName
-                        : l10n.discountCouponAppliedLabel(discount.couponCode),
-                    value: -discount.discountAmount,
-                  ),
-                if (viewModel.landedCostTotal > 0)
-                  TotalRow(
-                    label: l10n.purchaseLandedCostTotalLabel,
-                    value: viewModel.landedCostTotal,
-                  ),
-                const Divider(),
-                TotalRow(
-                  label: l10n.total,
-                  value: viewModel.total,
-                  isStrong: true,
                 ),
-              ],
-            ),
-            const SizedBox(height: 4),
-            CheckboxListTile(
-              value: viewModel.receiveImmediately,
-              onChanged: viewModel.isSubmitting
-                  ? null
-                  : (value) =>
-                        viewModel.updateReceiveImmediately(value ?? true),
-              dense: true,
-              contentPadding: EdgeInsets.zero,
-              controlAffinity: ListTileControlAffinity.leading,
-              title: Text(l10n.receivePurchaseImmediatelyLabel),
-            ),
-            const SizedBox(height: 6),
-            FilledButton.icon(
-              onPressed: viewModel.canSubmitDraft
-                  ? () => _submitDraft(context)
-                  : null,
-              icon: viewModel.isSubmitting
-                  ? const SizedBox.square(
-                      dimension: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.inventory_outlined),
-              label: Text(
-                viewModel.isSubmitting
-                    ? l10n.purchaseSubmitInProgressButton
-                    : l10n.submitPurchaseDraftButton(
-                        formatMoney(viewModel.total),
-                      ),
               ),
             ),
           ],
@@ -331,16 +170,26 @@ class _PurchaseDraftPaneState extends State<PurchaseDraftPane> {
     );
   }
 
-  Widget _buildLandedCostSection(AppLocalizations l10n) {
-    return OutlinedButton.icon(
-      key: const ValueKey('landed_cost_button'),
-      onPressed: viewModel.isSubmitting
-          ? null
-          : () => _editLandedCosts(context),
-      icon: const Icon(Icons.request_quote_outlined),
-      label: Text(
-        l10n.purchaseLandedCostButton(formatMoney(viewModel.landedCostTotal)),
-        overflow: TextOverflow.ellipsis,
+  Future<void> _showSupplierInvoiceDetailsDialog(BuildContext context) {
+    return showDialog<void>(
+      context: context,
+      builder: (context) => _SupplierInvoiceDetailsDialog(
+        viewModel: viewModel,
+        numberController: _supplierInvoiceNumberController,
+        dateController: _supplierInvoiceDateController,
+        numberFocusNode: _supplierInvoiceNumberFocusNode,
+        dateFocusNode: _supplierInvoiceDateFocusNode,
+      ),
+    );
+  }
+
+  Future<void> _showDiscountCodeDialog(BuildContext context) {
+    return showDialog<void>(
+      context: context,
+      builder: (context) => _PurchaseDiscountCodeDialog(
+        viewModel: viewModel,
+        controller: _discountCodeController,
+        focusNode: _discountCodeFocusNode,
       ),
     );
   }
@@ -414,23 +263,6 @@ class _PurchaseDraftPaneState extends State<PurchaseDraftPane> {
     }
   }
 
-  Future<void> _pickSupplierInvoiceDate(BuildContext context) async {
-    final current = viewModel.supplierInvoiceDate ?? DateTime.now();
-    final selected = await showDatePicker(
-      context: context,
-      initialDate: current,
-      firstDate: DateTime(2000),
-      lastDate: DateTime(2100),
-    );
-    if (selected == null || !context.mounted) {
-      return;
-    }
-
-    final formatted = _formatDateInput(selected);
-    _supplierInvoiceDateController.text = formatted;
-    viewModel.updateSupplierInvoiceDateInput(formatted);
-  }
-
   Future<void> _editLandedCosts(BuildContext context) async {
     final result = await showModalBottomSheet<_LandedCostSheetResult>(
       context: context,
@@ -464,8 +296,490 @@ class _PurchaseDraftPaneState extends State<PurchaseDraftPane> {
       controller.text = value;
     }
   }
+}
 
-  String _formatDateInput(DateTime date) => _formatDateInputValue(date);
+class _PurchaseDraftHeaderActions extends StatelessWidget {
+  const _PurchaseDraftHeaderActions({
+    required this.viewModel,
+    required this.onSelectSupplier,
+    required this.onEditInvoiceDetails,
+    required this.onEditLandedCosts,
+    required this.onEditDiscountCode,
+  });
+
+  final PurchaseViewModel viewModel;
+  final VoidCallback onSelectSupplier;
+  final VoidCallback onEditInvoiceDetails;
+  final VoidCallback onEditLandedCosts;
+  final VoidCallback onEditDiscountCode;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final colors = context.pointyColors;
+    final supplier = viewModel.selectedSupplier;
+    final hasInvoiceDetails =
+        viewModel.supplierInvoiceNumber.trim().isNotEmpty ||
+        viewModel.supplierInvoiceDateInput.trim().isNotEmpty;
+    final hasDiscountCode = viewModel.discountCode.trim().isNotEmpty;
+    final hasDiscountIssue =
+        viewModel.hasDiscountPreviewError ||
+        viewModel.unappliedDiscountCodes.isNotEmpty;
+    final hasAppliedDiscount = viewModel.appliedDiscounts.isNotEmpty;
+    final hasLandedCosts = viewModel.landedCostTotal > 0;
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        IconButton(
+          tooltip: supplier?.name ?? l10n.purchaseSupplierActionTooltip,
+          onPressed: viewModel.isSubmitting ? null : onSelectSupplier,
+          icon: Icon(
+            supplier == null
+                ? Icons.local_shipping_outlined
+                : Icons.local_shipping,
+          ),
+          color: supplier == null ? colors.danger : colors.primaryStrong,
+        ),
+        IconButton(
+          tooltip: l10n.purchaseInvoiceDetailsActionTooltip,
+          onPressed: viewModel.isSubmitting ? null : onEditInvoiceDetails,
+          icon: const Icon(Icons.receipt_long_outlined),
+          color: viewModel.hasInvalidSupplierInvoiceDate
+              ? colors.danger
+              : hasInvoiceDetails
+              ? colors.primaryStrong
+              : null,
+        ),
+        IconButton(
+          key: const ValueKey('landed_cost_button'),
+          tooltip: l10n.purchaseLandedCostActionTooltip,
+          onPressed: viewModel.isSubmitting ? null : onEditLandedCosts,
+          icon: const Icon(Icons.request_quote_outlined),
+          color: hasLandedCosts ? colors.primaryStrong : null,
+        ),
+        IconButton(
+          tooltip: hasDiscountCode
+              ? '${l10n.discountCouponCodeLabel}: ${viewModel.discountCode.trim()}'
+              : l10n.purchaseDiscountActionTooltip,
+          onPressed: viewModel.isSubmitting ? null : onEditDiscountCode,
+          icon: viewModel.isLoadingDiscountPreview
+              ? const SizedBox.square(
+                  dimension: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.confirmation_number_outlined),
+          color: hasDiscountIssue
+              ? colors.danger
+              : hasDiscountCode || hasAppliedDiscount
+              ? colors.primaryStrong
+              : null,
+        ),
+        IconButton(
+          tooltip: l10n.clearPurchaseDraftTooltip,
+          onPressed: viewModel.draft.isEmpty || viewModel.isSubmitting
+              ? null
+              : () =>
+                    viewModel.clearDraft(source: 'purchase_draft_clear_button'),
+          icon: const Icon(Icons.delete_outline),
+          color: colors.danger,
+        ),
+      ],
+    );
+  }
+}
+
+class _PurchaseDraftScrollContent extends StatelessWidget {
+  const _PurchaseDraftScrollContent({required this.viewModel});
+
+  final PurchaseViewModel viewModel;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final spacing = AdaptiveSpacing.of(context);
+    final colors = context.pointyColors;
+    final visibleDraft = viewModel.draft.reversed.toList(growable: false);
+
+    return ListView(
+      padding: EdgeInsetsDirectional.fromSTEB(
+        spacing.md,
+        spacing.sm,
+        spacing.md,
+        spacing.md,
+      ),
+      children: [
+        if (viewModel.draft.isEmpty)
+          SizedBox(
+            height: 220,
+            child: PointyEmptyState(
+              icon: Icons.inventory_2_outlined,
+              title: l10n.emptyPurchaseDraft,
+            ),
+          )
+        else
+          for (var index = 0; index < visibleDraft.length; index += 1) ...[
+            if (index > 0) Divider(height: 1, color: colors.line),
+            PurchaseDraftLineTile(
+              line: visibleDraft[index],
+              previewLine: viewModel.discountPreviewLineForDraftIndex(
+                viewModel.draft.length - index - 1,
+              ),
+              enabled: !viewModel.isSubmitting,
+              onAdd: () => viewModel.addVariant(
+                visibleDraft[index].variant,
+                source: 'purchase_draft_quantity_button',
+              ),
+              onRemove: () => viewModel.decrementVariant(
+                visibleDraft[index].variant,
+                source: 'purchase_draft_quantity_button',
+              ),
+              onCostChanged: (unitCost) {
+                viewModel.updateLineCost(visibleDraft[index].variant, unitCost);
+              },
+              onExpiryDateChanged: (expiryDate) {
+                viewModel.updateLineExpiryDate(
+                  visibleDraft[index].variant,
+                  expiryDate,
+                );
+              },
+            ),
+          ],
+      ],
+    );
+  }
+}
+
+class _PurchaseDraftTotals extends StatelessWidget {
+  const _PurchaseDraftTotals({required this.viewModel});
+
+  final PurchaseViewModel viewModel;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+
+    return PointyTotalsPanel(
+      compact: true,
+      lines: [
+        PointyTotalLine(
+          label: l10n.subtotal,
+          value: formatMoney(viewModel.subtotal),
+        ),
+        if (viewModel.discountTotal > 0)
+          PointyTotalLine(
+            label: l10n.discountTotalLabel,
+            value: formatMoney(-viewModel.discountTotal),
+          ),
+        for (final discount in viewModel.appliedDiscounts)
+          PointyTotalLine(
+            label: discount.couponCode.isEmpty
+                ? discount.ruleName
+                : l10n.discountCouponAppliedLabel(discount.couponCode),
+            value: formatMoney(-discount.discountAmount),
+          ),
+        if (viewModel.landedCostTotal > 0)
+          PointyTotalLine(
+            label: l10n.purchaseLandedCostTotalLabel,
+            value: formatMoney(viewModel.landedCostTotal),
+          ),
+        PointyTotalLine(
+          label: l10n.total,
+          value: formatMoney(viewModel.total),
+          isStrong: true,
+        ),
+      ],
+    );
+  }
+}
+
+class _ReceiveImmediatelyToggle extends StatelessWidget {
+  const _ReceiveImmediatelyToggle({required this.viewModel});
+
+  final PurchaseViewModel viewModel;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+
+    return InkWell(
+      onTap: viewModel.isSubmitting
+          ? null
+          : () => viewModel.updateReceiveImmediately(
+              !viewModel.receiveImmediately,
+            ),
+      child: Padding(
+        padding: const EdgeInsetsDirectional.only(top: 2),
+        child: Row(
+          children: [
+            Checkbox(
+              value: viewModel.receiveImmediately,
+              onChanged: viewModel.isSubmitting
+                  ? null
+                  : (value) =>
+                        viewModel.updateReceiveImmediately(value ?? true),
+              visualDensity: VisualDensity.compact,
+              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+            const SizedBox(width: 4),
+            Expanded(
+              child: Text(
+                l10n.receivePurchaseImmediatelyLabel,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SupplierInvoiceDetailsDialog extends StatefulWidget {
+  const _SupplierInvoiceDetailsDialog({
+    required this.viewModel,
+    required this.numberController,
+    required this.dateController,
+    required this.numberFocusNode,
+    required this.dateFocusNode,
+  });
+
+  final PurchaseViewModel viewModel;
+  final TextEditingController numberController;
+  final TextEditingController dateController;
+  final FocusNode numberFocusNode;
+  final FocusNode dateFocusNode;
+
+  @override
+  State<_SupplierInvoiceDetailsDialog> createState() =>
+      _SupplierInvoiceDetailsDialogState();
+}
+
+class _SupplierInvoiceDetailsDialogState
+    extends State<_SupplierInvoiceDetailsDialog> {
+  late final String _initialNumber = widget.numberController.text;
+  late final String _initialDate = widget.dateController.text;
+
+  bool get _hasInvalidDate {
+    final text = widget.dateController.text.trim();
+    return text.isNotEmpty && _parseDateInputValue(text) == null;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+
+    return AlertDialog(
+      icon: const Icon(Icons.receipt_long_outlined),
+      title: Text(l10n.purchaseInvoiceDetailsDialogTitle),
+      content: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 420),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              key: const ValueKey('supplier_invoice_number_field'),
+              controller: widget.numberController,
+              focusNode: widget.numberFocusNode,
+              enabled: !widget.viewModel.isSubmitting,
+              decoration: InputDecoration(
+                labelText: l10n.supplierInvoiceNumberLabel,
+                hintText: l10n.supplierInvoiceNumberHint,
+                isDense: true,
+                prefixIcon: const Icon(Icons.receipt_long_outlined),
+              ),
+              onChanged: (_) => setState(() {}),
+              onSubmitted: (_) => _saveIfValid(),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              key: const ValueKey('supplier_invoice_date_field'),
+              controller: widget.dateController,
+              focusNode: widget.dateFocusNode,
+              enabled: !widget.viewModel.isSubmitting,
+              keyboardType: TextInputType.datetime,
+              inputFormatters: const [_DateDashInputFormatter()],
+              decoration: InputDecoration(
+                labelText: l10n.supplierInvoiceDateLabel,
+                hintText: l10n.supplierInvoiceDateHint,
+                errorText: _hasInvalidDate
+                    ? l10n.supplierInvoiceDateInvalid
+                    : null,
+                isDense: true,
+                prefixIcon: const Icon(Icons.event_outlined),
+                suffixIcon: IconButton(
+                  tooltip: l10n.supplierInvoiceDatePickerTooltip,
+                  onPressed: widget.viewModel.isSubmitting ? null : _pickDate,
+                  icon: const Icon(Icons.calendar_month_outlined),
+                ),
+              ),
+              onChanged: (_) => setState(() {}),
+              onSubmitted: (_) => _saveIfValid(),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(onPressed: _cancel, child: Text(l10n.cancelButton)),
+        FilledButton(
+          onPressed: _hasInvalidDate ? null : _save,
+          child: Text(l10n.saveButton),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _pickDate() async {
+    final current =
+        _parseDateInputValue(widget.dateController.text) ??
+        widget.viewModel.supplierInvoiceDate ??
+        DateTime.now();
+    final selected = await showDatePicker(
+      context: context,
+      initialDate: current,
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2100),
+    );
+    if (selected == null || !mounted) {
+      return;
+    }
+    setState(() {
+      widget.dateController.text = _formatDateInputValue(selected);
+    });
+  }
+
+  void _saveIfValid() {
+    if (!_hasInvalidDate) {
+      _save();
+    }
+  }
+
+  void _save() {
+    widget.viewModel.updateSupplierInvoiceNumber(
+      widget.numberController.text.trim(),
+    );
+    widget.viewModel.updateSupplierInvoiceDateInput(
+      widget.dateController.text.trim(),
+    );
+    Navigator.of(context).pop();
+  }
+
+  void _cancel() {
+    widget.numberController.text = _initialNumber;
+    widget.dateController.text = _initialDate;
+    Navigator.of(context).pop();
+  }
+}
+
+class _PurchaseDiscountCodeDialog extends StatefulWidget {
+  const _PurchaseDiscountCodeDialog({
+    required this.viewModel,
+    required this.controller,
+    required this.focusNode,
+  });
+
+  final PurchaseViewModel viewModel;
+  final TextEditingController controller;
+  final FocusNode focusNode;
+
+  @override
+  State<_PurchaseDiscountCodeDialog> createState() =>
+      _PurchaseDiscountCodeDialogState();
+}
+
+class _PurchaseDiscountCodeDialogState
+    extends State<_PurchaseDiscountCodeDialog> {
+  late final String _initialValue = widget.controller.text;
+
+  String get _currentCode => widget.controller.text.trim();
+
+  bool get _matchesSavedCode =>
+      _currentCode == widget.viewModel.discountCode.trim();
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final hasCoupon = _currentCode.isNotEmpty;
+    final hasInvalidCoupon =
+        _matchesSavedCode && widget.viewModel.unappliedDiscountCodes.isNotEmpty;
+
+    return AlertDialog(
+      icon: const Icon(Icons.confirmation_number_outlined),
+      title: Text(l10n.discountCouponCodeLabel),
+      content: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 420),
+        child: TextField(
+          key: const ValueKey('purchase_discount_code_field'),
+          controller: widget.controller,
+          focusNode: widget.focusNode,
+          enabled: !widget.viewModel.isSubmitting,
+          autofocus: true,
+          textCapitalization: TextCapitalization.characters,
+          decoration: InputDecoration(
+            hintText: l10n.purchaseDiscountCodeHint,
+            isDense: true,
+            errorText: hasInvalidCoupon
+                ? l10n.discountCouponUnavailable(
+                    widget.viewModel.unappliedDiscountCodes.join('، '),
+                  )
+                : _matchesSavedCode && widget.viewModel.hasDiscountPreviewError
+                ? l10n.discountPreviewUnavailable
+                : null,
+          ),
+          onChanged: (_) => setState(() {}),
+          onSubmitted: (_) => _apply(),
+        ),
+      ),
+      actions: [
+        TextButton(onPressed: _cancel, child: Text(l10n.cancelButton)),
+        if (hasCoupon)
+          TextButton(
+            onPressed: _clear,
+            child: Text(l10n.clearCouponCodeTooltip),
+          ),
+        TextButton(
+          onPressed: _refresh,
+          child: Text(l10n.refreshDiscountPreviewTooltip),
+        ),
+        FilledButton(
+          onPressed: _apply,
+          child: Text(l10n.applyDiscountCodeButton),
+        ),
+      ],
+    );
+  }
+
+  void _apply() {
+    _saveCode();
+    Navigator.of(context).pop();
+  }
+
+  void _clear() {
+    widget.controller.clear();
+    widget.viewModel.updateDiscountCode('');
+    Navigator.of(context).pop();
+  }
+
+  void _refresh() {
+    _saveCode();
+    unawaited(widget.viewModel.refreshDiscountPreview());
+    Navigator.of(context).pop();
+  }
+
+  void _saveCode() {
+    final value = _currentCode;
+    if (value == widget.viewModel.discountCode.trim()) {
+      return;
+    }
+    widget.viewModel.updateDiscountCode(value);
+  }
+
+  void _cancel() {
+    widget.controller.text = _initialValue;
+    Navigator.of(context).pop();
+  }
 }
 
 String _formatDateInputValue(DateTime date) {

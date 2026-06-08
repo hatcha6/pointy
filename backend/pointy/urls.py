@@ -17,6 +17,7 @@ from apps.discounts.views import DiscountRuleViewSet
 from apps.employees.views import (
     CompensationPlanViewSet,
     EmployeeViewSet,
+    EmployeeLoanViewSet,
     PayrollRunViewSet,
 )
 from apps.fraud.views import FraudFindingViewSet
@@ -27,6 +28,7 @@ from apps.core.views import (
     login_view,
     logout_view,
     me_view,
+    password_change_view,
 )
 from apps.core.dashboard import DashboardView
 from apps.core.relay_views import (
@@ -59,6 +61,7 @@ router = DefaultRouter()
 router.register("analytics-events", AnalyticsEventViewSet, basename="analytics-event")
 router.register("users", PosUserViewSet, basename="pos-user")
 router.register("employees", EmployeeViewSet, basename="employee")
+router.register("employee-loans", EmployeeLoanViewSet, basename="employee-loan")
 router.register(
     "compensation-plans",
     CompensationPlanViewSet,
@@ -109,6 +112,11 @@ urlpatterns = [
     path("api/auth/login/", login_view, name="auth-login"),
     path("api/auth/logout/", logout_view, name="auth-logout"),
     path("api/auth/me/", me_view, name="auth-me"),
+    path(
+        "api/auth/password/change/",
+        password_change_view,
+        name="auth-password-change",
+    ),
     path("api/dashboard/", DashboardView.as_view(), name="dashboard"),
     path(
         "api/discovery/service/",

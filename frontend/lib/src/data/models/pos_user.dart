@@ -30,6 +30,8 @@ class PosUser {
     required this.username,
     required this.role,
     required this.isActive,
+    this.firstName = '',
+    this.lastName = '',
     this.displayName = '',
     this.email = '',
     this.permissions = const {},
@@ -38,6 +40,8 @@ class PosUser {
 
   final int id;
   final String username;
+  final String firstName;
+  final String lastName;
   final String displayName;
   final String email;
   final UserRole role;
@@ -55,6 +59,8 @@ class PosUser {
     return PosUser(
       id: (json['id'] as num?)?.toInt() ?? 0,
       username: json['username']?.toString() ?? '',
+      firstName: firstName,
+      lastName: lastName,
       displayName:
           json['display_name']?.toString() ??
           json['full_name']?.toString() ??
@@ -101,6 +107,43 @@ class PosUser {
       return value['name']?.toString() ?? '';
     }
     return value?.toString() ?? '';
+  }
+}
+
+class CurrentUserProfileDraft {
+  const CurrentUserProfileDraft({
+    required this.username,
+    required this.firstName,
+    required this.lastName,
+    required this.email,
+  });
+
+  final String username;
+  final String firstName;
+  final String lastName;
+  final String email;
+
+  Map<String, Object?> toJson() {
+    return {
+      'username': username.trim(),
+      'first_name': firstName.trim(),
+      'last_name': lastName.trim(),
+      'email': email.trim(),
+    };
+  }
+}
+
+class PasswordChangeDraft {
+  const PasswordChangeDraft({
+    required this.currentPassword,
+    required this.newPassword,
+  });
+
+  final String currentPassword;
+  final String newPassword;
+
+  Map<String, Object?> toJson() {
+    return {'current_password': currentPassword, 'new_password': newPassword};
   }
 }
 

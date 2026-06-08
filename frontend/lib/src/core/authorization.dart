@@ -16,6 +16,9 @@ enum AppCapability {
   viewActivityLog,
   viewEmployees,
   manageEmployees,
+  manageOwnAccount,
+  viewEmployeeLoans,
+  manageEmployeeLoans,
   viewPayroll,
   managePayroll,
   accessPos,
@@ -66,6 +69,7 @@ class AuthorizationCapabilities {
       AppCapability.viewSalesDashboard,
       AppCapability.viewPaymentDashboard,
       AppCapability.viewPrintingDashboard,
+      AppCapability.manageOwnAccount,
       AppCapability.checkoutSale,
       AppCapability.startRegisterSession,
       AppCapability.resumeRegisterSession,
@@ -286,6 +290,29 @@ class AuthorizationCapabilities {
           ..add(AppCapability.viewEmployees);
       }
       if (_hasAny(user, const [
+        'view_employeeloan',
+        'employees.view_employeeloan',
+      ])) {
+        capabilities
+          ..add(AppCapability.viewDashboard)
+          ..add(AppCapability.viewEmployees)
+          ..add(AppCapability.viewEmployeeLoans);
+      }
+      if (_hasAny(user, const [
+        'change_employeeloan',
+        'approve_employeeloan',
+        'reject_employeeloan',
+        'employees.change_employeeloan',
+        'employees.approve_employeeloan',
+        'employees.reject_employeeloan',
+      ])) {
+        capabilities
+          ..add(AppCapability.viewDashboard)
+          ..add(AppCapability.viewEmployees)
+          ..add(AppCapability.viewEmployeeLoans)
+          ..add(AppCapability.manageEmployeeLoans);
+      }
+      if (_hasAny(user, const [
         'add_employee',
         'change_employee',
         'delete_employee',
@@ -442,6 +469,9 @@ class AuthorizationCapabilities {
   bool get canViewActivityLog => allows(AppCapability.viewActivityLog);
   bool get canViewEmployees => allows(AppCapability.viewEmployees);
   bool get canManageEmployees => allows(AppCapability.manageEmployees);
+  bool get canManageOwnAccount => allows(AppCapability.manageOwnAccount);
+  bool get canViewEmployeeLoans => allows(AppCapability.viewEmployeeLoans);
+  bool get canManageEmployeeLoans => allows(AppCapability.manageEmployeeLoans);
   bool get canViewPayroll => allows(AppCapability.viewPayroll);
   bool get canManagePayroll => allows(AppCapability.managePayroll);
   bool get canAccessPos => allows(AppCapability.accessPos);

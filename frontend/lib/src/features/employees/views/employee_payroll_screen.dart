@@ -93,7 +93,9 @@ class EmployeePayrollScreen extends StatelessWidget {
             leading: const PointyNavigationMenuButton(),
             title: Text(l10n.employeePayrollTitle),
             isLoading:
-                viewModel.isLoadingEmployees || viewModel.isLoadingPayrollRuns,
+                viewModel.isLoadingEmployees ||
+                viewModel.isLoadingPayrollRuns ||
+                viewModel.isLoadingLoans,
             reserveLoadingSlot: false,
             actions: [
               EmployeePayrollGuard(
@@ -104,6 +106,7 @@ class EmployeePayrollScreen extends StatelessWidget {
                   onPressed: () {
                     viewModel.loadEmployees();
                     viewModel.loadPayrollRuns();
+                    viewModel.loadLoans();
                   },
                   icon: const Icon(Icons.sync),
                 ),
@@ -141,7 +144,7 @@ class _EmployeePayrollBody extends StatelessWidget {
     final spacing = AdaptiveSpacing.of(context);
 
     return DefaultTabController(
-      length: 2,
+      length: 3,
       child: Padding(
         padding: spacing.pagePadding,
         child: AdaptiveMaxWidth(
@@ -192,6 +195,7 @@ class _EmployeePayrollBody extends StatelessWidget {
                 tabs: [
                   Tab(text: l10n.employeesTabLabel),
                   Tab(text: l10n.payrollRunsTabLabel),
+                  Tab(text: l10n.employeeLoansTabLabel),
                 ],
               ),
               SizedBox(height: spacing.sm),
@@ -203,6 +207,10 @@ class _EmployeePayrollBody extends StatelessWidget {
                       capabilities: capabilities,
                     ),
                     _PayrollRunList(
+                      viewModel: viewModel,
+                      capabilities: capabilities,
+                    ),
+                    _EmployeeLoanList(
                       viewModel: viewModel,
                       capabilities: capabilities,
                     ),
@@ -426,6 +434,95 @@ class _PayrollRunList extends StatelessWidget {
 
   String _payrollSubtitle(AppLocalizations l10n, PayrollRun run) {
     return _payrollPeriodLabel(l10n, run);
+  }
+}
+
+class _EmployeeLoanList extends StatelessWidget {
+  const _EmployeeLoanList({
+    required this.viewModel,
+    required this.capabilities,
+  });
+
+  final EmployeePayrollViewModel viewModel;
+  final AuthorizationCapabilities capabilities;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    return PointyDataList<EmployeeLoan>(
+      items: viewModel.loans,
+      onLoadMore: viewModel.loadMoreLoans,
+      hasMore: viewModel.hasMoreLoans,
+      isLoadingInitial: viewModel.isLoadingLoans,
+      isLoadingMore: viewModel.isLoadingMoreLoans,
+      hasError: viewModel.hasLoanError,
+      errorBuilder: (context) => PointyErrorState(
+        title: l10n.employeeLoansLoadError,
+        icon: Icons.account_balance_wallet_outlined,
+      ),
+      emptyBuilder: (context) => PointyEmptyState(
+        icon: Icons.account_balance_wallet_outlined,
+        title: l10n.emptyEmployeeLoans,
+      ),
+      padding: EdgeInsets.zero,
+      framed: false,
+      itemBuilder: (context, loan) {
+        return PointyDataRow(
+          leading: const CircleAvatar(
+            child: Icon(Icons.account_balance_wallet_outlined),
+          ),
+          title: loan.employeeName,
+          subtitle: _loanSubtitle(l10n, loan),
+          trailing: Text(
+            formatMoney(loan.outstandingBalance),
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          badges: [
+            PointyStatusPill(
+              label: _loanStatusLabel(l10n, loan.status),
+              icon: _loanStatusIcon(loan.status),
+            ),
+            PointyStatusPill(
+              label: l10n.employeeLoanMonthlyDeductionDetail(
+                formatMoney(loan.monthlyDeduction),
+              ),
+              icon: Icons.event_repeat_outlined,
+            ),
+          ],
+          actions: [
+            IconButton(
+              tooltip: l10n.approveEmployeeLoanTooltip,
+              onPressed:
+                  capabilities.canManageEmployeeLoans &&
+                      loan.status.canReview &&
+                      !viewModel.isSaving
+                  ? () => viewModel.approveLoan(loan)
+                  : null,
+              icon: const Icon(Icons.verified_outlined),
+            ),
+            IconButton(
+              tooltip: l10n.rejectEmployeeLoanTooltip,
+              onPressed:
+                  capabilities.canManageEmployeeLoans &&
+                      loan.status.canReview &&
+                      !viewModel.isSaving
+                  ? () => viewModel.rejectLoan(loan)
+                  : null,
+              icon: const Icon(Icons.cancel_outlined),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  String _loanSubtitle(AppLocalizations l10n, EmployeeLoan loan) {
+    final parts = [
+      if (loan.employeeNumber.isNotEmpty) loan.employeeNumber,
+      l10n.employeeLoanAmountDetail(formatMoney(loan.amount)),
+      if (loan.purpose.trim().isNotEmpty) loan.purpose.trim(),
+    ];
+    return parts.join(' - ');
   }
 }
 
@@ -2079,6 +2176,26 @@ String _payrollStatusLabel(AppLocalizations l10n, PayrollStatus status) {
   };
 }
 
+String _loanStatusLabel(AppLocalizations l10n, EmployeeLoanStatus status) {
+  return switch (status) {
+    EmployeeLoanStatus.requested => l10n.employeeLoanStatusRequested,
+    EmployeeLoanStatus.approved => l10n.employeeLoanStatusApproved,
+    EmployeeLoanStatus.rejected => l10n.employeeLoanStatusRejected,
+    EmployeeLoanStatus.cancelled => l10n.employeeLoanStatusCancelled,
+    EmployeeLoanStatus.paid => l10n.employeeLoanStatusPaid,
+  };
+}
+
+IconData _loanStatusIcon(EmployeeLoanStatus status) {
+  return switch (status) {
+    EmployeeLoanStatus.requested => Icons.hourglass_top_outlined,
+    EmployeeLoanStatus.approved => Icons.verified_outlined,
+    EmployeeLoanStatus.rejected => Icons.cancel_outlined,
+    EmployeeLoanStatus.cancelled => Icons.block_outlined,
+    EmployeeLoanStatus.paid => Icons.task_alt_outlined,
+  };
+}
+
 String _payrollAdjustmentDirectionLabel(
   AppLocalizations l10n,
   String direction,
@@ -2097,6 +2214,7 @@ String _payrollAdjustmentTypeLabel(AppLocalizations l10n, String type) {
     'overtime' => l10n.payrollAdjustmentOvertime,
     'reimbursement' => l10n.payrollAdjustmentReimbursement,
     'advance' => l10n.payrollAdjustmentAdvance,
+    'loan' => l10n.payrollAdjustmentLoan,
     'absence' => l10n.payrollAdjustmentAbsence,
     'penalty' => l10n.payrollAdjustmentPenalty,
     _ => l10n.payrollAdjustmentOther,

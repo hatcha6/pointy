@@ -6,19 +6,15 @@ import '../responsive/responsive.dart';
 class PointyNavigationSurface extends StatelessWidget {
   const PointyNavigationSurface({
     super.key,
-    required this.selectedIndex,
-    required this.onDestinationSelected,
     required this.userLabel,
     required this.roleLabel,
-    required this.destinations,
+    required this.navigationChildren,
     required this.logoutTile,
   });
 
-  final int? selectedIndex;
-  final ValueChanged<int> onDestinationSelected;
   final String userLabel;
   final String roleLabel;
-  final List<Widget> destinations;
+  final List<Widget> navigationChildren;
   final Widget logoutTile;
 
   @override
@@ -27,8 +23,6 @@ class PointyNavigationSurface extends StatelessWidget {
     final colors = context.pointyColors;
 
     return NavigationDrawer(
-      selectedIndex: selectedIndex,
-      onDestinationSelected: onDestinationSelected,
       children: [
         Padding(
           padding: EdgeInsetsDirectional.fromSTEB(
@@ -78,7 +72,7 @@ class PointyNavigationSurface extends StatelessWidget {
           ),
         ),
         const Divider(),
-        ...destinations,
+        ...navigationChildren,
         const Divider(),
         logoutTile,
       ],
@@ -89,21 +83,17 @@ class PointyNavigationSurface extends StatelessWidget {
 class PointyNavigationRailSurface extends StatelessWidget {
   const PointyNavigationRailSurface({
     super.key,
-    required this.selectedIndex,
-    required this.onDestinationSelected,
     required this.userLabel,
     required this.roleLabel,
-    required this.destinations,
+    required this.navigationChildren,
     required this.logoutTooltip,
     required this.onLogout,
     this.extended = false,
   });
 
-  final int? selectedIndex;
-  final ValueChanged<int> onDestinationSelected;
   final String userLabel;
   final String roleLabel;
-  final List<NavigationRailDestination> destinations;
+  final List<Widget> navigationChildren;
   final String logoutTooltip;
   final VoidCallback onLogout;
   final bool extended;
@@ -112,64 +102,62 @@ class PointyNavigationRailSurface extends StatelessWidget {
   Widget build(BuildContext context) {
     final spacing = AdaptiveSpacing.of(context);
     final colors = context.pointyColors;
-    final textTheme = Theme.of(context).textTheme;
 
-    return ScrollConfiguration(
-      behavior: ScrollConfiguration.of(context).copyWith(scrollbars: false),
-      child: NavigationRail(
-        selectedIndex: selectedIndex,
-        onDestinationSelected: onDestinationSelected,
-        labelType: NavigationRailLabelType.none,
-        extended: extended,
-        scrollable: true,
-        trailingAtBottom: true,
-        minWidth: 88,
-        minExtendedWidth: 240,
-        backgroundColor: colors.surface,
-        useIndicator: true,
-        indicatorColor: PointyColors.primaryContainer,
-        indicatorShape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(PointyRadii.button),
-        ),
-        selectedIconTheme: IconThemeData(color: colors.primaryDark),
-        unselectedIconTheme: IconThemeData(color: colors.mutedInk),
-        selectedLabelTextStyle: textTheme.labelLarge?.copyWith(
-          color: colors.primaryDark,
-          fontWeight: FontWeight.w700,
-        ),
-        unselectedLabelTextStyle: textTheme.labelLarge?.copyWith(
-          color: colors.ink,
-          fontWeight: FontWeight.w500,
-        ),
-        leading: Padding(
-          padding: EdgeInsetsDirectional.only(
-            top: spacing.md,
-            bottom: spacing.sm,
-          ),
-          child: extended
-              ? _ExtendedRailHeader(userLabel: userLabel, roleLabel: roleLabel)
-              : Tooltip(
-                  message: '$userLabel\n$roleLabel',
-                  child: const _RailMark(),
-                ),
-        ),
-        trailing: Padding(
-          padding: EdgeInsets.all(spacing.md),
-          child: extended
-              ? FilledButton.tonalIcon(
-                  onPressed: onLogout,
-                  icon: const Icon(Icons.logout),
-                  label: Text(logoutTooltip),
-                )
-              : Tooltip(
-                  message: logoutTooltip,
-                  child: IconButton(
-                    onPressed: onLogout,
-                    icon: const Icon(Icons.logout),
+    return Material(
+      color: colors.surface,
+      child: SizedBox(
+        width: extended ? 240 : 88,
+        child: Column(
+          children: [
+            Padding(
+              padding: EdgeInsetsDirectional.only(
+                top: spacing.md,
+                bottom: spacing.sm,
+              ),
+              child: extended
+                  ? _ExtendedRailHeader(
+                      userLabel: userLabel,
+                      roleLabel: roleLabel,
+                    )
+                  : Tooltip(
+                      message: '$userLabel\n$roleLabel',
+                      child: const _RailMark(),
+                    ),
+            ),
+            const Divider(height: 1),
+            Expanded(
+              child: ScrollConfiguration(
+                behavior: ScrollConfiguration.of(
+                  context,
+                ).copyWith(scrollbars: false),
+                child: ListView(
+                  padding: EdgeInsetsDirectional.symmetric(
+                    vertical: spacing.sm,
+                    horizontal: extended ? spacing.sm : spacing.xs,
                   ),
+                  children: navigationChildren,
                 ),
+              ),
+            ),
+            const Divider(height: 1),
+            Padding(
+              padding: EdgeInsets.all(spacing.md),
+              child: extended
+                  ? FilledButton.tonalIcon(
+                      onPressed: onLogout,
+                      icon: const Icon(Icons.logout),
+                      label: Text(logoutTooltip),
+                    )
+                  : Tooltip(
+                      message: logoutTooltip,
+                      child: IconButton(
+                        onPressed: onLogout,
+                        icon: const Icon(Icons.logout),
+                      ),
+                    ),
+            ),
+          ],
         ),
-        destinations: destinations,
       ),
     );
   }

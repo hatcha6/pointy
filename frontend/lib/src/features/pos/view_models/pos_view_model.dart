@@ -31,6 +31,7 @@ part 'pos_catalog_actions.dart';
 part 'pos_barcode_actions.dart';
 part 'pos_checkout.dart';
 part 'pos_register_session_actions.dart';
+part 'pos_sale_session_actions.dart';
 
 enum RegisterSessionGateStatus {
   loading,
@@ -68,6 +69,30 @@ class PosProductSelectionResult {
   final List<ProductVariant> variants;
 }
 
+class PosSaleSessionSummary {
+  const PosSaleSessionSummary({
+    required this.id,
+    required this.number,
+    required this.lineCount,
+    required this.itemCount,
+    required this.subtotal,
+    required this.total,
+    required this.isActive,
+    required this.customerName,
+  });
+
+  final int id;
+  final int number;
+  final int lineCount;
+  final int itemCount;
+  final double subtotal;
+  final double total;
+  final bool isActive;
+  final String? customerName;
+
+  bool get isEmpty => lineCount == 0;
+}
+
 class PosViewModel extends ChangeNotifier {
   PosViewModel(
     this._catalogRepository,
@@ -88,7 +113,12 @@ class PosViewModel extends ChangeNotifier {
   CatalogRepository get catalogRepository => _catalogRepository;
 
   List<Product> _products = [];
-  final List<CartLine> _cart = [];
+  final List<_PosSaleSession> _saleSessions = [
+    _PosSaleSession(id: 1, number: 1),
+  ];
+  int _activeSaleSessionId = 1;
+  int _nextSaleSessionId = 2;
+  int _nextSaleSessionNumber = 2;
   ShopSettings? _checkoutSettings;
   Uint8List? _checkoutShopLogoBytes;
   bool _isLoading = false;
@@ -100,16 +130,9 @@ class PosViewModel extends ChangeNotifier {
   bool _isCreatingCashMovement = false;
   bool _isCheckingOut = false;
   BarcodeScanStatus _barcodeScanStatus = BarcodeScanStatus.idle;
-  bool _printInvoiceAfterPayment = false;
-  bool _shareInvoiceAfterPayment = false;
-  Customer? _selectedCustomer;
   bool _hasMoreProducts = true;
   int _nextProductPage = 1;
   String? _errorMessage;
-  String _couponCode = '';
-  SaleDiscountPreview? _discountPreview;
-  bool _isLoadingDiscountPreview = false;
-  bool _hasDiscountPreviewError = false;
   String? _lastScannedBarcode;
   String? _lastScannedProductName;
   bool _hasRegisterSessionError = false;
@@ -117,7 +140,6 @@ class PosViewModel extends ChangeNotifier {
   RegisterSession? _availableRegisterSession;
   RegisterSession? _activeRegisterSession;
   int _catalogRequestVersion = 0;
-  int _discountPreviewRequestVersion = 0;
   Future<void>? _catalogLoadFuture;
   ProductQuery? _catalogLoadFutureQuery;
   Future<void>? _checkoutSettingsLoadFuture;
@@ -126,8 +148,81 @@ class PosViewModel extends ChangeNotifier {
     availability: ProductAvailabilityFilter.active,
   );
 
+  _PosSaleSession get _activeSaleSession {
+    return _saleSessions.firstWhere(
+      (session) => session.id == _activeSaleSessionId,
+    );
+  }
+
+  List<CartLine> get _cart => _activeSaleSession.cart;
+
+  Customer? get _selectedCustomer => _activeSaleSession.selectedCustomer;
+
+  set _selectedCustomer(Customer? customer) {
+    _activeSaleSession
+      ..selectedCustomer = customer
+      ..touch();
+  }
+
+  String get _couponCode => _activeSaleSession.couponCode;
+
+  set _couponCode(String value) {
+    _activeSaleSession
+      ..couponCode = value
+      ..touch();
+  }
+
+  SaleDiscountPreview? get _discountPreview {
+    return _activeSaleSession.discountPreview;
+  }
+
+  set _discountPreview(SaleDiscountPreview? preview) {
+    _activeSaleSession.discountPreview = preview;
+  }
+
+  bool get _isLoadingDiscountPreview {
+    return _activeSaleSession.isLoadingDiscountPreview;
+  }
+
+  bool get _hasDiscountPreviewError {
+    return _activeSaleSession.hasDiscountPreviewError;
+  }
+
+  set _hasDiscountPreviewError(bool value) {
+    _activeSaleSession.hasDiscountPreviewError = value;
+  }
+
+  bool get _printInvoiceAfterPayment {
+    return _activeSaleSession.printInvoiceAfterPayment;
+  }
+
+  set _printInvoiceAfterPayment(bool value) {
+    _activeSaleSession.printInvoiceAfterPayment = value;
+  }
+
+  bool get _shareInvoiceAfterPayment {
+    return _activeSaleSession.shareInvoiceAfterPayment;
+  }
+
+  set _shareInvoiceAfterPayment(bool value) {
+    _activeSaleSession.shareInvoiceAfterPayment = value;
+  }
+
   List<Product> get products => List.unmodifiable(_products);
   List<CartLine> get cart => List.unmodifiable(_cart);
+  List<PosSaleSessionSummary> get saleSessions {
+    return List.unmodifiable(
+      _saleSessions.map(_saleSessionSummary).toList(growable: false),
+    );
+  }
+
+  PosSaleSessionSummary get activeSaleSessionSummary {
+    return _saleSessionSummary(_activeSaleSession);
+  }
+
+  int get openSaleSessionCount => _saleSessions.length;
+  int get activeSaleSessionNumber => _activeSaleSession.number;
+  bool get canStartNewSaleSession => !_isCheckingOut && _cart.isNotEmpty;
   bool get isLoading => _isLoading;
   bool get isLoadingMore => _isLoadingMore;
   bool get isLoadingRegisterSession => _isLoadingRegisterSession;
@@ -222,14 +317,12 @@ class PosViewModel extends ChangeNotifier {
         _checkoutSettings = result.value;
         _checkoutShopLogoBytes = await _loadShopLogoBytes(result.value);
         if (result.value.autoPrintReceipts) {
-          _printInvoiceAfterPayment = false;
-          _shareInvoiceAfterPayment = false;
+          _clearManualInvoiceActionsForSaleSessions();
         }
       case Error<ShopSettings>():
         _checkoutSettings = null;
         _checkoutShopLogoBytes = null;
-        _printInvoiceAfterPayment = false;
-        _shareInvoiceAfterPayment = false;
+        _clearManualInvoiceActionsForSaleSessions();
         _hasCheckoutSettingsError = true;
     }
 
@@ -289,5 +382,55 @@ class PosViewModel extends ChangeNotifier {
     _couponCode = value;
     _notifyChanged();
     unawaited(refreshDiscountPreview());
+  }
+
+  PosSaleSessionSummary _saleSessionSummary(_PosSaleSession session) {
+    final subtotal = _saleSessionSubtotal(session);
+    return PosSaleSessionSummary(
+      id: session.id,
+      number: session.number,
+      lineCount: session.cart.length,
+      itemCount: session.cart.fold(0, (sum, line) => sum + line.quantity),
+      subtotal: subtotal,
+      total: session.discountPreview?.total ?? subtotal,
+      isActive: session.id == _activeSaleSessionId,
+      customerName: session.selectedCustomer?.fullName,
+    );
+  }
+
+  double _saleSessionSubtotal(_PosSaleSession session) {
+    return session.cart.fold(0, (sum, line) => sum + line.subtotal);
+  }
+
+  void _clearManualInvoiceActionsForSaleSessions() {
+    for (final session in _saleSessions) {
+      session
+        ..printInvoiceAfterPayment = false
+        ..shareInvoiceAfterPayment = false;
+    }
+  }
+}
+
+class _PosSaleSession {
+  _PosSaleSession({required this.id, required this.number})
+    : updatedAt = DateTime.now();
+
+  final int id;
+  final int number;
+  DateTime updatedAt;
+  final List<CartLine> cart = [];
+  Customer? selectedCustomer;
+  String couponCode = '';
+  SaleDiscountPreview? discountPreview;
+  bool isLoadingDiscountPreview = false;
+  bool hasDiscountPreviewError = false;
+  bool printInvoiceAfterPayment = false;
+  bool shareInvoiceAfterPayment = false;
+  int discountPreviewRequestVersion = 0;
+
+  bool get isEmpty => cart.isEmpty;
+
+  void touch() {
+    updatedAt = DateTime.now();
   }
 }

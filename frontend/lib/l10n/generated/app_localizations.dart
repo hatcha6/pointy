@@ -334,6 +334,48 @@ abstract class AppLocalizations {
   /// **'لوحة التحكم'**
   String get dashboardDrawerLabel;
 
+  /// No description provided for @userSettingsDrawerLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'إعداداتي'**
+  String get userSettingsDrawerLabel;
+
+  /// No description provided for @navigationGroupPrimary.
+  ///
+  /// In ar, this message translates to:
+  /// **'الرئيسية'**
+  String get navigationGroupPrimary;
+
+  /// No description provided for @navigationGroupSales.
+  ///
+  /// In ar, this message translates to:
+  /// **'المبيعات'**
+  String get navigationGroupSales;
+
+  /// No description provided for @navigationGroupStock.
+  ///
+  /// In ar, this message translates to:
+  /// **'المخزون والمشتريات'**
+  String get navigationGroupStock;
+
+  /// No description provided for @navigationGroupPeople.
+  ///
+  /// In ar, this message translates to:
+  /// **'الأشخاص والرواتب'**
+  String get navigationGroupPeople;
+
+  /// No description provided for @navigationGroupReports.
+  ///
+  /// In ar, this message translates to:
+  /// **'التقارير والمراجعة'**
+  String get navigationGroupReports;
+
+  /// No description provided for @navigationGroupSettings.
+  ///
+  /// In ar, this message translates to:
+  /// **'الإعدادات'**
+  String get navigationGroupSettings;
+
   /// No description provided for @reportsDrawerLabel.
   ///
   /// In ar, this message translates to:
@@ -3429,6 +3471,18 @@ abstract class AppLocalizations {
   /// **'مستخدم جديد'**
   String get userCreateTitle;
 
+  /// No description provided for @firstNameLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الاسم الأول'**
+  String get firstNameLabel;
+
+  /// No description provided for @lastNameLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'اسم العائلة'**
+  String get lastNameLabel;
+
   /// No description provided for @displayNameLabel.
   ///
   /// In ar, this message translates to:
@@ -3440,6 +3494,180 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'البريد الإلكتروني'**
   String get emailLabel;
+
+  /// No description provided for @currentPasswordLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'كلمة المرور الحالية'**
+  String get currentPasswordLabel;
+
+  /// No description provided for @newPasswordLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'كلمة المرور الجديدة'**
+  String get newPasswordLabel;
+
+  /// No description provided for @confirmPasswordLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'تأكيد كلمة المرور'**
+  String get confirmPasswordLabel;
+
+  /// No description provided for @saveChangesButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'حفظ التغييرات'**
+  String get saveChangesButton;
+
+  /// No description provided for @changePasswordButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'تغيير كلمة المرور'**
+  String get changePasswordButton;
+
+  /// No description provided for @passwordConfirmationMismatch.
+  ///
+  /// In ar, this message translates to:
+  /// **'تأكيد كلمة المرور غير مطابق.'**
+  String get passwordConfirmationMismatch;
+
+  /// No description provided for @userSettingsTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'إعداداتي'**
+  String get userSettingsTitle;
+
+  /// No description provided for @userSettingsRefreshLoansTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحديث طلبات السلفة'**
+  String get userSettingsRefreshLoansTooltip;
+
+  /// No description provided for @userSettingsOverviewTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'إعدادات الحساب'**
+  String get userSettingsOverviewTitle;
+
+  /// No description provided for @userSettingsOverviewSubtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'بيانات الدخول وطلبات السلفة المرتبطة بسجل الموظف'**
+  String get userSettingsOverviewSubtitle;
+
+  /// No description provided for @userSettingsProfileSectionTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'البيانات الشخصية'**
+  String get userSettingsProfileSectionTitle;
+
+  /// No description provided for @userSettingsPasswordSectionTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'كلمة المرور'**
+  String get userSettingsPasswordSectionTitle;
+
+  /// No description provided for @userSettingsLoansSectionTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'طلبات السلفة'**
+  String get userSettingsLoansSectionTitle;
+
+  /// No description provided for @userSettingsProfileSaveError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر حفظ بيانات الحساب. تحقق من اسم المستخدم ثم حاول مرة أخرى.'**
+  String get userSettingsProfileSaveError;
+
+  /// No description provided for @userSettingsProfileSaved.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم حفظ بيانات الحساب.'**
+  String get userSettingsProfileSaved;
+
+  /// No description provided for @userSettingsPasswordChangeError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر تغيير كلمة المرور. تحقق من كلمة المرور الحالية وشروط كلمة المرور الجديدة.'**
+  String get userSettingsPasswordChangeError;
+
+  /// No description provided for @userSettingsPasswordChanged.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم تغيير كلمة المرور.'**
+  String get userSettingsPasswordChanged;
+
+  /// No description provided for @userSettingsLoansLoadError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر تحميل طلبات السلفة.'**
+  String get userSettingsLoansLoadError;
+
+  /// No description provided for @userSettingsLoanNoEmployeeRecord.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا يوجد سجل موظف مرتبط بهذا المستخدم، لذلك لا يمكن إرسال طلب سلفة.'**
+  String get userSettingsLoanNoEmployeeRecord;
+
+  /// No description provided for @loanAmountLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'مبلغ السلفة'**
+  String get loanAmountLabel;
+
+  /// No description provided for @loanMonthlyDeductionLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الخصم الشهري'**
+  String get loanMonthlyDeductionLabel;
+
+  /// No description provided for @loanPurposeLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'سبب الطلب'**
+  String get loanPurposeLabel;
+
+  /// No description provided for @loanMonthlyDeductionTooHigh.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا يمكن أن يكون الخصم الشهري أكبر من مبلغ السلفة.'**
+  String get loanMonthlyDeductionTooHigh;
+
+  /// No description provided for @submitLoanRequestButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'إرسال طلب السلفة'**
+  String get submitLoanRequestButton;
+
+  /// No description provided for @userSettingsLoanRequestError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر إرسال طلب السلفة. راجع المبلغ والخصم الشهري ثم حاول مرة أخرى.'**
+  String get userSettingsLoanRequestError;
+
+  /// No description provided for @userSettingsLoanRequested.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم إرسال طلب السلفة للاعتماد.'**
+  String get userSettingsLoanRequested;
+
+  /// No description provided for @userSettingsNoLoans.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد طلبات سلفة بعد.'**
+  String get userSettingsNoLoans;
+
+  /// No description provided for @userSettingsLoanHistoryTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'سجل طلبات السلفة'**
+  String get userSettingsLoanHistoryTitle;
+
+  /// Current employee loan remaining balance and monthly deduction.
+  ///
+  /// In ar, this message translates to:
+  /// **'المتبقي {balance}، الخصم الشهري {monthlyDeduction}'**
+  String userSettingsLoanBalanceDetail(String balance, String monthlyDeduction);
 
   /// No description provided for @roleLabel.
   ///
@@ -6157,6 +6385,60 @@ abstract class AppLocalizations {
   /// **'مراجعة السلة'**
   String get openCartSheetButton;
 
+  /// No description provided for @openSaleSessionsTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'الفواتير المفتوحة'**
+  String get openSaleSessionsTitle;
+
+  /// No description provided for @newSaleSessionButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'فاتورة جديدة'**
+  String get newSaleSessionButton;
+
+  /// No description provided for @newSaleSessionTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'بدء فاتورة جديدة'**
+  String get newSaleSessionTooltip;
+
+  /// No description provided for @saleSessionSwitcherTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'إدارة الفواتير المفتوحة'**
+  String get saleSessionSwitcherTooltip;
+
+  /// No description provided for @activeSaleSessionStatusLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الحالية'**
+  String get activeSaleSessionStatusLabel;
+
+  /// No description provided for @parkedSaleSessionStatusLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'معلقة'**
+  String get parkedSaleSessionStatusLabel;
+
+  /// Temporary POS sale session title shown while multiple invoices are open.
+  ///
+  /// In ar, this message translates to:
+  /// **'فاتورة {number}'**
+  String saleSessionTitle(int number);
+
+  /// Tooltip for switching to another open POS sale session.
+  ///
+  /// In ar, this message translates to:
+  /// **'فتح {title}'**
+  String saleSessionSwitchTooltip(String title);
+
+  /// No description provided for @discardSaleSessionTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'حذف الفاتورة المعلقة'**
+  String get discardSaleSessionTooltip;
+
   /// No description provided for @purchasingTitle.
   ///
   /// In ar, this message translates to:
@@ -7084,6 +7366,36 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'مسح مسودة الشراء'**
   String get clearPurchaseDraftTooltip;
+
+  /// No description provided for @purchaseSupplierActionTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختيار المورد'**
+  String get purchaseSupplierActionTooltip;
+
+  /// No description provided for @purchaseInvoiceDetailsActionTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'بيانات فاتورة المورد'**
+  String get purchaseInvoiceDetailsActionTooltip;
+
+  /// No description provided for @purchaseInvoiceDetailsDialogTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'بيانات فاتورة المورد'**
+  String get purchaseInvoiceDetailsDialogTitle;
+
+  /// No description provided for @purchaseLandedCostActionTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'تكاليف الوصول'**
+  String get purchaseLandedCostActionTooltip;
+
+  /// No description provided for @purchaseDiscountActionTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'كود خصم المورد'**
+  String get purchaseDiscountActionTooltip;
 
   /// No description provided for @emptyPurchaseDraft.
   ///
@@ -9227,6 +9539,12 @@ abstract class AppLocalizations {
   /// **'تحديث الخصومات'**
   String get refreshDiscountPreviewTooltip;
 
+  /// No description provided for @applyDiscountCodeButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'تطبيق الخصم'**
+  String get applyDiscountCodeButton;
+
   /// No description provided for @discountPreviewUnavailable.
   ///
   /// In ar, this message translates to:
@@ -10731,6 +11049,12 @@ abstract class AppLocalizations {
   /// **'مسيرات الرواتب'**
   String get payrollRunsTabLabel;
 
+  /// No description provided for @employeeLoansTabLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'طلبات السلفة'**
+  String get employeeLoansTabLabel;
+
   /// No description provided for @employeesLoadError.
   ///
   /// In ar, this message translates to:
@@ -10815,6 +11139,72 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'لا توجد مسيرات رواتب بعد.'**
   String get emptyPayrollRuns;
+
+  /// No description provided for @employeeLoansLoadError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر تحميل طلبات السلفة.'**
+  String get employeeLoansLoadError;
+
+  /// No description provided for @emptyEmployeeLoans.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد طلبات سلفة بعد.'**
+  String get emptyEmployeeLoans;
+
+  /// No description provided for @employeeLoanStatusRequested.
+  ///
+  /// In ar, this message translates to:
+  /// **'بانتظار الاعتماد'**
+  String get employeeLoanStatusRequested;
+
+  /// No description provided for @employeeLoanStatusApproved.
+  ///
+  /// In ar, this message translates to:
+  /// **'معتمد'**
+  String get employeeLoanStatusApproved;
+
+  /// No description provided for @employeeLoanStatusRejected.
+  ///
+  /// In ar, this message translates to:
+  /// **'مرفوض'**
+  String get employeeLoanStatusRejected;
+
+  /// No description provided for @employeeLoanStatusCancelled.
+  ///
+  /// In ar, this message translates to:
+  /// **'ملغي'**
+  String get employeeLoanStatusCancelled;
+
+  /// No description provided for @employeeLoanStatusPaid.
+  ///
+  /// In ar, this message translates to:
+  /// **'مسدد'**
+  String get employeeLoanStatusPaid;
+
+  /// Employee loan amount detail.
+  ///
+  /// In ar, this message translates to:
+  /// **'المبلغ {amount}'**
+  String employeeLoanAmountDetail(String amount);
+
+  /// Employee loan monthly deduction detail.
+  ///
+  /// In ar, this message translates to:
+  /// **'شهريًا {amount}'**
+  String employeeLoanMonthlyDeductionDetail(String amount);
+
+  /// No description provided for @approveEmployeeLoanTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'اعتماد طلب السلفة'**
+  String get approveEmployeeLoanTooltip;
+
+  /// No description provided for @rejectEmployeeLoanTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'رفض طلب السلفة'**
+  String get rejectEmployeeLoanTooltip;
 
   /// Payroll run employee line count.
   ///
@@ -11181,6 +11571,12 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'سلفة'**
   String get payrollAdjustmentAdvance;
+
+  /// No description provided for @payrollAdjustmentLoan.
+  ///
+  /// In ar, this message translates to:
+  /// **'خصم سلفة'**
+  String get payrollAdjustmentLoan;
 
   /// No description provided for @payrollAdjustmentAbsence.
   ///

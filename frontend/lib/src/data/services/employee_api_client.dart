@@ -123,4 +123,87 @@ class EmployeeApiClient {
       _session.decodedBody(response) as Map<String, Object?>,
     );
   }
+
+  Future<EmployeeLoanPage> fetchEmployeeLoans({
+    int page = 1,
+    String status = '',
+  }) async {
+    final response = await _session.get(
+      'employee-loans/',
+      query: {
+        'page': '$page',
+        if (status.trim().isNotEmpty) 'status': status.trim(),
+      },
+    );
+    _session.ensureSuccess(
+      response,
+      'Employee loans request failed with status',
+    );
+    return EmployeeLoanPage.fromAny(_session.decodedBody(response));
+  }
+
+  Future<MyEmployeeLoans> fetchMyEmployeeLoans() async {
+    final response = await _session.get('employee-loans/mine/');
+    _session.ensureSuccess(
+      response,
+      'My employee loans request failed with status',
+    );
+    return MyEmployeeLoans.fromJson(
+      _session.decodedBody(response) as Map<String, Object?>,
+    );
+  }
+
+  Future<EmployeeLoan> requestEmployeeLoan(
+    EmployeeLoanRequestDraft draft,
+  ) async {
+    final response = await _session.post(
+      'employee-loans/request/',
+      body: draft.toJson(),
+    );
+    _session.ensureSuccess(
+      response,
+      'Employee loan request failed with status',
+    );
+    return EmployeeLoan.fromJson(
+      _session.decodedBody(response) as Map<String, Object?>,
+    );
+  }
+
+  Future<EmployeeLoan> approveEmployeeLoan(
+    int id, {
+    String reviewNotes = '',
+  }) async {
+    final response = await _session.post(
+      'employee-loans/$id/approve/',
+      body: {
+        if (reviewNotes.trim().isNotEmpty) 'review_notes': reviewNotes.trim(),
+      },
+    );
+    _session.ensureSuccess(
+      response,
+      'Employee loan approval failed with status',
+    );
+    return EmployeeLoan.fromJson(
+      _session.decodedBody(response) as Map<String, Object?>,
+    );
+  }
+
+  Future<EmployeeLoan> rejectEmployeeLoan(
+    int id, {
+    String reviewNotes = '',
+  }) async {
+    final response = await _session.post(
+      'employee-loans/$id/reject/',
+      body: {
+        if (reviewNotes.trim().isNotEmpty) 'review_notes': reviewNotes.trim(),
+      },
+    );
+    _session.ensureSuccess(
+      response,
+      'Employee loan rejection failed with status',
+    );
+    return EmployeeLoan.fromJson(
+      _session.decodedBody(response) as Map<String, Object?>,
+    );
+  }
 }

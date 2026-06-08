@@ -7,17 +7,19 @@ import '../../../shared/order/order.dart';
 import '../view_models/pos_view_model.dart';
 
 class CartTotals extends StatelessWidget {
-  const CartTotals({super.key, required this.viewModel});
+  const CartTotals({super.key, required this.viewModel, this.compact = false});
 
   final PosViewModel viewModel;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
 
     return Padding(
-      padding: const EdgeInsets.only(top: 8),
+      padding: EdgeInsets.only(top: compact ? 0 : 8),
       child: PointyTotalsPanel(
+        compact: compact,
         lines: [
           PointyTotalLine(
             label: l10n.subtotal,

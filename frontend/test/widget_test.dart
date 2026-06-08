@@ -44,6 +44,7 @@ import 'package:pointy_frontend/src/features/pos/views/register_session_close_sh
 import 'package:pointy_frontend/src/features/pos/views/payment/payment_sheet.dart';
 import 'package:pointy_frontend/src/features/users/view_models/user_management_view_model.dart';
 import 'package:pointy_frontend/src/features/users/views/user_management_screen.dart';
+import 'package:pointy_frontend/src/shared/components/pointy_navigation_surface.dart';
 import 'package:pointy_frontend/src/shared/infinite_scroll_grid.dart';
 import 'package:pointy_frontend/src/shared/product_tile.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -1332,21 +1333,31 @@ void main() {
     expect(find.text('مدير النظام'), findsOneWidget);
     expect(find.text('لوحة التحكم'), findsWidgets);
     expect(find.text('شاشة البيع'), findsOneWidget);
+
+    await _expandNavigationDrawerGroup(tester, 'المبيعات');
     expect(find.text('الفواتير'), findsOneWidget);
-    expect(find.text('المشتريات'), findsOneWidget);
-    expect(find.text('الجهات'), findsOneWidget);
-    expect(find.text('المنتجات'), findsWidgets);
-    expect(find.text('التصنيفات'), findsOneWidget);
     expect(find.text('جلسات الدرج'), findsOneWidget);
     expect(find.text('الخصومات'), findsOneWidget);
-    expect(find.text('التقارير'), findsOneWidget);
-    await tester.drag(find.byType(NavigationDrawer), const Offset(0, -420));
-    await tester.pumpAndSettle();
+
+    await _expandNavigationDrawerGroup(tester, 'المخزون والمشتريات');
+    expect(find.text('المنتجات'), findsWidgets);
+    expect(find.text('التصنيفات'), findsOneWidget);
+    expect(find.text('المشتريات'), findsOneWidget);
+
+    await _expandNavigationDrawerGroup(tester, 'الأشخاص والرواتب');
+    expect(find.text('الجهات'), findsOneWidget);
     expect(find.text('الموظفون والرواتب'), findsOneWidget);
+
+    await _expandNavigationDrawerGroup(tester, 'التقارير والمراجعة');
+    expect(find.text('التقارير'), findsOneWidget);
     expect(find.text('سجل النشاط'), findsOneWidget);
+
+    await _expandNavigationDrawerGroup(tester, 'الإعدادات');
     expect(find.text('إعدادات الجهاز'), findsOneWidget);
     expect(find.text('المستخدمون'), findsOneWidget);
     expect(find.text('إعدادات المتجر'), findsOneWidget);
+    await tester.drag(find.byType(NavigationDrawer), const Offset(0, -320));
+    await tester.pumpAndSettle();
     expect(find.text('تسجيل الخروج'), findsOneWidget);
   });
 
@@ -1460,11 +1471,13 @@ void main() {
       expect(find.text('كتالوج الشراء'), findsOneWidget);
       expect(find.text('مسودة الشراء'), findsOneWidget);
 
-      await tester.tap(find.text('لا يوجد مورد محدد'));
+      await tester.tap(find.byTooltip('اختيار المورد'));
       await tester.pumpAndSettle(const Duration(seconds: 1));
       await tester.tap(find.text('مورد المدينة').last);
       await tester.pumpAndSettle();
 
+      await tester.tap(find.byTooltip('بيانات فاتورة المورد'));
+      await tester.pumpAndSettle();
       await tester.enterText(
         find.byKey(const ValueKey('supplier_invoice_number_field')),
         'SUP-2026-55',
@@ -1474,6 +1487,8 @@ void main() {
         '20260518',
       );
       expect(find.text('2026-05-18'), findsOneWidget);
+      await tester.tap(find.widgetWithText(FilledButton, 'حفظ'));
+      await tester.pumpAndSettle();
 
       await tester.enterText(
         find.byKey(const ValueKey('purchase_product_lookup_field')),
@@ -1539,7 +1554,7 @@ void main() {
     expect(find.text('اختر موردًا قبل إرسال أمر الشراء.'), findsOneWidget);
     expect(find.text('إرسال أمر الشراء 4.25 د.ل'), findsOneWidget);
 
-    await tester.tap(find.text('لا يوجد مورد محدد'));
+    await tester.tap(find.byTooltip('اختيار المورد'));
     await tester.pumpAndSettle(const Duration(seconds: 1));
     await tester.tap(find.text('مورد المدينة').last);
     await tester.pumpAndSettle();
@@ -2373,7 +2388,9 @@ void main() {
 
     expect(find.text('كاشير الوردية'), findsOneWidget);
     expect(find.text('شاشة البيع'), findsOneWidget);
+    await _expandNavigationDrawerGroup(tester, 'المبيعات');
     expect(find.text('جلسات الدرج'), findsOneWidget);
+    await _expandNavigationDrawerGroup(tester, 'الإعدادات');
     expect(find.text('إعدادات الجهاز'), findsOneWidget);
     expect(find.text('المنتجات'), findsNothing);
     expect(find.text('الخصومات'), findsNothing);
@@ -2455,14 +2472,14 @@ void main() {
 
     expect(find.text('مبيعات جلسة RS-1'), findsOneWidget);
     expect(find.text('الملخص'), findsOneWidget);
-    expect(find.text('المبيعات'), findsOneWidget);
+    expect(_tabText('المبيعات'), findsOneWidget);
     expect(find.text('حركات النقد'), findsOneWidget);
-    await tester.tap(find.text('الملخص'));
+    await tester.tap(_tabText('الملخص'));
     await tester.pumpAndSettle(const Duration(seconds: 1));
     expect(find.text('ملخص النقد'), findsOneWidget);
     expect(find.text('فرق -0.25 د.ل'), findsWidgets);
 
-    await tester.tap(find.text('المبيعات'));
+    await tester.tap(_tabText('المبيعات'));
     await tester.pumpAndSettle(const Duration(seconds: 1));
 
     expect(find.text('إيصال R-100'), findsOneWidget);
@@ -2496,10 +2513,10 @@ void main() {
 
     expect(find.text('مبيعات جلسة RS-1'), findsOneWidget);
     expect(find.text('الملخص'), findsOneWidget);
-    expect(find.text('المبيعات'), findsOneWidget);
+    expect(_tabText('المبيعات'), findsOneWidget);
     expect(find.text('حركات النقد'), findsOneWidget);
 
-    await tester.tap(find.text('المبيعات'));
+    await tester.tap(_tabText('المبيعات'));
     await tester.pumpAndSettle(const Duration(seconds: 1));
 
     expect(find.text('إيصال R-100'), findsOneWidget);
@@ -2525,7 +2542,7 @@ void main() {
 
     await tester.tap(find.text('جلسة RS-1'));
     await tester.pumpAndSettle(const Duration(seconds: 1));
-    await tester.tap(find.text('المبيعات'));
+    await tester.tap(_tabText('المبيعات'));
     await tester.pumpAndSettle(const Duration(seconds: 1));
     await tester.tap(find.text('إيصال R-100'));
     await tester.pumpAndSettle();
@@ -2556,7 +2573,7 @@ void main() {
       await _openNavigationDestination(tester, 'جلسات الدرج');
       await tester.tap(find.text('جلسة RS-1'));
       await tester.pumpAndSettle(const Duration(seconds: 1));
-      await tester.tap(find.text('المبيعات'));
+      await tester.tap(_tabText('المبيعات'));
       await tester.pumpAndSettle(const Duration(seconds: 1));
       await tester.tap(find.text('إيصال R-100'));
       await tester.pumpAndSettle();
@@ -2596,7 +2613,7 @@ void main() {
     await _openNavigationDestination(tester, 'جلسات الدرج');
     await tester.tap(find.text('جلسة RS-1'));
     await tester.pumpAndSettle(const Duration(seconds: 1));
-    await tester.tap(find.text('المبيعات'));
+    await tester.tap(_tabText('المبيعات'));
     await tester.pumpAndSettle(const Duration(seconds: 1));
     await tester.tap(find.text('إيصال R-100'));
     await tester.pumpAndSettle();
@@ -2635,7 +2652,7 @@ void main() {
     await _openNavigationDestination(tester, 'جلسات الدرج');
     await tester.tap(find.text('جلسة RS-1'));
     await tester.pumpAndSettle(const Duration(seconds: 1));
-    await tester.tap(find.text('المبيعات'));
+    await tester.tap(_tabText('المبيعات'));
     await tester.pumpAndSettle(const Duration(seconds: 1));
     await tester.tap(find.text('إيصال R-100'));
     await tester.pumpAndSettle();
@@ -2661,7 +2678,7 @@ void main() {
 
     await tester.tap(find.text('جلسة RS-1'));
     await tester.pumpAndSettle(const Duration(seconds: 1));
-    await tester.tap(find.text('المبيعات'));
+    await tester.tap(_tabText('المبيعات'));
     await tester.pumpAndSettle(const Duration(seconds: 1));
 
     expect(requestedOrderPages, containsAllInOrder([1, 2]));
@@ -3069,15 +3086,39 @@ Future<void> _startRegisterSession(WidgetTester tester) async {
   await tester.pumpAndSettle(const Duration(seconds: 1));
 }
 
+Finder _tabText(String label) {
+  return find.descendant(of: find.byType(TabBar), matching: find.text(label));
+}
+
+Future<void> _expandNavigationDrawerGroup(
+  WidgetTester tester,
+  String label,
+) async {
+  final group = find.descendant(
+    of: find.byType(NavigationDrawer),
+    matching: find.text(label),
+  );
+  expect(group, findsWidgets);
+  await tester.ensureVisible(group.first);
+  await tester.pumpAndSettle();
+  await tester.tap(group.first);
+  await tester.pumpAndSettle();
+}
+
 Future<void> _openNavigationDestination(
   WidgetTester tester,
   String label,
 ) async {
+  Finder railSurface() {
+    return find.byType(PointyNavigationRailSurface);
+  }
+
   Finder railDestination() {
-    return find.descendant(
-      of: find.byType(NavigationRail),
-      matching: find.text(label),
-    );
+    return find.descendant(of: railSurface(), matching: find.text(label));
+  }
+
+  Finder collapsedRailDestination() {
+    return find.descendant(of: railSurface(), matching: find.byTooltip(label));
   }
 
   Finder drawerDestination() {
@@ -3094,13 +3135,72 @@ Future<void> _openNavigationDestination(
     await tester.pumpAndSettle(const Duration(seconds: 1));
   }
 
-  Future<Finder> scrollDrawerUntilDestinationIsBuilt() async {
+  Future<void> expandVisibleGroups(
+    Finder scope,
+    Finder Function() destination,
+  ) async {
+    const groupLabels = [
+      'الرئيسية',
+      'المبيعات',
+      'المخزون والمشتريات',
+      'الأشخاص والرواتب',
+      'التقارير والمراجعة',
+      'الإعدادات',
+    ];
+    for (final groupLabel in groupLabels) {
+      if (tester.any(destination())) {
+        return;
+      }
+      final group = find.descendant(of: scope, matching: find.text(groupLabel));
+      if (!tester.any(group)) {
+        continue;
+      }
+      await tester.ensureVisible(group);
+      await tester.pumpAndSettle();
+      if (tester.any(destination())) {
+        return;
+      }
+      await tester.tap(group);
+      await tester.pumpAndSettle();
+    }
+  }
+
+  Future<Finder> revealRailDestination() async {
+    var destination = railDestination();
+    if (tester.any(destination)) {
+      return destination;
+    }
+    final tooltipDestination = collapsedRailDestination();
+    if (tester.any(tooltipDestination)) {
+      return tooltipDestination;
+    }
+    if (!tester.any(railSurface())) {
+      return destination;
+    }
+
+    await expandVisibleGroups(railSurface(), railDestination);
+    destination = railDestination();
+    if (tester.any(destination)) {
+      return destination;
+    }
+    return collapsedRailDestination();
+  }
+
+  Future<Finder> revealDrawerDestination() async {
     var destination = drawerDestination();
     for (
       var attempts = 0;
-      attempts < 4 && !tester.any(destination);
+      attempts < 8 && !tester.any(destination);
       attempts++
     ) {
+      await expandVisibleGroups(
+        find.byType(NavigationDrawer),
+        drawerDestination,
+      );
+      destination = drawerDestination();
+      if (tester.any(destination)) {
+        return destination;
+      }
       await tester.drag(find.byType(NavigationDrawer), const Offset(0, -240));
       await tester.pumpAndSettle();
       destination = drawerDestination();
@@ -3108,7 +3208,7 @@ Future<void> _openNavigationDestination(
     return destination;
   }
 
-  final visibleRailDestination = railDestination();
+  final visibleRailDestination = await revealRailDestination();
   if (tester.any(visibleRailDestination)) {
     await tapDestination(visibleRailDestination);
     return;
@@ -3124,7 +3224,7 @@ Future<void> _openNavigationDestination(
   if (tester.any(openDrawerButton)) {
     await tester.tap(openDrawerButton);
     await tester.pumpAndSettle();
-    visibleDrawerDestination = await scrollDrawerUntilDestinationIsBuilt();
+    visibleDrawerDestination = await revealDrawerDestination();
     expect(visibleDrawerDestination, findsWidgets);
     await tapDestination(visibleDrawerDestination);
     return;
@@ -3134,7 +3234,7 @@ Future<void> _openNavigationDestination(
   if (tester.any(expandRailButton)) {
     await tester.tap(expandRailButton);
     await tester.pumpAndSettle();
-    final expandedRailDestination = railDestination();
+    final expandedRailDestination = await revealRailDestination();
     expect(expandedRailDestination, findsWidgets);
     await tapDestination(expandedRailDestination);
     return;

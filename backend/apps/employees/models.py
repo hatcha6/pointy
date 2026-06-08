@@ -548,6 +548,7 @@ class PayrollAdjustment(TimeStampedModel):
         OVERTIME = "overtime", "Overtime"
         REIMBURSEMENT = "reimbursement", "Reimbursement"
         ADVANCE = "advance", "Advance"
+        LOAN = "loan", "Loan"
         ABSENCE = "absence", "Absence"
         PENALTY = "penalty", "Penalty"
         OTHER = "other", "Other"
@@ -564,6 +565,13 @@ class PayrollAdjustment(TimeStampedModel):
         decimal_places=2,
         validators=[MinValueValidator(Decimal("0.00"))],
     )
+    loan = models.ForeignKey(
+        "EmployeeLoan",
+        on_delete=models.PROTECT,
+        related_name="payroll_adjustments",
+        blank=True,
+        null=True,
+    )
     notes = models.TextField(blank=True)
 
     class Meta:
@@ -571,3 +579,131 @@ class PayrollAdjustment(TimeStampedModel):
 
     def __str__(self):
         return f"{self.direction} {self.amount}"
+
+
+class EmployeeLoan(TimeStampedModel):
+    MONEY_PLACES = Decimal("0.01")
+
+    class Status(models.TextChoices):
+        REQUESTED = "requested", "Requested"
+        APPROVED = "approved", "Approved"
+        REJECTED = "rejected", "Rejected"
+        CANCELLED = "cancelled", "Cancelled"
+        PAID = "paid", "Paid"
+
+    employee = models.ForeignKey(
+        Employee,
+        on_delete=models.PROTECT,
+        related_name="loans",
+    )
+    requested_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="requested_employee_loans",
+        blank=True,
+        null=True,
+    )
+    reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="reviewed_employee_loans",
+        blank=True,
+        null=True,
+    )
+    status = models.CharField(
+        max_length=16,
+        choices=Status.choices,
+        default=Status.REQUESTED,
+        db_index=True,
+    )
+    amount = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        validators=[MinValueValidator(Decimal("0.01"))],
+    )
+    monthly_deduction = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        validators=[MinValueValidator(Decimal("0.01"))],
+    )
+    outstanding_balance = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=Decimal("0.00"),
+        validators=[MinValueValidator(Decimal("0.00"))],
+    )
+    purpose = models.TextField(blank=True)
+    review_notes = models.TextField(blank=True)
+    reviewed_at = models.DateTimeField(blank=True, null=True)
+    paid_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+        permissions = [
+            ("approve_employeeloan", "Can approve employee loan"),
+            ("reject_employeeloan", "Can reject employee loan"),
+        ]
+        indexes = [
+            models.Index(fields=["employee", "status", "created_at"]),
+            models.Index(fields=["status", "created_at"]),
+        ]
+
+    def __str__(self):
+        return f"{self.employee} loan {self.amount}"
+
+    @property
+    def deducted_amount(self):
+        return (self.amount - self.outstanding_balance).quantize(self.MONEY_PLACES)
+
+    @property
+    def is_open(self):
+        return self.status == self.Status.APPROVED and self.outstanding_balance > 0
+
+    def clean(self):
+        if self.monthly_deduction > self.amount:
+            raise ValidationError(
+                {"monthly_deduction": "Monthly deduction cannot exceed loan amount."}
+            )
+        if self.outstanding_balance > self.amount:
+            raise ValidationError(
+                {"outstanding_balance": "Outstanding balance cannot exceed loan amount."}
+            )
+        if self.status == self.Status.PAID and self.outstanding_balance != Decimal("0.00"):
+            raise ValidationError(
+                {"outstanding_balance": "Paid loans must have no outstanding balance."}
+            )
+
+
+class EmployeeLoanPayment(TimeStampedModel):
+    loan = models.ForeignKey(
+        EmployeeLoan,
+        on_delete=models.PROTECT,
+        related_name="payments",
+    )
+    payroll_line = models.ForeignKey(
+        PayrollLine,
+        on_delete=models.PROTECT,
+        related_name="loan_payments",
+    )
+    amount = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        validators=[MinValueValidator(Decimal("0.01"))],
+    )
+    paid_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        ordering = ["-paid_at", "-id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["loan", "payroll_line"],
+                name="unique_employee_loan_payment_per_payroll_line",
+            )
+        ]
+        indexes = [
+            models.Index(fields=["loan", "paid_at"]),
+            models.Index(fields=["payroll_line"]),
+        ]
+
+    def __str__(self):
+        return f"{self.loan} payment {self.amount}"

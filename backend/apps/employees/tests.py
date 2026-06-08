@@ -1,5 +1,5 @@
 import warnings
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 
 from django.contrib.auth import get_user_model
@@ -18,8 +18,15 @@ from apps.notifications.services import sync_business_notifications
 from apps.core.roles import ACCOUNTANT_GROUP, CASHIER_GROUP, MANAGER_GROUP, ensure_role_groups
 from apps.sales.models import Order, OrderLine, RegisterSession
 
-from .models import CompensationPlan, Employee, PayrollAdjustment, PayrollRun
-from .services import draft_monthly_payroll_run
+from .models import (
+    CompensationPlan,
+    Employee,
+    EmployeeLoan,
+    EmployeeLoanPayment,
+    PayrollAdjustment,
+    PayrollRun,
+)
+from .services import approve_payroll_run, draft_monthly_payroll_run, mark_payroll_run_paid
 
 
 class EmployeePayrollApiTests(TestCase):
@@ -37,6 +44,21 @@ class EmployeePayrollApiTests(TestCase):
         client = APIClient()
         client.force_authenticate(user=user)
         return client
+
+    def create_order_for_user(self, user, *, total, created_at, order_status=Order.Status.PAID):
+        session = RegisterSession.objects.create(
+            owner=user,
+            owner_key=f"user:{user.pk}:test:{RegisterSession.objects.count() + 1}",
+        )
+        order = Order.objects.create(
+            register_session=session,
+            status=order_status,
+            subtotal=Decimal(total),
+            total=Decimal(total),
+        )
+        Order.objects.filter(pk=order.pk).update(created_at=created_at)
+        order.refresh_from_db()
+        return order
 
     def test_cashier_cannot_read_employee_records(self):
         response = self.authenticated_client(self.cashier).get(reverse("employee-list"))
@@ -308,6 +330,69 @@ class EmployeePayrollApiTests(TestCase):
         self.assertEqual(line.net_amount, Decimal("920.00"))
         self.assertEqual(payroll.net_total, Decimal("920.00"))
 
+    def test_monthly_payroll_draft_commission_uses_only_cashier_paid_sales_in_period(self):
+        employee = Employee.objects.create(
+            full_name="كاشير مبيعات متعددة",
+            user=self.cashier,
+        )
+        CompensationPlan.objects.create(
+            employee=employee,
+            pay_type=CompensationPlan.PayType.MONTHLY_SALARY,
+            salary_type=CompensationPlan.SalaryType.MONTHLY_FIXED_PLUS_SALES_COMMISSION,
+            amount=Decimal("900.00"),
+            commission_percent=Decimal("10.00"),
+        )
+        in_period = timezone.make_aware(datetime(2026, 6, 10, 12, 0))
+        outside_period = timezone.make_aware(datetime(2026, 5, 31, 12, 0))
+        self.create_order_for_user(
+            self.cashier,
+            total="200.00",
+            created_at=in_period,
+        )
+        self.create_order_for_user(
+            self.cashier,
+            total="150.00",
+            created_at=in_period + timedelta(days=2),
+        )
+        self.create_order_for_user(
+            self.cashier,
+            total="80.00",
+            created_at=in_period,
+            order_status=Order.Status.OPEN,
+        )
+        self.create_order_for_user(
+            self.cashier,
+            total="90.00",
+            created_at=in_period,
+            order_status=Order.Status.VOID,
+        )
+        self.create_order_for_user(
+            self.cashier,
+            total="125.00",
+            created_at=outside_period,
+        )
+        self.create_order_for_user(
+            self.accountant,
+            total="999.00",
+            created_at=in_period,
+        )
+
+        payroll, created = draft_monthly_payroll_run(
+            period_start=date(2026, 6, 1),
+            period_end=date(2026, 6, 30),
+        )
+
+        self.assertTrue(created)
+        line = payroll.lines.get()
+        self.assertEqual(line.gross_amount, Decimal("900.00"))
+        self.assertEqual(line.additions_amount, Decimal("35.00"))
+        self.assertEqual(line.net_amount, Decimal("935.00"))
+        commission = line.adjustments.get(
+            adjustment_type=PayrollAdjustment.AdjustmentType.COMMISSION
+        )
+        self.assertEqual(commission.amount, Decimal("35.00"))
+        self.assertIn("350.00 sales", commission.notes)
+
     def test_monthly_payroll_draft_uses_commission_only_salary(self):
         employee = Employee.objects.create(
             full_name="مندوب عمولة",
@@ -468,6 +553,168 @@ class EmployeePayrollApiTests(TestCase):
             ).count(),
             1,
         )
+
+    def test_employee_can_request_loan_and_admin_can_approve_it(self):
+        employee = Employee.objects.create(
+            full_name="موظف قرض",
+            user=self.cashier,
+        )
+
+        request_response = self.authenticated_client(self.cashier).post(
+            reverse("employee-loan-request"),
+            {
+                "amount": "300.00",
+                "monthly_deduction": "75.00",
+                "purpose": "مصروفات عائلية",
+            },
+            format="json",
+        )
+        mine_response = self.authenticated_client(self.cashier).get(
+            reverse("employee-loan-mine")
+        )
+        approve_response = self.authenticated_client(self.accountant).post(
+            reverse("employee-loan-approve", args=[request_response.data["id"]]),
+            {"review_notes": "مقبول للخصم الشهري"},
+            format="json",
+        )
+
+        self.assertEqual(request_response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(request_response.data["employee"], employee.pk)
+        self.assertEqual(request_response.data["status"], EmployeeLoan.Status.REQUESTED)
+        self.assertEqual(request_response.data["outstanding_balance"], "0.00")
+        self.assertEqual(mine_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(mine_response.data["employee"]["id"], employee.pk)
+        self.assertEqual(len(mine_response.data["loans"]), 1)
+        self.assertEqual(approve_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(approve_response.data["status"], EmployeeLoan.Status.APPROVED)
+        self.assertEqual(approve_response.data["outstanding_balance"], "300.00")
+
+    def test_unlinked_user_cannot_request_employee_loan(self):
+        response = self.authenticated_client(self.cashier).post(
+            reverse("employee-loan-request"),
+            {"amount": "300.00", "monthly_deduction": "75.00"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("employee", response.data)
+
+    def test_monthly_payroll_deducts_approved_loan_when_payroll_is_paid(self):
+        employee = Employee.objects.create(
+            full_name="موظف خصم قرض",
+            user=self.cashier,
+        )
+        CompensationPlan.objects.create(
+            employee=employee,
+            pay_type=CompensationPlan.PayType.MONTHLY_SALARY,
+            salary_type=CompensationPlan.SalaryType.MONTHLY_FIXED,
+            amount=Decimal("500.00"),
+        )
+        loan = EmployeeLoan.objects.create(
+            employee=employee,
+            requested_by=self.cashier,
+            reviewed_by=self.accountant,
+            status=EmployeeLoan.Status.APPROVED,
+            amount=Decimal("120.00"),
+            monthly_deduction=Decimal("50.00"),
+            outstanding_balance=Decimal("120.00"),
+            reviewed_at=timezone.now(),
+        )
+
+        payroll, created = draft_monthly_payroll_run(
+            period_start=date(2026, 6, 1),
+            period_end=date(2026, 6, 30),
+        )
+        line = payroll.lines.get()
+        loan.refresh_from_db()
+        approved_payroll = approve_payroll_run(payroll)
+        paid_payroll = mark_payroll_run_paid(approved_payroll)
+        loan.refresh_from_db()
+
+        self.assertTrue(created)
+        self.assertEqual(line.gross_amount, Decimal("500.00"))
+        self.assertEqual(line.deductions_amount, Decimal("50.00"))
+        self.assertEqual(line.net_amount, Decimal("450.00"))
+        self.assertEqual(payroll.net_total, Decimal("450.00"))
+        self.assertEqual(loan.outstanding_balance, Decimal("70.00"))
+        self.assertEqual(loan.status, EmployeeLoan.Status.APPROVED)
+        payment = EmployeeLoanPayment.objects.get(loan=loan)
+        self.assertEqual(payment.amount, Decimal("50.00"))
+        self.assertEqual(payment.payroll_line_id, line.pk)
+        self.assertEqual(paid_payroll.status, PayrollRun.Status.PAID)
+        adjustment = line.adjustments.get(
+            adjustment_type=PayrollAdjustment.AdjustmentType.LOAN
+        )
+        self.assertEqual(adjustment.loan_id, loan.pk)
+
+    def test_monthly_payroll_loan_deduction_caps_to_remaining_balance(self):
+        employee = Employee.objects.create(full_name="موظف آخر قرض")
+        CompensationPlan.objects.create(
+            employee=employee,
+            pay_type=CompensationPlan.PayType.MONTHLY_SALARY,
+            salary_type=CompensationPlan.SalaryType.MONTHLY_FIXED,
+            amount=Decimal("500.00"),
+        )
+        loan = EmployeeLoan.objects.create(
+            employee=employee,
+            requested_by=self.cashier,
+            reviewed_by=self.accountant,
+            status=EmployeeLoan.Status.APPROVED,
+            amount=Decimal("120.00"),
+            monthly_deduction=Decimal("50.00"),
+            outstanding_balance=Decimal("30.00"),
+            reviewed_at=timezone.now(),
+        )
+
+        payroll, created = draft_monthly_payroll_run(
+            period_start=date(2026, 6, 1),
+            period_end=date(2026, 6, 30),
+        )
+        line = payroll.lines.get()
+        mark_payroll_run_paid(approve_payroll_run(payroll))
+        loan.refresh_from_db()
+
+        self.assertTrue(created)
+        self.assertEqual(line.deductions_amount, Decimal("30.00"))
+        self.assertEqual(line.net_amount, Decimal("470.00"))
+        self.assertEqual(loan.outstanding_balance, Decimal("0.00"))
+        self.assertEqual(loan.status, EmployeeLoan.Status.PAID)
+        self.assertEqual(EmployeeLoanPayment.objects.get(loan=loan).amount, Decimal("30.00"))
+
+    def test_unpaid_loan_deductions_are_not_double_scheduled(self):
+        employee = Employee.objects.create(full_name="موظف جدولة قرض")
+        CompensationPlan.objects.create(
+            employee=employee,
+            pay_type=CompensationPlan.PayType.MONTHLY_SALARY,
+            salary_type=CompensationPlan.SalaryType.MONTHLY_FIXED,
+            amount=Decimal("500.00"),
+        )
+        loan = EmployeeLoan.objects.create(
+            employee=employee,
+            requested_by=self.cashier,
+            reviewed_by=self.accountant,
+            status=EmployeeLoan.Status.APPROVED,
+            amount=Decimal("80.00"),
+            monthly_deduction=Decimal("50.00"),
+            outstanding_balance=Decimal("80.00"),
+            reviewed_at=timezone.now(),
+        )
+
+        first, first_created = draft_monthly_payroll_run(
+            period_start=date(2026, 6, 1),
+            period_end=date(2026, 6, 30),
+        )
+        second, second_created = draft_monthly_payroll_run(
+            period_start=date(2026, 7, 1),
+            period_end=date(2026, 7, 31),
+        )
+        loan.refresh_from_db()
+
+        self.assertTrue(first_created)
+        self.assertTrue(second_created)
+        self.assertEqual(first.lines.get().deductions_amount, Decimal("50.00"))
+        self.assertEqual(second.lines.get().deductions_amount, Decimal("30.00"))
+        self.assertEqual(loan.outstanding_balance, Decimal("80.00"))
 
     def test_draft_payroll_run_generates_admin_notification(self):
         employee = Employee.objects.create(full_name="تنبيه الرواتب")

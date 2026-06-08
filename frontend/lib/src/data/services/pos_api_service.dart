@@ -147,6 +147,14 @@ class PosApiService {
 
   Future<PosUser?> fetchCurrentUser() => _auth.fetchCurrentUser();
 
+  Future<PosUser> updateCurrentUser(CurrentUserProfileDraft draft) {
+    return _auth.updateCurrentUser(draft);
+  }
+
+  Future<void> changePassword(PasswordChangeDraft draft) {
+    return _auth.changePassword(draft);
+  }
+
   Future<AnalyticsIngestResult> ingestAnalyticsEvents(
     List<AnalyticsEventDraft> events,
   ) {
@@ -252,6 +260,29 @@ class PosApiService {
 
   Future<PayrollRun> markPayrollRunPaid(int id) {
     return _employees.markPayrollRunPaid(id);
+  }
+
+  Future<EmployeeLoanPage> fetchEmployeeLoans({
+    int page = 1,
+    String status = '',
+  }) {
+    return _employees.fetchEmployeeLoans(page: page, status: status);
+  }
+
+  Future<MyEmployeeLoans> fetchMyEmployeeLoans() {
+    return _employees.fetchMyEmployeeLoans();
+  }
+
+  Future<EmployeeLoan> requestEmployeeLoan(EmployeeLoanRequestDraft draft) {
+    return _employees.requestEmployeeLoan(draft);
+  }
+
+  Future<EmployeeLoan> approveEmployeeLoan(int id, {String reviewNotes = ''}) {
+    return _employees.approveEmployeeLoan(id, reviewNotes: reviewNotes);
+  }
+
+  Future<EmployeeLoan> rejectEmployeeLoan(int id, {String reviewNotes = ''}) {
+    return _employees.rejectEmployeeLoan(id, reviewNotes: reviewNotes);
   }
 
   Future<ShopSettings> fetchShopSettings() {

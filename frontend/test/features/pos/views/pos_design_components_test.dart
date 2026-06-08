@@ -6,6 +6,8 @@ import 'package:pointy_frontend/src/data/models/cart_line.dart';
 import 'package:pointy_frontend/src/data/models/product.dart';
 import 'package:pointy_frontend/src/data/models/product_variant.dart';
 import 'package:pointy_frontend/src/features/pos/views/cart_line_tile.dart';
+import 'package:pointy_frontend/src/features/pos/views/pos_sale_session_strip.dart';
+import 'package:pointy_frontend/src/features/pos/view_models/pos_view_model.dart';
 import 'package:pointy_frontend/src/shared/design/design.dart';
 import 'package:pointy_frontend/src/shared/order/order.dart';
 import 'package:pointy_frontend/src/shared/product_tile.dart';
@@ -91,6 +93,81 @@ void main() {
       await tester.pump();
 
       expect(tapCount, 1);
+    });
+  }
+
+  for (final width in [390.0, 768.0]) {
+    testWidgets('POS sale session switcher is usable at width $width', (
+      tester,
+    ) async {
+      var started = false;
+      int? selectedSessionId;
+      int? discardedSessionId;
+
+      await _pumpAtWidth(
+        tester,
+        width: width,
+        child: SizedBox(
+          width: width,
+          child: PosSaleSessionSwitcher(
+            sessions: const [
+              PosSaleSessionSummary(
+                id: 1,
+                number: 1,
+                lineCount: 1,
+                itemCount: 2,
+                subtotal: 25.5,
+                total: 25.5,
+                isActive: false,
+                customerName: 'عميل سريع',
+              ),
+              PosSaleSessionSummary(
+                id: 2,
+                number: 2,
+                lineCount: 1,
+                itemCount: 1,
+                subtotal: 2.75,
+                total: 2.75,
+                isActive: true,
+                customerName: null,
+              ),
+            ],
+            canStartNewSession: true,
+            isLocked: false,
+            onStartNewSession: () => started = true,
+            onSelectSession: (id) => selectedSessionId = id,
+            onDiscardSession: (id) => discardedSessionId = id,
+          ),
+        ),
+      );
+
+      expect(find.text('فاتورة 2'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+
+      await tester.tap(find.text('فاتورة 2'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('الفواتير المفتوحة'), findsOneWidget);
+      expect(find.text('فاتورة جديدة'), findsOneWidget);
+      expect(find.text('فاتورة 1'), findsOneWidget);
+      expect(find.textContaining('عميل سريع'), findsOneWidget);
+
+      await tester.tap(find.text('فاتورة جديدة'));
+      await tester.pumpAndSettle();
+      expect(started, isTrue);
+
+      await tester.tap(find.text('فاتورة 2'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('فاتورة 1'));
+      await tester.pumpAndSettle();
+      expect(selectedSessionId, 1);
+
+      await tester.tap(find.text('فاتورة 2'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byIcon(Icons.close).first);
+      await tester.pumpAndSettle();
+
+      expect(discardedSessionId, 1);
     });
   }
 }

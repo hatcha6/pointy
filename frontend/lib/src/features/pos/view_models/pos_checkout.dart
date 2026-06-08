@@ -2,39 +2,40 @@ part of 'pos_view_model.dart';
 
 extension PosCheckoutActions on PosViewModel {
   Future<void> refreshDiscountPreview() async {
-    final requestVersion = ++_discountPreviewRequestVersion;
-    if (_cart.isEmpty) {
-      _discountPreview = null;
-      _hasDiscountPreviewError = false;
-      _isLoadingDiscountPreview = false;
+    final session = _activeSaleSession;
+    final requestVersion = ++session.discountPreviewRequestVersion;
+    if (session.cart.isEmpty) {
+      session.discountPreview = null;
+      session.hasDiscountPreviewError = false;
+      session.isLoadingDiscountPreview = false;
       _notifyChanged();
       return;
     }
 
-    _isLoadingDiscountPreview = true;
-    _hasDiscountPreviewError = false;
+    session.isLoadingDiscountPreview = true;
+    session.hasDiscountPreviewError = false;
     _notifyChanged();
 
     final result = await _saleRepository.previewDiscounts(
       SaleDiscountPreviewDraft.fromCart(
-        cart: List<CartLine>.of(_cart),
-        customerId: _selectedCustomer?.id,
-        couponCode: _couponCode,
+        cart: List<CartLine>.of(session.cart),
+        customerId: session.selectedCustomer?.id,
+        couponCode: session.couponCode,
       ),
     );
-    if (requestVersion != _discountPreviewRequestVersion) {
+    if (requestVersion != session.discountPreviewRequestVersion) {
       return;
     }
 
     switch (result) {
       case Ok<SaleDiscountPreview>():
-        _discountPreview = result.value;
-        _hasDiscountPreviewError = false;
+        session.discountPreview = result.value;
+        session.hasDiscountPreviewError = false;
       case Error<SaleDiscountPreview>():
-        _discountPreview = null;
-        _hasDiscountPreviewError = true;
+        session.discountPreview = null;
+        session.hasDiscountPreviewError = true;
     }
-    _isLoadingDiscountPreview = false;
+    session.isLoadingDiscountPreview = false;
     _notifyChanged();
   }
 
@@ -134,13 +135,7 @@ extension PosCheckoutActions on PosViewModel {
             ? await _printPaidInvoice(result.value, invoicePrinterConfig)
             : InvoicePrintStatus.notRequested;
         _applySoldQuantities(cartSnapshot);
-        _cart.clear();
-        _selectedCustomer = null;
-        _couponCode = '';
-        _discountPreview = null;
-        _hasDiscountPreviewError = false;
-        _printInvoiceAfterPayment = false;
-        _shareInvoiceAfterPayment = false;
+        _completeActiveSaleSessionCheckout();
         _isCheckingOut = false;
         _notifyChanged();
         unawaited(

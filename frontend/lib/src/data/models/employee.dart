@@ -171,6 +171,37 @@ enum PayrollStatus {
   }
 }
 
+enum EmployeeLoanStatus {
+  requested,
+  approved,
+  rejected,
+  cancelled,
+  paid;
+
+  bool get canReview => this == EmployeeLoanStatus.requested;
+
+  static EmployeeLoanStatus fromJson(Object? value) {
+    return switch (value?.toString()) {
+      'requested' => EmployeeLoanStatus.requested,
+      'approved' => EmployeeLoanStatus.approved,
+      'rejected' => EmployeeLoanStatus.rejected,
+      'cancelled' => EmployeeLoanStatus.cancelled,
+      'paid' => EmployeeLoanStatus.paid,
+      _ => EmployeeLoanStatus.requested,
+    };
+  }
+
+  String toJson() {
+    return switch (this) {
+      EmployeeLoanStatus.requested => 'requested',
+      EmployeeLoanStatus.approved => 'approved',
+      EmployeeLoanStatus.rejected => 'rejected',
+      EmployeeLoanStatus.cancelled => 'cancelled',
+      EmployeeLoanStatus.paid => 'paid',
+    };
+  }
+}
+
 class CompensationPlan {
   const CompensationPlan({
     required this.id,
@@ -304,6 +335,134 @@ class EmployeePage {
       );
     }
     return const EmployeePage(employees: [], hasMore: false);
+  }
+}
+
+class EmployeeLoan {
+  const EmployeeLoan({
+    required this.id,
+    required this.employeeId,
+    required this.status,
+    required this.amount,
+    required this.monthlyDeduction,
+    required this.outstandingBalance,
+    required this.deductedAmount,
+    this.employeeName = '',
+    this.employeeNumber = '',
+    this.requestedByUsername = '',
+    this.reviewedByUsername = '',
+    this.purpose = '',
+    this.reviewNotes = '',
+    this.reviewedAt,
+    this.paidAt,
+    this.createdAt,
+    this.updatedAt,
+  });
+
+  final int id;
+  final int employeeId;
+  final String employeeName;
+  final String employeeNumber;
+  final EmployeeLoanStatus status;
+  final double amount;
+  final double monthlyDeduction;
+  final double outstandingBalance;
+  final double deductedAmount;
+  final String requestedByUsername;
+  final String reviewedByUsername;
+  final String purpose;
+  final String reviewNotes;
+  final DateTime? reviewedAt;
+  final DateTime? paidAt;
+  final DateTime? createdAt;
+  final DateTime? updatedAt;
+
+  factory EmployeeLoan.fromJson(Map<String, Object?> json) {
+    return EmployeeLoan(
+      id: _intFromJson(json['id']),
+      employeeId: _intFromJson(json['employee']),
+      employeeName: json['employee_name']?.toString() ?? '',
+      employeeNumber: json['employee_number']?.toString() ?? '',
+      status: EmployeeLoanStatus.fromJson(json['status']),
+      amount: _doubleFromJson(json['amount']),
+      monthlyDeduction: _doubleFromJson(json['monthly_deduction']),
+      outstandingBalance: _doubleFromJson(json['outstanding_balance']),
+      deductedAmount: _doubleFromJson(json['deducted_amount']),
+      requestedByUsername: json['requested_by_username']?.toString() ?? '',
+      reviewedByUsername: json['reviewed_by_username']?.toString() ?? '',
+      purpose: json['purpose']?.toString() ?? '',
+      reviewNotes: json['review_notes']?.toString() ?? '',
+      reviewedAt: _dateFromJson(json['reviewed_at']),
+      paidAt: _dateFromJson(json['paid_at']),
+      createdAt: _dateFromJson(json['created_at']),
+      updatedAt: _dateFromJson(json['updated_at']),
+    );
+  }
+}
+
+class EmployeeLoanPage {
+  const EmployeeLoanPage({required this.loans, required this.hasMore});
+
+  final List<EmployeeLoan> loans;
+  final bool hasMore;
+
+  factory EmployeeLoanPage.fromAny(Object? decoded) {
+    if (decoded is Map<String, Object?>) {
+      final results = decoded['results'];
+      return EmployeeLoanPage(
+        loans: results is List<Object?>
+            ? results
+                  .whereType<Map<String, Object?>>()
+                  .map(EmployeeLoan.fromJson)
+                  .toList(growable: false)
+            : const [],
+        hasMore: decoded['next'] != null,
+      );
+    }
+    return const EmployeeLoanPage(loans: [], hasMore: false);
+  }
+}
+
+class MyEmployeeLoans {
+  const MyEmployeeLoans({this.employee, required this.loans});
+
+  final Employee? employee;
+  final List<EmployeeLoan> loans;
+
+  factory MyEmployeeLoans.fromJson(Map<String, Object?> json) {
+    final employee = json['employee'];
+    final loans = json['loans'];
+    return MyEmployeeLoans(
+      employee: employee is Map<String, Object?>
+          ? Employee.fromJson(employee)
+          : null,
+      loans: loans is List<Object?>
+          ? loans
+                .whereType<Map<String, Object?>>()
+                .map(EmployeeLoan.fromJson)
+                .toList(growable: false)
+          : const [],
+    );
+  }
+}
+
+class EmployeeLoanRequestDraft {
+  const EmployeeLoanRequestDraft({
+    required this.amount,
+    required this.monthlyDeduction,
+    this.purpose = '',
+  });
+
+  final String amount;
+  final String monthlyDeduction;
+  final String purpose;
+
+  Map<String, Object?> toJson() {
+    return {
+      'amount': amount,
+      'monthly_deduction': monthlyDeduction,
+      if (purpose.trim().isNotEmpty) 'purpose': purpose.trim(),
+    };
   }
 }
 

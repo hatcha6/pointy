@@ -106,7 +106,7 @@ extension PosRegisterSessionActions on PosViewModel {
         _trackRegisterSessionClosed(result.value);
         _activeRegisterSession = null;
         _availableRegisterSession = null;
-        _cart.clear();
+        _resetSaleSessions();
         _products = [];
         _isClosingRegisterSession = false;
         _notifyChanged();
@@ -156,7 +156,7 @@ extension PosRegisterSessionActions on PosViewModel {
   void _activateRegisterSession(RegisterSession session) {
     _activeRegisterSession = session;
     _availableRegisterSession = null;
-    _cart.clear();
+    _resetSaleSessions();
   }
 
   void _trackRegisterSessionStarted(

@@ -139,6 +139,27 @@ class AppLocalizationsAr extends AppLocalizations {
   String get dashboardDrawerLabel => 'لوحة التحكم';
 
   @override
+  String get userSettingsDrawerLabel => 'إعداداتي';
+
+  @override
+  String get navigationGroupPrimary => 'الرئيسية';
+
+  @override
+  String get navigationGroupSales => 'المبيعات';
+
+  @override
+  String get navigationGroupStock => 'المخزون والمشتريات';
+
+  @override
+  String get navigationGroupPeople => 'الأشخاص والرواتب';
+
+  @override
+  String get navigationGroupReports => 'التقارير والمراجعة';
+
+  @override
+  String get navigationGroupSettings => 'الإعدادات';
+
+  @override
   String get reportsDrawerLabel => 'التقارير';
 
   @override
@@ -1969,10 +1990,114 @@ class AppLocalizationsAr extends AppLocalizations {
   String get userCreateTitle => 'مستخدم جديد';
 
   @override
+  String get firstNameLabel => 'الاسم الأول';
+
+  @override
+  String get lastNameLabel => 'اسم العائلة';
+
+  @override
   String get displayNameLabel => 'الاسم المعروض';
 
   @override
   String get emailLabel => 'البريد الإلكتروني';
+
+  @override
+  String get currentPasswordLabel => 'كلمة المرور الحالية';
+
+  @override
+  String get newPasswordLabel => 'كلمة المرور الجديدة';
+
+  @override
+  String get confirmPasswordLabel => 'تأكيد كلمة المرور';
+
+  @override
+  String get saveChangesButton => 'حفظ التغييرات';
+
+  @override
+  String get changePasswordButton => 'تغيير كلمة المرور';
+
+  @override
+  String get passwordConfirmationMismatch => 'تأكيد كلمة المرور غير مطابق.';
+
+  @override
+  String get userSettingsTitle => 'إعداداتي';
+
+  @override
+  String get userSettingsRefreshLoansTooltip => 'تحديث طلبات السلفة';
+
+  @override
+  String get userSettingsOverviewTitle => 'إعدادات الحساب';
+
+  @override
+  String get userSettingsOverviewSubtitle =>
+      'بيانات الدخول وطلبات السلفة المرتبطة بسجل الموظف';
+
+  @override
+  String get userSettingsProfileSectionTitle => 'البيانات الشخصية';
+
+  @override
+  String get userSettingsPasswordSectionTitle => 'كلمة المرور';
+
+  @override
+  String get userSettingsLoansSectionTitle => 'طلبات السلفة';
+
+  @override
+  String get userSettingsProfileSaveError =>
+      'تعذر حفظ بيانات الحساب. تحقق من اسم المستخدم ثم حاول مرة أخرى.';
+
+  @override
+  String get userSettingsProfileSaved => 'تم حفظ بيانات الحساب.';
+
+  @override
+  String get userSettingsPasswordChangeError =>
+      'تعذر تغيير كلمة المرور. تحقق من كلمة المرور الحالية وشروط كلمة المرور الجديدة.';
+
+  @override
+  String get userSettingsPasswordChanged => 'تم تغيير كلمة المرور.';
+
+  @override
+  String get userSettingsLoansLoadError => 'تعذر تحميل طلبات السلفة.';
+
+  @override
+  String get userSettingsLoanNoEmployeeRecord =>
+      'لا يوجد سجل موظف مرتبط بهذا المستخدم، لذلك لا يمكن إرسال طلب سلفة.';
+
+  @override
+  String get loanAmountLabel => 'مبلغ السلفة';
+
+  @override
+  String get loanMonthlyDeductionLabel => 'الخصم الشهري';
+
+  @override
+  String get loanPurposeLabel => 'سبب الطلب';
+
+  @override
+  String get loanMonthlyDeductionTooHigh =>
+      'لا يمكن أن يكون الخصم الشهري أكبر من مبلغ السلفة.';
+
+  @override
+  String get submitLoanRequestButton => 'إرسال طلب السلفة';
+
+  @override
+  String get userSettingsLoanRequestError =>
+      'تعذر إرسال طلب السلفة. راجع المبلغ والخصم الشهري ثم حاول مرة أخرى.';
+
+  @override
+  String get userSettingsLoanRequested => 'تم إرسال طلب السلفة للاعتماد.';
+
+  @override
+  String get userSettingsNoLoans => 'لا توجد طلبات سلفة بعد.';
+
+  @override
+  String get userSettingsLoanHistoryTitle => 'سجل طلبات السلفة';
+
+  @override
+  String userSettingsLoanBalanceDetail(
+    String balance,
+    String monthlyDeduction,
+  ) {
+    return 'المتبقي $balance، الخصم الشهري $monthlyDeduction';
+  }
 
   @override
   String get roleLabel => 'الدور';
@@ -3500,6 +3625,37 @@ class AppLocalizationsAr extends AppLocalizations {
   String get openCartSheetButton => 'مراجعة السلة';
 
   @override
+  String get openSaleSessionsTitle => 'الفواتير المفتوحة';
+
+  @override
+  String get newSaleSessionButton => 'فاتورة جديدة';
+
+  @override
+  String get newSaleSessionTooltip => 'بدء فاتورة جديدة';
+
+  @override
+  String get saleSessionSwitcherTooltip => 'إدارة الفواتير المفتوحة';
+
+  @override
+  String get activeSaleSessionStatusLabel => 'الحالية';
+
+  @override
+  String get parkedSaleSessionStatusLabel => 'معلقة';
+
+  @override
+  String saleSessionTitle(int number) {
+    return 'فاتورة $number';
+  }
+
+  @override
+  String saleSessionSwitchTooltip(String title) {
+    return 'فتح $title';
+  }
+
+  @override
+  String get discardSaleSessionTooltip => 'حذف الفاتورة المعلقة';
+
+  @override
   String get purchasingTitle => 'المشتريات';
 
   @override
@@ -4082,6 +4238,21 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get clearPurchaseDraftTooltip => 'مسح مسودة الشراء';
+
+  @override
+  String get purchaseSupplierActionTooltip => 'اختيار المورد';
+
+  @override
+  String get purchaseInvoiceDetailsActionTooltip => 'بيانات فاتورة المورد';
+
+  @override
+  String get purchaseInvoiceDetailsDialogTitle => 'بيانات فاتورة المورد';
+
+  @override
+  String get purchaseLandedCostActionTooltip => 'تكاليف الوصول';
+
+  @override
+  String get purchaseDiscountActionTooltip => 'كود خصم المورد';
 
   @override
   String get emptyPurchaseDraft => 'لا توجد عناصر في مسودة الشراء';
@@ -5338,6 +5509,9 @@ class AppLocalizationsAr extends AppLocalizations {
   String get refreshDiscountPreviewTooltip => 'تحديث الخصومات';
 
   @override
+  String get applyDiscountCodeButton => 'تطبيق الخصم';
+
+  @override
   String get discountPreviewUnavailable => 'تعذر تحديث الخصومات الآن.';
 
   @override
@@ -6241,6 +6415,9 @@ class AppLocalizationsAr extends AppLocalizations {
   String get payrollRunsTabLabel => 'مسيرات الرواتب';
 
   @override
+  String get employeeLoansTabLabel => 'طلبات السلفة';
+
+  @override
   String get employeesLoadError => 'تعذر تحميل الموظفين.';
 
   @override
@@ -6299,6 +6476,43 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get emptyPayrollRuns => 'لا توجد مسيرات رواتب بعد.';
+
+  @override
+  String get employeeLoansLoadError => 'تعذر تحميل طلبات السلفة.';
+
+  @override
+  String get emptyEmployeeLoans => 'لا توجد طلبات سلفة بعد.';
+
+  @override
+  String get employeeLoanStatusRequested => 'بانتظار الاعتماد';
+
+  @override
+  String get employeeLoanStatusApproved => 'معتمد';
+
+  @override
+  String get employeeLoanStatusRejected => 'مرفوض';
+
+  @override
+  String get employeeLoanStatusCancelled => 'ملغي';
+
+  @override
+  String get employeeLoanStatusPaid => 'مسدد';
+
+  @override
+  String employeeLoanAmountDetail(String amount) {
+    return 'المبلغ $amount';
+  }
+
+  @override
+  String employeeLoanMonthlyDeductionDetail(String amount) {
+    return 'شهريًا $amount';
+  }
+
+  @override
+  String get approveEmployeeLoanTooltip => 'اعتماد طلب السلفة';
+
+  @override
+  String get rejectEmployeeLoanTooltip => 'رفض طلب السلفة';
 
   @override
   String payrollLineCount(num count) {
@@ -6517,6 +6731,9 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get payrollAdjustmentAdvance => 'سلفة';
+
+  @override
+  String get payrollAdjustmentLoan => 'خصم سلفة';
 
   @override
   String get payrollAdjustmentAbsence => 'غياب';

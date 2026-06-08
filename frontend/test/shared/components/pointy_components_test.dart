@@ -379,18 +379,18 @@ void main() {
       tester,
       width: 390,
       child: PointyNavigationSurface(
-        selectedIndex: 0,
-        onDestinationSelected: (index) => selected = index,
         userLabel: 'مدير المتجر',
         roleLabel: 'مدير',
-        destinations: const [
-          NavigationDrawerDestination(
-            icon: Icon(Icons.dashboard_outlined),
-            label: Text('لوحة التحكم'),
+        navigationChildren: [
+          ListTile(
+            leading: const Icon(Icons.dashboard_outlined),
+            title: const Text('لوحة التحكم'),
+            onTap: () => selected = 0,
           ),
-          NavigationDrawerDestination(
-            icon: Icon(Icons.point_of_sale_outlined),
-            label: Text('نقطة البيع'),
+          ListTile(
+            leading: const Icon(Icons.point_of_sale_outlined),
+            title: const Text('نقطة البيع'),
+            onTap: () => selected = 1,
           ),
         ],
         logoutTile: ListTile(
@@ -423,18 +423,18 @@ void main() {
         child: SizedBox(
           height: 720,
           child: PointyNavigationRailSurface(
-            selectedIndex: 0,
-            onDestinationSelected: (index) => selected = index,
             userLabel: 'مدير المتجر',
             roleLabel: 'مدير',
-            destinations: const [
-              NavigationRailDestination(
-                icon: Icon(Icons.dashboard_outlined),
-                label: Text('لوحة التحكم'),
+            navigationChildren: [
+              IconButton(
+                tooltip: 'لوحة التحكم',
+                onPressed: () => selected = 0,
+                icon: const Icon(Icons.dashboard_outlined),
               ),
-              NavigationRailDestination(
-                icon: Icon(Icons.point_of_sale_outlined),
-                label: Text('نقطة البيع'),
+              IconButton(
+                tooltip: 'نقطة البيع',
+                onPressed: () => selected = 1,
+                icon: const Icon(Icons.point_of_sale_outlined),
               ),
             ],
             logoutTooltip: 'تسجيل الخروج',
@@ -443,7 +443,7 @@ void main() {
         ),
       );
 
-      expect(find.byType(NavigationRail), findsOneWidget);
+      expect(find.byType(PointyNavigationRailSurface), findsOneWidget);
       expect(find.byTooltip('مدير المتجر\nمدير'), findsOneWidget);
       expect(find.byIcon(Icons.dashboard_outlined), findsOneWidget);
 

@@ -1,5 +1,5 @@
 from django.contrib.auth import get_user_model
-from django.contrib.auth import login, logout
+from django.contrib.auth import login, logout, update_session_auth_hash
 from django.middleware.csrf import get_token
 from rest_framework import parsers, status, views, viewsets
 from rest_framework.decorators import action, api_view, permission_classes
@@ -16,7 +16,9 @@ from .permissions import HasPointyPermission
 from .roles import ensure_role_groups
 from .models import ShopSettings
 from .serializers import (
+    CurrentUserUpdateSerializer,
     LoginSerializer,
+    PasswordChangeSerializer,
     PosUserSerializer,
     ShopSettingsSerializer,
     UserSerializer,
@@ -52,10 +54,55 @@ def logout_view(request):
     return Response(status=status.HTTP_204_NO_CONTENT)
 
 
-@api_view(["GET"])
+@api_view(["GET", "PATCH"])
 @permission_classes([IsAuthenticated])
 def me_view(request):
+    if request.method == "PATCH":
+        serializer = CurrentUserUpdateSerializer(
+            request.user,
+            data=request.data,
+            partial=True,
+        )
+        serializer.is_valid(raise_exception=True)
+        before = {
+            field: getattr(request.user, field)
+            for field in serializer.validated_data
+        }
+        user = serializer.save()
+        changed_fields = [
+            field for field, previous in before.items() if getattr(user, field) != previous
+        ]
+        record_domain_event(
+            name="auth.profile.updated",
+            event_type=AnalyticsEvent.EventType.AUDIT,
+            user=user,
+            entity_type="user",
+            entity_id=user.pk,
+            attributes={"changed_fields": sorted(changed_fields)},
+        )
+        return Response({"user": UserSerializer(user).data, "csrf_token": get_token(request)})
     return Response({"user": UserSerializer(request.user).data, "csrf_token": get_token(request)})
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def password_change_view(request):
+    serializer = PasswordChangeSerializer(
+        data=request.data,
+        context={"request": request},
+    )
+    serializer.is_valid(raise_exception=True)
+    user = serializer.save()
+    update_session_auth_hash(request, user)
+    record_domain_event(
+        name="auth.password.changed",
+        event_type=AnalyticsEvent.EventType.SECURITY,
+        user=user,
+        entity_type="user",
+        entity_id=user.pk,
+        attributes={"self_service": True},
+    )
+    return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class PosUserViewSet(viewsets.ModelViewSet):

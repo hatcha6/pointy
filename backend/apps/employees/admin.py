@@ -3,6 +3,8 @@ from django.contrib import admin
 from .models import (
     CompensationPlan,
     Employee,
+    EmployeeLoan,
+    EmployeeLoanPayment,
     PayrollAdjustment,
     PayrollLine,
     PayrollRun,
@@ -45,6 +47,35 @@ class CompensationPlanAdmin(admin.ModelAdmin):
     )
     list_filter = ("salary_type", "pay_type", "is_active", "currency")
     search_fields = ("employee__full_name", "employee__employee_number", "notes")
+
+
+class EmployeeLoanPaymentInline(admin.TabularInline):
+    model = EmployeeLoanPayment
+    extra = 0
+    readonly_fields = ("paid_at",)
+
+
+@admin.register(EmployeeLoan)
+class EmployeeLoanAdmin(admin.ModelAdmin):
+    list_display = (
+        "employee",
+        "status",
+        "amount",
+        "monthly_deduction",
+        "outstanding_balance",
+        "requested_by",
+        "reviewed_by",
+    )
+    list_filter = ("status", "created_at", "reviewed_at")
+    search_fields = (
+        "employee__full_name",
+        "employee__employee_number",
+        "requested_by__username",
+        "purpose",
+        "review_notes",
+    )
+    readonly_fields = ("paid_at",)
+    inlines = [EmployeeLoanPaymentInline]
 
 
 class PayrollAdjustmentInline(admin.TabularInline):

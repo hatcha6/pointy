@@ -11,6 +11,7 @@ class EmployeePayrollViewModel extends ChangeNotifier {
     : _analyticsEngine = analyticsEngine {
     loadEmployees();
     loadPayrollRuns();
+    loadLoans();
   }
 
   final EmployeeRepository _repository;
@@ -18,31 +19,42 @@ class EmployeePayrollViewModel extends ChangeNotifier {
 
   List<Employee> _employees = [];
   List<PayrollRun> _payrollRuns = [];
+  List<EmployeeLoan> _loans = [];
   bool _isLoadingEmployees = false;
   bool _isLoadingMoreEmployees = false;
   bool _isLoadingPayrollRuns = false;
   bool _isLoadingMorePayrollRuns = false;
+  bool _isLoadingLoans = false;
+  bool _isLoadingMoreLoans = false;
   bool _isSaving = false;
   bool _hasEmployeeError = false;
   bool _hasPayrollError = false;
+  bool _hasLoanError = false;
   bool _hasSaveError = false;
   bool _hasMoreEmployees = true;
   bool _hasMorePayrollRuns = true;
+  bool _hasMoreLoans = true;
   int _nextEmployeePage = 1;
   int _nextPayrollPage = 1;
+  int _nextLoanPage = 1;
 
   List<Employee> get employees => List.unmodifiable(_employees);
   List<PayrollRun> get payrollRuns => List.unmodifiable(_payrollRuns);
+  List<EmployeeLoan> get loans => List.unmodifiable(_loans);
   bool get isLoadingEmployees => _isLoadingEmployees;
   bool get isLoadingMoreEmployees => _isLoadingMoreEmployees;
   bool get isLoadingPayrollRuns => _isLoadingPayrollRuns;
   bool get isLoadingMorePayrollRuns => _isLoadingMorePayrollRuns;
+  bool get isLoadingLoans => _isLoadingLoans;
+  bool get isLoadingMoreLoans => _isLoadingMoreLoans;
   bool get isSaving => _isSaving;
   bool get hasEmployeeError => _hasEmployeeError;
   bool get hasPayrollError => _hasPayrollError;
+  bool get hasLoanError => _hasLoanError;
   bool get hasSaveError => _hasSaveError;
   bool get hasMoreEmployees => _hasMoreEmployees;
   bool get hasMorePayrollRuns => _hasMorePayrollRuns;
+  bool get hasMoreLoans => _hasMoreLoans;
 
   Future<void> loadEmployees() async {
     _isLoadingEmployees = true;
@@ -127,6 +139,48 @@ class EmployeePayrollViewModel extends ChangeNotifier {
         _hasMorePayrollRuns = false;
     }
     _isLoadingMorePayrollRuns = false;
+    notifyListeners();
+  }
+
+  Future<void> loadLoans() async {
+    _isLoadingLoans = true;
+    _hasLoanError = false;
+    _hasMoreLoans = true;
+    _nextLoanPage = 1;
+    notifyListeners();
+
+    final result = await _repository.loadEmployeeLoans(page: _nextLoanPage);
+    switch (result) {
+      case Ok<EmployeeLoanPage>(value: final page):
+        _loans = page.loans;
+        _hasMoreLoans = page.hasMore;
+        _nextLoanPage = 2;
+      case Error<EmployeeLoanPage>():
+        _hasLoanError = true;
+        _hasMoreLoans = false;
+    }
+    _isLoadingLoans = false;
+    notifyListeners();
+  }
+
+  Future<void> loadMoreLoans() async {
+    if (_isLoadingLoans || _isLoadingMoreLoans || !_hasMoreLoans) {
+      return;
+    }
+    _isLoadingMoreLoans = true;
+    notifyListeners();
+
+    final result = await _repository.loadEmployeeLoans(page: _nextLoanPage);
+    switch (result) {
+      case Ok<EmployeeLoanPage>(value: final page):
+        _loans = [..._loans, ...page.loans];
+        _hasMoreLoans = page.hasMore;
+        _nextLoanPage += 1;
+      case Error<EmployeeLoanPage>():
+        _hasLoanError = true;
+        _hasMoreLoans = false;
+    }
+    _isLoadingMoreLoans = false;
     notifyListeners();
   }
 
@@ -231,10 +285,28 @@ class EmployeePayrollViewModel extends ChangeNotifier {
   }
 
   Future<bool> markPayrollRunPaid(PayrollRun run) {
-    return _updatePayrollRun(
-      run,
-      () => _repository.markPayrollRunPaid(run.id),
-      eventName: 'employees.management.payroll_run.paid',
+    return _updatePayrollRun(run, () async {
+      final result = await _repository.markPayrollRunPaid(run.id);
+      if (result is Ok<PayrollRun>) {
+        await loadLoans();
+      }
+      return result;
+    }, eventName: 'employees.management.payroll_run.paid');
+  }
+
+  Future<bool> approveLoan(EmployeeLoan loan) {
+    return _updateLoan(
+      loan,
+      () => _repository.approveEmployeeLoan(loan.id),
+      eventName: 'employees.management.loan.approved',
+    );
+  }
+
+  Future<bool> rejectLoan(EmployeeLoan loan) {
+    return _updateLoan(
+      loan,
+      () => _repository.rejectEmployeeLoan(loan.id),
+      eventName: 'employees.management.loan.rejected',
     );
   }
 
@@ -305,6 +377,28 @@ class EmployeePayrollViewModel extends ChangeNotifier {
     });
   }
 
+  Future<bool> _updateLoan(
+    EmployeeLoan loan,
+    Future<Result<EmployeeLoan>> Function() action, {
+    required String eventName,
+  }) {
+    return _save(() async {
+      final result = await action();
+      switch (result) {
+        case Ok<EmployeeLoan>(value: final updatedLoan):
+          _upsertLoan(updatedLoan);
+          _track(eventName, 'employee_loan', updatedLoan.id, {
+            'previous_status': loan.status.name,
+            'new_status': updatedLoan.status.name,
+            'employee': updatedLoan.employeeId,
+          });
+          return true;
+        case Error<EmployeeLoan>():
+          return false;
+      }
+    });
+  }
+
   Future<bool> _save(Future<bool> Function() action) async {
     _isSaving = true;
     _hasSaveError = false;
@@ -326,6 +420,18 @@ class EmployeePayrollViewModel extends ChangeNotifier {
       ];
     } else {
       _payrollRuns = [run, ..._payrollRuns];
+    }
+  }
+
+  void _upsertLoan(EmployeeLoan loan) {
+    final exists = _loans.any((existing) => existing.id == loan.id);
+    if (exists) {
+      _loans = [
+        for (final existing in _loans)
+          if (existing.id == loan.id) loan else existing,
+      ];
+    } else {
+      _loans = [loan, ..._loans];
     }
   }
 

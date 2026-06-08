@@ -180,6 +180,53 @@ class ApiAuthenticationTests(TestCase):
         self.assertEqual(login_response.status_code, status.HTTP_200_OK)
         self.assertEqual(start_response.status_code, status.HTTP_200_OK)
 
+    def test_current_user_can_update_profile_and_change_password(self):
+        ensure_role_groups()
+        user = get_user_model().objects.create_user(
+            username="profile-cashier",
+            password="secret-pass",
+        )
+        user.groups.add(Group.objects.get(name=CASHIER_GROUP))
+        client = APIClient()
+        client.force_authenticate(user=user)
+
+        profile_response = client.patch(
+            reverse("auth-me"),
+            {
+                "username": "profile-updated",
+                "first_name": "سارة",
+                "last_name": "علي",
+                "email": "sara@example.test",
+            },
+            format="json",
+        )
+        password_response = client.post(
+            reverse("auth-password-change"),
+            {
+                "current_password": "secret-pass",
+                "new_password": "New-Strong-Pass-2026!",
+            },
+            format="json",
+        )
+        wrong_password_response = client.post(
+            reverse("auth-password-change"),
+            {
+                "current_password": "secret-pass",
+                "new_password": "Another-Strong-Pass-2026!",
+            },
+            format="json",
+        )
+
+        self.assertEqual(profile_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(profile_response.data["user"]["username"], "profile-updated")
+        self.assertEqual(profile_response.data["user"]["first_name"], "سارة")
+        self.assertEqual(profile_response.data["user"]["last_name"], "علي")
+        self.assertIn("csrf_token", profile_response.data)
+        self.assertEqual(password_response.status_code, status.HTTP_204_NO_CONTENT)
+        user.refresh_from_db()
+        self.assertTrue(user.check_password("New-Strong-Pass-2026!"))
+        self.assertEqual(wrong_password_response.status_code, status.HTTP_400_BAD_REQUEST)
+
 
 class PosUserManagementTests(TestCase):
     def setUp(self):

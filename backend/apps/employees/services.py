@@ -10,7 +10,15 @@ from apps.analytics.models import AnalyticsEvent
 from apps.analytics.services import record_domain_event
 from apps.sales.models import Order
 
-from .models import CompensationPlan, Employee, PayrollAdjustment, PayrollLine, PayrollRun
+from .models import (
+    CompensationPlan,
+    Employee,
+    EmployeeLoan,
+    EmployeeLoanPayment,
+    PayrollAdjustment,
+    PayrollLine,
+    PayrollRun,
+)
 
 
 MONEY_PLACES = Decimal("0.01")
@@ -167,6 +175,15 @@ def draft_monthly_payroll_run(
                     f"{line_input['sales_total']} sales"
                 ),
             )
+        for loan_deduction in line_input["loan_deductions"]:
+            PayrollAdjustment.objects.create(
+                payroll_line=line,
+                direction=PayrollAdjustment.Direction.DEDUCTION,
+                adjustment_type=PayrollAdjustment.AdjustmentType.LOAN,
+                amount=loan_deduction["amount"],
+                loan=loan_deduction["loan"],
+                notes=f"Loan installment for loan #{loan_deduction['loan'].pk}",
+            )
         line.recalculate(save=True)
 
     payroll_run.recalculate(save_lines=True)
@@ -218,14 +235,21 @@ def _monthly_payroll_line_inputs(period_start, period_end):
             if plan.uses_expected_units
             else Decimal("1.00")
         )
+        gross_amount = plan.amount_for_units(units)
+        loan_deductions = _loan_deduction_inputs(
+            employee,
+            available_pay=gross_amount + commission_amount,
+        )
         line_inputs.append(
             {
                 "employee": employee,
                 "plan": plan,
                 "units": units,
+                "gross_amount": gross_amount,
                 "sales_total": sales_total,
                 "commission_percent": commission_percent,
                 "commission_amount": commission_amount,
+                "loan_deductions": loan_deductions,
                 "description": (
                     f"Monthly salary for {period_start:%Y-%m-%d} - "
                     f"{period_end:%Y-%m-%d}"
@@ -270,6 +294,51 @@ def _commissionable_sales_total(employee, period_start, period_end):
         created_at__date__gte=period_start,
         created_at__date__lte=period_end,
     ).aggregate(total=Sum("total"))["total"]
+    return (total or Decimal("0.00")).quantize(MONEY_PLACES)
+
+
+def _loan_deduction_inputs(employee, *, available_pay):
+    available_pay = Decimal(available_pay or "0.00").quantize(MONEY_PLACES)
+    if available_pay <= Decimal("0.00"):
+        return []
+
+    deductions = []
+    loans = EmployeeLoan.objects.filter(
+        employee=employee,
+        status=EmployeeLoan.Status.APPROVED,
+        outstanding_balance__gt=Decimal("0.00"),
+    ).order_by("reviewed_at", "created_at", "id")
+    for loan in loans:
+        remaining_balance = (
+            Decimal(loan.outstanding_balance or "0.00")
+            - _scheduled_unpaid_loan_deductions(loan)
+        ).quantize(MONEY_PLACES)
+        if remaining_balance <= Decimal("0.00"):
+            continue
+
+        amount = min(loan.monthly_deduction, remaining_balance, available_pay).quantize(
+            MONEY_PLACES
+        )
+        if amount <= Decimal("0.00"):
+            continue
+
+        deductions.append({"loan": loan, "amount": amount})
+        available_pay = (available_pay - amount).quantize(MONEY_PLACES)
+        if available_pay <= Decimal("0.00"):
+            break
+    return deductions
+
+
+def _scheduled_unpaid_loan_deductions(loan):
+    total = PayrollAdjustment.objects.filter(
+        loan=loan,
+        direction=PayrollAdjustment.Direction.DEDUCTION,
+        adjustment_type=PayrollAdjustment.AdjustmentType.LOAN,
+        payroll_line__payroll_run__status__in=(
+            PayrollRun.Status.DRAFT,
+            PayrollRun.Status.APPROVED,
+        ),
+    ).aggregate(total=Sum("amount"))["total"]
     return (total or Decimal("0.00")).quantize(MONEY_PLACES)
 
 
@@ -331,6 +400,7 @@ def mark_payroll_run_paid(payroll_run, *, payment_date=None, request=None):
             "updated_at",
         ]
     )
+    _apply_payroll_loan_payments(payroll_run)
     record_employee_event(
         name="employees.payroll_run.paid",
         user=employee_created_by(request),
@@ -343,6 +413,52 @@ def mark_payroll_run_paid(payroll_run, *, payment_date=None, request=None):
         metrics={"net_total": float(payroll_run.net_total)},
     )
     return payroll_run
+
+
+def _apply_payroll_loan_payments(payroll_run):
+    loan_adjustments = (
+        PayrollAdjustment.objects.select_related("loan", "payroll_line")
+        .filter(
+            payroll_line__payroll_run=payroll_run,
+            loan__isnull=False,
+            direction=PayrollAdjustment.Direction.DEDUCTION,
+            adjustment_type=PayrollAdjustment.AdjustmentType.LOAN,
+        )
+        .order_by("payroll_line_id", "id")
+    )
+    for adjustment in loan_adjustments:
+        if EmployeeLoanPayment.objects.filter(
+            loan_id=adjustment.loan_id,
+            payroll_line_id=adjustment.payroll_line_id,
+        ).exists():
+            continue
+
+        loan = EmployeeLoan.objects.select_for_update().get(pk=adjustment.loan_id)
+        if loan.status not in (EmployeeLoan.Status.APPROVED, EmployeeLoan.Status.PAID):
+            continue
+        amount = min(
+            Decimal(adjustment.amount or "0.00"),
+            Decimal(loan.outstanding_balance or "0.00"),
+        ).quantize(MONEY_PLACES)
+        if amount <= Decimal("0.00"):
+            continue
+
+        EmployeeLoanPayment.objects.create(
+            loan=loan,
+            payroll_line=adjustment.payroll_line,
+            amount=amount,
+            paid_at=payroll_run.paid_at or timezone.now(),
+        )
+        loan.outstanding_balance = (
+            Decimal(loan.outstanding_balance or "0.00") - amount
+        ).quantize(MONEY_PLACES)
+        update_fields = ["outstanding_balance", "updated_at"]
+        if loan.outstanding_balance == Decimal("0.00"):
+            loan.status = EmployeeLoan.Status.PAID
+            loan.paid_at = payroll_run.paid_at or timezone.now()
+            update_fields.extend(["status", "paid_at"])
+        loan.full_clean()
+        loan.save(update_fields=update_fields)
 
 
 @transaction.atomic
@@ -392,3 +508,104 @@ def models_sum_net():
 
 def active_employee_count():
     return Employee.objects.filter(status=Employee.Status.ACTIVE).count()
+
+
+@transaction.atomic
+def request_employee_loan(*, user, amount, monthly_deduction, purpose=""):
+    try:
+        employee = user.employee_profile
+    except Employee.DoesNotExist as exc:
+        raise serializers.ValidationError(
+            {"employee": "Current user is not linked to an employee record."}
+        ) from exc
+
+    loan = EmployeeLoan(
+        employee=employee,
+        requested_by=user,
+        amount=amount,
+        monthly_deduction=monthly_deduction,
+        purpose=purpose,
+    )
+    loan.full_clean()
+    loan.save()
+    record_employee_event(
+        name="employees.loan.requested",
+        user=user,
+        entity_type="employee_loan",
+        entity_id=loan.pk,
+        attributes={"employee": employee.pk, "status": loan.status},
+        metrics={
+            "amount": float(loan.amount),
+            "monthly_deduction": float(loan.monthly_deduction),
+        },
+    )
+    return loan
+
+
+@transaction.atomic
+def approve_employee_loan(loan, *, request=None, review_notes=""):
+    loan = EmployeeLoan.objects.select_for_update().get(pk=loan.pk)
+    if loan.status != EmployeeLoan.Status.REQUESTED:
+        raise serializers.ValidationError(
+            {"detail": "Only requested loans can be approved."}
+        )
+    loan.status = EmployeeLoan.Status.APPROVED
+    loan.outstanding_balance = loan.amount
+    loan.reviewed_by = employee_created_by(request)
+    loan.reviewed_at = timezone.now()
+    loan.review_notes = review_notes
+    loan.full_clean()
+    loan.save(
+        update_fields=[
+            "status",
+            "outstanding_balance",
+            "reviewed_by",
+            "reviewed_at",
+            "review_notes",
+            "updated_at",
+        ]
+    )
+    record_employee_event(
+        name="employees.loan.approved",
+        user=employee_created_by(request),
+        entity_type="employee_loan",
+        entity_id=loan.pk,
+        attributes={"employee": loan.employee_id, "status": loan.status},
+        metrics={
+            "amount": float(loan.amount),
+            "monthly_deduction": float(loan.monthly_deduction),
+        },
+    )
+    return loan
+
+
+@transaction.atomic
+def reject_employee_loan(loan, *, request=None, review_notes=""):
+    loan = EmployeeLoan.objects.select_for_update().get(pk=loan.pk)
+    if loan.status != EmployeeLoan.Status.REQUESTED:
+        raise serializers.ValidationError(
+            {"detail": "Only requested loans can be rejected."}
+        )
+    loan.status = EmployeeLoan.Status.REJECTED
+    loan.reviewed_by = employee_created_by(request)
+    loan.reviewed_at = timezone.now()
+    loan.review_notes = review_notes
+    loan.full_clean()
+    loan.save(
+        update_fields=[
+            "status",
+            "reviewed_by",
+            "reviewed_at",
+            "review_notes",
+            "updated_at",
+        ]
+    )
+    record_employee_event(
+        name="employees.loan.rejected",
+        user=employee_created_by(request),
+        entity_type="employee_loan",
+        entity_id=loan.pk,
+        severity=AnalyticsEvent.Severity.WARNING,
+        attributes={"employee": loan.employee_id, "status": loan.status},
+    )
+    return loan

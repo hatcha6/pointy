@@ -34,6 +34,14 @@ class AuthViewModel extends ChangeNotifier {
   bool get isSubmitting => _isSubmitting;
   bool get hasError => _hasError;
 
+  void replaceCurrentUser(PosUser user) {
+    if (_currentUser?.id != user.id) {
+      return;
+    }
+    _currentUser = user;
+    notifyListeners();
+  }
+
   Future<void> loadCurrentUser({bool forgetRememberedUser = false}) async {
     _status = AuthStatus.checking;
     _hasError = false;

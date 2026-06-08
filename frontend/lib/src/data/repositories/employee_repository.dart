@@ -68,4 +68,41 @@ class EmployeeRepository {
   Future<Result<PayrollRun>> markPayrollRunPaid(int id) {
     return Result.guard(() => _service.markPayrollRunPaid(id));
   }
+
+  Future<Result<EmployeeLoanPage>> loadEmployeeLoans({
+    int page = 1,
+    String status = '',
+  }) {
+    return Result.guard(
+      () => _service.fetchEmployeeLoans(page: page, status: status),
+    );
+  }
+
+  Future<Result<MyEmployeeLoans>> loadMyEmployeeLoans() {
+    return Result.guard(() => _service.fetchMyEmployeeLoans());
+  }
+
+  Future<Result<EmployeeLoan>> requestEmployeeLoan(
+    EmployeeLoanRequestDraft draft,
+  ) {
+    return Result.guard(() => _service.requestEmployeeLoan(draft));
+  }
+
+  Future<Result<EmployeeLoan>> approveEmployeeLoan(
+    int id, {
+    String reviewNotes = '',
+  }) {
+    return Result.guard(
+      () => _service.approveEmployeeLoan(id, reviewNotes: reviewNotes),
+    );
+  }
+
+  Future<Result<EmployeeLoan>> rejectEmployeeLoan(
+    int id, {
+    String reviewNotes = '',
+  }) {
+    return Result.guard(
+      () => _service.rejectEmployeeLoan(id, reviewNotes: reviewNotes),
+    );
+  }
 }

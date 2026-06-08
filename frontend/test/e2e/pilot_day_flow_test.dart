@@ -146,16 +146,52 @@ void _setDesktopSurface(WidgetTester tester) {
 }
 
 Future<void> _openDrawerDestination(WidgetTester tester, String label) async {
-  final expandedDestination = find.text(label);
-  if (!tester.any(expandedDestination)) {
+  Finder destination() => find.text(label);
+
+  if (!tester.any(destination())) {
+    await _expandNavigationGroups(tester, destination);
+  }
+  if (!tester.any(destination())) {
     final expandRail = find.byTooltip('توسيع التنقل');
     await tester.tap(
       tester.any(expandRail) ? expandRail : find.byTooltip('فتح القائمة'),
     );
+    await tester.pumpAndSettle();
+    await _expandNavigationGroups(tester, destination);
   }
-  await tester.pumpAndSettle();
-  await tester.tap(find.text(label).last);
+  expect(destination(), findsWidgets);
+  await tester.tap(destination().last);
   await tester.pumpAndSettle(const Duration(seconds: 1));
+}
+
+Future<void> _expandNavigationGroups(
+  WidgetTester tester,
+  Finder Function() destination,
+) async {
+  const groupLabels = [
+    'الرئيسية',
+    'المبيعات',
+    'المخزون والمشتريات',
+    'الأشخاص والرواتب',
+    'التقارير والمراجعة',
+    'الإعدادات',
+  ];
+  for (final groupLabel in groupLabels) {
+    if (tester.any(destination())) {
+      return;
+    }
+    final group = find.text(groupLabel);
+    if (!tester.any(group)) {
+      continue;
+    }
+    await tester.ensureVisible(group.first);
+    await tester.pumpAndSettle();
+    if (tester.any(destination())) {
+      return;
+    }
+    await tester.tap(group.first);
+    await tester.pumpAndSettle();
+  }
 }
 
 class _PilotDayApiService extends PosApiService {

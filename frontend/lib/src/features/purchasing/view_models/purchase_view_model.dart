@@ -250,10 +250,12 @@ class PurchaseViewModel extends ChangeNotifier {
         ),
       );
     } else {
-      final line = _draft[index];
-      _draft[index] = line.copyWith(
-        quantity: (line.quantity + quantity).clamp(1, 999),
-        unitCost: unitCost,
+      final line = _draft.removeAt(index);
+      _draft.add(
+        line.copyWith(
+          quantity: (line.quantity + quantity).clamp(1, 999),
+          unitCost: unitCost,
+        ),
       );
     }
     final updatedLine = _draft

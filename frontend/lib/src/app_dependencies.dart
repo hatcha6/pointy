@@ -39,6 +39,7 @@ import 'features/printing/view_models/printing_settings_view_model.dart';
 import 'features/invoices/view_models/invoice_list_view_model.dart';
 import 'features/purchasing/view_models/purchase_order_list_view_model.dart';
 import 'features/purchasing/view_models/purchase_view_model.dart';
+import 'features/user_settings/view_models/user_settings_view_model.dart';
 
 class PointyAppDependencies {
   PointyAppDependencies({
@@ -123,6 +124,7 @@ class PointyAppDependencies {
   InvoiceListViewModel? _invoiceListViewModel;
   PurchaseViewModel? _purchaseViewModel;
   PurchaseOrderListViewModel? _purchaseOrderListViewModel;
+  UserSettingsViewModel? _userSettingsViewModel;
 
   int? _lastAuthenticatedUserId;
 
@@ -201,6 +203,13 @@ class PointyAppDependencies {
         shopSettingsRepository,
       );
 
+  UserSettingsViewModel get userSettingsViewModel =>
+      _userSettingsViewModel ??= UserSettingsViewModel(
+        authRepository,
+        employeeRepository,
+        analyticsEngine: analyticsEngine,
+      );
+
   void handleAuthChanged() {
     final currentUser = authViewModel.currentUser;
     if (authViewModel.status == AuthStatus.authenticated &&
@@ -228,6 +237,7 @@ class PointyAppDependencies {
       _discountManagementViewModel?.loadRules();
       _employeePayrollViewModel?.loadEmployees();
       _employeePayrollViewModel?.loadPayrollRuns();
+      _employeePayrollViewModel?.loadLoans();
       _activityLogViewModel?.loadEvents();
       _activityLogViewModel?.loadUsers();
     }
@@ -268,5 +278,7 @@ class PointyAppDependencies {
     _purchaseViewModel = null;
     _purchaseOrderListViewModel?.dispose();
     _purchaseOrderListViewModel = null;
+    _userSettingsViewModel?.dispose();
+    _userSettingsViewModel = null;
   }
 }

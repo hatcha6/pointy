@@ -4,6 +4,7 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 import 'package:pointy_frontend/src/core/authorization.dart';
 import 'package:pointy_frontend/src/data/models/pos_user.dart';
 import 'package:pointy_frontend/src/shared/app_navigation_drawer.dart';
+import 'package:pointy_frontend/src/shared/components/components.dart';
 import 'package:pointy_frontend/src/shared/design/design.dart';
 import 'package:pointy_frontend/src/shared/shell/shell.dart';
 
@@ -74,12 +75,14 @@ void main() {
       ),
     );
 
-    expect(find.byType(NavigationRail), findsOneWidget);
+    expect(find.byType(PointyNavigationRailSurface), findsOneWidget);
     expect(find.byType(Scrollbar), findsNothing);
-    expect(find.byTooltip('لوحة التحكم'), findsOneWidget);
+    expect(find.text('لوحة التحكم'), findsOneWidget);
     expect(find.text('المحتوى'), findsOneWidget);
 
-    await tester.tap(find.byTooltip('المشتريات'));
+    await tester.tap(find.text('المخزون والمشتريات'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('المشتريات'));
     expect(opened, 'purchasing');
   });
 
@@ -101,7 +104,11 @@ void main() {
 
       expect(find.byType(Drawer), findsNothing);
       expect(
-        tester.widget<NavigationRail>(find.byType(NavigationRail)).extended,
+        tester
+            .widget<PointyNavigationRailSurface>(
+              find.byType(PointyNavigationRailSurface),
+            )
+            .extended,
         isTrue,
       );
 
@@ -110,7 +117,11 @@ void main() {
 
       expect(find.byType(Drawer), findsNothing);
       expect(
-        tester.widget<NavigationRail>(find.byType(NavigationRail)).extended,
+        tester
+            .widget<PointyNavigationRailSurface>(
+              find.byType(PointyNavigationRailSurface),
+            )
+            .extended,
         isFalse,
       );
 
@@ -119,7 +130,11 @@ void main() {
 
       expect(find.byType(Drawer), findsNothing);
       expect(
-        tester.widget<NavigationRail>(find.byType(NavigationRail)).extended,
+        tester
+            .widget<PointyNavigationRailSurface>(
+              find.byType(PointyNavigationRailSurface),
+            )
+            .extended,
         isTrue,
       );
     },
@@ -161,14 +176,22 @@ void main() {
     );
 
     expect(
-      tester.widget<NavigationRail>(find.byType(NavigationRail)).extended,
+      tester
+          .widget<PointyNavigationRailSurface>(
+            find.byType(PointyNavigationRailSurface),
+          )
+          .extended,
       isTrue,
     );
 
     await tester.tap(find.byTooltip('طي التنقل'));
     await tester.pumpAndSettle();
     expect(
-      tester.widget<NavigationRail>(find.byType(NavigationRail)).extended,
+      tester
+          .widget<PointyNavigationRailSurface>(
+            find.byType(PointyNavigationRailSurface),
+          )
+          .extended,
       isFalse,
     );
 
@@ -177,7 +200,11 @@ void main() {
 
     expect(find.text('الثانية'), findsOneWidget);
     expect(
-      tester.widget<NavigationRail>(find.byType(NavigationRail)).extended,
+      tester
+          .widget<PointyNavigationRailSurface>(
+            find.byType(PointyNavigationRailSurface),
+          )
+          .extended,
       isFalse,
     );
   });
@@ -201,9 +228,21 @@ void main() {
     await tester.tap(find.byTooltip('فتح القائمة'));
     await tester.pumpAndSettle();
 
+    expect(_top(tester, 'الرئيسية'), lessThan(_top(tester, 'المبيعات')));
+    expect(
+      _top(tester, 'المبيعات'),
+      lessThan(_top(tester, 'المخزون والمشتريات')),
+    );
+
+    await tester.tap(find.text('المبيعات'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('المخزون والمشتريات'));
+    await tester.pumpAndSettle();
+
     expect(_top(tester, 'لوحة التحكم'), lessThan(_top(tester, 'شاشة البيع')));
+    expect(_top(tester, 'جلسات الدرج'), lessThan(_top(tester, 'الخصومات')));
     expect(_top(tester, 'المنتجات'), lessThan(_top(tester, 'التصنيفات')));
-    expect(_top(tester, 'التصنيفات'), lessThan(_top(tester, 'جلسات الدرج')));
+    expect(_top(tester, 'التصنيفات'), lessThan(_top(tester, 'المشتريات')));
   });
 }
 

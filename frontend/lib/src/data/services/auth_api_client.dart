@@ -37,6 +37,20 @@ class AuthApiClient {
     return _decodeUserResponse(response);
   }
 
+  Future<PosUser> updateCurrentUser(CurrentUserProfileDraft draft) async {
+    final response = await _session.patch('auth/me/', body: draft.toJson());
+    _session.ensureSuccess(response, 'Current user update failed with status');
+    return _decodeUserResponse(response);
+  }
+
+  Future<void> changePassword(PasswordChangeDraft draft) async {
+    final response = await _session.post(
+      'auth/password/change/',
+      body: draft.toJson(),
+    );
+    _session.ensureSuccess(response, 'Password change failed with status');
+  }
+
   PosUser _decodeUserResponse(http.Response response) {
     final decoded = _session.decodedBody(response) as Map<String, Object?>;
     _session.updateCsrfToken(decoded);

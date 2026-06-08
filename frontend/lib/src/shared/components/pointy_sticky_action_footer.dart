@@ -11,6 +11,7 @@ class PointyStickyActionFooter extends StatelessWidget {
     this.summary,
     this.padding,
     this.showTopBorder = true,
+    this.primaryActionHeight,
   });
 
   final Widget primaryAction;
@@ -18,11 +19,14 @@ class PointyStickyActionFooter extends StatelessWidget {
   final Widget? summary;
   final EdgeInsetsGeometry? padding;
   final bool showTopBorder;
+  final double? primaryActionHeight;
 
   @override
   Widget build(BuildContext context) {
     final spacing = AdaptiveSpacing.of(context);
     final colors = context.pointyColors;
+    final actionHeight =
+        primaryActionHeight ?? PointyDimensions.primaryActionHeight;
     final resolvedPadding =
         padding ??
         EdgeInsetsDirectional.fromSTEB(
@@ -59,10 +63,7 @@ class PointyStickyActionFooter extends StatelessWidget {
                       action,
                       SizedBox(height: spacing.sm),
                     ],
-                    SizedBox(
-                      height: PointyDimensions.primaryActionHeight,
-                      child: primaryAction,
-                    ),
+                    SizedBox(height: actionHeight, child: primaryAction),
                   ],
                 );
               }
@@ -80,7 +81,7 @@ class PointyStickyActionFooter extends StatelessWidget {
                   SizedBox(width: spacing.md),
                   SizedBox(
                     width: 280,
-                    height: PointyDimensions.primaryActionHeight,
+                    height: actionHeight,
                     child: primaryAction,
                   ),
                 ],

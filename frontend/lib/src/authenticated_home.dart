@@ -42,10 +42,12 @@ import 'features/reports/views/report_pdf_preview_screen.dart';
 import 'features/reports/views/reports_screen.dart';
 import 'features/settings/view_models/shop_settings_view_model.dart';
 import 'features/settings/views/shop_settings_screen.dart';
+import 'features/user_settings/views/user_settings_screen.dart';
 import 'features/users/view_models/user_management_view_model.dart';
 import 'features/users/view_models/user_details_view_model.dart';
 import 'features/users/views/user_details_screen.dart';
 import 'features/users/views/user_management_screen.dart';
+import 'shared/shell/shell.dart';
 
 class AuthenticatedHome extends StatelessWidget {
   const AuthenticatedHome({
@@ -67,10 +69,13 @@ class AuthenticatedHome extends StatelessWidget {
     final home = routes.capabilities.canViewDashboard
         ? routes.buildDashboardScreen(context)
         : routes.buildPosScreen(context);
-    return NotificationCenterHost(
-      viewModel: dependencies.notificationCenterViewModel,
-      onOpenAlert: routes.openBusinessAlert,
-      child: home,
+    return PointyUserSettingsRouteScope(
+      onOpenUserSettings: routes.openUserSettings,
+      child: NotificationCenterHost(
+        viewModel: dependencies.notificationCenterViewModel,
+        onOpenAlert: routes.openBusinessAlert,
+        child: home,
+      ),
     );
   }
 }
@@ -751,6 +756,79 @@ class _AuthenticatedRoutes {
     );
   }
 
+  Widget userSettingsRouteBuilder(BuildContext routeContext) {
+    return _screen(
+      'user_settings',
+      UserSettingsScreen(
+        viewModel: dependencies.userSettingsViewModel,
+        currentUser: currentUser,
+        capabilities: capabilities,
+        onUserChanged: dependencies.authViewModel.replaceCurrentUser,
+        onOpenDashboard: guardedAction(
+          AppCapability.viewDashboard,
+          () => openDashboard(routeContext),
+        ),
+        onOpenPos: guardedAction(
+          AppCapability.accessPos,
+          () => openPos(routeContext),
+        ),
+        onOpenInvoices: guardedAction(
+          AppCapability.viewInvoices,
+          () => replace(routeContext, invoicesRouteBuilder),
+        ),
+        onOpenCatalog: guardedAction(
+          AppCapability.viewCatalogManagement,
+          () => replace(routeContext, catalogRouteBuilder),
+        ),
+        onOpenCategories: guardedAction(
+          AppCapability.manageCategories,
+          () => replace(routeContext, categoryRouteBuilder),
+        ),
+        onOpenPurchasing: guardedAction(
+          AppCapability.accessPurchasing,
+          () => replace(routeContext, purchasingRouteBuilder),
+        ),
+        onOpenContacts: guardedAction(
+          AppCapability.manageContacts,
+          () => replace(routeContext, contactsRouteBuilder),
+        ),
+        onOpenRegisterSessions: guardedAction(
+          AppCapability.viewRegisterSessions,
+          () => replace(routeContext, registerSessionsRouteBuilder),
+        ),
+        onOpenDiscounts: guardedAction(
+          AppCapability.viewDiscountRules,
+          () => replace(routeContext, discountsRouteBuilder),
+        ),
+        onOpenReports: guardedAction(
+          AppCapability.viewReports,
+          () => replace(routeContext, reportsRouteBuilder),
+        ),
+        onOpenActivityLog: guardedAction(
+          AppCapability.viewActivityLog,
+          () => replace(routeContext, activityLogRouteBuilder),
+        ),
+        onOpenEmployees: guardedAction(
+          AppCapability.viewEmployees,
+          () => replace(routeContext, employeePayrollRouteBuilder),
+        ),
+        onOpenDeviceSettings: guardedAction(
+          AppCapability.manageDeviceSettings,
+          () => replace(routeContext, deviceSettingsRouteBuilder),
+        ),
+        onOpenUsers: capabilities.actionFor(
+          AppCapability.manageUsers,
+          () => replace(routeContext, usersRouteBuilder),
+        ),
+        onOpenShopSettings: capabilities.actionFor(
+          AppCapability.manageShopSettings,
+          () => replace(routeContext, shopSettingsRouteBuilder),
+        ),
+        onLogout: () => logout(routeContext),
+      ),
+    );
+  }
+
   Widget discountsRouteBuilder(BuildContext routeContext) {
     return _screen(
       'discounts',
@@ -1402,6 +1480,15 @@ class _AuthenticatedRoutes {
       return;
     }
     replace(context, posRouteBuilder);
+  }
+
+  void openUserSettings(BuildContext context) {
+    final route = ModalRoute.of(context);
+    if (route?.isFirst ?? false) {
+      push(context, userSettingsRouteBuilder);
+      return;
+    }
+    replace(context, userSettingsRouteBuilder);
   }
 
   void logout(BuildContext context) {
