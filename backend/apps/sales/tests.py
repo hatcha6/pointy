@@ -12,7 +12,7 @@ from rest_framework.test import APIClient
 
 from apps.catalog.models import ProductVariant
 from apps.catalog.testing import create_product_with_default_variant
-from apps.core.models import ShopSettings
+from apps.core.models import IdempotencyRecord, ShopSettings
 from apps.core.roles import CASHIER_GROUP, MANAGER_GROUP, ensure_role_groups
 from apps.customers.models import Customer
 from apps.discounts.models import AppliedDiscount, DiscountRedemption, DiscountRule
@@ -968,6 +968,61 @@ class OrderCheckoutApiTests(TestCase):
         self.assertEqual(payment.commission_percent, Decimal("0.00"))
         self.assertEqual(payment.commission_amount, Decimal("0.00"))
         self.assertEqual(response.data["payments"][0]["method"], Payment.Method.CASH)
+
+    def test_checkout_replay_with_idempotency_key_returns_same_order(self):
+        self.start_session()
+        payload = self.checkout_payload()
+
+        first_response = self.client.post(
+            reverse("order-checkout"),
+            payload,
+            format="json",
+            HTTP_IDEMPOTENCY_KEY="checkout-retry-1",
+        )
+        second_response = self.client.post(
+            reverse("order-checkout"),
+            payload,
+            format="json",
+            HTTP_IDEMPOTENCY_KEY="checkout-retry-1",
+        )
+
+        self.assertEqual(first_response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(second_response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(first_response["Idempotency-Replayed"], "false")
+        self.assertEqual(second_response["Idempotency-Replayed"], "true")
+        self.assertEqual(first_response.data["id"], second_response.data["id"])
+        self.assertEqual(Order.objects.count(), 1)
+        self.assertEqual(Payment.objects.count(), 1)
+        self.assertEqual(StockMovement.objects.count(), 1)
+        self.stock_item.refresh_from_db()
+        self.assertEqual(self.stock_item.quantity_on_hand, 8)
+
+        record = IdempotencyRecord.objects.get()
+        self.assertEqual(record.replay_count, 1)
+
+    def test_checkout_rejects_idempotency_key_reused_with_different_body(self):
+        self.start_session()
+
+        first_response = self.client.post(
+            reverse("order-checkout"),
+            self.checkout_payload(),
+            format="json",
+            HTTP_IDEMPOTENCY_KEY="checkout-conflict",
+        )
+        conflict_response = self.client.post(
+            reverse("order-checkout"),
+            self.checkout_payload(
+                lines=[{"variant": self.variant.pk, "quantity": 1}],
+                amount_received="3.50",
+            ),
+            format="json",
+            HTTP_IDEMPOTENCY_KEY="checkout-conflict",
+        )
+
+        self.assertEqual(first_response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(conflict_response.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual(Order.objects.count(), 1)
+        self.assertEqual(Payment.objects.count(), 1)
 
     def test_checkout_applies_automatic_document_percentage_discount(self):
         DiscountRule.objects.create(

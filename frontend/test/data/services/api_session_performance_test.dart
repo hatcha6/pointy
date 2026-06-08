@@ -21,6 +21,22 @@ void main() {
     expect(timings.single.responseSizeBytes, greaterThan(0));
   });
 
+  test('API session sends idempotency key on POST when provided', () async {
+    final session = PosApiSession(
+      client: MockClient((request) async {
+        expect(request.headers['Idempotency-Key'], 'checkout:test-key');
+        return http.Response('{"ok":true}', 200);
+      }),
+      baseUrl: 'http://pointy.test/api',
+    );
+
+    await session.post(
+      'orders/checkout/',
+      body: {'lines': []},
+      idempotencyKey: ' checkout:test-key ',
+    );
+  });
+
   test(
     'API session records network failures without swallowing them',
     () async {

@@ -41,9 +41,13 @@ class PurchaseRepository {
   }
 
   Future<Result<SupplierPayment>> createSupplierPayment(
-    SupplierPaymentDraft draft,
-  ) async {
-    return Result.guard(() => _service.createSupplierPayment(draft));
+    SupplierPaymentDraft draft, {
+    String? idempotencyKey,
+  }) async {
+    return Result.guard(
+      () =>
+          _service.createSupplierPayment(draft, idempotencyKey: idempotencyKey),
+    );
   }
 
   Future<Result<PurchaseOrderPage>> loadOutstandingReceivedNotPaid({
@@ -126,6 +130,7 @@ class PurchaseRepository {
     LandedCostAllocationMethod landedCostAllocationMethod =
         LandedCostAllocationMethod.byLineValue,
     String discountCode = '',
+    String? idempotencyKey,
   }) async {
     if (lines.isEmpty) {
       return Error(Exception('purchase draft is empty'));
@@ -141,8 +146,14 @@ class PurchaseRepository {
         landedCostAllocationMethod: landedCostAllocationMethod,
         discountCode: discountCode,
       );
-      final order = await _service.createPurchaseOrder(draft);
-      final submittedOrder = await _service.submitPurchaseOrder(order.id);
+      final order = await _service.createPurchaseOrder(
+        draft,
+        idempotencyKey: _scopedIdempotencyKey(idempotencyKey, 'create'),
+      );
+      final submittedOrder = await _service.submitPurchaseOrder(
+        order.id,
+        idempotencyKey: _scopedIdempotencyKey(idempotencyKey, 'submit'),
+      );
       if (!receiveImmediately) {
         return submittedOrder.toSubmission();
       }
@@ -161,40 +172,72 @@ class PurchaseRepository {
       final receivedOrder = await _service.receivePurchaseOrder(
         submittedOrder.id,
         draft: receiveDraft,
+        idempotencyKey: _scopedIdempotencyKey(idempotencyKey, 'receive'),
       );
       return receivedOrder.toSubmission();
     });
   }
 
-  Future<Result<PurchaseOrder>> submitOrder(int purchaseOrderId) async {
-    return Result.guard(() => _service.submitPurchaseOrder(purchaseOrderId));
+  Future<Result<PurchaseOrder>> submitOrder(
+    int purchaseOrderId, {
+    String? idempotencyKey,
+  }) async {
+    return Result.guard(
+      () => _service.submitPurchaseOrder(
+        purchaseOrderId,
+        idempotencyKey: idempotencyKey,
+      ),
+    );
   }
 
-  Future<Result<PurchaseOrder>> receiveOrder(int purchaseOrderId) async {
-    return Result.guard(() => _service.receivePurchaseOrder(purchaseOrderId));
+  Future<Result<PurchaseOrder>> receiveOrder(
+    int purchaseOrderId, {
+    String? idempotencyKey,
+  }) async {
+    return Result.guard(
+      () => _service.receivePurchaseOrder(
+        purchaseOrderId,
+        idempotencyKey: idempotencyKey,
+      ),
+    );
   }
 
   Future<Result<PurchaseOrder>> receiveLines({
     required int purchaseOrderId,
     required PurchaseReceiveDraft draft,
+    String? idempotencyKey,
   }) async {
     return Result.guard(
-      () => _service.receivePurchaseOrder(purchaseOrderId, draft: draft),
+      () => _service.receivePurchaseOrder(
+        purchaseOrderId,
+        draft: draft,
+        idempotencyKey: idempotencyKey,
+      ),
     );
   }
 
-  Future<Result<PurchaseOrder>> cancelOrder(int purchaseOrderId) async {
-    return Result.guard(() => _service.cancelPurchaseOrder(purchaseOrderId));
+  Future<Result<PurchaseOrder>> cancelOrder(
+    int purchaseOrderId, {
+    String? idempotencyKey,
+  }) async {
+    return Result.guard(
+      () => _service.cancelPurchaseOrder(
+        purchaseOrderId,
+        idempotencyKey: idempotencyKey,
+      ),
+    );
   }
 
   Future<Result<PurchaseOrder>> returnItems({
     required int purchaseOrderId,
     required PurchaseAdjustmentDraft draft,
+    String? idempotencyKey,
   }) async {
     return Result.guard(
       () => _service.returnPurchaseOrderItems(
         purchaseOrderId: purchaseOrderId,
         draft: draft,
+        idempotencyKey: idempotencyKey,
       ),
     );
   }
@@ -202,11 +245,13 @@ class PurchaseRepository {
   Future<Result<PurchaseOrder>> refundItems({
     required int purchaseOrderId,
     required PurchaseAdjustmentDraft draft,
+    String? idempotencyKey,
   }) async {
     return Result.guard(
       () => _service.refundPurchaseOrderItems(
         purchaseOrderId: purchaseOrderId,
         draft: draft,
+        idempotencyKey: idempotencyKey,
       ),
     );
   }
@@ -214,12 +259,22 @@ class PurchaseRepository {
   Future<Result<PurchaseOrder>> exchangeItems({
     required int purchaseOrderId,
     required PurchaseAdjustmentDraft draft,
+    String? idempotencyKey,
   }) async {
     return Result.guard(
       () => _service.exchangePurchaseOrderItems(
         purchaseOrderId: purchaseOrderId,
         draft: draft,
+        idempotencyKey: idempotencyKey,
       ),
     );
   }
+}
+
+String? _scopedIdempotencyKey(String? key, String scope) {
+  final normalized = key?.trim() ?? '';
+  if (normalized.isEmpty) {
+    return null;
+  }
+  return '$normalized:$scope';
 }

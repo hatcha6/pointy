@@ -187,6 +187,51 @@ class PurchaseOrderApiTests(TestCase):
         self.assertEqual(order.lines.count(), 1)
         self.assertEqual(order.total, Decimal("7.50"))
 
+    def test_create_purchase_order_replay_with_idempotency_key_returns_same_order(self):
+        payload = self.purchase_order_payload(supplier_invoice_number="INV-IDEM")
+
+        first_response = self.client.post(
+            reverse("purchaseorder-list"),
+            payload,
+            format="json",
+            HTTP_IDEMPOTENCY_KEY="purchase-order-retry-1",
+        )
+        second_response = self.client.post(
+            reverse("purchaseorder-list"),
+            payload,
+            format="json",
+            HTTP_IDEMPOTENCY_KEY="purchase-order-retry-1",
+        )
+
+        self.assertEqual(first_response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(second_response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(first_response["Idempotency-Replayed"], "false")
+        self.assertEqual(second_response["Idempotency-Replayed"], "true")
+        self.assertEqual(first_response.data["id"], second_response.data["id"])
+        self.assertEqual(PurchaseOrder.objects.count(), 1)
+        self.assertEqual(PurchaseLine.objects.count(), 1)
+        self.assertEqual(PurchaseOrderAuditEvent.objects.count(), 1)
+
+    def test_create_purchase_order_rejects_key_reused_with_different_body(self):
+        first_response = self.client.post(
+            reverse("purchaseorder-list"),
+            self.purchase_order_payload(supplier_invoice_number="INV-CONFLICT"),
+            format="json",
+            HTTP_IDEMPOTENCY_KEY="purchase-order-conflict",
+        )
+        conflict_response = self.client.post(
+            reverse("purchaseorder-list"),
+            self.purchase_order_payload(
+                supplier_invoice_number="INV-CONFLICT-2",
+            ),
+            format="json",
+            HTTP_IDEMPOTENCY_KEY="purchase-order-conflict",
+        )
+
+        self.assertEqual(first_response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(conflict_response.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual(PurchaseOrder.objects.count(), 1)
+
     def test_expiry_tracked_product_requires_purchase_line_expiry_date(self):
         self.product.tracks_expiry = True
         self.product.save(update_fields=["tracks_expiry", "updated_at"])
@@ -1300,6 +1345,53 @@ class PurchaseOrderApiTests(TestCase):
         self.assertEqual(movement.expected_before, 4)
         self.assertEqual(movement.expected_after, 0)
         self.assertEqual(movement.created_by, self.user)
+
+    def test_receive_purchase_order_replay_does_not_duplicate_receipt_or_stock(self):
+        StockItem.objects.create(variant=self.variant, quantity_on_hand=5)
+        create_response = self.client.post(
+            reverse("purchaseorder-list"),
+            self.purchase_order_payload(
+                lines=[
+                    {
+                        "variant": self.variant.pk,
+                        "quantity": 3,
+                        "unit_cost": "1.25",
+                    }
+                ],
+            ),
+            format="json",
+        )
+        order_id = create_response.data["id"]
+        self.client.post(reverse("purchaseorder-submit", args=[order_id]), format="json")
+
+        first_response = self.client.post(
+            reverse("purchaseorder-receive", args=[order_id]),
+            format="json",
+            HTTP_IDEMPOTENCY_KEY="purchase-receive-retry-1",
+        )
+        second_response = self.client.post(
+            reverse("purchaseorder-receive", args=[order_id]),
+            format="json",
+            HTTP_IDEMPOTENCY_KEY="purchase-receive-retry-1",
+        )
+
+        self.assertEqual(first_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(second_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(first_response["Idempotency-Replayed"], "false")
+        self.assertEqual(second_response["Idempotency-Replayed"], "true")
+        self.assertEqual(len(first_response.data["receipts"]), 1)
+        self.assertEqual(len(second_response.data["receipts"]), 1)
+        self.assertEqual(PurchaseReceipt.objects.filter(purchase_order_id=order_id).count(), 1)
+        self.assertEqual(
+            StockMovement.objects.filter(
+                variant=self.variant,
+                movement_type=StockMovement.Type.RECEIVE_EXPECTED,
+            ).count(),
+            1,
+        )
+        stock_item = StockItem.objects.get(variant=self.variant)
+        self.assertEqual(stock_item.quantity_on_hand, 8)
+        self.assertEqual(stock_item.quantity_expected, 0)
 
     def test_partial_receipt_leaves_outstanding_expected_stock_open(self):
         StockItem.objects.create(variant=self.variant, quantity_on_hand=5)
@@ -2876,6 +2968,68 @@ class SupplierPaymentApiTests(TestCase):
         self.assertEqual(detail.data["paid_total"], "3.00")
         self.assertEqual(detail.data["balance_due"], "4.50")
         self.assertEqual(detail.data["payment_status"], "partial")
+
+    def test_supplier_payment_replay_with_idempotency_key_returns_same_payment(self):
+        order = self.create_order()
+        payload = {
+            "supplier": self.supplier.pk,
+            "purchase_order": order.pk,
+            "amount": "3.00",
+            "method": SupplierPayment.Method.CASH,
+            "reference": "PAY-IDEM",
+        }
+
+        first_response = self.client.post(
+            reverse("supplierpayment-list"),
+            payload,
+            format="json",
+            HTTP_IDEMPOTENCY_KEY="supplier-payment-retry-1",
+        )
+        second_response = self.client.post(
+            reverse("supplierpayment-list"),
+            payload,
+            format="json",
+            HTTP_IDEMPOTENCY_KEY="supplier-payment-retry-1",
+        )
+
+        self.assertEqual(first_response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(second_response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(first_response["Idempotency-Replayed"], "false")
+        self.assertEqual(second_response["Idempotency-Replayed"], "true")
+        self.assertEqual(first_response.data["id"], second_response.data["id"])
+        self.assertEqual(SupplierPayment.objects.count(), 1)
+        order.refresh_from_db()
+        self.assertEqual(order.paid_total, Decimal("3.00"))
+
+    def test_supplier_payment_rejects_key_reused_with_different_body(self):
+        order = self.create_order()
+
+        first_response = self.client.post(
+            reverse("supplierpayment-list"),
+            {
+                "supplier": self.supplier.pk,
+                "purchase_order": order.pk,
+                "amount": "3.00",
+                "method": SupplierPayment.Method.CASH,
+            },
+            format="json",
+            HTTP_IDEMPOTENCY_KEY="supplier-payment-conflict",
+        )
+        conflict_response = self.client.post(
+            reverse("supplierpayment-list"),
+            {
+                "supplier": self.supplier.pk,
+                "purchase_order": order.pk,
+                "amount": "2.00",
+                "method": SupplierPayment.Method.CASH,
+            },
+            format="json",
+            HTTP_IDEMPOTENCY_KEY="supplier-payment-conflict",
+        )
+
+        self.assertEqual(first_response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(conflict_response.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual(SupplierPayment.objects.count(), 1)
 
     def test_supplier_payment_rejects_purchase_order_overpayment(self):
         order = self.create_order()

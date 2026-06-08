@@ -104,6 +104,64 @@ class PaymentAuthorizationTests(TestCase):
         self.assertIn("amount", response.data)
         self.assertEqual(Payment.objects.filter(order=self.cashier_order).count(), 1)
 
+    def test_payment_create_replay_with_idempotency_key_returns_same_payment(self):
+        client = APIClient()
+        client.force_authenticate(user=self.cashier)
+        payload = {
+            "order": self.cashier_order.pk,
+            "method": Payment.Method.CASH,
+            "amount": "2.00",
+        }
+
+        first_response = client.post(
+            reverse("payment-list"),
+            payload,
+            format="json",
+            HTTP_IDEMPOTENCY_KEY="payment-retry-1",
+        )
+        second_response = client.post(
+            reverse("payment-list"),
+            payload,
+            format="json",
+            HTTP_IDEMPOTENCY_KEY="payment-retry-1",
+        )
+
+        self.assertEqual(first_response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(second_response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(first_response["Idempotency-Replayed"], "false")
+        self.assertEqual(second_response["Idempotency-Replayed"], "true")
+        self.assertEqual(first_response.data["id"], second_response.data["id"])
+        self.assertEqual(Payment.objects.filter(order=self.cashier_order).count(), 2)
+
+    def test_payment_create_rejects_key_reused_with_different_body(self):
+        client = APIClient()
+        client.force_authenticate(user=self.cashier)
+
+        first_response = client.post(
+            reverse("payment-list"),
+            {
+                "order": self.cashier_order.pk,
+                "method": Payment.Method.CASH,
+                "amount": "2.00",
+            },
+            format="json",
+            HTTP_IDEMPOTENCY_KEY="payment-conflict",
+        )
+        conflict_response = client.post(
+            reverse("payment-list"),
+            {
+                "order": self.cashier_order.pk,
+                "method": Payment.Method.CASH,
+                "amount": "1.00",
+            },
+            format="json",
+            HTTP_IDEMPOTENCY_KEY="payment-conflict",
+        )
+
+        self.assertEqual(first_response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(conflict_response.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual(Payment.objects.filter(order=self.cashier_order).count(), 2)
+
     def test_manager_can_list_all_payments(self):
         client = APIClient()
         client.force_authenticate(user=self.manager)

@@ -337,7 +337,10 @@ class _PilotDayApiService extends PosApiService {
   }
 
   @override
-  Future<SaleOrder> checkout(SaleCheckoutDraft draft) async {
+  Future<SaleOrder> checkout(
+    SaleCheckoutDraft draft, {
+    String? idempotencyKey,
+  }) async {
     checkoutDrafts.add(draft);
     final subtotal = _draftSubtotal(draft.lines);
     final order = SaleOrder(

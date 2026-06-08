@@ -1,6 +1,7 @@
 from rest_framework import viewsets
 from rest_framework.permissions import IsAuthenticated
 
+from apps.core.idempotency import run_idempotent_request
 from apps.core.permissions import HasPointyPermission
 from apps.core.roles import user_is_manager
 from .models import Payment
@@ -26,6 +27,12 @@ class PaymentViewSet(viewsets.ModelViewSet):
     filterset_fields = ("method", "order")
     search_fields = ("order__receipt_number", "external_reference")
     ordering_fields = ("created_at", "amount")
+
+    def create(self, request, *args, **kwargs):
+        return run_idempotent_request(
+            request,
+            lambda: super(PaymentViewSet, self).create(request, *args, **kwargs),
+        )
 
     def get_queryset(self):
         queryset = super().get_queryset()

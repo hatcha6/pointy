@@ -8,10 +8,14 @@ class SalesApiClient {
 
   final PosApiSession _session;
 
-  Future<SaleOrder> checkout(SaleCheckoutDraft draft) async {
+  Future<SaleOrder> checkout(
+    SaleCheckoutDraft draft, {
+    String? idempotencyKey,
+  }) async {
     final response = await _session.post(
       'orders/checkout/',
       body: draft.toJson(),
+      idempotencyKey: idempotencyKey,
     );
     _session.throwApiException(response, 'Checkout failed with status');
     return SaleOrder.fromJson(

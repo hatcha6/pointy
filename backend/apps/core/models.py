@@ -11,6 +11,34 @@ class TimeStampedModel(models.Model):
         abstract = True
 
 
+class IdempotencyRecord(TimeStampedModel):
+    key = models.CharField(max_length=180)
+    owner_key = models.CharField(max_length=128, db_index=True)
+    method = models.CharField(max_length=12)
+    path = models.CharField(max_length=512)
+    request_hash = models.CharField(max_length=64)
+    response_status_code = models.PositiveSmallIntegerField(blank=True, null=True)
+    response_data = models.JSONField(blank=True, null=True)
+    replay_count = models.PositiveIntegerField(default=0)
+    completed_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["owner_key", "method", "path", "key"],
+                name="unique_idempotency_record_per_request_scope",
+            )
+        ]
+        indexes = [
+            models.Index(fields=["owner_key", "key"]),
+            models.Index(fields=["method", "path"]),
+        ]
+
+    def __str__(self):
+        return f"{self.owner_key} {self.method} {self.path} {self.key}"
+
+
 class ShopSettings(TimeStampedModel):
     shop_name = models.CharField(max_length=120, default="نقطة البيع")
     receipt_header = models.CharField(max_length=240, blank=True)

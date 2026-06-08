@@ -33,9 +33,12 @@ class SaleRepository {
 
   final PosApiService _service;
 
-  Future<Result<SaleOrder>> checkout(SaleCheckoutDraft draft) async {
+  Future<Result<SaleOrder>> checkout(
+    SaleCheckoutDraft draft, {
+    String? idempotencyKey,
+  }) async {
     try {
-      return Ok(await _service.checkout(draft));
+      return Ok(await _service.checkout(draft, idempotencyKey: idempotencyKey));
     } on PosApiException catch (exception) {
       final shortages = _stockShortagesFromException(exception);
       if (shortages.isNotEmpty) {

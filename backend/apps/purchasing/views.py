@@ -9,6 +9,7 @@ from rest_framework.response import Response
 from apps.attachments.models import Attachment
 from apps.attachments.serializers import AttachmentSerializer, AttachmentSummarySerializer
 from apps.catalog.models import Product, ProductVariant
+from apps.core.idempotency import run_idempotent_request
 from apps.core.permissions import HasPointyPermission
 from .models import (
     PurchaseLine,
@@ -102,6 +103,16 @@ class SupplierPaymentViewSet(
     )
     ordering_fields = ("paid_at", "created_at", "amount")
 
+    def create(self, request, *args, **kwargs):
+        return run_idempotent_request(
+            request,
+            lambda: super(SupplierPaymentViewSet, self).create(
+                request,
+                *args,
+                **kwargs,
+            ),
+        )
+
 
 class PurchaseOrderViewSet(viewsets.ModelViewSet):
     serializer_class = PurchaseOrderSerializer
@@ -173,6 +184,16 @@ class PurchaseOrderViewSet(viewsets.ModelViewSet):
         "order_number",
         "supplier_invoice_date",
     )
+
+    def create(self, request, *args, **kwargs):
+        return run_idempotent_request(
+            request,
+            lambda: super(PurchaseOrderViewSet, self).create(
+                request,
+                *args,
+                **kwargs,
+            ),
+        )
 
     @action(detail=False, methods=["get"], url_path="last-cost")
     def last_cost(self, request):
@@ -432,6 +453,12 @@ class PurchaseOrderViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["post"])
     def submit(self, request, pk=None):
+        return run_idempotent_request(
+            request,
+            lambda: self._submit(request),
+        )
+
+    def _submit(self, request):
         purchase_order = submit_purchase_order(self.get_object(), request=request)
         return Response(
             self.get_serializer(purchase_order).data,
@@ -439,6 +466,12 @@ class PurchaseOrderViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["post"])
     def receive(self, request, pk=None):
+        return run_idempotent_request(
+            request,
+            lambda: self._receive(request),
+        )
+
+    def _receive(self, request):
         lines_data = None
         notes = ""
         if request.data:
@@ -461,6 +494,12 @@ class PurchaseOrderViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["post"])
     def cancel(self, request, pk=None):
+        return run_idempotent_request(
+            request,
+            lambda: self._cancel(request),
+        )
+
+    def _cancel(self, request):
         purchase_order = cancel_purchase_order(self.get_object(), request=request)
         return Response(
             self.get_serializer(purchase_order).data,
@@ -479,6 +518,12 @@ class PurchaseOrderViewSet(viewsets.ModelViewSet):
         return self._adjust_items(request, PurchaseOrderExchangeSerializer)
 
     def _adjust_items(self, request, serializer_class):
+        return run_idempotent_request(
+            request,
+            lambda: self._adjust_items_once(request, serializer_class),
+        )
+
+    def _adjust_items_once(self, request, serializer_class):
         purchase_order = self.get_object()
         serializer = serializer_class(
             data=request.data,

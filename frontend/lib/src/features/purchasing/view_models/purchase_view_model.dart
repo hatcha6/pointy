@@ -45,6 +45,7 @@ class PurchaseViewModel extends ChangeNotifier {
   String _supplierInvoiceDateInput = '';
   List<PurchaseLandedCostEntry> _landedCostEntries = [];
   String _discountCode = '';
+  String _submitIdempotencyKey = _newPurchaseIdempotencyKey('purchase-draft');
   PurchaseDiscountPreview? _discountPreview;
   bool _isLoadingDiscountPreview = false;
   bool _hasDiscountPreviewError = false;
@@ -269,6 +270,7 @@ class PurchaseViewModel extends ChangeNotifier {
         source: source,
       );
     }
+    _touchSubmissionIntent();
     notifyListeners();
     unawaited(refreshDiscountPreview());
   }
@@ -301,6 +303,7 @@ class PurchaseViewModel extends ChangeNotifier {
         source: source,
       );
     }
+    _touchSubmissionIntent();
     notifyListeners();
     unawaited(refreshDiscountPreview());
   }
@@ -315,6 +318,7 @@ class PurchaseViewModel extends ChangeNotifier {
     }
     _lastCostByVariantId[variant.id] = unitCost;
     _draft[index] = _draft[index].copyWith(unitCost: unitCost);
+    _touchSubmissionIntent();
     notifyListeners();
     unawaited(refreshDiscountPreview());
   }
@@ -331,6 +335,7 @@ class PurchaseViewModel extends ChangeNotifier {
       expiryDate: expiryDate,
       clearExpiryDate: expiryDate == null,
     );
+    _touchSubmissionIntent();
     notifyListeners();
   }
 
@@ -356,6 +361,7 @@ class PurchaseViewModel extends ChangeNotifier {
     _supplierInvoiceDateInput = '';
     _resetLandedCosts();
     _clearDiscountPreview();
+    _touchSubmissionIntent();
     notifyListeners();
   }
 
@@ -365,6 +371,7 @@ class PurchaseViewModel extends ChangeNotifier {
     }
     _selectedSupplier = supplier;
     _trackSupplierSelected(supplier);
+    _touchSubmissionIntent();
     notifyListeners();
     unawaited(refreshDiscountPreview());
   }
@@ -374,6 +381,7 @@ class PurchaseViewModel extends ChangeNotifier {
       return;
     }
     _receiveImmediately = value;
+    _touchSubmissionIntent();
     notifyListeners();
   }
 
@@ -382,6 +390,7 @@ class PurchaseViewModel extends ChangeNotifier {
       return;
     }
     _supplierInvoiceNumber = value;
+    _touchSubmissionIntent();
     notifyListeners();
   }
 
@@ -390,6 +399,7 @@ class PurchaseViewModel extends ChangeNotifier {
       return;
     }
     _supplierInvoiceDateInput = value;
+    _touchSubmissionIntent();
     notifyListeners();
   }
 
@@ -398,6 +408,7 @@ class PurchaseViewModel extends ChangeNotifier {
       return;
     }
     _discountCode = value;
+    _touchSubmissionIntent();
     notifyListeners();
     unawaited(refreshDiscountPreview());
   }
@@ -407,6 +418,7 @@ class PurchaseViewModel extends ChangeNotifier {
       return;
     }
     _landedCostAllocationMethod = method;
+    _touchSubmissionIntent();
     notifyListeners();
     unawaited(refreshDiscountPreview());
   }
@@ -420,6 +432,7 @@ class PurchaseViewModel extends ChangeNotifier {
     }
     _landedCostEntries = _normalizedLandedCostEntries(entries);
     _landedCostAllocationMethod = allocationMethod;
+    _touchSubmissionIntent();
     notifyListeners();
     unawaited(refreshDiscountPreview());
   }
@@ -485,6 +498,7 @@ class PurchaseViewModel extends ChangeNotifier {
       landedCostEntries: _landedCostEntries,
       landedCostAllocationMethod: _landedCostAllocationMethod,
       discountCode: _discountCode,
+      idempotencyKey: _submitIdempotencyKey,
     );
     switch (result) {
       case Ok<PurchaseSubmission>():
@@ -496,6 +510,7 @@ class PurchaseViewModel extends ChangeNotifier {
         _discountCode = '';
         _resetLandedCosts();
         _clearDiscountPreview();
+        _touchSubmissionIntent();
       case Error<PurchaseSubmission>():
         _trackDraftSubmitFailed(supplier);
         break;
@@ -558,6 +573,10 @@ class PurchaseViewModel extends ChangeNotifier {
     _discountPreview = null;
     _hasDiscountPreviewError = false;
     _isLoadingDiscountPreview = false;
+  }
+
+  void _touchSubmissionIntent() {
+    _submitIdempotencyKey = _newPurchaseIdempotencyKey('purchase-draft');
   }
 
   void _trackDraftLineAdded(
@@ -843,4 +862,8 @@ class PurchaseViewModel extends ChangeNotifier {
     }
     return DateTime.tryParse(normalized);
   }
+}
+
+String _newPurchaseIdempotencyKey(String scope) {
+  return '$scope:${generateAnalyticsEventId()}';
 }

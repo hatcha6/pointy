@@ -7,6 +7,7 @@ from rest_framework.response import Response
 
 from apps.analytics.models import AnalyticsEvent
 from apps.analytics.services import record_domain_event
+from apps.core.idempotency import run_idempotent_request
 from apps.core.permissions import HasPointyPermission
 from apps.core.roles import user_is_manager
 from .models import Order, RegisterCashMovement, RegisterSession
@@ -88,6 +89,12 @@ class OrderViewSet(viewsets.ModelViewSet):
             )
         serializer.save(register_session=session)
 
+    def create(self, request, *args, **kwargs):
+        return run_idempotent_request(
+            request,
+            lambda: super(OrderViewSet, self).create(request, *args, **kwargs),
+        )
+
     @action(detail=False, methods=["post"])
     def checkout(self, request):
         session = self._open_register_session(request)
@@ -97,6 +104,12 @@ class OrderViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        return run_idempotent_request(
+            request,
+            lambda: self._checkout(request, session),
+        )
+
+    def _checkout(self, request, session):
         print_action_serializer = self._invoice_print_action_serializer(request)
         serializer = CheckoutSerializer(
             data=request.data,
@@ -147,6 +160,12 @@ class OrderViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["post"], url_path="return-items")
     def return_items(self, request, pk=None):
+        return run_idempotent_request(
+            request,
+            lambda: self._return_items(request),
+        )
+
+    def _return_items(self, request):
         order = self.get_object()
         serializer = OrderReturnSerializer(
             data=request.data,
@@ -166,6 +185,12 @@ class OrderViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["post"])
     def void(self, request, pk=None):
+        return run_idempotent_request(
+            request,
+            lambda: self._void(request),
+        )
+
+    def _void(self, request):
         order = self.get_object()
         serializer = OrderVoidSerializer(
             data=request.data,
@@ -328,6 +353,12 @@ class RegisterSessionViewSet(
 
     @action(detail=False, methods=["post"])
     def start(self, request):
+        return run_idempotent_request(
+            request,
+            lambda: self._start(request),
+        )
+
+    def _start(self, request):
         serializer = RegisterSessionStartSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
@@ -371,11 +402,23 @@ class RegisterSessionViewSet(
 
     @action(detail=True, methods=["post"], url_path="pay-in")
     def pay_in(self, request, pk=None):
-        return self._create_cash_movement(request, RegisterCashMovement.MovementType.PAY_IN)
+        return run_idempotent_request(
+            request,
+            lambda: self._create_cash_movement(
+                request,
+                RegisterCashMovement.MovementType.PAY_IN,
+            ),
+        )
 
     @action(detail=True, methods=["post"], url_path="pay-out")
     def pay_out(self, request, pk=None):
-        return self._create_cash_movement(request, RegisterCashMovement.MovementType.PAY_OUT)
+        return run_idempotent_request(
+            request,
+            lambda: self._create_cash_movement(
+                request,
+                RegisterCashMovement.MovementType.PAY_OUT,
+            ),
+        )
 
     def _create_cash_movement(self, request, movement_type):
         session = self.get_object()
@@ -419,6 +462,12 @@ class RegisterSessionViewSet(
 
     @action(detail=True, methods=["post"])
     def close(self, request, pk=None):
+        return run_idempotent_request(
+            request,
+            lambda: self._close(request),
+        )
+
+    def _close(self, request):
         session = self.get_object()
         if session.status != RegisterSession.Status.OPEN:
             return Response(

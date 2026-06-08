@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 
@@ -197,7 +198,9 @@ class PosViewModel extends ChangeNotifier {
   }
 
   set _printInvoiceAfterPayment(bool value) {
-    _activeSaleSession.printInvoiceAfterPayment = value;
+    _activeSaleSession
+      ..printInvoiceAfterPayment = value
+      ..touch();
   }
 
   bool get _shareInvoiceAfterPayment {
@@ -205,7 +208,9 @@ class PosViewModel extends ChangeNotifier {
   }
 
   set _shareInvoiceAfterPayment(bool value) {
-    _activeSaleSession.shareInvoiceAfterPayment = value;
+    _activeSaleSession
+      ..shareInvoiceAfterPayment = value
+      ..touch();
   }
 
   List<Product> get products => List.unmodifiable(_products);
@@ -404,9 +409,13 @@ class PosViewModel extends ChangeNotifier {
 
   void _clearManualInvoiceActionsForSaleSessions() {
     for (final session in _saleSessions) {
-      session
-        ..printInvoiceAfterPayment = false
-        ..shareInvoiceAfterPayment = false;
+      if (session.printInvoiceAfterPayment ||
+          session.shareInvoiceAfterPayment) {
+        session
+          ..printInvoiceAfterPayment = false
+          ..shareInvoiceAfterPayment = false
+          ..touch();
+      }
     }
   }
 }
@@ -421,6 +430,7 @@ class _PosSaleSession {
   final List<CartLine> cart = [];
   Customer? selectedCustomer;
   String couponCode = '';
+  final Map<String, String> _checkoutIdempotencyKeysBySignature = {};
   SaleDiscountPreview? discountPreview;
   bool isLoadingDiscountPreview = false;
   bool hasDiscountPreviewError = false;
@@ -432,5 +442,21 @@ class _PosSaleSession {
 
   void touch() {
     updatedAt = DateTime.now();
+    _checkoutIdempotencyKeysBySignature.clear();
   }
+
+  String checkoutIdempotencyKeyFor(SaleCheckoutDraft draft) {
+    return _checkoutIdempotencyKeysBySignature.putIfAbsent(
+      _checkoutSignature(draft),
+      _newCheckoutIdempotencyKey,
+    );
+  }
+}
+
+String _newCheckoutIdempotencyKey() {
+  return 'checkout:${generateAnalyticsEventId()}';
+}
+
+String _checkoutSignature(SaleCheckoutDraft draft) {
+  return jsonEncode(draft.toJson());
 }

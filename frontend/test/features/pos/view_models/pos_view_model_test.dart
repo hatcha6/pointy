@@ -103,6 +103,85 @@ void main() {
     },
   );
 
+  test('checkout retry reuses the active sale idempotency key', () async {
+    var attempts = 0;
+    final keys = <String?>[];
+    final apiService = _FakePosApiService(
+      onCheckout: (draft, idempotencyKey) async {
+        keys.add(idempotencyKey);
+        attempts += 1;
+        if (attempts == 1) {
+          throw Exception('offline');
+        }
+        return _saleOrder(total: draft.payments.single.amount, lines: const []);
+      },
+    );
+    final viewModel = _viewModel(apiService);
+    addTearDown(viewModel.dispose);
+
+    await viewModel.loadCurrentRegisterSession();
+    await viewModel.resumeRegisterSession();
+    viewModel.addVariant(_coffeeVariant);
+    await _settle();
+
+    final failedOutcome = await viewModel.checkoutCurrentSale(
+      payments: const [
+        SaleCheckoutPaymentDraft(method: PaymentMethod.cash, amount: 3.5),
+      ],
+    );
+    final retriedOutcome = await viewModel.checkoutCurrentSale(
+      payments: const [
+        SaleCheckoutPaymentDraft(method: PaymentMethod.cash, amount: 3.5),
+      ],
+    );
+
+    expect(failedOutcome.isSuccess, isFalse);
+    expect(retriedOutcome.isSuccess, isTrue);
+    expect(keys, hasLength(2));
+    expect(keys.first, isNotNull);
+    expect(keys.first, keys.last);
+    expect(keys.first, startsWith('checkout:'));
+    await _settle();
+  });
+
+  test('checkout retry rotates idempotency key when payment changes', () async {
+    final keys = <String?>[];
+    final apiService = _FakePosApiService(
+      onCheckout: (draft, idempotencyKey) async {
+        keys.add(idempotencyKey);
+        throw Exception('offline');
+      },
+    );
+    final viewModel = _viewModel(apiService);
+    addTearDown(viewModel.dispose);
+
+    await viewModel.loadCurrentRegisterSession();
+    await viewModel.resumeRegisterSession();
+    viewModel.addVariant(_coffeeVariant);
+    await _settle();
+
+    await viewModel.checkoutCurrentSale(
+      payments: const [
+        SaleCheckoutPaymentDraft(method: PaymentMethod.cash, amount: 3.5),
+      ],
+    );
+    await viewModel.checkoutCurrentSale(
+      payments: const [
+        SaleCheckoutPaymentDraft(method: PaymentMethod.cash, amount: 3.5),
+      ],
+    );
+    await viewModel.checkoutCurrentSale(
+      payments: const [
+        SaleCheckoutPaymentDraft(method: PaymentMethod.card, amount: 3.5),
+      ],
+    );
+
+    expect(keys, hasLength(3));
+    expect(keys[0], keys[1]);
+    expect(keys[2], isNot(keys[0]));
+    await _settle();
+  });
+
   test(
     'search resets catalog pagination and load more appends results',
     () async {
@@ -509,6 +588,7 @@ class _CatalogRequest {
 class _FakePosApiService extends PosApiService {
   _FakePosApiService({
     this.checkoutCompleter,
+    this.onCheckout,
     this.onFetchProducts,
     this.catalogPages = const {},
   }) : super(
@@ -517,10 +597,16 @@ class _FakePosApiService extends PosApiService {
        );
 
   final Completer<SaleOrder>? checkoutCompleter;
+  final Future<SaleOrder> Function(
+    SaleCheckoutDraft draft,
+    String? idempotencyKey,
+  )?
+  onCheckout;
   final ProductPage Function(ProductQuery query, int page)? onFetchProducts;
   final Map<int, List<ProductVariant>> catalogPages;
   final List<_CatalogRequest> catalogRequests = [];
   SaleCheckoutDraft? capturedCheckoutDraft;
+  String? capturedCheckoutIdempotencyKey;
 
   @override
   Future<RegisterSession?> fetchCurrentRegisterSession() async {
@@ -575,8 +661,16 @@ class _FakePosApiService extends PosApiService {
   }
 
   @override
-  Future<SaleOrder> checkout(SaleCheckoutDraft draft) {
+  Future<SaleOrder> checkout(
+    SaleCheckoutDraft draft, {
+    String? idempotencyKey,
+  }) {
     capturedCheckoutDraft = draft;
+    capturedCheckoutIdempotencyKey = idempotencyKey;
+    final customCheckout = onCheckout;
+    if (customCheckout != null) {
+      return customCheckout(draft, idempotencyKey);
+    }
     final pendingCheckout = checkoutCompleter;
     if (pendingCheckout != null) {
       return pendingCheckout.future;

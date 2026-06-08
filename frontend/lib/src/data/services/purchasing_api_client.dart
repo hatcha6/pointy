@@ -151,10 +151,14 @@ class PurchasingApiClient {
     );
   }
 
-  Future<PurchaseOrder> createPurchaseOrder(PurchaseOrderDraft draft) async {
+  Future<PurchaseOrder> createPurchaseOrder(
+    PurchaseOrderDraft draft, {
+    String? idempotencyKey,
+  }) async {
     final response = await _session.post(
       'purchase-orders/',
       body: draft.toJson(),
+      idempotencyKey: idempotencyKey,
     );
     _session.throwApiException(
       response,
@@ -217,11 +221,13 @@ class PurchasingApiClient {
   }
 
   Future<SupplierPayment> createSupplierPayment(
-    SupplierPaymentDraft draft,
-  ) async {
+    SupplierPaymentDraft draft, {
+    String? idempotencyKey,
+  }) async {
     final response = await _session.post(
       'supplier-payments/',
       body: draft.toJson(),
+      idempotencyKey: idempotencyKey,
     );
     _session.throwApiException(
       response,
@@ -258,9 +264,13 @@ class PurchasingApiClient {
     return double.tryParse(unitCost.toString());
   }
 
-  Future<PurchaseOrder> submitPurchaseOrder(int purchaseOrderId) async {
+  Future<PurchaseOrder> submitPurchaseOrder(
+    int purchaseOrderId, {
+    String? idempotencyKey,
+  }) async {
     final response = await _session.post(
       'purchase-orders/$purchaseOrderId/submit/',
+      idempotencyKey: idempotencyKey,
     );
     _session.throwApiException(
       response,
@@ -274,10 +284,12 @@ class PurchasingApiClient {
   Future<PurchaseOrder> receivePurchaseOrder(
     int purchaseOrderId, {
     PurchaseReceiveDraft? draft,
+    String? idempotencyKey,
   }) async {
     final response = await _session.post(
       'purchase-orders/$purchaseOrderId/receive/',
       body: draft?.toJson(),
+      idempotencyKey: idempotencyKey,
     );
     _session.throwApiException(
       response,
@@ -288,9 +300,13 @@ class PurchasingApiClient {
     );
   }
 
-  Future<PurchaseOrder> cancelPurchaseOrder(int purchaseOrderId) async {
+  Future<PurchaseOrder> cancelPurchaseOrder(
+    int purchaseOrderId, {
+    String? idempotencyKey,
+  }) async {
     final response = await _session.post(
       'purchase-orders/$purchaseOrderId/cancel/',
+      idempotencyKey: idempotencyKey,
     );
     _session.throwApiException(
       response,
@@ -304,11 +320,13 @@ class PurchasingApiClient {
   Future<PurchaseOrder> returnPurchaseOrderItems({
     required int purchaseOrderId,
     required PurchaseAdjustmentDraft draft,
+    String? idempotencyKey,
   }) {
     return _adjustPurchaseOrderItems(
       purchaseOrderId: purchaseOrderId,
       actionPath: 'return-items',
       draft: draft,
+      idempotencyKey: idempotencyKey,
       errorMessage: 'Purchase order return failed with status',
     );
   }
@@ -316,11 +334,13 @@ class PurchasingApiClient {
   Future<PurchaseOrder> refundPurchaseOrderItems({
     required int purchaseOrderId,
     required PurchaseAdjustmentDraft draft,
+    String? idempotencyKey,
   }) {
     return _adjustPurchaseOrderItems(
       purchaseOrderId: purchaseOrderId,
       actionPath: 'refund-items',
       draft: draft,
+      idempotencyKey: idempotencyKey,
       errorMessage: 'Purchase order refund failed with status',
     );
   }
@@ -328,11 +348,13 @@ class PurchasingApiClient {
   Future<PurchaseOrder> exchangePurchaseOrderItems({
     required int purchaseOrderId,
     required PurchaseAdjustmentDraft draft,
+    String? idempotencyKey,
   }) {
     return _adjustPurchaseOrderItems(
       purchaseOrderId: purchaseOrderId,
       actionPath: 'exchange-items',
       draft: draft,
+      idempotencyKey: idempotencyKey,
       errorMessage: 'Purchase order exchange failed with status',
     );
   }
@@ -341,11 +363,13 @@ class PurchasingApiClient {
     required int purchaseOrderId,
     required String actionPath,
     required PurchaseAdjustmentDraft draft,
+    String? idempotencyKey,
     required String errorMessage,
   }) async {
     final response = await _session.post(
       'purchase-orders/$purchaseOrderId/$actionPath/',
       body: draft.toJson(),
+      idempotencyKey: idempotencyKey,
     );
     _session.throwApiException(response, errorMessage);
     return PurchaseOrder.fromJson(

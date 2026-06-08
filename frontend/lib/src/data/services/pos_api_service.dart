@@ -631,8 +631,11 @@ class PosApiService {
     );
   }
 
-  Future<SaleOrder> checkout(SaleCheckoutDraft draft) {
-    return _sales.checkout(draft);
+  Future<SaleOrder> checkout(
+    SaleCheckoutDraft draft, {
+    String? idempotencyKey,
+  }) {
+    return _sales.checkout(draft, idempotencyKey: idempotencyKey);
   }
 
   Future<SaleOrderPage> fetchOrders({
@@ -670,8 +673,14 @@ class PosApiService {
     return _sales.returnSaleOrderItems(saleOrderId: saleOrderId, draft: draft);
   }
 
-  Future<PurchaseOrder> createPurchaseOrder(PurchaseOrderDraft draft) {
-    return _purchasing.createPurchaseOrder(draft);
+  Future<PurchaseOrder> createPurchaseOrder(
+    PurchaseOrderDraft draft, {
+    String? idempotencyKey,
+  }) {
+    return _purchasing.createPurchaseOrder(
+      draft,
+      idempotencyKey: idempotencyKey,
+    );
   }
 
   Future<PurchaseDiscountPreview> previewPurchaseDiscounts(
@@ -696,8 +705,14 @@ class PosApiService {
     );
   }
 
-  Future<SupplierPayment> createSupplierPayment(SupplierPaymentDraft draft) {
-    return _purchasing.createSupplierPayment(draft);
+  Future<SupplierPayment> createSupplierPayment(
+    SupplierPaymentDraft draft, {
+    String? idempotencyKey,
+  }) {
+    return _purchasing.createSupplierPayment(
+      draft,
+      idempotencyKey: idempotencyKey,
+    );
   }
 
   Future<PurchaseOrderPage> fetchOutstandingReceivedNotPaidPurchases({
@@ -765,48 +780,71 @@ class PosApiService {
     return _purchasing.fetchPurchaseOrders(query: query, page: page);
   }
 
-  Future<PurchaseOrder> submitPurchaseOrder(int purchaseOrderId) {
-    return _purchasing.submitPurchaseOrder(purchaseOrderId);
+  Future<PurchaseOrder> submitPurchaseOrder(
+    int purchaseOrderId, {
+    String? idempotencyKey,
+  }) {
+    return _purchasing.submitPurchaseOrder(
+      purchaseOrderId,
+      idempotencyKey: idempotencyKey,
+    );
   }
 
   Future<PurchaseOrder> receivePurchaseOrder(
     int purchaseOrderId, {
     PurchaseReceiveDraft? draft,
+    String? idempotencyKey,
   }) {
-    return _purchasing.receivePurchaseOrder(purchaseOrderId, draft: draft);
+    return _purchasing.receivePurchaseOrder(
+      purchaseOrderId,
+      draft: draft,
+      idempotencyKey: idempotencyKey,
+    );
   }
 
-  Future<PurchaseOrder> cancelPurchaseOrder(int purchaseOrderId) {
-    return _purchasing.cancelPurchaseOrder(purchaseOrderId);
+  Future<PurchaseOrder> cancelPurchaseOrder(
+    int purchaseOrderId, {
+    String? idempotencyKey,
+  }) {
+    return _purchasing.cancelPurchaseOrder(
+      purchaseOrderId,
+      idempotencyKey: idempotencyKey,
+    );
   }
 
   Future<PurchaseOrder> returnPurchaseOrderItems({
     required int purchaseOrderId,
     required PurchaseAdjustmentDraft draft,
+    String? idempotencyKey,
   }) {
     return _purchasing.returnPurchaseOrderItems(
       purchaseOrderId: purchaseOrderId,
       draft: draft,
+      idempotencyKey: idempotencyKey,
     );
   }
 
   Future<PurchaseOrder> refundPurchaseOrderItems({
     required int purchaseOrderId,
     required PurchaseAdjustmentDraft draft,
+    String? idempotencyKey,
   }) {
     return _purchasing.refundPurchaseOrderItems(
       purchaseOrderId: purchaseOrderId,
       draft: draft,
+      idempotencyKey: idempotencyKey,
     );
   }
 
   Future<PurchaseOrder> exchangePurchaseOrderItems({
     required int purchaseOrderId,
     required PurchaseAdjustmentDraft draft,
+    String? idempotencyKey,
   }) {
     return _purchasing.exchangePurchaseOrderItems(
       purchaseOrderId: purchaseOrderId,
       draft: draft,
+      idempotencyKey: idempotencyKey,
     );
   }
 

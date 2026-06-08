@@ -137,6 +137,7 @@ class PosApiSession {
     String path, {
     Object? body,
     bool includeCsrf = true,
+    String? idempotencyKey,
   }) async {
     final encodedBody = body == null ? null : jsonEncode(body);
     return _send(
@@ -145,7 +146,10 @@ class PosApiSession {
       requestSizeBytes: _encodedSize(encodedBody),
       request: () => client.post(
         uri(path),
-        headers: headers(includeCsrf: includeCsrf),
+        headers: headers(
+          includeCsrf: includeCsrf,
+          idempotencyKey: idempotencyKey,
+        ),
         body: encodedBody,
       ),
     );
@@ -211,7 +215,11 @@ class PosApiSession {
     );
   }
 
-  Map<String, String> headers({bool includeCsrf = false}) {
+  Map<String, String> headers({
+    bool includeCsrf = false,
+    String? idempotencyKey,
+  }) {
+    final normalizedIdempotencyKey = idempotencyKey?.trim() ?? '';
     return {
       'Content-Type': 'application/json',
       if (_cookies.isNotEmpty)
@@ -220,6 +228,8 @@ class PosApiSession {
             .join('; '),
       if (includeCsrf && _csrfToken != null) 'X-CSRFToken': _csrfToken!,
       if (_relayToken.isNotEmpty) 'X-Pointy-Relay-Token': _relayToken,
+      if (normalizedIdempotencyKey.isNotEmpty)
+        'Idempotency-Key': normalizedIdempotencyKey,
     };
   }
 

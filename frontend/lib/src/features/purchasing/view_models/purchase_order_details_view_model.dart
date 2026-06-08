@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 
 import '../../../core/authorization.dart';
 import '../../../core/result.dart';
+import '../../../data/models/analytics_event.dart';
 import '../../../data/models/purchase_submission.dart';
 import '../../../data/models/shop_settings.dart';
 import '../../../data/repositories/printing_repository.dart';
@@ -49,6 +50,7 @@ class PurchaseOrderDetailsViewModel extends ChangeNotifier {
   bool _hasPaymentError = false;
   PurchaseOrderActionError? _statusError;
   PurchaseOrderActionError? _adjustmentError;
+  final Map<String, String> _idempotencyKeysBySignature = {};
 
   PurchaseOrder get order => _order;
   bool get isLoading => _isLoading;
@@ -218,6 +220,12 @@ class PurchaseOrderDetailsViewModel extends ChangeNotifier {
     _hasPaymentError = false;
     notifyListeners();
 
+    final paymentSignature = _supplierPaymentSignature(
+      method: method,
+      amount: amount,
+      reference: reference,
+      notes: notes,
+    );
     final result = await _purchaseRepository.createSupplierPayment(
       SupplierPaymentDraft(
         supplierId: _order.supplierId,
@@ -227,12 +235,14 @@ class PurchaseOrderDetailsViewModel extends ChangeNotifier {
         reference: reference,
         notes: notes,
       ),
+      idempotencyKey: _idempotencyKeyFor(paymentSignature),
     );
     final didRecord = switch (result) {
       Ok<SupplierPayment>() => true,
       Error<SupplierPayment>() => false,
     };
     if (didRecord) {
+      _clearIdempotencyKey(paymentSignature);
       final reloadResult = await _purchaseRepository.loadPurchaseOrder(
         _order.id,
       );
@@ -249,6 +259,33 @@ class PurchaseOrderDetailsViewModel extends ChangeNotifier {
     _isRecordingPayment = false;
     notifyListeners();
     return didRecord;
+  }
+
+  String _supplierPaymentSignature({
+    required SupplierPaymentMethod method,
+    required double amount,
+    required String reference,
+    required String notes,
+  }) {
+    return [
+      'supplier-payment',
+      _order.id,
+      method.apiValue,
+      amount.toStringAsFixed(2),
+      reference.trim(),
+      notes.trim(),
+    ].join(':');
+  }
+
+  String _idempotencyKeyFor(String signature) {
+    return _idempotencyKeysBySignature.putIfAbsent(
+      signature,
+      () => 'purchase-action:${generateAnalyticsEventId()}',
+    );
+  }
+
+  void _clearIdempotencyKey(String signature) {
+    _idempotencyKeysBySignature.remove(signature);
   }
 
   Future<bool> _changeStatus(Future<Result<PurchaseOrder>> action) async {

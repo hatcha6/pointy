@@ -119,14 +119,20 @@ extension PosCheckoutActions on PosViewModel {
         ? invoicePrinterConfig
         : null;
 
+    final checkoutDraft = SaleCheckoutDraft.fromCart(
+      cart: cartSnapshot,
+      payments: payments,
+      invoicePrinterConfig: backendInvoicePrinterConfig,
+      customerId: _selectedCustomer?.id,
+      couponCode: _couponCode,
+    );
+    final checkoutIdempotencyKey = _activeSaleSession.checkoutIdempotencyKeyFor(
+      checkoutDraft,
+    );
+
     final result = await _saleRepository.checkout(
-      SaleCheckoutDraft.fromCart(
-        cart: cartSnapshot,
-        payments: payments,
-        invoicePrinterConfig: backendInvoicePrinterConfig,
-        customerId: _selectedCustomer?.id,
-        couponCode: _couponCode,
-      ),
+      checkoutDraft,
+      idempotencyKey: checkoutIdempotencyKey,
     );
 
     switch (result) {
