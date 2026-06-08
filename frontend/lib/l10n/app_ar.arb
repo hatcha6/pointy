@@ -1654,6 +1654,49 @@
   "noSelectedPrinter": "لم يتم اختيار طابعة",
   "paperWidthLabel": "عرض الورق بالملليمتر",
   "printerCodeTableLabel": "جدول ترميز الطابعة",
+  "barcodeLabelPrinterSettingsTitle": "إعدادات ملصقات الباركود",
+  "printerBarcodeLabelLanguageLabel": "لغة طابعة الملصقات",
+  "printerBarcodeLabelLanguageAuto": "اكتشاف تلقائي آمن",
+  "printerBarcodeLabelLanguageZpl": "ZPL",
+  "printerBarcodeLabelLanguageTspl": "TSPL/TSPL2",
+  "printerBarcodeLabelLanguageEpl": "EPL/EPL2",
+  "printerBarcodeLabelLanguageCpcl": "CPCL",
+  "detectBarcodeLabelLanguageButton": "اكتشاف لغة طابعة الملصقات",
+  "printerLabelWidthLabel": "عرض الملصق مم",
+  "printerLabelHeightLabel": "ارتفاع الملصق مم",
+  "printerLabelGapLabel": "الفاصل مم",
+  "printerLabelDpiLabel": "الدقة DPI",
+  "printerBarcodeLanguageSummary": "لغة الملصقات: {language}",
+  "@printerBarcodeLanguageSummary": {
+    "description": "Selected barcode label printer language summary.",
+    "placeholders": {
+      "language": {
+        "type": "String"
+      }
+    }
+  },
+  "printerLabelGeometrySummary": "الملصق: {width}×{height} مم، فاصل {gap} مم، {dpi} DPI",
+  "@printerLabelGeometrySummary": {
+    "description": "Barcode label dimensions and resolution summary.",
+    "placeholders": {
+      "width": {
+        "type": "int"
+      },
+      "height": {
+        "type": "int"
+      },
+      "gap": {
+        "type": "int"
+      },
+      "dpi": {
+        "type": "int"
+      }
+    }
+  },
+  "barcodeLabelLanguageDetected": "تم اكتشاف لغة طابعة الملصقات وحفظها.",
+  "barcodeLabelLanguageInferred": "تم تخمين لغة طابعة الملصقات من اسم الطابعة. راجعها إذا لم تطبع الملصقات بشكل صحيح.",
+  "barcodeLabelLanguageDetectionUnavailable": "تعذر اكتشاف لغة الملصقات تلقائيًا. اختر اللغة يدويًا لتجنب إرسال أوامر غير مناسبة.",
+  "barcodeLabelLanguageDetectionFailed": "فشل اكتشاف لغة طابعة الملصقات. تحقق من الاتصال أو اختر اللغة يدويًا.",
   "discoveredPrintersLabel": "اختر الطابعة",
   "selectDiscoveredPrinterHint": "اختر طابعة",
   "noDiscoveredPrinters": "اضغط على البحث لاكتشاف الطابعات المتاحة",
@@ -1668,9 +1711,13 @@
   "printerDisconnectedSnackBar": "تعذر الاتصال بطابعة إيصال نقطة البيع.",
   "testPrinterButton": "اختبار الطابعة",
   "testingPrinterButton": "جار الاختبار...",
+  "testBarcodeLabelPrinterButton": "اختبار ملصق باركود",
+  "testingBarcodeLabelPrinterButton": "جار اختبار الملصق...",
   "fakePrintButton": "طباعة تجريبية بالمحاكاة",
   "printerTestSuccess": "تم إرسال اختبار الطباعة.",
   "printerTestFailure": "تعذر اختبار الطابعة. تحقق من الاتصال والإعدادات وحاول مرة أخرى.",
+  "barcodeLabelTestSuccess": "تم إرسال ملصق اختبار الباركود.",
+  "barcodeLabelTestFailure": "تعذر إرسال ملصق اختبار الباركود. تحقق من لغة الملصقات والإعدادات.",
   "printerTestUnsupported": "طريقة الاتصال غير متاحة على هذا الجهاز.",
   "fakePrintSuccess": "نجحت الطباعة التجريبية بالمحاكاة.",
   "fakePrintFailure": "تعذرت الطباعة التجريبية بالمحاكاة.",
@@ -1956,10 +2003,39 @@
   "barcodeLabelPrintButton": "طباعة ملصقات",
   "barcodeLabelPrintInProgressButton": "جار الطباعة...",
   "barcodeLabelPrintNoBarcode": "أضف باركودًا للمنتج قبل طباعة الملصق.",
+  "barcodeLabelPrintNoBarcodeShort": "لا يوجد باركود للطباعة",
   "barcodeLabelCopiesDialogTitle": "طباعة ملصقات الباركود",
   "barcodeLabelCopiesLabel": "عدد النسخ",
   "barcodeLabelCopiesHint": "مثال: 10",
   "barcodeLabelCopiesPrintButton": "طباعة",
+  "barcodeLabelIncludePriceLabel": "طباعة السعر",
+  "barcodeLabelIncludePriceHint": "إظهار سعر البيع على الملصق.",
+  "barcodeLabelIncludeExpiryLabel": "طباعة تاريخ الانتهاء",
+  "barcodeLabelIncludeExpiryHint": "إضافة تاريخ انتهاء الدفعة على الملصق.",
+  "barcodeLabelExpiryDateLabel": "تاريخ الانتهاء",
+  "barcodeLabelExpiryDatePickerTooltip": "اختيار تاريخ الانتهاء",
+  "barcodeLabelExpiryDateRequired": "اختر تاريخ الانتهاء أو أوقف طباعته.",
+  "barcodeLabelPreviewTitle": "معاينة الملصق",
+  "barcodeLabelPreviewPrice": "السعر {price}",
+  "@barcodeLabelPreviewPrice": {
+    "description": "Preview line showing the printed label price.",
+    "placeholders": {
+      "price": {
+        "type": "String"
+      }
+    }
+  },
+  "barcodeLabelPreviewExpiry": "الانتهاء {date}",
+  "@barcodeLabelPreviewExpiry": {
+    "description": "Preview line showing the printed label expiry date.",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "barcodeLabelPrintProductTooltip": "طباعة ملصقات المنتج",
+  "barcodeLabelPrintVariantTooltip": "طباعة ملصقات الخيار",
   "barcodeLabelPrintSuccess": "{count, plural, =1{تم إرسال ملصق باركود واحد للطابعة.} =2{تم إرسال ملصقي باركود للطابعة.} other{تم إرسال {count} ملصقات باركود للطابعة.}}",
   "@barcodeLabelPrintSuccess": {
     "description": "Message shown after barcode label copies are sent to the printer.",

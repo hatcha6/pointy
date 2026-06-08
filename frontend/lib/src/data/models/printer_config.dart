@@ -2,6 +2,8 @@ enum PrintTransportKind { serial, bluetooth, wifi, system, fake }
 
 enum PrinterOutputMode { escPos, pdfA4 }
 
+enum BarcodeLabelPrinterLanguage { auto, zpl, tspl, epl, cpcl }
+
 enum PrinterRole { posReceipt }
 
 PrinterRole printerRoleFromJson(Object? value) {
@@ -28,6 +30,11 @@ class PrinterEndpoint {
     this.codeTable = 'CP864',
     this.timeoutMs = 5000,
     this.outputMode = PrinterOutputMode.escPos,
+    this.barcodeLabelLanguage = BarcodeLabelPrinterLanguage.auto,
+    this.labelWidthMm = 40,
+    this.labelHeightMm = 30,
+    this.labelGapMm = 2,
+    this.labelDpi = 203,
   });
 
   final PrintTransportKind kind;
@@ -39,6 +46,11 @@ class PrinterEndpoint {
   final String codeTable;
   final int timeoutMs;
   final PrinterOutputMode outputMode;
+  final BarcodeLabelPrinterLanguage barcodeLabelLanguage;
+  final int labelWidthMm;
+  final int labelHeightMm;
+  final int labelGapMm;
+  final int labelDpi;
 
   bool get usesThermalReceipt => outputMode == PrinterOutputMode.escPos;
 
@@ -63,6 +75,25 @@ class PrinterEndpoint {
           _transportKindFromJson(json['kind'] ?? json['transport']),
         ),
       ),
+      barcodeLabelLanguage: barcodeLabelPrinterLanguageFromJson(
+        json['barcode_label_language'] ?? json['label_language'],
+      ),
+      labelWidthMm: _intFromJson(
+        json['label_width_mm'] ?? json['barcode_label_width_mm'],
+        fallback: 40,
+      ),
+      labelHeightMm: _intFromJson(
+        json['label_height_mm'] ?? json['barcode_label_height_mm'],
+        fallback: 30,
+      ),
+      labelGapMm: _intFromJson(
+        json['label_gap_mm'] ?? json['barcode_label_gap_mm'],
+        fallback: 2,
+      ),
+      labelDpi: _intFromJson(
+        json['label_dpi'] ?? json['barcode_label_dpi'],
+        fallback: 203,
+      ),
     );
   }
 
@@ -77,6 +108,13 @@ class PrinterEndpoint {
       'code_table': codeTable,
       'timeout_ms': timeoutMs,
       'output_mode': outputMode.name,
+      'barcode_label_language': barcodeLabelPrinterLanguageToJson(
+        barcodeLabelLanguage,
+      ),
+      'label_width_mm': labelWidthMm,
+      'label_height_mm': labelHeightMm,
+      'label_gap_mm': labelGapMm,
+      'label_dpi': labelDpi,
     };
   }
 
@@ -90,6 +128,11 @@ class PrinterEndpoint {
     String? codeTable,
     int? timeoutMs,
     PrinterOutputMode? outputMode,
+    BarcodeLabelPrinterLanguage? barcodeLabelLanguage,
+    int? labelWidthMm,
+    int? labelHeightMm,
+    int? labelGapMm,
+    int? labelDpi,
   }) {
     return PrinterEndpoint(
       kind: kind ?? this.kind,
@@ -101,8 +144,38 @@ class PrinterEndpoint {
       codeTable: codeTable ?? this.codeTable,
       timeoutMs: timeoutMs ?? this.timeoutMs,
       outputMode: outputMode ?? this.outputMode,
+      barcodeLabelLanguage: barcodeLabelLanguage ?? this.barcodeLabelLanguage,
+      labelWidthMm: labelWidthMm ?? this.labelWidthMm,
+      labelHeightMm: labelHeightMm ?? this.labelHeightMm,
+      labelGapMm: labelGapMm ?? this.labelGapMm,
+      labelDpi: labelDpi ?? this.labelDpi,
     );
   }
+}
+
+BarcodeLabelPrinterLanguage barcodeLabelPrinterLanguageFromJson(Object? value) {
+  return switch (value?.toString()) {
+    'auto' => BarcodeLabelPrinterLanguage.auto,
+    'zpl' || 'ZPL' => BarcodeLabelPrinterLanguage.zpl,
+    'tspl' || 'tspl2' || 'TSPL' || 'TSPL2' => BarcodeLabelPrinterLanguage.tspl,
+    'epl' || 'epl2' || 'EPL' || 'EPL2' => BarcodeLabelPrinterLanguage.epl,
+    'cpcl' || 'CPCL' => BarcodeLabelPrinterLanguage.cpcl,
+    'esc_pos' ||
+    'escPos' ||
+    'thermal' ||
+    'receipt' => BarcodeLabelPrinterLanguage.auto,
+    _ => BarcodeLabelPrinterLanguage.auto,
+  };
+}
+
+String barcodeLabelPrinterLanguageToJson(BarcodeLabelPrinterLanguage language) {
+  return switch (language) {
+    BarcodeLabelPrinterLanguage.auto => 'auto',
+    BarcodeLabelPrinterLanguage.zpl => 'zpl',
+    BarcodeLabelPrinterLanguage.tspl => 'tspl',
+    BarcodeLabelPrinterLanguage.epl => 'epl',
+    BarcodeLabelPrinterLanguage.cpcl => 'cpcl',
+  };
 }
 
 class PrinterConfig {

@@ -4765,6 +4765,114 @@ abstract class AppLocalizations {
   /// **'جدول ترميز الطابعة'**
   String get printerCodeTableLabel;
 
+  /// No description provided for @barcodeLabelPrinterSettingsTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'إعدادات ملصقات الباركود'**
+  String get barcodeLabelPrinterSettingsTitle;
+
+  /// No description provided for @printerBarcodeLabelLanguageLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'لغة طابعة الملصقات'**
+  String get printerBarcodeLabelLanguageLabel;
+
+  /// No description provided for @printerBarcodeLabelLanguageAuto.
+  ///
+  /// In ar, this message translates to:
+  /// **'اكتشاف تلقائي آمن'**
+  String get printerBarcodeLabelLanguageAuto;
+
+  /// No description provided for @printerBarcodeLabelLanguageZpl.
+  ///
+  /// In ar, this message translates to:
+  /// **'ZPL'**
+  String get printerBarcodeLabelLanguageZpl;
+
+  /// No description provided for @printerBarcodeLabelLanguageTspl.
+  ///
+  /// In ar, this message translates to:
+  /// **'TSPL/TSPL2'**
+  String get printerBarcodeLabelLanguageTspl;
+
+  /// No description provided for @printerBarcodeLabelLanguageEpl.
+  ///
+  /// In ar, this message translates to:
+  /// **'EPL/EPL2'**
+  String get printerBarcodeLabelLanguageEpl;
+
+  /// No description provided for @printerBarcodeLabelLanguageCpcl.
+  ///
+  /// In ar, this message translates to:
+  /// **'CPCL'**
+  String get printerBarcodeLabelLanguageCpcl;
+
+  /// No description provided for @detectBarcodeLabelLanguageButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'اكتشاف لغة طابعة الملصقات'**
+  String get detectBarcodeLabelLanguageButton;
+
+  /// No description provided for @printerLabelWidthLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'عرض الملصق مم'**
+  String get printerLabelWidthLabel;
+
+  /// No description provided for @printerLabelHeightLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'ارتفاع الملصق مم'**
+  String get printerLabelHeightLabel;
+
+  /// No description provided for @printerLabelGapLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الفاصل مم'**
+  String get printerLabelGapLabel;
+
+  /// No description provided for @printerLabelDpiLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الدقة DPI'**
+  String get printerLabelDpiLabel;
+
+  /// Selected barcode label printer language summary.
+  ///
+  /// In ar, this message translates to:
+  /// **'لغة الملصقات: {language}'**
+  String printerBarcodeLanguageSummary(String language);
+
+  /// Barcode label dimensions and resolution summary.
+  ///
+  /// In ar, this message translates to:
+  /// **'الملصق: {width}×{height} مم، فاصل {gap} مم، {dpi} DPI'**
+  String printerLabelGeometrySummary(int width, int height, int gap, int dpi);
+
+  /// No description provided for @barcodeLabelLanguageDetected.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم اكتشاف لغة طابعة الملصقات وحفظها.'**
+  String get barcodeLabelLanguageDetected;
+
+  /// No description provided for @barcodeLabelLanguageInferred.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم تخمين لغة طابعة الملصقات من اسم الطابعة. راجعها إذا لم تطبع الملصقات بشكل صحيح.'**
+  String get barcodeLabelLanguageInferred;
+
+  /// No description provided for @barcodeLabelLanguageDetectionUnavailable.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر اكتشاف لغة الملصقات تلقائيًا. اختر اللغة يدويًا لتجنب إرسال أوامر غير مناسبة.'**
+  String get barcodeLabelLanguageDetectionUnavailable;
+
+  /// No description provided for @barcodeLabelLanguageDetectionFailed.
+  ///
+  /// In ar, this message translates to:
+  /// **'فشل اكتشاف لغة طابعة الملصقات. تحقق من الاتصال أو اختر اللغة يدويًا.'**
+  String get barcodeLabelLanguageDetectionFailed;
+
   /// No description provided for @discoveredPrintersLabel.
   ///
   /// In ar, this message translates to:
@@ -4849,6 +4957,18 @@ abstract class AppLocalizations {
   /// **'جار الاختبار...'**
   String get testingPrinterButton;
 
+  /// No description provided for @testBarcodeLabelPrinterButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختبار ملصق باركود'**
+  String get testBarcodeLabelPrinterButton;
+
+  /// No description provided for @testingBarcodeLabelPrinterButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'جار اختبار الملصق...'**
+  String get testingBarcodeLabelPrinterButton;
+
   /// No description provided for @fakePrintButton.
   ///
   /// In ar, this message translates to:
@@ -4866,6 +4986,18 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'تعذر اختبار الطابعة. تحقق من الاتصال والإعدادات وحاول مرة أخرى.'**
   String get printerTestFailure;
+
+  /// No description provided for @barcodeLabelTestSuccess.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم إرسال ملصق اختبار الباركود.'**
+  String get barcodeLabelTestSuccess;
+
+  /// No description provided for @barcodeLabelTestFailure.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر إرسال ملصق اختبار الباركود. تحقق من لغة الملصقات والإعدادات.'**
+  String get barcodeLabelTestFailure;
 
   /// No description provided for @printerTestUnsupported.
   ///
@@ -6175,6 +6307,12 @@ abstract class AppLocalizations {
   /// **'أضف باركودًا للمنتج قبل طباعة الملصق.'**
   String get barcodeLabelPrintNoBarcode;
 
+  /// No description provided for @barcodeLabelPrintNoBarcodeShort.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا يوجد باركود للطباعة'**
+  String get barcodeLabelPrintNoBarcodeShort;
+
   /// No description provided for @barcodeLabelCopiesDialogTitle.
   ///
   /// In ar, this message translates to:
@@ -6198,6 +6336,78 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'طباعة'**
   String get barcodeLabelCopiesPrintButton;
+
+  /// No description provided for @barcodeLabelIncludePriceLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'طباعة السعر'**
+  String get barcodeLabelIncludePriceLabel;
+
+  /// No description provided for @barcodeLabelIncludePriceHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'إظهار سعر البيع على الملصق.'**
+  String get barcodeLabelIncludePriceHint;
+
+  /// No description provided for @barcodeLabelIncludeExpiryLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'طباعة تاريخ الانتهاء'**
+  String get barcodeLabelIncludeExpiryLabel;
+
+  /// No description provided for @barcodeLabelIncludeExpiryHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'إضافة تاريخ انتهاء الدفعة على الملصق.'**
+  String get barcodeLabelIncludeExpiryHint;
+
+  /// No description provided for @barcodeLabelExpiryDateLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'تاريخ الانتهاء'**
+  String get barcodeLabelExpiryDateLabel;
+
+  /// No description provided for @barcodeLabelExpiryDatePickerTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختيار تاريخ الانتهاء'**
+  String get barcodeLabelExpiryDatePickerTooltip;
+
+  /// No description provided for @barcodeLabelExpiryDateRequired.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر تاريخ الانتهاء أو أوقف طباعته.'**
+  String get barcodeLabelExpiryDateRequired;
+
+  /// No description provided for @barcodeLabelPreviewTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'معاينة الملصق'**
+  String get barcodeLabelPreviewTitle;
+
+  /// Preview line showing the printed label price.
+  ///
+  /// In ar, this message translates to:
+  /// **'السعر {price}'**
+  String barcodeLabelPreviewPrice(String price);
+
+  /// Preview line showing the printed label expiry date.
+  ///
+  /// In ar, this message translates to:
+  /// **'الانتهاء {date}'**
+  String barcodeLabelPreviewExpiry(String date);
+
+  /// No description provided for @barcodeLabelPrintProductTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'طباعة ملصقات المنتج'**
+  String get barcodeLabelPrintProductTooltip;
+
+  /// No description provided for @barcodeLabelPrintVariantTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'طباعة ملصقات الخيار'**
+  String get barcodeLabelPrintVariantTooltip;
 
   /// Message shown after barcode label copies are sent to the printer.
   ///

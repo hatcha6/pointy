@@ -28,7 +28,7 @@ import 'package:pointy_frontend/src/data/repositories/inventory_repository.dart'
 import 'package:pointy_frontend/src/data/repositories/purchase_repository.dart';
 import 'package:pointy_frontend/src/data/repositories/shop_settings_repository.dart';
 import 'package:pointy_frontend/src/data/repositories/user_repository.dart';
-import 'package:pointy_frontend/src/data/services/esc_pos_barcode_label_encoder.dart';
+import 'package:pointy_frontend/src/data/services/barcode_label_command_encoder.dart';
 import 'package:pointy_frontend/src/data/services/esc_pos_receipt_encoder.dart';
 import 'package:pointy_frontend/src/data/services/pos_api_service.dart';
 import 'package:pointy_frontend/src/data/services/print_transport.dart';
@@ -54,38 +54,55 @@ void main() {
     SharedPreferences.setMockInitialValues({});
   });
 
-  test(
-    'printer endpoint parses serial, bluetooth, wifi, and ESC/POS options',
-    () {
-      final endpoint = PrinterEndpoint.fromJson({
-        'kind': 'wifi',
-        'name': 'Counter',
-        'address': '192.168.1.50',
-        'port': 9100,
-        'paper_width_mm': 58,
-        'code_table': 'CP1256',
-        'timeout_ms': 3000,
-      });
+  test('printer endpoint parses transport and barcode label options', () {
+    final endpoint = PrinterEndpoint.fromJson({
+      'kind': 'wifi',
+      'name': 'Counter',
+      'address': '192.168.1.50',
+      'port': 9100,
+      'paper_width_mm': 58,
+      'code_table': 'CP1256',
+      'timeout_ms': 3000,
+      'barcode_label_language': 'zpl',
+      'label_width_mm': 50,
+      'label_height_mm': 25,
+      'label_gap_mm': 3,
+      'label_dpi': 300,
+    });
 
-      expect(endpoint.kind, PrintTransportKind.wifi);
-      expect(endpoint.address, '192.168.1.50');
-      expect(endpoint.port, 9100);
-      expect(endpoint.paperWidthMm, 58);
-      expect(endpoint.codeTable, 'CP1256');
-      expect(endpoint.timeoutMs, 3000);
-      expect(endpoint.outputMode, PrinterOutputMode.escPos);
-      expect(
-        PrinterEndpoint.fromJson({'kind': 'bluetooth'}).kind,
-        PrintTransportKind.bluetooth,
-      );
-      final systemPrinter = PrinterEndpoint.fromJson({
-        'kind': 'system',
-        'output_mode': 'pdf_a4',
-      });
-      expect(systemPrinter.kind, PrintTransportKind.system);
-      expect(systemPrinter.outputMode, PrinterOutputMode.pdfA4);
-    },
-  );
+    expect(endpoint.kind, PrintTransportKind.wifi);
+    expect(endpoint.address, '192.168.1.50');
+    expect(endpoint.port, 9100);
+    expect(endpoint.paperWidthMm, 58);
+    expect(endpoint.codeTable, 'CP1256');
+    expect(endpoint.timeoutMs, 3000);
+    expect(endpoint.outputMode, PrinterOutputMode.escPos);
+    expect(endpoint.barcodeLabelLanguage, BarcodeLabelPrinterLanguage.zpl);
+    expect(endpoint.labelWidthMm, 50);
+    expect(endpoint.labelHeightMm, 25);
+    expect(endpoint.labelGapMm, 3);
+    expect(endpoint.labelDpi, 300);
+    expect(
+      PrinterEndpoint.fromJson({'kind': 'bluetooth'}).kind,
+      PrintTransportKind.bluetooth,
+    );
+    final systemPrinter = PrinterEndpoint.fromJson({
+      'kind': 'system',
+      'output_mode': 'pdf_a4',
+    });
+    expect(systemPrinter.kind, PrintTransportKind.system);
+    expect(systemPrinter.outputMode, PrinterOutputMode.pdfA4);
+    expect(
+      PrinterEndpoint.fromJson({}).barcodeLabelLanguage,
+      BarcodeLabelPrinterLanguage.auto,
+    );
+    expect(
+      PrinterEndpoint.fromJson({
+        'barcode_label_language': 'esc_pos',
+      }).barcodeLabelLanguage,
+      BarcodeLabelPrinterLanguage.auto,
+    );
+  });
 
   test('Moamalat receipt parser decodes the terminal receipt URL', () {
     final receipt = const MoamalatReceiptParser().parse(
@@ -187,33 +204,82 @@ void main() {
     expect(utf8.decode(bytes, allowMalformed: true), isNot(contains('x1')));
   });
 
-  test('ESC/POS barcode label encoder prints repeated labels', () async {
-    const endpoint = PrinterEndpoint(
-      kind: PrintTransportKind.serial,
-      name: 'Counter',
-      address: '/dev/tty.test',
-      paperWidthMm: 58,
-    );
-
-    final bytes = await const EscPosBarcodeLabelEncoder().encodeLabels(
-      endpoint: endpoint,
-      lines: const [
-        BarcodeLabelPrintLine(
-          label: BarcodeLabelDraft(
-            displayName: 'قهوة عربية',
-            productName: 'قهوة عربية',
-            sku: 'COF-100',
-            barcode: '123456789012',
-            unitPrice: 5.5,
-          ),
-          copies: 2,
+  test('native barcode label encoder requires a resolved language', () async {
+    await expectLater(
+      const BarcodeLabelCommandEncoder().encodeLabels(
+        endpoint: const PrinterEndpoint(
+          kind: PrintTransportKind.serial,
+          name: 'Counter',
+          address: '/dev/tty.test',
         ),
-      ],
+        lines: const [
+          BarcodeLabelPrintLine(
+            label: BarcodeLabelDraft(
+              displayName: 'قهوة عربية',
+              productName: 'قهوة عربية',
+              sku: 'COF-100',
+              barcode: '123456789012',
+              unitPrice: 5.5,
+            ),
+            copies: 2,
+          ),
+        ],
+      ),
+      throwsA(isA<ArgumentError>()),
+    );
+  });
+
+  test('native barcode label encoder emits label-language commands', () async {
+    const line = BarcodeLabelPrintLine(
+      label: BarcodeLabelDraft(
+        displayName: 'قهوة عربية',
+        productName: 'قهوة عربية',
+        sku: 'COF-100',
+        barcode: '987654321098',
+        unitPrice: 5.5,
+      ),
+      copies: 2,
+      includePrice: false,
+    );
+    const endpoint = PrinterEndpoint(
+      kind: PrintTransportKind.wifi,
+      name: 'Label printer',
+      address: '192.168.1.50',
+      labelWidthMm: 40,
+      labelHeightMm: 30,
+      labelGapMm: 2,
+      labelDpi: 203,
     );
 
-    expect(bytes, isNotEmpty);
-    expect(bytes.first, 27);
-    expect(_countSubsequence(bytes, [29, 107]), 2);
+    for (final entry in {
+      BarcodeLabelPrinterLanguage.zpl: ['^XA', '^PW', '^BCN', '^PQ2'],
+      BarcodeLabelPrinterLanguage.tspl: [
+        'SIZE 40 mm,30 mm',
+        'GAP 2 mm,0',
+        'BARCODE',
+        'PRINT 2,1',
+      ],
+      BarcodeLabelPrinterLanguage.epl: ['N', 'q', 'Q', 'B', 'P2'],
+      BarcodeLabelPrinterLanguage.cpcl: [
+        '! 0 200 200',
+        'PAGE-WIDTH',
+        'BARCODE 128',
+        'PRINT',
+      ],
+    }.entries) {
+      final bytes = await const BarcodeLabelCommandEncoder().encodeLabels(
+        endpoint: endpoint.copyWith(barcodeLabelLanguage: entry.key),
+        language: entry.key,
+        lines: const [line],
+      );
+      final text = utf8.decode(bytes);
+
+      for (final expected in entry.value) {
+        expect(text, contains(expected), reason: entry.key.name);
+      }
+      expect(text, contains('987654321098'));
+      expect(text, isNot(contains('5.50')));
+    }
   });
 
   test('printing repository discovers printers across transports', () async {
@@ -734,8 +800,184 @@ void main() {
     ]);
 
     expect(result.isSuccess, isTrue);
-    expect(transport.printedBytes, isNotEmpty);
-    expect(_countSubsequence(transport.printedBytes, [29, 107]), 1);
+    final text = utf8.decode(transport.printedBytes);
+    expect(text, contains('^XA'));
+    expect(text, contains('^PQ1'));
+    expect(text, contains('123456789012'));
+  });
+
+  test('printing repository sends native ZPL barcode label bytes', () async {
+    final transport = _CapturingPrintTransport();
+    final repository = PrintingRepository(
+      _mockApiService(),
+      serialTransport: transport,
+      bluetoothTransport: transport,
+      wifiTransport: transport,
+      fakeTransport: transport,
+    );
+    await repository.saveDefaultPrinterConfig(
+      const PrinterConfig(
+        endpoint: PrinterEndpoint(
+          kind: PrintTransportKind.wifi,
+          name: 'Zebra ZD421',
+          address: '192.168.1.50',
+          barcodeLabelLanguage: BarcodeLabelPrinterLanguage.zpl,
+          labelWidthMm: 40,
+          labelHeightMm: 30,
+          labelGapMm: 2,
+        ),
+      ),
+    );
+
+    final result = await repository.printBarcodeLabels([
+      BarcodeLabelPrintLine.product(
+        const Product(
+          id: 1,
+          name: 'قهوة عربية',
+          quantityOnHand: 10,
+          defaultVariant: ProductVariant(
+            id: 1,
+            productId: 1,
+            sku: 'COF-100',
+            unitPrice: 5.5,
+            barcode: '123456789012',
+          ),
+        ),
+        copies: 2,
+      ),
+    ]);
+    final text = utf8.decode(transport.printedBytes);
+
+    expect(result.isSuccess, isTrue);
+    expect(text, contains('^XA'));
+    expect(text, contains('^BCN'));
+    expect(text, contains('^PQ2'));
+    expect(text, contains('123456789012'));
+  });
+
+  test(
+    'printing repository safely auto-detects barcode label language',
+    () async {
+      final transport = _CapturingPrintTransport(
+        probeResponse: PrintTransportResponse.success(
+          utf8.encode('zpl'),
+          'language',
+        ),
+      );
+      final repository = PrintingRepository(
+        _mockApiService(),
+        serialTransport: transport,
+        bluetoothTransport: transport,
+        wifiTransport: transport,
+        fakeTransport: transport,
+      );
+      await repository.saveDefaultPrinterConfig(
+        const PrinterConfig(
+          endpoint: PrinterEndpoint(
+            kind: PrintTransportKind.wifi,
+            name: 'Label printer',
+            address: '192.168.1.50',
+            barcodeLabelLanguage: BarcodeLabelPrinterLanguage.auto,
+          ),
+        ),
+      );
+
+      final result = await repository.printBarcodeLabels([
+        BarcodeLabelPrintLine.product(
+          const Product(
+            id: 1,
+            name: 'قهوة عربية',
+            quantityOnHand: 10,
+            defaultVariant: ProductVariant(
+              id: 1,
+              productId: 1,
+              sku: 'COF-100',
+              unitPrice: 5.5,
+              barcode: '123456789012',
+            ),
+          ),
+        ),
+      ]);
+      final text = utf8.decode(transport.printedBytes);
+
+      expect(result.isSuccess, isTrue);
+      expect(text, contains('^XA'));
+    },
+  );
+
+  test(
+    'printing repository falls back to ZPL when auto-detection fails',
+    () async {
+      final transport = _CapturingPrintTransport();
+      final repository = PrintingRepository(
+        _mockApiService(),
+        serialTransport: transport,
+        bluetoothTransport: transport,
+        wifiTransport: transport,
+        fakeTransport: transport,
+      );
+      await repository.saveDefaultPrinterConfig(
+        const PrinterConfig(
+          endpoint: PrinterEndpoint(
+            kind: PrintTransportKind.wifi,
+            name: 'Unknown label printer',
+            address: '192.168.1.50',
+            barcodeLabelLanguage: BarcodeLabelPrinterLanguage.auto,
+          ),
+        ),
+      );
+
+      final result = await repository.printBarcodeLabels([
+        BarcodeLabelPrintLine.product(
+          const Product(
+            id: 1,
+            name: 'قهوة عربية',
+            quantityOnHand: 10,
+            defaultVariant: ProductVariant(
+              id: 1,
+              productId: 1,
+              sku: 'COF-100',
+              unitPrice: 5.5,
+              barcode: '123456789012',
+            ),
+          ),
+        ),
+      ]);
+      final text = utf8.decode(transport.printedBytes);
+
+      expect(result.isSuccess, isTrue);
+      expect(text, contains('^XA'));
+      expect(text, contains('^BCN'));
+      expect(text, contains('123456789012'));
+    },
+  );
+
+  test('printing repository sends a barcode label test print', () async {
+    final transport = _CapturingPrintTransport();
+    final repository = PrintingRepository(
+      _mockApiService(),
+      serialTransport: transport,
+      bluetoothTransport: transport,
+      wifiTransport: transport,
+      fakeTransport: transport,
+    );
+    const config = PrinterConfig(
+      endpoint: PrinterEndpoint(
+        kind: PrintTransportKind.wifi,
+        name: 'Zebra ZD421',
+        address: '192.168.1.50',
+        barcodeLabelLanguage: BarcodeLabelPrinterLanguage.zpl,
+      ),
+    );
+
+    final result = await repository.printBarcodeLabelTest(config);
+    final text = utf8.decode(transport.printedBytes);
+
+    expect(result.isSuccess, isTrue);
+    expect(text, contains('^XA'));
+    expect(text, contains('ملصق اختبار'));
+    expect(text, contains('TEST-LABEL'));
+    expect(text, contains('123456789012'));
   });
 
   testWidgets('checkout keeps cart and shows error on failure', (
@@ -2889,6 +3131,9 @@ void main() {
 
     expect(find.text('طباعة ملصقات الباركود'), findsOneWidget);
     expect(find.text('عدد النسخ'), findsOneWidget);
+    expect(find.text('طباعة السعر'), findsOneWidget);
+    expect(find.text('طباعة تاريخ الانتهاء'), findsOneWidget);
+    expect(find.text('معاينة الملصق'), findsOneWidget);
 
     await tester.enterText(find.byType(TextFormField).last, '3');
     await tester.tap(find.text('طباعة').last);
@@ -2899,7 +3144,10 @@ void main() {
     await tester.pump();
 
     expect(find.text('تم إرسال 3 ملصقات باركود للطابعة.'), findsOneWidget);
-    expect(_countSubsequence(transport.printedBytes, [29, 107]), 3);
+    final text = utf8.decode(transport.printedBytes);
+    expect(text, contains('^XA'));
+    expect(text, contains('^PQ3'));
+    expect(text, contains('123456789012'));
   });
 
   testWidgets('catalog product details can create a stock movement', (
@@ -3280,19 +3528,6 @@ LogicalKeyboardKey _logicalKeyForCharacter(String character) {
   };
 }
 
-int _countSubsequence(List<int> values, List<int> pattern) {
-  var count = 0;
-  for (var index = 0; index <= values.length - pattern.length; index += 1) {
-    final matches = Iterable<int>.generate(
-      pattern.length,
-    ).every((offset) => values[index + offset] == pattern[offset]);
-    if (matches) {
-      count += 1;
-    }
-  }
-  return count;
-}
-
 class _StaticDiscoveryTransport extends PrintTransport {
   const _StaticDiscoveryTransport(this.endpoints);
 
@@ -3355,6 +3590,9 @@ class _StatusPrintTransport extends PrintTransport {
 }
 
 class _CapturingPrintTransport extends PrintTransport {
+  _CapturingPrintTransport({this.probeResponse});
+
+  final PrintTransportResponse? probeResponse;
   List<int> printedBytes = const [];
 
   @override
@@ -3380,6 +3618,16 @@ class _CapturingPrintTransport extends PrintTransport {
   }) async {
     printedBytes = List<int>.of(bytes);
     return const PrintTransportResult.success('printed bytes');
+  }
+
+  @override
+  Future<PrintTransportResponse> sendAndReceiveBytes({
+    required List<int> bytes,
+    required PrinterEndpoint endpoint,
+    Duration? readTimeout,
+  }) async {
+    return probeResponse ??
+        const PrintTransportResponse.failure('no probe response');
   }
 
   @override

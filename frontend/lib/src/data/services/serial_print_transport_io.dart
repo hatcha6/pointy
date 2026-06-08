@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter_libserialport/flutter_libserialport.dart';
@@ -76,6 +77,21 @@ class SerialPrintTransport extends PrintTransport {
   }
 
   @override
+  Future<PrintTransportResponse> sendAndReceiveBytes({
+    required List<int> bytes,
+    required PrinterEndpoint endpoint,
+    Duration? readTimeout,
+  }) async {
+    return _queue.run(
+      () => _sendAndReceive(
+        endpoint,
+        Uint8List.fromList(bytes),
+        readTimeout: readTimeout,
+      ),
+    );
+  }
+
+  @override
   Future<PrintTransportResult> printTest(PrinterEndpoint endpoint) async {
     final bytes = await _encoder.encodeTest(endpoint);
     return printBytes(bytes: bytes, endpoint: endpoint);
@@ -122,6 +138,93 @@ class SerialPrintTransport extends PrintTransport {
     } on Object catch (error) {
       return PrintTransportResult.failure('serial print failed: $error');
     } finally {
+      config?.dispose();
+      if (port.isOpen) {
+        port.close();
+      }
+      port.dispose();
+    }
+  }
+
+  Future<PrintTransportResponse> _sendAndReceive(
+    PrinterEndpoint endpoint,
+    Uint8List bytes, {
+    Duration? readTimeout,
+  }) async {
+    final address = endpoint.address.trim();
+    if (address.isEmpty) {
+      return const PrintTransportResponse.failure('serial port is required');
+    }
+
+    final port = SerialPort(address);
+    SerialPortConfig? config;
+    SerialPortReader? reader;
+    StreamSubscription<Uint8List>? subscription;
+    try {
+      if (!port.openReadWrite()) {
+        return PrintTransportResponse.failure(
+          'failed to open serial port ${port.name ?? address}',
+        );
+      }
+      config = SerialPortConfig()
+        ..baudRate = endpoint.baudRate
+        ..bits = 8
+        ..stopBits = 1
+        ..parity = SerialPortParity.none
+        ..setFlowControl(SerialPortFlowControl.none);
+      port.config = config;
+
+      final response = <int>[];
+      final firstData = Completer<void>();
+      reader = SerialPortReader(port, timeout: endpoint.timeoutMs);
+      subscription = reader.stream.listen(
+        (data) {
+          response.addAll(data);
+          if (!firstData.isCompleted) {
+            firstData.complete();
+          }
+        },
+        onError: (Object error) {
+          if (!firstData.isCompleted) {
+            firstData.completeError(error);
+          }
+        },
+        onDone: () {
+          if (!firstData.isCompleted) {
+            firstData.complete();
+          }
+        },
+      );
+
+      var written = 0;
+      while (written < bytes.length) {
+        final next = bytes.sublist(written);
+        final count = port.write(next, timeout: endpoint.timeoutMs);
+        if (count <= 0) {
+          return PrintTransportResponse.failure(
+            'serial probe stopped after $written of ${bytes.length} bytes',
+          );
+        }
+        written += count;
+      }
+      port.drain();
+      await firstData.future.timeout(
+        readTimeout ?? Duration(milliseconds: endpoint.timeoutMs),
+        onTimeout: () {},
+      );
+
+      if (response.isEmpty) {
+        return const PrintTransportResponse.failure('printer did not respond');
+      }
+      return PrintTransportResponse.success(
+        List<int>.unmodifiable(response),
+        'printer response received',
+      );
+    } on Object catch (error) {
+      return PrintTransportResponse.failure('serial probe failed: $error');
+    } finally {
+      await subscription?.cancel();
+      reader?.close();
       config?.dispose();
       if (port.isOpen) {
         port.close();

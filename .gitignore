@@ -15,3 +15,7 @@ backend/media/
 relay/.gocache/
 relay/.gomodcache/
 relay/data/
+
+# Local PyArmor license material and generated diagnostics.
+pyarmor-regfile-1941/
+pyarmor.bug.log

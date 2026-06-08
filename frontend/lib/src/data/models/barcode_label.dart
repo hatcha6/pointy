@@ -56,25 +56,45 @@ class BarcodeLabelDraft {
 }
 
 class BarcodeLabelPrintLine {
-  const BarcodeLabelPrintLine({required this.label, required this.copies});
+  const BarcodeLabelPrintLine({
+    required this.label,
+    required this.copies,
+    this.includePrice = true,
+    this.expiryDate,
+  });
 
   final BarcodeLabelDraft label;
   final int copies;
+  final bool includePrice;
+  final DateTime? expiryDate;
 
-  factory BarcodeLabelPrintLine.product(Product product, {int copies = 1}) {
+  bool get includeExpiryDate => expiryDate != null;
+
+  factory BarcodeLabelPrintLine.product(
+    Product product, {
+    int copies = 1,
+    bool includePrice = true,
+    DateTime? expiryDate,
+  }) {
     return BarcodeLabelPrintLine(
       label: BarcodeLabelDraft.fromProduct(product),
       copies: copies,
+      includePrice: includePrice,
+      expiryDate: expiryDate,
     );
   }
 
   factory BarcodeLabelPrintLine.variant(
     ProductVariant variant, {
     int copies = 1,
+    bool includePrice = true,
+    DateTime? expiryDate,
   }) {
     return BarcodeLabelPrintLine(
       label: BarcodeLabelDraft.fromVariant(variant),
       copies: copies,
+      includePrice: includePrice,
+      expiryDate: expiryDate,
     );
   }
 }

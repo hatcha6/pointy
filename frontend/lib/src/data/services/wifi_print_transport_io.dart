@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:multicast_dns/multicast_dns.dart';
@@ -89,6 +90,17 @@ class WifiPrintTransport extends PrintTransport {
   }
 
   @override
+  Future<PrintTransportResponse> sendAndReceiveBytes({
+    required List<int> bytes,
+    required PrinterEndpoint endpoint,
+    Duration? readTimeout,
+  }) async {
+    return _queue.run(
+      () => _sendAndReceive(endpoint, bytes, readTimeout: readTimeout),
+    );
+  }
+
+  @override
   Future<PrintTransportResult> printTest(PrinterEndpoint endpoint) async {
     final bytes = await _encoder.encodeTest(endpoint);
     return printBytes(bytes: bytes, endpoint: endpoint);
@@ -120,6 +132,69 @@ class WifiPrintTransport extends PrintTransport {
       );
     } on Object catch (error) {
       return PrintTransportResult.failure('network print failed: $error');
+    } finally {
+      socket?.destroy();
+    }
+  }
+
+  Future<PrintTransportResponse> _sendAndReceive(
+    PrinterEndpoint endpoint,
+    List<int> bytes, {
+    Duration? readTimeout,
+  }) async {
+    final host = endpoint.address.trim();
+    if (host.isEmpty) {
+      return const PrintTransportResponse.failure('printer host is required');
+    }
+
+    Socket? socket;
+    try {
+      socket = await Socket.connect(
+        host,
+        endpoint.port,
+        timeout: Duration(milliseconds: endpoint.timeoutMs),
+      );
+      final response = <int>[];
+      final firstData = Completer<void>();
+      final subscription = socket.listen(
+        (data) {
+          response.addAll(data);
+          if (!firstData.isCompleted) {
+            firstData.complete();
+          }
+        },
+        onError: (Object error) {
+          if (!firstData.isCompleted) {
+            firstData.completeError(error);
+          }
+        },
+        onDone: () {
+          if (!firstData.isCompleted) {
+            firstData.complete();
+          }
+        },
+      );
+
+      socket.add(bytes);
+      await socket.flush();
+      await firstData.future.timeout(
+        readTimeout ?? Duration(milliseconds: endpoint.timeoutMs),
+        onTimeout: () {},
+      );
+      await subscription.cancel();
+      await socket.close();
+
+      if (response.isEmpty) {
+        return const PrintTransportResponse.failure('printer did not respond');
+      }
+      return PrintTransportResponse.success(
+        List<int>.unmodifiable(response),
+        'printer response received',
+      );
+    } on Object catch (error) {
+      return PrintTransportResponse.failure(
+        'network printer probe failed: $error',
+      );
     } finally {
       socket?.destroy();
     }

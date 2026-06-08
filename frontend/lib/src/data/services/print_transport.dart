@@ -20,6 +20,16 @@ abstract class PrintTransport {
     return const PrintTransportResult.failure('raw printing unsupported');
   }
 
+  Future<PrintTransportResponse> sendAndReceiveBytes({
+    required List<int> bytes,
+    required PrinterEndpoint endpoint,
+    Duration? readTimeout,
+  }) async {
+    return const PrintTransportResponse.failure(
+      'printer response probes unsupported',
+    );
+  }
+
   Future<PrintTransportResult> printTest(PrinterEndpoint endpoint);
 }
 
@@ -40,4 +50,19 @@ class PrintTransportResult {
 
   final bool isSuccess;
   final String message;
+}
+
+class PrintTransportResponse {
+  const PrintTransportResponse.success(this.bytes, this.message)
+    : isSuccess = true;
+
+  const PrintTransportResponse.failure(this.message)
+    : isSuccess = false,
+      bytes = const [];
+
+  final bool isSuccess;
+  final String message;
+  final List<int> bytes;
+
+  String get text => String.fromCharCodes(bytes);
 }

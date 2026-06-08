@@ -3,6 +3,7 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../core/analytics_engine.dart';
 import '../../../core/authorization.dart';
+import '../../../data/models/barcode_label.dart';
 import '../../../data/models/product.dart';
 import '../../../data/models/product_variant.dart';
 import '../../../data/repositories/inventory_repository.dart';
@@ -17,6 +18,7 @@ import '../../../shared/product_status_pill.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../view_models/product_details_view_model.dart';
 import '../view_models/product_stock_view_model.dart';
+import 'barcode_label_print_action.dart';
 import 'product_document_history_section.dart';
 import 'product_parent_edit_sheet.dart';
 import 'product_variant_details_screen.dart';
@@ -88,12 +90,17 @@ class ProductDetailsScreen extends StatelessWidget {
                   product: product,
                   variantCount: viewModel.variants.length,
                   capabilities: capabilities,
+                  printingRepository: printingRepository,
+                  analyticsEngine: analyticsEngine,
                   onEdit: () => _showProductEditor(context),
                 ),
                 const SizedBox(height: 12),
                 _VariantsSection(
+                  product: product,
                   variants: viewModel.variants,
                   capabilities: capabilities,
+                  printingRepository: printingRepository,
+                  analyticsEngine: analyticsEngine,
                   onAddVariant: () => _showVariantEditor(context),
                   onGenerateVariants: () => _showVariantGenerator(context),
                   onEditVariant: (variant) =>
@@ -214,36 +221,37 @@ class ProductDetailsScreen extends StatelessWidget {
       ),
     );
   }
+}
 
-  ProductVariant _variantWithParentFallback(
-    Product product,
-    ProductVariant variant,
-  ) {
-    if (variant.productDetail != null && variant.productName.isNotEmpty) {
-      return variant;
-    }
-    return ProductVariant(
-      id: variant.id,
-      productId: product.id,
-      productName: product.name,
-      productDetail: product,
-      name: variant.name,
-      displayName: variant.displayName,
-      fullName: variant.fullName,
-      sku: variant.sku,
-      barcode: variant.barcode,
-      unitPrice: variant.unitPrice,
-      isActive: variant.isActive,
-      isDefault: variant.isDefault,
-      quantityOnHand: variant.quantityOnHand,
-      optionValueIds: variant.optionValueIds,
-      optionValues: variant.optionValues,
-      primaryImage: variant.primaryImage ?? product.primaryImage,
-      imageAttachments: variant.imageAttachments.isNotEmpty
-          ? variant.imageAttachments
-          : product.imageAttachments,
-    );
+ProductVariant _variantWithParentFallback(
+  Product product,
+  ProductVariant variant,
+) {
+  if (variant.productDetail != null && variant.productName.isNotEmpty) {
+    return variant;
   }
+  return ProductVariant(
+    id: variant.id,
+    productId: product.id,
+    productName: product.name,
+    productDetail: product,
+    name: variant.name,
+    displayName: variant.displayName,
+    fullName: variant.fullName,
+    sku: variant.sku,
+    barcode: variant.barcode,
+    unitPrice: variant.unitPrice,
+    isActive: variant.isActive,
+    isDefault: variant.isDefault,
+    tracksExpiry: variant.tracksExpiry || product.tracksExpiry,
+    quantityOnHand: variant.quantityOnHand,
+    optionValueIds: variant.optionValueIds,
+    optionValues: variant.optionValues,
+    primaryImage: variant.primaryImage ?? product.primaryImage,
+    imageAttachments: variant.imageAttachments.isNotEmpty
+        ? variant.imageAttachments
+        : product.imageAttachments,
+  );
 }
 
 class _ParentSummaryCard extends StatelessWidget {
@@ -251,12 +259,16 @@ class _ParentSummaryCard extends StatelessWidget {
     required this.product,
     required this.variantCount,
     required this.capabilities,
+    required this.printingRepository,
+    this.analyticsEngine,
     required this.onEdit,
   });
 
   final Product product;
   final int variantCount;
   final AuthorizationCapabilities capabilities;
+  final PrintingRepository printingRepository;
+  final AnalyticsEngine? analyticsEngine;
   final VoidCallback onEdit;
 
   @override
@@ -293,6 +305,22 @@ class _ParentSummaryCard extends StatelessWidget {
                       ProductStatusPill(isActive: product.isActive),
                     ],
                   ),
+                ),
+                BarcodeLabelPrintButton(
+                  label: BarcodeLabelDraft.fromProduct(product),
+                  printingRepository: printingRepository,
+                  productId: product.id,
+                  productName: product.name,
+                  variantId: product.variantId,
+                  entityType: 'product',
+                  entityId: product.id,
+                  source: 'product_detail_parent',
+                  tracksExpiry:
+                      product.tracksExpiry ||
+                      (product.defaultVariant?.tracksExpiry ?? false),
+                  analyticsEngine: analyticsEngine,
+                  style: BarcodeLabelPrintButtonStyle.icon,
+                  tooltip: l10n.barcodeLabelPrintProductTooltip,
                 ),
                 ProductChangeGuard(
                   capabilities: capabilities,
@@ -404,16 +432,22 @@ class _SummaryChip extends StatelessWidget {
 
 class _VariantsSection extends StatelessWidget {
   const _VariantsSection({
+    required this.product,
     required this.variants,
     required this.capabilities,
+    required this.printingRepository,
+    this.analyticsEngine,
     required this.onAddVariant,
     required this.onGenerateVariants,
     required this.onEditVariant,
     required this.onOpenVariant,
   });
 
+  final Product product;
   final List<ProductVariant> variants;
   final AuthorizationCapabilities capabilities;
+  final PrintingRepository printingRepository;
+  final AnalyticsEngine? analyticsEngine;
   final VoidCallback onAddVariant;
   final VoidCallback onGenerateVariants;
   final ValueChanged<ProductVariant> onEditVariant;
@@ -459,8 +493,11 @@ class _VariantsSection extends StatelessWidget {
               builder: (context, constraints) {
                 if (constraints.maxWidth >= 720) {
                   return _VariantDataTable(
+                    product: product,
                     variants: variants,
                     capabilities: capabilities,
+                    printingRepository: printingRepository,
+                    analyticsEngine: analyticsEngine,
                     onEditVariant: onEditVariant,
                     onOpenVariant: onOpenVariant,
                   );
@@ -469,8 +506,11 @@ class _VariantsSection extends StatelessWidget {
                   children: [
                     for (final variant in variants) ...[
                       _VariantListTile(
+                        product: product,
                         variant: variant,
                         capabilities: capabilities,
+                        printingRepository: printingRepository,
+                        analyticsEngine: analyticsEngine,
                         onEdit: () => onEditVariant(variant),
                         onOpen: () => onOpenVariant(variant),
                       ),
@@ -488,14 +528,20 @@ class _VariantsSection extends StatelessWidget {
 
 class _VariantDataTable extends StatelessWidget {
   const _VariantDataTable({
+    required this.product,
     required this.variants,
     required this.capabilities,
+    required this.printingRepository,
+    this.analyticsEngine,
     required this.onEditVariant,
     required this.onOpenVariant,
   });
 
+  final Product product;
   final List<ProductVariant> variants;
   final AuthorizationCapabilities capabilities;
+  final PrintingRepository printingRepository;
+  final AnalyticsEngine? analyticsEngine;
   final ValueChanged<ProductVariant> onEditVariant;
   final ValueChanged<ProductVariant> onOpenVariant;
 
@@ -535,6 +581,12 @@ class _VariantDataTable extends StatelessWidget {
                   Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
+                      _VariantBarcodeLabelPrintButton(
+                        product: product,
+                        variant: variant,
+                        printingRepository: printingRepository,
+                        analyticsEngine: analyticsEngine,
+                      ),
                       IconButton(
                         tooltip: l10n.openVariantDetailsTooltip,
                         onPressed: () => onOpenVariant(variant),
@@ -561,14 +613,20 @@ class _VariantDataTable extends StatelessWidget {
 
 class _VariantListTile extends StatelessWidget {
   const _VariantListTile({
+    required this.product,
     required this.variant,
     required this.capabilities,
+    required this.printingRepository,
+    this.analyticsEngine,
     required this.onEdit,
     required this.onOpen,
   });
 
+  final Product product;
   final ProductVariant variant;
   final AuthorizationCapabilities capabilities;
+  final PrintingRepository printingRepository;
+  final AnalyticsEngine? analyticsEngine;
   final VoidCallback onEdit;
   final VoidCallback onOpen;
 
@@ -592,6 +650,12 @@ class _VariantListTile extends StatelessWidget {
       trailing: Wrap(
         spacing: 4,
         children: [
+          _VariantBarcodeLabelPrintButton(
+            product: product,
+            variant: variant,
+            printingRepository: printingRepository,
+            analyticsEngine: analyticsEngine,
+          ),
           IconButton(
             tooltip: l10n.openVariantDetailsTooltip,
             onPressed: onOpen,
@@ -612,6 +676,40 @@ class _VariantListTile extends StatelessWidget {
   }
 }
 
+class _VariantBarcodeLabelPrintButton extends StatelessWidget {
+  const _VariantBarcodeLabelPrintButton({
+    required this.product,
+    required this.variant,
+    required this.printingRepository,
+    this.analyticsEngine,
+  });
+
+  final Product product;
+  final ProductVariant variant;
+  final PrintingRepository printingRepository;
+  final AnalyticsEngine? analyticsEngine;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final labelVariant = _variantWithParentFallback(product, variant);
+    return BarcodeLabelPrintButton(
+      label: BarcodeLabelDraft.fromVariant(labelVariant),
+      printingRepository: printingRepository,
+      productId: product.id,
+      productName: product.name,
+      variantId: variant.id,
+      entityType: 'product_variant',
+      entityId: variant.id,
+      source: 'product_detail_variants',
+      tracksExpiry: labelVariant.tracksExpiry,
+      analyticsEngine: analyticsEngine,
+      style: BarcodeLabelPrintButtonStyle.icon,
+      tooltip: l10n.barcodeLabelPrintVariantTooltip,
+    );
+  }
+}
+
 class _VariantNameLabel extends StatelessWidget {
   const _VariantNameLabel({required this.variant});
 
@@ -621,8 +719,10 @@ class _VariantNameLabel extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
 
-    return Row(
-      mainAxisSize: MainAxisSize.min,
+    return Wrap(
+      spacing: 6,
+      runSpacing: 4,
+      crossAxisAlignment: WrapCrossAlignment.center,
       children: [
         ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 220),
@@ -632,13 +732,11 @@ class _VariantNameLabel extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
           ),
         ),
-        if (variant.isDefault) ...[
-          const SizedBox(width: 6),
+        if (variant.isDefault)
           Chip(
             visualDensity: VisualDensity.compact,
             label: Text(l10n.defaultVariantBadge),
           ),
-        ],
       ],
     );
   }

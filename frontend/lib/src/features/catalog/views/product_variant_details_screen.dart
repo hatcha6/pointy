@@ -1,11 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
-import '../../../core/analytics_audit.dart';
 import '../../../core/analytics_engine.dart';
 import '../../../core/authorization.dart';
-import '../../../data/models/analytics_event.dart';
 import '../../../data/models/barcode_label.dart';
 import '../../../data/models/product.dart';
 import '../../../data/models/purchase_submission.dart';
@@ -17,6 +14,7 @@ import '../../../shared/formatters.dart';
 import '../../../shared/infinite_scroll_grid.dart';
 import '../../../shared/product_status_pill.dart';
 import '../view_models/product_stock_view_model.dart';
+import 'barcode_label_print_action.dart';
 import 'product_details_hero.dart';
 import 'stock_movement_form.dart';
 import 'stock_movements_sheet.dart';
@@ -377,7 +375,7 @@ class _MetricChip extends StatelessWidget {
   }
 }
 
-class _BarcodeLabelPrintSection extends StatefulWidget {
+class _BarcodeLabelPrintSection extends StatelessWidget {
   const _BarcodeLabelPrintSection({
     required this.product,
     required this.printingRepository,
@@ -389,18 +387,14 @@ class _BarcodeLabelPrintSection extends StatefulWidget {
   final AnalyticsEngine? analyticsEngine;
 
   @override
-  State<_BarcodeLabelPrintSection> createState() =>
-      _BarcodeLabelPrintSectionState();
-}
-
-class _BarcodeLabelPrintSectionState extends State<_BarcodeLabelPrintSection> {
-  bool _isPrinting = false;
-
-  @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final colorScheme = Theme.of(context).colorScheme;
-    final hasBarcode = widget.product.effectiveBarcode.trim().isNotEmpty;
+    final variant = product.defaultVariant;
+    final label = variant == null
+        ? BarcodeLabelDraft.fromProduct(product)
+        : BarcodeLabelDraft.fromVariant(variant);
+    final hasBarcode = label.barcode.trim().isNotEmpty;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -414,167 +408,26 @@ class _BarcodeLabelPrintSectionState extends State<_BarcodeLabelPrintSection> {
         ],
         Align(
           alignment: AlignmentDirectional.centerStart,
-          child: SizedBox(
+          child: BarcodeLabelPrintButton(
             width: 240,
-            child: FilledButton.icon(
-              onPressed: hasBarcode && !_isPrinting ? _printLabel : null,
-              icon: _isPrinting
-                  ? const SizedBox.square(
-                      dimension: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.print_outlined),
-              label: Text(
-                _isPrinting
-                    ? l10n.barcodeLabelPrintInProgressButton
-                    : l10n.barcodeLabelPrintButton,
-              ),
-            ),
+            label: label,
+            printingRepository: printingRepository,
+            productId: product.id,
+            productName: label.productName.isEmpty
+                ? product.name
+                : label.productName,
+            variantId: variant?.id,
+            entityType: variant == null ? 'product' : 'product_variant',
+            entityId: variant?.id ?? product.id,
+            source: 'barcode_label_panel',
+            tracksExpiry:
+                product.tracksExpiry || (variant?.tracksExpiry ?? false),
+            analyticsEngine: analyticsEngine,
+            tooltip: l10n.barcodeLabelPrintButton,
           ),
         ),
       ],
     );
-  }
-
-  Future<void> _printLabel() async {
-    final l10n = AppLocalizations.of(context)!;
-    final messenger = ScaffoldMessenger.of(context);
-    final copies = await _askLabelCopies();
-    if (copies == null) {
-      return;
-    }
-
-    setState(() => _isPrinting = true);
-
-    final variant = widget.product.defaultVariant;
-    final result = await widget.printingRepository.printBarcodeLabels([
-      variant == null
-          ? BarcodeLabelPrintLine.product(widget.product, copies: copies)
-          : BarcodeLabelPrintLine.variant(variant, copies: copies),
-    ]);
-    _trackBarcodeLabelsPrinted(
-      success: result.isSuccess,
-      copies: copies,
-      variantId: variant?.id,
-    );
-
-    if (!mounted) {
-      return;
-    }
-    setState(() => _isPrinting = false);
-    messenger.showSnackBar(
-      SnackBar(
-        content: Text(
-          result.isSuccess
-              ? l10n.barcodeLabelPrintSuccess(copies)
-              : l10n.barcodeLabelPrintError,
-        ),
-      ),
-    );
-  }
-
-  void _trackBarcodeLabelsPrinted({
-    required bool success,
-    required int copies,
-    required int? variantId,
-  }) {
-    trackAuditEvent(
-      widget.analyticsEngine,
-      name: success
-          ? 'printing.barcode_labels.printed'
-          : 'printing.barcode_labels.failed',
-      severity: success
-          ? AnalyticsEventSeverity.info
-          : AnalyticsEventSeverity.warning,
-      entityType: variantId == null ? 'product' : 'product_variant',
-      entityId: variantId ?? widget.product.id,
-      attributes: {
-        'product_id': widget.product.id,
-        'product_name': widget.product.name,
-        'variant_id': ?variantId,
-        'sku': widget.product.effectiveSku,
-        'barcode_present': widget.product.effectiveBarcode.trim().isNotEmpty,
-        'source': 'barcode_label_panel',
-      },
-      metrics: {'copies': copies, 'label_count': copies},
-      flushImmediately: !success,
-    );
-  }
-
-  Future<int?> _askLabelCopies() {
-    return showDialog<int>(
-      context: context,
-      builder: (dialogContext) {
-        return const _BarcodeLabelCopiesDialog();
-      },
-    );
-  }
-}
-
-class _BarcodeLabelCopiesDialog extends StatefulWidget {
-  const _BarcodeLabelCopiesDialog();
-
-  @override
-  State<_BarcodeLabelCopiesDialog> createState() =>
-      _BarcodeLabelCopiesDialogState();
-}
-
-class _BarcodeLabelCopiesDialogState extends State<_BarcodeLabelCopiesDialog> {
-  final _formKey = GlobalKey<FormState>();
-  final _copiesController = TextEditingController(text: '1');
-
-  @override
-  void dispose() {
-    _copiesController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
-
-    return AlertDialog(
-      title: Text(l10n.barcodeLabelCopiesDialogTitle),
-      content: Form(
-        key: _formKey,
-        child: TextFormField(
-          controller: _copiesController,
-          autofocus: true,
-          keyboardType: TextInputType.number,
-          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-          decoration: InputDecoration(
-            labelText: l10n.barcodeLabelCopiesLabel,
-            hintText: l10n.barcodeLabelCopiesHint,
-          ),
-          validator: (value) {
-            final copies = int.tryParse(value ?? '');
-            if (copies == null || copies <= 0) {
-              return l10n.invalidNumber;
-            }
-            return null;
-          },
-          onFieldSubmitted: (_) => _submit(),
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: Text(l10n.cancelButton),
-        ),
-        FilledButton.icon(
-          onPressed: _submit,
-          icon: const Icon(Icons.print_outlined),
-          label: Text(l10n.barcodeLabelCopiesPrintButton),
-        ),
-      ],
-    );
-  }
-
-  void _submit() {
-    if (!_formKey.currentState!.validate()) {
-      return;
-    }
-    Navigator.of(context).pop(int.parse(_copiesController.text));
   }
 }
 

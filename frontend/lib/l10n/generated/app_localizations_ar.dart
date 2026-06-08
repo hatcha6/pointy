@@ -2728,6 +2728,68 @@ class AppLocalizationsAr extends AppLocalizations {
   String get printerCodeTableLabel => 'جدول ترميز الطابعة';
 
   @override
+  String get barcodeLabelPrinterSettingsTitle => 'إعدادات ملصقات الباركود';
+
+  @override
+  String get printerBarcodeLabelLanguageLabel => 'لغة طابعة الملصقات';
+
+  @override
+  String get printerBarcodeLabelLanguageAuto => 'اكتشاف تلقائي آمن';
+
+  @override
+  String get printerBarcodeLabelLanguageZpl => 'ZPL';
+
+  @override
+  String get printerBarcodeLabelLanguageTspl => 'TSPL/TSPL2';
+
+  @override
+  String get printerBarcodeLabelLanguageEpl => 'EPL/EPL2';
+
+  @override
+  String get printerBarcodeLabelLanguageCpcl => 'CPCL';
+
+  @override
+  String get detectBarcodeLabelLanguageButton => 'اكتشاف لغة طابعة الملصقات';
+
+  @override
+  String get printerLabelWidthLabel => 'عرض الملصق مم';
+
+  @override
+  String get printerLabelHeightLabel => 'ارتفاع الملصق مم';
+
+  @override
+  String get printerLabelGapLabel => 'الفاصل مم';
+
+  @override
+  String get printerLabelDpiLabel => 'الدقة DPI';
+
+  @override
+  String printerBarcodeLanguageSummary(String language) {
+    return 'لغة الملصقات: $language';
+  }
+
+  @override
+  String printerLabelGeometrySummary(int width, int height, int gap, int dpi) {
+    return 'الملصق: $width×$height مم، فاصل $gap مم، $dpi DPI';
+  }
+
+  @override
+  String get barcodeLabelLanguageDetected =>
+      'تم اكتشاف لغة طابعة الملصقات وحفظها.';
+
+  @override
+  String get barcodeLabelLanguageInferred =>
+      'تم تخمين لغة طابعة الملصقات من اسم الطابعة. راجعها إذا لم تطبع الملصقات بشكل صحيح.';
+
+  @override
+  String get barcodeLabelLanguageDetectionUnavailable =>
+      'تعذر اكتشاف لغة الملصقات تلقائيًا. اختر اللغة يدويًا لتجنب إرسال أوامر غير مناسبة.';
+
+  @override
+  String get barcodeLabelLanguageDetectionFailed =>
+      'فشل اكتشاف لغة طابعة الملصقات. تحقق من الاتصال أو اختر اللغة يدويًا.';
+
+  @override
   String get discoveredPrintersLabel => 'اختر الطابعة';
 
   @override
@@ -2774,6 +2836,12 @@ class AppLocalizationsAr extends AppLocalizations {
   String get testingPrinterButton => 'جار الاختبار...';
 
   @override
+  String get testBarcodeLabelPrinterButton => 'اختبار ملصق باركود';
+
+  @override
+  String get testingBarcodeLabelPrinterButton => 'جار اختبار الملصق...';
+
+  @override
   String get fakePrintButton => 'طباعة تجريبية بالمحاكاة';
 
   @override
@@ -2782,6 +2850,13 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get printerTestFailure =>
       'تعذر اختبار الطابعة. تحقق من الاتصال والإعدادات وحاول مرة أخرى.';
+
+  @override
+  String get barcodeLabelTestSuccess => 'تم إرسال ملصق اختبار الباركود.';
+
+  @override
+  String get barcodeLabelTestFailure =>
+      'تعذر إرسال ملصق اختبار الباركود. تحقق من لغة الملصقات والإعدادات.';
 
   @override
   String get printerTestUnsupported =>
@@ -3496,6 +3571,9 @@ class AppLocalizationsAr extends AppLocalizations {
       'أضف باركودًا للمنتج قبل طباعة الملصق.';
 
   @override
+  String get barcodeLabelPrintNoBarcodeShort => 'لا يوجد باركود للطباعة';
+
+  @override
   String get barcodeLabelCopiesDialogTitle => 'طباعة ملصقات الباركود';
 
   @override
@@ -3506,6 +3584,48 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get barcodeLabelCopiesPrintButton => 'طباعة';
+
+  @override
+  String get barcodeLabelIncludePriceLabel => 'طباعة السعر';
+
+  @override
+  String get barcodeLabelIncludePriceHint => 'إظهار سعر البيع على الملصق.';
+
+  @override
+  String get barcodeLabelIncludeExpiryLabel => 'طباعة تاريخ الانتهاء';
+
+  @override
+  String get barcodeLabelIncludeExpiryHint =>
+      'إضافة تاريخ انتهاء الدفعة على الملصق.';
+
+  @override
+  String get barcodeLabelExpiryDateLabel => 'تاريخ الانتهاء';
+
+  @override
+  String get barcodeLabelExpiryDatePickerTooltip => 'اختيار تاريخ الانتهاء';
+
+  @override
+  String get barcodeLabelExpiryDateRequired =>
+      'اختر تاريخ الانتهاء أو أوقف طباعته.';
+
+  @override
+  String get barcodeLabelPreviewTitle => 'معاينة الملصق';
+
+  @override
+  String barcodeLabelPreviewPrice(String price) {
+    return 'السعر $price';
+  }
+
+  @override
+  String barcodeLabelPreviewExpiry(String date) {
+    return 'الانتهاء $date';
+  }
+
+  @override
+  String get barcodeLabelPrintProductTooltip => 'طباعة ملصقات المنتج';
+
+  @override
+  String get barcodeLabelPrintVariantTooltip => 'طباعة ملصقات الخيار';
 
   @override
   String barcodeLabelPrintSuccess(num count) {

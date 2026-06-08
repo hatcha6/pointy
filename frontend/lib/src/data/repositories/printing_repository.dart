@@ -8,8 +8,9 @@ import '../models/printer_config.dart';
 import '../models/purchase_submission.dart';
 import '../models/sale_order.dart';
 import '../models/shop_settings.dart';
+import '../services/barcode_label_command_encoder.dart';
+import '../services/barcode_label_language_detector.dart';
 import '../services/device_settings_storage_service.dart';
-import '../services/esc_pos_barcode_label_encoder.dart';
 import '../services/esc_pos_receipt_encoder.dart';
 import '../services/order_document_service.dart';
 import '../services/pos_api_service.dart';
@@ -23,8 +24,10 @@ class PrintingRepository {
     PrintTransport? bluetoothTransport,
     PrintTransport? wifiTransport,
     PrintTransport fakeTransport = const FakePrintTransport(),
-    EscPosBarcodeLabelEncoder barcodeLabelEncoder =
-        const EscPosBarcodeLabelEncoder(),
+    BarcodeLabelCommandEncoder barcodeLabelEncoder =
+        const BarcodeLabelCommandEncoder(),
+    BarcodeLabelLanguageDetector barcodeLabelLanguageDetector =
+        const BarcodeLabelLanguageDetector(),
     EscPosReceiptEncoder receiptEncoder = const EscPosReceiptEncoder(),
     OrderDocumentService documentService = const OrderDocumentService(),
     DeviceSettingsStorageService storageService =
@@ -34,6 +37,7 @@ class PrintingRepository {
        _wifiTransport = wifiTransport ?? WifiPrintTransport(),
        _fakeTransport = fakeTransport,
        _barcodeLabelEncoder = barcodeLabelEncoder,
+       _barcodeLabelLanguageDetector = barcodeLabelLanguageDetector,
        _receiptEncoder = receiptEncoder,
        _documentService = documentService,
        _storageService = storageService;
@@ -43,7 +47,8 @@ class PrintingRepository {
   final PrintTransport _bluetoothTransport;
   final PrintTransport _wifiTransport;
   final PrintTransport _fakeTransport;
-  final EscPosBarcodeLabelEncoder _barcodeLabelEncoder;
+  final BarcodeLabelCommandEncoder _barcodeLabelEncoder;
+  final BarcodeLabelLanguageDetector _barcodeLabelLanguageDetector;
   final EscPosReceiptEncoder _receiptEncoder;
   final OrderDocumentService _documentService;
   final DeviceSettingsStorageService _storageService;
@@ -218,16 +223,56 @@ class PrintingRepository {
     }
 
     try {
-      final bytes = await _barcodeLabelEncoder.encodeLabels(
-        lines: lines,
-        endpoint: config.endpoint,
-      );
-      return _transportFor(
-        config.endpoint,
-      ).printBytes(bytes: bytes, endpoint: config.endpoint);
+      return _printBarcodeLabelLines(lines, config);
     } on Object catch (error) {
       return PrintTransportResult.failure(error.toString());
     }
+  }
+
+  Future<PrintTransportResult> printBarcodeLabelTest(
+    PrinterConfig config,
+  ) async {
+    if (config.endpoint.usesDocumentInvoice) {
+      return const PrintTransportResult.failure(
+        'document printers do not print barcode labels',
+      );
+    }
+    if (!config.endpoint.usesThermalReceipt) {
+      return const PrintTransportResult.failure(
+        'barcode labels require a thermal printer',
+      );
+    }
+
+    try {
+      return _printBarcodeLabelLines(const [
+        BarcodeLabelPrintLine(
+          label: BarcodeLabelDraft(
+            displayName: 'ملصق اختبار',
+            productName: 'ملصق اختبار',
+            sku: 'TEST-LABEL',
+            barcode: '123456789012',
+            unitPrice: 1,
+          ),
+          copies: 1,
+          includePrice: true,
+        ),
+      ], config);
+    } on Object catch (error) {
+      return PrintTransportResult.failure(error.toString());
+    }
+  }
+
+  Future<Result<BarcodeLabelLanguageDetectionResult>>
+  detectBarcodeLabelLanguage(PrinterConfig config) async {
+    if (config.endpoint.usesDocumentInvoice) {
+      return Error(Exception('document printers do not print barcode labels'));
+    }
+    return Result.guard(
+      () => _barcodeLabelLanguageDetector.detect(
+        endpoint: config.endpoint,
+        transport: _transportFor(config.endpoint),
+      ),
+    );
   }
 
   Future<PrintTransportResult> printSaleInvoice({
@@ -504,6 +549,24 @@ class PrintingRepository {
     };
   }
 
+  Future<BarcodeLabelPrinterLanguage> _resolveBarcodeLabelLanguage(
+    PrinterEndpoint endpoint,
+  ) async {
+    final configured = endpoint.barcodeLabelLanguage;
+    if (configured != BarcodeLabelPrinterLanguage.auto) {
+      return configured;
+    }
+    try {
+      final detection = await _barcodeLabelLanguageDetector.detect(
+        endpoint: endpoint,
+        transport: _transportFor(endpoint),
+      );
+      return detection.language ?? BarcodeLabelPrinterLanguage.zpl;
+    } on Object {
+      return BarcodeLabelPrinterLanguage.zpl;
+    }
+  }
+
   String _endpointKey(PrinterEndpoint endpoint) {
     return '${endpoint.kind.name}:${endpoint.outputMode.name}:${endpoint.address}:${endpoint.port}';
   }
@@ -540,6 +603,21 @@ class PrintingRepository {
     } on Object catch (error) {
       return PrintTransportResult.failure('thermal print failed: $error');
     }
+  }
+
+  Future<PrintTransportResult> _printBarcodeLabelLines(
+    List<BarcodeLabelPrintLine> lines,
+    PrinterConfig config,
+  ) async {
+    final language = await _resolveBarcodeLabelLanguage(config.endpoint);
+    final bytes = await _barcodeLabelEncoder.encodeLabels(
+      lines: lines,
+      endpoint: config.endpoint,
+      language: language,
+    );
+    return _transportFor(
+      config.endpoint,
+    ).printBytes(bytes: bytes, endpoint: config.endpoint);
   }
 
   Map<String, Object?> _purchaseReceiptPayload({

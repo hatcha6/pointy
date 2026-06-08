@@ -27,6 +27,7 @@ class PrintingSettingsPanel extends StatelessWidget {
         final busy =
             viewModel.isTesting ||
             viewModel.isDiscovering ||
+            viewModel.isDetectingBarcodeLabelLanguage ||
             viewModel.isSavingConfig;
 
         return Column(
@@ -75,16 +76,35 @@ class PrintingSettingsPanel extends StatelessWidget {
                   onPressed: busy || !viewModel.hasConfiguredPrinter
                       ? null
                       : viewModel.testPrinter,
-                  icon: viewModel.isTesting
+                  icon:
+                      viewModel.isTesting &&
+                          !viewModel.isTestingBarcodeLabelPrinter
                       ? const SizedBox.square(
                           dimension: 18,
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
                       : const Icon(Icons.print_outlined),
                   label: Text(
-                    viewModel.isTesting
+                    viewModel.isTesting &&
+                            !viewModel.isTestingBarcodeLabelPrinter
                         ? l10n.testingPrinterButton
                         : l10n.testPrinterButton,
+                  ),
+                ),
+                OutlinedButton.icon(
+                  onPressed: busy || !viewModel.hasConfiguredPrinter
+                      ? null
+                      : viewModel.testBarcodeLabelPrinter,
+                  icon: viewModel.isTestingBarcodeLabelPrinter
+                      ? const SizedBox.square(
+                          dimension: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.label_outline),
+                  label: Text(
+                    viewModel.isTestingBarcodeLabelPrinter
+                        ? l10n.testingBarcodeLabelPrinterButton
+                        : l10n.testBarcodeLabelPrinterButton,
                   ),
                 ),
               ],
@@ -123,6 +143,10 @@ class _PrinterRoleDialog extends StatefulWidget {
 class _PrinterRoleDialogState extends State<_PrinterRoleDialog> {
   late final TextEditingController _paperWidthController;
   late final TextEditingController _codeTableController;
+  late final TextEditingController _labelWidthController;
+  late final TextEditingController _labelHeightController;
+  late final TextEditingController _labelGapController;
+  late final TextEditingController _labelDpiController;
 
   @override
   void initState() {
@@ -132,6 +156,14 @@ class _PrinterRoleDialogState extends State<_PrinterRoleDialog> {
       text: '${endpoint.paperWidthMm}',
     );
     _codeTableController = TextEditingController(text: endpoint.codeTable);
+    _labelWidthController = TextEditingController(
+      text: '${endpoint.labelWidthMm}',
+    );
+    _labelHeightController = TextEditingController(
+      text: '${endpoint.labelHeightMm}',
+    );
+    _labelGapController = TextEditingController(text: '${endpoint.labelGapMm}');
+    _labelDpiController = TextEditingController(text: '${endpoint.labelDpi}');
     if (widget.viewModel.discoveredPrinters.isEmpty) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted && widget.viewModel.discoveredPrinters.isEmpty) {
@@ -145,6 +177,10 @@ class _PrinterRoleDialogState extends State<_PrinterRoleDialog> {
   void dispose() {
     _paperWidthController.dispose();
     _codeTableController.dispose();
+    _labelWidthController.dispose();
+    _labelHeightController.dispose();
+    _labelGapController.dispose();
+    _labelDpiController.dispose();
     super.dispose();
   }
 
@@ -216,6 +252,136 @@ class _PrinterRoleDialogState extends State<_PrinterRoleDialog> {
                     ],
                   ),
                   SizedBox(height: spacing.md),
+                  Text(
+                    l10n.barcodeLabelPrinterSettingsTitle,
+                    style: Theme.of(context).textTheme.titleSmall,
+                  ),
+                  SizedBox(height: spacing.sm),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child:
+                            DropdownButtonFormField<
+                              BarcodeLabelPrinterLanguage
+                            >(
+                              key: ValueKey(endpoint.barcodeLabelLanguage),
+                              initialValue: endpoint.barcodeLabelLanguage,
+                              isExpanded: true,
+                              decoration: InputDecoration(
+                                labelText:
+                                    l10n.printerBarcodeLabelLanguageLabel,
+                                prefixIcon: const Icon(Icons.label_outline),
+                              ),
+                              items: [
+                                for (final language
+                                    in BarcodeLabelPrinterLanguage.values)
+                                  DropdownMenuItem(
+                                    value: language,
+                                    child: Text(
+                                      _barcodeLabelLanguageLabel(
+                                        l10n,
+                                        language,
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                              onChanged: widget.viewModel.isTesting
+                                  ? null
+                                  : (language) {
+                                      if (language != null) {
+                                        widget.viewModel
+                                            .updateBarcodeLabelLanguage(
+                                              language,
+                                            );
+                                      }
+                                    },
+                            ),
+                      ),
+                      SizedBox(width: spacing.sm),
+                      IconButton.filledTonal(
+                        tooltip: l10n.detectBarcodeLabelLanguageButton,
+                        onPressed:
+                            widget.viewModel.isTesting ||
+                                widget
+                                    .viewModel
+                                    .isDetectingBarcodeLabelLanguage ||
+                                !widget.viewModel.hasConfiguredPrinter
+                            ? null
+                            : widget.viewModel.detectBarcodeLabelLanguage,
+                        icon: widget.viewModel.isDetectingBarcodeLabelLanguage
+                            ? const SizedBox.square(
+                                dimension: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Icon(Icons.auto_fix_high_outlined),
+                      ),
+                    ],
+                  ),
+                  _BarcodeLabelLanguageDetectionMessage(
+                    viewModel: widget.viewModel,
+                  ),
+                  SizedBox(height: spacing.md),
+                  ResponsiveFormGrid(
+                    maxColumns: 4,
+                    children: [
+                      TextFormField(
+                        controller: _labelWidthController,
+                        enabled: !widget.viewModel.isTesting,
+                        keyboardType: TextInputType.number,
+                        inputFormatters: [
+                          FilteringTextInputFormatter.digitsOnly,
+                        ],
+                        onChanged: widget.viewModel.updateLabelWidth,
+                        decoration: InputDecoration(
+                          labelText: l10n.printerLabelWidthLabel,
+                          prefixIcon: const Icon(Icons.width_normal_outlined),
+                        ),
+                      ),
+                      TextFormField(
+                        controller: _labelHeightController,
+                        enabled: !widget.viewModel.isTesting,
+                        keyboardType: TextInputType.number,
+                        inputFormatters: [
+                          FilteringTextInputFormatter.digitsOnly,
+                        ],
+                        onChanged: widget.viewModel.updateLabelHeight,
+                        decoration: InputDecoration(
+                          labelText: l10n.printerLabelHeightLabel,
+                          prefixIcon: const Icon(Icons.height_outlined),
+                        ),
+                      ),
+                      TextFormField(
+                        controller: _labelGapController,
+                        enabled: !widget.viewModel.isTesting,
+                        keyboardType: TextInputType.number,
+                        inputFormatters: [
+                          FilteringTextInputFormatter.digitsOnly,
+                        ],
+                        onChanged: widget.viewModel.updateLabelGap,
+                        decoration: InputDecoration(
+                          labelText: l10n.printerLabelGapLabel,
+                          prefixIcon: const Icon(Icons.space_bar_outlined),
+                        ),
+                      ),
+                      TextFormField(
+                        controller: _labelDpiController,
+                        enabled: !widget.viewModel.isTesting,
+                        keyboardType: TextInputType.number,
+                        inputFormatters: [
+                          FilteringTextInputFormatter.digitsOnly,
+                        ],
+                        onChanged: widget.viewModel.updateLabelDpi,
+                        decoration: InputDecoration(
+                          labelText: l10n.printerLabelDpiLabel,
+                          prefixIcon: const Icon(Icons.grid_4x4_outlined),
+                        ),
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: spacing.md),
                   _SelectedPrinterSummary(
                     endpoint: endpoint,
                     hasConfiguredPrinter: widget.viewModel.hasConfiguredPrinter,
@@ -245,6 +411,10 @@ class _PrinterRoleDialogState extends State<_PrinterRoleDialog> {
     final endpoint = widget.viewModel.config.endpoint;
     _setText(_paperWidthController, '${endpoint.paperWidthMm}');
     _setText(_codeTableController, endpoint.codeTable);
+    _setText(_labelWidthController, '${endpoint.labelWidthMm}');
+    _setText(_labelHeightController, '${endpoint.labelHeightMm}');
+    _setText(_labelGapController, '${endpoint.labelGapMm}');
+    _setText(_labelDpiController, '${endpoint.labelDpi}');
   }
 
   void _setText(TextEditingController controller, String value) {
@@ -415,7 +585,68 @@ class _SelectedPrinterSummary extends StatelessWidget {
     final outputMode = endpoint.usesDocumentInvoice
         ? l10n.printerOutputA4Pdf
         : l10n.printerOutputThermalReceipt;
-    return '$transport\n$outputMode';
+    if (endpoint.usesDocumentInvoice) {
+      return '$transport\n$outputMode';
+    }
+    final barcodeLanguage = l10n.printerBarcodeLanguageSummary(
+      _barcodeLabelLanguageLabel(l10n, endpoint.barcodeLabelLanguage),
+    );
+    final labelGeometry = l10n.printerLabelGeometrySummary(
+      endpoint.labelWidthMm,
+      endpoint.labelHeightMm,
+      endpoint.labelGapMm,
+      endpoint.labelDpi,
+    );
+    return '$transport\n$outputMode\n$barcodeLanguage\n$labelGeometry';
+  }
+}
+
+class _BarcodeLabelLanguageDetectionMessage extends StatelessWidget {
+  const _BarcodeLabelLanguageDetectionMessage({required this.viewModel});
+
+  final PrintingSettingsViewModel viewModel;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final spacing = AdaptiveSpacing.of(context);
+    final outcome = viewModel.barcodeLabelLanguageDetectionOutcome;
+    if (outcome == BarcodeLabelLanguageDetectionOutcome.none) {
+      return const SizedBox.shrink();
+    }
+    final (message, icon, isError) = switch (outcome) {
+      BarcodeLabelLanguageDetectionOutcome.detected => (
+        l10n.barcodeLabelLanguageDetected,
+        Icons.check_circle_outline,
+        false,
+      ),
+      BarcodeLabelLanguageDetectionOutcome.inferred => (
+        l10n.barcodeLabelLanguageInferred,
+        Icons.manage_search_outlined,
+        false,
+      ),
+      BarcodeLabelLanguageDetectionOutcome.unavailable => (
+        l10n.barcodeLabelLanguageDetectionUnavailable,
+        Icons.info_outline,
+        false,
+      ),
+      BarcodeLabelLanguageDetectionOutcome.failed => (
+        l10n.barcodeLabelLanguageDetectionFailed,
+        Icons.error_outline,
+        true,
+      ),
+      BarcodeLabelLanguageDetectionOutcome.none => (
+        '',
+        Icons.info_outline,
+        false,
+      ),
+    };
+    return Padding(
+      padding: EdgeInsets.only(top: spacing.sm),
+      child: isError
+          ? PointyInlineMessage.error(message: message, compact: true)
+          : PointyInlineMessage(message: message, icon: icon, compact: true),
+    );
   }
 }
 
@@ -471,6 +702,14 @@ class _PrinterTestMessage extends StatelessWidget {
         colorScheme.primary,
       ),
       PrinterTestOutcome.failed => (l10n.printerTestFailure, colorScheme.error),
+      PrinterTestOutcome.barcodeLabelSuccess => (
+        l10n.barcodeLabelTestSuccess,
+        colorScheme.primary,
+      ),
+      PrinterTestOutcome.barcodeLabelFailed => (
+        l10n.barcodeLabelTestFailure,
+        colorScheme.error,
+      ),
       PrinterTestOutcome.fakeSuccess => (
         l10n.fakePrintSuccess,
         colorScheme.primary,
@@ -525,5 +764,18 @@ IconData _transportIcon(PrintTransportKind kind) {
     PrintTransportKind.wifi => Icons.wifi_outlined,
     PrintTransportKind.system => Icons.print_outlined,
     PrintTransportKind.fake => Icons.science_outlined,
+  };
+}
+
+String _barcodeLabelLanguageLabel(
+  AppLocalizations l10n,
+  BarcodeLabelPrinterLanguage language,
+) {
+  return switch (language) {
+    BarcodeLabelPrinterLanguage.auto => l10n.printerBarcodeLabelLanguageAuto,
+    BarcodeLabelPrinterLanguage.zpl => l10n.printerBarcodeLabelLanguageZpl,
+    BarcodeLabelPrinterLanguage.tspl => l10n.printerBarcodeLabelLanguageTspl,
+    BarcodeLabelPrinterLanguage.epl => l10n.printerBarcodeLabelLanguageEpl,
+    BarcodeLabelPrinterLanguage.cpcl => l10n.printerBarcodeLabelLanguageCpcl,
   };
 }

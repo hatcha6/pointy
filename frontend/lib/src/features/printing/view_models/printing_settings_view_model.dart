@@ -10,7 +10,23 @@ import '../../../data/models/printer_config.dart';
 import '../../../data/repositories/printing_repository.dart';
 import '../../../data/services/print_transport.dart';
 
-enum PrinterTestOutcome { none, success, failed, fakeSuccess, fakeFailed }
+enum PrinterTestOutcome {
+  none,
+  success,
+  failed,
+  barcodeLabelSuccess,
+  barcodeLabelFailed,
+  fakeSuccess,
+  fakeFailed,
+}
+
+enum BarcodeLabelLanguageDetectionOutcome {
+  none,
+  detected,
+  inferred,
+  unavailable,
+  failed,
+}
 
 enum PrinterConnectionState {
   unknown,
@@ -42,7 +58,9 @@ class PrintingSettingsViewModel extends ChangeNotifier {
   bool _isLoadingConfig = false;
   bool _isSavingConfig = false;
   bool _isTesting = false;
+  bool _isTestingBarcodeLabelPrinter = false;
   bool _isDiscovering = false;
+  bool _isDetectingBarcodeLabelLanguage = false;
   bool _isCheckingConnection = false;
   bool _isDisposed = false;
   bool _hasConfigLoadError = false;
@@ -50,23 +68,33 @@ class PrintingSettingsViewModel extends ChangeNotifier {
   bool _hasDiscoveryError = false;
   List<PrinterEndpoint> _discoveredPrinters = const [];
   PrinterTestOutcome _testOutcome = PrinterTestOutcome.none;
+  BarcodeLabelLanguageDetectionOutcome _barcodeLabelLanguageDetectionOutcome =
+      BarcodeLabelLanguageDetectionOutcome.none;
   PrinterConnectionState _connectionState = PrinterConnectionState.unknown;
   String _connectionMessage = '';
+  String _barcodeLabelLanguageDetectionMessage = '';
   DateTime? _lastConnectionCheckedAt;
 
   PrinterConfig get config => _config;
   bool get isLoadingConfig => _isLoadingConfig;
   bool get isSavingConfig => _isSavingConfig;
   bool get isTesting => _isTesting;
+  bool get isTestingBarcodeLabelPrinter => _isTestingBarcodeLabelPrinter;
   bool get isDiscovering => _isDiscovering;
+  bool get isDetectingBarcodeLabelLanguage => _isDetectingBarcodeLabelLanguage;
   bool get isCheckingConnection => _isCheckingConnection;
   bool get hasConfigLoadError => _hasConfigLoadError;
   bool get hasConfigSaveError => _hasConfigSaveError;
   bool get hasDiscoveryError => _hasDiscoveryError;
   List<PrinterEndpoint> get discoveredPrinters => _discoveredPrinters;
   PrinterTestOutcome get testOutcome => _testOutcome;
+  BarcodeLabelLanguageDetectionOutcome
+  get barcodeLabelLanguageDetectionOutcome =>
+      _barcodeLabelLanguageDetectionOutcome;
   PrinterConnectionState get connectionState => _connectionState;
   String get connectionMessage => _connectionMessage;
+  String get barcodeLabelLanguageDetectionMessage =>
+      _barcodeLabelLanguageDetectionMessage;
   DateTime? get lastConnectionCheckedAt => _lastConnectionCheckedAt;
   bool get hasConfiguredPrinter => _hasConfiguredEndpoint(_config.endpoint);
   bool get shouldWarnPrinterDisconnected =>
@@ -176,6 +204,54 @@ class PrintingSettingsViewModel extends ChangeNotifier {
     );
   }
 
+  void updateBarcodeLabelLanguage(BarcodeLabelPrinterLanguage language) {
+    _updateConfig(
+      _config.copyWith(
+        endpoint: _config.endpoint.copyWith(barcodeLabelLanguage: language),
+      ),
+    );
+  }
+
+  void updateLabelWidth(String value) {
+    _updateConfig(
+      _config.copyWith(
+        endpoint: _config.endpoint.copyWith(
+          labelWidthMm: int.tryParse(value) ?? _config.endpoint.labelWidthMm,
+        ),
+      ),
+    );
+  }
+
+  void updateLabelHeight(String value) {
+    _updateConfig(
+      _config.copyWith(
+        endpoint: _config.endpoint.copyWith(
+          labelHeightMm: int.tryParse(value) ?? _config.endpoint.labelHeightMm,
+        ),
+      ),
+    );
+  }
+
+  void updateLabelGap(String value) {
+    _updateConfig(
+      _config.copyWith(
+        endpoint: _config.endpoint.copyWith(
+          labelGapMm: int.tryParse(value) ?? _config.endpoint.labelGapMm,
+        ),
+      ),
+    );
+  }
+
+  void updateLabelDpi(String value) {
+    _updateConfig(
+      _config.copyWith(
+        endpoint: _config.endpoint.copyWith(
+          labelDpi: int.tryParse(value) ?? _config.endpoint.labelDpi,
+        ),
+      ),
+    );
+  }
+
   void updateTimeout(String value) {
     _updateConfig(
       _config.copyWith(
@@ -223,6 +299,7 @@ class PrintingSettingsViewModel extends ChangeNotifier {
 
   Future<void> testPrinter() async {
     _isTesting = true;
+    _isTestingBarcodeLabelPrinter = false;
     _testOutcome = PrinterTestOutcome.none;
     notifyListeners();
 
@@ -236,8 +313,73 @@ class PrintingSettingsViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> testBarcodeLabelPrinter() async {
+    if (_isTesting || !hasConfiguredPrinter) {
+      return;
+    }
+
+    _isTesting = true;
+    _isTestingBarcodeLabelPrinter = true;
+    _testOutcome = PrinterTestOutcome.none;
+    notifyListeners();
+
+    final result = await _repository.printBarcodeLabelTest(_config);
+    _testOutcome = result.isSuccess
+        ? PrinterTestOutcome.barcodeLabelSuccess
+        : PrinterTestOutcome.barcodeLabelFailed;
+    _updateConnectionStateFromPrintResult(result);
+    _trackPrinterTest(result, name: 'printing.printer.barcode_label_tested');
+    _isTesting = false;
+    _isTestingBarcodeLabelPrinter = false;
+    notifyListeners();
+  }
+
+  Future<void> detectBarcodeLabelLanguage() async {
+    if (_isDetectingBarcodeLabelLanguage || !hasConfiguredPrinter) {
+      return;
+    }
+
+    _isDetectingBarcodeLabelLanguage = true;
+    _barcodeLabelLanguageDetectionOutcome =
+        BarcodeLabelLanguageDetectionOutcome.none;
+    _barcodeLabelLanguageDetectionMessage = '';
+    notifyListeners();
+
+    final result = await _repository.detectBarcodeLabelLanguage(_config);
+    switch (result) {
+      case Ok():
+        final detection = result.value;
+        final language = detection.language;
+        if (detection.isSuccess && language != null) {
+          _config = _config.copyWith(
+            endpoint: _config.endpoint.copyWith(barcodeLabelLanguage: language),
+          );
+          _barcodeLabelLanguageDetectionOutcome = detection.isInferred
+              ? BarcodeLabelLanguageDetectionOutcome.inferred
+              : BarcodeLabelLanguageDetectionOutcome.detected;
+          _barcodeLabelLanguageDetectionMessage = detection.message;
+          unawaited(_saveDefaultConfig());
+          _trackBarcodeLabelLanguageDetection(success: true);
+        } else {
+          _barcodeLabelLanguageDetectionOutcome =
+              BarcodeLabelLanguageDetectionOutcome.unavailable;
+          _barcodeLabelLanguageDetectionMessage = detection.message;
+          _trackBarcodeLabelLanguageDetection(success: false);
+        }
+      case Error():
+        _barcodeLabelLanguageDetectionOutcome =
+            BarcodeLabelLanguageDetectionOutcome.failed;
+        _barcodeLabelLanguageDetectionMessage = result.exception.toString();
+        _trackBarcodeLabelLanguageDetection(success: false);
+    }
+
+    _isDetectingBarcodeLabelLanguage = false;
+    notifyListeners();
+  }
+
   Future<void> runFakePrint() async {
     _isTesting = true;
+    _isTestingBarcodeLabelPrinter = false;
     _testOutcome = PrinterTestOutcome.none;
     notifyListeners();
 
@@ -250,6 +392,7 @@ class PrintingSettingsViewModel extends ChangeNotifier {
     _updateConnectionStateFromPrintResult(result);
     _trackPrinterTest(result, name: 'printing.printer.fake_receipt_printed');
     _isTesting = false;
+    _isTestingBarcodeLabelPrinter = false;
     notifyListeners();
   }
 
@@ -295,6 +438,9 @@ class PrintingSettingsViewModel extends ChangeNotifier {
 
   void _clearTestOutcome() {
     _testOutcome = PrinterTestOutcome.none;
+    _barcodeLabelLanguageDetectionOutcome =
+        BarcodeLabelLanguageDetectionOutcome.none;
+    _barcodeLabelLanguageDetectionMessage = '';
     notifyListeners();
   }
 
@@ -403,11 +549,33 @@ class PrintingSettingsViewModel extends ChangeNotifier {
         'transport_kind': _config.endpoint.kind.name,
         'printer_configured': hasConfiguredPrinter,
         'paper_width_mm': _config.endpoint.paperWidthMm,
+        'barcode_label_language': _config.endpoint.barcodeLabelLanguage.name,
         'outcome': result.isSuccess ? 'success' : 'failed',
         'source': 'printing_settings',
       },
       metrics: {'timeout_ms': _config.endpoint.timeoutMs},
       flushImmediately: !result.isSuccess,
+    );
+  }
+
+  void _trackBarcodeLabelLanguageDetection({required bool success}) {
+    trackAuditEvent(
+      _analyticsEngine,
+      name: success
+          ? 'printing.barcode_label_language.detected'
+          : 'printing.barcode_label_language.detect_failed',
+      severity: success
+          ? AnalyticsEventSeverity.info
+          : AnalyticsEventSeverity.warning,
+      entityType: 'printer_settings',
+      attributes: {
+        'transport_kind': _config.endpoint.kind.name,
+        'barcode_label_language': _config.endpoint.barcodeLabelLanguage.name,
+        'outcome': _barcodeLabelLanguageDetectionOutcome.name,
+        'source': 'printing_settings',
+      },
+      metrics: {'timeout_ms': _config.endpoint.timeoutMs},
+      flushImmediately: !success,
     );
   }
 
