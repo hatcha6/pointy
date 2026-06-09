@@ -81,6 +81,12 @@ func saveConnectorState(path string, state connectorState) error {
 	return nil
 }
 
+func connectorStateHasManagedTLS(state connectorState) bool {
+	return strings.TrimSpace(state.ConnectorCertificatePEM) != "" &&
+		strings.TrimSpace(state.ConnectorPrivateKeyPEM) != "" &&
+		strings.TrimSpace(state.ConnectorCACertificatePEM) != ""
+}
+
 func connectorStateError(path string, err error) error {
 	if strings.TrimSpace(path) == "" {
 		return err

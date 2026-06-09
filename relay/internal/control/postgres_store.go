@@ -55,6 +55,128 @@ func (s *PostgresStore) Migrate(ctx context.Context) error {
 	return MigratePostgres(ctx, s.pool)
 }
 
+func (s *PostgresStore) GetOrCreateCertificateMaterial(
+	ctx context.Context,
+	name string,
+	rotationWindow time.Duration,
+	create CertificateMaterialCreateFunc,
+) (CertificateMaterial, error) {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return CertificateMaterial{}, ErrCertificateMaterialNameRequired
+	}
+	if create == nil {
+		return CertificateMaterial{}, ErrCertificateMaterialCreateRequired
+	}
+
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return CertificateMaterial{}, err
+	}
+	defer tx.Rollback(ctx)
+
+	now := s.clock.Now()
+	material, err := scanCertificateMaterial(tx.QueryRow(
+		ctx,
+		selectCertificateMaterialSQL+" WHERE name = $1 FOR UPDATE",
+		name,
+	))
+	if err == nil && !CertificateMaterialRotationDue(material.ExpiresAt, now, rotationWindow) {
+		if err := tx.Commit(ctx); err != nil {
+			return CertificateMaterial{}, err
+		}
+		return material, nil
+	}
+	materialMissing := errors.Is(err, ErrNotFound)
+	if err != nil && !materialMissing {
+		return CertificateMaterial{}, err
+	}
+
+	generated, err := create(now)
+	if err != nil {
+		return CertificateMaterial{}, err
+	}
+	generated, err = certificateMaterialRecord(name, generated, now)
+	if err != nil {
+		return CertificateMaterial{}, err
+	}
+
+	if materialMissing {
+		tag, err := tx.Exec(
+			ctx,
+			`INSERT INTO relay_certificate_materials (
+				name,
+				certificate_pem,
+				private_key_pem,
+				expires_at,
+				created_at,
+				updated_at
+			) VALUES ($1, $2, $3, $4::timestamptz, $5::timestamptz, $6::timestamptz)
+			ON CONFLICT (name) DO NOTHING`,
+			generated.Name,
+			generated.CertificatePEM,
+			generated.PrivateKeyPEM,
+			generated.ExpiresAt,
+			generated.CreatedAt,
+			generated.UpdatedAt,
+		)
+		if err != nil {
+			return CertificateMaterial{}, err
+		}
+		if tag.RowsAffected() > 0 {
+			if err := tx.Commit(ctx); err != nil {
+				return CertificateMaterial{}, err
+			}
+			return generated, nil
+		}
+
+		material, err = scanCertificateMaterial(tx.QueryRow(
+			ctx,
+			selectCertificateMaterialSQL+" WHERE name = $1 FOR UPDATE",
+			name,
+		))
+		if err != nil {
+			return CertificateMaterial{}, err
+		}
+		if !CertificateMaterialRotationDue(material.ExpiresAt, now, rotationWindow) {
+			if err := tx.Commit(ctx); err != nil {
+				return CertificateMaterial{}, err
+			}
+			return material, nil
+		}
+	}
+
+	material, err = scanCertificateMaterial(tx.QueryRow(
+		ctx,
+		`UPDATE relay_certificate_materials
+		SET
+			certificate_pem = $2,
+			private_key_pem = $3,
+			expires_at = $4::timestamptz,
+			updated_at = $5::timestamptz
+		WHERE name = $1
+		RETURNING
+			name,
+			certificate_pem,
+			private_key_pem,
+			expires_at,
+			created_at,
+			updated_at`,
+		name,
+		generated.CertificatePEM,
+		generated.PrivateKeyPEM,
+		generated.ExpiresAt,
+		now,
+	))
+	if err != nil {
+		return CertificateMaterial{}, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return CertificateMaterial{}, err
+	}
+	return material, nil
+}
+
 func (s *PostgresStore) ProvisionInstallation(
 	ctx context.Context,
 	request ProvisionInstallationRequest,
@@ -539,6 +661,15 @@ const selectInstallationSQL = `SELECT
 	last_connector_connected_at
 FROM relay_installations`
 
+const selectCertificateMaterialSQL = `SELECT
+	name,
+	certificate_pem,
+	private_key_pem,
+	expires_at,
+	created_at,
+	updated_at
+FROM relay_certificate_materials`
+
 func scanInstallation(row pgx.Row) (Installation, error) {
 	var installation Installation
 	var connectorCertificateExpiresAt pgtype.Timestamptz
@@ -582,6 +713,56 @@ func scanInstallation(row pgx.Row) (Installation, error) {
 	installation.CreatedAt = installation.CreatedAt.UTC()
 	installation.UpdatedAt = installation.UpdatedAt.UTC()
 	return installation, nil
+}
+
+func scanCertificateMaterial(row pgx.Row) (CertificateMaterial, error) {
+	var material CertificateMaterial
+	var expiresAt pgtype.Timestamptz
+	err := row.Scan(
+		&material.Name,
+		&material.CertificatePEM,
+		&material.PrivateKeyPEM,
+		&expiresAt,
+		&material.CreatedAt,
+		&material.UpdatedAt,
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return CertificateMaterial{}, ErrNotFound
+	}
+	if err != nil {
+		return CertificateMaterial{}, err
+	}
+	if expiresAt.Valid {
+		value := expiresAt.Time.UTC()
+		material.ExpiresAt = &value
+	}
+	material.CreatedAt = material.CreatedAt.UTC()
+	material.UpdatedAt = material.UpdatedAt.UTC()
+	return material, nil
+}
+
+func certificateMaterialRecord(
+	name string,
+	material CertificateMaterial,
+	now time.Time,
+) (CertificateMaterial, error) {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return CertificateMaterial{}, ErrCertificateMaterialNameRequired
+	}
+	material.Name = name
+	material.CertificatePEM = strings.TrimSpace(material.CertificatePEM)
+	material.PrivateKeyPEM = strings.TrimSpace(material.PrivateKeyPEM)
+	if material.CertificatePEM == "" || material.PrivateKeyPEM == "" {
+		return CertificateMaterial{}, fmt.Errorf("certificate material certificate and key are required")
+	}
+	if material.ExpiresAt != nil {
+		expiresAt := material.ExpiresAt.UTC()
+		material.ExpiresAt = &expiresAt
+	}
+	material.CreatedAt = now.UTC()
+	material.UpdatedAt = now.UTC()
+	return material, nil
 }
 
 type adminAuditEventRow interface {

@@ -51,6 +51,48 @@ func TestCertificateAuthoritySignsCSRWithConnectorIdentity(t *testing.T) {
 	}
 }
 
+func TestGeneratedCertificateAuthoritySignsServerCertificate(t *testing.T) {
+	now := time.Date(2026, 6, 2, 12, 0, 0, 0, time.UTC)
+	generatedCA, err := GenerateCertificateAuthority("Pointy Test CA", time.Hour, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	issuer, err := LoadCertificateAuthorityPEM(
+		generatedCA.CertificatePEM,
+		generatedCA.PrivateKeyPEM,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	generatedServer, err := issuer.IssueServerCertificate(
+		"relay.example.com",
+		[]string{"relay.example.com", "127.0.0.1"},
+		time.Hour,
+		now,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	certificate := parseSingleCertificate(t, generatedServer.CertificatePEM)
+	if certificate.Subject.CommonName != "relay.example.com" {
+		t.Fatalf("unexpected server certificate common name %q", certificate.Subject.CommonName)
+	}
+	if len(certificate.DNSNames) != 1 || certificate.DNSNames[0] != "relay.example.com" {
+		t.Fatalf("unexpected DNS SANs %#v", certificate.DNSNames)
+	}
+	if len(certificate.IPAddresses) != 1 || certificate.IPAddresses[0].String() != "127.0.0.1" {
+		t.Fatalf("unexpected IP SANs %#v", certificate.IPAddresses)
+	}
+	if len(certificate.ExtKeyUsage) != 1 || certificate.ExtKeyUsage[0] != x509.ExtKeyUsageServerAuth {
+		t.Fatalf("expected server auth EKU, got %#v", certificate.ExtKeyUsage)
+	}
+	if generatedServer.PrivateKeyPEM == "" {
+		t.Fatal("expected generated server private key")
+	}
+}
+
 func writeTestCA(t *testing.T) (string, string) {
 	t.Helper()
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)

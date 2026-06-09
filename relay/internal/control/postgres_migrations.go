@@ -118,6 +118,24 @@ CREATE INDEX IF NOT EXISTS relay_revoked_connector_certificate_fingerprints_revo
 	ON relay_revoked_connector_certificate_fingerprints (revoked_at DESC);
 `,
 	},
+	{
+		version: 6,
+		name:    "relay certificate materials",
+		sql: `
+CREATE TABLE IF NOT EXISTS relay_certificate_materials (
+	name text PRIMARY KEY,
+	certificate_pem text NOT NULL,
+	private_key_pem text NOT NULL,
+	expires_at timestamptz,
+	created_at timestamptz NOT NULL,
+	updated_at timestamptz NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS relay_certificate_materials_expires_at_idx
+	ON relay_certificate_materials (expires_at)
+	WHERE expires_at IS NOT NULL;
+`,
+	},
 }
 
 func MigratePostgres(ctx context.Context, pool *pgxpool.Pool) error {

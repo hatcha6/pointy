@@ -2,6 +2,8 @@ package security
 
 import (
 	"crypto"
+	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha256"
@@ -11,10 +13,18 @@ import (
 	"encoding/pem"
 	"fmt"
 	"math/big"
+	"net"
 	"os"
+	"sort"
 	"strings"
 	"time"
 )
+
+type PEMCertificate struct {
+	CertificatePEM string
+	PrivateKeyPEM  string
+	ExpiresAt      time.Time
+}
 
 type IssuedCertificate struct {
 	CertificatePEM    string    `json:"certificate_pem"`
@@ -39,21 +49,145 @@ func LoadCertificateAuthority(certFile string, keyFile string) (*CertificateAuth
 	if err != nil {
 		return nil, err
 	}
-	certificate, err := parseCertificate(certPEM)
+	return LoadCertificateAuthorityPEM(string(certPEM), string(keyPEM))
+}
+
+func LoadCertificateAuthorityPEM(certPEM string, keyPEM string) (*CertificateAuthority, error) {
+	certPEM = strings.TrimSpace(certPEM)
+	keyPEM = strings.TrimSpace(keyPEM)
+	if certPEM == "" || keyPEM == "" {
+		return nil, fmt.Errorf("certificate authority certificate and key are required")
+	}
+	certificate, err := parseCertificate([]byte(certPEM))
 	if err != nil {
 		return nil, err
 	}
 	if !certificate.IsCA {
 		return nil, fmt.Errorf("connector certificate issuer must be a CA certificate")
 	}
-	privateKey, err := parseSigner(keyPEM)
+	privateKey, err := parseSigner([]byte(keyPEM))
 	if err != nil {
 		return nil, err
 	}
 	return &CertificateAuthority{
 		certificate:    certificate,
 		privateKey:     privateKey,
-		certificatePEM: string(certPEM),
+		certificatePEM: certPEM,
+	}, nil
+}
+
+func GenerateCertificateAuthority(commonName string, ttl time.Duration, now time.Time) (PEMCertificate, error) {
+	if ttl <= 0 {
+		ttl = 10 * 365 * 24 * time.Hour
+	}
+	commonName = strings.TrimSpace(commonName)
+	if commonName == "" {
+		commonName = "Pointy Relay Certificate Authority"
+	}
+	now = now.UTC()
+	privateKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		return PEMCertificate{}, err
+	}
+	serialNumber, err := randomSerialNumber()
+	if err != nil {
+		return PEMCertificate{}, err
+	}
+	template := &x509.Certificate{
+		SerialNumber: serialNumber,
+		Subject: pkix.Name{
+			CommonName:   commonName,
+			Organization: []string{"Pointy"},
+		},
+		NotBefore:             now.Add(-time.Minute),
+		NotAfter:              now.Add(ttl),
+		KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
+		IsCA:                  true,
+		BasicConstraintsValid: true,
+	}
+	certDER, err := x509.CreateCertificate(rand.Reader, template, template, privateKey.Public(), privateKey)
+	if err != nil {
+		return PEMCertificate{}, err
+	}
+	keyPEM, err := privateKeyPEM(privateKey)
+	if err != nil {
+		return PEMCertificate{}, err
+	}
+	return PEMCertificate{
+		CertificatePEM: certificatePEM(certDER),
+		PrivateKeyPEM:  keyPEM,
+		ExpiresAt:      template.NotAfter,
+	}, nil
+}
+
+func (ca *CertificateAuthority) IssueServerCertificate(
+	commonName string,
+	hosts []string,
+	ttl time.Duration,
+	now time.Time,
+) (PEMCertificate, error) {
+	if ca == nil {
+		return PEMCertificate{}, fmt.Errorf("certificate authority is not configured")
+	}
+	if ttl <= 0 {
+		ttl = 397 * 24 * time.Hour
+	}
+	commonName = strings.TrimSpace(commonName)
+	dnsNames, ipAddresses := certificateHostNames(hosts)
+	if commonName == "" {
+		if len(dnsNames) > 0 {
+			commonName = dnsNames[0]
+		} else if len(ipAddresses) > 0 {
+			commonName = ipAddresses[0].String()
+		} else {
+			commonName = "Pointy Relay"
+		}
+	}
+	now = now.UTC()
+	privateKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		return PEMCertificate{}, err
+	}
+	serialNumber, err := randomSerialNumber()
+	if err != nil {
+		return PEMCertificate{}, err
+	}
+	notAfter, err := issuedCertificateNotAfter(ca.certificate, ttl, now)
+	if err != nil {
+		return PEMCertificate{}, err
+	}
+	template := &x509.Certificate{
+		SerialNumber: serialNumber,
+		Subject: pkix.Name{
+			CommonName:   commonName,
+			Organization: []string{"Pointy"},
+		},
+		NotBefore:             now.Add(-time.Minute),
+		NotAfter:              notAfter,
+		KeyUsage:              x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		DNSNames:              dnsNames,
+		IPAddresses:           ipAddresses,
+		BasicConstraintsValid: true,
+	}
+	certDER, err := x509.CreateCertificate(
+		rand.Reader,
+		template,
+		ca.certificate,
+		privateKey.Public(),
+		ca.privateKey,
+	)
+	if err != nil {
+		return PEMCertificate{}, err
+	}
+	keyPEM, err := privateKeyPEM(privateKey)
+	if err != nil {
+		return PEMCertificate{}, err
+	}
+	return PEMCertificate{
+		CertificatePEM: certificatePEM(certDER),
+		PrivateKeyPEM:  keyPEM,
+		ExpiresAt:      template.NotAfter,
 	}, nil
 }
 
@@ -81,6 +215,10 @@ func (ca *CertificateAuthority) IssueClientCertificateFromCSR(
 	if err != nil {
 		return IssuedCertificate{}, err
 	}
+	notAfter, err := issuedCertificateNotAfter(ca.certificate, ttl, now)
+	if err != nil {
+		return IssuedCertificate{}, err
+	}
 	template := &x509.Certificate{
 		SerialNumber: serialNumber,
 		Subject: pkix.Name{
@@ -88,7 +226,7 @@ func (ca *CertificateAuthority) IssueClientCertificateFromCSR(
 			Organization: []string{"Pointy"},
 		},
 		NotBefore:             now.Add(-time.Minute),
-		NotAfter:              now.Add(ttl),
+		NotAfter:              notAfter,
 		KeyUsage:              x509.KeyUsageDigitalSignature,
 		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
 		BasicConstraintsValid: true,
@@ -104,10 +242,7 @@ func (ca *CertificateAuthority) IssueClientCertificateFromCSR(
 		return IssuedCertificate{}, err
 	}
 	return IssuedCertificate{
-		CertificatePEM: string(pem.EncodeToMemory(&pem.Block{
-			Type:  "CERTIFICATE",
-			Bytes: certDER,
-		})),
+		CertificatePEM:    certificatePEM(certDER),
 		CACertificatePEM:  ca.certificatePEM,
 		FingerprintSHA256: CertificateFingerprintSHA256(certDER),
 		SerialNumber:      serialNumber.Text(16),
@@ -181,6 +316,63 @@ func parseSigner(content []byte) (crypto.Signer, error) {
 		return nil, fmt.Errorf("private key is not usable for signing")
 	}
 	return nil, fmt.Errorf("no PEM private key found")
+}
+
+func issuedCertificateNotAfter(
+	issuer *x509.Certificate,
+	ttl time.Duration,
+	now time.Time,
+) (time.Time, error) {
+	notAfter := now.UTC().Add(ttl)
+	issuerNotAfter := issuer.NotAfter.UTC()
+	if issuerNotAfter.Before(notAfter) {
+		notAfter = issuerNotAfter
+	}
+	if !notAfter.After(now.UTC()) {
+		return time.Time{}, fmt.Errorf("certificate authority is expired")
+	}
+	return notAfter, nil
+}
+
+func certificateHostNames(hosts []string) ([]string, []net.IP) {
+	seen := map[string]bool{}
+	var dnsNames []string
+	var ipAddresses []net.IP
+	for _, host := range hosts {
+		host = strings.Trim(strings.TrimSpace(host), "[]")
+		if host == "" || seen[host] {
+			continue
+		}
+		seen[host] = true
+		if ip := net.ParseIP(host); ip != nil {
+			ipAddresses = append(ipAddresses, ip)
+			continue
+		}
+		dnsNames = append(dnsNames, host)
+	}
+	sort.Strings(dnsNames)
+	sort.Slice(ipAddresses, func(i, j int) bool {
+		return ipAddresses[i].String() < ipAddresses[j].String()
+	})
+	return dnsNames, ipAddresses
+}
+
+func certificatePEM(certDER []byte) string {
+	return string(pem.EncodeToMemory(&pem.Block{
+		Type:  "CERTIFICATE",
+		Bytes: certDER,
+	}))
+}
+
+func privateKeyPEM(privateKey crypto.PrivateKey) (string, error) {
+	keyDER, err := x509.MarshalPKCS8PrivateKey(privateKey)
+	if err != nil {
+		return "", err
+	}
+	return string(pem.EncodeToMemory(&pem.Block{
+		Type:  "PRIVATE KEY",
+		Bytes: keyDER,
+	})), nil
 }
 
 func randomSerialNumber() (*big.Int, error) {

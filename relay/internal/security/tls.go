@@ -10,8 +10,11 @@ import (
 
 type ServerTLSOptions struct {
 	CertFile        string
+	CertPEM         string
 	KeyFile         string
+	KeyPEM          string
 	ClientCAFile    string
+	ClientCAPEM     string
 	RequireClientCA bool
 	RequestClientCA bool
 }
@@ -28,10 +31,11 @@ type ClientTLSOptions struct {
 }
 
 func ServerTLSConfig(options ServerTLSOptions) (*tls.Config, error) {
-	if strings.TrimSpace(options.CertFile) == "" || strings.TrimSpace(options.KeyFile) == "" {
+	if (strings.TrimSpace(options.CertFile) == "" && strings.TrimSpace(options.CertPEM) == "") ||
+		(strings.TrimSpace(options.KeyFile) == "" && strings.TrimSpace(options.KeyPEM) == "") {
 		return nil, fmt.Errorf("TLS certificate and key are required")
 	}
-	certificate, err := tls.LoadX509KeyPair(options.CertFile, options.KeyFile)
+	certificate, err := serverCertificate(options)
 	if err != nil {
 		return nil, err
 	}
@@ -41,8 +45,9 @@ func ServerTLSConfig(options ServerTLSOptions) (*tls.Config, error) {
 		MinVersion:   tls.VersionTLS12,
 	}
 	clientCAFile := strings.TrimSpace(options.ClientCAFile)
-	if options.RequireClientCA || options.RequestClientCA || clientCAFile != "" {
-		pool, err := certificatePool(clientCAFile)
+	clientCAPEM := strings.TrimSpace(options.ClientCAPEM)
+	if options.RequireClientCA || options.RequestClientCA || clientCAFile != "" || clientCAPEM != "" {
+		pool, err := certificatePoolFromOptions(clientCAFile, clientCAPEM)
 		if err != nil {
 			return nil, err
 		}
@@ -54,6 +59,16 @@ func ServerTLSConfig(options ServerTLSOptions) (*tls.Config, error) {
 		}
 	}
 	return config, nil
+}
+
+func serverCertificate(options ServerTLSOptions) (tls.Certificate, error) {
+	if strings.TrimSpace(options.CertFile) != "" || strings.TrimSpace(options.KeyFile) != "" {
+		return tls.LoadX509KeyPair(options.CertFile, options.KeyFile)
+	}
+	return tls.X509KeyPair(
+		[]byte(strings.TrimSpace(options.CertPEM)),
+		[]byte(strings.TrimSpace(options.KeyPEM)),
+	)
 }
 
 func ClientTLSConfig(options ClientTLSOptions) (*tls.Config, error) {

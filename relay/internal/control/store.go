@@ -17,6 +17,8 @@ var (
 	ErrSubscriptionInactive                    = errors.New("relay subscription is inactive")
 	ErrConnectorCertificateFingerprintRequired = errors.New("connector certificate fingerprint is required")
 	ErrConnectorCertificateRevoked             = errors.New("connector certificate fingerprint is revoked")
+	ErrCertificateMaterialNameRequired         = errors.New("certificate material name is required")
+	ErrCertificateMaterialCreateRequired       = errors.New("certificate material create function is required")
 )
 
 type Clock interface {
@@ -114,6 +116,17 @@ type ConnectorCertificateRevocation struct {
 	RevokedAt         time.Time  `json:"revoked_at"`
 	Reason            string     `json:"reason,omitempty"`
 }
+
+type CertificateMaterial struct {
+	Name           string     `json:"name"`
+	CertificatePEM string     `json:"certificate_pem"`
+	PrivateKeyPEM  string     `json:"private_key_pem"`
+	ExpiresAt      *time.Time `json:"expires_at,omitempty"`
+	CreatedAt      time.Time  `json:"created_at"`
+	UpdatedAt      time.Time  `json:"updated_at"`
+}
+
+type CertificateMaterialCreateFunc func(now time.Time) (CertificateMaterial, error)
 
 type InstallationStore interface {
 	ProvisionInstallation(ctx context.Context, request ProvisionInstallationRequest) (ProvisionedInstallation, error)
@@ -558,6 +571,14 @@ func ConnectorCertificateExpired(expiresAt *time.Time, now time.Time) bool {
 }
 
 func ConnectorCertificateRotationDue(
+	expiresAt *time.Time,
+	now time.Time,
+	rotationWindow time.Duration,
+) bool {
+	return CertificateMaterialRotationDue(expiresAt, now, rotationWindow)
+}
+
+func CertificateMaterialRotationDue(
 	expiresAt *time.Time,
 	now time.Time,
 	rotationWindow time.Duration,

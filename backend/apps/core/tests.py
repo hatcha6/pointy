@@ -866,10 +866,17 @@ class RelayBackendApiTests(TestCase):
                     format="json",
                     HTTP_X_POINTY_CONNECTOR_SETUP_TOKEN="setup-secret",
                 )
+                renewed = APIClient().post(
+                    reverse("relay-connector-config"),
+                    {"csr_pem": "-----BEGIN CERTIFICATE REQUEST-----\nrenew\n-----END CERTIFICATE REQUEST-----\n"},
+                    format="json",
+                    HTTP_X_POINTY_CONNECTOR_TOKEN="ptc1.installation-1.connector-secret",
+                )
 
         self.assertEqual(rejected.status_code, status.HTTP_403_FORBIDDEN)
         self.assertEqual(accepted.status_code, status.HTTP_200_OK)
         self.assertEqual(replayed.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(renewed.status_code, status.HTTP_200_OK)
         self.assertEqual(
             accepted.data["connector_token"],
             "ptc1.installation-1.connector-secret",
@@ -884,6 +891,10 @@ class RelayBackendApiTests(TestCase):
             fake_relay.issued_connector_certificate_request["installation_id"],
             "installation-1",
         )
+        self.assertIn(
+            "renew",
+            fake_relay.issued_connector_certificate_request["csr_pem"],
+        )
         setup_token = RelayConnectorSetupToken.objects.get()
         self.assertNotEqual(setup_token.token_hash, "setup-secret")
         self.assertIsNotNone(setup_token.consumed_at)
@@ -896,6 +907,11 @@ class RelayBackendApiTests(TestCase):
         self.assertEqual(event.entity_id, str(installation.pk))
         self.assertTrue(event.attributes["certificate_issued"])
         self.assertNotIn("connector_token", event.attributes)
+        renewal_event = AnalyticsEvent.objects.get(
+            name="relay.connector.certificate_renewed"
+        )
+        self.assertEqual(renewal_event.installation_id, "installation-1")
+        self.assertNotIn("connector_token", renewal_event.attributes)
 
     @override_settings(POINTY_RELAY_CONNECTOR_SETUP_TOKEN="setup-secret")
     def test_connector_config_rejects_relay_tunneled_request(self):

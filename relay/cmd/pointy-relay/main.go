@@ -99,6 +99,11 @@ func runServer(args []string) error {
 		envString("POINTY_RELAY_HTTP_TLS_KEY", ""),
 		"TLS key for HTTP remote/control listener",
 	)
+	httpTLSServerName := flags.String(
+		"http-tls-server-name",
+		envString("POINTY_RELAY_HTTP_TLS_SERVER_NAME", ""),
+		"DNS name or IP to include when auto-generating HTTP listener TLS material",
+	)
 	httpClientCA := flags.String(
 		"http-client-ca",
 		envString("POINTY_RELAY_HTTP_CLIENT_CA", ""),
@@ -124,6 +129,11 @@ func runServer(args []string) error {
 		envString("POINTY_RELAY_CONNECTOR_TLS_KEY", ""),
 		"TLS key for connector listener",
 	)
+	connectorTLSServerName := flags.String(
+		"connector-tls-server-name",
+		envString("POINTY_RELAY_CONNECTOR_TLS_SERVER_NAME", ""),
+		"DNS name or IP to include when auto-generating connector listener TLS material",
+	)
 	connectorClientCA := flags.String(
 		"connector-client-ca",
 		envString("POINTY_RELAY_CONNECTOR_CLIENT_CA", ""),
@@ -138,6 +148,26 @@ func runServer(args []string) error {
 		"connector-client-cert-ttl",
 		envDuration("POINTY_RELAY_CONNECTOR_CLIENT_CERT_TTL", 90*24*time.Hour),
 		"connector client certificate TTL",
+	)
+	autoTLS := flags.Bool(
+		"auto-tls",
+		envBool("POINTY_RELAY_AUTO_TLS", true),
+		"auto-generate missing relay TLS material in PostgreSQL",
+	)
+	generatedTLSCATTL := flags.Duration(
+		"generated-tls-ca-ttl",
+		envDuration("POINTY_RELAY_GENERATED_TLS_CA_TTL", defaultGeneratedTLSCATTL),
+		"TTL for auto-generated relay TLS CA material",
+	)
+	generatedTLSServerCertTTL := flags.Duration(
+		"generated-tls-server-cert-ttl",
+		envDuration("POINTY_RELAY_GENERATED_TLS_SERVER_CERT_TTL", defaultGeneratedTLSServerCertTTL),
+		"TTL for auto-generated relay server TLS certificates",
+	)
+	generatedTLSRotationWindow := flags.Duration(
+		"generated-tls-rotation-window",
+		envDuration("POINTY_RELAY_GENERATED_TLS_ROTATION_WINDOW", defaultGeneratedTLSRotationWindow),
+		"rotation window for auto-generated relay server TLS certificates",
 	)
 	allowInsecureConnector := flags.Bool(
 		"allow-insecure-connector",
@@ -260,13 +290,18 @@ func runServer(args []string) error {
 		AllowInsecureHTTP:      *allowInsecureHTTP,
 		HTTPTLSCert:            *httpTLSCert,
 		HTTPTLSKey:             *httpTLSKey,
+		HTTPTLSServerName:      *httpTLSServerName,
+		HTTPAddr:               *httpAddr,
 		HTTPClientCA:           *httpClientCA,
 		RequireAdminClientCert: *requireAdminClientCert,
 		AllowInsecureConnector: *allowInsecureConnector,
 		ConnectorTLSCert:       *connectorTLSCert,
 		ConnectorTLSKey:        *connectorTLSKey,
+		ConnectorTLSServerName: *connectorTLSServerName,
+		ConnectorAddr:          *connectorAddr,
 		ConnectorClientCA:      *connectorClientCA,
 		ConnectorClientCAKey:   *connectorClientCAKey,
+		AutoTLS:                *autoTLS,
 		NodeInternalURL:        *nodeInternalURL,
 		NodeProxyToken:         *nodeProxyToken,
 		AllowInsecureNodeProxy: *allowInsecureNodeProxy,
@@ -290,6 +325,32 @@ func runServer(args []string) error {
 	}
 	if redisClient != nil {
 		defer redisClient.Close()
+	}
+	autoTLSMaterial, err := prepareRelayAutoTLSMaterial(
+		setupCtx,
+		postgresStore,
+		relayAutoTLSOptions{
+			Enabled:           *autoTLS,
+			HTTPAddr:          *httpAddr,
+			HTTPSName:         *httpTLSServerName,
+			HTTPCertFile:      *httpTLSCert,
+			HTTPKeyFile:       *httpTLSKey,
+			InsecureHTTP:      *allowInsecureHTTP,
+			ConnectorAddr:     *connectorAddr,
+			ConnectorName:     *connectorTLSServerName,
+			ConnectorCert:     *connectorTLSCert,
+			ConnectorKey:      *connectorTLSKey,
+			ConnectorCA:       *connectorClientCA,
+			ConnectorCAKey:    *connectorClientCAKey,
+			InsecureConnector: *allowInsecureConnector,
+			CATTL:             *generatedTLSCATTL,
+			ServerCertTTL:     *generatedTLSServerCertTTL,
+			RotationWindow:    *generatedTLSRotationWindow,
+		},
+		logger,
+	)
+	if err != nil {
+		return err
 	}
 
 	store := control.InstallationStore(postgresStore)
@@ -318,11 +379,20 @@ func runServer(args []string) error {
 	hub := relayserver.NewHub()
 	metrics := observability.NewMetrics()
 	var connectorCertificateIssuer relayserver.ConnectorCertificateIssuer
-	if strings.TrimSpace(*connectorClientCAKey) != "" {
-		issuer, err := security.LoadCertificateAuthority(
-			*connectorClientCA,
-			*connectorClientCAKey,
-		)
+	if strings.TrimSpace(*connectorClientCAKey) != "" ||
+		strings.TrimSpace(autoTLSMaterial.ConnectorCAKeyPEM) != "" {
+		var issuer *security.CertificateAuthority
+		if strings.TrimSpace(*connectorClientCAKey) != "" {
+			issuer, err = security.LoadCertificateAuthority(
+				*connectorClientCA,
+				*connectorClientCAKey,
+			)
+		} else {
+			issuer, err = security.LoadCertificateAuthorityPEM(
+				autoTLSMaterial.ConnectorCAPEM,
+				autoTLSMaterial.ConnectorCAKeyPEM,
+			)
+		}
 		if err != nil {
 			return fmt.Errorf("connector certificate issuer setup failed: %w", err)
 		}
@@ -337,7 +407,10 @@ func runServer(args []string) error {
 		connectorListener,
 		*connectorTLSCert,
 		*connectorTLSKey,
+		autoTLSMaterial.ConnectorServerCertPEM,
+		autoTLSMaterial.ConnectorServerKeyPEM,
 		*connectorClientCA,
+		autoTLSMaterial.ConnectorCAPEM,
 		*allowInsecureConnector,
 	)
 	if err != nil {
@@ -361,7 +434,10 @@ func runServer(args []string) error {
 		httpListener,
 		*httpTLSCert,
 		*httpTLSKey,
+		autoTLSMaterial.HTTPServerCertPEM,
+		autoTLSMaterial.HTTPServerKeyPEM,
 		httpClientCAFile,
+		"",
 		httpRequiresAdminClientCert,
 		*allowInsecureHTTP,
 	)
@@ -383,7 +459,10 @@ func runServer(args []string) error {
 			adminHTTPListener,
 			*httpTLSCert,
 			*httpTLSKey,
+			autoTLSMaterial.HTTPServerCertPEM,
+			autoTLSMaterial.HTTPServerKeyPEM,
 			*httpClientCA,
+			"",
 			*requireAdminClientCert,
 			*allowInsecureHTTP,
 		)
@@ -513,19 +592,34 @@ type serverSecurityConfig struct {
 	AllowInsecureHTTP      bool
 	HTTPTLSCert            string
 	HTTPTLSKey             string
+	HTTPTLSServerName      string
+	HTTPAddr               string
 	HTTPClientCA           string
 	RequireAdminClientCert bool
 	AllowInsecureConnector bool
 	ConnectorTLSCert       string
 	ConnectorTLSKey        string
+	ConnectorTLSServerName string
+	ConnectorAddr          string
 	ConnectorClientCA      string
 	ConnectorClientCAKey   string
+	AutoTLS                bool
 	NodeInternalURL        string
 	NodeProxyToken         string
 	AllowInsecureNodeProxy bool
 }
 
 func validateServerSecurityConfig(config serverSecurityConfig) error {
+	if certificatePairPartial(config.HTTPTLSCert, config.HTTPTLSKey) {
+		return fmt.Errorf("HTTP TLS certificate and key must be provided together")
+	}
+	if certificatePairPartial(config.ConnectorTLSCert, config.ConnectorTLSKey) {
+		return fmt.Errorf("connector TLS certificate and key must be provided together")
+	}
+	if (strings.TrimSpace(config.ConnectorClientCA) == "") !=
+		(strings.TrimSpace(config.ConnectorClientCAKey) == "") {
+		return fmt.Errorf("connector client CA certificate and key must be provided together or omitted for automatic generation")
+	}
 	if !config.Production {
 		return nil
 	}
@@ -543,8 +637,14 @@ func validateServerSecurityConfig(config serverSecurityConfig) error {
 	if config.AllowInsecureHTTP {
 		problems = append(problems, "cleartext HTTP listener is not allowed")
 	}
-	if strings.TrimSpace(config.HTTPTLSCert) == "" || strings.TrimSpace(config.HTTPTLSKey) == "" {
+	if !config.AutoTLS &&
+		(strings.TrimSpace(config.HTTPTLSCert) == "" || strings.TrimSpace(config.HTTPTLSKey) == "") {
 		problems = append(problems, "HTTP TLS certificate and key are required")
+	}
+	if config.AutoTLS &&
+		strings.TrimSpace(config.HTTPTLSCert) == "" &&
+		!hasUsableCertificateHost(config.HTTPTLSServerName, config.HTTPAddr) {
+		problems = append(problems, "HTTP TLS server name is required for automatic certificate generation on a wildcard listener")
 	}
 	if !config.RequireAdminClientCert {
 		problems = append(problems, "admin client certificates must be required")
@@ -555,13 +655,18 @@ func validateServerSecurityConfig(config serverSecurityConfig) error {
 	if config.AllowInsecureConnector {
 		problems = append(problems, "cleartext connector listener is not allowed")
 	}
-	if strings.TrimSpace(config.ConnectorTLSCert) == "" ||
+	if !config.AutoTLS && (strings.TrimSpace(config.ConnectorTLSCert) == "" ||
 		strings.TrimSpace(config.ConnectorTLSKey) == "" ||
-		strings.TrimSpace(config.ConnectorClientCA) == "" {
+		strings.TrimSpace(config.ConnectorClientCA) == "") {
 		problems = append(problems, "connector mTLS certificate, key, and client CA are required")
 	}
-	if strings.TrimSpace(config.ConnectorClientCAKey) == "" {
+	if !config.AutoTLS && strings.TrimSpace(config.ConnectorClientCAKey) == "" {
 		problems = append(problems, "connector client CA key is required for automatic certificate issuance")
+	}
+	if config.AutoTLS &&
+		strings.TrimSpace(config.ConnectorTLSCert) == "" &&
+		!hasUsableCertificateHost(config.ConnectorTLSServerName, config.ConnectorAddr) {
+		problems = append(problems, "connector TLS server name is required for automatic certificate generation on a wildcard listener")
 	}
 	if config.AllowInsecureNodeProxy {
 		problems = append(problems, "insecure node proxy routing is not allowed")
@@ -642,6 +747,11 @@ func runConnector(args []string) error {
 		envInt("POINTY_RELAY_CONNECTOR_MAX_CONCURRENT_REQUESTS", 64),
 		"maximum concurrent backend requests forwarded by this connector; set 0 to disable",
 	)
+	connectorCertRotationWindow := flags.Duration(
+		"client-cert-rotation-window",
+		envDuration("POINTY_RELAY_CONNECTOR_CLIENT_CERT_ROTATION_WINDOW", defaultConnectorCertRotationWindow),
+		"renew managed connector client certificates inside this window before expiry",
+	)
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
@@ -671,14 +781,21 @@ func runConnector(args []string) error {
 	if tlsServerNameValue == "" {
 		tlsServerNameValue = strings.TrimSpace(state.TLSServerName)
 	}
+	managedTLS := !*allowInsecureRelay && strings.TrimSpace(*tlsCert) == ""
 	needsBootstrap := connectorToken == "" ||
-		(!*allowInsecureRelay &&
-			strings.TrimSpace(*tlsCert) == "" &&
-			strings.TrimSpace(state.ConnectorCertificatePEM) == "")
-	if needsBootstrap {
+		(managedTLS && strings.TrimSpace(state.ConnectorCertificatePEM) == "")
+	needsCertificateRenewal := !needsBootstrap &&
+		managedTLS &&
+		(state.ConnectorCertificateExpiresAt == nil ||
+			control.ConnectorCertificateRotationDue(
+				state.ConnectorCertificateExpiresAt,
+				time.Now().UTC(),
+				*connectorCertRotationWindow,
+			))
+	if needsBootstrap || needsCertificateRenewal {
 		csrPEM := ""
 		privateKeyPEM := ""
-		if !*allowInsecureRelay && strings.TrimSpace(*tlsCert) == "" {
+		if managedTLS {
 			request, err := security.GenerateClientCertificateRequest("pointy-connector")
 			if err != nil {
 				return err
@@ -691,32 +808,37 @@ func runConnector(args []string) error {
 			backendURL,
 			*backendConfigURL,
 			*backendConfigToken,
+			connectorToken,
 			csrPEM,
 		)
 		if err != nil {
-			return err
-		}
-		connectorToken = bootstrap.ConnectorToken
-		if strings.TrimSpace(bootstrap.RelayConnectorAddress) != "" {
-			relayAddress = strings.TrimSpace(bootstrap.RelayConnectorAddress)
-		}
-		if strings.TrimSpace(bootstrap.TLSServerName) != "" {
-			tlsServerNameValue = strings.TrimSpace(bootstrap.TLSServerName)
-		}
-		state = connectorState{
-			InstallationID:                bootstrap.InstallationID,
-			ShopName:                      bootstrap.ShopName,
-			BackendURL:                    backendURL.String(),
-			RelayConnectorAddress:         relayAddress,
-			ConnectorToken:                connectorToken,
-			TLSServerName:                 tlsServerNameValue,
-			ConnectorCertificatePEM:       bootstrap.ConnectorCertificatePEM,
-			ConnectorPrivateKeyPEM:        privateKeyPEM,
-			ConnectorCACertificatePEM:     bootstrap.ConnectorCACertificatePEM,
-			ConnectorCertificateExpiresAt: bootstrap.ConnectorCertificateExpiresAt,
-		}
-		if err := saveConnectorState(*stateFile, state); err != nil {
-			return connectorStateError(*stateFile, err)
+			if !needsCertificateRenewal || !connectorStateHasManagedTLS(state) {
+				return err
+			}
+			logger.Warn("connector certificate renewal failed; using existing certificate", "error", err)
+		} else {
+			connectorToken = bootstrap.ConnectorToken
+			if strings.TrimSpace(bootstrap.RelayConnectorAddress) != "" {
+				relayAddress = strings.TrimSpace(bootstrap.RelayConnectorAddress)
+			}
+			if strings.TrimSpace(bootstrap.TLSServerName) != "" {
+				tlsServerNameValue = strings.TrimSpace(bootstrap.TLSServerName)
+			}
+			state = connectorState{
+				InstallationID:                bootstrap.InstallationID,
+				ShopName:                      bootstrap.ShopName,
+				BackendURL:                    backendURL.String(),
+				RelayConnectorAddress:         relayAddress,
+				ConnectorToken:                connectorToken,
+				TLSServerName:                 tlsServerNameValue,
+				ConnectorCertificatePEM:       bootstrap.ConnectorCertificatePEM,
+				ConnectorPrivateKeyPEM:        privateKeyPEM,
+				ConnectorCACertificatePEM:     bootstrap.ConnectorCACertificatePEM,
+				ConnectorCertificateExpiresAt: bootstrap.ConnectorCertificateExpiresAt,
+			}
+			if err := saveConnectorState(*stateFile, state); err != nil {
+				return connectorStateError(*stateFile, err)
+			}
 		}
 	}
 	if connectorToken == "" {
@@ -1017,10 +1139,11 @@ func fetchBackendConnectorConfig(
 	backendURL *url.URL,
 	rawEndpoint string,
 	setupToken string,
+	connectorToken string,
 	csrPEM string,
 ) (backendConnectorConfig, error) {
-	if strings.TrimSpace(setupToken) == "" {
-		return backendConnectorConfig{}, fmt.Errorf("connector setup token is required when connector token is not configured")
+	if strings.TrimSpace(setupToken) == "" && strings.TrimSpace(connectorToken) == "" {
+		return backendConnectorConfig{}, fmt.Errorf("connector setup token or connector token is required for connector bootstrap")
 	}
 	endpoint, err := backendConnectorConfigEndpoint(backendURL, rawEndpoint)
 	if err != nil {
@@ -1043,7 +1166,12 @@ func fetchBackendConnectorConfig(
 	if body != nil {
 		request.Header.Set("Content-Type", "application/json")
 	}
-	request.Header.Set("X-Pointy-Connector-Setup-Token", strings.TrimSpace(setupToken))
+	if strings.TrimSpace(setupToken) != "" {
+		request.Header.Set("X-Pointy-Connector-Setup-Token", strings.TrimSpace(setupToken))
+	}
+	if strings.TrimSpace(connectorToken) != "" {
+		request.Header.Set("X-Pointy-Connector-Token", strings.TrimSpace(connectorToken))
+	}
 
 	client := newBackendConnectorHTTPClient()
 	response, err := client.Do(request)
@@ -1414,7 +1542,10 @@ func secureConnectorListener(
 	listener net.Listener,
 	certFile string,
 	keyFile string,
+	certPEM string,
+	keyPEM string,
 	clientCAFile string,
+	clientCAPEM string,
 	allowInsecure bool,
 ) (net.Listener, error) {
 	if allowInsecure {
@@ -1422,8 +1553,11 @@ func secureConnectorListener(
 	}
 	config, err := security.ServerTLSConfig(security.ServerTLSOptions{
 		CertFile:        certFile,
+		CertPEM:         certPEM,
 		KeyFile:         keyFile,
+		KeyPEM:          keyPEM,
 		ClientCAFile:    clientCAFile,
+		ClientCAPEM:     clientCAPEM,
 		RequireClientCA: true,
 	})
 	if err != nil {
@@ -1436,7 +1570,10 @@ func secureHTTPListener(
 	listener net.Listener,
 	certFile string,
 	keyFile string,
+	certPEM string,
+	keyPEM string,
 	clientCAFile string,
+	clientCAPEM string,
 	requireAdminClientCert bool,
 	allowInsecure bool,
 ) (net.Listener, error) {
@@ -1448,10 +1585,13 @@ func secureHTTPListener(
 	}
 	options := security.ServerTLSOptions{
 		CertFile: certFile,
+		CertPEM:  certPEM,
 		KeyFile:  keyFile,
+		KeyPEM:   keyPEM,
 	}
 	if requireAdminClientCert {
 		options.ClientCAFile = clientCAFile
+		options.ClientCAPEM = clientCAPEM
 		options.RequestClientCA = true
 	}
 	config, err := security.ServerTLSConfig(options)

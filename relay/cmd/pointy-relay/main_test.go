@@ -44,6 +44,9 @@ func TestFetchBackendConnectorConfigUsesSetupToken(t *testing.T) {
 				if got := r.Header.Get("X-Pointy-Connector-Setup-Token"); got != "setup-secret" {
 					t.Fatalf("unexpected setup token %q", got)
 				}
+				if got := r.Header.Get("X-Pointy-Connector-Token"); got != "" {
+					t.Fatalf("unexpected connector token %q", got)
+				}
 				content, err := json.Marshal(map[string]string{
 					"installation_id":              "installation-1",
 					"shop_name":                    "متجر الاختبار",
@@ -74,6 +77,7 @@ func TestFetchBackendConnectorConfigUsesSetupToken(t *testing.T) {
 		backendURL,
 		"",
 		"setup-secret",
+		"",
 		"csr",
 	)
 	if err != nil {
@@ -100,8 +104,8 @@ func TestFetchBackendConnectorConfigRequiresSetupToken(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := fetchBackendConnectorConfig(context.Background(), backendURL, "", "", ""); err == nil {
-		t.Fatal("expected setup token requirement")
+	if _, err := fetchBackendConnectorConfig(context.Background(), backendURL, "", "", "", ""); err == nil {
+		t.Fatal("expected connector credential requirement")
 	}
 }
 
@@ -126,8 +130,61 @@ func TestFetchBackendConnectorConfigHandlesBootstrapHTTPError(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := fetchBackendConnectorConfig(context.Background(), backendURL, "", "setup-secret", ""); err == nil {
+	if _, err := fetchBackendConnectorConfig(context.Background(), backendURL, "", "setup-secret", "", ""); err == nil {
 		t.Fatal("expected backend bootstrap HTTP error")
+	}
+}
+
+func TestFetchBackendConnectorConfigCanUseConnectorTokenForRenewal(t *testing.T) {
+	originalClientFactory := newBackendConnectorHTTPClient
+	defer func() {
+		newBackendConnectorHTTPClient = originalClientFactory
+	}()
+	newBackendConnectorHTTPClient = func() *http.Client {
+		return &http.Client{
+			Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+				if got := r.Header.Get("X-Pointy-Connector-Setup-Token"); got != "" {
+					t.Fatalf("unexpected setup token %q", got)
+				}
+				if got := r.Header.Get("X-Pointy-Connector-Token"); got != "ptc1.installation-1.secret" {
+					t.Fatalf("unexpected connector token %q", got)
+				}
+				content, err := json.Marshal(map[string]string{
+					"installation_id":              "installation-1",
+					"relay_connector_address":      "relay.example:443",
+					"connector_token":              "ptc1.installation-1.secret",
+					"connector_certificate_pem":    "cert",
+					"connector_ca_certificate_pem": "ca",
+				})
+				if err != nil {
+					return nil, err
+				}
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Body:       io.NopCloser(strings.NewReader(string(content))),
+					Header:     http.Header{"Content-Type": []string{"application/json"}},
+				}, nil
+			}),
+		}
+	}
+	backendURL, err := parseOrigin("http://pointy.test")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	config, err := fetchBackendConnectorConfig(
+		context.Background(),
+		backendURL,
+		"",
+		"",
+		"ptc1.installation-1.secret",
+		"csr",
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if config.ConnectorCertificatePEM != "cert" {
+		t.Fatalf("unexpected renewed certificate %q", config.ConnectorCertificatePEM)
 	}
 }
 
@@ -147,6 +204,25 @@ func TestValidateServerSecurityConfigAcceptsProductionConfig(t *testing.T) {
 
 	if err := validateServerSecurityConfig(config); err != nil {
 		t.Fatalf("valid production config rejected: %v", err)
+	}
+}
+
+func TestValidateServerSecurityConfigAcceptsProductionAutoTLS(t *testing.T) {
+	config := validProductionServerSecurityConfig()
+	config.AutoTLS = true
+	config.HTTPTLSCert = ""
+	config.HTTPTLSKey = ""
+	config.HTTPTLSServerName = "relay.example.com"
+	config.HTTPAddr = "0.0.0.0:443"
+	config.ConnectorTLSCert = ""
+	config.ConnectorTLSKey = ""
+	config.ConnectorTLSServerName = "relay.example.com"
+	config.ConnectorAddr = "0.0.0.0:8092"
+	config.ConnectorClientCA = ""
+	config.ConnectorClientCAKey = ""
+
+	if err := validateServerSecurityConfig(config); err != nil {
+		t.Fatalf("valid production auto-TLS config rejected: %v", err)
 	}
 }
 
@@ -199,12 +275,12 @@ func TestValidateServerSecurityConfigRejectsUnsafeProductionConfig(t *testing.T)
 		{
 			name:    "missing connector mTLS",
 			mutate:  func(config *serverSecurityConfig) { config.ConnectorClientCA = "" },
-			message: "connector mTLS",
+			message: "connector client CA",
 		},
 		{
 			name:    "missing connector issuer key",
 			mutate:  func(config *serverSecurityConfig) { config.ConnectorClientCAKey = "" },
-			message: "automatic certificate issuance",
+			message: "connector client CA",
 		},
 		{
 			name:    "insecure node proxy",
@@ -235,6 +311,29 @@ func TestValidateServerSecurityConfigRejectsUnsafeProductionConfig(t *testing.T)
 	}
 }
 
+func TestValidateServerSecurityConfigRejectsProductionAutoTLSWithoutServerName(t *testing.T) {
+	config := validProductionServerSecurityConfig()
+	config.AutoTLS = true
+	config.HTTPTLSCert = ""
+	config.HTTPTLSKey = ""
+	config.HTTPAddr = "0.0.0.0:443"
+	config.HTTPTLSServerName = ""
+	config.ConnectorTLSCert = ""
+	config.ConnectorTLSKey = ""
+	config.ConnectorAddr = "0.0.0.0:8092"
+	config.ConnectorTLSServerName = ""
+	config.ConnectorClientCA = ""
+	config.ConnectorClientCAKey = ""
+
+	err := validateServerSecurityConfig(config)
+	if err == nil {
+		t.Fatal("expected unsafe auto-TLS config rejection")
+	}
+	if !strings.Contains(err.Error(), "server name") {
+		t.Fatalf("expected server name error, got %v", err)
+	}
+}
+
 func validProductionServerSecurityConfig() serverSecurityConfig {
 	return serverSecurityConfig{
 		Production:             true,
@@ -242,10 +341,12 @@ func validProductionServerSecurityConfig() serverSecurityConfig {
 		AdminToken:             "admin-secret",
 		HTTPTLSCert:            "/etc/pointy/relay-http.crt",
 		HTTPTLSKey:             "/etc/pointy/relay-http.key",
+		HTTPAddr:               "127.0.0.1:8091",
 		HTTPClientCA:           "/etc/pointy/admin-ca.crt",
 		RequireAdminClientCert: true,
 		ConnectorTLSCert:       "/etc/pointy/relay-connector.crt",
 		ConnectorTLSKey:        "/etc/pointy/relay-connector.key",
+		ConnectorAddr:          "127.0.0.1:8092",
 		ConnectorClientCA:      "/etc/pointy/connector-ca.crt",
 		ConnectorClientCAKey:   "/etc/pointy/connector-ca.key",
 		NodeInternalURL:        "https://relay-node-a.internal",

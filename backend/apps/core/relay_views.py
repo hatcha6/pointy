@@ -203,19 +203,25 @@ class RelayConnectorConfigView(views.APIView):
             )
         request_serializer = RelayConnectorConfigRequestSerializer(data=request.data)
         request_serializer.is_valid(raise_exception=True)
-        provided_token = request.headers.get("X-Pointy-Connector-Setup-Token", "")
-        if not consume_connector_setup_token(provided_token):
-            return Response(
-                {"detail": "connector setup token rejected"},
-                status=status.HTTP_403_FORBIDDEN,
-            )
-        try:
-            installation, _ = ensure_relay_installation()
-        except (ImproperlyConfigured, RelayControlError) as exc:
-            return Response(
-                {"detail": str(exc)},
-                status=status.HTTP_502_BAD_GATEWAY,
-            )
+        installation = RelayInstallation.load()
+        is_renewal = self._valid_connector_token(
+            installation,
+            request.headers.get("X-Pointy-Connector-Token", ""),
+        )
+        if not is_renewal:
+            provided_token = request.headers.get("X-Pointy-Connector-Setup-Token", "")
+            if not consume_connector_setup_token(provided_token):
+                return Response(
+                    {"detail": "connector setup token rejected"},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+            try:
+                installation, _ = ensure_relay_installation()
+            except (ImproperlyConfigured, RelayControlError) as exc:
+                return Response(
+                    {"detail": str(exc)},
+                    status=status.HTTP_502_BAD_GATEWAY,
+                )
         certificate = self._issue_connector_certificate(
             installation,
             request_serializer.validated_data.get("csr_pem", ""),
@@ -226,7 +232,11 @@ class RelayConnectorConfigView(views.APIView):
             self._connector_config_payload(installation, certificate)
         )
         record_domain_event(
-            name="relay.connector.bootstrap_succeeded",
+            name=(
+                "relay.connector.certificate_renewed"
+                if is_renewal
+                else "relay.connector.bootstrap_succeeded"
+            ),
             event_type=AnalyticsEvent.EventType.AUDIT,
             severity=AnalyticsEvent.Severity.INFO,
             entity_type="relay_installation",
@@ -241,6 +251,14 @@ class RelayConnectorConfigView(views.APIView):
             },
         )
         return Response(serializer.data)
+
+    def _valid_connector_token(self, installation, provided_token):
+        if installation is None:
+            return False
+        return secrets.compare_digest(
+            str(provided_token or ""),
+            installation.connector_token,
+        )
 
     def _issue_connector_certificate(self, installation, csr_pem):
         if not csr_pem.strip():
