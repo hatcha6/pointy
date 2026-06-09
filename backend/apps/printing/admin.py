@@ -62,6 +62,7 @@ class PrintJobAdmin(admin.ModelAdmin):
         "order",
         "printer_profile",
         "attempts",
+        "lease_expires_at",
         "created_at",
     )
     list_filter = ("job_type", "status", "printer_profile")

@@ -8,12 +8,14 @@ import '../../../core/result.dart';
 import '../../../data/models/analytics_event.dart';
 import '../../../data/models/analytics_export.dart';
 import '../../../data/models/shop_settings.dart';
+import '../../../data/models/system_backup.dart';
 import '../../../data/repositories/shop_settings_repository.dart';
 
 class ShopSettingsViewModel extends ChangeNotifier {
   ShopSettingsViewModel(this._repository, {AnalyticsEngine? analyticsEngine})
     : _analyticsEngine = analyticsEngine {
     loadSettings();
+    loadBackupOperations();
   }
 
   final ShopSettingsRepository _repository;
@@ -23,17 +25,38 @@ class ShopSettingsViewModel extends ChangeNotifier {
   bool _isLoading = false;
   bool _isSaving = false;
   bool _isExportingAnalytics = false;
+  bool _isLoadingBackupOperations = false;
+  bool _isSavingBackupSchedule = false;
+  bool _isStartingBackup = false;
+  bool _isRestoringBackup = false;
   bool _hasLoadError = false;
   bool _hasSaveError = false;
   bool _hasAnalyticsExportError = false;
+  bool _hasBackupOperationsError = false;
+  BackupOperationsStatus? _backupStatus;
+  List<BackupDestination> _backupDestinations = const [];
+  Timer? _backupPollTimer;
 
   ShopSettings? get settings => _settings;
   bool get isLoading => _isLoading;
   bool get isSaving => _isSaving;
   bool get isExportingAnalytics => _isExportingAnalytics;
+  bool get isLoadingBackupOperations => _isLoadingBackupOperations;
+  bool get isSavingBackupSchedule => _isSavingBackupSchedule;
+  bool get isStartingBackup => _isStartingBackup;
+  bool get isRestoringBackup => _isRestoringBackup;
   bool get hasLoadError => _hasLoadError;
   bool get hasSaveError => _hasSaveError;
   bool get hasAnalyticsExportError => _hasAnalyticsExportError;
+  bool get hasBackupOperationsError => _hasBackupOperationsError;
+  BackupOperationsStatus? get backupStatus => _backupStatus;
+  List<BackupDestination> get backupDestinations => _backupDestinations;
+
+  @override
+  void dispose() {
+    _backupPollTimer?.cancel();
+    super.dispose();
+  }
 
   Future<void> loadSettings() async {
     _isLoading = true;
@@ -191,6 +214,109 @@ class ShopSettingsViewModel extends ChangeNotifier {
     }
   }
 
+  Future<void> loadBackupOperations({bool silent = false}) async {
+    if (!silent) {
+      _isLoadingBackupOperations = true;
+      _hasBackupOperationsError = false;
+      notifyListeners();
+    }
+
+    final statusResult = await _repository.loadBackupOperationsStatus();
+    final destinationsResult = await _repository.loadBackupDestinations();
+    switch (statusResult) {
+      case Ok<BackupOperationsStatus>():
+        _backupStatus = statusResult.value;
+      case Error<BackupOperationsStatus>():
+        _hasBackupOperationsError = true;
+    }
+    switch (destinationsResult) {
+      case Ok<List<BackupDestination>>():
+        _backupDestinations = destinationsResult.value;
+      case Error<List<BackupDestination>>():
+        _hasBackupOperationsError = true;
+    }
+
+    _isLoadingBackupOperations = false;
+    _syncBackupPolling();
+    notifyListeners();
+  }
+
+  Future<bool> updateBackupSchedule(BackupScheduleDraft draft) async {
+    _isSavingBackupSchedule = true;
+    _hasBackupOperationsError = false;
+    notifyListeners();
+
+    final result = await _repository.updateBackupSchedule(draft);
+    _isSavingBackupSchedule = false;
+    switch (result) {
+      case Ok<BackupOperationsStatus>():
+        _backupStatus = result.value;
+        _trackBackupOperation(
+          name: 'settings.backup.schedule_saved',
+          attributes: {
+            'enabled': draft.enabled,
+            'destination_selected': draft.destinationPath.trim().isNotEmpty,
+            'source': 'shop_settings',
+          },
+        );
+        _syncBackupPolling();
+        notifyListeners();
+        return true;
+      case Error<BackupOperationsStatus>():
+        _hasBackupOperationsError = true;
+        notifyListeners();
+        return false;
+    }
+  }
+
+  Future<bool> startBackup() async {
+    _isStartingBackup = true;
+    _hasBackupOperationsError = false;
+    notifyListeners();
+
+    final result = await _repository.startBackup();
+    _isStartingBackup = false;
+    switch (result) {
+      case Ok<SystemMaintenanceJob>():
+        _trackBackupOperation(
+          name: 'settings.backup.manual_started',
+          attributes: {'source': 'shop_settings'},
+        );
+        await loadBackupOperations(silent: true);
+        return true;
+      case Error<SystemMaintenanceJob>():
+        _hasBackupOperationsError = true;
+        notifyListeners();
+        return false;
+    }
+  }
+
+  Future<bool> restoreBackup(RestoreBackupUpload upload) async {
+    _isRestoringBackup = true;
+    _hasBackupOperationsError = false;
+    notifyListeners();
+
+    final result = await _repository.restoreBackup(upload);
+    _isRestoringBackup = false;
+    switch (result) {
+      case Ok<SystemMaintenanceJob>():
+        _trackBackupOperation(
+          name: 'settings.backup.restore_started',
+          attributes: {
+            'source': 'shop_settings',
+            'filename_extension': upload.filename.split('.').last,
+          },
+          metrics: {'byte_count': upload.bytes.length},
+        );
+        await loadBackupOperations(silent: true);
+        return true;
+      case Error<SystemMaintenanceJob>():
+        _hasBackupOperationsError = true;
+        notifyListeners();
+        return false;
+    }
+  }
+
   void trackAnalyticsExportDownloadResult(
     AnalyticsExportFile file, {
     required bool downloaded,
@@ -262,6 +388,33 @@ class ShopSettingsViewModel extends ChangeNotifier {
         'logo_present': settings.logoAttachment != null,
         'source': 'shop_settings',
       },
+    );
+  }
+
+  void _syncBackupPolling() {
+    final hasActiveJob = _backupStatus?.activeJob?.isActive ?? false;
+    if (!hasActiveJob) {
+      _backupPollTimer?.cancel();
+      _backupPollTimer = null;
+      return;
+    }
+    _backupPollTimer ??= Timer.periodic(
+      const Duration(seconds: 2),
+      (_) => unawaited(loadBackupOperations(silent: true)),
+    );
+  }
+
+  void _trackBackupOperation({
+    required String name,
+    Map<String, Object?> attributes = const {},
+    Map<String, num> metrics = const {},
+  }) {
+    trackAuditEvent(
+      _analyticsEngine,
+      name: name,
+      entityType: 'system_backup',
+      attributes: attributes,
+      metrics: metrics,
     );
   }
 }

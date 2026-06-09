@@ -327,6 +327,7 @@ extension PosCheckoutActions on PosViewModel {
       final result = await _printingRepository.printAndReportJob(
         job: job,
         config: config,
+        requeueOnFailure: true,
       );
       return switch (result) {
         Ok<PrintJob>() => InvoicePrintStatus.printed,

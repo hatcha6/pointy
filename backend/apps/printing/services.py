@@ -1,6 +1,8 @@
+from datetime import timedelta
 from decimal import Decimal
 from uuid import uuid4
 
+from django.conf import settings
 from django.db import transaction
 from django.db.models import Max
 from django.urls import reverse
@@ -27,6 +29,7 @@ from .models import (
 
 
 DEFAULT_RECEIPT_TEMPLATE_SLUG = "receipt"
+DEFAULT_PRINT_JOB_LEASE_SECONDS = 300
 
 
 def next_template_version_number(template):
@@ -346,41 +349,162 @@ def get_or_create_print_agent(identifier):
     return agent
 
 
+def print_job_lease_seconds():
+    configured = getattr(
+        settings,
+        "POINTY_PRINT_JOB_LEASE_SECONDS",
+        DEFAULT_PRINT_JOB_LEASE_SECONDS,
+    )
+    try:
+        seconds = int(configured)
+    except (TypeError, ValueError):
+        return DEFAULT_PRINT_JOB_LEASE_SECONDS
+    return max(30, seconds)
+
+
+def print_job_lease_expires_at(now=None):
+    claim_time = now or timezone.now()
+    return claim_time + timedelta(seconds=print_job_lease_seconds())
+
+
+def recover_stale_print_job_claims(*, user=None, now=None, limit=100):
+    recovery_time = now or timezone.now()
+    with transaction.atomic():
+        stale_jobs = list(
+            PrintJob.objects.select_for_update(skip_locked=True)
+            .filter(
+                status=PrintJob.Status.CLAIMED,
+                lease_expires_at__lte=recovery_time,
+            )
+            .order_by("lease_expires_at", "id")[:limit]
+        )
+        for job in stale_jobs:
+            _recover_locked_stale_claim(job, user=user, now=recovery_time)
+    return stale_jobs
+
+
+def claim_next_print_job(agent, *, user=None, printer_endpoint=None):
+    now = timezone.now()
+    with transaction.atomic():
+        recover_stale_print_job_claims(user=user, now=now)
+        job_queryset = PrintJob.objects.select_for_update(skip_locked=True).filter(
+            status=PrintJob.Status.QUEUED,
+        )
+        if agent.printer_profile_id:
+            job_queryset = job_queryset.filter(
+                printer_profile_id__in=[agent.printer_profile_id, None],
+            )
+        job = job_queryset.order_by("-priority", "created_at", "id").first()
+        agent.last_seen_at = now
+        agent.save(update_fields=["last_seen_at", "updated_at"])
+        if job is None:
+            return None
+        return _claim_locked_print_job(
+            job,
+            agent,
+            user=user,
+            printer_endpoint=printer_endpoint,
+            now=now,
+        )
+
+
 def claim_print_job(job, agent, *, user=None, printer_endpoint=None):
     now = timezone.now()
     with transaction.atomic():
         locked_job = PrintJob.objects.select_for_update().get(pk=job.pk)
+        _recover_locked_stale_claim(locked_job, user=user, now=now)
         if locked_job.status != PrintJob.Status.QUEUED:
             raise ValueError("Only queued jobs can be claimed.")
 
-        locked_job.status = PrintJob.Status.CLAIMED
-        locked_job.claimed_by = agent
-        locked_job.claimed_at = now
-        locked_job.attempts += 1
-        locked_job.error_message = ""
-        locked_job.save(
-            update_fields=[
-                "status",
-                "claimed_by",
-                "claimed_at",
-                "attempts",
-                "error_message",
-                "updated_at",
-            ]
-        )
-        agent.last_seen_at = now
-        agent.save(update_fields=["last_seen_at", "updated_at"])
-        create_job_event(
+        claimed_job = _claim_locked_print_job(
             locked_job,
-            PrintJobEvent.Type.CLAIMED,
+            agent,
             user=user,
-            agent=agent,
-            message="Print job claimed.",
-            metadata={"printer_endpoint": printer_endpoint or {}},
+            printer_endpoint=printer_endpoint,
+            now=now,
         )
 
-    locked_job.refresh_from_db()
-    return locked_job
+    claimed_job.refresh_from_db()
+    return claimed_job
+
+
+def _recover_locked_stale_claim(job, *, user=None, now=None):
+    recovery_time = now or timezone.now()
+    if job.status != PrintJob.Status.CLAIMED:
+        return False
+    if job.lease_expires_at is None or job.lease_expires_at > recovery_time:
+        return False
+
+    previous_agent_id = job.claimed_by_id
+    previous_claimed_at = job.claimed_at
+    previous_lease_expires_at = job.lease_expires_at
+    job.status = PrintJob.Status.QUEUED
+    job.claimed_by = None
+    job.claimed_at = None
+    job.lease_expires_at = None
+    job.error_message = ""
+    job.save(
+        update_fields=[
+            "status",
+            "claimed_by",
+            "claimed_at",
+            "lease_expires_at",
+            "error_message",
+            "updated_at",
+        ]
+    )
+    create_job_event(
+        job,
+        PrintJobEvent.Type.REQUEUED,
+        user=user,
+        message="Print job lease expired; job returned to queue.",
+        metadata={
+            "recovery_reason": "lease_expired",
+            "previous_agent_id": previous_agent_id,
+            "previous_claimed_at": (
+                previous_claimed_at.isoformat() if previous_claimed_at else None
+            ),
+            "previous_lease_expires_at": (
+                previous_lease_expires_at.isoformat()
+                if previous_lease_expires_at
+                else None
+            ),
+        },
+    )
+    return True
+
+
+def _claim_locked_print_job(job, agent, *, user=None, printer_endpoint=None, now=None):
+    claim_time = now or timezone.now()
+    job.status = PrintJob.Status.CLAIMED
+    job.claimed_by = agent
+    job.claimed_at = claim_time
+    job.lease_expires_at = print_job_lease_expires_at(claim_time)
+    job.attempts += 1
+    job.error_message = ""
+    job.save(
+        update_fields=[
+            "status",
+            "claimed_by",
+            "claimed_at",
+            "lease_expires_at",
+            "attempts",
+            "error_message",
+            "updated_at",
+        ]
+    )
+    create_job_event(
+        job,
+        PrintJobEvent.Type.CLAIMED,
+        user=user,
+        agent=agent,
+        message="Print job claimed.",
+        metadata={
+            "printer_endpoint": printer_endpoint or {},
+            "lease_expires_at": job.lease_expires_at.isoformat(),
+        },
+    )
+    return job
 
 
 def enqueue_receipt_print_job(order_id):

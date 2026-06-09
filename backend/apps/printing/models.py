@@ -174,6 +174,7 @@ class PrintJob(TimeStampedModel):
         null=True,
     )
     claimed_at = models.DateTimeField(blank=True, null=True)
+    lease_expires_at = models.DateTimeField(blank=True, null=True, db_index=True)
     printed_at = models.DateTimeField(blank=True, null=True)
     failed_at = models.DateTimeField(blank=True, null=True)
     error_message = models.TextField(blank=True)

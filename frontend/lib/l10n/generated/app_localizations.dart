@@ -4291,6 +4291,314 @@ abstract class AppLocalizations {
   /// **'تعذر تصدير التتبع. راجع الفلاتر وحاول مرة أخرى.'**
   String get analyticsExportFailedMessage;
 
+  /// No description provided for @backupRestoreSectionTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'النسخ والاستعادة'**
+  String get backupRestoreSectionTitle;
+
+  /// No description provided for @backupStatusLoadingSummary.
+  ///
+  /// In ar, this message translates to:
+  /// **'جار تحميل حالة النسخ الاحتياطي'**
+  String get backupStatusLoadingSummary;
+
+  /// No description provided for @backupScheduleDisabledSummary.
+  ///
+  /// In ar, this message translates to:
+  /// **'النسخ التلقائي متوقف'**
+  String get backupScheduleDisabledSummary;
+
+  /// No description provided for @backupScheduleMissingDestinationSummary.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر قرصا خارجيا لتفعيل النسخ التلقائي'**
+  String get backupScheduleMissingDestinationSummary;
+
+  /// Summary for the next scheduled backup time.
+  ///
+  /// In ar, this message translates to:
+  /// **'النسخة التالية: {dateTime}'**
+  String backupNextScheduledSummary(String dateTime);
+
+  /// Summary when a backup or restore job is running.
+  ///
+  /// In ar, this message translates to:
+  /// **'{operation} قيد التنفيذ، {percent}٪'**
+  String backupJobRunningSummary(String operation, int percent);
+
+  /// No description provided for @backupRestoreTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'النسخ والاستعادة'**
+  String get backupRestoreTitle;
+
+  /// No description provided for @backupRefreshTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحديث حالة النسخ'**
+  String get backupRefreshTooltip;
+
+  /// No description provided for @backupScheduleSectionTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'النسخ الاحتياطي التلقائي'**
+  String get backupScheduleSectionTitle;
+
+  /// No description provided for @backupScheduleEnabledLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'تفعيل النسخ اليومي'**
+  String get backupScheduleEnabledLabel;
+
+  /// No description provided for @backupScheduleEnabledSubtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'ينشئ النظام ملف ZIP واحدا يحتوي قاعدة البيانات والملفات المرفوعة.'**
+  String get backupScheduleEnabledSubtitle;
+
+  /// No description provided for @backupDestinationLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'قرص النسخ الاحتياطي'**
+  String get backupDestinationLabel;
+
+  /// Dropdown label for a backup destination.
+  ///
+  /// In ar, this message translates to:
+  /// **'{label}، متاح {freeSpace}'**
+  String backupDestinationOption(String label, String freeSpace);
+
+  /// Details for the selected backup destination.
+  ///
+  /// In ar, this message translates to:
+  /// **'سيتم الحفظ في {path}. المساحة المتاحة {freeSpace} من {totalSpace}.'**
+  String backupDestinationDetails(
+    String path,
+    String freeSpace,
+    String totalSpace,
+  );
+
+  /// No description provided for @backupNoWritableDestinationsMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم يجد الخادم قرصا خارجيا قابلا للكتابة. تأكد من توصيل القرص وربطه داخل Docker.'**
+  String get backupNoWritableDestinationsMessage;
+
+  /// No description provided for @backupScheduledTimeLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'وقت النسخ اليومي'**
+  String get backupScheduledTimeLabel;
+
+  /// Retention explanation for automatic backups.
+  ///
+  /// In ar, this message translates to:
+  /// **'بعد نجاح النسخ يحتفظ Pointy بآخر {count} نسخ ويحذف الأقدم من مجلد النسخ.'**
+  String backupRetentionMessage(int count);
+
+  /// No description provided for @backupDestinationRequiredError.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر قرصا للنسخ الاحتياطي.'**
+  String get backupDestinationRequiredError;
+
+  /// No description provided for @backupSaveScheduleButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'حفظ الجدولة'**
+  String get backupSaveScheduleButton;
+
+  /// No description provided for @backupSavingScheduleButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'جار الحفظ...'**
+  String get backupSavingScheduleButton;
+
+  /// No description provided for @backupStartNowButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'نسخ الآن'**
+  String get backupStartNowButton;
+
+  /// No description provided for @backupStartingButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'جار البدء...'**
+  String get backupStartingButton;
+
+  /// No description provided for @backupScheduleSavedMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم حفظ جدولة النسخ الاحتياطي.'**
+  String get backupScheduleSavedMessage;
+
+  /// No description provided for @backupStartedMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'بدأ النسخ الاحتياطي.'**
+  String get backupStartedMessage;
+
+  /// No description provided for @backupOperationFailedMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذرت عملية النسخ أو الاستعادة. حاول مرة أخرى.'**
+  String get backupOperationFailedMessage;
+
+  /// Title for an active backup/restore job.
+  ///
+  /// In ar, this message translates to:
+  /// **'{operation} قيد التنفيذ'**
+  String backupActiveJobTitle(String operation);
+
+  /// Progress percentage label.
+  ///
+  /// In ar, this message translates to:
+  /// **'{percent}٪'**
+  String backupProgressPercent(int percent);
+
+  /// No description provided for @restoreSectionTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'استعادة نسخة'**
+  String get restoreSectionTitle;
+
+  /// No description provided for @restoreWarningMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'الاستعادة تستبدل قاعدة البيانات والملفات الحالية بمحتوى النسخة المختارة.'**
+  String get restoreWarningMessage;
+
+  /// No description provided for @restorePickFileButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختيار ملف ZIP'**
+  String get restorePickFileButton;
+
+  /// No description provided for @restoreUploadingButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'جار الرفع...'**
+  String get restoreUploadingButton;
+
+  /// No description provided for @restorePickErrorMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر قراءة ملف النسخة المختارة.'**
+  String get restorePickErrorMessage;
+
+  /// No description provided for @restoreConfirmTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'تأكيد الاستعادة'**
+  String get restoreConfirmTitle;
+
+  /// No description provided for @restoreConfirmMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'سيتم استبدال بيانات المتجر الحالية بعد بدء الاستعادة. تأكد أن ملف النسخة صحيح.'**
+  String get restoreConfirmMessage;
+
+  /// No description provided for @restoreConfirmButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'بدء الاستعادة'**
+  String get restoreConfirmButton;
+
+  /// No description provided for @restoreStartedMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'بدأت الاستعادة.'**
+  String get restoreStartedMessage;
+
+  /// No description provided for @backupHistorySectionTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'آخر العمليات'**
+  String get backupHistorySectionTitle;
+
+  /// No description provided for @latestBackupLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'آخر نسخة احتياطية'**
+  String get latestBackupLabel;
+
+  /// No description provided for @latestRestoreLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'آخر استعادة'**
+  String get latestRestoreLabel;
+
+  /// No description provided for @backupNoJobValue.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد عملية مسجلة'**
+  String get backupNoJobValue;
+
+  /// Summary for latest backup or restore job.
+  ///
+  /// In ar, this message translates to:
+  /// **'{status}، {completedAt}، {filename}'**
+  String backupJobHistorySummary(
+    String status,
+    String completedAt,
+    String filename,
+  );
+
+  /// No description provided for @backupOperationBackup.
+  ///
+  /// In ar, this message translates to:
+  /// **'النسخ الاحتياطي'**
+  String get backupOperationBackup;
+
+  /// No description provided for @backupOperationRestore.
+  ///
+  /// In ar, this message translates to:
+  /// **'الاستعادة'**
+  String get backupOperationRestore;
+
+  /// No description provided for @backupJobStatusQueued.
+  ///
+  /// In ar, this message translates to:
+  /// **'في الانتظار'**
+  String get backupJobStatusQueued;
+
+  /// No description provided for @backupJobStatusRunning.
+  ///
+  /// In ar, this message translates to:
+  /// **'قيد التنفيذ'**
+  String get backupJobStatusRunning;
+
+  /// No description provided for @backupJobStatusSucceeded.
+  ///
+  /// In ar, this message translates to:
+  /// **'مكتملة'**
+  String get backupJobStatusSucceeded;
+
+  /// No description provided for @backupJobStatusFailed.
+  ///
+  /// In ar, this message translates to:
+  /// **'فشلت'**
+  String get backupJobStatusFailed;
+
+  /// No description provided for @backupStorageUnknownValue.
+  ///
+  /// In ar, this message translates to:
+  /// **'غير معروف'**
+  String get backupStorageUnknownValue;
+
+  /// Storage size in GiB.
+  ///
+  /// In ar, this message translates to:
+  /// **'{value} جيجابايت'**
+  String backupStorageGigabytes(String value);
+
+  /// Storage size in MiB.
+  ///
+  /// In ar, this message translates to:
+  /// **'{value} ميجابايت'**
+  String backupStorageMegabytes(String value);
+
   /// No description provided for @analyticsEventTypeUsage.
   ///
   /// In ar, this message translates to:

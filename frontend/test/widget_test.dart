@@ -772,6 +772,43 @@ void main() {
     );
   });
 
+  test(
+    'printing repository requeues post-sale print job after local failure',
+    () async {
+      final reportBodies = <Map<String, Object?>>[];
+      var requeueCalls = 0;
+      final repository = PrintingRepository(
+        _mockApiService(
+          onPrintJobReport: (request) {
+            reportBodies.add(jsonDecode(request.body) as Map<String, Object?>);
+          },
+          onPrintJobRequeue: (_) => requeueCalls += 1,
+        ),
+        serialTransport: const _StatusPrintTransport(isAvailable: false),
+      );
+      const config = PrinterConfig(
+        endpoint: PrinterEndpoint(
+          kind: PrintTransportKind.serial,
+          name: 'Counter printer',
+          address: '/dev/tty.usbserial',
+        ),
+      );
+      final job = PrintJob.fromJson(_printJobJson(status: 'claimed'));
+
+      final result = await repository.printAndReportJob(
+        job: job,
+        config: config,
+        requeueOnFailure: true,
+      );
+
+      expect(result, isA<Error<PrintJob>>());
+      expect(reportBodies, hasLength(1));
+      expect(reportBodies.single['status'], 'failed');
+      expect(reportBodies.single['error_message'], 'offline');
+      expect(requeueCalls, 1);
+    },
+  );
+
   test('printing repository sends product barcode label bytes', () async {
     final transport = _CapturingPrintTransport();
     final repository = PrintingRepository(
@@ -3672,6 +3709,7 @@ PosApiService _mockApiService({
   void Function(http.Request request)? onReturn,
   void Function(http.Request request)? onVoid,
   void Function(http.Request request)? onPrintJobReport,
+  void Function(http.Request request)? onPrintJobRequeue,
   void Function(http.Request request)? onPrintAuditRecord,
   void Function(http.Request request)? onPrintAuditReport,
   void Function(http.Request request)? onStockMovement,
@@ -4644,6 +4682,11 @@ PosApiService _mockApiService({
       if (path.endsWith('/print-jobs/501/report/')) {
         onPrintJobReport?.call(request);
         return _jsonResponse(_printJobJson(status: 'printed'));
+      }
+
+      if (path.endsWith('/print-jobs/501/requeue/')) {
+        onPrintJobRequeue?.call(request);
+        return _jsonResponse(_printJobJson());
       }
 
       if (path.endsWith('/print-audit-events/record/')) {

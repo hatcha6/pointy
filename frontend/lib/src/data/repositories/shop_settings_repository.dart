@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import '../../core/result.dart';
 import '../models/analytics_export.dart';
 import '../models/shop_settings.dart';
+import '../models/system_backup.dart';
 import '../services/pos_api_service.dart';
 
 class ShopSettingsRepository {
@@ -34,5 +35,29 @@ class ShopSettingsRepository {
     AnalyticsExportQuery query,
   ) async {
     return Result.guard(() => _service.exportAnalyticsEvents(query));
+  }
+
+  Future<Result<List<BackupDestination>>> loadBackupDestinations() async {
+    return Result.guard(_service.fetchBackupDestinations);
+  }
+
+  Future<Result<BackupOperationsStatus>> loadBackupOperationsStatus() async {
+    return Result.guard(_service.fetchBackupOperationsStatus);
+  }
+
+  Future<Result<BackupOperationsStatus>> updateBackupSchedule(
+    BackupScheduleDraft draft,
+  ) async {
+    return Result.guard(() => _service.updateBackupSchedule(draft));
+  }
+
+  Future<Result<SystemMaintenanceJob>> startBackup() async {
+    return Result.guard(_service.startBackup);
+  }
+
+  Future<Result<SystemMaintenanceJob>> restoreBackup(
+    RestoreBackupUpload upload,
+  ) async {
+    return Result.guard(() => _service.restoreBackup(upload));
   }
 }

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:file_picker/file_picker.dart';
@@ -8,6 +10,7 @@ import '../../../data/models/analytics_export.dart';
 import '../../../data/models/attachment_summary.dart';
 import '../../../data/models/pos_user.dart';
 import '../../../data/models/shop_settings.dart';
+import '../../../data/models/system_backup.dart';
 import '../../../data/services/analytics_export_downloader.dart';
 import '../../../shared/app_navigation_drawer.dart';
 import '../../../shared/authorization_guards.dart';
@@ -18,6 +21,7 @@ import '../../../shared/shell/shell.dart';
 import '../view_models/shop_settings_view_model.dart';
 
 part 'shop_settings_widgets.dart';
+part 'shop_backup_widgets.dart';
 
 class ShopSettingsScreen extends StatelessWidget {
   const ShopSettingsScreen({
@@ -397,6 +401,15 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
                                 ),
                         ),
                         PointySettingsTile(
+                          icon: Icons.backup_outlined,
+                          title: l10n.backupRestoreSectionTitle,
+                          subtitle: _backupOperationsSummary(l10n),
+                          hasError: widget.viewModel.hasBackupOperationsError,
+                          onTap: widget.viewModel.isSaving
+                              ? null
+                              : () => _openBackupOperations(context),
+                        ),
+                        PointySettingsTile(
                           icon: Icons.file_download_outlined,
                           title: l10n.analyticsExportSectionTitle,
                           subtitle: _analyticsExportSummary(l10n),
@@ -509,6 +522,28 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
       return l10n.analyticsExportAllEventsSummary;
     }
     return filters.join('، ');
+  }
+
+  String _backupOperationsSummary(AppLocalizations l10n) {
+    final status = widget.viewModel.backupStatus;
+    final activeJob = status?.activeJob;
+    if (activeJob != null && activeJob.isActive) {
+      return l10n.backupJobRunningSummary(
+        _backupOperationLabel(l10n, activeJob.operation),
+        activeJob.progressPercent,
+      );
+    }
+    if (status == null) {
+      return l10n.backupStatusLoadingSummary;
+    }
+    if (!status.schedule.enabled) {
+      return l10n.backupScheduleDisabledSummary;
+    }
+    final nextScheduledAt = status.schedule.nextScheduledAt;
+    if (nextScheduledAt == null) {
+      return l10n.backupScheduleMissingDestinationSummary;
+    }
+    return l10n.backupNextScheduledSummary(_formatDateTime(nextScheduledAt));
   }
 
   String? _shopNameError(AppLocalizations l10n) {
@@ -1020,6 +1055,15 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
     );
   }
 
+  Future<void> _openBackupOperations(BuildContext context) {
+    return Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (routeContext) =>
+            _BackupOperationsPage(viewModel: widget.viewModel),
+      ),
+    );
+  }
+
   Future<void> _pickAnalyticsDate(
     BuildContext context, {
     required DateTime? initialDate,
@@ -1165,5 +1209,13 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
     final month = date.month.toString().padLeft(2, '0');
     final day = date.day.toString().padLeft(2, '0');
     return '${date.year}-$month-$day';
+  }
+
+  String _formatDateTime(DateTime date) {
+    final month = date.month.toString().padLeft(2, '0');
+    final day = date.day.toString().padLeft(2, '0');
+    final hour = date.hour.toString().padLeft(2, '0');
+    final minute = date.minute.toString().padLeft(2, '0');
+    return '${date.year}-$month-$day $hour:$minute';
   }
 }

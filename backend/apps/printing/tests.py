@@ -1,3 +1,4 @@
+from datetime import timedelta
 from decimal import Decimal
 
 from django.contrib.auth import get_user_model
@@ -5,6 +6,7 @@ from django.contrib.auth.models import Group
 from django.contrib.contenttypes.models import ContentType
 from django.test import TestCase
 from django.urls import reverse
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APIClient
 
@@ -371,8 +373,10 @@ class PrintJobAgentApiTests(PrintingTestMixin, TestCase):
         self.assertEqual(claim_response.data["id"], job.pk)
         self.assertEqual(claim_response.data["status"], PrintJob.Status.CLAIMED)
         self.assertEqual(claim_response.data["attempts"], 1)
+        self.assertIsNotNone(claim_response.data["lease_expires_at"])
         self.assertEqual(printed_response.status_code, status.HTTP_200_OK)
         self.assertEqual(printed_response.data["status"], PrintJob.Status.PRINTED)
+        self.assertIsNone(printed_response.data["lease_expires_at"])
         self.assertEqual(events_response.status_code, status.HTTP_200_OK)
         self.assertEqual(
             [event["event_type"] for event in events_response.data["results"]],
@@ -381,6 +385,7 @@ class PrintJobAgentApiTests(PrintingTestMixin, TestCase):
 
         job.refresh_from_db()
         self.assertEqual(job.claimed_by_id, agent.pk)
+        self.assertIsNone(job.lease_expires_at)
         self.assertIsNotNone(job.printed_at)
 
     def test_agent_can_report_failed_and_requeue_job(self):
@@ -404,9 +409,11 @@ class PrintJobAgentApiTests(PrintingTestMixin, TestCase):
 
         self.assertEqual(failed_response.status_code, status.HTTP_200_OK)
         self.assertEqual(failed_response.data["status"], PrintJob.Status.FAILED)
+        self.assertIsNone(failed_response.data["lease_expires_at"])
         self.assertEqual(failed_response.data["error_message"], "Paper empty")
         self.assertEqual(requeue_response.status_code, status.HTTP_200_OK)
         self.assertEqual(requeue_response.data["status"], PrintJob.Status.QUEUED)
+        self.assertIsNone(requeue_response.data["lease_expires_at"])
         self.assertEqual(
             list(PrintJobEvent.objects.filter(job=job).values_list("event_type", flat=True)),
             [
@@ -415,6 +422,49 @@ class PrintJobAgentApiTests(PrintingTestMixin, TestCase):
                 PrintJobEvent.Type.REQUEUED,
             ],
         )
+
+    def test_claim_next_recovers_expired_claim_before_claiming(self):
+        job = self.create_job()
+        first_agent = PrintAgent.objects.create(
+            name="First agent",
+            identifier="first-agent",
+        )
+        second_agent = PrintAgent.objects.create(
+            name="Second agent",
+            identifier="second-agent",
+        )
+        claim_response = self.cashier_client.post(
+            reverse("printjob-claim-next"),
+            {"agent": first_agent.pk},
+            format="json",
+        )
+        self.assertEqual(claim_response.status_code, status.HTTP_200_OK)
+
+        expired_at = timezone.now() - timedelta(minutes=1)
+        PrintJob.objects.filter(pk=job.pk).update(lease_expires_at=expired_at)
+        recovered_response = self.cashier_client.post(
+            reverse("printjob-claim-next"),
+            {"agent": second_agent.pk},
+            format="json",
+        )
+
+        self.assertEqual(recovered_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(recovered_response.data["id"], job.pk)
+        self.assertEqual(recovered_response.data["status"], PrintJob.Status.CLAIMED)
+        self.assertEqual(recovered_response.data["claimed_by"], second_agent.pk)
+        self.assertEqual(recovered_response.data["attempts"], 2)
+        self.assertIsNotNone(recovered_response.data["lease_expires_at"])
+        self.assertEqual(
+            list(PrintJobEvent.objects.filter(job=job).values_list("event_type", flat=True)),
+            [
+                PrintJobEvent.Type.CLAIMED,
+                PrintJobEvent.Type.REQUEUED,
+                PrintJobEvent.Type.CLAIMED,
+            ],
+        )
+        job.refresh_from_db()
+        self.assertEqual(job.claimed_by_id, second_agent.pk)
+        self.assertGreater(job.lease_expires_at, timezone.now())
 
     def test_frontend_agent_contract_can_claim_and_report_with_identifier(self):
         job = self.create_job()

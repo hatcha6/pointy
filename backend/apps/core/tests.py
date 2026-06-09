@@ -6,6 +6,7 @@ from unittest import mock
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
+from django.core.cache import cache
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.management import call_command
 from django.test import TestCase, override_settings
@@ -1032,8 +1033,17 @@ class RelayBackendApiTests(TestCase):
         self.assertEqual(installation.connector_version, "pointy-relay/test")
 
 
+@override_settings(
+    CACHES={
+        "default": {
+            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+            "LOCATION": "dashboard-tests",
+        }
+    }
+)
 class DashboardApiTests(TestCase):
     def setUp(self):
+        cache.clear()
         ensure_role_groups()
         User = get_user_model()
         self.manager = User.objects.create_user(username="dashboard-manager", password="pass")
@@ -1095,6 +1105,9 @@ class DashboardApiTests(TestCase):
             created_by=self.manager,
         )
 
+    def tearDown(self):
+        cache.clear()
+
     def test_dashboard_scopes_cashier_sales_and_sections(self):
         client = APIClient()
         client.force_authenticate(user=self.cashier)
@@ -1131,6 +1144,40 @@ class DashboardApiTests(TestCase):
         self.assertEqual(sections["inventory"]["movement_mix"][0]["quantity"], 4)
         self.assertEqual(sections["purchasing"]["summary"]["due_total"], "100.00")
         self.assertEqual(sections["purchasing"]["summary"]["overdue_order_count"], 1)
+        self.assertEqual(
+            sections["purchasing"]["top_supplier_balances"][0]["net_balance"],
+            "100.00",
+        )
+
+    def test_dashboard_short_caches_aggregate_sections(self):
+        client = APIClient()
+        client.force_authenticate(user=self.manager)
+
+        first_response = client.get(reverse("dashboard"))
+        self._create_paid_order(
+            user=self.cashier,
+            receipt_number="R-DASH-CACHED",
+            total=Decimal("20.00"),
+        )
+        cached_response = client.get(reverse("dashboard"))
+        cache.clear()
+        fresh_response = client.get(reverse("dashboard"))
+
+        self.assertEqual(first_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(cached_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(fresh_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            first_response.data["sections"]["payments"]["summary"]["total"],
+            "50.00",
+        )
+        self.assertEqual(
+            cached_response.data["sections"]["payments"]["summary"]["total"],
+            "50.00",
+        )
+        self.assertEqual(
+            fresh_response.data["sections"]["payments"]["summary"]["total"],
+            "70.00",
+        )
 
     def test_dashboard_reports_parent_products_and_variant_breakdown(self):
         large_variant = ProductVariant.objects.create(

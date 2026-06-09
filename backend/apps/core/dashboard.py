@@ -2,6 +2,7 @@ from collections import defaultdict
 from datetime import timedelta
 from decimal import Decimal
 
+from django.core.cache import cache
 from django.db.models import (
     Count,
     DecimalField,
@@ -25,11 +26,24 @@ from apps.employees.models import Employee, PayrollRun
 from apps.inventory.models import StockItem, StockMovement
 from apps.payments.models import Payment
 from apps.printing.models import PrintAgent, PrintJob
-from apps.purchasing.models import PurchaseOrder, Supplier, SupplierPayment
-from apps.sales.models import Order, OrderAdjustment, OrderLine, RegisterSession
+from apps.purchasing.models import (
+    PurchaseOrder,
+    Supplier,
+    SupplierCredit,
+    SupplierPayment,
+)
+from apps.sales.models import (
+    Order,
+    OrderAdjustment,
+    OrderLine,
+    RegisterCashMovement,
+    RegisterSession,
+)
 
 MONEY_PLACES = Decimal("0.01")
 MONEY_FIELD = DecimalField(max_digits=12, decimal_places=2)
+DASHBOARD_SECTION_CACHE_SECONDS = 30
+DASHBOARD_CACHE_VERSION = 1
 
 
 class DashboardView(APIView):
@@ -55,11 +69,22 @@ class DashboardView(APIView):
         if _can_any(request.user, ("sales.view_order", "sales.view_registersession")):
             data["sections"]["sales"] = _sales_section(request, period)
         if _can(request.user, "payments.view_payment"):
-            data["sections"]["payments"] = _payments_section(request, period)
+            data["sections"]["payments"] = _cached_dashboard_section(
+                "payments",
+                request,
+                period,
+                lambda: _payments_section(request, period),
+            )
         if _can_any(request.user, ("inventory.view_stockitem", "inventory.view_stockmovement")):
             data["sections"]["inventory"] = _inventory_section(period)
         if _can_any(request.user, ("purchasing.view_purchaseorder", "purchasing.view_supplier")):
-            data["sections"]["purchasing"] = _purchasing_section(period)
+            data["sections"]["purchasing"] = _cached_dashboard_section(
+                "purchasing",
+                request,
+                period,
+                lambda: _purchasing_section(period),
+                scope="global",
+            )
         if _can(request.user, "employees.view_payrollrun"):
             data["sections"]["payroll"] = _payroll_section(period)
         if _can(request.user, "sales.view_order"):
@@ -69,7 +94,12 @@ class DashboardView(APIView):
         if _can(request.user, "discounts.view_discountrule"):
             data["sections"]["discounts"] = _discounts_section(period)
         if _can(request.user, "printing.view_printjob"):
-            data["sections"]["printing"] = _printing_section(request, period)
+            data["sections"]["printing"] = _cached_dashboard_section(
+                "printing",
+                request,
+                period,
+                lambda: _printing_section(request, period),
+            )
 
         return Response(data)
 
@@ -92,6 +122,37 @@ def _period_from_request(request):
         "previous_start": previous_start,
         "previous_end": previous_end,
     }
+
+
+def _cached_dashboard_section(section, request, period, builder, *, scope=None):
+    cache_key = _dashboard_section_cache_key(section, request, period, scope=scope)
+    try:
+        cached = cache.get(cache_key)
+    except Exception:
+        return builder()
+    if cached is not None:
+        return cached
+
+    value = builder()
+    try:
+        cache.set(cache_key, value, timeout=DASHBOARD_SECTION_CACHE_SECONDS)
+    except Exception:
+        pass
+    return value
+
+
+def _dashboard_section_cache_key(section, request, period, *, scope=None):
+    cache_scope = scope or _dashboard_cache_scope(request)
+    return (
+        f"dashboard:v{DASHBOARD_CACHE_VERSION}:{section}:"
+        f"{cache_scope}:days:{period['days']}"
+    )
+
+
+def _dashboard_cache_scope(request):
+    if user_is_manager(request.user):
+        return "manager"
+    return _owner_key(request)
 
 
 def _sales_section(request, period):
@@ -133,7 +194,12 @@ def _sales_section(request, period):
         "reports": _sales_reports(current_orders),
         "top_categories": _top_categories(current_orders),
         "recent_orders": _recent_orders(current_orders),
-        "registers": _register_summary(request, period),
+        "registers": _cached_dashboard_section(
+            "registers",
+            request,
+            period,
+            lambda: _register_summary(request, period),
+        ),
     }
 
 
@@ -142,14 +208,18 @@ def _payments_section(request, period):
         created_at__gte=period["start"],
         created_at__lt=period["end"],
     )
-    rows = payments.values("method").annotate(
-        total=Coalesce(Sum("amount"), Value(Decimal("0.00")), output_field=MONEY_FIELD),
-        commission=Coalesce(
-            Sum("commission_amount"),
-            Value(Decimal("0.00")),
-            output_field=MONEY_FIELD,
-        ),
-        count=Count("id"),
+    rows = list(
+        payments.values("method")
+        .annotate(
+            total=Coalesce(Sum("amount"), Value(Decimal("0.00")), output_field=MONEY_FIELD),
+            commission=Coalesce(
+                Sum("commission_amount"),
+                Value(Decimal("0.00")),
+                output_field=MONEY_FIELD,
+            ),
+            count=Count("id"),
+        )
+        .order_by("-total")
     )
     methods = [
         {
@@ -158,21 +228,16 @@ def _payments_section(request, period):
             "commission": _money(row["commission"]),
             "count": row["count"],
         }
-        for row in rows.order_by("-total")
+        for row in rows
     ]
-    total = sum((_decimal_from(row["total"]) for row in methods), Decimal("0.00"))
-    commission_total = payments.aggregate(
-        total=Coalesce(
-            Sum("commission_amount"),
-            Value(Decimal("0.00")),
-            output_field=MONEY_FIELD,
-        )
-    )["total"]
+    total = sum((row["total"] for row in rows), Decimal("0.00"))
+    commission_total = sum((row["commission"] for row in rows), Decimal("0.00"))
+    payment_count = sum((row["count"] for row in rows), 0)
     return {
         "summary": {
             "total": _money(total),
             "commission_total": _money(commission_total),
-            "payment_count": payments.count(),
+            "payment_count": payment_count,
         },
         "methods": methods,
     }
@@ -276,24 +341,7 @@ def _purchasing_section(period):
         created_at__gte=period["start"],
         created_at__lt=period["end"],
     )
-    balance_rows = orders.annotate(
-        dashboard_paid_total=Coalesce(
-            Sum(
-                "supplier_payments__amount",
-                filter=~Q(supplier_payments__method=SupplierPayment.Method.SUPPLIER_CREDIT),
-            ),
-            Value(Decimal("0.00")),
-            output_field=MONEY_FIELD,
-        ),
-        dashboard_credit_total=Coalesce(
-            Sum(
-                "supplier_payments__amount",
-                filter=Q(supplier_payments__method=SupplierPayment.Method.SUPPLIER_CREDIT),
-            ),
-            Value(Decimal("0.00")),
-            output_field=MONEY_FIELD,
-        ),
-    )
+    balance_rows = _purchase_order_balance_rows(orders)
     today = timezone.localdate()
     open_orders = orders.exclude(status=PurchaseOrder.Status.RECEIVED)
     purchase_total = period_orders.aggregate(
@@ -301,15 +349,12 @@ def _purchasing_section(period):
     )["total"]
     due_total = Decimal("0.00")
     overdue_orders = []
-    for order in balance_rows.select_related("supplier"):
-        balance = max(
-            order.total - order.dashboard_paid_total - order.dashboard_credit_total,
-            Decimal("0.00"),
-        )
+    for row in balance_rows:
+        balance = _purchase_order_balance_due(row)
         due_total += balance
-        if order.due_date is not None and order.due_date < today and balance > 0:
-            overdue_orders.append((order, balance))
-    overdue_orders.sort(key=lambda item: (item[0].due_date, -item[1]))
+        if row["due_date"] is not None and row["due_date"] < today and balance > 0:
+            overdue_orders.append((row, balance))
+    overdue_orders.sort(key=lambda item: (item[0]["due_date"], -item[1]))
 
     return {
         "summary": {
@@ -326,14 +371,14 @@ def _purchasing_section(period):
         ],
         "overdue_orders": [
             {
-                "order_number": order.order_number,
-                "supplier_name": order.supplier.name,
-                "due_date": order.due_date.isoformat() if order.due_date else None,
+                "order_number": order["order_number"],
+                "supplier_name": order["supplier__name"],
+                "due_date": order["due_date"].isoformat() if order["due_date"] else None,
                 "balance_due": _money(balance),
             }
             for order, balance in overdue_orders[:6]
         ],
-        "top_supplier_balances": _top_supplier_balances(),
+        "top_supplier_balances": _top_supplier_balances(balance_rows),
     }
 
 
@@ -595,21 +640,41 @@ def _printing_section(request, period):
         created_at__lt=period["end"],
     )
     stale_before = timezone.now() - timedelta(minutes=15)
+    job_summary = jobs.aggregate(
+        queued_count=Count("id", filter=Q(status=PrintJob.Status.QUEUED)),
+        claimed_count=Count("id", filter=Q(status=PrintJob.Status.CLAIMED)),
+        failed_count=Count(
+            "id",
+            filter=Q(
+                status=PrintJob.Status.FAILED,
+                created_at__gte=period["start"],
+                created_at__lt=period["end"],
+            ),
+        ),
+        printed_count=Count(
+            "id",
+            filter=Q(
+                status=PrintJob.Status.PRINTED,
+                created_at__gte=period["start"],
+                created_at__lt=period["end"],
+            ),
+        ),
+    )
+    agent_summary = PrintAgent.objects.filter(is_active=True).aggregate(
+        active_agent_count=Count("id", filter=Q(last_seen_at__gte=stale_before)),
+        stale_agent_count=Count(
+            "id",
+            filter=Q(last_seen_at__lt=stale_before) | Q(last_seen_at__isnull=True),
+        ),
+    )
     return {
         "summary": {
-            "queued_count": jobs.filter(status=PrintJob.Status.QUEUED).count(),
-            "claimed_count": jobs.filter(status=PrintJob.Status.CLAIMED).count(),
-            "failed_count": period_jobs.filter(status=PrintJob.Status.FAILED).count(),
-            "printed_count": period_jobs.filter(status=PrintJob.Status.PRINTED).count(),
-            "active_agent_count": PrintAgent.objects.filter(
-                is_active=True,
-                last_seen_at__gte=stale_before,
-            ).count(),
-            "stale_agent_count": PrintAgent.objects.filter(
-                is_active=True,
-            )
-            .filter(Q(last_seen_at__lt=stale_before) | Q(last_seen_at__isnull=True))
-            .count(),
+            "queued_count": job_summary["queued_count"],
+            "claimed_count": job_summary["claimed_count"],
+            "failed_count": job_summary["failed_count"],
+            "printed_count": job_summary["printed_count"],
+            "active_agent_count": agent_summary["active_agent_count"],
+            "stale_agent_count": agent_summary["stale_agent_count"],
         },
         "status_counts": [
             {"status": row["status"], "count": row["count"]}
@@ -887,38 +952,229 @@ def _register_summary(request, period):
     sessions = RegisterSession.objects.all()
     if not user_is_manager(request.user):
         sessions = sessions.filter(owner_key=_owner_key(request))
-    period_sessions = sessions.filter(
-        created_at__gte=period["start"],
-        created_at__lt=period["end"],
+    period_filter = Q(created_at__gte=period["start"], created_at__lt=period["end"])
+    closed_period_filter = Q(status=RegisterSession.Status.CLOSED) & period_filter
+    values = sessions.aggregate(
+        open_count=Count("id", filter=Q(status=RegisterSession.Status.OPEN)),
+        closed_count=Count("id", filter=closed_period_filter),
     )
-    variance_count = 0
-    variance_total = Decimal("0.00")
-    if user_is_manager(request.user):
-        for session in period_sessions.filter(status=RegisterSession.Status.CLOSED):
-            if session.cash_variance is not None and session.cash_variance != Decimal("0.00"):
-                variance_count += 1
-                variance_total += session.cash_variance
+    variance = (
+        _register_variance_summary(sessions.filter(closed_period_filter))
+        if user_is_manager(request.user)
+        else {"count": 0, "total": Decimal("0.00")}
+    )
     return {
-        "open_count": sessions.filter(status=RegisterSession.Status.OPEN).count(),
-        "closed_count": period_sessions.filter(status=RegisterSession.Status.CLOSED).count(),
-        "variance_count": variance_count,
-        "variance_total": _money(variance_total),
+        "open_count": values["open_count"],
+        "closed_count": values["closed_count"],
+        "variance_count": variance["count"],
+        "variance_total": _money(variance["total"]),
     }
 
 
-def _top_supplier_balances():
+def _register_variance_summary(closed_sessions):
+    session_rows = list(
+        closed_sessions.values(
+            "id",
+            "opening_cash",
+            "closing_cash",
+        )
+    )
+    if not session_rows:
+        return {"count": 0, "total": Decimal("0.00")}
+
+    session_ids = [row["id"] for row in session_rows]
+    cash_sales_by_session = _totals_by_key(
+        Payment.objects.filter(
+            order__register_session_id__in=session_ids,
+            order__status__in=(Order.Status.PAID, Order.Status.VOID),
+            method=Payment.Method.CASH,
+            amount__gt=0,
+        )
+        .values("order__register_session_id")
+        .annotate(
+            total=Coalesce(
+                Sum("amount"),
+                Value(Decimal("0.00")),
+                output_field=MONEY_FIELD,
+            )
+        ),
+        key="order__register_session_id",
+    )
+    cash_refunds_by_session = _totals_by_key(
+        OrderAdjustment.objects.filter(
+            register_session_id__in=session_ids,
+            refund_method=Payment.Method.CASH,
+        )
+        .values("register_session_id")
+        .annotate(
+            total=Coalesce(
+                Sum("amount"),
+                Value(Decimal("0.00")),
+                output_field=MONEY_FIELD,
+            )
+        ),
+        key="register_session_id",
+    )
+    pay_ins_by_session = _register_cash_movement_totals(
+        session_ids,
+        RegisterCashMovement.MovementType.PAY_IN,
+    )
+    pay_outs_by_session = _register_cash_movement_totals(
+        session_ids,
+        RegisterCashMovement.MovementType.PAY_OUT,
+    )
+
+    variance_count = 0
+    variance_total = Decimal("0.00")
+    for row in session_rows:
+        session_id = row["id"]
+        if row["closing_cash"] is None:
+            continue
+        expected_cash = (
+            row["opening_cash"]
+            + cash_sales_by_session[session_id]
+            + pay_ins_by_session[session_id]
+            - pay_outs_by_session[session_id]
+            - cash_refunds_by_session[session_id]
+        ).quantize(MONEY_PLACES)
+        variance = (row["closing_cash"] - expected_cash).quantize(MONEY_PLACES)
+        if variance != Decimal("0.00"):
+            variance_count += 1
+            variance_total += variance
+    return {"count": variance_count, "total": variance_total}
+
+
+def _register_cash_movement_totals(session_ids, movement_type):
+    return _totals_by_key(
+        RegisterCashMovement.objects.filter(
+            register_session_id__in=session_ids,
+            movement_type=movement_type,
+        )
+        .values("register_session_id")
+        .annotate(
+            total=Coalesce(
+                Sum("amount"),
+                Value(Decimal("0.00")),
+                output_field=MONEY_FIELD,
+            )
+        ),
+        key="register_session_id",
+    )
+
+
+def _totals_by_key(rows, *, key):
+    totals = defaultdict(lambda: Decimal("0.00"))
+    for row in rows:
+        totals[row[key]] = row["total"]
+    return totals
+
+
+def _purchase_order_balance_rows(orders):
+    return list(
+        orders.values(
+            "id",
+            "order_number",
+            "supplier_id",
+            "supplier__name",
+            "due_date",
+            "total",
+        )
+        .annotate(
+            dashboard_paid_total=Coalesce(
+                Sum(
+                    "supplier_payments__amount",
+                    filter=~Q(supplier_payments__method=SupplierPayment.Method.SUPPLIER_CREDIT),
+                ),
+                Value(Decimal("0.00")),
+                output_field=MONEY_FIELD,
+            ),
+            dashboard_credit_total=Coalesce(
+                Sum(
+                    "supplier_payments__amount",
+                    filter=Q(supplier_payments__method=SupplierPayment.Method.SUPPLIER_CREDIT),
+                ),
+                Value(Decimal("0.00")),
+                output_field=MONEY_FIELD,
+            ),
+        )
+        .order_by("due_date", "id")
+    )
+
+
+def _purchase_order_balance_due(row):
+    return max(
+        row["total"] - row["dashboard_paid_total"] - row["dashboard_credit_total"],
+        Decimal("0.00"),
+    )
+
+
+def _top_supplier_balances(balance_rows):
+    active_suppliers = {
+        row["id"]: row["name"]
+        for row in Supplier.objects.filter(is_active=True).values("id", "name")
+    }
+    if not active_suppliers:
+        return []
+
+    supplier_ids = set(active_suppliers)
+    balances_by_supplier = defaultdict(lambda: Decimal("0.00"))
+    for row in balance_rows:
+        supplier_id = row["supplier_id"]
+        if supplier_id in supplier_ids:
+            balances_by_supplier[supplier_id] += _purchase_order_balance_due(row)
+
+    unallocated_payments_by_supplier = {
+        row["supplier_id"]: row["total"]
+        for row in SupplierPayment.objects.filter(
+            supplier_id__in=supplier_ids,
+            purchase_order__isnull=True,
+        )
+        .exclude(method=SupplierPayment.Method.SUPPLIER_CREDIT)
+        .values("supplier_id")
+        .annotate(
+            total=Coalesce(
+                Sum("amount"),
+                Value(Decimal("0.00")),
+                output_field=MONEY_FIELD,
+            )
+        )
+    }
+    open_credits_by_supplier = {
+        row["supplier_id"]: row["total"]
+        for row in SupplierCredit.objects.filter(
+            supplier_id__in=supplier_ids,
+            status=SupplierCredit.Status.OPEN,
+        )
+        .values("supplier_id")
+        .annotate(
+            total=Coalesce(
+                Sum("remaining_amount"),
+                Value(Decimal("0.00")),
+                output_field=MONEY_FIELD,
+            )
+        )
+    }
+
     rows = []
-    for supplier in Supplier.objects.filter(is_active=True):
-        balance = supplier.net_balance
-        if balance > 0:
-            rows.append((supplier, balance))
-    rows.sort(key=lambda item: (-item[1], item[0].name))
+    for supplier_id, supplier_name in active_suppliers.items():
+        payable = max(
+            balances_by_supplier[supplier_id]
+            - unallocated_payments_by_supplier.get(supplier_id, Decimal("0.00")),
+            Decimal("0.00"),
+        )
+        net_balance = payable - open_credits_by_supplier.get(
+            supplier_id,
+            Decimal("0.00"),
+        )
+        if net_balance > 0:
+            rows.append((supplier_name, net_balance))
+    rows.sort(key=lambda item: (-item[1], item[0]))
     return [
         {
-            "supplier_name": supplier.name,
+            "supplier_name": supplier_name,
             "net_balance": _money(balance),
         }
-        for supplier, balance in rows[:6]
+        for supplier_name, balance in rows[:6]
     ]
 
 

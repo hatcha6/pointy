@@ -107,9 +107,14 @@ class PrintingRepository {
     );
   }
 
+  Future<Result<PrintJob>> requeuePrintJob(int jobId) async {
+    return Result.guard(() => _service.requeuePrintJob(jobId));
+  }
+
   Future<Result<PrintJob>> printAndReportJob({
     required PrintJob job,
     required PrinterConfig config,
+    bool requeueOnFailure = false,
   }) async {
     if (config.endpoint.usesDocumentInvoice) {
       return Error(Exception('document printers require order-level printing'));
@@ -126,7 +131,15 @@ class PrintingRepository {
       errorMessage: printResult.isSuccess ? null : printResult.message,
       endpoint: config.endpoint,
     );
-    return reportPrintJob(jobId: job.id, report: report);
+    final reportResult = await reportPrintJob(jobId: job.id, report: report);
+    if (printResult.isSuccess) {
+      return reportResult;
+    }
+
+    if (requeueOnFailure && reportResult is Ok<PrintJob>) {
+      await requeuePrintJob(job.id);
+    }
+    return Error(Exception(printResult.message));
   }
 
   Future<Result<PrintJob>> requestSaleReprint(int saleOrderId) async {

@@ -13,6 +13,7 @@ class PrintJob {
     this.claimedBy,
     this.endpoint,
     this.errorMessage,
+    this.leaseExpiresAt,
     this.createdAt,
     this.updatedAt,
   });
@@ -26,6 +27,7 @@ class PrintJob {
   final String? claimedBy;
   final PrinterEndpoint? endpoint;
   final String? errorMessage;
+  final DateTime? leaseExpiresAt;
   final DateTime? createdAt;
   final DateTime? updatedAt;
 
@@ -45,6 +47,7 @@ class PrintJob {
           ? PrinterEndpoint.fromJson(endpointJson)
           : null,
       errorMessage: json['error_message']?.toString(),
+      leaseExpiresAt: _dateTimeFromJson(json['lease_expires_at']),
       createdAt: _dateTimeFromJson(json['created_at']),
       updatedAt: _dateTimeFromJson(json['updated_at']),
     );

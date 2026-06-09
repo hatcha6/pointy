@@ -2465,6 +2465,190 @@ class AppLocalizationsAr extends AppLocalizations {
       'تعذر تصدير التتبع. راجع الفلاتر وحاول مرة أخرى.';
 
   @override
+  String get backupRestoreSectionTitle => 'النسخ والاستعادة';
+
+  @override
+  String get backupStatusLoadingSummary => 'جار تحميل حالة النسخ الاحتياطي';
+
+  @override
+  String get backupScheduleDisabledSummary => 'النسخ التلقائي متوقف';
+
+  @override
+  String get backupScheduleMissingDestinationSummary =>
+      'اختر قرصا خارجيا لتفعيل النسخ التلقائي';
+
+  @override
+  String backupNextScheduledSummary(String dateTime) {
+    return 'النسخة التالية: $dateTime';
+  }
+
+  @override
+  String backupJobRunningSummary(String operation, int percent) {
+    return '$operation قيد التنفيذ، $percent٪';
+  }
+
+  @override
+  String get backupRestoreTitle => 'النسخ والاستعادة';
+
+  @override
+  String get backupRefreshTooltip => 'تحديث حالة النسخ';
+
+  @override
+  String get backupScheduleSectionTitle => 'النسخ الاحتياطي التلقائي';
+
+  @override
+  String get backupScheduleEnabledLabel => 'تفعيل النسخ اليومي';
+
+  @override
+  String get backupScheduleEnabledSubtitle =>
+      'ينشئ النظام ملف ZIP واحدا يحتوي قاعدة البيانات والملفات المرفوعة.';
+
+  @override
+  String get backupDestinationLabel => 'قرص النسخ الاحتياطي';
+
+  @override
+  String backupDestinationOption(String label, String freeSpace) {
+    return '$label، متاح $freeSpace';
+  }
+
+  @override
+  String backupDestinationDetails(
+    String path,
+    String freeSpace,
+    String totalSpace,
+  ) {
+    return 'سيتم الحفظ في $path. المساحة المتاحة $freeSpace من $totalSpace.';
+  }
+
+  @override
+  String get backupNoWritableDestinationsMessage =>
+      'لم يجد الخادم قرصا خارجيا قابلا للكتابة. تأكد من توصيل القرص وربطه داخل Docker.';
+
+  @override
+  String get backupScheduledTimeLabel => 'وقت النسخ اليومي';
+
+  @override
+  String backupRetentionMessage(int count) {
+    return 'بعد نجاح النسخ يحتفظ Pointy بآخر $count نسخ ويحذف الأقدم من مجلد النسخ.';
+  }
+
+  @override
+  String get backupDestinationRequiredError => 'اختر قرصا للنسخ الاحتياطي.';
+
+  @override
+  String get backupSaveScheduleButton => 'حفظ الجدولة';
+
+  @override
+  String get backupSavingScheduleButton => 'جار الحفظ...';
+
+  @override
+  String get backupStartNowButton => 'نسخ الآن';
+
+  @override
+  String get backupStartingButton => 'جار البدء...';
+
+  @override
+  String get backupScheduleSavedMessage => 'تم حفظ جدولة النسخ الاحتياطي.';
+
+  @override
+  String get backupStartedMessage => 'بدأ النسخ الاحتياطي.';
+
+  @override
+  String get backupOperationFailedMessage =>
+      'تعذرت عملية النسخ أو الاستعادة. حاول مرة أخرى.';
+
+  @override
+  String backupActiveJobTitle(String operation) {
+    return '$operation قيد التنفيذ';
+  }
+
+  @override
+  String backupProgressPercent(int percent) {
+    return '$percent٪';
+  }
+
+  @override
+  String get restoreSectionTitle => 'استعادة نسخة';
+
+  @override
+  String get restoreWarningMessage =>
+      'الاستعادة تستبدل قاعدة البيانات والملفات الحالية بمحتوى النسخة المختارة.';
+
+  @override
+  String get restorePickFileButton => 'اختيار ملف ZIP';
+
+  @override
+  String get restoreUploadingButton => 'جار الرفع...';
+
+  @override
+  String get restorePickErrorMessage => 'تعذر قراءة ملف النسخة المختارة.';
+
+  @override
+  String get restoreConfirmTitle => 'تأكيد الاستعادة';
+
+  @override
+  String get restoreConfirmMessage =>
+      'سيتم استبدال بيانات المتجر الحالية بعد بدء الاستعادة. تأكد أن ملف النسخة صحيح.';
+
+  @override
+  String get restoreConfirmButton => 'بدء الاستعادة';
+
+  @override
+  String get restoreStartedMessage => 'بدأت الاستعادة.';
+
+  @override
+  String get backupHistorySectionTitle => 'آخر العمليات';
+
+  @override
+  String get latestBackupLabel => 'آخر نسخة احتياطية';
+
+  @override
+  String get latestRestoreLabel => 'آخر استعادة';
+
+  @override
+  String get backupNoJobValue => 'لا توجد عملية مسجلة';
+
+  @override
+  String backupJobHistorySummary(
+    String status,
+    String completedAt,
+    String filename,
+  ) {
+    return '$status، $completedAt، $filename';
+  }
+
+  @override
+  String get backupOperationBackup => 'النسخ الاحتياطي';
+
+  @override
+  String get backupOperationRestore => 'الاستعادة';
+
+  @override
+  String get backupJobStatusQueued => 'في الانتظار';
+
+  @override
+  String get backupJobStatusRunning => 'قيد التنفيذ';
+
+  @override
+  String get backupJobStatusSucceeded => 'مكتملة';
+
+  @override
+  String get backupJobStatusFailed => 'فشلت';
+
+  @override
+  String get backupStorageUnknownValue => 'غير معروف';
+
+  @override
+  String backupStorageGigabytes(String value) {
+    return '$value جيجابايت';
+  }
+
+  @override
+  String backupStorageMegabytes(String value) {
+    return '$value ميجابايت';
+  }
+
+  @override
   String get analyticsEventTypeUsage => 'استخدام';
 
   @override

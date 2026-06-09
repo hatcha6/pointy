@@ -30,6 +30,11 @@ from apps.core.views import (
     me_view,
     password_change_view,
 )
+from apps.core.backup_views import (
+    BackupDestinationListView,
+    BackupOperationsView,
+    RestoreUploadView,
+)
 from apps.core.dashboard import DashboardView
 from apps.core.relay_views import (
     DiscoveryServiceView,
@@ -145,6 +150,13 @@ urlpatterns = [
         ShopSettingsLogoView.as_view(),
         name="shop-settings-logo",
     ),
+    path(
+        "api/backup/destinations/",
+        BackupDestinationListView.as_view(),
+        name="backup-destinations",
+    ),
+    path("api/backup/", BackupOperationsView.as_view(), name="backup-operations"),
+    path("api/backup/restore/", RestoreUploadView.as_view(), name="backup-restore"),
     path("api/", include(router.urls)),
     path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
     path("api/docs/", SpectacularSwaggerView.as_view(url_name="schema"), name="swagger-ui"),

@@ -31,7 +31,12 @@ from .serializers import (
     PrintTemplateSerializer,
     PrintTemplateVersionSerializer,
 )
-from .services import claim_print_job, create_job_event, publish_template_version
+from .services import (
+    claim_next_print_job,
+    claim_print_job,
+    create_job_event,
+    publish_template_version,
+)
 
 
 class PrintTemplateViewSet(viewsets.ModelViewSet):
@@ -257,46 +262,13 @@ class PrintJobViewSet(
         serializer = PrintJobAgentActionSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         agent = serializer.validated_data["agent"]
-        now = timezone.now()
-
-        with transaction.atomic():
-            job_queryset = PrintJob.objects.select_for_update().filter(
-                status=PrintJob.Status.QUEUED,
-            )
-            if agent.printer_profile_id:
-                job_queryset = job_queryset.filter(
-                    printer_profile_id__in=[agent.printer_profile_id, None],
-                )
-            job = job_queryset.order_by("-priority", "created_at", "id").first()
-            if job is None:
-                agent.last_seen_at = now
-                agent.save(update_fields=["last_seen_at", "updated_at"])
-                return Response(status=status.HTTP_204_NO_CONTENT)
-
-            job.status = PrintJob.Status.CLAIMED
-            job.claimed_by = agent
-            job.claimed_at = now
-            job.attempts += 1
-            job.error_message = ""
-            job.save(
-                update_fields=[
-                    "status",
-                    "claimed_by",
-                    "claimed_at",
-                    "attempts",
-                    "error_message",
-                    "updated_at",
-                ]
-            )
-            agent.last_seen_at = now
-            agent.save(update_fields=["last_seen_at", "updated_at"])
-            create_job_event(
-                job,
-                PrintJobEvent.Type.CLAIMED,
-                user=request.user,
-                agent=agent,
-                message="Print job claimed.",
-            )
+        job = claim_next_print_job(
+            agent,
+            user=request.user,
+            printer_endpoint=serializer.validated_data.get("printer_endpoint", {}),
+        )
+        if job is None:
+            return Response(status=status.HTTP_204_NO_CONTENT)
 
         return Response(self.get_serializer(job).data)
 
@@ -333,6 +305,7 @@ class PrintJobViewSet(
         job.status = PrintJob.Status.QUEUED
         job.claimed_by = None
         job.claimed_at = None
+        job.lease_expires_at = None
         job.failed_at = None
         job.error_message = ""
         job.save(
@@ -340,6 +313,7 @@ class PrintJobViewSet(
                 "status",
                 "claimed_by",
                 "claimed_at",
+                "lease_expires_at",
                 "failed_at",
                 "error_message",
                 "updated_at",
@@ -363,7 +337,8 @@ class PrintJobViewSet(
             )
         if job.status != PrintJob.Status.CANCELED:
             job.status = PrintJob.Status.CANCELED
-            job.save(update_fields=["status", "updated_at"])
+            job.lease_expires_at = None
+            job.save(update_fields=["status", "lease_expires_at", "updated_at"])
             create_job_event(
                 job,
                 PrintJobEvent.Type.CANCELED,
@@ -378,41 +353,50 @@ class PrintJobViewSet(
         serializer.is_valid(raise_exception=True)
         agent = serializer.validated_data["agent"]
         job = self.get_object()
-        if job.status != PrintJob.Status.CLAIMED:
-            return Response(
-                {"detail": "Only claimed jobs can be reported printed."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+        with transaction.atomic():
+            job = PrintJob.objects.select_for_update().get(pk=job.pk)
+            if job.status != PrintJob.Status.CLAIMED:
+                return Response(
+                    {"detail": "Only claimed jobs can be reported printed."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            if job.claimed_by_id is not None and job.claimed_by_id != agent.pk:
+                return Response(
+                    {"detail": "Only the claiming agent can report this job."},
+                    status=status.HTTP_409_CONFLICT,
+                )
 
-        now = timezone.now()
-        job.status = PrintJob.Status.PRINTED
-        job.claimed_by = agent
-        job.printed_at = now
-        job.error_message = ""
-        job.save(
-            update_fields=[
-                "status",
-                "claimed_by",
-                "printed_at",
-                "error_message",
-                "updated_at",
-            ]
-        )
-        agent.last_seen_at = now
-        agent.save(update_fields=["last_seen_at", "updated_at"])
-        create_job_event(
-            job,
-            PrintJobEvent.Type.PRINTED,
-            user=request.user,
-            agent=agent,
-            message="Print job completed.",
-            metadata={
-                "printer_endpoint": serializer.validated_data.get(
-                    "printer_endpoint",
-                    {},
-                ),
-            },
-        )
+            now = timezone.now()
+            job.status = PrintJob.Status.PRINTED
+            job.claimed_by = agent
+            job.lease_expires_at = None
+            job.printed_at = now
+            job.error_message = ""
+            job.save(
+                update_fields=[
+                    "status",
+                    "claimed_by",
+                    "lease_expires_at",
+                    "printed_at",
+                    "error_message",
+                    "updated_at",
+                ]
+            )
+            agent.last_seen_at = now
+            agent.save(update_fields=["last_seen_at", "updated_at"])
+            create_job_event(
+                job,
+                PrintJobEvent.Type.PRINTED,
+                user=request.user,
+                agent=agent,
+                message="Print job completed.",
+                metadata={
+                    "printer_endpoint": serializer.validated_data.get(
+                        "printer_endpoint",
+                        {},
+                    ),
+                },
+            )
         return Response(self.get_serializer(job).data)
 
     @action(detail=True, methods=["post"])
@@ -421,41 +405,50 @@ class PrintJobViewSet(
         serializer.is_valid(raise_exception=True)
         agent = serializer.validated_data["agent"]
         job = self.get_object()
-        if job.status != PrintJob.Status.CLAIMED:
-            return Response(
-                {"detail": "Only claimed jobs can be reported failed."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+        with transaction.atomic():
+            job = PrintJob.objects.select_for_update().get(pk=job.pk)
+            if job.status != PrintJob.Status.CLAIMED:
+                return Response(
+                    {"detail": "Only claimed jobs can be reported failed."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            if job.claimed_by_id is not None and job.claimed_by_id != agent.pk:
+                return Response(
+                    {"detail": "Only the claiming agent can report this job."},
+                    status=status.HTTP_409_CONFLICT,
+                )
 
-        now = timezone.now()
-        job.status = PrintJob.Status.FAILED
-        job.claimed_by = agent
-        job.failed_at = now
-        job.error_message = serializer.validated_data.get("error_message", "")
-        job.save(
-            update_fields=[
-                "status",
-                "claimed_by",
-                "failed_at",
-                "error_message",
-                "updated_at",
-            ]
-        )
-        agent.last_seen_at = now
-        agent.save(update_fields=["last_seen_at", "updated_at"])
-        create_job_event(
-            job,
-            PrintJobEvent.Type.FAILED,
-            user=request.user,
-            agent=agent,
-            message=job.error_message,
-            metadata={
-                "printer_endpoint": serializer.validated_data.get(
-                    "printer_endpoint",
-                    {},
-                ),
-            },
-        )
+            now = timezone.now()
+            job.status = PrintJob.Status.FAILED
+            job.claimed_by = agent
+            job.lease_expires_at = None
+            job.failed_at = now
+            job.error_message = serializer.validated_data.get("error_message", "")
+            job.save(
+                update_fields=[
+                    "status",
+                    "claimed_by",
+                    "lease_expires_at",
+                    "failed_at",
+                    "error_message",
+                    "updated_at",
+                ]
+            )
+            agent.last_seen_at = now
+            agent.save(update_fields=["last_seen_at", "updated_at"])
+            create_job_event(
+                job,
+                PrintJobEvent.Type.FAILED,
+                user=request.user,
+                agent=agent,
+                message=job.error_message,
+                metadata={
+                    "printer_endpoint": serializer.validated_data.get(
+                        "printer_endpoint",
+                        {},
+                    ),
+                },
+            )
         return Response(self.get_serializer(job).data)
 
     @action(detail=True, methods=["post"])

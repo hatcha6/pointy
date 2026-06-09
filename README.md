@@ -53,6 +53,30 @@ The worker processes Redis-backed tasks. Beat schedules recurring jobs such as
 business notification sync, suspected cashier activity detection, and expiry-date
 stock alerts.
 
+## Backup and Restore
+
+Managers can configure daily backups from the shop settings screen. Backups run
+through Celery, write one dated ZIP file, and include the database fixture plus
+uploaded media files. Restore uploads that ZIP through the same screen and runs
+as a tracked background job with progress updates.
+
+For Docker deployments, mount the USB flash drive or external SSD into the
+backend container, then expose that mount through `POINTY_BACKUP_ALLOWED_ROOTS`.
+The backend can only list and write paths visible inside the container.
+
+Example:
+
+```env
+POINTY_BACKUP_ALLOWED_ROOTS=/mnt/pointy-backups,/media,/run/media
+POINTY_BACKUP_STAGING_ROOT=/tmp/pointy-backup-staging
+POINTY_BACKUP_RETENTION_COUNT=7
+POINTY_BACKUP_RESTORE_MAX_BYTES=5368709120
+```
+
+Pointy stores archives under `pointy-backups/` inside the selected destination
+and removes older Pointy backup archives after a successful run according to the
+retention count.
+
 ## Attachment Storage
 
 Pointy stores uploads through one shared attachment API for product images,

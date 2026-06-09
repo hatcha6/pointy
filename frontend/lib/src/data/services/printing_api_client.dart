@@ -70,6 +70,14 @@ class PrintingApiClient {
     );
   }
 
+  Future<PrintJob> requeuePrintJob({required int jobId}) async {
+    final response = await _session.post('print-jobs/$jobId/requeue/');
+    _session.ensureSuccess(response, 'Print job requeue failed with status');
+    return PrintJob.fromJson(
+      _session.decodedBody(response) as Map<String, Object?>,
+    );
+  }
+
   Future<List<PrintAuditEvent>> fetchPrintAuditEvents({
     required PrintAuditDocumentType documentType,
     required int documentId,

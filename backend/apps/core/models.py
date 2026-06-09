@@ -1,5 +1,8 @@
+from datetime import time
+
+from django.conf import settings as django_settings
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
-from django.core.validators import MinValueValidator
 from django.utils import timezone
 
 
@@ -91,6 +94,130 @@ class ShopSettings(TimeStampedModel):
             "card": self.card_commission_percent,
             "transfer": self.transfer_commission_percent,
         }.get(method, 0)
+
+
+class SystemBackupSchedule(TimeStampedModel):
+    enabled = models.BooleanField(default=False)
+    destination_path = models.CharField(max_length=1024, blank=True)
+    scheduled_time = models.TimeField(default=time(hour=2, minute=0))
+    retention_count = models.PositiveSmallIntegerField(
+        default=7,
+        validators=[MinValueValidator(1)],
+    )
+    last_scheduled_backup_date = models.DateField(blank=True, null=True)
+
+    class Meta:
+        verbose_name = "system backup schedule"
+        verbose_name_plural = "system backup schedules"
+
+    def __str__(self):
+        if not self.enabled:
+            return "System backup schedule disabled"
+        return f"System backup schedule at {self.scheduled_time}"
+
+    @classmethod
+    def load(cls):
+        schedule, _ = cls.objects.get_or_create(
+            pk=1,
+            defaults={
+                "retention_count": django_settings.POINTY_BACKUP_RETENTION_COUNT,
+            },
+        )
+        return schedule
+
+
+class SystemMaintenanceJob(TimeStampedModel):
+    class Operation(models.TextChoices):
+        BACKUP = "backup", "Backup"
+        RESTORE = "restore", "Restore"
+
+    class Status(models.TextChoices):
+        QUEUED = "queued", "Queued"
+        RUNNING = "running", "Running"
+        SUCCEEDED = "succeeded", "Succeeded"
+        FAILED = "failed", "Failed"
+
+    operation = models.CharField(max_length=16, choices=Operation.choices)
+    status = models.CharField(
+        max_length=16,
+        choices=Status.choices,
+        default=Status.QUEUED,
+        db_index=True,
+    )
+    progress_percent = models.PositiveSmallIntegerField(
+        default=0,
+        validators=[MaxValueValidator(100)],
+    )
+    progress_message = models.CharField(max_length=240, blank=True)
+    destination_path = models.CharField(max_length=1024, blank=True)
+    backup_file_name = models.CharField(max_length=255, blank=True)
+    backup_file_path = models.CharField(max_length=1024, blank=True)
+    archive_size_bytes = models.PositiveBigIntegerField(default=0)
+    error_message = models.TextField(blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+    initiated_by_user_id = models.PositiveBigIntegerField(blank=True, null=True)
+    initiated_by_username = models.CharField(max_length=150, blank=True)
+    started_at = models.DateTimeField(blank=True, null=True)
+    completed_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["operation", "status", "-created_at"]),
+            models.Index(fields=["status", "-created_at"]),
+        ]
+
+    def __str__(self):
+        return f"{self.operation} {self.status} #{self.pk}"
+
+    @property
+    def is_active(self):
+        return self.status in {self.Status.QUEUED, self.Status.RUNNING}
+
+    def mark_running(self, message=""):
+        self.status = self.Status.RUNNING
+        self.started_at = self.started_at or timezone.now()
+        if message:
+            self.progress_message = message
+        self.save(update_fields=["status", "started_at", "progress_message", "updated_at"])
+
+    def update_progress(self, percent, message=""):
+        self.progress_percent = max(0, min(100, int(percent)))
+        if message:
+            self.progress_message = message
+        self.save(update_fields=["progress_percent", "progress_message", "updated_at"])
+
+    def mark_succeeded(self, message=""):
+        self.status = self.Status.SUCCEEDED
+        self.progress_percent = 100
+        self.completed_at = timezone.now()
+        if message:
+            self.progress_message = message
+        self.save(
+            update_fields=[
+                "status",
+                "progress_percent",
+                "progress_message",
+                "completed_at",
+                "updated_at",
+            ]
+        )
+
+    def mark_failed(self, error_message):
+        self.status = self.Status.FAILED
+        self.error_message = str(error_message)
+        self.completed_at = timezone.now()
+        if not self.progress_message:
+            self.progress_message = "فشلت العملية."
+        self.save(
+            update_fields=[
+                "status",
+                "error_message",
+                "progress_message",
+                "completed_at",
+                "updated_at",
+            ]
+        )
 
 
 class RelayInstallation(TimeStampedModel):

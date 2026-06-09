@@ -39,6 +39,7 @@ import '../models/shop_settings.dart';
 import '../models/stock_item.dart';
 import '../models/stock_movement.dart';
 import '../models/stock_movement_page.dart';
+import '../models/system_backup.dart';
 import '../models/variant_option_page.dart';
 import '../models/variant_option_query.dart';
 import '../models/variant_option.dart';
@@ -330,6 +331,28 @@ class PosApiService {
     AnalyticsExportQuery query,
   ) {
     return _shopSettings.exportAnalyticsEvents(query);
+  }
+
+  Future<List<BackupDestination>> fetchBackupDestinations() {
+    return _shopSettings.fetchBackupDestinations();
+  }
+
+  Future<BackupOperationsStatus> fetchBackupOperationsStatus() {
+    return _shopSettings.fetchBackupOperationsStatus();
+  }
+
+  Future<BackupOperationsStatus> updateBackupSchedule(
+    BackupScheduleDraft draft,
+  ) {
+    return _shopSettings.updateBackupSchedule(draft);
+  }
+
+  Future<SystemMaintenanceJob> startBackup() {
+    return _shopSettings.startBackup();
+  }
+
+  Future<SystemMaintenanceJob> restoreBackup(RestoreBackupUpload upload) {
+    return _shopSettings.restoreBackup(upload);
   }
 
   Future<ProductPage> fetchProducts({required ModelQuery query, int page = 1}) {
@@ -657,6 +680,10 @@ class PosApiService {
 
   Future<PrintJob> requestSaleReprint(int saleOrderId) {
     return _sales.requestSaleReprint(saleOrderId);
+  }
+
+  Future<PrintJob> requeuePrintJob(int printJobId) {
+    return _printing.requeuePrintJob(jobId: printJobId);
   }
 
   Future<SaleOrder> voidSaleOrder({

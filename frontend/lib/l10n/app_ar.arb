@@ -1532,6 +1532,154 @@
   "analyticsExportRunningButton": "جار التصدير...",
   "analyticsExportStartedMessage": "بدأ تنزيل ملف التتبع.",
   "analyticsExportFailedMessage": "تعذر تصدير التتبع. راجع الفلاتر وحاول مرة أخرى.",
+  "backupRestoreSectionTitle": "النسخ والاستعادة",
+  "backupStatusLoadingSummary": "جار تحميل حالة النسخ الاحتياطي",
+  "backupScheduleDisabledSummary": "النسخ التلقائي متوقف",
+  "backupScheduleMissingDestinationSummary": "اختر قرصا خارجيا لتفعيل النسخ التلقائي",
+  "backupNextScheduledSummary": "النسخة التالية: {dateTime}",
+  "@backupNextScheduledSummary": {
+    "description": "Summary for the next scheduled backup time.",
+    "placeholders": {
+      "dateTime": {
+        "type": "String"
+      }
+    }
+  },
+  "backupJobRunningSummary": "{operation} قيد التنفيذ، {percent}٪",
+  "@backupJobRunningSummary": {
+    "description": "Summary when a backup or restore job is running.",
+    "placeholders": {
+      "operation": {
+        "type": "String"
+      },
+      "percent": {
+        "type": "int"
+      }
+    }
+  },
+  "backupRestoreTitle": "النسخ والاستعادة",
+  "backupRefreshTooltip": "تحديث حالة النسخ",
+  "backupScheduleSectionTitle": "النسخ الاحتياطي التلقائي",
+  "backupScheduleEnabledLabel": "تفعيل النسخ اليومي",
+  "backupScheduleEnabledSubtitle": "ينشئ النظام ملف ZIP واحدا يحتوي قاعدة البيانات والملفات المرفوعة.",
+  "backupDestinationLabel": "قرص النسخ الاحتياطي",
+  "backupDestinationOption": "{label}، متاح {freeSpace}",
+  "@backupDestinationOption": {
+    "description": "Dropdown label for a backup destination.",
+    "placeholders": {
+      "label": {
+        "type": "String"
+      },
+      "freeSpace": {
+        "type": "String"
+      }
+    }
+  },
+  "backupDestinationDetails": "سيتم الحفظ في {path}. المساحة المتاحة {freeSpace} من {totalSpace}.",
+  "@backupDestinationDetails": {
+    "description": "Details for the selected backup destination.",
+    "placeholders": {
+      "path": {
+        "type": "String"
+      },
+      "freeSpace": {
+        "type": "String"
+      },
+      "totalSpace": {
+        "type": "String"
+      }
+    }
+  },
+  "backupNoWritableDestinationsMessage": "لم يجد الخادم قرصا خارجيا قابلا للكتابة. تأكد من توصيل القرص وربطه داخل Docker.",
+  "backupScheduledTimeLabel": "وقت النسخ اليومي",
+  "backupRetentionMessage": "بعد نجاح النسخ يحتفظ Pointy بآخر {count} نسخ ويحذف الأقدم من مجلد النسخ.",
+  "@backupRetentionMessage": {
+    "description": "Retention explanation for automatic backups.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "backupDestinationRequiredError": "اختر قرصا للنسخ الاحتياطي.",
+  "backupSaveScheduleButton": "حفظ الجدولة",
+  "backupSavingScheduleButton": "جار الحفظ...",
+  "backupStartNowButton": "نسخ الآن",
+  "backupStartingButton": "جار البدء...",
+  "backupScheduleSavedMessage": "تم حفظ جدولة النسخ الاحتياطي.",
+  "backupStartedMessage": "بدأ النسخ الاحتياطي.",
+  "backupOperationFailedMessage": "تعذرت عملية النسخ أو الاستعادة. حاول مرة أخرى.",
+  "backupActiveJobTitle": "{operation} قيد التنفيذ",
+  "@backupActiveJobTitle": {
+    "description": "Title for an active backup/restore job.",
+    "placeholders": {
+      "operation": {
+        "type": "String"
+      }
+    }
+  },
+  "backupProgressPercent": "{percent}٪",
+  "@backupProgressPercent": {
+    "description": "Progress percentage label.",
+    "placeholders": {
+      "percent": {
+        "type": "int"
+      }
+    }
+  },
+  "restoreSectionTitle": "استعادة نسخة",
+  "restoreWarningMessage": "الاستعادة تستبدل قاعدة البيانات والملفات الحالية بمحتوى النسخة المختارة.",
+  "restorePickFileButton": "اختيار ملف ZIP",
+  "restoreUploadingButton": "جار الرفع...",
+  "restorePickErrorMessage": "تعذر قراءة ملف النسخة المختارة.",
+  "restoreConfirmTitle": "تأكيد الاستعادة",
+  "restoreConfirmMessage": "سيتم استبدال بيانات المتجر الحالية بعد بدء الاستعادة. تأكد أن ملف النسخة صحيح.",
+  "restoreConfirmButton": "بدء الاستعادة",
+  "restoreStartedMessage": "بدأت الاستعادة.",
+  "backupHistorySectionTitle": "آخر العمليات",
+  "latestBackupLabel": "آخر نسخة احتياطية",
+  "latestRestoreLabel": "آخر استعادة",
+  "backupNoJobValue": "لا توجد عملية مسجلة",
+  "backupJobHistorySummary": "{status}، {completedAt}، {filename}",
+  "@backupJobHistorySummary": {
+    "description": "Summary for latest backup or restore job.",
+    "placeholders": {
+      "status": {
+        "type": "String"
+      },
+      "completedAt": {
+        "type": "String"
+      },
+      "filename": {
+        "type": "String"
+      }
+    }
+  },
+  "backupOperationBackup": "النسخ الاحتياطي",
+  "backupOperationRestore": "الاستعادة",
+  "backupJobStatusQueued": "في الانتظار",
+  "backupJobStatusRunning": "قيد التنفيذ",
+  "backupJobStatusSucceeded": "مكتملة",
+  "backupJobStatusFailed": "فشلت",
+  "backupStorageUnknownValue": "غير معروف",
+  "backupStorageGigabytes": "{value} جيجابايت",
+  "@backupStorageGigabytes": {
+    "description": "Storage size in GiB.",
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "backupStorageMegabytes": "{value} ميجابايت",
+  "@backupStorageMegabytes": {
+    "description": "Storage size in MiB.",
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
   "analyticsEventTypeUsage": "استخدام",
   "analyticsEventTypeError": "خطأ",
   "analyticsEventTypePerformance": "أداء",

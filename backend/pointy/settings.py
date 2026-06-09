@@ -31,6 +31,8 @@ env = environ.Env(
     POINTY_NOTIFICATION_SYNC_INTERVAL_MINUTES=(int, 15),
     POINTY_FRAUD_DETECTION_INTERVAL_MINUTES=(int, 15),
     POINTY_FRAUD_DETECTION_LOOKBACK_DAYS=(int, 30),
+    POINTY_BACKUP_RETENTION_COUNT=(int, 7),
+    POINTY_BACKUP_RESTORE_MAX_BYTES=(int, 5 * 1024 * 1024 * 1024),
 )
 environ.Env.read_env(BASE_DIR / ".env")
 
@@ -145,6 +147,21 @@ POINTY_FRAUD_DETECTION_INTERVAL_MINUTES = max(
     env("POINTY_FRAUD_DETECTION_INTERVAL_MINUTES"),
     1,
 )
+POINTY_BACKUP_RETENTION_COUNT = max(env("POINTY_BACKUP_RETENTION_COUNT"), 1)
+POINTY_BACKUP_ALLOWED_ROOTS = env.list(
+    "POINTY_BACKUP_ALLOWED_ROOTS",
+    default=[
+        str(BASE_DIR / "backups"),
+        "/mnt",
+        "/media",
+        "/run/media",
+        "/Volumes",
+    ],
+)
+POINTY_BACKUP_STAGING_ROOT = Path(
+    env("POINTY_BACKUP_STAGING_ROOT", default="/tmp/pointy-backup-staging")
+)
+POINTY_BACKUP_RESTORE_MAX_BYTES = env("POINTY_BACKUP_RESTORE_MAX_BYTES")
 CELERY_BEAT_SCHEDULE = {
     "notifications.sync-business-notifications": {
         "task": "notifications.sync_business_notifications",
@@ -157,6 +174,10 @@ CELERY_BEAT_SCHEDULE = {
     "employees.draft-monthly-payroll": {
         "task": "employees.draft_monthly_payroll",
         "schedule": crontab(minute=10, hour=0, day_of_month="1"),
+    },
+    "core.run-due-scheduled-backup": {
+        "task": "core.run_due_scheduled_backup",
+        "schedule": timedelta(minutes=1),
     },
 }
 

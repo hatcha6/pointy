@@ -1,5 +1,6 @@
 import '../models/analytics_export.dart';
 import '../models/shop_settings.dart';
+import '../models/system_backup.dart';
 import 'api_session.dart';
 
 class ShopSettingsApiClient {
@@ -67,6 +68,70 @@ class ShopSettingsApiClient {
       bytes: response.bodyBytes,
       filename: _filenameFromHeaders(response.headers),
       contentType: response.headers['content-type'] ?? 'application/zip',
+    );
+  }
+
+  Future<List<BackupDestination>> fetchBackupDestinations() async {
+    final response = await _session.get('backup/destinations/');
+    _session.ensureSuccess(
+      response,
+      'Backup destinations request failed with status',
+    );
+    final decoded = _session.decodedBody(response) as Map<String, Object?>;
+    final destinations = decoded['destinations'] as List<Object?>? ?? const [];
+    return destinations
+        .whereType<Map<String, Object?>>()
+        .map(BackupDestination.fromJson)
+        .toList(growable: false);
+  }
+
+  Future<BackupOperationsStatus> fetchBackupOperationsStatus() async {
+    final response = await _session.get('backup/');
+    _session.ensureSuccess(
+      response,
+      'Backup status request failed with status',
+    );
+    return BackupOperationsStatus.fromJson(
+      _session.decodedBody(response) as Map<String, Object?>,
+    );
+  }
+
+  Future<BackupOperationsStatus> updateBackupSchedule(
+    BackupScheduleDraft draft,
+  ) async {
+    final response = await _session.patch('backup/', body: draft.toJson());
+    _session.ensureSuccess(
+      response,
+      'Backup schedule update failed with status',
+    );
+    return BackupOperationsStatus.fromJson(
+      _session.decodedBody(response) as Map<String, Object?>,
+    );
+  }
+
+  Future<SystemMaintenanceJob> startBackup() async {
+    final response = await _session.post('backup/');
+    _session.ensureSuccess(response, 'Backup start failed with status');
+    return SystemMaintenanceJob.fromJson(
+      _session.decodedBody(response) as Map<String, Object?>,
+    );
+  }
+
+  Future<SystemMaintenanceJob> restoreBackup(RestoreBackupUpload upload) async {
+    final response = await _session.postMultipart(
+      'backup/restore/',
+      files: [
+        ApiMultipartFile(
+          fieldName: 'file',
+          filename: upload.filename,
+          bytes: upload.bytes,
+          contentType: upload.contentType,
+        ),
+      ],
+    );
+    _session.ensureSuccess(response, 'Backup restore failed with status');
+    return SystemMaintenanceJob.fromJson(
+      _session.decodedBody(response) as Map<String, Object?>,
     );
   }
 
