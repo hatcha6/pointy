@@ -61,9 +61,13 @@ void main() {
       expect(find.text('البيع الحالي'), findsOneWidget);
       expect(find.text('جلسة RS-PILOT'), findsOneWidget);
 
-      await tester.tap(find.text('عميل عابر'));
+      await tester.tap(find.byTooltip('إعدادات الفاتورة'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('تغيير'));
       await tester.pumpAndSettle(const Duration(seconds: 1));
       await tester.tap(find.text('ليلى أحمد').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, 'حفظ'));
       await tester.pumpAndSettle();
 
       await tester.tap(find.byType(ProductTile).first);
@@ -237,6 +241,7 @@ class _PilotDayApiService extends PosApiService {
     'shop_name': 'متجر نقطة البيع',
     'receipt_header': 'أهلا بكم',
     'receipt_footer': 'شكرا لزيارتكم',
+    'enable_online_invoices': false,
     'require_opening_cash': true,
     'auto_print_receipts': false,
     'allow_overselling': false,

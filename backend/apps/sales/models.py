@@ -1,4 +1,5 @@
 from decimal import Decimal
+import secrets
 
 from django.conf import settings
 from django.core.validators import MinValueValidator
@@ -179,6 +180,12 @@ class Order(TimeStampedModel):
         null=True,
     )
     receipt_number = models.CharField(max_length=32, unique=True, blank=True)
+    public_token = models.CharField(
+        max_length=64,
+        unique=True,
+        blank=True,
+        null=True,
+    )
     status = models.CharField(max_length=16, choices=Status.choices, default=Status.OPEN)
     subtotal = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     discount_total = models.DecimalField(max_digits=10, decimal_places=2, default=0)
@@ -211,15 +218,27 @@ class Order(TimeStampedModel):
         return total.quantize(Decimal("0.01"))
 
     def save(self, *args, **kwargs):
+        update_fields = kwargs.get("update_fields")
+        if not self.public_token:
+            self.public_token = self._generate_public_token()
+            if update_fields is not None and "public_token" not in update_fields:
+                kwargs["update_fields"] = [*update_fields, "public_token"]
         if not self.receipt_number:
             with transaction.atomic():
                 super().save(*args, **kwargs)
                 self.receipt_number = f"R{self.created_at:%Y%m%d}{self.id:06d}"
-                return super().save(update_fields=["receipt_number"])
+                return super().save(update_fields=["receipt_number", "public_token"])
         return super().save(*args, **kwargs)
 
     def __str__(self) -> str:
         return self.receipt_number or f"Order {self.pk}"
+
+    @classmethod
+    def _generate_public_token(cls) -> str:
+        while True:
+            token = secrets.token_urlsafe(24)
+            if not cls.objects.filter(public_token=token).exists():
+                return token
 
 
 class OrderLine(TimeStampedModel):

@@ -51,6 +51,7 @@ class EscPosReceiptEncoder {
     final totalLabel = _string(order['total_label'], fallback: 'الإجمالي');
     final createdAt = _formatDateTime(order['created_at']);
     final lines = _list(order['lines']);
+    final publicInvoiceUrl = _string(order['public_invoice_url']);
 
     final bytes = <int>[];
     bytes.addAll(generator.reset());
@@ -162,6 +163,39 @@ class EscPosReceiptEncoder {
       }
     }
 
+    if (publicInvoiceUrl.isNotEmpty) {
+      bytes.addAll(generator.feed(1));
+      bytes.addAll(generator.hr());
+      bytes.addAll(
+        _text(
+          generator,
+          'امسح الرمز لعرض الفاتورة',
+          styles: PosStyles(align: PosAlign.center, codeTable: codeTable),
+        ),
+      );
+      bytes.addAll(
+        generator.qrcode(
+          publicInvoiceUrl,
+          align: PosAlign.center,
+          size: _qrSize(endpoint.paperWidthMm),
+          cor: QRCorrection.M,
+        ),
+      );
+      bytes.addAll(generator.feed(1));
+      for (final line in _wrap(
+        publicInvoiceUrl,
+        _charsPerLine(endpoint.paperWidthMm),
+      )) {
+        bytes.addAll(
+          _text(
+            generator,
+            line,
+            styles: PosStyles(align: PosAlign.center, codeTable: codeTable),
+          ),
+        );
+      }
+    }
+
     bytes.addAll(generator.feed(2));
     bytes.addAll(generator.cut(mode: PosCutMode.partial));
     return bytes;
@@ -192,6 +226,13 @@ class EscPosReceiptEncoder {
       return PaperSize.mm72;
     }
     return PaperSize.mm80;
+  }
+
+  QRSize _qrSize(int paperWidthMm) {
+    if (paperWidthMm <= 58) {
+      return QRSize.size4;
+    }
+    return QRSize.size5;
   }
 
   int _charsPerLine(int paperWidthMm) {

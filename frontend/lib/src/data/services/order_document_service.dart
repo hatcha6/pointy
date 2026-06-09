@@ -237,6 +237,7 @@ class OrderDocumentService {
     return OrderDocumentTemplate(
       title: labels.saleInvoiceTitle,
       reference: _saleReference(order),
+      publicInvoiceUrl: _publicInvoiceUrl(order),
       shopName: _shopName(shopSettings),
       shopHeaderLines: _shopHeaderLines(shopSettings),
       recipientTitle: labels.billTo,
@@ -556,6 +557,8 @@ class OrderDocumentLabels {
     required this.emptyValue,
     required this.page,
     required this.ofPages,
+    required this.onlineInvoice,
+    required this.scanOnlineInvoice,
   });
 
   const OrderDocumentLabels.arabic()
@@ -603,7 +606,9 @@ class OrderDocumentLabels {
       walkInCustomer = 'عميل نقدي',
       emptyValue = '-',
       page = 'صفحة',
-      ofPages = 'من';
+      ofPages = 'من',
+      onlineInvoice = 'الفاتورة عبر الإنترنت',
+      scanOnlineInvoice = 'امسح الرمز لعرض الفاتورة';
 
   final String saleInvoiceTitle;
   final String purchaseOrderTitle;
@@ -650,6 +655,8 @@ class OrderDocumentLabels {
   final String emptyValue;
   final String page;
   final String ofPages;
+  final String onlineInvoice;
+  final String scanOnlineInvoice;
 
   String paymentMethodLabel(PaymentMethod method) {
     return switch (method) {
@@ -732,6 +739,7 @@ class OrderDocumentTemplate {
     required this.totals,
     this.notes,
     this.terms,
+    this.publicInvoiceUrl,
   });
 
   final String title;
@@ -745,6 +753,7 @@ class OrderDocumentTemplate {
   final List<OrderDocumentField> totals;
   final String? notes;
   final String? terms;
+  final String? publicInvoiceUrl;
 }
 
 class _DocumentFrame {
@@ -798,41 +807,109 @@ class _DocumentFrame {
 
   pw.Widget _hero() {
     final logoProvider = _logoProvider(shopLogoBytes);
+    final heroSide = _heroSide(logoProvider);
     return pw.Directionality(
       textDirection: pw.TextDirection.ltr,
       child: pw.Row(
-        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
         crossAxisAlignment: pw.CrossAxisAlignment.start,
         children: [
-          pw.Column(
-            crossAxisAlignment: pw.CrossAxisAlignment.start,
-            children: [
-              pw.Text(
-                template.title,
-                style: pw.TextStyle(
-                  fontSize: 32,
-                  fontWeight: pw.FontWeight.bold,
-                  color: _PdfColors.ink,
+          pw.Expanded(
+            child: pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                pw.Text(
+                  template.title,
+                  style: pw.TextStyle(
+                    fontSize: 32,
+                    fontWeight: pw.FontWeight.bold,
+                    color: _PdfColors.ink,
+                  ),
+                  textDirection: pw.TextDirection.rtl,
                 ),
-                textDirection: pw.TextDirection.rtl,
-              ),
-              pw.SizedBox(height: 4),
-              pw.Text(
-                '# ${template.reference}',
-                style: const pw.TextStyle(
-                  fontSize: 14,
-                  color: _PdfColors.muted,
+                pw.SizedBox(height: 4),
+                pw.Text(
+                  '# ${template.reference}',
+                  style: const pw.TextStyle(
+                    fontSize: 14,
+                    color: _PdfColors.muted,
+                  ),
+                  textDirection: pw.TextDirection.ltr,
                 ),
-                textDirection: pw.TextDirection.ltr,
-              ),
-            ],
-          ),
-          if (logoProvider != null)
-            pw.Container(
-              height: 50,
-              alignment: pw.Alignment.topRight,
-              child: pw.Image(logoProvider, fit: pw.BoxFit.contain),
+              ],
             ),
+          ),
+          if (heroSide != null) ...[pw.SizedBox(width: 18), heroSide],
+        ],
+      ),
+    );
+  }
+
+  pw.Widget? _heroSide(pw.ImageProvider? logoProvider) {
+    final children = <pw.Widget>[];
+    if (logoProvider != null) {
+      children.add(
+        pw.Container(
+          width: 84,
+          height: 52,
+          alignment: pw.Alignment.topRight,
+          child: pw.Image(logoProvider, fit: pw.BoxFit.contain),
+        ),
+      );
+    }
+    final url = template.publicInvoiceUrl?.trim() ?? '';
+    if (url.isNotEmpty) {
+      if (children.isNotEmpty) {
+        children.add(pw.SizedBox(width: 14));
+      }
+      children.add(_onlineInvoiceQr(url));
+    }
+    if (children.isEmpty) {
+      return null;
+    }
+    return pw.Row(
+      mainAxisSize: pw.MainAxisSize.min,
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: children,
+    );
+  }
+
+  pw.Widget _onlineInvoiceQr(String url) {
+    return pw.Container(
+      width: 100,
+      padding: const pw.EdgeInsets.all(8),
+      decoration: pw.BoxDecoration(
+        border: pw.Border.all(color: _PdfColors.border),
+        borderRadius: const pw.BorderRadius.all(pw.Radius.circular(6)),
+      ),
+      child: pw.Column(
+        mainAxisSize: pw.MainAxisSize.min,
+        crossAxisAlignment: pw.CrossAxisAlignment.center,
+        children: [
+          pw.Text(
+            labels.onlineInvoice,
+            style: pw.TextStyle(
+              fontSize: 9,
+              color: _PdfColors.ink,
+              fontWeight: pw.FontWeight.bold,
+            ),
+            textAlign: pw.TextAlign.center,
+            textDirection: pw.TextDirection.rtl,
+          ),
+          pw.SizedBox(height: 4),
+          pw.BarcodeWidget(
+            barcode: pw.Barcode.qrCode(),
+            data: url,
+            width: 58,
+            height: 58,
+            drawText: false,
+          ),
+          pw.SizedBox(height: 4),
+          pw.Text(
+            labels.scanOnlineInvoice,
+            style: const pw.TextStyle(fontSize: 7, color: _PdfColors.muted),
+            textAlign: pw.TextAlign.center,
+            textDirection: pw.TextDirection.rtl,
+          ),
         ],
       ),
     );
@@ -1133,6 +1210,11 @@ class _PdfColors {
 String _saleReference(SaleOrder order) {
   final receiptNumber = order.receiptNumber?.trim() ?? '';
   return receiptNumber.isEmpty ? '${order.id}' : receiptNumber;
+}
+
+String? _publicInvoiceUrl(SaleOrder order) {
+  final url = order.publicInvoiceUrl.trim();
+  return url.isEmpty ? null : url;
 }
 
 String _purchaseReference(PurchaseOrder order) {

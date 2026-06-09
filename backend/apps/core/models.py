@@ -46,6 +46,7 @@ class ShopSettings(TimeStampedModel):
     shop_name = models.CharField(max_length=120, default="نقطة البيع")
     receipt_header = models.CharField(max_length=240, blank=True)
     receipt_footer = models.CharField(max_length=240, blank=True)
+    enable_online_invoices = models.BooleanField(default=False)
     require_opening_cash = models.BooleanField(default=True)
     auto_print_receipts = models.BooleanField(default=False)
     allow_overselling = models.BooleanField(default=False)

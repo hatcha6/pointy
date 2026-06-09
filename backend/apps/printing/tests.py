@@ -13,7 +13,7 @@ from rest_framework.test import APIClient
 from apps.attachments.models import Attachment, StorageVolume
 from apps.catalog.models import ProductVariant
 from apps.catalog.testing import create_product_with_default_variant
-from apps.core.models import ShopSettings
+from apps.core.models import RelayInstallation, ShopSettings
 from apps.core.roles import CASHIER_GROUP, MANAGER_GROUP, ensure_role_groups
 from apps.discounts.models import DiscountRule
 from apps.inventory.models import StockItem
@@ -270,6 +270,29 @@ class ReceiptAutoPrintTests(PrintingTestMixin, TestCase):
         self.assertEqual(job.payload["order"]["lines"][0]["line_subtotal"], "8.50")
         self.assertEqual(job.payload["order"]["lines"][0]["discount_total"], "0.85")
         self.assertEqual(job.payload["order"]["lines"][0]["line_total"], "7.65")
+
+    def test_receipt_job_payload_includes_public_invoice_url_when_enabled(self):
+        ShopSettings.objects.filter(pk=1).update(enable_online_invoices=True)
+        RelayInstallation.objects.create(
+            installation_id="installation-1",
+            shop_name="متجر الاختبار",
+            relay_public_api_url="https://relay.example",
+            relay_connector_address="relay.example:443",
+            connector_token="connector-token",
+            access_token="access-token",
+            relay_enabled=True,
+            subscription_active=True,
+        )
+
+        response = self.checkout()
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        order = Order.objects.get(pk=response.data["id"])
+        job = PrintJob.objects.get(order_id=order.pk)
+        self.assertEqual(
+            job.payload["order"]["public_invoice_url"],
+            f"https://relay.example/invoices/installation-1/{order.public_token}",
+        )
 
     def test_checkout_can_return_claimed_auto_print_job(self):
         response = self.checkout(self.print_invoice_payload())

@@ -20,6 +20,7 @@ import 'cart_line_tile.dart';
 import 'cart_totals.dart';
 import 'payment/payment.dart';
 import 'pos_sale_session_strip.dart';
+import 'public_invoice_dialog.dart';
 
 class PosCartPane extends StatelessWidget {
   const PosCartPane({
@@ -56,11 +57,11 @@ class PosCartPane extends StatelessWidget {
                 Expanded(
                   child: PointyOrderPanel(
                     title: l10n.currentSaleTitle,
+                    subtitle: _saleDraftSubtitle(l10n, viewModel),
                     trailing: _PosCartHeaderActions(
                       viewModel: viewModel,
                       isCartLocked: isCartLocked,
-                      onSelectCustomer: () => _selectCustomer(context),
-                      onEditCoupon: () => _showCouponDialog(context),
+                      onEditSettings: () => _showSaleSettingsDialog(context),
                     ),
                     child: _CartScrollContent(
                       viewModel: viewModel,
@@ -207,24 +208,24 @@ class PosCartPane extends StatelessWidget {
       ..showSnackBar(SnackBar(content: Text(message)));
 
     if (outcome.isSuccess) {
+      final order = outcome.order;
+      if (order != null && order.publicInvoiceUrl.trim().isNotEmpty) {
+        await showPublicInvoiceDialog(context: context, order: order);
+        if (!context.mounted) {
+          return;
+        }
+      }
       onCheckoutSuccess?.call();
     }
   }
 
-  Future<void> _selectCustomer(BuildContext context) async {
-    final customer = await showCustomerPickerSheet(
-      context: context,
-      repository: contactRepository,
-    );
-    if (customer != null) {
-      viewModel.selectCustomer(customer);
-    }
-  }
-
-  Future<void> _showCouponDialog(BuildContext context) {
+  Future<void> _showSaleSettingsDialog(BuildContext context) {
     return showDialog<void>(
       context: context,
-      builder: (context) => _CouponCodeDialog(viewModel: viewModel),
+      builder: (context) => _SaleSettingsDialog(
+        viewModel: viewModel,
+        contactRepository: contactRepository,
+      ),
     );
   }
 
@@ -358,6 +359,14 @@ class PosCartPane extends StatelessWidget {
   }
 }
 
+String _saleDraftSubtitle(AppLocalizations l10n, PosViewModel viewModel) {
+  final customerName = viewModel.selectedCustomer?.fullName.trim();
+  if (customerName != null && customerName.isNotEmpty) {
+    return customerName;
+  }
+  return l10n.walkInCustomerLabel;
+}
+
 class _CartScrollContent extends StatelessWidget {
   const _CartScrollContent({
     required this.viewModel,
@@ -421,25 +430,30 @@ class _CartScrollContent extends StatelessWidget {
   }
 }
 
-enum _CustomerHeaderMenuAction { change, clear }
-
 class _PosCartHeaderActions extends StatelessWidget {
   const _PosCartHeaderActions({
     required this.viewModel,
     required this.isCartLocked,
-    required this.onSelectCustomer,
-    required this.onEditCoupon,
+    required this.onEditSettings,
   });
 
   final PosViewModel viewModel;
   final bool isCartLocked;
-  final VoidCallback onSelectCustomer;
-  final VoidCallback onEditCoupon;
+  final VoidCallback onEditSettings;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final colors = context.pointyColors;
+    final couponCode = viewModel.couponCode.trim();
+    final hasCoupon = couponCode.isNotEmpty;
+    final hasIssue =
+        viewModel.hasDiscountPreviewError ||
+        viewModel.unappliedCouponCodes.isNotEmpty;
+    final hasActiveSettings =
+        viewModel.selectedCustomer != null ||
+        hasCoupon ||
+        viewModel.appliedDiscounts.isNotEmpty;
 
     return Row(
       mainAxisSize: MainAxisSize.min,
@@ -452,15 +466,16 @@ class _PosCartHeaderActions extends StatelessWidget {
           onSelectSession: viewModel.switchSaleSession,
           onDiscardSession: viewModel.discardSaleSession,
         ),
-        _CustomerHeaderAction(
-          viewModel: viewModel,
-          isCartLocked: isCartLocked,
-          onSelectCustomer: onSelectCustomer,
-        ),
-        _CouponHeaderAction(
-          viewModel: viewModel,
-          isCartLocked: isCartLocked,
-          onEditCoupon: onEditCoupon,
+        IconButton(
+          key: const ValueKey('sale_draft_settings_button'),
+          tooltip: l10n.saleDraftSettingsActionTooltip,
+          onPressed: isCartLocked ? null : onEditSettings,
+          icon: const Icon(Icons.tune),
+          color: hasIssue
+              ? colors.danger
+              : hasActiveSettings
+              ? colors.primaryStrong
+              : null,
         ),
         IconButton(
           tooltip: l10n.clearCartTooltip,
@@ -475,188 +490,29 @@ class _PosCartHeaderActions extends StatelessWidget {
   }
 }
 
-class _CustomerHeaderAction extends StatelessWidget {
-  const _CustomerHeaderAction({
+class _SaleSettingsDialog extends StatefulWidget {
+  const _SaleSettingsDialog({
     required this.viewModel,
-    required this.isCartLocked,
-    required this.onSelectCustomer,
+    required this.contactRepository,
   });
 
   final PosViewModel viewModel;
-  final bool isCartLocked;
-  final VoidCallback onSelectCustomer;
+  final ContactRepository contactRepository;
 
   @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
-    final colors = context.pointyColors;
-    final customer = viewModel.selectedCustomer;
-    final hasCustomer = customer != null;
-    final pill = _CustomerHeaderPill(
-      label: hasCustomer ? customer.fullName : l10n.walkInCustomerLabel,
-      icon: hasCustomer
-          ? Icons.person_pin_circle_outlined
-          : Icons.person_add_alt_1_outlined,
-      foreground: hasCustomer ? colors.primaryStrong : colors.ink,
-      background: hasCustomer
-          ? PointyColors.primaryContainer
-          : colors.subtleFill,
-    );
-
-    if (!hasCustomer) {
-      return Tooltip(
-        message: l10n.selectedCustomerLabel,
-        child: InkWell(
-          onTap: isCartLocked ? null : onSelectCustomer,
-          borderRadius: BorderRadius.circular(PointyRadii.card),
-          child: pill,
-        ),
-      );
-    }
-
-    return PopupMenuButton<_CustomerHeaderMenuAction>(
-      tooltip: customer.fullName,
-      enabled: !isCartLocked,
-      onSelected: (action) {
-        switch (action) {
-          case _CustomerHeaderMenuAction.change:
-            onSelectCustomer();
-          case _CustomerHeaderMenuAction.clear:
-            viewModel.selectCustomer(null);
-        }
-      },
-      itemBuilder: (context) {
-        return [
-          PopupMenuItem(
-            value: _CustomerHeaderMenuAction.change,
-            child: ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: const Icon(Icons.edit_outlined),
-              title: Text(l10n.changeContactAction),
-            ),
-          ),
-          PopupMenuItem(
-            value: _CustomerHeaderMenuAction.clear,
-            child: ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: const Icon(Icons.close),
-              title: Text(l10n.clearContactTooltip),
-            ),
-          ),
-        ];
-      },
-      child: pill,
-    );
-  }
+  State<_SaleSettingsDialog> createState() => _SaleSettingsDialogState();
 }
 
-class _CustomerHeaderPill extends StatelessWidget {
-  const _CustomerHeaderPill({
-    required this.label,
-    required this.icon,
-    required this.foreground,
-    required this.background,
-  });
-
-  final String label;
-  final IconData icon;
-  final Color foreground;
-  final Color background;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.pointyColors;
-
-    return ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 128, minHeight: 40),
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: background,
-          border: Border.all(color: colors.line),
-          borderRadius: BorderRadius.circular(PointyRadii.card),
-        ),
-        child: Padding(
-          padding: const EdgeInsetsDirectional.symmetric(horizontal: 10),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, size: 18, color: foreground),
-              const SizedBox(width: 6),
-              Flexible(
-                child: Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: foreground,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _CouponHeaderAction extends StatelessWidget {
-  const _CouponHeaderAction({
-    required this.viewModel,
-    required this.isCartLocked,
-    required this.onEditCoupon,
-  });
-
-  final PosViewModel viewModel;
-  final bool isCartLocked;
-  final VoidCallback onEditCoupon;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
-    final colors = context.pointyColors;
-    final couponCode = viewModel.couponCode.trim();
-    final hasCoupon = couponCode.isNotEmpty;
-    final hasIssue =
-        viewModel.hasDiscountPreviewError ||
-        viewModel.unappliedCouponCodes.isNotEmpty;
-    final hasAppliedDiscount = viewModel.appliedDiscounts.isNotEmpty;
-    final iconColor = hasIssue
-        ? colors.danger
-        : hasCoupon || hasAppliedDiscount
-        ? colors.primaryStrong
-        : null;
-
-    return IconButton(
-      tooltip: hasCoupon
-          ? '${l10n.discountCouponCodeLabel}: $couponCode'
-          : l10n.discountCouponCodeLabel,
-      onPressed: isCartLocked ? null : onEditCoupon,
-      icon: viewModel.isLoadingDiscountPreview
-          ? const SizedBox.square(
-              dimension: 18,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            )
-          : const Icon(Icons.confirmation_number_outlined),
-      color: iconColor,
-    );
-  }
-}
-
-class _CouponCodeDialog extends StatefulWidget {
-  const _CouponCodeDialog({required this.viewModel});
-
-  final PosViewModel viewModel;
-
-  @override
-  State<_CouponCodeDialog> createState() => _CouponCodeDialogState();
-}
-
-class _CouponCodeDialogState extends State<_CouponCodeDialog> {
+class _SaleSettingsDialogState extends State<_SaleSettingsDialog> {
+  late var _selectedCustomer = widget.viewModel.selectedCustomer;
   late final TextEditingController _controller = TextEditingController(
     text: widget.viewModel.couponCode,
   );
+
+  String get _currentCode => _controller.text.trim();
+
+  bool get _matchesSavedCode =>
+      _currentCode == widget.viewModel.couponCode.trim();
 
   @override
   void dispose() {
@@ -667,32 +523,54 @@ class _CouponCodeDialogState extends State<_CouponCodeDialog> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final hasCoupon = _controller.text.trim().isNotEmpty;
-    final hasInvalidCoupon = widget.viewModel.unappliedCouponCodes.isNotEmpty;
+    final hasCoupon = _currentCode.isNotEmpty;
+    final hasInvalidCoupon =
+        _matchesSavedCode && widget.viewModel.unappliedCouponCodes.isNotEmpty;
 
     return AlertDialog(
-      icon: const Icon(Icons.confirmation_number_outlined),
-      title: Text(l10n.discountCouponCodeLabel),
-      content: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 420),
-        child: TextField(
-          controller: _controller,
-          enabled: !widget.viewModel.isCheckingOut,
-          autofocus: true,
-          textCapitalization: TextCapitalization.characters,
-          decoration: InputDecoration(
-            hintText: l10n.discountCouponCodeHint,
-            isDense: true,
-            errorText: hasInvalidCoupon
-                ? l10n.discountCouponUnavailable(
-                    widget.viewModel.unappliedCouponCodes.join('، '),
-                  )
-                : widget.viewModel.hasDiscountPreviewError
-                ? l10n.discountPreviewUnavailable
-                : null,
+      icon: const Icon(Icons.tune),
+      title: Text(l10n.saleDraftSettingsDialogTitle),
+      content: SizedBox(
+        width: 440,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ContactSelectionTile(
+                label: l10n.selectedCustomerLabel,
+                value: _selectedCustomer?.fullName ?? '',
+                placeholder: l10n.walkInCustomerLabel,
+                icon: Icons.person_pin_circle_outlined,
+                enabled: !widget.viewModel.isCheckingOut,
+                onSelect: _selectCustomer,
+                onClear: () => setState(() => _selectedCustomer = null),
+                allowClear: _selectedCustomer != null,
+                selectActionIcon: Icons.edit_outlined,
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _controller,
+                enabled: !widget.viewModel.isCheckingOut,
+                textCapitalization: TextCapitalization.characters,
+                decoration: InputDecoration(
+                  labelText: l10n.discountCouponCodeLabel,
+                  hintText: l10n.discountCouponCodeHint,
+                  isDense: true,
+                  prefixIcon: const Icon(Icons.confirmation_number_outlined),
+                  errorText: hasInvalidCoupon
+                      ? l10n.discountCouponUnavailable(
+                          widget.viewModel.unappliedCouponCodes.join('، '),
+                        )
+                      : _matchesSavedCode &&
+                            widget.viewModel.hasDiscountPreviewError
+                      ? l10n.discountPreviewUnavailable
+                      : null,
+                ),
+                onChanged: (_) => setState(() {}),
+                onSubmitted: (_) => _apply(),
+              ),
+            ],
           ),
-          onChanged: (_) => setState(() {}),
-          onSubmitted: (_) => _apply(),
         ),
       ),
       actions: [
@@ -709,36 +587,51 @@ class _CouponCodeDialogState extends State<_CouponCodeDialog> {
           onPressed: _refresh,
           child: Text(l10n.refreshDiscountPreviewTooltip),
         ),
-        FilledButton(
-          onPressed: _apply,
-          child: Text(l10n.applyDiscountCodeButton),
-        ),
+        FilledButton(onPressed: _apply, child: Text(l10n.saveButton)),
       ],
     );
   }
 
-  void _apply() {
-    final value = _controller.text.trim();
-    if (value == widget.viewModel.couponCode.trim()) {
-      unawaited(widget.viewModel.refreshDiscountPreview());
-    } else {
-      widget.viewModel.updateCouponCode(value);
+  Future<void> _selectCustomer() async {
+    final customer = await showCustomerPickerSheet(
+      context: context,
+      repository: widget.contactRepository,
+    );
+    if (customer == null || !mounted) {
+      return;
     }
+    setState(() => _selectedCustomer = customer);
+  }
+
+  void _apply() {
+    _saveSettings();
     Navigator.of(context).pop();
   }
 
   void _clear() {
-    widget.viewModel.updateCouponCode('');
+    _controller.clear();
+    _saveSettings();
     Navigator.of(context).pop();
   }
 
   void _refresh() {
-    final value = _controller.text.trim();
-    if (value != widget.viewModel.couponCode.trim()) {
-      widget.viewModel.updateCouponCode(value);
+    final customerChanged =
+        _selectedCustomer?.id != widget.viewModel.selectedCustomer?.id;
+    final codeChanged = _currentCode != widget.viewModel.couponCode.trim();
+    _saveSettings();
+    if (!customerChanged && !codeChanged) {
+      unawaited(widget.viewModel.refreshDiscountPreview());
     }
-    unawaited(widget.viewModel.refreshDiscountPreview());
     Navigator.of(context).pop();
+  }
+
+  void _saveSettings() {
+    if (_selectedCustomer?.id != widget.viewModel.selectedCustomer?.id) {
+      widget.viewModel.selectCustomer(_selectedCustomer);
+    }
+    if (_currentCode != widget.viewModel.couponCode.trim()) {
+      widget.viewModel.updateCouponCode(_currentCode);
+    }
   }
 }
 

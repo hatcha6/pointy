@@ -2360,6 +2360,11 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
+  String onlineInvoiceSettingSummary(String status) {
+    return 'فواتير الإنترنت: $status';
+  }
+
+  @override
   String registerSessionSettingsSummary(String status, String window) {
     return 'نقدية الافتتاح: $status، صلاحية الكاشير للإرجاع: $window';
   }
@@ -2761,6 +2766,14 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get autoPrintReceiptsLabel => 'طباعة الإيصالات تلقائيًا';
+
+  @override
+  String get enableOnlineInvoicesLabel =>
+      'إظهار رابط وQR للفاتورة عبر الإنترنت';
+
+  @override
+  String get enableOnlineInvoicesSubtitle =>
+      'بعد الدفع يظهر رابط الفاتورة الحقيقي عبر الريلاي ليتمكن العميل من حفظها كملف PDF.';
 
   @override
   String get allowOversellingLabel => 'السماح بالبيع فوق المخزون';
@@ -3917,6 +3930,12 @@ class AppLocalizationsAr extends AppLocalizations {
   String get currentSaleTitle => 'البيع الحالي';
 
   @override
+  String get saleDraftSettingsActionTooltip => 'إعدادات الفاتورة';
+
+  @override
+  String get saleDraftSettingsDialogTitle => 'إعدادات الفاتورة';
+
+  @override
   String get clearCartTooltip => 'مسح السلة';
 
   @override
@@ -4542,6 +4561,12 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get clearPurchaseDraftTooltip => 'مسح مسودة الشراء';
+
+  @override
+  String get purchaseDraftSettingsActionTooltip => 'إعدادات مسودة الشراء';
+
+  @override
+  String get purchaseDraftSettingsDialogTitle => 'إعدادات مسودة الشراء';
 
   @override
   String get purchaseSupplierActionTooltip => 'اختيار المورد';
@@ -5281,6 +5306,30 @@ class AppLocalizationsAr extends AppLocalizations {
   String get invoiceShareError => 'تعذر تجهيز ملف PDF للفاتورة.';
 
   @override
+  String get publicInvoiceDialogTitle => 'فاتورة العميل عبر الإنترنت';
+
+  @override
+  String get publicInvoiceDialogSubtitle =>
+      'اطلب من العميل مسح رمز QR لفتح الفاتورة.';
+
+  @override
+  String publicInvoiceDialogSubtitleWithReceipt(String receiptNumber) {
+    return 'اطلب من العميل مسح رمز QR لفتح الفاتورة $receiptNumber.';
+  }
+
+  @override
+  String get publicInvoiceUrlLabel => 'رابط الفاتورة';
+
+  @override
+  String get copyPublicInvoiceUrlButton => 'نسخ الرابط';
+
+  @override
+  String get publicInvoiceUrlCopiedMessage => 'تم نسخ رابط الفاتورة.';
+
+  @override
+  String get publicInvoiceQrSemanticsLabel => 'رمز QR لرابط الفاتورة';
+
+  @override
   String get invoiceProfitLabel => 'الربح';
 
   @override
@@ -5453,6 +5502,9 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get cancelButton => 'إلغاء';
+
+  @override
+  String get closeButton => 'إغلاق';
 
   @override
   String get closeRegisterSessionButton => 'إغلاق الجلسة';

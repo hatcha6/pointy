@@ -60,7 +60,7 @@ from apps.purchasing.views import (
     SupplierViewSet,
 )
 from apps.reports.views import ReportRunViewSet
-from apps.sales.views import OrderViewSet, RegisterSessionViewSet
+from apps.sales.views import OrderViewSet, PublicInvoiceView, RegisterSessionViewSet
 
 router = DefaultRouter()
 router.register("analytics-events", AnalyticsEventViewSet, basename="analytics-event")
@@ -149,6 +149,11 @@ urlpatterns = [
         "api/shop-settings/logo/",
         ShopSettingsLogoView.as_view(),
         name="shop-settings-logo",
+    ),
+    path(
+        "api/public-invoices/<str:token>/",
+        PublicInvoiceView.as_view({"get": "retrieve"}),
+        name="public-invoice-detail",
     ),
     path(
         "api/backup/destinations/",

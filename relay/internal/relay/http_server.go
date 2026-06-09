@@ -121,6 +121,123 @@ var adminConsoleTemplate = template.Must(template.New("relay-admin").Parse(`<!do
 </body>
 </html>`))
 
+var publicInvoiceTemplate = template.Must(template.New("public-invoice").Parse(`<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{.ShopName}} - {{.ReceiptNumber}}</title>
+  <style>
+    :root { color-scheme: light; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Tahoma, Arial, sans-serif; }
+    body { margin: 0; background: #f5f7fa; color: #111827; }
+    main { max-width: 760px; margin: 0 auto; padding: 28px 16px 44px; }
+    .invoice { background: #fff; border: 1px solid #d8dee9; border-radius: 8px; overflow: hidden; }
+    header { padding: 24px; border-bottom: 1px solid #e5e7eb; }
+    h1 { margin: 0; font-size: 26px; }
+    .muted { color: #5f6b7a; }
+    .meta { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; padding: 18px 24px; border-bottom: 1px solid #e5e7eb; }
+    .meta div { display: grid; gap: 4px; }
+    .label { color: #6b7280; font-size: 12px; font-weight: 700; }
+    .value { font-weight: 700; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 12px 16px; border-bottom: 1px solid #eef1f5; text-align: right; }
+    th { color: #4b5563; font-size: 12px; }
+    .num { text-align: left; direction: ltr; white-space: nowrap; }
+    .totals { display: grid; gap: 10px; padding: 18px 24px; margin-inline-start: auto; max-width: 340px; }
+    .total-row { display: flex; justify-content: space-between; gap: 16px; }
+    .grand { font-size: 20px; font-weight: 800; }
+    footer { padding: 18px 24px 24px; border-top: 1px solid #e5e7eb; }
+    .actions { display: flex; justify-content: flex-end; margin-top: 18px; }
+    button { border: 0; border-radius: 6px; padding: 12px 18px; font: inherit; font-weight: 800; background: #155eef; color: #fff; cursor: pointer; }
+    @media (max-width: 560px) {
+      main { padding: 12px; }
+      header, .meta, footer { padding-inline: 16px; }
+      .meta { grid-template-columns: 1fr; }
+      th, td { padding: 10px 12px; font-size: 13px; }
+    }
+    @media print {
+      body { background: #fff; }
+      main { padding: 0; max-width: none; }
+      .invoice { border: 0; border-radius: 0; }
+      .actions { display: none; }
+    }
+  </style>
+</head>
+<body>
+<main>
+  <section class="invoice">
+    <header>
+      <h1>{{.ShopName}}</h1>
+      {{if .ReceiptHeader}}<p class="muted">{{.ReceiptHeader}}</p>{{end}}
+    </header>
+    <section class="meta">
+      <div><span class="label">رقم الفاتورة</span><span class="value">{{.ReceiptNumber}}</span></div>
+      <div><span class="label">الحالة</span><span class="value">{{.StatusLabel}}</span></div>
+      <div><span class="label">تاريخ الإصدار</span><span class="value">{{.CreatedAt}}</span></div>
+      {{if .CustomerName}}<div><span class="label">العميل</span><span class="value">{{.CustomerName}}</span></div>{{end}}
+    </section>
+    <table>
+      <thead>
+        <tr>
+          <th>الصنف</th>
+          <th class="num">الكمية</th>
+          <th class="num">السعر</th>
+          <th class="num">الإجمالي</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{range .Lines}}
+          <tr>
+            <td>{{.DisplayName}}</td>
+            <td class="num">{{.Quantity}}</td>
+            <td class="num">{{.UnitPrice}}</td>
+            <td class="num">{{.LineTotal}}</td>
+          </tr>
+        {{end}}
+      </tbody>
+    </table>
+    <section class="totals">
+      <div class="total-row"><span>المجموع الفرعي</span><span class="num">{{.Subtotal}}</span></div>
+      <div class="total-row"><span>الخصم</span><span class="num">{{.DiscountTotal}}</span></div>
+      <div class="total-row grand"><span>الإجمالي</span><span class="num">{{.Total}}</span></div>
+    </section>
+    {{if .ReceiptFooter}}<footer class="muted">{{.ReceiptFooter}}</footer>{{end}}
+  </section>
+  <div class="actions">
+    <button type="button" id="save-pdf" dir="ltr">Save as PDF</button>
+  </div>
+</main>
+<script>
+document.getElementById('save-pdf').addEventListener('click', function () { window.print(); });
+</script>
+</body>
+</html>`))
+
+var publicInvoiceErrorTemplate = template.Must(template.New("public-invoice-error").Parse(`<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>الفاتورة غير متاحة</title>
+  <style>
+    :root { color-scheme: light; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Tahoma, Arial, sans-serif; }
+    body { margin: 0; background: #f5f7fa; color: #111827; }
+    main { max-width: 560px; margin: 0 auto; padding: 48px 16px; }
+    section { background: #fff; border: 1px solid #d8dee9; border-radius: 8px; padding: 24px; }
+    h1 { margin: 0 0 10px; font-size: 24px; }
+    p { margin: 0; color: #5f6b7a; }
+  </style>
+</head>
+<body>
+<main>
+  <section>
+    <h1>الفاتورة غير متاحة</h1>
+    <p>{{.Message}}</p>
+  </section>
+</main>
+</body>
+</html>`))
+
 type HTTPServer struct {
 	Store                         control.InstallationStore
 	Hub                           *Hub
@@ -197,6 +314,45 @@ type adminConsoleData struct {
 	CSRFToken    string
 }
 
+type publicInvoicePayload struct {
+	ShopName      string                     `json:"shop_name"`
+	ReceiptHeader string                     `json:"receipt_header"`
+	ReceiptFooter string                     `json:"receipt_footer"`
+	ReceiptNumber string                     `json:"receipt_number"`
+	Status        string                     `json:"status"`
+	CustomerName  string                     `json:"customer_name"`
+	Lines         []publicInvoiceLinePayload `json:"lines"`
+	Subtotal      string                     `json:"subtotal"`
+	DiscountTotal string                     `json:"discount_total"`
+	Total         string                     `json:"total"`
+	CreatedAt     string                     `json:"created_at"`
+}
+
+type publicInvoiceLinePayload struct {
+	ProductName   string `json:"product_name"`
+	VariantName   string `json:"variant_name"`
+	Quantity      int    `json:"quantity"`
+	UnitPrice     string `json:"unit_price"`
+	LineSubtotal  string `json:"line_subtotal"`
+	DiscountTotal string `json:"discount_total"`
+	LineTotal     string `json:"line_total"`
+}
+
+type publicInvoiceViewData struct {
+	publicInvoicePayload
+	StatusLabel string
+	Lines       []publicInvoiceLineViewData
+}
+
+type publicInvoiceLineViewData struct {
+	publicInvoiceLinePayload
+	DisplayName string
+}
+
+type publicInvoiceErrorData struct {
+	Message string
+}
+
 func (s HTTPServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case r.URL.Path == "/healthz":
@@ -237,6 +393,18 @@ func (s HTTPServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		s.withNodeProxy(w, r, s.handleNodeRelay)
+	case strings.HasPrefix(r.URL.Path, "/v1/node/public-invoices/"):
+		if !s.RouteMode.allowsAdmin() {
+			writeNotFound(w)
+			return
+		}
+		s.withNodeProxy(w, r, s.handleNodePublicInvoice)
+	case strings.HasPrefix(r.URL.Path, "/invoices/") && r.Method == http.MethodGet:
+		if !s.RouteMode.allowsPublic() {
+			writeNotFound(w)
+			return
+		}
+		s.handlePublicInvoice(w, r)
 	case r.URL.Path == "/v1/installations" && r.Method == http.MethodPost:
 		if !s.RouteMode.allowsAdmin() {
 			writeNotFound(w)
@@ -458,6 +626,263 @@ func (s HTTPServer) handleNodeRelay(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (s HTTPServer) handlePublicInvoice(w http.ResponseWriter, r *http.Request) {
+	installationID, invoiceToken, ok := publicInvoiceTarget(r.URL.Path, "/invoices/")
+	if !ok {
+		writeNotFound(w)
+		return
+	}
+	s.handlePublicInvoiceTarget(w, r, installationID, invoiceToken, true)
+}
+
+func (s HTTPServer) handleNodePublicInvoice(w http.ResponseWriter, r *http.Request) {
+	installationID, invoiceToken, ok := publicInvoiceTarget(
+		r.URL.Path,
+		"/v1/node/public-invoices/",
+	)
+	if !ok {
+		writeNotFound(w)
+		return
+	}
+	s.handlePublicInvoiceTarget(w, r, installationID, invoiceToken, false)
+}
+
+func (s HTTPServer) handlePublicInvoiceTarget(
+	w http.ResponseWriter,
+	r *http.Request,
+	installationID string,
+	invoiceToken string,
+	allowNodeProxy bool,
+) {
+	startedAt := time.Now()
+	statusCode := 0
+	outcome := "unknown"
+	defer func() {
+		s.metrics().RecordRelayRequest(observability.RelayRequestObservation{
+			Outcome:    outcome,
+			StatusCode: statusCode,
+			Duration:   time.Since(startedAt),
+		})
+	}()
+
+	installation, err := s.Store.GetInstallation(r.Context(), installationID)
+	if err != nil {
+		statusCode = http.StatusNotFound
+		outcome = "public_invoice_not_found"
+		s.renderPublicInvoiceError(
+			w,
+			http.StatusNotFound,
+			"تحقق من رابط الفاتورة أو اطلب نسخة جديدة من المتجر.",
+		)
+		return
+	}
+	if !installation.RelayActive(s.clock().Now()) {
+		statusCode = http.StatusNotFound
+		outcome = "subscription_rejected"
+		s.metrics().RecordSubscriptionRejected()
+		s.renderPublicInvoiceError(
+			w,
+			http.StatusNotFound,
+			"هذه الفاتورة غير متاحة عبر الإنترنت حاليًا.",
+		)
+		return
+	}
+	if limited, limitStatus, limitOutcome := s.enforceRateLimit(
+		w,
+		r,
+		"public_invoice",
+		relayRequestRateLimitKey(installation.ID),
+		s.RelayRequestRateLimit,
+	); limited {
+		statusCode = limitStatus
+		outcome = limitOutcome
+		return
+	}
+
+	release, ok := limit.TryAcquire(s.RelayLimiter)
+	if !ok {
+		statusCode = http.StatusTooManyRequests
+		outcome = "request_limited"
+		s.metrics().RecordRequestLimitRejected()
+		s.renderPublicInvoiceError(
+			w,
+			http.StatusTooManyRequests,
+			"الخدمة مشغولة الآن. حاول مرة أخرى بعد قليل.",
+		)
+		return
+	}
+	defer release()
+
+	requestCtx, requestCancel := context.WithTimeout(r.Context(), s.relayRequestTimeout())
+	defer requestCancel()
+	openCtx, openCancel := context.WithTimeout(requestCtx, s.streamOpenTimeout())
+	stream, err := s.Hub.OpenStream(openCtx, installation.ID)
+	openCancel()
+	if err != nil {
+		if errors.Is(err, ErrConnectorOffline) {
+			if allowNodeProxy {
+				if proxied, proxyStatus, proxyOutcome := s.tryProxyPublicInvoiceToRemoteNode(
+					w,
+					r.WithContext(requestCtx),
+					installation.ID,
+					invoiceToken,
+				); proxied {
+					statusCode = proxyStatus
+					outcome = proxyOutcome
+					return
+				}
+			}
+			statusCode = http.StatusServiceUnavailable
+			outcome = "connector_offline"
+			s.metrics().RecordOfflineInstallation()
+			s.renderPublicInvoiceError(
+				w,
+				http.StatusServiceUnavailable,
+				"تعذر الوصول إلى المتجر الآن. حاول مرة أخرى لاحقًا.",
+			)
+			return
+		}
+		statusCode = http.StatusBadGateway
+		outcome = "stream_open_failed"
+		s.logger().Warn("public invoice stream open failed", "installation_id", installation.ID, "error", err)
+		s.renderPublicInvoiceError(
+			w,
+			http.StatusBadGateway,
+			"تعذر تحميل الفاتورة الآن.",
+		)
+		return
+	}
+	defer stream.Close()
+	stopDeadlineCloser := closeStreamOnContextDone(requestCtx, stream)
+	defer stopDeadlineCloser()
+
+	targetPath := "/api/public-invoices/" + url.PathEscape(invoiceToken) + "/"
+	request := outboundRequest(r.WithContext(requestCtx), targetPath)
+	request.URL.RawQuery = ""
+	request.Header.Del("Authorization")
+	request.Header.Del("Cookie")
+	request.Header.Del("X-CSRFToken")
+	request.Header.Set("Accept", "application/json")
+	if err := request.Write(stream); err != nil {
+		if requestCtx.Err() != nil {
+			statusCode = http.StatusGatewayTimeout
+			outcome = "request_timeout"
+			s.renderPublicInvoiceError(
+				w,
+				http.StatusGatewayTimeout,
+				"استغرق تحميل الفاتورة وقتًا أطول من المتوقع.",
+			)
+			return
+		}
+		statusCode = http.StatusBadGateway
+		outcome = "request_write_failed"
+		s.logger().Warn("public invoice request write failed", "installation_id", installation.ID, "error", err)
+		s.renderPublicInvoiceError(
+			w,
+			http.StatusBadGateway,
+			"تعذر طلب الفاتورة من المتجر.",
+		)
+		return
+	}
+
+	response, err := http.ReadResponse(bufio.NewReader(stream), request)
+	if err != nil {
+		if requestCtx.Err() != nil {
+			statusCode = http.StatusGatewayTimeout
+			outcome = "response_timeout"
+			s.renderPublicInvoiceError(
+				w,
+				http.StatusGatewayTimeout,
+				"استغرق تحميل الفاتورة وقتًا أطول من المتوقع.",
+			)
+			return
+		}
+		statusCode = http.StatusBadGateway
+		outcome = "backend_failure"
+		s.metrics().RecordBackendFailure()
+		s.logger().Warn("public invoice response read failed", "installation_id", installation.ID, "error", err)
+		s.renderPublicInvoiceError(
+			w,
+			http.StatusBadGateway,
+			"تعذر قراءة استجابة المتجر.",
+		)
+		return
+	}
+	defer response.Body.Close()
+
+	content, tooLarge, err := readResponseBodyWithinLimit(
+		response.Body,
+		s.MaxRelayedResponseBodyBytes,
+	)
+	if err != nil {
+		if requestCtx.Err() != nil {
+			statusCode = http.StatusGatewayTimeout
+			outcome = "response_timeout"
+			s.renderPublicInvoiceError(
+				w,
+				http.StatusGatewayTimeout,
+				"استغرق تحميل الفاتورة وقتًا أطول من المتوقع.",
+			)
+			return
+		}
+		statusCode = http.StatusBadGateway
+		outcome = "backend_failure"
+		s.metrics().RecordBackendFailure()
+		s.logger().Warn("public invoice response body read failed", "installation_id", installation.ID, "error", err)
+		s.renderPublicInvoiceError(
+			w,
+			http.StatusBadGateway,
+			"تعذر تحميل بيانات الفاتورة.",
+		)
+		return
+	}
+	if tooLarge {
+		statusCode = http.StatusBadGateway
+		outcome = "response_body_too_large"
+		s.metrics().RecordResponseBodyLimitFailed()
+		s.renderPublicInvoiceError(
+			w,
+			http.StatusBadGateway,
+			"بيانات الفاتورة أكبر من الحد المسموح.",
+		)
+		return
+	}
+	if response.StatusCode != http.StatusOK {
+		statusCode = response.StatusCode
+		outcome = "public_invoice_unavailable"
+		if response.StatusCode >= 500 {
+			s.metrics().RecordBackendFailure()
+		}
+		renderStatus := http.StatusNotFound
+		if response.StatusCode >= 500 {
+			renderStatus = http.StatusBadGateway
+		}
+		s.renderPublicInvoiceError(
+			w,
+			renderStatus,
+			"تحقق من رابط الفاتورة أو اطلب نسخة جديدة من المتجر.",
+		)
+		return
+	}
+
+	var invoice publicInvoicePayload
+	if err := json.Unmarshal(content, &invoice); err != nil {
+		statusCode = http.StatusBadGateway
+		outcome = "backend_failure"
+		s.metrics().RecordBackendFailure()
+		s.logger().Warn("public invoice JSON decode failed", "installation_id", installation.ID, "error", err)
+		s.renderPublicInvoiceError(
+			w,
+			http.StatusBadGateway,
+			"تعذر قراءة بيانات الفاتورة.",
+		)
+		return
+	}
+	statusCode = http.StatusOK
+	outcome = "public_invoice_rendered"
+	s.renderPublicInvoice(w, invoice)
+}
+
 func (s HTTPServer) handleProvisionInstallation(w http.ResponseWriter, r *http.Request) {
 	var request control.ProvisionInstallationRequest
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil && !errors.Is(err, io.EOF) {
@@ -636,6 +1061,101 @@ func setAdminConsoleHeaders(header http.Header) {
 		"Content-Security-Policy",
 		"default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'",
 	)
+}
+
+func publicInvoiceTarget(path string, prefix string) (string, string, bool) {
+	if !strings.HasPrefix(path, prefix) {
+		return "", "", false
+	}
+	trimmed := strings.Trim(strings.TrimPrefix(path, prefix), "/")
+	parts := strings.Split(trimmed, "/")
+	if len(parts) != 2 {
+		return "", "", false
+	}
+	installationID, err := url.PathUnescape(parts[0])
+	if err != nil {
+		return "", "", false
+	}
+	invoiceToken, err := url.PathUnescape(parts[1])
+	if err != nil {
+		return "", "", false
+	}
+	installationID = strings.TrimSpace(installationID)
+	invoiceToken = strings.TrimSpace(invoiceToken)
+	if installationID == "" || invoiceToken == "" {
+		return "", "", false
+	}
+	if strings.Contains(installationID, "/") || strings.Contains(invoiceToken, "/") {
+		return "", "", false
+	}
+	return installationID, invoiceToken, true
+}
+
+func (s HTTPServer) renderPublicInvoice(
+	w http.ResponseWriter,
+	payload publicInvoicePayload,
+) {
+	data := publicInvoiceViewData{
+		publicInvoicePayload: payload,
+		StatusLabel:          publicInvoiceStatusLabel(payload.Status),
+		Lines:                publicInvoiceLineViewDataList(payload.Lines),
+	}
+	setPublicInvoiceHeaders(w.Header(), true)
+	w.WriteHeader(http.StatusOK)
+	_ = publicInvoiceTemplate.Execute(w, data)
+}
+
+func (s HTTPServer) renderPublicInvoiceError(
+	w http.ResponseWriter,
+	statusCode int,
+	message string,
+) {
+	setPublicInvoiceHeaders(w.Header(), false)
+	w.WriteHeader(statusCode)
+	_ = publicInvoiceErrorTemplate.Execute(w, publicInvoiceErrorData{
+		Message: message,
+	})
+}
+
+func setPublicInvoiceHeaders(header http.Header, allowScript bool) {
+	header.Set("Content-Type", "text/html; charset=utf-8")
+	header.Set("Cache-Control", "no-store")
+	header.Set("X-Content-Type-Options", "nosniff")
+	csp := "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; frame-ancestors 'none'"
+	if allowScript {
+		csp = "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; base-uri 'none'; frame-ancestors 'none'"
+	}
+	header.Set("Content-Security-Policy", csp)
+}
+
+func publicInvoiceStatusLabel(status string) string {
+	switch strings.TrimSpace(status) {
+	case "paid":
+		return "مدفوعة"
+	case "void":
+		return "ملغاة"
+	case "open":
+		return "مفتوحة"
+	default:
+		return status
+	}
+}
+
+func publicInvoiceLineViewDataList(
+	lines []publicInvoiceLinePayload,
+) []publicInvoiceLineViewData {
+	rendered := make([]publicInvoiceLineViewData, 0, len(lines))
+	for _, line := range lines {
+		name := strings.TrimSpace(line.VariantName)
+		if name == "" {
+			name = strings.TrimSpace(line.ProductName)
+		}
+		rendered = append(rendered, publicInvoiceLineViewData{
+			publicInvoiceLinePayload: line,
+			DisplayName:              name,
+		})
+	}
+	return rendered
 }
 
 func (s HTTPServer) updateAdminSubscription(
@@ -1252,6 +1772,94 @@ func (s HTTPServer) tryProxyRelayToRemoteNode(
 	return true, response.StatusCode, "node_proxied"
 }
 
+func (s HTTPServer) tryProxyPublicInvoiceToRemoteNode(
+	w http.ResponseWriter,
+	r *http.Request,
+	installationID string,
+	invoiceToken string,
+) (bool, int, string) {
+	if strings.TrimSpace(s.NodeProxyToken) == "" ||
+		s.Presence == nil ||
+		strings.TrimSpace(r.Header.Get(NodeProxyMarkerHeader)) != "" {
+		return false, 0, ""
+	}
+
+	record, ok, err := s.Presence.Get(r.Context(), installationID)
+	if err != nil {
+		s.logger().Warn("public invoice connector presence lookup failed", "installation_id", installationID, "error", err)
+		return false, 0, ""
+	}
+	if !ok ||
+		strings.TrimSpace(record.NodeID) == "" ||
+		record.NodeID == s.NodeID ||
+		strings.TrimSpace(record.RelayHTTPURL) == "" {
+		return false, 0, ""
+	}
+
+	endpoint, err := nodePublicInvoiceEndpoint(
+		record.RelayHTTPURL,
+		installationID,
+		invoiceToken,
+		s.AllowInsecureNodeProxy,
+	)
+	if err != nil {
+		s.logger().Warn(
+			"public invoice remote node URL rejected",
+			"installation_id",
+			installationID,
+			"connector_node_id",
+			record.NodeID,
+			"error",
+			err,
+		)
+		return false, 0, ""
+	}
+
+	request := r.Clone(r.Context())
+	request.URL = endpoint
+	request.RequestURI = ""
+	request.Host = endpoint.Host
+	request.Header = r.Header.Clone()
+	removeHopHeaders(request.Header)
+	request.Header.Set(NodeProxyMarkerHeader, "1")
+	request.Header.Set(NodeProxyTokenHeader, strings.TrimSpace(s.NodeProxyToken))
+
+	response, err := s.nodeProxyHTTPClient().Do(request)
+	if err != nil {
+		s.logger().Warn(
+			"public invoice remote node proxy failed",
+			"installation_id",
+			installationID,
+			"connector_node_id",
+			record.NodeID,
+			"error",
+			err,
+		)
+		s.renderPublicInvoiceError(
+			w,
+			http.StatusServiceUnavailable,
+			"تعذر الوصول إلى المتجر الآن. حاول مرة أخرى لاحقًا.",
+		)
+		return true, http.StatusServiceUnavailable, "node_proxy_failed"
+	}
+	defer response.Body.Close()
+
+	copyHeader(w.Header(), response.Header)
+	w.WriteHeader(response.StatusCode)
+	if _, err := io.Copy(w, response.Body); err != nil {
+		s.logger().Warn(
+			"public invoice remote node proxy response copy failed",
+			"installation_id",
+			installationID,
+			"connector_node_id",
+			record.NodeID,
+			"error",
+			err,
+		)
+	}
+	return true, response.StatusCode, "node_proxied"
+}
+
 func nodeRelayEndpoint(
 	rawBaseURL string,
 	targetPath string,
@@ -1277,6 +1885,36 @@ func nodeRelayEndpoint(
 	}
 	parsed.Path = joinHTTPPath(parsed.Path, "/v1/node/relay"+targetPath)
 	parsed.RawQuery = rawQuery
+	return parsed, nil
+}
+
+func nodePublicInvoiceEndpoint(
+	rawBaseURL string,
+	installationID string,
+	invoiceToken string,
+	allowInsecure bool,
+) (*url.URL, error) {
+	parsed, err := url.Parse(strings.TrimSpace(rawBaseURL))
+	if err != nil {
+		return nil, err
+	}
+	if parsed.Scheme == "" || parsed.Host == "" {
+		return nil, errors.New("node public invoice URL must include scheme and host")
+	}
+	if parsed.Scheme == "http" && !allowInsecure {
+		return nil, errors.New("node public invoice URL must use https unless insecure node proxy is enabled")
+	}
+	if parsed.Scheme != "https" && parsed.Scheme != "http" {
+		return nil, errors.New("node public invoice URL must use http or https")
+	}
+	parsed.Path = joinHTTPPath(
+		parsed.Path,
+		"/v1/node/public-invoices/"+
+			url.PathEscape(installationID)+
+			"/"+
+			url.PathEscape(invoiceToken),
+	)
+	parsed.RawQuery = ""
 	return parsed, nil
 }
 

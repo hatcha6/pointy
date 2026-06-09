@@ -563,6 +563,7 @@ const _settings = ShopSettings(
   shopName: 'نقطة البيع',
   receiptHeader: '',
   receiptFooter: '',
+  enableOnlineInvoices: false,
   requireOpeningCash: true,
   autoPrintReceipts: false,
   allowOverselling: false,

@@ -1791,6 +1791,227 @@ func TestNodeRelayEndpointRequiresHTTPSByDefault(t *testing.T) {
 	}
 }
 
+func TestHTTPPublicInvoiceRendersHTMLFromBackend(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	backendURL, err := url.Parse("http://127.0.0.1:8000")
+	if err != nil {
+		t.Fatal(err)
+	}
+	backendClient := &http.Client{
+		Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+			if r.Method != http.MethodGet {
+				t.Errorf("expected GET, got %s", r.Method)
+			}
+			if r.URL.Path != "/api/public-invoices/public-token/" {
+				t.Errorf("expected public invoice API path, got %s", r.URL.String())
+			}
+			if got := r.Header.Get(RelayedRequestHeader); got != "1" {
+				t.Errorf("expected relayed request marker, got %q", got)
+			}
+			if got := r.Header.Get("Cookie"); got != "" {
+				t.Errorf("customer cookies must not reach backend, got %q", got)
+			}
+			content := `{
+				"shop_name": "متجر نقطة البيع",
+				"receipt_header": "أهلا بكم",
+				"receipt_footer": "شكرا لكم",
+				"receipt_number": "R20260609000001",
+				"status": "paid",
+				"customer_name": "Layla Ahmed",
+				"created_at": "2026-06-09T10:30:00Z",
+				"subtotal": "7.00",
+				"discount_total": "0.00",
+				"total": "7.00",
+				"lines": [{
+					"product_name": "Coffee",
+					"variant_name": "Coffee",
+					"quantity": 2,
+					"unit_price": "3.50",
+					"line_subtotal": "7.00",
+					"discount_total": "0.00",
+					"line_total": "7.00"
+				}]
+			}`
+			return &http.Response{
+				StatusCode:    http.StatusOK,
+				Status:        "200 OK",
+				Proto:         "HTTP/1.1",
+				ProtoMajor:    1,
+				ProtoMinor:    1,
+				Body:          io.NopCloser(strings.NewReader(content)),
+				ContentLength: int64(len(content)),
+				Header: http.Header{
+					"Content-Type": []string{"application/json"},
+				},
+				Request: r,
+			}, nil
+		}),
+	}
+	store, provisioned := provisionRelayInstallation(t)
+	hub := NewHub()
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+
+	startInMemoryConnector(t, ctx, hub, provisioned.Installation.ID, connector.Client{
+		BackendURL: backendURL,
+		Logger:     logger,
+		HTTPClient: backendClient,
+	})
+	waitUntil(t, time.Second, func() bool {
+		return hub.IsOnline(provisioned.Installation.ID)
+	})
+
+	server := HTTPServer{
+		Store:  store,
+		Hub:    hub,
+		Logger: logger,
+	}
+	request, err := http.NewRequest(
+		http.MethodGet,
+		"http://relay.test/invoices/"+provisioned.Installation.ID+"/public-token",
+		nil,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Header.Set("Cookie", "customer=browser-cookie")
+	recorder := httptest.NewRecorder()
+	server.ServeHTTP(recorder, request)
+	response := recorder.Result()
+	defer response.Body.Close()
+
+	if response.StatusCode != http.StatusOK {
+		content, _ := io.ReadAll(response.Body)
+		t.Fatalf("expected 200, got %d: %s", response.StatusCode, string(content))
+	}
+	if got := response.Header.Get("Content-Type"); !strings.Contains(got, "text/html") {
+		t.Fatalf("expected HTML content type, got %q", got)
+	}
+	content, err := io.ReadAll(response.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := string(content)
+	for _, expected := range []string{
+		"Save as PDF",
+		"R20260609000001",
+		"متجر نقطة البيع",
+		"Coffee",
+		"7.00",
+	} {
+		if !strings.Contains(body, expected) {
+			t.Fatalf("expected response body to contain %q, got %s", expected, body)
+		}
+	}
+}
+
+func TestHTTPPublicInvoiceProxiesToRemoteNode(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	store, provisioned := provisionRelayInstallation(t)
+	backendURL, err := url.Parse("http://127.0.0.1:8000")
+	if err != nil {
+		t.Fatal(err)
+	}
+	nodeBHub := NewHub()
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	startInMemoryConnector(t, ctx, nodeBHub, provisioned.Installation.ID, connector.Client{
+		BackendURL: backendURL,
+		Logger:     logger,
+		HTTPClient: &http.Client{
+			Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+				content := `{
+					"shop_name": "Remote shop",
+					"receipt_header": "",
+					"receipt_footer": "",
+					"receipt_number": "R-REMOTE",
+					"status": "paid",
+					"customer_name": "",
+					"created_at": "2026-06-09T10:30:00Z",
+					"subtotal": "1.00",
+					"discount_total": "0.00",
+					"total": "1.00",
+					"lines": []
+				}`
+				return &http.Response{
+					StatusCode:    http.StatusOK,
+					Status:        "200 OK",
+					Proto:         "HTTP/1.1",
+					ProtoMajor:    1,
+					ProtoMinor:    1,
+					Body:          io.NopCloser(strings.NewReader(content)),
+					ContentLength: int64(len(content)),
+					Header:        http.Header{"Content-Type": []string{"application/json"}},
+					Request:       r,
+				}, nil
+			}),
+		},
+	})
+	waitUntil(t, time.Second, func() bool {
+		return nodeBHub.IsOnline(provisioned.Installation.ID)
+	})
+
+	nodeB := HTTPServer{
+		Store:          store,
+		Hub:            nodeBHub,
+		Logger:         logger,
+		NodeID:         "relay-node-b",
+		NodeProxyToken: "node-secret",
+	}
+	nodeA := HTTPServer{
+		Store:  store,
+		Hub:    NewHub(),
+		Logger: logger,
+		Presence: &staticPresence{
+			record: ConnectorPresenceRecord{
+				InstallationID: provisioned.Installation.ID,
+				NodeID:         "relay-node-b",
+				ConnectionID:   "connection-1",
+				RelayHTTPURL:   "http://relay-node-b.internal",
+				ConnectedAt:    time.Now().UTC(),
+			},
+			ok: true,
+		},
+		NodeID:         "relay-node-a",
+		NodeProxyToken: "node-secret",
+		NodeProxyHTTPClient: &http.Client{
+			Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+				recorder := httptest.NewRecorder()
+				nodeB.ServeHTTP(recorder, r)
+				return recorder.Result(), nil
+			}),
+		},
+		AllowInsecureNodeProxy: true,
+	}
+
+	request, err := http.NewRequest(
+		http.MethodGet,
+		"http://relay-a.test/invoices/"+provisioned.Installation.ID+"/public-token",
+		nil,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	recorder := httptest.NewRecorder()
+	nodeA.ServeHTTP(recorder, request)
+	response := recorder.Result()
+	defer response.Body.Close()
+
+	if response.StatusCode != http.StatusOK {
+		content, _ := io.ReadAll(response.Body)
+		t.Fatalf("expected 200, got %d: %s", response.StatusCode, string(content))
+	}
+	content, err := io.ReadAll(response.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(content), "R-REMOTE") {
+		t.Fatalf("expected proxied invoice HTML, got %s", string(content))
+	}
+}
+
 func provisionRelayInstallation(t *testing.T) (*control.FileStore, control.ProvisionedInstallation) {
 	t.Helper()
 	now := time.Date(2026, 6, 2, 12, 0, 0, 0, time.UTC)

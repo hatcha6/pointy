@@ -1450,6 +1450,15 @@
       }
     }
   },
+  "onlineInvoiceSettingSummary": "فواتير الإنترنت: {status}",
+  "@onlineInvoiceSettingSummary": {
+    "description": "Online invoice setting summary in the shop settings index.",
+    "placeholders": {
+      "status": {
+        "type": "String"
+      }
+    }
+  },
   "registerSessionSettingsSummary": "نقدية الافتتاح: {status}، صلاحية الكاشير للإرجاع: {window}",
   "@registerSessionSettingsSummary": {
     "description": "Summary for register session settings in the shop settings index.",
@@ -1743,6 +1752,8 @@
     }
   },
   "autoPrintReceiptsLabel": "طباعة الإيصالات تلقائيًا",
+  "enableOnlineInvoicesLabel": "إظهار رابط وQR للفاتورة عبر الإنترنت",
+  "enableOnlineInvoicesSubtitle": "بعد الدفع يظهر رابط الفاتورة الحقيقي عبر الريلاي ليتمكن العميل من حفظها كملف PDF.",
   "allowOversellingLabel": "السماح بالبيع فوق المخزون",
   "preventSellingAtLossLabel": "منع البيع بخسارة",
   "preventSellingAtLossSubtitle": "عند إيقافه سيظهر تحذير للكاشير قبل إتمام بيع بخسارة.",
@@ -2267,6 +2278,8 @@
   "switchCameraTooltip": "تبديل الكاميرا",
   "toggleTorchTooltip": "تشغيل أو إيقاف الفلاش",
   "currentSaleTitle": "البيع الحالي",
+  "saleDraftSettingsActionTooltip": "إعدادات الفاتورة",
+  "saleDraftSettingsDialogTitle": "إعدادات الفاتورة",
   "clearCartTooltip": "مسح السلة",
   "removeCartLineTooltip": "حذف العنصر من السلة",
   "emptyCart": "لا توجد عناصر في السلة",
@@ -2761,6 +2774,8 @@
   "purchaseDraftTitle": "مسودة الشراء",
   "openPurchaseDraftSheetButton": "مراجعة المسودة",
   "clearPurchaseDraftTooltip": "مسح مسودة الشراء",
+  "purchaseDraftSettingsActionTooltip": "إعدادات مسودة الشراء",
+  "purchaseDraftSettingsDialogTitle": "إعدادات مسودة الشراء",
   "purchaseSupplierActionTooltip": "اختيار المورد",
   "purchaseInvoiceDetailsActionTooltip": "بيانات فاتورة المورد",
   "purchaseInvoiceDetailsDialogTitle": "بيانات فاتورة المورد",
@@ -3177,6 +3192,21 @@
   "invoicePrintError": "تم تسجيل البيع، لكن تعذرت طباعة الفاتورة.",
   "invoiceShareSuccess": "تم تجهيز ملف PDF للفاتورة.",
   "invoiceShareError": "تعذر تجهيز ملف PDF للفاتورة.",
+  "publicInvoiceDialogTitle": "فاتورة العميل عبر الإنترنت",
+  "publicInvoiceDialogSubtitle": "اطلب من العميل مسح رمز QR لفتح الفاتورة.",
+  "publicInvoiceDialogSubtitleWithReceipt": "اطلب من العميل مسح رمز QR لفتح الفاتورة {receiptNumber}.",
+  "@publicInvoiceDialogSubtitleWithReceipt": {
+    "description": "Public invoice QR dialog subtitle with the receipt number.",
+    "placeholders": {
+      "receiptNumber": {
+        "type": "String"
+      }
+    }
+  },
+  "publicInvoiceUrlLabel": "رابط الفاتورة",
+  "copyPublicInvoiceUrlButton": "نسخ الرابط",
+  "publicInvoiceUrlCopiedMessage": "تم نسخ رابط الفاتورة.",
+  "publicInvoiceQrSemanticsLabel": "رمز QR لرابط الفاتورة",
   "invoiceProfitLabel": "الربح",
   "invoiceProfitValue": "الربح {amount}",
   "@invoiceProfitValue": {
@@ -3307,6 +3337,7 @@
     }
   },
   "cancelButton": "إلغاء",
+  "closeButton": "إغلاق",
   "closeRegisterSessionButton": "إغلاق الجلسة",
   "closingRegisterSessionButton": "جار الإغلاق...",
   "closeRegisterSessionError": "تعذر إغلاق جلسة الدرج. راجع القيم وحاول مرة أخرى.",

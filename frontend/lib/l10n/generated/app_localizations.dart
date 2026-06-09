@@ -4125,6 +4125,12 @@ abstract class AppLocalizations {
   /// **'الطباعة التلقائية: {status}'**
   String receiptSettingsSummary(String status);
 
+  /// Online invoice setting summary in the shop settings index.
+  ///
+  /// In ar, this message translates to:
+  /// **'فواتير الإنترنت: {status}'**
+  String onlineInvoiceSettingSummary(String status);
+
   /// Summary for register session settings in the shop settings index.
   ///
   /// In ar, this message translates to:
@@ -4814,6 +4820,18 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'طباعة الإيصالات تلقائيًا'**
   String get autoPrintReceiptsLabel;
+
+  /// No description provided for @enableOnlineInvoicesLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'إظهار رابط وQR للفاتورة عبر الإنترنت'**
+  String get enableOnlineInvoicesLabel;
+
+  /// No description provided for @enableOnlineInvoicesSubtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'بعد الدفع يظهر رابط الفاتورة الحقيقي عبر الريلاي ليتمكن العميل من حفظها كملف PDF.'**
+  String get enableOnlineInvoicesSubtitle;
 
   /// No description provided for @allowOversellingLabel.
   ///
@@ -6879,6 +6897,18 @@ abstract class AppLocalizations {
   /// **'البيع الحالي'**
   String get currentSaleTitle;
 
+  /// No description provided for @saleDraftSettingsActionTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'إعدادات الفاتورة'**
+  String get saleDraftSettingsActionTooltip;
+
+  /// No description provided for @saleDraftSettingsDialogTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'إعدادات الفاتورة'**
+  String get saleDraftSettingsDialogTitle;
+
   /// No description provided for @clearCartTooltip.
   ///
   /// In ar, this message translates to:
@@ -7884,6 +7914,18 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'مسح مسودة الشراء'**
   String get clearPurchaseDraftTooltip;
+
+  /// No description provided for @purchaseDraftSettingsActionTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'إعدادات مسودة الشراء'**
+  String get purchaseDraftSettingsActionTooltip;
+
+  /// No description provided for @purchaseDraftSettingsDialogTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'إعدادات مسودة الشراء'**
+  String get purchaseDraftSettingsDialogTitle;
 
   /// No description provided for @purchaseSupplierActionTooltip.
   ///
@@ -9097,6 +9139,48 @@ abstract class AppLocalizations {
   /// **'تعذر تجهيز ملف PDF للفاتورة.'**
   String get invoiceShareError;
 
+  /// No description provided for @publicInvoiceDialogTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'فاتورة العميل عبر الإنترنت'**
+  String get publicInvoiceDialogTitle;
+
+  /// No description provided for @publicInvoiceDialogSubtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'اطلب من العميل مسح رمز QR لفتح الفاتورة.'**
+  String get publicInvoiceDialogSubtitle;
+
+  /// Public invoice QR dialog subtitle with the receipt number.
+  ///
+  /// In ar, this message translates to:
+  /// **'اطلب من العميل مسح رمز QR لفتح الفاتورة {receiptNumber}.'**
+  String publicInvoiceDialogSubtitleWithReceipt(String receiptNumber);
+
+  /// No description provided for @publicInvoiceUrlLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'رابط الفاتورة'**
+  String get publicInvoiceUrlLabel;
+
+  /// No description provided for @copyPublicInvoiceUrlButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'نسخ الرابط'**
+  String get copyPublicInvoiceUrlButton;
+
+  /// No description provided for @publicInvoiceUrlCopiedMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم نسخ رابط الفاتورة.'**
+  String get publicInvoiceUrlCopiedMessage;
+
+  /// No description provided for @publicInvoiceQrSemanticsLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'رمز QR لرابط الفاتورة'**
+  String get publicInvoiceQrSemanticsLabel;
+
   /// No description provided for @invoiceProfitLabel.
   ///
   /// In ar, this message translates to:
@@ -9390,6 +9474,12 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'إلغاء'**
   String get cancelButton;
+
+  /// No description provided for @closeButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'إغلاق'**
+  String get closeButton;
 
   /// No description provided for @closeRegisterSessionButton.
   ///

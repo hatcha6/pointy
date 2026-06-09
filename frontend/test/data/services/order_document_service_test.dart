@@ -25,6 +25,8 @@ void main() {
       final template = service.saleInvoiceTemplate(
         order: _saleOrder(
           receiptNumber: 'R-1',
+          publicInvoiceUrl:
+              'https://relay.example/invoices/installation-1/token',
           customerName: '  سارة أحمد  ',
           customerNumber: 'C-100',
           customerPhone: '',
@@ -46,6 +48,10 @@ void main() {
       );
 
       expect(template.shopName, 'متجر الربيع');
+      expect(
+        template.publicInvoiceUrl,
+        'https://relay.example/invoices/installation-1/token',
+      );
       expect(template.shopHeaderLines, ['شارع السوق', 'طرابلس']);
       expect(template.recipientTitle, 'فاتورة إلى:');
       expect(template.recipientLines, [
@@ -122,6 +128,29 @@ void main() {
       expect(template.totals.last.label, 'المدفوع');
     },
   );
+
+  test('sale invoice PDF renders with an online invoice QR URL', () async {
+    const service = OrderDocumentService(fontLoader: _TestFontLoader());
+
+    final bytes = await service.buildSaleInvoiceBytes(
+      order: _saleOrder(
+        receiptNumber: 'R-QR',
+        publicInvoiceUrl: 'https://relay.example/invoices/installation-1/token',
+      ),
+      shopSettings: _settings,
+    );
+
+    expect(bytes, isNotEmpty);
+  });
+}
+
+class _TestFontLoader extends OrderDocumentFontLoader {
+  const _TestFontLoader();
+
+  @override
+  Future<OrderDocumentFonts> load() async {
+    return OrderDocumentFonts.type1ForTests();
+  }
 }
 
 SaleOrder _saleOrder({
@@ -134,6 +163,7 @@ SaleOrder _saleOrder({
   double subtotal = 0,
   double total = 0,
   DateTime? createdAt,
+  String publicInvoiceUrl = '',
 }) {
   return SaleOrder(
     id: 1,
@@ -147,6 +177,7 @@ SaleOrder _saleOrder({
     customerNumber: customerNumber,
     customerPhone: customerPhone,
     customerEmail: customerEmail,
+    publicInvoiceUrl: publicInvoiceUrl,
     createdAt: createdAt,
   );
 }
@@ -195,6 +226,7 @@ const _settings = ShopSettings(
   shopName: 'متجر الربيع',
   receiptHeader: 'شارع السوق\nطرابلس',
   receiptFooter: 'ملاحظات الفاتورة',
+  enableOnlineInvoices: false,
   requireOpeningCash: true,
   autoPrintReceipts: false,
   allowOverselling: false,

@@ -176,6 +176,7 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
   late int _cashierReturnWindowHours;
   late bool _requireOpeningCash;
   late bool _autoPrintReceipts;
+  late bool _enableOnlineInvoices;
   late bool _allowOverselling;
   late bool _preventSellingAtLoss;
   late bool _enableCashPayments;
@@ -228,6 +229,7 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
       _cashierReturnWindowHours = widget.settings.cashierReturnWindowHours;
       _requireOpeningCash = widget.settings.requireOpeningCash;
       _autoPrintReceipts = widget.settings.autoPrintReceipts;
+      _enableOnlineInvoices = widget.settings.enableOnlineInvoices;
       _allowOverselling = widget.settings.allowOverselling;
       _preventSellingAtLoss = widget.settings.preventSellingAtLoss;
       _enableCashPayments = widget.settings.enableCashPayments;
@@ -282,6 +284,7 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
     _cashierReturnWindowHours = settings.cashierReturnWindowHours;
     _requireOpeningCash = settings.requireOpeningCash;
     _autoPrintReceipts = settings.autoPrintReceipts;
+    _enableOnlineInvoices = settings.enableOnlineInvoices;
     _allowOverselling = settings.allowOverselling;
     _preventSellingAtLoss = settings.preventSellingAtLoss;
     _enableCashPayments = settings.enableCashPayments;
@@ -461,7 +464,13 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
     final status = _autoPrintReceipts
         ? l10n.shopSettingsEnabledValue
         : l10n.shopSettingsDisabledValue;
-    return l10n.receiptSettingsSummary(status);
+    final onlineStatus = _enableOnlineInvoices
+        ? l10n.shopSettingsEnabledValue
+        : l10n.shopSettingsDisabledValue;
+    return [
+      l10n.receiptSettingsSummary(status),
+      l10n.onlineInvoiceSettingSummary(onlineStatus),
+    ].join('، ');
   }
 
   String _registerSessionSummary(AppLocalizations l10n) {
@@ -624,9 +633,14 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
         headerController: _receiptHeaderController,
         footerController: _receiptFooterController,
         autoPrintReceipts: _autoPrintReceipts,
+        enableOnlineInvoices: _enableOnlineInvoices,
         enabled: !widget.viewModel.isSaving,
         onAutoPrintReceiptsChanged: (value) {
           setState(() => _autoPrintReceipts = value);
+          refresh();
+        },
+        onEnableOnlineInvoicesChanged: (value) {
+          setState(() => _enableOnlineInvoices = value);
           refresh();
         },
       ),
@@ -1145,6 +1159,7 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
         shopName: _shopNameController.text.trim(),
         receiptHeader: _receiptHeaderController.text.trim(),
         receiptFooter: _receiptFooterController.text.trim(),
+        enableOnlineInvoices: _enableOnlineInvoices,
         requireOpeningCash: _requireOpeningCash,
         autoPrintReceipts: _autoPrintReceipts,
         allowOverselling: _allowOverselling,

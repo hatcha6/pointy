@@ -17,6 +17,7 @@ from apps.core.models import ShopSettings
 from apps.discounts.models import AppliedDiscount
 from apps.discounts.services import rounding_metadata_payload
 from apps.sales.models import Order
+from apps.sales.public_invoices import public_invoice_url_for_order
 from .models import (
     PrintAgent,
     PrintAuditEvent,
@@ -140,6 +141,10 @@ def build_receipt_payload(order):
         "order": {
             "id": order.pk,
             "receipt_number": order.receipt_number,
+            "public_invoice_url": public_invoice_url_for_order(
+                order,
+                shop_settings=shop_settings,
+            ),
             "status": order.status,
             "subtotal": money(order.subtotal),
             "discount_total": money(order.discount_total),

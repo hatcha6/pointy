@@ -8,11 +8,13 @@ class PointyOrderPanel extends StatelessWidget {
     super.key,
     required this.title,
     required this.child,
+    this.subtitle,
     this.trailing,
   });
 
   final String title;
   final Widget child;
+  final String? subtitle;
   final Widget? trailing;
 
   @override
@@ -39,14 +41,30 @@ class PointyOrderPanel extends StatelessWidget {
             child: Row(
               children: [
                 Expanded(
-                  child: Text(
-                    title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      color: colors.ink,
-                      fontWeight: FontWeight.w800,
-                    ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          color: colors.ink,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      if (subtitle != null && subtitle!.trim().isNotEmpty) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          subtitle!.trim(),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(color: colors.mutedInk),
+                        ),
+                      ],
+                    ],
                   ),
                 ),
                 ?trailing,

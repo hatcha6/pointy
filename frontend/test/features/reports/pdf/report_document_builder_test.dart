@@ -131,6 +131,7 @@ const _settings = ShopSettings(
   shopName: 'متجر الربيع',
   receiptHeader: 'شارع السوق',
   receiptFooter: 'شكرا لزيارتكم',
+  enableOnlineInvoices: false,
   requireOpeningCash: true,
   autoPrintReceipts: false,
   allowOverselling: false,

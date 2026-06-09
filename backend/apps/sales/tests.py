@@ -12,7 +12,7 @@ from rest_framework.test import APIClient
 
 from apps.catalog.models import ProductVariant
 from apps.catalog.testing import create_product_with_default_variant
-from apps.core.models import IdempotencyRecord, ShopSettings
+from apps.core.models import IdempotencyRecord, RelayInstallation, ShopSettings
 from apps.core.roles import CASHIER_GROUP, MANAGER_GROUP, ensure_role_groups
 from apps.customers.models import Customer
 from apps.discounts.models import AppliedDiscount, DiscountRedemption, DiscountRule
@@ -714,6 +714,98 @@ class OrderCheckoutApiTests(TestCase):
         self.assertEqual(order.customer_id, customer.pk)
         self.assertEqual(order.lines.get().unit_price, Decimal("3.50"))
         self.assertEqual(order.lines.get().discount_total, Decimal("0.00"))
+
+    def test_checkout_exposes_public_invoice_url_when_enabled(self):
+        self.start_session()
+        ShopSettings.load()
+        ShopSettings.objects.filter(pk=1).update(enable_online_invoices=True)
+        RelayInstallation.objects.create(
+            installation_id="installation-1",
+            shop_name="متجر نقطة البيع",
+            relay_public_api_url="https://relay.example",
+            relay_connector_address="relay.example:443",
+            connector_token="connector-token",
+            access_token="access-token",
+            relay_enabled=True,
+            subscription_active=True,
+        )
+
+        response = self.client.post(
+            reverse("order-checkout"),
+            self.checkout_payload(),
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        order = Order.objects.get(pk=response.data["id"])
+        self.assertTrue(order.public_token)
+        self.assertEqual(
+            response.data["public_invoice_url"],
+            f"https://relay.example/invoices/installation-1/{order.public_token}",
+        )
+
+    def test_checkout_hides_public_invoice_url_when_setting_disabled(self):
+        self.start_session()
+        RelayInstallation.objects.create(
+            installation_id="installation-1",
+            shop_name="متجر نقطة البيع",
+            relay_public_api_url="https://relay.example",
+            relay_connector_address="relay.example:443",
+            connector_token="connector-token",
+            access_token="access-token",
+            relay_enabled=True,
+            subscription_active=True,
+        )
+
+        response = self.client.post(
+            reverse("order-checkout"),
+            self.checkout_payload(),
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["public_invoice_url"], "")
+
+    def test_public_invoice_requires_relayed_request_and_enabled_setting(self):
+        self.start_session()
+        ShopSettings.load()
+        ShopSettings.objects.filter(pk=1).update(
+            enable_online_invoices=True,
+            shop_name="متجر الاختبار",
+            receipt_header="أهلا بكم",
+            receipt_footer="شكرا لكم",
+        )
+        checkout_response = self.client.post(
+            reverse("order-checkout"),
+            self.checkout_payload(),
+            format="json",
+        )
+        order = Order.objects.get(pk=checkout_response.data["id"])
+        url = reverse("public-invoice-detail", args=[order.public_token])
+
+        direct_response = APIClient().get(url)
+        relayed_response = APIClient().get(url, HTTP_X_POINTY_RELAYED_REQUEST="1")
+
+        self.assertEqual(direct_response.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(relayed_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(relayed_response.data["shop_name"], "متجر الاختبار")
+        self.assertEqual(relayed_response.data["receipt_header"], "أهلا بكم")
+        self.assertEqual(relayed_response.data["receipt_footer"], "شكرا لكم")
+        self.assertEqual(relayed_response.data["receipt_number"], order.receipt_number)
+        self.assertEqual(relayed_response.data["status"], Order.Status.PAID)
+        self.assertEqual(relayed_response.data["subtotal"], "7.00")
+        self.assertEqual(relayed_response.data["discount_total"], "0.00")
+        self.assertEqual(relayed_response.data["total"], "7.00")
+        self.assertEqual(relayed_response.data["lines"][0]["quantity"], 2)
+        self.assertNotIn("total_profit", relayed_response.data)
+        self.assertNotIn("payments", relayed_response.data)
+
+        ShopSettings.objects.filter(pk=1).update(enable_online_invoices=False)
+        disabled_response = APIClient().get(
+            url,
+            HTTP_X_POINTY_RELAYED_REQUEST="1",
+        )
+        self.assertEqual(disabled_response.status_code, status.HTTP_404_NOT_FOUND)
 
     def test_checkout_exposes_cost_and_profit_snapshot(self):
         self.start_session()

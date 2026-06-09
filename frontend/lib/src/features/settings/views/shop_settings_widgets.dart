@@ -258,15 +258,19 @@ class _ReceiptSettingsFields extends StatelessWidget {
     required this.headerController,
     required this.footerController,
     required this.autoPrintReceipts,
+    required this.enableOnlineInvoices,
     required this.enabled,
     required this.onAutoPrintReceiptsChanged,
+    required this.onEnableOnlineInvoicesChanged,
   });
 
   final TextEditingController headerController;
   final TextEditingController footerController;
   final bool autoPrintReceipts;
+  final bool enableOnlineInvoices;
   final bool enabled;
   final ValueChanged<bool> onAutoPrintReceiptsChanged;
+  final ValueChanged<bool> onEnableOnlineInvoicesChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -301,6 +305,13 @@ class _ReceiptSettingsFields extends StatelessWidget {
           value: autoPrintReceipts,
           title: Text(l10n.autoPrintReceiptsLabel),
           onChanged: enabled ? onAutoPrintReceiptsChanged : null,
+        ),
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          value: enableOnlineInvoices,
+          title: Text(l10n.enableOnlineInvoicesLabel),
+          subtitle: Text(l10n.enableOnlineInvoicesSubtitle),
+          onChanged: enabled ? onEnableOnlineInvoicesChanged : null,
         ),
       ],
     );

@@ -236,6 +236,7 @@ class ShopSettingsView(views.APIView):
                 "allow_overselling": settings.allow_overselling,
                 "prevent_selling_at_loss": settings.prevent_selling_at_loss,
                 "auto_print_receipts": settings.auto_print_receipts,
+                "enable_online_invoices": settings.enable_online_invoices,
                 "require_opening_cash": settings.require_opening_cash,
                 "cashier_return_window_hours": settings.cashier_return_window_hours,
                 "low_stock_threshold": settings.low_stock_threshold,

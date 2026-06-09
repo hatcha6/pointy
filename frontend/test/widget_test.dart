@@ -175,6 +175,8 @@ void main() {
         },
         'order': {
           'receipt_number': 'R-1',
+          'public_invoice_url':
+              'https://relay.example/invoices/installation-1/public-token',
           'created_at': '2026-05-16T12:00:00Z',
           'total': '3.50',
           'lines': [
@@ -201,7 +203,9 @@ void main() {
 
     expect(bytes, isNotEmpty);
     expect(bytes.first, 27);
-    expect(utf8.decode(bytes, allowMalformed: true), isNot(contains('x1')));
+    final printedText = utf8.decode(bytes, allowMalformed: true);
+    expect(printedText, contains('https://relay.example/invoices'));
+    expect(printedText, isNot(contains('x1')));
   });
 
   test('native barcode label encoder requires a resolved language', () async {
@@ -512,9 +516,13 @@ void main() {
     await tester.pumpAndSettle(const Duration(seconds: 1));
 
     await _startRegisterSession(tester);
-    await tester.tap(find.text('عميل عابر'));
+    await tester.tap(find.byTooltip('إعدادات الفاتورة'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('تغيير'));
     await tester.pumpAndSettle(const Duration(seconds: 1));
     await tester.tap(find.text('ليلى أحمد').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'حفظ'));
     await tester.pumpAndSettle();
 
     await tester.tap(find.byType(ProductTile).first);
@@ -1750,13 +1758,13 @@ void main() {
       expect(find.text('كتالوج الشراء'), findsOneWidget);
       expect(find.text('مسودة الشراء'), findsOneWidget);
 
-      await tester.tap(find.byTooltip('اختيار المورد'));
+      await tester.tap(find.byTooltip('إعدادات مسودة الشراء'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('تغيير'));
       await tester.pumpAndSettle(const Duration(seconds: 1));
       await tester.tap(find.text('مورد المدينة').last);
       await tester.pumpAndSettle();
 
-      await tester.tap(find.byTooltip('بيانات فاتورة المورد'));
-      await tester.pumpAndSettle();
       await tester.enterText(
         find.byKey(const ValueKey('supplier_invoice_number_field')),
         'SUP-2026-55',
@@ -1768,6 +1776,7 @@ void main() {
       expect(find.text('2026-05-18'), findsOneWidget);
       await tester.tap(find.widgetWithText(FilledButton, 'حفظ'));
       await tester.pumpAndSettle();
+      expect(find.textContaining('فاتورة المورد SUP-2026-55'), findsOneWidget);
 
       await tester.enterText(
         find.byKey(const ValueKey('purchase_product_lookup_field')),
@@ -1833,9 +1842,13 @@ void main() {
     expect(find.text('اختر موردًا قبل إرسال أمر الشراء.'), findsOneWidget);
     expect(find.text('إرسال أمر الشراء 4.25 د.ل'), findsOneWidget);
 
-    await tester.tap(find.byTooltip('اختيار المورد'));
+    await tester.tap(find.byTooltip('إعدادات مسودة الشراء'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('تغيير'));
     await tester.pumpAndSettle(const Duration(seconds: 1));
     await tester.tap(find.text('مورد المدينة').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'حفظ'));
     await tester.pumpAndSettle();
 
     await tester.tap(find.text('إرسال أمر الشراء 4.25 د.ل'));
@@ -4927,6 +4940,7 @@ Map<String, Object?> _sessionJson({
 Map<String, Object?> _shopSettingsJson({
   bool autoPrintReceipts = false,
   bool requireOpeningCash = true,
+  bool enableOnlineInvoices = false,
   bool allowOverselling = false,
   bool preventSellingAtLoss = true,
   bool requireCardPaymentReceipt = false,
@@ -4939,6 +4953,7 @@ Map<String, Object?> _shopSettingsJson({
     'logo_attachment': logoAttachment,
     'receipt_header': 'أهلا بكم',
     'receipt_footer': 'شكرا لزيارتكم',
+    'enable_online_invoices': enableOnlineInvoices,
     'require_opening_cash': requireOpeningCash,
     'auto_print_receipts': autoPrintReceipts,
     'allow_overselling': allowOverselling,

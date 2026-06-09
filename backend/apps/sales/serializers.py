@@ -4,7 +4,7 @@ from django.contrib.contenttypes.models import ContentType
 from rest_framework import serializers
 
 from apps.catalog.models import ProductVariant
-from apps.core.models import ShopSettings
+from apps.core.models import RelayInstallation, ShopSettings
 from apps.core.roles import user_is_manager
 from apps.customers.models import Customer
 from apps.discounts.models import AppliedDiscount
@@ -28,6 +28,7 @@ from .services import (
     validate_order_adjustment_allowed,
     void_order,
 )
+from .public_invoices import public_invoice_url_for_order
 
 
 class RegisterSessionSerializer(serializers.ModelSerializer):
@@ -297,6 +298,7 @@ class OrderSerializer(serializers.ModelSerializer):
     can_return = serializers.SerializerMethodField()
     requires_manager_adjustment = serializers.SerializerMethodField()
     applied_discounts = serializers.SerializerMethodField()
+    public_invoice_url = serializers.SerializerMethodField()
     total_cost = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
     total_profit = serializers.DecimalField(
         max_digits=10,
@@ -323,6 +325,7 @@ class OrderSerializer(serializers.ModelSerializer):
             "discount_total",
             "total",
             "applied_discounts",
+            "public_invoice_url",
             "total_cost",
             "total_profit",
             "can_void",
@@ -343,6 +346,7 @@ class OrderSerializer(serializers.ModelSerializer):
             "discount_total",
             "total",
             "applied_discounts",
+            "public_invoice_url",
             "total_cost",
             "total_profit",
             "can_void",
@@ -390,9 +394,87 @@ class OrderSerializer(serializers.ModelSerializer):
             for discount in discounts
         ]
 
+    def get_public_invoice_url(self, order):
+        settings = self.context.get("shop_settings")
+        if settings is None:
+            settings = ShopSettings.load()
+            self.context["shop_settings"] = settings
+        if not settings.enable_online_invoices:
+            return ""
+        if "_relay_installation" not in self.context:
+            self.context["_relay_installation"] = RelayInstallation.load()
+        return public_invoice_url_for_order(
+            order,
+            shop_settings=settings,
+            relay_installation=self.context["_relay_installation"],
+        )
+
     def create(self, validated_data):
         lines_data = validated_data.pop("lines", [])
         return create_order_with_lines(lines_data=lines_data, **validated_data)
+
+
+class PublicInvoiceLineSerializer(serializers.ModelSerializer):
+    product_name = serializers.CharField(source="variant.product.name", read_only=True)
+    variant_name = serializers.CharField(source="variant.display_name", read_only=True)
+    line_subtotal = serializers.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        read_only=True,
+    )
+    line_total = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
+
+    class Meta:
+        model = OrderLine
+        fields = [
+            "product_name",
+            "variant_name",
+            "quantity",
+            "unit_price",
+            "line_subtotal",
+            "discount_total",
+            "line_total",
+        ]
+
+
+class PublicInvoiceSerializer(serializers.ModelSerializer):
+    shop_name = serializers.SerializerMethodField()
+    receipt_header = serializers.SerializerMethodField()
+    receipt_footer = serializers.SerializerMethodField()
+    customer_name = serializers.CharField(source="customer.full_name", read_only=True)
+    lines = PublicInvoiceLineSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Order
+        fields = [
+            "shop_name",
+            "receipt_header",
+            "receipt_footer",
+            "receipt_number",
+            "status",
+            "customer_name",
+            "lines",
+            "subtotal",
+            "discount_total",
+            "total",
+            "created_at",
+        ]
+
+    def _settings(self):
+        settings = self.context.get("shop_settings")
+        if settings is None:
+            settings = ShopSettings.load()
+            self.context["shop_settings"] = settings
+        return settings
+
+    def get_shop_name(self, order):
+        return self._settings().shop_name
+
+    def get_receipt_header(self, order):
+        return self._settings().receipt_header
+
+    def get_receipt_footer(self, order):
+        return self._settings().receipt_footer
 
 
 class CheckoutLineSerializer(serializers.Serializer):

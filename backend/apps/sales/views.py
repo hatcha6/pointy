@@ -2,12 +2,14 @@ from django.db import IntegrityError, transaction
 from django.utils import timezone
 from rest_framework import mixins, serializers, status, viewsets
 from rest_framework.decorators import action
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
 from apps.analytics.models import AnalyticsEvent
 from apps.analytics.services import record_domain_event
 from apps.core.idempotency import run_idempotent_request
+from apps.core.discovery import request_is_relayed
+from apps.core.models import ShopSettings
 from apps.core.permissions import HasPointyPermission
 from apps.core.roles import user_is_manager
 from .models import Order, RegisterCashMovement, RegisterSession
@@ -15,6 +17,7 @@ from .serializers import (
     CheckoutSerializer,
     DiscountPreviewSerializer,
     OrderSerializer,
+    PublicInvoiceSerializer,
     OrderReturnSerializer,
     OrderVoidSerializer,
     RegisterCashMovementCreateSerializer,
@@ -254,6 +257,25 @@ class OrderViewSet(viewsets.ModelViewSet):
             )
         except ValueError:
             return None
+
+
+class PublicInvoiceView(mixins.RetrieveModelMixin, viewsets.GenericViewSet):
+    serializer_class = PublicInvoiceSerializer
+    permission_classes = [AllowAny]
+    authentication_classes = []
+    lookup_field = "public_token"
+    lookup_url_kwarg = "token"
+
+    queryset = Order.objects.select_related("customer").prefetch_related(
+        "lines__variant__product",
+    )
+
+    def get_queryset(self):
+        if not request_is_relayed(self.request):
+            return Order.objects.none()
+        if not ShopSettings.load().enable_online_invoices:
+            return Order.objects.none()
+        return super().get_queryset().exclude(status=Order.Status.OPEN)
 
 
 def register_session_owner_key(request):

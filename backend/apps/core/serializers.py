@@ -210,6 +210,7 @@ class ShopSettingsSerializer(serializers.ModelSerializer):
             "shop_name",
             "receipt_header",
             "receipt_footer",
+            "enable_online_invoices",
             "require_opening_cash",
             "auto_print_receipts",
             "allow_overselling",

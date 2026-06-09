@@ -401,6 +401,7 @@ class ShopSettingsApiTests(TestCase):
                 "shop_name": "متجر الوردية",
                 "receipt_header": "أهلا بكم",
                 "receipt_footer": "شكرا لزيارتكم",
+                "enable_online_invoices": True,
                 "require_opening_cash": False,
                 "auto_print_receipts": True,
                 "prevent_selling_at_loss": False,
@@ -420,6 +421,7 @@ class ShopSettingsApiTests(TestCase):
         self.assertEqual(read_response.status_code, status.HTTP_200_OK)
         self.assertEqual(update_response.status_code, status.HTTP_200_OK)
         self.assertEqual(update_response.data["shop_name"], "متجر الوردية")
+        self.assertTrue(update_response.data["enable_online_invoices"])
         self.assertFalse(update_response.data["require_opening_cash"])
         self.assertTrue(update_response.data["auto_print_receipts"])
         self.assertFalse(update_response.data["prevent_selling_at_loss"])

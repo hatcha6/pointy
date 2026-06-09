@@ -7,6 +7,7 @@ class ShopSettings {
     required this.shopName,
     required this.receiptHeader,
     required this.receiptFooter,
+    required this.enableOnlineInvoices,
     required this.requireOpeningCash,
     required this.autoPrintReceipts,
     required this.allowOverselling,
@@ -26,6 +27,7 @@ class ShopSettings {
   final String shopName;
   final String receiptHeader;
   final String receiptFooter;
+  final bool enableOnlineInvoices;
   final bool requireOpeningCash;
   final bool autoPrintReceipts;
   final bool allowOverselling;
@@ -47,6 +49,10 @@ class ShopSettings {
       shopName: json['shop_name']?.toString() ?? '',
       receiptHeader: json['receipt_header']?.toString() ?? '',
       receiptFooter: json['receipt_footer']?.toString() ?? '',
+      enableOnlineInvoices: _boolFromJson(
+        json['enable_online_invoices'],
+        false,
+      ),
       requireOpeningCash: json['require_opening_cash'] is bool
           ? json['require_opening_cash'] as bool
           : json['require_opening_cash']?.toString() != 'false',
@@ -105,6 +111,7 @@ class ShopSettingsDraft {
     required this.shopName,
     required this.receiptHeader,
     required this.receiptFooter,
+    required this.enableOnlineInvoices,
     required this.requireOpeningCash,
     required this.autoPrintReceipts,
     required this.allowOverselling,
@@ -123,6 +130,7 @@ class ShopSettingsDraft {
   final String shopName;
   final String receiptHeader;
   final String receiptFooter;
+  final bool enableOnlineInvoices;
   final bool requireOpeningCash;
   final bool autoPrintReceipts;
   final bool allowOverselling;
@@ -142,6 +150,7 @@ class ShopSettingsDraft {
       'shop_name': shopName,
       'receipt_header': receiptHeader,
       'receipt_footer': receiptFooter,
+      'enable_online_invoices': enableOnlineInvoices,
       'require_opening_cash': requireOpeningCash,
       'auto_print_receipts': autoPrintReceipts,
       'allow_overselling': allowOverselling,

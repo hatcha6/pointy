@@ -92,13 +92,11 @@ class _PurchaseDraftPaneState extends State<PurchaseDraftPane> {
             Expanded(
               child: PointyOrderPanel(
                 title: l10n.purchaseDraftTitle,
+                subtitle: _purchaseDraftSubtitle(l10n, viewModel),
                 trailing: _PurchaseDraftHeaderActions(
                   viewModel: viewModel,
-                  onSelectSupplier: () => _selectSupplier(context),
-                  onEditInvoiceDetails: () =>
-                      _showSupplierInvoiceDetailsDialog(context),
-                  onEditLandedCosts: () => _editLandedCosts(context),
-                  onEditDiscountCode: () => _showDiscountCodeDialog(context),
+                  onEditSettings: () =>
+                      _showPurchaseDraftSettingsDialog(context),
                 ),
                 child: _PurchaseDraftScrollContent(viewModel: viewModel),
               ),
@@ -170,26 +168,18 @@ class _PurchaseDraftPaneState extends State<PurchaseDraftPane> {
     );
   }
 
-  Future<void> _showSupplierInvoiceDetailsDialog(BuildContext context) {
+  Future<void> _showPurchaseDraftSettingsDialog(BuildContext context) {
     return showDialog<void>(
       context: context,
-      builder: (context) => _SupplierInvoiceDetailsDialog(
+      builder: (context) => _PurchaseDraftSettingsDialog(
         viewModel: viewModel,
+        contactRepository: widget.contactRepository,
         numberController: _supplierInvoiceNumberController,
         dateController: _supplierInvoiceDateController,
+        discountController: _discountCodeController,
         numberFocusNode: _supplierInvoiceNumberFocusNode,
         dateFocusNode: _supplierInvoiceDateFocusNode,
-      ),
-    );
-  }
-
-  Future<void> _showDiscountCodeDialog(BuildContext context) {
-    return showDialog<void>(
-      context: context,
-      builder: (context) => _PurchaseDiscountCodeDialog(
-        viewModel: viewModel,
-        controller: _discountCodeController,
-        focusNode: _discountCodeFocusNode,
+        discountFocusNode: _discountCodeFocusNode,
       ),
     );
   }
@@ -253,37 +243,6 @@ class _PurchaseDraftPaneState extends State<PurchaseDraftPane> {
     }
   }
 
-  Future<void> _selectSupplier(BuildContext context) async {
-    final supplier = await showSupplierPickerSheet(
-      context: context,
-      repository: widget.contactRepository,
-    );
-    if (supplier != null) {
-      viewModel.selectSupplier(supplier);
-    }
-  }
-
-  Future<void> _editLandedCosts(BuildContext context) async {
-    final result = await showModalBottomSheet<_LandedCostSheetResult>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      builder: (context) {
-        return _LandedCostSheet(
-          entries: viewModel.landedCostEntries,
-          allocationMethod: viewModel.landedCostAllocationMethod,
-        );
-      },
-    );
-    if (result == null || !context.mounted) {
-      return;
-    }
-    viewModel.updateLandedCosts(
-      entries: result.entries,
-      allocationMethod: result.allocationMethod,
-    );
-  }
-
   void _syncController({
     required TextEditingController controller,
     required FocusNode focusNode,
@@ -298,20 +257,31 @@ class _PurchaseDraftPaneState extends State<PurchaseDraftPane> {
   }
 }
 
+String _purchaseDraftSubtitle(
+  AppLocalizations l10n,
+  PurchaseViewModel viewModel,
+) {
+  final supplierName = viewModel.selectedSupplier?.name.trim();
+  final invoiceNumber = viewModel.supplierInvoiceNumber.trim();
+  final parts = <String>[
+    if (supplierName != null && supplierName.isNotEmpty)
+      supplierName
+    else
+      l10n.noSupplierSelectedLabel,
+    if (invoiceNumber.isNotEmpty)
+      l10n.supplierInvoiceNumberValue(invoiceNumber),
+  ];
+  return parts.join(' • ');
+}
+
 class _PurchaseDraftHeaderActions extends StatelessWidget {
   const _PurchaseDraftHeaderActions({
     required this.viewModel,
-    required this.onSelectSupplier,
-    required this.onEditInvoiceDetails,
-    required this.onEditLandedCosts,
-    required this.onEditDiscountCode,
+    required this.onEditSettings,
   });
 
   final PurchaseViewModel viewModel;
-  final VoidCallback onSelectSupplier;
-  final VoidCallback onEditInvoiceDetails;
-  final VoidCallback onEditLandedCosts;
-  final VoidCallback onEditDiscountCode;
+  final VoidCallback onEditSettings;
 
   @override
   Widget build(BuildContext context) {
@@ -327,51 +297,28 @@ class _PurchaseDraftHeaderActions extends StatelessWidget {
         viewModel.unappliedDiscountCodes.isNotEmpty;
     final hasAppliedDiscount = viewModel.appliedDiscounts.isNotEmpty;
     final hasLandedCosts = viewModel.landedCostTotal > 0;
+    final hasSettings =
+        supplier != null ||
+        hasInvoiceDetails ||
+        hasDiscountCode ||
+        hasAppliedDiscount ||
+        hasLandedCosts;
+    final hasSettingsIssue =
+        supplier == null ||
+        viewModel.hasInvalidSupplierInvoiceDate ||
+        hasDiscountIssue;
 
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
         IconButton(
-          tooltip: supplier?.name ?? l10n.purchaseSupplierActionTooltip,
-          onPressed: viewModel.isSubmitting ? null : onSelectSupplier,
-          icon: Icon(
-            supplier == null
-                ? Icons.local_shipping_outlined
-                : Icons.local_shipping,
-          ),
-          color: supplier == null ? colors.danger : colors.primaryStrong,
-        ),
-        IconButton(
-          tooltip: l10n.purchaseInvoiceDetailsActionTooltip,
-          onPressed: viewModel.isSubmitting ? null : onEditInvoiceDetails,
-          icon: const Icon(Icons.receipt_long_outlined),
-          color: viewModel.hasInvalidSupplierInvoiceDate
+          key: const ValueKey('purchase_draft_settings_button'),
+          tooltip: l10n.purchaseDraftSettingsActionTooltip,
+          onPressed: viewModel.isSubmitting ? null : onEditSettings,
+          icon: const Icon(Icons.tune),
+          color: hasSettingsIssue
               ? colors.danger
-              : hasInvoiceDetails
-              ? colors.primaryStrong
-              : null,
-        ),
-        IconButton(
-          key: const ValueKey('landed_cost_button'),
-          tooltip: l10n.purchaseLandedCostActionTooltip,
-          onPressed: viewModel.isSubmitting ? null : onEditLandedCosts,
-          icon: const Icon(Icons.request_quote_outlined),
-          color: hasLandedCosts ? colors.primaryStrong : null,
-        ),
-        IconButton(
-          tooltip: hasDiscountCode
-              ? '${l10n.discountCouponCodeLabel}: ${viewModel.discountCode.trim()}'
-              : l10n.purchaseDiscountActionTooltip,
-          onPressed: viewModel.isSubmitting ? null : onEditDiscountCode,
-          icon: viewModel.isLoadingDiscountPreview
-              ? const SizedBox.square(
-                  dimension: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Icon(Icons.confirmation_number_outlined),
-          color: hasDiscountIssue
-              ? colors.danger
-              : hasDiscountCode || hasAppliedDiscount
+              : hasSettings
               ? colors.primaryStrong
               : null,
         ),
@@ -537,98 +484,302 @@ class _ReceiveImmediatelyToggle extends StatelessWidget {
   }
 }
 
-class _SupplierInvoiceDetailsDialog extends StatefulWidget {
-  const _SupplierInvoiceDetailsDialog({
+class _PurchaseDraftSettingsDialog extends StatefulWidget {
+  const _PurchaseDraftSettingsDialog({
     required this.viewModel,
+    required this.contactRepository,
     required this.numberController,
     required this.dateController,
+    required this.discountController,
     required this.numberFocusNode,
     required this.dateFocusNode,
+    required this.discountFocusNode,
   });
 
   final PurchaseViewModel viewModel;
+  final ContactRepository contactRepository;
   final TextEditingController numberController;
   final TextEditingController dateController;
+  final TextEditingController discountController;
   final FocusNode numberFocusNode;
   final FocusNode dateFocusNode;
+  final FocusNode discountFocusNode;
 
   @override
-  State<_SupplierInvoiceDetailsDialog> createState() =>
-      _SupplierInvoiceDetailsDialogState();
+  State<_PurchaseDraftSettingsDialog> createState() =>
+      _PurchaseDraftSettingsDialogState();
 }
 
-class _SupplierInvoiceDetailsDialogState
-    extends State<_SupplierInvoiceDetailsDialog> {
+class _PurchaseDraftSettingsDialogState
+    extends State<_PurchaseDraftSettingsDialog> {
+  late var _selectedSupplier = widget.viewModel.selectedSupplier;
+  late final List<_LandedCostEntryControllers> _landedCostControllers =
+      (widget.viewModel.landedCostEntries.isEmpty
+              ? const [PurchaseLandedCostEntry(name: '', cost: 0)]
+              : widget.viewModel.landedCostEntries)
+          .map(_LandedCostEntryControllers.new)
+          .toList(growable: true);
+  late LandedCostAllocationMethod _landedCostAllocationMethod =
+      widget.viewModel.landedCostAllocationMethod;
   late final String _initialNumber = widget.numberController.text;
   late final String _initialDate = widget.dateController.text;
+  late final String _initialDiscountCode = widget.discountController.text;
+
+  @override
+  void dispose() {
+    for (final controllers in _landedCostControllers) {
+      controllers.dispose();
+    }
+    super.dispose();
+  }
+
+  String get _currentDiscountCode => widget.discountController.text.trim();
+
+  bool get _matchesSavedDiscountCode =>
+      _currentDiscountCode == widget.viewModel.discountCode.trim();
 
   bool get _hasInvalidDate {
     final text = widget.dateController.text.trim();
     return text.isNotEmpty && _parseDateInputValue(text) == null;
   }
 
+  bool get _hasInvalidDiscountCode {
+    return _matchesSavedDiscountCode &&
+        widget.viewModel.unappliedDiscountCodes.isNotEmpty;
+  }
+
+  List<PurchaseLandedCostEntry> _currentLandedCostEntries(
+    AppLocalizations l10n,
+  ) {
+    return _landedCostControllers
+        .map((controllers) {
+          final name = controllers.name.text.trim();
+          final cost = _parseLandedCost(controllers.cost.text);
+          if (cost <= 0) {
+            return null;
+          }
+          return PurchaseLandedCostEntry(
+            name: name.isEmpty ? l10n.defaultLandedCostEntryName : name,
+            cost: cost,
+          );
+        })
+        .nonNulls
+        .toList(growable: false);
+  }
+
+  bool _landedCostsChanged(List<PurchaseLandedCostEntry> entries) {
+    final savedEntries = widget.viewModel.landedCostEntries;
+    if (_landedCostAllocationMethod !=
+            widget.viewModel.landedCostAllocationMethod ||
+        savedEntries.length != entries.length) {
+      return true;
+    }
+    for (var index = 0; index < savedEntries.length; index += 1) {
+      final saved = savedEntries[index];
+      final pending = entries[index];
+      if (saved.name != pending.name ||
+          (saved.cost - pending.cost).abs() >= 0.005) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  double _landedCostTotal(List<PurchaseLandedCostEntry> entries) {
+    return entries.fold<double>(0, (sum, entry) => sum + entry.cost);
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    final hasDiscountCode = _currentDiscountCode.isNotEmpty;
+    final landedCostEntries = _currentLandedCostEntries(l10n);
+    final landedCostTotal = _landedCostTotal(landedCostEntries);
 
     return AlertDialog(
-      icon: const Icon(Icons.receipt_long_outlined),
-      title: Text(l10n.purchaseInvoiceDetailsDialogTitle),
-      content: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 420),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              key: const ValueKey('supplier_invoice_number_field'),
-              controller: widget.numberController,
-              focusNode: widget.numberFocusNode,
-              enabled: !widget.viewModel.isSubmitting,
-              decoration: InputDecoration(
-                labelText: l10n.supplierInvoiceNumberLabel,
-                hintText: l10n.supplierInvoiceNumberHint,
-                isDense: true,
-                prefixIcon: const Icon(Icons.receipt_long_outlined),
+      icon: const Icon(Icons.tune),
+      title: Text(l10n.purchaseDraftSettingsDialogTitle),
+      content: SizedBox(
+        width: 460,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ContactSelectionTile(
+                label: l10n.selectedSupplierLabel,
+                value: _selectedSupplier?.name ?? '',
+                placeholder: l10n.noSupplierSelectedLabel,
+                icon: Icons.local_shipping_outlined,
+                enabled: !widget.viewModel.isSubmitting,
+                onSelect: _selectSupplier,
+                onClear: () => setState(() => _selectedSupplier = null),
+                allowClear: _selectedSupplier != null,
+                selectActionIcon: Icons.edit_outlined,
               ),
-              onChanged: (_) => setState(() {}),
-              onSubmitted: (_) => _saveIfValid(),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              key: const ValueKey('supplier_invoice_date_field'),
-              controller: widget.dateController,
-              focusNode: widget.dateFocusNode,
-              enabled: !widget.viewModel.isSubmitting,
-              keyboardType: TextInputType.datetime,
-              inputFormatters: const [_DateDashInputFormatter()],
-              decoration: InputDecoration(
-                labelText: l10n.supplierInvoiceDateLabel,
-                hintText: l10n.supplierInvoiceDateHint,
-                errorText: _hasInvalidDate
-                    ? l10n.supplierInvoiceDateInvalid
-                    : null,
-                isDense: true,
-                prefixIcon: const Icon(Icons.event_outlined),
-                suffixIcon: IconButton(
-                  tooltip: l10n.supplierInvoiceDatePickerTooltip,
-                  onPressed: widget.viewModel.isSubmitting ? null : _pickDate,
-                  icon: const Icon(Icons.calendar_month_outlined),
+              const SizedBox(height: 12),
+              TextField(
+                key: const ValueKey('supplier_invoice_number_field'),
+                controller: widget.numberController,
+                focusNode: widget.numberFocusNode,
+                enabled: !widget.viewModel.isSubmitting,
+                decoration: InputDecoration(
+                  labelText: l10n.supplierInvoiceNumberLabel,
+                  hintText: l10n.supplierInvoiceNumberHint,
+                  isDense: true,
+                  prefixIcon: const Icon(Icons.receipt_long_outlined),
+                ),
+                onChanged: (_) => setState(() {}),
+                onSubmitted: (_) => _saveIfValid(),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                key: const ValueKey('supplier_invoice_date_field'),
+                controller: widget.dateController,
+                focusNode: widget.dateFocusNode,
+                enabled: !widget.viewModel.isSubmitting,
+                keyboardType: TextInputType.datetime,
+                inputFormatters: const [_DateDashInputFormatter()],
+                decoration: InputDecoration(
+                  labelText: l10n.supplierInvoiceDateLabel,
+                  hintText: l10n.supplierInvoiceDateHint,
+                  errorText: _hasInvalidDate
+                      ? l10n.supplierInvoiceDateInvalid
+                      : null,
+                  isDense: true,
+                  prefixIcon: const Icon(Icons.event_outlined),
+                  suffixIcon: IconButton(
+                    tooltip: l10n.supplierInvoiceDatePickerTooltip,
+                    onPressed: widget.viewModel.isSubmitting ? null : _pickDate,
+                    icon: const Icon(Icons.calendar_month_outlined),
+                  ),
+                ),
+                onChanged: (_) => setState(() {}),
+                onSubmitted: (_) => _saveIfValid(),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  const Icon(Icons.request_quote_outlined),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      l10n.purchaseLandedCostSheetTitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleSmall,
+                    ),
+                  ),
+                  Text(
+                    formatMoney(landedCostTotal),
+                    style: Theme.of(context).textTheme.titleSmall,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              DropdownButtonFormField<LandedCostAllocationMethod>(
+                initialValue: _landedCostAllocationMethod,
+                decoration: InputDecoration(
+                  labelText: l10n.landedCostAllocationMethodLabel,
+                  isDense: true,
+                  prefixIcon: const Icon(Icons.call_split_outlined),
+                ),
+                items: [
+                  for (final method in LandedCostAllocationMethod.values)
+                    DropdownMenuItem(
+                      value: method,
+                      child: Text(_landedCostAllocationLabel(l10n, method)),
+                    ),
+                ],
+                onChanged: widget.viewModel.isSubmitting
+                    ? null
+                    : (method) {
+                        if (method == null) {
+                          return;
+                        }
+                        setState(() => _landedCostAllocationMethod = method);
+                      },
+              ),
+              const SizedBox(height: 8),
+              for (final (index, controllers)
+                  in _landedCostControllers.indexed) ...[
+                if (index > 0) const SizedBox(height: 8),
+                _LandedCostEntryRow(
+                  nameController: controllers.name,
+                  costController: controllers.cost,
+                  canRemove: _landedCostControllers.length > 1,
+                  enabled: !widget.viewModel.isSubmitting,
+                  onChanged: () => setState(() {}),
+                  onRemove: () => _removeLandedCostEntry(index),
+                ),
+              ],
+              const SizedBox(height: 8),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  key: const ValueKey('landed_cost_button'),
+                  onPressed: widget.viewModel.isSubmitting
+                      ? null
+                      : _addLandedCostEntry,
+                  icon: const Icon(Icons.add),
+                  label: Text(l10n.addLandedCostEntryButton),
                 ),
               ),
-              onChanged: (_) => setState(() {}),
-              onSubmitted: (_) => _saveIfValid(),
-            ),
-          ],
+              const SizedBox(height: 12),
+              TextField(
+                key: const ValueKey('purchase_discount_code_field'),
+                controller: widget.discountController,
+                focusNode: widget.discountFocusNode,
+                enabled: !widget.viewModel.isSubmitting,
+                textCapitalization: TextCapitalization.characters,
+                decoration: InputDecoration(
+                  labelText: l10n.discountCouponCodeLabel,
+                  hintText: l10n.purchaseDiscountCodeHint,
+                  isDense: true,
+                  prefixIcon: const Icon(Icons.confirmation_number_outlined),
+                  errorText: _hasInvalidDiscountCode
+                      ? l10n.discountCouponUnavailable(
+                          widget.viewModel.unappliedDiscountCodes.join('، '),
+                        )
+                      : _matchesSavedDiscountCode &&
+                            widget.viewModel.hasDiscountPreviewError
+                      ? l10n.discountPreviewUnavailable
+                      : null,
+                ),
+                onChanged: (_) => setState(() {}),
+                onSubmitted: (_) => _saveIfValid(),
+              ),
+            ],
+          ),
         ),
       ),
       actions: [
         TextButton(onPressed: _cancel, child: Text(l10n.cancelButton)),
+        if (hasDiscountCode)
+          TextButton(
+            onPressed: _clearDiscountCode,
+            child: Text(l10n.clearCouponCodeTooltip),
+          ),
+        TextButton(
+          onPressed: _refreshDiscountPreview,
+          child: Text(l10n.refreshDiscountPreviewTooltip),
+        ),
         FilledButton(
           onPressed: _hasInvalidDate ? null : _save,
           child: Text(l10n.saveButton),
         ),
       ],
     );
+  }
+
+  Future<void> _selectSupplier() async {
+    final supplier = await showSupplierPickerSheet(
+      context: context,
+      repository: widget.contactRepository,
+    );
+    if (supplier == null || !mounted) {
+      return;
+    }
+    setState(() => _selectedSupplier = supplier);
   }
 
   Future<void> _pickDate() async {
@@ -650,6 +801,23 @@ class _SupplierInvoiceDetailsDialogState
     });
   }
 
+  void _addLandedCostEntry() {
+    setState(() {
+      _landedCostControllers.add(
+        _LandedCostEntryControllers(
+          const PurchaseLandedCostEntry(name: '', cost: 0),
+        ),
+      );
+    });
+  }
+
+  void _removeLandedCostEntry(int index) {
+    setState(() {
+      final removed = _landedCostControllers.removeAt(index);
+      removed.dispose();
+    });
+  }
+
   void _saveIfValid() {
     if (!_hasInvalidDate) {
       _save();
@@ -657,127 +825,76 @@ class _SupplierInvoiceDetailsDialogState
   }
 
   void _save() {
-    widget.viewModel.updateSupplierInvoiceNumber(
-      widget.numberController.text.trim(),
-    );
-    widget.viewModel.updateSupplierInvoiceDateInput(
-      widget.dateController.text.trim(),
-    );
+    if (_hasInvalidDate) {
+      setState(() {});
+      return;
+    }
+    final l10n = AppLocalizations.of(context)!;
+    _saveSettings(l10n);
     Navigator.of(context).pop();
+  }
+
+  void _clearDiscountCode() {
+    if (_hasInvalidDate) {
+      setState(() {});
+      return;
+    }
+    widget.discountController.clear();
+    final l10n = AppLocalizations.of(context)!;
+    _saveSettings(l10n);
+    Navigator.of(context).pop();
+  }
+
+  void _refreshDiscountPreview() {
+    if (_hasInvalidDate) {
+      setState(() {});
+      return;
+    }
+    final l10n = AppLocalizations.of(context)!;
+    final landedCostEntries = _currentLandedCostEntries(l10n);
+    final refreshWillAlreadyRun =
+        _selectedSupplier?.id != widget.viewModel.selectedSupplier?.id ||
+        _landedCostsChanged(landedCostEntries) ||
+        _currentDiscountCode != widget.viewModel.discountCode.trim();
+    _saveSettings(l10n, landedCostEntries: landedCostEntries);
+    if (!refreshWillAlreadyRun) {
+      unawaited(widget.viewModel.refreshDiscountPreview());
+    }
+    Navigator.of(context).pop();
+  }
+
+  void _saveSettings(
+    AppLocalizations l10n, {
+    List<PurchaseLandedCostEntry>? landedCostEntries,
+  }) {
+    final currentLandedCostEntries =
+        landedCostEntries ?? _currentLandedCostEntries(l10n);
+    if (_selectedSupplier?.id != widget.viewModel.selectedSupplier?.id) {
+      widget.viewModel.selectSupplier(_selectedSupplier);
+    }
+    final invoiceNumber = widget.numberController.text.trim();
+    if (invoiceNumber != widget.viewModel.supplierInvoiceNumber.trim()) {
+      widget.viewModel.updateSupplierInvoiceNumber(invoiceNumber);
+    }
+    final invoiceDate = widget.dateController.text.trim();
+    if (invoiceDate != widget.viewModel.supplierInvoiceDateInput.trim()) {
+      widget.viewModel.updateSupplierInvoiceDateInput(invoiceDate);
+    }
+    if (_landedCostsChanged(currentLandedCostEntries)) {
+      widget.viewModel.updateLandedCosts(
+        entries: currentLandedCostEntries,
+        allocationMethod: _landedCostAllocationMethod,
+      );
+    }
+    if (_currentDiscountCode != widget.viewModel.discountCode.trim()) {
+      widget.viewModel.updateDiscountCode(_currentDiscountCode);
+    }
   }
 
   void _cancel() {
     widget.numberController.text = _initialNumber;
     widget.dateController.text = _initialDate;
-    Navigator.of(context).pop();
-  }
-}
-
-class _PurchaseDiscountCodeDialog extends StatefulWidget {
-  const _PurchaseDiscountCodeDialog({
-    required this.viewModel,
-    required this.controller,
-    required this.focusNode,
-  });
-
-  final PurchaseViewModel viewModel;
-  final TextEditingController controller;
-  final FocusNode focusNode;
-
-  @override
-  State<_PurchaseDiscountCodeDialog> createState() =>
-      _PurchaseDiscountCodeDialogState();
-}
-
-class _PurchaseDiscountCodeDialogState
-    extends State<_PurchaseDiscountCodeDialog> {
-  late final String _initialValue = widget.controller.text;
-
-  String get _currentCode => widget.controller.text.trim();
-
-  bool get _matchesSavedCode =>
-      _currentCode == widget.viewModel.discountCode.trim();
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
-    final hasCoupon = _currentCode.isNotEmpty;
-    final hasInvalidCoupon =
-        _matchesSavedCode && widget.viewModel.unappliedDiscountCodes.isNotEmpty;
-
-    return AlertDialog(
-      icon: const Icon(Icons.confirmation_number_outlined),
-      title: Text(l10n.discountCouponCodeLabel),
-      content: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 420),
-        child: TextField(
-          key: const ValueKey('purchase_discount_code_field'),
-          controller: widget.controller,
-          focusNode: widget.focusNode,
-          enabled: !widget.viewModel.isSubmitting,
-          autofocus: true,
-          textCapitalization: TextCapitalization.characters,
-          decoration: InputDecoration(
-            hintText: l10n.purchaseDiscountCodeHint,
-            isDense: true,
-            errorText: hasInvalidCoupon
-                ? l10n.discountCouponUnavailable(
-                    widget.viewModel.unappliedDiscountCodes.join('، '),
-                  )
-                : _matchesSavedCode && widget.viewModel.hasDiscountPreviewError
-                ? l10n.discountPreviewUnavailable
-                : null,
-          ),
-          onChanged: (_) => setState(() {}),
-          onSubmitted: (_) => _apply(),
-        ),
-      ),
-      actions: [
-        TextButton(onPressed: _cancel, child: Text(l10n.cancelButton)),
-        if (hasCoupon)
-          TextButton(
-            onPressed: _clear,
-            child: Text(l10n.clearCouponCodeTooltip),
-          ),
-        TextButton(
-          onPressed: _refresh,
-          child: Text(l10n.refreshDiscountPreviewTooltip),
-        ),
-        FilledButton(
-          onPressed: _apply,
-          child: Text(l10n.applyDiscountCodeButton),
-        ),
-      ],
-    );
-  }
-
-  void _apply() {
-    _saveCode();
-    Navigator.of(context).pop();
-  }
-
-  void _clear() {
-    widget.controller.clear();
-    widget.viewModel.updateDiscountCode('');
-    Navigator.of(context).pop();
-  }
-
-  void _refresh() {
-    _saveCode();
-    unawaited(widget.viewModel.refreshDiscountPreview());
-    Navigator.of(context).pop();
-  }
-
-  void _saveCode() {
-    final value = _currentCode;
-    if (value == widget.viewModel.discountCode.trim()) {
-      return;
-    }
-    widget.viewModel.updateDiscountCode(value);
-  }
-
-  void _cancel() {
-    widget.controller.text = _initialValue;
+    widget.discountController.text = _initialDiscountCode;
     Navigator.of(context).pop();
   }
 }
@@ -825,16 +942,6 @@ class _DateDashInputFormatter extends TextInputFormatter {
   }
 }
 
-class _LandedCostSheetResult {
-  const _LandedCostSheetResult({
-    required this.entries,
-    required this.allocationMethod,
-  });
-
-  final List<PurchaseLandedCostEntry> entries;
-  final LandedCostAllocationMethod allocationMethod;
-}
-
 class _LandedCostEntryControllers {
   _LandedCostEntryControllers(PurchaseLandedCostEntry entry)
     : name = TextEditingController(text: entry.name),
@@ -851,187 +958,25 @@ class _LandedCostEntryControllers {
   }
 }
 
-class _LandedCostSheet extends StatefulWidget {
-  const _LandedCostSheet({
-    required this.entries,
-    required this.allocationMethod,
-  });
-
-  final List<PurchaseLandedCostEntry> entries;
-  final LandedCostAllocationMethod allocationMethod;
-
-  @override
-  State<_LandedCostSheet> createState() => _LandedCostSheetState();
+double _parseLandedCost(String value) {
+  final normalized = value.trim().replaceAll(',', '.');
+  return double.tryParse(normalized) ?? 0;
 }
 
-class _LandedCostSheetState extends State<_LandedCostSheet> {
-  late final List<_LandedCostEntryControllers> _entryControllers;
-  late LandedCostAllocationMethod _allocationMethod;
-
-  @override
-  void initState() {
-    super.initState();
-    _allocationMethod = widget.allocationMethod;
-    final entries = widget.entries.isEmpty
-        ? const [PurchaseLandedCostEntry(name: '', cost: 0)]
-        : widget.entries;
-    _entryControllers = entries
-        .map(_LandedCostEntryControllers.new)
-        .toList(growable: true);
-  }
-
-  @override
-  void dispose() {
-    for (final controller in _entryControllers) {
-      controller.dispose();
-    }
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
-    final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
-    final total = _currentEntries(
-      l10n,
-    ).fold<double>(0, (sum, entry) => sum + entry.cost);
-
-    return Padding(
-      padding: EdgeInsets.only(bottom: bottomInset),
-      child: SingleChildScrollView(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      l10n.purchaseLandedCostSheetTitle,
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
-                  ),
-                  Text(
-                    formatMoney(total),
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              DropdownButtonFormField<LandedCostAllocationMethod>(
-                initialValue: _allocationMethod,
-                decoration: InputDecoration(
-                  labelText: l10n.landedCostAllocationMethodLabel,
-                  isDense: true,
-                  prefixIcon: const Icon(Icons.call_split_outlined),
-                ),
-                items: [
-                  for (final method in LandedCostAllocationMethod.values)
-                    DropdownMenuItem(
-                      value: method,
-                      child: Text(_landedCostAllocationLabel(l10n, method)),
-                    ),
-                ],
-                onChanged: (method) {
-                  if (method == null) {
-                    return;
-                  }
-                  setState(() => _allocationMethod = method);
-                },
-              ),
-              const SizedBox(height: 12),
-              for (final (index, controllers) in _entryControllers.indexed) ...[
-                if (index > 0) const SizedBox(height: 8),
-                _LandedCostEntryRow(
-                  nameController: controllers.name,
-                  costController: controllers.cost,
-                  canRemove: _entryControllers.length > 1,
-                  onChanged: () => setState(() {}),
-                  onRemove: () => _removeEntry(index),
-                ),
-              ],
-              const SizedBox(height: 12),
-              OutlinedButton.icon(
-                onPressed: _addEntry,
-                icon: const Icon(Icons.add),
-                label: Text(l10n.addLandedCostEntryButton),
-              ),
-              const SizedBox(height: 8),
-              FilledButton.icon(
-                onPressed: () {
-                  Navigator.of(context).pop(
-                    _LandedCostSheetResult(
-                      entries: _currentEntries(l10n),
-                      allocationMethod: _allocationMethod,
-                    ),
-                  );
-                },
-                icon: const Icon(Icons.check),
-                label: Text(l10n.saveLandedCostEntriesButton),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  void _addEntry() {
-    setState(() {
-      _entryControllers.add(
-        _LandedCostEntryControllers(
-          const PurchaseLandedCostEntry(name: '', cost: 0),
-        ),
-      );
-    });
-  }
-
-  void _removeEntry(int index) {
-    setState(() {
-      final removed = _entryControllers.removeAt(index);
-      removed.dispose();
-    });
-  }
-
-  List<PurchaseLandedCostEntry> _currentEntries(AppLocalizations l10n) {
-    return _entryControllers
-        .map((controllers) {
-          final name = controllers.name.text.trim();
-          final cost = _parseCost(controllers.cost.text);
-          if (cost <= 0) {
-            return null;
-          }
-          return PurchaseLandedCostEntry(
-            name: name.isEmpty ? l10n.defaultLandedCostEntryName : name,
-            cost: cost,
-          );
-        })
-        .nonNulls
-        .toList(growable: false);
-  }
-
-  double _parseCost(String value) {
-    final normalized = value.trim().replaceAll(',', '.');
-    return double.tryParse(normalized) ?? 0;
-  }
-
-  String _landedCostAllocationLabel(
-    AppLocalizations l10n,
-    LandedCostAllocationMethod method,
-  ) {
-    return switch (method) {
-      LandedCostAllocationMethod.byLineValue =>
-        l10n.landedCostAllocationByLineValueLabel,
-      LandedCostAllocationMethod.byQuantity =>
-        l10n.landedCostAllocationByQuantityLabel,
-      LandedCostAllocationMethod.byRetailValue =>
-        l10n.landedCostAllocationByRetailValueLabel,
-      LandedCostAllocationMethod.equallyByLine =>
-        l10n.landedCostAllocationEquallyByLineLabel,
-    };
-  }
+String _landedCostAllocationLabel(
+  AppLocalizations l10n,
+  LandedCostAllocationMethod method,
+) {
+  return switch (method) {
+    LandedCostAllocationMethod.byLineValue =>
+      l10n.landedCostAllocationByLineValueLabel,
+    LandedCostAllocationMethod.byQuantity =>
+      l10n.landedCostAllocationByQuantityLabel,
+    LandedCostAllocationMethod.byRetailValue =>
+      l10n.landedCostAllocationByRetailValueLabel,
+    LandedCostAllocationMethod.equallyByLine =>
+      l10n.landedCostAllocationEquallyByLineLabel,
+  };
 }
 
 class _LandedCostEntryRow extends StatelessWidget {
@@ -1039,6 +984,7 @@ class _LandedCostEntryRow extends StatelessWidget {
     required this.nameController,
     required this.costController,
     required this.canRemove,
+    required this.enabled,
     required this.onChanged,
     required this.onRemove,
   });
@@ -1046,6 +992,7 @@ class _LandedCostEntryRow extends StatelessWidget {
   final TextEditingController nameController;
   final TextEditingController costController;
   final bool canRemove;
+  final bool enabled;
   final VoidCallback onChanged;
   final VoidCallback onRemove;
 
@@ -1058,6 +1005,7 @@ class _LandedCostEntryRow extends StatelessWidget {
         Expanded(
           child: TextField(
             controller: nameController,
+            enabled: enabled,
             textInputAction: TextInputAction.next,
             decoration: InputDecoration(
               labelText: l10n.landedCostEntryNameLabel,
@@ -1072,6 +1020,7 @@ class _LandedCostEntryRow extends StatelessWidget {
           width: 120,
           child: TextField(
             controller: costController,
+            enabled: enabled,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
             inputFormatters: [DecimalTextInputFormatter()],
             decoration: InputDecoration(
@@ -1084,7 +1033,7 @@ class _LandedCostEntryRow extends StatelessWidget {
         const SizedBox(width: 4),
         IconButton(
           tooltip: l10n.removeLandedCostEntryTooltip,
-          onPressed: canRemove ? onRemove : null,
+          onPressed: enabled && canRemove ? onRemove : null,
           icon: const Icon(Icons.close),
         ),
       ],

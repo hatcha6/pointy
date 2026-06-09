@@ -264,6 +264,7 @@ class SaleOrder {
     this.customerName,
     this.customerPhone,
     this.customerEmail,
+    this.publicInvoiceUrl = '',
     this.profit,
     this.profitMarginPercent,
     this.invoicePrintJob,
@@ -286,6 +287,7 @@ class SaleOrder {
   final String? customerName;
   final String? customerPhone;
   final String? customerEmail;
+  final String publicInvoiceUrl;
   final double? profit;
   final double? profitMarginPercent;
   final PrintJob? invoicePrintJob;
@@ -316,6 +318,7 @@ class SaleOrder {
       customerName: json['customer_name']?.toString(),
       customerPhone: json['customer_phone']?.toString(),
       customerEmail: json['customer_email']?.toString(),
+      publicInvoiceUrl: json['public_invoice_url']?.toString() ?? '',
       profit: _nullableMoneyFromJson(
         json['profit'] ?? json['gross_profit'] ?? json['total_profit'],
       ),
