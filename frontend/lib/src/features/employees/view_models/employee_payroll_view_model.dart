@@ -356,6 +356,46 @@ class EmployeePayrollViewModel extends ChangeNotifier {
     return updatedRun;
   }
 
+  Future<PayrollRun?> createPayrollBulkAdjustment(
+    PayrollRun run,
+    PayrollBulkAdjustmentDraft draft,
+  ) async {
+    if (draft.payrollLineIds.isEmpty) {
+      _hasSaveError = true;
+      notifyListeners();
+      return null;
+    }
+
+    _isSaving = true;
+    _hasSaveError = false;
+    notifyListeners();
+
+    final result = await _repository.createPayrollBulkAdjustment(run.id, draft);
+    PayrollRun? updatedRun;
+    switch (result) {
+      case Ok<PayrollRun>(value: final savedRun):
+        updatedRun = savedRun;
+        _upsertPayrollRun(savedRun);
+        _track(
+          'employees.management.payroll_run.bulk_adjusted',
+          'payroll_run',
+          savedRun.id,
+          {
+            'line_count': draft.payrollLineIds.length,
+            'direction': draft.type.direction,
+            'adjustment_type': draft.type.adjustmentType,
+            'amount': draft.amount,
+          },
+        );
+      case Error<PayrollRun>():
+        _hasSaveError = true;
+    }
+
+    _isSaving = false;
+    notifyListeners();
+    return updatedRun;
+  }
+
   Future<bool> _updatePayrollRun(
     PayrollRun run,
     Future<Result<PayrollRun>> Function() action, {

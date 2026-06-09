@@ -211,6 +211,20 @@ void main() {
       'notes': 'تعديل شهر يونيو',
     });
 
+    final bulkAdjustment = const PayrollBulkAdjustmentDraft(
+      payrollLineIds: [41, 42],
+      type: PayrollBulkAdjustmentType.overtime,
+      amount: '2000.00',
+      notes: 'عيد الفطر',
+    ).toJson();
+    expect(bulkAdjustment, {
+      'line_ids': [41, 42],
+      'direction': 'addition',
+      'adjustment_type': 'overtime',
+      'amount': '2000.00',
+      'notes': 'عيد الفطر',
+    });
+
     final fixedSalary = const CompensationPlanDraft(
       employeeId: 7,
       salaryType: SalaryType.monthlyFixed,

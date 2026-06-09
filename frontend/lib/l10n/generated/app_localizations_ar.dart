@@ -6947,6 +6947,61 @@ class AppLocalizationsAr extends AppLocalizations {
   String get payrollRunNoEmployees => 'لا توجد بنود موظفين في هذا المسير.';
 
   @override
+  String get payrollBulkAdjustmentButton => 'تعديل جماعي للرواتب';
+
+  @override
+  String get payrollBulkAdjustmentTitle => 'تعديل جماعي للرواتب';
+
+  @override
+  String get payrollBulkAdjustmentSubtitle =>
+      'اختر الموظفين وأدخل مبلغًا يطبق على كل موظف محدد.';
+
+  @override
+  String get payrollBulkAdjustmentAmountLabel => 'المبلغ لكل موظف';
+
+  @override
+  String get payrollBulkAdjustmentAmountHelper =>
+      'سيطبق نفس المبلغ على كل موظف محدد.';
+
+  @override
+  String get payrollBulkAdjustmentNotesLabel => 'ملاحظات التعديل';
+
+  @override
+  String get payrollBulkSelectionSection => 'الموظفون المحددون';
+
+  @override
+  String get payrollBulkSelectAllEmployees => 'اختيار كل موظفي المسير';
+
+  @override
+  String payrollBulkSelectedCount(int selected, int total) {
+    return '$selected من $total محددين';
+  }
+
+  @override
+  String get payrollBulkNoEmployeesSelected => 'اختر موظفًا واحدًا على الأقل.';
+
+  @override
+  String get payrollBulkPositiveAmountError => 'أدخل مبلغًا أكبر من صفر.';
+
+  @override
+  String get payrollBulkSelectedEmployeesLabel => 'الموظفون';
+
+  @override
+  String get payrollBulkAmountPerEmployeeLabel => 'لكل موظف';
+
+  @override
+  String get payrollBulkTotalAdditionLabel => 'إجمالي الإضافة';
+
+  @override
+  String get payrollBulkTotalDeductionLabel => 'إجمالي الخصم';
+
+  @override
+  String get payrollBulkAdjustmentSaveButton => 'تطبيق على المحددين';
+
+  @override
+  String get payrollBulkAdjustmentSaveError => 'تعذر تطبيق التعديل الجماعي.';
+
+  @override
   String get payrollLineManualPayLabel => 'أجر يدوي';
 
   @override

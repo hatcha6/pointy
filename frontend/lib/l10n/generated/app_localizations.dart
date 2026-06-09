@@ -11934,6 +11934,108 @@ abstract class AppLocalizations {
   /// **'لا توجد بنود موظفين في هذا المسير.'**
   String get payrollRunNoEmployees;
 
+  /// No description provided for @payrollBulkAdjustmentButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعديل جماعي للرواتب'**
+  String get payrollBulkAdjustmentButton;
+
+  /// No description provided for @payrollBulkAdjustmentTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعديل جماعي للرواتب'**
+  String get payrollBulkAdjustmentTitle;
+
+  /// No description provided for @payrollBulkAdjustmentSubtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر الموظفين وأدخل مبلغًا يطبق على كل موظف محدد.'**
+  String get payrollBulkAdjustmentSubtitle;
+
+  /// No description provided for @payrollBulkAdjustmentAmountLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'المبلغ لكل موظف'**
+  String get payrollBulkAdjustmentAmountLabel;
+
+  /// No description provided for @payrollBulkAdjustmentAmountHelper.
+  ///
+  /// In ar, this message translates to:
+  /// **'سيطبق نفس المبلغ على كل موظف محدد.'**
+  String get payrollBulkAdjustmentAmountHelper;
+
+  /// No description provided for @payrollBulkAdjustmentNotesLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'ملاحظات التعديل'**
+  String get payrollBulkAdjustmentNotesLabel;
+
+  /// No description provided for @payrollBulkSelectionSection.
+  ///
+  /// In ar, this message translates to:
+  /// **'الموظفون المحددون'**
+  String get payrollBulkSelectionSection;
+
+  /// No description provided for @payrollBulkSelectAllEmployees.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختيار كل موظفي المسير'**
+  String get payrollBulkSelectAllEmployees;
+
+  /// Selected payroll line count in the bulk adjustment sheet.
+  ///
+  /// In ar, this message translates to:
+  /// **'{selected} من {total} محددين'**
+  String payrollBulkSelectedCount(int selected, int total);
+
+  /// No description provided for @payrollBulkNoEmployeesSelected.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر موظفًا واحدًا على الأقل.'**
+  String get payrollBulkNoEmployeesSelected;
+
+  /// No description provided for @payrollBulkPositiveAmountError.
+  ///
+  /// In ar, this message translates to:
+  /// **'أدخل مبلغًا أكبر من صفر.'**
+  String get payrollBulkPositiveAmountError;
+
+  /// No description provided for @payrollBulkSelectedEmployeesLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الموظفون'**
+  String get payrollBulkSelectedEmployeesLabel;
+
+  /// No description provided for @payrollBulkAmountPerEmployeeLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'لكل موظف'**
+  String get payrollBulkAmountPerEmployeeLabel;
+
+  /// No description provided for @payrollBulkTotalAdditionLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'إجمالي الإضافة'**
+  String get payrollBulkTotalAdditionLabel;
+
+  /// No description provided for @payrollBulkTotalDeductionLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'إجمالي الخصم'**
+  String get payrollBulkTotalDeductionLabel;
+
+  /// No description provided for @payrollBulkAdjustmentSaveButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'تطبيق على المحددين'**
+  String get payrollBulkAdjustmentSaveButton;
+
+  /// No description provided for @payrollBulkAdjustmentSaveError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر تطبيق التعديل الجماعي.'**
+  String get payrollBulkAdjustmentSaveError;
+
   /// No description provided for @payrollLineManualPayLabel.
   ///
   /// In ar, this message translates to:

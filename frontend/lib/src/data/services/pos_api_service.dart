@@ -251,6 +251,13 @@ class PosApiService {
     );
   }
 
+  Future<PayrollRun> createPayrollBulkAdjustment(
+    int payrollRunId,
+    PayrollBulkAdjustmentDraft draft,
+  ) {
+    return _employees.createPayrollBulkAdjustment(payrollRunId, draft);
+  }
+
   Future<PayrollDraftResult> draftMonthlyPayrollRun() {
     return _employees.draftMonthlyPayrollRun();
   }

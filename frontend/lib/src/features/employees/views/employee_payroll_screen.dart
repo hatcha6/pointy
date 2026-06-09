@@ -685,6 +685,10 @@ class _PayrollRunDetailContent extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final spacing = AdaptiveSpacing.of(context);
+    final canEditPayrollLines =
+        capabilities.canManagePayroll &&
+        run.status == PayrollStatus.draft &&
+        run.lines.isNotEmpty;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -769,6 +773,15 @@ class _PayrollRunDetailContent extends StatelessWidget {
         PointyDetailSection(
           title: l10n.payrollRunEmployeesSection,
           icon: Icons.groups_outlined,
+          trailing: canEditPayrollLines
+              ? IconButton.filledTonal(
+                  onPressed: viewModel.isSaving
+                      ? null
+                      : () => _showBulkAdjustmentSheet(context),
+                  icon: const Icon(Icons.playlist_add_check_outlined),
+                  tooltip: l10n.payrollBulkAdjustmentButton,
+                )
+              : null,
           child: run.lines.isEmpty
               ? PointyEmptyState(
                   icon: Icons.groups_outlined,
@@ -793,6 +806,19 @@ class _PayrollRunDetailContent extends StatelessWidget {
         ),
       ],
     );
+  }
+
+  Future<void> _showBulkAdjustmentSheet(BuildContext context) async {
+    final updatedRun = await showModalBottomSheet<PayrollRun>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (sheetContext) =>
+          _PayrollBulkAdjustmentSheet(run: run, viewModel: viewModel),
+    );
+    if (updatedRun != null) {
+      onRunChanged(updatedRun);
+    }
   }
 
   String _actorWithDate(AppLocalizations l10n, String actor, DateTime date) {
@@ -1002,6 +1028,323 @@ class _PayrollLineCard extends StatelessWidget {
       _payrollLinePayLabel(l10n, line),
     ];
     return parts.join(' - ');
+  }
+}
+
+class _PayrollBulkAdjustmentSheet extends StatefulWidget {
+  const _PayrollBulkAdjustmentSheet({
+    required this.run,
+    required this.viewModel,
+  });
+
+  final PayrollRun run;
+  final EmployeePayrollViewModel viewModel;
+
+  @override
+  State<_PayrollBulkAdjustmentSheet> createState() =>
+      _PayrollBulkAdjustmentSheetState();
+}
+
+class _PayrollBulkAdjustmentSheetState
+    extends State<_PayrollBulkAdjustmentSheet> {
+  final TextEditingController _amountController = TextEditingController();
+  final TextEditingController _notesController = TextEditingController();
+  late Set<int> _selectedLineIds;
+  PayrollBulkAdjustmentType _type = PayrollBulkAdjustmentType.addition;
+  bool _submitted = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedLineIds = widget.run.lines.map((line) => line.id).toSet();
+    _amountController.addListener(_refreshPreview);
+  }
+
+  @override
+  void dispose() {
+    _amountController
+      ..removeListener(_refreshPreview)
+      ..dispose();
+    _notesController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final spacing = AdaptiveSpacing.of(context);
+    final theme = Theme.of(context);
+    final amount = _decimalValue(_amountController.text);
+    final selectedCount = _selectedLineIds.length;
+    final totalImpact = _roundMoney(amount * selectedCount);
+    final showSelectionError = _submitted && selectedCount == 0;
+    final showAmountError = _submitted && amount <= 0;
+
+    return Padding(
+      padding: EdgeInsets.only(
+        left: 16,
+        right: 16,
+        top: 16,
+        bottom: MediaQuery.viewInsetsOf(context).bottom + 16,
+      ),
+      child: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            PointySectionHeader(
+              title: l10n.payrollBulkAdjustmentTitle,
+              subtitle: l10n.payrollBulkAdjustmentSubtitle,
+              leading: const Icon(Icons.playlist_add_check_outlined),
+            ),
+            SizedBox(height: spacing.md),
+            SegmentedButton<PayrollBulkAdjustmentType>(
+              showSelectedIcon: false,
+              segments: [
+                ButtonSegment(
+                  value: PayrollBulkAdjustmentType.addition,
+                  icon: const Icon(Icons.add_circle_outline),
+                  label: Text(l10n.payrollAdjustmentAddition),
+                ),
+                ButtonSegment(
+                  value: PayrollBulkAdjustmentType.deduction,
+                  icon: const Icon(Icons.remove_circle_outline),
+                  label: Text(l10n.payrollAdjustmentDeduction),
+                ),
+                ButtonSegment(
+                  value: PayrollBulkAdjustmentType.overtime,
+                  icon: const Icon(Icons.more_time_outlined),
+                  label: Text(l10n.payrollAdjustmentOvertime),
+                ),
+              ],
+              selected: {_type},
+              onSelectionChanged: widget.viewModel.isSaving
+                  ? null
+                  : (selection) {
+                      setState(() {
+                        _type = selection.single;
+                      });
+                    },
+            ),
+            SizedBox(height: spacing.sm),
+            TextFormField(
+              controller: _amountController,
+              decoration: InputDecoration(
+                labelText: l10n.payrollBulkAdjustmentAmountLabel,
+                helperText: l10n.payrollBulkAdjustmentAmountHelper,
+                errorText: showAmountError
+                    ? l10n.payrollBulkPositiveAmountError
+                    : null,
+              ),
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
+              inputFormatters: [DecimalTextInputFormatter()],
+            ),
+            SizedBox(height: spacing.sm),
+            TextField(
+              controller: _notesController,
+              decoration: InputDecoration(
+                labelText: l10n.payrollBulkAdjustmentNotesLabel,
+              ),
+              minLines: 2,
+              maxLines: 4,
+            ),
+            SizedBox(height: spacing.md),
+            PointyDetailSection(
+              title: l10n.payrollBulkSelectionSection,
+              icon: Icons.groups_outlined,
+              child: Column(
+                children: [
+                  CheckboxListTile(
+                    contentPadding: EdgeInsets.zero,
+                    controlAffinity: ListTileControlAffinity.leading,
+                    dense: true,
+                    value: _allSelected,
+                    onChanged: widget.viewModel.isSaving
+                        ? null
+                        : (selected) => _toggleAll(selected ?? false),
+                    title: Text(l10n.payrollBulkSelectAllEmployees),
+                    subtitle: Text(
+                      l10n.payrollBulkSelectedCount(
+                        selectedCount,
+                        widget.run.lines.length,
+                      ),
+                    ),
+                  ),
+                  Divider(height: spacing.md),
+                  for (final line in widget.run.lines)
+                    CheckboxListTile(
+                      key: ValueKey('payroll_bulk_line_${line.id}'),
+                      contentPadding: EdgeInsets.zero,
+                      controlAffinity: ListTileControlAffinity.leading,
+                      dense: true,
+                      value: _selectedLineIds.contains(line.id),
+                      onChanged: widget.viewModel.isSaving
+                          ? null
+                          : (selected) =>
+                                _toggleLine(line.id, selected ?? false),
+                      title: Text(
+                        _employeeLineTitle(l10n, line),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      subtitle: Text(
+                        _employeeLineSubtitle(l10n, line),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  if (showSelectionError) ...[
+                    SizedBox(height: spacing.xs),
+                    Align(
+                      alignment: AlignmentDirectional.centerStart,
+                      child: Text(
+                        l10n.payrollBulkNoEmployeesSelected,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.error,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            SizedBox(height: spacing.md),
+            PointyDetailSection(
+              title: l10n.payrollAdjustmentPreviewSection,
+              icon: Icons.calculate_outlined,
+              child: Column(
+                children: [
+                  PointyDetailRow(
+                    label: l10n.payrollBulkSelectedEmployeesLabel,
+                    value: l10n.payrollLineCount(selectedCount),
+                  ),
+                  PointyDetailRow(
+                    label: l10n.payrollBulkAmountPerEmployeeLabel,
+                    value: formatMoney(amount),
+                  ),
+                  PointyDetailRow(
+                    label: _type == PayrollBulkAdjustmentType.deduction
+                        ? l10n.payrollBulkTotalDeductionLabel
+                        : l10n.payrollBulkTotalAdditionLabel,
+                    value: formatMoney(totalImpact),
+                  ),
+                ],
+              ),
+            ),
+            SizedBox(height: spacing.md),
+            ListenableBuilder(
+              listenable: widget.viewModel,
+              builder: (context, _) {
+                return Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: widget.viewModel.isSaving
+                            ? null
+                            : () => Navigator.of(context).pop(),
+                        child: Text(l10n.cancelButton),
+                      ),
+                    ),
+                    SizedBox(width: spacing.sm),
+                    Expanded(
+                      child: FilledButton.icon(
+                        onPressed: widget.viewModel.isSaving ? null : _save,
+                        icon: const Icon(Icons.playlist_add_check_outlined),
+                        label: Text(l10n.payrollBulkAdjustmentSaveButton),
+                      ),
+                    ),
+                  ],
+                );
+              },
+            ),
+            if (widget.viewModel.hasSaveError) ...[
+              SizedBox(height: spacing.sm),
+              Text(
+                l10n.payrollBulkAdjustmentSaveError,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.error,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  bool get _allSelected {
+    return widget.run.lines.isNotEmpty &&
+        _selectedLineIds.length == widget.run.lines.length;
+  }
+
+  Future<void> _save() async {
+    setState(() {
+      _submitted = true;
+    });
+    final amount = _decimalValue(_amountController.text);
+    if (_selectedLineIds.isEmpty || amount <= 0) {
+      return;
+    }
+
+    final updatedRun = await widget.viewModel.createPayrollBulkAdjustment(
+      widget.run,
+      PayrollBulkAdjustmentDraft(
+        payrollLineIds: [
+          for (final line in widget.run.lines)
+            if (_selectedLineIds.contains(line.id)) line.id,
+        ],
+        type: _type,
+        amount: _decimalPayload(_amountController.text),
+        notes: _notesController.text,
+      ),
+    );
+    if (mounted && updatedRun != null) {
+      Navigator.of(context).pop(updatedRun);
+    } else if (mounted) {
+      setState(() {});
+    }
+  }
+
+  void _toggleAll(bool selected) {
+    setState(() {
+      _selectedLineIds = selected
+          ? widget.run.lines.map((line) => line.id).toSet()
+          : <int>{};
+    });
+  }
+
+  void _toggleLine(int lineId, bool selected) {
+    setState(() {
+      if (selected) {
+        _selectedLineIds.add(lineId);
+      } else {
+        _selectedLineIds.remove(lineId);
+      }
+    });
+  }
+
+  String _employeeLineTitle(AppLocalizations l10n, PayrollLine line) {
+    return line.employeeName.trim().isEmpty
+        ? l10n.payrollEmployeeFallbackLabel(line.employeeId)
+        : line.employeeName.trim();
+  }
+
+  String _employeeLineSubtitle(AppLocalizations l10n, PayrollLine line) {
+    final parts = [
+      if (line.employeeNumber.trim().isNotEmpty) line.employeeNumber.trim(),
+      _payrollLinePayLabel(l10n, line),
+      l10n.payrollLineAmountDetail(
+        l10n.payrollLineNetLabel,
+        formatMoney(line.netAmount),
+      ),
+    ];
+    return parts.join(' - ');
+  }
+
+  void _refreshPreview() {
+    setState(() {});
   }
 }
 

@@ -1,3 +1,4 @@
+from django.db import transaction
 from django.db.models import Count, Prefetch, Q
 from rest_framework import mixins, serializers, viewsets
 from rest_framework.decorators import action
@@ -8,7 +9,14 @@ from rest_framework.response import Response
 from apps.analytics.models import AnalyticsEvent
 from apps.core.permissions import HasPointyPermission
 
-from .models import CompensationPlan, Employee, EmployeeLoan, PayrollLine, PayrollRun
+from .models import (
+    CompensationPlan,
+    Employee,
+    EmployeeLoan,
+    PayrollAdjustment,
+    PayrollLine,
+    PayrollRun,
+)
 from .serializers import (
     CompensationPlanSerializer,
     EmployeeSerializer,
@@ -17,6 +25,7 @@ from .serializers import (
     EmployeeLoanSerializer,
     EmployeeSummarySerializer,
     PayrollLineAdjustmentUpdateSerializer,
+    PayrollRunBulkAdjustmentSerializer,
     PayrollRunSerializer,
 )
 from .services import (
@@ -295,6 +304,7 @@ class PayrollRunViewSet(viewsets.ModelViewSet):
         "draft_monthly": ("employees.add_payrollrun", "employees.view_employee"),
         "mark_paid": ("employees.mark_payrollrun_paid",),
         "update_line_adjustments": ("employees.change_payrollrun",),
+        "bulk_adjustments": ("employees.change_payrollrun",),
         "void": ("employees.void_payrollrun",),
     }
     queryset = PayrollRun.objects.annotate(line_count=Count("lines")).prefetch_related(
@@ -393,6 +403,95 @@ class PayrollRunViewSet(viewsets.ModelViewSet):
                 "manual_addition_amount": float(line.manual_addition_amount),
                 "manual_deduction_amount": float(line.manual_deduction_amount),
             },
+        )
+        payroll_run = self.get_queryset().get(pk=payroll_run.pk)
+        return Response(
+            PayrollRunSerializer(
+                payroll_run,
+                context=self.get_serializer_context(),
+            ).data
+        )
+
+    @action(detail=True, methods=["post"], url_path="bulk-adjustments")
+    def bulk_adjustments(self, request, pk=None):
+        payroll_run = self.get_object()
+        if payroll_run.status != PayrollRun.Status.DRAFT:
+            raise serializers.ValidationError(
+                {"detail": "Only draft payroll runs can be changed."}
+            )
+
+        serializer = PayrollRunBulkAdjustmentSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        line_ids = serializer.validated_data["line_ids"]
+        amount = serializer.validated_data["amount"]
+        direction = serializer.validated_data["direction"]
+
+        with transaction.atomic():
+            locked_run = PayrollRun.objects.select_for_update().get(pk=payroll_run.pk)
+            lines = list(
+                PayrollLine.objects.select_for_update()
+                .select_related("employee", "compensation_plan", "payroll_run")
+                .filter(payroll_run=locked_run, pk__in=line_ids)
+            )
+            lines_by_id = {line.pk: line for line in lines}
+            missing_ids = [line_id for line_id in line_ids if line_id not in lines_by_id]
+            if missing_ids:
+                raise serializers.ValidationError(
+                    {"line_ids": "One or more payroll lines were not found."}
+                )
+
+            if direction == PayrollAdjustment.Direction.DEDUCTION:
+                negative_lines = [
+                    line for line in lines if line.net_amount < amount
+                ]
+                if negative_lines:
+                    raise serializers.ValidationError(
+                        {
+                            "amount": (
+                                "This deduction would make one or more payroll "
+                                "lines negative."
+                            )
+                        }
+                    )
+
+            PayrollAdjustment.objects.bulk_create(
+                [
+                    PayrollAdjustment(
+                        payroll_line=lines_by_id[line_id],
+                        direction=direction,
+                        adjustment_type=serializer.validated_data["adjustment_type"],
+                        amount=amount,
+                        notes=serializer.validated_data.get("notes", ""),
+                    )
+                    for line_id in line_ids
+                ]
+            )
+
+            for line_id in line_ids:
+                lines_by_id[line_id].recalculate(save=True)
+            locked_run.recalculate(save_lines=False)
+            locked_run.save(
+                update_fields=[
+                    "gross_total",
+                    "additions_total",
+                    "deductions_total",
+                    "net_total",
+                    "updated_at",
+                ]
+            )
+
+        record_employee_event(
+            name="employees.payroll_run.bulk_adjustment_created",
+            user=request.user if request.user.is_authenticated else None,
+            entity_type="payroll_run",
+            entity_id=payroll_run.pk,
+            attributes={
+                "run_number": payroll_run.run_number,
+                "direction": direction,
+                "adjustment_type": serializer.validated_data["adjustment_type"],
+                "line_count": len(line_ids),
+            },
+            metrics={"amount": float(amount)},
         )
         payroll_run = self.get_queryset().get(pk=payroll_run.pk)
         return Response(

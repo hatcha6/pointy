@@ -253,6 +253,105 @@ class EmployeePayrollApiTests(TestCase):
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
+    def test_payroll_run_bulk_adjustments_apply_to_selected_lines(self):
+        first_employee = Employee.objects.create(full_name="أحمد سالم")
+        second_employee = Employee.objects.create(full_name="منى صالح")
+        payroll = PayrollRun.objects.create(
+            period_start=date(2026, 6, 1),
+            period_end=date(2026, 6, 30),
+        )
+        first_line = payroll.lines.create(
+            employee=first_employee,
+            units=Decimal("1.00"),
+            rate=Decimal("900.00"),
+        )
+        second_line = payroll.lines.create(
+            employee=second_employee,
+            units=Decimal("1.00"),
+            rate=Decimal("800.00"),
+        )
+        payroll.recalculate(save_lines=True)
+        payroll.save()
+
+        client = self.authenticated_client(self.accountant)
+        response = client.post(
+            reverse("payroll-run-bulk-adjustments", args=[payroll.pk]),
+            {
+                "line_ids": [first_line.pk],
+                "direction": PayrollAdjustment.Direction.ADDITION,
+                "adjustment_type": PayrollAdjustment.AdjustmentType.OVERTIME,
+                "amount": "2000.00",
+                "notes": "عيد الفطر",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["gross_total"], "1700.00")
+        self.assertEqual(response.data["additions_total"], "2000.00")
+        self.assertEqual(response.data["deductions_total"], "0.00")
+        self.assertEqual(response.data["net_total"], "3700.00")
+        response_lines = {line["id"]: line for line in response.data["lines"]}
+        self.assertEqual(
+            response_lines[first_line.pk]["adjustments"][0]["adjustment_type"],
+            PayrollAdjustment.AdjustmentType.OVERTIME,
+        )
+        self.assertEqual(
+            response_lines[first_line.pk]["adjustments"][0]["amount"],
+            "2000.00",
+        )
+        self.assertEqual(
+            response_lines[first_line.pk]["adjustments"][0]["notes"],
+            "عيد الفطر",
+        )
+        self.assertEqual(response_lines[second_line.pk]["adjustments"], [])
+
+        response = client.post(
+            reverse("payroll-run-bulk-adjustments", args=[payroll.pk]),
+            {
+                "line_ids": [second_line.pk],
+                "direction": PayrollAdjustment.Direction.DEDUCTION,
+                "adjustment_type": PayrollAdjustment.AdjustmentType.OTHER,
+                "amount": "50.00",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["deductions_total"], "50.00")
+        self.assertEqual(response.data["net_total"], "3650.00")
+        response_lines = {line["id"]: line for line in response.data["lines"]}
+        self.assertEqual(
+            response_lines[second_line.pk]["adjustments"][0]["direction"],
+            PayrollAdjustment.Direction.DEDUCTION,
+        )
+
+    def test_payroll_run_bulk_adjustments_are_locked_after_draft_status(self):
+        employee = Employee.objects.create(full_name="منى صالح")
+        payroll = PayrollRun.objects.create(
+            status=PayrollRun.Status.APPROVED,
+            period_start=date(2026, 6, 1),
+            period_end=date(2026, 6, 30),
+        )
+        line = payroll.lines.create(
+            employee=employee,
+            units=Decimal("1.00"),
+            rate=Decimal("300.00"),
+        )
+
+        response = self.authenticated_client(self.accountant).post(
+            reverse("payroll-run-bulk-adjustments", args=[payroll.pk]),
+            {
+                "line_ids": [line.pk],
+                "direction": PayrollAdjustment.Direction.ADDITION,
+                "adjustment_type": PayrollAdjustment.AdjustmentType.BONUS,
+                "amount": "10.00",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
     def test_payroll_run_list_paginates_with_stable_ordering(self):
         older = PayrollRun.objects.create(
             period_start=timezone.localdate() - timedelta(days=60),

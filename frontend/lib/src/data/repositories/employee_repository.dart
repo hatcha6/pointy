@@ -57,6 +57,15 @@ class EmployeeRepository {
     );
   }
 
+  Future<Result<PayrollRun>> createPayrollBulkAdjustment(
+    int payrollRunId,
+    PayrollBulkAdjustmentDraft draft,
+  ) {
+    return Result.guard(
+      () => _service.createPayrollBulkAdjustment(payrollRunId, draft),
+    );
+  }
+
   Future<Result<PayrollDraftResult>> draftMonthlyPayrollRun() {
     return Result.guard(() => _service.draftMonthlyPayrollRun());
   }

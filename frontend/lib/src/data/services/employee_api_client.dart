@@ -97,6 +97,23 @@ class EmployeeApiClient {
     );
   }
 
+  Future<PayrollRun> createPayrollBulkAdjustment(
+    int payrollRunId,
+    PayrollBulkAdjustmentDraft draft,
+  ) async {
+    final response = await _session.post(
+      'payroll-runs/$payrollRunId/bulk-adjustments/',
+      body: draft.toJson(),
+    );
+    _session.ensureSuccess(
+      response,
+      'Payroll bulk adjustment create failed with status',
+    );
+    return PayrollRun.fromJson(
+      _session.decodedBody(response) as Map<String, Object?>,
+    );
+  }
+
   Future<PayrollDraftResult> draftMonthlyPayrollRun() async {
     final response = await _session.post('payroll-runs/draft-monthly/');
     _session.ensureSuccess(

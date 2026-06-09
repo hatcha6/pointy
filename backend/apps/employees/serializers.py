@@ -583,6 +583,36 @@ class PayrollLineAdjustmentUpdateSerializer(serializers.ModelSerializer):
         return instance
 
 
+class PayrollRunBulkAdjustmentSerializer(serializers.Serializer):
+    line_ids = serializers.ListField(
+        child=serializers.IntegerField(min_value=1),
+        allow_empty=False,
+    )
+    direction = serializers.ChoiceField(choices=PayrollAdjustment.Direction.choices)
+    adjustment_type = serializers.ChoiceField(
+        choices=PayrollAdjustment.AdjustmentType.choices
+    )
+    amount = serializers.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        min_value=Decimal("0.01"),
+    )
+    notes = serializers.CharField(required=False, allow_blank=True, trim_whitespace=True)
+
+    def validate_line_ids(self, value):
+        return list(dict.fromkeys(value))
+
+    def validate(self, attrs):
+        if (
+            attrs["adjustment_type"] == PayrollAdjustment.AdjustmentType.OVERTIME
+            and attrs["direction"] != PayrollAdjustment.Direction.ADDITION
+        ):
+            raise serializers.ValidationError(
+                {"direction": "Overtime adjustments must be additions."}
+            )
+        return attrs
+
+
 class PayrollRunSerializer(serializers.ModelSerializer):
     lines = PayrollLineSerializer(many=True, required=False)
     line_count = serializers.SerializerMethodField()

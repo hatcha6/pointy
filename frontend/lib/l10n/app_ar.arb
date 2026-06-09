@@ -4419,6 +4419,34 @@
     }
   },
   "payrollRunNoEmployees": "لا توجد بنود موظفين في هذا المسير.",
+  "payrollBulkAdjustmentButton": "تعديل جماعي للرواتب",
+  "payrollBulkAdjustmentTitle": "تعديل جماعي للرواتب",
+  "payrollBulkAdjustmentSubtitle": "اختر الموظفين وأدخل مبلغًا يطبق على كل موظف محدد.",
+  "payrollBulkAdjustmentAmountLabel": "المبلغ لكل موظف",
+  "payrollBulkAdjustmentAmountHelper": "سيطبق نفس المبلغ على كل موظف محدد.",
+  "payrollBulkAdjustmentNotesLabel": "ملاحظات التعديل",
+  "payrollBulkSelectionSection": "الموظفون المحددون",
+  "payrollBulkSelectAllEmployees": "اختيار كل موظفي المسير",
+  "payrollBulkSelectedCount": "{selected} من {total} محددين",
+  "@payrollBulkSelectedCount": {
+    "description": "Selected payroll line count in the bulk adjustment sheet.",
+    "placeholders": {
+      "selected": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "payrollBulkNoEmployeesSelected": "اختر موظفًا واحدًا على الأقل.",
+  "payrollBulkPositiveAmountError": "أدخل مبلغًا أكبر من صفر.",
+  "payrollBulkSelectedEmployeesLabel": "الموظفون",
+  "payrollBulkAmountPerEmployeeLabel": "لكل موظف",
+  "payrollBulkTotalAdditionLabel": "إجمالي الإضافة",
+  "payrollBulkTotalDeductionLabel": "إجمالي الخصم",
+  "payrollBulkAdjustmentSaveButton": "تطبيق على المحددين",
+  "payrollBulkAdjustmentSaveError": "تعذر تطبيق التعديل الجماعي.",
   "payrollLineManualPayLabel": "أجر يدوي",
   "editPayrollLineAdjustmentsTooltip": "تعديل غياب وإضافات الموظف",
   "payrollLineAdjustmentTitle": "تعديل راتب {employee}",

@@ -787,6 +787,52 @@ class PayrollLineAdjustmentDraft {
   }
 }
 
+enum PayrollBulkAdjustmentType {
+  addition,
+  deduction,
+  overtime;
+
+  String get direction {
+    return switch (this) {
+      PayrollBulkAdjustmentType.addition => 'addition',
+      PayrollBulkAdjustmentType.deduction => 'deduction',
+      PayrollBulkAdjustmentType.overtime => 'addition',
+    };
+  }
+
+  String get adjustmentType {
+    return switch (this) {
+      PayrollBulkAdjustmentType.addition => 'bonus',
+      PayrollBulkAdjustmentType.deduction => 'other',
+      PayrollBulkAdjustmentType.overtime => 'overtime',
+    };
+  }
+}
+
+class PayrollBulkAdjustmentDraft {
+  const PayrollBulkAdjustmentDraft({
+    required this.payrollLineIds,
+    required this.type,
+    required this.amount,
+    this.notes = '',
+  });
+
+  final List<int> payrollLineIds;
+  final PayrollBulkAdjustmentType type;
+  final String amount;
+  final String notes;
+
+  Map<String, Object?> toJson() {
+    return {
+      'line_ids': payrollLineIds,
+      'direction': type.direction,
+      'adjustment_type': type.adjustmentType,
+      'amount': amount,
+      if (notes.trim().isNotEmpty) 'notes': notes.trim(),
+    };
+  }
+}
+
 class PayrollRunDraft {
   const PayrollRunDraft({
     required this.periodStart,
