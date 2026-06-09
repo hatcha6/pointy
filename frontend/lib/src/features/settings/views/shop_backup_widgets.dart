@@ -13,6 +13,7 @@ class _BackupOperationsPageState extends State<_BackupOperationsPage> {
   bool _scheduleInitialized = false;
   bool _scheduleDirty = false;
   bool _showScheduleErrors = false;
+  bool _requireDestinationForManualBackup = false;
   bool _backupEnabled = false;
   String _destinationPath = '';
   TimeOfDay _scheduledTime = const TimeOfDay(hour: 2, minute: 0);
@@ -21,7 +22,12 @@ class _BackupOperationsPageState extends State<_BackupOperationsPage> {
   @override
   void initState() {
     super.initState();
-    unawaited(widget.viewModel.loadBackupOperations());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      unawaited(widget.viewModel.loadBackupOperations());
+    });
   }
 
   @override
@@ -171,7 +177,7 @@ class _BackupOperationsPageState extends State<_BackupOperationsPage> {
 
   String? _backupDestinationError(AppLocalizations l10n) {
     if (!_showScheduleErrors ||
-        !_backupEnabled ||
+        (!_backupEnabled && !_requireDestinationForManualBackup) ||
         _destinationPath.isNotEmpty) {
       return null;
     }
@@ -198,7 +204,10 @@ class _BackupOperationsPageState extends State<_BackupOperationsPage> {
 
   Future<void> _saveSchedule() async {
     final l10n = AppLocalizations.of(context)!;
-    setState(() => _showScheduleErrors = true);
+    setState(() {
+      _showScheduleErrors = true;
+      _requireDestinationForManualBackup = false;
+    });
     if (_backupDestinationError(l10n) != null) {
       return;
     }
@@ -219,6 +228,7 @@ class _BackupOperationsPageState extends State<_BackupOperationsPage> {
       setState(() {
         _scheduleDirty = false;
         _showScheduleErrors = false;
+        _requireDestinationForManualBackup = false;
       });
     }
     messenger
@@ -237,6 +247,46 @@ class _BackupOperationsPageState extends State<_BackupOperationsPage> {
   Future<void> _startBackup() async {
     final l10n = AppLocalizations.of(context)!;
     final messenger = ScaffoldMessenger.of(context);
+    setState(() {
+      _showScheduleErrors = true;
+      _requireDestinationForManualBackup = true;
+    });
+    if (_backupDestinationError(l10n) != null) {
+      messenger
+        ..clearSnackBars()
+        ..showSnackBar(
+          SnackBar(content: Text(l10n.backupDestinationRequiredError)),
+        );
+      return;
+    }
+
+    if (_scheduleDirty) {
+      final saved = await widget.viewModel.updateBackupSchedule(
+        BackupScheduleDraft(
+          enabled: _backupEnabled,
+          destinationPath: _destinationPath,
+          scheduledTime: _timeOfDayToApiValue(_scheduledTime),
+          retentionCount: _retentionCount,
+        ),
+      );
+      if (!context.mounted) {
+        return;
+      }
+      if (!saved) {
+        messenger
+          ..clearSnackBars()
+          ..showSnackBar(
+            SnackBar(content: Text(l10n.backupOperationFailedMessage)),
+          );
+        return;
+      }
+      setState(() {
+        _scheduleDirty = false;
+        _showScheduleErrors = false;
+        _requireDestinationForManualBackup = false;
+      });
+    }
+
     final started = await widget.viewModel.startBackup();
     if (!context.mounted) {
       return;

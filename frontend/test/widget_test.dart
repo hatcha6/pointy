@@ -2530,6 +2530,48 @@ void main() {
     expect(find.text('تم حفظ إعدادات المتجر.'), findsOneWidget);
   });
 
+  testWidgets('manual backup saves selected destination before starting', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(1200, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final backupRequests = <String>[];
+    Map<String, Object?>? scheduleBody;
+
+    await tester.pumpWidget(
+      PointyApp(
+        apiService: _mockApiService(
+          onBackupScheduleUpdate: (request) {
+            backupRequests.add(request.method);
+            scheduleBody = jsonDecode(request.body) as Map<String, Object?>;
+          },
+          onBackupStart: (request) {
+            backupRequests.add(request.method);
+          },
+        ),
+      ),
+    );
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+
+    await _openNavigationDestination(tester, 'إعدادات المتجر');
+    await tester.tap(find.text('النسخ والاستعادة'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('backup_destination_field')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.textContaining('PointyBackup').last);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('نسخ الآن'));
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+
+    expect(scheduleBody?['destination_path'], '/mnt/pointy-backup');
+    expect(backupRequests, ['PATCH', 'POST']);
+    expect(find.text('بدأ النسخ الاحتياطي.'), findsOneWidget);
+  });
+
   testWidgets('manager can filter and download analytics export', (
     WidgetTester tester,
   ) async {
@@ -3720,12 +3762,17 @@ PosApiService _mockApiService({
   void Function(http.Request request)? onProductCategoryRequest,
   void Function(http.Request request)? onProductUpdate,
   void Function(http.Request request)? onProductVariantUpdate,
+  void Function(http.Request request)? onBackupScheduleUpdate,
+  void Function(http.Request request)? onBackupStart,
   bool shopSettingsAutoPrint = false,
   bool shopSettingsRequireOpeningCash = true,
   bool shopSettingsAllowOverselling = false,
   bool shopSettingsPreventSellingAtLoss = true,
   bool shopSettingsRequireCardReceipt = false,
   List<String> shopSettingsTrustedCardTerminalIds = const [],
+  String backupDestinationPath = '',
+  bool backupScheduleEnabled = false,
+  String backupScheduledTime = '02:00:00',
   bool saleDiscountPreviewHasLoss = false,
   int shopSettingsCashierReturnWindowHours = 42,
   int productQuantityOnHand = 12,
@@ -3738,6 +3785,9 @@ PosApiService _mockApiService({
   var authenticated = isAuthenticated;
   var currentSessionIsOpen = hasOpenSession;
   var supplierPaidTotal = 0.0;
+  var configuredBackupDestinationPath = backupDestinationPath;
+  var configuredBackupScheduleEnabled = backupScheduleEnabled;
+  var configuredBackupScheduledTime = backupScheduledTime;
 
   return PosApiService(
     client: MockClient((request) async {
@@ -3873,6 +3923,64 @@ PosApiService _mockApiService({
                   'http://127.0.0.1:8000/api/attachments/10/download/',
               'is_primary': true,
             },
+          ),
+        );
+      }
+
+      if (path.endsWith('/backup/destinations/')) {
+        return _jsonResponse({
+          'destinations': [
+            {
+              'label': 'PointyBackup',
+              'path': '/mnt/pointy-backup',
+              'backup_path': '/mnt/pointy-backup/pointy-backups',
+              'is_available': true,
+              'is_writable': true,
+              'total_bytes': 10737418240,
+              'free_bytes': 8589934592,
+            },
+          ],
+        });
+      }
+
+      if (path.endsWith('/backup/')) {
+        if (request.method == 'PATCH') {
+          onBackupScheduleUpdate?.call(request);
+          final body = jsonDecode(request.body) as Map<String, Object?>;
+          configuredBackupScheduleEnabled = body['enabled'] == true;
+          configuredBackupDestinationPath =
+              body['destination_path']?.toString() ?? '';
+          configuredBackupScheduledTime =
+              body['scheduled_time']?.toString() ??
+              configuredBackupScheduledTime;
+          return _jsonResponse(
+            _backupOperationsJson(
+              enabled: configuredBackupScheduleEnabled,
+              destinationPath: configuredBackupDestinationPath,
+              scheduledTime: configuredBackupScheduledTime,
+            ),
+          );
+        }
+        if (request.method == 'POST') {
+          onBackupStart?.call(request);
+          if (configuredBackupDestinationPath.isEmpty) {
+            return http.Response.bytes(
+              utf8.encode(
+                jsonEncode({'detail': 'Backup destination is required.'}),
+              ),
+              400,
+              headers: const {
+                'Content-Type': 'application/json; charset=utf-8',
+              },
+            );
+          }
+          return _jsonResponse(_backupJobJson());
+        }
+        return _jsonResponse(
+          _backupOperationsJson(
+            enabled: configuredBackupScheduleEnabled,
+            destinationPath: configuredBackupDestinationPath,
+            scheduledTime: configuredBackupScheduledTime,
           ),
         );
       }
@@ -4844,6 +4952,49 @@ Map<String, Object?> _shopSettingsJson({
     'trusted_card_terminal_ids': trustedCardTerminalIds,
     'card_commission_percent': '1.00',
     'transfer_commission_percent': '0.00',
+  };
+}
+
+Map<String, Object?> _backupOperationsJson({
+  required bool enabled,
+  required String destinationPath,
+  required String scheduledTime,
+}) {
+  return {
+    'schedule': {
+      'enabled': enabled,
+      'destination_path': destinationPath,
+      'scheduled_time': scheduledTime,
+      'retention_count': 7,
+      'next_scheduled_at': enabled && destinationPath.isNotEmpty
+          ? '2026-06-09T02:00:00Z'
+          : null,
+      'updated_at': '2026-06-09T01:00:00Z',
+    },
+    'active_job': null,
+    'latest_backup_job': null,
+    'latest_restore_job': null,
+  };
+}
+
+Map<String, Object?> _backupJobJson() {
+  return {
+    'id': 1,
+    'operation': 'backup',
+    'status': 'queued',
+    'progress_percent': 0,
+    'progress_message': 'تمت جدولة النسخ الاحتياطي.',
+    'destination_path': '/mnt/pointy-backup',
+    'backup_file_name': '',
+    'archive_size_bytes': 0,
+    'error_message': '',
+    'metadata': <String, Object?>{},
+    'initiated_by_user_id': 1,
+    'initiated_by_username': 'manager',
+    'created_at': '2026-06-09T01:00:00Z',
+    'updated_at': '2026-06-09T01:00:00Z',
+    'started_at': null,
+    'completed_at': null,
   };
 }
 
