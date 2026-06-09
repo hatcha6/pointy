@@ -5,6 +5,7 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../data/models/product_variant.dart';
 import '../../../shared/barcode/camera_barcode_scanner_sheet.dart';
+import '../../../shared/catalog/catalog.dart';
 import '../../../shared/infinite_scroll_grid.dart';
 import '../../../shared/product_query_controls.dart';
 import '../../../shared/product_tile.dart';
@@ -20,6 +21,7 @@ class PurchaseCatalogPane extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    final spacing = AdaptiveSpacing.of(context);
 
     return Padding(
       padding: const EdgeInsets.all(16),
@@ -70,31 +72,35 @@ class PurchaseCatalogPane extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           Expanded(
-            child: InfiniteScrollGrid(
-              items: viewModel.variants,
-              onLoadMore: viewModel.loadMoreCatalog,
-              hasMore: viewModel.hasMoreProducts,
-              isLoadingInitial: viewModel.isLoading,
-              isLoadingMore: viewModel.isLoadingMore,
-              emptyBuilder: (context) => Center(child: Text(l10n.emptyCatalog)),
-              gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                maxCrossAxisExtent: 220,
-                mainAxisExtent: 156,
-                crossAxisSpacing: 12,
-                mainAxisSpacing: 12,
-              ),
-              itemBuilder: (context, variant) {
-                return ProductTile.variant(
-                  variant: variant,
-                  showPrice: false,
-                  onTap: viewModel.isSubmitting
-                      ? null
-                      : () => unawaited(
-                          viewModel.addVariant(
-                            variant,
-                            source: 'purchase_catalog_tile',
-                          ),
-                        ),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                return InfiniteScrollGrid<ProductVariant>(
+                  items: viewModel.variants,
+                  onLoadMore: viewModel.loadMoreCatalog,
+                  hasMore: viewModel.hasMoreProducts,
+                  isLoadingInitial: viewModel.isLoading,
+                  isLoadingMore: viewModel.isLoadingMore,
+                  loadMoreExtent: PointyProductCardGrid.loadMoreExtent,
+                  emptyBuilder: (context) =>
+                      Center(child: Text(l10n.emptyCatalog)),
+                  gridDelegate: PointyProductCardGrid.delegateFor(
+                    width: constraints.maxWidth,
+                    spacing: spacing.gutter,
+                  ),
+                  itemBuilder: (context, variant) {
+                    return ProductTile.variant(
+                      variant: variant,
+                      showPrice: false,
+                      onTap: viewModel.isSubmitting
+                          ? null
+                          : () => unawaited(
+                              viewModel.addVariant(
+                                variant,
+                                source: 'purchase_catalog_tile',
+                              ),
+                            ),
+                    );
+                  },
                 );
               },
             ),

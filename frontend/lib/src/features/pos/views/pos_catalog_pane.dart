@@ -17,12 +17,6 @@ import '../../../shared/responsive/responsive.dart';
 import '../view_models/pos_view_model.dart';
 import 'pos_variant_picker_sheet.dart';
 
-const _catalogTileMinWidth = 168.0;
-const _catalogTileMainExtent = 236.0;
-const _catalogWideTileMainExtent = 252.0;
-const _catalogLoadMoreExtent = 720.0;
-const _catalogMaxColumnCount = 5;
-
 class PosCatalogPane extends StatelessWidget {
   const PosCatalogPane({
     super.key,
@@ -144,15 +138,6 @@ class _PosCatalogGrid extends StatelessWidget {
         return LayoutBuilder(
           builder: (context, constraints) {
             final spacing = AdaptiveSpacing.of(context);
-            final columnCount = _catalogColumnCountFor(
-              constraints.maxWidth,
-              spacing.gutter,
-            );
-            final tileWidth = _catalogTileWidthFor(
-              constraints.maxWidth,
-              spacing.gutter,
-              columnCount,
-            );
 
             return InfiniteScrollGrid<Product>(
               items: products,
@@ -160,14 +145,12 @@ class _PosCatalogGrid extends StatelessWidget {
               hasMore: viewModel.hasMoreProducts,
               isLoadingInitial: viewModel.isLoading,
               isLoadingMore: viewModel.isLoadingMore,
-              loadMoreExtent: _catalogLoadMoreExtent,
+              loadMoreExtent: PointyProductCardGrid.loadMoreExtent,
               emptyBuilder: (context) =>
                   _PosCatalogEmptyState(message: emptyMessage),
-              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: columnCount,
-                mainAxisExtent: _catalogTileMainExtentFor(tileWidth),
-                crossAxisSpacing: spacing.gutter,
-                mainAxisSpacing: spacing.gutter,
+              gridDelegate: PointyProductCardGrid.delegateFor(
+                width: constraints.maxWidth,
+                spacing: spacing.gutter,
               ),
               itemBuilder: (context, product) {
                 return ProductTile(
@@ -215,30 +198,6 @@ class _PosCatalogGrid extends StatelessWidget {
           ..clearSnackBars()
           ..showSnackBar(SnackBar(content: Text(l10n.catalogLoadError)));
     }
-  }
-
-  int _catalogColumnCountFor(double width, double spacing) {
-    if (!width.isFinite || width <= 0) {
-      return 1;
-    }
-
-    final count = ((width + spacing) / (_catalogTileMinWidth + spacing))
-        .floor();
-    return count.clamp(1, _catalogMaxColumnCount);
-  }
-
-  double _catalogTileWidthFor(double width, double spacing, int columnCount) {
-    if (!width.isFinite || width <= 0 || columnCount <= 0) {
-      return _catalogTileMinWidth;
-    }
-    return (width - (spacing * (columnCount - 1))) / columnCount;
-  }
-
-  double _catalogTileMainExtentFor(double tileWidth) {
-    if (tileWidth >= 260) {
-      return _catalogWideTileMainExtent;
-    }
-    return _catalogTileMainExtent;
   }
 }
 

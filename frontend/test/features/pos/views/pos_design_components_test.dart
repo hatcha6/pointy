@@ -8,11 +8,24 @@ import 'package:pointy_frontend/src/data/models/product_variant.dart';
 import 'package:pointy_frontend/src/features/pos/views/cart_line_tile.dart';
 import 'package:pointy_frontend/src/features/pos/views/pos_sale_session_strip.dart';
 import 'package:pointy_frontend/src/features/pos/view_models/pos_view_model.dart';
+import 'package:pointy_frontend/src/shared/catalog/catalog.dart';
 import 'package:pointy_frontend/src/shared/design/design.dart';
 import 'package:pointy_frontend/src/shared/order/order.dart';
 import 'package:pointy_frontend/src/shared/product_tile.dart';
 
 void main() {
+  test('product card grid keeps catalog card proportions consistent', () {
+    final compact = PointyProductCardGrid.delegateFor(width: 390, spacing: 12);
+    expect(compact.crossAxisCount, 2);
+    expect(compact.mainAxisExtent, PointyProductCardGrid.tileMainExtent);
+    expect(compact.crossAxisSpacing, 12);
+    expect(compact.mainAxisSpacing, 12);
+
+    final wide = PointyProductCardGrid.delegateFor(width: 1400, spacing: 20);
+    expect(wide.crossAxisCount, PointyProductCardGrid.maxColumnCount);
+    expect(wide.mainAxisExtent, PointyProductCardGrid.wideTileMainExtent);
+  });
+
   for (final width in [390.0, 768.0, 1366.0]) {
     testWidgets('POS product card stays usable at width $width', (
       tester,
