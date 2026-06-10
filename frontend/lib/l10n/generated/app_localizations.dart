@@ -3399,6 +3399,42 @@ abstract class AppLocalizations {
   /// **'جار فحص الجلسة...'**
   String get authCheckingSession;
 
+  /// No description provided for @onboardingTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'إعداد نقطة البيع'**
+  String get onboardingTitle;
+
+  /// No description provided for @onboardingIntro.
+  ///
+  /// In ar, this message translates to:
+  /// **'أنشئ حساب المدير الأول للمتجر.'**
+  String get onboardingIntro;
+
+  /// No description provided for @onboardingAdminSectionTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'حساب المدير'**
+  String get onboardingAdminSectionTitle;
+
+  /// No description provided for @onboardingCreateAdminButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'إنشاء المدير'**
+  String get onboardingCreateAdminButton;
+
+  /// No description provided for @onboardingCreatingAdminButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'جار إنشاء المدير...'**
+  String get onboardingCreatingAdminButton;
+
+  /// No description provided for @onboardingCreateAdminError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر إنشاء المدير. تحقق من البيانات وقوة كلمة المرور ثم حاول مرة أخرى.'**
+  String get onboardingCreateAdminError;
+
   /// No description provided for @loginTitle.
   ///
   /// In ar, this message translates to:

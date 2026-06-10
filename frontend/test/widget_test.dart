@@ -2258,6 +2258,50 @@ void main() {
     expect(find.text('نقدية الافتتاح'), findsNothing);
   });
 
+  testWidgets('first-run onboarding creates the initial admin user', (
+    WidgetTester tester,
+  ) async {
+    Map<String, Object?>? setupPayload;
+
+    await tester.pumpWidget(
+      PointyApp(
+        apiService: _mockApiService(
+          isAuthenticated: false,
+          requiresOnboarding: true,
+          onInitialAdminCreate: (request) {
+            setupPayload = jsonDecode(request.body) as Map<String, Object?>;
+          },
+        ),
+      ),
+    );
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+
+    expect(find.text('إعداد نقطة البيع'), findsOneWidget);
+    expect(find.text('تسجيل الدخول'), findsNothing);
+
+    await tester.enterText(find.byType(TextFormField).at(0), 'owner');
+    await tester.enterText(find.byType(TextFormField).at(1), 'سارة');
+    await tester.enterText(find.byType(TextFormField).at(2), 'علي');
+    await tester.enterText(
+      find.byType(TextFormField).at(3),
+      'owner@example.com',
+    );
+    await tester.enterText(
+      find.byType(TextFormField).at(4),
+      'Owner-Strong-Pass-2026!',
+    );
+    await tester.enterText(
+      find.byType(TextFormField).at(5),
+      'Owner-Strong-Pass-2026!',
+    );
+    await tester.tap(find.text('إنشاء المدير'));
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+
+    expect(setupPayload?['username'], 'owner');
+    expect(setupPayload?['password'], 'Owner-Strong-Pass-2026!');
+    expect(find.text('لوحة التحكم'), findsOneWidget);
+  });
+
   testWidgets('multi-user device mode forgets authenticated user on startup', (
     WidgetTester tester,
   ) async {
@@ -3753,6 +3797,8 @@ PosApiService _mockApiService({
   String currentUserRole = 'manager',
   String currentUserDisplayName = 'مدير النظام',
   List<String> currentUserPermissions = const [],
+  bool requiresOnboarding = false,
+  void Function(http.Request request)? onInitialAdminCreate,
   void Function(http.Request request)? onCheckout,
   void Function(http.Request request)? onLogout,
   void Function(http.Request request)? onPurchaseOrderCreate,
@@ -3796,6 +3842,7 @@ PosApiService _mockApiService({
   bool orderRequiresManagerAdjustment = false,
 }) {
   var authenticated = isAuthenticated;
+  var onboardingRequired = requiresOnboarding;
   var currentSessionIsOpen = hasOpenSession;
   var supplierPaidTotal = 0.0;
   var configuredBackupDestinationPath = backupDestinationPath;
@@ -3805,6 +3852,31 @@ PosApiService _mockApiService({
   return PosApiService(
     client: MockClient((request) async {
       final path = request.url.path;
+
+      if (path.endsWith('/setup/status/')) {
+        return _jsonResponse({
+          'requires_onboarding': onboardingRequired && !authenticated,
+        });
+      }
+
+      if (path.endsWith('/setup/admin/')) {
+        onInitialAdminCreate?.call(request);
+        if (!onboardingRequired) {
+          return _jsonResponse({'detail': 'Setup completed.'}, statusCode: 409);
+        }
+        final body = jsonDecode(request.body) as Map<String, Object?>;
+        authenticated = true;
+        onboardingRequired = false;
+        return _jsonResponse(
+          _userJson(
+            username: body['username']?.toString() ?? 'admin',
+            displayName: body['first_name']?.toString() ?? 'مدير النظام',
+            role: 'manager',
+            permissions: currentUserPermissions,
+          ),
+          statusCode: 201,
+        );
+      }
 
       if (path.endsWith('/auth/me/')) {
         if (!authenticated) {
@@ -4845,10 +4917,10 @@ const _sampleMoamalatReceiptUrl =
     'https://receipt.moamalat.net:9443/frontTicketDigital/#/digital/ticket?query='
     'eJxdUstum0AU%2FZURy6qJZgBjsFcDdmVagxPAjtzd1EYNagALcCU36iqOVaVf0UXkNGobpUoX%2FZOZv%20mdsa1WvQuYOefc14GJ08c2cYij61i3sIV1YhuGqXf5E3%2FkW%2F6lS6PupRak1eycFU3I8lTraDENaQ%2FRoTsOpzSEQ0LPXvt9RLXnSEvSKs8KduFlzQq0gR%20PI5pQNJz%20y%2Fpz4PBLak%20JcSYJj1XzZLWQ5cNxMEIuDV8RSVC%2FBxjFKhwYEBMs8RMaAm4ZjtM2nx3CtrFzqDYoL%20ZpBZpTGp2ORgGK6bA%2FUKwqaasyiQfHttMmpuu2W05LN90Xuz0mkRJBmPKpsNiXPe3dzZsEUqKIihU1mzVZWeyXOBgoWb94X2azNFzmb9RALQn2WJMmmfIT60fYOtItROyOYXTM3d7L5ryssg9MFvXKuRJCtFQ2zctl0QBEjgFD%2FOFYrP8bJG5Ys6zlKPfimt8jvhVr%2Fltci7W44V8RvxMb%2Fg1G%2FI7UMuVitR8dfET8FkS%2FZMou7yfIP4kNAm6nzvNU9edP4kpuKj4jkG35D%20h2A%209HcYXg8gCttwBt%20FbmRWm9KIs63dvWr6qyCtK6Zm8P0ElZNS4r3kmbsK6rpEh9adIyiKUcUO7HifoB%2FgIuTbwBIKb28Q%2Fm9%206L';
 
-http.Response _jsonResponse(Map<String, Object?> body) {
+http.Response _jsonResponse(Map<String, Object?> body, {int statusCode = 200}) {
   return http.Response.bytes(
     utf8.encode(jsonEncode(body)),
-    200,
+    statusCode,
     headers: const {'Content-Type': 'application/json; charset=utf-8'},
   );
 }

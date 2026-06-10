@@ -99,6 +99,48 @@ class PasswordChangeSerializer(serializers.Serializer):
         return user
 
 
+class InitialAdminSetupSerializer(serializers.Serializer):
+    username = serializers.CharField(max_length=150)
+    email = serializers.EmailField(required=False, allow_blank=True)
+    first_name = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        max_length=150,
+    )
+    last_name = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        max_length=150,
+    )
+    password = serializers.CharField(trim_whitespace=False, write_only=True)
+
+    def validate_username(self, value):
+        value = value.strip()
+        if not value:
+            raise serializers.ValidationError("Username is required.")
+        return value
+
+    def validate_email(self, value):
+        return value.strip()
+
+    def validate_first_name(self, value):
+        return value.strip()
+
+    def validate_last_name(self, value):
+        return value.strip()
+
+    def validate(self, attrs):
+        User = get_user_model()
+        user = User(
+            username=attrs["username"],
+            email=attrs.get("email", ""),
+            first_name=attrs.get("first_name", ""),
+            last_name=attrs.get("last_name", ""),
+        )
+        validate_password(attrs["password"], user)
+        return attrs
+
+
 class PosUserSerializer(serializers.ModelSerializer):
     role = serializers.ChoiceField(choices=ROLE_GROUPS, write_only=True)
     assigned_role = serializers.SerializerMethodField(read_only=True)

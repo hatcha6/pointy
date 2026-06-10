@@ -1,4 +1,5 @@
 import '../../core/result.dart';
+import '../models/onboarding.dart';
 import '../models/pos_user.dart';
 import '../services/pos_api_service.dart';
 
@@ -18,6 +19,14 @@ class AuthRepository {
 
   Future<Result<PosUser?>> loadCurrentUser() async {
     return Result.guard(_service.fetchCurrentUser);
+  }
+
+  Future<Result<OnboardingStatus>> loadOnboardingStatus() async {
+    return Result.guard(_service.fetchOnboardingStatus);
+  }
+
+  Future<Result<PosUser>> createInitialAdmin(InitialAdminDraft draft) async {
+    return Result.guard(() => _service.createInitialAdmin(draft));
   }
 
   Future<Result<PosUser>> updateCurrentUser(

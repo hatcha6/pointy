@@ -3,6 +3,7 @@ from django.urls import include, path
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 from rest_framework.routers import DefaultRouter
 
+from pointy.health import healthz, readyz
 from apps.analytics.views import AnalyticsEventViewSet
 from apps.attachments.views import AttachmentViewSet, StorageVolumeViewSet
 from apps.catalog.views import (
@@ -29,6 +30,8 @@ from apps.core.views import (
     logout_view,
     me_view,
     password_change_view,
+    setup_initial_admin_view,
+    setup_status_view,
 )
 from apps.core.backup_views import (
     BackupDestinationListView,
@@ -113,7 +116,11 @@ router.register(
 )
 
 urlpatterns = [
+    path("healthz/", healthz, name="healthz"),
+    path("readyz/", readyz, name="readyz"),
     path("admin/", admin.site.urls),
+    path("api/setup/status/", setup_status_view, name="setup-status"),
+    path("api/setup/admin/", setup_initial_admin_view, name="setup-initial-admin"),
     path("api/auth/login/", login_view, name="auth-login"),
     path("api/auth/logout/", logout_view, name="auth-logout"),
     path("api/auth/me/", me_view, name="auth-me"),

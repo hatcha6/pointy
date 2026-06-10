@@ -56,36 +56,3 @@ DEFAULT_VARIANT_OPTIONS = [
         ],
     },
 ]
-
-
-def seed_variant_options(*, option_model=None, value_model=None):
-    from .models import VariantOption, VariantOptionValue
-
-    option_model = option_model or VariantOption
-    value_model = value_model or VariantOptionValue
-    created = {"options": 0, "values": 0}
-
-    for option_data in DEFAULT_VARIANT_OPTIONS:
-        option, option_created = option_model.objects.update_or_create(
-            code=option_data["code"],
-            defaults={
-                "name": option_data["name"],
-                "display_order": option_data["display_order"],
-                "is_active": True,
-            },
-        )
-        created["options"] += int(option_created)
-
-        for code, name, display_order in option_data["values"]:
-            _, value_created = value_model.objects.update_or_create(
-                option=option,
-                code=code,
-                defaults={
-                    "name": name,
-                    "display_order": display_order,
-                    "is_active": True,
-                },
-            )
-            created["values"] += int(value_created)
-
-    return created

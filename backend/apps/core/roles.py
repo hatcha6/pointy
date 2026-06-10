@@ -1,12 +1,36 @@
+from django.apps import apps
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group, Permission
 from django.db import IntegrityError, transaction
-from django.utils.crypto import get_random_string
+from django.db.models import Q
+
+from apps.catalog.variant_option_defaults import DEFAULT_VARIANT_OPTIONS
 
 MANAGER_GROUP = "manager"
 CASHIER_GROUP = "cashier"
 ACCOUNTANT_GROUP = "accountant"
 ROLE_GROUPS = (MANAGER_GROUP, CASHIER_GROUP, ACCOUNTANT_GROUP)
+INITIAL_SETUP_IGNORED_MODELS = {
+    ("admin", "logentry"),
+    ("analytics", "analyticsevent"),
+    ("auth", "group"),
+    ("auth", "permission"),
+    ("auth", "user"),
+    ("contenttypes", "contenttype"),
+    ("sessions", "session"),
+}
+INITIAL_SETUP_VARIANT_OPTION_CODES = {
+    option["code"]
+    for option in DEFAULT_VARIANT_OPTIONS
+}
+INITIAL_SETUP_VARIANT_VALUE_CODES_BY_OPTION = {
+    option["code"]: {code for code, _name, _display_order in option["values"]}
+    for option in DEFAULT_VARIANT_OPTIONS
+}
+INITIAL_SETUP_UNSPECIFIED_SUPPLIER_NAME = "مورد غير محدد"
+INITIAL_SETUP_UNSPECIFIED_SUPPLIER_NOTES = (
+    "تم إنشاؤه لربط أوامر الشراء القديمة التي لم يكن لها مورد."
+)
 
 MANAGER_PERMISSION_DOMAINS = (
     "catalog",
@@ -129,40 +153,89 @@ def user_is_manager(user):
     return user_has_role(user, MANAGER_GROUP)
 
 
-def bootstrap_admin_user(*, username=None, email="", password=None, enabled=True):
+def initial_admin_setup_required():
     User = get_user_model()
-    if not enabled:
+    return not User.objects.exists() and not pointy_domain_data_exists()
+
+
+def pointy_domain_data_exists():
+    for model in apps.get_models():
+        model_label = (model._meta.app_label, model._meta.model_name)
+        if model_label in INITIAL_SETUP_IGNORED_MODELS:
+            continue
+        try:
+            if _model_has_initial_setup_blocking_data(model, model_label):
+                return True
+        except Exception:
+            return True
+    return False
+
+
+def _model_has_initial_setup_blocking_data(model, model_label):
+    queryset = model._default_manager.all()
+    if model_label == ("catalog", "variantoption"):
+        return queryset.exclude(
+            code__in=INITIAL_SETUP_VARIANT_OPTION_CODES,
+        ).exists()
+    if model_label == ("catalog", "variantoptionvalue"):
+        return queryset.exclude(_initial_setup_seed_variant_value_query()).exists()
+    if model_label == ("purchasing", "supplier"):
+        return queryset.exclude(
+            name=INITIAL_SETUP_UNSPECIFIED_SUPPLIER_NAME,
+            contact_name="",
+            phone="",
+            email="",
+            address="",
+            notes=INITIAL_SETUP_UNSPECIFIED_SUPPLIER_NOTES,
+            is_active=True,
+            purchase_orders__isnull=True,
+        ).distinct().exists()
+    return queryset.exists()
+
+
+def _initial_setup_seed_variant_value_query():
+    query = Q()
+    for option_code, value_codes in INITIAL_SETUP_VARIANT_VALUE_CODES_BY_OPTION.items():
+        query |= Q(option__code=option_code, code__in=value_codes)
+    return query
+
+
+def create_initial_admin_user(
+    *,
+    username=None,
+    email="",
+    password=None,
+    first_name="",
+    last_name="",
+    enabled=True,
+):
+    User = get_user_model()
+    if not enabled or not password:
         return None
 
-    username = username or "admin"
-    generated_password = None
-    if password is None:
-        generated_password = get_random_string(24)
-        password = generated_password
-
-    existing_user_count = User.objects.count()
-    if existing_user_count:
-        admin = User.objects.filter(username=username, is_superuser=True).first()
-        if existing_user_count == 1 and admin is not None and not admin.has_usable_password():
-            admin.set_password(password)
-            admin.save(update_fields=["password"])
-            admin._pointy_bootstrap_password = password
-            admin._pointy_bootstrap_repaired = True
-            return admin
+    username = (username or "admin").strip()
+    if not username:
         return None
 
-    groups = ensure_role_groups()
     try:
         with transaction.atomic():
+            groups = ensure_role_groups()
+            list(
+                Group.objects.select_for_update()
+                .filter(name__in=ROLE_GROUPS)
+                .order_by("name")
+            )
+            if User.objects.exists() or pointy_domain_data_exists():
+                return None
             admin = User.objects.create_superuser(
                 username=username,
                 email=email or "",
                 password=password,
+                first_name=first_name or "",
+                last_name=last_name or "",
             )
+            admin.groups.add(groups[MANAGER_GROUP])
     except IntegrityError:
         return None
-    admin.groups.add(groups[MANAGER_GROUP])
-    if generated_password is not None:
-        admin._pointy_bootstrap_password = generated_password
-    admin._pointy_bootstrap_created = True
+    admin._pointy_initial_admin_created = True
     return admin

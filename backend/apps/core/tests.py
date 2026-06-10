@@ -29,7 +29,13 @@ from apps.purchasing.models import (
 )
 from apps.sales.models import Order, OrderLine, RegisterCashMovement, RegisterSession
 from .models import RelayConnectorSetupToken, RelayInstallation, ShopSettings
-from .roles import CASHIER_GROUP, MANAGER_GROUP, bootstrap_admin_user, ensure_role_groups
+from .roles import (
+    CASHIER_GROUP,
+    MANAGER_GROUP,
+    create_initial_admin_user,
+    ensure_role_groups,
+    initial_admin_setup_required,
+)
 from .discovery import private_network_host_for_peer
 
 
@@ -1325,13 +1331,34 @@ class BootstrapAdminTests(TestCase):
     def setUp(self):
         get_user_model().objects.all().delete()
 
-    def test_bootstrap_admin_creates_superuser_once_when_no_users_exist(self):
-        admin = bootstrap_admin_user(
+    def test_initial_admin_setup_reports_required_only_without_users(self):
+        self.assertTrue(initial_admin_setup_required())
+
+        get_user_model().objects.create_user(username="existing", password="pass")
+
+        self.assertFalse(initial_admin_setup_required())
+
+    def test_initial_admin_setup_ignores_operational_analytics_events(self):
+        AnalyticsEvent.objects.create(
+            name="backend.request",
+            event_type=AnalyticsEvent.EventType.PERFORMANCE,
+            occurred_at=timezone.now(),
+        )
+
+        self.assertTrue(initial_admin_setup_required())
+
+    def test_initial_admin_setup_rejects_existing_domain_data(self):
+        ShopSettings.load()
+
+        self.assertFalse(initial_admin_setup_required())
+
+    def test_initial_admin_creates_superuser_once_when_no_users_exist(self):
+        admin = create_initial_admin_user(
             username="admin",
             email="admin@example.com",
             password="first-pass",
         )
-        skipped = bootstrap_admin_user(
+        skipped = create_initial_admin_user(
             username="other-admin",
             email="other@example.com",
             password="second-pass",
@@ -1345,21 +1372,23 @@ class BootstrapAdminTests(TestCase):
         self.assertTrue(admin.groups.filter(name=MANAGER_GROUP).exists())
         self.assertTrue(admin.check_password("first-pass"))
 
-    def test_bootstrap_admin_without_password_generates_password(self):
-        admin = bootstrap_admin_user(username="admin")
-
-        self.assertIsNotNone(admin)
-        generated_password = getattr(admin, "_pointy_bootstrap_password")
-        self.assertTrue(admin.has_usable_password())
-        self.assertTrue(admin.check_password(generated_password))
-
-    def test_bootstrap_admin_can_be_disabled(self):
-        admin = bootstrap_admin_user(username="admin", enabled=False)
+    def test_initial_admin_requires_explicit_password(self):
+        admin = create_initial_admin_user(username="admin")
 
         self.assertIsNone(admin)
         self.assertFalse(get_user_model().objects.exists())
 
-    def test_bootstrap_admin_repairs_single_unusable_bootstrap_admin_once(self):
+    def test_initial_admin_can_be_disabled(self):
+        admin = create_initial_admin_user(
+            username="admin",
+            password="first-pass",
+            enabled=False,
+        )
+
+        self.assertIsNone(admin)
+        self.assertFalse(get_user_model().objects.exists())
+
+    def test_initial_admin_does_not_repair_existing_unusable_user(self):
         existing_admin = get_user_model().objects.create_superuser(
             username="admin",
             password=None,
@@ -1367,15 +1396,11 @@ class BootstrapAdminTests(TestCase):
         existing_admin.set_unusable_password()
         existing_admin.save(update_fields=["password"])
 
-        repaired_admin = bootstrap_admin_user(username="admin", password="repair-pass")
-        skipped = bootstrap_admin_user(username="admin", password="second-pass")
+        skipped = create_initial_admin_user(username="admin", password="repair-pass")
 
-        self.assertEqual(repaired_admin.pk, existing_admin.pk)
-        self.assertTrue(getattr(repaired_admin, "_pointy_bootstrap_repaired"))
-        repaired_admin.refresh_from_db()
-        self.assertTrue(repaired_admin.check_password("repair-pass"))
         self.assertIsNone(skipped)
-        self.assertFalse(repaired_admin.check_password("second-pass"))
+        existing_admin.refresh_from_db()
+        self.assertFalse(existing_admin.has_usable_password())
 
     def test_bootstrap_management_command_creates_admin(self):
         call_command("bootstrap_admin", username="admin", password="admin-pass")
@@ -1383,3 +1408,79 @@ class BootstrapAdminTests(TestCase):
         admin = get_user_model().objects.get(username="admin")
         self.assertTrue(admin.is_superuser)
         self.assertTrue(admin.groups.filter(name=MANAGER_GROUP).exists())
+
+    def test_setup_status_endpoint_reports_required(self):
+        response = APIClient().get(reverse("setup-status"))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data, {"requires_onboarding": True})
+
+    def test_setup_admin_endpoint_creates_and_logs_in_admin(self):
+        client = APIClient()
+
+        response = client.post(
+            reverse("setup-initial-admin"),
+            {
+                "username": "owner",
+                "email": "owner@example.com",
+                "first_name": "سارة",
+                "last_name": "علي",
+                "password": "Owner-Strong-Pass-2026!",
+            },
+            format="json",
+        )
+        current_user_response = client.get(reverse("auth-me"))
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertIn("csrf_token", response.data)
+        self.assertEqual(response.data["user"]["username"], "owner")
+        admin = get_user_model().objects.get(username="owner")
+        self.assertTrue(admin.is_superuser)
+        self.assertTrue(admin.groups.filter(name=MANAGER_GROUP).exists())
+        self.assertTrue(admin.check_password("Owner-Strong-Pass-2026!"))
+        self.assertEqual(current_user_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(current_user_response.data["user"]["username"], "owner")
+
+    def test_setup_admin_endpoint_allows_status_probe_before_create(self):
+        client = APIClient()
+
+        status_response = client.get(reverse("setup-status"))
+        create_response = client.post(
+            reverse("setup-initial-admin"),
+            {
+                "username": "owner",
+                "password": "Owner-Strong-Pass-2026!",
+            },
+            format="json",
+        )
+
+        self.assertEqual(status_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(create_response.status_code, status.HTTP_201_CREATED)
+
+    def test_setup_admin_endpoint_rejects_when_user_exists(self):
+        get_user_model().objects.create_user(username="existing", password="pass")
+
+        response = APIClient().post(
+            reverse("setup-initial-admin"),
+            {
+                "username": "owner",
+                "password": "Owner-Strong-Pass-2026!",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
+        self.assertFalse(get_user_model().objects.filter(username="owner").exists())
+
+    def test_setup_admin_endpoint_rejects_weak_password(self):
+        response = APIClient().post(
+            reverse("setup-initial-admin"),
+            {
+                "username": "owner",
+                "password": "password",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertFalse(get_user_model().objects.exists())

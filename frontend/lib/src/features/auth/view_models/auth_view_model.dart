@@ -5,10 +5,11 @@ import 'package:flutter/foundation.dart';
 import '../../../core/analytics_engine.dart';
 import '../../../core/result.dart';
 import '../../../data/models/analytics_event.dart';
+import '../../../data/models/onboarding.dart';
 import '../../../data/models/pos_user.dart';
 import '../../../data/repositories/auth_repository.dart';
 
-enum AuthStatus { checking, unauthenticated, authenticated }
+enum AuthStatus { checking, setupRequired, unauthenticated, authenticated }
 
 class AuthViewModel extends ChangeNotifier {
   AuthViewModel(
@@ -50,7 +51,7 @@ class AuthViewModel extends ChangeNotifier {
     if (forgetRememberedUser) {
       await _authRepository.forgetCurrentUser();
       _currentUser = null;
-      _status = AuthStatus.unauthenticated;
+      _status = await _resolveUnauthenticatedStatus();
       _hasError = false;
       notifyListeners();
       return;
@@ -61,14 +62,25 @@ class AuthViewModel extends ChangeNotifier {
       case Ok<PosUser?>(value: final user):
         _currentUser = user;
         _status = user == null
-            ? AuthStatus.unauthenticated
+            ? await _resolveUnauthenticatedStatus()
             : AuthStatus.authenticated;
       case Error<PosUser?>(exception: _):
         _currentUser = null;
-        _status = AuthStatus.unauthenticated;
+        _status = await _resolveUnauthenticatedStatus();
         _hasError = false;
     }
     notifyListeners();
+  }
+
+  Future<AuthStatus> _resolveUnauthenticatedStatus() async {
+    final result = await _authRepository.loadOnboardingStatus();
+    return switch (result) {
+      Ok<OnboardingStatus>(value: final status) =>
+        status.requiresOnboarding
+            ? AuthStatus.setupRequired
+            : AuthStatus.unauthenticated,
+      Error<OnboardingStatus>() => AuthStatus.unauthenticated,
+    };
   }
 
   Future<bool> login({
@@ -117,6 +129,30 @@ class AuthViewModel extends ChangeNotifier {
     }
   }
 
+  Future<bool> createInitialAdmin(InitialAdminDraft draft) async {
+    _isSubmitting = true;
+    _hasError = false;
+    notifyListeners();
+
+    final result = await _authRepository.createInitialAdmin(draft);
+
+    _isSubmitting = false;
+    switch (result) {
+      case Ok<PosUser>(value: final user):
+        _currentUser = user;
+        _status = AuthStatus.authenticated;
+        _analyticsEngine?.setCurrentUser(user.id);
+        notifyListeners();
+        return true;
+      case Error<PosUser>(exception: _):
+        _currentUser = null;
+        _status = await _resolveUnauthenticatedStatus();
+        _hasError = _status == AuthStatus.setupRequired;
+        notifyListeners();
+        return false;
+    }
+  }
+
   Future<void> logout() async {
     _isSubmitting = true;
     notifyListeners();
@@ -133,7 +169,7 @@ class AuthViewModel extends ChangeNotifier {
 
     _isSubmitting = false;
     _currentUser = null;
-    _status = AuthStatus.unauthenticated;
+    _status = await _resolveUnauthenticatedStatus();
     notifyListeners();
   }
 }

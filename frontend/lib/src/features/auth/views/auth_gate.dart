@@ -5,6 +5,7 @@ import '../../../core/analytics_engine.dart';
 import '../../../shared/components/components.dart';
 import '../../../shared/shell/shell.dart';
 import '../view_models/auth_view_model.dart';
+import 'initial_admin_setup_screen.dart';
 import 'login_screen.dart';
 
 class AuthGate extends StatelessWidget {
@@ -28,6 +29,9 @@ class AuthGate extends StatelessWidget {
         analyticsEngine?.setCurrentScreen(_screenName(status));
         return switch (status) {
           AuthStatus.checking => const _AuthCheckingScreen(),
+          AuthStatus.setupRequired => InitialAdminSetupScreen(
+            viewModel: viewModel,
+          ),
           AuthStatus.unauthenticated => LoginScreen(viewModel: viewModel),
           AuthStatus.authenticated => authenticatedBuilder(context),
         };
@@ -38,6 +42,7 @@ class AuthGate extends StatelessWidget {
   String _screenName(AuthStatus status) {
     return switch (status) {
       AuthStatus.checking => 'auth_checking',
+      AuthStatus.setupRequired => 'onboarding',
       AuthStatus.unauthenticated => 'login',
       AuthStatus.authenticated => 'authenticated',
     };

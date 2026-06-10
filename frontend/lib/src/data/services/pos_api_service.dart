@@ -7,6 +7,7 @@ import '../models/pos_user.dart';
 import '../models/analytics_export.dart';
 import '../models/analytics_event.dart';
 import '../models/business_alert.dart';
+import '../models/onboarding.dart';
 import '../models/print_audit_event.dart';
 import '../models/print_job.dart';
 import '../models/printer_config.dart';
@@ -147,6 +148,14 @@ class PosApiService {
   }
 
   Future<PosUser?> fetchCurrentUser() => _auth.fetchCurrentUser();
+
+  Future<OnboardingStatus> fetchOnboardingStatus() {
+    return _auth.fetchOnboardingStatus();
+  }
+
+  Future<PosUser> createInitialAdmin(InitialAdminDraft draft) {
+    return _auth.createInitialAdmin(draft);
+  }
 
   Future<PosUser> updateCurrentUser(CurrentUserProfileDraft draft) {
     return _auth.updateCurrentUser(draft);

@@ -1953,6 +1953,25 @@ class AppLocalizationsAr extends AppLocalizations {
   String get authCheckingSession => 'جار فحص الجلسة...';
 
   @override
+  String get onboardingTitle => 'إعداد نقطة البيع';
+
+  @override
+  String get onboardingIntro => 'أنشئ حساب المدير الأول للمتجر.';
+
+  @override
+  String get onboardingAdminSectionTitle => 'حساب المدير';
+
+  @override
+  String get onboardingCreateAdminButton => 'إنشاء المدير';
+
+  @override
+  String get onboardingCreatingAdminButton => 'جار إنشاء المدير...';
+
+  @override
+  String get onboardingCreateAdminError =>
+      'تعذر إنشاء المدير. تحقق من البيانات وقوة كلمة المرور ثم حاول مرة أخرى.';
+
+  @override
   String get loginTitle => 'تسجيل الدخول';
 
   @override

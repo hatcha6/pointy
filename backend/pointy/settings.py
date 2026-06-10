@@ -11,7 +11,6 @@ env = environ.Env(
     DJANGO_ALLOWED_HOSTS=(list, ["localhost", "127.0.0.1"]),
     CORS_ALLOWED_ORIGINS=(list, []),
     CSRF_TRUSTED_ORIGINS=(list, ["http://localhost:8080", "http://127.0.0.1:8080"]),
-    POINTY_BOOTSTRAP_ADMIN_ENABLED=(bool, True),
     POINTY_ANALYTICS_BACKEND_PERFORMANCE_ENABLED=(bool, True),
     POINTY_ANALYTICS_BACKEND_SLOW_REQUEST_MS=(int, 750),
     POINTY_ATTACHMENT_MAX_UPLOAD_BYTES=(int, 100 * 1024 * 1024),
@@ -27,6 +26,10 @@ env = environ.Env(
     POINTY_DISCOVERY_UDP_PORT=(int, 47777),
     POINTY_DISCOVERY_API_PORT=(int, 8000),
     POINTY_DISCOVERY_TRUST_PROXY_HEADERS=(bool, False),
+    DATABASE_CONN_MAX_AGE=(int, 60),
+    DJANGO_SECURE_SSL_REDIRECT=(bool, False),
+    DJANGO_SESSION_COOKIE_SECURE=(bool, False),
+    DJANGO_CSRF_COOKIE_SECURE=(bool, False),
     POINTY_EXPIRY_ALERT_WINDOW_DAYS=(int, 30),
     POINTY_NOTIFICATION_SYNC_INTERVAL_MINUTES=(int, 15),
     POINTY_FRAUD_DETECTION_INTERVAL_MINUTES=(int, 15),
@@ -102,6 +105,18 @@ WSGI_APPLICATION = "pointy.wsgi.application"
 DATABASES = {
     "default": env.db("DATABASE_URL", default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}"),
 }
+DATABASES["default"]["CONN_MAX_AGE"] = env("DATABASE_CONN_MAX_AGE")
+
+SECURE_SSL_REDIRECT = env("DJANGO_SECURE_SSL_REDIRECT")
+SESSION_COOKIE_SECURE = env("DJANGO_SESSION_COOKIE_SECURE")
+CSRF_COOKIE_SECURE = env("DJANGO_CSRF_COOKIE_SECURE")
+_secure_proxy_ssl_header = env("DJANGO_SECURE_PROXY_SSL_HEADER", default="")
+if _secure_proxy_ssl_header:
+    _secure_proxy_ssl_header_parts = [
+        part.strip() for part in _secure_proxy_ssl_header.split(",", 1)
+    ]
+    if len(_secure_proxy_ssl_header_parts) == 2:
+        SECURE_PROXY_SSL_HEADER = tuple(_secure_proxy_ssl_header_parts)
 
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
@@ -116,8 +131,9 @@ USE_I18N = True
 USE_TZ = True
 
 STATIC_URL = "static/"
+STATIC_ROOT = Path(env("DJANGO_STATIC_ROOT", default=str(BASE_DIR / "staticfiles")))
 MEDIA_URL = "media/"
-MEDIA_ROOT = BASE_DIR / "media"
+MEDIA_ROOT = Path(env("DJANGO_MEDIA_ROOT", default=str(BASE_DIR / "media")))
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 REDIS_URL = env("REDIS_URL", default="redis://localhost:6379/0")
@@ -184,10 +200,6 @@ CELERY_BEAT_SCHEDULE = {
 CORS_ALLOWED_ORIGINS = env("CORS_ALLOWED_ORIGINS")
 CORS_ALLOW_CREDENTIALS = True
 CSRF_TRUSTED_ORIGINS = env("CSRF_TRUSTED_ORIGINS")
-POINTY_BOOTSTRAP_ADMIN_ENABLED = env("POINTY_BOOTSTRAP_ADMIN_ENABLED")
-POINTY_BOOTSTRAP_ADMIN_USERNAME = env("POINTY_BOOTSTRAP_ADMIN_USERNAME", default="admin")
-POINTY_BOOTSTRAP_ADMIN_EMAIL = env("POINTY_BOOTSTRAP_ADMIN_EMAIL", default="")
-POINTY_BOOTSTRAP_ADMIN_PASSWORD = env("POINTY_BOOTSTRAP_ADMIN_PASSWORD", default=None)
 POINTY_ANALYTICS_BACKEND_PERFORMANCE_ENABLED = env("POINTY_ANALYTICS_BACKEND_PERFORMANCE_ENABLED")
 POINTY_ANALYTICS_BACKEND_SLOW_REQUEST_MS = env("POINTY_ANALYTICS_BACKEND_SLOW_REQUEST_MS")
 POINTY_ANALYTICS_BACKEND_PERFORMANCE_PATHS = ("/api/",)

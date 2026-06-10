@@ -1,5 +1,6 @@
 import 'package:http/http.dart' as http;
 
+import '../models/onboarding.dart';
 import '../models/pos_user.dart';
 import 'api_session.dart';
 
@@ -7,6 +8,26 @@ class AuthApiClient {
   const AuthApiClient(this._session);
 
   final PosApiSession _session;
+
+  Future<OnboardingStatus> fetchOnboardingStatus() async {
+    final response = await _session.get('setup/status/');
+    _session.ensureSuccess(
+      response,
+      'Onboarding status request failed with status',
+    );
+    final decoded = _session.decodedBody(response) as Map<String, Object?>;
+    return OnboardingStatus.fromJson(decoded);
+  }
+
+  Future<PosUser> createInitialAdmin(InitialAdminDraft draft) async {
+    final response = await _session.post(
+      'setup/admin/',
+      body: draft.toJson(),
+      includeCsrf: false,
+    );
+    _session.ensureSuccess(response, 'Initial admin setup failed with status');
+    return _decodeUserResponse(response);
+  }
 
   Future<PosUser> login({
     required String username,

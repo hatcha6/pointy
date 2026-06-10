@@ -12,11 +12,16 @@ from apps.attachments.models import Attachment
 from apps.attachments.serializers import AttachmentSerializer
 from apps.attachments.services import active_attachments_for, content_type_for_upload
 
-from .permissions import HasPointyPermission
-from .roles import ensure_role_groups
 from .models import ShopSettings
+from .permissions import HasPointyPermission
+from .roles import (
+    create_initial_admin_user,
+    ensure_role_groups,
+    initial_admin_setup_required,
+)
 from .serializers import (
     CurrentUserUpdateSerializer,
+    InitialAdminSetupSerializer,
     LoginSerializer,
     PasswordChangeSerializer,
     PosUserSerializer,
@@ -27,6 +32,45 @@ from .user_activity import build_user_activity
 
 
 SHOP_LOGO_ALLOWED_CONTENT_TYPES = {"image/jpeg", "image/png"}
+
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def setup_status_view(request):
+    return Response({"requires_onboarding": initial_admin_setup_required()})
+
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def setup_initial_admin_view(request):
+    if not initial_admin_setup_required():
+        return Response(
+            {"detail": "Initial setup has already been completed."},
+            status=status.HTTP_409_CONFLICT,
+        )
+
+    serializer = InitialAdminSetupSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    admin = create_initial_admin_user(**serializer.validated_data)
+    if admin is None:
+        return Response(
+            {"detail": "Initial setup has already been completed."},
+            status=status.HTTP_409_CONFLICT,
+        )
+
+    login(request, admin)
+    record_domain_event(
+        name="setup.initial_admin.created",
+        event_type=AnalyticsEvent.EventType.SECURITY,
+        user=admin,
+        entity_type="user",
+        entity_id=admin.pk,
+        attributes={"username": admin.username},
+    )
+    return Response(
+        {"user": UserSerializer(admin).data, "csrf_token": get_token(request)},
+        status=status.HTTP_201_CREATED,
+    )
 
 
 @api_view(["POST"])

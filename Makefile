@@ -101,8 +101,8 @@ ENDURANCE_DURATION ?= 3600
 ENDURANCE_WORKERS ?= 4
 
 .PHONY: help setup install docker-check postgres postgres-stop postgres-logs postgres-ping redis redis-local redis-stop redis-logs redis-ping \
-		backend-venv backend-install backend-env backend-migrate backend-migrations backend-dev-migrate backend-run \
-		backend-seed-variants backend-load-test backend-stress-test backend-endurance-test \
+	backend-venv backend-install backend-env backend-migrate backend-migrations backend-dev-migrate backend-run \
+	backend-load-test backend-stress-test backend-endurance-test \
 	backend-shell backend-superuser backend-test backend-check backend-celery backend-celery-beat \
 	frontend-install frontend-l10n frontend-run frontend-web frontend-test frontend-e2e frontend-analyze frontend-format \
 	relay-install relay-format relay-check relay-test relay-production-test relay-run relay-connector relay-migrate relay-provision relay-subscription-update \
@@ -193,9 +193,6 @@ backend-shell: backend-env backend-install ## Open the Django shell.
 
 backend-superuser: backend-env backend-install ## Create a Django superuser.
 	$(MANAGE) createsuperuser
-
-backend-seed-variants: backend-env backend-install ## Seed common product variant options.
-	$(MANAGE) seed_variant_options
 
 backend-load-test: backend-env backend-install ## Run opt-in checkout load test against a running API server.
 	$(MANAGE) checkout_load --base-url "$(LOAD_BASE_URL)" --duration "$(LOAD_DURATION)" --workers "$(LOAD_WORKERS)" $(LOAD_EXTRA)

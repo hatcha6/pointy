@@ -16,7 +16,6 @@ With Make:
 make setup
 make redis
 make backend-migrate
-make backend-seed-variants
 make backend-run
 ```
 
@@ -29,10 +28,12 @@ source .venv/bin/activate
 pip install -e .
 cp .env.example .env
 python manage.py migrate
-python manage.py seed_variant_options
-python manage.py createsuperuser
 python manage.py runserver
 ```
+
+On a fresh database, start the Flutter frontend and create the first manager
+account from the onboarding screen. Pointy no longer creates or prints default
+admin credentials during migration.
 
 Run Redis with Docker:
 

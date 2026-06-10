@@ -1,0 +1,269 @@
+x-pointy-logging: &pointy-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
+x-backend-environment: &backend-environment
+  DJANGO_SECRET_KEY: "${DJANGO_SECRET_KEY:?Set DJANGO_SECRET_KEY in deploy/onprem/.env}"
+  DJANGO_DEBUG: "${DJANGO_DEBUG:-false}"
+  DJANGO_ALLOWED_HOSTS: "${DJANGO_ALLOWED_HOSTS:?Set DJANGO_ALLOWED_HOSTS in deploy/onprem/.env}"
+  CORS_ALLOWED_ORIGINS: "${CORS_ALLOWED_ORIGINS:-}"
+  CSRF_TRUSTED_ORIGINS: "${CSRF_TRUSTED_ORIGINS:-}"
+  DJANGO_SECURE_SSL_REDIRECT: "${DJANGO_SECURE_SSL_REDIRECT:-false}"
+  DJANGO_SESSION_COOKIE_SECURE: "${DJANGO_SESSION_COOKIE_SECURE:-false}"
+  DJANGO_CSRF_COOKIE_SECURE: "${DJANGO_CSRF_COOKIE_SECURE:-false}"
+  DJANGO_SECURE_PROXY_SSL_HEADER: "${DJANGO_SECURE_PROXY_SSL_HEADER:-}"
+  DJANGO_STATIC_ROOT: /var/lib/pointy/staticfiles
+  DJANGO_MEDIA_ROOT: /var/lib/pointy/media
+  DATABASE_URL: "${POINTY_DATABASE_URL:?Set POINTY_DATABASE_URL in deploy/onprem/.env}"
+  DATABASE_CONN_MAX_AGE: "60"
+  REDIS_URL: "${POINTY_REDIS_URL:-redis://redis:6379/0}"
+  POINTY_ATTACHMENT_STORAGE_ROOT: /var/lib/pointy/media
+  POINTY_BACKUP_ALLOWED_ROOTS: /var/lib/pointy/backups,/mnt/pointy-external
+  POINTY_BACKUP_STAGING_ROOT: /tmp/pointy-backup-staging
+  POINTY_BACKUP_RETENTION_COUNT: "14"
+  POINTY_RELAY_CONTROL_URL: "${POINTY_RELAY_CONTROL_URL:?Set POINTY_RELAY_CONTROL_URL in deploy/onprem/.env}"
+  POINTY_RELAY_PUBLIC_API_URL: "${POINTY_RELAY_PUBLIC_API_URL:?Set POINTY_RELAY_PUBLIC_API_URL in deploy/onprem/.env}"
+  POINTY_RELAY_CONNECTOR_ADDR: "${POINTY_RELAY_CONNECTOR_ADDR:?Set POINTY_RELAY_CONNECTOR_ADDR in deploy/onprem/.env}"
+  POINTY_RELAY_ADMIN_TOKEN: "${POINTY_RELAY_ADMIN_TOKEN:?Set POINTY_RELAY_ADMIN_TOKEN in deploy/onprem/.env}"
+  POINTY_RELAY_CONNECTOR_SETUP_TOKEN: "${POINTY_RELAY_CONNECTOR_SETUP_TOKEN:?Set POINTY_RELAY_CONNECTOR_SETUP_TOKEN in deploy/onprem/.env}"
+  POINTY_RELAY_CONNECTOR_TLS_SERVER_NAME: "${POINTY_RELAY_CONNECTOR_TLS_SERVER_NAME:-}"
+  POINTY_RELAY_ALLOW_INSECURE_CONTROL: "${POINTY_RELAY_ALLOW_INSECURE_CONTROL:-false}"
+  POINTY_DISCOVERY_ENABLED: "true"
+  POINTY_DISCOVERY_PRIVATE_ONLY: "true"
+  POINTY_DISCOVERY_UDP_ENABLED: "true"
+  POINTY_DISCOVERY_UDP_PORT: "47777"
+  POINTY_DISCOVERY_API_PORT: "8000"
+  POINTY_DISCOVERY_API_BASE_URL: "${POINTY_DISCOVERY_API_BASE_URL:?Set POINTY_DISCOVERY_API_BASE_URL in deploy/onprem/.env}"
+  POINTY_DISCOVERY_TRUST_PROXY_HEADERS: "false"
+  POINTY_IMAGE_SEARCH_PROVIDERS: "${POINTY_IMAGE_SEARCH_PROVIDERS:-}"
+  POINTY_SERPER_API_KEY: "${POINTY_SERPER_API_KEY:-}"
+  POINTY_SERPAPI_API_KEY: "${POINTY_SERPAPI_API_KEY:-}"
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: pointy
+      POSTGRES_USER: pointy
+      POSTGRES_PASSWORD: "${POINTY_POSTGRES_PASSWORD:?Set POINTY_POSTGRES_PASSWORD in deploy/onprem/.env}"
+    command:
+      - postgres
+      - -c
+      - max_connections=100
+      - -c
+      - shared_buffers=256MB
+      - -c
+      - wal_compression=on
+      - -c
+      - log_min_duration_statement=1000
+    volumes:
+      - pointy-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    stop_grace_period: 60s
+    logging: *pointy-logging
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --appendfsync
+      - everysec
+    volumes:
+      - pointy-redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    stop_grace_period: 30s
+    logging: *pointy-logging
+
+  backend:
+    image: "${POINTY_BACKEND_IMAGE:-pointy-backend:local}"
+    build:
+      context: ../..
+      dockerfile: backend/Dockerfile
+    command: ["web"]
+    restart: unless-stopped
+    init: true
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 256
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      <<: *backend-environment
+      POINTY_ASGI_WORKERS: "${POINTY_ASGI_WORKERS:-3}"
+      POINTY_ASGI_KEEP_ALIVE: "${POINTY_ASGI_KEEP_ALIVE:-5}"
+      POINTY_ASGI_GRACEFUL_TIMEOUT: "${POINTY_ASGI_GRACEFUL_TIMEOUT:-30}"
+      POINTY_ASGI_MAX_REQUESTS: "${POINTY_ASGI_MAX_REQUESTS:-1000}"
+      POINTY_ASGI_MAX_REQUESTS_JITTER: "${POINTY_ASGI_MAX_REQUESTS_JITTER:-100}"
+      POINTY_ASGI_LIMIT_CONCURRENCY: "${POINTY_ASGI_LIMIT_CONCURRENCY:-}"
+      POINTY_ASGI_PROXY_HEADERS: "${POINTY_ASGI_PROXY_HEADERS:-0}"
+      POINTY_ASGI_FORWARDED_ALLOW_IPS: "${POINTY_ASGI_FORWARDED_ALLOW_IPS:-127.0.0.1}"
+    ports:
+      - "${POINTY_BACKEND_BIND:-0.0.0.0}:8000:8000"
+      - "${POINTY_DISCOVERY_UDP_BIND:-0.0.0.0}:47777:47777/udp"
+    volumes:
+      - pointy-media:/var/lib/pointy/media
+      - pointy-static:/var/lib/pointy/staticfiles
+      - pointy-backups:/var/lib/pointy/backups
+      - pointy-backup-staging:/tmp/pointy-backup-staging
+      - type: bind
+        source: "${POINTY_BACKUP_DRIVE_1_SOURCE:-./external-backups/drive-1}"
+        target: /mnt/pointy-external/drive-1
+      - type: bind
+        source: "${POINTY_BACKUP_DRIVE_2_SOURCE:-./external-backups/drive-2}"
+        target: /mnt/pointy-external/drive-2
+      - type: bind
+        source: "${POINTY_BACKUP_DRIVE_3_SOURCE:-./external-backups/drive-3}"
+        target: /mnt/pointy-external/drive-3
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=64m
+    healthcheck:
+      test: ["CMD", "python", "/app/backend/docker/healthcheck.py", "http://127.0.0.1:8000/readyz/"]
+      interval: 15s
+      timeout: 5s
+      retries: 6
+      start_period: 90s
+    stop_grace_period: 45s
+    logging: *pointy-logging
+
+  celery-worker:
+    image: "${POINTY_BACKEND_IMAGE:-pointy-backend:local}"
+    command: ["worker"]
+    restart: unless-stopped
+    init: true
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 256
+    depends_on:
+      backend:
+        condition: service_healthy
+    environment:
+      <<: *backend-environment
+      CELERY_WORKER_CONCURRENCY: "${CELERY_WORKER_CONCURRENCY:-2}"
+      CELERY_LOG_LEVEL: "${CELERY_LOG_LEVEL:-info}"
+    volumes:
+      - pointy-media:/var/lib/pointy/media
+      - pointy-backups:/var/lib/pointy/backups
+      - pointy-backup-staging:/tmp/pointy-backup-staging
+      - type: bind
+        source: "${POINTY_BACKUP_DRIVE_1_SOURCE:-./external-backups/drive-1}"
+        target: /mnt/pointy-external/drive-1
+      - type: bind
+        source: "${POINTY_BACKUP_DRIVE_2_SOURCE:-./external-backups/drive-2}"
+        target: /mnt/pointy-external/drive-2
+      - type: bind
+        source: "${POINTY_BACKUP_DRIVE_3_SOURCE:-./external-backups/drive-3}"
+        target: /mnt/pointy-external/drive-3
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=64m
+    healthcheck:
+      test: ["CMD", "celery", "-A", "pointy", "inspect", "ping", "--timeout=5"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    stop_grace_period: 60s
+    logging: *pointy-logging
+
+  celery-beat:
+    image: "${POINTY_BACKEND_IMAGE:-pointy-backend:local}"
+    command: ["beat"]
+    restart: unless-stopped
+    init: true
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 128
+    depends_on:
+      backend:
+        condition: service_healthy
+    environment:
+      <<: *backend-environment
+      CELERY_LOG_LEVEL: "${CELERY_LOG_LEVEL:-info}"
+    volumes:
+      - pointy-celerybeat:/var/lib/pointy/celerybeat
+      - pointy-backups:/var/lib/pointy/backups
+      - pointy-backup-staging:/tmp/pointy-backup-staging
+      - type: bind
+        source: "${POINTY_BACKUP_DRIVE_1_SOURCE:-./external-backups/drive-1}"
+        target: /mnt/pointy-external/drive-1
+      - type: bind
+        source: "${POINTY_BACKUP_DRIVE_2_SOURCE:-./external-backups/drive-2}"
+        target: /mnt/pointy-external/drive-2
+      - type: bind
+        source: "${POINTY_BACKUP_DRIVE_3_SOURCE:-./external-backups/drive-3}"
+        target: /mnt/pointy-external/drive-3
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=64m
+    stop_grace_period: 45s
+    logging: *pointy-logging
+
+  connector:
+    image: "${POINTY_RELAY_IMAGE:-pointy-relay:local}"
+    build:
+      context: ../..
+      dockerfile: relay/Dockerfile
+    command:
+      - connector
+      - --relay
+      - "${POINTY_RELAY_CONNECTOR_ADDR:?Set POINTY_RELAY_CONNECTOR_ADDR in deploy/onprem/.env}"
+      - --backend
+      - http://backend:8000
+    restart: unless-stopped
+    init: true
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 64
+    depends_on:
+      backend:
+        condition: service_healthy
+    environment:
+      POINTY_RELAY_CONNECTOR_SETUP_TOKEN: "${POINTY_RELAY_CONNECTOR_SETUP_TOKEN:?Set POINTY_RELAY_CONNECTOR_SETUP_TOKEN in deploy/onprem/.env}"
+      POINTY_RELAY_CONNECTOR_STATE_FILE: /var/lib/pointy/relay-connector.json
+      POINTY_RELAY_TLS_SERVER_NAME: "${POINTY_RELAY_CONNECTOR_TLS_SERVER_NAME:-}"
+      POINTY_RELAY_ALLOW_INSECURE_CONNECTOR: "${POINTY_RELAY_ALLOW_INSECURE_CONNECTOR:-false}"
+      POINTY_RELAY_CONNECTOR_REQUEST_TIMEOUT: "30s"
+      POINTY_RELAY_CONNECTOR_MAX_CONCURRENT_REQUESTS: "64"
+    volumes:
+      - pointy-connector-state:/var/lib/pointy
+    stop_grace_period: 30s
+    logging: *pointy-logging
+
+volumes:
+  pointy-postgres-data:
+  pointy-redis-data:
+  pointy-media:
+  pointy-static:
+  pointy-backups:
+  pointy-backup-staging:
+  pointy-celerybeat:
+  pointy-connector-state:
