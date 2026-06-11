@@ -28,7 +28,17 @@ from .serializers import (
 )
 
 
-class OrderViewSet(viewsets.ModelViewSet):
+class OrderViewSet(
+    mixins.CreateModelMixin,
+    mixins.RetrieveModelMixin,
+    mixins.ListModelMixin,
+    viewsets.GenericViewSet,
+):
+    # Orders are append-only: they may be created and then only adjusted through
+    # the audited ``void`` and ``return_items`` actions. Direct PATCH/PUT/DELETE
+    # is intentionally not exposed so a sale (and its audit trail) can never be
+    # silently edited or erased — including by a manager, who is otherwise
+    # granted every ``sales`` permission.
     serializer_class = OrderSerializer
     permission_classes = [IsAuthenticated, HasPointyPermission]
     permission_map = {
@@ -40,9 +50,6 @@ class OrderViewSet(viewsets.ModelViewSet):
         "return_items": ("sales.add_order",),
         "void": ("sales.add_order",),
         "reprint": ("sales.view_order", "printing.add_printjob"),
-        "update": ("sales.change_order",),
-        "partial_update": ("sales.change_order",),
-        "destroy": ("sales.delete_order",),
     }
     queryset = Order.objects.select_related("customer", "register_session").prefetch_related(
         "lines__variant__product",

@@ -1,9 +1,12 @@
+import logging
 from datetime import timedelta
 from decimal import Decimal
 
 from django.db import transaction
 from django.utils import timezone
 from rest_framework import serializers
+
+logger = logging.getLogger(__name__)
 
 from apps.analytics.models import AnalyticsEvent
 from apps.analytics.services import record_domain_event
@@ -458,13 +461,31 @@ def record_sale_stock_movements(order, stock_adjustments, *, request=None):
         )
 
 
-def enqueue_receipt_print_on_commit(order_id):
-    def enqueue_receipt():
-        from apps.printing.services import enqueue_receipt_print_job
+def create_receipt_print_job(order_id):
+    """Persist the receipt print job atomically with the sale.
 
-        enqueue_receipt_print_job(order_id)
+    The print job is an outbox row that print agents poll for and print, so it
+    does not depend on Redis or Celery for delivery. Creating it inside the
+    sale's transaction (rather than in a post-commit hook) means a broker
+    outage or a crash in the post-commit window can never silently drop a paid
+    order's receipt.
 
-    transaction.on_commit(enqueue_receipt)
+    Job creation runs in its own savepoint and any failure is swallowed and
+    logged: a printing misconfiguration (for example a broken default
+    template) must never roll back a completed, paid sale. When that happens
+    the sale still commits and staff can reprint the receipt from the order.
+    """
+    from apps.printing.services import enqueue_receipt_print_job
+
+    try:
+        with transaction.atomic():
+            enqueue_receipt_print_job(order_id)
+    except Exception:
+        logger.exception(
+            "Failed to enqueue receipt print job for order %s; the sale is "
+            "unaffected and the receipt can be reprinted from the order.",
+            order_id,
+        )
 
 
 def mark_order_paid(order, *, request=None, stock_already_recorded=False):
@@ -489,7 +510,7 @@ def mark_order_paid(order, *, request=None, stock_already_recorded=False):
 
     locked_order.status = Order.Status.PAID
     locked_order.save(update_fields=["status", "updated_at"])
-    enqueue_receipt_print_on_commit(locked_order.pk)
+    create_receipt_print_job(locked_order.pk)
     record_domain_event(
         name="sales.order.paid",
         event_type=AnalyticsEvent.EventType.AUDIT,

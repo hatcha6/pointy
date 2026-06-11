@@ -1,5 +1,7 @@
 from django.contrib import admin
 
+from apps.core.admin_mixins import AppendOnlyAuditAdminMixin
+
 from .models import StockBatch, StockItem, StockMovement
 
 
@@ -27,7 +29,7 @@ class StockItemAdmin(admin.ModelAdmin):
 
 
 @admin.register(StockMovement)
-class StockMovementAdmin(admin.ModelAdmin):
+class StockMovementAdmin(AppendOnlyAuditAdminMixin, admin.ModelAdmin):
     list_display = (
         "variant",
         "parent_product",

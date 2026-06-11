@@ -87,6 +87,47 @@ class AttachmentApiTests(TestCase):
             first_payload,
         )
 
+    def test_storage_volume_creation_rejects_path_outside_allowed_roots(self):
+        outside = tempfile.TemporaryDirectory()
+        self.addCleanup(outside.cleanup)
+
+        response = self.client.post(
+            reverse("storagevolume-list"),
+            {"name": "rogue", "path": outside.name},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("path", response.data)
+
+    def test_storage_volume_creation_allows_path_within_storage_root(self):
+        inside = Path(self.storage_root.name) / "volume-c"
+        inside.mkdir()
+
+        response = self.client.post(
+            reverse("storagevolume-list"),
+            {"name": "volume-c", "path": str(inside)},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+    def test_symlinked_storage_child_is_not_discovered(self):
+        from .services import discovered_storage_paths
+
+        outside = tempfile.TemporaryDirectory()
+        self.addCleanup(outside.cleanup)
+        link = Path(self.storage_root.name) / "evil-link"
+        link.symlink_to(outside.name)
+
+        discovered = discovered_storage_paths()
+
+        resolved_target = str(Path(outside.name).resolve(strict=False))
+        self.assertNotIn(resolved_target, discovered)
+        self.assertNotIn(str(link), discovered)
+        # The real volume directories are still discovered.
+        self.assertIn(str(self.volume_one.resolve(strict=False)), discovered)
+
     def test_product_attachment_action_defaults_images_and_exposes_primary_image(self):
         response = self.client.post(
             reverse("product-attachments", args=[self.product.pk]),

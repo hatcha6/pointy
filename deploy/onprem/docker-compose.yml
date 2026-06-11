@@ -61,6 +61,8 @@ services:
       - log_min_duration_statement=1000
     volumes:
       - pointy-postgres-data:/var/lib/postgresql/data
+    mem_limit: "${POINTY_POSTGRES_MEM_LIMIT:-1g}"
+    cpus: "${POINTY_POSTGRES_CPUS:-1.5}"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
       interval: 10s
@@ -81,6 +83,8 @@ services:
       - everysec
     volumes:
       - pointy-redis-data:/data
+    mem_limit: "${POINTY_REDIS_MEM_LIMIT:-768m}"
+    cpus: "${POINTY_REDIS_CPUS:-1}"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -104,6 +108,8 @@ services:
     security_opt:
       - no-new-privileges:true
     pids_limit: 256
+    mem_limit: "${POINTY_BACKEND_MEM_LIMIT:-2g}"
+    cpus: "${POINTY_BACKEND_CPUS:-2}"
     depends_on:
       postgres:
         condition: service_healthy
@@ -158,6 +164,8 @@ services:
     security_opt:
       - no-new-privileges:true
     pids_limit: 256
+    mem_limit: "${POINTY_WORKER_MEM_LIMIT:-1536m}"
+    cpus: "${POINTY_WORKER_CPUS:-2}"
     depends_on:
       backend:
         condition: service_healthy
@@ -200,6 +208,8 @@ services:
     security_opt:
       - no-new-privileges:true
     pids_limit: 128
+    mem_limit: "${POINTY_BEAT_MEM_LIMIT:-256m}"
+    cpus: "${POINTY_BEAT_CPUS:-0.5}"
     depends_on:
       backend:
         condition: service_healthy
@@ -243,6 +253,8 @@ services:
     security_opt:
       - no-new-privileges:true
     pids_limit: 64
+    mem_limit: "${POINTY_CONNECTOR_MEM_LIMIT:-128m}"
+    cpus: "${POINTY_CONNECTOR_CPUS:-0.5}"
     depends_on:
       backend:
         condition: service_healthy

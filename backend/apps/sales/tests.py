@@ -651,6 +651,51 @@ class OrderCheckoutApiTests(TestCase):
             format="json",
         ).data
 
+    def test_orders_cannot_be_deleted_or_edited_via_api_even_by_manager(self):
+        # Create a paid order through checkout.
+        self.start_session()
+        checkout = self.client.post(
+            reverse("order-checkout"),
+            self.checkout_payload(),
+            format="json",
+        )
+        self.assertEqual(checkout.status_code, status.HTTP_201_CREATED)
+        order_id = checkout.data["id"]
+
+        manager = get_user_model().objects.create_user(
+            username="order-manager",
+            password="pass",
+        )
+        manager.groups.add(Group.objects.get(name=MANAGER_GROUP))
+        manager_client = APIClient()
+        manager_client.force_authenticate(user=manager)
+
+        original_total = Order.objects.get(pk=order_id).total
+        delete_response = manager_client.delete(
+            reverse("order-detail", args=[order_id])
+        )
+        patch_response = manager_client.patch(
+            reverse("order-detail", args=[order_id]),
+            {"total": "0.00"},
+            format="json",
+        )
+        put_response = manager_client.put(
+            reverse("order-detail", args=[order_id]),
+            {"status": Order.Status.VOID},
+            format="json",
+        )
+
+        # The write methods are not exposed; either the action is unmapped
+        # (405) or the permission layer rejects it (403). Both deny the write.
+        denied = {status.HTTP_403_FORBIDDEN, status.HTTP_405_METHOD_NOT_ALLOWED}
+        self.assertIn(delete_response.status_code, denied)
+        self.assertIn(patch_response.status_code, denied)
+        self.assertIn(put_response.status_code, denied)
+        # The order and its audit trail are untouched.
+        order = Order.objects.get(pk=order_id)
+        self.assertEqual(order.total, original_total)
+        self.assertNotEqual(order.status, Order.Status.VOID)
+
     def test_order_lines_reject_product_aliases(self):
         order = Order.objects.create()
 

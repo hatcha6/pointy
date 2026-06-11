@@ -8,6 +8,7 @@ from .services import (
     AttachmentStorageError,
     ensure_volume_path,
     normalize_storage_path,
+    path_within_allowed_volume_roots,
     resolve_attachment_owner,
     sign_attachment_content_token,
     store_uploaded_attachment,
@@ -72,7 +73,12 @@ class StorageVolumeSerializer(serializers.ModelSerializer):
         read_only_fields = ("id", "created_at", "updated_at")
 
     def validate_path(self, value):
-        return normalize_storage_path(value)
+        normalized = normalize_storage_path(value)
+        if not path_within_allowed_volume_roots(normalized):
+            raise serializers.ValidationError(
+                "Storage path must be inside an allowed storage root."
+            )
+        return normalized
 
     def validate(self, attrs):
         attrs = super().validate(attrs)

@@ -1330,6 +1330,10 @@ class RolePermissionBootstrapTests(TestCase):
 class BootstrapAdminTests(TestCase):
     def setUp(self):
         get_user_model().objects.all().delete()
+        # The setup endpoint is rate-limited per client IP; clear throttle
+        # state so accumulated counts across test methods (or repeated test
+        # runs against a persistent cache) cannot trip the limit.
+        cache.clear()
 
     def test_initial_admin_setup_reports_required_only_without_users(self):
         self.assertTrue(initial_admin_setup_required())
@@ -1484,3 +1488,94 @@ class BootstrapAdminTests(TestCase):
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertFalse(get_user_model().objects.exists())
+
+
+_THROTTLE_TEST_CACHE = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+        "LOCATION": "pointy-throttle-tests",
+    }
+}
+
+
+@override_settings(CACHES=_THROTTLE_TEST_CACHE)
+class AuthThrottlingTests(TestCase):
+    """The login/setup endpoints are rate-limited to resist brute-force.
+
+    A dedicated local-memory cache keeps throttle state isolated from the rest
+    of the suite, and is cleared before each test for determinism.
+    """
+
+    def setUp(self):
+        cache.clear()
+
+    def test_login_is_throttled_per_username(self):
+        get_user_model().objects.create_user(
+            username="cashier",
+            password="secret-pass",
+        )
+        client = APIClient()
+        # Default rate is 6/min for the per-username throttle.
+        for _ in range(6):
+            response = client.post(
+                reverse("auth-login"),
+                {"username": "cashier", "password": "wrong-pass"},
+                format="json",
+            )
+            self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+        throttled = client.post(
+            reverse("auth-login"),
+            {"username": "cashier", "password": "wrong-pass"},
+            format="json",
+        )
+        self.assertEqual(throttled.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
+
+    def test_login_throttle_is_scoped_to_each_username(self):
+        get_user_model().objects.create_user(username="alice", password="pw-alice")
+        get_user_model().objects.create_user(username="bob", password="pw-bob")
+        client = APIClient()
+        for _ in range(6):
+            client.post(
+                reverse("auth-login"),
+                {"username": "alice", "password": "wrong"},
+                format="json",
+            )
+
+        # A different username shares the per-IP budget (30/min) but not the
+        # per-username one, so it is not blocked by alice's failures.
+        bob_response = client.post(
+            reverse("auth-login"),
+            {"username": "bob", "password": "pw-bob"},
+            format="json",
+        )
+        self.assertEqual(bob_response.status_code, status.HTTP_200_OK)
+
+    def test_setup_admin_endpoint_is_throttled(self):
+        client = APIClient()
+        # Default rate is 5/hour for the setup throttle; weak passwords keep
+        # each attempt at 400 without completing onboarding.
+        for _ in range(5):
+            response = client.post(
+                reverse("setup-initial-admin"),
+                {"username": "owner", "password": "password"},
+                format="json",
+            )
+            self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+        throttled = client.post(
+            reverse("setup-initial-admin"),
+            {"username": "owner", "password": "password"},
+            format="json",
+        )
+        self.assertEqual(throttled.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
+
+    def test_login_throttle_fails_open_when_cache_unavailable(self):
+        from apps.core.throttling import LoginRateThrottle
+
+        throttle = LoginRateThrottle()
+        with mock.patch(
+            "rest_framework.throttling.SimpleRateThrottle.allow_request",
+            side_effect=RuntimeError("cache down"),
+        ):
+            self.assertTrue(throttle.allow_request(mock.Mock(), mock.Mock()))

@@ -1,5 +1,6 @@
 from datetime import timedelta
 from decimal import Decimal
+from unittest import mock
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
@@ -151,6 +152,41 @@ class ReceiptAutoPrintTests(PrintingTestMixin, TestCase):
         self.assertEqual(job.job_type, PrintJob.Type.RECEIPT)
         self.assertEqual(job.idempotency_key, f"receipt:{response.data['id']}")
         self.assertEqual(job.events.get().event_type, PrintJobEvent.Type.CREATED)
+
+    def test_auto_print_job_persisted_in_sale_transaction_not_post_commit(self):
+        # No captureOnCommitCallbacks wrapper: the job must already exist once
+        # the checkout response returns, proving it is written inside the sale
+        # transaction and does not depend on a post-commit hook (or Redis).
+        payload = {
+            "lines": [{"variant": self.variant.pk, "quantity": 2}],
+            "payment_method": Payment.Method.CASH,
+            "amount_received": "8.50",
+        }
+        response = self.cashier_client.post(
+            reverse("order-checkout"),
+            payload,
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        job = PrintJob.objects.get()
+        self.assertEqual(job.order_id, response.data["id"])
+        self.assertEqual(job.status, PrintJob.Status.QUEUED)
+
+    def test_sale_still_completes_when_receipt_job_creation_fails(self):
+        # A printing misconfiguration must never roll back a paid sale.
+        with mock.patch(
+            "apps.printing.services.enqueue_receipt_print_job",
+            side_effect=RuntimeError("template exploded"),
+        ):
+            response = self.checkout()
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        order = Order.objects.get(pk=response.data["id"])
+        self.assertEqual(order.status, Order.Status.PAID)
+        self.assertEqual(order.payments.count(), 1)
+        # The sale committed even though the receipt job could not be created.
+        self.assertEqual(PrintJob.objects.count(), 0)
 
     def test_auto_print_job_not_created_when_shop_setting_is_disabled(self):
         ShopSettings.objects.filter(pk=1).update(auto_print_receipts=False)

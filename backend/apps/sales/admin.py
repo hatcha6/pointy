@@ -1,5 +1,7 @@
 from django.contrib import admin
 
+from apps.core.admin_mixins import AppendOnlyAuditAdminMixin
+
 from .models import Order, OrderLine, RegisterCashMovement, RegisterSession
 
 
@@ -19,7 +21,7 @@ class RegisterSessionAdmin(admin.ModelAdmin):
 
 
 @admin.register(RegisterCashMovement)
-class RegisterCashMovementAdmin(admin.ModelAdmin):
+class RegisterCashMovementAdmin(AppendOnlyAuditAdminMixin, admin.ModelAdmin):
     list_display = (
         "register_session",
         "movement_type",
@@ -55,3 +57,8 @@ class OrderAdmin(admin.ModelAdmin):
     list_filter = ("status", "register_session__status")
     search_fields = ("receipt_number", "register_session__owner_key")
     inlines = [OrderLineInline]
+
+    def has_delete_permission(self, request, obj=None):
+        # A completed sale is part of the financial record and must never be
+        # erased from the admin; corrections happen through void/return.
+        return False

@@ -43,14 +43,48 @@ def normalize_storage_path(path) -> str:
     return str(resolved)
 
 
+def _path_is_within(path: Path, root: Path) -> bool:
+    try:
+        path.relative_to(root)
+        return True
+    except ValueError:
+        return False
+
+
+def allowed_volume_roots() -> list[Path]:
+    # The storage root is always permitted; additional roots may be configured
+    # for volumes mounted elsewhere. De-duplicated, preserving order.
+    roots = [storage_root_path()]
+    extra = getattr(settings, "POINTY_ATTACHMENT_ALLOWED_VOLUME_ROOTS", None) or []
+    roots.extend(Path(normalize_storage_path(raw)) for raw in extra)
+    unique: dict[str, Path] = {}
+    for root in roots:
+        unique.setdefault(str(root), root)
+    return list(unique.values())
+
+
+def path_within_allowed_volume_roots(path) -> bool:
+    resolved = Path(normalize_storage_path(path))
+    return any(_path_is_within(resolved, root) for root in allowed_volume_roots())
+
+
 def discovered_storage_paths() -> list[str]:
     root = storage_root_path()
     root.mkdir(parents=True, exist_ok=True)
-    paths = sorted(
-        child.resolve(strict=False)
-        for child in root.iterdir()
-        if child.is_dir() and not child.name.startswith(".")
-    )
+    paths = []
+    for child in root.iterdir():
+        if child.name.startswith("."):
+            continue
+        # Never adopt a symlinked child: it could point outside the managed
+        # storage root (for example at a system directory), turning storage
+        # discovery into a path-escape primitive.
+        if child.is_symlink() or not child.is_dir():
+            continue
+        resolved = child.resolve(strict=False)
+        if not _path_is_within(resolved, root):
+            continue
+        paths.append(resolved)
+    paths = sorted(paths)
     if not paths:
         default_path = root / DEFAULT_VOLUME_NAME
         default_path.mkdir(parents=True, exist_ok=True)

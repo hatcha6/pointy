@@ -150,6 +150,25 @@ CELERY_BROKER_URL = REDIS_URL
 CELERY_RESULT_BACKEND = REDIS_URL
 CELERY_TASK_ALWAYS_EAGER = False
 CELERY_TIMEZONE = TIME_ZONE
+# Only accept JSON-serialized messages so a compromised broker cannot deliver a
+# pickle payload that executes arbitrary code on the worker.
+CELERY_ACCEPT_CONTENT = ["json"]
+CELERY_TASK_SERIALIZER = "json"
+CELERY_RESULT_SERIALIZER = "json"
+# Bound ordinary periodic tasks (notification sync, fraud scan, expiry alerts,
+# payroll) so a hung task cannot pin a worker forever. The soft limit raises
+# SoftTimeLimitExceeded for graceful cleanup before the hard kill. Backup and
+# restore are long-running and override these with their own higher limits.
+CELERY_TASK_SOFT_TIME_LIMIT = env.int("CELERY_TASK_SOFT_TIME_LIMIT", default=25 * 60)
+CELERY_TASK_TIME_LIMIT = env.int("CELERY_TASK_TIME_LIMIT", default=30 * 60)
+# Backup/restore can legitimately run for a long time on large archives, so
+# they are exempted from the short default limits above.
+POINTY_BACKUP_TASK_SOFT_TIME_LIMIT = env.int(
+    "POINTY_BACKUP_TASK_SOFT_TIME_LIMIT", default=6 * 60 * 60
+)
+POINTY_BACKUP_TASK_TIME_LIMIT = env.int(
+    "POINTY_BACKUP_TASK_TIME_LIMIT", default=6 * 60 * 60 + 5 * 60
+)
 POINTY_EXPIRY_ALERT_WINDOW_DAYS = env("POINTY_EXPIRY_ALERT_WINDOW_DAYS")
 POINTY_NOTIFICATION_SYNC_INTERVAL_MINUTES = max(
     env("POINTY_NOTIFICATION_SYNC_INTERVAL_MINUTES"),
@@ -206,6 +225,15 @@ POINTY_ANALYTICS_BACKEND_PERFORMANCE_PATHS = ("/api/",)
 POINTY_ATTACHMENT_STORAGE_ROOT = env(
     "POINTY_ATTACHMENT_STORAGE_ROOT",
     default=str(MEDIA_ROOT),
+)
+# Storage volumes (auto-discovered or created via the API) must live under the
+# attachment storage root or one of these additional roots, so a privileged
+# user cannot point a volume at an arbitrary host directory such as /etc. The
+# storage root is always allowed; set this only when volumes are mounted
+# elsewhere (e.g. an external drive at a fixed path).
+POINTY_ATTACHMENT_ALLOWED_VOLUME_ROOTS = env.list(
+    "POINTY_ATTACHMENT_ALLOWED_VOLUME_ROOTS",
+    default=[],
 )
 POINTY_ATTACHMENT_MAX_UPLOAD_BYTES = env("POINTY_ATTACHMENT_MAX_UPLOAD_BYTES")
 POINTY_ATTACHMENT_CONTENT_TOKEN_MAX_AGE_SECONDS = env(
@@ -297,6 +325,19 @@ REST_FRAMEWORK = {
     ],
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
     "PAGE_SIZE": 50,
+    # Number of trusted reverse proxies in front of the backend. Used when
+    # deriving the client IP for throttling. 0 keys on REMOTE_ADDR so a client
+    # cannot bypass throttles by spoofing X-Forwarded-For; set this to the real
+    # proxy hop count (e.g. relay + nginx) to throttle on the true client IP.
+    "NUM_PROXIES": env.int("DJANGO_NUM_PROXIES", default=0),
+    # Scoped rates for sensitive auth endpoints only. Authenticated POS traffic
+    # is intentionally left unthrottled; these scopes are applied per-view.
+    "DEFAULT_THROTTLE_RATES": {
+        "login": env("DJANGO_THROTTLE_LOGIN", default="30/min"),
+        "login_username": env("DJANGO_THROTTLE_LOGIN_USERNAME", default="6/min"),
+        "setup": env("DJANGO_THROTTLE_SETUP", default="5/hour"),
+        "password_change": env("DJANGO_THROTTLE_PASSWORD_CHANGE", default="10/min"),
+    },
 }
 
 SPECTACULAR_SETTINGS = {

@@ -2,7 +2,12 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth import login, logout, update_session_auth_hash
 from django.middleware.csrf import get_token
 from rest_framework import parsers, status, views, viewsets
-from rest_framework.decorators import action, api_view, permission_classes
+from rest_framework.decorators import (
+    action,
+    api_view,
+    permission_classes,
+    throttle_classes,
+)
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
@@ -18,6 +23,12 @@ from .roles import (
     create_initial_admin_user,
     ensure_role_groups,
     initial_admin_setup_required,
+)
+from .throttling import (
+    LoginRateThrottle,
+    LoginUsernameRateThrottle,
+    PasswordChangeRateThrottle,
+    SetupRateThrottle,
 )
 from .serializers import (
     CurrentUserUpdateSerializer,
@@ -42,6 +53,7 @@ def setup_status_view(request):
 
 @api_view(["POST"])
 @permission_classes([AllowAny])
+@throttle_classes([SetupRateThrottle])
 def setup_initial_admin_view(request):
     if not initial_admin_setup_required():
         return Response(
@@ -75,6 +87,7 @@ def setup_initial_admin_view(request):
 
 @api_view(["POST"])
 @permission_classes([AllowAny])
+@throttle_classes([LoginRateThrottle, LoginUsernameRateThrottle])
 def login_view(request):
     serializer = LoginSerializer(data=request.data, context={"request": request})
     serializer.is_valid(raise_exception=True)
@@ -130,6 +143,7 @@ def me_view(request):
 
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
+@throttle_classes([PasswordChangeRateThrottle])
 def password_change_view(request):
     serializer = PasswordChangeSerializer(
         data=request.data,

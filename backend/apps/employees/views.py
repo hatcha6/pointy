@@ -429,7 +429,10 @@ class PayrollRunViewSet(viewsets.ModelViewSet):
         with transaction.atomic():
             locked_run = PayrollRun.objects.select_for_update().get(pk=payroll_run.pk)
             lines = list(
-                PayrollLine.objects.select_for_update()
+                # Lock only the PayrollLine rows (of="self"): select_related
+                # pulls in the nullable compensation_plan via an outer join, and
+                # PostgreSQL refuses FOR UPDATE on the nullable side of one.
+                PayrollLine.objects.select_for_update(of=("self",))
                 .select_related("employee", "compensation_plan", "payroll_run")
                 .filter(payroll_run=locked_run, pk__in=line_ids)
             )

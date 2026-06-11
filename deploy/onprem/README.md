@@ -86,3 +86,46 @@ Compose additionally applies a read-only root filesystem, drops all Linux
 capabilities, blocks privilege escalation, and sets PID limits for the Pointy
 backend, Celery, Beat, and connector containers. Writable paths are limited to
 named volumes, tmpfs, and explicitly configured backup drive mounts.
+
+Every service also has a memory (`mem_limit`) and CPU (`cpus`) cap so one
+runaway process — a heavy report, a worker leak, a restore — cannot starve the
+host and take down the till. Defaults total well under 8GB; raise the
+`POINTY_*_MEM_LIMIT` / `POINTY_*_CPUS` values in `.env` on larger hosts.
+
+### Brute-force protection
+
+The login, initial-admin-setup, and password-change endpoints are rate-limited
+(`DJANGO_THROTTLE_*`). When the backend sits behind a reverse proxy, set
+`DJANGO_NUM_PROXIES` to the number of trusted proxies so the throttle keys on
+the real client IP; the default of `0` keys on the direct peer and ignores
+`X-Forwarded-For` to prevent spoofing. Throttle state lives in Redis and fails
+open if Redis is down, so a cache outage never locks cashiers out.
+
+### Audit trail
+
+Completed sales are append-only: the API exposes no edit or delete for orders,
+so corrections must go through the audited void/return flow (even managers
+cannot erase a sale). Domain events, stock movements, and register cash
+movements are read-only in the Django admin and cannot be deleted there.
+
+## Resilience And Failure Behavior
+
+- **Redis down:** Sales still work — checkout, payment, stock decrements, and
+  receipt jobs are written synchronously to PostgreSQL inside the sale
+  transaction, so no paid receipt is lost. What pauses is asynchronous work
+  (scheduled backups, notification sync, fraud scans) and rate limiting. Print
+  agents keep printing queued receipts because they poll the database. Restart
+  Redis to resume background jobs; queued receipts and sales need no replay.
+- **Disk full:** PostgreSQL stops accepting writes and the backend's `/readyz/`
+  check fails, so checkout errors out rather than silently losing data. Monitor
+  free space on the Docker volume host and on backup drives; the backup
+  retention count (`POINTY_BACKUP_RETENTION_COUNT`) bounds archive growth, and
+  container logs are capped at 10MB × 5 files per service.
+- **A service crashes:** All services use `restart: unless-stopped` and Docker
+  health checks. Celery only starts once the backend is healthy.
+- **Long task hangs:** Celery enforces soft/hard time limits
+  (`CELERY_TASK_*_TIME_LIMIT`) so a stuck task cannot pin a worker forever;
+  backup/restore are exempted with their own higher limits.
+
+For stronger recovery guarantees, pair Pointy's app backup with PostgreSQL
+physical/base backups and WAL archiving, and monitor host disk usage.

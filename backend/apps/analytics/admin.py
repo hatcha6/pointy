@@ -1,10 +1,12 @@
 from django.contrib import admin
 
+from apps.core.admin_mixins import AppendOnlyAuditAdminMixin
+
 from .models import AnalyticsEvent
 
 
 @admin.register(AnalyticsEvent)
-class AnalyticsEventAdmin(admin.ModelAdmin):
+class AnalyticsEventAdmin(AppendOnlyAuditAdminMixin, admin.ModelAdmin):
     list_display = (
         "occurred_at",
         "name",
