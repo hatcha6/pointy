@@ -59,8 +59,11 @@ import 'package:pointy_frontend/src/features/employees/views/payroll_run_details
 import 'package:pointy_frontend/src/shared/components/pointy_navigation_surface.dart';
 import 'package:pointy_frontend/src/shared/responsive/adaptive_modal.dart';
 import 'package:pointy_frontend/src/shared/infinite_scroll_grid.dart';
+import 'package:pointy_frontend/src/shared/navigation/app_navigation.dart';
 import 'package:pointy_frontend/src/shared/product_tile.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+import 'shared/fake_app_navigation.dart';
 
 void main() {
   setUp(() {
@@ -1376,16 +1379,7 @@ void main() {
         ],
         home: CategoryManagementScreen(
           viewModel: CategoryManagementViewModel(CatalogRepository(apiService)),
-          currentUser: manager,
-          capabilities: AuthorizationCapabilities.forUser(manager),
-          onOpenPos: () {},
-          onOpenInvoices: () {},
-          onOpenPurchasing: () {},
-          onOpenContacts: () {},
-          onOpenCatalog: () {},
-          onOpenRegisterSessions: () {},
-          onOpenDeviceSettings: () {},
-          onLogout: () {},
+          navigation: FakeAppNavigation(currentUser: manager),
         ),
       ),
     );
@@ -2841,16 +2835,8 @@ void main() {
             ),
             currentUser: cashier,
             capabilities: AuthorizationCapabilities.forUser(cashier),
-            onOpenPos: () {},
-            onOpenInvoices: () {},
-            onOpenCatalog: () {},
-            onOpenCategories: () {},
-            onOpenPurchasing: () {},
-            onOpenContacts: () {},
-            onOpenRegisterSessions: () {},
-            onOpenDeviceSettings: () {},
+            navigation: FakeAppNavigation(currentUser: cashier),
             onOpenUserDetails: (_) {},
-            onLogout: () {},
           ),
         ),
       );
@@ -3262,18 +3248,16 @@ void main() {
         ],
         home: DashboardScreen(
           viewModel: viewModel,
-          currentUser: user,
           capabilities: AuthorizationCapabilities.forUser(user),
-          onOpenPos: () {},
-          onOpenInvoices: () {},
-          onOpenCatalog: () => openedCatalog = true,
-          onOpenCategories: () {},
-          onOpenPurchasing: () {},
-          onOpenContacts: () {},
-          onOpenRegisterSessions: () {},
-          onOpenDeviceSettings: () {},
+          navigation: FakeAppNavigation(
+            currentUser: user,
+            onNavigate: (destination) {
+              if (destination == AppNavigationDestination.catalog) {
+                openedCatalog = true;
+              }
+            },
+          ),
           onOpenIntegrityMonitor: () => openedIntegrityMonitor = true,
-          onLogout: () {},
         ),
       ),
     );
@@ -5547,17 +5531,11 @@ Widget _payrollApp(
     home: EmployeePayrollScreen(
       viewModel: viewModel,
       userRepository: UserRepository(apiService),
-      currentUser: PosUser.fromJson(_userJson(permissions: _payrollPermissions)),
       capabilities: capabilities,
-      onOpenPos: () {},
-      onOpenInvoices: () {},
-      onOpenCatalog: () {},
-      onOpenCategories: () {},
-      onOpenPurchasing: () {},
-      onOpenContacts: () {},
-      onOpenRegisterSessions: () {},
-      onOpenDeviceSettings: () {},
-      onLogout: () {},
+      navigation: FakeAppNavigation(
+        currentUser: PosUser.fromJson(_userJson(permissions: _payrollPermissions)),
+        capabilities: capabilities,
+      ),
     ),
   );
 }

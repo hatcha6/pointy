@@ -5,7 +5,6 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../core/authorization.dart';
 import '../../../data/models/dashboard.dart';
-import '../../../data/models/pos_user.dart';
 import '../../../shared/app_navigation_drawer.dart';
 import '../../../shared/authorization_guards.dart';
 import '../../../shared/components/components.dart';
@@ -23,45 +22,15 @@ class DashboardScreen extends StatelessWidget {
   const DashboardScreen({
     super.key,
     required this.viewModel,
-    required this.currentUser,
     required this.capabilities,
-    required this.onOpenPos,
-    required this.onOpenInvoices,
-    required this.onOpenCatalog,
-    required this.onOpenCategories,
-    required this.onOpenPurchasing,
-    required this.onOpenContacts,
-    required this.onOpenRegisterSessions,
-    required this.onOpenDeviceSettings,
-    required this.onLogout,
-    this.onOpenDiscounts,
-    this.onOpenReports,
-    this.onOpenActivityLog,
-    this.onOpenEmployees,
-    this.onOpenUsers,
-    this.onOpenShopSettings,
+    required this.navigation,
     this.onOpenIntegrityMonitor,
   });
 
   final DashboardViewModel viewModel;
-  final PosUser currentUser;
   final AuthorizationCapabilities capabilities;
-  final VoidCallback onOpenPos;
-  final VoidCallback onOpenInvoices;
-  final VoidCallback onOpenCatalog;
-  final VoidCallback onOpenCategories;
-  final VoidCallback onOpenPurchasing;
-  final VoidCallback onOpenContacts;
-  final VoidCallback onOpenRegisterSessions;
-  final VoidCallback onOpenDeviceSettings;
-  final VoidCallback? onOpenDiscounts;
-  final VoidCallback? onOpenReports;
-  final VoidCallback? onOpenActivityLog;
-  final VoidCallback? onOpenEmployees;
-  final VoidCallback? onOpenUsers;
-  final VoidCallback? onOpenShopSettings;
+  final AppNavigation navigation;
   final VoidCallback? onOpenIntegrityMonitor;
-  final VoidCallback onLogout;
 
   @override
   Widget build(BuildContext context) {
@@ -73,24 +42,7 @@ class DashboardScreen extends StatelessWidget {
         return PointyScaffold(
           drawer: AppNavigationDrawer(
             selectedDestination: AppNavigationDestination.dashboard,
-            currentUser: currentUser,
-            capabilities: capabilities,
-            onOpenDashboard: () {},
-            onOpenPos: onOpenPos,
-            onOpenInvoices: onOpenInvoices,
-            onOpenPurchasing: onOpenPurchasing,
-            onOpenContacts: onOpenContacts,
-            onOpenCatalog: onOpenCatalog,
-            onOpenCategories: onOpenCategories,
-            onOpenRegisterSessions: onOpenRegisterSessions,
-            onOpenDeviceSettings: onOpenDeviceSettings,
-            onOpenDiscounts: onOpenDiscounts,
-            onOpenReports: onOpenReports,
-            onOpenActivityLog: onOpenActivityLog,
-            onOpenEmployees: onOpenEmployees,
-            onOpenUsers: onOpenUsers,
-            onOpenShopSettings: onOpenShopSettings,
-            onLogout: onLogout,
+            navigation: navigation,
           ),
           appBar: PointyAppBar(
             leading: const PointyNavigationMenuButton(),
@@ -115,18 +67,50 @@ class DashboardScreen extends StatelessWidget {
               viewModel: viewModel,
               capabilities: capabilities,
               navigation: _DashboardNavigation(
-                openCatalog: onOpenCatalog,
-                openPurchasing: onOpenPurchasing,
-                openRegisterSessions: onOpenRegisterSessions,
-                openEmployees: onOpenEmployees,
-                openDiscounts: onOpenDiscounts,
-                openDeviceSettings: onOpenDeviceSettings,
+                openCatalog: _destinationAction(
+                  context,
+                  AppNavigationDestination.catalog,
+                ),
+                openPurchasing: _destinationAction(
+                  context,
+                  AppNavigationDestination.purchasing,
+                ),
+                openRegisterSessions: _destinationAction(
+                  context,
+                  AppNavigationDestination.registerSessions,
+                ),
+                openEmployees: _destinationAction(
+                  context,
+                  AppNavigationDestination.employees,
+                ),
+                openDiscounts: _destinationAction(
+                  context,
+                  AppNavigationDestination.discounts,
+                ),
+                openDeviceSettings: _destinationAction(
+                  context,
+                  AppNavigationDestination.deviceSettings,
+                ),
                 openIntegrityMonitor: onOpenIntegrityMonitor,
               ),
             ),
           ),
         );
       },
+    );
+  }
+
+  VoidCallback? _destinationAction(
+    BuildContext context,
+    AppNavigationDestination destination,
+  ) {
+    if (!navigation.isDestinationAvailable(destination)) {
+      return null;
+    }
+    return () => navigation.navigateTo(
+      context,
+      destination,
+      from: AppNavigationDestination.dashboard,
     );
   }
 }

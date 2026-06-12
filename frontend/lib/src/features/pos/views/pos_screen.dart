@@ -3,7 +3,6 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../core/authorization.dart';
 import '../../../data/models/register_cash_movement.dart';
-import '../../../data/models/pos_user.dart';
 import '../../../data/repositories/contact_repository.dart';
 import '../../../shared/app_navigation_drawer.dart';
 import '../../../shared/authorization_guards.dart';
@@ -25,44 +24,14 @@ class PosScreen extends StatelessWidget {
     super.key,
     required this.viewModel,
     required this.contactRepository,
-    required this.currentUser,
     required this.capabilities,
-    required this.onOpenInvoices,
-    required this.onOpenPurchasing,
-    required this.onOpenContacts,
-    required this.onOpenCatalog,
-    required this.onOpenCategories,
-    required this.onOpenRegisterSessions,
-    required this.onOpenDeviceSettings,
-    required this.onLogout,
-    this.onOpenDashboard,
-    this.onOpenDiscounts,
-    this.onOpenReports,
-    this.onOpenActivityLog,
-    this.onOpenEmployees,
-    this.onOpenUsers,
-    this.onOpenShopSettings,
+    required this.navigation,
   });
 
   final PosViewModel viewModel;
   final ContactRepository contactRepository;
-  final PosUser currentUser;
   final AuthorizationCapabilities capabilities;
-  final VoidCallback onOpenInvoices;
-  final VoidCallback onOpenPurchasing;
-  final VoidCallback onOpenContacts;
-  final VoidCallback onOpenCatalog;
-  final VoidCallback onOpenCategories;
-  final VoidCallback onOpenRegisterSessions;
-  final VoidCallback onOpenDeviceSettings;
-  final VoidCallback? onOpenDashboard;
-  final VoidCallback? onOpenDiscounts;
-  final VoidCallback? onOpenReports;
-  final VoidCallback? onOpenActivityLog;
-  final VoidCallback? onOpenEmployees;
-  final VoidCallback? onOpenUsers;
-  final VoidCallback? onOpenShopSettings;
-  final VoidCallback onLogout;
+  final AppNavigation navigation;
 
   @override
   Widget build(BuildContext context) {
@@ -74,24 +43,7 @@ class PosScreen extends StatelessWidget {
         return PointyScaffold(
           drawer: AppNavigationDrawer(
             selectedDestination: AppNavigationDestination.pos,
-            currentUser: currentUser,
-            capabilities: capabilities,
-            onOpenDashboard: onOpenDashboard,
-            onOpenPos: () {},
-            onOpenInvoices: onOpenInvoices,
-            onOpenPurchasing: onOpenPurchasing,
-            onOpenContacts: onOpenContacts,
-            onOpenCatalog: onOpenCatalog,
-            onOpenCategories: onOpenCategories,
-            onOpenRegisterSessions: onOpenRegisterSessions,
-            onOpenDeviceSettings: onOpenDeviceSettings,
-            onOpenDiscounts: onOpenDiscounts,
-            onOpenReports: onOpenReports,
-            onOpenActivityLog: onOpenActivityLog,
-            onOpenEmployees: onOpenEmployees,
-            onOpenUsers: onOpenUsers,
-            onOpenShopSettings: onOpenShopSettings,
-            onLogout: onLogout,
+            navigation: navigation,
           ),
           appBar: PointyAppBar(
             style: PointyAppBarStyle.highFocus,

@@ -67,9 +67,20 @@ class DashboardView(APIView):
             "sections": {},
         }
 
-        if _can_any(request.user, ("sales.view_order", "sales.view_registersession")):
+        # Revenue aggregates additionally require the reporting permission.
+        # Cashiers hold ``sales.view_order``/``payments.view_payment`` to run
+        # the register, but exposing shop-wide cash totals to them would defeat
+        # the blind close: a cashier who can read today's cash sales can pocket
+        # the difference and type in a "perfect" closing count.
+        if _can(request.user, "reports.view_reportrun") and _can_any(
+            request.user,
+            ("sales.view_order", "sales.view_registersession"),
+        ):
             data["sections"]["sales"] = _sales_section(request, period)
-        if _can(request.user, "payments.view_payment"):
+        if _can(request.user, "reports.view_reportrun") and _can(
+            request.user,
+            "payments.view_payment",
+        ):
             data["sections"]["payments"] = _cached_dashboard_section(
                 "payments",
                 request,
@@ -88,7 +99,10 @@ class DashboardView(APIView):
             )
         if _can(request.user, "employees.view_payrollrun"):
             data["sections"]["payroll"] = _payroll_section(period)
-        if _can(request.user, "sales.view_order"):
+        if _can(request.user, "reports.view_reportrun") and _can(
+            request.user,
+            "sales.view_order",
+        ):
             data["sections"]["profitability"] = _profitability_section(request, period)
         if _can(request.user, "customers.view_customer"):
             data["sections"]["customers"] = _customers_section(period)
@@ -153,8 +167,8 @@ def _dashboard_section_cache_key(section, request, period, *, scope=None):
 
 
 def _dashboard_cache_scope(request):
-    if user_is_manager(request.user):
-        return "manager"
+    if _views_shop_wide(request):
+        return "shop"
     return _owner_key(request)
 
 
@@ -990,7 +1004,7 @@ def _recent_orders(orders):
 
 def _register_summary(request, period):
     sessions = RegisterSession.objects.all()
-    if not user_is_manager(request.user):
+    if not _views_shop_wide(request):
         sessions = sessions.filter(owner_key=_owner_key(request))
     period_filter = Q(created_at__gte=period["start"], created_at__lt=period["end"])
     closed_period_filter = Q(status=RegisterSession.Status.CLOSED) & period_filter
@@ -1000,7 +1014,7 @@ def _register_summary(request, period):
     )
     variance = (
         _register_variance_summary(sessions.filter(closed_period_filter))
-        if user_is_manager(request.user)
+        if _views_shop_wide(request)
         else {"count": 0, "total": Decimal("0.00")}
     )
     return {
@@ -1234,34 +1248,47 @@ def _stock_item_row(item):
 
 def _settled_orders(request):
     queryset = Order.objects.filter(status__in=(Order.Status.PAID, Order.Status.VOID))
-    if user_is_manager(request.user):
+    if _views_shop_wide(request):
         return queryset
     return queryset.filter(register_session__owner_key=_owner_key(request))
 
 
 def _order_adjustments(request):
     queryset = OrderAdjustment.objects.all()
-    if user_is_manager(request.user):
+    if _views_shop_wide(request):
         return queryset
     return queryset.filter(register_session__owner_key=_owner_key(request))
 
 
 def _payments(request):
     queryset = Payment.objects.select_related("order", "order__register_session")
-    if user_is_manager(request.user):
+    if _views_shop_wide(request):
         return queryset
     return queryset.filter(order__register_session__owner_key=_owner_key(request))
 
 
 def _print_jobs(request):
     queryset = PrintJob.objects.all()
-    if user_is_manager(request.user):
+    if _views_shop_wide(request):
         return queryset
     return queryset.filter(order__register_session__owner_key=_owner_key(request))
 
 
 def _owner_key(request):
     return f"user:{request.user.pk}"
+
+
+def _views_shop_wide(request):
+    """Whether dashboard data may span all registers instead of the caller's.
+
+    Reporting roles (managers, accountants) see shop-wide aggregates; anyone
+    else is scoped to their own register sessions so a cashier can never read
+    totals that would let them fake a clean drawer count.
+    """
+    return user_is_manager(request.user) or _can(
+        request.user,
+        "reports.view_reportrun",
+    )
 
 
 def _can(user, permission):

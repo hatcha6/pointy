@@ -4,7 +4,6 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 import '../../../core/analytics_engine.dart';
 import '../../../core/authorization.dart';
 import '../../../data/models/product.dart';
-import '../../../data/models/pos_user.dart';
 import '../../../data/models/product_variant.dart';
 import '../../../data/repositories/inventory_repository.dart';
 import '../../../data/repositories/printing_repository.dart';
@@ -33,23 +32,9 @@ class CatalogScreen extends StatefulWidget {
     required this.purchaseRepository,
     required this.saleRepository,
     required this.shopSettingsRepository,
-    required this.currentUser,
+    required this.navigation,
     required this.capabilities,
     this.analyticsEngine,
-    required this.onOpenPos,
-    required this.onOpenInvoices,
-    required this.onOpenPurchasing,
-    required this.onOpenContacts,
-    required this.onOpenRegisterSessions,
-    required this.onOpenDeviceSettings,
-    required this.onLogout,
-    this.onOpenDashboard,
-    this.onOpenCategories,
-    this.onOpenDiscounts,
-    this.onOpenReports,
-    this.onOpenActivityLog,
-    this.onOpenUsers,
-    this.onOpenShopSettings,
   });
 
   final CatalogViewModel viewModel;
@@ -58,23 +43,9 @@ class CatalogScreen extends StatefulWidget {
   final PurchaseRepository purchaseRepository;
   final SaleRepository saleRepository;
   final ShopSettingsRepository shopSettingsRepository;
-  final PosUser currentUser;
+  final AppNavigation navigation;
   final AuthorizationCapabilities capabilities;
   final AnalyticsEngine? analyticsEngine;
-  final VoidCallback onOpenPos;
-  final VoidCallback onOpenInvoices;
-  final VoidCallback onOpenPurchasing;
-  final VoidCallback onOpenContacts;
-  final VoidCallback onOpenRegisterSessions;
-  final VoidCallback onOpenDeviceSettings;
-  final VoidCallback? onOpenDashboard;
-  final VoidCallback? onOpenCategories;
-  final VoidCallback? onOpenDiscounts;
-  final VoidCallback? onOpenReports;
-  final VoidCallback? onOpenActivityLog;
-  final VoidCallback? onOpenUsers;
-  final VoidCallback? onOpenShopSettings;
-  final VoidCallback onLogout;
 
   @override
   State<CatalogScreen> createState() => _CatalogScreenState();
@@ -119,23 +90,7 @@ class _CatalogScreenState extends State<CatalogScreen> {
         return PointyScaffold(
           drawer: AppNavigationDrawer(
             selectedDestination: AppNavigationDestination.catalog,
-            currentUser: widget.currentUser,
-            capabilities: capabilities,
-            onOpenDashboard: widget.onOpenDashboard,
-            onOpenPos: widget.onOpenPos,
-            onOpenInvoices: widget.onOpenInvoices,
-            onOpenPurchasing: widget.onOpenPurchasing,
-            onOpenContacts: widget.onOpenContacts,
-            onOpenCatalog: () {},
-            onOpenCategories: widget.onOpenCategories,
-            onOpenRegisterSessions: widget.onOpenRegisterSessions,
-            onOpenDeviceSettings: widget.onOpenDeviceSettings,
-            onOpenDiscounts: widget.onOpenDiscounts,
-            onOpenReports: widget.onOpenReports,
-            onOpenActivityLog: widget.onOpenActivityLog,
-            onOpenUsers: widget.onOpenUsers,
-            onOpenShopSettings: widget.onOpenShopSettings,
-            onLogout: widget.onLogout,
+            navigation: widget.navigation,
           ),
           appBar: PointyAppBar(
             leading: const PointyNavigationMenuButton(),

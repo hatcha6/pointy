@@ -4,82 +4,30 @@ import 'package:flutter/material.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../core/analytics_interaction_tracker.dart';
-import '../core/authorization.dart';
 import '../data/models/pos_user.dart';
 import 'components/components.dart';
-import 'shell/pointy_user_settings_route_scope.dart';
+import 'navigation/app_navigation.dart';
 
-enum AppNavigationDestination {
-  userSettings,
-  dashboard,
-  pos,
-  invoices,
-  purchasing,
-  contacts,
-  catalog,
-  categories,
-  registerSessions,
-  employees,
-  discounts,
-  reports,
-  activityLog,
-  deviceSettings,
-  users,
-  settings,
-}
+export 'navigation/app_navigation.dart';
 
 class AppNavigationDrawer extends StatelessWidget {
   const AppNavigationDrawer({
     super.key,
     required this.selectedDestination,
-    required this.currentUser,
-    required this.capabilities,
-    required this.onOpenPos,
-    required this.onOpenPurchasing,
-    required this.onOpenContacts,
-    required this.onOpenCatalog,
-    required this.onOpenRegisterSessions,
-    required this.onOpenDeviceSettings,
-    required this.onLogout,
-    this.onOpenDashboard,
-    this.onOpenInvoices,
-    this.onOpenDiscounts,
-    this.onOpenReports,
-    this.onOpenActivityLog,
-    this.onOpenCategories,
-    this.onOpenEmployees,
-    this.onOpenUsers,
-    this.onOpenShopSettings,
+    required this.navigation,
   });
 
   final AppNavigationDestination selectedDestination;
-  final PosUser currentUser;
-  final AuthorizationCapabilities capabilities;
-  final VoidCallback onOpenPos;
-  final VoidCallback? onOpenInvoices;
-  final VoidCallback? onOpenPurchasing;
-  final VoidCallback? onOpenContacts;
-  final VoidCallback onOpenCatalog;
-  final VoidCallback onOpenRegisterSessions;
-  final VoidCallback onOpenDeviceSettings;
-  final VoidCallback? onOpenDashboard;
-  final VoidCallback? onOpenDiscounts;
-  final VoidCallback? onOpenReports;
-  final VoidCallback? onOpenActivityLog;
-  final VoidCallback? onOpenCategories;
-  final VoidCallback? onOpenEmployees;
-  final VoidCallback? onOpenUsers;
-  final VoidCallback? onOpenShopSettings;
-  final VoidCallback onLogout;
+  final AppNavigation navigation;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final groups = _availableGroups(l10n, context);
+    final groups = _availableGroups(l10n);
 
     return PointyNavigationSurface(
-      userLabel: currentUser.label,
-      roleLabel: _roleLabel(l10n, currentUser.role),
+      userLabel: navigation.currentUser.label,
+      roleLabel: _roleLabel(l10n, navigation.currentUser.role),
       navigationChildren: [
         for (final group in groups)
           _DrawerNavigationGroupTile(
@@ -111,11 +59,11 @@ class AppNavigationDrawer extends StatelessWidget {
 
   Widget buildRail(BuildContext context, {bool extended = false}) {
     final l10n = AppLocalizations.of(context)!;
-    final groups = _availableGroups(l10n, context);
+    final groups = _availableGroups(l10n);
 
     return PointyNavigationRailSurface(
-      userLabel: currentUser.label,
-      roleLabel: _roleLabel(l10n, currentUser.role),
+      userLabel: navigation.currentUser.label,
+      roleLabel: _roleLabel(l10n, navigation.currentUser.role),
       logoutTooltip: l10n.logoutButton,
       onLogout: () {
         _logout(context, target: 'navigation_rail', closeDrawer: false);
@@ -161,11 +109,7 @@ class AppNavigationDrawer extends StatelessWidget {
     );
   }
 
-  List<_NavigationGroup> _availableGroups(
-    AppLocalizations l10n,
-    BuildContext context,
-  ) {
-    final userSettingsScope = PointyUserSettingsRouteScope.maybeOf(context);
+  List<_NavigationGroup> _availableGroups(AppLocalizations l10n) {
     final groups = [
       _NavigationGroup(
         label: l10n.navigationGroupPrimary,
@@ -173,19 +117,15 @@ class AppNavigationDrawer extends StatelessWidget {
         destinations: [
           _DrawerDestination(
             destination: AppNavigationDestination.dashboard,
-            capability: AppCapability.viewDashboard,
             icon: const Icon(Icons.dashboard_outlined),
             selectedIcon: const Icon(Icons.dashboard),
             label: l10n.dashboardDrawerLabel,
-            onTap: onOpenDashboard,
           ),
           _DrawerDestination(
             destination: AppNavigationDestination.pos,
-            capability: AppCapability.accessPos,
             icon: const Icon(Icons.receipt_long_outlined),
             selectedIcon: const Icon(Icons.receipt_long),
             label: l10n.posDrawerLabel,
-            onTap: onOpenPos,
           ),
         ],
       ),
@@ -195,27 +135,21 @@ class AppNavigationDrawer extends StatelessWidget {
         destinations: [
           _DrawerDestination(
             destination: AppNavigationDestination.invoices,
-            capability: AppCapability.viewInvoices,
             icon: const Icon(Icons.request_quote_outlined),
             selectedIcon: const Icon(Icons.request_quote),
             label: l10n.invoicesDrawerLabel,
-            onTap: onOpenInvoices,
           ),
           _DrawerDestination(
             destination: AppNavigationDestination.registerSessions,
-            capability: AppCapability.viewRegisterSessions,
             icon: const Icon(Icons.manage_history_outlined),
             selectedIcon: const Icon(Icons.manage_history),
             label: l10n.registerSessionsDrawerLabel,
-            onTap: onOpenRegisterSessions,
           ),
           _DrawerDestination(
             destination: AppNavigationDestination.discounts,
-            capability: AppCapability.viewDiscountRules,
             icon: const Icon(Icons.local_offer_outlined),
             selectedIcon: const Icon(Icons.local_offer),
             label: l10n.discountsDrawerLabel,
-            onTap: onOpenDiscounts,
           ),
         ],
       ),
@@ -225,27 +159,21 @@ class AppNavigationDrawer extends StatelessWidget {
         destinations: [
           _DrawerDestination(
             destination: AppNavigationDestination.catalog,
-            capability: AppCapability.viewCatalogManagement,
             icon: const Icon(Icons.inventory_2_outlined),
             selectedIcon: const Icon(Icons.inventory_2),
             label: l10n.catalogDrawerLabel,
-            onTap: onOpenCatalog,
           ),
           _DrawerDestination(
             destination: AppNavigationDestination.categories,
-            capability: AppCapability.manageCategories,
             icon: const Icon(Icons.category_outlined),
             selectedIcon: const Icon(Icons.category),
             label: l10n.categoriesDrawerLabel,
-            onTap: onOpenCategories,
           ),
           _DrawerDestination(
             destination: AppNavigationDestination.purchasing,
-            capability: AppCapability.accessPurchasing,
             icon: const Icon(Icons.add_shopping_cart_outlined),
             selectedIcon: const Icon(Icons.add_shopping_cart),
             label: l10n.purchasingDrawerLabel,
-            onTap: onOpenPurchasing,
           ),
         ],
       ),
@@ -255,19 +183,15 @@ class AppNavigationDrawer extends StatelessWidget {
         destinations: [
           _DrawerDestination(
             destination: AppNavigationDestination.contacts,
-            capability: AppCapability.manageContacts,
             icon: const Icon(Icons.contacts_outlined),
             selectedIcon: const Icon(Icons.contacts),
             label: l10n.contactsDrawerLabel,
-            onTap: onOpenContacts,
           ),
           _DrawerDestination(
             destination: AppNavigationDestination.employees,
-            capability: AppCapability.viewEmployees,
             icon: const Icon(Icons.badge_outlined),
             selectedIcon: const Icon(Icons.badge),
             label: l10n.employeesDrawerLabel,
-            onTap: onOpenEmployees,
           ),
         ],
       ),
@@ -277,19 +201,15 @@ class AppNavigationDrawer extends StatelessWidget {
         destinations: [
           _DrawerDestination(
             destination: AppNavigationDestination.reports,
-            capability: AppCapability.viewReports,
             icon: const Icon(Icons.summarize_outlined),
             selectedIcon: const Icon(Icons.summarize),
             label: l10n.reportsDrawerLabel,
-            onTap: onOpenReports,
           ),
           _DrawerDestination(
             destination: AppNavigationDestination.activityLog,
-            capability: AppCapability.viewActivityLog,
             icon: const Icon(Icons.manage_search_outlined),
             selectedIcon: const Icon(Icons.manage_search),
             label: l10n.activityLogDrawerLabel,
-            onTap: onOpenActivityLog,
           ),
         ],
       ),
@@ -299,49 +219,44 @@ class AppNavigationDrawer extends StatelessWidget {
         destinations: [
           _DrawerDestination(
             destination: AppNavigationDestination.userSettings,
-            capability: AppCapability.manageOwnAccount,
             icon: const Icon(Icons.manage_accounts_outlined),
             selectedIcon: const Icon(Icons.manage_accounts),
             label: l10n.userSettingsDrawerLabel,
-            onTap: userSettingsScope == null
-                ? null
-                : () => userSettingsScope.onOpenUserSettings(context),
           ),
           _DrawerDestination(
             destination: AppNavigationDestination.deviceSettings,
-            capability: AppCapability.manageDeviceSettings,
             icon: const Icon(Icons.devices_other_outlined),
             selectedIcon: const Icon(Icons.devices_other),
             label: l10n.deviceSettingsDrawerLabel,
-            onTap: onOpenDeviceSettings,
           ),
           _DrawerDestination(
             destination: AppNavigationDestination.users,
-            capability: AppCapability.manageUsers,
             icon: const Icon(Icons.group_outlined),
             selectedIcon: const Icon(Icons.group),
             label: l10n.usersDrawerLabel,
-            onTap: onOpenUsers,
           ),
           _DrawerDestination(
             destination: AppNavigationDestination.settings,
-            capability: AppCapability.manageShopSettings,
             icon: const Icon(Icons.settings_outlined),
             selectedIcon: const Icon(Icons.settings),
             label: l10n.settingsDrawerLabel,
-            onTap: onOpenShopSettings,
           ),
         ],
       ),
     ];
 
+    // Availability is decided centrally from capabilities alone, so the same
+    // user always sees the same destinations on every screen.
     return [
       for (final group in groups)
         _NavigationGroup(
           label: group.label,
           icon: group.icon,
           destinations: group.destinations
-              .where((destination) => destination.isAvailable(capabilities))
+              .where(
+                (destination) =>
+                    navigation.isDestinationAvailable(destination.destination),
+              )
               .toList(growable: false),
         ),
     ].where((group) => group.destinations.isNotEmpty).toList(growable: false);
@@ -367,7 +282,11 @@ class AppNavigationDrawer extends StatelessWidget {
     if (closeDrawer) {
       Navigator.of(context).pop();
     }
-    destination.onTap?.call();
+    navigation.navigateTo(
+      context,
+      destination.destination,
+      from: selectedDestination,
+    );
   }
 
   void _logout(
@@ -383,7 +302,7 @@ class AppNavigationDrawer extends StatelessWidget {
     if (closeDrawer) {
       Navigator.of(context).pop();
     }
-    onLogout();
+    navigation.logout(context);
   }
 
   String _roleLabel(AppLocalizations l10n, UserRole role) {
@@ -565,21 +484,13 @@ class _CollapsedRailDestinationTile extends StatelessWidget {
 class _DrawerDestination {
   const _DrawerDestination({
     required this.destination,
-    required this.capability,
     required this.icon,
     required this.selectedIcon,
     required this.label,
-    required this.onTap,
   });
 
   final AppNavigationDestination destination;
-  final AppCapability capability;
   final Widget icon;
   final Widget selectedIcon;
   final String label;
-  final VoidCallback? onTap;
-
-  bool isAvailable(AuthorizationCapabilities capabilities) {
-    return onTap != null && capabilities.allows(capability);
-  }
 }

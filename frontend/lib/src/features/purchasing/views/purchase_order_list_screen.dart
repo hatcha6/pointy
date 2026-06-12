@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../core/authorization.dart';
-import '../../../data/models/pos_user.dart';
 import '../../../data/models/purchase_submission.dart';
 import '../../../data/repositories/contact_repository.dart';
 import '../../../data/services/order_document_service.dart';
@@ -23,46 +22,18 @@ class PurchaseOrderListScreen extends StatelessWidget {
     super.key,
     required this.viewModel,
     required this.contactRepository,
-    required this.currentUser,
     required this.capabilities,
+    required this.navigation,
     required this.onCreatePurchaseOrder,
     required this.onOpenPurchaseOrder,
-    required this.onOpenPos,
-    required this.onOpenInvoices,
-    required this.onOpenCatalog,
-    required this.onOpenCategories,
-    required this.onOpenContacts,
-    required this.onOpenRegisterSessions,
-    required this.onOpenDeviceSettings,
-    required this.onLogout,
-    this.onOpenDashboard,
-    this.onOpenDiscounts,
-    this.onOpenReports,
-    this.onOpenActivityLog,
-    this.onOpenUsers,
-    this.onOpenShopSettings,
   });
 
   final PurchaseOrderListViewModel viewModel;
   final ContactRepository contactRepository;
-  final PosUser currentUser;
   final AuthorizationCapabilities capabilities;
+  final AppNavigation navigation;
   final VoidCallback onCreatePurchaseOrder;
   final ValueChanged<PurchaseOrder> onOpenPurchaseOrder;
-  final VoidCallback onOpenPos;
-  final VoidCallback onOpenInvoices;
-  final VoidCallback onOpenCatalog;
-  final VoidCallback onOpenCategories;
-  final VoidCallback onOpenContacts;
-  final VoidCallback onOpenRegisterSessions;
-  final VoidCallback onOpenDeviceSettings;
-  final VoidCallback? onOpenDashboard;
-  final VoidCallback? onOpenDiscounts;
-  final VoidCallback? onOpenReports;
-  final VoidCallback? onOpenActivityLog;
-  final VoidCallback? onOpenUsers;
-  final VoidCallback? onOpenShopSettings;
-  final VoidCallback onLogout;
 
   @override
   Widget build(BuildContext context) {
@@ -74,23 +45,7 @@ class PurchaseOrderListScreen extends StatelessWidget {
         return PointyScaffold(
           drawer: AppNavigationDrawer(
             selectedDestination: AppNavigationDestination.purchasing,
-            currentUser: currentUser,
-            capabilities: capabilities,
-            onOpenDashboard: onOpenDashboard,
-            onOpenPos: onOpenPos,
-            onOpenInvoices: onOpenInvoices,
-            onOpenPurchasing: () {},
-            onOpenContacts: onOpenContacts,
-            onOpenCatalog: onOpenCatalog,
-            onOpenCategories: onOpenCategories,
-            onOpenRegisterSessions: onOpenRegisterSessions,
-            onOpenDeviceSettings: onOpenDeviceSettings,
-            onOpenDiscounts: onOpenDiscounts,
-            onOpenReports: onOpenReports,
-            onOpenActivityLog: onOpenActivityLog,
-            onOpenUsers: onOpenUsers,
-            onOpenShopSettings: onOpenShopSettings,
-            onLogout: onLogout,
+            navigation: navigation,
           ),
           appBar: AppBar(
             leading: const PointyNavigationMenuButton(),

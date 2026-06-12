@@ -3,7 +3,6 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../core/authorization.dart';
 import '../../../data/models/contact.dart';
-import '../../../data/models/pos_user.dart';
 import '../../../data/repositories/printing_repository.dart';
 import '../../../data/repositories/purchase_repository.dart';
 import '../../../data/repositories/shop_settings_repository.dart';
@@ -27,44 +26,16 @@ class ContactManagementScreen extends StatefulWidget {
     required this.purchaseRepository,
     required this.printingRepository,
     required this.shopSettingsRepository,
-    required this.currentUser,
+    required this.navigation,
     required this.capabilities,
-    required this.onOpenPos,
-    required this.onOpenInvoices,
-    required this.onOpenPurchasing,
-    required this.onOpenCatalog,
-    required this.onOpenCategories,
-    required this.onOpenRegisterSessions,
-    required this.onOpenDeviceSettings,
-    required this.onLogout,
-    this.onOpenDashboard,
-    this.onOpenDiscounts,
-    this.onOpenReports,
-    this.onOpenActivityLog,
-    this.onOpenUsers,
-    this.onOpenShopSettings,
   });
 
   final ContactManagementViewModel viewModel;
   final PurchaseRepository purchaseRepository;
   final PrintingRepository printingRepository;
   final ShopSettingsRepository shopSettingsRepository;
-  final PosUser currentUser;
+  final AppNavigation navigation;
   final AuthorizationCapabilities capabilities;
-  final VoidCallback onOpenPos;
-  final VoidCallback onOpenInvoices;
-  final VoidCallback onOpenPurchasing;
-  final VoidCallback onOpenCatalog;
-  final VoidCallback onOpenCategories;
-  final VoidCallback onOpenRegisterSessions;
-  final VoidCallback onOpenDeviceSettings;
-  final VoidCallback? onOpenDashboard;
-  final VoidCallback? onOpenDiscounts;
-  final VoidCallback? onOpenReports;
-  final VoidCallback? onOpenActivityLog;
-  final VoidCallback? onOpenUsers;
-  final VoidCallback? onOpenShopSettings;
-  final VoidCallback onLogout;
 
   @override
   State<ContactManagementScreen> createState() =>
@@ -139,23 +110,7 @@ class _ContactManagementScreenState extends State<ContactManagementScreen>
         return PointyScaffold(
           drawer: AppNavigationDrawer(
             selectedDestination: AppNavigationDestination.contacts,
-            currentUser: widget.currentUser,
-            capabilities: widget.capabilities,
-            onOpenDashboard: widget.onOpenDashboard,
-            onOpenPos: widget.onOpenPos,
-            onOpenInvoices: widget.onOpenInvoices,
-            onOpenPurchasing: widget.onOpenPurchasing,
-            onOpenContacts: () {},
-            onOpenCatalog: widget.onOpenCatalog,
-            onOpenCategories: widget.onOpenCategories,
-            onOpenRegisterSessions: widget.onOpenRegisterSessions,
-            onOpenDeviceSettings: widget.onOpenDeviceSettings,
-            onOpenDiscounts: widget.onOpenDiscounts,
-            onOpenReports: widget.onOpenReports,
-            onOpenActivityLog: widget.onOpenActivityLog,
-            onOpenUsers: widget.onOpenUsers,
-            onOpenShopSettings: widget.onOpenShopSettings,
-            onLogout: widget.onLogout,
+            navigation: widget.navigation,
           ),
           appBar: AppBar(
             leading: const PointyNavigationMenuButton(),

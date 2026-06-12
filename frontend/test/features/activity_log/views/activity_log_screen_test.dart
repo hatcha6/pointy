@@ -13,6 +13,8 @@ import 'package:pointy_frontend/src/features/activity_log/views/activity_log_eve
 import 'package:pointy_frontend/src/features/activity_log/views/activity_log_screen.dart';
 import 'package:pointy_frontend/src/shared/design/design.dart';
 
+import '../../../shared/fake_app_navigation.dart';
+
 void main() {
   testWidgets('activity log renders event timeline and details in Arabic', (
     tester,
@@ -36,20 +38,11 @@ void main() {
       _TestApp(
         child: ActivityLogScreen(
           viewModel: viewModel,
-          currentUser: _manager,
           capabilities: AuthorizationCapabilities.forUser(_manager),
-          onOpenPos: () {},
-          onOpenInvoices: () {},
-          onOpenCatalog: () {},
-          onOpenCategories: () {},
-          onOpenPurchasing: () {},
-          onOpenContacts: () {},
-          onOpenRegisterSessions: () {},
-          onOpenDeviceSettings: () {},
+          navigation: FakeAppNavigation(currentUser: _manager),
           onOpenTarget: (context, target) async {
             openedTarget = target;
           },
-          onLogout: () {},
         ),
       ),
     );
@@ -95,17 +88,8 @@ void main() {
       _TestApp(
         child: ActivityLogScreen(
           viewModel: viewModel,
-          currentUser: _manager,
           capabilities: AuthorizationCapabilities.forUser(_manager),
-          onOpenPos: () {},
-          onOpenInvoices: () {},
-          onOpenCatalog: () {},
-          onOpenCategories: () {},
-          onOpenPurchasing: () {},
-          onOpenContacts: () {},
-          onOpenRegisterSessions: () {},
-          onOpenDeviceSettings: () {},
-          onLogout: () {},
+          navigation: FakeAppNavigation(currentUser: _manager),
         ),
       ),
     );

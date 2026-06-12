@@ -42,6 +42,7 @@ from apps.purchasing.models import (
 from apps.sales.models import Order, OrderLine, RegisterCashMovement, RegisterSession
 from .models import RelayConnectorSetupToken, RelayInstallation, ShopSettings
 from .roles import (
+    ACCOUNTANT_GROUP,
     CASHIER_GROUP,
     MANAGER_GROUP,
     create_initial_admin_user,
@@ -1226,20 +1227,42 @@ class DashboardApiTests(TestCase):
     def tearDown(self):
         cache.clear()
 
-    def test_dashboard_scopes_cashier_sales_and_sections(self):
+    def test_dashboard_hides_revenue_aggregates_from_cashiers(self):
+        # A cashier who can read cash totals can pocket the difference and
+        # type a "perfect" closing count, so the blind close requires that no
+        # revenue aggregate ever reaches a register-only role.
         client = APIClient()
         client.force_authenticate(user=self.cashier)
 
         response = client.get(reverse("dashboard"))
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertIn("sales", response.data["sections"])
-        self.assertIn("payments", response.data["sections"])
-        self.assertIn("printing", response.data["sections"])
-        self.assertNotIn("inventory", response.data["sections"])
-        self.assertNotIn("purchasing", response.data["sections"])
-        self.assertEqual(response.data["sections"]["sales"]["summary"]["net_sales"], "10.00")
-        self.assertEqual(response.data["sections"]["payments"]["summary"]["total"], "10.00")
+        sections = response.data["sections"]
+        self.assertNotIn("sales", sections)
+        self.assertNotIn("payments", sections)
+        self.assertNotIn("profitability", sections)
+        self.assertNotIn("inventory", sections)
+        self.assertNotIn("purchasing", sections)
+        self.assertIn("printing", sections)
+
+    def test_dashboard_shows_revenue_aggregates_to_reporting_roles(self):
+        User = get_user_model()
+        accountant = User.objects.create_user(
+            username="dashboard-accountant",
+            password="pass",
+        )
+        accountant.groups.add(Group.objects.get(name=ACCOUNTANT_GROUP))
+        client = APIClient()
+        client.force_authenticate(user=accountant)
+
+        response = client.get(reverse("dashboard"))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        sections = response.data["sections"]
+        self.assertIn("sales", sections)
+        self.assertIn("payments", sections)
+        self.assertIn("profitability", sections)
+        self.assertEqual(sections["sales"]["summary"]["net_sales"], "50.00")
 
     def test_manager_dashboard_includes_admin_sections_and_all_sales(self):
         client = APIClient()

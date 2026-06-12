@@ -16,41 +16,15 @@ class UserManagementScreen extends StatelessWidget {
     required this.viewModel,
     required this.currentUser,
     required this.capabilities,
-    required this.onOpenPos,
-    required this.onOpenInvoices,
-    required this.onOpenCatalog,
-    required this.onOpenCategories,
-    required this.onOpenPurchasing,
-    required this.onOpenContacts,
-    required this.onOpenRegisterSessions,
-    required this.onOpenDeviceSettings,
     required this.onOpenUserDetails,
-    required this.onLogout,
-    this.onOpenDashboard,
-    this.onOpenDiscounts,
-    this.onOpenReports,
-    this.onOpenActivityLog,
-    this.onOpenShopSettings,
+    required this.navigation,
   });
 
   final UserManagementViewModel viewModel;
   final PosUser currentUser;
   final AuthorizationCapabilities capabilities;
-  final VoidCallback onOpenPos;
-  final VoidCallback onOpenInvoices;
-  final VoidCallback onOpenCatalog;
-  final VoidCallback onOpenCategories;
-  final VoidCallback onOpenPurchasing;
-  final VoidCallback onOpenContacts;
-  final VoidCallback onOpenRegisterSessions;
-  final VoidCallback onOpenDeviceSettings;
   final ValueChanged<PosUser> onOpenUserDetails;
-  final VoidCallback? onOpenDashboard;
-  final VoidCallback? onOpenDiscounts;
-  final VoidCallback? onOpenReports;
-  final VoidCallback? onOpenActivityLog;
-  final VoidCallback? onOpenShopSettings;
-  final VoidCallback onLogout;
+  final AppNavigation navigation;
 
   @override
   Widget build(BuildContext context) {
@@ -62,23 +36,7 @@ class UserManagementScreen extends StatelessWidget {
         return PointyScaffold(
           drawer: AppNavigationDrawer(
             selectedDestination: AppNavigationDestination.users,
-            currentUser: currentUser,
-            capabilities: capabilities,
-            onOpenDashboard: onOpenDashboard,
-            onOpenPos: onOpenPos,
-            onOpenInvoices: onOpenInvoices,
-            onOpenPurchasing: onOpenPurchasing,
-            onOpenContacts: onOpenContacts,
-            onOpenCatalog: onOpenCatalog,
-            onOpenCategories: onOpenCategories,
-            onOpenRegisterSessions: onOpenRegisterSessions,
-            onOpenDeviceSettings: onOpenDeviceSettings,
-            onOpenDiscounts: onOpenDiscounts,
-            onOpenReports: onOpenReports,
-            onOpenActivityLog: onOpenActivityLog,
-            onOpenUsers: () {},
-            onOpenShopSettings: onOpenShopSettings,
-            onLogout: onLogout,
+            navigation: navigation,
           ),
           appBar: PointyAppBar(
             leading: const PointyNavigationMenuButton(),

@@ -3,7 +3,6 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../core/authorization.dart';
 import '../../../data/models/analytics_event.dart';
-import '../../../data/models/pos_user.dart';
 import '../../../shared/app_navigation_drawer.dart';
 import '../../../shared/authorization_guards.dart';
 import '../../../shared/components/components.dart';
@@ -18,47 +17,19 @@ class ActivityLogScreen extends StatelessWidget {
   const ActivityLogScreen({
     super.key,
     required this.viewModel,
-    required this.currentUser,
+    required this.navigation,
     required this.capabilities,
-    required this.onOpenPos,
-    required this.onOpenInvoices,
-    required this.onOpenCatalog,
-    required this.onOpenCategories,
-    required this.onOpenPurchasing,
-    required this.onOpenContacts,
-    required this.onOpenRegisterSessions,
-    required this.onOpenDeviceSettings,
-    required this.onLogout,
-    this.onOpenDashboard,
-    this.onOpenDiscounts,
-    this.onOpenReports,
-    this.onOpenUsers,
-    this.onOpenShopSettings,
     this.onOpenTarget,
   });
 
   final ActivityLogViewModel viewModel;
-  final PosUser currentUser;
+  final AppNavigation navigation;
   final AuthorizationCapabilities capabilities;
-  final VoidCallback onOpenPos;
-  final VoidCallback onOpenInvoices;
-  final VoidCallback onOpenCatalog;
-  final VoidCallback onOpenCategories;
-  final VoidCallback onOpenPurchasing;
-  final VoidCallback onOpenContacts;
-  final VoidCallback onOpenRegisterSessions;
-  final VoidCallback onOpenDeviceSettings;
-  final VoidCallback? onOpenDashboard;
-  final VoidCallback? onOpenDiscounts;
-  final VoidCallback? onOpenReports;
-  final VoidCallback? onOpenUsers;
-  final VoidCallback? onOpenShopSettings;
   final Future<void> Function(
     BuildContext context,
     ActivityLogDrillDownTarget target,
   )?
   onOpenTarget;
-  final VoidCallback onLogout;
 
   @override
   Widget build(BuildContext context) {
@@ -70,23 +41,7 @@ class ActivityLogScreen extends StatelessWidget {
         return PointyScaffold(
           drawer: AppNavigationDrawer(
             selectedDestination: AppNavigationDestination.activityLog,
-            currentUser: currentUser,
-            capabilities: capabilities,
-            onOpenDashboard: onOpenDashboard,
-            onOpenPos: onOpenPos,
-            onOpenInvoices: onOpenInvoices,
-            onOpenPurchasing: onOpenPurchasing,
-            onOpenContacts: onOpenContacts,
-            onOpenCatalog: onOpenCatalog,
-            onOpenCategories: onOpenCategories,
-            onOpenRegisterSessions: onOpenRegisterSessions,
-            onOpenDeviceSettings: onOpenDeviceSettings,
-            onOpenDiscounts: onOpenDiscounts,
-            onOpenReports: onOpenReports,
-            onOpenUsers: onOpenUsers,
-            onOpenActivityLog: () {},
-            onOpenShopSettings: onOpenShopSettings,
-            onLogout: onLogout,
+            navigation: navigation,
           ),
           appBar: PointyAppBar(
             leading: const PointyNavigationMenuButton(),

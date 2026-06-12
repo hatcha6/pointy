@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
-import '../../../core/authorization.dart';
 import '../../../data/models/employee.dart';
 import '../../../data/models/pos_user.dart';
 import '../../../shared/app_navigation_drawer.dart';
@@ -18,46 +17,14 @@ class UserSettingsScreen extends StatefulWidget {
     super.key,
     required this.viewModel,
     required this.currentUser,
-    required this.capabilities,
     required this.onUserChanged,
-    required this.onOpenPos,
-    required this.onOpenInvoices,
-    required this.onOpenCatalog,
-    required this.onOpenCategories,
-    required this.onOpenPurchasing,
-    required this.onOpenContacts,
-    required this.onOpenRegisterSessions,
-    required this.onOpenDeviceSettings,
-    required this.onLogout,
-    this.onOpenDashboard,
-    this.onOpenDiscounts,
-    this.onOpenReports,
-    this.onOpenActivityLog,
-    this.onOpenEmployees,
-    this.onOpenUsers,
-    this.onOpenShopSettings,
+    required this.navigation,
   });
 
   final UserSettingsViewModel viewModel;
   final PosUser currentUser;
-  final AuthorizationCapabilities capabilities;
   final ValueChanged<PosUser> onUserChanged;
-  final VoidCallback onOpenPos;
-  final VoidCallback onOpenInvoices;
-  final VoidCallback onOpenCatalog;
-  final VoidCallback onOpenCategories;
-  final VoidCallback onOpenPurchasing;
-  final VoidCallback onOpenContacts;
-  final VoidCallback onOpenRegisterSessions;
-  final VoidCallback onOpenDeviceSettings;
-  final VoidCallback? onOpenDashboard;
-  final VoidCallback? onOpenDiscounts;
-  final VoidCallback? onOpenReports;
-  final VoidCallback? onOpenActivityLog;
-  final VoidCallback? onOpenEmployees;
-  final VoidCallback? onOpenUsers;
-  final VoidCallback? onOpenShopSettings;
-  final VoidCallback onLogout;
+  final AppNavigation navigation;
 
   @override
   State<UserSettingsScreen> createState() => _UserSettingsScreenState();
@@ -88,24 +55,7 @@ class _UserSettingsScreenState extends State<UserSettingsScreen> {
         return PointyScaffold(
           drawer: AppNavigationDrawer(
             selectedDestination: AppNavigationDestination.userSettings,
-            currentUser: widget.currentUser,
-            capabilities: widget.capabilities,
-            onOpenDashboard: widget.onOpenDashboard,
-            onOpenPos: widget.onOpenPos,
-            onOpenInvoices: widget.onOpenInvoices,
-            onOpenPurchasing: widget.onOpenPurchasing,
-            onOpenContacts: widget.onOpenContacts,
-            onOpenCatalog: widget.onOpenCatalog,
-            onOpenCategories: widget.onOpenCategories,
-            onOpenRegisterSessions: widget.onOpenRegisterSessions,
-            onOpenDeviceSettings: widget.onOpenDeviceSettings,
-            onOpenDiscounts: widget.onOpenDiscounts,
-            onOpenReports: widget.onOpenReports,
-            onOpenActivityLog: widget.onOpenActivityLog,
-            onOpenEmployees: widget.onOpenEmployees,
-            onOpenUsers: widget.onOpenUsers,
-            onOpenShopSettings: widget.onOpenShopSettings,
-            onLogout: widget.onLogout,
+            navigation: widget.navigation,
           ),
           appBar: PointyAppBar(
             leading: const PointyNavigationMenuButton(),

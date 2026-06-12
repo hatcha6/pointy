@@ -66,12 +66,12 @@ class AuthorizationCapabilities {
       return AuthorizationCapabilities._(Set.of(AppCapability.values));
     }
 
+    // Deliberately no dashboard capabilities here: revenue aggregates would
+    // tell a cashier exactly how much cash the drawer should hold, defeating
+    // the blind close. Dashboards are granted below from explicit reporting
+    // permissions instead.
     final capabilities = <AppCapability>{
       AppCapability.accessPos,
-      AppCapability.viewDashboard,
-      AppCapability.viewSalesDashboard,
-      AppCapability.viewPaymentDashboard,
-      AppCapability.viewPrintingDashboard,
       AppCapability.manageOwnAccount,
       AppCapability.checkoutSale,
       AppCapability.startRegisterSession,
@@ -234,15 +234,10 @@ class AuthorizationCapabilities {
         'view_registersession',
         'sales.view_registersession',
       ])) {
-        capabilities
-          ..add(AppCapability.viewDashboard)
-          ..add(AppCapability.viewSalesDashboard)
-          ..add(AppCapability.viewRegisterSessions);
+        capabilities.add(AppCapability.viewRegisterSessions);
       }
       if (_hasAny(user, const ['view_order', 'sales.view_order'])) {
         capabilities
-          ..add(AppCapability.viewDashboard)
-          ..add(AppCapability.viewSalesDashboard)
           ..add(AppCapability.viewInvoices)
           ..add(AppCapability.viewRegisterSessions)
           ..add(AppCapability.viewRegisterSessionOrders);
@@ -277,15 +272,19 @@ class AuthorizationCapabilities {
           ..add(AppCapability.accessPos)
           ..add(AppCapability.createRegisterCashMovement);
       }
-      if (_hasAny(user, const ['view_payment', 'payments.view_payment'])) {
+      // Revenue dashboards are reserved for reporting roles: holding the POS
+      // permissions (view_payment, view_order) alone must not reveal shop-wide
+      // cash totals to the person counting the drawer.
+      if (_hasAny(user, const ['view_reportrun', 'reports.view_reportrun'])) {
         capabilities
           ..add(AppCapability.viewDashboard)
-          ..add(AppCapability.viewPaymentDashboard);
-      }
-      if (_hasAny(user, const ['view_printjob', 'printing.view_printjob'])) {
-        capabilities
-          ..add(AppCapability.viewDashboard)
-          ..add(AppCapability.viewPrintingDashboard);
+          ..add(AppCapability.viewSalesDashboard);
+        if (_hasAny(user, const ['view_payment', 'payments.view_payment'])) {
+          capabilities.add(AppCapability.viewPaymentDashboard);
+        }
+        if (_hasAny(user, const ['view_printjob', 'printing.view_printjob'])) {
+          capabilities.add(AppCapability.viewPrintingDashboard);
+        }
       }
       if (_hasAny(user, const ['view_employee', 'employees.view_employee'])) {
         capabilities

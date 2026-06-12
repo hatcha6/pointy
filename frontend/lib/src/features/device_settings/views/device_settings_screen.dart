@@ -3,7 +3,6 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../core/authorization.dart';
 import '../../../data/models/device_settings.dart';
-import '../../../data/models/pos_user.dart';
 import '../../../shared/app_navigation_drawer.dart';
 import '../../../shared/authorization_guards.dart';
 import '../../../shared/components/components.dart';
@@ -18,42 +17,14 @@ class DeviceSettingsScreen extends StatelessWidget {
     super.key,
     required this.deviceSettingsViewModel,
     required this.printingSettingsViewModel,
-    required this.currentUser,
     required this.capabilities,
-    required this.onOpenPos,
-    required this.onOpenInvoices,
-    required this.onOpenCatalog,
-    required this.onOpenCategories,
-    required this.onOpenPurchasing,
-    required this.onOpenContacts,
-    required this.onOpenRegisterSessions,
-    required this.onLogout,
-    this.onOpenDashboard,
-    this.onOpenDiscounts,
-    this.onOpenReports,
-    this.onOpenActivityLog,
-    this.onOpenUsers,
-    this.onOpenShopSettings,
+    required this.navigation,
   });
 
   final DeviceSettingsViewModel deviceSettingsViewModel;
   final PrintingSettingsViewModel printingSettingsViewModel;
-  final PosUser currentUser;
   final AuthorizationCapabilities capabilities;
-  final VoidCallback onOpenPos;
-  final VoidCallback onOpenInvoices;
-  final VoidCallback onOpenCatalog;
-  final VoidCallback onOpenCategories;
-  final VoidCallback onOpenPurchasing;
-  final VoidCallback onOpenContacts;
-  final VoidCallback onOpenRegisterSessions;
-  final VoidCallback? onOpenDashboard;
-  final VoidCallback? onOpenDiscounts;
-  final VoidCallback? onOpenReports;
-  final VoidCallback? onOpenActivityLog;
-  final VoidCallback? onOpenUsers;
-  final VoidCallback? onOpenShopSettings;
-  final VoidCallback onLogout;
+  final AppNavigation navigation;
 
   @override
   Widget build(BuildContext context) {
@@ -72,23 +43,7 @@ class DeviceSettingsScreen extends StatelessWidget {
             return PointyScaffold(
               drawer: AppNavigationDrawer(
                 selectedDestination: AppNavigationDestination.deviceSettings,
-                currentUser: currentUser,
-                capabilities: capabilities,
-                onOpenDashboard: onOpenDashboard,
-                onOpenPos: onOpenPos,
-                onOpenInvoices: onOpenInvoices,
-                onOpenPurchasing: onOpenPurchasing,
-                onOpenContacts: onOpenContacts,
-                onOpenCatalog: onOpenCatalog,
-                onOpenCategories: onOpenCategories,
-                onOpenRegisterSessions: onOpenRegisterSessions,
-                onOpenUsers: onOpenUsers,
-                onOpenShopSettings: onOpenShopSettings,
-                onOpenDiscounts: onOpenDiscounts,
-                onOpenReports: onOpenReports,
-                onOpenActivityLog: onOpenActivityLog,
-                onOpenDeviceSettings: () {},
-                onLogout: onLogout,
+                navigation: navigation,
               ),
               appBar: PointyAppBar(
                 leading: const PointyNavigationMenuButton(),

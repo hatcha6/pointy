@@ -283,20 +283,42 @@ AppNavigationDrawer _navigationDrawer({VoidCallback? onOpenPurchasing}) {
 
   return AppNavigationDrawer(
     selectedDestination: AppNavigationDestination.dashboard,
-    currentUser: currentUser,
-    capabilities: AuthorizationCapabilities.forUser(currentUser),
-    onOpenDashboard: () {},
-    onOpenPos: () {},
-    onOpenPurchasing: onOpenPurchasing ?? () {},
-    onOpenContacts: () {},
-    onOpenCatalog: () {},
-    onOpenCategories: () {},
-    onOpenRegisterSessions: () {},
-    onOpenDeviceSettings: () {},
-    onOpenDiscounts: () {},
-    onOpenReports: () {},
-    onOpenUsers: () {},
-    onOpenShopSettings: () {},
-    onLogout: () {},
+    navigation: _FakeAppNavigation(
+      currentUser: currentUser,
+      capabilities: AuthorizationCapabilities.forUser(currentUser),
+      onNavigate: (destination) {
+        if (destination == AppNavigationDestination.purchasing) {
+          onOpenPurchasing?.call();
+        }
+      },
+    ),
   );
+}
+
+class _FakeAppNavigation implements AppNavigation {
+  const _FakeAppNavigation({
+    required this.currentUser,
+    required this.capabilities,
+    this.onNavigate,
+  });
+
+  @override
+  final PosUser currentUser;
+
+  @override
+  final AuthorizationCapabilities capabilities;
+
+  final void Function(AppNavigationDestination destination)? onNavigate;
+
+  @override
+  void navigateTo(
+    BuildContext context,
+    AppNavigationDestination destination, {
+    AppNavigationDestination? from,
+  }) {
+    onNavigate?.call(destination);
+  }
+
+  @override
+  void logout(BuildContext context) {}
 }

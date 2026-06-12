@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../core/authorization.dart';
-import '../../../data/models/pos_user.dart';
 import '../../../data/models/sale_order.dart';
 import '../../../data/repositories/contact_repository.dart';
 import '../../../data/services/order_document_service.dart';
@@ -23,45 +22,17 @@ class InvoiceListScreen extends StatelessWidget {
     super.key,
     required this.viewModel,
     required this.contactRepository,
-    required this.currentUser,
     required this.capabilities,
     required this.onOpenInvoice,
-    required this.onOpenPos,
-    required this.onOpenCatalog,
-    required this.onOpenCategories,
-    required this.onOpenPurchasing,
-    required this.onOpenContacts,
-    required this.onOpenRegisterSessions,
-    required this.onOpenDeviceSettings,
-    required this.onLogout,
-    this.onOpenDashboard,
-    this.onOpenDiscounts,
-    this.onOpenReports,
-    this.onOpenActivityLog,
-    this.onOpenUsers,
-    this.onOpenShopSettings,
+    required this.navigation,
     this.detailPaneBuilder,
   });
 
   final InvoiceListViewModel viewModel;
   final ContactRepository contactRepository;
-  final PosUser currentUser;
   final AuthorizationCapabilities capabilities;
   final ValueChanged<SaleOrder> onOpenInvoice;
-  final VoidCallback onOpenPos;
-  final VoidCallback onOpenCatalog;
-  final VoidCallback onOpenCategories;
-  final VoidCallback onOpenPurchasing;
-  final VoidCallback onOpenContacts;
-  final VoidCallback onOpenRegisterSessions;
-  final VoidCallback onOpenDeviceSettings;
-  final VoidCallback? onOpenDashboard;
-  final VoidCallback? onOpenDiscounts;
-  final VoidCallback? onOpenReports;
-  final VoidCallback? onOpenActivityLog;
-  final VoidCallback? onOpenUsers;
-  final VoidCallback? onOpenShopSettings;
-  final VoidCallback onLogout;
+  final AppNavigation navigation;
 
   /// When provided, wide layouts show the selected invoice inline in a
   /// trailing detail pane instead of pushing a route.
@@ -78,23 +49,7 @@ class InvoiceListScreen extends StatelessWidget {
         return PointyScaffold(
           drawer: AppNavigationDrawer(
             selectedDestination: AppNavigationDestination.invoices,
-            currentUser: currentUser,
-            capabilities: capabilities,
-            onOpenDashboard: onOpenDashboard,
-            onOpenPos: onOpenPos,
-            onOpenInvoices: () {},
-            onOpenPurchasing: onOpenPurchasing,
-            onOpenContacts: onOpenContacts,
-            onOpenCatalog: onOpenCatalog,
-            onOpenCategories: onOpenCategories,
-            onOpenRegisterSessions: onOpenRegisterSessions,
-            onOpenDeviceSettings: onOpenDeviceSettings,
-            onOpenDiscounts: onOpenDiscounts,
-            onOpenReports: onOpenReports,
-            onOpenActivityLog: onOpenActivityLog,
-            onOpenUsers: onOpenUsers,
-            onOpenShopSettings: onOpenShopSettings,
-            onLogout: onLogout,
+            navigation: navigation,
           ),
           appBar: AppBar(
             leading: const PointyNavigationMenuButton(),

@@ -8,6 +8,8 @@ import 'package:pointy_frontend/src/core/authorization.dart';
 import 'package:pointy_frontend/src/data/models/pos_user.dart';
 import 'package:pointy_frontend/src/features/reports/views/reports_screen.dart';
 
+import '../../../shared/fake_app_navigation.dart';
+
 void main() {
   testWidgets('keeps report workspace usable on compact and wide widths', (
     tester,
@@ -147,17 +149,8 @@ class _ReportsTestApp extends StatelessWidget {
         GlobalWidgetsLocalizations.delegate,
       ],
       home: ReportsScreen(
-        currentUser: user,
         capabilities: AuthorizationCapabilities.forUser(user),
-        onOpenPos: () {},
-        onOpenInvoices: () {},
-        onOpenCatalog: () {},
-        onOpenCategories: () {},
-        onOpenPurchasing: () {},
-        onOpenContacts: () {},
-        onOpenRegisterSessions: () {},
-        onOpenDeviceSettings: () {},
-        onLogout: () {},
+        navigation: FakeAppNavigation(currentUser: user),
         onPreviewPdf: onPreviewPdf,
         onPrintReport: onPrintReport,
         onExportArchive: (_) async {},

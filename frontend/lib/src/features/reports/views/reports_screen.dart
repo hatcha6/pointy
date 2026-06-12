@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../core/authorization.dart';
-import '../../../data/models/pos_user.dart';
 import '../../../shared/app_navigation_drawer.dart';
 import '../../../shared/authorization_guards.dart';
 import '../../../shared/components/components.dart';
@@ -52,43 +51,15 @@ class ReportRequest {
 class ReportsScreen extends StatefulWidget {
   const ReportsScreen({
     super.key,
-    required this.currentUser,
     required this.capabilities,
-    required this.onOpenPos,
-    required this.onOpenInvoices,
-    required this.onOpenCatalog,
-    required this.onOpenCategories,
-    required this.onOpenPurchasing,
-    required this.onOpenContacts,
-    required this.onOpenRegisterSessions,
-    required this.onOpenDeviceSettings,
-    required this.onLogout,
-    this.onOpenDashboard,
-    this.onOpenDiscounts,
-    this.onOpenActivityLog,
-    this.onOpenUsers,
-    this.onOpenShopSettings,
+    required this.navigation,
     this.onPreviewPdf,
     this.onPrintReport,
     this.onExportArchive,
   });
 
-  final PosUser currentUser;
   final AuthorizationCapabilities capabilities;
-  final VoidCallback onOpenPos;
-  final VoidCallback onOpenInvoices;
-  final VoidCallback onOpenCatalog;
-  final VoidCallback onOpenCategories;
-  final VoidCallback onOpenPurchasing;
-  final VoidCallback onOpenContacts;
-  final VoidCallback onOpenRegisterSessions;
-  final VoidCallback onOpenDeviceSettings;
-  final VoidCallback? onOpenDashboard;
-  final VoidCallback? onOpenDiscounts;
-  final VoidCallback? onOpenActivityLog;
-  final VoidCallback? onOpenUsers;
-  final VoidCallback? onOpenShopSettings;
-  final VoidCallback onLogout;
+  final AppNavigation navigation;
   final ReportActionCallback? onPreviewPdf;
   final ReportActionCallback? onPrintReport;
   final ReportActionCallback? onExportArchive;
@@ -116,23 +87,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
     return PointyScaffold(
       drawer: AppNavigationDrawer(
         selectedDestination: AppNavigationDestination.reports,
-        currentUser: widget.currentUser,
-        capabilities: widget.capabilities,
-        onOpenDashboard: widget.onOpenDashboard,
-        onOpenPos: widget.onOpenPos,
-        onOpenInvoices: widget.onOpenInvoices,
-        onOpenPurchasing: widget.onOpenPurchasing,
-        onOpenContacts: widget.onOpenContacts,
-        onOpenCatalog: widget.onOpenCatalog,
-        onOpenCategories: widget.onOpenCategories,
-        onOpenRegisterSessions: widget.onOpenRegisterSessions,
-        onOpenDeviceSettings: widget.onOpenDeviceSettings,
-        onOpenDiscounts: widget.onOpenDiscounts,
-        onOpenReports: () {},
-        onOpenActivityLog: widget.onOpenActivityLog,
-        onOpenUsers: widget.onOpenUsers,
-        onOpenShopSettings: widget.onOpenShopSettings,
-        onLogout: widget.onLogout,
+        navigation: widget.navigation,
       ),
       appBar: AppBar(
         leading: const PointyNavigationMenuButton(),

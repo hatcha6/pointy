@@ -50,7 +50,7 @@ import 'features/users/view_models/user_management_view_model.dart';
 import 'features/users/view_models/user_details_view_model.dart';
 import 'features/users/views/user_details_screen.dart';
 import 'features/users/views/user_management_screen.dart';
-import 'shared/shell/shell.dart';
+import 'shared/navigation/app_navigation.dart';
 
 class AuthenticatedHome extends StatelessWidget {
   const AuthenticatedHome({
@@ -72,18 +72,18 @@ class AuthenticatedHome extends StatelessWidget {
     final home = routes.capabilities.canViewDashboard
         ? routes.buildDashboardScreen(context)
         : routes.buildPosScreen(context);
-    return PointyUserSettingsRouteScope(
-      onOpenUserSettings: routes.openUserSettings,
-      child: NotificationCenterHost(
-        viewModel: dependencies.notificationCenterViewModel,
-        onOpenAlert: routes.openBusinessAlert,
-        child: home,
-      ),
+    return NotificationCenterHost(
+      viewModel: dependencies.notificationCenterViewModel,
+      onOpenAlert: routes.openBusinessAlert,
+      child: home,
     );
   }
 }
 
-class _AuthenticatedRoutes {
+/// Builds every top-level screen and implements [AppNavigation], so the
+/// drawer/rail on each screen navigates through one place with one set of
+/// rules instead of per-screen callback wiring.
+class _AuthenticatedRoutes implements AppNavigation {
   const _AuthenticatedRoutes({
     required this.dependencies,
     required this.currentUser,
@@ -91,8 +91,105 @@ class _AuthenticatedRoutes {
   });
 
   final PointyAppDependencies dependencies;
+
+  @override
   final PosUser currentUser;
+
+  @override
   final AuthorizationCapabilities capabilities;
+
+  @override
+  void navigateTo(
+    BuildContext context,
+    AppNavigationDestination destination, {
+    AppNavigationDestination? from,
+  }) {
+    if (destination == from) {
+      return;
+    }
+    if (!isDestinationAvailable(destination)) {
+      return;
+    }
+    switch (destination) {
+      case AppNavigationDestination.dashboard:
+        openDashboard(context);
+      case AppNavigationDestination.pos:
+        openPos(context);
+      default:
+        _openDestinationScreen(context, destination, from: from);
+    }
+  }
+
+  @override
+  void logout(BuildContext context) {
+    Navigator.of(context).popUntil((route) => route.isFirst);
+    dependencies.authViewModel.logout();
+  }
+
+  /// Uniform stack semantics: sections are pushed over the home route and
+  /// replace each other afterwards, so the stack never grows past
+  /// [home, section] — except when leaving the POS workspace, which stays on
+  /// the stack so the cashier can return to an untouched sale.
+  void _openDestinationScreen(
+    BuildContext context,
+    AppNavigationDestination destination, {
+    AppNavigationDestination? from,
+  }) {
+    final builder = _destinationRouteBuilder(destination);
+    if (from == AppNavigationDestination.pos) {
+      unawaited(_pushFromPos(context, destination, builder));
+      return;
+    }
+    if (ModalRoute.of(context)?.isFirst ?? false) {
+      push(context, builder);
+      return;
+    }
+    replace(context, builder);
+  }
+
+  Future<void> _pushFromPos(
+    BuildContext context,
+    AppNavigationDestination destination,
+    WidgetBuilder builder,
+  ) async {
+    await push(context, builder);
+    // Back on the POS workspace: refresh whatever the visited screen may
+    // have changed before the cashier resumes selling.
+    switch (destination) {
+      case AppNavigationDestination.catalog:
+        await dependencies.posViewModel.loadCatalog();
+      case AppNavigationDestination.settings:
+        await dependencies.posViewModel.loadCheckoutSettings();
+      default:
+        break;
+    }
+  }
+
+  WidgetBuilder _destinationRouteBuilder(
+    AppNavigationDestination destination,
+  ) {
+    return switch (destination) {
+      AppNavigationDestination.userSettings => userSettingsRouteBuilder,
+      AppNavigationDestination.invoices => invoicesRouteBuilder,
+      AppNavigationDestination.purchasing => purchasingRouteBuilder,
+      AppNavigationDestination.contacts => contactsRouteBuilder,
+      AppNavigationDestination.catalog => catalogRouteBuilder,
+      AppNavigationDestination.categories => categoryRouteBuilder,
+      AppNavigationDestination.registerSessions =>
+        registerSessionsRouteBuilder,
+      AppNavigationDestination.employees => employeePayrollRouteBuilder,
+      AppNavigationDestination.discounts => discountsRouteBuilder,
+      AppNavigationDestination.reports => reportsRouteBuilder,
+      AppNavigationDestination.activityLog => activityLogRouteBuilder,
+      AppNavigationDestination.deviceSettings => deviceSettingsRouteBuilder,
+      AppNavigationDestination.users => usersRouteBuilder,
+      AppNavigationDestination.settings => shopSettingsRouteBuilder,
+      AppNavigationDestination.dashboard ||
+      AppNavigationDestination.pos => throw StateError(
+        'dashboard and pos are handled directly by navigateTo',
+      ),
+    };
+  }
 
   Widget buildDashboardScreen(BuildContext context) {
     return dashboardRouteBuilder(context);
@@ -104,77 +201,8 @@ class _AuthenticatedRoutes {
       PosScreen(
         viewModel: dependencies.posViewModel,
         contactRepository: dependencies.contactRepository,
-        currentUser: currentUser,
         capabilities: capabilities,
-        onOpenCatalog: guardedAsyncAction(
-          AppCapability.viewCatalogManagement,
-          () async {
-            await push(context, catalogRouteBuilder);
-            await dependencies.posViewModel.loadCatalog();
-          },
-        ),
-        onOpenCategories: guardedAction(
-          AppCapability.manageCategories,
-          () => push(context, categoryRouteBuilder),
-        ),
-        onOpenDashboard: guardedAction(
-          AppCapability.viewDashboard,
-          () => openDashboard(context),
-        ),
-        onOpenInvoices: guardedAction(
-          AppCapability.viewInvoices,
-          () => push(context, invoicesRouteBuilder),
-        ),
-        onOpenPurchasing: guardedAction(
-          AppCapability.accessPurchasing,
-          () => push(context, purchasingRouteBuilder),
-        ),
-        onOpenContacts: guardedAction(
-          AppCapability.manageContacts,
-          () => push(context, contactsRouteBuilder),
-        ),
-        onOpenRegisterSessions: guardedAsyncAction(
-          AppCapability.viewRegisterSessions,
-          () async {
-            await push(context, registerSessionsRouteBuilder);
-          },
-        ),
-        onOpenDiscounts: guardedAsyncAction(
-          AppCapability.viewDiscountRules,
-          () async {
-            await push(context, discountsRouteBuilder);
-          },
-        ),
-        onOpenReports: guardedAction(
-          AppCapability.viewReports,
-          () => push(context, reportsRouteBuilder),
-        ),
-        onOpenActivityLog: guardedAction(
-          AppCapability.viewActivityLog,
-          () => push(context, activityLogRouteBuilder),
-        ),
-        onOpenEmployees: guardedAction(
-          AppCapability.viewEmployees,
-          () => push(context, employeePayrollRouteBuilder),
-        ),
-        onOpenDeviceSettings: guardedAction(
-          AppCapability.manageDeviceSettings,
-          () => push(context, deviceSettingsRouteBuilder),
-        ),
-        onOpenUsers: capabilities.asyncActionFor(
-          AppCapability.manageUsers,
-          () async {
-            await push(context, usersRouteBuilder);
-          },
-        ),
-        onOpenShopSettings: capabilities.asyncActionFor(
-          AppCapability.manageShopSettings,
-          () async {
-            await push(context, shopSettingsRouteBuilder);
-            await dependencies.posViewModel.loadCheckoutSettings();
-          },
-        ),
-        onLogout: () => logout(context),
+        navigation: this,
       ),
     );
   }
@@ -184,69 +212,12 @@ class _AuthenticatedRoutes {
       'dashboard',
       DashboardScreen(
         viewModel: dependencies.dashboardViewModel,
-        currentUser: currentUser,
         capabilities: capabilities,
-        onOpenPos: guardedAction(
-          AppCapability.accessPos,
-          () => openPos(routeContext),
-        ),
-        onOpenInvoices: guardedAction(
-          AppCapability.viewInvoices,
-          () => push(routeContext, invoicesRouteBuilder),
-        ),
-        onOpenCatalog: guardedAction(
-          AppCapability.viewCatalogManagement,
-          () => push(routeContext, catalogRouteBuilder),
-        ),
-        onOpenCategories: guardedAction(
-          AppCapability.manageCategories,
-          () => push(routeContext, categoryRouteBuilder),
-        ),
-        onOpenPurchasing: guardedAction(
-          AppCapability.accessPurchasing,
-          () => push(routeContext, purchasingRouteBuilder),
-        ),
-        onOpenContacts: guardedAction(
-          AppCapability.manageContacts,
-          () => push(routeContext, contactsRouteBuilder),
-        ),
-        onOpenRegisterSessions: guardedAction(
-          AppCapability.viewRegisterSessions,
-          () => push(routeContext, registerSessionsRouteBuilder),
-        ),
-        onOpenDiscounts: guardedAction(
-          AppCapability.viewDiscountRules,
-          () => push(routeContext, discountsRouteBuilder),
-        ),
-        onOpenReports: guardedAction(
-          AppCapability.viewReports,
-          () => push(routeContext, reportsRouteBuilder),
-        ),
-        onOpenActivityLog: guardedAction(
-          AppCapability.viewActivityLog,
-          () => push(routeContext, activityLogRouteBuilder),
-        ),
-        onOpenIntegrityMonitor: guardedAction(
+        navigation: this,
+        onOpenIntegrityMonitor: capabilities.actionFor(
           AppCapability.viewFraudFindings,
           () => openIntegrityMonitor(routeContext),
         ),
-        onOpenEmployees: guardedAction(
-          AppCapability.viewEmployees,
-          () => push(routeContext, employeePayrollRouteBuilder),
-        ),
-        onOpenDeviceSettings: guardedAction(
-          AppCapability.manageDeviceSettings,
-          () => push(routeContext, deviceSettingsRouteBuilder),
-        ),
-        onOpenUsers: capabilities.actionFor(
-          AppCapability.manageUsers,
-          () => push(routeContext, usersRouteBuilder),
-        ),
-        onOpenShopSettings: capabilities.actionFor(
-          AppCapability.manageShopSettings,
-          () => push(routeContext, shopSettingsRouteBuilder),
-        ),
-        onLogout: () => logout(routeContext),
       ),
     );
   }
@@ -268,62 +239,9 @@ class _AuthenticatedRoutes {
         purchaseRepository: dependencies.purchaseRepository,
         saleRepository: dependencies.saleRepository,
         shopSettingsRepository: dependencies.shopSettingsRepository,
-        currentUser: currentUser,
         capabilities: capabilities,
         analyticsEngine: dependencies.analyticsEngine,
-        onOpenDashboard: guardedAction(
-          AppCapability.viewDashboard,
-          () => openDashboard(routeContext),
-        ),
-        onOpenPos: guardedAction(
-          AppCapability.accessPos,
-          () => openPos(routeContext),
-        ),
-        onOpenInvoices: guardedAction(
-          AppCapability.viewInvoices,
-          () => replace(routeContext, invoicesRouteBuilder),
-        ),
-        onOpenPurchasing: guardedAction(
-          AppCapability.accessPurchasing,
-          () => replace(routeContext, purchasingRouteBuilder),
-        ),
-        onOpenContacts: guardedAction(
-          AppCapability.manageContacts,
-          () => replace(routeContext, contactsRouteBuilder),
-        ),
-        onOpenCategories: guardedAction(
-          AppCapability.manageCategories,
-          () => replace(routeContext, categoryRouteBuilder),
-        ),
-        onOpenRegisterSessions: guardedAction(
-          AppCapability.viewRegisterSessions,
-          () => replace(routeContext, registerSessionsRouteBuilder),
-        ),
-        onOpenDiscounts: guardedAction(
-          AppCapability.viewDiscountRules,
-          () => replace(routeContext, discountsRouteBuilder),
-        ),
-        onOpenReports: guardedAction(
-          AppCapability.viewReports,
-          () => replace(routeContext, reportsRouteBuilder),
-        ),
-        onOpenActivityLog: guardedAction(
-          AppCapability.viewActivityLog,
-          () => replace(routeContext, activityLogRouteBuilder),
-        ),
-        onOpenDeviceSettings: guardedAction(
-          AppCapability.manageDeviceSettings,
-          () => replace(routeContext, deviceSettingsRouteBuilder),
-        ),
-        onOpenUsers: capabilities.actionFor(
-          AppCapability.manageUsers,
-          () => replace(routeContext, usersRouteBuilder),
-        ),
-        onOpenShopSettings: capabilities.actionFor(
-          AppCapability.manageShopSettings,
-          () => replace(routeContext, shopSettingsRouteBuilder),
-        ),
-        onLogout: () => logout(routeContext),
+        navigation: this,
       ),
     );
   }
@@ -336,61 +254,7 @@ class _AuthenticatedRoutes {
           dependencies.catalogRepository,
           analyticsEngine: dependencies.analyticsEngine,
         ),
-        currentUser: currentUser,
-        capabilities: capabilities,
-        onOpenDashboard: guardedAction(
-          AppCapability.viewDashboard,
-          () => openDashboard(routeContext),
-        ),
-        onOpenPos: guardedAction(
-          AppCapability.accessPos,
-          () => openPos(routeContext),
-        ),
-        onOpenInvoices: guardedAction(
-          AppCapability.viewInvoices,
-          () => replace(routeContext, invoicesRouteBuilder),
-        ),
-        onOpenCatalog: guardedAction(
-          AppCapability.viewCatalogManagement,
-          () => replace(routeContext, catalogRouteBuilder),
-        ),
-        onOpenPurchasing: guardedAction(
-          AppCapability.accessPurchasing,
-          () => replace(routeContext, purchasingRouteBuilder),
-        ),
-        onOpenContacts: guardedAction(
-          AppCapability.manageContacts,
-          () => replace(routeContext, contactsRouteBuilder),
-        ),
-        onOpenRegisterSessions: guardedAction(
-          AppCapability.viewRegisterSessions,
-          () => replace(routeContext, registerSessionsRouteBuilder),
-        ),
-        onOpenDiscounts: guardedAction(
-          AppCapability.viewDiscountRules,
-          () => replace(routeContext, discountsRouteBuilder),
-        ),
-        onOpenReports: guardedAction(
-          AppCapability.viewReports,
-          () => replace(routeContext, reportsRouteBuilder),
-        ),
-        onOpenActivityLog: guardedAction(
-          AppCapability.viewActivityLog,
-          () => replace(routeContext, activityLogRouteBuilder),
-        ),
-        onOpenDeviceSettings: guardedAction(
-          AppCapability.manageDeviceSettings,
-          () => replace(routeContext, deviceSettingsRouteBuilder),
-        ),
-        onOpenUsers: capabilities.actionFor(
-          AppCapability.manageUsers,
-          () => replace(routeContext, usersRouteBuilder),
-        ),
-        onOpenShopSettings: capabilities.actionFor(
-          AppCapability.manageShopSettings,
-          () => replace(routeContext, shopSettingsRouteBuilder),
-        ),
-        onLogout: () => logout(routeContext),
+        navigation: this,
       ),
     );
   }
@@ -405,61 +269,8 @@ class _AuthenticatedRoutes {
           analyticsEngine: dependencies.analyticsEngine,
         ),
         contactRepository: dependencies.contactRepository,
-        currentUser: currentUser,
         capabilities: capabilities,
-        onOpenDashboard: guardedAction(
-          AppCapability.viewDashboard,
-          () => openDashboard(routeContext),
-        ),
-        onOpenPos: guardedAction(
-          AppCapability.accessPos,
-          () => openPos(routeContext),
-        ),
-        onOpenInvoices: guardedAction(
-          AppCapability.viewInvoices,
-          () => replace(routeContext, invoicesRouteBuilder),
-        ),
-        onOpenCatalog: guardedAction(
-          AppCapability.viewCatalogManagement,
-          () => replace(routeContext, catalogRouteBuilder),
-        ),
-        onOpenCategories: guardedAction(
-          AppCapability.manageCategories,
-          () => replace(routeContext, categoryRouteBuilder),
-        ),
-        onOpenPurchasing: guardedAction(
-          AppCapability.accessPurchasing,
-          () => replace(routeContext, purchasingRouteBuilder),
-        ),
-        onOpenContacts: guardedAction(
-          AppCapability.manageContacts,
-          () => replace(routeContext, contactsRouteBuilder),
-        ),
-        onOpenDiscounts: guardedAction(
-          AppCapability.viewDiscountRules,
-          () => replace(routeContext, discountsRouteBuilder),
-        ),
-        onOpenReports: guardedAction(
-          AppCapability.viewReports,
-          () => replace(routeContext, reportsRouteBuilder),
-        ),
-        onOpenActivityLog: guardedAction(
-          AppCapability.viewActivityLog,
-          () => replace(routeContext, activityLogRouteBuilder),
-        ),
-        onOpenDeviceSettings: guardedAction(
-          AppCapability.manageDeviceSettings,
-          () => replace(routeContext, deviceSettingsRouteBuilder),
-        ),
-        onOpenUsers: capabilities.actionFor(
-          AppCapability.manageUsers,
-          () => replace(routeContext, usersRouteBuilder),
-        ),
-        onOpenShopSettings: capabilities.actionFor(
-          AppCapability.manageShopSettings,
-          () => replace(routeContext, shopSettingsRouteBuilder),
-        ),
-        onLogout: () => logout(routeContext),
+        navigation: this,
       ),
     );
   }
@@ -470,12 +281,8 @@ class _AuthenticatedRoutes {
       InvoiceListScreen(
         viewModel: dependencies.invoiceListViewModel,
         contactRepository: dependencies.contactRepository,
-        currentUser: currentUser,
         capabilities: capabilities,
-        onOpenDashboard: guardedAction(
-          AppCapability.viewDashboard,
-          () => openDashboard(routeContext),
-        ),
+        navigation: this,
         onOpenInvoice: guardedSaleOrderAction(AppCapability.viewInvoices, (
           order,
         ) async {
@@ -502,55 +309,6 @@ class _AuthenticatedRoutes {
           analyticsEngine: dependencies.analyticsEngine,
           showHeader: true,
         ),
-        onOpenPos: guardedAction(
-          AppCapability.accessPos,
-          () => openPos(routeContext),
-        ),
-        onOpenCatalog: guardedAction(
-          AppCapability.viewCatalogManagement,
-          () => replace(routeContext, catalogRouteBuilder),
-        ),
-        onOpenCategories: guardedAction(
-          AppCapability.manageCategories,
-          () => replace(routeContext, categoryRouteBuilder),
-        ),
-        onOpenPurchasing: guardedAction(
-          AppCapability.accessPurchasing,
-          () => replace(routeContext, purchasingRouteBuilder),
-        ),
-        onOpenContacts: guardedAction(
-          AppCapability.manageContacts,
-          () => replace(routeContext, contactsRouteBuilder),
-        ),
-        onOpenRegisterSessions: guardedAction(
-          AppCapability.viewRegisterSessions,
-          () => replace(routeContext, registerSessionsRouteBuilder),
-        ),
-        onOpenDiscounts: guardedAction(
-          AppCapability.viewDiscountRules,
-          () => replace(routeContext, discountsRouteBuilder),
-        ),
-        onOpenReports: guardedAction(
-          AppCapability.viewReports,
-          () => replace(routeContext, reportsRouteBuilder),
-        ),
-        onOpenActivityLog: guardedAction(
-          AppCapability.viewActivityLog,
-          () => replace(routeContext, activityLogRouteBuilder),
-        ),
-        onOpenDeviceSettings: guardedAction(
-          AppCapability.manageDeviceSettings,
-          () => replace(routeContext, deviceSettingsRouteBuilder),
-        ),
-        onOpenUsers: capabilities.actionFor(
-          AppCapability.manageUsers,
-          () => replace(routeContext, usersRouteBuilder),
-        ),
-        onOpenShopSettings: capabilities.actionFor(
-          AppCapability.manageShopSettings,
-          () => replace(routeContext, shopSettingsRouteBuilder),
-        ),
-        onLogout: () => logout(routeContext),
       ),
     );
   }
@@ -565,54 +323,7 @@ class _AuthenticatedRoutes {
         ),
         currentUser: currentUser,
         capabilities: capabilities,
-        onOpenDashboard: guardedAction(
-          AppCapability.viewDashboard,
-          () => openDashboard(routeContext),
-        ),
-        onOpenPos: guardedAction(
-          AppCapability.accessPos,
-          () => openPos(routeContext),
-        ),
-        onOpenInvoices: guardedAction(
-          AppCapability.viewInvoices,
-          () => replace(routeContext, invoicesRouteBuilder),
-        ),
-        onOpenCatalog: guardedAction(
-          AppCapability.viewCatalogManagement,
-          () => replace(routeContext, catalogRouteBuilder),
-        ),
-        onOpenCategories: guardedAction(
-          AppCapability.manageCategories,
-          () => replace(routeContext, categoryRouteBuilder),
-        ),
-        onOpenPurchasing: guardedAction(
-          AppCapability.accessPurchasing,
-          () => replace(routeContext, purchasingRouteBuilder),
-        ),
-        onOpenContacts: guardedAction(
-          AppCapability.manageContacts,
-          () => replace(routeContext, contactsRouteBuilder),
-        ),
-        onOpenRegisterSessions: guardedAction(
-          AppCapability.viewRegisterSessions,
-          () => replace(routeContext, registerSessionsRouteBuilder),
-        ),
-        onOpenDiscounts: guardedAction(
-          AppCapability.viewDiscountRules,
-          () => replace(routeContext, discountsRouteBuilder),
-        ),
-        onOpenReports: guardedAction(
-          AppCapability.viewReports,
-          () => replace(routeContext, reportsRouteBuilder),
-        ),
-        onOpenActivityLog: guardedAction(
-          AppCapability.viewActivityLog,
-          () => replace(routeContext, activityLogRouteBuilder),
-        ),
-        onOpenDeviceSettings: guardedAction(
-          AppCapability.manageDeviceSettings,
-          () => replace(routeContext, deviceSettingsRouteBuilder),
-        ),
+        navigation: this,
         onOpenUserDetails: guardedValueAction(AppCapability.manageUsers, (
           user,
         ) {
@@ -627,11 +338,6 @@ class _AuthenticatedRoutes {
             ),
           );
         }),
-        onOpenShopSettings: capabilities.actionFor(
-          AppCapability.manageShopSettings,
-          () => replace(routeContext, shopSettingsRouteBuilder),
-        ),
-        onLogout: () => logout(routeContext),
       ),
     );
   }
@@ -642,65 +348,8 @@ class _AuthenticatedRoutes {
       EmployeePayrollScreen(
         viewModel: dependencies.employeePayrollViewModel,
         userRepository: dependencies.userRepository,
-        currentUser: currentUser,
         capabilities: capabilities,
-        onOpenDashboard: guardedAction(
-          AppCapability.viewDashboard,
-          () => openDashboard(routeContext),
-        ),
-        onOpenPos: guardedAction(
-          AppCapability.accessPos,
-          () => openPos(routeContext),
-        ),
-        onOpenInvoices: guardedAction(
-          AppCapability.viewInvoices,
-          () => replace(routeContext, invoicesRouteBuilder),
-        ),
-        onOpenCatalog: guardedAction(
-          AppCapability.viewCatalogManagement,
-          () => replace(routeContext, catalogRouteBuilder),
-        ),
-        onOpenCategories: guardedAction(
-          AppCapability.manageCategories,
-          () => replace(routeContext, categoryRouteBuilder),
-        ),
-        onOpenPurchasing: guardedAction(
-          AppCapability.accessPurchasing,
-          () => replace(routeContext, purchasingRouteBuilder),
-        ),
-        onOpenContacts: guardedAction(
-          AppCapability.manageContacts,
-          () => replace(routeContext, contactsRouteBuilder),
-        ),
-        onOpenRegisterSessions: guardedAction(
-          AppCapability.viewRegisterSessions,
-          () => replace(routeContext, registerSessionsRouteBuilder),
-        ),
-        onOpenDiscounts: guardedAction(
-          AppCapability.viewDiscountRules,
-          () => replace(routeContext, discountsRouteBuilder),
-        ),
-        onOpenReports: guardedAction(
-          AppCapability.viewReports,
-          () => replace(routeContext, reportsRouteBuilder),
-        ),
-        onOpenActivityLog: guardedAction(
-          AppCapability.viewActivityLog,
-          () => replace(routeContext, activityLogRouteBuilder),
-        ),
-        onOpenDeviceSettings: guardedAction(
-          AppCapability.manageDeviceSettings,
-          () => replace(routeContext, deviceSettingsRouteBuilder),
-        ),
-        onOpenUsers: capabilities.actionFor(
-          AppCapability.manageUsers,
-          () => replace(routeContext, usersRouteBuilder),
-        ),
-        onOpenShopSettings: capabilities.actionFor(
-          AppCapability.manageShopSettings,
-          () => replace(routeContext, shopSettingsRouteBuilder),
-        ),
-        onLogout: () => logout(routeContext),
+        navigation: this,
       ),
     );
   }
@@ -717,61 +366,8 @@ class _AuthenticatedRoutes {
           dependencies.salesChannelRepository,
           analyticsEngine: dependencies.analyticsEngine,
         ),
-        currentUser: currentUser,
         capabilities: capabilities,
-        onOpenDashboard: guardedAction(
-          AppCapability.viewDashboard,
-          () => openDashboard(routeContext),
-        ),
-        onOpenPos: guardedAction(
-          AppCapability.accessPos,
-          () => openPos(routeContext),
-        ),
-        onOpenInvoices: guardedAction(
-          AppCapability.viewInvoices,
-          () => replace(routeContext, invoicesRouteBuilder),
-        ),
-        onOpenCatalog: guardedAction(
-          AppCapability.viewCatalogManagement,
-          () => replace(routeContext, catalogRouteBuilder),
-        ),
-        onOpenCategories: guardedAction(
-          AppCapability.manageCategories,
-          () => replace(routeContext, categoryRouteBuilder),
-        ),
-        onOpenPurchasing: guardedAction(
-          AppCapability.accessPurchasing,
-          () => replace(routeContext, purchasingRouteBuilder),
-        ),
-        onOpenContacts: guardedAction(
-          AppCapability.manageContacts,
-          () => replace(routeContext, contactsRouteBuilder),
-        ),
-        onOpenRegisterSessions: guardedAction(
-          AppCapability.viewRegisterSessions,
-          () => replace(routeContext, registerSessionsRouteBuilder),
-        ),
-        onOpenDiscounts: guardedAction(
-          AppCapability.viewDiscountRules,
-          () => replace(routeContext, discountsRouteBuilder),
-        ),
-        onOpenReports: guardedAction(
-          AppCapability.viewReports,
-          () => replace(routeContext, reportsRouteBuilder),
-        ),
-        onOpenActivityLog: guardedAction(
-          AppCapability.viewActivityLog,
-          () => replace(routeContext, activityLogRouteBuilder),
-        ),
-        onOpenDeviceSettings: guardedAction(
-          AppCapability.manageDeviceSettings,
-          () => replace(routeContext, deviceSettingsRouteBuilder),
-        ),
-        onOpenUsers: capabilities.actionFor(
-          AppCapability.manageUsers,
-          () => replace(routeContext, usersRouteBuilder),
-        ),
-        onLogout: () => logout(routeContext),
+        navigation: this,
       ),
     );
   }
@@ -782,69 +378,8 @@ class _AuthenticatedRoutes {
       UserSettingsScreen(
         viewModel: dependencies.userSettingsViewModel,
         currentUser: currentUser,
-        capabilities: capabilities,
         onUserChanged: dependencies.authViewModel.replaceCurrentUser,
-        onOpenDashboard: guardedAction(
-          AppCapability.viewDashboard,
-          () => openDashboard(routeContext),
-        ),
-        onOpenPos: guardedAction(
-          AppCapability.accessPos,
-          () => openPos(routeContext),
-        ),
-        onOpenInvoices: guardedAction(
-          AppCapability.viewInvoices,
-          () => replace(routeContext, invoicesRouteBuilder),
-        ),
-        onOpenCatalog: guardedAction(
-          AppCapability.viewCatalogManagement,
-          () => replace(routeContext, catalogRouteBuilder),
-        ),
-        onOpenCategories: guardedAction(
-          AppCapability.manageCategories,
-          () => replace(routeContext, categoryRouteBuilder),
-        ),
-        onOpenPurchasing: guardedAction(
-          AppCapability.accessPurchasing,
-          () => replace(routeContext, purchasingRouteBuilder),
-        ),
-        onOpenContacts: guardedAction(
-          AppCapability.manageContacts,
-          () => replace(routeContext, contactsRouteBuilder),
-        ),
-        onOpenRegisterSessions: guardedAction(
-          AppCapability.viewRegisterSessions,
-          () => replace(routeContext, registerSessionsRouteBuilder),
-        ),
-        onOpenDiscounts: guardedAction(
-          AppCapability.viewDiscountRules,
-          () => replace(routeContext, discountsRouteBuilder),
-        ),
-        onOpenReports: guardedAction(
-          AppCapability.viewReports,
-          () => replace(routeContext, reportsRouteBuilder),
-        ),
-        onOpenActivityLog: guardedAction(
-          AppCapability.viewActivityLog,
-          () => replace(routeContext, activityLogRouteBuilder),
-        ),
-        onOpenEmployees: guardedAction(
-          AppCapability.viewEmployees,
-          () => replace(routeContext, employeePayrollRouteBuilder),
-        ),
-        onOpenDeviceSettings: guardedAction(
-          AppCapability.manageDeviceSettings,
-          () => replace(routeContext, deviceSettingsRouteBuilder),
-        ),
-        onOpenUsers: capabilities.actionFor(
-          AppCapability.manageUsers,
-          () => replace(routeContext, usersRouteBuilder),
-        ),
-        onOpenShopSettings: capabilities.actionFor(
-          AppCapability.manageShopSettings,
-          () => replace(routeContext, shopSettingsRouteBuilder),
-        ),
-        onLogout: () => logout(routeContext),
+        navigation: this,
       ),
     );
   }
@@ -856,61 +391,8 @@ class _AuthenticatedRoutes {
         viewModel: dependencies.discountManagementViewModel,
         catalogRepository: dependencies.catalogRepository,
         contactRepository: dependencies.contactRepository,
-        currentUser: currentUser,
         capabilities: capabilities,
-        onOpenDashboard: guardedAction(
-          AppCapability.viewDashboard,
-          () => openDashboard(routeContext),
-        ),
-        onOpenPos: guardedAction(
-          AppCapability.accessPos,
-          () => openPos(routeContext),
-        ),
-        onOpenInvoices: guardedAction(
-          AppCapability.viewInvoices,
-          () => replace(routeContext, invoicesRouteBuilder),
-        ),
-        onOpenCatalog: guardedAction(
-          AppCapability.viewCatalogManagement,
-          () => replace(routeContext, catalogRouteBuilder),
-        ),
-        onOpenCategories: guardedAction(
-          AppCapability.manageCategories,
-          () => replace(routeContext, categoryRouteBuilder),
-        ),
-        onOpenPurchasing: guardedAction(
-          AppCapability.accessPurchasing,
-          () => replace(routeContext, purchasingRouteBuilder),
-        ),
-        onOpenContacts: guardedAction(
-          AppCapability.manageContacts,
-          () => replace(routeContext, contactsRouteBuilder),
-        ),
-        onOpenRegisterSessions: guardedAction(
-          AppCapability.viewRegisterSessions,
-          () => replace(routeContext, registerSessionsRouteBuilder),
-        ),
-        onOpenReports: guardedAction(
-          AppCapability.viewReports,
-          () => replace(routeContext, reportsRouteBuilder),
-        ),
-        onOpenActivityLog: guardedAction(
-          AppCapability.viewActivityLog,
-          () => replace(routeContext, activityLogRouteBuilder),
-        ),
-        onOpenDeviceSettings: guardedAction(
-          AppCapability.manageDeviceSettings,
-          () => replace(routeContext, deviceSettingsRouteBuilder),
-        ),
-        onOpenUsers: capabilities.actionFor(
-          AppCapability.manageUsers,
-          () => replace(routeContext, usersRouteBuilder),
-        ),
-        onOpenShopSettings: capabilities.actionFor(
-          AppCapability.manageShopSettings,
-          () => replace(routeContext, shopSettingsRouteBuilder),
-        ),
-        onLogout: () => logout(routeContext),
+        navigation: this,
       ),
     );
   }
@@ -919,64 +401,11 @@ class _AuthenticatedRoutes {
     return _screen(
       'reports',
       ReportsScreen(
-        currentUser: currentUser,
         capabilities: capabilities,
-        onOpenDashboard: guardedAction(
-          AppCapability.viewDashboard,
-          () => openDashboard(routeContext),
-        ),
-        onOpenPos: guardedAction(
-          AppCapability.accessPos,
-          () => openPos(routeContext),
-        ),
-        onOpenInvoices: guardedAction(
-          AppCapability.viewInvoices,
-          () => replace(routeContext, invoicesRouteBuilder),
-        ),
-        onOpenCatalog: guardedAction(
-          AppCapability.viewCatalogManagement,
-          () => replace(routeContext, catalogRouteBuilder),
-        ),
-        onOpenCategories: guardedAction(
-          AppCapability.manageCategories,
-          () => replace(routeContext, categoryRouteBuilder),
-        ),
-        onOpenPurchasing: guardedAction(
-          AppCapability.accessPurchasing,
-          () => replace(routeContext, purchasingRouteBuilder),
-        ),
-        onOpenContacts: guardedAction(
-          AppCapability.manageContacts,
-          () => replace(routeContext, contactsRouteBuilder),
-        ),
-        onOpenRegisterSessions: guardedAction(
-          AppCapability.viewRegisterSessions,
-          () => replace(routeContext, registerSessionsRouteBuilder),
-        ),
-        onOpenDiscounts: guardedAction(
-          AppCapability.viewDiscountRules,
-          () => replace(routeContext, discountsRouteBuilder),
-        ),
-        onOpenDeviceSettings: guardedAction(
-          AppCapability.manageDeviceSettings,
-          () => replace(routeContext, deviceSettingsRouteBuilder),
-        ),
-        onOpenActivityLog: guardedAction(
-          AppCapability.viewActivityLog,
-          () => replace(routeContext, activityLogRouteBuilder),
-        ),
-        onOpenUsers: capabilities.actionFor(
-          AppCapability.manageUsers,
-          () => replace(routeContext, usersRouteBuilder),
-        ),
-        onOpenShopSettings: capabilities.actionFor(
-          AppCapability.manageShopSettings,
-          () => replace(routeContext, shopSettingsRouteBuilder),
-        ),
+        navigation: this,
         onPreviewPdf: (request) => previewReport(routeContext, request),
         onPrintReport: (request) => printReport(routeContext, request),
         onExportArchive: (request) => shareReport(routeContext, request),
-        onLogout: () => logout(routeContext),
       ),
     );
   }
@@ -986,62 +415,85 @@ class _AuthenticatedRoutes {
       'activity_log',
       ActivityLogScreen(
         viewModel: dependencies.activityLogViewModel,
-        currentUser: currentUser,
         capabilities: capabilities,
-        onOpenDashboard: guardedAction(
-          AppCapability.viewDashboard,
-          () => openDashboard(routeContext),
-        ),
-        onOpenPos: guardedAction(
-          AppCapability.accessPos,
-          () => openPos(routeContext),
-        ),
-        onOpenInvoices: guardedAction(
-          AppCapability.viewInvoices,
-          () => replace(routeContext, invoicesRouteBuilder),
-        ),
-        onOpenCatalog: guardedAction(
-          AppCapability.viewCatalogManagement,
-          () => replace(routeContext, catalogRouteBuilder),
-        ),
-        onOpenCategories: guardedAction(
-          AppCapability.manageCategories,
-          () => replace(routeContext, categoryRouteBuilder),
-        ),
-        onOpenPurchasing: guardedAction(
-          AppCapability.accessPurchasing,
-          () => replace(routeContext, purchasingRouteBuilder),
-        ),
-        onOpenContacts: guardedAction(
-          AppCapability.manageContacts,
-          () => replace(routeContext, contactsRouteBuilder),
-        ),
-        onOpenRegisterSessions: guardedAction(
-          AppCapability.viewRegisterSessions,
-          () => replace(routeContext, registerSessionsRouteBuilder),
-        ),
-        onOpenDiscounts: guardedAction(
-          AppCapability.viewDiscountRules,
-          () => replace(routeContext, discountsRouteBuilder),
-        ),
-        onOpenReports: guardedAction(
-          AppCapability.viewReports,
-          () => replace(routeContext, reportsRouteBuilder),
-        ),
-        onOpenDeviceSettings: guardedAction(
-          AppCapability.manageDeviceSettings,
-          () => replace(routeContext, deviceSettingsRouteBuilder),
-        ),
-        onOpenUsers: capabilities.actionFor(
-          AppCapability.manageUsers,
-          () => replace(routeContext, usersRouteBuilder),
-        ),
-        onOpenShopSettings: capabilities.actionFor(
-          AppCapability.manageShopSettings,
-          () => replace(routeContext, shopSettingsRouteBuilder),
-        ),
+        navigation: this,
         onOpenTarget: _openActivityTarget,
-        onLogout: () => logout(routeContext),
+      ),
+    );
+  }
+
+  Widget deviceSettingsRouteBuilder(BuildContext routeContext) {
+    return _screen(
+      'device_settings',
+      DeviceSettingsScreen(
+        deviceSettingsViewModel: dependencies.deviceSettingsViewModel,
+        printingSettingsViewModel: dependencies.printingSettingsViewModel,
+        capabilities: capabilities,
+        navigation: this,
+      ),
+    );
+  }
+
+  Widget contactsRouteBuilder(BuildContext routeContext) {
+    return _screen(
+      'contacts',
+      ContactManagementScreen(
+        viewModel: dependencies.contactManagementViewModel,
+        purchaseRepository: dependencies.purchaseRepository,
+        printingRepository: dependencies.printingRepository,
+        shopSettingsRepository: dependencies.shopSettingsRepository,
+        capabilities: capabilities,
+        navigation: this,
+      ),
+    );
+  }
+
+  Widget purchasingRouteBuilder(BuildContext routeContext) {
+    return _screen(
+      'purchase_orders',
+      PurchaseOrderListScreen(
+        viewModel: dependencies.purchaseOrderListViewModel,
+        contactRepository: dependencies.contactRepository,
+        capabilities: capabilities,
+        navigation: this,
+        onCreatePurchaseOrder: guardedAction(
+          AppCapability.createPurchaseOrder,
+          () async {
+            dependencies.purchaseViewModel.clearDraft(trackLineDeletes: false);
+            await push(routeContext, createPurchaseOrderRouteBuilder);
+            await dependencies.purchaseOrderListViewModel.loadOrders();
+          },
+        ),
+        onOpenPurchaseOrder: guardedPurchaseOrderAction(
+          AppCapability.accessPurchasing,
+          (order) async {
+            _trackScreenView('purchase_order_details');
+            await push(
+              routeContext,
+              (context) => PurchaseOrderDetailsScreen(
+                purchaseRepository: dependencies.purchaseRepository,
+                printingRepository: dependencies.printingRepository,
+                shopSettingsRepository: dependencies.shopSettingsRepository,
+                initialOrder: order,
+                capabilities: capabilities,
+              ),
+            );
+            await dependencies.purchaseOrderListViewModel.loadOrders();
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget createPurchaseOrderRouteBuilder(BuildContext routeContext) {
+    return _screen(
+      'purchase_create',
+      PurchasingScreen(
+        viewModel: dependencies.purchaseViewModel,
+        contactRepository: dependencies.contactRepository,
+        capabilities: capabilities,
+        navigation: this,
+        showBackButton: true,
       ),
     );
   }
@@ -1138,294 +590,6 @@ class _AuthenticatedRoutes {
     }
   }
 
-  Widget deviceSettingsRouteBuilder(BuildContext routeContext) {
-    return _screen(
-      'device_settings',
-      DeviceSettingsScreen(
-        deviceSettingsViewModel: dependencies.deviceSettingsViewModel,
-        printingSettingsViewModel: dependencies.printingSettingsViewModel,
-        currentUser: currentUser,
-        capabilities: capabilities,
-        onOpenDashboard: guardedAction(
-          AppCapability.viewDashboard,
-          () => openDashboard(routeContext),
-        ),
-        onOpenPos: guardedAction(
-          AppCapability.accessPos,
-          () => openPos(routeContext),
-        ),
-        onOpenInvoices: guardedAction(
-          AppCapability.viewInvoices,
-          () => replace(routeContext, invoicesRouteBuilder),
-        ),
-        onOpenCatalog: guardedAction(
-          AppCapability.viewCatalogManagement,
-          () => replace(routeContext, catalogRouteBuilder),
-        ),
-        onOpenCategories: guardedAction(
-          AppCapability.manageCategories,
-          () => replace(routeContext, categoryRouteBuilder),
-        ),
-        onOpenPurchasing: guardedAction(
-          AppCapability.accessPurchasing,
-          () => replace(routeContext, purchasingRouteBuilder),
-        ),
-        onOpenContacts: guardedAction(
-          AppCapability.manageContacts,
-          () => replace(routeContext, contactsRouteBuilder),
-        ),
-        onOpenRegisterSessions: guardedAction(
-          AppCapability.viewRegisterSessions,
-          () => replace(routeContext, registerSessionsRouteBuilder),
-        ),
-        onOpenDiscounts: guardedAction(
-          AppCapability.viewDiscountRules,
-          () => replace(routeContext, discountsRouteBuilder),
-        ),
-        onOpenReports: guardedAction(
-          AppCapability.viewReports,
-          () => replace(routeContext, reportsRouteBuilder),
-        ),
-        onOpenActivityLog: guardedAction(
-          AppCapability.viewActivityLog,
-          () => replace(routeContext, activityLogRouteBuilder),
-        ),
-        onOpenUsers: capabilities.actionFor(
-          AppCapability.manageUsers,
-          () => replace(routeContext, usersRouteBuilder),
-        ),
-        onOpenShopSettings: capabilities.actionFor(
-          AppCapability.manageShopSettings,
-          () => replace(routeContext, shopSettingsRouteBuilder),
-        ),
-        onLogout: () => logout(routeContext),
-      ),
-    );
-  }
-
-  Widget contactsRouteBuilder(BuildContext routeContext) {
-    return _screen(
-      'contacts',
-      ContactManagementScreen(
-        viewModel: dependencies.contactManagementViewModel,
-        purchaseRepository: dependencies.purchaseRepository,
-        printingRepository: dependencies.printingRepository,
-        shopSettingsRepository: dependencies.shopSettingsRepository,
-        currentUser: currentUser,
-        capabilities: capabilities,
-        onOpenDashboard: guardedAction(
-          AppCapability.viewDashboard,
-          () => openDashboard(routeContext),
-        ),
-        onOpenPos: guardedAction(
-          AppCapability.accessPos,
-          () => openPos(routeContext),
-        ),
-        onOpenInvoices: guardedAction(
-          AppCapability.viewInvoices,
-          () => replace(routeContext, invoicesRouteBuilder),
-        ),
-        onOpenPurchasing: guardedAction(
-          AppCapability.accessPurchasing,
-          () => replace(routeContext, purchasingRouteBuilder),
-        ),
-        onOpenCatalog: guardedAction(
-          AppCapability.viewCatalogManagement,
-          () => replace(routeContext, catalogRouteBuilder),
-        ),
-        onOpenCategories: guardedAction(
-          AppCapability.manageCategories,
-          () => replace(routeContext, categoryRouteBuilder),
-        ),
-        onOpenRegisterSessions: guardedAction(
-          AppCapability.viewRegisterSessions,
-          () => replace(routeContext, registerSessionsRouteBuilder),
-        ),
-        onOpenDiscounts: guardedAction(
-          AppCapability.viewDiscountRules,
-          () => replace(routeContext, discountsRouteBuilder),
-        ),
-        onOpenReports: guardedAction(
-          AppCapability.viewReports,
-          () => replace(routeContext, reportsRouteBuilder),
-        ),
-        onOpenActivityLog: guardedAction(
-          AppCapability.viewActivityLog,
-          () => replace(routeContext, activityLogRouteBuilder),
-        ),
-        onOpenDeviceSettings: guardedAction(
-          AppCapability.manageDeviceSettings,
-          () => replace(routeContext, deviceSettingsRouteBuilder),
-        ),
-        onOpenUsers: capabilities.actionFor(
-          AppCapability.manageUsers,
-          () => replace(routeContext, usersRouteBuilder),
-        ),
-        onOpenShopSettings: capabilities.actionFor(
-          AppCapability.manageShopSettings,
-          () => replace(routeContext, shopSettingsRouteBuilder),
-        ),
-        onLogout: () => logout(routeContext),
-      ),
-    );
-  }
-
-  Widget purchasingRouteBuilder(BuildContext routeContext) {
-    return _screen(
-      'purchase_orders',
-      PurchaseOrderListScreen(
-        viewModel: dependencies.purchaseOrderListViewModel,
-        contactRepository: dependencies.contactRepository,
-        currentUser: currentUser,
-        capabilities: capabilities,
-        onOpenDashboard: guardedAction(
-          AppCapability.viewDashboard,
-          () => openDashboard(routeContext),
-        ),
-        onCreatePurchaseOrder: guardedAction(
-          AppCapability.createPurchaseOrder,
-          () async {
-            dependencies.purchaseViewModel.clearDraft(trackLineDeletes: false);
-            await push(routeContext, createPurchaseOrderRouteBuilder);
-            await dependencies.purchaseOrderListViewModel.loadOrders();
-          },
-        ),
-        onOpenPurchaseOrder: guardedPurchaseOrderAction(
-          AppCapability.accessPurchasing,
-          (order) async {
-            _trackScreenView('purchase_order_details');
-            await push(
-              routeContext,
-              (context) => PurchaseOrderDetailsScreen(
-                purchaseRepository: dependencies.purchaseRepository,
-                printingRepository: dependencies.printingRepository,
-                shopSettingsRepository: dependencies.shopSettingsRepository,
-                initialOrder: order,
-                capabilities: capabilities,
-              ),
-            );
-            await dependencies.purchaseOrderListViewModel.loadOrders();
-          },
-        ),
-        onOpenPos: guardedAction(
-          AppCapability.accessPos,
-          () => openPos(routeContext),
-        ),
-        onOpenInvoices: guardedAction(
-          AppCapability.viewInvoices,
-          () => replace(routeContext, invoicesRouteBuilder),
-        ),
-        onOpenCatalog: guardedAction(
-          AppCapability.viewCatalogManagement,
-          () => replace(routeContext, catalogRouteBuilder),
-        ),
-        onOpenCategories: guardedAction(
-          AppCapability.manageCategories,
-          () => replace(routeContext, categoryRouteBuilder),
-        ),
-        onOpenContacts: guardedAction(
-          AppCapability.manageContacts,
-          () => replace(routeContext, contactsRouteBuilder),
-        ),
-        onOpenRegisterSessions: guardedAction(
-          AppCapability.viewRegisterSessions,
-          () => replace(routeContext, registerSessionsRouteBuilder),
-        ),
-        onOpenDiscounts: guardedAction(
-          AppCapability.viewDiscountRules,
-          () => replace(routeContext, discountsRouteBuilder),
-        ),
-        onOpenReports: guardedAction(
-          AppCapability.viewReports,
-          () => replace(routeContext, reportsRouteBuilder),
-        ),
-        onOpenActivityLog: guardedAction(
-          AppCapability.viewActivityLog,
-          () => replace(routeContext, activityLogRouteBuilder),
-        ),
-        onOpenDeviceSettings: guardedAction(
-          AppCapability.manageDeviceSettings,
-          () => replace(routeContext, deviceSettingsRouteBuilder),
-        ),
-        onOpenUsers: capabilities.actionFor(
-          AppCapability.manageUsers,
-          () => replace(routeContext, usersRouteBuilder),
-        ),
-        onOpenShopSettings: capabilities.actionFor(
-          AppCapability.manageShopSettings,
-          () => replace(routeContext, shopSettingsRouteBuilder),
-        ),
-        onLogout: () => logout(routeContext),
-      ),
-    );
-  }
-
-  Widget createPurchaseOrderRouteBuilder(BuildContext routeContext) {
-    return _screen(
-      'purchase_create',
-      PurchasingScreen(
-        viewModel: dependencies.purchaseViewModel,
-        contactRepository: dependencies.contactRepository,
-        currentUser: currentUser,
-        capabilities: capabilities,
-        showBackButton: true,
-        onOpenDashboard: guardedAction(
-          AppCapability.viewDashboard,
-          () => openDashboard(routeContext),
-        ),
-        onOpenPos: guardedAction(
-          AppCapability.accessPos,
-          () => openPos(routeContext),
-        ),
-        onOpenInvoices: guardedAction(
-          AppCapability.viewInvoices,
-          () => replace(routeContext, invoicesRouteBuilder),
-        ),
-        onOpenCatalog: guardedAction(
-          AppCapability.viewCatalogManagement,
-          () => replace(routeContext, catalogRouteBuilder),
-        ),
-        onOpenCategories: guardedAction(
-          AppCapability.manageCategories,
-          () => replace(routeContext, categoryRouteBuilder),
-        ),
-        onOpenContacts: guardedAction(
-          AppCapability.manageContacts,
-          () => replace(routeContext, contactsRouteBuilder),
-        ),
-        onOpenRegisterSessions: guardedAction(
-          AppCapability.viewRegisterSessions,
-          () => replace(routeContext, registerSessionsRouteBuilder),
-        ),
-        onOpenDiscounts: guardedAction(
-          AppCapability.viewDiscountRules,
-          () => replace(routeContext, discountsRouteBuilder),
-        ),
-        onOpenReports: guardedAction(
-          AppCapability.viewReports,
-          () => replace(routeContext, reportsRouteBuilder),
-        ),
-        onOpenActivityLog: guardedAction(
-          AppCapability.viewActivityLog,
-          () => replace(routeContext, activityLogRouteBuilder),
-        ),
-        onOpenDeviceSettings: guardedAction(
-          AppCapability.manageDeviceSettings,
-          () => replace(routeContext, deviceSettingsRouteBuilder),
-        ),
-        onOpenUsers: capabilities.actionFor(
-          AppCapability.manageUsers,
-          () => replace(routeContext, usersRouteBuilder),
-        ),
-        onOpenShopSettings: capabilities.actionFor(
-          AppCapability.manageShopSettings,
-          () => replace(routeContext, shopSettingsRouteBuilder),
-        ),
-        onLogout: () => logout(routeContext),
-      ),
-    );
-  }
-
   Widget _screen(String screenName, Widget child) {
     _trackScreenView(screenName);
     return child;
@@ -1443,13 +607,6 @@ class _AuthenticatedRoutes {
 
   VoidCallback guardedAction(AppCapability capability, VoidCallback action) {
     return capabilities.actionFor(capability, action) ?? () {};
-  }
-
-  Future<void> Function() guardedAsyncAction(
-    AppCapability capability,
-    Future<void> Function() action,
-  ) {
-    return capabilities.asyncActionFor(capability, action) ?? () async {};
   }
 
   void Function(T value) guardedValueAction<T>(
@@ -1502,15 +659,6 @@ class _AuthenticatedRoutes {
     replace(context, posRouteBuilder);
   }
 
-  void openUserSettings(BuildContext context) {
-    final route = ModalRoute.of(context);
-    if (route?.isFirst ?? false) {
-      push(context, userSettingsRouteBuilder);
-      return;
-    }
-    replace(context, userSettingsRouteBuilder);
-  }
-
   void openIntegrityMonitor(BuildContext context) {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
@@ -1526,11 +674,6 @@ class _AuthenticatedRoutes {
         ),
       ),
     );
-  }
-
-  void logout(BuildContext context) {
-    Navigator.of(context).popUntil((route) => route.isFirst);
-    dependencies.authViewModel.logout();
   }
 
   Future<void> previewReport(
