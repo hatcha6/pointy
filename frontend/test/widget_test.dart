@@ -21,6 +21,7 @@ import 'package:pointy_frontend/src/data/models/product_variant.dart';
 import 'package:pointy_frontend/src/data/models/purchase_submission.dart';
 import 'package:pointy_frontend/src/data/models/register_cash_movement.dart';
 import 'package:pointy_frontend/src/app.dart';
+import 'package:pointy_frontend/src/features/catalog/views/product_details_screen.dart';
 import 'package:pointy_frontend/src/data/repositories/catalog_repository.dart';
 import 'package:pointy_frontend/src/data/repositories/device_settings_repository.dart';
 import 'package:pointy_frontend/src/data/repositories/printing_repository.dart';
@@ -44,7 +45,16 @@ import 'package:pointy_frontend/src/features/pos/views/register_session_close_sh
 import 'package:pointy_frontend/src/features/pos/views/payment/payment_sheet.dart';
 import 'package:pointy_frontend/src/features/users/view_models/user_management_view_model.dart';
 import 'package:pointy_frontend/src/features/users/views/user_management_screen.dart';
+import 'package:pointy_frontend/src/data/models/employee.dart';
+import 'package:pointy_frontend/src/data/repositories/dashboard_repository.dart';
+import 'package:pointy_frontend/src/data/repositories/employee_repository.dart';
+import 'package:pointy_frontend/src/features/dashboard/view_models/dashboard_view_model.dart';
+import 'package:pointy_frontend/src/features/dashboard/views/dashboard_screen.dart';
+import 'package:pointy_frontend/src/features/employees/view_models/employee_payroll_view_model.dart';
+import 'package:pointy_frontend/src/features/employees/views/employee_payroll_screen.dart';
+import 'package:pointy_frontend/src/features/employees/views/payroll_run_details_screen.dart';
 import 'package:pointy_frontend/src/shared/components/pointy_navigation_surface.dart';
+import 'package:pointy_frontend/src/shared/responsive/adaptive_modal.dart';
 import 'package:pointy_frontend/src/shared/infinite_scroll_grid.dart';
 import 'package:pointy_frontend/src/shared/product_tile.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -1608,6 +1618,31 @@ void main() {
     expect(variantBody?['is_active'], isTrue);
   });
 
+  testWidgets('catalog shows inline product details pane on wide screens', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(1400, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(PointyApp(apiService: _mockApiService()));
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+
+    await _openNavigationDestination(tester, 'المنتجات');
+
+    expect(find.text('اختر منتجًا من القائمة لعرض تفاصيله.'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('فتح تفاصيل المنتج').first);
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+
+    // Detail renders inline: the product list stays visible, no route push.
+    expect(find.text('قائمة المنتجات'), findsOneWidget);
+    expect(find.byType(ProductDetailsView), findsOneWidget);
+    expect(find.byType(ProductDetailsScreen), findsNothing);
+    expect(find.text('اختر منتجًا من القائمة لعرض تفاصيله.'), findsNothing);
+  });
+
   testWidgets('navigation drawer exposes primary destinations', (
     WidgetTester tester,
   ) async {
@@ -3083,6 +3118,40 @@ void main() {
     expect(find.byTooltip('إغلاق جلسة الدرج'), findsOneWidget);
   });
 
+  testWidgets('adaptive modal bottom sheet shrinks to fit short content', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Builder(
+            builder: (context) {
+              return FilledButton(
+                onPressed: () {
+                  showAdaptiveModalBottomSheet<void>(
+                    context: context,
+                    builder: (sheetContext) => const SizedBox(
+                      key: ValueKey('short_sheet_content'),
+                      height: 120,
+                    ),
+                  );
+                },
+                child: const Text('open'),
+              );
+            },
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+
+    final screenHeight = tester.getSize(find.byType(Scaffold)).height;
+    final sheetHeight = tester.getSize(find.byType(BottomSheet)).height;
+    expect(sheetHeight, lessThan(screenHeight / 2));
+  });
+
   testWidgets('close register sheet submits cash and denomination counts', (
     WidgetTester tester,
   ) async {
@@ -3130,6 +3199,17 @@ void main() {
       '4',
     );
 
+    await tester.pump();
+
+    // 25.50 entered + 7.50 in counted denominations.
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('register_session_closing_total_tile')),
+        matching: find.text('33.00 د.ل'),
+      ),
+      findsOneWidget,
+    );
+
     await tester.tap(
       find.byKey(const ValueKey('register_session_close_submit_button')),
     );
@@ -3140,6 +3220,225 @@ void main() {
     expect(submittedInput?.count050, 2);
     expect(submittedInput?.count075, 3);
     expect(submittedInput?.count100, 4);
+  });
+
+  testWidgets('dashboard leads with hero numbers and actionable alerts', (
+    WidgetTester tester,
+  ) async {
+    var openedCatalog = false;
+    final apiService = PosApiService(
+      client: MockClient((request) async {
+        if (request.url.path.endsWith('/dashboard/')) {
+          return _jsonResponse(_richDashboardJson());
+        }
+        return http.Response('', 404);
+      }),
+    );
+    final viewModel = DashboardViewModel(DashboardRepository(apiService));
+    final user = PosUser.fromJson(
+      _userJson(
+        permissions: const [
+          'sales.view_order',
+          'inventory.view_stockitem',
+          'employees.view_payrollrun',
+        ],
+      ),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        locale: const Locale('ar'),
+        supportedLocales: AppLocalizations.supportedLocales,
+        localizationsDelegates: const [
+          AppLocalizations.delegate,
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
+        home: DashboardScreen(
+          viewModel: viewModel,
+          currentUser: user,
+          capabilities: AuthorizationCapabilities.forUser(user),
+          onOpenPos: () {},
+          onOpenInvoices: () {},
+          onOpenCatalog: () => openedCatalog = true,
+          onOpenCategories: () {},
+          onOpenPurchasing: () {},
+          onOpenContacts: () {},
+          onOpenRegisterSessions: () {},
+          onOpenDeviceSettings: () {},
+          onLogout: () {},
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('dashboard_hero_card')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('dashboard_action_center_card')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('dashboard_alert_out_of_stock')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('dashboard_alert_register_variance')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('dashboard_alert_pending_loans')),
+      findsOneWidget,
+    );
+
+    final lowStockAlert = find.byKey(
+      const ValueKey('dashboard_alert_low_stock'),
+    );
+    await tester.ensureVisible(lowStockAlert);
+    await tester.tap(lowStockAlert);
+    expect(openedCatalog, isTrue);
+  });
+
+  testWidgets('payroll home prepares the current month and opens the run', (
+    WidgetTester tester,
+  ) async {
+    final draftRun = _payrollRunJson(id: 7, status: 'draft');
+    final apiService = _payrollApiService(
+      employees: [_employeeJson()],
+      runDetails: {7: draftRun},
+    );
+    final viewModel = EmployeePayrollViewModel(EmployeeRepository(apiService));
+
+    await tester.pumpWidget(_payrollApp(viewModel, apiService));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('payroll_month_workflow_card')),
+      findsOneWidget,
+    );
+    final prepareButton = find.byKey(
+      const ValueKey('payroll_prepare_month_button'),
+    );
+    expect(prepareButton, findsOneWidget);
+
+    await tester.tap(prepareButton);
+    await tester.pumpAndSettle();
+
+    // Drafting the month pushes the run details screen for review.
+    expect(find.byType(PayrollRunDetailsScreen), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('payroll_details_approve_button')),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('payroll run details walks approve then record payment', (
+    WidgetTester tester,
+  ) async {
+    final draftRun = _payrollRunJson(
+      id: 3,
+      status: 'draft',
+      lines: [
+        _payrollLineJson(id: 31, employeeName: 'سالم'),
+        _payrollLineJson(id: 32, employeeName: 'مريم'),
+      ],
+    );
+    final apiService = _payrollApiService(
+      employees: [_employeeJson()],
+      runDetails: {3: draftRun},
+    );
+    final viewModel = EmployeePayrollViewModel(EmployeeRepository(apiService));
+    final capabilities = AuthorizationCapabilities.forUser(
+      PosUser.fromJson(_userJson(permissions: _payrollPermissions)),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        locale: const Locale('ar'),
+        supportedLocales: AppLocalizations.supportedLocales,
+        localizationsDelegates: const [
+          AppLocalizations.delegate,
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
+        home: PayrollRunDetailsScreen(
+          viewModel: viewModel,
+          capabilities: capabilities,
+          initialRun: PayrollRun.fromJson(draftRun),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('سالم'), findsOneWidget);
+    expect(find.text('مريم'), findsOneWidget);
+
+    await tester.tap(
+      find.byKey(const ValueKey('payroll_details_approve_button')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('payroll_confirm_dialog_button')),
+    );
+    await tester.pumpAndSettle();
+
+    // Approved: the footer now offers the payment step.
+    final markPaidButton = find.byKey(
+      const ValueKey('payroll_details_mark_paid_button'),
+    );
+    expect(markPaidButton, findsOneWidget);
+
+    await tester.tap(markPaidButton);
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('payroll_confirm_dialog_button')),
+    );
+    await tester.pumpAndSettle();
+
+    // Paid: no further action is offered.
+    expect(markPaidButton, findsNothing);
+    expect(
+      find.byKey(const ValueKey('payroll_details_approve_button')),
+      findsNothing,
+    );
+  });
+
+  testWidgets('payroll home surfaces pending loan requests for review', (
+    WidgetTester tester,
+  ) async {
+    final apiService = _payrollApiService(
+      employees: [_employeeJson()],
+      payrollRuns: [_payrollRunJson(id: 9, status: 'paid')],
+      runDetails: {9: _payrollRunJson(id: 9, status: 'paid')},
+      loans: [
+        {
+          'id': 4,
+          'employee': 1,
+          'employee_name': 'سالم',
+          'employee_number': 'E1',
+          'status': 'requested',
+          'amount': '300.00',
+          'monthly_deduction': '50.00',
+          'outstanding_balance': '0.00',
+          'deducted_amount': '0.00',
+          'purpose': '',
+        },
+      ],
+    );
+    final viewModel = EmployeePayrollViewModel(EmployeeRepository(apiService));
+
+    await tester.pumpWidget(_payrollApp(viewModel, apiService));
+    await tester.pumpAndSettle();
+
+    final loansCard = find.byKey(const ValueKey('payroll_pending_loans_card'));
+    expect(loansCard, findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('pending_loan_approve_4')));
+    await tester.pumpAndSettle();
+
+    // Approved request leaves the attention card with nothing to show.
+    expect(loansCard, findsNothing);
   });
 
   testWidgets('product details screen presents product information', (
@@ -4933,6 +5232,218 @@ http.Response _jsonResponseList(List<Object?> body) {
   );
 }
 
+const List<String> _payrollPermissions = [
+  'employees.view_employee',
+  'employees.add_employee',
+  'employees.add_compensationplan',
+  'employees.view_payrollrun',
+  'employees.add_payrollrun',
+  'employees.change_payrollrun',
+  'employees.approve_payrollrun',
+  'employees.mark_payrollrun_paid',
+  'employees.view_employeeloan',
+  'employees.approve_employeeloan',
+  'employees.reject_employeeloan',
+];
+
+String _isoDate(DateTime date) {
+  return '${date.year.toString().padLeft(4, '0')}-'
+      '${date.month.toString().padLeft(2, '0')}-'
+      '${date.day.toString().padLeft(2, '0')}';
+}
+
+Map<String, Object?> _employeeJson({int id = 1, String name = 'سالم'}) {
+  return {
+    'id': id,
+    'employee_number': 'E$id',
+    'full_name': name,
+    'status': 'active',
+    'employment_type': 'full_time',
+    'hire_date': '2025-01-01',
+    'has_system_access': false,
+    'payroll_total': '0.00',
+    'active_compensation_plan': {
+      'id': id,
+      'employee': id,
+      'pay_type': 'monthly_salary',
+      'salary_type': 'monthly_fixed',
+      'amount': '500.00',
+      'commission_percent': '0.00',
+      'expected_units_per_period': '1.00',
+      'effective_from': '2025-01-01',
+      'is_active': true,
+    },
+  };
+}
+
+Map<String, Object?> _payrollLineJson({
+  required int id,
+  String employeeName = 'سالم',
+}) {
+  return {
+    'id': id,
+    'employee': 1,
+    'employee_name': employeeName,
+    'employee_number': 'E1',
+    'pay_type': 'monthly_salary',
+    'salary_type': 'monthly_fixed',
+    'units': '1.00',
+    'rate': '500.00',
+    'gross_amount': '500.00',
+    'absence_days': '0.00',
+    'absence_day_rate': '16.67',
+    'absence_deduction_amount': '0.00',
+    'raise_amount': '0.00',
+    'manual_addition_amount': '0.00',
+    'manual_deduction_amount': '0.00',
+    'additions_amount': '0.00',
+    'deductions_amount': '0.00',
+    'net_amount': '500.00',
+    'adjustments': const <Object?>[],
+    'notes': '',
+  };
+}
+
+Map<String, Object?> _payrollRunJson({
+  required int id,
+  String status = 'draft',
+  List<Map<String, Object?>>? lines,
+}) {
+  final now = DateTime.now();
+  final resolvedLines = lines ?? [_payrollLineJson(id: id * 10)];
+  return {
+    'id': id,
+    'run_number': 'PR$id',
+    'status': status,
+    'period_start': _isoDate(DateTime(now.year, now.month)),
+    'period_end': _isoDate(DateTime(now.year, now.month + 1, 0)),
+    'payment_date': null,
+    'notes': '',
+    'gross_total': '500.00',
+    'additions_total': '0.00',
+    'deductions_total': '0.00',
+    'net_total': '500.00',
+    'line_count': resolvedLines.length,
+    'lines': resolvedLines,
+    'approved_by_username': '',
+    'paid_by_username': '',
+  };
+}
+
+PosApiService _payrollApiService({
+  List<Map<String, Object?>> employees = const [],
+  List<Map<String, Object?>> payrollRuns = const [],
+  List<Map<String, Object?>> loans = const [],
+  Map<int, Map<String, Object?>> runDetails = const {},
+}) {
+  var runs = [...payrollRuns];
+  var loanList = [...loans];
+  final details = {...runDetails};
+
+  return PosApiService(
+    client: MockClient((request) async {
+      final path = request.url.path;
+
+      if (path.endsWith('/payroll-runs/draft-monthly/')) {
+        final run = details.values.first;
+        runs = [run, ...runs];
+        return _jsonResponse({'created': true, 'payroll_run': run});
+      }
+
+      final approveMatch = RegExp(
+        r'/payroll-runs/(\d+)/approve/$',
+      ).firstMatch(path);
+      if (approveMatch != null) {
+        final id = int.parse(approveMatch.group(1)!);
+        final run = {...details[id]!, 'status': 'approved'};
+        details[id] = run;
+        return _jsonResponse(run);
+      }
+
+      final paidMatch = RegExp(
+        r'/payroll-runs/(\d+)/mark-paid/$',
+      ).firstMatch(path);
+      if (paidMatch != null) {
+        final id = int.parse(paidMatch.group(1)!);
+        final run = {...details[id]!, 'status': 'paid'};
+        details[id] = run;
+        return _jsonResponse(run);
+      }
+
+      final detailMatch = RegExp(r'/payroll-runs/(\d+)/$').firstMatch(path);
+      if (detailMatch != null) {
+        final id = int.parse(detailMatch.group(1)!);
+        return _jsonResponse(details[id]!);
+      }
+
+      if (path.endsWith('/payroll-runs/')) {
+        return _jsonResponse({'results': runs, 'next': null});
+      }
+
+      final loanApproveMatch = RegExp(
+        r'/employee-loans/(\d+)/approve/$',
+      ).firstMatch(path);
+      if (loanApproveMatch != null) {
+        final id = int.parse(loanApproveMatch.group(1)!);
+        final loan = {
+          ...loanList.firstWhere((entry) => entry['id'] == id),
+          'status': 'approved',
+        };
+        loanList = [
+          for (final entry in loanList)
+            if (entry['id'] == id) loan else entry,
+        ];
+        return _jsonResponse(loan);
+      }
+
+      if (path.endsWith('/employee-loans/')) {
+        return _jsonResponse({'results': loanList, 'next': null});
+      }
+
+      if (path.endsWith('/employees/')) {
+        return _jsonResponse({'results': employees, 'next': null});
+      }
+
+      return http.Response('', 404);
+    }),
+  );
+}
+
+Widget _payrollApp(
+  EmployeePayrollViewModel viewModel,
+  PosApiService apiService,
+) {
+  final capabilities = AuthorizationCapabilities.forUser(
+    PosUser.fromJson(_userJson(permissions: _payrollPermissions)),
+  );
+
+  return MaterialApp(
+    locale: const Locale('ar'),
+    supportedLocales: AppLocalizations.supportedLocales,
+    localizationsDelegates: const [
+      AppLocalizations.delegate,
+      GlobalMaterialLocalizations.delegate,
+      GlobalWidgetsLocalizations.delegate,
+      GlobalCupertinoLocalizations.delegate,
+    ],
+    home: EmployeePayrollScreen(
+      viewModel: viewModel,
+      userRepository: UserRepository(apiService),
+      currentUser: PosUser.fromJson(_userJson(permissions: _payrollPermissions)),
+      capabilities: capabilities,
+      onOpenPos: () {},
+      onOpenInvoices: () {},
+      onOpenCatalog: () {},
+      onOpenCategories: () {},
+      onOpenPurchasing: () {},
+      onOpenContacts: () {},
+      onOpenRegisterSessions: () {},
+      onOpenDeviceSettings: () {},
+      onLogout: () {},
+    ),
+  );
+}
+
 Map<String, Object?> _userJson({
   int id = 1,
   String username = 'manager',
@@ -4948,6 +5459,90 @@ Map<String, Object?> _userJson({
     'role': role,
     'permissions': permissions,
     'is_active': true,
+  };
+}
+
+Map<String, Object?> _richDashboardJson() {
+  return {
+    'generated_at': '2026-06-12T09:00:00Z',
+    'period': {
+      'days': 30,
+      'start': '2026-05-13T00:00:00Z',
+      'end': '2026-06-12T00:00:00Z',
+      'previous_start': '2026-04-13T00:00:00Z',
+      'previous_end': '2026-05-13T00:00:00Z',
+    },
+    'sections': {
+      'sales': {
+        'summary': {
+          'gross_sales': '1530.00',
+          'discount_total': '20.00',
+          'refund_total': '10.00',
+          'net_sales': '1500.00',
+          'net_sales_change_percent': '12.50',
+          'gross_profit': '600.00',
+          'profit_margin_percent': '40.00',
+          'order_count': 42,
+          'order_count_change_percent': '5.00',
+          'average_order_value': '35.71',
+          'items_sold': 90,
+          'void_count': 1,
+          'return_count': 2,
+        },
+        'registers': {
+          'open_count': 1,
+          'closed_count': 3,
+          'variance_count': 1,
+          'variance_total': '5.00',
+        },
+        'trend': const <Object?>[],
+        'hourly_sales': const <Object?>[],
+        'top_products': const <Object?>[],
+        'top_categories': const <Object?>[],
+        'recent_orders': const <Object?>[],
+      },
+      'inventory': {
+        'summary': {
+          'product_count': 10,
+          'active_product_count': 9,
+          'stock_item_count': 12,
+          'low_stock_count': 3,
+          'out_of_stock_count': 2,
+          'committed_units': 0,
+          'expected_units': 0,
+          'retail_stock_value': '5000.00',
+        },
+        'low_stock_items': const <Object?>[],
+        'low_stock_variants': const <Object?>[],
+        'dusty_items': const <Object?>[],
+        'movement_mix': const <Object?>[],
+        'recent_movements': const <Object?>[],
+      },
+      'payroll': {
+        'summary': {
+          'salary_expense': '200.00',
+          'paid_total': '200.00',
+          'pending_total': '300.00',
+          'active_employee_count': 4,
+          'payroll_run_count': 1,
+          'draft_run_count': 1,
+          'pending_run_count': 1,
+          'pending_loan_request_count': 2,
+        },
+        'recent_runs': const <Object?>[],
+      },
+      'profitability': {
+        'summary': {
+          'gross_profit': '600.00',
+          'payroll_paid_total': '200.00',
+          'payroll_accrued_total': '300.00',
+          'payment_commission_total': '15.00',
+          'purchase_spend_total': '0.00',
+          'operating_expense_total': '215.00',
+          'net_operating_profit': '385.00',
+        },
+      },
+    },
   };
 }
 

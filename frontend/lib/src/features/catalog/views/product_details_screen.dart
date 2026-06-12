@@ -51,99 +51,118 @@ class ProductDetailsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
 
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(l10n.productDetailsTitle),
+        actions: [
+          ProductChangeGuard(
+            capabilities: capabilities,
+            child: IconButton(
+              tooltip: l10n.editProductButton,
+              onPressed: () =>
+                  showProductParentEditor(context, viewModel, onChanged),
+              icon: const Icon(Icons.edit_outlined),
+            ),
+          ),
+        ],
+      ),
+      body: SafeArea(
+        child: ProductDetailsView(
+          viewModel: viewModel,
+          inventoryRepository: inventoryRepository,
+          printingRepository: printingRepository,
+          purchaseRepository: purchaseRepository,
+          shopSettingsRepository: shopSettingsRepository,
+          capabilities: capabilities,
+          analyticsEngine: analyticsEngine,
+          onChanged: onChanged,
+        ),
+      ),
+    );
+  }
+}
+
+/// Embeddable product details body: used by [ProductDetailsScreen] as a pushed
+/// route on compact widths, and by the catalog master-detail pane on desktop.
+class ProductDetailsView extends StatelessWidget {
+  const ProductDetailsView({
+    super.key,
+    required this.viewModel,
+    required this.inventoryRepository,
+    required this.printingRepository,
+    required this.purchaseRepository,
+    required this.shopSettingsRepository,
+    required this.capabilities,
+    this.analyticsEngine,
+    this.onChanged,
+  });
+
+  final ProductDetailsViewModel viewModel;
+  final InventoryRepository inventoryRepository;
+  final PrintingRepository printingRepository;
+  final PurchaseRepository purchaseRepository;
+  final ShopSettingsRepository shopSettingsRepository;
+  final AuthorizationCapabilities capabilities;
+  final AnalyticsEngine? analyticsEngine;
+  final VoidCallback? onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+
     return ListenableBuilder(
       listenable: viewModel,
       builder: (context, _) {
         final product = viewModel.product;
-        return Scaffold(
-          appBar: AppBar(
-            title: Text(l10n.productDetailsTitle),
-            actions: [
-              ProductChangeGuard(
+        return ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            if (viewModel.isLoading) ...[
+              const LinearProgressIndicator(),
+              const SizedBox(height: 12),
+            ],
+            if (viewModel.errorMessage == 'product_detail_load_error') ...[
+              Text(
+                l10n.productDetailLoadError,
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
+              const SizedBox(height: 12),
+            ],
+            _ParentSummaryCard(
+              product: product,
+              variantCount: viewModel.variants.length,
+              capabilities: capabilities,
+              printingRepository: printingRepository,
+              analyticsEngine: analyticsEngine,
+              onEdit: () =>
+                  showProductParentEditor(context, viewModel, onChanged),
+            ),
+            const SizedBox(height: 12),
+            _VariantsSection(
+              product: product,
+              variants: viewModel.variants,
+              capabilities: capabilities,
+              printingRepository: printingRepository,
+              analyticsEngine: analyticsEngine,
+              onAddVariant: () => _showVariantEditor(context),
+              onGenerateVariants: () => _showVariantGenerator(context),
+              onEditVariant: (variant) =>
+                  _showVariantEditor(context, variant: variant),
+              onOpenVariant: (variant) =>
+                  _openVariantDetails(context, product, variant),
+            ),
+            if (capabilities.canViewRegisterSessionOrders ||
+                capabilities.canAccessPurchasing) ...[
+              const SizedBox(height: 12),
+              ProductDocumentHistorySection(
+                viewModel: viewModel,
+                purchaseRepository: purchaseRepository,
+                printingRepository: printingRepository,
+                shopSettingsRepository: shopSettingsRepository,
                 capabilities: capabilities,
-                child: IconButton(
-                  tooltip: l10n.editProductButton,
-                  onPressed: () => _showProductEditor(context),
-                  icon: const Icon(Icons.edit_outlined),
-                ),
               ),
             ],
-          ),
-          body: SafeArea(
-            child: ListView(
-              padding: const EdgeInsets.all(16),
-              children: [
-                if (viewModel.isLoading) ...[
-                  const LinearProgressIndicator(),
-                  const SizedBox(height: 12),
-                ],
-                if (viewModel.errorMessage == 'product_detail_load_error') ...[
-                  Text(
-                    l10n.productDetailLoadError,
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.error,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                ],
-                _ParentSummaryCard(
-                  product: product,
-                  variantCount: viewModel.variants.length,
-                  capabilities: capabilities,
-                  printingRepository: printingRepository,
-                  analyticsEngine: analyticsEngine,
-                  onEdit: () => _showProductEditor(context),
-                ),
-                const SizedBox(height: 12),
-                _VariantsSection(
-                  product: product,
-                  variants: viewModel.variants,
-                  capabilities: capabilities,
-                  printingRepository: printingRepository,
-                  analyticsEngine: analyticsEngine,
-                  onAddVariant: () => _showVariantEditor(context),
-                  onGenerateVariants: () => _showVariantGenerator(context),
-                  onEditVariant: (variant) =>
-                      _showVariantEditor(context, variant: variant),
-                  onOpenVariant: (variant) =>
-                      _openVariantDetails(context, product, variant),
-                ),
-                if (capabilities.canViewRegisterSessionOrders ||
-                    capabilities.canAccessPurchasing) ...[
-                  const SizedBox(height: 12),
-                  ProductDocumentHistorySection(
-                    viewModel: viewModel,
-                    purchaseRepository: purchaseRepository,
-                    printingRepository: printingRepository,
-                    shopSettingsRepository: shopSettingsRepository,
-                    capabilities: capabilities,
-                  ),
-                ],
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  Future<void> _showProductEditor(BuildContext context) {
-    return showAdaptiveModalBottomSheet<void>(
-      context: context,
-      size: AdaptiveModalSize.standard,
-      maxHeightFactor: 0.9,
-      builder: (sheetContext) {
-        return Padding(
-          padding: EdgeInsets.only(
-            bottom: MediaQuery.viewInsetsOf(sheetContext).bottom,
-          ),
-          child: ProductParentEditSheet(
-            viewModel: viewModel,
-            onSaved: () {
-              onChanged?.call();
-              Navigator.of(sheetContext).pop();
-            },
-          ),
+          ],
         );
       },
     );
@@ -153,7 +172,7 @@ class ProductDetailsScreen extends StatelessWidget {
     BuildContext context, {
     ProductVariant? variant,
   }) {
-    return showAdaptiveModalBottomSheet<void>(
+    return showAdaptiveFormSurface<void>(
       context: context,
       size: AdaptiveModalSize.standard,
       maxHeightFactor: 0.92,
@@ -176,7 +195,7 @@ class ProductDetailsScreen extends StatelessWidget {
   }
 
   Future<void> _showVariantGenerator(BuildContext context) {
-    return showAdaptiveModalBottomSheet<void>(
+    return showAdaptiveFormSurface<void>(
       context: context,
       size: AdaptiveModalSize.expanded,
       maxHeightFactor: 0.94,
@@ -221,6 +240,33 @@ class ProductDetailsScreen extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Opens the parent-product edit form on the adaptive form surface.
+Future<void> showProductParentEditor(
+  BuildContext context,
+  ProductDetailsViewModel viewModel,
+  VoidCallback? onChanged,
+) {
+  return showAdaptiveFormSurface<void>(
+    context: context,
+    size: AdaptiveModalSize.standard,
+    maxHeightFactor: 0.9,
+    builder: (sheetContext) {
+      return Padding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.viewInsetsOf(sheetContext).bottom,
+        ),
+        child: ProductParentEditSheet(
+          viewModel: viewModel,
+          onSaved: () {
+            onChanged?.call();
+            Navigator.of(sheetContext).pop();
+          },
+        ),
+      );
+    },
+  );
 }
 
 ProductVariant _variantWithParentFallback(

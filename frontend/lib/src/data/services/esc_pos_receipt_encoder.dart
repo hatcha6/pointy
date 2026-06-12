@@ -1,7 +1,9 @@
 import 'dart:convert';
 
 import 'package:esc_pos_utils_plus/esc_pos_utils_plus.dart';
+import 'package:image/image.dart' as img;
 
+import '../../shared/branding.dart';
 import '../models/print_job.dart';
 import '../models/printer_config.dart';
 
@@ -39,7 +41,7 @@ class EscPosReceiptEncoder {
     required Map<String, Object?> payload,
     required PrinterEndpoint endpoint,
   }) async {
-    final profile = await CapabilityProfile.load();
+    final profile = await _loadProfile(endpoint);
     final generator = Generator(_paperSize(endpoint.paperWidthMm), profile);
     final codeTable = endpoint.codeTable.trim().isEmpty
         ? 'CP864'
@@ -55,6 +57,7 @@ class EscPosReceiptEncoder {
 
     final bytes = <int>[];
     bytes.addAll(generator.reset());
+    bytes.addAll(_logoRaster(generator, shop['logo_bytes']));
     bytes.addAll(
       _text(
         generator,
@@ -121,7 +124,7 @@ class EscPosReceiptEncoder {
         );
       }
       final lineDetails =
-          'الكمية: $quantity، سعر الوحدة: ${_money(line['unit_price'])}، الإجمالي: ${_money(line['line_total'])}';
+          '$quantity × ${_money(line['unit_price'])} = ${_money(line['line_total'])}';
       for (final wrappedDetail in _wrap(
         lineDetails,
         _charsPerLine(endpoint.paperWidthMm),
@@ -144,6 +147,7 @@ class EscPosReceiptEncoder {
         styles: PosStyles(
           align: PosAlign.right,
           bold: true,
+          height: PosTextSize.size2,
           codeTable: codeTable,
         ),
       ),
@@ -196,9 +200,65 @@ class EscPosReceiptEncoder {
       }
     }
 
-    bytes.addAll(generator.feed(2));
-    bytes.addAll(generator.cut(mode: PosCutMode.partial));
+    bytes.addAll(generator.feed(1));
+    bytes.addAll(
+      _text(
+        generator,
+        pointyPrintCreditLine,
+        styles: PosStyles(align: PosAlign.center, codeTable: codeTable),
+      ),
+    );
+
+    bytes.addAll(generator.feed(endpoint.feedLines.clamp(0, 12)));
+    switch (endpoint.cutMode) {
+      case ReceiptCutMode.partial:
+        bytes.addAll(generator.cut(mode: PosCutMode.partial));
+      case ReceiptCutMode.full:
+        bytes.addAll(generator.cut(mode: PosCutMode.full));
+      case ReceiptCutMode.none:
+        // Printer has no cutter: feed enough paper to tear by hand.
+        bytes.addAll(generator.feed(2));
+    }
     return bytes;
+  }
+
+  Future<CapabilityProfile> _loadProfile(PrinterEndpoint endpoint) async {
+    final name = endpoint.capabilityProfile.trim();
+    if (name.isEmpty || name == 'default') {
+      return CapabilityProfile.load();
+    }
+    try {
+      return await CapabilityProfile.load(name: name);
+    } on Object {
+      // Unknown profile names fall back to the generic profile instead of
+      // failing the print job.
+      return CapabilityProfile.load();
+    }
+  }
+
+  /// Prints the shop logo as a raster image when the payload carries
+  /// `shop.logo_bytes` (base64). Raster images work on effectively every
+  /// ESC/POS printer, regardless of code page support.
+  List<int> _logoRaster(Generator generator, Object? logoBytes) {
+    final encoded = logoBytes?.toString() ?? '';
+    if (encoded.isEmpty) {
+      return const [];
+    }
+    try {
+      final decoded = img.decodeImage(base64Decode(encoded));
+      if (decoded == null) {
+        return const [];
+      }
+      final resized = decoded.width > 384
+          ? img.copyResize(decoded, width: 384)
+          : decoded;
+      return [
+        ...generator.imageRaster(resized, align: PosAlign.center),
+        ...generator.feed(1),
+      ];
+    } on Object {
+      return const [];
+    }
   }
 
   List<int> _text(

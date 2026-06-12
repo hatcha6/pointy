@@ -113,7 +113,7 @@ class UserManagementScreen extends StatelessWidget {
   }
 
   Future<void> _showCreateUserSheet(BuildContext context) {
-    return showAdaptiveModalBottomSheet<void>(
+    return showAdaptiveFormSurface<void>(
       context: context,
       size: AdaptiveModalSize.standard,
       maxHeightFactor: 0.94,

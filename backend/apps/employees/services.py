@@ -52,6 +52,28 @@ def record_employee_event(
     )
 
 
+def ensure_employee_for_user(user, *, created_by=None):
+    """Create an Employee profile linked to ``user`` unless one already
+    exists, so every account holder shows up in payroll automatically."""
+    existing = Employee.objects.filter(user=user).first()
+    if existing is not None:
+        return existing
+
+    full_name = (user.get_full_name() or "").strip() or user.username
+    employee = Employee.objects.create(user=user, full_name=full_name)
+    record_employee_event(
+        name="employees.employee.created",
+        user=created_by,
+        entity_type="employee",
+        entity_id=employee.pk,
+        attributes={
+            "linked_user_id": user.pk,
+            "auto_created": True,
+        },
+    )
+    return employee
+
+
 @transaction.atomic
 def save_payroll_run_with_lines(
     *,

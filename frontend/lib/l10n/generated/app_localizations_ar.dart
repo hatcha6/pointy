@@ -1145,6 +1145,30 @@ class AppLocalizationsAr extends AppLocalizations {
   String get reportPurchasesSubtitle => 'أوامر الشراء والاستلام والمستحقات.';
 
   @override
+  String get reportCategoryEmployees => 'الموظفون';
+
+  @override
+  String get reportReorderItemsTitle => 'أصناف تحتاج إعادة طلب';
+
+  @override
+  String get reportReorderItemsSubtitle =>
+      'المنتجات التي بلغت حد إعادة الطلب مع الكميات المقترحة للشراء.';
+
+  @override
+  String get reportPayrollSummaryTitle => 'الرواتب والأجور';
+
+  @override
+  String get reportPayrollSummarySubtitle =>
+      'مسيرات الرواتب وتكلفة الموظفين خلال الفترة.';
+
+  @override
+  String get reportProfitCostsTitle => 'الأرباح والتكاليف';
+
+  @override
+  String get reportProfitCostsSubtitle =>
+      'الربح الإجمالي مقابل الرواتب والعمولات وإنفاق المشتريات.';
+
+  @override
   String get reportContactsTitle => 'أرصدة الجهات';
 
   @override
@@ -2944,6 +2968,32 @@ class AppLocalizationsAr extends AppLocalizations {
   String get printerCodeTableLabel => 'جدول ترميز الطابعة';
 
   @override
+  String get printerCapabilityProfileLabel => 'ملف تعريف الطابعة';
+
+  @override
+  String get printerCapabilityProfileHelper =>
+      'اتركه default إن لم تكن متأكدًا. اختر ملف الشركة المصنعة للطابعات غير المتوافقة.';
+
+  @override
+  String get printerCutModeLabel => 'وضع قص الورق';
+
+  @override
+  String get printerCutModePartial => 'قص جزئي';
+
+  @override
+  String get printerCutModeFull => 'قص كامل';
+
+  @override
+  String get printerCutModeNone => 'بدون قص (تغذية فقط)';
+
+  @override
+  String get printerFeedLinesLabel => 'أسطر التغذية قبل القص';
+
+  @override
+  String get printerFeedLinesHelper =>
+      'زدها إذا كان آخر الإيصال يُقطع قبل اكتمال الطباعة.';
+
+  @override
   String get barcodeLabelPrinterSettingsTitle => 'إعدادات ملصقات الباركود';
 
   @override
@@ -3564,6 +3614,30 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get productDetailsTitle => 'تفاصيل المنتج';
+
+  @override
+  String get catalogSelectProductPlaceholder =>
+      'اختر منتجًا من القائمة لعرض تفاصيله.';
+
+  @override
+  String get invoicesSelectInvoicePlaceholder =>
+      'اختر فاتورة من القائمة لعرض تفاصيلها.';
+
+  @override
+  String get contactsSelectContactPlaceholder =>
+      'اختر جهة من القائمة لعرض تفاصيلها.';
+
+  @override
+  String get discountsSelectDiscountPlaceholder =>
+      'اختر قاعدة خصم من القائمة لعرض تفاصيلها.';
+
+  @override
+  String reportLastCompletedMessage(String action, String report) {
+    return 'آخر إجراء ناجح: $action — $report';
+  }
+
+  @override
+  String get reportRunAgainButton => 'تشغيل مجددًا';
 
   @override
   String get variantDetailsTitle => 'تفاصيل الخيار';
@@ -5512,7 +5586,10 @@ class AppLocalizationsAr extends AppLocalizations {
   String get closeRegisterSessionTitle => 'إغلاق جلسة الدرج';
 
   @override
-  String get closingCashInputLabel => 'النقد عند الإغلاق';
+  String get closingCashInputLabel => 'النقد عند الإغلاق (بدون الفئات)';
+
+  @override
+  String get closingCashTotalLabel => 'إجمالي النقد عند الإغلاق';
 
   @override
   String denominationCountLabel(String denomination) {
@@ -5599,9 +5676,6 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get sessionClosingCashMetric => 'النقد المعدود';
-
-  @override
-  String get sessionDenominationTotalMetric => 'إجمالي الفئات';
 
   @override
   String get sessionCashVarianceMetric => 'فرق النقد';
@@ -6771,6 +6845,118 @@ class AppLocalizationsAr extends AppLocalizations {
       'سجلات الموظفين وخطط الأجر ومسيرات الرواتب';
 
   @override
+  String get payrollHomeTabLabel => 'الرواتب';
+
+  @override
+  String payrollMonthCardTitle(String month) {
+    return 'رواتب $month';
+  }
+
+  @override
+  String get payrollMonthStepPrepare => 'تجهيز';
+
+  @override
+  String get payrollMonthStepApprove => 'اعتماد';
+
+  @override
+  String get payrollMonthStepPay => 'دفع';
+
+  @override
+  String get payrollMonthNoRunMessage =>
+      'لم يتم تجهيز مسير رواتب هذا الشهر بعد.';
+
+  @override
+  String get payrollMonthDraftMessage => 'المسير جاهز للمراجعة والاعتماد.';
+
+  @override
+  String get payrollMonthApprovedMessage =>
+      'المسير معتمد وبانتظار تسجيل الدفع.';
+
+  @override
+  String get payrollMonthPaidMessage => 'تم دفع رواتب هذا الشهر.';
+
+  @override
+  String get payrollMonthOnboardingMessage =>
+      'أضف موظفيك وحدد خطط رواتبهم لبدء تجهيز مسيرات الرواتب.';
+
+  @override
+  String get preparePayrollMonthButton => 'تجهيز رواتب الشهر';
+
+  @override
+  String get reviewAndApprovePayrollButton => 'مراجعة واعتماد';
+
+  @override
+  String get recordPayrollPaymentButton => 'تسجيل الدفع';
+
+  @override
+  String get viewPayrollRunButton => 'عرض المسير';
+
+  @override
+  String get customPayrollRunButton => 'مسير مخصص';
+
+  @override
+  String get payrollHistoryTitle => 'سجل المسيرات';
+
+  @override
+  String get pendingLoanRequestsTitle => 'طلبات سلف بانتظار قرارك';
+
+  @override
+  String get employeeLoanApproveButton => 'موافقة';
+
+  @override
+  String get employeeLoanRejectButton => 'رفض';
+
+  @override
+  String get showAllLoansButton => 'عرض كل السلف';
+
+  @override
+  String get approvePayrollConfirmTitle => 'اعتماد مسير الرواتب؟';
+
+  @override
+  String approvePayrollConfirmMessage(String employees, String amount) {
+    return 'سيتم اعتماد رواتب $employees بإجمالي صافي $amount. لا يمكن تعديل البنود بعد الاعتماد.';
+  }
+
+  @override
+  String get approvePayrollConfirmButton => 'اعتماد';
+
+  @override
+  String get markPayrollPaidConfirmTitle => 'تسجيل دفع الرواتب؟';
+
+  @override
+  String markPayrollPaidConfirmMessage(String amount) {
+    return 'سيتم تسجيل المسير كمدفوع بإجمالي $amount، وستُخصم أقساط السلف المرتبطة تلقائيًا.';
+  }
+
+  @override
+  String get markPayrollPaidConfirmButton => 'تسجيل الدفع';
+
+  @override
+  String payrollAdditionsChipLabel(String amount) {
+    return 'إضافات $amount';
+  }
+
+  @override
+  String payrollDeductionsChipLabel(String amount) {
+    return 'خصومات $amount';
+  }
+
+  @override
+  String payrollAbsenceChipLabel(String days) {
+    return 'غياب $days يوم';
+  }
+
+  @override
+  String get payrollLineTapToAdjustHint =>
+      'اضغط على موظف لتعديل غيابه وإضافاته وخصوماته.';
+
+  @override
+  String get employeeNoPlanWarning => 'لا توجد خطة راتب';
+
+  @override
+  String get employeeCompensationButton => 'خطة الراتب';
+
+  @override
   String get addEmployeeButton => 'إضافة موظف';
 
   @override
@@ -7504,4 +7690,124 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get dashboardNetOperatingProfitMetric => 'صافي الربح التشغيلي';
+
+  @override
+  String get dashboardVsPreviousPeriodLabel => 'مقارنة بالفترة السابقة';
+
+  @override
+  String get dashboardActionCenterTitle => 'يحتاج انتباهك';
+
+  @override
+  String get dashboardAllClearMessage =>
+      'كل شيء تحت السيطرة — لا يوجد ما يتطلب تدخلك الآن.';
+
+  @override
+  String dashboardAlertOutOfStock(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count منتجات نفدت من المخزون',
+      two: 'منتجان نفدا من المخزون',
+      one: 'منتج واحد نفد من المخزون',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String dashboardAlertLowStock(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count منتجات تحت حد إعادة الطلب',
+      two: 'منتجان تحت حد إعادة الطلب',
+      one: 'منتج واحد تحت حد إعادة الطلب',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String dashboardAlertOverduePurchases(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count أوامر شراء متأخرة السداد',
+      two: 'أمرا شراء متأخران عن السداد',
+      one: 'أمر شراء واحد متأخر السداد',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String dashboardAlertRegisterVariance(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count جلسات درج بفروق نقدية',
+      two: 'جلستا درج بفرق نقدي',
+      one: 'جلسة درج واحدة بفرق نقدي',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String dashboardAlertDraftPayroll(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count مسيرات رواتب بانتظار الاعتماد',
+      two: 'مسيرا رواتب بانتظار الاعتماد',
+      one: 'مسير رواتب بانتظار الاعتماد',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get dashboardAlertPendingPayroll => 'رواتب معتمدة بانتظار تسجيل الدفع';
+
+  @override
+  String dashboardAlertPendingLoans(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count طلبات سلف بانتظار قرارك',
+      two: 'طلبا سلفة بانتظار قرارك',
+      one: 'طلب سلفة واحد بانتظار قرارك',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String dashboardAlertExpiringDiscounts(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count عروض خصم تنتهي قريبًا',
+      two: 'عرضا خصم ينتهيان قريبًا',
+      one: 'عرض خصم واحد ينتهي قريبًا',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String dashboardAlertPrintFailures(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count مهام طباعة فشلت',
+      two: 'مهمتا طباعة فشلتا',
+      one: 'مهمة طباعة واحدة فشلت',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get dashboardBestSellersTitle => 'الأفضل أداءً';
+
+  @override
+  String get dashboardOperationsTitle => 'التشغيل اليومي';
+
+  @override
+  String dashboardApprovedAwaitingPaymentNote(Object amount) {
+    return 'منها $amount رواتب معتمدة لم تُدفع بعد';
+  }
 }

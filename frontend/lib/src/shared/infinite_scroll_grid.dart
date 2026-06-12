@@ -11,6 +11,7 @@ class InfiniteScrollView<T> extends StatefulWidget {
     required this.isLoadingMore,
     required this.emptyBuilder,
     required this.sliverBuilder,
+    this.header,
     this.padding = EdgeInsets.zero,
     this.loadMoreExtent = 480,
   });
@@ -24,6 +25,10 @@ class InfiniteScrollView<T> extends StatefulWidget {
   final WidgetBuilder emptyBuilder;
   final Widget Function(BuildContext context, SliverChildDelegate delegate)
   sliverBuilder;
+
+  /// Scrolls with the content above the first item, and stays visible in the
+  /// loading and empty states.
+  final Widget? header;
   final EdgeInsetsGeometry padding;
   final double loadMoreExtent;
 
@@ -81,11 +86,16 @@ class _InfiniteScrollViewState<T> extends State<InfiniteScrollView<T>> {
   @override
   Widget build(BuildContext context) {
     if (widget.isLoadingInitial && widget.items.isEmpty) {
-      return const Center(child: CircularProgressIndicator());
+      return _withHeader(
+        const Padding(
+          padding: EdgeInsets.all(24),
+          child: Center(child: CircularProgressIndicator()),
+        ),
+      );
     }
 
     if (widget.items.isEmpty) {
-      return widget.emptyBuilder(context);
+      return _withHeader(widget.emptyBuilder(context));
     }
 
     final delegate = SliverChildBuilderDelegate(
@@ -96,6 +106,8 @@ class _InfiniteScrollViewState<T> extends State<InfiniteScrollView<T>> {
     return CustomScrollView(
       controller: _controller,
       slivers: [
+        if (widget.header != null)
+          SliverToBoxAdapter(child: widget.header),
         SliverPadding(
           padding: widget.padding,
           sliver: widget.sliverBuilder(context, delegate),
@@ -109,6 +121,17 @@ class _InfiniteScrollViewState<T> extends State<InfiniteScrollView<T>> {
           ),
       ],
     );
+  }
+
+  Widget _withHeader(Widget body) {
+    final header = widget.header;
+    if (header == null) {
+      if (widget.isLoadingInitial && widget.items.isEmpty) {
+        return const Center(child: CircularProgressIndicator());
+      }
+      return body;
+    }
+    return ListView(children: [header, body]);
   }
 }
 
@@ -176,6 +199,7 @@ class InfiniteScrollList<T> extends StatelessWidget {
     required this.isLoadingMore,
     required this.emptyBuilder,
     this.separatorBuilder,
+    this.header,
     this.padding = EdgeInsets.zero,
     this.loadMoreExtent = 480,
   });
@@ -188,6 +212,7 @@ class InfiniteScrollList<T> extends StatelessWidget {
   final bool isLoadingInitial;
   final bool isLoadingMore;
   final WidgetBuilder emptyBuilder;
+  final Widget? header;
   final EdgeInsetsGeometry padding;
   final double loadMoreExtent;
 
@@ -201,6 +226,7 @@ class InfiniteScrollList<T> extends StatelessWidget {
       isLoadingInitial: isLoadingInitial,
       isLoadingMore: isLoadingMore,
       emptyBuilder: emptyBuilder,
+      header: header,
       padding: padding,
       loadMoreExtent: loadMoreExtent,
       sliverBuilder: (context, delegate) {

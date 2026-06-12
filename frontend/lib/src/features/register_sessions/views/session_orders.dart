@@ -167,12 +167,6 @@ class _SessionSummaryPanel extends StatelessWidget {
             _DenominationChip(label: '1.00', count: session.count100),
           ],
         ),
-        const SizedBox(height: 8),
-        PointyMetricTile(
-          icon: Icons.inventory_2_outlined,
-          label: l10n.sessionDenominationTotalMetric,
-          value: formatMoney(session.denominationTotal),
-        ),
       ],
     );
   }

@@ -27,6 +27,7 @@ class PointyOrderPanel extends StatelessWidget {
         color: colors.surface,
         border: Border.all(color: colors.line),
         borderRadius: BorderRadius.circular(PointyRadii.card),
+        boxShadow: PointyShadows.raised,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,

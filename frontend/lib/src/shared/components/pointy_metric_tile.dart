@@ -26,60 +26,69 @@ class PointyMetricTile extends StatelessWidget {
     final colors = context.pointyColors;
     final resolvedAccent = accentColor ?? theme.colorScheme.primary;
 
-    return Card(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(
-          minHeight: PointyDimensions.metricTileMinHeight,
-        ),
-        child: Padding(
-          padding: spacing.compactPadding,
-          child: Row(
-            children: [
-              if (icon != null) ...[
-                Icon(icon, color: resolvedAccent),
-                SizedBox(width: spacing.md),
-              ],
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: colors.mutedInk,
-                      ),
-                    ),
-                    SizedBox(height: spacing.xs),
-                    FittedBox(
-                      fit: BoxFit.scaleDown,
-                      alignment: AlignmentDirectional.centerStart,
-                      child: Text(
-                        value,
-                        maxLines: 1,
-                        style: theme.textTheme.titleLarge?.copyWith(
-                          color: colors.ink,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                    if (subtitle != null) ...[
-                      SizedBox(height: spacing.xs),
+    return DecoratedBox(
+      decoration: const BoxDecoration(
+        borderRadius: BorderRadius.all(Radius.circular(PointyRadii.card)),
+        boxShadow: PointyShadows.raised,
+      ),
+      child: Card(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(
+            minHeight: PointyDimensions.metricTileMinHeight,
+          ),
+          child: Padding(
+            padding: spacing.compactPadding,
+            child: Row(
+              children: [
+                if (icon != null) ...[
+                  Icon(icon, color: resolvedAccent),
+                  SizedBox(width: spacing.md),
+                ],
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
                       Text(
-                        subtitle!,
-                        maxLines: 2,
+                        label,
+                        maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: theme.textTheme.bodySmall?.copyWith(
                           color: colors.mutedInk,
                         ),
                       ),
+                      SizedBox(height: spacing.xs),
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: AlignmentDirectional.centerStart,
+                        child: Text(
+                          value,
+                          maxLines: 1,
+                          style: switch (theme.textTheme.titleLarge?.copyWith(
+                            color: colors.ink,
+                            fontWeight: FontWeight.w700,
+                          )) {
+                            final style? => PointyTypography.numeric(style),
+                            null => null,
+                          },
+                        ),
+                      ),
+                      if (subtitle != null) ...[
+                        SizedBox(height: spacing.xs),
+                        Text(
+                          subtitle!,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: colors.mutedInk,
+                          ),
+                        ),
+                      ],
                     ],
-                  ],
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

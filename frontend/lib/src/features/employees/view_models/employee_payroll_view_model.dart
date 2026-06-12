@@ -56,6 +56,31 @@ class EmployeePayrollViewModel extends ChangeNotifier {
   bool get hasMorePayrollRuns => _hasMorePayrollRuns;
   bool get hasMoreLoans => _hasMoreLoans;
 
+  /// The latest non-void payroll run whose period overlaps the current month.
+  PayrollRun? get currentMonthRun {
+    final now = DateTime.now();
+    final monthStart = DateTime(now.year, now.month);
+    final monthEnd = DateTime(now.year, now.month + 1, 0);
+    for (final run in _payrollRuns) {
+      if (run.status == PayrollStatus.voided) {
+        continue;
+      }
+      final start = run.periodStart;
+      final end = run.periodEnd;
+      if (start == null || end == null) {
+        continue;
+      }
+      if (!end.isBefore(monthStart) && !start.isAfter(monthEnd)) {
+        return run;
+      }
+    }
+    return null;
+  }
+
+  List<EmployeeLoan> get pendingLoans => List.unmodifiable(
+    _loans.where((loan) => loan.status.canReview),
+  );
+
   Future<void> loadEmployees() async {
     _isLoadingEmployees = true;
     _hasEmployeeError = false;
@@ -244,36 +269,33 @@ class EmployeePayrollViewModel extends ChangeNotifier {
     });
   }
 
-  Future<bool> draftMonthlyPayrollRun() async {
-    return _save(() async {
-      final result = await _repository.draftMonthlyPayrollRun();
-      switch (result) {
-        case Ok<PayrollDraftResult>(value: final draft):
-          final run = draft.payrollRun;
-          if (run != null) {
-            final existingIndex = _payrollRuns.indexWhere(
-              (existing) => existing.id == run.id,
-            );
-            if (existingIndex >= 0) {
-              _payrollRuns = [
-                for (final existing in _payrollRuns)
-                  if (existing.id == run.id) run else existing,
-              ];
-            } else {
-              _payrollRuns = [run, ..._payrollRuns];
-            }
-            _track(
-              'employees.management.payroll_run.monthly_drafted',
-              'payroll_run',
-              run.id,
-              {'created': draft.created},
-            );
-          }
-          return run != null;
-        case Error<PayrollDraftResult>():
-          return false;
-      }
-    });
+  Future<PayrollRun?> draftMonthlyPayrollRun() async {
+    _isSaving = true;
+    _hasSaveError = false;
+    notifyListeners();
+
+    PayrollRun? run;
+    final result = await _repository.draftMonthlyPayrollRun();
+    switch (result) {
+      case Ok<PayrollDraftResult>(value: final draft):
+        run = draft.payrollRun;
+        if (run != null) {
+          _upsertPayrollRun(run);
+          _track(
+            'employees.management.payroll_run.monthly_drafted',
+            'payroll_run',
+            run.id,
+            {'created': draft.created},
+          );
+        }
+      case Error<PayrollDraftResult>():
+        run = null;
+    }
+
+    _hasSaveError = run == null;
+    _isSaving = false;
+    notifyListeners();
+    return run;
   }
 
   Future<bool> approvePayrollRun(PayrollRun run) {

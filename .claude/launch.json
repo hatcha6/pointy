@@ -1,0 +1,29 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "backend",
+      "runtimeExecutable": "make",
+      "runtimeArgs": ["backend-run"],
+      "port": 8000
+    },
+    {
+      "name": "frontend-web",
+      "runtimeExecutable": "make",
+      "runtimeArgs": ["frontend-web"],
+      "port": 8080
+    },
+    {
+      "name": "relay",
+      "runtimeExecutable": "make",
+      "runtimeArgs": ["relay-run"],
+      "port": 8091
+    },
+    {
+      "name": "redis",
+      "runtimeExecutable": "make",
+      "runtimeArgs": ["redis"],
+      "port": 6379
+    }
+  ]
+}

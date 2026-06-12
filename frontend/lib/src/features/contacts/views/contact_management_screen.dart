@@ -15,10 +15,12 @@ import '../../../shared/formatters.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../../../shared/shell/shell.dart';
 import '../view_models/contact_management_view_model.dart';
+import '../view_models/customer_details_view_model.dart';
+import '../view_models/supplier_details_view_model.dart';
 import 'customer_details_screen.dart';
 import 'supplier_details_screen.dart';
 
-class ContactManagementScreen extends StatelessWidget {
+class ContactManagementScreen extends StatefulWidget {
   const ContactManagementScreen({
     super.key,
     required this.viewModel,
@@ -65,71 +67,167 @@ class ContactManagementScreen extends StatelessWidget {
   final VoidCallback onLogout;
 
   @override
+  State<ContactManagementScreen> createState() =>
+      _ContactManagementScreenState();
+}
+
+class _ContactManagementScreenState extends State<ContactManagementScreen>
+    with SingleTickerProviderStateMixin {
+  late final TabController _tabController;
+
+  Customer? _selectedCustomer;
+  CustomerDetailsViewModel? _selectedCustomerViewModel;
+  SupplierContact? _selectedSupplier;
+  SupplierDetailsViewModel? _selectedSupplierViewModel;
+
+  ContactManagementViewModel get viewModel => widget.viewModel;
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 2, vsync: this);
+    _tabController.addListener(_handleTabChanged);
+  }
+
+  @override
+  void dispose() {
+    _tabController.removeListener(_handleTabChanged);
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  void _handleTabChanged() {
+    if (_selectedCustomer == null && _selectedSupplier == null) {
+      return;
+    }
+    setState(() {
+      _selectedCustomer = null;
+      _selectedCustomerViewModel = null;
+      _selectedSupplier = null;
+      _selectedSupplierViewModel = null;
+    });
+  }
+
+  void _selectCustomer(Customer customer) {
+    setState(() {
+      _selectedCustomer = customer;
+      _selectedCustomerViewModel = CustomerDetailsViewModel(
+        contactRepository: viewModel.repository,
+        initialCustomer: customer,
+      );
+    });
+  }
+
+  void _selectSupplier(SupplierContact supplier) {
+    setState(() {
+      _selectedSupplier = supplier;
+      _selectedSupplierViewModel = SupplierDetailsViewModel(
+        contactRepository: viewModel.repository,
+        purchaseRepository: widget.purchaseRepository,
+        initialSupplier: supplier,
+      );
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
 
-    return DefaultTabController(
-      length: 2,
-      child: ListenableBuilder(
-        listenable: viewModel,
-        builder: (context, _) {
-          return PointyScaffold(
-            drawer: AppNavigationDrawer(
-              selectedDestination: AppNavigationDestination.contacts,
-              currentUser: currentUser,
-              capabilities: capabilities,
-              onOpenDashboard: onOpenDashboard,
-              onOpenPos: onOpenPos,
-              onOpenInvoices: onOpenInvoices,
-              onOpenPurchasing: onOpenPurchasing,
-              onOpenContacts: () {},
-              onOpenCatalog: onOpenCatalog,
-              onOpenCategories: onOpenCategories,
-              onOpenRegisterSessions: onOpenRegisterSessions,
-              onOpenDeviceSettings: onOpenDeviceSettings,
-              onOpenDiscounts: onOpenDiscounts,
-              onOpenReports: onOpenReports,
-              onOpenActivityLog: onOpenActivityLog,
-              onOpenUsers: onOpenUsers,
-              onOpenShopSettings: onOpenShopSettings,
-              onLogout: onLogout,
-            ),
-            appBar: AppBar(
-              leading: const PointyNavigationMenuButton(),
-              title: Text(l10n.contactsTitle),
-              bottom: TabBar(
-                tabs: [
-                  Tab(text: l10n.customersTab),
-                  Tab(text: l10n.suppliersTab),
-                ],
-              ),
-              actions: [
-                AuthorizationGuard(
-                  capabilities: capabilities,
-                  capability: AppCapability.manageContacts,
-                  fallback: const SizedBox.shrink(),
-                  child: IconButton(
-                    tooltip: l10n.refreshContactsTooltip,
-                    onPressed: viewModel.loadContacts,
-                    icon: const Icon(Icons.sync),
-                  ),
-                ),
+    return ListenableBuilder(
+      listenable: viewModel,
+      builder: (context, _) {
+        return PointyScaffold(
+          drawer: AppNavigationDrawer(
+            selectedDestination: AppNavigationDestination.contacts,
+            currentUser: widget.currentUser,
+            capabilities: widget.capabilities,
+            onOpenDashboard: widget.onOpenDashboard,
+            onOpenPos: widget.onOpenPos,
+            onOpenInvoices: widget.onOpenInvoices,
+            onOpenPurchasing: widget.onOpenPurchasing,
+            onOpenContacts: () {},
+            onOpenCatalog: widget.onOpenCatalog,
+            onOpenCategories: widget.onOpenCategories,
+            onOpenRegisterSessions: widget.onOpenRegisterSessions,
+            onOpenDeviceSettings: widget.onOpenDeviceSettings,
+            onOpenDiscounts: widget.onOpenDiscounts,
+            onOpenReports: widget.onOpenReports,
+            onOpenActivityLog: widget.onOpenActivityLog,
+            onOpenUsers: widget.onOpenUsers,
+            onOpenShopSettings: widget.onOpenShopSettings,
+            onLogout: widget.onLogout,
+          ),
+          appBar: AppBar(
+            leading: const PointyNavigationMenuButton(),
+            title: Text(l10n.contactsTitle),
+            bottom: TabBar(
+              controller: _tabController,
+              tabs: [
+                Tab(text: l10n.customersTab),
+                Tab(text: l10n.suppliersTab),
               ],
             ),
-            body: AuthorizationGuard(
-              capabilities: capabilities,
-              capability: AppCapability.manageContacts,
-              child: _ContactManagementBody(
-                viewModel: viewModel,
-                purchaseRepository: purchaseRepository,
-                printingRepository: printingRepository,
-                shopSettingsRepository: shopSettingsRepository,
-                capabilities: capabilities,
+            actions: [
+              AuthorizationGuard(
+                capabilities: widget.capabilities,
+                capability: AppCapability.manageContacts,
+                fallback: const SizedBox.shrink(),
+                child: IconButton(
+                  tooltip: l10n.refreshContactsTooltip,
+                  onPressed: viewModel.loadContacts,
+                  icon: const Icon(Icons.sync),
+                ),
               ),
+            ],
+          ),
+          body: AuthorizationGuard(
+            capabilities: widget.capabilities,
+            capability: AppCapability.manageContacts,
+            child: _ContactManagementBody(
+              viewModel: viewModel,
+              tabController: _tabController,
+              customerDetailPane: _buildCustomerDetailPane(),
+              supplierDetailPane: _buildSupplierDetailPane(),
+              onSelectCustomer: _selectCustomer,
+              onSelectSupplier: _selectSupplier,
+              selectedCustomerId: _selectedCustomer?.id,
+              selectedSupplierId: _selectedSupplier?.id,
+              purchaseRepository: widget.purchaseRepository,
+              printingRepository: widget.printingRepository,
+              shopSettingsRepository: widget.shopSettingsRepository,
+              capabilities: widget.capabilities,
             ),
-          );
-        },
-      ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget? _buildCustomerDetailPane() {
+    final customer = _selectedCustomer;
+    final customerViewModel = _selectedCustomerViewModel;
+    if (customer == null || customerViewModel == null) {
+      return null;
+    }
+    return CustomerDetailsView(
+      key: ValueKey('contact_detail_customer_${customer.id}'),
+      viewModel: customerViewModel,
+    );
+  }
+
+  Widget? _buildSupplierDetailPane() {
+    final supplier = _selectedSupplier;
+    final supplierViewModel = _selectedSupplierViewModel;
+    if (supplier == null || supplierViewModel == null) {
+      return null;
+    }
+    return SupplierDetailsView(
+      key: ValueKey('contact_detail_supplier_${supplier.id}'),
+      viewModel: supplierViewModel,
+      purchaseRepository: widget.purchaseRepository,
+      printingRepository: widget.printingRepository,
+      shopSettingsRepository: widget.shopSettingsRepository,
+      capabilities: widget.capabilities,
     );
   }
 }
@@ -137,6 +235,13 @@ class ContactManagementScreen extends StatelessWidget {
 class _ContactManagementBody extends StatelessWidget {
   const _ContactManagementBody({
     required this.viewModel,
+    required this.tabController,
+    required this.customerDetailPane,
+    required this.supplierDetailPane,
+    required this.onSelectCustomer,
+    required this.onSelectSupplier,
+    required this.selectedCustomerId,
+    required this.selectedSupplierId,
     required this.purchaseRepository,
     required this.printingRepository,
     required this.shopSettingsRepository,
@@ -144,6 +249,13 @@ class _ContactManagementBody extends StatelessWidget {
   });
 
   final ContactManagementViewModel viewModel;
+  final TabController tabController;
+  final Widget? customerDetailPane;
+  final Widget? supplierDetailPane;
+  final ValueChanged<Customer> onSelectCustomer;
+  final ValueChanged<SupplierContact> onSelectSupplier;
+  final int? selectedCustomerId;
+  final int? selectedSupplierId;
   final PurchaseRepository purchaseRepository;
   final PrintingRepository printingRepository;
   final ShopSettingsRepository shopSettingsRepository;
@@ -154,11 +266,19 @@ class _ContactManagementBody extends StatelessWidget {
     final l10n = AppLocalizations.of(context)!;
     final spacing = AdaptiveSpacing.of(context);
 
+    final placeholder = PointyEmptyState(
+      icon: Icons.people_outline,
+      title: l10n.contactsSelectContactPlaceholder,
+    );
+
     return Column(
       children: [
         Padding(
           padding: spacing.pagePadding.copyWith(bottom: spacing.sm),
-          child: _ContactActionBar(viewModel: viewModel),
+          child: _ContactActionBar(
+            viewModel: viewModel,
+            tabController: tabController,
+          ),
         ),
         if (viewModel.hasError)
           Padding(
@@ -172,14 +292,39 @@ class _ContactManagementBody extends StatelessWidget {
           child: viewModel.isLoading
               ? const Center(child: CircularProgressIndicator())
               : TabBarView(
+                  controller: tabController,
                   children: [
-                    _CustomerList(viewModel: viewModel),
-                    _SupplierList(
-                      viewModel: viewModel,
-                      purchaseRepository: purchaseRepository,
-                      printingRepository: printingRepository,
-                      shopSettingsRepository: shopSettingsRepository,
-                      capabilities: capabilities,
+                    MasterDetailLayout(
+                      listPaneBuilder: (paneContext, isDualPane) =>
+                          _CustomerList(
+                            viewModel: viewModel,
+                            onSelectCustomer: isDualPane
+                                ? onSelectCustomer
+                                : null,
+                            selectedCustomerId: isDualPane
+                                ? selectedCustomerId
+                                : null,
+                          ),
+                      placeholder: placeholder,
+                      detailPane: customerDetailPane,
+                    ),
+                    MasterDetailLayout(
+                      listPaneBuilder: (paneContext, isDualPane) =>
+                          _SupplierList(
+                            viewModel: viewModel,
+                            purchaseRepository: purchaseRepository,
+                            printingRepository: printingRepository,
+                            shopSettingsRepository: shopSettingsRepository,
+                            capabilities: capabilities,
+                            onSelectSupplier: isDualPane
+                                ? onSelectSupplier
+                                : null,
+                            selectedSupplierId: isDualPane
+                                ? selectedSupplierId
+                                : null,
+                          ),
+                      placeholder: placeholder,
+                      detailPane: supplierDetailPane,
                     ),
                   ],
                 ),
@@ -190,20 +335,23 @@ class _ContactManagementBody extends StatelessWidget {
 }
 
 class _ContactActionBar extends StatelessWidget {
-  const _ContactActionBar({required this.viewModel});
+  const _ContactActionBar({
+    required this.viewModel,
+    required this.tabController,
+  });
 
   final ContactManagementViewModel viewModel;
+  final TabController tabController;
 
   @override
   Widget build(BuildContext context) {
-    final controller = DefaultTabController.of(context);
     final l10n = AppLocalizations.of(context)!;
     final spacing = AdaptiveSpacing.of(context);
 
     return AnimatedBuilder(
-      animation: controller,
+      animation: tabController,
       builder: (context, _) {
-        final isCustomersTab = controller.index == 0;
+        final isCustomersTab = tabController.index == 0;
         return LayoutBuilder(
           builder: (context, constraints) {
             final isWide = constraints.maxWidth >= AppBreakpoints.tabletMin;
@@ -267,9 +415,15 @@ class _ContactActionBar extends StatelessWidget {
 }
 
 class _CustomerList extends StatelessWidget {
-  const _CustomerList({required this.viewModel});
+  const _CustomerList({
+    required this.viewModel,
+    this.onSelectCustomer,
+    this.selectedCustomerId,
+  });
 
   final ContactManagementViewModel viewModel;
+  final ValueChanged<Customer>? onSelectCustomer;
+  final int? selectedCustomerId;
 
   @override
   Widget build(BuildContext context) {
@@ -307,16 +461,26 @@ class _CustomerList extends StatelessWidget {
             if (!customer.isActive) l10n.inactiveContactLabel,
           ].join(' • '),
           trailing: const Icon(Icons.chevron_left),
-          onTap: () => Navigator.of(context).push(
-            MaterialPageRoute<void>(
-              builder: (_) => CustomerDetailsScreen(
-                customer: customer,
-                contactRepository: viewModel.repository,
-              ),
-            ),
-          ),
+          selected: customer.id == selectedCustomerId,
+          onTap: () => _openCustomer(context, customer),
         );
       },
+    );
+  }
+
+  void _openCustomer(BuildContext context, Customer customer) {
+    final onSelect = onSelectCustomer;
+    if (onSelect != null) {
+      onSelect(customer);
+      return;
+    }
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => CustomerDetailsScreen(
+          customer: customer,
+          contactRepository: viewModel.repository,
+        ),
+      ),
     );
   }
 }
@@ -328,6 +492,8 @@ class _SupplierList extends StatelessWidget {
     required this.printingRepository,
     required this.shopSettingsRepository,
     required this.capabilities,
+    this.onSelectSupplier,
+    this.selectedSupplierId,
   });
 
   final ContactManagementViewModel viewModel;
@@ -335,6 +501,8 @@ class _SupplierList extends StatelessWidget {
   final PrintingRepository printingRepository;
   final ShopSettingsRepository shopSettingsRepository;
   final AuthorizationCapabilities capabilities;
+  final ValueChanged<SupplierContact>? onSelectSupplier;
+  final int? selectedSupplierId;
 
   @override
   Widget build(BuildContext context) {
@@ -375,20 +543,30 @@ class _SupplierList extends StatelessWidget {
             if (!supplier.isActive) l10n.inactiveContactLabel,
           ].join(' • '),
           trailing: const Icon(Icons.chevron_left),
-          onTap: () => Navigator.of(context).push(
-            MaterialPageRoute<void>(
-              builder: (_) => SupplierDetailsScreen(
-                supplier: supplier,
-                contactRepository: viewModel.repository,
-                purchaseRepository: purchaseRepository,
-                printingRepository: printingRepository,
-                shopSettingsRepository: shopSettingsRepository,
-                capabilities: capabilities,
-              ),
-            ),
-          ),
+          selected: supplier.id == selectedSupplierId,
+          onTap: () => _openSupplier(context, supplier),
         );
       },
+    );
+  }
+
+  void _openSupplier(BuildContext context, SupplierContact supplier) {
+    final onSelect = onSelectSupplier;
+    if (onSelect != null) {
+      onSelect(supplier);
+      return;
+    }
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => SupplierDetailsScreen(
+          supplier: supplier,
+          contactRepository: viewModel.repository,
+          purchaseRepository: purchaseRepository,
+          printingRepository: printingRepository,
+          shopSettingsRepository: shopSettingsRepository,
+          capabilities: capabilities,
+        ),
+      ),
     );
   }
 }

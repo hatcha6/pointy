@@ -11,13 +11,14 @@ import '../../../shared/authorization_guards.dart';
 import '../../../shared/components/components.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../../../shared/shell/shell.dart';
+import '../view_models/discount_details_view_model.dart';
 import '../view_models/discount_management_view_model.dart';
 import 'discount_details_screen.dart';
 import 'discount_rule_query_controls.dart';
 import 'discount_rule_form.dart';
 import 'discount_rule_presenter.dart';
 
-class DiscountManagementScreen extends StatelessWidget {
+class DiscountManagementScreen extends StatefulWidget {
   const DiscountManagementScreen({
     super.key,
     required this.viewModel,
@@ -62,6 +63,30 @@ class DiscountManagementScreen extends StatelessWidget {
   final VoidCallback onLogout;
 
   @override
+  State<DiscountManagementScreen> createState() =>
+      _DiscountManagementScreenState();
+}
+
+class _DiscountManagementScreenState extends State<DiscountManagementScreen> {
+  DiscountManagementViewModel get viewModel => widget.viewModel;
+  CatalogRepository get catalogRepository => widget.catalogRepository;
+  ContactRepository get contactRepository => widget.contactRepository;
+  AuthorizationCapabilities get capabilities => widget.capabilities;
+
+  DiscountRule? _selectedRule;
+  DiscountDetailsViewModel? _selectedRuleViewModel;
+
+  void _selectRule(DiscountRule rule) {
+    setState(() {
+      _selectedRule = rule;
+      _selectedRuleViewModel = DiscountDetailsViewModel(
+        discountRepository: viewModel.discountRepository,
+        initialRule: rule,
+      );
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
 
@@ -71,23 +96,23 @@ class DiscountManagementScreen extends StatelessWidget {
         return PointyScaffold(
           drawer: AppNavigationDrawer(
             selectedDestination: AppNavigationDestination.discounts,
-            currentUser: currentUser,
+            currentUser: widget.currentUser,
             capabilities: capabilities,
-            onOpenDashboard: onOpenDashboard,
-            onOpenPos: onOpenPos,
-            onOpenInvoices: onOpenInvoices,
-            onOpenPurchasing: onOpenPurchasing,
-            onOpenContacts: onOpenContacts,
-            onOpenCatalog: onOpenCatalog,
-            onOpenCategories: onOpenCategories,
-            onOpenRegisterSessions: onOpenRegisterSessions,
-            onOpenDeviceSettings: onOpenDeviceSettings,
+            onOpenDashboard: widget.onOpenDashboard,
+            onOpenPos: widget.onOpenPos,
+            onOpenInvoices: widget.onOpenInvoices,
+            onOpenPurchasing: widget.onOpenPurchasing,
+            onOpenContacts: widget.onOpenContacts,
+            onOpenCatalog: widget.onOpenCatalog,
+            onOpenCategories: widget.onOpenCategories,
+            onOpenRegisterSessions: widget.onOpenRegisterSessions,
+            onOpenDeviceSettings: widget.onOpenDeviceSettings,
             onOpenDiscounts: () {},
-            onOpenReports: onOpenReports,
-            onOpenActivityLog: onOpenActivityLog,
-            onOpenUsers: onOpenUsers,
-            onOpenShopSettings: onOpenShopSettings,
-            onLogout: onLogout,
+            onOpenReports: widget.onOpenReports,
+            onOpenActivityLog: widget.onOpenActivityLog,
+            onOpenUsers: widget.onOpenUsers,
+            onOpenShopSettings: widget.onOpenShopSettings,
+            onLogout: widget.onLogout,
           ),
           appBar: AppBar(
             leading: const PointyNavigationMenuButton(),
@@ -108,14 +133,29 @@ class DiscountManagementScreen extends StatelessWidget {
           body: AuthorizationGuard(
             capabilities: capabilities,
             capability: AppCapability.viewDiscountRules,
-            child: _DiscountManagementBody(
-              viewModel: viewModel,
-              catalogRepository: catalogRepository,
-              contactRepository: contactRepository,
-              capabilities: capabilities,
-              onCreateRule: viewModel.isSaving
+            child: MasterDetailLayout(
+              listPaneBuilder: (paneContext, isDualPane) =>
+                  _DiscountManagementBody(
+                    viewModel: viewModel,
+                    capabilities: capabilities,
+                    onCreateRule: viewModel.isSaving
+                        ? null
+                        : () => _showRuleForm(context),
+                    onEditRule: (rule) => _showRuleForm(context, rule: rule),
+                    onOpenDetails: isDualPane
+                        ? _selectRule
+                        : (rule) => _pushDetails(context, rule),
+                  ),
+              placeholder: PointyEmptyState(
+                icon: Icons.local_offer_outlined,
+                title: l10n.discountsSelectDiscountPlaceholder,
+              ),
+              detailPane: _selectedRule == null
                   ? null
-                  : () => _showRuleForm(context),
+                  : DiscountDetailsView(
+                      key: ValueKey('discount_detail_${_selectedRule!.id}'),
+                      viewModel: _selectedRuleViewModel!,
+                    ),
             ),
           ),
         );
@@ -123,8 +163,8 @@ class DiscountManagementScreen extends StatelessWidget {
     );
   }
 
-  Future<void> _showRuleForm(BuildContext context, {DiscountRule? rule}) {
-    return showAdaptiveModalBottomSheet<void>(
+  Future<void> _showRuleForm(BuildContext context, {DiscountRule? rule}) async {
+    await showAdaptiveFormSurface<void>(
       context: context,
       size: AdaptiveModalSize.expanded,
       maxHeightFactor: 0.94,
@@ -143,23 +183,41 @@ class DiscountManagementScreen extends StatelessWidget {
         );
       },
     );
+    if (rule != null && rule.id == _selectedRule?.id) {
+      await _selectedRuleViewModel?.load();
+    }
+  }
+
+  Future<void> _pushDetails(BuildContext context, DiscountRule rule) {
+    return Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => DiscountDetailsScreen(
+          initialRule: rule,
+          discountRepository: viewModel.discountRepository,
+          managementViewModel: viewModel,
+          catalogRepository: catalogRepository,
+          contactRepository: contactRepository,
+          capabilities: capabilities,
+        ),
+      ),
+    );
   }
 }
 
 class _DiscountManagementBody extends StatelessWidget {
   const _DiscountManagementBody({
     required this.viewModel,
-    required this.catalogRepository,
-    required this.contactRepository,
     required this.capabilities,
     required this.onCreateRule,
+    required this.onEditRule,
+    required this.onOpenDetails,
   });
 
   final DiscountManagementViewModel viewModel;
-  final CatalogRepository catalogRepository;
-  final ContactRepository contactRepository;
   final AuthorizationCapabilities capabilities;
   final VoidCallback? onCreateRule;
+  final ValueChanged<DiscountRule> onEditRule;
+  final ValueChanged<DiscountRule> onOpenDetails;
 
   @override
   Widget build(BuildContext context) {
@@ -219,50 +277,13 @@ class _DiscountManagementBody extends StatelessWidget {
                   rule: rule,
                   viewModel: viewModel,
                   capabilities: capabilities,
-                  onEdit: () => _openForm(context, rule),
-                  onOpenDetails: () => _openDetails(context, rule),
+                  onEdit: () => onEditRule(rule),
+                  onOpenDetails: () => onOpenDetails(rule),
                 );
               },
             ),
           ),
         ],
-      ),
-    );
-  }
-
-  Future<void> _openForm(BuildContext context, DiscountRule rule) {
-    return showAdaptiveModalBottomSheet<void>(
-      context: context,
-      size: AdaptiveModalSize.expanded,
-      maxHeightFactor: 0.94,
-      builder: (sheetContext) {
-        return Padding(
-          padding: EdgeInsets.only(
-            bottom: MediaQuery.viewInsetsOf(sheetContext).bottom,
-          ),
-          child: DiscountRuleForm(
-            viewModel: viewModel,
-            catalogRepository: catalogRepository,
-            contactRepository: contactRepository,
-            rule: rule,
-            onSaved: () => Navigator.of(sheetContext).pop(),
-          ),
-        );
-      },
-    );
-  }
-
-  Future<void> _openDetails(BuildContext context, DiscountRule rule) {
-    return Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => DiscountDetailsScreen(
-          initialRule: rule,
-          discountRepository: viewModel.discountRepository,
-          managementViewModel: viewModel,
-          catalogRepository: catalogRepository,
-          contactRepository: contactRepository,
-          capabilities: capabilities,
-        ),
       ),
     );
   }

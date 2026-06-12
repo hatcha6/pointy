@@ -2186,6 +2186,48 @@ abstract class AppLocalizations {
   /// **'أوامر الشراء والاستلام والمستحقات.'**
   String get reportPurchasesSubtitle;
 
+  /// No description provided for @reportCategoryEmployees.
+  ///
+  /// In ar, this message translates to:
+  /// **'الموظفون'**
+  String get reportCategoryEmployees;
+
+  /// No description provided for @reportReorderItemsTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'أصناف تحتاج إعادة طلب'**
+  String get reportReorderItemsTitle;
+
+  /// No description provided for @reportReorderItemsSubtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'المنتجات التي بلغت حد إعادة الطلب مع الكميات المقترحة للشراء.'**
+  String get reportReorderItemsSubtitle;
+
+  /// No description provided for @reportPayrollSummaryTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'الرواتب والأجور'**
+  String get reportPayrollSummaryTitle;
+
+  /// No description provided for @reportPayrollSummarySubtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'مسيرات الرواتب وتكلفة الموظفين خلال الفترة.'**
+  String get reportPayrollSummarySubtitle;
+
+  /// No description provided for @reportProfitCostsTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'الأرباح والتكاليف'**
+  String get reportProfitCostsTitle;
+
+  /// No description provided for @reportProfitCostsSubtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'الربح الإجمالي مقابل الرواتب والعمولات وإنفاق المشتريات.'**
+  String get reportProfitCostsSubtitle;
+
   /// No description provided for @reportContactsTitle.
   ///
   /// In ar, this message translates to:
@@ -5127,6 +5169,54 @@ abstract class AppLocalizations {
   /// **'جدول ترميز الطابعة'**
   String get printerCodeTableLabel;
 
+  /// No description provided for @printerCapabilityProfileLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'ملف تعريف الطابعة'**
+  String get printerCapabilityProfileLabel;
+
+  /// No description provided for @printerCapabilityProfileHelper.
+  ///
+  /// In ar, this message translates to:
+  /// **'اتركه default إن لم تكن متأكدًا. اختر ملف الشركة المصنعة للطابعات غير المتوافقة.'**
+  String get printerCapabilityProfileHelper;
+
+  /// No description provided for @printerCutModeLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'وضع قص الورق'**
+  String get printerCutModeLabel;
+
+  /// No description provided for @printerCutModePartial.
+  ///
+  /// In ar, this message translates to:
+  /// **'قص جزئي'**
+  String get printerCutModePartial;
+
+  /// No description provided for @printerCutModeFull.
+  ///
+  /// In ar, this message translates to:
+  /// **'قص كامل'**
+  String get printerCutModeFull;
+
+  /// No description provided for @printerCutModeNone.
+  ///
+  /// In ar, this message translates to:
+  /// **'بدون قص (تغذية فقط)'**
+  String get printerCutModeNone;
+
+  /// No description provided for @printerFeedLinesLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'أسطر التغذية قبل القص'**
+  String get printerFeedLinesLabel;
+
+  /// No description provided for @printerFeedLinesHelper.
+  ///
+  /// In ar, this message translates to:
+  /// **'زدها إذا كان آخر الإيصال يُقطع قبل اكتمال الطباعة.'**
+  String get printerFeedLinesHelper;
+
   /// No description provided for @barcodeLabelPrinterSettingsTitle.
   ///
   /// In ar, this message translates to:
@@ -6254,6 +6344,42 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'تفاصيل المنتج'**
   String get productDetailsTitle;
+
+  /// Placeholder shown in the catalog detail pane before a product is selected.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر منتجًا من القائمة لعرض تفاصيله.'**
+  String get catalogSelectProductPlaceholder;
+
+  /// Placeholder shown in the invoices detail pane before an invoice is selected.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر فاتورة من القائمة لعرض تفاصيلها.'**
+  String get invoicesSelectInvoicePlaceholder;
+
+  /// Placeholder shown in the contacts detail pane before a contact is selected.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر جهة من القائمة لعرض تفاصيلها.'**
+  String get contactsSelectContactPlaceholder;
+
+  /// Placeholder shown in the discounts detail pane before a discount rule is selected.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر قاعدة خصم من القائمة لعرض تفاصيلها.'**
+  String get discountsSelectDiscountPlaceholder;
+
+  /// Inline confirmation in the reports output panel showing the last successfully generated report.
+  ///
+  /// In ar, this message translates to:
+  /// **'آخر إجراء ناجح: {action} — {report}'**
+  String reportLastCompletedMessage(String action, String report);
+
+  /// Button that re-runs the last successful report action.
+  ///
+  /// In ar, this message translates to:
+  /// **'تشغيل مجددًا'**
+  String get reportRunAgainButton;
 
   /// No description provided for @variantDetailsTitle.
   ///
@@ -9496,8 +9622,14 @@ abstract class AppLocalizations {
   /// No description provided for @closingCashInputLabel.
   ///
   /// In ar, this message translates to:
-  /// **'النقد عند الإغلاق'**
+  /// **'النقد عند الإغلاق (بدون الفئات)'**
   String get closingCashInputLabel;
+
+  /// No description provided for @closingCashTotalLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'إجمالي النقد عند الإغلاق'**
+  String get closingCashTotalLabel;
 
   /// Label for a denomination count input.
   ///
@@ -9660,12 +9792,6 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'النقد المعدود'**
   String get sessionClosingCashMetric;
-
-  /// No description provided for @sessionDenominationTotalMetric.
-  ///
-  /// In ar, this message translates to:
-  /// **'إجمالي الفئات'**
-  String get sessionDenominationTotalMetric;
 
   /// No description provided for @sessionCashVarianceMetric.
   ///
@@ -11657,6 +11783,198 @@ abstract class AppLocalizations {
   /// **'سجلات الموظفين وخطط الأجر ومسيرات الرواتب'**
   String get employeePayrollOverviewSubtitle;
 
+  /// No description provided for @payrollHomeTabLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الرواتب'**
+  String get payrollHomeTabLabel;
+
+  /// Monthly payroll workflow card title.
+  ///
+  /// In ar, this message translates to:
+  /// **'رواتب {month}'**
+  String payrollMonthCardTitle(String month);
+
+  /// No description provided for @payrollMonthStepPrepare.
+  ///
+  /// In ar, this message translates to:
+  /// **'تجهيز'**
+  String get payrollMonthStepPrepare;
+
+  /// No description provided for @payrollMonthStepApprove.
+  ///
+  /// In ar, this message translates to:
+  /// **'اعتماد'**
+  String get payrollMonthStepApprove;
+
+  /// No description provided for @payrollMonthStepPay.
+  ///
+  /// In ar, this message translates to:
+  /// **'دفع'**
+  String get payrollMonthStepPay;
+
+  /// No description provided for @payrollMonthNoRunMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم يتم تجهيز مسير رواتب هذا الشهر بعد.'**
+  String get payrollMonthNoRunMessage;
+
+  /// No description provided for @payrollMonthDraftMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'المسير جاهز للمراجعة والاعتماد.'**
+  String get payrollMonthDraftMessage;
+
+  /// No description provided for @payrollMonthApprovedMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'المسير معتمد وبانتظار تسجيل الدفع.'**
+  String get payrollMonthApprovedMessage;
+
+  /// No description provided for @payrollMonthPaidMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم دفع رواتب هذا الشهر.'**
+  String get payrollMonthPaidMessage;
+
+  /// No description provided for @payrollMonthOnboardingMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'أضف موظفيك وحدد خطط رواتبهم لبدء تجهيز مسيرات الرواتب.'**
+  String get payrollMonthOnboardingMessage;
+
+  /// No description provided for @preparePayrollMonthButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'تجهيز رواتب الشهر'**
+  String get preparePayrollMonthButton;
+
+  /// No description provided for @reviewAndApprovePayrollButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'مراجعة واعتماد'**
+  String get reviewAndApprovePayrollButton;
+
+  /// No description provided for @recordPayrollPaymentButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'تسجيل الدفع'**
+  String get recordPayrollPaymentButton;
+
+  /// No description provided for @viewPayrollRunButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'عرض المسير'**
+  String get viewPayrollRunButton;
+
+  /// No description provided for @customPayrollRunButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'مسير مخصص'**
+  String get customPayrollRunButton;
+
+  /// No description provided for @payrollHistoryTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'سجل المسيرات'**
+  String get payrollHistoryTitle;
+
+  /// No description provided for @pendingLoanRequestsTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'طلبات سلف بانتظار قرارك'**
+  String get pendingLoanRequestsTitle;
+
+  /// No description provided for @employeeLoanApproveButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'موافقة'**
+  String get employeeLoanApproveButton;
+
+  /// No description provided for @employeeLoanRejectButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'رفض'**
+  String get employeeLoanRejectButton;
+
+  /// No description provided for @showAllLoansButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'عرض كل السلف'**
+  String get showAllLoansButton;
+
+  /// No description provided for @approvePayrollConfirmTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'اعتماد مسير الرواتب؟'**
+  String get approvePayrollConfirmTitle;
+
+  /// Approve payroll run confirmation body.
+  ///
+  /// In ar, this message translates to:
+  /// **'سيتم اعتماد رواتب {employees} بإجمالي صافي {amount}. لا يمكن تعديل البنود بعد الاعتماد.'**
+  String approvePayrollConfirmMessage(String employees, String amount);
+
+  /// No description provided for @approvePayrollConfirmButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'اعتماد'**
+  String get approvePayrollConfirmButton;
+
+  /// No description provided for @markPayrollPaidConfirmTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'تسجيل دفع الرواتب؟'**
+  String get markPayrollPaidConfirmTitle;
+
+  /// Mark payroll paid confirmation body.
+  ///
+  /// In ar, this message translates to:
+  /// **'سيتم تسجيل المسير كمدفوع بإجمالي {amount}، وستُخصم أقساط السلف المرتبطة تلقائيًا.'**
+  String markPayrollPaidConfirmMessage(String amount);
+
+  /// No description provided for @markPayrollPaidConfirmButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'تسجيل الدفع'**
+  String get markPayrollPaidConfirmButton;
+
+  /// Payroll line additions chip.
+  ///
+  /// In ar, this message translates to:
+  /// **'إضافات {amount}'**
+  String payrollAdditionsChipLabel(String amount);
+
+  /// Payroll line deductions chip.
+  ///
+  /// In ar, this message translates to:
+  /// **'خصومات {amount}'**
+  String payrollDeductionsChipLabel(String amount);
+
+  /// Payroll line absence chip.
+  ///
+  /// In ar, this message translates to:
+  /// **'غياب {days} يوم'**
+  String payrollAbsenceChipLabel(String days);
+
+  /// No description provided for @payrollLineTapToAdjustHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'اضغط على موظف لتعديل غيابه وإضافاته وخصوماته.'**
+  String get payrollLineTapToAdjustHint;
+
+  /// No description provided for @employeeNoPlanWarning.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد خطة راتب'**
+  String get employeeNoPlanWarning;
+
+  /// No description provided for @employeeCompensationButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'خطة الراتب'**
+  String get employeeCompensationButton;
+
   /// No description provided for @addEmployeeButton.
   ///
   /// In ar, this message translates to:
@@ -12953,6 +13271,96 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'صافي الربح التشغيلي'**
   String get dashboardNetOperatingProfitMetric;
+
+  /// No description provided for @dashboardVsPreviousPeriodLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'مقارنة بالفترة السابقة'**
+  String get dashboardVsPreviousPeriodLabel;
+
+  /// No description provided for @dashboardActionCenterTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'يحتاج انتباهك'**
+  String get dashboardActionCenterTitle;
+
+  /// No description provided for @dashboardAllClearMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'كل شيء تحت السيطرة — لا يوجد ما يتطلب تدخلك الآن.'**
+  String get dashboardAllClearMessage;
+
+  /// No description provided for @dashboardAlertOutOfStock.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, =1{منتج واحد نفد من المخزون} =2{منتجان نفدا من المخزون} other{{count} منتجات نفدت من المخزون}}'**
+  String dashboardAlertOutOfStock(int count);
+
+  /// No description provided for @dashboardAlertLowStock.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, =1{منتج واحد تحت حد إعادة الطلب} =2{منتجان تحت حد إعادة الطلب} other{{count} منتجات تحت حد إعادة الطلب}}'**
+  String dashboardAlertLowStock(int count);
+
+  /// No description provided for @dashboardAlertOverduePurchases.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, =1{أمر شراء واحد متأخر السداد} =2{أمرا شراء متأخران عن السداد} other{{count} أوامر شراء متأخرة السداد}}'**
+  String dashboardAlertOverduePurchases(int count);
+
+  /// No description provided for @dashboardAlertRegisterVariance.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, =1{جلسة درج واحدة بفرق نقدي} =2{جلستا درج بفرق نقدي} other{{count} جلسات درج بفروق نقدية}}'**
+  String dashboardAlertRegisterVariance(int count);
+
+  /// No description provided for @dashboardAlertDraftPayroll.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, =1{مسير رواتب بانتظار الاعتماد} =2{مسيرا رواتب بانتظار الاعتماد} other{{count} مسيرات رواتب بانتظار الاعتماد}}'**
+  String dashboardAlertDraftPayroll(int count);
+
+  /// No description provided for @dashboardAlertPendingPayroll.
+  ///
+  /// In ar, this message translates to:
+  /// **'رواتب معتمدة بانتظار تسجيل الدفع'**
+  String get dashboardAlertPendingPayroll;
+
+  /// No description provided for @dashboardAlertPendingLoans.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, =1{طلب سلفة واحد بانتظار قرارك} =2{طلبا سلفة بانتظار قرارك} other{{count} طلبات سلف بانتظار قرارك}}'**
+  String dashboardAlertPendingLoans(int count);
+
+  /// No description provided for @dashboardAlertExpiringDiscounts.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, =1{عرض خصم واحد ينتهي قريبًا} =2{عرضا خصم ينتهيان قريبًا} other{{count} عروض خصم تنتهي قريبًا}}'**
+  String dashboardAlertExpiringDiscounts(int count);
+
+  /// No description provided for @dashboardAlertPrintFailures.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, =1{مهمة طباعة واحدة فشلت} =2{مهمتا طباعة فشلتا} other{{count} مهام طباعة فشلت}}'**
+  String dashboardAlertPrintFailures(int count);
+
+  /// No description provided for @dashboardBestSellersTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'الأفضل أداءً'**
+  String get dashboardBestSellersTitle;
+
+  /// No description provided for @dashboardOperationsTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'التشغيل اليومي'**
+  String get dashboardOperationsTitle;
+
+  /// No description provided for @dashboardApprovedAwaitingPaymentNote.
+  ///
+  /// In ar, this message translates to:
+  /// **'منها {amount} رواتب معتمدة لم تُدفع بعد'**
+  String dashboardApprovedAwaitingPaymentNote(Object amount);
 }
 
 class _AppLocalizationsDelegate

@@ -133,7 +133,7 @@ class _HistoryWorkspace extends StatelessWidget {
         final width = constraints.hasBoundedWidth
             ? constraints.maxWidth
             : MediaQuery.sizeOf(context).width;
-        final isCompact = width < 900;
+        final isCompact = width < AppBreakpoints.masterDetailMin;
         final sessions = RegisterSessionList(
           viewModel: viewModel,
           capabilities: capabilities,
@@ -155,7 +155,7 @@ class _HistoryWorkspace extends StatelessWidget {
         );
 
         return TwoPaneLayout(
-          dualPaneBreakpoint: 900,
+          dualPaneBreakpoint: AppBreakpoints.masterDetailMin,
           primaryPane: orders,
           secondaryPane: sessions,
           secondaryFirst: true,

@@ -1894,7 +1894,8 @@ func TestHTTPPublicInvoiceRendersHTMLFromBackend(t *testing.T) {
 	}
 	body := string(content)
 	for _, expected := range []string{
-		"Save as PDF",
+		"حفظ كملف PDF",
+		"صُنع بحب",
 		"R20260609000001",
 		"متجر نقطة البيع",
 		"Coffee",

@@ -17,11 +17,14 @@ import '../../../shared/barcode/camera_barcode_scanner_sheet.dart';
 import '../../../shared/barcode/barcode_scan_listener.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../../../shared/shell/shell.dart';
+import '../../../shared/components/components.dart';
 import '../view_models/catalog_view_model.dart';
+import '../view_models/product_details_view_model.dart';
+import 'product_details_screen.dart';
 import 'product_form.dart';
 import 'product_list.dart';
 
-class CatalogScreen extends StatelessWidget {
+class CatalogScreen extends StatefulWidget {
   const CatalogScreen({
     super.key,
     required this.viewModel,
@@ -74,6 +77,39 @@ class CatalogScreen extends StatelessWidget {
   final VoidCallback onLogout;
 
   @override
+  State<CatalogScreen> createState() => _CatalogScreenState();
+}
+
+class _CatalogScreenState extends State<CatalogScreen> {
+  CatalogViewModel get viewModel => widget.viewModel;
+  InventoryRepository get inventoryRepository => widget.inventoryRepository;
+  PrintingRepository get printingRepository => widget.printingRepository;
+  PurchaseRepository get purchaseRepository => widget.purchaseRepository;
+  SaleRepository get saleRepository => widget.saleRepository;
+  ShopSettingsRepository get shopSettingsRepository =>
+      widget.shopSettingsRepository;
+  AuthorizationCapabilities get capabilities => widget.capabilities;
+  AnalyticsEngine? get analyticsEngine => widget.analyticsEngine;
+
+  Product? _selectedProduct;
+  ProductDetailsViewModel? _selectedProductViewModel;
+
+  void _selectProduct(Product product) {
+    setState(() {
+      _selectedProduct = product;
+      _selectedProductViewModel = ProductDetailsViewModel(
+        viewModel.catalogRepository,
+        purchaseRepository,
+        saleRepository,
+        product,
+        analyticsEngine: analyticsEngine,
+        shouldLoadSaleHistory: capabilities.canViewRegisterSessionOrders,
+        shouldLoadPurchaseHistory: capabilities.canAccessPurchasing,
+      );
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
 
@@ -83,23 +119,23 @@ class CatalogScreen extends StatelessWidget {
         return PointyScaffold(
           drawer: AppNavigationDrawer(
             selectedDestination: AppNavigationDestination.catalog,
-            currentUser: currentUser,
+            currentUser: widget.currentUser,
             capabilities: capabilities,
-            onOpenDashboard: onOpenDashboard,
-            onOpenPos: onOpenPos,
-            onOpenInvoices: onOpenInvoices,
-            onOpenPurchasing: onOpenPurchasing,
-            onOpenContacts: onOpenContacts,
+            onOpenDashboard: widget.onOpenDashboard,
+            onOpenPos: widget.onOpenPos,
+            onOpenInvoices: widget.onOpenInvoices,
+            onOpenPurchasing: widget.onOpenPurchasing,
+            onOpenContacts: widget.onOpenContacts,
             onOpenCatalog: () {},
-            onOpenCategories: onOpenCategories,
-            onOpenRegisterSessions: onOpenRegisterSessions,
-            onOpenDeviceSettings: onOpenDeviceSettings,
-            onOpenDiscounts: onOpenDiscounts,
-            onOpenReports: onOpenReports,
-            onOpenActivityLog: onOpenActivityLog,
-            onOpenUsers: onOpenUsers,
-            onOpenShopSettings: onOpenShopSettings,
-            onLogout: onLogout,
+            onOpenCategories: widget.onOpenCategories,
+            onOpenRegisterSessions: widget.onOpenRegisterSessions,
+            onOpenDeviceSettings: widget.onOpenDeviceSettings,
+            onOpenDiscounts: widget.onOpenDiscounts,
+            onOpenReports: widget.onOpenReports,
+            onOpenActivityLog: widget.onOpenActivityLog,
+            onOpenUsers: widget.onOpenUsers,
+            onOpenShopSettings: widget.onOpenShopSettings,
+            onLogout: widget.onLogout,
           ),
           appBar: PointyAppBar(
             leading: const PointyNavigationMenuButton(),
@@ -122,20 +158,40 @@ class CatalogScreen extends StatelessWidget {
               onBarcodeScanned: (barcode) {
                 _openProductForBarcode(context, barcode);
               },
-              child: ProductList(
-                viewModel: viewModel,
-                inventoryRepository: inventoryRepository,
-                printingRepository: printingRepository,
-                purchaseRepository: purchaseRepository,
-                saleRepository: saleRepository,
-                shopSettingsRepository: shopSettingsRepository,
-                capabilities: capabilities,
-                analyticsEngine: analyticsEngine,
-                onBarcodeSubmitted: (barcode) {
-                  return _openProductForBarcode(context, barcode);
-                },
-                onOpenCameraScanner: () => _openCameraScanner(context),
-                onCreateProduct: () => _showProductForm(context),
+              child: MasterDetailLayout(
+                listPaneBuilder: (paneContext, isDualPane) => ProductList(
+                  viewModel: viewModel,
+                  inventoryRepository: inventoryRepository,
+                  printingRepository: printingRepository,
+                  purchaseRepository: purchaseRepository,
+                  saleRepository: saleRepository,
+                  shopSettingsRepository: shopSettingsRepository,
+                  capabilities: capabilities,
+                  analyticsEngine: analyticsEngine,
+                  onBarcodeSubmitted: (barcode) {
+                    return _openProductForBarcode(context, barcode);
+                  },
+                  onOpenCameraScanner: () => _openCameraScanner(context),
+                  onCreateProduct: () => _showProductForm(context),
+                  onOpenProduct: isDualPane ? _selectProduct : null,
+                ),
+                placeholder: PointyEmptyState(
+                  icon: Icons.inventory_2_outlined,
+                  title: l10n.catalogSelectProductPlaceholder,
+                ),
+                detailPane: _selectedProduct == null
+                    ? null
+                    : ProductDetailsView(
+                        key: ValueKey('catalog_detail_${_selectedProduct!.id}'),
+                        viewModel: _selectedProductViewModel!,
+                        inventoryRepository: inventoryRepository,
+                        printingRepository: printingRepository,
+                        purchaseRepository: purchaseRepository,
+                        shopSettingsRepository: shopSettingsRepository,
+                        capabilities: capabilities,
+                        analyticsEngine: analyticsEngine,
+                        onChanged: viewModel.loadProducts,
+                      ),
               ),
             ),
           ),
@@ -162,6 +218,10 @@ class CatalogScreen extends StatelessWidget {
 
     switch (outcome.status) {
       case CatalogBarcodeLookupStatus.found:
+        if (MasterDetailLayout.isDualPane(context)) {
+          _selectProduct(outcome.product!);
+          return true;
+        }
         await openProductDetails(
           context,
           product: outcome.product!,
@@ -196,6 +256,10 @@ class CatalogScreen extends StatelessWidget {
     if (entries == null || entries.isEmpty || !context.mounted) {
       return;
     }
+    if (MasterDetailLayout.isDualPane(context)) {
+      _selectProduct(Product.fromVariant(entries.first.variant));
+      return;
+    }
     await openProductDetails(
       context,
       product: Product.fromVariant(entries.first.variant),
@@ -223,9 +287,10 @@ class CatalogScreen extends StatelessWidget {
   }
 
   Future<void> _showProductForm(BuildContext context) {
-    return showAdaptiveModalBottomSheet<void>(
+    return showAdaptiveFormSurface<void>(
       context: context,
       size: AdaptiveModalSize.standard,
+      desktopPresentation: AdaptiveFormPresentation.sidePanel,
       maxHeightFactor: 0.9,
       builder: (sheetContext) {
         return Padding(

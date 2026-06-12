@@ -71,51 +71,91 @@ class _SupplierDetailsScreenState extends State<SupplierDetailsScreen> {
             ],
           ),
           body: SafeArea(
-            child: AdaptiveMaxWidth(
-              width: AppContentWidth.detail,
-              child: ListView(
-                padding: const EdgeInsets.all(16),
-                children: [
-                  _SupplierHeader(supplier: supplier),
-                  const SizedBox(height: 12),
-                  PointyDetailSection(
-                    title: l10n.supplierPurchaseSummaryTitle,
-                    icon: Icons.summarize_outlined,
-                    child: _SupplierTotals(viewModel: _viewModel),
-                  ),
-                  const SizedBox(height: 12),
-                  PointyDetailSection(
-                    title: l10n.supplierPurchaseHistoryTitle,
-                    icon: Icons.receipt_long_outlined,
-                    child: _SupplierPurchaseHistory(
-                      viewModel: _viewModel,
-                      onOpenPurchaseOrder: _openPurchaseOrder,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  PointyDetailSection(
-                    title: l10n.supplierReturnRefundHistoryTitle,
-                    icon: Icons.keyboard_return_outlined,
-                    child: _SupplierAdjustmentHistory(viewModel: _viewModel),
-                  ),
-                ],
-              ),
+            child: SupplierDetailsView(
+              viewModel: _viewModel,
+              purchaseRepository: widget.purchaseRepository,
+              printingRepository: widget.printingRepository,
+              shopSettingsRepository: widget.shopSettingsRepository,
+              capabilities: widget.capabilities,
             ),
           ),
         );
       },
     );
   }
+}
 
-  Future<void> _openPurchaseOrder(PurchaseOrder order) {
+/// Embeddable supplier details body: used by [SupplierDetailsScreen] as a
+/// pushed route on compact widths, and by the contacts master-detail pane on
+/// desktop.
+class SupplierDetailsView extends StatelessWidget {
+  const SupplierDetailsView({
+    super.key,
+    required this.viewModel,
+    required this.purchaseRepository,
+    required this.printingRepository,
+    required this.shopSettingsRepository,
+    required this.capabilities,
+  });
+
+  final SupplierDetailsViewModel viewModel;
+  final PurchaseRepository purchaseRepository;
+  final PrintingRepository printingRepository;
+  final ShopSettingsRepository shopSettingsRepository;
+  final AuthorizationCapabilities capabilities;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+
+    return ListenableBuilder(
+      listenable: viewModel,
+      builder: (context, _) {
+        final supplier = viewModel.supplier;
+        return AdaptiveMaxWidth(
+          width: AppContentWidth.detail,
+          child: ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              _SupplierHeader(supplier: supplier),
+              const SizedBox(height: 12),
+              PointyDetailSection(
+                title: l10n.supplierPurchaseSummaryTitle,
+                icon: Icons.summarize_outlined,
+                child: _SupplierTotals(viewModel: viewModel),
+              ),
+              const SizedBox(height: 12),
+              PointyDetailSection(
+                title: l10n.supplierPurchaseHistoryTitle,
+                icon: Icons.receipt_long_outlined,
+                child: _SupplierPurchaseHistory(
+                  viewModel: viewModel,
+                  onOpenPurchaseOrder: (order) =>
+                      _openPurchaseOrder(context, order),
+                ),
+              ),
+              const SizedBox(height: 12),
+              PointyDetailSection(
+                title: l10n.supplierReturnRefundHistoryTitle,
+                icon: Icons.keyboard_return_outlined,
+                child: _SupplierAdjustmentHistory(viewModel: viewModel),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _openPurchaseOrder(BuildContext context, PurchaseOrder order) {
     return Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) => PurchaseOrderDetailsScreen(
-          purchaseRepository: widget.purchaseRepository,
-          printingRepository: widget.printingRepository,
-          shopSettingsRepository: widget.shopSettingsRepository,
+          purchaseRepository: purchaseRepository,
+          printingRepository: printingRepository,
+          shopSettingsRepository: shopSettingsRepository,
           initialOrder: order,
-          capabilities: widget.capabilities,
+          capabilities: capabilities,
         ),
       ),
     );

@@ -97,6 +97,105 @@ class ReportRunApiTests(TestCase):
         self.assertEqual(len(response.data["checksum"]), 64)
         self.assertEqual(ReportRun.objects.count(), 1)
 
+    def test_manager_can_run_reorder_items_report(self):
+        from apps.inventory.models import StockItem
+
+        variant = create_product_with_default_variant(
+            sku="REPORT-REORDER",
+            name="منتج إعادة الطلب",
+            unit_price=Decimal("2.00"),
+        ).default_variant
+        StockItem.objects.create(
+            variant=variant,
+            quantity_on_hand=1,
+            reorder_level=5,
+        )
+        client = APIClient()
+        client.force_authenticate(user=self.manager)
+
+        response = client.post(
+            reverse("report-list"),
+            {
+                "report_type": ReportRun.ReportType.REORDER_ITEMS,
+                "output_format": ReportRun.OutputFormat.PDF,
+                "params": {},
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        payload = response.data["payload"]
+        self.assertEqual(payload["summary"]["reorder_item_count"], 1)
+        section = self._section(payload, "reorder_items")
+        self.assertEqual(section["rows"][0]["quantity_on_hand"], 1)
+        # Restock to 2x reorder level: 5*2 - 1 on hand - 0 expected = 9.
+        self.assertEqual(section["rows"][0]["suggested_quantity"], 9)
+
+    def test_manager_can_run_payroll_summary_report(self):
+        from apps.employees.models import Employee, PayrollLine, PayrollRun
+
+        employee = Employee.objects.create(full_name="موظف التقارير")
+        run = PayrollRun.objects.create(
+            status=PayrollRun.Status.PAID,
+            period_start=timezone.localdate().replace(day=1),
+            period_end=timezone.localdate(),
+            payment_date=timezone.localdate(),
+        )
+        PayrollLine.objects.create(
+            payroll_run=run,
+            employee=employee,
+            rate=Decimal("500.00"),
+            gross_amount=Decimal("500.00"),
+            net_amount=Decimal("500.00"),
+        )
+        run.recalculate(save_lines=True)
+        run.save()
+        client = APIClient()
+        client.force_authenticate(user=self.manager)
+
+        response = client.post(
+            reverse("report-list"),
+            {
+                "report_type": ReportRun.ReportType.PAYROLL_SUMMARY,
+                "output_format": ReportRun.OutputFormat.PDF,
+                "params": {},
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        payload = response.data["payload"]
+        self.assertEqual(payload["summary"]["paid_total"], "500.00")
+        runs_section = self._section(payload, "payroll_runs")
+        self.assertEqual(len(runs_section["rows"]), 1)
+        employees_section = self._section(payload, "employee_totals")
+        self.assertEqual(
+            employees_section["rows"][0]["employee_name"],
+            "موظف التقارير",
+        )
+
+    def test_manager_can_run_profit_costs_report(self):
+        client = APIClient()
+        client.force_authenticate(user=self.manager)
+
+        response = client.post(
+            reverse("report-list"),
+            {
+                "report_type": ReportRun.ReportType.PROFIT_COSTS,
+                "output_format": ReportRun.OutputFormat.PDF,
+                "params": {},
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        payload = response.data["payload"]
+        # 2 units * (4.00 - 1.50) = 5.00 gross profit from setUp's order.
+        self.assertEqual(payload["summary"]["gross_profit"], "5.00")
+        self.assertEqual(payload["summary"]["net_operating_profit"], "5.00")
+        section = self._section(payload, "cost_breakdown")
+        self.assertEqual(len(section["rows"]), 3)
+
     def test_user_without_source_permission_cannot_run_report_but_failure_is_audited(
         self,
     ):

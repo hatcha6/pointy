@@ -22,7 +22,7 @@ from apps.core.permissions import HasPointyPermission
 from apps.core.roles import user_is_manager
 from apps.customers.models import Customer
 from apps.discounts.models import DiscountRedemption, DiscountRule
-from apps.employees.models import Employee, PayrollRun
+from apps.employees.models import Employee, EmployeeLoan, PayrollRun
 from apps.inventory.models import StockItem, StockMovement
 from apps.payments.models import Payment
 from apps.printing.models import PrintAgent, PrintJob
@@ -418,6 +418,13 @@ def _payroll_section(period):
                 status=Employee.Status.ACTIVE,
             ).count(),
             "payroll_run_count": period_runs.count(),
+            "draft_run_count": payroll_runs.filter(
+                status=PayrollRun.Status.DRAFT,
+            ).count(),
+            "pending_run_count": pending_runs.count(),
+            "pending_loan_request_count": EmployeeLoan.objects.filter(
+                status=EmployeeLoan.Status.REQUESTED,
+            ).count(),
         },
         "recent_runs": [
             {

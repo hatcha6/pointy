@@ -63,25 +63,13 @@ Future<PaymentSheetResult?> showPosPaymentSheet({
     );
   }
 
-  if (width < AppBreakpoints.tabletMin) {
-    return showAdaptiveModalBottomSheet<PaymentSheetResult>(
-      context: context,
-      size: AdaptiveModalSize.expanded,
-      maxHeightFactor: 1,
-      builder: childBuilder,
-    );
-  }
-
-  return showDialog<PaymentSheetResult>(
+  return showAdaptiveFormSurface<PaymentSheetResult>(
     context: context,
-    builder: (dialogContext) {
-      return AdaptiveDialogSurface(
-        size: AdaptiveModalSize.expanded,
-        maxWidth: 1120,
-        maxHeightFactor: 0.98,
-        child: childBuilder(dialogContext),
-      );
-    },
+    size: AdaptiveModalSize.expanded,
+    desktopBreakpoint: AppBreakpoints.tabletMin,
+    maxWidth: width < AppBreakpoints.tabletMin ? null : 1120,
+    maxHeightFactor: width < AppBreakpoints.tabletMin ? 1 : 0.98,
+    builder: childBuilder,
   );
 }
 
@@ -170,13 +158,14 @@ class _PaymentSheetState extends State<PaymentSheet> {
       child: SafeArea(
         top: false,
         child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
             _PaymentHeader(
               title: l10n.paymentDialogTitle,
               onCancel: widget.onCancel,
             ),
             Divider(height: 1, color: colors.line),
-            Expanded(
+            Flexible(
               child: LayoutBuilder(
                 builder: (context, constraints) {
                   final isWide =

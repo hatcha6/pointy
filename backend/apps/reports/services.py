@@ -14,6 +14,7 @@ from apps.analytics.models import AnalyticsEvent
 from apps.analytics.services import record_domain_event
 from apps.catalog.models import Product
 from apps.core.roles import user_is_manager
+from apps.employees.models import Employee, PayrollLine, PayrollRun
 from apps.inventory.models import StockItem, StockMovement
 from apps.payments.models import Payment
 from apps.purchasing.models import PurchaseOrder, Supplier, SupplierPayment
@@ -43,6 +44,10 @@ REPORT_SECTION_ROW_LIMITS = {
     "stock_movements": DEFAULT_DETAIL_ROW_LIMIT,
     "purchase_orders": DEFAULT_DETAIL_ROW_LIMIT,
     "supplier_balances": DEFAULT_DETAIL_ROW_LIMIT,
+    "reorder_items": DEFAULT_DETAIL_ROW_LIMIT,
+    "payroll_runs": DEFAULT_DETAIL_ROW_LIMIT,
+    "employee_totals": DEFAULT_DETAIL_ROW_LIMIT,
+    "cost_breakdown": CHOICE_DETAIL_ROW_LIMIT,
 }
 
 
@@ -104,6 +109,21 @@ REPORT_DEFINITIONS = {
         key=ReportRun.ReportType.PURCHASING_SUMMARY,
         category="purchasing",
         permissions=("purchasing.view_purchaseorder",),
+    ),
+    ReportRun.ReportType.REORDER_ITEMS: ReportDefinition(
+        key=ReportRun.ReportType.REORDER_ITEMS,
+        category="inventory",
+        permissions=("inventory.view_stockitem",),
+    ),
+    ReportRun.ReportType.PAYROLL_SUMMARY: ReportDefinition(
+        key=ReportRun.ReportType.PAYROLL_SUMMARY,
+        category="employees",
+        permissions=("employees.view_payrollrun",),
+    ),
+    ReportRun.ReportType.PROFIT_COSTS: ReportDefinition(
+        key=ReportRun.ReportType.PROFIT_COSTS,
+        category="sales",
+        permissions=("sales.view_order", "employees.view_payrollrun"),
     ),
 }
 
@@ -205,6 +225,9 @@ def generate_report_payload(*, report_type, params, user):
         ReportRun.ReportType.INVENTORY_STATUS: _inventory_status_report,
         ReportRun.ReportType.STOCK_MOVEMENTS: _stock_movements_report,
         ReportRun.ReportType.PURCHASING_SUMMARY: _purchasing_summary_report,
+        ReportRun.ReportType.REORDER_ITEMS: _reorder_items_report,
+        ReportRun.ReportType.PAYROLL_SUMMARY: _payroll_summary_report,
+        ReportRun.ReportType.PROFIT_COSTS: _profit_costs_report,
     }[report_type]
     payload = builder(user, period)
     payload.update(
@@ -816,6 +839,305 @@ def _purchasing_summary_report(user, period):
                 supplier_rows,
                 total_count=supplier_row_values.total_count,
                 limit=supplier_row_values.limit,
+            ),
+        ],
+    }
+
+
+def _reorder_items_report(user, period):
+    stock = StockItem.objects.select_related("variant", "variant__product").filter(
+        quantity_on_hand__lte=F("reorder_level"),
+    )
+    bounded = _bounded_queryset(
+        stock.order_by(
+            "quantity_on_hand",
+            "variant__product__name",
+            "variant__name",
+        ),
+        limit=_section_row_limit("reorder_items"),
+    )
+    rows = []
+    suggested_units = 0
+    for item in bounded.rows:
+        # Restock back to twice the reorder level, counting stock already on
+        # the way so the owner does not double-order.
+        suggested = max(
+            item.reorder_level * 2
+            - item.quantity_on_hand
+            - item.quantity_expected,
+            0,
+        )
+        suggested_units += suggested
+        rows.append(
+            {
+                "product_name": item.variant.full_name,
+                "sku": item.variant.sku,
+                "quantity_on_hand": item.quantity_on_hand,
+                "quantity_expected": item.quantity_expected,
+                "reorder_level": item.reorder_level,
+                "suggested_quantity": suggested,
+            }
+        )
+
+    return {
+        "summary": {
+            "reorder_item_count": bounded.total_count,
+            "out_of_stock_count": stock.filter(quantity_on_hand__lte=0).count(),
+            "suggested_units": suggested_units,
+        },
+        "sections": [
+            _metric_section(
+                [
+                    ("reorder_item_count", bounded.total_count),
+                    (
+                        "out_of_stock_count",
+                        stock.filter(quantity_on_hand__lte=0).count(),
+                    ),
+                    ("suggested_units", suggested_units),
+                ]
+            ),
+            _report_section(
+                "reorder_items",
+                [
+                    "product_name",
+                    "sku",
+                    "quantity_on_hand",
+                    "quantity_expected",
+                    "reorder_level",
+                    "suggested_quantity",
+                ],
+                rows,
+                total_count=bounded.total_count,
+                limit=bounded.limit,
+            ),
+        ],
+    }
+
+
+def _payroll_summary_report(user, period):
+    runs = PayrollRun.objects.exclude(status=PayrollRun.Status.VOID).filter(
+        period_end__gte=period["start_date"],
+        period_start__lte=period["end_date"],
+    )
+    money_sum = lambda field: Coalesce(  # noqa: E731
+        Sum(field),
+        Value(Decimal("0.00")),
+        output_field=MONEY_FIELD,
+    )
+    salary_expense = runs.filter(
+        status__in=(PayrollRun.Status.APPROVED, PayrollRun.Status.PAID),
+    ).aggregate(total=money_sum("net_total"))["total"]
+    paid_total = runs.filter(status=PayrollRun.Status.PAID).aggregate(
+        total=money_sum("net_total"),
+    )["total"]
+    pending_total = runs.filter(status=PayrollRun.Status.APPROVED).aggregate(
+        total=money_sum("net_total"),
+    )["total"]
+
+    bounded_runs = _bounded_queryset(
+        runs.order_by("-period_end", "-id"),
+        limit=_section_row_limit("payroll_runs"),
+    )
+    run_rows = [
+        {
+            "run_number": run.run_number,
+            "status": run.status,
+            "period_start": run.period_start.isoformat(),
+            "period_end": run.period_end.isoformat(),
+            "gross_total": _money(run.gross_total),
+            "deductions_total": _money(run.deductions_total),
+            "net_total": _money(run.net_total),
+        }
+        for run in bounded_runs.rows
+    ]
+
+    employee_values = (
+        PayrollLine.objects.filter(payroll_run__in=runs)
+        .values("employee__full_name")
+        .annotate(
+            gross_total=money_sum("gross_amount"),
+            additions_total=money_sum("additions_amount"),
+            deductions_total=money_sum("deductions_amount"),
+            net_total=money_sum("net_amount"),
+        )
+        .order_by("-net_total")
+    )
+    bounded_employees = _bounded_queryset(
+        employee_values,
+        limit=_section_row_limit("employee_totals"),
+    )
+    employee_rows = [
+        {
+            "employee_name": row["employee__full_name"],
+            "gross_total": _money(row["gross_total"]),
+            "additions_total": _money(row["additions_total"]),
+            "deductions_total": _money(row["deductions_total"]),
+            "net_total": _money(row["net_total"]),
+        }
+        for row in bounded_employees.rows
+    ]
+
+    return {
+        "summary": {
+            "salary_expense": _money(salary_expense),
+            "paid_total": _money(paid_total),
+            "pending_total": _money(pending_total),
+            "payroll_run_count": runs.count(),
+            "active_employee_count": Employee.objects.filter(
+                status=Employee.Status.ACTIVE,
+            ).count(),
+        },
+        "sections": [
+            _metric_section(
+                [
+                    ("salary_expense", _money(salary_expense)),
+                    ("paid_total", _money(paid_total)),
+                    ("pending_total", _money(pending_total)),
+                    ("payroll_run_count", runs.count()),
+                    (
+                        "active_employee_count",
+                        Employee.objects.filter(
+                            status=Employee.Status.ACTIVE,
+                        ).count(),
+                    ),
+                ]
+            ),
+            _report_section(
+                "payroll_runs",
+                [
+                    "run_number",
+                    "status",
+                    "period_start",
+                    "period_end",
+                    "gross_total",
+                    "deductions_total",
+                    "net_total",
+                ],
+                run_rows,
+                total_count=bounded_runs.total_count,
+                limit=bounded_runs.limit,
+            ),
+            _report_section(
+                "employee_totals",
+                [
+                    "employee_name",
+                    "gross_total",
+                    "additions_total",
+                    "deductions_total",
+                    "net_total",
+                ],
+                employee_rows,
+                total_count=bounded_employees.total_count,
+                limit=bounded_employees.limit,
+            ),
+        ],
+    }
+
+
+def _profit_costs_report(user, period):
+    orders = _settled_orders(user).filter(
+        created_at__gte=period["start"],
+        created_at__lt=period["end"],
+    )
+    adjustments = _order_adjustments(user).filter(
+        created_at__gte=period["start"],
+        created_at__lt=period["end"],
+    )
+    refund_total = adjustments.aggregate(
+        total=Coalesce(
+            Sum("amount"),
+            Value(Decimal("0.00")),
+            output_field=MONEY_FIELD,
+        )
+    )["total"]
+    line_profit = OrderLine.objects.filter(order__in=orders).aggregate(
+        total=Coalesce(
+            Sum(
+                F("quantity") * (F("unit_price") - F("unit_cost"))
+                - F("discount_total"),
+                output_field=MONEY_FIELD,
+            ),
+            Value(Decimal("0.00")),
+            output_field=MONEY_FIELD,
+        )
+    )["total"]
+    gross_profit = line_profit - refund_total
+
+    payroll_paid = PayrollRun.objects.filter(
+        status=PayrollRun.Status.PAID,
+        payment_date__gte=period["start_date"],
+        payment_date__lte=period["end_date"],
+    ).aggregate(
+        total=Coalesce(
+            Sum("net_total"),
+            Value(Decimal("0.00")),
+            output_field=MONEY_FIELD,
+        )
+    )["total"]
+    payment_commissions = Payment.objects.filter(
+        created_at__gte=period["start"],
+        created_at__lt=period["end"],
+    ).aggregate(
+        total=Coalesce(
+            Sum("commission_amount"),
+            Value(Decimal("0.00")),
+            output_field=MONEY_FIELD,
+        )
+    )["total"]
+    purchase_spend = (
+        PurchaseOrder.objects.exclude(status=PurchaseOrder.Status.CANCELLED)
+        .filter(
+            created_at__gte=period["start"],
+            created_at__lt=period["end"],
+        )
+        .aggregate(
+            total=Coalesce(
+                Sum("total"),
+                Value(Decimal("0.00")),
+                output_field=MONEY_FIELD,
+            )
+        )["total"]
+    )
+    operating_expense = payroll_paid + payment_commissions
+    net_operating_profit = gross_profit - operating_expense
+
+    return {
+        "summary": {
+            "gross_profit": _money(gross_profit),
+            "payroll_paid_total": _money(payroll_paid),
+            "payment_commission_total": _money(payment_commissions),
+            "purchase_spend_total": _money(purchase_spend),
+            "operating_expense_total": _money(operating_expense),
+            "net_operating_profit": _money(net_operating_profit),
+        },
+        "sections": [
+            _metric_section(
+                [
+                    ("gross_profit", _money(gross_profit)),
+                    ("payroll_paid_total", _money(payroll_paid)),
+                    ("payment_commission_total", _money(payment_commissions)),
+                    ("purchase_spend_total", _money(purchase_spend)),
+                    ("operating_expense_total", _money(operating_expense)),
+                    ("net_operating_profit", _money(net_operating_profit)),
+                ]
+            ),
+            _report_section(
+                "cost_breakdown",
+                ["cost_item", "amount"],
+                [
+                    {
+                        "cost_item": "payroll_paid_total",
+                        "amount": _money(payroll_paid),
+                    },
+                    {
+                        "cost_item": "payment_commission_total",
+                        "amount": _money(payment_commissions),
+                    },
+                    {
+                        "cost_item": "purchase_spend_total",
+                        "amount": _money(purchase_spend),
+                    },
+                ],
             ),
         ],
     }

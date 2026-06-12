@@ -613,6 +613,13 @@
   "reportStockMovementSubtitle": "الاستلام والتعديل والبيع لكل منتج.",
   "reportPurchasesTitle": "المشتريات والموردون",
   "reportPurchasesSubtitle": "أوامر الشراء والاستلام والمستحقات.",
+  "reportCategoryEmployees": "الموظفون",
+  "reportReorderItemsTitle": "أصناف تحتاج إعادة طلب",
+  "reportReorderItemsSubtitle": "المنتجات التي بلغت حد إعادة الطلب مع الكميات المقترحة للشراء.",
+  "reportPayrollSummaryTitle": "الرواتب والأجور",
+  "reportPayrollSummarySubtitle": "مسيرات الرواتب وتكلفة الموظفين خلال الفترة.",
+  "reportProfitCostsTitle": "الأرباح والتكاليف",
+  "reportProfitCostsSubtitle": "الربح الإجمالي مقابل الرواتب والعمولات وإنفاق المشتريات.",
   "reportContactsTitle": "أرصدة الجهات",
   "reportContactsSubtitle": "نشاط العملاء والموردين والأرصدة المرتبطة بهم.",
   "reportDiscountsTitle": "سجل الخصومات",
@@ -1819,6 +1826,14 @@
   "noSelectedPrinter": "لم يتم اختيار طابعة",
   "paperWidthLabel": "عرض الورق بالملليمتر",
   "printerCodeTableLabel": "جدول ترميز الطابعة",
+  "printerCapabilityProfileLabel": "ملف تعريف الطابعة",
+  "printerCapabilityProfileHelper": "اتركه default إن لم تكن متأكدًا. اختر ملف الشركة المصنعة للطابعات غير المتوافقة.",
+  "printerCutModeLabel": "وضع قص الورق",
+  "printerCutModePartial": "قص جزئي",
+  "printerCutModeFull": "قص كامل",
+  "printerCutModeNone": "بدون قص (تغذية فقط)",
+  "printerFeedLinesLabel": "أسطر التغذية قبل القص",
+  "printerFeedLinesHelper": "زدها إذا كان آخر الإيصال يُقطع قبل اكتمال الطباعة.",
   "barcodeLabelPrinterSettingsTitle": "إعدادات ملصقات الباركود",
   "printerBarcodeLabelLanguageLabel": "لغة طابعة الملصقات",
   "printerBarcodeLabelLanguageAuto": "اكتشاف تلقائي آمن",
@@ -2083,6 +2098,34 @@
   "activeStatus": "متاح",
   "inactiveStatus": "متوقف",
   "productDetailsTitle": "تفاصيل المنتج",
+  "catalogSelectProductPlaceholder": "اختر منتجًا من القائمة لعرض تفاصيله.",
+  "invoicesSelectInvoicePlaceholder": "اختر فاتورة من القائمة لعرض تفاصيلها.",
+  "@invoicesSelectInvoicePlaceholder": {
+    "description": "Placeholder shown in the invoices detail pane before an invoice is selected."
+  },
+  "contactsSelectContactPlaceholder": "اختر جهة من القائمة لعرض تفاصيلها.",
+  "@contactsSelectContactPlaceholder": {
+    "description": "Placeholder shown in the contacts detail pane before a contact is selected."
+  },
+  "discountsSelectDiscountPlaceholder": "اختر قاعدة خصم من القائمة لعرض تفاصيلها.",
+  "reportLastCompletedMessage": "آخر إجراء ناجح: {action} — {report}",
+  "@reportLastCompletedMessage": {
+    "description": "Inline confirmation in the reports output panel showing the last successfully generated report.",
+    "placeholders": {
+      "action": {"type": "String"},
+      "report": {"type": "String"}
+    }
+  },
+  "reportRunAgainButton": "تشغيل مجددًا",
+  "@reportRunAgainButton": {
+    "description": "Button that re-runs the last successful report action."
+  },
+  "@discountsSelectDiscountPlaceholder": {
+    "description": "Placeholder shown in the discounts detail pane before a discount rule is selected."
+  },
+  "@catalogSelectProductPlaceholder": {
+    "description": "Placeholder shown in the catalog detail pane before a product is selected."
+  },
   "variantDetailsTitle": "تفاصيل الخيار",
   "productDetailLoadError": "تعذر تحميل تفاصيل المنتج.",
   "productSummaryTitle": "ملخص المنتج",
@@ -3332,7 +3375,8 @@
   "cashMovementCreatedMessage": "تم حفظ الحركة النقدية.",
   "closeRegisterSessionTooltip": "إغلاق جلسة الدرج",
   "closeRegisterSessionTitle": "إغلاق جلسة الدرج",
-  "closingCashInputLabel": "النقد عند الإغلاق",
+  "closingCashInputLabel": "النقد عند الإغلاق (بدون الفئات)",
+  "closingCashTotalLabel": "إجمالي النقد عند الإغلاق",
   "denominationCountLabel": "عدد فئة {denomination}",
   "@denominationCountLabel": {
     "description": "Label for a denomination count input.",
@@ -3376,7 +3420,6 @@
   "sessionCashRefundMetric": "مبالغ الإرجاع النقدية",
   "sessionExpectedCashMetric": "النقد المتوقع",
   "sessionClosingCashMetric": "النقد المعدود",
-  "sessionDenominationTotalMetric": "إجمالي الفئات",
   "sessionCashVarianceMetric": "فرق النقد",
   "sessionDenominationsTitle": "الفئات عند الإغلاق",
   "sessionVarianceFlag": "فرق {amount}",
@@ -4249,6 +4292,89 @@
   "refreshEmployeePayrollTooltip": "تحديث الموظفين والرواتب",
   "employeePayrollOverviewTitle": "إدارة الموظفين والرواتب",
   "employeePayrollOverviewSubtitle": "سجلات الموظفين وخطط الأجر ومسيرات الرواتب",
+  "payrollHomeTabLabel": "الرواتب",
+  "payrollMonthCardTitle": "رواتب {month}",
+  "@payrollMonthCardTitle": {
+    "description": "Monthly payroll workflow card title.",
+    "placeholders": {
+      "month": {
+        "type": "String"
+      }
+    }
+  },
+  "payrollMonthStepPrepare": "تجهيز",
+  "payrollMonthStepApprove": "اعتماد",
+  "payrollMonthStepPay": "دفع",
+  "payrollMonthNoRunMessage": "لم يتم تجهيز مسير رواتب هذا الشهر بعد.",
+  "payrollMonthDraftMessage": "المسير جاهز للمراجعة والاعتماد.",
+  "payrollMonthApprovedMessage": "المسير معتمد وبانتظار تسجيل الدفع.",
+  "payrollMonthPaidMessage": "تم دفع رواتب هذا الشهر.",
+  "payrollMonthOnboardingMessage": "أضف موظفيك وحدد خطط رواتبهم لبدء تجهيز مسيرات الرواتب.",
+  "preparePayrollMonthButton": "تجهيز رواتب الشهر",
+  "reviewAndApprovePayrollButton": "مراجعة واعتماد",
+  "recordPayrollPaymentButton": "تسجيل الدفع",
+  "viewPayrollRunButton": "عرض المسير",
+  "customPayrollRunButton": "مسير مخصص",
+  "payrollHistoryTitle": "سجل المسيرات",
+  "pendingLoanRequestsTitle": "طلبات سلف بانتظار قرارك",
+  "employeeLoanApproveButton": "موافقة",
+  "employeeLoanRejectButton": "رفض",
+  "showAllLoansButton": "عرض كل السلف",
+  "approvePayrollConfirmTitle": "اعتماد مسير الرواتب؟",
+  "approvePayrollConfirmMessage": "سيتم اعتماد رواتب {employees} بإجمالي صافي {amount}. لا يمكن تعديل البنود بعد الاعتماد.",
+  "@approvePayrollConfirmMessage": {
+    "description": "Approve payroll run confirmation body.",
+    "placeholders": {
+      "employees": {
+        "type": "String"
+      },
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "approvePayrollConfirmButton": "اعتماد",
+  "markPayrollPaidConfirmTitle": "تسجيل دفع الرواتب؟",
+  "markPayrollPaidConfirmMessage": "سيتم تسجيل المسير كمدفوع بإجمالي {amount}، وستُخصم أقساط السلف المرتبطة تلقائيًا.",
+  "@markPayrollPaidConfirmMessage": {
+    "description": "Mark payroll paid confirmation body.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "markPayrollPaidConfirmButton": "تسجيل الدفع",
+  "payrollAdditionsChipLabel": "إضافات {amount}",
+  "@payrollAdditionsChipLabel": {
+    "description": "Payroll line additions chip.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "payrollDeductionsChipLabel": "خصومات {amount}",
+  "@payrollDeductionsChipLabel": {
+    "description": "Payroll line deductions chip.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "payrollAbsenceChipLabel": "غياب {days} يوم",
+  "@payrollAbsenceChipLabel": {
+    "description": "Payroll line absence chip.",
+    "placeholders": {
+      "days": {
+        "type": "String"
+      }
+    }
+  },
+  "payrollLineTapToAdjustHint": "اضغط على موظف لتعديل غيابه وإضافاته وخصوماته.",
+  "employeeNoPlanWarning": "لا توجد خطة راتب",
+  "employeeCompensationButton": "خطة الراتب",
   "addEmployeeButton": "إضافة موظف",
   "draftMonthlyPayrollButton": "مسودة رواتب الشهر",
   "createPayrollRunButton": "إنشاء مسير رواتب",
@@ -4680,5 +4806,76 @@
   "dashboardActiveEmployeesMetric": "موظفون نشطون",
   "dashboardRecentPayrollRunsTitle": "آخر مسيرات الرواتب",
   "dashboardPaymentCommissionsMetric": "عمولات الدفع",
-  "dashboardNetOperatingProfitMetric": "صافي الربح التشغيلي"
+  "dashboardNetOperatingProfitMetric": "صافي الربح التشغيلي",
+  "dashboardVsPreviousPeriodLabel": "مقارنة بالفترة السابقة",
+  "dashboardActionCenterTitle": "يحتاج انتباهك",
+  "dashboardAllClearMessage": "كل شيء تحت السيطرة — لا يوجد ما يتطلب تدخلك الآن.",
+  "dashboardAlertOutOfStock": "{count, plural, =1{منتج واحد نفد من المخزون} =2{منتجان نفدا من المخزون} other{{count} منتجات نفدت من المخزون}}",
+  "@dashboardAlertOutOfStock": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "dashboardAlertLowStock": "{count, plural, =1{منتج واحد تحت حد إعادة الطلب} =2{منتجان تحت حد إعادة الطلب} other{{count} منتجات تحت حد إعادة الطلب}}",
+  "@dashboardAlertLowStock": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "dashboardAlertOverduePurchases": "{count, plural, =1{أمر شراء واحد متأخر السداد} =2{أمرا شراء متأخران عن السداد} other{{count} أوامر شراء متأخرة السداد}}",
+  "@dashboardAlertOverduePurchases": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "dashboardAlertRegisterVariance": "{count, plural, =1{جلسة درج واحدة بفرق نقدي} =2{جلستا درج بفرق نقدي} other{{count} جلسات درج بفروق نقدية}}",
+  "@dashboardAlertRegisterVariance": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "dashboardAlertDraftPayroll": "{count, plural, =1{مسير رواتب بانتظار الاعتماد} =2{مسيرا رواتب بانتظار الاعتماد} other{{count} مسيرات رواتب بانتظار الاعتماد}}",
+  "@dashboardAlertDraftPayroll": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "dashboardAlertPendingPayroll": "رواتب معتمدة بانتظار تسجيل الدفع",
+  "dashboardAlertPendingLoans": "{count, plural, =1{طلب سلفة واحد بانتظار قرارك} =2{طلبا سلفة بانتظار قرارك} other{{count} طلبات سلف بانتظار قرارك}}",
+  "@dashboardAlertPendingLoans": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "dashboardAlertExpiringDiscounts": "{count, plural, =1{عرض خصم واحد ينتهي قريبًا} =2{عرضا خصم ينتهيان قريبًا} other{{count} عروض خصم تنتهي قريبًا}}",
+  "@dashboardAlertExpiringDiscounts": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "dashboardAlertPrintFailures": "{count, plural, =1{مهمة طباعة واحدة فشلت} =2{مهمتا طباعة فشلتا} other{{count} مهام طباعة فشلت}}",
+  "@dashboardAlertPrintFailures": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "dashboardBestSellersTitle": "الأفضل أداءً",
+  "dashboardOperationsTitle": "التشغيل اليومي",
+  "dashboardApprovedAwaitingPaymentNote": "منها {amount} رواتب معتمدة لم تُدفع بعد"
 }

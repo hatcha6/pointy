@@ -5,6 +5,7 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 import '../../../shared/components/components.dart';
 import '../../../shared/design/design.dart';
 import '../../../shared/decimal_text_input_formatter.dart';
+import '../../../shared/formatters.dart';
 import '../../../shared/responsive/responsive.dart';
 
 class RegisterSessionCloseSheet extends StatefulWidget {
@@ -34,6 +35,38 @@ class _RegisterSessionCloseSheetState extends State<RegisterSessionCloseSheet> {
   bool _showError = false;
 
   @override
+  void initState() {
+    super.initState();
+    for (final controller in [
+      _closingCashController,
+      _count025Controller,
+      _count050Controller,
+      _count075Controller,
+      _count100Controller,
+    ]) {
+      controller.addListener(_onAmountsChanged);
+    }
+  }
+
+  void _onAmountsChanged() {
+    setState(() {});
+  }
+
+  double get _denominationTotal {
+    return _parseCount(_count025Controller.text) * 0.25 +
+        _parseCount(_count050Controller.text) * 0.50 +
+        _parseCount(_count075Controller.text) * 0.75 +
+        _parseCount(_count100Controller.text) * 1.00;
+  }
+
+  double get _closingCashTotal {
+    final cash =
+        double.tryParse(_closingCashController.text.replaceAll(',', '.')) ??
+        0.0;
+    return cash + _denominationTotal;
+  }
+
+  @override
   void dispose() {
     _closingCashController.dispose();
     _count025Controller.dispose();
@@ -58,6 +91,7 @@ class _RegisterSessionCloseSheetState extends State<RegisterSessionCloseSheet> {
         child: Form(
           key: _formKey,
           child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
               _CloseSheetHeader(
                 title: l10n.closeRegisterSessionTitle,
@@ -65,7 +99,7 @@ class _RegisterSessionCloseSheetState extends State<RegisterSessionCloseSheet> {
                 onCancel: () => Navigator.of(context).pop(false),
               ),
               Divider(height: 1, color: colors.line),
-              Expanded(
+              Flexible(
                 child: SingleChildScrollView(
                   padding: EdgeInsetsDirectional.only(
                     start: spacing.lg,
@@ -133,6 +167,15 @@ class _RegisterSessionCloseSheetState extends State<RegisterSessionCloseSheet> {
                             label: l10n.denominationCountLabel('1.00'),
                           ),
                         ],
+                      ),
+                      SizedBox(height: spacing.md),
+                      PointyMetricTile(
+                        key: const ValueKey(
+                          'register_session_closing_total_tile',
+                        ),
+                        icon: Icons.point_of_sale_outlined,
+                        label: l10n.closingCashTotalLabel,
+                        value: formatMoney(_closingCashTotal),
                       ),
                       if (_showError) ...[
                         SizedBox(height: spacing.md),

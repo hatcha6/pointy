@@ -12,9 +12,11 @@ abstract final class PointyColors {
   static const Color ink = Color(0xFF101828);
   static const Color mutedInk = Color(0xFF667085);
   static const Color line = Color(0xFFE5E0D8);
+  static const Color lineStrong = Color(0xFFD5CFC4);
   static const Color surface = Color(0xFFFFFFFF);
   static const Color page = Color(0xFFF8F7F4);
   static const Color subtleFill = Color(0xFFF2F4F2);
+  static const Color surfaceSunken = Color(0xFFF1EFEA);
   static const Color primaryContainer = Color(0xFFE0F2EF);
   static const Color amberContainer = Color(0xFFFFF4E3);
 }

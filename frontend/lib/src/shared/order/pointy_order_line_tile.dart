@@ -223,7 +223,12 @@ class _ProductInfo extends StatelessWidget {
           unitPriceLabel,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: textTheme.bodySmall?.copyWith(color: colors.mutedInk),
+          style: switch (textTheme.bodySmall?.copyWith(
+            color: colors.mutedInk,
+          )) {
+            final style? => PointyTypography.numeric(style),
+            null => null,
+          },
         ),
       ],
     );

@@ -63,6 +63,9 @@ BusinessReportType _businessReportType(ReportRunType type) {
     ReportRunType.inventoryStatus => BusinessReportType.inventorySnapshot,
     ReportRunType.stockMovements => BusinessReportType.stockMovementArchive,
     ReportRunType.purchasingSummary => BusinessReportType.purchasingSummary,
+    ReportRunType.reorderItems => BusinessReportType.reorderPlan,
+    ReportRunType.payrollSummary => BusinessReportType.payrollSummary,
+    ReportRunType.profitCosts => BusinessReportType.profitAndCosts,
   };
 }
 
@@ -74,6 +77,9 @@ String _reportTitle(AppLocalizations l10n, ReportRunType type) {
     ReportRunType.inventoryStatus => l10n.reportInventoryValueTitle,
     ReportRunType.stockMovements => l10n.reportStockMovementTitle,
     ReportRunType.purchasingSummary => l10n.reportPurchasesTitle,
+    ReportRunType.reorderItems => l10n.reportReorderItemsTitle,
+    ReportRunType.payrollSummary => l10n.reportPayrollSummaryTitle,
+    ReportRunType.profitCosts => l10n.reportProfitCostsTitle,
   };
 }
 
@@ -208,7 +214,10 @@ List<ReportPdfField> _shopSettingFieldsForReport(
         value: '${settings.cashierReturnWindowHours} ساعة',
       ),
     ],
-    ReportRunType.inventoryStatus || ReportRunType.stockMovements => [
+    ReportRunType.payrollSummary || ReportRunType.profitCosts => const [],
+    ReportRunType.inventoryStatus ||
+    ReportRunType.stockMovements ||
+    ReportRunType.reorderItems => [
       ReportPdfField(
         label: 'حد تنبيه المخزون المنخفض',
         value: '${settings.lowStockThreshold}',
@@ -256,6 +265,12 @@ String _displayValueForKey(String key, Object? value) {
   }
 
   final raw = value.toString();
+  // Some sections carry metric/cost identifiers as row VALUES (e.g. the
+  // summary table's first column holds "gross_sales") — translate those the
+  // same way column headers are translated so no English key leaks through.
+  if (key == 'metric' || key == 'cost_item') {
+    return _labelFor(raw);
+  }
   final translatedValue = _valueLabel(raw);
   if (translatedValue != null) {
     return translatedValue;
@@ -379,6 +394,21 @@ const _moneyKeys = {
   'payable_balance',
   'credit_balance',
   'net_balance',
+  'amount',
+  'cash_sales_total',
+  'cash_refund_total',
+  'salary_expense',
+  'paid_total',
+  'pending_total',
+  'gross_total',
+  'additions_total',
+  'deductions_total',
+  'net_total',
+  'payroll_paid_total',
+  'payment_commission_total',
+  'purchase_spend_total',
+  'operating_expense_total',
+  'net_operating_profit',
 };
 
 const _percentKeys = {'profit_margin_percent'};
@@ -493,6 +523,35 @@ const _arabicLabels = {
   'total_count': 'إجمالي الصفوف',
   'omitted_count': 'غير معروض',
   'truncated': 'مختصر',
+  'cash_sales_total': 'المبيعات النقدية',
+  'cash_refund_total': 'المرتجعات النقدية',
+  'amount': 'المبلغ',
+  'reorder_items': 'أصناف تحتاج إعادة طلب',
+  'reorder_item_count': 'أصناف عند حد الطلب',
+  'suggested_quantity': 'الكمية المقترحة',
+  'suggested_units': 'إجمالي الكميات المقترحة',
+  'payroll_runs': 'مسيرات الرواتب',
+  'employee_totals': 'إجماليات الموظفين',
+  'employee_name': 'الموظف',
+  'run_number': 'رقم المسير',
+  'period_start': 'بداية الفترة',
+  'period_end': 'نهاية الفترة',
+  'gross_total': 'الإجمالي الأساسي',
+  'additions_total': 'الإضافات',
+  'deductions_total': 'الخصومات',
+  'net_total': 'الصافي',
+  'salary_expense': 'مصروف الرواتب',
+  'paid_total': 'الرواتب المدفوعة',
+  'pending_total': 'رواتب معتمدة غير مدفوعة',
+  'payroll_run_count': 'عدد المسيرات',
+  'active_employee_count': 'موظفون نشطون',
+  'cost_breakdown': 'تفصيل التكاليف',
+  'cost_item': 'بند التكلفة',
+  'payroll_paid_total': 'رواتب مدفوعة',
+  'payment_commission_total': 'عمولات الدفع',
+  'purchase_spend_total': 'إنفاق المشتريات',
+  'operating_expense_total': 'إجمالي المصاريف التشغيلية',
+  'net_operating_profit': 'صافي الربح التشغيلي',
 };
 
 const _arabicLabelTokens = {

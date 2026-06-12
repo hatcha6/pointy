@@ -59,40 +59,60 @@ class _CustomerDetailsScreenState extends State<CustomerDetailsScreen> {
               ),
             ],
           ),
-          body: SafeArea(
-            child: AdaptiveMaxWidth(
-              width: AppContentWidth.detail,
-              child: ListView(
-                padding: const EdgeInsets.all(16),
-                children: [
-                  _CustomerHeader(customer: customer),
-                  const SizedBox(height: 12),
-                  PointyDetailSection(
-                    title: l10n.customerProfileTitle,
-                    icon: Icons.badge_outlined,
-                    child: _CustomerProfile(viewModel: _viewModel),
-                  ),
-                  const SizedBox(height: 12),
-                  PointyDetailSection(
-                    title: l10n.customerSalesSummaryTitle,
-                    icon: Icons.summarize_outlined,
-                    child: _CustomerSalesSummary(viewModel: _viewModel),
-                  ),
-                  const SizedBox(height: 12),
-                  PointyDetailSection(
-                    title: l10n.customerInvoiceHistoryTitle,
-                    icon: Icons.receipt_long_outlined,
-                    child: _CustomerInvoiceHistory(viewModel: _viewModel),
-                  ),
-                  const SizedBox(height: 12),
-                  PointyDetailSection(
-                    title: l10n.customerAdjustmentHistoryTitle,
-                    icon: Icons.assignment_return_outlined,
-                    child: _CustomerAdjustmentHistory(viewModel: _viewModel),
-                  ),
-                ],
+          body: SafeArea(child: CustomerDetailsView(viewModel: _viewModel)),
+        );
+      },
+    );
+  }
+}
+
+/// Embeddable customer details body: used by [CustomerDetailsScreen] as a
+/// pushed route on compact widths, and by the contacts master-detail pane on
+/// desktop.
+class CustomerDetailsView extends StatelessWidget {
+  const CustomerDetailsView({super.key, required this.viewModel});
+
+  final CustomerDetailsViewModel viewModel;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+
+    return ListenableBuilder(
+      listenable: viewModel,
+      builder: (context, _) {
+        final customer = viewModel.customer;
+        return AdaptiveMaxWidth(
+          width: AppContentWidth.detail,
+          child: ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              _CustomerHeader(customer: customer),
+              const SizedBox(height: 12),
+              PointyDetailSection(
+                title: l10n.customerProfileTitle,
+                icon: Icons.badge_outlined,
+                child: _CustomerProfile(viewModel: viewModel),
               ),
-            ),
+              const SizedBox(height: 12),
+              PointyDetailSection(
+                title: l10n.customerSalesSummaryTitle,
+                icon: Icons.summarize_outlined,
+                child: _CustomerSalesSummary(viewModel: viewModel),
+              ),
+              const SizedBox(height: 12),
+              PointyDetailSection(
+                title: l10n.customerInvoiceHistoryTitle,
+                icon: Icons.receipt_long_outlined,
+                child: _CustomerInvoiceHistory(viewModel: viewModel),
+              ),
+              const SizedBox(height: 12),
+              PointyDetailSection(
+                title: l10n.customerAdjustmentHistoryTitle,
+                icon: Icons.assignment_return_outlined,
+                child: _CustomerAdjustmentHistory(viewModel: viewModel),
+              ),
+            ],
           ),
         );
       },

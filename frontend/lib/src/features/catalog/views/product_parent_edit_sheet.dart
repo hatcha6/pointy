@@ -96,8 +96,9 @@ class _ProductParentEditSheetState extends State<ProductParentEditSheet> {
           child: Form(
             key: _formKey,
             child: Column(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Expanded(
+                Flexible(
                   child: SingleChildScrollView(
                     padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
                     child: Column(

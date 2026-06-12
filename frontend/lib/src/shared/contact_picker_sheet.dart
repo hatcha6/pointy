@@ -140,7 +140,7 @@ Future<Customer?> showCreateCustomerSheet({
   required BuildContext context,
   required ContactRepository repository,
 }) {
-  return showAdaptiveModalBottomSheet<Customer?>(
+  return showAdaptiveFormSurface<Customer?>(
     context: context,
     size: AdaptiveModalSize.standard,
     maxHeightFactor: 0.92,
@@ -162,7 +162,7 @@ Future<SupplierContact?> showCreateSupplierSheet({
   required BuildContext context,
   required ContactRepository repository,
 }) {
-  return showAdaptiveModalBottomSheet<SupplierContact?>(
+  return showAdaptiveFormSurface<SupplierContact?>(
     context: context,
     size: AdaptiveModalSize.standard,
     maxHeightFactor: 0.92,

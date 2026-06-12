@@ -4,6 +4,18 @@ enum PrinterOutputMode { escPos, pdfA4 }
 
 enum BarcodeLabelPrinterLanguage { auto, zpl, tspl, epl, cpcl }
 
+/// How the receipt should be terminated. Cheap printers without a cutter
+/// should use [none] (feed only).
+enum ReceiptCutMode { partial, full, none }
+
+ReceiptCutMode receiptCutModeFromJson(Object? value) {
+  return switch (value?.toString()) {
+    'full' => ReceiptCutMode.full,
+    'none' || 'feed' => ReceiptCutMode.none,
+    _ => ReceiptCutMode.partial,
+  };
+}
+
 enum PrinterRole { posReceipt }
 
 PrinterRole printerRoleFromJson(Object? value) {
@@ -30,6 +42,9 @@ class PrinterEndpoint {
     this.codeTable = 'CP864',
     this.timeoutMs = 5000,
     this.outputMode = PrinterOutputMode.escPos,
+    this.capabilityProfile = 'default',
+    this.cutMode = ReceiptCutMode.partial,
+    this.feedLines = 2,
     this.barcodeLabelLanguage = BarcodeLabelPrinterLanguage.auto,
     this.labelWidthMm = 40,
     this.labelHeightMm = 30,
@@ -46,6 +61,14 @@ class PrinterEndpoint {
   final String codeTable;
   final int timeoutMs;
   final PrinterOutputMode outputMode;
+
+  /// ESC/POS capability profile name (esc_pos_utils_plus), so quirky printer
+  /// models can use their vendor profile instead of the generic one.
+  final String capabilityProfile;
+  final ReceiptCutMode cutMode;
+
+  /// Blank lines fed before cutting/tearing.
+  final int feedLines;
   final BarcodeLabelPrinterLanguage barcodeLabelLanguage;
   final int labelWidthMm;
   final int labelHeightMm;
@@ -75,6 +98,12 @@ class PrinterEndpoint {
           _transportKindFromJson(json['kind'] ?? json['transport']),
         ),
       ),
+      capabilityProfile:
+          json['capability_profile']?.toString().trim().isNotEmpty == true
+          ? json['capability_profile']!.toString().trim()
+          : 'default',
+      cutMode: receiptCutModeFromJson(json['cut_mode']),
+      feedLines: _intFromJson(json['feed_lines'], fallback: 2),
       barcodeLabelLanguage: barcodeLabelPrinterLanguageFromJson(
         json['barcode_label_language'] ?? json['label_language'],
       ),
@@ -108,6 +137,9 @@ class PrinterEndpoint {
       'code_table': codeTable,
       'timeout_ms': timeoutMs,
       'output_mode': outputMode.name,
+      'capability_profile': capabilityProfile,
+      'cut_mode': cutMode.name,
+      'feed_lines': feedLines,
       'barcode_label_language': barcodeLabelPrinterLanguageToJson(
         barcodeLabelLanguage,
       ),
@@ -128,6 +160,9 @@ class PrinterEndpoint {
     String? codeTable,
     int? timeoutMs,
     PrinterOutputMode? outputMode,
+    String? capabilityProfile,
+    ReceiptCutMode? cutMode,
+    int? feedLines,
     BarcodeLabelPrinterLanguage? barcodeLabelLanguage,
     int? labelWidthMm,
     int? labelHeightMm,
@@ -144,6 +179,9 @@ class PrinterEndpoint {
       codeTable: codeTable ?? this.codeTable,
       timeoutMs: timeoutMs ?? this.timeoutMs,
       outputMode: outputMode ?? this.outputMode,
+      capabilityProfile: capabilityProfile ?? this.capabilityProfile,
+      cutMode: cutMode ?? this.cutMode,
+      feedLines: feedLines ?? this.feedLines,
       barcodeLabelLanguage: barcodeLabelLanguage ?? this.barcodeLabelLanguage,
       labelWidthMm: labelWidthMm ?? this.labelWidthMm,
       labelHeightMm: labelHeightMm ?? this.labelHeightMm,

@@ -80,7 +80,7 @@ class _TotalLineView extends StatelessWidget {
                   line.value,
                   maxLines: 1,
                   textAlign: TextAlign.end,
-                  style: style,
+                  style: style == null ? null : PointyTypography.numeric(style),
                 ),
               ),
             ),

@@ -14,6 +14,7 @@ import '../models/shop_settings.dart';
 import 'order_document_action.dart';
 import 'order_document_web_delivery.dart';
 import 'print_transport.dart';
+import '../../shared/pdf/pointy_pdf_branding.dart';
 import '../../shared/pdf/pointy_pdf_table.dart';
 
 export 'order_document_action.dart';
@@ -1129,18 +1130,9 @@ class _DocumentFrame {
   }
 
   pw.Widget _footer(pw.Context context) {
-    return pw.Container(
-      padding: const pw.EdgeInsets.only(top: 8),
-      decoration: const pw.BoxDecoration(
-        border: pw.Border(top: pw.BorderSide(color: _PdfColors.border)),
-      ),
-      child: pw.Align(
-        alignment: pw.Alignment.centerLeft,
-        child: pw.Text(
+    return PointyPdfFooter(
+      pageLabel:
           '${labels.page} ${context.pageNumber} ${labels.ofPages} ${context.pagesCount}',
-          style: const pw.TextStyle(fontSize: 9, color: _PdfColors.muted),
-        ),
-      ),
     );
   }
 }

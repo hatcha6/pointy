@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
+import '../../../shared/pdf/pointy_pdf_branding.dart';
 import '../../../shared/pdf/pointy_pdf_table.dart';
 import 'report_pdf_fonts.dart';
 import 'report_pdf_labels.dart';
@@ -339,35 +340,10 @@ class _Footer extends pw.StatelessWidget {
 
   @override
   pw.Widget build(pw.Context context) {
-    final footerText = _compactText(report.businessFooter, maxCharacters: 150);
-
-    return pw.Container(
-      padding: const pw.EdgeInsets.only(top: 8),
-      decoration: const pw.BoxDecoration(
-        border: pw.Border(top: pw.BorderSide(color: _ReportColors.border)),
-      ),
-      child: pw.Row(
-        crossAxisAlignment: pw.CrossAxisAlignment.center,
-        children: [
-          pw.Text(
-            '${labels.page} ${context.pageNumber} ${labels.ofPages} ${context.pagesCount}',
-            style: const pw.TextStyle(color: _ReportColors.muted, fontSize: 8),
-          ),
-          if (footerText != null) ...[
-            pw.SizedBox(width: 10),
-            pw.Expanded(
-              child: pw.Text(
-                footerText,
-                style: const pw.TextStyle(
-                  color: _ReportColors.muted,
-                  fontSize: 8,
-                ),
-                textAlign: pw.TextAlign.right,
-              ),
-            ),
-          ],
-        ],
-      ),
+    return PointyPdfFooter(
+      pageLabel:
+          '${labels.page} ${context.pageNumber} ${labels.ofPages} ${context.pagesCount}',
+      shopFooter: _compactText(report.businessFooter, maxCharacters: 150),
     );
   }
 }

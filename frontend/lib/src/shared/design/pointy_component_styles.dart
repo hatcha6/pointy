@@ -23,6 +23,39 @@ abstract final class PointyDimensions {
 abstract final class PointyComponentStyles {
   static const BorderSide defaultBorder = BorderSide(color: PointyColors.line);
 
+  /// Hover/focus/pressed feedback for controls on light surfaces.
+  /// POS terminals run with a mouse, so hover states matter as much as ripples.
+  static WidgetStateProperty<Color?> get inkOverlay {
+    return WidgetStateProperty.resolveWith((states) {
+      if (states.contains(WidgetState.pressed)) {
+        return PointyColors.ink.withValues(alpha: 0.10);
+      }
+      if (states.contains(WidgetState.hovered)) {
+        return PointyColors.ink.withValues(alpha: 0.04);
+      }
+      if (states.contains(WidgetState.focused)) {
+        return PointyColors.ink.withValues(alpha: 0.08);
+      }
+      return null;
+    });
+  }
+
+  /// Feedback for controls on the primary green fill.
+  static WidgetStateProperty<Color?> get onPrimaryOverlay {
+    return WidgetStateProperty.resolveWith((states) {
+      if (states.contains(WidgetState.pressed)) {
+        return PointyColors.surface.withValues(alpha: 0.16);
+      }
+      if (states.contains(WidgetState.hovered)) {
+        return PointyColors.surface.withValues(alpha: 0.08);
+      }
+      if (states.contains(WidgetState.focused)) {
+        return PointyColors.surface.withValues(alpha: 0.12);
+      }
+      return null;
+    });
+  }
+
   static RoundedRectangleBorder shape(double radius) {
     return RoundedRectangleBorder(borderRadius: BorderRadius.circular(radius));
   }
@@ -44,7 +77,6 @@ abstract final class PointyComponentStyles {
       centerTitle: true,
       titleTextStyle: textTheme.titleLarge?.copyWith(
         color: PointyColors.ink,
-        fontSize: 24,
         fontWeight: FontWeight.w700,
       ),
       iconTheme: const IconThemeData(color: PointyColors.ink),
@@ -62,7 +94,7 @@ abstract final class PointyComponentStyles {
       centerTitle: true,
       titleTextStyle: textTheme.titleLarge?.copyWith(
         color: PointyColors.surface,
-        fontSize: 26,
+        fontSize: 24,
         fontWeight: FontWeight.w700,
       ),
       iconTheme: const IconThemeData(color: PointyColors.surface),
@@ -110,7 +142,7 @@ abstract final class PointyComponentStyles {
         disabledForegroundColor: PointyColors.mutedInk,
         shape: shape(PointyRadii.button),
         textStyle: const TextStyle(fontWeight: FontWeight.w700),
-      ),
+      ).copyWith(overlayColor: onPrimaryOverlay),
     );
   }
 
@@ -123,7 +155,7 @@ abstract final class PointyComponentStyles {
         side: const BorderSide(color: PointyColors.line),
         shape: shape(PointyRadii.button),
         textStyle: const TextStyle(fontWeight: FontWeight.w600),
-      ),
+      ).copyWith(overlayColor: inkOverlay),
     );
   }
 
@@ -135,7 +167,7 @@ abstract final class PointyComponentStyles {
         disabledForegroundColor: PointyColors.mutedInk,
         shape: shape(PointyRadii.button),
         textStyle: const TextStyle(fontWeight: FontWeight.w600),
-      ),
+      ).copyWith(overlayColor: inkOverlay),
     );
   }
 
@@ -146,7 +178,7 @@ abstract final class PointyComponentStyles {
         foregroundColor: PointyColors.ink,
         disabledForegroundColor: PointyColors.mutedInk,
         shape: shape(PointyRadii.button),
-      ),
+      ).copyWith(overlayColor: inkOverlay),
     );
   }
 

@@ -148,7 +148,9 @@ var publicInvoiceTemplate = template.Must(template.New("public-invoice").Parse(`
     .grand { font-size: 20px; font-weight: 800; }
     footer { padding: 18px 24px 24px; border-top: 1px solid #e5e7eb; }
     .actions { display: flex; justify-content: flex-end; margin-top: 18px; }
-    button { border: 0; border-radius: 6px; padding: 12px 18px; font: inherit; font-weight: 800; background: #155eef; color: #fff; cursor: pointer; }
+    button { border: 0; border-radius: 6px; padding: 12px 18px; font: inherit; font-weight: 800; background: #0b6b64; color: #fff; cursor: pointer; }
+    .credit { text-align: center; color: #6b7280; font-size: 12px; margin-top: 20px; }
+    .credit strong { color: #0b6b64; }
     @media (max-width: 560px) {
       main { padding: 12px; }
       header, .meta, footer { padding-inline: 16px; }
@@ -204,8 +206,9 @@ var publicInvoiceTemplate = template.Must(template.New("public-invoice").Parse(`
     {{if .ReceiptFooter}}<footer class="muted">{{.ReceiptFooter}}</footer>{{end}}
   </section>
   <div class="actions">
-    <button type="button" id="save-pdf" dir="ltr">Save as PDF</button>
+    <button type="button" id="save-pdf">حفظ كملف PDF</button>
   </div>
+  <p class="credit">صُنع بحب بواسطة <strong>سمات</strong> · نظام Pointy</p>
 </main>
 <script>
 document.getElementById('save-pdf').addEventListener('click', function () { window.print(); });

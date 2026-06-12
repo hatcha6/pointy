@@ -147,7 +147,9 @@ the payment/receipt accent, and clear danger/warning/success states.
 | `ink` | `#101828` | Primary text. |
 | `mutedInk` | `#667085` | Secondary labels and metadata. |
 | `line` | `#E5E0D8` | Borders and dividers. |
+| `lineStrong` | `#D5CFC4` | Emphasized hairlines and stronger separation. |
 | `surface` | `#FFFFFF` | Cards, sheets, inputs, dialogs. |
+| `surfaceSunken` | `#F1EFEA` | Recessed wells and grouped backgrounds. |
 | `page` | `#F8F7F4` | App background. |
 
 Avoid one-note palettes. Green is the brand/action color, but the app should be
@@ -156,8 +158,21 @@ distinct warning/danger states.
 
 ### Typography
 
-Use the app's default Arabic-capable Flutter font stack unless a project font is
-introduced globally. Typography should prioritize legibility and numeric clarity.
+The app typeface is **IBM Plex Sans Arabic**, bundled in
+`frontend/assets/fonts/` (weights 400/500/600/700) and applied globally through
+`PointyTypography` in `frontend/lib/src/shared/design/pointy_typography.dart`.
+Rules the type ramp already enforces — do not undo them locally:
+
+- `letterSpacing: 0` everywhere. Positive tracking visually breaks connected
+  Arabic script; never add letter spacing to Arabic text.
+- Line height ~1.5 for body/label styles and ~1.3 for titles so Arabic
+  ascenders and diacritics do not clip. Avoid hard-coded tight `height` values
+  in fixed-height rows.
+- Amounts, quantities, and barcodes use tabular figures via
+  `PointyTypography.numeric(style)` so digits align in columns and do not
+  jitter when values change.
+
+Typography should prioritize legibility and numeric clarity.
 
 | Role | Approx Size | Weight | Usage |
 | --- | ---: | ---: | --- |
@@ -184,8 +199,17 @@ line limits, and overflow behavior instead.
 - Bottom sheets: rounded top corners around 24-28 px and a drag handle.
 - Icon buttons: at least 48 x 48 px tap target.
 - Primary CTA: 64-80 px height depending screen density.
-- Elevation should be subtle. Prefer borders and surface separation over heavy
-  shadows.
+- Elevation should be subtle. Raised surfaces keep their 1 px `line` border
+  and add `PointyShadows.raised` (a whisper-soft two-layer ink shadow);
+  floating overlays (dialogs, side panels, menus) use `PointyShadows.overlay`.
+  Both live in `frontend/lib/src/shared/design/pointy_elevations.dart`. Never
+  invent ad-hoc `BoxShadow` values.
+- Motion uses `PointyMotion` tokens (`fast` 150 ms, `standard` 200 ms,
+  `emphasized` 250 ms, `easeOutCubic`). Transitions confirm state changes;
+  they never decorate. Do not hard-code durations.
+- Hover, focus, and pressed feedback comes from the theme
+  (`PointyComponentStyles.inkOverlay` / `onPrimaryOverlay`). Desktop POS
+  terminals have mice — interactive surfaces must respond to hover.
 
 Cards are for repeated items, modals, and genuinely framed tools. Do not nest
 cards inside cards.
@@ -226,6 +250,24 @@ missing, use a simple localized placeholder that does not look broken.
 ## Layout And Responsiveness
 
 Pointy should work on phones, tablets, desktop web, and POS terminals.
+
+### Master-Detail And Form Surfaces
+
+Two conventions govern how management screens use wide viewports:
+
+- **Master-detail**: list screens (catalog, invoices, contacts, discounts,
+  register sessions) use `MasterDetailLayout` from
+  `frontend/lib/src/shared/responsive/master_detail_layout.dart`. At content
+  widths >= `AppBreakpoints.masterDetailMin` (900 px of *pane* width, not
+  viewport), the list becomes a fixed-width leading pane and the detail
+  renders inline; below that, row taps keep their push navigation. Selection
+  state lives in the screen, never in the primitive. Detail panes get a
+  `ValueKey` per selection so the swap animation runs.
+- **Forms vs pickers**: create/edit forms open through
+  `showAdaptiveFormSurface` (bottom sheet below desktop width, centered
+  dialog or end-anchored side panel at desktop). Transient pickers, filter
+  sheets, and informational detail sheets stay on
+  `showAdaptiveModalBottomSheet`. If it has a save button, it is a form.
 
 Suggested breakpoints:
 

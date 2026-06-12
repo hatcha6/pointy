@@ -70,6 +70,9 @@ def setup_initial_admin_view(request):
             status=status.HTTP_409_CONFLICT,
         )
 
+    from apps.employees.services import ensure_employee_for_user
+
+    ensure_employee_for_user(admin, created_by=admin)
     login(request, admin)
     record_domain_event(
         name="setup.initial_admin.created",
@@ -185,8 +188,11 @@ class PosUserViewSet(viewsets.ModelViewSet):
         return super().initial(request, *args, **kwargs)
 
     def perform_create(self, serializer):
+        from apps.employees.services import ensure_employee_for_user
+
         role = self.request.data.get("role", "")
         user = serializer.save()
+        ensure_employee_for_user(user, created_by=self.request.user)
         record_domain_event(
             name="users.user.created",
             event_type=AnalyticsEvent.EventType.AUDIT,

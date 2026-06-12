@@ -76,55 +76,14 @@ class _DiscountDetailsScreenState extends State<DiscountDetailsScreen> {
                 ),
             ],
           ),
-          body: SafeArea(
-            child: AdaptiveMaxWidth(
-              width: AppContentWidth.list,
-              child: ListView(
-                padding: const EdgeInsets.all(16),
-                children: [
-                  _DiscountDetailsHeader(rule: rule),
-                  if (_viewModel.hasLoadError) ...[
-                    const SizedBox(height: 12),
-                    PointyInlineMessage.error(
-                      message: l10n.discountDetailsLoadError,
-                    ),
-                  ],
-                  if (_viewModel.isLoading &&
-                      _viewModel.performance == null) ...[
-                    const SizedBox(height: 12),
-                    const PointyLoadingArea(),
-                  ],
-                  if (_viewModel.performance case final performance?) ...[
-                    const SizedBox(height: 12),
-                    _PerformanceMetrics(performance: performance),
-                    const SizedBox(height: 12),
-                    _IncrementalitySection(
-                      incrementality: performance.incrementality,
-                    ),
-                    const SizedBox(height: 12),
-                    _TrendSection(trend: performance.monthlyTrend),
-                    const SizedBox(height: 12),
-                    _ChannelBreakdownSection(
-                      breakdown: performance.channelBreakdown,
-                    ),
-                  ],
-                  const SizedBox(height: 12),
-                  _ConfigurationSection(rule: rule),
-                  const SizedBox(height: 12),
-                  _ConstraintsSection(rule: rule),
-                  const SizedBox(height: 12),
-                  _BeneficiariesSection(viewModel: _viewModel),
-                ],
-              ),
-            ),
-          ),
+          body: SafeArea(child: DiscountDetailsView(viewModel: _viewModel)),
         );
       },
     );
   }
 
   Future<void> _openForm(BuildContext context, DiscountRule rule) async {
-    await showAdaptiveModalBottomSheet<void>(
+    await showAdaptiveFormSurface<void>(
       context: context,
       size: AdaptiveModalSize.expanded,
       maxHeightFactor: 0.94,
@@ -144,6 +103,66 @@ class _DiscountDetailsScreenState extends State<DiscountDetailsScreen> {
       },
     );
     await _viewModel.load();
+  }
+}
+
+/// Embeddable discount details body: used by [DiscountDetailsScreen] as a
+/// pushed route on compact widths, and by the discount management
+/// master-detail pane on desktop.
+class DiscountDetailsView extends StatelessWidget {
+  const DiscountDetailsView({super.key, required this.viewModel});
+
+  final DiscountDetailsViewModel viewModel;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+
+    return ListenableBuilder(
+      listenable: viewModel,
+      builder: (context, _) {
+        final rule = viewModel.rule;
+        return AdaptiveMaxWidth(
+          width: AppContentWidth.list,
+          child: ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              _DiscountDetailsHeader(rule: rule),
+              if (viewModel.hasLoadError) ...[
+                const SizedBox(height: 12),
+                PointyInlineMessage.error(
+                  message: l10n.discountDetailsLoadError,
+                ),
+              ],
+              if (viewModel.isLoading && viewModel.performance == null) ...[
+                const SizedBox(height: 12),
+                const PointyLoadingArea(),
+              ],
+              if (viewModel.performance case final performance?) ...[
+                const SizedBox(height: 12),
+                _PerformanceMetrics(performance: performance),
+                const SizedBox(height: 12),
+                _IncrementalitySection(
+                  incrementality: performance.incrementality,
+                ),
+                const SizedBox(height: 12),
+                _TrendSection(trend: performance.monthlyTrend),
+                const SizedBox(height: 12),
+                _ChannelBreakdownSection(
+                  breakdown: performance.channelBreakdown,
+                ),
+              ],
+              const SizedBox(height: 12),
+              _ConfigurationSection(rule: rule),
+              const SizedBox(height: 12),
+              _ConstraintsSection(rule: rule),
+              const SizedBox(height: 12),
+              _BeneficiariesSection(viewModel: viewModel),
+            ],
+          ),
+        );
+      },
+    );
   }
 }
 

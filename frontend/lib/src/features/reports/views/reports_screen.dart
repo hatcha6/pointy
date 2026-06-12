@@ -22,6 +22,9 @@ enum ReportType {
   inventoryValue,
   stockMovement,
   purchases,
+  reorderItems,
+  payrollSummary,
+  profitCosts,
 }
 
 enum ReportPeriodPreset { today, week, month, custom }
@@ -102,6 +105,8 @@ class _ReportsScreenState extends State<ReportsScreen> {
   bool _includeAuditTrail = true;
   bool _includePreparedBy = true;
   _ReportOutputAction? _runningAction;
+  _ReportOutputAction? _lastCompletedAction;
+  ReportType? _lastCompletedType;
 
   @override
   Widget build(BuildContext context) {
@@ -144,6 +149,8 @@ class _ReportsScreenState extends State<ReportsScreen> {
           includeAuditTrail: _includeAuditTrail,
           includePreparedBy: _includePreparedBy,
           runningAction: _runningAction,
+          lastCompletedAction: _lastCompletedAction,
+          lastCompletedType: _lastCompletedType,
           onSelectType: _selectReportType,
           onOpenTypeDetails: _openReportDetails,
           onSelectPreset: (preset) {
@@ -211,6 +218,8 @@ class _ReportsScreenState extends State<ReportsScreen> {
                 includeAuditTrail: _includeAuditTrail,
                 includePreparedBy: _includePreparedBy,
                 runningAction: _runningAction,
+                lastCompletedAction: _lastCompletedAction,
+                lastCompletedType: _lastCompletedType,
                 onSelectPreset: (preset) {
                   if (!mounted) {
                     return;
@@ -344,6 +353,13 @@ class _ReportsScreenState extends State<ReportsScreen> {
     onStateChanged?.call();
     try {
       await callback(request);
+      if (mounted) {
+        setState(() {
+          _lastCompletedAction = action;
+          _lastCompletedType = request.type;
+        });
+        onStateChanged?.call();
+      }
     } catch (_) {
       if (mounted) {
         final l10n = AppLocalizations.of(context)!;
@@ -405,6 +421,8 @@ class _ReportsWorkspace extends StatelessWidget {
     required this.includeAuditTrail,
     required this.includePreparedBy,
     required this.runningAction,
+    required this.lastCompletedAction,
+    required this.lastCompletedType,
     required this.onSelectType,
     required this.onOpenTypeDetails,
     required this.onSelectPreset,
@@ -424,6 +442,8 @@ class _ReportsWorkspace extends StatelessWidget {
   final bool includeAuditTrail;
   final bool includePreparedBy;
   final _ReportOutputAction? runningAction;
+  final _ReportOutputAction? lastCompletedAction;
+  final ReportType? lastCompletedType;
   final ValueChanged<ReportType> onSelectType;
   final ValueChanged<ReportType> onOpenTypeDetails;
   final ValueChanged<ReportPeriodPreset> onSelectPreset;
@@ -441,11 +461,11 @@ class _ReportsWorkspace extends StatelessWidget {
         final width = constraints.hasBoundedWidth
             ? constraints.maxWidth
             : MediaQuery.sizeOf(context).width;
-        final isCompact = width < 900;
+        final isCompact = width < AppBreakpoints.masterDetailMin;
 
         if (!isCompact) {
           return TwoPaneLayout(
-            dualPaneBreakpoint: 900,
+            dualPaneBreakpoint: AppBreakpoints.masterDetailMin,
             secondaryFirst: true,
             secondaryPaneWidth: 380,
             secondaryPane: _ReportCatalog(
@@ -463,6 +483,8 @@ class _ReportsWorkspace extends StatelessWidget {
                 includeAuditTrail: includeAuditTrail,
                 includePreparedBy: includePreparedBy,
                 runningAction: runningAction,
+                lastCompletedAction: lastCompletedAction,
+                lastCompletedType: lastCompletedType,
                 onSelectPreset: onSelectPreset,
                 onSelectStartDate: onSelectStartDate,
                 onSelectEndDate: onSelectEndDate,
@@ -654,6 +676,8 @@ class _ReportConfiguration extends StatelessWidget {
     required this.includeAuditTrail,
     required this.includePreparedBy,
     required this.runningAction,
+    required this.lastCompletedAction,
+    required this.lastCompletedType,
     required this.onSelectPreset,
     required this.onSelectStartDate,
     required this.onSelectEndDate,
@@ -670,6 +694,8 @@ class _ReportConfiguration extends StatelessWidget {
   final bool includeAuditTrail;
   final bool includePreparedBy;
   final _ReportOutputAction? runningAction;
+  final _ReportOutputAction? lastCompletedAction;
+  final ReportType? lastCompletedType;
   final ValueChanged<ReportPeriodPreset> onSelectPreset;
   final VoidCallback onSelectStartDate;
   final VoidCallback onSelectEndDate;
@@ -712,6 +738,8 @@ class _ReportConfiguration extends StatelessWidget {
             dateRange: dateRange,
             granularity: granularity,
             runningAction: runningAction,
+            lastCompletedAction: lastCompletedAction,
+            lastCompletedType: lastCompletedType,
             onRunAction: onRunAction,
           ),
         ],
@@ -925,6 +953,8 @@ class _OutputActionsPanel extends StatelessWidget {
     required this.dateRange,
     required this.granularity,
     required this.runningAction,
+    required this.lastCompletedAction,
+    required this.lastCompletedType,
     required this.onRunAction,
   });
 
@@ -932,6 +962,8 @@ class _OutputActionsPanel extends StatelessWidget {
   final DateTimeRange dateRange;
   final ReportGranularity granularity;
   final _ReportOutputAction? runningAction;
+  final _ReportOutputAction? lastCompletedAction;
+  final ReportType? lastCompletedType;
   final ValueChanged<_ReportOutputAction> onRunAction;
 
   @override
@@ -1001,6 +1033,26 @@ class _OutputActionsPanel extends StatelessWidget {
               ),
             ],
           ),
+          if (lastCompletedAction != null &&
+              lastCompletedType != null &&
+              runningAction == null) ...[
+            const SizedBox(height: 12),
+            PointyInlineMessage.success(
+              message: l10n.reportLastCompletedMessage(
+                _outputActionLabel(l10n, lastCompletedAction!),
+                _reportTitle(l10n, lastCompletedType!),
+              ),
+            ),
+            const SizedBox(height: 4),
+            Align(
+              alignment: AlignmentDirectional.centerStart,
+              child: TextButton.icon(
+                onPressed: () => onRunAction(lastCompletedAction!),
+                icon: const Icon(Icons.replay_outlined),
+                label: Text(l10n.reportRunAgainButton),
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -1122,6 +1174,18 @@ const _reportDefinitions = [
     type: ReportType.purchases,
     icon: Icons.add_shopping_cart_outlined,
   ),
+  _ReportDefinition(
+    type: ReportType.reorderItems,
+    icon: Icons.production_quantity_limits_outlined,
+  ),
+  _ReportDefinition(
+    type: ReportType.payrollSummary,
+    icon: Icons.badge_outlined,
+  ),
+  _ReportDefinition(
+    type: ReportType.profitCosts,
+    icon: Icons.account_balance_outlined,
+  ),
 ];
 
 List<_ReportDefinition> _availableReportDefinitions(
@@ -1144,6 +1208,10 @@ bool _isReportAvailable(
     ReportType.inventoryValue ||
     ReportType.stockMovement => capabilities.canViewStock,
     ReportType.purchases => capabilities.canAccessPurchasing,
+    ReportType.reorderItems => capabilities.canViewStock,
+    ReportType.payrollSummary => capabilities.canViewPayroll,
+    ReportType.profitCosts =>
+      capabilities.canViewSalesDashboard && capabilities.canViewPayroll,
   };
 }
 
@@ -1168,6 +1236,9 @@ String _reportTitle(AppLocalizations l10n, ReportType type) {
     ReportType.inventoryValue => l10n.reportInventoryValueTitle,
     ReportType.stockMovement => l10n.reportStockMovementTitle,
     ReportType.purchases => l10n.reportPurchasesTitle,
+    ReportType.reorderItems => l10n.reportReorderItemsTitle,
+    ReportType.payrollSummary => l10n.reportPayrollSummaryTitle,
+    ReportType.profitCosts => l10n.reportProfitCostsTitle,
   };
 }
 
@@ -1179,6 +1250,9 @@ String _reportSubtitle(AppLocalizations l10n, ReportType type) {
     ReportType.inventoryValue => l10n.reportInventoryValueSubtitle,
     ReportType.stockMovement => l10n.reportStockMovementSubtitle,
     ReportType.purchases => l10n.reportPurchasesSubtitle,
+    ReportType.reorderItems => l10n.reportReorderItemsSubtitle,
+    ReportType.payrollSummary => l10n.reportPayrollSummarySubtitle,
+    ReportType.profitCosts => l10n.reportProfitCostsSubtitle,
   };
 }
 
@@ -1190,6 +1264,9 @@ String _reportCategory(AppLocalizations l10n, ReportType type) {
     ReportType.inventoryValue ||
     ReportType.stockMovement => l10n.reportCategoryInventory,
     ReportType.purchases => l10n.reportCategoryPurchasing,
+    ReportType.reorderItems => l10n.reportCategoryInventory,
+    ReportType.payrollSummary => l10n.reportCategoryEmployees,
+    ReportType.profitCosts => l10n.reportCategorySales,
   };
 }
 

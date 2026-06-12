@@ -15,10 +15,13 @@ class PointySemanticColors extends ThemeExtension<PointySemanticColors> {
     required this.ink,
     required this.mutedInk,
     required this.line,
+    required this.lineStrong,
     required this.page,
     required this.surface,
+    required this.surfaceSunken,
     required this.subtleFill,
     required this.onDarkTopBar,
+    required this.shadow,
   });
 
   const PointySemanticColors.light()
@@ -32,10 +35,13 @@ class PointySemanticColors extends ThemeExtension<PointySemanticColors> {
       ink = PointyColors.ink,
       mutedInk = PointyColors.mutedInk,
       line = PointyColors.line,
+      lineStrong = PointyColors.lineStrong,
       page = PointyColors.page,
       surface = PointyColors.surface,
+      surfaceSunken = PointyColors.surfaceSunken,
       subtleFill = PointyColors.subtleFill,
-      onDarkTopBar = PointyColors.surface;
+      onDarkTopBar = PointyColors.surface,
+      shadow = PointyColors.ink;
 
   final Color primaryStrong;
   final Color primaryDark;
@@ -47,10 +53,13 @@ class PointySemanticColors extends ThemeExtension<PointySemanticColors> {
   final Color ink;
   final Color mutedInk;
   final Color line;
+  final Color lineStrong;
   final Color page;
   final Color surface;
+  final Color surfaceSunken;
   final Color subtleFill;
   final Color onDarkTopBar;
+  final Color shadow;
 
   @override
   PointySemanticColors copyWith({
@@ -64,10 +73,13 @@ class PointySemanticColors extends ThemeExtension<PointySemanticColors> {
     Color? ink,
     Color? mutedInk,
     Color? line,
+    Color? lineStrong,
     Color? page,
     Color? surface,
+    Color? surfaceSunken,
     Color? subtleFill,
     Color? onDarkTopBar,
+    Color? shadow,
   }) {
     return PointySemanticColors(
       primaryStrong: primaryStrong ?? this.primaryStrong,
@@ -80,10 +92,13 @@ class PointySemanticColors extends ThemeExtension<PointySemanticColors> {
       ink: ink ?? this.ink,
       mutedInk: mutedInk ?? this.mutedInk,
       line: line ?? this.line,
+      lineStrong: lineStrong ?? this.lineStrong,
       page: page ?? this.page,
       surface: surface ?? this.surface,
+      surfaceSunken: surfaceSunken ?? this.surfaceSunken,
       subtleFill: subtleFill ?? this.subtleFill,
       onDarkTopBar: onDarkTopBar ?? this.onDarkTopBar,
+      shadow: shadow ?? this.shadow,
     );
   }
 
@@ -106,10 +121,13 @@ class PointySemanticColors extends ThemeExtension<PointySemanticColors> {
       ink: Color.lerp(ink, other.ink, t)!,
       mutedInk: Color.lerp(mutedInk, other.mutedInk, t)!,
       line: Color.lerp(line, other.line, t)!,
+      lineStrong: Color.lerp(lineStrong, other.lineStrong, t)!,
       page: Color.lerp(page, other.page, t)!,
       surface: Color.lerp(surface, other.surface, t)!,
+      surfaceSunken: Color.lerp(surfaceSunken, other.surfaceSunken, t)!,
       subtleFill: Color.lerp(subtleFill, other.subtleFill, t)!,
       onDarkTopBar: Color.lerp(onDarkTopBar, other.onDarkTopBar, t)!,
+      shadow: Color.lerp(shadow, other.shadow, t)!,
     );
   }
 }

@@ -56,14 +56,16 @@ class PointyAmountDisplay extends StatelessWidget {
               child: Text(
                 value,
                 maxLines: 1,
-                style:
-                    (emphasized
-                            ? textTheme.headlineSmall
-                            : textTheme.titleLarge)
-                        ?.copyWith(
-                          color: amountColor,
-                          fontWeight: FontWeight.w800,
-                        ),
+                style: switch ((emphasized
+                        ? textTheme.headlineSmall
+                        : textTheme.titleLarge)
+                    ?.copyWith(
+                      color: amountColor,
+                      fontWeight: FontWeight.w800,
+                    )) {
+                  final style? => PointyTypography.numeric(style),
+                  null => null,
+                },
               ),
             ),
           ],

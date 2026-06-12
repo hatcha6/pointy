@@ -33,7 +33,7 @@ Future<ProductVariant?> showPurchaseQuickProductSheet(
   required String barcode,
   required PurchaseViewModel viewModel,
 }) {
-  return showAdaptiveModalBottomSheet<ProductVariant?>(
+  return showAdaptiveFormSurface<ProductVariant?>(
     context: context,
     builder: (context) {
       return PurchaseQuickProductSheet(

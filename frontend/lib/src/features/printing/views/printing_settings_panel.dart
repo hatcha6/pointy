@@ -143,6 +143,8 @@ class _PrinterRoleDialog extends StatefulWidget {
 class _PrinterRoleDialogState extends State<_PrinterRoleDialog> {
   late final TextEditingController _paperWidthController;
   late final TextEditingController _codeTableController;
+  late final TextEditingController _capabilityProfileController;
+  late final TextEditingController _feedLinesController;
   late final TextEditingController _labelWidthController;
   late final TextEditingController _labelHeightController;
   late final TextEditingController _labelGapController;
@@ -156,6 +158,10 @@ class _PrinterRoleDialogState extends State<_PrinterRoleDialog> {
       text: '${endpoint.paperWidthMm}',
     );
     _codeTableController = TextEditingController(text: endpoint.codeTable);
+    _capabilityProfileController = TextEditingController(
+      text: endpoint.capabilityProfile,
+    );
+    _feedLinesController = TextEditingController(text: '${endpoint.feedLines}');
     _labelWidthController = TextEditingController(
       text: '${endpoint.labelWidthMm}',
     );
@@ -177,6 +183,8 @@ class _PrinterRoleDialogState extends State<_PrinterRoleDialog> {
   void dispose() {
     _paperWidthController.dispose();
     _codeTableController.dispose();
+    _capabilityProfileController.dispose();
+    _feedLinesController.dispose();
     _labelWidthController.dispose();
     _labelHeightController.dispose();
     _labelGapController.dispose();
@@ -247,6 +255,60 @@ class _PrinterRoleDialogState extends State<_PrinterRoleDialog> {
                         decoration: InputDecoration(
                           labelText: l10n.printerCodeTableLabel,
                           prefixIcon: const Icon(Icons.translate_outlined),
+                        ),
+                      ),
+                      TextFormField(
+                        controller: _capabilityProfileController,
+                        enabled: !widget.viewModel.isTesting,
+                        onChanged: widget.viewModel.updateCapabilityProfile,
+                        decoration: InputDecoration(
+                          labelText: l10n.printerCapabilityProfileLabel,
+                          helperText: l10n.printerCapabilityProfileHelper,
+                          prefixIcon: const Icon(Icons.tune_outlined),
+                        ),
+                      ),
+                      DropdownButtonFormField<ReceiptCutMode>(
+                        key: ValueKey(endpoint.cutMode),
+                        initialValue: endpoint.cutMode,
+                        isExpanded: true,
+                        decoration: InputDecoration(
+                          labelText: l10n.printerCutModeLabel,
+                          prefixIcon: const Icon(Icons.content_cut_outlined),
+                        ),
+                        items: [
+                          DropdownMenuItem(
+                            value: ReceiptCutMode.partial,
+                            child: Text(l10n.printerCutModePartial),
+                          ),
+                          DropdownMenuItem(
+                            value: ReceiptCutMode.full,
+                            child: Text(l10n.printerCutModeFull),
+                          ),
+                          DropdownMenuItem(
+                            value: ReceiptCutMode.none,
+                            child: Text(l10n.printerCutModeNone),
+                          ),
+                        ],
+                        onChanged: widget.viewModel.isTesting
+                            ? null
+                            : (mode) {
+                                if (mode != null) {
+                                  widget.viewModel.updateCutMode(mode);
+                                }
+                              },
+                      ),
+                      TextFormField(
+                        controller: _feedLinesController,
+                        enabled: !widget.viewModel.isTesting,
+                        keyboardType: TextInputType.number,
+                        inputFormatters: [
+                          FilteringTextInputFormatter.digitsOnly,
+                        ],
+                        onChanged: widget.viewModel.updateFeedLines,
+                        decoration: InputDecoration(
+                          labelText: l10n.printerFeedLinesLabel,
+                          helperText: l10n.printerFeedLinesHelper,
+                          prefixIcon: const Icon(Icons.density_medium_outlined),
                         ),
                       ),
                     ],
@@ -411,6 +473,8 @@ class _PrinterRoleDialogState extends State<_PrinterRoleDialog> {
     final endpoint = widget.viewModel.config.endpoint;
     _setText(_paperWidthController, '${endpoint.paperWidthMm}');
     _setText(_codeTableController, endpoint.codeTable);
+    _setText(_capabilityProfileController, endpoint.capabilityProfile);
+    _setText(_feedLinesController, '${endpoint.feedLines}');
     _setText(_labelWidthController, '${endpoint.labelWidthMm}');
     _setText(_labelHeightController, '${endpoint.labelHeightMm}');
     _setText(_labelGapController, '${endpoint.labelGapMm}');

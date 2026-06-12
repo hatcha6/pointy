@@ -773,6 +773,9 @@ class PayrollDashboardSummary {
     required this.pendingTotal,
     required this.activeEmployeeCount,
     required this.payrollRunCount,
+    this.draftRunCount = 0,
+    this.pendingRunCount = 0,
+    this.pendingLoanRequestCount = 0,
   });
 
   final double salaryExpense;
@@ -780,6 +783,9 @@ class PayrollDashboardSummary {
   final double pendingTotal;
   final int activeEmployeeCount;
   final int payrollRunCount;
+  final int draftRunCount;
+  final int pendingRunCount;
+  final int pendingLoanRequestCount;
 
   factory PayrollDashboardSummary.fromJson(Map<String, Object?> json) {
     return PayrollDashboardSummary(
@@ -788,6 +794,11 @@ class PayrollDashboardSummary {
       pendingTotal: _moneyFromJson(json['pending_total']),
       activeEmployeeCount: _intFromJson(json['active_employee_count']),
       payrollRunCount: _intFromJson(json['payroll_run_count']),
+      draftRunCount: _intFromJson(json['draft_run_count']),
+      pendingRunCount: _intFromJson(json['pending_run_count']),
+      pendingLoanRequestCount: _intFromJson(
+        json['pending_loan_request_count'],
+      ),
     );
   }
 }

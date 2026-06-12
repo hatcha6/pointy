@@ -35,6 +35,7 @@ class ProductList extends StatelessWidget {
     required this.onBarcodeSubmitted,
     required this.onOpenCameraScanner,
     required this.onCreateProduct,
+    this.onOpenProduct,
   });
 
   final CatalogViewModel viewModel;
@@ -48,6 +49,10 @@ class ProductList extends StatelessWidget {
   final FutureOr<bool> Function(String barcode) onBarcodeSubmitted;
   final VoidCallback onOpenCameraScanner;
   final VoidCallback onCreateProduct;
+
+  /// Overrides the default push navigation when a product row is opened.
+  /// The catalog master-detail pane uses this to select inline.
+  final ValueChanged<Product>? onOpenProduct;
 
   @override
   Widget build(BuildContext context) {
@@ -98,7 +103,8 @@ class ProductList extends StatelessWidget {
                 icon: Icons.inventory_2_outlined,
                 title: l10n.emptyCatalog,
               ),
-              onOpenProduct: (product) => _openProduct(context, product),
+              onOpenProduct: (product) =>
+                  (onOpenProduct ?? (p) => _openProduct(context, p))(product),
             ),
           ),
         ],

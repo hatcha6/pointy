@@ -13,6 +13,9 @@ class ReportRun(TimeStampedModel):
         INVENTORY_STATUS = "inventory_status", "Inventory status"
         STOCK_MOVEMENTS = "stock_movements", "Stock movements"
         PURCHASING_SUMMARY = "purchasing_summary", "Purchasing summary"
+        REORDER_ITEMS = "reorder_items", "Reorder items"
+        PAYROLL_SUMMARY = "payroll_summary", "Payroll summary"
+        PROFIT_COSTS = "profit_costs", "Profit and costs"
 
     class OutputFormat(models.TextChoices):
         JSON = "json", "JSON"

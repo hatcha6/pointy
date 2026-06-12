@@ -217,7 +217,8 @@ class RegisterSessionApiTests(TestCase):
         self.assertEqual(close_response.status_code, status.HTTP_200_OK)
         session = RegisterSession.objects.get(pk=session_id)
         self.assertEqual(session.status, RegisterSession.Status.CLOSED)
-        self.assertEqual(session.closing_cash, Decimal("18.75"))
+        # Submitted cash (18.75) plus the counted denominations (12.50).
+        self.assertEqual(session.closing_cash, Decimal("31.25"))
         self.assertEqual(session.count_025, 3)
         self.assertEqual(session.count_050, 4)
         self.assertEqual(session.count_075, 5)
@@ -261,7 +262,7 @@ class RegisterSessionApiTests(TestCase):
         close_response = self.client.post(
             reverse("register-session-close", args=[session_id]),
             {
-                "closing_cash": "18.75",
+                "closing_cash": "6.25",
                 "count_025": 3,
                 "count_050": 4,
                 "count_075": 5,
@@ -292,6 +293,8 @@ class RegisterSessionApiTests(TestCase):
         self.assertEqual(detail_response.data["cash_refund_total"], "0.00")
         self.assertEqual(detail_response.data["expected_cash"], "19.00")
         self.assertEqual(detail_response.data["denomination_total"], "12.50")
+        # 6.25 entered + 12.50 in counted denominations.
+        self.assertEqual(detail_response.data["closing_cash"], "18.75")
         self.assertEqual(detail_response.data["cash_variance"], "-0.25")
         self.assertTrue(detail_response.data["has_cash_variance"])
 

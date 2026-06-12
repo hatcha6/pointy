@@ -509,6 +509,9 @@ class RegisterSessionViewSet(
 
         for field, value in serializer.validated_data.items():
             setattr(session, field, value)
+        # ``closing_cash`` stores the full drawer total: the manually entered
+        # cash plus the value of the counted denominations.
+        session.closing_cash = session.closing_cash + session.denomination_total
         session.status = RegisterSession.Status.CLOSED
         session.closed_at = timezone.now()
         session.save(

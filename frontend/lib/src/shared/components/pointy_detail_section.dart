@@ -24,33 +24,39 @@ class PointyDetailSection extends StatelessWidget {
     final spacing = AdaptiveSpacing.of(context);
     final colors = context.pointyColors;
 
-    final section = Card(
-      margin: EdgeInsets.zero,
-      child: Padding(
-        padding: spacing.compactPadding,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              children: [
-                Icon(icon, color: colors.primaryStrong),
-                SizedBox(width: spacing.sm),
-                Expanded(
-                  child: Text(
-                    title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w800,
+    final section = DecoratedBox(
+      decoration: const BoxDecoration(
+        borderRadius: BorderRadius.all(Radius.circular(PointyRadii.card)),
+        boxShadow: PointyShadows.raised,
+      ),
+      child: Card(
+        margin: EdgeInsets.zero,
+        child: Padding(
+          padding: spacing.compactPadding,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  Icon(icon, color: colors.primaryStrong),
+                  SizedBox(width: spacing.sm),
+                  Expanded(
+                    child: Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
                     ),
                   ),
-                ),
-                ?trailing,
-              ],
-            ),
-            SizedBox(height: spacing.sm),
-            child,
-          ],
+                  ?trailing,
+                ],
+              ),
+              SizedBox(height: spacing.sm),
+              child,
+            ],
+          ),
         ),
       ),
     );

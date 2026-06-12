@@ -12,6 +12,12 @@ class AppBreakpoints {
   static const double desktopMin = 1024;
   static const double widePosMin = 1366;
 
+  /// Minimum *content* width for inline master-detail panes. Measured against
+  /// the pane's own constraints, not the viewport: a 1024 px desktop window
+  /// with an extended navigation rail leaves ~784 px of content, so a
+  /// viewport-tier threshold would disable dual-pane exactly where it helps.
+  static const double masterDetailMin = 900;
+
   static AppBreakpoint of(BuildContext context) {
     return forWidth(MediaQuery.sizeOf(context).width);
   }

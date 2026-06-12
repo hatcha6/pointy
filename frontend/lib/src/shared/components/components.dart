@@ -1,3 +1,4 @@
+export 'pointy_card_grid.dart';
 export 'pointy_data_list.dart';
 export 'pointy_data_row.dart';
 export 'pointy_detail_section.dart';

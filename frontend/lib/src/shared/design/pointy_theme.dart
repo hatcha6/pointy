@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'pointy_colors.dart';
 import 'pointy_component_styles.dart';
 import 'pointy_theme_extensions.dart';
+import 'pointy_typography.dart';
 
 abstract final class PointyTheme {
   static ThemeData light() {
@@ -32,15 +33,19 @@ abstract final class PointyTheme {
       useMaterial3: true,
       colorScheme: colorScheme,
       brightness: Brightness.light,
+      fontFamily: PointyTypography.fontFamily,
     );
-    final textTheme = baseTheme.textTheme.apply(
-      bodyColor: PointyColors.ink,
-      displayColor: PointyColors.ink,
-    );
+    final textTheme = PointyTypography.textTheme(
+      baseTheme.textTheme,
+    ).apply(bodyColor: PointyColors.ink, displayColor: PointyColors.ink);
 
     return baseTheme.copyWith(
       scaffoldBackgroundColor: PointyColors.page,
       textTheme: textTheme,
+      hoverColor: PointyColors.ink.withValues(alpha: 0.04),
+      focusColor: PointyColors.ink.withValues(alpha: 0.08),
+      highlightColor: PointyColors.ink.withValues(alpha: 0.06),
+      splashColor: PointyColors.ink.withValues(alpha: 0.10),
       extensions: const [semanticColors],
       appBarTheme: PointyComponentStyles.appBarTheme(textTheme),
       bottomSheetTheme: BottomSheetThemeData(

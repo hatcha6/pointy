@@ -40,6 +40,7 @@ class InvoiceListScreen extends StatelessWidget {
     this.onOpenActivityLog,
     this.onOpenUsers,
     this.onOpenShopSettings,
+    this.detailPaneBuilder,
   });
 
   final InvoiceListViewModel viewModel;
@@ -61,6 +62,11 @@ class InvoiceListScreen extends StatelessWidget {
   final VoidCallback? onOpenUsers;
   final VoidCallback? onOpenShopSettings;
   final VoidCallback onLogout;
+
+  /// When provided, wide layouts show the selected invoice inline in a
+  /// trailing detail pane instead of pushing a route.
+  final Widget Function(BuildContext context, SaleOrder order)?
+  detailPaneBuilder;
 
   @override
   Widget build(BuildContext context) {
@@ -114,6 +120,7 @@ class InvoiceListScreen extends StatelessWidget {
               viewModel: viewModel,
               contactRepository: contactRepository,
               onOpenInvoice: onOpenInvoice,
+              detailPaneBuilder: detailPaneBuilder,
             ),
           ),
         );
@@ -122,19 +129,63 @@ class InvoiceListScreen extends StatelessWidget {
   }
 }
 
-class _InvoiceListBody extends StatelessWidget {
+class _InvoiceListBody extends StatefulWidget {
   const _InvoiceListBody({
     required this.viewModel,
     required this.contactRepository,
     required this.onOpenInvoice,
+    this.detailPaneBuilder,
   });
 
   final InvoiceListViewModel viewModel;
   final ContactRepository contactRepository;
   final ValueChanged<SaleOrder> onOpenInvoice;
+  final Widget Function(BuildContext context, SaleOrder order)?
+  detailPaneBuilder;
+
+  @override
+  State<_InvoiceListBody> createState() => _InvoiceListBodyState();
+}
+
+class _InvoiceListBodyState extends State<_InvoiceListBody> {
+  InvoiceListViewModel get viewModel => widget.viewModel;
+
+  SaleOrder? _selectedOrder;
+
+  void _openInvoice(SaleOrder order, bool isDualPane) {
+    if (isDualPane && widget.detailPaneBuilder != null) {
+      setState(() {
+        _selectedOrder = order;
+      });
+      return;
+    }
+    widget.onOpenInvoice(order);
+  }
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+
+    if (widget.detailPaneBuilder == null) {
+      return _buildList(context, false);
+    }
+
+    return MasterDetailLayout(
+      listPaneBuilder: _buildList,
+      placeholder: PointyEmptyState(
+        icon: Icons.receipt_long_outlined,
+        title: l10n.invoicesSelectInvoicePlaceholder,
+      ),
+      detailPane: _selectedOrder == null || widget.detailPaneBuilder == null
+          ? null
+          : KeyedSubtree(
+              key: ValueKey('invoice_detail_${_selectedOrder!.id}'),
+              child: widget.detailPaneBuilder!(context, _selectedOrder!),
+            ),
+    );
+  }
+
+  Widget _buildList(BuildContext context, bool isDualPane) {
     final l10n = AppLocalizations.of(context)!;
     final spacing = AdaptiveSpacing.of(context);
 
@@ -145,7 +196,7 @@ class _InvoiceListBody extends StatelessWidget {
         children: [
           InvoiceQueryControls(
             query: viewModel.query,
-            contactRepository: contactRepository,
+            contactRepository: widget.contactRepository,
             onSearchChanged: viewModel.updateSearch,
             onQueryChanged: viewModel.applyQuery,
             enabled: !viewModel.isLoading,
@@ -170,7 +221,7 @@ class _InvoiceListBody extends StatelessWidget {
               itemBuilder: (context, invoice) {
                 return InvoiceTile(
                   invoice: invoice,
-                  onTap: () => onOpenInvoice(invoice),
+                  onTap: () => _openInvoice(invoice, isDualPane),
                   onPrint: () => _printInvoice(context, invoice),
                   onShare: () => _shareInvoice(context, invoice),
                 );

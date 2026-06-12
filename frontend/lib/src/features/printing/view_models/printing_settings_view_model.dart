@@ -204,6 +204,33 @@ class PrintingSettingsViewModel extends ChangeNotifier {
     );
   }
 
+  void updateCapabilityProfile(String value) {
+    final trimmed = value.trim();
+    _updateConfig(
+      _config.copyWith(
+        endpoint: _config.endpoint.copyWith(
+          capabilityProfile: trimmed.isEmpty ? 'default' : trimmed,
+        ),
+      ),
+    );
+  }
+
+  void updateCutMode(ReceiptCutMode mode) {
+    _updateConfig(
+      _config.copyWith(endpoint: _config.endpoint.copyWith(cutMode: mode)),
+    );
+  }
+
+  void updateFeedLines(String value) {
+    _updateConfig(
+      _config.copyWith(
+        endpoint: _config.endpoint.copyWith(
+          feedLines: int.tryParse(value) ?? _config.endpoint.feedLines,
+        ),
+      ),
+    );
+  }
+
   void updateBarcodeLabelLanguage(BarcodeLabelPrinterLanguage language) {
     _updateConfig(
       _config.copyWith(

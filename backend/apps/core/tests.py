@@ -280,6 +280,30 @@ class PosUserManagementTests(TestCase):
         self.assertTrue(user.check_password("new-secret-pass"))
         self.assertTrue(user.groups.filter(name=CASHIER_GROUP).exists())
 
+    def test_creating_user_auto_creates_linked_employee(self):
+        from apps.employees.models import Employee
+
+        client = APIClient()
+        client.force_authenticate(user=self.manager)
+
+        response = client.post(
+            reverse("pos-user-list"),
+            {
+                "username": "new-cashier",
+                "first_name": "سالم الكاسير",
+                "password": "new-secret-pass",
+                "role": CASHIER_GROUP,
+                "is_active": True,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        user = get_user_model().objects.get(username="new-cashier")
+        employee = Employee.objects.get(user=user)
+        self.assertEqual(employee.full_name, "سالم الكاسير")
+        self.assertEqual(employee.status, Employee.Status.ACTIVE)
+
     def test_manager_can_assign_manager_role(self):
         client = APIClient()
         client.force_authenticate(user=self.manager)
@@ -1444,6 +1468,10 @@ class BootstrapAdminTests(TestCase):
         self.assertTrue(admin.check_password("Owner-Strong-Pass-2026!"))
         self.assertEqual(current_user_response.status_code, status.HTTP_200_OK)
         self.assertEqual(current_user_response.data["user"]["username"], "owner")
+        from apps.employees.models import Employee
+
+        employee = Employee.objects.get(user=admin)
+        self.assertEqual(employee.full_name, "سارة علي")
 
     def test_setup_admin_endpoint_allows_status_probe_before_create(self):
         client = APIClient()

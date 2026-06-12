@@ -486,6 +486,15 @@ class _AuthenticatedRoutes {
           );
           await dependencies.invoiceListViewModel.loadInvoices();
         }),
+        detailPaneBuilder: (context, order) => InvoiceDetailsView(
+          saleRepository: dependencies.saleRepository,
+          printingRepository: dependencies.printingRepository,
+          shopSettingsRepository: dependencies.shopSettingsRepository,
+          initialOrder: order,
+          capabilities: capabilities,
+          analyticsEngine: dependencies.analyticsEngine,
+          showHeader: true,
+        ),
         onOpenPos: guardedAction(
           AppCapability.accessPos,
           () => openPos(routeContext),
@@ -1724,6 +1733,9 @@ class _AuthenticatedRoutes {
       ReportType.inventoryValue => ReportRunType.inventoryStatus,
       ReportType.stockMovement => ReportRunType.stockMovements,
       ReportType.purchases => ReportRunType.purchasingSummary,
+      ReportType.reorderItems => ReportRunType.reorderItems,
+      ReportType.payrollSummary => ReportRunType.payrollSummary,
+      ReportType.profitCosts => ReportRunType.profitCosts,
     };
   }
 

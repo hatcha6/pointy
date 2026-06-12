@@ -53,8 +53,9 @@ class PointyPdfTable {
         borderRadius: pw.BorderRadius.all(pw.Radius.circular(6)),
       ),
       rowDecoration: const pw.BoxDecoration(color: _PointyPdfTableColors.white),
+      // Zebra striping keeps long tables readable at a glance.
       oddRowDecoration: const pw.BoxDecoration(
-        color: _PointyPdfTableColors.white,
+        color: _PointyPdfTableColors.zebra,
       ),
       headerStyle: pw.TextStyle(
         color: _PointyPdfTableColors.white,
@@ -209,6 +210,7 @@ class PointyPdfTableDisplayData {
 
 class _PointyPdfTableColors {
   static const ink = PdfColor.fromInt(0xff172026);
-  static const tableHeader = PdfColor.fromInt(0xff202124);
+  static const tableHeader = PdfColor.fromInt(0xff0b6b64);
   static const white = PdfColor.fromInt(0xffffffff);
+  static const zebra = PdfColor.fromInt(0xfff4f7f6);
 }

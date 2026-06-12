@@ -16,8 +16,34 @@ void main() {
       expect(PointyColors.ink, const Color(0xFF101828));
       expect(PointyColors.mutedInk, const Color(0xFF667085));
       expect(PointyColors.line, const Color(0xFFE5E0D8));
+      expect(PointyColors.lineStrong, const Color(0xFFD5CFC4));
       expect(PointyColors.surface, const Color(0xFFFFFFFF));
       expect(PointyColors.page, const Color(0xFFF8F7F4));
+      expect(PointyColors.surfaceSunken, const Color(0xFFF1EFEA));
+    });
+  });
+
+  group('PointyTypography', () {
+    test('applies the bundled Arabic typeface without letter spacing', () {
+      final theme = PointyTheme.light();
+
+      for (final style in [
+        theme.textTheme.bodyMedium,
+        theme.textTheme.titleLarge,
+        theme.textTheme.labelLarge,
+        theme.textTheme.headlineMedium,
+      ]) {
+        expect(style?.fontFamily, PointyTypography.fontFamily);
+        expect(style?.letterSpacing, 0);
+      }
+      expect(theme.textTheme.bodyMedium?.height, closeTo(1.5, 0.01));
+    });
+
+    test('numeric helper enables tabular figures', () {
+      final style = PointyTypography.numeric(const TextStyle(fontSize: 16));
+
+      expect(style.fontFeatures, contains(const FontFeature.tabularFigures()));
+      expect(style.fontSize, 16);
     });
   });
 
@@ -30,6 +56,9 @@ void main() {
       expect(semanticColors?.darkTopBar, PointyColors.darkTopBar);
       expect(semanticColors?.accentAmber, PointyColors.accentAmber);
       expect(semanticColors?.line, PointyColors.line);
+      expect(semanticColors?.lineStrong, PointyColors.lineStrong);
+      expect(semanticColors?.surfaceSunken, PointyColors.surfaceSunken);
+      expect(semanticColors?.shadow, PointyColors.ink);
     });
 
     test('copyWith preserves unspecified values', () {

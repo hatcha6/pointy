@@ -5,6 +5,9 @@ enum ReportRunType {
   inventoryStatus,
   stockMovements,
   purchasingSummary,
+  reorderItems,
+  payrollSummary,
+  profitCosts,
 }
 
 enum ReportOutputFormat { json, pdf, csv }
@@ -91,6 +94,9 @@ String reportRunTypeToJson(ReportRunType type) {
     ReportRunType.inventoryStatus => 'inventory_status',
     ReportRunType.stockMovements => 'stock_movements',
     ReportRunType.purchasingSummary => 'purchasing_summary',
+    ReportRunType.reorderItems => 'reorder_items',
+    ReportRunType.payrollSummary => 'payroll_summary',
+    ReportRunType.profitCosts => 'profit_costs',
   };
 }
 
@@ -102,6 +108,9 @@ ReportRunType reportRunTypeFromJson(String? value) {
     'inventory_status' => ReportRunType.inventoryStatus,
     'stock_movements' => ReportRunType.stockMovements,
     'purchasing_summary' => ReportRunType.purchasingSummary,
+    'reorder_items' => ReportRunType.reorderItems,
+    'payroll_summary' => ReportRunType.payrollSummary,
+    'profit_costs' => ReportRunType.profitCosts,
     _ => ReportRunType.salesSummary,
   };
 }

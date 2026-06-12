@@ -18,6 +18,7 @@ class PointyDataList<T> extends StatelessWidget {
     this.errorBuilder,
     this.padding = const EdgeInsets.all(8),
     this.separatorBuilder,
+    this.header,
     this.framed = true,
     this.loadMoreExtent = 480,
   });
@@ -33,19 +34,30 @@ class PointyDataList<T> extends StatelessWidget {
   final WidgetBuilder? errorBuilder;
   final EdgeInsetsGeometry padding;
   final IndexedWidgetBuilder? separatorBuilder;
+
+  /// Scrolls with the items above the first row, and stays visible in the
+  /// loading, error, and empty states.
+  final Widget? header;
   final bool framed;
   final double loadMoreExtent;
 
   @override
   Widget build(BuildContext context) {
+    final Widget? stateBody;
     if (isLoadingInitial && items.isEmpty) {
-      return const PointyLoadingArea();
+      stateBody = const PointyLoadingArea();
+    } else if (hasError && items.isEmpty && errorBuilder != null) {
+      stateBody = errorBuilder!(context);
+    } else if (items.isEmpty) {
+      stateBody = emptyBuilder(context);
+    } else {
+      stateBody = null;
     }
-    if (hasError && items.isEmpty && errorBuilder != null) {
-      return errorBuilder!(context);
-    }
-    if (items.isEmpty) {
-      return emptyBuilder(context);
+    if (stateBody != null) {
+      if (header == null) {
+        return stateBody;
+      }
+      return ListView(children: [header!, stateBody]);
     }
 
     final colors = context.pointyColors;
@@ -57,6 +69,7 @@ class PointyDataList<T> extends StatelessWidget {
       isLoadingInitial: isLoadingInitial,
       isLoadingMore: isLoadingMore,
       emptyBuilder: emptyBuilder,
+      header: header,
       padding: padding,
       loadMoreExtent: loadMoreExtent,
       separatorBuilder: separatorBuilder ?? (_, _) => const SizedBox(height: 8),
@@ -71,6 +84,7 @@ class PointyDataList<T> extends StatelessWidget {
         color: colors.surface,
         border: Border.all(color: colors.line),
         borderRadius: BorderRadius.circular(PointyRadii.card),
+        boxShadow: PointyShadows.raised,
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(PointyRadii.card),
