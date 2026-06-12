@@ -65,6 +65,83 @@ def suspected_fraud_notification_specs(now=None):
     ]
 
 
+MANUAL_STATUSES = (
+    FraudFinding.Status.REVIEWED,
+    FraudFinding.Status.DISMISSED,
+)
+
+
+def review_finding(finding, *, user, note="", dismiss=False):
+    """Manager triage: mark a finding reviewed (explanation found) or
+    dismissed (false positive)."""
+    finding.status = (
+        FraudFinding.Status.DISMISSED if dismiss else FraudFinding.Status.REVIEWED
+    )
+    finding.reviewed_by = user
+    finding.reviewed_at = timezone.now()
+    finding.resolution_note = (note or "").strip()
+    finding.save(
+        update_fields=[
+            "status",
+            "reviewed_by",
+            "reviewed_at",
+            "resolution_note",
+            "updated_at",
+        ]
+    )
+    record_domain_event(
+        name="fraud.finding.dismissed" if dismiss else "fraud.finding.reviewed",
+        event_type=AnalyticsEvent.EventType.AUDIT,
+        user=user,
+        entity_type="fraud.fraudfinding",
+        entity_id=finding.pk,
+        attributes={
+            "finding_id": finding.pk,
+            "rule_code": finding.rule_code,
+            "target_user_id": finding.target_user_id,
+            "risk_score": finding.risk_score,
+            "has_note": bool(finding.resolution_note),
+        },
+    )
+    return finding
+
+
+def reopen_finding(finding, *, user):
+    finding.status = FraudFinding.Status.ACTIVE
+    finding.resolved_at = None
+    finding.save(update_fields=["status", "resolved_at", "updated_at"])
+    record_domain_event(
+        name="fraud.finding.reopened",
+        event_type=AnalyticsEvent.EventType.AUDIT,
+        user=user,
+        entity_type="fraud.fraudfinding",
+        entity_id=finding.pk,
+        attributes={
+            "finding_id": finding.pk,
+            "rule_code": finding.rule_code,
+            "target_user_id": finding.target_user_id,
+            "risk_score": finding.risk_score,
+        },
+    )
+    return finding
+
+
+def schedule_targeted_sweep():
+    """Kick a detection sweep right after a risky action (void, return, cash
+    pay-out, register close) so findings surface when the owner needs them,
+    not minutes later on the periodic beat."""
+    from .tasks import sync_suspected_fraud_findings_task
+
+    def _enqueue():
+        try:
+            sync_suspected_fraud_findings_task.delay()
+        except Exception:
+            # Broker unavailable — the periodic sweep still covers detection.
+            pass
+
+    transaction.on_commit(_enqueue)
+
+
 def _upsert_finding(spec, now):
     finding = FraudFinding.objects.filter(fingerprint=spec.fingerprint).first()
     if finding is None:
@@ -93,7 +170,39 @@ def _upsert_finding(spec, now):
             True,
         )
 
-    was_resolved = finding.status == FraudFinding.Status.RESOLVED
+    if finding.status in MANUAL_STATUSES:
+        escalated = (
+            spec.risk_score > finding.risk_score
+            or spec.pattern_count > finding.pattern_count
+        )
+        if not escalated:
+            # The manager already triaged this pattern and nothing got worse:
+            # keep their verdict, quietly refresh the evidence trail.
+            finding.window_start = spec.window_start
+            finding.window_end = spec.window_end
+            finding.summary = spec.summary
+            finding.evidence = spec.evidence
+            finding.metrics = spec.metrics
+            finding.peer_metrics = spec.peer_metrics
+            finding.last_detected_at = now
+            finding.save(
+                update_fields=[
+                    "window_start",
+                    "window_end",
+                    "summary",
+                    "evidence",
+                    "metrics",
+                    "peer_metrics",
+                    "last_detected_at",
+                    "updated_at",
+                ]
+            )
+            return finding, False, False
+
+    was_resolved = finding.status in (
+        FraudFinding.Status.RESOLVED,
+        *MANUAL_STATUSES,
+    )
     finding.rule_code = spec.rule_code
     finding.status = FraudFinding.Status.ACTIVE
     finding.severity = spec.severity

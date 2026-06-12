@@ -57,6 +57,15 @@ class FraudFinding(TimeStampedModel):
     last_detected_at = models.DateTimeField(default=timezone.now, db_index=True)
     occurrence_count = models.PositiveIntegerField(default=1)
     resolved_at = models.DateTimeField(blank=True, null=True)
+    reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="reviewed_fraud_findings",
+        blank=True,
+        null=True,
+    )
+    reviewed_at = models.DateTimeField(blank=True, null=True)
+    resolution_note = models.TextField(blank=True)
 
     class Meta:
         ordering = ["status", "-risk_score", "-last_detected_at", "-id"]

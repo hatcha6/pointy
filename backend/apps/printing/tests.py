@@ -255,6 +255,46 @@ class ReceiptAutoPrintTests(PrintingTestMixin, TestCase):
         )
         self.assertIn("token=", job.payload["shop"]["logo"]["content_url"])
 
+    def test_receipt_job_payload_inlines_logo_bytes_when_file_exists(self):
+        import base64
+        import tempfile
+        from pathlib import Path
+
+        settings = ShopSettings.load()
+        logo_content = b"\x89PNG-fake-logo-bytes"
+        temp_dir = tempfile.mkdtemp()
+        Path(temp_dir, "logos").mkdir()
+        Path(temp_dir, "logos", "logo.png").write_bytes(logo_content)
+        volume = StorageVolume.objects.create(
+            name="test-logo-bytes-volume",
+            path=temp_dir,
+        )
+        Attachment.objects.create(
+            owner_content_type=ContentType.objects.get_for_model(
+                settings,
+                for_concrete_model=False,
+            ),
+            owner_object_id=settings.pk,
+            role=Attachment.Role.SHOP_LOGO,
+            storage_volume=volume,
+            relative_path="logos/logo.png",
+            original_filename="logo.png",
+            content_type="image/png",
+            original_size=len(logo_content),
+            stored_size=len(logo_content),
+            checksum_sha256="b" * 64,
+            is_primary=True,
+        )
+
+        response = self.checkout()
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        job = PrintJob.objects.get(order_id=response.data["id"])
+        self.assertEqual(
+            job.payload["shop"]["logo_bytes"],
+            base64.b64encode(logo_content).decode("ascii"),
+        )
+
     def test_receipt_job_payload_includes_variant_line_fields(self):
         variant = ProductVariant.objects.create(
             product=self.product,

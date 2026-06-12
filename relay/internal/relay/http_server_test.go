@@ -1815,6 +1815,7 @@ func TestHTTPPublicInvoiceRendersHTMLFromBackend(t *testing.T) {
 			}
 			content := `{
 				"shop_name": "متجر نقطة البيع",
+				"shop_logo_data_uri": "data:image/png;base64,aGVsbG8=",
 				"receipt_header": "أهلا بكم",
 				"receipt_footer": "شكرا لكم",
 				"receipt_number": "R20260609000001",
@@ -1896,6 +1897,7 @@ func TestHTTPPublicInvoiceRendersHTMLFromBackend(t *testing.T) {
 	for _, expected := range []string{
 		"حفظ كملف PDF",
 		"صُنع بحب",
+		`<img class="logo" src="data:image/png;base64,aGVsbG8="`,
 		"R20260609000001",
 		"متجر نقطة البيع",
 		"Coffee",

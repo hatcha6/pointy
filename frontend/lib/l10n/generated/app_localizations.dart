@@ -13344,6 +13344,198 @@ abstract class AppLocalizations {
   /// **'{count, plural, =1{مهمة طباعة واحدة فشلت} =2{مهمتا طباعة فشلتا} other{{count} مهام طباعة فشلت}}'**
   String dashboardAlertPrintFailures(int count);
 
+  /// No description provided for @integrityMonitorTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'مركز النزاهة'**
+  String get integrityMonitorTitle;
+
+  /// No description provided for @integrityMonitorRefreshTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحديث نتائج المراقبة'**
+  String get integrityMonitorRefreshTooltip;
+
+  /// No description provided for @integrityMonitorLoadError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر تحميل نتائج المراقبة.'**
+  String get integrityMonitorLoadError;
+
+  /// No description provided for @integrityMonitorActionError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر حفظ الإجراء. حاول مرة أخرى.'**
+  String get integrityMonitorActionError;
+
+  /// No description provided for @integrityMonitorAllClearTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'كل شيء سليم'**
+  String get integrityMonitorAllClearTitle;
+
+  /// No description provided for @integrityMonitorAttentionTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, =1{حالة واحدة تحتاج مراجعتك} =2{حالتان تحتاجان مراجعتك} other{{count} حالات تحتاج مراجعتك}}'**
+  String integrityMonitorAttentionTitle(int count);
+
+  /// No description provided for @integrityMonitorSubtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'محرك المراقبة يعمل بصمت في الخلفية: يتحقق من كل إلغاء وإرجاع وفرق نقدي، ويقارن كل كاشير بزملائه دون أن يشعر أحد.'**
+  String get integrityMonitorSubtitle;
+
+  /// No description provided for @integrityMonitorActiveSection.
+  ///
+  /// In ar, this message translates to:
+  /// **'حالات بانتظار قرارك'**
+  String get integrityMonitorActiveSection;
+
+  /// No description provided for @integrityMonitorSettledSection.
+  ///
+  /// In ar, this message translates to:
+  /// **'حالات سابقة'**
+  String get integrityMonitorSettledSection;
+
+  /// No description provided for @integrityRiskScoreCaption.
+  ///
+  /// In ar, this message translates to:
+  /// **'خطورة'**
+  String get integrityRiskScoreCaption;
+
+  /// No description provided for @integrityFindingWindowLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'فترة الرصد'**
+  String get integrityFindingWindowLabel;
+
+  /// No description provided for @integrityFindingPatternCountLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'عدد الأنماط المرصودة'**
+  String get integrityFindingPatternCountLabel;
+
+  /// No description provided for @integrityPeerComparisonTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'مقارنة بالزملاء'**
+  String get integrityPeerComparisonTitle;
+
+  /// No description provided for @integrityUserRateLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'معدل هذا الكاشير'**
+  String get integrityUserRateLabel;
+
+  /// No description provided for @integrityPeerMedianLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'وسيط الزملاء'**
+  String get integrityPeerMedianLabel;
+
+  /// No description provided for @integrityThresholdLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'حد الاشتباه'**
+  String get integrityThresholdLabel;
+
+  /// No description provided for @integrityEvidenceTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'الأدلة المرصودة'**
+  String get integrityEvidenceTitle;
+
+  /// No description provided for @integrityOpenActivityLogButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'فتح سجل النشاط للتحقيق'**
+  String get integrityOpenActivityLogButton;
+
+  /// No description provided for @integrityNoteFieldLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'ملاحظة القرار'**
+  String get integrityNoteFieldLabel;
+
+  /// No description provided for @integrityNoteFieldHelper.
+  ///
+  /// In ar, this message translates to:
+  /// **'وثّق ما وجدته بعد المراجعة — تُحفظ في سجل التدقيق.'**
+  String get integrityNoteFieldHelper;
+
+  /// No description provided for @integrityReviewButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'تمت المراجعة'**
+  String get integrityReviewButton;
+
+  /// No description provided for @integrityDismissButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'تجاهل كإنذار كاذب'**
+  String get integrityDismissButton;
+
+  /// No description provided for @integrityReopenButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'إعادة فتح الحالة'**
+  String get integrityReopenButton;
+
+  /// No description provided for @integrityStatusActive.
+  ///
+  /// In ar, this message translates to:
+  /// **'بانتظار المراجعة'**
+  String get integrityStatusActive;
+
+  /// No description provided for @integrityStatusResolved.
+  ///
+  /// In ar, this message translates to:
+  /// **'زال تلقائيًا'**
+  String get integrityStatusResolved;
+
+  /// No description provided for @integrityStatusReviewed.
+  ///
+  /// In ar, this message translates to:
+  /// **'تمت مراجعتها'**
+  String get integrityStatusReviewed;
+
+  /// No description provided for @integrityStatusDismissed.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم تجاهلها'**
+  String get integrityStatusDismissed;
+
+  /// No description provided for @integrityFindingNoteLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'ملاحظة {user}: {note}'**
+  String integrityFindingNoteLabel(String user, String note);
+
+  /// No description provided for @dashboardAlertFraudFindings.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, =1{حالة اشتباه واحدة تحتاج مراجعتك} =2{حالتا اشتباه تحتاجان مراجعتك} other{{count} حالات اشتباه تحتاج مراجعتك}}'**
+  String dashboardAlertFraudFindings(int count);
+
+  /// No description provided for @dashboardIntegritySectionTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'النزاهة والمراقبة'**
+  String get dashboardIntegritySectionTitle;
+
+  /// No description provided for @dashboardIntegrityAllClear.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد حالات اشتباه نشطة — المراقبة تعمل بصمت.'**
+  String get dashboardIntegrityAllClear;
+
+  /// No description provided for @dashboardOpenIntegrityButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'فتح مركز النزاهة'**
+  String get dashboardOpenIntegrityButton;
+
   /// No description provided for @dashboardBestSellersTitle.
   ///
   /// In ar, this message translates to:

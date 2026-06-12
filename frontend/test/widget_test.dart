@@ -48,8 +48,11 @@ import 'package:pointy_frontend/src/features/users/views/user_management_screen.
 import 'package:pointy_frontend/src/data/models/employee.dart';
 import 'package:pointy_frontend/src/data/repositories/dashboard_repository.dart';
 import 'package:pointy_frontend/src/data/repositories/employee_repository.dart';
+import 'package:pointy_frontend/src/data/repositories/fraud_repository.dart';
 import 'package:pointy_frontend/src/features/dashboard/view_models/dashboard_view_model.dart';
 import 'package:pointy_frontend/src/features/dashboard/views/dashboard_screen.dart';
+import 'package:pointy_frontend/src/features/fraud/view_models/integrity_monitor_view_model.dart';
+import 'package:pointy_frontend/src/features/fraud/views/integrity_monitor_screen.dart';
 import 'package:pointy_frontend/src/features/employees/view_models/employee_payroll_view_model.dart';
 import 'package:pointy_frontend/src/features/employees/views/employee_payroll_screen.dart';
 import 'package:pointy_frontend/src/features/employees/views/payroll_run_details_screen.dart';
@@ -3226,6 +3229,7 @@ void main() {
     WidgetTester tester,
   ) async {
     var openedCatalog = false;
+    var openedIntegrityMonitor = false;
     final apiService = PosApiService(
       client: MockClient((request) async {
         if (request.url.path.endsWith('/dashboard/')) {
@@ -3241,6 +3245,7 @@ void main() {
           'sales.view_order',
           'inventory.view_stockitem',
           'employees.view_payrollrun',
+          'fraud.view_fraudfinding',
         ],
       ),
     );
@@ -3267,6 +3272,7 @@ void main() {
           onOpenContacts: () {},
           onOpenRegisterSessions: () {},
           onOpenDeviceSettings: () {},
+          onOpenIntegrityMonitor: () => openedIntegrityMonitor = true,
           onLogout: () {},
         ),
       ),
@@ -3291,12 +3297,124 @@ void main() {
       findsOneWidget,
     );
 
+    final fraudAlert = find.byKey(
+      const ValueKey('dashboard_alert_fraud_findings'),
+    );
+    expect(fraudAlert, findsOneWidget);
+    await tester.ensureVisible(fraudAlert);
+    await tester.tap(fraudAlert);
+    expect(openedIntegrityMonitor, isTrue);
+
     final lowStockAlert = find.byKey(
       const ValueKey('dashboard_alert_low_stock'),
     );
     await tester.ensureVisible(lowStockAlert);
     await tester.tap(lowStockAlert);
     expect(openedCatalog, isTrue);
+  });
+
+  testWidgets('integrity monitor lists findings and records a review verdict', (
+    WidgetTester tester,
+  ) async {
+    Map<String, Object?> findingJson({String status = 'active'}) => {
+      'id': 11,
+      'rule_code': 'cash_shortage',
+      'status': status,
+      'severity': 'critical',
+      'risk_score': 88,
+      'target_user_label': 'سالم الكاشير',
+      'summary': {
+        'rule_title': 'عجز نقدي',
+        'headline': 'عجز نقدي متكرر في جلسات الدرج',
+        'amount': '120.00',
+      },
+      'evidence': {
+        'cash_shortage': [
+          {
+            'session_number': 'RS-9',
+            'cash_variance': '-60.00',
+            'occurred_at': '2026-06-11T20:00:00Z',
+          },
+        ],
+      },
+      'metrics': const <String, Object?>{},
+      'peer_metrics': {'rate': '0.4', 'median': '0.05', 'threshold': '0.15'},
+      'pattern_count': 2,
+      'occurrence_count': 1,
+      'window_start': '2026-05-13T00:00:00Z',
+      'window_end': '2026-06-12T00:00:00Z',
+      'last_detected_at': '2026-06-12T08:00:00Z',
+      'reviewed_by_username': status == 'reviewed' ? 'manager' : '',
+      'resolution_note': '',
+    };
+
+    var reviewed = false;
+    final apiService = PosApiService(
+      client: MockClient((request) async {
+        final path = request.url.path;
+        if (path.endsWith('/fraud-findings/11/review/')) {
+          reviewed = true;
+          return _jsonResponse(findingJson(status: 'reviewed'));
+        }
+        if (path.endsWith('/fraud-findings/')) {
+          return _jsonResponse({
+            'results': [findingJson()],
+            'next': null,
+          });
+        }
+        return http.Response('', 404);
+      }),
+    );
+    final viewModel = IntegrityMonitorViewModel(FraudRepository(apiService));
+    final user = PosUser.fromJson(
+      _userJson(
+        permissions: const [
+          'fraud.view_fraudfinding',
+          'fraud.change_fraudfinding',
+        ],
+      ),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        locale: const Locale('ar'),
+        supportedLocales: AppLocalizations.supportedLocales,
+        localizationsDelegates: const [
+          AppLocalizations.delegate,
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
+        home: IntegrityMonitorScreen(
+          viewModel: viewModel,
+          capabilities: AuthorizationCapabilities.forUser(user),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('integrity_status_card')),
+      findsOneWidget,
+    );
+    final card = find.byKey(const ValueKey('fraud_finding_card_11'));
+    expect(card, findsOneWidget);
+    expect(find.text('سالم الكاشير'), findsOneWidget);
+
+    await tester.tap(card);
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byKey(const ValueKey('integrity_note_field')),
+      'تمت مطابقة الجلسات مع الكاميرا',
+    );
+    await tester.tap(find.byKey(const ValueKey('integrity_review_button')));
+    await tester.pumpAndSettle();
+
+    expect(reviewed, isTrue);
+    // The finding moved out of the active list into the settled section.
+    expect(viewModel.activeFindings, isEmpty);
+    expect(viewModel.settledFindings, hasLength(1));
   });
 
   testWidgets('payroll home prepares the current month and opens the run', (
@@ -5541,6 +5659,25 @@ Map<String, Object?> _richDashboardJson() {
           'operating_expense_total': '215.00',
           'net_operating_profit': '385.00',
         },
+      },
+      'fraud': {
+        'summary': {
+          'active_count': 2,
+          'critical_count': 1,
+          'top_risk_score': 88,
+        },
+        'recent_findings': [
+          {
+            'id': 11,
+            'rule_code': 'cash_shortage',
+            'rule_title': 'عجز نقدي',
+            'headline': 'عجز نقدي متكرر في جلسات الدرج',
+            'user_label': 'سالم',
+            'severity': 'critical',
+            'risk_score': 88,
+            'last_detected_at': '2026-06-12T08:00:00Z',
+          },
+        ],
       },
     },
   };

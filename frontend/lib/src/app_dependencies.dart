@@ -13,6 +13,7 @@ import 'data/repositories/dashboard_repository.dart';
 import 'data/repositories/device_settings_repository.dart';
 import 'data/repositories/discount_repository.dart';
 import 'data/repositories/employee_repository.dart';
+import 'data/repositories/fraud_repository.dart';
 import 'data/repositories/inventory_repository.dart';
 import 'data/repositories/printing_repository.dart';
 import 'data/repositories/purchase_repository.dart';
@@ -59,6 +60,7 @@ class PointyAppDependencies {
     businessAlertRepository = BusinessAlertRepository(service);
     discountRepository = DiscountRepository(service);
     employeeRepository = EmployeeRepository(service);
+    fraudRepository = FraudRepository(service);
     inventoryRepository = InventoryRepository(service);
     registerSessionRepository = RegisterSessionRepository(service);
     reportRepository = ReportRepository(service);
@@ -102,6 +104,7 @@ class PointyAppDependencies {
   late final BusinessAlertRepository businessAlertRepository;
   late final DiscountRepository discountRepository;
   late final EmployeeRepository employeeRepository;
+  late final FraudRepository fraudRepository;
   late final InventoryRepository inventoryRepository;
   late final RegisterSessionRepository registerSessionRepository;
   late final ReportRepository reportRepository;

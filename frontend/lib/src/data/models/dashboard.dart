@@ -56,6 +56,7 @@ class DashboardSections {
     this.profitability,
     this.customers,
     this.discounts,
+    this.fraud,
     this.printing,
   });
 
@@ -67,6 +68,7 @@ class DashboardSections {
   final DashboardProfitabilitySection? profitability;
   final DashboardCustomersSection? customers;
   final DashboardDiscountsSection? discounts;
+  final DashboardFraudSection? fraud;
   final DashboardPrintingSection? printing;
 
   bool get hasAny =>
@@ -78,6 +80,7 @@ class DashboardSections {
       profitability != null ||
       customers != null ||
       discounts != null ||
+      fraud != null ||
       printing != null;
 
   factory DashboardSections.fromJson(Map<String, Object?> json) {
@@ -115,6 +118,11 @@ class DashboardSections {
       customers: json['customers'] is Map<String, Object?>
           ? DashboardCustomersSection.fromJson(
               json['customers'] as Map<String, Object?>,
+            )
+          : null,
+      fraud: json['fraud'] is Map<String, Object?>
+          ? DashboardFraudSection.fromJson(
+              json['fraud'] as Map<String, Object?>,
             )
           : null,
       discounts: json['discounts'] is Map<String, Object?>
@@ -1228,4 +1236,87 @@ double _moneyFromJson(Object? value) {
     return value.toDouble();
   }
   return double.tryParse(value?.toString() ?? '') ?? 0;
+}
+
+
+class DashboardFraudSection {
+  const DashboardFraudSection({
+    required this.summary,
+    this.recentFindings = const [],
+  });
+
+  final FraudDashboardSummary summary;
+  final List<FraudFindingInsight> recentFindings;
+
+  factory DashboardFraudSection.fromJson(Map<String, Object?> json) {
+    final findings = json['recent_findings'];
+    return DashboardFraudSection(
+      summary: FraudDashboardSummary.fromJson(_mapFromJson(json['summary'])),
+      recentFindings: findings is List
+          ? findings
+                .whereType<Map>()
+                .map(
+                  (row) => FraudFindingInsight.fromJson(
+                    row.map((key, value) => MapEntry(key.toString(), value)),
+                  ),
+                )
+                .toList(growable: false)
+          : const [],
+    );
+  }
+}
+
+class FraudDashboardSummary {
+  const FraudDashboardSummary({
+    required this.activeCount,
+    required this.criticalCount,
+    required this.topRiskScore,
+  });
+
+  final int activeCount;
+  final int criticalCount;
+  final int topRiskScore;
+
+  factory FraudDashboardSummary.fromJson(Map<String, Object?> json) {
+    return FraudDashboardSummary(
+      activeCount: _intFromJson(json['active_count']),
+      criticalCount: _intFromJson(json['critical_count']),
+      topRiskScore: _intFromJson(json['top_risk_score']),
+    );
+  }
+}
+
+class FraudFindingInsight {
+  const FraudFindingInsight({
+    required this.id,
+    required this.ruleCode,
+    required this.ruleTitle,
+    required this.headline,
+    required this.userLabel,
+    required this.severity,
+    required this.riskScore,
+    this.lastDetectedAt,
+  });
+
+  final int id;
+  final String ruleCode;
+  final String ruleTitle;
+  final String headline;
+  final String userLabel;
+  final String severity;
+  final int riskScore;
+  final DateTime? lastDetectedAt;
+
+  factory FraudFindingInsight.fromJson(Map<String, Object?> json) {
+    return FraudFindingInsight(
+      id: _intFromJson(json['id']),
+      ruleCode: json['rule_code']?.toString() ?? '',
+      ruleTitle: json['rule_title']?.toString() ?? '',
+      headline: json['headline']?.toString() ?? '',
+      userLabel: json['user_label']?.toString() ?? '',
+      severity: json['severity']?.toString() ?? 'warning',
+      riskScore: _intFromJson(json['risk_score']),
+      lastDetectedAt: _dateTimeFromJson(json['last_detected_at']),
+    );
+  }
 }

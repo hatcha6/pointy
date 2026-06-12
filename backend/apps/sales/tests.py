@@ -845,6 +845,8 @@ class OrderCheckoutApiTests(TestCase):
         self.assertEqual(relayed_response.data["discount_total"], "0.00")
         self.assertEqual(relayed_response.data["total"], "7.00")
         self.assertEqual(relayed_response.data["lines"][0]["quantity"], 2)
+        # No logo configured: the field is present but empty.
+        self.assertEqual(relayed_response.data["shop_logo_data_uri"], "")
         self.assertNotIn("total_profit", relayed_response.data)
         self.assertNotIn("payments", relayed_response.data)
 
@@ -854,6 +856,61 @@ class OrderCheckoutApiTests(TestCase):
             HTTP_X_POINTY_RELAYED_REQUEST="1",
         )
         self.assertEqual(disabled_response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_public_invoice_embeds_shop_logo_as_data_uri(self):
+        import base64
+        import tempfile
+        from pathlib import Path
+
+        from django.contrib.contenttypes.models import ContentType
+
+        from apps.attachments.models import Attachment, StorageVolume
+
+        self.start_session()
+        settings = ShopSettings.load()
+        ShopSettings.objects.filter(pk=1).update(enable_online_invoices=True)
+        logo_content = b"\x89PNG-public-logo"
+        temp_dir = tempfile.mkdtemp()
+        Path(temp_dir, "logos").mkdir()
+        Path(temp_dir, "logos", "logo.png").write_bytes(logo_content)
+        volume = StorageVolume.objects.create(
+            name="public-invoice-logo-volume",
+            path=temp_dir,
+        )
+        Attachment.objects.create(
+            owner_content_type=ContentType.objects.get_for_model(
+                settings,
+                for_concrete_model=False,
+            ),
+            owner_object_id=settings.pk,
+            role=Attachment.Role.SHOP_LOGO,
+            storage_volume=volume,
+            relative_path="logos/logo.png",
+            original_filename="logo.png",
+            content_type="image/png",
+            original_size=len(logo_content),
+            stored_size=len(logo_content),
+            checksum_sha256="c" * 64,
+            is_primary=True,
+        )
+        checkout_response = self.client.post(
+            reverse("order-checkout"),
+            self.checkout_payload(),
+            format="json",
+        )
+        order = Order.objects.get(pk=checkout_response.data["id"])
+
+        response = APIClient().get(
+            reverse("public-invoice-detail", args=[order.public_token]),
+            HTTP_X_POINTY_RELAYED_REQUEST="1",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        expected = (
+            "data:image/png;base64,"
+            + base64.b64encode(logo_content).decode("ascii")
+        )
+        self.assertEqual(response.data["shop_logo_data_uri"], expected)
 
     def test_checkout_exposes_cost_and_profit_snapshot(self):
         self.start_session()

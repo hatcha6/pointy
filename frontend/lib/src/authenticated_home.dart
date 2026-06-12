@@ -23,6 +23,8 @@ import 'features/catalog/views/category_management_screen.dart';
 import 'features/catalog/views/catalog_screen.dart';
 import 'features/contacts/views/contact_management_screen.dart';
 import 'features/dashboard/views/dashboard_screen.dart';
+import 'features/fraud/view_models/integrity_monitor_view_model.dart';
+import 'features/fraud/views/integrity_monitor_screen.dart';
 import 'features/device_settings/views/device_settings_screen.dart';
 import 'features/discounts/views/discount_management_screen.dart';
 import 'features/employees/views/employee_payroll_screen.dart';
@@ -222,6 +224,10 @@ class _AuthenticatedRoutes {
         onOpenActivityLog: guardedAction(
           AppCapability.viewActivityLog,
           () => push(routeContext, activityLogRouteBuilder),
+        ),
+        onOpenIntegrityMonitor: guardedAction(
+          AppCapability.viewFraudFindings,
+          () => openIntegrityMonitor(routeContext),
         ),
         onOpenEmployees: guardedAction(
           AppCapability.viewEmployees,
@@ -1498,6 +1504,23 @@ class _AuthenticatedRoutes {
       return;
     }
     replace(context, userSettingsRouteBuilder);
+  }
+
+  void openIntegrityMonitor(BuildContext context) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => IntegrityMonitorScreen(
+          viewModel: IntegrityMonitorViewModel(
+            dependencies.fraudRepository,
+            analyticsEngine: dependencies.analyticsEngine,
+          ),
+          capabilities: capabilities,
+          onOpenActivityLog: capabilities.canViewActivityLog
+              ? () => push(context, activityLogRouteBuilder)
+              : null,
+        ),
+      ),
+    );
   }
 
   void logout(BuildContext context) {

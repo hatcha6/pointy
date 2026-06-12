@@ -14,6 +14,8 @@ enum AppCapability {
   viewPrintingDashboard,
   viewReports,
   viewActivityLog,
+  viewFraudFindings,
+  manageFraudFindings,
   viewEmployees,
   manageEmployees,
   manageOwnAccount,
@@ -419,6 +421,20 @@ class AuthorizationCapabilities {
           ..add(AppCapability.viewActivityLog);
       }
       if (_hasAny(user, const [
+        'view_fraudfinding',
+        'fraud.view_fraudfinding',
+      ])) {
+        capabilities.add(AppCapability.viewFraudFindings);
+      }
+      if (_hasAny(user, const [
+        'change_fraudfinding',
+        'fraud.change_fraudfinding',
+      ])) {
+        capabilities
+          ..add(AppCapability.viewFraudFindings)
+          ..add(AppCapability.manageFraudFindings);
+      }
+      if (_hasAny(user, const [
         'view_reportrun',
         'reports.view_reportrun',
         'view_order',
@@ -467,6 +483,8 @@ class AuthorizationCapabilities {
       allows(AppCapability.viewPrintingDashboard);
   bool get canViewReports => allows(AppCapability.viewReports);
   bool get canViewActivityLog => allows(AppCapability.viewActivityLog);
+  bool get canViewFraudFindings => allows(AppCapability.viewFraudFindings);
+  bool get canManageFraudFindings => allows(AppCapability.manageFraudFindings);
   bool get canViewEmployees => allows(AppCapability.viewEmployees);
   bool get canManageEmployees => allows(AppCapability.manageEmployees);
   bool get canManageOwnAccount => allows(AppCapability.manageOwnAccount);

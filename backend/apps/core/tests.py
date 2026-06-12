@@ -1,8 +1,20 @@
 import tempfile
 from datetime import timedelta
 from decimal import Decimal
+from io import BytesIO
 from pathlib import Path
 from unittest import mock
+
+
+def _png_logo_bytes(width=64, height=64):
+    from PIL import Image
+
+    buffer = BytesIO()
+    Image.new("RGBA", (width, height), (11, 107, 100, 255)).save(
+        buffer,
+        format="PNG",
+    )
+    return buffer.getvalue()
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
@@ -498,7 +510,7 @@ class ShopSettingsApiTests(TestCase):
                     {
                         "file": SimpleUploadedFile(
                             "logo.png",
-                            b"shop logo bytes",
+                            _png_logo_bytes(),
                             content_type="image/png",
                         ),
                     },
@@ -524,6 +536,64 @@ class ShopSettingsApiTests(TestCase):
             Attachment.objects.get(pk=upload_response.data["logo_attachment"]["id"]).status,
             Attachment.Status.DELETED,
         )
+
+    def test_shop_logo_uploads_are_downscaled_to_embedding_budget(self):
+        import os
+
+        from PIL import Image
+
+        from apps.attachments.services import open_attachment
+        from apps.core.images import LOGO_MAX_BYTES, LOGO_MAX_DIMENSION
+
+        client = APIClient()
+        client.force_authenticate(user=self.manager)
+        # Random noise is incompressible, so this PNG is far over the budget
+        # and forces both the resize and the halving loop to run.
+        noise = Image.frombytes("RGB", (1600, 1200), os.urandom(1600 * 1200 * 3))
+        buffer = BytesIO()
+        noise.save(buffer, format="PNG")
+        self.assertGreater(buffer.tell(), LOGO_MAX_BYTES)
+
+        response = client.post(
+            reverse("shop-settings-logo"),
+            {
+                "file": SimpleUploadedFile(
+                    "big-logo.png",
+                    buffer.getvalue(),
+                    content_type="image/png",
+                ),
+            },
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        attachment = Attachment.objects.get(
+            pk=response.data["logo_attachment"]["id"],
+        )
+        self.assertLessEqual(attachment.original_size, LOGO_MAX_BYTES)
+        with open_attachment(attachment) as handle:
+            stored = Image.open(handle)
+            stored.load()
+        self.assertLessEqual(max(stored.size), LOGO_MAX_DIMENSION)
+        self.assertEqual(stored.format, "PNG")
+
+    def test_shop_logo_rejects_undecodable_image_bytes(self):
+        client = APIClient()
+        client.force_authenticate(user=self.manager)
+
+        response = client.post(
+            reverse("shop-settings-logo"),
+            {
+                "file": SimpleUploadedFile(
+                    "logo.png",
+                    b"not really a png",
+                    content_type="image/png",
+                ),
+            },
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_shop_logo_rejects_non_reportable_files(self):
         client = APIClient()

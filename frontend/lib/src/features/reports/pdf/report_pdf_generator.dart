@@ -225,7 +225,7 @@ class _Header extends pw.StatelessWidget {
         children: [
           pw.Expanded(
             child: pw.Column(
-              crossAxisAlignment: pw.CrossAxisAlignment.end,
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
               children: [
                 pw.Text(
                   report.businessName,
@@ -402,7 +402,7 @@ class _MetricGrid extends pw.StatelessWidget {
               borderRadius: const pw.BorderRadius.all(pw.Radius.circular(5)),
             ),
             child: pw.Column(
-              crossAxisAlignment: pw.CrossAxisAlignment.end,
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
               children: [
                 pw.Text(
                   metric.label,
@@ -455,7 +455,7 @@ class _FieldSection extends pw.StatelessWidget {
   @override
   pw.Widget build(pw.Context context) {
     return pw.Column(
-      crossAxisAlignment: pw.CrossAxisAlignment.end,
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
       children: [
         _SectionTitle(title),
         pw.SizedBox(height: 6),
@@ -481,7 +481,7 @@ class _FieldWrap extends pw.StatelessWidget {
           pw.SizedBox(
             width: compact ? 124 : 150,
             child: pw.Column(
-              crossAxisAlignment: pw.CrossAxisAlignment.end,
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
               children: [
                 pw.Text(
                   field.label,

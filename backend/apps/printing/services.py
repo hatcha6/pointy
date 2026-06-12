@@ -8,9 +8,13 @@ from django.db.models import Max
 from django.urls import reverse
 from django.utils import timezone
 
+import base64
+
 from apps.attachments.models import Attachment
 from apps.attachments.services import (
+    AttachmentStorageError,
     active_attachments_for,
+    open_attachment,
     sign_attachment_content_token,
 )
 from apps.core.models import ShopSettings
@@ -120,6 +124,29 @@ def shop_logo_payload(shop_settings):
     }
 
 
+RECEIPT_LOGO_MAX_BYTES = 256 * 1024
+
+
+def shop_logo_base64(shop_settings):
+    """Inline the logo so the printing device can raster it on any thermal
+    printer, even when it cannot reach the signed content URL."""
+    attachment = (
+        active_attachments_for(shop_settings, role=Attachment.Role.SHOP_LOGO)
+        .filter(is_primary=True)
+        .first()
+    )
+    if attachment is None or attachment.original_size > RECEIPT_LOGO_MAX_BYTES:
+        return None
+    try:
+        with open_attachment(attachment) as handle:
+            content = handle.read(RECEIPT_LOGO_MAX_BYTES + 1)
+    except (OSError, AttachmentStorageError):
+        return None
+    if not content or len(content) > RECEIPT_LOGO_MAX_BYTES:
+        return None
+    return base64.b64encode(content).decode("ascii")
+
+
 def build_receipt_payload(order):
     shop_settings = ShopSettings.load()
     order = (
@@ -137,6 +164,7 @@ def build_receipt_payload(order):
             "receipt_header": shop_settings.receipt_header,
             "receipt_footer": shop_settings.receipt_footer,
             "logo": shop_logo_payload(shop_settings),
+            "logo_bytes": shop_logo_base64(shop_settings),
         },
         "order": {
             "id": order.pk,

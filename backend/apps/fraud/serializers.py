@@ -8,6 +8,11 @@ class FraudFindingSerializer(serializers.ModelSerializer):
         source="target_user.username",
         read_only=True,
     )
+    reviewed_by_username = serializers.CharField(
+        source="reviewed_by.username",
+        read_only=True,
+        default="",
+    )
 
     class Meta:
         model = FraudFinding
@@ -34,8 +39,20 @@ class FraudFindingSerializer(serializers.ModelSerializer):
             "last_detected_at",
             "occurrence_count",
             "resolved_at",
+            "reviewed_by",
+            "reviewed_by_username",
+            "reviewed_at",
+            "resolution_note",
             "created_at",
             "updated_at",
         ]
         read_only_fields = fields
+
+
+class FraudFindingReviewSerializer(serializers.Serializer):
+    note = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        max_length=1000,
+    )
 

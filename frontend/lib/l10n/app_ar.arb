@@ -4875,6 +4875,62 @@
       }
     }
   },
+  "integrityMonitorTitle": "مركز النزاهة",
+  "integrityMonitorRefreshTooltip": "تحديث نتائج المراقبة",
+  "integrityMonitorLoadError": "تعذر تحميل نتائج المراقبة.",
+  "integrityMonitorActionError": "تعذر حفظ الإجراء. حاول مرة أخرى.",
+  "integrityMonitorAllClearTitle": "كل شيء سليم",
+  "integrityMonitorAttentionTitle": "{count, plural, =1{حالة واحدة تحتاج مراجعتك} =2{حالتان تحتاجان مراجعتك} other{{count} حالات تحتاج مراجعتك}}",
+  "@integrityMonitorAttentionTitle": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "integrityMonitorSubtitle": "محرك المراقبة يعمل بصمت في الخلفية: يتحقق من كل إلغاء وإرجاع وفرق نقدي، ويقارن كل كاشير بزملائه دون أن يشعر أحد.",
+  "integrityMonitorActiveSection": "حالات بانتظار قرارك",
+  "integrityMonitorSettledSection": "حالات سابقة",
+  "integrityRiskScoreCaption": "خطورة",
+  "integrityFindingWindowLabel": "فترة الرصد",
+  "integrityFindingPatternCountLabel": "عدد الأنماط المرصودة",
+  "integrityPeerComparisonTitle": "مقارنة بالزملاء",
+  "integrityUserRateLabel": "معدل هذا الكاشير",
+  "integrityPeerMedianLabel": "وسيط الزملاء",
+  "integrityThresholdLabel": "حد الاشتباه",
+  "integrityEvidenceTitle": "الأدلة المرصودة",
+  "integrityOpenActivityLogButton": "فتح سجل النشاط للتحقيق",
+  "integrityNoteFieldLabel": "ملاحظة القرار",
+  "integrityNoteFieldHelper": "وثّق ما وجدته بعد المراجعة — تُحفظ في سجل التدقيق.",
+  "integrityReviewButton": "تمت المراجعة",
+  "integrityDismissButton": "تجاهل كإنذار كاذب",
+  "integrityReopenButton": "إعادة فتح الحالة",
+  "integrityStatusActive": "بانتظار المراجعة",
+  "integrityStatusResolved": "زال تلقائيًا",
+  "integrityStatusReviewed": "تمت مراجعتها",
+  "integrityStatusDismissed": "تم تجاهلها",
+  "integrityFindingNoteLabel": "ملاحظة {user}: {note}",
+  "@integrityFindingNoteLabel": {
+    "placeholders": {
+      "user": {
+        "type": "String"
+      },
+      "note": {
+        "type": "String"
+      }
+    }
+  },
+  "dashboardAlertFraudFindings": "{count, plural, =1{حالة اشتباه واحدة تحتاج مراجعتك} =2{حالتا اشتباه تحتاجان مراجعتك} other{{count} حالات اشتباه تحتاج مراجعتك}}",
+  "@dashboardAlertFraudFindings": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "dashboardIntegritySectionTitle": "النزاهة والمراقبة",
+  "dashboardIntegrityAllClear": "لا توجد حالات اشتباه نشطة — المراقبة تعمل بصمت.",
+  "dashboardOpenIntegrityButton": "فتح مركز النزاهة",
   "dashboardBestSellersTitle": "الأفضل أداءً",
   "dashboardOperationsTitle": "التشغيل اليومي",
   "dashboardApprovedAwaitingPaymentNote": "منها {amount} رواتب معتمدة لم تُدفع بعد"

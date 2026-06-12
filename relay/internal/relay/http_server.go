@@ -132,7 +132,9 @@ var publicInvoiceTemplate = template.Must(template.New("public-invoice").Parse(`
     body { margin: 0; background: #f5f7fa; color: #111827; }
     main { max-width: 760px; margin: 0 auto; padding: 28px 16px 44px; }
     .invoice { background: #fff; border: 1px solid #d8dee9; border-radius: 8px; overflow: hidden; }
-    header { padding: 24px; border-bottom: 1px solid #e5e7eb; }
+    header { padding: 24px; border-bottom: 1px solid #e5e7eb; display: flex; align-items: center; gap: 16px; }
+    header .heading { flex: 1; }
+    .logo { width: 64px; height: 64px; object-fit: contain; border: 1px solid #e5e7eb; border-radius: 8px; background: #fff; padding: 4px; }
     h1 { margin: 0; font-size: 26px; }
     .muted { color: #5f6b7a; }
     .meta { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; padding: 18px 24px; border-bottom: 1px solid #e5e7eb; }
@@ -169,8 +171,11 @@ var publicInvoiceTemplate = template.Must(template.New("public-invoice").Parse(`
 <main>
   <section class="invoice">
     <header>
-      <h1>{{.ShopName}}</h1>
-      {{if .ReceiptHeader}}<p class="muted">{{.ReceiptHeader}}</p>{{end}}
+      {{if .ShopLogoSrc}}<img class="logo" src="{{.ShopLogoSrc}}" alt="">{{end}}
+      <div class="heading">
+        <h1>{{.ShopName}}</h1>
+        {{if .ReceiptHeader}}<p class="muted">{{.ReceiptHeader}}</p>{{end}}
+      </div>
     </header>
     <section class="meta">
       <div><span class="label">رقم الفاتورة</span><span class="value">{{.ReceiptNumber}}</span></div>
@@ -318,17 +323,18 @@ type adminConsoleData struct {
 }
 
 type publicInvoicePayload struct {
-	ShopName      string                     `json:"shop_name"`
-	ReceiptHeader string                     `json:"receipt_header"`
-	ReceiptFooter string                     `json:"receipt_footer"`
-	ReceiptNumber string                     `json:"receipt_number"`
-	Status        string                     `json:"status"`
-	CustomerName  string                     `json:"customer_name"`
-	Lines         []publicInvoiceLinePayload `json:"lines"`
-	Subtotal      string                     `json:"subtotal"`
-	DiscountTotal string                     `json:"discount_total"`
-	Total         string                     `json:"total"`
-	CreatedAt     string                     `json:"created_at"`
+	ShopName        string                     `json:"shop_name"`
+	ReceiptHeader   string                     `json:"receipt_header"`
+	ReceiptFooter   string                     `json:"receipt_footer"`
+	ShopLogoDataURI string                     `json:"shop_logo_data_uri"`
+	ReceiptNumber   string                     `json:"receipt_number"`
+	Status          string                     `json:"status"`
+	CustomerName    string                     `json:"customer_name"`
+	Lines           []publicInvoiceLinePayload `json:"lines"`
+	Subtotal        string                     `json:"subtotal"`
+	DiscountTotal   string                     `json:"discount_total"`
+	Total           string                     `json:"total"`
+	CreatedAt       string                     `json:"created_at"`
 }
 
 type publicInvoiceLinePayload struct {
@@ -345,6 +351,9 @@ type publicInvoiceViewData struct {
 	publicInvoicePayload
 	StatusLabel string
 	Lines       []publicInvoiceLineViewData
+	// Typed template.URL so html/template renders the validated data URI
+	// instead of sanitizing it.
+	ShopLogoSrc template.URL
 }
 
 type publicInvoiceLineViewData struct {
@@ -1094,6 +1103,17 @@ func publicInvoiceTarget(path string, prefix string) (string, string, bool) {
 	return installationID, invoiceToken, true
 }
 
+// publicInvoiceLogoSrc only trusts embedded raster image data URIs; anything
+// else renders no logo at all.
+func publicInvoiceLogoSrc(dataURI string) template.URL {
+	if strings.HasPrefix(dataURI, "data:image/png;base64,") ||
+		strings.HasPrefix(dataURI, "data:image/jpeg;base64,") ||
+		strings.HasPrefix(dataURI, "data:image/webp;base64,") {
+		return template.URL(dataURI)
+	}
+	return ""
+}
+
 func (s HTTPServer) renderPublicInvoice(
 	w http.ResponseWriter,
 	payload publicInvoicePayload,
@@ -1102,6 +1122,7 @@ func (s HTTPServer) renderPublicInvoice(
 		publicInvoicePayload: payload,
 		StatusLabel:          publicInvoiceStatusLabel(payload.Status),
 		Lines:                publicInvoiceLineViewDataList(payload.Lines),
+		ShopLogoSrc:          publicInvoiceLogoSrc(payload.ShopLogoDataURI),
 	}
 	setPublicInvoiceHeaders(w.Header(), true)
 	w.WriteHeader(http.StatusOK)

@@ -16,6 +16,7 @@ dependencies = [
   "django-redis>=5.4,<6",
   "djangorestframework>=3.15,<4",
   "drf-spectacular>=0.27,<1",
+  "pillow>=10,<12",
   "psycopg[binary]>=3.2,<4",
   "uvicorn[standard]>=0.30,<1",
 ]

@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:typed_data';
 
 import '../../core/result.dart';
@@ -381,7 +382,11 @@ class PrintingRepository {
             );
           })
         : await _printThermalPayload(
-            _purchaseReceiptPayload(order: order, shopSettings: shopSettings),
+            _purchaseReceiptPayload(
+              order: order,
+              shopSettings: shopSettings,
+              shopLogoBytes: shopLogoBytes,
+            ),
             config,
           );
     await _reportPrintAudit(
@@ -636,9 +641,10 @@ class PrintingRepository {
   Map<String, Object?> _purchaseReceiptPayload({
     required PurchaseOrder order,
     ShopSettings? shopSettings,
+    Uint8List? shopLogoBytes,
   }) {
     return {
-      'shop': _shopPayload(shopSettings),
+      'shop': _shopPayload(shopSettings, logoBytes: shopLogoBytes),
       'order': {
         'document_title': 'فاتورة مشتريات',
         'total_label': 'الإجمالي',
@@ -661,7 +667,10 @@ class PrintingRepository {
     };
   }
 
-  Map<String, Object?> _shopPayload(ShopSettings? settings) {
+  Map<String, Object?> _shopPayload(
+    ShopSettings? settings, {
+    Uint8List? logoBytes,
+  }) {
     return {
       'name': settings?.shopName.trim().isNotEmpty == true
           ? settings!.shopName.trim()
@@ -670,6 +679,8 @@ class PrintingRepository {
         'receipt_header': settings!.receiptHeader.trim(),
       if (settings?.receiptFooter.trim().isNotEmpty == true)
         'receipt_footer': settings!.receiptFooter.trim(),
+      if (logoBytes != null && logoBytes.isNotEmpty)
+        'logo_bytes': base64Encode(logoBytes),
     };
   }
 

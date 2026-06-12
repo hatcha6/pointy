@@ -328,9 +328,12 @@ class ShopSettingsLogoView(views.APIView):
         return ("core.change_shopsettings",)
 
     def post(self, request):
+        from apps.core.images import normalized_logo_upload
+
         settings = ShopSettings.load()
-        data = request.data.copy()
-        uploaded_file = data.get("file")
+        # Never request.data.copy() here: QueryDict.copy() deep-copies the
+        # upload, which fails for disk-buffered files (uploads over ~2.5MB).
+        uploaded_file = request.data.get("file")
         content_type = (
             content_type_for_upload(uploaded_file).lower() if uploaded_file else ""
         )
@@ -339,8 +342,20 @@ class ShopSettingsLogoView(views.APIView):
                 {"file": ["Shop logo must be a PNG or JPEG image."]},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        data["role"] = Attachment.Role.SHOP_LOGO
-        data["is_primary"] = True
+        original_upload_size = getattr(uploaded_file, "size", 0)
+        # Normalize so every stored logo fits the inline-embedding budget used
+        # by thermal receipts and the public invoice page.
+        normalized_file = normalized_logo_upload(uploaded_file, content_type)
+        if normalized_file is None:
+            return Response(
+                {"file": ["Shop logo image could not be read."]},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        data = {
+            "file": normalized_file,
+            "role": Attachment.Role.SHOP_LOGO,
+            "is_primary": True,
+        }
         serializer = AttachmentSerializer(
             data=data,
             context={"request": request, "owner": settings},
@@ -365,6 +380,7 @@ class ShopSettingsLogoView(views.APIView):
                 "attachment_id": attachment.pk,
                 "content_type": attachment.content_type,
                 "original_size": attachment.original_size,
+                "uploaded_size": original_upload_size,
                 "replaced_count": removed_count,
             },
         )

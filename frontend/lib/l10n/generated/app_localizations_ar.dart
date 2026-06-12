@@ -7801,6 +7801,125 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
+  String get integrityMonitorTitle => 'مركز النزاهة';
+
+  @override
+  String get integrityMonitorRefreshTooltip => 'تحديث نتائج المراقبة';
+
+  @override
+  String get integrityMonitorLoadError => 'تعذر تحميل نتائج المراقبة.';
+
+  @override
+  String get integrityMonitorActionError => 'تعذر حفظ الإجراء. حاول مرة أخرى.';
+
+  @override
+  String get integrityMonitorAllClearTitle => 'كل شيء سليم';
+
+  @override
+  String integrityMonitorAttentionTitle(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count حالات تحتاج مراجعتك',
+      two: 'حالتان تحتاجان مراجعتك',
+      one: 'حالة واحدة تحتاج مراجعتك',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get integrityMonitorSubtitle =>
+      'محرك المراقبة يعمل بصمت في الخلفية: يتحقق من كل إلغاء وإرجاع وفرق نقدي، ويقارن كل كاشير بزملائه دون أن يشعر أحد.';
+
+  @override
+  String get integrityMonitorActiveSection => 'حالات بانتظار قرارك';
+
+  @override
+  String get integrityMonitorSettledSection => 'حالات سابقة';
+
+  @override
+  String get integrityRiskScoreCaption => 'خطورة';
+
+  @override
+  String get integrityFindingWindowLabel => 'فترة الرصد';
+
+  @override
+  String get integrityFindingPatternCountLabel => 'عدد الأنماط المرصودة';
+
+  @override
+  String get integrityPeerComparisonTitle => 'مقارنة بالزملاء';
+
+  @override
+  String get integrityUserRateLabel => 'معدل هذا الكاشير';
+
+  @override
+  String get integrityPeerMedianLabel => 'وسيط الزملاء';
+
+  @override
+  String get integrityThresholdLabel => 'حد الاشتباه';
+
+  @override
+  String get integrityEvidenceTitle => 'الأدلة المرصودة';
+
+  @override
+  String get integrityOpenActivityLogButton => 'فتح سجل النشاط للتحقيق';
+
+  @override
+  String get integrityNoteFieldLabel => 'ملاحظة القرار';
+
+  @override
+  String get integrityNoteFieldHelper =>
+      'وثّق ما وجدته بعد المراجعة — تُحفظ في سجل التدقيق.';
+
+  @override
+  String get integrityReviewButton => 'تمت المراجعة';
+
+  @override
+  String get integrityDismissButton => 'تجاهل كإنذار كاذب';
+
+  @override
+  String get integrityReopenButton => 'إعادة فتح الحالة';
+
+  @override
+  String get integrityStatusActive => 'بانتظار المراجعة';
+
+  @override
+  String get integrityStatusResolved => 'زال تلقائيًا';
+
+  @override
+  String get integrityStatusReviewed => 'تمت مراجعتها';
+
+  @override
+  String get integrityStatusDismissed => 'تم تجاهلها';
+
+  @override
+  String integrityFindingNoteLabel(String user, String note) {
+    return 'ملاحظة $user: $note';
+  }
+
+  @override
+  String dashboardAlertFraudFindings(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count حالات اشتباه تحتاج مراجعتك',
+      two: 'حالتا اشتباه تحتاجان مراجعتك',
+      one: 'حالة اشتباه واحدة تحتاج مراجعتك',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get dashboardIntegritySectionTitle => 'النزاهة والمراقبة';
+
+  @override
+  String get dashboardIntegrityAllClear =>
+      'لا توجد حالات اشتباه نشطة — المراقبة تعمل بصمت.';
+
+  @override
+  String get dashboardOpenIntegrityButton => 'فتح مركز النزاهة';
+
+  @override
   String get dashboardBestSellersTitle => 'الأفضل أداءً';
 
   @override

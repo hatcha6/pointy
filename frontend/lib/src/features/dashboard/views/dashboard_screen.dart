@@ -40,6 +40,7 @@ class DashboardScreen extends StatelessWidget {
     this.onOpenEmployees,
     this.onOpenUsers,
     this.onOpenShopSettings,
+    this.onOpenIntegrityMonitor,
   });
 
   final DashboardViewModel viewModel;
@@ -59,6 +60,7 @@ class DashboardScreen extends StatelessWidget {
   final VoidCallback? onOpenEmployees;
   final VoidCallback? onOpenUsers;
   final VoidCallback? onOpenShopSettings;
+  final VoidCallback? onOpenIntegrityMonitor;
   final VoidCallback onLogout;
 
   @override
@@ -119,6 +121,7 @@ class DashboardScreen extends StatelessWidget {
                 openEmployees: onOpenEmployees,
                 openDiscounts: onOpenDiscounts,
                 openDeviceSettings: onOpenDeviceSettings,
+                openIntegrityMonitor: onOpenIntegrityMonitor,
               ),
             ),
           ),
@@ -137,6 +140,7 @@ class _DashboardNavigation {
     required this.openEmployees,
     required this.openDiscounts,
     required this.openDeviceSettings,
+    required this.openIntegrityMonitor,
   });
 
   final VoidCallback? openCatalog;
@@ -145,6 +149,7 @@ class _DashboardNavigation {
   final VoidCallback? openEmployees;
   final VoidCallback? openDiscounts;
   final VoidCallback? openDeviceSettings;
+  final VoidCallback? openIntegrityMonitor;
 }
 
 class _DashboardBody extends StatelessWidget {
@@ -308,6 +313,12 @@ class _DashboardSections extends StatelessWidget {
             capabilities: capabilities,
             capability: AppCapability.viewSalesDashboard,
             child: _ProfitSection(section: sections.profitability!),
+          ),
+        if (sections.fraud != null &&
+            capabilities.allows(AppCapability.viewFraudFindings))
+          _IntegritySection(
+            section: sections.fraud!,
+            onOpen: navigation.openIntegrityMonitor,
           ),
         if (showSales)
           _BestSellersSection(
@@ -767,6 +778,21 @@ class _ActionCenter extends StatelessWidget {
             discounts.expiringRules.length,
           ),
           onTap: navigation.openDiscounts,
+        ),
+      );
+    }
+
+    final fraud = sections.fraud?.summary;
+    if (fraud != null &&
+        capabilities.allows(AppCapability.viewFraudFindings) &&
+        fraud.activeCount > 0) {
+      alerts.add(
+        _DashboardAlert(
+          id: 'fraud_findings',
+          icon: Icons.gpp_maybe_outlined,
+          color: fraud.criticalCount > 0 ? colors.danger : colors.warning,
+          title: l10n.dashboardAlertFraudFindings(fraud.activeCount),
+          onTap: navigation.openIntegrityMonitor,
         ),
       );
     }
@@ -1306,6 +1332,96 @@ class _OperationsSection extends StatelessWidget {
 // ---------------------------------------------------------------------------
 // Shared section scaffold, charts, and lists
 // ---------------------------------------------------------------------------
+
+class _IntegritySection extends StatelessWidget {
+  const _IntegritySection({required this.section, required this.onOpen});
+
+  final DashboardFraudSection section;
+  final VoidCallback? onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final spacing = AdaptiveSpacing.of(context);
+    final theme = Theme.of(context);
+    final colors = context.pointyColors;
+    final summary = section.summary;
+    final allClear = summary.activeCount == 0;
+
+    return _DashboardSection(
+      title: l10n.dashboardIntegritySectionTitle,
+      icon: Icons.verified_user_outlined,
+      children: [
+        Card(
+          key: const ValueKey('dashboard_integrity_card'),
+          margin: EdgeInsets.zero,
+          child: Padding(
+            padding: spacing.compactPadding,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    Icon(
+                      allClear
+                          ? Icons.verified_user_outlined
+                          : Icons.gpp_maybe_outlined,
+                      color: allClear ? colors.success : colors.warning,
+                    ),
+                    SizedBox(width: spacing.sm),
+                    Expanded(
+                      child: Text(
+                        allClear
+                            ? l10n.dashboardIntegrityAllClear
+                            : l10n.dashboardAlertFraudFindings(
+                                summary.activeCount,
+                              ),
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
+                          color: allClear ? colors.success : colors.ink,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                if (!allClear) ...[
+                  SizedBox(height: spacing.sm),
+                  for (final finding in section.recentFindings.take(3))
+                    PointyDataRow(
+                      minHeight: 56,
+                      title: finding.userLabel,
+                      subtitle: finding.headline.isNotEmpty
+                          ? finding.headline
+                          : finding.ruleTitle,
+                      trailing: PointyStatusPill(
+                        label: '${finding.riskScore}',
+                        color: finding.severity == 'critical'
+                            ? colors.danger
+                            : colors.warning,
+                        icon: Icons.speed_outlined,
+                      ),
+                    ),
+                ],
+                if (onOpen != null) ...[
+                  SizedBox(height: spacing.sm),
+                  Align(
+                    alignment: AlignmentDirectional.centerStart,
+                    child: FilledButton.tonalIcon(
+                      key: const ValueKey('dashboard_open_integrity_button'),
+                      onPressed: onOpen,
+                      icon: const Icon(Icons.shield_outlined),
+                      label: Text(l10n.dashboardOpenIntegrityButton),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
 
 class _DashboardSection extends StatelessWidget {
   const _DashboardSection({

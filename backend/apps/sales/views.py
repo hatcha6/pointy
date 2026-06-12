@@ -12,6 +12,7 @@ from apps.core.discovery import request_is_relayed
 from apps.core.models import ShopSettings
 from apps.core.permissions import HasPointyPermission
 from apps.core.roles import user_is_manager
+from apps.fraud.services import schedule_targeted_sweep
 from .models import Order, RegisterCashMovement, RegisterSession
 from .serializers import (
     CheckoutSerializer,
@@ -188,6 +189,7 @@ class OrderViewSet(
         serializer.is_valid(raise_exception=True)
         serializer.save()
         order.refresh_from_db()
+        schedule_targeted_sweep()
         return Response(
             OrderSerializer(order, context={"request": request}).data,
             status=status.HTTP_200_OK,
@@ -213,6 +215,7 @@ class OrderViewSet(
         serializer.is_valid(raise_exception=True)
         serializer.save()
         order.refresh_from_db()
+        schedule_targeted_sweep()
         return Response(
             OrderSerializer(order, context={"request": request}).data,
             status=status.HTTP_200_OK,
@@ -484,6 +487,8 @@ class RegisterSessionViewSet(
             },
             metrics={"amount": float(movement.amount)},
         )
+        if movement_type == RegisterCashMovement.MovementType.PAY_OUT:
+            schedule_targeted_sweep()
         return Response(
             RegisterCashMovementSerializer(movement).data,
             status=status.HTTP_201_CREATED,
@@ -549,5 +554,8 @@ class RegisterSessionViewSet(
                 "closing_cash": float(session.closing_cash),
             },
         )
+        # Closing the register is when cash shortages become visible — sweep
+        # immediately so the owner sees a finding while the shift is fresh.
+        schedule_targeted_sweep()
 
         return Response(self.get_serializer(session).data)

@@ -23,6 +23,7 @@ from apps.core.roles import user_is_manager
 from apps.customers.models import Customer
 from apps.discounts.models import DiscountRedemption, DiscountRule
 from apps.employees.models import Employee, EmployeeLoan, PayrollRun
+from apps.fraud.models import FraudFinding
 from apps.inventory.models import StockItem, StockMovement
 from apps.payments.models import Payment
 from apps.printing.models import PrintAgent, PrintJob
@@ -93,6 +94,8 @@ class DashboardView(APIView):
             data["sections"]["customers"] = _customers_section(period)
         if _can(request.user, "discounts.view_discountrule"):
             data["sections"]["discounts"] = _discounts_section(period)
+        if _can(request.user, "fraud.view_fraudfinding"):
+            data["sections"]["fraud"] = _fraud_section()
         if _can(request.user, "printing.view_printjob"):
             data["sections"]["printing"] = _cached_dashboard_section(
                 "printing",
@@ -379,6 +382,36 @@ def _purchasing_section(period):
             for order, balance in overdue_orders[:6]
         ],
         "top_supplier_balances": _top_supplier_balances(balance_rows),
+    }
+
+
+def _fraud_section():
+    active = FraudFinding.objects.filter(status=FraudFinding.Status.ACTIVE)
+    top_findings = active.order_by("-risk_score", "-last_detected_at")[:5]
+    return {
+        "summary": {
+            "active_count": active.count(),
+            "critical_count": active.filter(
+                severity=FraudFinding.Severity.CRITICAL,
+            ).count(),
+            "top_risk_score": next(
+                iter(active.values_list("risk_score", flat=True)[:1]),
+                0,
+            ),
+        },
+        "recent_findings": [
+            {
+                "id": finding.pk,
+                "rule_code": finding.rule_code,
+                "rule_title": finding.summary.get("rule_title", ""),
+                "headline": finding.summary.get("headline", ""),
+                "user_label": finding.target_user_label,
+                "severity": finding.severity,
+                "risk_score": finding.risk_score,
+                "last_detected_at": finding.last_detected_at.isoformat(),
+            }
+            for finding in top_findings
+        ],
     }
 
 

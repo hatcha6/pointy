@@ -441,6 +441,7 @@ class PublicInvoiceSerializer(serializers.ModelSerializer):
     shop_name = serializers.SerializerMethodField()
     receipt_header = serializers.SerializerMethodField()
     receipt_footer = serializers.SerializerMethodField()
+    shop_logo_data_uri = serializers.SerializerMethodField()
     customer_name = serializers.CharField(source="customer.full_name", read_only=True)
     lines = PublicInvoiceLineSerializer(many=True, read_only=True)
 
@@ -450,6 +451,7 @@ class PublicInvoiceSerializer(serializers.ModelSerializer):
             "shop_name",
             "receipt_header",
             "receipt_footer",
+            "shop_logo_data_uri",
             "receipt_number",
             "status",
             "customer_name",
@@ -475,6 +477,36 @@ class PublicInvoiceSerializer(serializers.ModelSerializer):
 
     def get_receipt_footer(self, order):
         return self._settings().receipt_footer
+
+    def get_shop_logo_data_uri(self, order):
+        # Embedded as a data URI because the public invoice page is served
+        # through the relay: a signed LAN content URL would not be reachable
+        # from the visitor's browser.
+        if "shop_logo_data_uri" not in self.context:
+            from apps.attachments.models import Attachment
+            from apps.attachments.services import active_attachments_for
+            from apps.printing.services import shop_logo_base64
+
+            settings = self._settings()
+            encoded = shop_logo_base64(settings)
+            attachment = (
+                active_attachments_for(
+                    settings,
+                    role=Attachment.Role.SHOP_LOGO,
+                )
+                .filter(is_primary=True)
+                .first()
+                if encoded is not None
+                else None
+            )
+            if encoded is None or attachment is None:
+                self.context["shop_logo_data_uri"] = ""
+            else:
+                content_type = attachment.content_type or "image/png"
+                self.context["shop_logo_data_uri"] = (
+                    f"data:{content_type};base64,{encoded}"
+                )
+        return self.context["shop_logo_data_uri"]
 
 
 class CheckoutLineSerializer(serializers.Serializer):

@@ -85,6 +85,123 @@ class FraudDetectionTests(TestCase):
             str(self.cashier.pk),
         )
 
+    def test_manager_can_review_and_dismiss_findings_via_api(self):
+        from django.urls import reverse
+        from rest_framework.test import APIClient
+
+        order = self._paid_order(
+            user=self.cashier,
+            total=Decimal("90.00"),
+            created_at=timezone.now() - timedelta(days=3),
+        )
+        OrderAdjustment.objects.create(
+            order=order,
+            register_session=order.register_session,
+            adjustment_type=OrderAdjustment.AdjustmentType.VOID,
+            amount=Decimal("90.00"),
+            refund_method=Payment.Method.CASH,
+            reason="Manager review",
+            created_by=self.cashier,
+            created_at=timezone.now(),
+        )
+        sync_suspected_fraud_findings()
+        finding = FraudFinding.objects.get(rule_code="late_void_or_return")
+        client = APIClient()
+        client.force_authenticate(user=self.manager)
+
+        with self.captureOnCommitCallbacks(execute=True):
+            review_response = client.post(
+                reverse("fraud-finding-review", args=[finding.pk]),
+                {"note": "تمت مراجعة الفواتير مع الكاشير"},
+                format="json",
+            )
+
+        self.assertEqual(review_response.status_code, 200)
+        finding.refresh_from_db()
+        self.assertEqual(finding.status, FraudFinding.Status.REVIEWED)
+        self.assertEqual(finding.reviewed_by, self.manager)
+        self.assertEqual(
+            finding.resolution_note,
+            "تمت مراجعة الفواتير مع الكاشير",
+        )
+        self.assertTrue(
+            AnalyticsEvent.objects.filter(name="fraud.finding.reviewed").exists()
+        )
+
+        reopen_response = client.post(
+            reverse("fraud-finding-reopen", args=[finding.pk]),
+            format="json",
+        )
+        self.assertEqual(reopen_response.status_code, 200)
+        finding.refresh_from_db()
+        self.assertEqual(finding.status, FraudFinding.Status.ACTIVE)
+
+        dismiss_response = client.post(
+            reverse("fraud-finding-dismiss", args=[finding.pk]),
+            {"note": "إنذار كاذب"},
+            format="json",
+        )
+        self.assertEqual(dismiss_response.status_code, 200)
+        finding.refresh_from_db()
+        self.assertEqual(finding.status, FraudFinding.Status.DISMISSED)
+
+    def test_cashier_cannot_triage_findings(self):
+        from django.urls import reverse
+        from rest_framework.test import APIClient
+
+        finding = FraudFinding.objects.create(
+            fingerprint="late_void_or_return:user:999",
+            rule_code="late_void_or_return",
+            risk_score=80,
+            window_start=timezone.now() - timedelta(days=30),
+            window_end=timezone.now(),
+        )
+        client = APIClient()
+        client.force_authenticate(user=self.cashier)
+
+        response = client.post(
+            reverse("fraud-finding-review", args=[finding.pk]),
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 403)
+
+    def test_sweep_preserves_manual_triage_unless_pattern_escalates(self):
+        order = self._paid_order(
+            user=self.cashier,
+            total=Decimal("90.00"),
+            created_at=timezone.now() - timedelta(days=3),
+        )
+        OrderAdjustment.objects.create(
+            order=order,
+            register_session=order.register_session,
+            adjustment_type=OrderAdjustment.AdjustmentType.VOID,
+            amount=Decimal("90.00"),
+            refund_method=Payment.Method.CASH,
+            reason="Manager review",
+            created_by=self.cashier,
+            created_at=timezone.now(),
+        )
+        sync_suspected_fraud_findings()
+        finding = FraudFinding.objects.get(rule_code="late_void_or_return")
+        from .services import review_finding
+
+        review_finding(finding, user=self.manager, note="موثقة", dismiss=True)
+
+        # Same pattern again: the manager's verdict must stick.
+        sync_suspected_fraud_findings()
+        finding.refresh_from_db()
+        self.assertEqual(finding.status, FraudFinding.Status.DISMISSED)
+        self.assertEqual(finding.resolution_note, "موثقة")
+
+        # Force the stored score below the sweep's score to simulate the
+        # pattern getting worse after triage.
+        FraudFinding.objects.filter(pk=finding.pk).update(risk_score=10)
+        sync_suspected_fraud_findings()
+        finding.refresh_from_db()
+        self.assertEqual(finding.status, FraudFinding.Status.ACTIVE)
+        self.assertGreater(finding.risk_score, 10)
+
     def test_peer_outlier_discount_pattern_is_detected(self):
         for index in range(4):
             self._paid_order(
