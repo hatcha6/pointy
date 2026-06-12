@@ -49,6 +49,7 @@ enum AppCapability {
   manageDeviceSettings,
   manageUsers,
   manageShopSettings,
+  manageSalesChannels,
   viewDiscountRules,
   createDiscountRule,
   changeDiscountRule,
@@ -378,6 +379,12 @@ class AuthorizationCapabilities {
         capabilities.add(AppCapability.manageShopSettings);
       }
       if (_hasAny(user, const [
+        'change_saleschannel',
+        'channels.change_saleschannel',
+      ])) {
+        capabilities.add(AppCapability.manageSalesChannels);
+      }
+      if (_hasAny(user, const [
         'view_discountrule',
         'discounts.view_discountrule',
         'view_reportrun',
@@ -530,6 +537,8 @@ class AuthorizationCapabilities {
       allows(AppCapability.manageDeviceSettings);
   bool get canManageUsers => allows(AppCapability.manageUsers);
   bool get canManageShopSettings => allows(AppCapability.manageShopSettings);
+  bool get canManageSalesChannels =>
+      allows(AppCapability.manageSalesChannels);
   bool get canViewDiscountRules => allows(AppCapability.viewDiscountRules);
   bool get canCreateDiscountRule => allows(AppCapability.createDiscountRule);
   bool get canChangeDiscountRule => allows(AppCapability.changeDiscountRule);

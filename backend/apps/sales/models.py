@@ -172,6 +172,15 @@ class Order(TimeStampedModel):
         blank=True,
         null=True,
     )
+    # Stamped by the backend from the request's credentials (see
+    # apps.channels.services.resolve_sales_channel) — never from client input.
+    sales_channel = models.ForeignKey(
+        "channels.SalesChannel",
+        on_delete=models.PROTECT,
+        related_name="orders",
+        blank=True,
+        null=True,
+    )
     customer = models.ForeignKey(
         Customer,
         on_delete=models.SET_NULL,

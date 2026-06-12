@@ -294,6 +294,8 @@ class OrderSerializer(serializers.ModelSerializer):
         source="register_session.session_number",
         read_only=True,
     )
+    sales_channel_name = serializers.CharField(source="sales_channel.name", read_only=True)
+    sales_channel_slug = serializers.CharField(source="sales_channel.slug", read_only=True)
     can_void = serializers.SerializerMethodField()
     can_return = serializers.SerializerMethodField()
     requires_manager_adjustment = serializers.SerializerMethodField()
@@ -314,6 +316,9 @@ class OrderSerializer(serializers.ModelSerializer):
             "status",
             "register_session",
             "register_session_number",
+            "sales_channel",
+            "sales_channel_name",
+            "sales_channel_slug",
             "customer",
             "customer_number",
             "customer_name",
@@ -338,6 +343,9 @@ class OrderSerializer(serializers.ModelSerializer):
             "receipt_number",
             "register_session",
             "register_session_number",
+            "sales_channel",
+            "sales_channel_name",
+            "sales_channel_slug",
             "customer_number",
             "customer_name",
             "customer_phone",

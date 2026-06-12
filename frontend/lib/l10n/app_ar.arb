@@ -1439,6 +1439,66 @@
   "paymentSettingsSectionTitle": "طرق الدفع",
   "inventorySettingsSectionTitle": "المخزون والربحية",
   "analyticsExportSectionTitle": "تصدير التتبع",
+  "salesChannelsSectionTitle": "قنوات البيع",
+  "salesChannelsSectionSubtitle": "ربط تطبيقات التوصيل والمتاجر الإلكترونية وإدارة تفويضها",
+  "salesChannelsLoadError": "تعذر تحميل قنوات البيع.",
+  "salesChannelsEmptyMessage": "لا توجد قنوات بيع خارجية بعد. أضف قناة لربط تطبيقات التوصيل أو المتاجر الإلكترونية.",
+  "salesChannelAddButton": "إضافة قناة",
+  "salesChannelCreateTitle": "إضافة قناة بيع",
+  "salesChannelCreateSubmit": "إنشاء القناة",
+  "salesChannelNameLabel": "اسم القناة",
+  "salesChannelNameRequired": "أدخل اسم القناة.",
+  "salesChannelTypeLabel": "نوع القناة",
+  "salesChannelNotesLabel": "ملاحظات (اختياري)",
+  "salesChannelTypePos": "نقطة البيع",
+  "salesChannelTypeDelivery": "تطبيق توصيل",
+  "salesChannelTypeEcommerce": "متجر إلكتروني",
+  "salesChannelTypeMarketplace": "سوق إلكتروني",
+  "salesChannelTypeOther": "أخرى",
+  "salesChannelStatusActive": "مفوضة",
+  "salesChannelStatusInactive": "موقوفة",
+  "salesChannelSystemBadge": "القناة الافتراضية",
+  "salesChannelPosSubtitle": "تطبيق نقطة البيع الخاص بالمتجر. يحدد الخادم هذه القناة تلقائيًا من جلسة الدخول ولا يمكن إيقافها.",
+  "salesChannelKeyPrefixLabel": "معرف المفتاح: {prefix}",
+  "@salesChannelKeyPrefixLabel": {
+    "description": "Shows the public prefix of a channel API key.",
+    "placeholders": {
+      "prefix": {
+        "type": "String"
+      }
+    }
+  },
+  "salesChannelDeauthorizeAction": "إيقاف التفويض",
+  "salesChannelAuthorizeAction": "إعادة التفويض",
+  "salesChannelDeauthorizeConfirmTitle": "إيقاف تفويض القناة؟",
+  "salesChannelDeauthorizeConfirmMessage": "سيرفض الخادم جميع طلبات «{name}» فورًا حتى تتم إعادة التفويض.",
+  "@salesChannelDeauthorizeConfirmMessage": {
+    "description": "Confirmation message before deauthorizing a sales channel.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "salesChannelRotateKeyAction": "تدوير مفتاح الربط",
+  "salesChannelRotateKeyConfirmTitle": "تدوير مفتاح الربط؟",
+  "salesChannelRotateKeyConfirmMessage": "سيتوقف المفتاح الحالي عن العمل فورًا وسيظهر مفتاح جديد لمرة واحدة.",
+  "salesChannelDeleteAction": "حذف القناة",
+  "salesChannelDeleteConfirmTitle": "حذف القناة؟",
+  "salesChannelDeleteConfirmMessage": "سيتم حذف «{name}» نهائيًا. القنوات التي لديها فواتير مسجلة لا يمكن حذفها ويمكن إيقاف تفويضها بدلًا من ذلك.",
+  "@salesChannelDeleteConfirmMessage": {
+    "description": "Confirmation message before deleting a sales channel.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "salesChannelApiKeyDialogTitle": "مفتاح ربط القناة",
+  "salesChannelApiKeyDialogMessage": "انسخ المفتاح الآن واحفظه في مكان آمن، لن يظهر مرة أخرى.",
+  "salesChannelApiKeyCopyButton": "نسخ المفتاح",
+  "salesChannelApiKeyCopiedMessage": "تم نسخ المفتاح.",
+  "salesChannelActionError": "تعذر تنفيذ العملية على القناة. حاول مرة أخرى.",
   "shopSettingsEmptyValue": "غير محدد",
   "shopSettingsEnabledValue": "مفعل",
   "shopSettingsDisabledValue": "متوقف",

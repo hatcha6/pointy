@@ -35,6 +35,7 @@ INITIAL_SETUP_UNSPECIFIED_SUPPLIER_NOTES = (
 MANAGER_PERMISSION_DOMAINS = (
     "catalog",
     "analytics",
+    "channels",
     "core",
     "inventory",
     "sales",
@@ -173,6 +174,9 @@ def pointy_domain_data_exists():
 
 def _model_has_initial_setup_blocking_data(model, model_label):
     queryset = model._default_manager.all()
+    if model_label == ("channels", "saleschannel"):
+        # The built-in POS channel is seeded data, not shop activity.
+        return queryset.filter(is_system=False).exists()
     if model_label == ("catalog", "variantoption"):
         return queryset.exclude(
             code__in=INITIAL_SETUP_VARIANT_OPTION_CODES,

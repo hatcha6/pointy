@@ -42,6 +42,7 @@ import 'features/reports/pdf/report_document_builder.dart';
 import 'features/reports/pdf/report_pdf.dart';
 import 'features/reports/views/report_pdf_preview_screen.dart';
 import 'features/reports/views/reports_screen.dart';
+import 'features/settings/view_models/sales_channels_view_model.dart';
 import 'features/settings/view_models/shop_settings_view_model.dart';
 import 'features/settings/views/shop_settings_screen.dart';
 import 'features/user_settings/views/user_settings_screen.dart';
@@ -710,6 +711,10 @@ class _AuthenticatedRoutes {
       ShopSettingsScreen(
         viewModel: ShopSettingsViewModel(
           dependencies.shopSettingsRepository,
+          analyticsEngine: dependencies.analyticsEngine,
+        ),
+        salesChannelsViewModel: SalesChannelsViewModel(
+          dependencies.salesChannelRepository,
           analyticsEngine: dependencies.analyticsEngine,
         ),
         currentUser: currentUser,

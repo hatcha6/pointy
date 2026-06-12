@@ -7,6 +7,7 @@ from rest_framework.response import Response
 
 from apps.analytics.models import AnalyticsEvent
 from apps.analytics.services import record_domain_event
+from apps.channels.services import require_active_sales_channel
 from apps.core.idempotency import run_idempotent_request
 from apps.core.discovery import request_is_relayed
 from apps.core.models import ShopSettings
@@ -52,7 +53,11 @@ class OrderViewSet(
         "void": ("sales.add_order",),
         "reprint": ("sales.view_order", "printing.add_printjob"),
     }
-    queryset = Order.objects.select_related("customer", "register_session").prefetch_related(
+    queryset = Order.objects.select_related(
+        "customer",
+        "register_session",
+        "sales_channel",
+    ).prefetch_related(
         "lines__variant__product",
         "payments",
     )
@@ -61,6 +66,7 @@ class OrderViewSet(
         "customer",
         "register_session",
         "register_session__status",
+        "sales_channel",
     )
     search_fields = (
         "receipt_number",
@@ -98,7 +104,10 @@ class OrderViewSet(
             raise serializers.ValidationError(
                 {"detail": "No open register session for this request owner."}
             )
-        serializer.save(register_session=session)
+        serializer.save(
+            register_session=session,
+            sales_channel=require_active_sales_channel(self.request),
+        )
 
     def create(self, request, *args, **kwargs):
         return run_idempotent_request(

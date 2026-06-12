@@ -4173,6 +4173,222 @@ abstract class AppLocalizations {
   /// **'تصدير التتبع'**
   String get analyticsExportSectionTitle;
 
+  /// No description provided for @salesChannelsSectionTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'قنوات البيع'**
+  String get salesChannelsSectionTitle;
+
+  /// No description provided for @salesChannelsSectionSubtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'ربط تطبيقات التوصيل والمتاجر الإلكترونية وإدارة تفويضها'**
+  String get salesChannelsSectionSubtitle;
+
+  /// No description provided for @salesChannelsLoadError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر تحميل قنوات البيع.'**
+  String get salesChannelsLoadError;
+
+  /// No description provided for @salesChannelsEmptyMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد قنوات بيع خارجية بعد. أضف قناة لربط تطبيقات التوصيل أو المتاجر الإلكترونية.'**
+  String get salesChannelsEmptyMessage;
+
+  /// No description provided for @salesChannelAddButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'إضافة قناة'**
+  String get salesChannelAddButton;
+
+  /// No description provided for @salesChannelCreateTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'إضافة قناة بيع'**
+  String get salesChannelCreateTitle;
+
+  /// No description provided for @salesChannelCreateSubmit.
+  ///
+  /// In ar, this message translates to:
+  /// **'إنشاء القناة'**
+  String get salesChannelCreateSubmit;
+
+  /// No description provided for @salesChannelNameLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'اسم القناة'**
+  String get salesChannelNameLabel;
+
+  /// No description provided for @salesChannelNameRequired.
+  ///
+  /// In ar, this message translates to:
+  /// **'أدخل اسم القناة.'**
+  String get salesChannelNameRequired;
+
+  /// No description provided for @salesChannelTypeLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'نوع القناة'**
+  String get salesChannelTypeLabel;
+
+  /// No description provided for @salesChannelNotesLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'ملاحظات (اختياري)'**
+  String get salesChannelNotesLabel;
+
+  /// No description provided for @salesChannelTypePos.
+  ///
+  /// In ar, this message translates to:
+  /// **'نقطة البيع'**
+  String get salesChannelTypePos;
+
+  /// No description provided for @salesChannelTypeDelivery.
+  ///
+  /// In ar, this message translates to:
+  /// **'تطبيق توصيل'**
+  String get salesChannelTypeDelivery;
+
+  /// No description provided for @salesChannelTypeEcommerce.
+  ///
+  /// In ar, this message translates to:
+  /// **'متجر إلكتروني'**
+  String get salesChannelTypeEcommerce;
+
+  /// No description provided for @salesChannelTypeMarketplace.
+  ///
+  /// In ar, this message translates to:
+  /// **'سوق إلكتروني'**
+  String get salesChannelTypeMarketplace;
+
+  /// No description provided for @salesChannelTypeOther.
+  ///
+  /// In ar, this message translates to:
+  /// **'أخرى'**
+  String get salesChannelTypeOther;
+
+  /// No description provided for @salesChannelStatusActive.
+  ///
+  /// In ar, this message translates to:
+  /// **'مفوضة'**
+  String get salesChannelStatusActive;
+
+  /// No description provided for @salesChannelStatusInactive.
+  ///
+  /// In ar, this message translates to:
+  /// **'موقوفة'**
+  String get salesChannelStatusInactive;
+
+  /// No description provided for @salesChannelSystemBadge.
+  ///
+  /// In ar, this message translates to:
+  /// **'القناة الافتراضية'**
+  String get salesChannelSystemBadge;
+
+  /// No description provided for @salesChannelPosSubtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'تطبيق نقطة البيع الخاص بالمتجر. يحدد الخادم هذه القناة تلقائيًا من جلسة الدخول ولا يمكن إيقافها.'**
+  String get salesChannelPosSubtitle;
+
+  /// Shows the public prefix of a channel API key.
+  ///
+  /// In ar, this message translates to:
+  /// **'معرف المفتاح: {prefix}'**
+  String salesChannelKeyPrefixLabel(String prefix);
+
+  /// No description provided for @salesChannelDeauthorizeAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'إيقاف التفويض'**
+  String get salesChannelDeauthorizeAction;
+
+  /// No description provided for @salesChannelAuthorizeAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'إعادة التفويض'**
+  String get salesChannelAuthorizeAction;
+
+  /// No description provided for @salesChannelDeauthorizeConfirmTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'إيقاف تفويض القناة؟'**
+  String get salesChannelDeauthorizeConfirmTitle;
+
+  /// Confirmation message before deauthorizing a sales channel.
+  ///
+  /// In ar, this message translates to:
+  /// **'سيرفض الخادم جميع طلبات «{name}» فورًا حتى تتم إعادة التفويض.'**
+  String salesChannelDeauthorizeConfirmMessage(String name);
+
+  /// No description provided for @salesChannelRotateKeyAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'تدوير مفتاح الربط'**
+  String get salesChannelRotateKeyAction;
+
+  /// No description provided for @salesChannelRotateKeyConfirmTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'تدوير مفتاح الربط؟'**
+  String get salesChannelRotateKeyConfirmTitle;
+
+  /// No description provided for @salesChannelRotateKeyConfirmMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'سيتوقف المفتاح الحالي عن العمل فورًا وسيظهر مفتاح جديد لمرة واحدة.'**
+  String get salesChannelRotateKeyConfirmMessage;
+
+  /// No description provided for @salesChannelDeleteAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'حذف القناة'**
+  String get salesChannelDeleteAction;
+
+  /// No description provided for @salesChannelDeleteConfirmTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'حذف القناة؟'**
+  String get salesChannelDeleteConfirmTitle;
+
+  /// Confirmation message before deleting a sales channel.
+  ///
+  /// In ar, this message translates to:
+  /// **'سيتم حذف «{name}» نهائيًا. القنوات التي لديها فواتير مسجلة لا يمكن حذفها ويمكن إيقاف تفويضها بدلًا من ذلك.'**
+  String salesChannelDeleteConfirmMessage(String name);
+
+  /// No description provided for @salesChannelApiKeyDialogTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'مفتاح ربط القناة'**
+  String get salesChannelApiKeyDialogTitle;
+
+  /// No description provided for @salesChannelApiKeyDialogMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'انسخ المفتاح الآن واحفظه في مكان آمن، لن يظهر مرة أخرى.'**
+  String get salesChannelApiKeyDialogMessage;
+
+  /// No description provided for @salesChannelApiKeyCopyButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'نسخ المفتاح'**
+  String get salesChannelApiKeyCopyButton;
+
+  /// No description provided for @salesChannelApiKeyCopiedMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم نسخ المفتاح.'**
+  String get salesChannelApiKeyCopiedMessage;
+
+  /// No description provided for @salesChannelActionError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر تنفيذ العملية على القناة. حاول مرة أخرى.'**
+  String get salesChannelActionError;
+
   /// No description provided for @shopSettingsEmptyValue.
   ///
   /// In ar, this message translates to:

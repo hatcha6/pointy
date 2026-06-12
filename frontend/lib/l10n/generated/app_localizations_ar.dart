@@ -2384,6 +2384,126 @@ class AppLocalizationsAr extends AppLocalizations {
   String get analyticsExportSectionTitle => 'تصدير التتبع';
 
   @override
+  String get salesChannelsSectionTitle => 'قنوات البيع';
+
+  @override
+  String get salesChannelsSectionSubtitle =>
+      'ربط تطبيقات التوصيل والمتاجر الإلكترونية وإدارة تفويضها';
+
+  @override
+  String get salesChannelsLoadError => 'تعذر تحميل قنوات البيع.';
+
+  @override
+  String get salesChannelsEmptyMessage =>
+      'لا توجد قنوات بيع خارجية بعد. أضف قناة لربط تطبيقات التوصيل أو المتاجر الإلكترونية.';
+
+  @override
+  String get salesChannelAddButton => 'إضافة قناة';
+
+  @override
+  String get salesChannelCreateTitle => 'إضافة قناة بيع';
+
+  @override
+  String get salesChannelCreateSubmit => 'إنشاء القناة';
+
+  @override
+  String get salesChannelNameLabel => 'اسم القناة';
+
+  @override
+  String get salesChannelNameRequired => 'أدخل اسم القناة.';
+
+  @override
+  String get salesChannelTypeLabel => 'نوع القناة';
+
+  @override
+  String get salesChannelNotesLabel => 'ملاحظات (اختياري)';
+
+  @override
+  String get salesChannelTypePos => 'نقطة البيع';
+
+  @override
+  String get salesChannelTypeDelivery => 'تطبيق توصيل';
+
+  @override
+  String get salesChannelTypeEcommerce => 'متجر إلكتروني';
+
+  @override
+  String get salesChannelTypeMarketplace => 'سوق إلكتروني';
+
+  @override
+  String get salesChannelTypeOther => 'أخرى';
+
+  @override
+  String get salesChannelStatusActive => 'مفوضة';
+
+  @override
+  String get salesChannelStatusInactive => 'موقوفة';
+
+  @override
+  String get salesChannelSystemBadge => 'القناة الافتراضية';
+
+  @override
+  String get salesChannelPosSubtitle =>
+      'تطبيق نقطة البيع الخاص بالمتجر. يحدد الخادم هذه القناة تلقائيًا من جلسة الدخول ولا يمكن إيقافها.';
+
+  @override
+  String salesChannelKeyPrefixLabel(String prefix) {
+    return 'معرف المفتاح: $prefix';
+  }
+
+  @override
+  String get salesChannelDeauthorizeAction => 'إيقاف التفويض';
+
+  @override
+  String get salesChannelAuthorizeAction => 'إعادة التفويض';
+
+  @override
+  String get salesChannelDeauthorizeConfirmTitle => 'إيقاف تفويض القناة؟';
+
+  @override
+  String salesChannelDeauthorizeConfirmMessage(String name) {
+    return 'سيرفض الخادم جميع طلبات «$name» فورًا حتى تتم إعادة التفويض.';
+  }
+
+  @override
+  String get salesChannelRotateKeyAction => 'تدوير مفتاح الربط';
+
+  @override
+  String get salesChannelRotateKeyConfirmTitle => 'تدوير مفتاح الربط؟';
+
+  @override
+  String get salesChannelRotateKeyConfirmMessage =>
+      'سيتوقف المفتاح الحالي عن العمل فورًا وسيظهر مفتاح جديد لمرة واحدة.';
+
+  @override
+  String get salesChannelDeleteAction => 'حذف القناة';
+
+  @override
+  String get salesChannelDeleteConfirmTitle => 'حذف القناة؟';
+
+  @override
+  String salesChannelDeleteConfirmMessage(String name) {
+    return 'سيتم حذف «$name» نهائيًا. القنوات التي لديها فواتير مسجلة لا يمكن حذفها ويمكن إيقاف تفويضها بدلًا من ذلك.';
+  }
+
+  @override
+  String get salesChannelApiKeyDialogTitle => 'مفتاح ربط القناة';
+
+  @override
+  String get salesChannelApiKeyDialogMessage =>
+      'انسخ المفتاح الآن واحفظه في مكان آمن، لن يظهر مرة أخرى.';
+
+  @override
+  String get salesChannelApiKeyCopyButton => 'نسخ المفتاح';
+
+  @override
+  String get salesChannelApiKeyCopiedMessage => 'تم نسخ المفتاح.';
+
+  @override
+  String get salesChannelActionError =>
+      'تعذر تنفيذ العملية على القناة. حاول مرة أخرى.';
+
+  @override
   String get shopSettingsEmptyValue => 'غير محدد';
 
   @override

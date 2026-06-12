@@ -13,6 +13,7 @@ from apps.catalog.views import (
     VariantOptionValueViewSet,
     VariantOptionViewSet,
 )
+from apps.channels.views import SalesChannelViewSet
 from apps.customers.views import CustomerViewSet
 from apps.discounts.views import DiscountRuleViewSet
 from apps.employees.views import (
@@ -95,6 +96,7 @@ router.register("suppliers", SupplierViewSet)
 router.register("supplier-payments", SupplierPaymentViewSet)
 router.register("purchase-orders", PurchaseOrderViewSet)
 router.register("register-sessions", RegisterSessionViewSet, basename="register-session")
+router.register("sales-channels", SalesChannelViewSet, basename="sales-channel")
 router.register("payments", PaymentViewSet)
 router.register("print-templates", PrintTemplateViewSet)
 router.register("print-template-versions", PrintTemplateVersionViewSet)

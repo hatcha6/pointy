@@ -10,6 +10,7 @@ logger = logging.getLogger(__name__)
 
 from apps.analytics.models import AnalyticsEvent
 from apps.analytics.services import record_domain_event
+from apps.channels.services import require_active_sales_channel
 from apps.core.models import ShopSettings
 from apps.core.roles import user_is_manager
 from apps.discounts.models import DiscountRule, normalize_coupon_code
@@ -328,8 +329,12 @@ def checkout_order(
         discount_result=discount_result,
     )
     stock_adjustments = prepare_sale_stock_adjustments(lines_data, settings=settings)
+    # The channel comes from the request's credentials only; direct service
+    # calls without a request (scripts, tests) leave it unset.
+    sales_channel = require_active_sales_channel(request) if request is not None else None
     order = create_order_with_lines(
         register_session=register_session,
+        sales_channel=sales_channel,
         customer=customer,
         lines_data=lines_data,
         coupon_codes=coupon_codes,
@@ -365,6 +370,7 @@ def checkout_order(
         attributes={
             "receipt_number": order.receipt_number,
             "register_session_id": order.register_session_id,
+            "sales_channel": sales_channel.slug if sales_channel is not None else None,
             "customer_present": customer is not None,
             "coupon_count": len(coupon_codes),
             "line_count": len(lines_data),

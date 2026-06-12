@@ -18,7 +18,9 @@ import '../../../shared/components/components.dart';
 import '../../../shared/decimal_text_input_formatter.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../../../shared/shell/shell.dart';
+import '../view_models/sales_channels_view_model.dart';
 import '../view_models/shop_settings_view_model.dart';
+import 'sales_channels_page.dart';
 
 part 'shop_settings_widgets.dart';
 part 'shop_backup_widgets.dart';
@@ -27,6 +29,7 @@ class ShopSettingsScreen extends StatelessWidget {
   const ShopSettingsScreen({
     super.key,
     required this.viewModel,
+    required this.salesChannelsViewModel,
     required this.currentUser,
     required this.capabilities,
     required this.onOpenPos,
@@ -46,6 +49,7 @@ class ShopSettingsScreen extends StatelessWidget {
   });
 
   final ShopSettingsViewModel viewModel;
+  final SalesChannelsViewModel salesChannelsViewModel;
   final PosUser currentUser;
   final AuthorizationCapabilities capabilities;
   final VoidCallback onOpenPos;
@@ -110,7 +114,11 @@ class ShopSettingsScreen extends StatelessWidget {
           ),
           body: ShopSettingsGuard(
             capabilities: capabilities,
-            child: _ShopSettingsBody(viewModel: viewModel),
+            child: _ShopSettingsBody(
+              viewModel: viewModel,
+              salesChannelsViewModel: salesChannelsViewModel,
+              canManageSalesChannels: capabilities.canManageSalesChannels,
+            ),
           ),
         );
       },
@@ -119,9 +127,15 @@ class ShopSettingsScreen extends StatelessWidget {
 }
 
 class _ShopSettingsBody extends StatelessWidget {
-  const _ShopSettingsBody({required this.viewModel});
+  const _ShopSettingsBody({
+    required this.viewModel,
+    required this.salesChannelsViewModel,
+    required this.canManageSalesChannels,
+  });
 
   final ShopSettingsViewModel viewModel;
+  final SalesChannelsViewModel salesChannelsViewModel;
+  final bool canManageSalesChannels;
 
   @override
   Widget build(BuildContext context) {
@@ -148,14 +162,26 @@ class _ShopSettingsBody extends StatelessWidget {
       return const SizedBox.shrink();
     }
 
-    return _ShopSettingsForm(viewModel: viewModel, settings: settings);
+    return _ShopSettingsForm(
+      viewModel: viewModel,
+      salesChannelsViewModel: salesChannelsViewModel,
+      canManageSalesChannels: canManageSalesChannels,
+      settings: settings,
+    );
   }
 }
 
 class _ShopSettingsForm extends StatefulWidget {
-  const _ShopSettingsForm({required this.viewModel, required this.settings});
+  const _ShopSettingsForm({
+    required this.viewModel,
+    required this.salesChannelsViewModel,
+    required this.canManageSalesChannels,
+    required this.settings,
+  });
 
   final ShopSettingsViewModel viewModel;
+  final SalesChannelsViewModel salesChannelsViewModel;
+  final bool canManageSalesChannels;
   final ShopSettings settings;
 
   @override
@@ -403,6 +429,15 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
                                   children: _buildInventoryFields,
                                 ),
                         ),
+                        if (widget.canManageSalesChannels)
+                          PointySettingsTile(
+                            icon: Icons.hub_outlined,
+                            title: l10n.salesChannelsSectionTitle,
+                            subtitle: l10n.salesChannelsSectionSubtitle,
+                            onTap: widget.viewModel.isSaving
+                                ? null
+                                : () => _openSalesChannels(context),
+                          ),
                         PointySettingsTile(
                           icon: Icons.backup_outlined,
                           title: l10n.backupRestoreSectionTitle,
@@ -1074,6 +1109,15 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
       MaterialPageRoute<void>(
         builder: (routeContext) =>
             _BackupOperationsPage(viewModel: widget.viewModel),
+      ),
+    );
+  }
+
+  Future<void> _openSalesChannels(BuildContext context) {
+    return Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (routeContext) =>
+            SalesChannelsPage(viewModel: widget.salesChannelsViewModel),
       ),
     );
   }
