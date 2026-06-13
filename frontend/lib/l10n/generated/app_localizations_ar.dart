@@ -8617,4 +8617,231 @@ class AppLocalizationsAr extends AppLocalizations {
   String dashboardApprovedAwaitingPaymentNote(Object amount) {
     return 'منها $amount رواتب معتمدة لم تُدفع بعد';
   }
+
+  @override
+  String get attendanceSettingsSectionTitle => 'الحضور والانصراف (BioTime)';
+
+  @override
+  String get attendanceSettingsSectionSubtitle =>
+      'ربط جهاز البصمة ZKTeco ومزامنة الحضور تلقائيًا';
+
+  @override
+  String get attendanceConnectionSectionTitle => 'الاتصال بخادم BioTime';
+
+  @override
+  String get attendanceConnectionSectionSubtitle =>
+      'أدخل عنوان خادم BioTime المحلي وبيانات حساب لديه صلاحية قراءة الحضور.';
+
+  @override
+  String get attendanceServerUrlLabel => 'عنوان خادم BioTime';
+
+  @override
+  String get attendanceServerUrlHint => 'http://192.168.1.50:8081';
+
+  @override
+  String get attendanceUsernameLabel => 'اسم المستخدم';
+
+  @override
+  String get attendancePasswordLabel => 'كلمة المرور';
+
+  @override
+  String get attendancePasswordKeepHint =>
+      'اتركها فارغة للإبقاء على كلمة المرور المحفوظة';
+
+  @override
+  String get attendanceEnableLabel => 'تفعيل مزامنة الحضور';
+
+  @override
+  String get attendanceEnableSubtitle =>
+      'عند التفعيل يمكن سحب البصمات وتطبيقها على الرواتب';
+
+  @override
+  String get attendanceTestConnectionButton => 'اختبار الاتصال';
+
+  @override
+  String attendanceTestSuccess(int count) {
+    return 'تم الاتصال بنجاح. عدد الموظفين في BioTime: $count';
+  }
+
+  @override
+  String get attendanceTestFailed =>
+      'تعذر الاتصال بخادم BioTime. تحقق من العنوان وبيانات الدخول.';
+
+  @override
+  String get attendanceScheduleSectionTitle => 'جدول الدوام الافتراضي';
+
+  @override
+  String get attendanceScheduleSectionSubtitle =>
+      'يُستخدم لحساب التأخير والغياب والوقت الإضافي لكل الموظفين.';
+
+  @override
+  String get attendanceShiftStartLabel => 'بداية الدوام';
+
+  @override
+  String get attendanceShiftEndLabel => 'نهاية الدوام';
+
+  @override
+  String get attendanceGraceLabel => 'فترة السماح (دقائق)';
+
+  @override
+  String get attendanceWorkdaysLabel => 'أيام العمل';
+
+  @override
+  String get attendanceSyncNowButton => 'مزامنة الآن';
+
+  @override
+  String get attendanceSyncInProgressButton => 'جار المزامنة...';
+
+  @override
+  String attendanceSyncSuccess(int punches, int matched) {
+    return 'تمت المزامنة: $punches بصمة جديدة، $matched موظف مرتبط';
+  }
+
+  @override
+  String get attendanceSyncFailed =>
+      'فشلت المزامنة مع BioTime. تحقق من الاتصال ثم أعد المحاولة.';
+
+  @override
+  String attendanceLastSyncLabel(String date) {
+    return 'آخر مزامنة: $date';
+  }
+
+  @override
+  String get attendanceNeverSynced => 'لم تتم المزامنة بعد';
+
+  @override
+  String attendanceLastSyncErrorLabel(String error) {
+    return 'خطأ آخر مزامنة: $error';
+  }
+
+  @override
+  String get attendanceMappingSectionTitle => 'ربط الموظفين بجهاز البصمة';
+
+  @override
+  String get attendanceMappingSectionSubtitle =>
+      'اربط كل موظف برقمه في BioTime. الموظفون الذين يحمل رقمهم نفس رقم الموظف يُربطون تلقائيًا عند المزامنة.';
+
+  @override
+  String get attendanceMappingCodeLabel => 'رقم BioTime';
+
+  @override
+  String get attendanceMappingEmptyState =>
+      'لا يوجد موظفون بعد. أضف الموظفين من شاشة الموظفين أولًا.';
+
+  @override
+  String get attendanceTrackedLabel => 'متابعة الحضور';
+
+  @override
+  String attendanceUnmatchedTitle(int count) {
+    return 'في BioTime بدون ربط ($count)';
+  }
+
+  @override
+  String get attendanceSettingsSaved => 'تم حفظ إعدادات الحضور.';
+
+  @override
+  String get attendanceSettingsSaveError => 'تعذر حفظ إعدادات الحضور.';
+
+  @override
+  String get attendanceSettingsLoadError => 'تعذر تحميل إعدادات الحضور.';
+
+  @override
+  String get attendanceDisabledNotice =>
+      'مزامنة الحضور غير مفعلة. فعّلها من إعدادات المتجر ← الحضور والانصراف.';
+
+  @override
+  String get attendanceTabLabel => 'الحضور';
+
+  @override
+  String get attendanceSelectEmployeeLabel => 'الموظف';
+
+  @override
+  String get attendanceSelectEmployeeHint => 'اختر موظفًا لعرض حضوره';
+
+  @override
+  String get attendanceMonthLabel => 'الشهر';
+
+  @override
+  String get attendanceSummaryExpectedLabel => 'أيام العمل';
+
+  @override
+  String get attendanceSummaryPresentLabel => 'أيام الحضور';
+
+  @override
+  String get attendanceSummaryAbsentLabel => 'أيام الغياب';
+
+  @override
+  String get attendanceSummaryLateLabel => 'دقائق التأخير';
+
+  @override
+  String get attendanceSummaryOvertimeLabel => 'دقائق إضافية';
+
+  @override
+  String get attendanceStatusPresent => 'حاضر';
+
+  @override
+  String get attendanceStatusLate => 'متأخر';
+
+  @override
+  String get attendanceStatusPartial => 'بصمة ناقصة';
+
+  @override
+  String get attendanceStatusDayOff => 'يوم راحة';
+
+  @override
+  String get attendanceNoDaysMessage => 'لا توجد سجلات حضور في هذه الفترة.';
+
+  @override
+  String get attendanceLoadError => 'تعذر تحميل سجلات الحضور.';
+
+  @override
+  String attendanceDayMetrics(String worked, int late, int overtime) {
+    return 'عمل $worked • تأخير $late د • إضافي $overtime د';
+  }
+
+  @override
+  String attendanceDayTimes(String firstIn, String lastOut) {
+    return '$firstIn → $lastOut';
+  }
+
+  @override
+  String get attendanceApplyToPayrollButton => 'تطبيق الحضور على الرواتب';
+
+  @override
+  String get attendanceApplyInProgressButton => 'جار التطبيق...';
+
+  @override
+  String get attendanceApplyCardTitle => 'احتساب الحضور من BioTime';
+
+  @override
+  String get attendanceApplyCardSubtitle =>
+      'يحدّث أيام الغياب والوقت الإضافي لكل موظف مرتبط بجهاز البصمة قبل اعتماد المسير. يمكنك تعديل القيم يدويًا بعد ذلك.';
+
+  @override
+  String get attendanceApplySuccess =>
+      'تم تحديث الغياب والوقت الإضافي من سجلات الحضور.';
+
+  @override
+  String get attendanceApplyFailed => 'تعذر تطبيق الحضور على مسير الرواتب.';
+
+  @override
+  String get weekdayMonday => 'الاثنين';
+
+  @override
+  String get weekdayTuesday => 'الثلاثاء';
+
+  @override
+  String get weekdayWednesday => 'الأربعاء';
+
+  @override
+  String get weekdayThursday => 'الخميس';
+
+  @override
+  String get weekdayFriday => 'الجمعة';
+
+  @override
+  String get weekdaySaturday => 'السبت';
+
+  @override
+  String get weekdaySunday => 'الأحد';
 }

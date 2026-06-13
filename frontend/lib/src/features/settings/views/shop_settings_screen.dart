@@ -17,6 +17,8 @@ import '../../../shared/components/components.dart';
 import '../../../shared/decimal_text_input_formatter.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../../../shared/shell/shell.dart';
+import '../../attendance/view_models/attendance_view_model.dart';
+import '../../attendance/views/attendance_settings_page.dart';
 import '../../operations/view_models/workflows_view_model.dart';
 import '../view_models/sales_channels_view_model.dart';
 import '../view_models/shop_settings_view_model.dart';
@@ -32,6 +34,7 @@ class ShopSettingsScreen extends StatelessWidget {
     required this.viewModel,
     required this.salesChannelsViewModel,
     required this.workflowsViewModel,
+    required this.attendanceViewModel,
     required this.capabilities,
     required this.navigation,
   });
@@ -39,6 +42,7 @@ class ShopSettingsScreen extends StatelessWidget {
   final ShopSettingsViewModel viewModel;
   final SalesChannelsViewModel salesChannelsViewModel;
   final WorkflowsViewModel workflowsViewModel;
+  final AttendanceViewModel attendanceViewModel;
   final AuthorizationCapabilities capabilities;
   final AppNavigation navigation;
 
@@ -77,8 +81,10 @@ class ShopSettingsScreen extends StatelessWidget {
               viewModel: viewModel,
               salesChannelsViewModel: salesChannelsViewModel,
               workflowsViewModel: workflowsViewModel,
+              attendanceViewModel: attendanceViewModel,
               canManageSalesChannels: capabilities.canManageSalesChannels,
               canManageWorkflows: capabilities.canManageWorkflows,
+              canManageAttendance: capabilities.canManageAttendance,
             ),
           ),
         );
@@ -92,15 +98,19 @@ class _ShopSettingsBody extends StatelessWidget {
     required this.viewModel,
     required this.salesChannelsViewModel,
     required this.workflowsViewModel,
+    required this.attendanceViewModel,
     required this.canManageSalesChannels,
     required this.canManageWorkflows,
+    required this.canManageAttendance,
   });
 
   final ShopSettingsViewModel viewModel;
   final SalesChannelsViewModel salesChannelsViewModel;
   final WorkflowsViewModel workflowsViewModel;
+  final AttendanceViewModel attendanceViewModel;
   final bool canManageSalesChannels;
   final bool canManageWorkflows;
+  final bool canManageAttendance;
 
   @override
   Widget build(BuildContext context) {
@@ -131,8 +141,10 @@ class _ShopSettingsBody extends StatelessWidget {
       viewModel: viewModel,
       salesChannelsViewModel: salesChannelsViewModel,
       workflowsViewModel: workflowsViewModel,
+      attendanceViewModel: attendanceViewModel,
       canManageSalesChannels: canManageSalesChannels,
       canManageWorkflows: canManageWorkflows,
+      canManageAttendance: canManageAttendance,
       settings: settings,
     );
   }
@@ -143,16 +155,20 @@ class _ShopSettingsForm extends StatefulWidget {
     required this.viewModel,
     required this.salesChannelsViewModel,
     required this.workflowsViewModel,
+    required this.attendanceViewModel,
     required this.canManageSalesChannels,
     required this.canManageWorkflows,
+    required this.canManageAttendance,
     required this.settings,
   });
 
   final ShopSettingsViewModel viewModel;
   final SalesChannelsViewModel salesChannelsViewModel;
   final WorkflowsViewModel workflowsViewModel;
+  final AttendanceViewModel attendanceViewModel;
   final bool canManageSalesChannels;
   final bool canManageWorkflows;
+  final bool canManageAttendance;
   final ShopSettings settings;
 
   @override
@@ -417,6 +433,15 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
                             onTap: widget.viewModel.isSaving
                                 ? null
                                 : () => _openSalesChannels(context),
+                          ),
+                        if (widget.canManageAttendance)
+                          PointySettingsTile(
+                            icon: Icons.fingerprint,
+                            title: l10n.attendanceSettingsSectionTitle,
+                            subtitle: l10n.attendanceSettingsSectionSubtitle,
+                            onTap: widget.viewModel.isSaving
+                                ? null
+                                : () => _openAttendanceSettings(context),
                           ),
                         PointySettingsTile(
                           icon: Icons.backup_outlined,
@@ -1098,6 +1123,15 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
       MaterialPageRoute<void>(
         builder: (routeContext) =>
             SalesChannelsPage(viewModel: widget.salesChannelsViewModel),
+      ),
+    );
+  }
+
+  Future<void> _openAttendanceSettings(BuildContext context) {
+    return Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (routeContext) =>
+            AttendanceSettingsPage(viewModel: widget.attendanceViewModel),
       ),
     );
   }

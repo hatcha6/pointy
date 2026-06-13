@@ -305,6 +305,10 @@ class PayrollRunViewSet(viewsets.ModelViewSet):
         "mark_paid": ("employees.mark_payrollrun_paid",),
         "update_line_adjustments": ("employees.change_payrollrun",),
         "bulk_adjustments": ("employees.change_payrollrun",),
+        "apply_attendance": (
+            "employees.change_payrollrun",
+            "attendance.view_attendanceday",
+        ),
         "void": ("employees.void_payrollrun",),
     }
     queryset = PayrollRun.objects.annotate(line_count=Count("lines")).prefetch_related(
@@ -410,6 +414,23 @@ class PayrollRunViewSet(viewsets.ModelViewSet):
                 payroll_run,
                 context=self.get_serializer_context(),
             ).data
+        )
+
+    @action(detail=True, methods=["post"], url_path="apply-attendance")
+    def apply_attendance(self, request, pk=None):
+        from apps.attendance.services import apply_attendance_to_run
+
+        payroll_run = self.get_object()
+        result = apply_attendance_to_run(payroll_run, request=request)
+        payroll_run = self.get_queryset().get(pk=payroll_run.pk)
+        return Response(
+            {
+                **PayrollRunSerializer(
+                    payroll_run,
+                    context=self.get_serializer_context(),
+                ).data,
+                "attendance": result,
+            }
         )
 
     @action(detail=True, methods=["post"], url_path="bulk-adjustments")

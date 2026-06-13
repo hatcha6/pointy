@@ -401,6 +401,7 @@ class _AuthenticatedRoutes implements AppNavigation {
       'employees',
       EmployeePayrollScreen(
         viewModel: dependencies.employeePayrollViewModel,
+        attendanceViewModel: dependencies.attendanceViewModel,
         userRepository: dependencies.userRepository,
         capabilities: capabilities,
         navigation: this,
@@ -424,6 +425,7 @@ class _AuthenticatedRoutes implements AppNavigation {
           dependencies.operationsRepository,
           analyticsEngine: dependencies.analyticsEngine,
         ),
+        attendanceViewModel: dependencies.attendanceViewModel,
         capabilities: capabilities,
         navigation: this,
       ),

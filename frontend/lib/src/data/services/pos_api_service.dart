@@ -55,8 +55,10 @@ import '../models/variant_option_value_draft.dart';
 import '../models/variant_option_value_page.dart';
 import '../models/user_activity.dart';
 import '../models/workflow.dart';
+import '../models/attendance.dart';
 import 'api_session.dart';
 import 'analytics_api_client.dart';
+import 'attendance_api_client.dart';
 import 'auth_api_client.dart';
 import 'business_notification_api_client.dart';
 import 'catalog_api_client.dart';
@@ -90,6 +92,7 @@ class PosApiService {
       baseUrl: baseUrl,
     );
     _analytics = AnalyticsApiClient(_session);
+    _attendance = AttendanceApiClient(_session);
     _auth = AuthApiClient(_session);
     _businessNotifications = BusinessNotificationApiClient(_session);
     _users = UserApiClient(_session);
@@ -115,6 +118,7 @@ class PosApiService {
   bool get usesRelay => _session.usesRelay;
 
   late final PosApiSession _session;
+  late final AttendanceApiClient _attendance;
   late final AuthApiClient _auth;
   late final BusinessNotificationApiClient _businessNotifications;
   late final AnalyticsApiClient _analytics;
@@ -303,6 +307,74 @@ class PosApiService {
 
   Future<PayrollDraftResult> draftMonthlyPayrollRun() {
     return _employees.draftMonthlyPayrollRun();
+  }
+
+  Future<AttendanceConfig> fetchAttendanceConfig() {
+    return _attendance.fetchConfig();
+  }
+
+  Future<AttendanceConfig> updateAttendanceConfig(
+    AttendanceConfigDraft draft,
+  ) {
+    return _attendance.updateConfig(draft);
+  }
+
+  Future<int> testAttendanceConnection() {
+    return _attendance.testConnection();
+  }
+
+  Future<AttendanceSyncResult> syncAttendance() {
+    return _attendance.sync();
+  }
+
+  Future<AttendanceProfilePage> fetchAttendanceProfiles({int page = 1}) {
+    return _attendance.fetchProfiles(page: page);
+  }
+
+  Future<void> ensureAttendanceProfiles() {
+    return _attendance.ensureProfiles();
+  }
+
+  Future<AttendanceProfileLink> updateAttendanceProfile(
+    int profileId, {
+    String? bioTimeEmpCode,
+    bool? isTracked,
+  }) {
+    return _attendance.updateProfile(
+      profileId,
+      bioTimeEmpCode: bioTimeEmpCode,
+      isTracked: isTracked,
+    );
+  }
+
+  Future<AttendanceDayPage> fetchAttendanceDays({
+    int page = 1,
+    int? employeeId,
+    DateTime? dateFrom,
+    DateTime? dateTo,
+  }) {
+    return _attendance.fetchDays(
+      page: page,
+      employeeId: employeeId,
+      dateFrom: dateFrom,
+      dateTo: dateTo,
+    );
+  }
+
+  Future<AttendanceSummary> fetchAttendanceSummary({
+    required int employeeId,
+    required DateTime dateFrom,
+    required DateTime dateTo,
+  }) {
+    return _attendance.fetchSummary(
+      employeeId: employeeId,
+      dateFrom: dateFrom,
+      dateTo: dateTo,
+    );
+  }
+
+  Future<PayrollRun> applyAttendanceToPayrollRun(int payrollRunId) {
+    return _attendance.applyAttendanceToPayrollRun(payrollRunId);
   }
 
   Future<PayrollRun> approvePayrollRun(int id) {

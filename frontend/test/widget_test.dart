@@ -22,6 +22,7 @@ import 'package:pointy_frontend/src/data/models/purchase_submission.dart';
 import 'package:pointy_frontend/src/data/models/register_cash_movement.dart';
 import 'package:pointy_frontend/src/app.dart';
 import 'package:pointy_frontend/src/features/catalog/views/product_details_screen.dart';
+import 'package:pointy_frontend/src/data/repositories/attendance_repository.dart';
 import 'package:pointy_frontend/src/data/repositories/catalog_repository.dart';
 import 'package:pointy_frontend/src/data/repositories/device_settings_repository.dart';
 import 'package:pointy_frontend/src/data/repositories/printing_repository.dart';
@@ -53,6 +54,7 @@ import 'package:pointy_frontend/src/features/dashboard/view_models/dashboard_vie
 import 'package:pointy_frontend/src/features/dashboard/views/dashboard_screen.dart';
 import 'package:pointy_frontend/src/features/fraud/view_models/integrity_monitor_view_model.dart';
 import 'package:pointy_frontend/src/features/fraud/views/integrity_monitor_screen.dart';
+import 'package:pointy_frontend/src/features/attendance/view_models/attendance_view_model.dart';
 import 'package:pointy_frontend/src/features/employees/view_models/employee_payroll_view_model.dart';
 import 'package:pointy_frontend/src/features/employees/views/employee_payroll_screen.dart';
 import 'package:pointy_frontend/src/features/employees/views/payroll_run_details_screen.dart';
@@ -3466,6 +3468,9 @@ void main() {
         ],
         home: PayrollRunDetailsScreen(
           viewModel: viewModel,
+          attendanceViewModel: AttendanceViewModel(
+            AttendanceRepository(apiService),
+          ),
           capabilities: capabilities,
           initialRun: PayrollRun.fromJson(draftRun),
         ),
@@ -3504,6 +3509,65 @@ void main() {
       find.byKey(const ValueKey('payroll_details_approve_button')),
       findsNothing,
     );
+  });
+
+  testWidgets('payroll run details applies BioTime attendance to a draft', (
+    WidgetTester tester,
+  ) async {
+    final draftRun = _payrollRunJson(
+      id: 5,
+      status: 'draft',
+      lines: [_payrollLineJson(id: 51, employeeName: 'سالم')],
+    );
+    final apiService = _payrollApiService(
+      employees: [_employeeJson()],
+      runDetails: {5: draftRun},
+    );
+    final viewModel = EmployeePayrollViewModel(EmployeeRepository(apiService));
+    final capabilities = AuthorizationCapabilities.forUser(
+      PosUser.fromJson(
+        _userJson(
+          permissions: [
+            ..._payrollPermissions,
+            'attendance.view_attendanceday',
+            'attendance.change_biotimeconnection',
+          ],
+        ),
+      ),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        locale: const Locale('ar'),
+        supportedLocales: AppLocalizations.supportedLocales,
+        localizationsDelegates: const [
+          AppLocalizations.delegate,
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
+        home: PayrollRunDetailsScreen(
+          viewModel: viewModel,
+          attendanceViewModel: AttendanceViewModel(
+            AttendanceRepository(apiService),
+          ),
+          capabilities: capabilities,
+          initialRun: PayrollRun.fromJson(draftRun),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final applyButton = find.byKey(
+      const ValueKey('payroll_details_apply_attendance_button'),
+    );
+    expect(applyButton, findsOneWidget);
+
+    await tester.tap(applyButton);
+    await tester.pumpAndSettle();
+
+    // Net total falls after the BioTime absence deduction is applied.
+    expect(find.textContaining('450'), findsWidgets);
   });
 
   testWidgets('payroll home surfaces pending loan requests for review', (
@@ -5472,6 +5536,26 @@ PosApiService _payrollApiService({
         return _jsonResponse(run);
       }
 
+      final applyAttendanceMatch = RegExp(
+        r'/payroll-runs/(\d+)/apply-attendance/$',
+      ).firstMatch(path);
+      if (applyAttendanceMatch != null) {
+        final id = int.parse(applyAttendanceMatch.group(1)!);
+        final base = details[id]!;
+        final lines = [
+          for (final line in (base['lines'] as List<Object?>))
+            {...(line as Map<String, Object?>), 'absence_days': '1.00'},
+        ];
+        final run = {
+          ...base,
+          'lines': lines,
+          'deductions_total': '50.00',
+          'net_total': '450.00',
+        };
+        details[id] = run;
+        return _jsonResponse(run);
+      }
+
       final paidMatch = RegExp(
         r'/payroll-runs/(\d+)/mark-paid/$',
       ).firstMatch(path);
@@ -5540,6 +5624,9 @@ Widget _payrollApp(
     ],
     home: EmployeePayrollScreen(
       viewModel: viewModel,
+      attendanceViewModel: AttendanceViewModel(
+        AttendanceRepository(apiService),
+      ),
       userRepository: UserRepository(apiService),
       capabilities: capabilities,
       navigation: FakeAppNavigation(

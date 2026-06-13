@@ -14819,6 +14819,408 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'منها {amount} رواتب معتمدة لم تُدفع بعد'**
   String dashboardApprovedAwaitingPaymentNote(Object amount);
+
+  /// No description provided for @attendanceSettingsSectionTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'الحضور والانصراف (BioTime)'**
+  String get attendanceSettingsSectionTitle;
+
+  /// No description provided for @attendanceSettingsSectionSubtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'ربط جهاز البصمة ZKTeco ومزامنة الحضور تلقائيًا'**
+  String get attendanceSettingsSectionSubtitle;
+
+  /// No description provided for @attendanceConnectionSectionTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'الاتصال بخادم BioTime'**
+  String get attendanceConnectionSectionTitle;
+
+  /// No description provided for @attendanceConnectionSectionSubtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'أدخل عنوان خادم BioTime المحلي وبيانات حساب لديه صلاحية قراءة الحضور.'**
+  String get attendanceConnectionSectionSubtitle;
+
+  /// No description provided for @attendanceServerUrlLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'عنوان خادم BioTime'**
+  String get attendanceServerUrlLabel;
+
+  /// No description provided for @attendanceServerUrlHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'http://192.168.1.50:8081'**
+  String get attendanceServerUrlHint;
+
+  /// No description provided for @attendanceUsernameLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'اسم المستخدم'**
+  String get attendanceUsernameLabel;
+
+  /// No description provided for @attendancePasswordLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'كلمة المرور'**
+  String get attendancePasswordLabel;
+
+  /// No description provided for @attendancePasswordKeepHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'اتركها فارغة للإبقاء على كلمة المرور المحفوظة'**
+  String get attendancePasswordKeepHint;
+
+  /// No description provided for @attendanceEnableLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'تفعيل مزامنة الحضور'**
+  String get attendanceEnableLabel;
+
+  /// No description provided for @attendanceEnableSubtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'عند التفعيل يمكن سحب البصمات وتطبيقها على الرواتب'**
+  String get attendanceEnableSubtitle;
+
+  /// No description provided for @attendanceTestConnectionButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختبار الاتصال'**
+  String get attendanceTestConnectionButton;
+
+  /// Snack message after a successful BioTime connection test.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم الاتصال بنجاح. عدد الموظفين في BioTime: {count}'**
+  String attendanceTestSuccess(int count);
+
+  /// No description provided for @attendanceTestFailed.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر الاتصال بخادم BioTime. تحقق من العنوان وبيانات الدخول.'**
+  String get attendanceTestFailed;
+
+  /// No description provided for @attendanceScheduleSectionTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'جدول الدوام الافتراضي'**
+  String get attendanceScheduleSectionTitle;
+
+  /// No description provided for @attendanceScheduleSectionSubtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'يُستخدم لحساب التأخير والغياب والوقت الإضافي لكل الموظفين.'**
+  String get attendanceScheduleSectionSubtitle;
+
+  /// No description provided for @attendanceShiftStartLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'بداية الدوام'**
+  String get attendanceShiftStartLabel;
+
+  /// No description provided for @attendanceShiftEndLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'نهاية الدوام'**
+  String get attendanceShiftEndLabel;
+
+  /// No description provided for @attendanceGraceLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'فترة السماح (دقائق)'**
+  String get attendanceGraceLabel;
+
+  /// No description provided for @attendanceWorkdaysLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'أيام العمل'**
+  String get attendanceWorkdaysLabel;
+
+  /// No description provided for @attendanceSyncNowButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'مزامنة الآن'**
+  String get attendanceSyncNowButton;
+
+  /// No description provided for @attendanceSyncInProgressButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'جار المزامنة...'**
+  String get attendanceSyncInProgressButton;
+
+  /// Snack message after a successful BioTime sync.
+  ///
+  /// In ar, this message translates to:
+  /// **'تمت المزامنة: {punches} بصمة جديدة، {matched} موظف مرتبط'**
+  String attendanceSyncSuccess(int punches, int matched);
+
+  /// No description provided for @attendanceSyncFailed.
+  ///
+  /// In ar, this message translates to:
+  /// **'فشلت المزامنة مع BioTime. تحقق من الاتصال ثم أعد المحاولة.'**
+  String get attendanceSyncFailed;
+
+  /// Shows when the last BioTime sync happened.
+  ///
+  /// In ar, this message translates to:
+  /// **'آخر مزامنة: {date}'**
+  String attendanceLastSyncLabel(String date);
+
+  /// No description provided for @attendanceNeverSynced.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم تتم المزامنة بعد'**
+  String get attendanceNeverSynced;
+
+  /// Shows the last BioTime sync error message.
+  ///
+  /// In ar, this message translates to:
+  /// **'خطأ آخر مزامنة: {error}'**
+  String attendanceLastSyncErrorLabel(String error);
+
+  /// No description provided for @attendanceMappingSectionTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'ربط الموظفين بجهاز البصمة'**
+  String get attendanceMappingSectionTitle;
+
+  /// No description provided for @attendanceMappingSectionSubtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'اربط كل موظف برقمه في BioTime. الموظفون الذين يحمل رقمهم نفس رقم الموظف يُربطون تلقائيًا عند المزامنة.'**
+  String get attendanceMappingSectionSubtitle;
+
+  /// No description provided for @attendanceMappingCodeLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'رقم BioTime'**
+  String get attendanceMappingCodeLabel;
+
+  /// No description provided for @attendanceMappingEmptyState.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا يوجد موظفون بعد. أضف الموظفين من شاشة الموظفين أولًا.'**
+  String get attendanceMappingEmptyState;
+
+  /// No description provided for @attendanceTrackedLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'متابعة الحضور'**
+  String get attendanceTrackedLabel;
+
+  /// Header for BioTime people that matched no employee.
+  ///
+  /// In ar, this message translates to:
+  /// **'في BioTime بدون ربط ({count})'**
+  String attendanceUnmatchedTitle(int count);
+
+  /// No description provided for @attendanceSettingsSaved.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم حفظ إعدادات الحضور.'**
+  String get attendanceSettingsSaved;
+
+  /// No description provided for @attendanceSettingsSaveError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر حفظ إعدادات الحضور.'**
+  String get attendanceSettingsSaveError;
+
+  /// No description provided for @attendanceSettingsLoadError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر تحميل إعدادات الحضور.'**
+  String get attendanceSettingsLoadError;
+
+  /// No description provided for @attendanceDisabledNotice.
+  ///
+  /// In ar, this message translates to:
+  /// **'مزامنة الحضور غير مفعلة. فعّلها من إعدادات المتجر ← الحضور والانصراف.'**
+  String get attendanceDisabledNotice;
+
+  /// No description provided for @attendanceTabLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الحضور'**
+  String get attendanceTabLabel;
+
+  /// No description provided for @attendanceSelectEmployeeLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الموظف'**
+  String get attendanceSelectEmployeeLabel;
+
+  /// No description provided for @attendanceSelectEmployeeHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر موظفًا لعرض حضوره'**
+  String get attendanceSelectEmployeeHint;
+
+  /// No description provided for @attendanceMonthLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الشهر'**
+  String get attendanceMonthLabel;
+
+  /// No description provided for @attendanceSummaryExpectedLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'أيام العمل'**
+  String get attendanceSummaryExpectedLabel;
+
+  /// No description provided for @attendanceSummaryPresentLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'أيام الحضور'**
+  String get attendanceSummaryPresentLabel;
+
+  /// No description provided for @attendanceSummaryAbsentLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'أيام الغياب'**
+  String get attendanceSummaryAbsentLabel;
+
+  /// No description provided for @attendanceSummaryLateLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'دقائق التأخير'**
+  String get attendanceSummaryLateLabel;
+
+  /// No description provided for @attendanceSummaryOvertimeLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'دقائق إضافية'**
+  String get attendanceSummaryOvertimeLabel;
+
+  /// No description provided for @attendanceStatusPresent.
+  ///
+  /// In ar, this message translates to:
+  /// **'حاضر'**
+  String get attendanceStatusPresent;
+
+  /// No description provided for @attendanceStatusLate.
+  ///
+  /// In ar, this message translates to:
+  /// **'متأخر'**
+  String get attendanceStatusLate;
+
+  /// No description provided for @attendanceStatusPartial.
+  ///
+  /// In ar, this message translates to:
+  /// **'بصمة ناقصة'**
+  String get attendanceStatusPartial;
+
+  /// No description provided for @attendanceStatusDayOff.
+  ///
+  /// In ar, this message translates to:
+  /// **'يوم راحة'**
+  String get attendanceStatusDayOff;
+
+  /// No description provided for @attendanceNoDaysMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد سجلات حضور في هذه الفترة.'**
+  String get attendanceNoDaysMessage;
+
+  /// No description provided for @attendanceLoadError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر تحميل سجلات الحضور.'**
+  String get attendanceLoadError;
+
+  /// Per-day attendance metrics line.
+  ///
+  /// In ar, this message translates to:
+  /// **'عمل {worked} • تأخير {late} د • إضافي {overtime} د'**
+  String attendanceDayMetrics(String worked, int late, int overtime);
+
+  /// First-in and last-out times for an attendance day.
+  ///
+  /// In ar, this message translates to:
+  /// **'{firstIn} → {lastOut}'**
+  String attendanceDayTimes(String firstIn, String lastOut);
+
+  /// No description provided for @attendanceApplyToPayrollButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'تطبيق الحضور على الرواتب'**
+  String get attendanceApplyToPayrollButton;
+
+  /// No description provided for @attendanceApplyInProgressButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'جار التطبيق...'**
+  String get attendanceApplyInProgressButton;
+
+  /// No description provided for @attendanceApplyCardTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'احتساب الحضور من BioTime'**
+  String get attendanceApplyCardTitle;
+
+  /// No description provided for @attendanceApplyCardSubtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'يحدّث أيام الغياب والوقت الإضافي لكل موظف مرتبط بجهاز البصمة قبل اعتماد المسير. يمكنك تعديل القيم يدويًا بعد ذلك.'**
+  String get attendanceApplyCardSubtitle;
+
+  /// No description provided for @attendanceApplySuccess.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم تحديث الغياب والوقت الإضافي من سجلات الحضور.'**
+  String get attendanceApplySuccess;
+
+  /// No description provided for @attendanceApplyFailed.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر تطبيق الحضور على مسير الرواتب.'**
+  String get attendanceApplyFailed;
+
+  /// No description provided for @weekdayMonday.
+  ///
+  /// In ar, this message translates to:
+  /// **'الاثنين'**
+  String get weekdayMonday;
+
+  /// No description provided for @weekdayTuesday.
+  ///
+  /// In ar, this message translates to:
+  /// **'الثلاثاء'**
+  String get weekdayTuesday;
+
+  /// No description provided for @weekdayWednesday.
+  ///
+  /// In ar, this message translates to:
+  /// **'الأربعاء'**
+  String get weekdayWednesday;
+
+  /// No description provided for @weekdayThursday.
+  ///
+  /// In ar, this message translates to:
+  /// **'الخميس'**
+  String get weekdayThursday;
+
+  /// No description provided for @weekdayFriday.
+  ///
+  /// In ar, this message translates to:
+  /// **'الجمعة'**
+  String get weekdayFriday;
+
+  /// No description provided for @weekdaySaturday.
+  ///
+  /// In ar, this message translates to:
+  /// **'السبت'**
+  String get weekdaySaturday;
+
+  /// No description provided for @weekdaySunday.
+  ///
+  /// In ar, this message translates to:
+  /// **'الأحد'**
+  String get weekdaySunday;
 }
 
 class _AppLocalizationsDelegate

@@ -8,6 +8,7 @@ import '../../../shared/date_formatters.dart';
 import '../../../shared/design/design.dart';
 import '../../../shared/formatters.dart';
 import '../../../shared/responsive/responsive.dart';
+import '../../attendance/view_models/attendance_view_model.dart';
 import '../view_models/employee_payroll_view_model.dart';
 import 'payroll_adjustment_sheets.dart';
 import 'payroll_labels.dart';
@@ -19,11 +20,13 @@ class PayrollRunDetailsScreen extends StatefulWidget {
   const PayrollRunDetailsScreen({
     super.key,
     required this.viewModel,
+    required this.attendanceViewModel,
     required this.capabilities,
     required this.initialRun,
   });
 
   final EmployeePayrollViewModel viewModel;
+  final AttendanceViewModel attendanceViewModel;
   final AuthorizationCapabilities capabilities;
   final PayrollRun initialRun;
 
@@ -36,6 +39,7 @@ class _PayrollRunDetailsScreenState extends State<PayrollRunDetailsScreen> {
   PayrollRun? _run;
   bool _isLoading = true;
   bool _loadFailed = false;
+  bool _isApplyingAttendance = false;
 
   PayrollRun get _activeRun => _run ?? widget.initialRun;
 
@@ -98,6 +102,9 @@ class _PayrollRunDetailsScreenState extends State<PayrollRunDetailsScreen> {
                   run: run,
                   viewModel: widget.viewModel,
                   canManage: canManage,
+                  showAttendanceAction: widget.capabilities.canViewAttendance,
+                  isApplyingAttendance: _isApplyingAttendance,
+                  onApplyAttendance: _applyAttendance,
                   onRunChanged: (updated) => setState(() => _run = updated),
                 ),
           bottomNavigationBar: _buildActionFooter(context, l10n, run, canManage),
@@ -161,6 +168,33 @@ class _PayrollRunDetailsScreenState extends State<PayrollRunDetailsScreen> {
     if (updated != null && mounted) {
       setState(() => _run = updated);
     }
+  }
+
+  Future<void> _applyAttendance() async {
+    final l10n = AppLocalizations.of(context)!;
+    final messenger = ScaffoldMessenger.of(context);
+    setState(() => _isApplyingAttendance = true);
+    final updated = await widget.attendanceViewModel.applyToPayrollRun(
+      _activeRun.id,
+    );
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _isApplyingAttendance = false;
+      if (updated != null) {
+        _run = updated;
+      }
+    });
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          updated != null
+              ? l10n.attendanceApplySuccess
+              : l10n.attendanceApplyFailed,
+        ),
+      ),
+    );
   }
 
   Future<void> _confirmApprove() async {
@@ -238,12 +272,18 @@ class _PayrollRunDetailsBody extends StatelessWidget {
     required this.run,
     required this.viewModel,
     required this.canManage,
+    required this.showAttendanceAction,
+    required this.isApplyingAttendance,
+    required this.onApplyAttendance,
     required this.onRunChanged,
   });
 
   final PayrollRun run;
   final EmployeePayrollViewModel viewModel;
   final bool canManage;
+  final bool showAttendanceAction;
+  final bool isApplyingAttendance;
+  final Future<void> Function() onApplyAttendance;
   final ValueChanged<PayrollRun> onRunChanged;
 
   @override
@@ -262,6 +302,13 @@ class _PayrollRunDetailsBody extends StatelessWidget {
           children: [
             _RunHeaderCard(run: run),
             SizedBox(height: spacing.md),
+            if (canEditLines && showAttendanceAction) ...[
+              _AttendanceApplyCard(
+                isApplying: isApplyingAttendance,
+                onApply: onApplyAttendance,
+              ),
+              SizedBox(height: spacing.md),
+            ],
             PointyMetricGrid(
               maxColumns: 4,
               minTileWidth: 160,
@@ -345,6 +392,71 @@ class _PayrollRunDetailsBody extends StatelessWidget {
             ],
             // Leave room so the last row is reachable above the sticky footer.
             SizedBox(height: spacing.lg),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AttendanceApplyCard extends StatelessWidget {
+  const _AttendanceApplyCard({
+    required this.isApplying,
+    required this.onApply,
+  });
+
+  final bool isApplying;
+  final Future<void> Function() onApply;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final spacing = AdaptiveSpacing.of(context);
+    final theme = Theme.of(context);
+
+    return Card(
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: EdgeInsets.all(spacing.md),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.fingerprint),
+                SizedBox(width: spacing.sm),
+                Expanded(
+                  child: Text(
+                    l10n.attendanceApplyCardTitle,
+                    style: theme.textTheme.titleMedium,
+                  ),
+                ),
+              ],
+            ),
+            SizedBox(height: spacing.xs),
+            Text(
+              l10n.attendanceApplyCardSubtitle,
+              style: theme.textTheme.bodySmall,
+            ),
+            SizedBox(height: spacing.sm),
+            Align(
+              alignment: AlignmentDirectional.centerStart,
+              child: FilledButton.tonalIcon(
+                key: const ValueKey('payroll_details_apply_attendance_button'),
+                onPressed: isApplying ? null : () => onApply(),
+                icon: isApplying
+                    ? const SizedBox.square(
+                        dimension: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.sync),
+                label: Text(
+                  isApplying
+                      ? l10n.attendanceApplyInProgressButton
+                      : l10n.attendanceApplyToPayrollButton,
+                ),
+              ),
+            ),
           ],
         ),
       ),

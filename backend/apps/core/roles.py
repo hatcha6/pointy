@@ -51,6 +51,7 @@ MANAGER_PERMISSION_DOMAINS = (
     "notifications",
     "attachments",
     "employees",
+    "attendance",
 )
 USER_PERMISSION_CODES = (
     "auth.add_user",
@@ -145,6 +146,12 @@ ACCOUNTANT_PERMISSION_CODES = (
     "reports.view_reportrun",
     "sales.view_order",
     "sales.view_registersession",
+    "attendance.view_biotimeconnection",
+    "attendance.change_biotimeconnection",
+    "attendance.view_attendanceprofile",
+    "attendance.change_attendanceprofile",
+    "attendance.view_attendancepunch",
+    "attendance.view_attendanceday",
 )
 
 
@@ -217,6 +224,9 @@ def _model_has_initial_setup_blocking_data(model, model_label):
     if model_label == ("channels", "saleschannel"):
         # The built-in POS channel is seeded data, not shop activity.
         return queryset.filter(is_system=False).exists()
+    if model_label == ("attendance", "biotimeconnection"):
+        # An untouched singleton row is configuration scaffolding, not activity.
+        return queryset.exclude(base_url="").exists()
     if model_label == ("operations", "workflowtemplate"):
         # Seeded default workflows are configuration, not shop activity.
         return queryset.filter(is_system=False).exists()

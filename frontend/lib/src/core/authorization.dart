@@ -50,6 +50,8 @@ enum AppCapability {
   manageUsers,
   manageShopSettings,
   manageSalesChannels,
+  viewAttendance,
+  manageAttendance,
   viewOperations,
   createJobs,
   manageJobMaterials,
@@ -388,6 +390,20 @@ class AuthorizationCapabilities {
       ])) {
         capabilities.add(AppCapability.manageSalesChannels);
       }
+      if (_hasAny(user, const [
+        'view_attendanceday',
+        'attendance.view_attendanceday',
+      ])) {
+        capabilities.add(AppCapability.viewAttendance);
+      }
+      if (_hasAny(user, const [
+        'change_biotimeconnection',
+        'attendance.change_biotimeconnection',
+      ])) {
+        capabilities
+          ..add(AppCapability.viewAttendance)
+          ..add(AppCapability.manageAttendance);
+      }
       if (_hasAny(user, const ['view_job', 'operations.view_job'])) {
         capabilities.add(AppCapability.viewOperations);
       }
@@ -529,6 +545,8 @@ class AuthorizationCapabilities {
   bool get canManageEmployeeLoans => allows(AppCapability.manageEmployeeLoans);
   bool get canViewPayroll => allows(AppCapability.viewPayroll);
   bool get canManagePayroll => allows(AppCapability.managePayroll);
+  bool get canViewAttendance => allows(AppCapability.viewAttendance);
+  bool get canManageAttendance => allows(AppCapability.manageAttendance);
   bool get canAccessPos => allows(AppCapability.accessPos);
   bool get canViewInvoices => allows(AppCapability.viewInvoices);
   bool get canAccessPurchasing => allows(AppCapability.accessPurchasing);

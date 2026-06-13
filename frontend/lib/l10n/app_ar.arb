@@ -5263,5 +5263,140 @@
   "dashboardOpenIntegrityButton": "فتح مركز النزاهة",
   "dashboardBestSellersTitle": "الأفضل أداءً",
   "dashboardOperationsTitle": "التشغيل اليومي",
-  "dashboardApprovedAwaitingPaymentNote": "منها {amount} رواتب معتمدة لم تُدفع بعد"
+  "dashboardApprovedAwaitingPaymentNote": "منها {amount} رواتب معتمدة لم تُدفع بعد",
+  "attendanceSettingsSectionTitle": "الحضور والانصراف (BioTime)",
+  "attendanceSettingsSectionSubtitle": "ربط جهاز البصمة ZKTeco ومزامنة الحضور تلقائيًا",
+  "attendanceConnectionSectionTitle": "الاتصال بخادم BioTime",
+  "attendanceConnectionSectionSubtitle": "أدخل عنوان خادم BioTime المحلي وبيانات حساب لديه صلاحية قراءة الحضور.",
+  "attendanceServerUrlLabel": "عنوان خادم BioTime",
+  "attendanceServerUrlHint": "http://192.168.1.50:8081",
+  "attendanceUsernameLabel": "اسم المستخدم",
+  "attendancePasswordLabel": "كلمة المرور",
+  "attendancePasswordKeepHint": "اتركها فارغة للإبقاء على كلمة المرور المحفوظة",
+  "attendanceEnableLabel": "تفعيل مزامنة الحضور",
+  "attendanceEnableSubtitle": "عند التفعيل يمكن سحب البصمات وتطبيقها على الرواتب",
+  "attendanceTestConnectionButton": "اختبار الاتصال",
+  "attendanceTestSuccess": "تم الاتصال بنجاح. عدد الموظفين في BioTime: {count}",
+  "@attendanceTestSuccess": {
+    "description": "Snack message after a successful BioTime connection test.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "attendanceTestFailed": "تعذر الاتصال بخادم BioTime. تحقق من العنوان وبيانات الدخول.",
+  "attendanceScheduleSectionTitle": "جدول الدوام الافتراضي",
+  "attendanceScheduleSectionSubtitle": "يُستخدم لحساب التأخير والغياب والوقت الإضافي لكل الموظفين.",
+  "attendanceShiftStartLabel": "بداية الدوام",
+  "attendanceShiftEndLabel": "نهاية الدوام",
+  "attendanceGraceLabel": "فترة السماح (دقائق)",
+  "attendanceWorkdaysLabel": "أيام العمل",
+  "attendanceSyncNowButton": "مزامنة الآن",
+  "attendanceSyncInProgressButton": "جار المزامنة...",
+  "attendanceSyncSuccess": "تمت المزامنة: {punches} بصمة جديدة، {matched} موظف مرتبط",
+  "@attendanceSyncSuccess": {
+    "description": "Snack message after a successful BioTime sync.",
+    "placeholders": {
+      "punches": {
+        "type": "int"
+      },
+      "matched": {
+        "type": "int"
+      }
+    }
+  },
+  "attendanceSyncFailed": "فشلت المزامنة مع BioTime. تحقق من الاتصال ثم أعد المحاولة.",
+  "attendanceLastSyncLabel": "آخر مزامنة: {date}",
+  "@attendanceLastSyncLabel": {
+    "description": "Shows when the last BioTime sync happened.",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "attendanceNeverSynced": "لم تتم المزامنة بعد",
+  "attendanceLastSyncErrorLabel": "خطأ آخر مزامنة: {error}",
+  "@attendanceLastSyncErrorLabel": {
+    "description": "Shows the last BioTime sync error message.",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "attendanceMappingSectionTitle": "ربط الموظفين بجهاز البصمة",
+  "attendanceMappingSectionSubtitle": "اربط كل موظف برقمه في BioTime. الموظفون الذين يحمل رقمهم نفس رقم الموظف يُربطون تلقائيًا عند المزامنة.",
+  "attendanceMappingCodeLabel": "رقم BioTime",
+  "attendanceMappingEmptyState": "لا يوجد موظفون بعد. أضف الموظفين من شاشة الموظفين أولًا.",
+  "attendanceTrackedLabel": "متابعة الحضور",
+  "attendanceUnmatchedTitle": "في BioTime بدون ربط ({count})",
+  "@attendanceUnmatchedTitle": {
+    "description": "Header for BioTime people that matched no employee.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "attendanceSettingsSaved": "تم حفظ إعدادات الحضور.",
+  "attendanceSettingsSaveError": "تعذر حفظ إعدادات الحضور.",
+  "attendanceSettingsLoadError": "تعذر تحميل إعدادات الحضور.",
+  "attendanceDisabledNotice": "مزامنة الحضور غير مفعلة. فعّلها من إعدادات المتجر ← الحضور والانصراف.",
+  "attendanceTabLabel": "الحضور",
+  "attendanceSelectEmployeeLabel": "الموظف",
+  "attendanceSelectEmployeeHint": "اختر موظفًا لعرض حضوره",
+  "attendanceMonthLabel": "الشهر",
+  "attendanceSummaryExpectedLabel": "أيام العمل",
+  "attendanceSummaryPresentLabel": "أيام الحضور",
+  "attendanceSummaryAbsentLabel": "أيام الغياب",
+  "attendanceSummaryLateLabel": "دقائق التأخير",
+  "attendanceSummaryOvertimeLabel": "دقائق إضافية",
+  "attendanceStatusPresent": "حاضر",
+  "attendanceStatusLate": "متأخر",
+  "attendanceStatusPartial": "بصمة ناقصة",
+  "attendanceStatusDayOff": "يوم راحة",
+  "attendanceNoDaysMessage": "لا توجد سجلات حضور في هذه الفترة.",
+  "attendanceLoadError": "تعذر تحميل سجلات الحضور.",
+  "attendanceDayMetrics": "عمل {worked} • تأخير {late} د • إضافي {overtime} د",
+  "@attendanceDayMetrics": {
+    "description": "Per-day attendance metrics line.",
+    "placeholders": {
+      "worked": {
+        "type": "String"
+      },
+      "late": {
+        "type": "int"
+      },
+      "overtime": {
+        "type": "int"
+      }
+    }
+  },
+  "attendanceDayTimes": "{firstIn} → {lastOut}",
+  "@attendanceDayTimes": {
+    "description": "First-in and last-out times for an attendance day.",
+    "placeholders": {
+      "firstIn": {
+        "type": "String"
+      },
+      "lastOut": {
+        "type": "String"
+      }
+    }
+  },
+  "attendanceApplyToPayrollButton": "تطبيق الحضور على الرواتب",
+  "attendanceApplyInProgressButton": "جار التطبيق...",
+  "attendanceApplyCardTitle": "احتساب الحضور من BioTime",
+  "attendanceApplyCardSubtitle": "يحدّث أيام الغياب والوقت الإضافي لكل موظف مرتبط بجهاز البصمة قبل اعتماد المسير. يمكنك تعديل القيم يدويًا بعد ذلك.",
+  "attendanceApplySuccess": "تم تحديث الغياب والوقت الإضافي من سجلات الحضور.",
+  "attendanceApplyFailed": "تعذر تطبيق الحضور على مسير الرواتب.",
+  "weekdayMonday": "الاثنين",
+  "weekdayTuesday": "الثلاثاء",
+  "weekdayWednesday": "الأربعاء",
+  "weekdayThursday": "الخميس",
+  "weekdayFriday": "الجمعة",
+  "weekdaySaturday": "السبت",
+  "weekdaySunday": "الأحد"
 }

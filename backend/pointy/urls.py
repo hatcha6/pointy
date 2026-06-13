@@ -6,6 +6,14 @@ from rest_framework.routers import DefaultRouter
 from pointy.health import healthz, readyz
 from apps.analytics.views import AnalyticsEventViewSet
 from apps.attachments.views import AttachmentViewSet, StorageVolumeViewSet
+from apps.attendance.views import (
+    AttendanceDayViewSet,
+    AttendanceProfileViewSet,
+    AttendancePunchViewSet,
+    BioTimeConnectionView,
+    BioTimeSyncView,
+    BioTimeTestConnectionView,
+)
 from apps.catalog.views import (
     ProductCategoryViewSet,
     ProductVariantViewSet,
@@ -127,6 +135,17 @@ router.register(
 )
 router.register("attachments", AttachmentViewSet, basename="attachment")
 router.register(
+    "attendance/profiles",
+    AttendanceProfileViewSet,
+    basename="attendance-profile",
+)
+router.register(
+    "attendance/punches",
+    AttendancePunchViewSet,
+    basename="attendance-punch",
+)
+router.register("attendance/days", AttendanceDayViewSet, basename="attendance-day")
+router.register(
     "attachment-storage-volumes",
     StorageVolumeViewSet,
     basename="storagevolume",
@@ -168,6 +187,17 @@ urlpatterns = [
         RelayConnectorHeartbeatView.as_view(),
         name="relay-connector-heartbeat",
     ),
+    path(
+        "api/attendance/connection/",
+        BioTimeConnectionView.as_view(),
+        name="attendance-connection",
+    ),
+    path(
+        "api/attendance/connection/test/",
+        BioTimeTestConnectionView.as_view(),
+        name="attendance-connection-test",
+    ),
+    path("api/attendance/sync/", BioTimeSyncView.as_view(), name="attendance-sync"),
     path("api/shop-settings/", ShopSettingsView.as_view(), name="shop-settings"),
     path(
         "api/shop-settings/logo/",

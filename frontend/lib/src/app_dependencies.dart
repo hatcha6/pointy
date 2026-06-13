@@ -7,6 +7,7 @@ import 'data/models/device_settings.dart';
 import 'data/repositories/analytics_repository.dart';
 import 'data/repositories/auth_repository.dart';
 import 'data/repositories/business_alert_repository.dart';
+import 'data/repositories/attendance_repository.dart';
 import 'data/repositories/catalog_repository.dart';
 import 'data/repositories/contact_repository.dart';
 import 'data/repositories/dashboard_repository.dart';
@@ -35,6 +36,7 @@ import 'features/contacts/view_models/contact_management_view_model.dart';
 import 'features/dashboard/view_models/dashboard_view_model.dart';
 import 'features/device_settings/view_models/device_settings_view_model.dart';
 import 'features/discounts/view_models/discount_management_view_model.dart';
+import 'features/attendance/view_models/attendance_view_model.dart';
 import 'features/employees/view_models/employee_payroll_view_model.dart';
 import 'features/notifications/view_models/notification_center_view_model.dart';
 import 'features/pos/view_models/pos_view_model.dart';
@@ -54,6 +56,7 @@ class PointyAppDependencies {
     analyticsRepository = AnalyticsRepository(service);
     analyticsEngine = AnalyticsEngine(analyticsRepository);
     service.performanceRecorder = analyticsEngine.recordApiRequest;
+    attendanceRepository = AttendanceRepository(service);
     authRepository = AuthRepository(service);
     catalogRepository = CatalogRepository(service);
     contactRepository = ContactRepository(service);
@@ -100,6 +103,7 @@ class PointyAppDependencies {
   final bool _enableAutomaticConnection;
   late final AnalyticsRepository analyticsRepository;
   late final AnalyticsEngine analyticsEngine;
+  late final AttendanceRepository attendanceRepository;
   late final AuthRepository authRepository;
   late final CatalogRepository catalogRepository;
   late final ContactRepository contactRepository;
@@ -127,6 +131,7 @@ class PointyAppDependencies {
   ContactManagementViewModel? _contactManagementViewModel;
   DiscountManagementViewModel? _discountManagementViewModel;
   EmployeePayrollViewModel? _employeePayrollViewModel;
+  AttendanceViewModel? _attendanceViewModel;
   NotificationCenterViewModel? _notificationCenterViewModel;
   ActivityLogViewModel? _activityLogViewModel;
   DashboardViewModel? _dashboardViewModel;
@@ -177,6 +182,12 @@ class PointyAppDependencies {
   EmployeePayrollViewModel get employeePayrollViewModel =>
       _employeePayrollViewModel ??= EmployeePayrollViewModel(
         employeeRepository,
+        analyticsEngine: analyticsEngine,
+      );
+
+  AttendanceViewModel get attendanceViewModel =>
+      _attendanceViewModel ??= AttendanceViewModel(
+        attendanceRepository,
         analyticsEngine: analyticsEngine,
       );
 

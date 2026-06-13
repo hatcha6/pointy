@@ -11,6 +11,8 @@ import '../../../shared/design/design.dart';
 import '../../../shared/formatters.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../../../shared/shell/shell.dart';
+import '../../attendance/view_models/attendance_view_model.dart';
+import '../../attendance/views/attendance_review_tab.dart';
 import '../view_models/employee_payroll_view_model.dart';
 import 'payroll_forms.dart';
 import 'payroll_labels.dart';
@@ -23,12 +25,14 @@ class EmployeePayrollScreen extends StatelessWidget {
   const EmployeePayrollScreen({
     super.key,
     required this.viewModel,
+    required this.attendanceViewModel,
     required this.userRepository,
     required this.capabilities,
     required this.navigation,
   });
 
   final EmployeePayrollViewModel viewModel;
+  final AttendanceViewModel attendanceViewModel;
   final UserRepository userRepository;
   final AuthorizationCapabilities capabilities;
   final AppNavigation navigation;
@@ -72,6 +76,7 @@ class EmployeePayrollScreen extends StatelessWidget {
             capabilities: capabilities,
             child: _EmployeePayrollBody(
               viewModel: viewModel,
+              attendanceViewModel: attendanceViewModel,
               userRepository: userRepository,
               capabilities: capabilities,
             ),
@@ -85,11 +90,13 @@ class EmployeePayrollScreen extends StatelessWidget {
 class _EmployeePayrollBody extends StatelessWidget {
   const _EmployeePayrollBody({
     required this.viewModel,
+    required this.attendanceViewModel,
     required this.userRepository,
     required this.capabilities,
   });
 
   final EmployeePayrollViewModel viewModel;
+  final AttendanceViewModel attendanceViewModel;
   final UserRepository userRepository;
   final AuthorizationCapabilities capabilities;
 
@@ -97,9 +104,10 @@ class _EmployeePayrollBody extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final spacing = AdaptiveSpacing.of(context);
+    final showAttendance = capabilities.canViewAttendance;
 
     return DefaultTabController(
-      length: 3,
+      length: showAttendance ? 4 : 3,
       child: Padding(
         padding: spacing.pagePadding,
         child: AdaptiveMaxWidth(
@@ -119,6 +127,7 @@ class _EmployeePayrollBody extends StatelessWidget {
                   Tab(text: l10n.payrollHomeTabLabel),
                   Tab(text: l10n.employeesTabLabel),
                   Tab(text: l10n.employeeLoansTabLabel),
+                  if (showAttendance) Tab(text: l10n.attendanceTabLabel),
                 ],
               ),
               SizedBox(height: spacing.sm),
@@ -127,6 +136,7 @@ class _EmployeePayrollBody extends StatelessWidget {
                   children: [
                     _PayrollHomeTab(
                       viewModel: viewModel,
+                      attendanceViewModel: attendanceViewModel,
                       capabilities: capabilities,
                     ),
                     _EmployeesTab(
@@ -135,6 +145,11 @@ class _EmployeePayrollBody extends StatelessWidget {
                       capabilities: capabilities,
                     ),
                     _LoansTab(viewModel: viewModel, capabilities: capabilities),
+                    if (showAttendance)
+                      AttendanceReviewTab(
+                        viewModel: attendanceViewModel,
+                        employees: viewModel.employees,
+                      ),
                   ],
                 ),
               ),
@@ -147,9 +162,14 @@ class _EmployeePayrollBody extends StatelessWidget {
 }
 
 class _PayrollHomeTab extends StatelessWidget {
-  const _PayrollHomeTab({required this.viewModel, required this.capabilities});
+  const _PayrollHomeTab({
+    required this.viewModel,
+    required this.attendanceViewModel,
+    required this.capabilities,
+  });
 
   final EmployeePayrollViewModel viewModel;
+  final AttendanceViewModel attendanceViewModel;
   final AuthorizationCapabilities capabilities;
 
   @override
@@ -162,7 +182,11 @@ class _PayrollHomeTab extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         SizedBox(height: spacing.xs),
-        _MonthWorkflowCard(viewModel: viewModel, capabilities: capabilities),
+        _MonthWorkflowCard(
+          viewModel: viewModel,
+          attendanceViewModel: attendanceViewModel,
+          capabilities: capabilities,
+        ),
         if (pendingLoans.isNotEmpty &&
             capabilities.canManageEmployeeLoans) ...[
           SizedBox(height: spacing.md),
@@ -252,6 +276,7 @@ class _PayrollHomeTab extends StatelessWidget {
       MaterialPageRoute<void>(
         builder: (_) => PayrollRunDetailsScreen(
           viewModel: viewModel,
+          attendanceViewModel: attendanceViewModel,
           capabilities: capabilities,
           initialRun: run,
         ),
@@ -263,10 +288,12 @@ class _PayrollHomeTab extends StatelessWidget {
 class _MonthWorkflowCard extends StatelessWidget {
   const _MonthWorkflowCard({
     required this.viewModel,
+    required this.attendanceViewModel,
     required this.capabilities,
   });
 
   final EmployeePayrollViewModel viewModel;
+  final AttendanceViewModel attendanceViewModel;
   final AuthorizationCapabilities capabilities;
 
   @override
@@ -435,6 +462,7 @@ class _MonthWorkflowCard extends StatelessWidget {
       MaterialPageRoute<void>(
         builder: (_) => PayrollRunDetailsScreen(
           viewModel: viewModel,
+          attendanceViewModel: attendanceViewModel,
           capabilities: capabilities,
           initialRun: run,
         ),
