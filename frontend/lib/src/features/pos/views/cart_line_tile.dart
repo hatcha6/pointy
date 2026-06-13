@@ -35,7 +35,8 @@ class CartLineTile extends StatelessWidget {
       title: line.variant.productLabel,
       subtitle: line.variant.variantLabel,
       detail: line.variant.sku,
-      unitPriceLabel: l10n.unitPriceEach(formatMoney(line.variant.unitPrice)),
+      // Effective unit price reflects any modifier deltas on this line.
+      unitPriceLabel: l10n.unitPriceEach(formatMoney(line.unitPrice)),
       totalLabel: formatMoney(line.total),
       quantity: line.quantity,
       imageUrl:
@@ -50,13 +51,58 @@ class CartLineTile extends StatelessWidget {
       onQuantityTap: line.variant.unit == 'piece' ? null : onEditQuantity,
     );
 
-    if (onEditNote == null && line.notes.trim().isEmpty) {
+    final hasNoteRow = onEditNote != null || line.notes.trim().isNotEmpty;
+    if (line.modifiers.isEmpty && !hasNoteRow) {
       return tile;
     }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [tile, _CartLineNote(line: line, onEditNote: onEditNote)],
+      children: [
+        tile,
+        if (line.modifiers.isNotEmpty) _CartLineModifiers(line: line),
+        if (hasNoteRow) _CartLineNote(line: line, onEditNote: onEditNote),
+      ],
+    );
+  }
+}
+
+class _CartLineModifiers extends StatelessWidget {
+  const _CartLineModifiers({required this.line});
+
+  final CartLine line;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final label = line.modifiers
+        .map(
+          (modifier) => modifier.quantity > 1
+              ? '${modifier.optionName} ×${modifier.quantity}'
+              : modifier.optionName,
+        )
+        .join(' · ');
+
+    return Padding(
+      padding: const EdgeInsetsDirectional.only(start: 12, end: 12, bottom: 4),
+      child: Row(
+        children: [
+          Icon(
+            Icons.tune_outlined,
+            size: 16,
+            color: theme.colorScheme.primary,
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              label,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.bodySmall,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

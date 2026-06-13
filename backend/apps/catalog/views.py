@@ -27,6 +27,7 @@ from apps.attachments.serializers import (
 )
 from apps.core.permissions import HasPointyPermission
 from .models import (
+    ModifierGroup,
     Product,
     ProductCategory,
     ProductVariant,
@@ -34,6 +35,7 @@ from .models import (
     VariantOptionValue,
 )
 from .serializers import (
+    ModifierGroupSerializer,
     ProductCategorySerializer,
     ProductCatalogSerializer,
     ProductVariantSerializer,
@@ -487,3 +489,20 @@ class VariantOptionValueViewSet(viewsets.ModelViewSet):
     filterset_fields = ("option", "is_active")
     search_fields = ("code", "name", "option__name")
     ordering_fields = ("option__display_order", "display_order", "name", "created_at")
+
+
+class ModifierGroupViewSet(viewsets.ModelViewSet):
+    serializer_class = ModifierGroupSerializer
+    permission_classes = [IsAuthenticated, HasPointyPermission]
+    permission_map = {
+        "list": ("catalog.view_modifiergroup",),
+        "retrieve": ("catalog.view_modifiergroup",),
+        "create": ("catalog.add_modifiergroup",),
+        "update": ("catalog.change_modifiergroup",),
+        "partial_update": ("catalog.change_modifiergroup",),
+        "destroy": ("catalog.delete_modifiergroup",),
+    }
+    queryset = ModifierGroup.objects.prefetch_related("options")
+    filterset_fields = ("is_active",)
+    search_fields = ("name",)
+    ordering_fields = ("display_order", "name", "created_at")

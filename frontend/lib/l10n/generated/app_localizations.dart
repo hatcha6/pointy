@@ -8541,6 +8541,156 @@ abstract class AppLocalizations {
   /// **'مثال: بدون بصل'**
   String get cartLineNoteHint;
 
+  /// No description provided for @modifierGroupRequiredLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'مطلوب'**
+  String get modifierGroupRequiredLabel;
+
+  /// No description provided for @modifierGroupOptionalLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختياري'**
+  String get modifierGroupOptionalLabel;
+
+  /// No description provided for @modifierGroupChooseUpToLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر حتى {count}'**
+  String modifierGroupChooseUpToLabel(int count);
+
+  /// No description provided for @modifierSheetAddButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'إضافة — {price}'**
+  String modifierSheetAddButton(String price);
+
+  /// No description provided for @modifierSheetEditTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعديل الخيارات'**
+  String get modifierSheetEditTitle;
+
+  /// No description provided for @modifierGroupsSectionTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'مجموعات الإضافات'**
+  String get modifierGroupsSectionTitle;
+
+  /// No description provided for @modifierGroupsSectionSubtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'خيارات تُضاف للأصناف عند البيع (الحليب، الإضافات...).'**
+  String get modifierGroupsSectionSubtitle;
+
+  /// No description provided for @modifierGroupAddButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'إضافة مجموعة'**
+  String get modifierGroupAddButton;
+
+  /// No description provided for @modifierGroupsEmptyMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد مجموعات إضافات بعد.'**
+  String get modifierGroupsEmptyMessage;
+
+  /// No description provided for @modifierGroupsLoadError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر تحميل مجموعات الإضافات.'**
+  String get modifierGroupsLoadError;
+
+  /// No description provided for @modifierGroupNameLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'اسم المجموعة'**
+  String get modifierGroupNameLabel;
+
+  /// No description provided for @modifierGroupSingleSelectLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختيار واحد فقط'**
+  String get modifierGroupSingleSelectLabel;
+
+  /// No description provided for @modifierGroupRequiredToggleLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'إلزامية'**
+  String get modifierGroupRequiredToggleLabel;
+
+  /// No description provided for @modifierGroupOptionsLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الخيارات'**
+  String get modifierGroupOptionsLabel;
+
+  /// No description provided for @modifierOptionAddButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'إضافة خيار'**
+  String get modifierOptionAddButton;
+
+  /// No description provided for @modifierOptionNameLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الاسم'**
+  String get modifierOptionNameLabel;
+
+  /// No description provided for @modifierOptionPriceLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'السعر الإضافي'**
+  String get modifierOptionPriceLabel;
+
+  /// No description provided for @modifierOptionMaxQtyLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'أقصى كمية'**
+  String get modifierOptionMaxQtyLabel;
+
+  /// No description provided for @modifierOptionDefaultLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'افتراضي'**
+  String get modifierOptionDefaultLabel;
+
+  /// No description provided for @modifierGroupSummary.
+  ///
+  /// In ar, this message translates to:
+  /// **'{selection} · {count} خيار'**
+  String modifierGroupSummary(String selection, int count);
+
+  /// No description provided for @modifierGroupDeleteTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'حذف المجموعة؟'**
+  String get modifierGroupDeleteTitle;
+
+  /// No description provided for @modifierGroupDeleteMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'ستُزال من كل الأصناف المرتبطة بها.'**
+  String get modifierGroupDeleteMessage;
+
+  /// No description provided for @modifierGroupSaveError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر حفظ المجموعة.'**
+  String get modifierGroupSaveError;
+
+  /// No description provided for @modifierGroupDeleteError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر حذف المجموعة.'**
+  String get modifierGroupDeleteError;
+
+  /// No description provided for @productModifierGroupsLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'مجموعات الإضافات'**
+  String get productModifierGroupsLabel;
+
   /// No description provided for @emptyCart.
   ///
   /// In ar, this message translates to:

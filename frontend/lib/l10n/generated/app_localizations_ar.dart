@@ -4827,6 +4827,88 @@ class AppLocalizationsAr extends AppLocalizations {
   String get cartLineNoteHint => 'مثال: بدون بصل';
 
   @override
+  String get modifierGroupRequiredLabel => 'مطلوب';
+
+  @override
+  String get modifierGroupOptionalLabel => 'اختياري';
+
+  @override
+  String modifierGroupChooseUpToLabel(int count) {
+    return 'اختر حتى $count';
+  }
+
+  @override
+  String modifierSheetAddButton(String price) {
+    return 'إضافة — $price';
+  }
+
+  @override
+  String get modifierSheetEditTitle => 'تعديل الخيارات';
+
+  @override
+  String get modifierGroupsSectionTitle => 'مجموعات الإضافات';
+
+  @override
+  String get modifierGroupsSectionSubtitle =>
+      'خيارات تُضاف للأصناف عند البيع (الحليب، الإضافات...).';
+
+  @override
+  String get modifierGroupAddButton => 'إضافة مجموعة';
+
+  @override
+  String get modifierGroupsEmptyMessage => 'لا توجد مجموعات إضافات بعد.';
+
+  @override
+  String get modifierGroupsLoadError => 'تعذّر تحميل مجموعات الإضافات.';
+
+  @override
+  String get modifierGroupNameLabel => 'اسم المجموعة';
+
+  @override
+  String get modifierGroupSingleSelectLabel => 'اختيار واحد فقط';
+
+  @override
+  String get modifierGroupRequiredToggleLabel => 'إلزامية';
+
+  @override
+  String get modifierGroupOptionsLabel => 'الخيارات';
+
+  @override
+  String get modifierOptionAddButton => 'إضافة خيار';
+
+  @override
+  String get modifierOptionNameLabel => 'الاسم';
+
+  @override
+  String get modifierOptionPriceLabel => 'السعر الإضافي';
+
+  @override
+  String get modifierOptionMaxQtyLabel => 'أقصى كمية';
+
+  @override
+  String get modifierOptionDefaultLabel => 'افتراضي';
+
+  @override
+  String modifierGroupSummary(String selection, int count) {
+    return '$selection · $count خيار';
+  }
+
+  @override
+  String get modifierGroupDeleteTitle => 'حذف المجموعة؟';
+
+  @override
+  String get modifierGroupDeleteMessage => 'ستُزال من كل الأصناف المرتبطة بها.';
+
+  @override
+  String get modifierGroupSaveError => 'تعذّر حفظ المجموعة.';
+
+  @override
+  String get modifierGroupDeleteError => 'تعذّر حذف المجموعة.';
+
+  @override
+  String get productModifierGroupsLabel => 'مجموعات الإضافات';
+
+  @override
   String get emptyCart => 'لا توجد عناصر في السلة';
 
   @override

@@ -10,7 +10,12 @@ from django.utils import timezone
 from rest_framework import serializers, status
 from rest_framework.test import APIClient
 
-from apps.catalog.models import ProductVariant
+from apps.catalog.models import (
+    ModifierGroup,
+    ModifierOption,
+    ProductModifierGroup,
+    ProductVariant,
+)
 from apps.catalog.testing import create_product_with_default_variant
 from apps.core.models import IdempotencyRecord, RelayInstallation, ShopSettings
 from apps.core.roles import CASHIER_GROUP, MANAGER_GROUP, ensure_role_groups
@@ -24,6 +29,7 @@ from .models import (
     Order,
     OrderAdjustment,
     OrderLine,
+    OrderLineModifier,
     RegisterCashMovement,
     RegisterSession,
 )
@@ -2080,3 +2086,161 @@ class OrderCheckoutApiTests(TestCase):
         self.assertEqual(quantity_response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("lines", empty_response.data)
         self.assertIn("lines", quantity_response.data)
+
+
+class ModifierCheckoutApiTests(TestCase):
+    def setUp(self):
+        ensure_role_groups()
+        self.client = APIClient()
+        self.user = get_user_model().objects.create_user(
+            username="mod-cashier", password="pass"
+        )
+        self.user.groups.add(Group.objects.get(name=CASHIER_GROUP))
+        self.client.force_authenticate(user=self.user)
+
+        self.product = create_product_with_default_variant(
+            sku="COFFEE-M", name="Coffee", unit_price=Decimal("3.50")
+        )
+        self.variant = self.product.default_variant
+        StockItem.objects.create(variant=self.variant, quantity_on_hand=20)
+
+        # Optional multi-select group with a quantifiable, priced option.
+        self.extras = ModifierGroup.objects.create(
+            name="Extras", min_select=0, max_select=None
+        )
+        self.extra_shot = ModifierOption.objects.create(
+            group=self.extras,
+            name="Extra shot",
+            price_delta=Decimal("0.50"),
+            max_quantity=3,
+        )
+        # Required single-select group with a default.
+        self.milk = ModifierGroup.objects.create(
+            name="Milk", min_select=1, max_select=1
+        )
+        self.whole = ModifierOption.objects.create(
+            group=self.milk, name="Whole", is_default=True
+        )
+        self.oat = ModifierOption.objects.create(
+            group=self.milk, name="Oat", price_delta=Decimal("0.30")
+        )
+        for order, group in enumerate((self.milk, self.extras)):
+            ProductModifierGroup.objects.create(
+                product=self.product, group=group, display_order=order
+            )
+
+        self.client.post(
+            reverse("register-session-start"),
+            {"opening_cash": "0.00"},
+            format="json",
+        )
+
+    def _checkout(self, modifiers, amount):
+        return self.client.post(
+            reverse("order-checkout"),
+            {
+                "lines": [
+                    {
+                        "variant": self.variant.pk,
+                        "quantity": 2,
+                        "modifiers": modifiers,
+                    }
+                ],
+                "payment_method": "cash",
+                "amount_received": amount,
+            },
+            format="json",
+        )
+
+    def test_modifier_deltas_price_into_the_line_and_total(self):
+        response = self._checkout(
+            [
+                {"option": self.whole.pk},
+                {"option": self.extra_shot.pk, "quantity": 2},
+            ],
+            # (3.50 base + 0.50×2 extra shot + 0.00 whole) × 2 = 9.00
+            amount="9.00",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        order = Order.objects.get(pk=response.data["id"])
+        line = order.lines.get()
+        self.assertEqual(line.unit_price, Decimal("4.50"))
+        self.assertEqual(order.total, Decimal("9.00"))
+        shot = line.modifiers.get(option_name="Extra shot")
+        self.assertEqual(shot.quantity, 2)
+        self.assertEqual(shot.unit_price_delta, Decimal("0.50"))
+        self.assertEqual(shot.group_name, "Extras")
+
+    def test_required_group_must_be_satisfied(self):
+        # No Milk choice → the required single-select group is unsatisfied.
+        response = self._checkout([], amount="7.00")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_option_must_belong_to_the_products_groups(self):
+        foreign = ModifierGroup.objects.create(name="Syrups")
+        foreign_option = ModifierOption.objects.create(
+            group=foreign, name="Vanilla", price_delta=Decimal("1.00")
+        )
+        response = self._checkout(
+            [{"option": self.whole.pk}, {"option": foreign_option.pk}],
+            amount="7.00",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_quantity_capped_at_option_max_quantity(self):
+        response = self._checkout(
+            [{"option": self.whole.pk}, {"option": self.extra_shot.pk, "quantity": 5}],
+            amount="100.00",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_single_select_group_rejects_two_choices(self):
+        response = self._checkout(
+            [{"option": self.whole.pk}, {"option": self.oat.pk}],
+            amount="100.00",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+
+class ModifierGroupApiTests(TestCase):
+    def setUp(self):
+        ensure_role_groups()
+        self.manager = get_user_model().objects.create_user(
+            username="mod-manager", password="pass"
+        )
+        self.manager.groups.add(Group.objects.get(name=MANAGER_GROUP))
+        self.manager_client = APIClient()
+        self.manager_client.force_authenticate(user=self.manager)
+        self.cashier = get_user_model().objects.create_user(
+            username="mod-cashier2", password="pass"
+        )
+        self.cashier.groups.add(Group.objects.get(name=CASHIER_GROUP))
+        self.cashier_client = APIClient()
+        self.cashier_client.force_authenticate(user=self.cashier)
+
+    def test_manager_creates_group_with_nested_options(self):
+        response = self.manager_client.post(
+            reverse("modifiergroup-list"),
+            {
+                "name": "Milk",
+                "min_select": 1,
+                "max_select": 1,
+                "options": [
+                    {"name": "Whole", "is_default": True},
+                    {"name": "Oat", "price_delta": "0.30"},
+                ],
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        group = ModifierGroup.objects.get(pk=response.data["id"])
+        self.assertEqual(group.options.count(), 2)
+
+    def test_cashier_cannot_manage_modifier_groups(self):
+        response = self.cashier_client.post(
+            reverse("modifiergroup-list"),
+            {"name": "Milk", "options": []},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)

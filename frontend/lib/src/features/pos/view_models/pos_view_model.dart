@@ -7,6 +7,7 @@ import '../../../core/analytics_audit.dart';
 import '../../../core/analytics_engine.dart';
 import '../../../core/result.dart';
 import '../../../data/models/cart_line.dart';
+import '../../../data/models/modifier_group.dart';
 import '../../../shared/barcode/scale_barcode.dart';
 import '../../../data/models/analytics_event.dart';
 import '../../../data/models/contact.dart';
@@ -44,13 +45,21 @@ enum RegisterSessionGateStatus {
 
 enum BarcodeScanStatus { idle, resolving, found, notFound, error }
 
-enum PosProductSelectionStatus { added, chooseVariant, unavailable, error, weighVariant }
+enum PosProductSelectionStatus {
+  added,
+  chooseVariant,
+  chooseModifiers,
+  unavailable,
+  error,
+  weighVariant,
+}
 
 class PosProductSelectionResult {
   const PosProductSelectionResult._({
     required this.status,
     this.variants = const [],
     this.weighedVariant,
+    this.modifierVariant,
   });
 
   const PosProductSelectionResult.added()
@@ -75,9 +84,16 @@ class PosProductSelectionResult {
         weighedVariant: variant,
       );
 
+  const PosProductSelectionResult.chooseModifiers(ProductVariant variant)
+    : this._(
+        status: PosProductSelectionStatus.chooseModifiers,
+        modifierVariant: variant,
+      );
+
   final PosProductSelectionStatus status;
   final List<ProductVariant> variants;
   final ProductVariant? weighedVariant;
+  final ProductVariant? modifierVariant;
 }
 
 class PosSaleSessionSummary {

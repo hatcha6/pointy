@@ -15,6 +15,7 @@ from apps.attendance.views import (
     BioTimeTestConnectionView,
 )
 from apps.catalog.views import (
+    ModifierGroupViewSet,
     ProductCategoryViewSet,
     ProductVariantViewSet,
     ProductViewSet,
@@ -102,6 +103,7 @@ router.register(
 router.register("product-categories", ProductCategoryViewSet)
 router.register("variant-options", VariantOptionViewSet)
 router.register("variant-option-values", VariantOptionValueViewSet)
+router.register("modifier-groups", ModifierGroupViewSet)
 router.register("stock", StockItemViewSet)
 router.register("stock-movements", StockMovementViewSet)
 router.register("orders", OrderViewSet)

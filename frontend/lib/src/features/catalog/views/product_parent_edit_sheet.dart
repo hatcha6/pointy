@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../core/result.dart';
+import '../../../data/models/modifier_group.dart';
 import '../../../data/models/product_update_draft.dart';
 import '../../../data/models/variant_option.dart';
 import '../../../shared/async_selection/async_multi_select_picker.dart';
 import '../../../shared/product_category_picker.dart';
 import '../view_models/product_details_view_model.dart';
+import 'modifier_group_selector.dart';
 import 'product_form_fields.dart';
 import 'product_form_section.dart';
 import 'product_image_picker.dart';
@@ -34,6 +36,10 @@ class _ProductParentEditSheetState extends State<ProductParentEditSheet> {
   late List<AsyncSelectionOption<int>> _selectedCategories;
   List<VariantOption> _availableVariantOptions = [];
   late Set<int> _selectedVariantOptionIds;
+  List<ModifierGroup> _availableModifierGroups = [];
+  late Set<int> _selectedModifierGroupIds;
+  var _isLoadingModifierGroups = false;
+  var _modifierGroupsLoadFailed = false;
   ProductImageSelection? _selectedImage;
   var _isLoadingVariantOptions = false;
   var _variantOptionsLoadFailed = false;
@@ -67,6 +73,9 @@ class _ProductParentEditSheetState extends State<ProductParentEditSheet> {
     _selectedVariantOptionIds = {
       for (final option in product.variantOptions) option.id,
     };
+    _selectedModifierGroupIds = {
+      for (final group in product.modifierGroups) group.id,
+    };
     _isActive = product.isActive;
     _tracksExpiry = product.tracksExpiry;
     _unit = product.unit;
@@ -74,6 +83,7 @@ class _ProductParentEditSheetState extends State<ProductParentEditSheet> {
     _isPrepared = product.isPrepared;
     _nameController.addListener(_refreshImageSearchSeed);
     _loadVariantOptions();
+    _loadModifierGroups();
   }
 
   @override
@@ -164,6 +174,15 @@ class _ProductParentEditSheetState extends State<ProductParentEditSheet> {
                               onToggleOption: _toggleVariantOption,
                               onCreateOption: _createVariantOption,
                             ),
+                            const SizedBox(height: 12),
+                            ModifierGroupSelector(
+                              available: _availableModifierGroups,
+                              selectedIds: _selectedModifierGroupIds,
+                              isLoading: _isLoadingModifierGroups,
+                              hasError: _modifierGroupsLoadFailed,
+                              onReload: _loadModifierGroups,
+                              onToggle: _toggleModifierGroup,
+                            ),
                           ],
                         ),
                         if (widget.viewModel.errorMessage ==
@@ -252,6 +271,9 @@ class _ProductParentEditSheetState extends State<ProductParentEditSheet> {
         variantOptionIds: [
           for (final optionId in _selectedVariantOptionIds) optionId,
         ],
+        modifierGroupIds: [
+          for (final groupId in _selectedModifierGroupIds) groupId,
+        ],
       ),
     );
     if (!mounted) {
@@ -310,6 +332,39 @@ class _ProductParentEditSheetState extends State<ProductParentEditSheet> {
       return;
     }
     setState(() => _selectedCategories = picked);
+  }
+
+  Future<void> _loadModifierGroups() async {
+    setState(() {
+      _isLoadingModifierGroups = true;
+      _modifierGroupsLoadFailed = false;
+    });
+
+    final result = await widget.viewModel.catalogRepository
+        .loadAllModifierGroups();
+    if (!mounted) {
+      return;
+    }
+    switch (result) {
+      case Ok<List<ModifierGroup>>():
+        setState(() {
+          _availableModifierGroups = result.value;
+          _isLoadingModifierGroups = false;
+        });
+      case Error<List<ModifierGroup>>():
+        setState(() {
+          _isLoadingModifierGroups = false;
+          _modifierGroupsLoadFailed = true;
+        });
+    }
+  }
+
+  void _toggleModifierGroup(ModifierGroup group) {
+    setState(() {
+      if (!_selectedModifierGroupIds.remove(group.id)) {
+        _selectedModifierGroupIds.add(group.id);
+      }
+    });
   }
 
   Future<void> _loadVariantOptions() async {

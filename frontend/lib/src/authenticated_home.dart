@@ -48,6 +48,7 @@ import 'features/reports/pdf/report_document_builder.dart';
 import 'features/reports/pdf/report_pdf.dart';
 import 'features/reports/views/report_pdf_preview_screen.dart';
 import 'features/reports/views/reports_screen.dart';
+import 'features/settings/view_models/modifier_groups_view_model.dart';
 import 'features/settings/view_models/prep_stations_view_model.dart';
 import 'features/settings/view_models/sales_channels_view_model.dart';
 import 'features/settings/view_models/shop_settings_view_model.dart';
@@ -429,6 +430,10 @@ class _AuthenticatedRoutes implements AppNavigation {
         prepStationsViewModel: PrepStationsViewModel(
           dependencies.prepStationRepository,
           dependencies.catalogRepository,
+          analyticsEngine: dependencies.analyticsEngine,
+        ),
+        modifierGroupsViewModel: ModifierGroupsViewModel(
+          dependencies.modifierGroupRepository,
           analyticsEngine: dependencies.analyticsEngine,
         ),
         attendanceViewModel: dependencies.attendanceViewModel,

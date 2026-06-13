@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
 from rest_framework import serializers
@@ -5,8 +7,11 @@ from rest_framework import serializers
 from apps.attachments.models import Attachment
 from apps.attachments.serializers import AttachmentSummarySerializer
 from .models import (
+    ModifierGroup,
+    ModifierOption,
     Product,
     ProductCategory,
+    ProductModifierGroup,
     ProductVariant,
     VariantOption,
     VariantOptionValue,
@@ -160,6 +165,107 @@ class VariantOptionSerializer(serializers.ModelSerializer):
         return value.strip()
 
 
+class ModifierOptionSerializer(serializers.ModelSerializer):
+    id = serializers.IntegerField(required=False)
+
+    class Meta:
+        model = ModifierOption
+        fields = [
+            "id",
+            "name",
+            "price_delta",
+            "max_quantity",
+            "is_default",
+            "display_order",
+            "is_active",
+        ]
+
+
+class ModifierGroupSerializer(serializers.ModelSerializer):
+    options = ModifierOptionSerializer(many=True)
+
+    class Meta:
+        model = ModifierGroup
+        fields = [
+            "id",
+            "name",
+            "min_select",
+            "max_select",
+            "display_order",
+            "is_active",
+            "options",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ("created_at", "updated_at")
+
+    def validate(self, attrs):
+        min_select = attrs.get(
+            "min_select",
+            getattr(self.instance, "min_select", 0),
+        )
+        max_select = attrs.get(
+            "max_select",
+            getattr(self.instance, "max_select", 1),
+        )
+        if max_select is not None and max_select < max(min_select, 1):
+            raise serializers.ValidationError(
+                {"max_select": "Max selectable must be at least the minimum (and at least 1)."}
+            )
+        return attrs
+
+    @transaction.atomic
+    def create(self, validated_data):
+        options = validated_data.pop("options", [])
+        group = ModifierGroup.objects.create(**validated_data)
+        self._sync_options(group, options)
+        return group
+
+    @transaction.atomic
+    def update(self, instance, validated_data):
+        options = validated_data.pop("options", None)
+        for field, value in validated_data.items():
+            setattr(instance, field, value)
+        instance.save()
+        if options is not None:
+            self._sync_options(instance, options)
+        return instance
+
+    def _sync_options(self, group, options_data):
+        kept_ids = []
+        for index, data in enumerate(options_data):
+            fields = {
+                "name": data["name"],
+                "price_delta": data.get("price_delta", Decimal("0.00")),
+                "max_quantity": data.get("max_quantity", 1),
+                "is_default": data.get("is_default", False),
+                "display_order": data.get("display_order", index),
+                "is_active": data.get("is_active", True),
+            }
+            option_id = data.get("id")
+            if option_id and group.options.filter(pk=option_id).exists():
+                group.options.filter(pk=option_id).update(**fields)
+                kept_ids.append(option_id)
+            else:
+                created = group.options.create(**fields)
+                kept_ids.append(created.id)
+        # Options dropped from the payload are removed; SET_NULL keeps historical
+        # OrderLineModifier snapshots intact.
+        group.options.exclude(id__in=kept_ids).delete()
+
+
+def product_modifier_group_details(product, context=None):
+    """Resolved modifier groups for a product, in the per-product order."""
+    links = product.modifier_group_links.select_related("group").prefetch_related(
+        "group__options",
+    ).order_by("display_order", "id")
+    return ModifierGroupSerializer(
+        [link.group for link in links],
+        many=True,
+        context=context,
+    ).data
+
+
 class ProductCatalogSummarySerializer(serializers.ModelSerializer):
     variant_options = serializers.PrimaryKeyRelatedField(many=True, read_only=True)
     variant_option_details = VariantOptionSerializer(
@@ -174,6 +280,7 @@ class ProductCatalogSummarySerializer(serializers.ModelSerializer):
     )
     primary_image = serializers.SerializerMethodField()
     image_attachments = serializers.SerializerMethodField()
+    modifier_group_details = serializers.SerializerMethodField()
 
     class Meta:
         model = Product
@@ -190,6 +297,7 @@ class ProductCatalogSummarySerializer(serializers.ModelSerializer):
             "category_details",
             "variant_options",
             "variant_option_details",
+            "modifier_group_details",
             "primary_image",
             "image_attachments",
             "created_at",
@@ -210,6 +318,9 @@ class ProductCatalogSummarySerializer(serializers.ModelSerializer):
             role=Attachment.Role.PRODUCT_IMAGE,
             context=self.context,
         )
+
+    def get_modifier_group_details(self, product):
+        return product_modifier_group_details(product, self.context)
 
 
 class DefaultProductVariantInputSerializer(serializers.Serializer):
@@ -494,6 +605,12 @@ class ProductCatalogSerializer(serializers.ModelSerializer):
         many=True,
         read_only=True,
     )
+    modifier_groups = serializers.PrimaryKeyRelatedField(
+        queryset=ModifierGroup.objects.all(),
+        many=True,
+        required=False,
+    )
+    modifier_group_details = serializers.SerializerMethodField()
     primary_image = serializers.SerializerMethodField()
     image_attachments = serializers.SerializerMethodField()
 
@@ -514,6 +631,8 @@ class ProductCatalogSerializer(serializers.ModelSerializer):
             "category_details",
             "variant_options",
             "variant_option_details",
+            "modifier_groups",
+            "modifier_group_details",
             "primary_image",
             "image_attachments",
             "quantity_on_hand",
@@ -542,9 +661,24 @@ class ProductCatalogSerializer(serializers.ModelSerializer):
             context=self.context,
         )
 
+    def get_modifier_group_details(self, product):
+        return product_modifier_group_details(product, self.context)
+
+    def _sync_modifier_groups(self, product, groups):
+        # modifier_groups uses a through model (ProductModifierGroup) so the
+        # per-product order is preserved; rebuild the links in payload order.
+        product.modifier_group_links.all().delete()
+        for index, group in enumerate(groups):
+            ProductModifierGroup.objects.create(
+                product=product,
+                group=group,
+                display_order=index,
+            )
+
     def create(self, validated_data):
         categories = validated_data.pop("categories", [])
         variant_options = validated_data.pop("variant_options", None)
+        modifier_groups = validated_data.pop("modifier_groups", None)
         variants_data = validated_data.pop("variants", None)
         default_variant_data = validated_data.pop("default_variant", None)
         variant_options = self._variant_options_for_payload(
@@ -559,6 +693,8 @@ class ProductCatalogSerializer(serializers.ModelSerializer):
                     product.categories.set(categories)
                 if variant_options is not None:
                     product.variant_options.set(variant_options)
+                if modifier_groups is not None:
+                    self._sync_modifier_groups(product, modifier_groups)
                 if variants_data is not None:
                     self._apply_variants_data(product, variants_data)
                 else:
@@ -570,6 +706,7 @@ class ProductCatalogSerializer(serializers.ModelSerializer):
     def update(self, instance, validated_data):
         categories = validated_data.pop("categories", None)
         variant_options = validated_data.pop("variant_options", None)
+        modifier_groups = validated_data.pop("modifier_groups", None)
         variants_data = validated_data.pop("variants", None)
         default_variant_data = validated_data.pop("default_variant", None)
         variant_options = self._variant_options_for_payload(
@@ -586,6 +723,8 @@ class ProductCatalogSerializer(serializers.ModelSerializer):
                     instance.categories.set(categories)
                 if variant_options is not None:
                     instance.variant_options.set(variant_options)
+                if modifier_groups is not None:
+                    self._sync_modifier_groups(instance, modifier_groups)
                 if variants_data is not None:
                     self._apply_variants_data(instance, variants_data)
                 else:

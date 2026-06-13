@@ -11,6 +11,7 @@ class ProductUpdateDraft {
     this.unit = 'piece',
     required this.categoryIds,
     this.variantOptionIds,
+    this.modifierGroupIds,
     this.variants = const [],
   });
 
@@ -23,6 +24,7 @@ class ProductUpdateDraft {
   final String unit;
   final List<int> categoryIds;
   final List<int>? variantOptionIds;
+  final List<int>? modifierGroupIds;
   final List<ProductVariantDraft> variants;
 
   Map<String, Object?> toJson() {
@@ -36,6 +38,7 @@ class ProductUpdateDraft {
       'unit': unit,
       'categories': categoryIds,
       if (variantOptionIds != null) 'variant_options': variantOptionIds,
+      if (modifierGroupIds != null) 'modifier_groups': modifierGroupIds,
       if (variants.isNotEmpty)
         'variants': [
           for (final variant in variants) variant.toJson(includeProduct: false),

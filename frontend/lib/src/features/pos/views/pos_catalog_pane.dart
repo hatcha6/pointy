@@ -15,6 +15,7 @@ import '../../../shared/product_query_controls.dart';
 import '../../../shared/product_tile.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../view_models/pos_view_model.dart';
+import 'modifier_sheet.dart';
 import 'pos_variant_picker_sheet.dart';
 import 'weight_entry_sheet.dart';
 
@@ -171,12 +172,46 @@ class _PosCatalogGrid extends StatelessWidget {
 
   Future<void> _addWeighedVariant(
     BuildContext context,
+    Product product,
     ProductVariant variant, {
     required String source,
   }) async {
     final weight = await showWeightEntrySheet(context, variant: variant);
-    if (weight != null && context.mounted) {
+    if (weight == null || !context.mounted) {
+      return;
+    }
+    if (product.modifierGroups.isEmpty) {
       viewModel.addVariant(variant, quantity: weight, source: source);
+      return;
+    }
+    final modifiers = await showModifierSheet(
+      context,
+      product: product,
+      variant: variant,
+    );
+    if (modifiers != null && context.mounted) {
+      viewModel.addVariant(
+        variant,
+        quantity: weight,
+        modifiers: modifiers,
+        source: source,
+      );
+    }
+  }
+
+  Future<void> _addWithModifiers(
+    BuildContext context,
+    Product product,
+    ProductVariant variant, {
+    required String source,
+  }) async {
+    final modifiers = await showModifierSheet(
+      context,
+      product: product,
+      variant: variant,
+    );
+    if (modifiers != null && context.mounted) {
+      viewModel.addVariant(variant, modifiers: modifiers, source: source);
     }
   }
 
@@ -193,7 +228,22 @@ class _PosCatalogGrid extends StatelessWidget {
       case PosProductSelectionStatus.weighVariant:
         final weighed = result.weighedVariant;
         if (weighed != null && context.mounted) {
-          await _addWeighedVariant(context, weighed, source: 'product_tile');
+          await _addWeighedVariant(
+            context,
+            product,
+            weighed,
+            source: 'product_tile',
+          );
+        }
+      case PosProductSelectionStatus.chooseModifiers:
+        final variant = result.modifierVariant;
+        if (variant != null && context.mounted) {
+          await _addWithModifiers(
+            context,
+            product,
+            variant,
+            source: 'product_tile',
+          );
         }
       case PosProductSelectionStatus.chooseVariant:
         final variant = await showPosVariantPickerSheet(
@@ -203,7 +253,19 @@ class _PosCatalogGrid extends StatelessWidget {
         );
         if (variant != null && context.mounted) {
           if (variant.unit != 'piece') {
-            await _addWeighedVariant(context, variant, source: 'variant_picker');
+            await _addWeighedVariant(
+              context,
+              product,
+              variant,
+              source: 'variant_picker',
+            );
+          } else if (product.modifierGroups.isNotEmpty) {
+            await _addWithModifiers(
+              context,
+              product,
+              variant,
+              source: 'variant_picker',
+            );
           } else {
             viewModel.addVariant(variant, source: 'variant_picker');
           }

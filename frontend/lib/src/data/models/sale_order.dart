@@ -1,4 +1,5 @@
 import 'cart_line.dart';
+import 'modifier_group.dart';
 import 'print_job.dart';
 import 'printer_config.dart';
 import 'query.dart';
@@ -32,6 +33,7 @@ class SaleCheckoutDraft {
               variantId: line.variant.id,
               quantity: line.quantity,
               notes: line.notes,
+              modifiers: line.modifiers,
             ),
           )
           .toList(growable: false),
@@ -80,6 +82,9 @@ class SaleDiscountPreviewDraft {
             (line) => SaleCheckoutLineDraft(
               variantId: line.variant.id,
               quantity: line.quantity,
+              // Modifiers affect price, so the discount preview must carry them
+              // to return a total the cashier can trust. (Notes don't.)
+              modifiers: line.modifiers,
             ),
           )
           .toList(growable: false),
@@ -240,11 +245,13 @@ class SaleCheckoutLineDraft {
     required this.variantId,
     required this.quantity,
     this.notes = '',
+    this.modifiers = const [],
   });
 
   final int variantId;
   final double quantity;
   final String notes;
+  final List<CartLineModifier> modifiers;
 
   Map<String, Object?> toJson() {
     final normalizedNotes = notes.trim();
@@ -252,6 +259,10 @@ class SaleCheckoutLineDraft {
       'variant': variantId,
       'quantity': formatQuantityForApi(quantity),
       if (normalizedNotes.isNotEmpty) 'notes': normalizedNotes,
+      if (modifiers.isNotEmpty)
+        'modifiers': modifiers
+            .map((modifier) => modifier.toCheckoutJson())
+            .toList(growable: false),
     };
   }
 }

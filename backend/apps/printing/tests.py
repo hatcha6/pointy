@@ -871,6 +871,29 @@ class KitchenTicketServiceTests(TestCase):
         self.assertNotIn("unit_price", line)
         self.assertNotIn("line_total", line)
 
+    def test_kitchen_payload_includes_line_modifiers(self):
+        from apps.sales.models import OrderLineModifier
+
+        variant = self._prepared_variant(name="برجر", sku="BRG-MOD")
+        station = self._station(name="الشواية")
+        order = self._paid_order([(variant, "1", "")])
+        OrderLineModifier.objects.create(
+            order_line=order.lines.get(),
+            group_name="إضافات",
+            option_name="جبن إضافي",
+            unit_price_delta=Decimal("1.00"),
+            quantity=2,
+        )
+
+        payload = build_kitchen_ticket_payload(
+            order, station, kitchen_prepared_lines(order)
+        )
+
+        modifiers = payload["order"]["lines"][0]["modifiers"]
+        self.assertEqual(len(modifiers), 1)
+        self.assertEqual(modifiers[0]["name"], "جبن إضافي")
+        self.assertEqual(modifiers[0]["quantity"], 2)
+
     def test_routing_uses_categories_with_default_catch_all(self):
         food = self._category("طعام")
         drinks = self._category("مشروبات")

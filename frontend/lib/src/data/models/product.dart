@@ -1,4 +1,5 @@
 import 'attachment_summary.dart';
+import 'modifier_group.dart';
 import 'product_category.dart';
 import 'product_variant.dart';
 import 'variant_option.dart';
@@ -16,6 +17,7 @@ class Product {
     this.unit = 'piece',
     this.categories = const [],
     this.variantOptions = const [],
+    this.modifierGroups = const [],
     this.defaultVariant,
     this.variants = const [],
     this.primaryImage,
@@ -33,6 +35,7 @@ class Product {
   final String unit;
   final List<ProductCategory> categories;
   final List<VariantOption> variantOptions;
+  final List<ModifierGroup> modifierGroups;
   final ProductVariant? defaultVariant;
   final List<ProductVariant> variants;
   final AttachmentSummary? primaryImage;
@@ -103,6 +106,7 @@ class Product {
       unit: json['unit']?.toString() ?? 'piece',
       categories: _categoriesFromJson(json),
       variantOptions: _variantOptionsFromJson(json),
+      modifierGroups: _modifierGroupsFromJson(json),
       defaultVariant: defaultVariant,
       variants: variants,
       primaryImage: _primaryImageFromJson(json),
@@ -123,6 +127,7 @@ class Product {
       tracksExpiry: detail?.tracksExpiry ?? variant.tracksExpiry,
       categories: detail?.categories ?? const [],
       variantOptions: detail?.variantOptions ?? const [],
+      modifierGroups: detail?.modifierGroups ?? const [],
       defaultVariant: variant,
       primaryImage: variant.primaryImage ?? detail?.primaryImage,
       imageAttachments: variant.imageAttachments.isNotEmpty
@@ -151,6 +156,7 @@ class Product {
       tracksExpiry: tracksExpiry ?? this.tracksExpiry,
       categories: categories,
       variantOptions: variantOptions,
+      modifierGroups: modifierGroups,
       defaultVariant: nextDefaultVariant,
       variants: variants ?? this.variants,
       primaryImage: primaryImage,
@@ -182,6 +188,17 @@ class Product {
       return variants
           .whereType<Map<String, Object?>>()
           .map(ProductVariant.fromJson)
+          .toList(growable: false);
+    }
+    return const [];
+  }
+
+  static List<ModifierGroup> _modifierGroupsFromJson(Map<String, Object?> json) {
+    final details = json['modifier_group_details'];
+    if (details is List<Object?>) {
+      return details
+          .whereType<Map<String, Object?>>()
+          .map(ModifierGroup.fromJson)
           .toList(growable: false);
     }
     return const [];

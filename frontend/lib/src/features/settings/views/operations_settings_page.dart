@@ -10,8 +10,10 @@ import '../../../shared/components/components.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../../../shared/shell/shell.dart';
 import '../../operations/view_models/workflows_view_model.dart';
+import '../view_models/modifier_groups_view_model.dart';
 import '../view_models/prep_stations_view_model.dart';
 import '../view_models/shop_settings_view_model.dart';
+import 'modifier_groups_page.dart';
 import 'prep_stations_page.dart';
 
 class OperationsSettingsPage extends StatefulWidget {
@@ -20,11 +22,13 @@ class OperationsSettingsPage extends StatefulWidget {
     required this.shopSettingsViewModel,
     required this.workflowsViewModel,
     required this.prepStationsViewModel,
+    required this.modifierGroupsViewModel,
   });
 
   final ShopSettingsViewModel shopSettingsViewModel;
   final WorkflowsViewModel workflowsViewModel;
   final PrepStationsViewModel prepStationsViewModel;
+  final ModifierGroupsViewModel modifierGroupsViewModel;
 
   @override
   State<OperationsSettingsPage> createState() => _OperationsSettingsPageState();
@@ -161,6 +165,12 @@ class _OperationsSettingsPageState extends State<OperationsSettingsPage> {
                                 title: l10n.prepStationsSectionTitle,
                                 subtitle: l10n.prepStationsSectionSubtitle,
                                 onTap: isBusy ? null : _openPrepStations,
+                              ),
+                              PointySettingsTile(
+                                icon: Icons.tune_outlined,
+                                title: l10n.modifierGroupsSectionTitle,
+                                subtitle: l10n.modifierGroupsSectionSubtitle,
+                                onTap: isBusy ? null : _openModifierGroups,
                               ),
                             ],
                           ),
@@ -336,6 +346,15 @@ class _OperationsSettingsPageState extends State<OperationsSettingsPage> {
       MaterialPageRoute<void>(
         builder: (_) =>
             PrepStationsPage(viewModel: widget.prepStationsViewModel),
+      ),
+    );
+  }
+
+  void _openModifierGroups() {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) =>
+            ModifierGroupsPage(viewModel: widget.modifierGroupsViewModel),
       ),
     );
   }

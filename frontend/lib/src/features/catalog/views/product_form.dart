@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../core/result.dart';
+import '../../../data/models/modifier_group.dart';
 import '../../../data/models/product_draft.dart';
 import '../../../data/models/product_variant_draft.dart';
 import '../../../data/models/variant_option.dart';
@@ -11,6 +12,7 @@ import '../../../shared/product_category_picker.dart';
 import '../view_models/catalog_view_model.dart';
 import '../view_models/variant_generation.dart';
 import 'product_form_fields.dart';
+import 'modifier_group_selector.dart';
 import 'product_form_section.dart';
 import 'product_image_picker.dart';
 import 'variant_option_creation_dialogs.dart';
@@ -43,6 +45,10 @@ class _ProductFormState extends State<ProductForm> {
   List<AsyncSelectionOption<int>> _selectedCategories = [];
   List<VariantOption> _availableVariantOptions = [];
   final Set<int> _selectedVariantOptionIds = {};
+  List<ModifierGroup> _availableModifierGroups = [];
+  final Set<int> _selectedModifierGroupIds = {};
+  var _isLoadingModifierGroups = false;
+  var _modifierGroupsLoadFailed = false;
   final Map<int, Set<int>> _selectedValueIdsByOption = {};
   Set<int> _valueErrorOptionIds = {};
   ProductImageSelection? _selectedImage;
@@ -87,6 +93,7 @@ class _ProductFormState extends State<ProductForm> {
     _skuController.addListener(_syncGeneratedSkusFromPrefix);
     _priceController.addListener(_syncGeneratedPricesFromBase);
     _loadVariantOptions();
+    _loadModifierGroups();
   }
 
   @override
@@ -230,6 +237,15 @@ class _ProductFormState extends State<ProductForm> {
                                           onReload: _loadVariantOptions,
                                           onToggleOption: _toggleVariantOption,
                                           onCreateOption: _createVariantOption,
+                                        ),
+                                        const SizedBox(height: 12),
+                                        ModifierGroupSelector(
+                                          available: _availableModifierGroups,
+                                          selectedIds: _selectedModifierGroupIds,
+                                          isLoading: _isLoadingModifierGroups,
+                                          hasError: _modifierGroupsLoadFailed,
+                                          onReload: _loadModifierGroups,
+                                          onToggle: _toggleModifierGroup,
                                         ),
                                       ],
                                     ),
@@ -490,6 +506,7 @@ class _ProductFormState extends State<ProductForm> {
       variantOptionIds: [
         for (final option in _selectedVariantOptions) option.id,
       ],
+      modifierGroupIds: _selectedModifierGroupIds.toList(),
       categoryIds: [for (final category in _selectedCategories) category.id],
       variants: generatedVariants,
     );
@@ -544,6 +561,39 @@ class _ProductFormState extends State<ProductForm> {
           _variantOptionsLoadFailed = true;
         });
     }
+  }
+
+  Future<void> _loadModifierGroups() async {
+    setState(() {
+      _isLoadingModifierGroups = true;
+      _modifierGroupsLoadFailed = false;
+    });
+
+    final result = await widget.viewModel.catalogRepository
+        .loadAllModifierGroups();
+    if (!mounted) {
+      return;
+    }
+    switch (result) {
+      case Ok<List<ModifierGroup>>():
+        setState(() {
+          _availableModifierGroups = result.value;
+          _isLoadingModifierGroups = false;
+        });
+      case Error<List<ModifierGroup>>():
+        setState(() {
+          _isLoadingModifierGroups = false;
+          _modifierGroupsLoadFailed = true;
+        });
+    }
+  }
+
+  void _toggleModifierGroup(ModifierGroup group) {
+    setState(() {
+      if (!_selectedModifierGroupIds.remove(group.id)) {
+        _selectedModifierGroupIds.add(group.id);
+      }
+    });
   }
 
   void _toggleVariantOption(VariantOption option) {

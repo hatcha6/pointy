@@ -61,6 +61,15 @@ class Product(TimeStampedModel):
         blank=True,
         related_name="products",
     )
+    # Per-line modifier sets (e.g. "Milk", "Extras"). Unlike variant_options
+    # these never create distinct variants — they are per-sale-line add-ons that
+    # adjust price and print on the chit/receipt.
+    modifier_groups = models.ManyToManyField(
+        "ModifierGroup",
+        blank=True,
+        through="ProductModifierGroup",
+        related_name="products",
+    )
     attachments = GenericRelation(
         "attachments.Attachment",
         content_type_field="owner_content_type",
@@ -226,6 +235,93 @@ class VariantOptionValue(TimeStampedModel):
 
     def __str__(self) -> str:
         return f"{self.option.name}: {self.name}"
+
+
+class ModifierGroupQuerySet(models.QuerySet):
+    def active(self):
+        return self.filter(is_active=True)
+
+
+class ModifierGroup(TimeStampedModel):
+    """A reusable set of per-line choices applied to a product, e.g. "Milk"
+    (single-select) or "Extras" (multi-select). Assigned to products via
+    ProductModifierGroup. Unlike VariantOption (which builds distinct priced,
+    stocked variants), a modifier is a per-sale-line add-on: it only adjusts the
+    line price and prints on the chit/receipt — it never creates a variant."""
+
+    name = models.CharField(max_length=160)
+    # 0 = optional; >=1 = the cashier must choose at least this many options.
+    min_select = models.PositiveIntegerField(default=0)
+    # null = unlimited multi-select; 1 = single-select.
+    max_select = models.PositiveIntegerField(blank=True, null=True, default=1)
+    display_order = models.PositiveIntegerField(default=0)
+    is_active = models.BooleanField(default=True)
+
+    objects = ModifierGroupQuerySet.as_manager()
+
+    class Meta:
+        ordering = ["display_order", "name"]
+
+    def __str__(self) -> str:
+        return self.name
+
+
+class ModifierOption(TimeStampedModel):
+    group = models.ForeignKey(
+        ModifierGroup,
+        on_delete=models.CASCADE,
+        related_name="options",
+    )
+    name = models.CharField(max_length=160)
+    price_delta = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal("0.00"),
+        validators=[MinValueValidator(Decimal("0.00"))],
+    )
+    # 1 = toggle (on/off); >1 = quantifiable up to this many (a stepper appears).
+    max_quantity = models.PositiveIntegerField(
+        default=1,
+        validators=[MinValueValidator(1)],
+    )
+    # Preselected when the modifier sheet opens, so the common case is one tap.
+    is_default = models.BooleanField(default=False)
+    display_order = models.PositiveIntegerField(default=0)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["group__display_order", "display_order", "name"]
+
+    def __str__(self) -> str:
+        return f"{self.group.name}: {self.name}"
+
+
+class ProductModifierGroup(TimeStampedModel):
+    """Assigns a reusable ModifierGroup to a Product with a per-product order."""
+
+    product = models.ForeignKey(
+        Product,
+        on_delete=models.CASCADE,
+        related_name="modifier_group_links",
+    )
+    group = models.ForeignKey(
+        ModifierGroup,
+        on_delete=models.CASCADE,
+        related_name="product_links",
+    )
+    display_order = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ["display_order", "id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["product", "group"],
+                name="unique_product_modifier_group",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.product.name} → {self.group.name}"
 
 
 class ProductVariantQuerySet(models.QuerySet):

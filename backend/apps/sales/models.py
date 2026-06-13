@@ -304,6 +304,40 @@ class OrderLine(TimeStampedModel):
         return (total or Decimal("0.00")).quantize(Decimal("0.01"))
 
 
+class OrderLineModifier(TimeStampedModel):
+    """A structured modifier chosen for a single order line (e.g. "Oat milk",
+    "Extra shot ×2"). The selected option's per-unit price delta is already
+    folded into OrderLine.unit_price; these rows carry the breakdown for the
+    chit/receipt and are snapshotted so reprints survive catalog edits."""
+
+    order_line = models.ForeignKey(
+        OrderLine,
+        on_delete=models.CASCADE,
+        related_name="modifiers",
+    )
+    modifier_option = models.ForeignKey(
+        "catalog.ModifierOption",
+        on_delete=models.SET_NULL,
+        related_name="order_line_modifiers",
+        blank=True,
+        null=True,
+    )
+    group_name = models.CharField(max_length=160, blank=True)
+    option_name = models.CharField(max_length=160, blank=True)
+    unit_price_delta = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    quantity = models.PositiveIntegerField(default=1)
+
+    class Meta:
+        ordering = ["id"]
+
+    @property
+    def line_price_delta(self) -> Decimal:
+        return (self.unit_price_delta * self.quantity).quantize(Decimal("0.01"))
+
+    def __str__(self) -> str:
+        return f"{self.option_name} ×{self.quantity}"
+
+
 class OrderAdjustment(TimeStampedModel):
     class AdjustmentType(models.TextChoices):
         VOID = "void", "Void"

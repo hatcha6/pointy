@@ -4,11 +4,13 @@ extension PosCartActions on PosViewModel {
   void addVariant(
     ProductVariant variant, {
     double quantity = 1,
+    List<CartLineModifier> modifiers = const [],
     String source = 'cart_quantity_button',
   }) {
     if (_addVariantToCartAndTrack(
       variant,
       quantity: quantity,
+      modifiers: modifiers,
       source: source,
     )) {
       _notifyChanged();
@@ -19,12 +21,13 @@ extension PosCartActions on PosViewModel {
   bool _addVariantToCartAndTrack(
     ProductVariant variant, {
     required double quantity,
+    List<CartLineModifier> modifiers = const [],
     required String source,
   }) {
-    final existingLine = _mergeableLineFor(variant);
+    final existingLine = _mergeableLineFor(variant, modifiers);
     final previousQuantity = existingLine?.quantity ?? 0;
-    if (_addVariantToCart(variant, quantity: quantity)) {
-      final updatedLine = _mergeableLineFor(variant);
+    if (_addVariantToCart(variant, quantity: quantity, modifiers: modifiers)) {
+      final updatedLine = _mergeableLineFor(variant, modifiers);
       if (updatedLine != null) {
         _trackCartLineAdded(
           updatedLine,
@@ -38,13 +41,31 @@ extension PosCartActions on PosViewModel {
     return false;
   }
 
-  /// The line a fresh add of [variant] should merge into: same variant and no
-  /// kitchen note. A noted line ("burger / no onions") stays separate so it
-  /// never absorbs a plain add.
-  CartLine? _mergeableLineFor(ProductVariant variant) {
+  /// The line a fresh add of [variant] should merge into: same variant, no
+  /// kitchen note, and the same modifier selection. A noted line or a different
+  /// modifier choice ("oat" vs "whole") stays separate so it never absorbs a
+  /// plain add.
+  CartLine? _mergeableLineFor(
+    ProductVariant variant,
+    List<CartLineModifier> modifiers,
+  ) {
+    final signature = _modifierSignature(modifiers);
     return _cart
-        .where((line) => line.variant.id == variant.id && line.notes.isEmpty)
+        .where(
+          (line) =>
+              line.variant.id == variant.id &&
+              line.notes.isEmpty &&
+              line.modifierSignature == signature,
+        )
         .firstOrNull;
+  }
+
+  String _modifierSignature(List<CartLineModifier> modifiers) {
+    final parts = modifiers
+        .map((modifier) => '${modifier.optionId}:${modifier.quantity}')
+        .toList()
+      ..sort();
+    return parts.join(',');
   }
 
   // Per-line mutations key on the stable [CartLine.lineKey] so two lines of the
@@ -240,22 +261,52 @@ extension PosCartActions on PosViewModel {
     _notifyChanged();
   }
 
-  bool _addVariantToCart(ProductVariant variant, {double quantity = 1}) {
+  bool _addVariantToCart(
+    ProductVariant variant, {
+    double quantity = 1,
+    List<CartLineModifier> modifiers = const [],
+  }) {
     if (_isCheckingOut || quantity <= 0) {
       return false;
     }
 
+    final signature = _modifierSignature(modifiers);
     final index = _cart.indexWhere(
-      (line) => line.variant.id == variant.id && line.notes.isEmpty,
+      (line) =>
+          line.variant.id == variant.id &&
+          line.notes.isEmpty &&
+          line.modifierSignature == signature,
     );
     if (index == -1) {
-      _cart.add(CartLine.create(variant: variant, quantity: quantity));
+      _cart.add(
+        CartLine.create(
+          variant: variant,
+          quantity: quantity,
+          modifiers: modifiers,
+        ),
+      );
     } else {
       final line = _cart.removeAt(index);
       _cart.add(line.copyWith(quantity: line.quantity + quantity));
     }
     _touchActiveSaleSession();
     return true;
+  }
+
+  /// Replaces the modifier selection on a cart line (used when editing from the
+  /// cart). Modifiers affect price, so the discount preview is refreshed.
+  void setCartLineModifiers(String lineKey, List<CartLineModifier> modifiers) {
+    if (_isCheckingOut) {
+      return;
+    }
+    final index = _cart.indexWhere((line) => line.lineKey == lineKey);
+    if (index == -1) {
+      return;
+    }
+    _cart[index] = _cart[index].copyWith(modifiers: modifiers);
+    _touchActiveSaleSession();
+    _notifyChanged();
+    unawaited(refreshDiscountPreview());
   }
 
   void _trackCartLineAdded(

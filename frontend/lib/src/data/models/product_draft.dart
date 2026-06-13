@@ -15,6 +15,7 @@ class ProductDraft {
     this.description = '',
     this.categoryIds = const [],
     this.variantOptionIds = const [],
+    this.modifierGroupIds = const [],
     this.optionValueIds = const [],
     this.variants = const [],
   });
@@ -32,6 +33,7 @@ class ProductDraft {
   final String description;
   final List<int> categoryIds;
   final List<int> variantOptionIds;
+  final List<int> modifierGroupIds;
   final List<int> optionValueIds;
   final List<ProductVariantDraft> variants;
 
@@ -46,6 +48,7 @@ class ProductDraft {
       'unit': unit,
       'categories': categoryIds,
       'variant_options': variantOptionIds,
+      'modifier_groups': modifierGroupIds,
       if (variants.isEmpty)
         'default_variant': {
           'name': variantName,

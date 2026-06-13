@@ -2693,6 +2693,55 @@
   "cartLineNoteEdit": "تعديل ملاحظة المطبخ",
   "cartLineNoteDialogTitle": "ملاحظة للمطبخ",
   "cartLineNoteHint": "مثال: بدون بصل",
+  "modifierGroupRequiredLabel": "مطلوب",
+  "modifierGroupOptionalLabel": "اختياري",
+  "modifierGroupChooseUpToLabel": "اختر حتى {count}",
+  "@modifierGroupChooseUpToLabel": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "modifierSheetAddButton": "إضافة — {price}",
+  "@modifierSheetAddButton": {
+    "placeholders": {
+      "price": {
+        "type": "String"
+      }
+    }
+  },
+  "modifierSheetEditTitle": "تعديل الخيارات",
+  "modifierGroupsSectionTitle": "مجموعات الإضافات",
+  "modifierGroupsSectionSubtitle": "خيارات تُضاف للأصناف عند البيع (الحليب، الإضافات...).",
+  "modifierGroupAddButton": "إضافة مجموعة",
+  "modifierGroupsEmptyMessage": "لا توجد مجموعات إضافات بعد.",
+  "modifierGroupsLoadError": "تعذّر تحميل مجموعات الإضافات.",
+  "modifierGroupNameLabel": "اسم المجموعة",
+  "modifierGroupSingleSelectLabel": "اختيار واحد فقط",
+  "modifierGroupRequiredToggleLabel": "إلزامية",
+  "modifierGroupOptionsLabel": "الخيارات",
+  "modifierOptionAddButton": "إضافة خيار",
+  "modifierOptionNameLabel": "الاسم",
+  "modifierOptionPriceLabel": "السعر الإضافي",
+  "modifierOptionMaxQtyLabel": "أقصى كمية",
+  "modifierOptionDefaultLabel": "افتراضي",
+  "modifierGroupSummary": "{selection} · {count} خيار",
+  "@modifierGroupSummary": {
+    "placeholders": {
+      "selection": {
+        "type": "String"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "modifierGroupDeleteTitle": "حذف المجموعة؟",
+  "modifierGroupDeleteMessage": "ستُزال من كل الأصناف المرتبطة بها.",
+  "modifierGroupSaveError": "تعذّر حفظ المجموعة.",
+  "modifierGroupDeleteError": "تعذّر حذف المجموعة.",
+  "productModifierGroupsLabel": "مجموعات الإضافات",
   "emptyCart": "لا توجد عناصر في السلة",
   "openCartSheetButton": "مراجعة السلة",
   "openSaleSessionsTitle": "الفواتير المفتوحة",

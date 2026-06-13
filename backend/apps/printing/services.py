@@ -159,6 +159,7 @@ def build_receipt_payload(order):
         .prefetch_related(
             "lines__variant__product",
             "lines__variant__option_values__option",
+            "lines__modifiers",
         )
         .get(pk=order.pk)
     )
@@ -198,6 +199,19 @@ def build_receipt_payload(order):
     }
 
 
+def order_line_modifier_payloads(line):
+    """The chosen modifiers for a line (snapshots), shared by receipt + chit."""
+    return [
+        {
+            "group_name": modifier.group_name,
+            "name": modifier.option_name,
+            "quantity": modifier.quantity,
+            "price_delta": money(modifier.unit_price_delta),
+        }
+        for modifier in line.modifiers.all()
+    ]
+
+
 def receipt_line_payload(line):
     variant = line.variant
     product = variant.product
@@ -229,6 +243,7 @@ def receipt_line_payload(line):
             }
             for option_value in variant.option_values.all()
         ],
+        "modifiers": order_line_modifier_payloads(line),
     }
 
 
@@ -636,6 +651,7 @@ def kitchen_prepared_lines(order):
         .prefetch_related(
             "variant__product__categories",
             "variant__option_values__option",
+            "modifiers",
         )
         .all()
     )
@@ -703,6 +719,7 @@ def kitchen_line_payload(line):
             }
             for option_value in variant.option_values.all()
         ],
+        "modifiers": order_line_modifier_payloads(line),
     }
 
 

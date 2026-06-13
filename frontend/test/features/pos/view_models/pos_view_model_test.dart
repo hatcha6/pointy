@@ -7,6 +7,7 @@ import 'package:pointy_frontend/src/core/analytics_engine.dart';
 import 'package:pointy_frontend/src/core/result.dart';
 import 'package:pointy_frontend/src/data/models/analytics_event.dart';
 import 'package:pointy_frontend/src/data/models/print_job.dart';
+import 'package:pointy_frontend/src/data/models/modifier_group.dart';
 import 'package:pointy_frontend/src/data/models/printer_config.dart';
 import 'package:pointy_frontend/src/data/models/product.dart';
 import 'package:pointy_frontend/src/data/models/product_page.dart';
@@ -202,6 +203,91 @@ void main() {
     await _settle();
 
     expect(apiService.capturedCheckoutDraft?.lines.single.notes, 'ساخن جدًا');
+  });
+
+  test('modifier selection prices the line and gates merging', () async {
+    final apiService = _FakePosApiService(
+      catalogPages: const {
+        1: [_coffeeVariant],
+      },
+    );
+    final viewModel = _viewModel(apiService);
+    addTearDown(viewModel.dispose);
+
+    await viewModel.loadCurrentRegisterSession();
+    await viewModel.resumeRegisterSession();
+
+    const oat = CartLineModifier(
+      groupId: 1,
+      optionId: 10,
+      groupName: 'Milk',
+      optionName: 'Oat',
+      priceDelta: 0.5,
+      quantity: 1,
+    );
+    const whole = CartLineModifier(
+      groupId: 1,
+      optionId: 11,
+      groupName: 'Milk',
+      optionName: 'Whole',
+      priceDelta: 0,
+      quantity: 1,
+    );
+
+    viewModel.addVariant(_coffeeVariant, modifiers: const [oat]);
+    viewModel.addVariant(_coffeeVariant, modifiers: const [whole]);
+    // Different modifier choices stay as separate lines.
+    expect(viewModel.cart, hasLength(2));
+
+    // An identical selection merges into the existing line.
+    viewModel.addVariant(_coffeeVariant, modifiers: const [oat]);
+    expect(viewModel.cart, hasLength(2));
+    final oatLine = viewModel.cart.firstWhere(
+      (line) => line.modifiers.any((modifier) => modifier.optionId == 10),
+    );
+    expect(oatLine.quantity, 2);
+    // (3.50 base + 0.50 oat) × 2 = 8.00.
+    expect(oatLine.subtotal, 8.0);
+    await _settle();
+  });
+
+  test('checkout sends the selected modifiers on the line', () async {
+    final apiService = _FakePosApiService(
+      catalogPages: const {
+        1: [_coffeeVariant],
+      },
+    );
+    final viewModel = _viewModel(apiService);
+    addTearDown(viewModel.dispose);
+
+    await viewModel.loadCurrentRegisterSession();
+    await viewModel.resumeRegisterSession();
+
+    viewModel.addVariant(
+      _coffeeVariant,
+      modifiers: const [
+        CartLineModifier(
+          groupId: 2,
+          optionId: 20,
+          groupName: 'Extras',
+          optionName: 'Extra shot',
+          priceDelta: 0.5,
+          quantity: 2,
+        ),
+      ],
+    );
+    await _settle();
+
+    await viewModel.checkoutCurrentSale(
+      payments: const [
+        SaleCheckoutPaymentDraft(method: PaymentMethod.cash, amount: 4.5),
+      ],
+    );
+    await _settle();
+
+    final line = apiService.capturedCheckoutDraft?.lines.single;
+    expect(line?.modifiers.single.optionId, 20);
+    expect(line?.modifiers.single.quantity, 2);
   });
 
   test('checkout retry rotates idempotency key when payment changes', () async {

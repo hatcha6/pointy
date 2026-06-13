@@ -3,7 +3,7 @@ from decimal import Decimal
 from django.contrib.contenttypes.models import ContentType
 from rest_framework import serializers
 
-from apps.catalog.models import ProductVariant
+from apps.catalog.models import ModifierOption, ProductVariant
 from apps.core.models import RelayInstallation, ShopSettings
 from apps.core.roles import user_is_manager
 from apps.customers.models import Customer
@@ -531,6 +531,15 @@ class PublicInvoiceSerializer(serializers.ModelSerializer):
         return self.context["shop_logo_data_uri"]
 
 
+class CheckoutLineModifierSerializer(serializers.Serializer):
+    option = serializers.PrimaryKeyRelatedField(
+        queryset=ModifierOption.objects.filter(is_active=True).select_related(
+            "group",
+        ),
+    )
+    quantity = serializers.IntegerField(min_value=1, default=1)
+
+
 class CheckoutLineSerializer(serializers.Serializer):
     variant = serializers.PrimaryKeyRelatedField(
         queryset=ProductVariant.objects.active().select_related("product"),
@@ -547,6 +556,11 @@ class CheckoutLineSerializer(serializers.Serializer):
         max_length=255,
         trim_whitespace=True,
         default="",
+    )
+    modifiers = CheckoutLineModifierSerializer(
+        many=True,
+        required=False,
+        default=list,
     )
 
     def validate(self, attrs):
@@ -565,7 +579,55 @@ class CheckoutLineSerializer(serializers.Serializer):
                 {"quantity": "Piece products sell in whole units."}
             )
         attrs["variant"] = variant
+        # Validate the chosen modifiers against the product's assigned groups and
+        # price them server-side; the client price is never trusted. The
+        # effective per-unit price (base + modifier deltas) rides on the line
+        # data so the discount engine and OrderLine creation both use it.
+        attrs["effective_unit_price"] = self._validate_and_price_modifiers(
+            variant,
+            attrs.get("modifiers", []),
+        )
         return attrs
+
+    def _validate_and_price_modifiers(self, variant, selections):
+        assigned_groups = {
+            group.id: group
+            for group in variant.product.modifier_groups.filter(is_active=True)
+        }
+        delta = Decimal("0.00")
+        seen_option_ids = set()
+        selected_by_group = {}
+        for selection in selections:
+            option = selection["option"]
+            quantity = selection["quantity"]
+            group = assigned_groups.get(option.group_id)
+            if group is None:
+                raise serializers.ValidationError(
+                    {"modifiers": f"'{option.name}' is not available for this product."}
+                )
+            if option.id in seen_option_ids:
+                raise serializers.ValidationError(
+                    {"modifiers": f"'{option.name}' was selected more than once; use a quantity."}
+                )
+            if quantity > option.max_quantity:
+                raise serializers.ValidationError(
+                    {"modifiers": f"'{option.name}' allows at most {option.max_quantity}."}
+                )
+            seen_option_ids.add(option.id)
+            selected_by_group.setdefault(group.id, []).append(option)
+            delta += option.price_delta * quantity
+
+        for group in assigned_groups.values():
+            chosen = len(selected_by_group.get(group.id, []))
+            if chosen < group.min_select:
+                raise serializers.ValidationError(
+                    {"modifiers": f"'{group.name}' requires at least {group.min_select} choice(s)."}
+                )
+            if group.max_select is not None and chosen > group.max_select:
+                raise serializers.ValidationError(
+                    {"modifiers": f"'{group.name}' allows at most {group.max_select} choice(s)."}
+                )
+        return variant.unit_price + delta
 
 
 class CheckoutPaymentSerializer(serializers.Serializer):

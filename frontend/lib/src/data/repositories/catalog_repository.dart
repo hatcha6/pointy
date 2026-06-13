@@ -1,6 +1,7 @@
 import '../../core/result.dart';
 import '../../shared/barcode/scale_barcode.dart';
 import '../models/attachment_summary.dart';
+import '../models/modifier_group.dart';
 import '../models/product.dart';
 import '../models/product_category.dart';
 import '../models/product_category_query.dart';
@@ -193,6 +194,21 @@ class CatalogRepository {
         page += 1;
       }
       return options;
+    });
+  }
+
+  Future<Result<List<ModifierGroup>>> loadAllModifierGroups() async {
+    return Result.guard(() async {
+      final groups = <ModifierGroup>[];
+      var page = 1;
+      var hasMore = true;
+      while (hasMore) {
+        final result = await _service.fetchModifierGroups(page: page);
+        groups.addAll(result.groups);
+        hasMore = result.hasMore;
+        page += 1;
+      }
+      return groups;
     });
   }
 

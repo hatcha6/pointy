@@ -164,6 +164,10 @@ extension PosCatalogActions on PosViewModel {
             // Weighted items need a weight before they can be priced.
             return PosProductSelectionResult.weighVariant(variant);
           }
+          if (product.modifierGroups.isNotEmpty) {
+            // Let the cashier pick modifiers before the line is added.
+            return PosProductSelectionResult.chooseModifiers(variant);
+          }
           addVariant(variant, source: 'product_tile');
           return const PosProductSelectionResult.added();
         }

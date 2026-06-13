@@ -29,7 +29,13 @@ from apps.inventory.services import (
     save_stock_item_quantities,
     stock_snapshot,
 )
-from .models import Order, OrderAdjustment, OrderAdjustmentLine, OrderLine
+from .models import (
+    Order,
+    OrderAdjustment,
+    OrderAdjustmentLine,
+    OrderLine,
+    OrderLineModifier,
+)
 
 
 MONEY_PLACES = Decimal("0.01")
@@ -91,11 +97,14 @@ def create_order_with_lines(
             order=order,
             variant=variant,
             quantity=line_data["quantity"],
-            unit_price=variant.unit_price,
+            # Effective price folds in the server-computed modifier deltas; falls
+            # back to the bare variant price for lines without modifiers.
+            unit_price=line_data.get("effective_unit_price", variant.unit_price),
             unit_cost=latest_sale_unit_cost(variant),
             discount_total=discount_by_line_key.get(line_key, Decimal("0.00")),
             notes=line_data.get("notes", ""),
         )
+        _persist_order_line_modifiers(line, line_data.get("modifiers", []))
         line_objects_by_key[line_key] = line
     order.recalculate()
     order.save(update_fields=["subtotal", "discount_total", "total", "updated_at"])
@@ -110,6 +119,21 @@ def create_order_with_lines(
             discount_usage_limit_error_payload(exc, "coupon_codes")
         )
     return order
+
+
+def _persist_order_line_modifiers(line, selections):
+    """Snapshot the chosen modifier options onto the order line so reprints and
+    audits survive later catalog edits."""
+    for selection in selections:
+        option = selection["option"]
+        OrderLineModifier.objects.create(
+            order_line=line,
+            modifier_option=option,
+            group_name=option.group.name,
+            option_name=option.name,
+            unit_price_delta=option.price_delta,
+            quantity=selection["quantity"],
+        )
 
 
 def checkout_line_key(line_data):
@@ -128,7 +152,7 @@ def prepare_discount_lines(lines_data):
                 product_id=product.pk,
                 variant_id=variant.pk,
                 quantity=line_data["quantity"],
-                unit_amount=variant.unit_price,
+                unit_amount=line_data.get("effective_unit_price", variant.unit_price),
                 category_ids=tuple(product.categories.values_list("id", flat=True)),
             )
         )
@@ -216,7 +240,7 @@ def checkout_loss_lines(lines_data, discount_result=None):
         if quantity <= 0 or unit_cost <= 0:
             continue
 
-        unit_price = money(variant.unit_price)
+        unit_price = money(line_data.get("effective_unit_price", variant.unit_price))
         line_subtotal = money(unit_price * quantity)
         line_key = checkout_line_key(line_data)
         discount_total = min(
