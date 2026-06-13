@@ -1,3 +1,5 @@
+import logging
+
 from django.db import IntegrityError, transaction
 from django.utils import timezone
 from rest_framework import mixins, serializers, status, viewsets
@@ -28,6 +30,8 @@ from .serializers import (
     RegisterSessionSerializer,
     RegisterSessionStartSerializer,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class OrderViewSet(
@@ -148,6 +152,19 @@ class OrderViewSet(
             from apps.printing.serializers import PrintJobSerializer
 
             response_data["print_job"] = PrintJobSerializer(claimed_print_job).data
+
+        # Kitchen chits are enqueued (idempotently, gated on the shop setting)
+        # and returned QUEUED. The printing device claims and prints the chits
+        # for the stations it actually serves; jobs for other stations stay
+        # queued for those devices (or a manual reprint).
+        kitchen_print_jobs = self._enqueue_checkout_kitchen_print_jobs(order)
+        if kitchen_print_jobs:
+            from apps.printing.serializers import PrintJobSerializer
+
+            response_data["kitchen_print_jobs"] = PrintJobSerializer(
+                kitchen_print_jobs,
+                many=True,
+            ).data
 
         return Response(response_data, status=status.HTTP_201_CREATED)
 
@@ -276,6 +293,21 @@ class OrderViewSet(
             )
         except ValueError:
             return None
+
+    def _enqueue_checkout_kitchen_print_jobs(self, order):
+        from apps.printing.services import enqueue_kitchen_print_jobs
+
+        # Best-effort: a kitchen-printing misconfiguration must never fail or
+        # roll back a completed, paid sale (mirrors the receipt enqueue).
+        try:
+            return enqueue_kitchen_print_jobs(order.pk)
+        except Exception:
+            logger.exception(
+                "Failed to enqueue kitchen tickets for order %s; the sale is "
+                "unaffected.",
+                order.pk,
+            )
+            return []
 
 
 class PublicInvoiceView(mixins.RetrieveModelMixin, viewsets.GenericViewSet):

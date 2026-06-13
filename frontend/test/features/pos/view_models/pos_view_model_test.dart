@@ -144,6 +144,66 @@ void main() {
     await _settle();
   });
 
+  test('a line note keeps the line separate from plain re-adds', () async {
+    final apiService = _FakePosApiService(
+      catalogPages: const {
+        1: [_coffeeVariant],
+      },
+    );
+    final viewModel = _viewModel(apiService);
+    addTearDown(viewModel.dispose);
+
+    await viewModel.loadCurrentRegisterSession();
+    await viewModel.resumeRegisterSession();
+
+    viewModel.addVariant(_coffeeVariant);
+    final notedKey = viewModel.cart.single.lineKey;
+    viewModel.setCartLineNote(notedKey, 'بدون سكر');
+    // A fresh add of the same variant must not merge into the noted line.
+    viewModel.addVariant(_coffeeVariant);
+    await _settle();
+
+    expect(viewModel.cart, hasLength(2));
+    final noted = viewModel.cart.firstWhere((line) => line.lineKey == notedKey);
+    expect(noted.notes, 'بدون سكر');
+    expect(noted.quantity, 1);
+    final plain = viewModel.cart.firstWhere((line) => line.lineKey != notedKey);
+    expect(plain.notes, isEmpty);
+    expect(plain.quantity, 1);
+
+    // Per-line mutations target the line by key, not the variant.
+    viewModel.removeCartLine(notedKey);
+    expect(viewModel.cart, hasLength(1));
+    expect(viewModel.cart.single.lineKey, plain.lineKey);
+    await _settle();
+  });
+
+  test('checkout sends the per-line kitchen note', () async {
+    final apiService = _FakePosApiService(
+      catalogPages: const {
+        1: [_coffeeVariant],
+      },
+    );
+    final viewModel = _viewModel(apiService);
+    addTearDown(viewModel.dispose);
+
+    await viewModel.loadCurrentRegisterSession();
+    await viewModel.resumeRegisterSession();
+
+    viewModel.addVariant(_coffeeVariant);
+    viewModel.setCartLineNote(viewModel.cart.single.lineKey, 'ساخن جدًا');
+    await _settle();
+
+    await viewModel.checkoutCurrentSale(
+      payments: const [
+        SaleCheckoutPaymentDraft(method: PaymentMethod.cash, amount: 3.5),
+      ],
+    );
+    await _settle();
+
+    expect(apiService.capturedCheckoutDraft?.lines.single.notes, 'ساخن جدًا');
+  });
+
   test('checkout retry rotates idempotency key when payment changes', () async {
     final keys = <String?>[];
     final apiService = _FakePosApiService(

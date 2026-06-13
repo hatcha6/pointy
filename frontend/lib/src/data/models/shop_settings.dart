@@ -21,6 +21,7 @@ class ShopSettings {
     required this.trustedCardTerminalIds,
     required this.cardCommissionPercent,
     required this.transferCommissionPercent,
+    this.autoPrintKitchenTickets = false,
     this.enableRepairOperations = false,
     this.enableProductionOperations = false,
     this.enableKitchenOperations = false,
@@ -34,6 +35,7 @@ class ShopSettings {
   final bool enableOnlineInvoices;
   final bool requireOpeningCash;
   final bool autoPrintReceipts;
+  final bool autoPrintKitchenTickets;
   final bool allowOverselling;
   final bool preventSellingAtLoss;
   final int lowStockThreshold;
@@ -67,6 +69,10 @@ class ShopSettings {
       autoPrintReceipts: json['auto_print_receipts'] is bool
           ? json['auto_print_receipts'] as bool
           : json['auto_print_receipts']?.toString() == 'true',
+      autoPrintKitchenTickets: _boolFromJson(
+        json['auto_print_kitchen_tickets'],
+        false,
+      ),
       allowOverselling: json['allow_overselling'] is bool
           ? json['allow_overselling'] as bool
           : json['allow_overselling']?.toString() == 'true',
@@ -146,6 +152,7 @@ class ShopSettingsDraft {
     required this.trustedCardTerminalIds,
     required this.cardCommissionPercent,
     required this.transferCommissionPercent,
+    this.autoPrintKitchenTickets = false,
     this.enableRepairOperations = false,
     this.enableProductionOperations = false,
     this.enableKitchenOperations = false,
@@ -158,6 +165,7 @@ class ShopSettingsDraft {
   final bool enableOnlineInvoices;
   final bool requireOpeningCash;
   final bool autoPrintReceipts;
+  final bool autoPrintKitchenTickets;
   final bool allowOverselling;
   final bool preventSellingAtLoss;
   final int lowStockThreshold;
@@ -182,6 +190,7 @@ class ShopSettingsDraft {
       'enable_online_invoices': enableOnlineInvoices,
       'require_opening_cash': requireOpeningCash,
       'auto_print_receipts': autoPrintReceipts,
+      'auto_print_kitchen_tickets': autoPrintKitchenTickets,
       'allow_overselling': allowOverselling,
       'prevent_selling_at_loss': preventSellingAtLoss,
       'low_stock_threshold': lowStockThreshold,

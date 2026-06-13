@@ -10,17 +10,21 @@ import '../../../shared/components/components.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../../../shared/shell/shell.dart';
 import '../../operations/view_models/workflows_view_model.dart';
+import '../view_models/prep_stations_view_model.dart';
 import '../view_models/shop_settings_view_model.dart';
+import 'prep_stations_page.dart';
 
 class OperationsSettingsPage extends StatefulWidget {
   const OperationsSettingsPage({
     super.key,
     required this.shopSettingsViewModel,
     required this.workflowsViewModel,
+    required this.prepStationsViewModel,
   });
 
   final ShopSettingsViewModel shopSettingsViewModel;
   final WorkflowsViewModel workflowsViewModel;
+  final PrepStationsViewModel prepStationsViewModel;
 
   @override
   State<OperationsSettingsPage> createState() => _OperationsSettingsPageState();
@@ -129,6 +133,39 @@ class _OperationsSettingsPageState extends State<OperationsSettingsPage> {
                           ),
                           SizedBox(height: spacing.lg),
                           PointySectionHeader(
+                            title: l10n.kitchenPrintingSectionTitle,
+                            subtitle: l10n.kitchenPrintingSectionHint,
+                            leading: const Icon(Icons.print_outlined),
+                          ),
+                          SizedBox(height: spacing.sm),
+                          PointySettingsSection(
+                            children: [
+                              SwitchListTile(
+                                secondary: const Icon(
+                                  Icons.receipt_long_outlined,
+                                ),
+                                title: Text(l10n.autoPrintKitchenTicketsTitle),
+                                subtitle: Text(
+                                  l10n.autoPrintKitchenTicketsDescription,
+                                ),
+                                value: settings.autoPrintKitchenTickets,
+                                onChanged: isBusy
+                                    ? null
+                                    : (value) => _saveSettings(
+                                        settings,
+                                        autoPrintKitchenTickets: value,
+                                      ),
+                              ),
+                              PointySettingsTile(
+                                icon: Icons.dinner_dining_outlined,
+                                title: l10n.prepStationsSectionTitle,
+                                subtitle: l10n.prepStationsSectionSubtitle,
+                                onTap: isBusy ? null : _openPrepStations,
+                              ),
+                            ],
+                          ),
+                          SizedBox(height: spacing.lg),
+                          PointySectionHeader(
                             title: l10n.workflowsTitle,
                             subtitle: l10n.workflowStagesHint,
                             leading: const Icon(Icons.timeline_outlined),
@@ -228,6 +265,7 @@ class _OperationsSettingsPageState extends State<OperationsSettingsPage> {
     bool? enableProductionOperations,
     bool? enableKitchenOperations,
     bool? enableJobTracking,
+    bool? autoPrintKitchenTickets,
   }) async {
     final saved = await widget.shopSettingsViewModel.updateSettings(
       ShopSettingsDraft(
@@ -237,6 +275,8 @@ class _OperationsSettingsPageState extends State<OperationsSettingsPage> {
         enableOnlineInvoices: settings.enableOnlineInvoices,
         requireOpeningCash: settings.requireOpeningCash,
         autoPrintReceipts: settings.autoPrintReceipts,
+        autoPrintKitchenTickets:
+            autoPrintKitchenTickets ?? settings.autoPrintKitchenTickets,
         allowOverselling: settings.allowOverselling,
         preventSellingAtLoss: settings.preventSellingAtLoss,
         lowStockThreshold: settings.lowStockThreshold,
@@ -288,6 +328,15 @@ class _OperationsSettingsPageState extends State<OperationsSettingsPage> {
                 producesOutput: stage.producesOutput,
               ),
           ],
+    );
+  }
+
+  void _openPrepStations() {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) =>
+            PrepStationsPage(viewModel: widget.prepStationsViewModel),
+      ),
     );
   }
 

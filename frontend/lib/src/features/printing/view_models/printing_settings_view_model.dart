@@ -42,8 +42,12 @@ class PrintingSettingsViewModel extends ChangeNotifier {
     AnalyticsEngine? analyticsEngine,
     Duration statusCheckInterval = const Duration(minutes: 2),
     bool autoLoad = true,
+    PrinterRole role = PrinterRole.posReceipt,
+    int? stationId,
   }) : _analyticsEngine = analyticsEngine,
-       _statusCheckInterval = statusCheckInterval {
+       _statusCheckInterval = statusCheckInterval,
+       _role = role,
+       _stationId = stationId {
     if (autoLoad) {
       loadDefaultConfig();
     }
@@ -52,6 +56,14 @@ class PrintingSettingsViewModel extends ChangeNotifier {
   final PrintingRepository _repository;
   final AnalyticsEngine? _analyticsEngine;
   final Duration _statusCheckInterval;
+
+  /// Which printer this view model configures. Defaults to the POS receipt
+  /// printer; a kitchen target also carries the [PrepStation] id it serves.
+  final PrinterRole _role;
+  final int? _stationId;
+
+  bool get _isKitchenTarget =>
+      _role == PrinterRole.kitchen && _stationId != null;
 
   PrinterConfig _config = PrinterConfig.defaultConfig();
   Timer? _statusTimer;
@@ -106,7 +118,7 @@ class PrintingSettingsViewModel extends ChangeNotifier {
     _hasConfigLoadError = false;
     notifyListeners();
 
-    final result = await _repository.loadDefaultPrinterConfig();
+    final result = await _loadConfigForTarget();
     switch (result) {
       case Ok<PrinterConfig>():
         _config = result.value;
@@ -330,7 +342,9 @@ class PrintingSettingsViewModel extends ChangeNotifier {
     _testOutcome = PrinterTestOutcome.none;
     notifyListeners();
 
-    final result = await _repository.testPrinter(_config);
+    final result = _isKitchenTarget
+        ? await _repository.printKitchenTest(_config)
+        : await _repository.testPrinter(_config);
     _testOutcome = result.isSuccess
         ? PrinterTestOutcome.success
         : PrinterTestOutcome.failed;
@@ -471,12 +485,22 @@ class PrintingSettingsViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<Result<PrinterConfig>> _loadConfigForTarget() async {
+    if (_isKitchenTarget) {
+      final config = await _repository.loadKitchenStationConfig(_stationId!);
+      return Ok(config ?? PrinterConfig.defaultConfig());
+    }
+    return _repository.loadDefaultPrinterConfig();
+  }
+
   Future<void> _saveDefaultConfig() async {
     _isSavingConfig = true;
     _hasConfigSaveError = false;
     notifyListeners();
 
-    final result = await _repository.saveDefaultPrinterConfig(_config);
+    final result = _isKitchenTarget
+        ? await _repository.saveKitchenStationConfig(_stationId!, _config)
+        : await _repository.saveDefaultPrinterConfig(_config);
     _isSavingConfig = false;
     _hasConfigSaveError = result is Error<void>;
     notifyListeners();

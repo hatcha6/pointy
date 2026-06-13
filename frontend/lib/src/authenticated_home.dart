@@ -48,6 +48,7 @@ import 'features/reports/pdf/report_document_builder.dart';
 import 'features/reports/pdf/report_pdf.dart';
 import 'features/reports/views/report_pdf_preview_screen.dart';
 import 'features/reports/views/reports_screen.dart';
+import 'features/settings/view_models/prep_stations_view_model.dart';
 import 'features/settings/view_models/sales_channels_view_model.dart';
 import 'features/settings/view_models/shop_settings_view_model.dart';
 import 'features/settings/views/shop_settings_screen.dart';
@@ -425,6 +426,11 @@ class _AuthenticatedRoutes implements AppNavigation {
           dependencies.operationsRepository,
           analyticsEngine: dependencies.analyticsEngine,
         ),
+        prepStationsViewModel: PrepStationsViewModel(
+          dependencies.prepStationRepository,
+          dependencies.catalogRepository,
+          analyticsEngine: dependencies.analyticsEngine,
+        ),
         attendanceViewModel: dependencies.attendanceViewModel,
         capabilities: capabilities,
         navigation: this,
@@ -488,6 +494,9 @@ class _AuthenticatedRoutes implements AppNavigation {
       DeviceSettingsScreen(
         deviceSettingsViewModel: dependencies.deviceSettingsViewModel,
         printingSettingsViewModel: dependencies.printingSettingsViewModel,
+        printingRepository: dependencies.printingRepository,
+        prepStationRepository: dependencies.prepStationRepository,
+        analyticsEngine: dependencies.analyticsEngine,
         capabilities: capabilities,
         navigation: this,
       ),

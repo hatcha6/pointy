@@ -3034,6 +3034,87 @@ class AppLocalizationsAr extends AppLocalizations {
       'طلبات مطبخ تمر بمراحل التحضير وتخصم المكونات عند الطبخ.';
 
   @override
+  String get kitchenPrintingSectionTitle => 'طباعة المطبخ';
+
+  @override
+  String get kitchenPrintingSectionHint =>
+      'اطبع تذاكر المطبخ تلقائيًا للأصناف المحضّرة عند الدفع، ووجّهها إلى الطابعات حسب الفئة.';
+
+  @override
+  String get autoPrintKitchenTicketsTitle => 'طباعة تذاكر المطبخ تلقائيًا';
+
+  @override
+  String get autoPrintKitchenTicketsDescription =>
+      'عند الدفع، تُطبع تذكرة تحضير لكل محطة معنية بالأصناف المحضّرة.';
+
+  @override
+  String get prepStationsSectionTitle => 'محطات التحضير';
+
+  @override
+  String get prepStationsSectionSubtitle =>
+      'وجّه الأصناف المحضّرة إلى طابعات المحطات حسب الفئة.';
+
+  @override
+  String get prepStationAddButton => 'إضافة محطة';
+
+  @override
+  String get prepStationsLoadError => 'تعذّر تحميل محطات التحضير.';
+
+  @override
+  String get prepStationsEmptyMessage => 'لا توجد محطات تحضير بعد.';
+
+  @override
+  String get prepStationNameLabel => 'اسم المحطة';
+
+  @override
+  String get prepStationCategoriesLabel => 'الفئات الموجّهة';
+
+  @override
+  String get prepStationDefaultLabel =>
+      'المحطة الافتراضية (تستقبل الأصناف غير المصنّفة)';
+
+  @override
+  String get prepStationActiveLabel => 'مفعّلة';
+
+  @override
+  String get prepStationDefaultBadge => 'افتراضية';
+
+  @override
+  String get prepStationInactiveBadge => 'موقوفة';
+
+  @override
+  String get prepStationCategoriesEmpty => 'كل الأصناف المحضّرة غير المصنّفة';
+
+  @override
+  String get prepStationDeleteTitle => 'حذف المحطة؟';
+
+  @override
+  String get prepStationDeleteMessage => 'لن تُطبع تذاكر هذه المحطة بعد الآن.';
+
+  @override
+  String get prepStationSaveError => 'تعذّر حفظ المحطة.';
+
+  @override
+  String get prepStationDeleteError => 'تعذّر حذف المحطة.';
+
+  @override
+  String get kitchenPrintersSectionTitle => 'طابعات المطبخ';
+
+  @override
+  String get kitchenPrintersSectionHint =>
+      'اربط طابعة حرارية بكل محطة تحضير يخدمها هذا الجهاز.';
+
+  @override
+  String get kitchenPrintersNoStations =>
+      'لا توجد محطات تحضير. أضِفها من إعدادات المتجر.';
+
+  @override
+  String get kitchenPrintersLoadError => 'تعذّر تحميل محطات التحضير.';
+
+  @override
+  String get kitchenStationNotConfigured => 'لم تُضبط طابعة لهذه المحطة.';
+
+  @override
   String get enableJobTrackingTitle => 'صفحة تتبع للزبائن';
 
   @override
@@ -4734,6 +4815,18 @@ class AppLocalizationsAr extends AppLocalizations {
   String get removeCartLineTooltip => 'حذف العنصر من السلة';
 
   @override
+  String get cartLineNoteAdd => 'إضافة ملاحظة للمطبخ';
+
+  @override
+  String get cartLineNoteEdit => 'تعديل ملاحظة المطبخ';
+
+  @override
+  String get cartLineNoteDialogTitle => 'ملاحظة للمطبخ';
+
+  @override
+  String get cartLineNoteHint => 'مثال: بدون بصل';
+
+  @override
   String get emptyCart => 'لا توجد عناصر في السلة';
 
   @override
@@ -6301,6 +6394,12 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get cancelButton => 'إلغاء';
+
+  @override
+  String get editButton => 'تعديل';
+
+  @override
+  String get deleteButton => 'حذف';
 
   @override
   String get closeButton => 'إغلاق';

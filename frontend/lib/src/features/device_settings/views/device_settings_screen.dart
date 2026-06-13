@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
+import '../../../core/analytics_engine.dart';
 import '../../../core/authorization.dart';
 import '../../../data/models/device_settings.dart';
+import '../../../data/repositories/prep_station_repository.dart';
+import '../../../data/repositories/printing_repository.dart';
 import '../../../shared/app_navigation_drawer.dart';
 import '../../../shared/authorization_guards.dart';
 import '../../../shared/components/components.dart';
@@ -17,12 +20,18 @@ class DeviceSettingsScreen extends StatelessWidget {
     super.key,
     required this.deviceSettingsViewModel,
     required this.printingSettingsViewModel,
+    required this.printingRepository,
+    required this.prepStationRepository,
+    required this.analyticsEngine,
     required this.capabilities,
     required this.navigation,
   });
 
   final DeviceSettingsViewModel deviceSettingsViewModel;
   final PrintingSettingsViewModel printingSettingsViewModel;
+  final PrintingRepository printingRepository;
+  final PrepStationRepository prepStationRepository;
+  final AnalyticsEngine? analyticsEngine;
   final AuthorizationCapabilities capabilities;
   final AppNavigation navigation;
 
@@ -72,6 +81,9 @@ class DeviceSettingsScreen extends StatelessWidget {
                 child: _DeviceSettingsBody(
                   deviceSettingsViewModel: deviceSettingsViewModel,
                   printingSettingsViewModel: printingSettingsViewModel,
+                  printingRepository: printingRepository,
+                  prepStationRepository: prepStationRepository,
+                  analyticsEngine: analyticsEngine,
                 ),
               ),
             );
@@ -86,10 +98,16 @@ class _DeviceSettingsBody extends StatelessWidget {
   const _DeviceSettingsBody({
     required this.deviceSettingsViewModel,
     required this.printingSettingsViewModel,
+    required this.printingRepository,
+    required this.prepStationRepository,
+    required this.analyticsEngine,
   });
 
   final DeviceSettingsViewModel deviceSettingsViewModel;
   final PrintingSettingsViewModel printingSettingsViewModel;
+  final PrintingRepository printingRepository;
+  final PrepStationRepository prepStationRepository;
+  final AnalyticsEngine? analyticsEngine;
 
   @override
   Widget build(BuildContext context) {
@@ -129,6 +147,31 @@ class _DeviceSettingsBody extends StatelessWidget {
                   SizedBox(height: spacing.md),
                 ],
                 PrintingSettingsPanel(viewModel: printingSettingsViewModel),
+              ],
+            ),
+          ),
+        ),
+        SizedBox(height: spacing.lg),
+        AdaptiveMaxWidth(
+          width: AppContentWidth.form,
+          child: PointyDetailSection(
+            icon: Icons.dinner_dining_outlined,
+            title: l10n.kitchenPrintersSectionTitle,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Padding(
+                  padding: EdgeInsets.only(bottom: spacing.sm),
+                  child: Text(
+                    l10n.kitchenPrintersSectionHint,
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ),
+                KitchenPrintersPanel(
+                  printingRepository: printingRepository,
+                  prepStationRepository: prepStationRepository,
+                  analyticsEngine: analyticsEngine,
+                ),
               ],
             ),
           ),

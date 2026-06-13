@@ -5,7 +5,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
+import '../../../core/analytics_engine.dart';
+import '../../../core/result.dart';
+import '../../../data/models/prep_station.dart';
 import '../../../data/models/printer_config.dart';
+import '../../../data/repositories/prep_station_repository.dart';
+import '../../../data/repositories/printing_repository.dart';
 import '../../../shared/components/components.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../view_models/printing_settings_view_model.dart';
@@ -127,6 +132,200 @@ class PrintingSettingsPanel extends StatelessWidget {
     return showDialog<void>(
       context: context,
       builder: (context) => _PrinterRoleDialog(viewModel: viewModel),
+    );
+  }
+}
+
+/// Lists the shop's prep stations and lets this device bind a thermal printer
+/// to each station it serves, reusing the same endpoint editor as the receipt
+/// printer. A device only prints chits for stations configured here.
+class KitchenPrintersPanel extends StatefulWidget {
+  const KitchenPrintersPanel({
+    super.key,
+    required this.printingRepository,
+    required this.prepStationRepository,
+    this.analyticsEngine,
+  });
+
+  final PrintingRepository printingRepository;
+  final PrepStationRepository prepStationRepository;
+  final AnalyticsEngine? analyticsEngine;
+
+  @override
+  State<KitchenPrintersPanel> createState() => _KitchenPrintersPanelState();
+}
+
+class _KitchenPrintersPanelState extends State<KitchenPrintersPanel> {
+  bool _isLoading = true;
+  bool _hasError = false;
+  List<PrepStation> _stations = const [];
+  Map<int, PrinterConfig> _configs = const {};
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => unawaited(_load()));
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _isLoading = true;
+      _hasError = false;
+    });
+    final stationsResult = await widget.prepStationRepository.loadStations();
+    final configs = await widget.printingRepository
+        .loadKitchenStationConfigs();
+    if (!mounted) {
+      return;
+    }
+    switch (stationsResult) {
+      case Ok<List<PrepStation>>():
+        setState(() {
+          _stations = stationsResult.value
+              .where((station) => station.isActive)
+              .toList(growable: false);
+          _configs = configs;
+          _isLoading = false;
+        });
+      case Error<List<PrepStation>>():
+        setState(() {
+          _hasError = true;
+          _isLoading = false;
+        });
+    }
+  }
+
+  Future<void> _configure(PrepStation station) async {
+    final viewModel = PrintingSettingsViewModel(
+      widget.printingRepository,
+      analyticsEngine: widget.analyticsEngine,
+      role: PrinterRole.kitchen,
+      stationId: station.id,
+    );
+    await showDialog<void>(
+      context: context,
+      builder: (context) => _PrinterRoleDialog(viewModel: viewModel),
+    );
+    viewModel.dispose();
+    await _load();
+  }
+
+  Future<void> _test(PrepStation station) async {
+    final config = _configs[station.id];
+    if (config == null) {
+      return;
+    }
+    final l10n = AppLocalizations.of(context)!;
+    final messenger = ScaffoldMessenger.of(context);
+    final result = await widget.printingRepository.printKitchenTest(config);
+    if (!mounted) {
+      return;
+    }
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          result.isSuccess ? l10n.printerTestSuccess : l10n.printerTestFailure,
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final spacing = AdaptiveSpacing.of(context);
+
+    if (_isLoading) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 24),
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+    if (_hasError) {
+      return PointyInlineMessage.error(message: l10n.kitchenPrintersLoadError);
+    }
+    if (_stations.isEmpty) {
+      return PointyInlineMessage(
+        message: l10n.kitchenPrintersNoStations,
+        icon: Icons.info_outline,
+        compact: true,
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (var index = 0; index < _stations.length; index += 1) ...[
+          if (index > 0) SizedBox(height: spacing.sm),
+          _KitchenStationPrinterTile(
+            station: _stations[index],
+            config: _configs[_stations[index].id],
+            onConfigure: () => _configure(_stations[index]),
+            onTest: _configs[_stations[index].id] == null
+                ? null
+                : () => _test(_stations[index]),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _KitchenStationPrinterTile extends StatelessWidget {
+  const _KitchenStationPrinterTile({
+    required this.station,
+    required this.config,
+    required this.onConfigure,
+    required this.onTest,
+  });
+
+  final PrepStation station;
+  final PrinterConfig? config;
+  final VoidCallback onConfigure;
+  final VoidCallback? onTest;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final endpoint = config?.endpoint;
+    final summary = endpoint == null
+        ? l10n.kitchenStationNotConfigured
+        : _printerLabel(endpoint, l10n);
+
+    return Card(
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: Icon(
+                endpoint == null
+                    ? Icons.print_disabled_outlined
+                    : _transportIcon(endpoint.kind),
+              ),
+              title: Text(station.name),
+              subtitle: Text(summary),
+            ),
+            ResponsiveActionBar(
+              actions: [
+                FilledButton.icon(
+                  onPressed: onConfigure,
+                  icon: const Icon(Icons.edit_outlined),
+                  label: Text(l10n.configurePrinterRoleButton),
+                ),
+                OutlinedButton.icon(
+                  onPressed: onTest,
+                  icon: const Icon(Icons.print_outlined),
+                  label: Text(l10n.testPrinterButton),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

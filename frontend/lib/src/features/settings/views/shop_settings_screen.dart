@@ -20,6 +20,7 @@ import '../../../shared/shell/shell.dart';
 import '../../attendance/view_models/attendance_view_model.dart';
 import '../../attendance/views/attendance_settings_page.dart';
 import '../../operations/view_models/workflows_view_model.dart';
+import '../view_models/prep_stations_view_model.dart';
 import '../view_models/sales_channels_view_model.dart';
 import '../view_models/shop_settings_view_model.dart';
 import 'operations_settings_page.dart';
@@ -34,6 +35,7 @@ class ShopSettingsScreen extends StatelessWidget {
     required this.viewModel,
     required this.salesChannelsViewModel,
     required this.workflowsViewModel,
+    required this.prepStationsViewModel,
     required this.attendanceViewModel,
     required this.capabilities,
     required this.navigation,
@@ -42,6 +44,7 @@ class ShopSettingsScreen extends StatelessWidget {
   final ShopSettingsViewModel viewModel;
   final SalesChannelsViewModel salesChannelsViewModel;
   final WorkflowsViewModel workflowsViewModel;
+  final PrepStationsViewModel prepStationsViewModel;
   final AttendanceViewModel attendanceViewModel;
   final AuthorizationCapabilities capabilities;
   final AppNavigation navigation;
@@ -81,6 +84,7 @@ class ShopSettingsScreen extends StatelessWidget {
               viewModel: viewModel,
               salesChannelsViewModel: salesChannelsViewModel,
               workflowsViewModel: workflowsViewModel,
+              prepStationsViewModel: prepStationsViewModel,
               attendanceViewModel: attendanceViewModel,
               canManageSalesChannels: capabilities.canManageSalesChannels,
               canManageWorkflows: capabilities.canManageWorkflows,
@@ -98,6 +102,7 @@ class _ShopSettingsBody extends StatelessWidget {
     required this.viewModel,
     required this.salesChannelsViewModel,
     required this.workflowsViewModel,
+    required this.prepStationsViewModel,
     required this.attendanceViewModel,
     required this.canManageSalesChannels,
     required this.canManageWorkflows,
@@ -107,6 +112,7 @@ class _ShopSettingsBody extends StatelessWidget {
   final ShopSettingsViewModel viewModel;
   final SalesChannelsViewModel salesChannelsViewModel;
   final WorkflowsViewModel workflowsViewModel;
+  final PrepStationsViewModel prepStationsViewModel;
   final AttendanceViewModel attendanceViewModel;
   final bool canManageSalesChannels;
   final bool canManageWorkflows;
@@ -141,6 +147,7 @@ class _ShopSettingsBody extends StatelessWidget {
       viewModel: viewModel,
       salesChannelsViewModel: salesChannelsViewModel,
       workflowsViewModel: workflowsViewModel,
+      prepStationsViewModel: prepStationsViewModel,
       attendanceViewModel: attendanceViewModel,
       canManageSalesChannels: canManageSalesChannels,
       canManageWorkflows: canManageWorkflows,
@@ -155,6 +162,7 @@ class _ShopSettingsForm extends StatefulWidget {
     required this.viewModel,
     required this.salesChannelsViewModel,
     required this.workflowsViewModel,
+    required this.prepStationsViewModel,
     required this.attendanceViewModel,
     required this.canManageSalesChannels,
     required this.canManageWorkflows,
@@ -165,6 +173,7 @@ class _ShopSettingsForm extends StatefulWidget {
   final ShopSettingsViewModel viewModel;
   final SalesChannelsViewModel salesChannelsViewModel;
   final WorkflowsViewModel workflowsViewModel;
+  final PrepStationsViewModel prepStationsViewModel;
   final AttendanceViewModel attendanceViewModel;
   final bool canManageSalesChannels;
   final bool canManageWorkflows;
@@ -1142,6 +1151,7 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
         builder: (routeContext) => OperationsSettingsPage(
           shopSettingsViewModel: widget.viewModel,
           workflowsViewModel: widget.workflowsViewModel,
+          prepStationsViewModel: widget.prepStationsViewModel,
         ),
       ),
     );

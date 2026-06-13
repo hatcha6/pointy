@@ -11,6 +11,7 @@ class DeviceSettingsStorageService {
   static const _deviceUsageModeKey = 'device_usage_mode';
   static const _defaultPrinterConfigKey = 'default_printer_config';
   static const _printerRoleConfigsKey = 'printer_role_configs';
+  static const _kitchenStationConfigsKey = 'kitchen_station_configs';
 
   Future<DeviceUsageMode?> loadDeviceUsageMode() async {
     final preferences = await SharedPreferences.getInstance();
@@ -95,5 +96,58 @@ class DeviceSettingsStorageService {
       return Map<String, Object?>.of(decoded);
     }
     return <String, Object?>{};
+  }
+
+  /// The kitchen printer(s) this device is responsible for, keyed by prep
+  /// station id. A device "serves" a station only when it has a saved config
+  /// here; otherwise kitchen chits for that station stay queued for another
+  /// device. Stored as `{ "<stationId>": <PrinterConfig json> }`.
+  Future<Map<int, PrinterConfig>> loadKitchenStationConfigs() async {
+    final preferences = await SharedPreferences.getInstance();
+    final decoded = _decodeRoleConfigs(
+      preferences.getString(_kitchenStationConfigsKey),
+    );
+    final configs = <int, PrinterConfig>{};
+    decoded.forEach((key, value) {
+      final stationId = int.tryParse(key);
+      if (stationId != null && value is Map<String, Object?>) {
+        configs[stationId] = PrinterConfig.fromJson(value);
+      }
+    });
+    return configs;
+  }
+
+  Future<PrinterConfig?> loadKitchenStationConfig(int stationId) async {
+    final configs = await loadKitchenStationConfigs();
+    return configs[stationId];
+  }
+
+  Future<void> saveKitchenStationConfig(
+    int stationId,
+    PrinterConfig config,
+  ) async {
+    final preferences = await SharedPreferences.getInstance();
+    final stationConfigs = _decodeRoleConfigs(
+      preferences.getString(_kitchenStationConfigsKey),
+    );
+    stationConfigs['$stationId'] = config.toJson();
+    await preferences.setString(
+      _kitchenStationConfigsKey,
+      jsonEncode(stationConfigs),
+    );
+  }
+
+  Future<void> removeKitchenStationConfig(int stationId) async {
+    final preferences = await SharedPreferences.getInstance();
+    final stationConfigs = _decodeRoleConfigs(
+      preferences.getString(_kitchenStationConfigsKey),
+    );
+    if (stationConfigs.remove('$stationId') == null) {
+      return;
+    }
+    await preferences.setString(
+      _kitchenStationConfigsKey,
+      jsonEncode(stationConfigs),
+    );
   }
 }

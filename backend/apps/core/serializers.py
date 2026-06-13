@@ -269,6 +269,7 @@ class ShopSettingsSerializer(serializers.ModelSerializer):
             "enable_job_tracking",
             "require_opening_cash",
             "auto_print_receipts",
+            "auto_print_kitchen_tickets",
             "allow_overselling",
             "prevent_selling_at_loss",
             "low_stock_threshold",

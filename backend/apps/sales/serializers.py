@@ -252,6 +252,7 @@ class OrderLineSerializer(serializers.ModelSerializer):
             "line_total",
             "line_cost",
             "line_profit",
+            "notes",
         ]
         read_only_fields = ("unit_price", "unit_cost", "discount_total")
 
@@ -539,6 +540,13 @@ class CheckoutLineSerializer(serializers.Serializer):
         decimal_places=3,
         min_value=Decimal("0.001"),
         coerce_to_string=False,
+    )
+    notes = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        max_length=255,
+        trim_whitespace=True,
+        default="",
     )
 
     def validate(self, attrs):

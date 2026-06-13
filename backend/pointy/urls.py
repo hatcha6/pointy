@@ -66,6 +66,7 @@ from apps.inventory.views import StockItemViewSet, StockMovementViewSet
 from apps.notifications.views import BusinessNotificationViewSet
 from apps.payments.views import PaymentViewSet
 from apps.printing.views import (
+    PrepStationViewSet,
     PrinterProfileViewSet,
     PrintAgentViewSet,
     PrintAuditEventViewSet,
@@ -124,6 +125,7 @@ router.register("payments", PaymentViewSet)
 router.register("print-templates", PrintTemplateViewSet)
 router.register("print-template-versions", PrintTemplateVersionViewSet)
 router.register("printer-profiles", PrinterProfileViewSet)
+router.register("prep-stations", PrepStationViewSet)
 router.register("print-agents", PrintAgentViewSet)
 router.register("print-audit-events", PrintAuditEventViewSet)
 router.register("print-jobs", PrintJobViewSet)

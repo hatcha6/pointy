@@ -1,3 +1,4 @@
+import logging
 from datetime import timedelta
 from decimal import Decimal
 from uuid import uuid4
@@ -23,6 +24,7 @@ from apps.discounts.services import rounding_metadata_payload
 from apps.sales.models import Order
 from apps.sales.public_invoices import public_invoice_url_for_order
 from .models import (
+    PrepStation,
     PrintAgent,
     PrintAuditEvent,
     PrinterProfile,
@@ -33,7 +35,10 @@ from .models import (
 )
 
 
+logger = logging.getLogger(__name__)
+
 DEFAULT_RECEIPT_TEMPLATE_SLUG = "receipt"
+DEFAULT_KITCHEN_TEMPLATE_SLUG = "kitchen-ticket"
 DEFAULT_PRINT_JOB_LEASE_SECONDS = 300
 
 
@@ -587,3 +592,198 @@ def enqueue_manual_receipt_reprint(order, *, user=None):
         message="Receipt reprint queued.",
     )
     return job
+
+
+def get_default_kitchen_template_version():
+    template, _ = PrintTemplate.objects.get_or_create(
+        slug=DEFAULT_KITCHEN_TEMPLATE_SLUG,
+        defaults={
+            "name": "Kitchen ticket",
+            "template_type": PrintTemplate.Type.KITCHEN,
+            "description": "Default kitchen ticket template.",
+        },
+    )
+    if template.current_version_id:
+        return template.current_version
+
+    version = (
+        template.versions.filter(status=PrintTemplateVersion.Status.PUBLISHED)
+        .order_by("-version_number")
+        .first()
+    )
+    if version is None:
+        version, _ = PrintTemplateVersion.objects.get_or_create(
+            template=template,
+            version_number=1,
+            defaults={
+                "status": PrintTemplateVersion.Status.PUBLISHED,
+                "published_at": timezone.now(),
+                "content": "{{ station.name }}\n{{ order.receipt_number }}",
+                "schema": {"kind": "kitchen", "version": 1},
+            },
+        )
+    template.current_version = version
+    template.save(update_fields=["current_version", "updated_at"])
+    return version
+
+
+def kitchen_prepared_lines(order):
+    """The made-to-order lines on an order, in order. A line is "prepared" when
+    its product is flagged is_prepared (the same filter the kitchen board uses);
+    retail/service lines never reach the kitchen."""
+    lines = (
+        order.lines.select_related("variant", "variant__product")
+        .prefetch_related(
+            "variant__product__categories",
+            "variant__option_values__option",
+        )
+        .all()
+    )
+    return [line for line in lines if line.variant.product.is_prepared]
+
+
+def resolve_prep_stations_for_order(order):
+    """Group an order's prepared lines by the station that should print them.
+
+    Returns (routed, prepared) where ``routed`` maps each PrepStation to its
+    lines and ``prepared`` is every made-to-order line. A line routes to the
+    first active station that owns one of its product's categories; anything
+    unmatched falls to the single default station. If a line matches no station
+    and there is no default, it is intentionally left out of ``routed`` (and
+    therefore surfaced via ``prepared``) rather than silently dropped.
+    """
+    prepared = kitchen_prepared_lines(order)
+    if not prepared:
+        return {}, prepared
+
+    stations = list(
+        PrepStation.objects.filter(is_active=True).prefetch_related("categories")
+    )
+    station_by_category = {}
+    default_station = None
+    for station in stations:
+        if station.is_default and default_station is None:
+            default_station = station
+        for category in station.categories.all():
+            station_by_category.setdefault(category.id, station)
+
+    routed = {}
+    for line in prepared:
+        category_ids = [
+            category.id for category in line.variant.product.categories.all()
+        ]
+        target = next(
+            (
+                station_by_category[category_id]
+                for category_id in category_ids
+                if category_id in station_by_category
+            ),
+            None,
+        )
+        if target is None:
+            target = default_station
+        if target is None:
+            continue
+        routed.setdefault(target, []).append(line)
+    return routed, prepared
+
+
+def kitchen_line_payload(line):
+    variant = line.variant
+    return {
+        "id": line.pk,
+        "name": variant.full_name,
+        "parent_product_name": variant.product.name,
+        "quantity": float(line.quantity),
+        "notes": line.notes,
+        "option_values": [
+            {
+                "option_name": option_value.option.name,
+                "value_name": option_value.name,
+            }
+            for option_value in variant.option_values.all()
+        ],
+    }
+
+
+def build_kitchen_ticket_payload(order, station, lines):
+    """A kitchen chit payload: what to cook, never what to charge. Carries no
+    money — only the station, order reference, time, and the prepared lines with
+    their options and free-text note. ``kind`` is the encoder discriminator."""
+    shop_settings = ShopSettings.load()
+    register = order.register_session
+    return {
+        "kind": "kitchen",
+        "shop": {"name": shop_settings.shop_name},
+        "station": {"id": station.pk, "name": station.name},
+        "order": {
+            "id": order.pk,
+            "receipt_number": order.receipt_number,
+            "document_title": "تذكرة المطبخ",
+            "created_at": order.created_at.isoformat(),
+            "customer_name": order.customer.full_name if order.customer_id else "",
+            "register_session": (
+                {
+                    "session_number": order.register_session.session_number,
+                    "owner_key": order.register_session.owner_key,
+                }
+                if register is not None
+                else None
+            ),
+            "lines": [kitchen_line_payload(line) for line in lines],
+        },
+    }
+
+
+def enqueue_kitchen_print_jobs(order_id):
+    """Enqueue one kitchen ticket per routed station after payment (auto-print).
+
+    Idempotent per (order, station) so re-checkout or retries never double-fire
+    a chit. Each job is tagged with its station's printer_profile so the right
+    device claims it (claim_next_print_job filters by profile). Like the receipt
+    enqueue, this only fires when the shop has opted into auto kitchen tickets.
+    """
+    order = (
+        Order.objects.select_related("register_session", "customer").get(pk=order_id)
+    )
+    if order.status != Order.Status.PAID:
+        return []
+
+    shop_settings = ShopSettings.load()
+    if not shop_settings.auto_print_kitchen_tickets:
+        return []
+
+    routed, prepared = resolve_prep_stations_for_order(order)
+    if prepared and not routed:
+        logger.warning(
+            "Order %s has %d made-to-order line(s) but no prep station routed "
+            "them; mark a station as default to avoid lost kitchen tickets.",
+            order.pk,
+            len(prepared),
+        )
+    if not routed:
+        return []
+
+    template_version = get_default_kitchen_template_version()
+    jobs = []
+    for station, lines in routed.items():
+        job, created = PrintJob.objects.get_or_create(
+            idempotency_key=f"kitchen:{order.pk}:{station.pk}",
+            defaults={
+                "job_type": PrintJob.Type.KITCHEN,
+                "order": order,
+                "prep_station": station,
+                "template_version": template_version,
+                "printer_profile": station.printer_profile,
+                "priority": station.priority,
+                "payload": build_kitchen_ticket_payload(order, station, lines),
+            },
+        )
+        if created:
+            create_job_event(
+                job,
+                PrintJobEvent.Type.CREATED,
+                message=f"Kitchen ticket queued for {station.name}.",
+            )
+        jobs.append(job)
+    return jobs

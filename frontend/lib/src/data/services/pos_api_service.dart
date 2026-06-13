@@ -40,6 +40,7 @@ import '../models/relay_pairing.dart';
 import '../models/report_run.dart';
 import '../models/sale_order.dart';
 import '../models/sale_order_page.dart';
+import '../models/prep_station.dart';
 import '../models/sales_channel.dart';
 import '../models/shop_settings.dart';
 import '../models/stock_item.dart';
@@ -76,6 +77,7 @@ import 'register_session_api_client.dart';
 import 'relay_api_client.dart';
 import 'reports_api_client.dart';
 import 'sales_api_client.dart';
+import 'prep_station_api_client.dart';
 import 'sales_channel_api_client.dart';
 import 'shop_settings_api_client.dart';
 import 'user_api_client.dart';
@@ -110,6 +112,7 @@ class PosApiService {
     _reports = ReportsApiClient(_session);
     _sales = SalesApiClient(_session);
     _salesChannels = SalesChannelApiClient(_session);
+    _prepStations = PrepStationApiClient(_session);
     _purchasing = PurchasingApiClient(_session);
     _printing = PrintingApiClient(_session);
   }
@@ -137,6 +140,7 @@ class PosApiService {
   late final ReportsApiClient _reports;
   late final SalesApiClient _sales;
   late final SalesChannelApiClient _salesChannels;
+  late final PrepStationApiClient _prepStations;
   late final PurchasingApiClient _purchasing;
   late final PrintingApiClient _printing;
 
@@ -965,6 +969,25 @@ class PosApiService {
 
   Future<SalesChannelKeyGrant> rotateSalesChannelKey(int channelId) {
     return _salesChannels.rotateSalesChannelKey(channelId);
+  }
+
+  Future<PrepStationPage> fetchPrepStations({int page = 1}) {
+    return _prepStations.fetchPrepStations(page: page);
+  }
+
+  Future<PrepStation> createPrepStation(PrepStationDraft draft) {
+    return _prepStations.createPrepStation(draft);
+  }
+
+  Future<PrepStation> updatePrepStation(
+    int stationId,
+    Map<String, Object?> changes,
+  ) {
+    return _prepStations.updatePrepStation(stationId, changes);
+  }
+
+  Future<void> deletePrepStation(int stationId) {
+    return _prepStations.deletePrepStation(stationId);
   }
 
   Future<PrintJob> requestSaleReprint(int saleOrderId) {

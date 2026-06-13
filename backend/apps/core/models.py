@@ -56,6 +56,7 @@ class ShopSettings(TimeStampedModel):
     enable_job_tracking = models.BooleanField(default=False)
     require_opening_cash = models.BooleanField(default=True)
     auto_print_receipts = models.BooleanField(default=False)
+    auto_print_kitchen_tickets = models.BooleanField(default=False)
     allow_overselling = models.BooleanField(default=False)
     prevent_selling_at_loss = models.BooleanField(default=True)
     low_stock_threshold = models.PositiveIntegerField(default=5)

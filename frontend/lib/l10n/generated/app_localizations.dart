@@ -5367,6 +5367,156 @@ abstract class AppLocalizations {
   /// **'طلبات مطبخ تمر بمراحل التحضير وتخصم المكونات عند الطبخ.'**
   String get enableKitchenOperationsDescription;
 
+  /// No description provided for @kitchenPrintingSectionTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'طباعة المطبخ'**
+  String get kitchenPrintingSectionTitle;
+
+  /// No description provided for @kitchenPrintingSectionHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'اطبع تذاكر المطبخ تلقائيًا للأصناف المحضّرة عند الدفع، ووجّهها إلى الطابعات حسب الفئة.'**
+  String get kitchenPrintingSectionHint;
+
+  /// No description provided for @autoPrintKitchenTicketsTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'طباعة تذاكر المطبخ تلقائيًا'**
+  String get autoPrintKitchenTicketsTitle;
+
+  /// No description provided for @autoPrintKitchenTicketsDescription.
+  ///
+  /// In ar, this message translates to:
+  /// **'عند الدفع، تُطبع تذكرة تحضير لكل محطة معنية بالأصناف المحضّرة.'**
+  String get autoPrintKitchenTicketsDescription;
+
+  /// No description provided for @prepStationsSectionTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'محطات التحضير'**
+  String get prepStationsSectionTitle;
+
+  /// No description provided for @prepStationsSectionSubtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'وجّه الأصناف المحضّرة إلى طابعات المحطات حسب الفئة.'**
+  String get prepStationsSectionSubtitle;
+
+  /// No description provided for @prepStationAddButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'إضافة محطة'**
+  String get prepStationAddButton;
+
+  /// No description provided for @prepStationsLoadError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر تحميل محطات التحضير.'**
+  String get prepStationsLoadError;
+
+  /// No description provided for @prepStationsEmptyMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد محطات تحضير بعد.'**
+  String get prepStationsEmptyMessage;
+
+  /// No description provided for @prepStationNameLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'اسم المحطة'**
+  String get prepStationNameLabel;
+
+  /// No description provided for @prepStationCategoriesLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الفئات الموجّهة'**
+  String get prepStationCategoriesLabel;
+
+  /// No description provided for @prepStationDefaultLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'المحطة الافتراضية (تستقبل الأصناف غير المصنّفة)'**
+  String get prepStationDefaultLabel;
+
+  /// No description provided for @prepStationActiveLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'مفعّلة'**
+  String get prepStationActiveLabel;
+
+  /// No description provided for @prepStationDefaultBadge.
+  ///
+  /// In ar, this message translates to:
+  /// **'افتراضية'**
+  String get prepStationDefaultBadge;
+
+  /// No description provided for @prepStationInactiveBadge.
+  ///
+  /// In ar, this message translates to:
+  /// **'موقوفة'**
+  String get prepStationInactiveBadge;
+
+  /// No description provided for @prepStationCategoriesEmpty.
+  ///
+  /// In ar, this message translates to:
+  /// **'كل الأصناف المحضّرة غير المصنّفة'**
+  String get prepStationCategoriesEmpty;
+
+  /// No description provided for @prepStationDeleteTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'حذف المحطة؟'**
+  String get prepStationDeleteTitle;
+
+  /// No description provided for @prepStationDeleteMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'لن تُطبع تذاكر هذه المحطة بعد الآن.'**
+  String get prepStationDeleteMessage;
+
+  /// No description provided for @prepStationSaveError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر حفظ المحطة.'**
+  String get prepStationSaveError;
+
+  /// No description provided for @prepStationDeleteError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر حذف المحطة.'**
+  String get prepStationDeleteError;
+
+  /// No description provided for @kitchenPrintersSectionTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'طابعات المطبخ'**
+  String get kitchenPrintersSectionTitle;
+
+  /// No description provided for @kitchenPrintersSectionHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'اربط طابعة حرارية بكل محطة تحضير يخدمها هذا الجهاز.'**
+  String get kitchenPrintersSectionHint;
+
+  /// No description provided for @kitchenPrintersNoStations.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد محطات تحضير. أضِفها من إعدادات المتجر.'**
+  String get kitchenPrintersNoStations;
+
+  /// No description provided for @kitchenPrintersLoadError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر تحميل محطات التحضير.'**
+  String get kitchenPrintersLoadError;
+
+  /// No description provided for @kitchenStationNotConfigured.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم تُضبط طابعة لهذه المحطة.'**
+  String get kitchenStationNotConfigured;
+
   /// No description provided for @enableJobTrackingTitle.
   ///
   /// In ar, this message translates to:
@@ -8367,6 +8517,30 @@ abstract class AppLocalizations {
   /// **'حذف العنصر من السلة'**
   String get removeCartLineTooltip;
 
+  /// No description provided for @cartLineNoteAdd.
+  ///
+  /// In ar, this message translates to:
+  /// **'إضافة ملاحظة للمطبخ'**
+  String get cartLineNoteAdd;
+
+  /// No description provided for @cartLineNoteEdit.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعديل ملاحظة المطبخ'**
+  String get cartLineNoteEdit;
+
+  /// No description provided for @cartLineNoteDialogTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'ملاحظة للمطبخ'**
+  String get cartLineNoteDialogTitle;
+
+  /// No description provided for @cartLineNoteHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'مثال: بدون بصل'**
+  String get cartLineNoteHint;
+
   /// No description provided for @emptyCart.
   ///
   /// In ar, this message translates to:
@@ -10932,6 +11106,18 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'إلغاء'**
   String get cancelButton;
+
+  /// No description provided for @editButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعديل'**
+  String get editButton;
+
+  /// No description provided for @deleteButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'حذف'**
+  String get deleteButton;
 
   /// No description provided for @closeButton.
   ///

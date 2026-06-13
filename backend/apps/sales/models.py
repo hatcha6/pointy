@@ -266,6 +266,9 @@ class OrderLine(TimeStampedModel):
     unit_price = models.DecimalField(max_digits=10, decimal_places=2)
     unit_cost = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     discount_total = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    # Free-text kitchen instruction for a single line (e.g. "no onions").
+    # Short by design so it never blows out a thermal kitchen chit.
+    notes = models.CharField(max_length=255, blank=True, default="")
 
     class Meta:
         ordering = ["created_at"]

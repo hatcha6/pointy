@@ -12,7 +12,7 @@ from rest_framework import status
 from rest_framework.test import APIClient
 
 from apps.attachments.models import Attachment, StorageVolume
-from apps.catalog.models import ProductVariant
+from apps.catalog.models import ProductCategory, ProductVariant
 from apps.catalog.testing import create_product_with_default_variant
 from apps.core.models import RelayInstallation, ShopSettings
 from apps.core.roles import CASHIER_GROUP, MANAGER_GROUP, ensure_role_groups
@@ -20,8 +20,10 @@ from apps.discounts.models import DiscountRule
 from apps.inventory.models import StockItem
 from apps.payments.models import Payment
 from apps.purchasing.models import PurchaseOrder, Supplier
-from apps.sales.models import Order
+from apps.sales.models import Order, OrderLine
 from .models import (
+    PrepStation,
+    PrinterProfile,
     PrintAgent,
     PrintAuditEvent,
     PrintJob,
@@ -29,7 +31,15 @@ from .models import (
     PrintTemplate,
     PrintTemplateVersion,
 )
-from .services import enqueue_receipt_print_job, publish_template_version
+from .services import (
+    build_kitchen_ticket_payload,
+    claim_next_print_job,
+    enqueue_kitchen_print_jobs,
+    enqueue_receipt_print_job,
+    kitchen_prepared_lines,
+    publish_template_version,
+    resolve_prep_stations_for_order,
+)
 
 
 class PrintingTestMixin:
@@ -792,3 +802,363 @@ class PrintingPermissionTests(PrintingTestMixin, TestCase):
         self.assertTrue(self.cashier.has_perm("printing.change_printjob"))
         self.assertFalse(self.cashier.has_perm("printing.add_printtemplate"))
         self.assertTrue(self.manager.has_perm("printing.add_printtemplate"))
+
+
+class KitchenTicketServiceTests(TestCase):
+    def setUp(self):
+        ShopSettings.load()
+        ShopSettings.objects.filter(pk=1).update(auto_print_kitchen_tickets=True)
+
+    def _category(self, name):
+        return ProductCategory.objects.create(name=name)
+
+    def _profile(self, name, printer_type=PrinterProfile.Type.ESCPOS):
+        return PrinterProfile.objects.create(name=name, printer_type=printer_type)
+
+    def _prepared_variant(self, *, name, sku, categories=()):
+        product = create_product_with_default_variant(
+            name=name, sku=sku, unit_price=Decimal("5.00")
+        )
+        product.is_prepared = True
+        product.save(update_fields=["is_prepared"])
+        for category in categories:
+            product.categories.add(category)
+        return product.default_variant
+
+    def _retail_variant(self, *, name, sku):
+        product = create_product_with_default_variant(
+            name=name, sku=sku, unit_price=Decimal("2.00")
+        )
+        return product.default_variant
+
+    def _station(self, *, name, profile=None, categories=(), is_default=False):
+        station = PrepStation.objects.create(
+            name=name, printer_profile=profile, is_default=is_default
+        )
+        for category in categories:
+            station.categories.add(category)
+        return station
+
+    def _paid_order(self, lines):
+        order = Order.objects.create(status=Order.Status.PAID)
+        for variant, quantity, notes in lines:
+            OrderLine.objects.create(
+                order=order,
+                variant=variant,
+                quantity=Decimal(quantity),
+                unit_price=variant.unit_price,
+                notes=notes,
+            )
+        return order
+
+    def test_kitchen_payload_omits_money_and_carries_notes_and_station(self):
+        variant = self._prepared_variant(name="برجر", sku="BRG-1")
+        station = self._station(name="الشواية")
+        order = self._paid_order([(variant, "2", "بدون بصل")])
+
+        payload = build_kitchen_ticket_payload(
+            order, station, kitchen_prepared_lines(order)
+        )
+
+        self.assertEqual(payload["kind"], "kitchen")
+        self.assertEqual(payload["station"]["name"], "الشواية")
+        order_payload = payload["order"]
+        self.assertNotIn("total", order_payload)
+        self.assertNotIn("subtotal", order_payload)
+        line = order_payload["lines"][0]
+        self.assertEqual(line["quantity"], 2.0)
+        self.assertEqual(line["notes"], "بدون بصل")
+        self.assertNotIn("unit_price", line)
+        self.assertNotIn("line_total", line)
+
+    def test_routing_uses_categories_with_default_catch_all(self):
+        food = self._category("طعام")
+        drinks = self._category("مشروبات")
+        grill = self._station(
+            name="الشواية", categories=[food], is_default=True
+        )
+        bar = self._station(name="البار", categories=[drinks])
+        burger = self._prepared_variant(name="برجر", sku="BRG-2", categories=[food])
+        juice = self._prepared_variant(name="عصير", sku="JCE-1", categories=[drinks])
+        special = self._prepared_variant(name="طبق اليوم", sku="SPC-1")  # uncategorized
+        bottle = self._retail_variant(name="ماء", sku="WTR-1")  # not prepared
+        order = self._paid_order(
+            [
+                (burger, "1", ""),
+                (juice, "1", ""),
+                (special, "1", ""),
+                (bottle, "3", ""),
+            ]
+        )
+
+        routed, prepared = resolve_prep_stations_for_order(order)
+
+        self.assertEqual(len(prepared), 3)  # bottle (retail) excluded
+        self.assertEqual(
+            {line.variant_id for line in routed[grill]},
+            {burger.id, special.id},  # special falls to the default station
+        )
+        self.assertEqual(
+            {line.variant_id for line in routed[bar]}, {juice.id}
+        )
+
+    def test_unrouted_prepared_lines_surface_when_no_default_station(self):
+        food = self._category("طعام")
+        drinks = self._category("مشروبات")
+        self._station(name="البار", categories=[drinks])  # not default
+        burger = self._prepared_variant(name="برجر", sku="BRG-3", categories=[food])
+        order = self._paid_order([(burger, "1", "")])
+
+        routed, prepared = resolve_prep_stations_for_order(order)
+
+        self.assertEqual(len(prepared), 1)
+        self.assertEqual(routed, {})  # surfaced via `prepared`, never silently dropped
+
+    def test_enqueue_creates_one_job_per_station_tagged_with_profile(self):
+        food = self._category("طعام")
+        drinks = self._category("مشروبات")
+        grill_profile = self._profile("Grill printer")
+        bar_profile = self._profile("Bar printer")
+        grill = self._station(
+            name="الشواية", profile=grill_profile, categories=[food], is_default=True
+        )
+        bar = self._station(name="البار", profile=bar_profile, categories=[drinks])
+        burger = self._prepared_variant(name="برجر", sku="BRG-4", categories=[food])
+        juice = self._prepared_variant(name="عصير", sku="JCE-2", categories=[drinks])
+        order = self._paid_order([(burger, "1", ""), (juice, "2", "")])
+
+        jobs = enqueue_kitchen_print_jobs(order.pk)
+
+        self.assertEqual(len(jobs), 2)
+        by_station = {job.prep_station_id: job for job in jobs}
+        self.assertEqual(by_station[grill.id].printer_profile_id, grill_profile.id)
+        self.assertEqual(by_station[grill.id].job_type, PrintJob.Type.KITCHEN)
+        self.assertEqual(
+            by_station[grill.id].idempotency_key, f"kitchen:{order.pk}:{grill.id}"
+        )
+        self.assertEqual(by_station[bar.id].printer_profile_id, bar_profile.id)
+
+        again = enqueue_kitchen_print_jobs(order.pk)  # idempotent
+        self.assertEqual(len(again), 2)
+        self.assertEqual(
+            PrintJob.objects.filter(job_type=PrintJob.Type.KITCHEN).count(), 2
+        )
+
+    def test_enqueue_noop_when_setting_disabled(self):
+        ShopSettings.objects.filter(pk=1).update(auto_print_kitchen_tickets=False)
+        food = self._category("طعام")
+        self._station(name="الشواية", categories=[food], is_default=True)
+        burger = self._prepared_variant(name="برجر", sku="BRG-5", categories=[food])
+        order = self._paid_order([(burger, "1", "")])
+
+        self.assertEqual(enqueue_kitchen_print_jobs(order.pk), [])
+        self.assertFalse(
+            PrintJob.objects.filter(job_type=PrintJob.Type.KITCHEN).exists()
+        )
+
+    def test_enqueue_returns_empty_without_prepared_lines(self):
+        self._station(name="الشواية", is_default=True)
+        bottle = self._retail_variant(name="ماء", sku="WTR-2")
+        order = self._paid_order([(bottle, "1", "")])
+
+        self.assertEqual(enqueue_kitchen_print_jobs(order.pk), [])
+
+    def test_claim_next_respects_station_printer_profile(self):
+        food = self._category("طعام")
+        grill_profile = self._profile("Grill printer")
+        bar_profile = self._profile("Bar printer")
+        self._station(
+            name="الشواية", profile=grill_profile, categories=[food], is_default=True
+        )
+        burger = self._prepared_variant(name="برجر", sku="BRG-6", categories=[food])
+        order = self._paid_order([(burger, "1", "")])
+        enqueue_kitchen_print_jobs(order.pk)
+
+        bar_agent = PrintAgent.objects.create(
+            name="Bar device", identifier="bar-device", printer_profile=bar_profile
+        )
+        self.assertIsNone(claim_next_print_job(bar_agent))
+
+        grill_agent = PrintAgent.objects.create(
+            name="Grill device",
+            identifier="grill-device",
+            printer_profile=grill_profile,
+        )
+        claimed = claim_next_print_job(grill_agent)
+        self.assertIsNotNone(claimed)
+        self.assertEqual(claimed.printer_profile_id, grill_profile.id)
+
+
+class KitchenCheckoutTests(PrintingTestMixin, TestCase):
+    def setUp(self):
+        super().setUp()
+        ShopSettings.load()
+        ShopSettings.objects.filter(pk=1).update(auto_print_kitchen_tickets=True)
+        self.food = ProductCategory.objects.create(name="طعام")
+        self.grill_profile = PrinterProfile.objects.create(
+            name="Grill", printer_type=PrinterProfile.Type.ESCPOS
+        )
+        self.grill = PrepStation.objects.create(
+            name="الشواية", printer_profile=self.grill_profile, is_default=True
+        )
+        self.grill.categories.add(self.food)
+
+        burger = create_product_with_default_variant(
+            name="برجر", sku="K-BRG", unit_price=Decimal("6.00")
+        )
+        burger.is_prepared = True
+        burger.save(update_fields=["is_prepared"])
+        burger.categories.add(self.food)
+        self.burger_variant = burger.default_variant
+        StockItem.objects.create(variant=self.burger_variant, quantity_on_hand=20)
+
+        bottle = create_product_with_default_variant(
+            name="ماء", sku="K-WTR", unit_price=Decimal("1.00")
+        )
+        self.bottle_variant = bottle.default_variant
+        StockItem.objects.create(variant=self.bottle_variant, quantity_on_hand=20)
+
+        self.cashier_client.post(
+            reverse("register-session-start"), {"opening_cash": "0.00"}, format="json"
+        )
+
+    def _checkout(self, lines, amount):
+        payload = {
+            "lines": lines,
+            "payment_method": Payment.Method.CASH,
+            "amount_received": amount,
+        }
+        with self.captureOnCommitCallbacks(execute=True):
+            return self.cashier_client.post(
+                reverse("order-checkout"), payload, format="json"
+            )
+
+    def test_checkout_returns_kitchen_jobs_for_prepared_lines_only(self):
+        response = self._checkout(
+            [
+                {"variant": self.burger_variant.pk, "quantity": 1, "notes": "بدون بصل"},
+                {"variant": self.bottle_variant.pk, "quantity": 2},
+            ],
+            amount="8.00",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        kitchen_jobs = response.data.get("kitchen_print_jobs")
+        self.assertEqual(len(kitchen_jobs), 1)
+        job = kitchen_jobs[0]
+        self.assertEqual(job["job_type"], PrintJob.Type.KITCHEN)
+        self.assertEqual(job["status"], PrintJob.Status.QUEUED)
+        order_payload = job["payload"]["order"]
+        self.assertEqual(job["payload"]["kind"], "kitchen")
+        self.assertEqual(len(order_payload["lines"]), 1)  # bottle excluded
+        self.assertEqual(order_payload["lines"][0]["notes"], "بدون بصل")
+        self.assertNotIn("total", order_payload)
+
+    def test_checkout_persists_order_line_notes(self):
+        response = self._checkout(
+            [{"variant": self.burger_variant.pk, "quantity": 1, "notes": "بدون بصل"}],
+            amount="6.00",
+        )
+
+        order = Order.objects.get(pk=response.data["id"])
+        self.assertEqual(order.lines.get().notes, "بدون بصل")
+
+    def test_no_kitchen_jobs_when_setting_disabled(self):
+        ShopSettings.objects.filter(pk=1).update(auto_print_kitchen_tickets=False)
+
+        response = self._checkout(
+            [{"variant": self.burger_variant.pk, "quantity": 1}], amount="6.00"
+        )
+
+        self.assertNotIn("kitchen_print_jobs", response.data)
+        self.assertFalse(
+            PrintJob.objects.filter(job_type=PrintJob.Type.KITCHEN).exists()
+        )
+
+    def test_sale_completes_when_kitchen_enqueue_fails(self):
+        # A kitchen-printing misconfiguration must never fail a paid sale.
+        with mock.patch(
+            "apps.printing.services.enqueue_kitchen_print_jobs",
+            side_effect=RuntimeError("kitchen exploded"),
+        ):
+            response = self._checkout(
+                [{"variant": self.burger_variant.pk, "quantity": 1}], amount="6.00"
+            )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertNotIn("kitchen_print_jobs", response.data)
+        self.assertEqual(
+            Order.objects.get(pk=response.data["id"]).status, Order.Status.PAID
+        )
+
+
+class PrepStationApiTests(PrintingTestMixin, TestCase):
+    def setUp(self):
+        super().setUp()
+        self.profile = PrinterProfile.objects.create(
+            name="Grill", printer_type=PrinterProfile.Type.ESCPOS
+        )
+        self.pdf_profile = PrinterProfile.objects.create(
+            name="Office A4", printer_type=PrinterProfile.Type.PDF
+        )
+        self.food = ProductCategory.objects.create(name="طعام")
+
+    def test_manager_can_create_station(self):
+        response = self.manager_client.post(
+            reverse("prepstation-list"),
+            {
+                "name": "الشواية",
+                "printer_profile": self.profile.pk,
+                "categories": [self.food.pk],
+                "is_default": True,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        self.assertEqual(response.data["category_names"], ["طعام"])
+        self.assertEqual(response.data["printer_profile_name"], "Grill")
+
+    def test_category_cannot_route_to_two_stations(self):
+        existing = PrepStation.objects.create(name="الشواية", printer_profile=self.profile)
+        existing.categories.add(self.food)
+
+        response = self.manager_client.post(
+            reverse("prepstation-list"),
+            {"name": "البار", "categories": [self.food.pk]},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("categories", response.data)
+
+    def test_pdf_profile_is_rejected(self):
+        response = self.manager_client.post(
+            reverse("prepstation-list"),
+            {"name": "الشواية", "printer_profile": self.pdf_profile.pk},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("printer_profile", response.data)
+
+    def test_second_default_is_rejected(self):
+        PrepStation.objects.create(name="الشواية", is_default=True)
+
+        response = self.manager_client.post(
+            reverse("prepstation-list"),
+            {"name": "البار", "is_default": True},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("is_default", response.data)
+
+    def test_cashier_cannot_manage_stations(self):
+        response = self.cashier_client.post(
+            reverse("prepstation-list"),
+            {"name": "الشواية"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)

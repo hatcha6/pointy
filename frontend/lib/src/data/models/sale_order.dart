@@ -31,6 +31,7 @@ class SaleCheckoutDraft {
             (line) => SaleCheckoutLineDraft(
               variantId: line.variant.id,
               quantity: line.quantity,
+              notes: line.notes,
             ),
           )
           .toList(growable: false),
@@ -238,13 +239,20 @@ class SaleCheckoutLineDraft {
   const SaleCheckoutLineDraft({
     required this.variantId,
     required this.quantity,
+    this.notes = '',
   });
 
   final int variantId;
   final double quantity;
+  final String notes;
 
   Map<String, Object?> toJson() {
-    return {'variant': variantId, 'quantity': formatQuantityForApi(quantity)};
+    final normalizedNotes = notes.trim();
+    return {
+      'variant': variantId,
+      'quantity': formatQuantityForApi(quantity),
+      if (normalizedNotes.isNotEmpty) 'notes': normalizedNotes,
+    };
   }
 }
 
@@ -276,6 +284,7 @@ class SaleOrder {
     this.profit,
     this.profitMarginPercent,
     this.invoicePrintJob,
+    this.kitchenPrintJobs = const [],
     this.canVoid = false,
     this.canReturn = false,
     this.requiresManagerAdjustment = false,
@@ -299,6 +308,10 @@ class SaleOrder {
   final double? profit;
   final double? profitMarginPercent;
   final PrintJob? invoicePrintJob;
+
+  /// Kitchen chits queued for this sale (one per routed prep station). The
+  /// device prints the ones it serves; the rest stay queued for other devices.
+  final List<PrintJob> kitchenPrintJobs;
   final bool canVoid;
   final bool canReturn;
   final bool requiresManagerAdjustment;
@@ -336,6 +349,12 @@ class SaleOrder {
       invoicePrintJob: json['print_job'] is Map<String, Object?>
           ? PrintJob.fromJson(json['print_job'] as Map<String, Object?>)
           : null,
+      kitchenPrintJobs:
+          (json['kitchen_print_jobs'] as List<Object?>?)
+              ?.whereType<Map<String, Object?>>()
+              .map(PrintJob.fromJson)
+              .toList(growable: false) ??
+          const [],
       canVoid: _boolFromJson(json['can_void']),
       canReturn: _boolFromJson(json['can_return']),
       requiresManagerAdjustment: _boolFromJson(

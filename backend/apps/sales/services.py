@@ -94,6 +94,7 @@ def create_order_with_lines(
             unit_price=variant.unit_price,
             unit_cost=latest_sale_unit_cost(variant),
             discount_total=discount_by_line_key.get(line_key, Decimal("0.00")),
+            notes=line_data.get("notes", ""),
         )
         line_objects_by_key[line_key] = line
     order.recalculate()

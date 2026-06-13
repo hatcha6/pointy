@@ -147,6 +147,9 @@ extension PosCheckoutActions on PosViewModel {
         final printStatus = shouldPrintInvoice
             ? await _printPaidInvoice(result.value, invoicePrinterConfig)
             : InvoicePrintStatus.notRequested;
+        if (_checkoutSettings?.autoPrintKitchenTickets == true) {
+          await _printPaidKitchenTickets(result.value);
+        }
         _applySoldQuantities(cartSnapshot);
         _completeActiveSaleSessionCheckout();
         _isCheckingOut = false;
@@ -329,6 +332,47 @@ extension PosCheckoutActions on PosViewModel {
         );
         return const SaleCheckoutOutcome.failure();
     }
+  }
+
+  /// Prints the kitchen chits this device is responsible for. The backend
+  /// enqueues one job per routed station; this device prints only the stations
+  /// it has a local thermal printer configured for and leaves the rest queued.
+  /// Skips silently when no kitchen station is configured here.
+  Future<void> _printPaidKitchenTickets(SaleOrder order) async {
+    final jobs = order.kitchenPrintJobs;
+    if (jobs.isEmpty) {
+      return;
+    }
+    final stationConfigs = await _printingRepository.loadKitchenStationConfigs();
+    if (stationConfigs.isEmpty) {
+      return;
+    }
+    for (final job in jobs) {
+      final stationId = _kitchenJobStationId(job);
+      if (stationId == null) {
+        continue;
+      }
+      final config = stationConfigs[stationId];
+      if (config == null || !config.endpoint.usesThermalReceipt) {
+        continue;
+      }
+      await _printingRepository.claimAndPrintKitchenJob(
+        job: job,
+        config: config,
+      );
+    }
+  }
+
+  int? _kitchenJobStationId(PrintJob job) {
+    final station = job.payload['station'];
+    if (station is Map<String, Object?>) {
+      final id = station['id'];
+      if (id is int) {
+        return id;
+      }
+      return int.tryParse('${id ?? ''}');
+    }
+    return null;
   }
 
   Future<InvoicePrintStatus> _printPaidInvoice(

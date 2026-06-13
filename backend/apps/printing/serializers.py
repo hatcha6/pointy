@@ -2,10 +2,12 @@ from django.db import transaction
 from rest_framework import serializers
 from rest_framework.exceptions import PermissionDenied
 
+from apps.catalog.models import ProductCategory
 from apps.core.roles import user_is_manager
 from apps.purchasing.models import PurchaseOrder
 from apps.sales.models import Order
 from .models import (
+    PrepStation,
     PrinterProfile,
     PrintAgent,
     PrintAuditEvent,
@@ -101,6 +103,95 @@ class PrinterProfileSerializer(serializers.ModelSerializer):
             "updated_at",
         ]
         read_only_fields = ("created_at", "updated_at")
+
+
+class PrepStationSerializer(serializers.ModelSerializer):
+    printer_profile_name = serializers.CharField(
+        source="printer_profile.name",
+        read_only=True,
+    )
+    categories = serializers.PrimaryKeyRelatedField(
+        many=True,
+        required=False,
+        queryset=ProductCategory.objects.all(),
+    )
+    category_names = serializers.SerializerMethodField()
+
+    class Meta:
+        model = PrepStation
+        fields = [
+            "id",
+            "name",
+            "printer_profile",
+            "printer_profile_name",
+            "categories",
+            "category_names",
+            "is_default",
+            "is_active",
+            "priority",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ("created_at", "updated_at")
+
+    def get_category_names(self, station) -> list[str]:
+        return [category.name for category in station.categories.all()]
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        # Kitchen chits are thermal only — a station cannot route to a full-page
+        # PDF printer.
+        printer_profile = attrs.get("printer_profile")
+        if (
+            printer_profile is not None
+            and printer_profile.printer_type == PrinterProfile.Type.PDF
+        ):
+            raise serializers.ValidationError(
+                {
+                    "printer_profile": (
+                        "Kitchen stations must use a thermal (ESC/POS) or raw "
+                        "printer profile, not a PDF profile."
+                    )
+                }
+            )
+        # Only one station may be the catch-all default (also DB-enforced);
+        # surface a clean error rather than a 500 from the constraint.
+        if attrs.get("is_default"):
+            existing_default = PrepStation.objects.filter(is_default=True)
+            if self.instance is not None:
+                existing_default = existing_default.exclude(pk=self.instance.pk)
+            if existing_default.exists():
+                raise serializers.ValidationError(
+                    {
+                        "is_default": (
+                            "Another station is already the default; unset it "
+                            "first."
+                        )
+                    }
+                )
+        # A product category routes to at most one station, so a chit never
+        # prints the same item twice.
+        categories = attrs.get("categories")
+        if categories:
+            conflicting = PrepStation.objects.filter(
+                is_active=True,
+                categories__in=[category.pk for category in categories],
+            )
+            if self.instance is not None:
+                conflicting = conflicting.exclude(pk=self.instance.pk)
+            conflicting_names = sorted(
+                set(conflicting.values_list("name", flat=True))
+            )
+            if conflicting_names:
+                raise serializers.ValidationError(
+                    {
+                        "categories": (
+                            "One or more categories are already routed to "
+                            "another station: " + ", ".join(conflicting_names)
+                        )
+                    }
+                )
+        return attrs
 
 
 class PrintAgentSerializer(serializers.ModelSerializer):

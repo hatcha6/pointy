@@ -21,14 +21,10 @@ extension PosCartActions on PosViewModel {
     required double quantity,
     required String source,
   }) {
-    final existingLine = _cart
-        .where((line) => line.variant.id == variant.id)
-        .firstOrNull;
+    final existingLine = _mergeableLineFor(variant);
     final previousQuantity = existingLine?.quantity ?? 0;
     if (_addVariantToCart(variant, quantity: quantity)) {
-      final updatedLine = _cart
-          .where((line) => line.variant.id == variant.id)
-          .firstOrNull;
+      final updatedLine = _mergeableLineFor(variant);
       if (updatedLine != null) {
         _trackCartLineAdded(
           updatedLine,
@@ -42,19 +38,55 @@ extension PosCartActions on PosViewModel {
     return false;
   }
 
-  void decrementVariant(
-    ProductVariant variant, {
+  /// The line a fresh add of [variant] should merge into: same variant and no
+  /// kitchen note. A noted line ("burger / no onions") stays separate so it
+  /// never absorbs a plain add.
+  CartLine? _mergeableLineFor(ProductVariant variant) {
+    return _cart
+        .where((line) => line.variant.id == variant.id && line.notes.isEmpty)
+        .firstOrNull;
+  }
+
+  // Per-line mutations key on the stable [CartLine.lineKey] so two lines of the
+  // same variant (one noted, one not) are edited independently.
+
+  void incrementCartLine(
+    String lineKey, {
     String source = 'cart_quantity_button',
   }) {
     if (_isCheckingOut) {
       return;
     }
-
-    final index = _cart.indexWhere((line) => line.variant.id == variant.id);
+    final index = _cart.indexWhere((line) => line.lineKey == lineKey);
     if (index == -1) {
       return;
     }
+    final line = _cart[index];
+    final updatedLine = line.copyWith(quantity: line.quantity + 1);
+    _cart[index] = updatedLine;
+    _trackCartLineQuantityChanged(
+      updatedLine,
+      previousQuantity: line.quantity,
+      newQuantity: updatedLine.quantity,
+      reason: 'increment',
+      source: source,
+    );
+    _touchActiveSaleSession();
+    _notifyChanged();
+    unawaited(refreshDiscountPreview());
+  }
 
+  void decrementCartLine(
+    String lineKey, {
+    String source = 'cart_quantity_button',
+  }) {
+    if (_isCheckingOut) {
+      return;
+    }
+    final index = _cart.indexWhere((line) => line.lineKey == lineKey);
+    if (index == -1) {
+      return;
+    }
     final line = _cart[index];
     if (line.quantity <= 1) {
       _cart.removeAt(index);
@@ -75,15 +107,15 @@ extension PosCartActions on PosViewModel {
     unawaited(refreshDiscountPreview());
   }
 
-  void setVariantQuantity(
-    ProductVariant variant,
+  void setCartLineQuantity(
+    String lineKey,
     double quantity, {
     String source = 'cart_weight_edit',
   }) {
     if (_isCheckingOut || quantity <= 0) {
       return;
     }
-    final index = _cart.indexWhere((line) => line.variant.id == variant.id);
+    final index = _cart.indexWhere((line) => line.lineKey == lineKey);
     if (index == -1) {
       return;
     }
@@ -105,24 +137,90 @@ extension PosCartActions on PosViewModel {
     unawaited(refreshDiscountPreview());
   }
 
-  void removeVariant(
-    ProductVariant variant, {
+  void removeCartLine(
+    String lineKey, {
     String source = 'cart_delete_button',
   }) {
     if (_isCheckingOut) {
       return;
     }
-
-    final index = _cart.indexWhere((line) => line.variant.id == variant.id);
+    final index = _cart.indexWhere((line) => line.lineKey == lineKey);
     if (index == -1) {
       return;
     }
-
     final line = _cart.removeAt(index);
     _trackCartLineDeleted(line, reason: 'remove_line', source: source);
     _touchActiveSaleSession();
     _notifyChanged();
     unawaited(refreshDiscountPreview());
+  }
+
+  /// Attaches (or clears) the free-text kitchen note on a cart line. Notes do
+  /// not affect pricing, so there is no discount refresh.
+  void setCartLineNote(
+    String lineKey,
+    String note, {
+    String source = 'cart_line_note',
+  }) {
+    if (_isCheckingOut) {
+      return;
+    }
+    final index = _cart.indexWhere((line) => line.lineKey == lineKey);
+    if (index == -1) {
+      return;
+    }
+    final line = _cart[index];
+    final normalized = note.trim();
+    if (line.notes == normalized) {
+      return;
+    }
+    _cart[index] = line.copyWith(notes: normalized);
+    _touchActiveSaleSession();
+    _notifyChanged();
+  }
+
+  // Variant-keyed wrappers kept for the product grid and existing callers; they
+  // resolve to the first line of the variant, then delegate to the line-keyed
+  // mutation above.
+
+  void decrementVariant(
+    ProductVariant variant, {
+    String source = 'cart_quantity_button',
+  }) {
+    final line = _cart
+        .where((line) => line.variant.id == variant.id)
+        .firstOrNull;
+    if (line == null) {
+      return;
+    }
+    decrementCartLine(line.lineKey, source: source);
+  }
+
+  void setVariantQuantity(
+    ProductVariant variant,
+    double quantity, {
+    String source = 'cart_weight_edit',
+  }) {
+    final line = _cart
+        .where((line) => line.variant.id == variant.id)
+        .firstOrNull;
+    if (line == null) {
+      return;
+    }
+    setCartLineQuantity(line.lineKey, quantity, source: source);
+  }
+
+  void removeVariant(
+    ProductVariant variant, {
+    String source = 'cart_delete_button',
+  }) {
+    final line = _cart
+        .where((line) => line.variant.id == variant.id)
+        .firstOrNull;
+    if (line == null) {
+      return;
+    }
+    removeCartLine(line.lineKey, source: source);
   }
 
   void clearCart({String source = 'cart_clear_button'}) {
@@ -147,9 +245,11 @@ extension PosCartActions on PosViewModel {
       return false;
     }
 
-    final index = _cart.indexWhere((line) => line.variant.id == variant.id);
+    final index = _cart.indexWhere(
+      (line) => line.variant.id == variant.id && line.notes.isEmpty,
+    );
     if (index == -1) {
-      _cart.add(CartLine(variant: variant, quantity: quantity));
+      _cart.add(CartLine.create(variant: variant, quantity: quantity));
     } else {
       final line = _cart.removeAt(index);
       _cart.add(line.copyWith(quantity: line.quantity + quantity));

@@ -197,6 +197,56 @@ class PrintingRepository {
     });
   }
 
+  /// The kitchen station printers this device serves, keyed by prep station id.
+  Future<Map<int, PrinterConfig>> loadKitchenStationConfigs() async {
+    final configs = await _storageService.loadKitchenStationConfigs();
+    return configs.map(
+      (stationId, config) =>
+          MapEntry(stationId, _devicePrintableConfig(config)),
+    );
+  }
+
+  Future<PrinterConfig?> loadKitchenStationConfig(int stationId) async {
+    final config = await _storageService.loadKitchenStationConfig(stationId);
+    return config == null ? null : _devicePrintableConfig(config);
+  }
+
+  Future<Result<void>> saveKitchenStationConfig(
+    int stationId,
+    PrinterConfig config,
+  ) async {
+    return Result.guard(() async {
+      await _storageService.saveKitchenStationConfig(
+        stationId,
+        _devicePrintableConfig(config),
+      );
+    });
+  }
+
+  Future<Result<void>> removeKitchenStationConfig(int stationId) async {
+    return Result.guard(
+      () => _storageService.removeKitchenStationConfig(stationId),
+    );
+  }
+
+  /// Claims a queued kitchen job for this device's station printer, then prints
+  /// and reports it. A job must be claimed before the backend accepts a
+  /// printed/failed report, so the two steps are sequenced here.
+  Future<Result<PrintJob>> claimAndPrintKitchenJob({
+    required PrintJob job,
+    required PrinterConfig config,
+  }) async {
+    final claimResult = await claimPrintJob(jobId: job.id, config: config);
+    return switch (claimResult) {
+      Ok<PrintJob>(value: final claimed) => await printAndReportJob(
+        job: claimed,
+        config: config,
+        requeueOnFailure: true,
+      ),
+      Error<PrintJob>(:final exception) => Error(exception),
+    };
+  }
+
   Future<PrintTransportStatus> printerStatus(PrinterConfig config) {
     if (config.endpoint.usesDocumentInvoice) {
       return _documentService.printerStatus(config.endpoint);
@@ -213,6 +263,29 @@ class PrintingRepository {
 
   Future<PrintTransportResult> printFakeReceipt(PrinterConfig config) {
     return _fakeTransport.printTest(config.endpoint);
+  }
+
+  /// Prints a sample kitchen chit so a station's thermal printer can be tested
+  /// from settings without ringing up a sale.
+  Future<PrintTransportResult> printKitchenTest(PrinterConfig config) async {
+    if (config.endpoint.usesDocumentInvoice) {
+      return const PrintTransportResult.failure(
+        'document printers do not print kitchen tickets',
+      );
+    }
+    if (!config.endpoint.usesThermalReceipt) {
+      return const PrintTransportResult.failure(
+        'kitchen tickets require a thermal printer',
+      );
+    }
+    try {
+      final bytes = await _receiptEncoder.encodeKitchenTest(config.endpoint);
+      return _transportFor(
+        config.endpoint,
+      ).printBytes(bytes: bytes, endpoint: config.endpoint);
+    } on Object catch (error) {
+      return PrintTransportResult.failure('kitchen test print failed: $error');
+    }
   }
 
   Future<PrintTransportResult> printBarcodeLabels(

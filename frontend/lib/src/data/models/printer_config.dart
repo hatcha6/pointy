@@ -16,11 +16,12 @@ ReceiptCutMode receiptCutModeFromJson(Object? value) {
   };
 }
 
-enum PrinterRole { posReceipt }
+enum PrinterRole { posReceipt, kitchen }
 
 PrinterRole printerRoleFromJson(Object? value) {
   return switch (value?.toString()) {
     'pos_receipt' || 'posReceipt' => PrinterRole.posReceipt,
+    'kitchen' => PrinterRole.kitchen,
     _ => PrinterRole.posReceipt,
   };
 }
@@ -28,6 +29,7 @@ PrinterRole printerRoleFromJson(Object? value) {
 String printerRoleToJson(PrinterRole role) {
   return switch (role) {
     PrinterRole.posReceipt => 'pos_receipt',
+    PrinterRole.kitchen => 'kitchen',
   };
 }
 

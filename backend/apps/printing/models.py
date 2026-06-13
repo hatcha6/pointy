@@ -10,6 +10,7 @@ from apps.sales.models import Order
 class PrintTemplate(TimeStampedModel):
     class Type(models.TextChoices):
         RECEIPT = "receipt", "Receipt"
+        KITCHEN = "kitchen", "Kitchen ticket"
 
     slug = models.SlugField(max_length=80, unique=True)
     name = models.CharField(max_length=120)
@@ -105,6 +106,45 @@ class PrinterProfile(TimeStampedModel):
         return self.name
 
 
+class PrepStation(TimeStampedModel):
+    """A kitchen/production station (grill, bar, pastry, ...) that prints the
+    made-to-order lines routed to it. A station binds to a PrinterProfile (the
+    physical destination) and owns a set of product categories; a prepared line
+    whose product is in any of those categories prints here. Exactly one station
+    may be the default catch-all for lines that match no station's categories.
+    """
+
+    name = models.CharField(max_length=120, unique=True)
+    printer_profile = models.ForeignKey(
+        PrinterProfile,
+        on_delete=models.PROTECT,
+        related_name="prep_stations",
+        blank=True,
+        null=True,
+    )
+    categories = models.ManyToManyField(
+        "catalog.ProductCategory",
+        related_name="prep_stations",
+        blank=True,
+    )
+    is_default = models.BooleanField(default=False)
+    is_active = models.BooleanField(default=True)
+    priority = models.IntegerField(default=0)
+
+    class Meta:
+        ordering = ["name"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["is_default"],
+                condition=Q(is_default=True),
+                name="unique_default_prep_station",
+            )
+        ]
+
+    def __str__(self) -> str:
+        return self.name
+
+
 class PrintAgent(TimeStampedModel):
     name = models.CharField(max_length=120)
     identifier = models.SlugField(max_length=80, unique=True)
@@ -128,6 +168,7 @@ class PrintAgent(TimeStampedModel):
 class PrintJob(TimeStampedModel):
     class Type(models.TextChoices):
         RECEIPT = "receipt", "Receipt"
+        KITCHEN = "kitchen", "Kitchen ticket"
 
     class Status(models.TextChoices):
         QUEUED = "queued", "Queued"
@@ -159,6 +200,13 @@ class PrintJob(TimeStampedModel):
         PrinterProfile,
         on_delete=models.SET_NULL,
         related_name="jobs",
+        blank=True,
+        null=True,
+    )
+    prep_station = models.ForeignKey(
+        "PrepStation",
+        on_delete=models.SET_NULL,
+        related_name="print_jobs",
         blank=True,
         null=True,
     )

@@ -9,6 +9,7 @@ from rest_framework.response import Response
 from apps.core.permissions import HasPointyPermission
 from apps.core.roles import user_is_manager
 from .models import (
+    PrepStation,
     PrinterProfile,
     PrintAgent,
     PrintAuditEvent,
@@ -18,6 +19,7 @@ from .models import (
     PrintTemplateVersion,
 )
 from .serializers import (
+    PrepStationSerializer,
     PrinterProfileSerializer,
     PrintAgentSerializer,
     PrintAuditEventRecordSerializer,
@@ -102,6 +104,25 @@ class PrinterProfileViewSet(viewsets.ModelViewSet):
     filterset_fields = ("printer_type", "is_default", "is_active")
     search_fields = ("name",)
     ordering_fields = ("name", "created_at", "updated_at")
+
+
+class PrepStationViewSet(viewsets.ModelViewSet):
+    serializer_class = PrepStationSerializer
+    permission_classes = [IsAuthenticated, HasPointyPermission]
+    permission_map = {
+        "list": ("printing.view_prepstation",),
+        "retrieve": ("printing.view_prepstation",),
+        "create": ("printing.add_prepstation",),
+        "update": ("printing.change_prepstation",),
+        "partial_update": ("printing.change_prepstation",),
+        "destroy": ("printing.delete_prepstation",),
+    }
+    queryset = PrepStation.objects.select_related("printer_profile").prefetch_related(
+        "categories"
+    )
+    filterset_fields = ("is_default", "is_active", "printer_profile")
+    search_fields = ("name",)
+    ordering_fields = ("name", "priority", "created_at", "updated_at")
 
 
 class PrintAgentViewSet(viewsets.ModelViewSet):

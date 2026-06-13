@@ -17,6 +17,7 @@ import '../../../shared/order/order.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../view_models/pos_view_model.dart';
 import '../../../data/models/cart_line.dart';
+import 'cart_line_note_sheet.dart';
 import 'cart_line_tile.dart';
 import 'weight_entry_sheet.dart';
 import 'cart_totals.dart';
@@ -417,25 +418,28 @@ class _CartScrollContent extends StatelessWidget {
               line: visibleLines[index],
               onAdd: isCartLocked
                   ? null
-                  : () => viewModel.addVariant(
-                      visibleLines[index].variant,
+                  : () => viewModel.incrementCartLine(
+                      visibleLines[index].lineKey,
                       source: 'cart_quantity_button',
                     ),
               onRemove: isCartLocked
                   ? null
-                  : () => viewModel.decrementVariant(
-                      visibleLines[index].variant,
+                  : () => viewModel.decrementCartLine(
+                      visibleLines[index].lineKey,
                       source: 'cart_quantity_button',
                     ),
               onDelete: isCartLocked
                   ? null
-                  : () => viewModel.removeVariant(
-                      visibleLines[index].variant,
+                  : () => viewModel.removeCartLine(
+                      visibleLines[index].lineKey,
                       source: 'cart_delete_button',
                     ),
               onEditQuantity: isCartLocked
                   ? null
                   : () => _editLineWeight(context, visibleLines[index]),
+              onEditNote: isCartLocked
+                  ? null
+                  : () => _editLineNote(context, visibleLines[index]),
             ),
           ],
       ],
@@ -448,7 +452,14 @@ class _CartScrollContent extends StatelessWidget {
       initialQuantity: line.quantity,
     );
     if (weight != null && context.mounted) {
-      viewModel.setVariantQuantity(line.variant, weight);
+      viewModel.setCartLineQuantity(line.lineKey, weight);
+    }
+  }
+
+  Future<void> _editLineNote(BuildContext context, CartLine line) async {
+    final note = await showCartLineNoteSheet(context, line: line);
+    if (note != null && context.mounted) {
+      viewModel.setCartLineNote(line.lineKey, note);
     }
   }
 }

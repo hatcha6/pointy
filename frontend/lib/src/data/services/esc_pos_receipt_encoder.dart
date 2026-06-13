@@ -37,6 +37,29 @@ class EscPosReceiptEncoder {
     return encodePayload(payload: payload, endpoint: endpoint);
   }
 
+  Future<List<int>> encodeKitchenTest(PrinterEndpoint endpoint) async {
+    final payload = <String, Object?>{
+      'kind': 'kitchen',
+      'station': {'name': 'الشواية'},
+      'order': {
+        'receipt_number': 'اختبار',
+        'created_at': DateTime.now().toIso8601String(),
+        'document_title': 'تذكرة المطبخ',
+        'lines': [
+          {
+            'name': 'برجر',
+            'quantity': 2,
+            'notes': 'بدون بصل',
+            'option_values': [
+              {'option_name': 'الحجم', 'value_name': 'كبير'},
+            ],
+          },
+        ],
+      },
+    };
+    return encodePayload(payload: payload, endpoint: endpoint);
+  }
+
   Future<List<int>> encodePayload({
     required Map<String, Object?> payload,
     required PrinterEndpoint endpoint,
@@ -46,6 +69,14 @@ class EscPosReceiptEncoder {
     final codeTable = endpoint.codeTable.trim().isEmpty
         ? 'CP864'
         : endpoint.codeTable.trim();
+    if (_string(payload['kind']) == 'kitchen') {
+      return _encodeKitchenTicket(
+        payload: payload,
+        endpoint: endpoint,
+        generator: generator,
+        codeTable: codeTable,
+      );
+    }
     final order = _map(payload['order']);
     final shop = _map(payload['shop']);
     final receiptNumber = _string(order['receipt_number'], fallback: '-');
@@ -217,6 +248,168 @@ class EscPosReceiptEncoder {
         bytes.addAll(generator.cut(mode: PosCutMode.full));
       case ReceiptCutMode.none:
         // Printer has no cutter: feed enough paper to tear by hand.
+        bytes.addAll(generator.feed(2));
+    }
+    return bytes;
+  }
+
+  /// Renders a kitchen chit: what to cook, never what to charge. Big, bold
+  /// item lines with options and the free-text note; no prices, totals, QR,
+  /// logo or footer. Reuses the receipt encoder's Arabic/CP864 text + wrapping.
+  List<int> _encodeKitchenTicket({
+    required Map<String, Object?> payload,
+    required PrinterEndpoint endpoint,
+    required Generator generator,
+    required String codeTable,
+  }) {
+    final order = _map(payload['order']);
+    final station = _map(payload['station']);
+    final width = _charsPerLine(endpoint.paperWidthMm);
+    final documentTitle = _string(
+      order['document_title'],
+      fallback: 'تذكرة المطبخ',
+    );
+    final stationName = _string(station['name']);
+    final receiptNumber = _string(order['receipt_number'], fallback: '-');
+    final createdAt = _formatDateTime(order['created_at']);
+    final customerName = _string(order['customer_name']);
+    final lines = _list(order['lines']);
+
+    final bytes = <int>[];
+    bytes.addAll(generator.reset());
+
+    // Title + station: big and bold so the line reads it across the pass.
+    bytes.addAll(
+      _text(
+        generator,
+        documentTitle,
+        styles: PosStyles(
+          align: PosAlign.center,
+          bold: true,
+          height: PosTextSize.size2,
+          width: PosTextSize.size2,
+          codeTable: codeTable,
+        ),
+      ),
+    );
+    if (stationName.isNotEmpty) {
+      bytes.addAll(
+        _text(
+          generator,
+          stationName,
+          styles: PosStyles(
+            align: PosAlign.center,
+            bold: true,
+            height: PosTextSize.size2,
+            codeTable: codeTable,
+          ),
+        ),
+      );
+    }
+
+    bytes.addAll(generator.hr());
+    bytes.addAll(
+      _text(
+        generator,
+        receiptNumber,
+        styles: PosStyles(
+          align: PosAlign.right,
+          bold: true,
+          height: PosTextSize.size2,
+          codeTable: codeTable,
+        ),
+      ),
+    );
+    if (createdAt.isNotEmpty) {
+      bytes.addAll(
+        _text(
+          generator,
+          createdAt,
+          styles: PosStyles(align: PosAlign.right, codeTable: codeTable),
+        ),
+      );
+    }
+    if (customerName.isNotEmpty) {
+      for (final wrapped in _wrap(customerName, width)) {
+        bytes.addAll(
+          _text(
+            generator,
+            wrapped,
+            styles: PosStyles(align: PosAlign.right, codeTable: codeTable),
+          ),
+        );
+      }
+    }
+    bytes.addAll(generator.hr());
+
+    // One block per made-to-order line: quantity × name (large/bold), then any
+    // variant options, then the free-text note (emphasized).
+    for (final rawLine in lines) {
+      final line = _map(rawLine);
+      final name = _string(
+        line['name'],
+        fallback: _string(line['parent_product_name'], fallback: 'منتج'),
+      );
+      final quantity = _string(line['quantity'], fallback: '1');
+      for (final wrapped in _wrap('$quantity × $name', width)) {
+        bytes.addAll(
+          _text(
+            generator,
+            wrapped,
+            styles: PosStyles(
+              align: PosAlign.right,
+              bold: true,
+              height: PosTextSize.size2,
+              codeTable: codeTable,
+            ),
+          ),
+        );
+      }
+      for (final rawOption in _list(line['option_values'])) {
+        final option = _map(rawOption);
+        final optionName = _string(option['option_name']);
+        final valueName = _string(option['value_name']);
+        final label = optionName.isEmpty ? valueName : '$optionName: $valueName';
+        if (label.isEmpty) {
+          continue;
+        }
+        for (final wrapped in _wrap('- $label', width)) {
+          bytes.addAll(
+            _text(
+              generator,
+              wrapped,
+              styles: PosStyles(align: PosAlign.right, codeTable: codeTable),
+            ),
+          );
+        }
+      }
+      final note = _string(line['notes']);
+      if (note.isNotEmpty) {
+        for (final wrapped in _wrap('** $note', width)) {
+          bytes.addAll(
+            _text(
+              generator,
+              wrapped,
+              styles: PosStyles(
+                align: PosAlign.right,
+                bold: true,
+                height: PosTextSize.size2,
+                codeTable: codeTable,
+              ),
+            ),
+          );
+        }
+      }
+      bytes.addAll(generator.hr());
+    }
+
+    bytes.addAll(generator.feed(endpoint.feedLines.clamp(0, 12)));
+    switch (endpoint.cutMode) {
+      case ReceiptCutMode.partial:
+        bytes.addAll(generator.cut(mode: PosCutMode.partial));
+      case ReceiptCutMode.full:
+        bytes.addAll(generator.cut(mode: PosCutMode.full));
+      case ReceiptCutMode.none:
         bytes.addAll(generator.feed(2));
     }
     return bytes;
