@@ -42,6 +42,13 @@ extension PosCheckoutActions on PosViewModel {
   List<SaleStockShortage> checkoutStockShortages() {
     final shortages = <SaleStockShortage>[];
     for (final line in _cart) {
+      // Mirror the backend: services have no stock and made-to-order
+      // (prepared) products consume their recipe ingredients instead of their
+      // own stock, so neither can ever be a shortage. See
+      // prepare_sale_stock_adjustments in apps/sales/services.py.
+      if (line.variant.isService || line.variant.isPrepared) {
+        continue;
+      }
       if (line.quantity > line.variant.quantityOnHand) {
         shortages.add(
           SaleStockShortage(
@@ -194,6 +201,27 @@ extension PosCheckoutActions on PosViewModel {
       case Error<SaleOrder>(:final exception):
         _isCheckingOut = false;
         _notifyChanged();
+        if (exception is SaleCheckoutNoSessionException) {
+          // The cached register session is gone on the backend. Drop it so the
+          // POS shows the open-session gate, and re-sync from the server.
+          _activeRegisterSession = null;
+          _notifyChanged();
+          unawaited(loadCurrentRegisterSession());
+          unawaited(
+            _analyticsEngine?.trackUsage(
+                  AnalyticsEventName.posCheckoutFailed,
+                  severity: AnalyticsEventSeverity.warning,
+                  attributes: {
+                    'failure_reason': 'register_session_missing',
+                    'line_count': cartSnapshot.length,
+                  },
+                  metrics: {'line_count': cartSnapshot.length},
+                  flushImmediately: true,
+                ) ??
+                Future<void>.value(),
+          );
+          return const SaleCheckoutOutcome.sessionExpired();
+        }
         if (exception is SaleCheckoutStockException) {
           unawaited(
             _analyticsEngine?.trackPerformance(
@@ -426,6 +454,7 @@ class SaleCheckoutOutcome {
     required this.isSuccess,
     required this.isStockRejected,
     required this.isLossRejected,
+    this.isSessionExpired = false,
     this.order,
     this.printStatus = InvoicePrintStatus.notRequested,
     this.shortages = const [],
@@ -446,6 +475,14 @@ class SaleCheckoutOutcome {
   const SaleCheckoutOutcome.failure()
     : this._(isSuccess: false, isStockRejected: false, isLossRejected: false);
 
+  const SaleCheckoutOutcome.sessionExpired()
+    : this._(
+        isSuccess: false,
+        isStockRejected: false,
+        isLossRejected: false,
+        isSessionExpired: true,
+      );
+
   const SaleCheckoutOutcome.stockRejected(List<SaleStockShortage> shortages)
     : this._(
         isSuccess: false,
@@ -465,6 +502,7 @@ class SaleCheckoutOutcome {
   final bool isSuccess;
   final bool isStockRejected;
   final bool isLossRejected;
+  final bool isSessionExpired;
   final SaleOrder? order;
   final InvoicePrintStatus printStatus;
   final List<SaleStockShortage> shortages;

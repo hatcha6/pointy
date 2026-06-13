@@ -799,3 +799,78 @@ class ServiceProductTests(OperationsTestCase):
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
         self.assertFalse(StockItem.objects.filter(variant=variant).exists())
+
+
+class RecipeMadeToOrderApiTests(OperationsTestCase):
+    """Creating a recipe should default its output to made-to-order so the POS
+    sells it without needing its own stock (the kitchen job consumes the recipe).
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.dish = create_product_with_default_variant(
+            sku="DISH-1",
+            name="طبق اليوم",
+            unit_price=Decimal("15.00"),
+        )
+        self.ingredient = create_product_with_default_variant(
+            sku="ING-1",
+            name="مكوّن",
+            unit_price=Decimal("2.00"),
+        )
+
+    def _recipe_payload(self, **overrides):
+        payload = {
+            "name": "وصفة طبق اليوم",
+            "variant": self.dish.default_variant.pk,
+            "output_quantity": 1,
+            "lines": [
+                {
+                    "component_variant": self.ingredient.default_variant.pk,
+                    "quantity": "1.000",
+                }
+            ],
+        }
+        payload.update(overrides)
+        return payload
+
+    def test_creating_recipe_marks_output_made_to_order_by_default(self):
+        client = authenticated_client(self.manager)
+        response = client.post(
+            reverse("bom-list"), self._recipe_payload(), format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        self.assertTrue(response.data["is_prepared"])
+        self.dish.refresh_from_db()
+        self.assertTrue(self.dish.is_prepared)
+
+    def test_produce_to_stock_recipe_keeps_output_stocked(self):
+        client = authenticated_client(self.manager)
+        response = client.post(
+            reverse("bom-list"),
+            self._recipe_payload(make_to_order=False),
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        self.assertFalse(response.data["is_prepared"])
+        self.dish.refresh_from_db()
+        self.assertFalse(self.dish.is_prepared)
+
+    def test_editing_recipe_without_flag_keeps_existing_choice(self):
+        # Produce-to-stock recipe; a later edit that omits the flag must not
+        # silently flip the product back to made-to-order.
+        client = authenticated_client(self.manager)
+        created = client.post(
+            reverse("bom-list"),
+            self._recipe_payload(make_to_order=False),
+            format="json",
+        )
+        bom_id = created.data["id"]
+        response = client.patch(
+            reverse("bom-detail", args=[bom_id]),
+            {"name": "اسم محدّث"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.dish.refresh_from_db()
+        self.assertFalse(self.dish.is_prepared)

@@ -9,7 +9,7 @@ from rest_framework.serializers import ValidationError
 
 from apps.analytics.models import AnalyticsEvent
 from apps.analytics.services import record_domain_event
-from apps.employees.models import Employee, PayrollAdjustment, PayrollRun
+from apps.employees.models import Employee, PayrollRun
 
 from .biotime import BioTimeClient, BioTimeError
 from .models import (
@@ -22,11 +22,11 @@ from .models import (
 
 MONEY_PLACES = Decimal("0.01")
 DAYS_PLACES = Decimal("0.01")
+HOURS_PLACES = Decimal("0.01")
 FIRST_SYNC_LOOKBACK_DAYS = 30
 # Re-read a small window behind the cursor so late-arriving device uploads are
 # still captured; upserts keep this idempotent.
 RESYNC_OVERLAP_HOURS = 24
-BIOTIME_OVERTIME_NOTE_PREFIX = "BioTime"
 
 
 def record_attendance_event(
@@ -394,32 +394,16 @@ def attendance_summary(employee, period_start, period_end, *, connection=None):
     }
 
 
-def _overtime_amount(line, summary, connection):
-    """Price overtime at the line's implied hourly rate (manager can edit after)."""
-    overtime_minutes = summary["overtime_minutes"]
-    if overtime_minutes <= 0 or summary["expected_days"] <= 0:
-        return Decimal("0.00")
-    _workdays, shift_start, shift_end, _grace = effective_schedule(
-        line.employee, connection
-    )
-    shift_minutes = _minutes_between(
-        _aware(timezone.localdate(), shift_start),
-        _aware(timezone.localdate(), shift_end),
-    )
-    if shift_minutes <= 0:
-        return Decimal("0.00")
-    expected_minutes = Decimal(summary["expected_days"] * shift_minutes)
-    if expected_minutes <= 0:
-        return Decimal("0.00")
-    per_minute = Decimal(line.gross_amount) / expected_minutes
-    return (per_minute * Decimal(overtime_minutes)).quantize(MONEY_PLACES)
+def _overtime_hours_from_minutes(overtime_minutes):
+    return (Decimal(overtime_minutes) / Decimal(60)).quantize(HOURS_PLACES)
 
 
 def apply_attendance_to_run(payroll_run, *, request=None):
     """Stamp BioTime attendance onto a draft payroll run.
 
-    Sets each line's absence days from the attendance summary and maintains a
-    single BioTime-tagged overtime adjustment per line. Safe to re-run.
+    Sets each line's absence days and overtime hours from the attendance
+    summary; the line's own recalculate values the overtime at the employee's
+    hourly wage and overtime multiplier. Safe to re-run.
     """
     if payroll_run.status != PayrollRun.Status.DRAFT:
         raise ValidationError(
@@ -435,7 +419,9 @@ def apply_attendance_to_run(payroll_run, *, request=None):
 
     applied_lines = []
     with transaction.atomic():
-        for line in payroll_run.lines.select_related("employee").all():
+        for line in payroll_run.lines.select_related(
+            "employee", "compensation_plan"
+        ).all():
             profile = getattr(line.employee, "attendance_profile", None)
             if profile is None or not profile.is_tracked or not profile.biotime_emp_code:
                 continue
@@ -446,30 +432,12 @@ def apply_attendance_to_run(payroll_run, *, request=None):
                 connection=connection,
             )
             line.absence_days = Decimal(summary["absent_days"]).quantize(DAYS_PLACES)
-            line.save(update_fields=["absence_days", "updated_at"])
-            line.recalculate(save=True)
-
-            overtime_amount = _overtime_amount(line, summary, connection)
-            existing = line.adjustments.filter(
-                adjustment_type=PayrollAdjustment.AdjustmentType.OVERTIME,
-                notes__startswith=BIOTIME_OVERTIME_NOTE_PREFIX,
-            ).first()
-            if overtime_amount > 0:
-                hours, minutes = divmod(summary["overtime_minutes"], 60)
-                note = f"{BIOTIME_OVERTIME_NOTE_PREFIX}: {hours}h {minutes:02d}m"
-                if existing is None:
-                    line.adjustments.create(
-                        direction=PayrollAdjustment.Direction.ADDITION,
-                        adjustment_type=PayrollAdjustment.AdjustmentType.OVERTIME,
-                        amount=overtime_amount,
-                        notes=note,
-                    )
-                else:
-                    existing.amount = overtime_amount
-                    existing.notes = note
-                    existing.save(update_fields=["amount", "notes", "updated_at"])
-            elif existing is not None:
-                existing.delete()
+            line.overtime_hours = _overtime_hours_from_minutes(
+                summary["overtime_minutes"]
+            )
+            line.save(
+                update_fields=["absence_days", "overtime_hours", "updated_at"]
+            )
             line.recalculate(save=True)
 
             applied_lines.append(
@@ -479,7 +447,8 @@ def apply_attendance_to_run(payroll_run, *, request=None):
                     "employee_name": line.employee.display_name,
                     "absent_days": summary["absent_days"],
                     "overtime_minutes": summary["overtime_minutes"],
-                    "overtime_amount": float(overtime_amount),
+                    "overtime_hours": float(line.overtime_hours),
+                    "overtime_amount": float(line.overtime_amount),
                 }
             )
         # Clear any prefetched line cache from the viewset queryset so totals

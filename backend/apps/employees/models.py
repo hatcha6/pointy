@@ -10,6 +10,11 @@ from django.utils import timezone
 
 from apps.core.models import TimeStampedModel
 
+# Overtime is paid at the hourly wage times this multiplier unless an employee's
+# compensation plan overrides it (e.g. 1.50 for time-and-a-half).
+DEFAULT_OVERTIME_MULTIPLIER = Decimal("1.50")
+DEFAULT_STANDARD_DAILY_HOURS = Decimal("8.00")
+
 
 class Employee(TimeStampedModel):
     class Status(models.TextChoices):
@@ -170,6 +175,26 @@ class CompensationPlan(TimeStampedModel):
         decimal_places=2,
         default=Decimal("1.00"),
         validators=[MinValueValidator(Decimal("0.00"))],
+    )
+    overtime_multiplier = models.DecimalField(
+        max_digits=4,
+        decimal_places=2,
+        default=DEFAULT_OVERTIME_MULTIPLIER,
+        validators=[
+            MinValueValidator(Decimal("0.00")),
+            MaxValueValidator(Decimal("10.00")),
+        ],
+        help_text="Overtime pay rate as a multiple of the hourly wage (e.g. 1.50).",
+    )
+    standard_daily_hours = models.DecimalField(
+        max_digits=4,
+        decimal_places=2,
+        default=DEFAULT_STANDARD_DAILY_HOURS,
+        validators=[
+            MinValueValidator(Decimal("0.00")),
+            MaxValueValidator(Decimal("24.00")),
+        ],
+        help_text="Hours in a standard working day, used to derive the hourly wage.",
     )
     effective_from = models.DateField(default=timezone.localdate)
     effective_to = models.DateField(blank=True, null=True)
@@ -435,6 +460,24 @@ class PayrollLine(TimeStampedModel):
         default=Decimal("0.00"),
         validators=[MinValueValidator(Decimal("0.00"))],
     )
+    overtime_hours = models.DecimalField(
+        max_digits=7,
+        decimal_places=2,
+        default=Decimal("0.00"),
+        validators=[MinValueValidator(Decimal("0.00"))],
+    )
+    overtime_multiplier = models.DecimalField(
+        max_digits=4,
+        decimal_places=2,
+        default=DEFAULT_OVERTIME_MULTIPLIER,
+        validators=[MinValueValidator(Decimal("0.00"))],
+    )
+    overtime_amount = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=Decimal("0.00"),
+        validators=[MinValueValidator(Decimal("0.00"))],
+    )
     raise_amount = models.DecimalField(
         max_digits=12,
         decimal_places=2,
@@ -494,6 +537,37 @@ class PayrollLine(TimeStampedModel):
             return Decimal("0.00").quantize(self.MONEY_PLACES)
         return (self.gross_amount / Decimal(period_days)).quantize(self.MONEY_PLACES)
 
+    @property
+    def standard_daily_hours(self):
+        if self.compensation_plan_id:
+            hours = Decimal(self.compensation_plan.standard_daily_hours or "0.00")
+            if hours > Decimal("0.00"):
+                return hours
+        return DEFAULT_STANDARD_DAILY_HOURS
+
+    @property
+    def resolved_overtime_multiplier(self):
+        if self.compensation_plan_id:
+            return Decimal(
+                self.compensation_plan.overtime_multiplier
+                or DEFAULT_OVERTIME_MULTIPLIER
+            )
+        return Decimal(self.overtime_multiplier or DEFAULT_OVERTIME_MULTIPLIER)
+
+    @property
+    def overtime_hourly_rate(self):
+        """The base (pre-multiplier) hourly wage used to value overtime."""
+        plan = self.compensation_plan if self.compensation_plan_id else None
+        if plan is not None and (
+            plan.pay_type == CompensationPlan.PayType.HOURLY
+            or plan.resolved_salary_type == CompensationPlan.SalaryType.HOURLY_RATE
+        ):
+            return Decimal(plan.amount or "0.00").quantize(self.MONEY_PLACES)
+        daily_hours = self.standard_daily_hours
+        if daily_hours <= Decimal("0.00"):
+            return Decimal("0.00").quantize(self.MONEY_PLACES)
+        return (self.absence_day_rate / daily_hours).quantize(self.MONEY_PLACES)
+
     def recalculate(self, *, save=False):
         if self.compensation_plan_id:
             self.rate = self.compensation_plan.amount
@@ -504,8 +578,18 @@ class PayrollLine(TimeStampedModel):
         self.absence_deduction_amount = (
             self.absence_day_rate * Decimal(self.absence_days or "0.00")
         ).quantize(self.MONEY_PLACES)
-        additions = Decimal(self.raise_amount or "0.00") + Decimal(
-            self.manual_addition_amount or "0.00"
+        # Overtime pays the hourly wage times the per-employee multiplier. The
+        # multiplier is snapshotted onto the line so the figure is auditable.
+        self.overtime_multiplier = self.resolved_overtime_multiplier
+        self.overtime_amount = (
+            Decimal(self.overtime_hours or "0.00")
+            * self.overtime_hourly_rate
+            * self.overtime_multiplier
+        ).quantize(self.MONEY_PLACES)
+        additions = (
+            Decimal(self.raise_amount or "0.00")
+            + Decimal(self.manual_addition_amount or "0.00")
+            + Decimal(self.overtime_amount or "0.00")
         )
         deductions = Decimal(self.absence_deduction_amount or "0.00") + Decimal(
             self.manual_deduction_amount or "0.00"
@@ -529,6 +613,8 @@ class PayrollLine(TimeStampedModel):
                     "rate",
                     "gross_amount",
                     "absence_deduction_amount",
+                    "overtime_multiplier",
+                    "overtime_amount",
                     "additions_amount",
                     "deductions_amount",
                     "net_amount",

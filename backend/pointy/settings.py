@@ -2,6 +2,7 @@ from datetime import timedelta
 from pathlib import Path
 
 from celery.schedules import crontab
+from corsheaders.defaults import default_headers
 import environ
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -222,6 +223,17 @@ CELERY_BEAT_SCHEDULE = {
 
 CORS_ALLOWED_ORIGINS = env("CORS_ALLOWED_ORIGINS")
 CORS_ALLOW_CREDENTIALS = True
+# The POS sends custom request headers the browser lists in its CORS preflight;
+# they must be allowed or the browser silently blocks the real request (the
+# checkout POST never leaves the browser). Idempotency-Key guards every money
+# mutation (checkout, returns, voids); X-Pointy-Relay-Token rides relay setups.
+CORS_ALLOW_HEADERS = (
+    *default_headers,
+    "idempotency-key",
+    "x-pointy-relay-token",
+)
+# Let the browser read the idempotency replay marker on the response.
+CORS_EXPOSE_HEADERS = ["Idempotency-Replayed"]
 CSRF_TRUSTED_ORIGINS = env("CSRF_TRUSTED_ORIGINS")
 POINTY_ANALYTICS_BACKEND_PERFORMANCE_ENABLED = env("POINTY_ANALYTICS_BACKEND_PERFORMANCE_ENABLED")
 POINTY_ANALYTICS_BACKEND_SLOW_REQUEST_MS = env("POINTY_ANALYTICS_BACKEND_SLOW_REQUEST_MS")

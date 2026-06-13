@@ -63,6 +63,20 @@ class CompensationPlanSerializer(serializers.ModelSerializer):
         max_value=Decimal("100.00"),
         required=False,
     )
+    overtime_multiplier = serializers.DecimalField(
+        max_digits=4,
+        decimal_places=2,
+        min_value=Decimal("0.00"),
+        max_value=Decimal("10.00"),
+        required=False,
+    )
+    standard_daily_hours = serializers.DecimalField(
+        max_digits=4,
+        decimal_places=2,
+        min_value=Decimal("0.00"),
+        max_value=Decimal("24.00"),
+        required=False,
+    )
 
     class Meta:
         model = CompensationPlan
@@ -74,6 +88,8 @@ class CompensationPlanSerializer(serializers.ModelSerializer):
             "salary_type",
             "amount",
             "commission_percent",
+            "overtime_multiplier",
+            "standard_daily_hours",
             "currency",
             "expected_units_per_period",
             "effective_from",
@@ -481,6 +497,7 @@ class PayrollLineSerializer(serializers.ModelSerializer):
         read_only=True,
     )
     absence_day_rate = serializers.SerializerMethodField()
+    overtime_hourly_rate = serializers.SerializerMethodField()
     adjustments = PayrollAdjustmentSerializer(many=True, required=False)
 
     class Meta:
@@ -500,6 +517,10 @@ class PayrollLineSerializer(serializers.ModelSerializer):
             "absence_days",
             "absence_day_rate",
             "absence_deduction_amount",
+            "overtime_hours",
+            "overtime_hourly_rate",
+            "overtime_multiplier",
+            "overtime_amount",
             "raise_amount",
             "manual_addition_amount",
             "manual_deduction_amount",
@@ -520,6 +541,9 @@ class PayrollLineSerializer(serializers.ModelSerializer):
             "gross_amount",
             "absence_day_rate",
             "absence_deduction_amount",
+            "overtime_hourly_rate",
+            "overtime_multiplier",
+            "overtime_amount",
             "additions_amount",
             "deductions_amount",
             "net_amount",
@@ -539,12 +563,16 @@ class PayrollLineSerializer(serializers.ModelSerializer):
     def get_absence_day_rate(self, payroll_line):
         return money_string(payroll_line.absence_day_rate)
 
+    def get_overtime_hourly_rate(self, payroll_line):
+        return money_string(payroll_line.overtime_hourly_rate)
+
 
 class PayrollLineAdjustmentUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = PayrollLine
         fields = [
             "absence_days",
+            "overtime_hours",
             "raise_amount",
             "manual_addition_amount",
             "manual_deduction_amount",
@@ -570,6 +598,9 @@ class PayrollLineAdjustmentUpdateSerializer(serializers.ModelSerializer):
                 "gross_amount",
                 "absence_days",
                 "absence_deduction_amount",
+                "overtime_hours",
+                "overtime_multiplier",
+                "overtime_amount",
                 "raise_amount",
                 "manual_addition_amount",
                 "manual_deduction_amount",

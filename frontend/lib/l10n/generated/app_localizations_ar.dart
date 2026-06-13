@@ -2950,6 +2950,17 @@ class AppLocalizationsAr extends AppLocalizations {
   String get recipeOutputQuantityLabel => 'الكمية الناتجة لكل دفعة';
 
   @override
+  String get recipeMakeToOrderLabel => 'يُحضّر عند الطلب';
+
+  @override
+  String get recipeMakeToOrderHelper =>
+      'يُخصم المكوّنات عند بيع المنتج، دون الحاجة لمخزون خاص به.';
+
+  @override
+  String get recipeProduceToStockHelper =>
+      'يُنتَج إلى المخزون مسبقًا عبر أمر إنتاج، ثم يُباع من المخزون.';
+
+  @override
   String get recipeComponentsTitle => 'المكونات';
 
   @override
@@ -6128,6 +6139,10 @@ class AppLocalizationsAr extends AppLocalizations {
       'تعذر تسجيل البيع. تحقق من جلسة الدرج وحاول مرة أخرى.';
 
   @override
+  String get saleCheckoutSessionExpired =>
+      'لم تعد جلسة الدرج مفتوحة. يرجى فتح جلسة درج جديدة ثم إعادة المحاولة.';
+
+  @override
   String get oversellWarningTitle => 'تنبيه المخزون';
 
   @override
@@ -7635,8 +7650,37 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
+  String payrollOvertimeChipLabel(String hours, String amount) {
+    return 'إضافي $hours س ($amount)';
+  }
+
+  @override
+  String get payrollLineOvertimePayLabel => 'أجر العمل الإضافي';
+
+  @override
+  String get overtimeHoursField => 'ساعات العمل الإضافي';
+
+  @override
+  String overtimeHoursHelper(String rate, String multiplier) {
+    return 'تُحتسب تلقائيًا: $rate للساعة × $multiplier';
+  }
+
+  @override
+  String get overtimeMultiplierField => 'معامل الأجر الإضافي';
+
+  @override
+  String get overtimeMultiplierHelper =>
+      'مثال: 1.50 يعني أجر الساعة الإضافية = 1.5 ضعف الأجر العادي';
+
+  @override
+  String get standardDailyHoursField => 'ساعات العمل اليومية';
+
+  @override
+  String get standardDailyHoursHelper => 'تُستخدم لاحتساب أجر الساعة الواحدة';
+
+  @override
   String get payrollLineTapToAdjustHint =>
-      'اضغط على موظف لتعديل غيابه وإضافاته وخصوماته.';
+      'اضغط على موظف لتعديل غيابه وعمله الإضافي وإضافاته وخصوماته.';
 
   @override
   String get employeeNoPlanWarning => 'لا توجد خطة راتب';

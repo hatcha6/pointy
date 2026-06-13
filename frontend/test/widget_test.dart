@@ -1073,6 +1073,37 @@ void main() {
     expect(find.text('لا توجد عناصر في السلة'), findsNothing);
   });
 
+  testWidgets('checkout surfaces a clear message when the session is stale', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(1200, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      PointyApp(apiService: _mockApiService(checkoutNoOpenSession: true)),
+    );
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+
+    await _startRegisterSession(tester);
+    await tester.tap(find.byType(ProductTile).first);
+    await tester.pump();
+
+    await tester.tap(find.text('ادفع 3.50 د.ل'));
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+    await _confirmPayment(tester);
+
+    // Instead of the generic error, the cashier sees an actionable message
+    // telling them to open a new register session.
+    expect(
+      find.text(
+        'لم تعد جلسة الدرج مفتوحة. يرجى فتح جلسة درج جديدة ثم إعادة المحاولة.',
+      ),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('checkout warns before allowed oversell', (
     WidgetTester tester,
   ) async {
@@ -1111,6 +1142,48 @@ void main() {
 
     await tester.tap(find.text('إتمام البيع'));
     await tester.pumpAndSettle(const Duration(seconds: 1));
+    await _confirmPayment(tester);
+
+    expect(checkoutBody, isNotNull);
+    expect(find.text('تم تسجيل البيع. رقم الإيصال: R-100'), findsOneWidget);
+  });
+
+  testWidgets('checkout sells a made-to-order product with no own stock', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(1200, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    Map<String, Object?>? checkoutBody;
+
+    await tester.pumpWidget(
+      PointyApp(
+        apiService: _mockApiService(
+          // A recipe/made-to-order product carries no stock of its own and
+          // overselling is off — the POS must not block it on a phantom
+          // shortage (the backend skips stock for prepared products).
+          productQuantityOnHand: 0,
+          productIsPrepared: true,
+          shopSettingsAllowOverselling: false,
+          onCheckout: (request) {
+            checkoutBody = jsonDecode(request.body) as Map<String, Object?>;
+          },
+        ),
+      ),
+    );
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+
+    await _startRegisterSession(tester);
+    await tester.tap(find.byType(ProductTile).first);
+    await tester.pump();
+
+    await tester.tap(find.text('ادفع 3.50 د.ل'));
+    await tester.pumpAndSettle();
+
+    // No stock warning dialog appears; checkout proceeds straight to payment.
+    expect(find.text('تنبيه المخزون'), findsNothing);
     await _confirmPayment(tester);
 
     expect(checkoutBody, isNotNull);
@@ -4265,6 +4338,7 @@ PosApiService _mockApiService({
   bool isAuthenticated = true,
   bool hasOpenSession = false,
   int checkoutStatusCode = 200,
+  bool checkoutNoOpenSession = false,
   int purchaseReturnStatusCode = 200,
   String purchaseOrderDetailStatus = 'draft',
   bool purchaseOrderDetailCanAdjust = true,
@@ -4310,6 +4384,7 @@ PosApiService _mockApiService({
   bool saleDiscountPreviewHasLoss = false,
   int shopSettingsCashierReturnWindowHours = 42,
   int productQuantityOnHand = 12,
+  bool productIsPrepared = false,
   String productBarcode = '',
   String registerHistorySessionStatus = 'closed',
   bool orderCanVoid = true,
@@ -4709,6 +4784,7 @@ PosApiService _mockApiService({
           _productPageJson(
             quantityOnHand: productQuantityOnHand,
             barcode: productBarcode,
+            isPrepared: productIsPrepared,
           ),
         );
       }
@@ -5306,6 +5382,12 @@ PosApiService _mockApiService({
 
       if (path.endsWith('/orders/checkout/')) {
         onCheckout?.call(request);
+        if (checkoutNoOpenSession) {
+          return _jsonResponse(
+            {'detail': 'No open register session for this request owner.'},
+            statusCode: 400,
+          );
+        }
         if (checkoutStatusCode < 200 || checkoutStatusCode >= 300) {
           return http.Response('bad request', checkoutStatusCode);
         }
@@ -5895,22 +5977,31 @@ Map<String, Object?> _backupJobJson() {
 Map<String, Object?> _productPageJson({
   int quantityOnHand = 12,
   String barcode = '',
+  bool isPrepared = false,
 }) {
   return {
     'next': null,
-    'results': [_productJson(quantityOnHand: quantityOnHand, barcode: barcode)],
+    'results': [
+      _productJson(
+        quantityOnHand: quantityOnHand,
+        barcode: barcode,
+        isPrepared: isPrepared,
+      ),
+    ],
   };
 }
 
 Map<String, Object?> _productJson({
   int quantityOnHand = 12,
   String barcode = '',
+  bool isPrepared = false,
 }) {
   return {
     'id': 1,
     'name': 'قهوة البيت',
     'description': '',
     'is_active': true,
+    'is_prepared': isPrepared,
     'categories': const [],
     'category_details': const [],
     'variant_options': const [],
@@ -5919,9 +6010,14 @@ Map<String, Object?> _productJson({
     'default_variant': _productVariantJson(
       quantityOnHand: quantityOnHand,
       barcode: barcode,
+      isPrepared: isPrepared,
     ),
     'variants': [
-      _productVariantJson(quantityOnHand: quantityOnHand, barcode: barcode),
+      _productVariantJson(
+        quantityOnHand: quantityOnHand,
+        barcode: barcode,
+        isPrepared: isPrepared,
+      ),
     ],
   };
 }
@@ -5931,6 +6027,7 @@ Map<String, Object?> _productVariantJson({
   int productId = 1,
   int quantityOnHand = 12,
   String barcode = '',
+  bool isPrepared = false,
 }) {
   return {
     'id': id,
@@ -5954,6 +6051,7 @@ Map<String, Object?> _productVariantJson({
     'unit_price': '3.50',
     'is_active': true,
     'is_default': true,
+    'is_prepared': isPrepared,
     'option_values': const [],
     'option_value_details': const [],
     'quantity_on_hand': quantityOnHand,

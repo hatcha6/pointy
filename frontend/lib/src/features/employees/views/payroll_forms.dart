@@ -213,6 +213,8 @@ class _CompensationPlanFormState extends State<CompensationPlanForm> {
   final _baseSalaryController = TextEditingController();
   final _commissionController = TextEditingController(text: '0.00');
   final _expectedUnitsController = TextEditingController(text: '1.00');
+  final _overtimeMultiplierController = TextEditingController(text: '1.50');
+  final _dailyHoursController = TextEditingController(text: '8.00');
   final _notesController = TextEditingController();
   SalaryType _salaryType = SalaryType.monthlyFixed;
   bool _submitted = false;
@@ -222,6 +224,8 @@ class _CompensationPlanFormState extends State<CompensationPlanForm> {
     _baseSalaryController.dispose();
     _commissionController.dispose();
     _expectedUnitsController.dispose();
+    _overtimeMultiplierController.dispose();
+    _dailyHoursController.dispose();
     _notesController.dispose();
     super.dispose();
   }
@@ -314,6 +318,39 @@ class _CompensationPlanFormState extends State<CompensationPlanForm> {
             icon: Icons.link_off_outlined,
             compact: true,
           ),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: TextField(
+                controller: _overtimeMultiplierController,
+                decoration: InputDecoration(
+                  labelText: l10n.overtimeMultiplierField,
+                  helperText: l10n.overtimeMultiplierHelper,
+                  suffixText: '×',
+                ),
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+                inputFormatters: [DecimalTextInputFormatter()],
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: TextField(
+                controller: _dailyHoursController,
+                decoration: InputDecoration(
+                  labelText: l10n.standardDailyHoursField,
+                  helperText: l10n.standardDailyHoursHelper,
+                ),
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+                inputFormatters: [DecimalTextInputFormatter()],
+              ),
+            ),
+          ],
+        ),
         if (_showsNotes)
           TextField(
             controller: _notesController,
@@ -356,6 +393,12 @@ class _CompensationPlanFormState extends State<CompensationPlanForm> {
         commissionPercent: _requiresCommission
             ? _commissionController.text.trim()
             : '0.00',
+        overtimeMultiplier: _overtimeMultiplierController.text.trim().isEmpty
+            ? '1.50'
+            : _overtimeMultiplierController.text.trim(),
+        standardDailyHours: _dailyHoursController.text.trim().isEmpty
+            ? '8.00'
+            : _dailyHoursController.text.trim(),
         expectedUnitsPerPeriod: _requiresExpectedUnits
             ? _expectedUnitsController.text.trim()
             : '1.00',

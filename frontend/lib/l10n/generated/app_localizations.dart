@@ -5217,6 +5217,24 @@ abstract class AppLocalizations {
   /// **'الكمية الناتجة لكل دفعة'**
   String get recipeOutputQuantityLabel;
 
+  /// No description provided for @recipeMakeToOrderLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'يُحضّر عند الطلب'**
+  String get recipeMakeToOrderLabel;
+
+  /// No description provided for @recipeMakeToOrderHelper.
+  ///
+  /// In ar, this message translates to:
+  /// **'يُخصم المكوّنات عند بيع المنتج، دون الحاجة لمخزون خاص به.'**
+  String get recipeMakeToOrderHelper;
+
+  /// No description provided for @recipeProduceToStockHelper.
+  ///
+  /// In ar, this message translates to:
+  /// **'يُنتَج إلى المخزون مسبقًا عبر أمر إنتاج، ثم يُباع من المخزون.'**
+  String get recipeProduceToStockHelper;
+
   /// No description provided for @recipeComponentsTitle.
   ///
   /// In ar, this message translates to:
@@ -10633,6 +10651,12 @@ abstract class AppLocalizations {
   /// **'تعذر تسجيل البيع. تحقق من جلسة الدرج وحاول مرة أخرى.'**
   String get saleCheckoutError;
 
+  /// No description provided for @saleCheckoutSessionExpired.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم تعد جلسة الدرج مفتوحة. يرجى فتح جلسة درج جديدة ثم إعادة المحاولة.'**
+  String get saleCheckoutSessionExpired;
+
   /// No description provided for @oversellWarningTitle.
   ///
   /// In ar, this message translates to:
@@ -13223,10 +13247,58 @@ abstract class AppLocalizations {
   /// **'غياب {days} يوم'**
   String payrollAbsenceChipLabel(String days);
 
+  /// Payroll line overtime chip showing hours and pay.
+  ///
+  /// In ar, this message translates to:
+  /// **'إضافي {hours} س ({amount})'**
+  String payrollOvertimeChipLabel(String hours, String amount);
+
+  /// No description provided for @payrollLineOvertimePayLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'أجر العمل الإضافي'**
+  String get payrollLineOvertimePayLabel;
+
+  /// No description provided for @overtimeHoursField.
+  ///
+  /// In ar, this message translates to:
+  /// **'ساعات العمل الإضافي'**
+  String get overtimeHoursField;
+
+  /// Helper under the overtime hours field showing hourly rate and multiplier.
+  ///
+  /// In ar, this message translates to:
+  /// **'تُحتسب تلقائيًا: {rate} للساعة × {multiplier}'**
+  String overtimeHoursHelper(String rate, String multiplier);
+
+  /// No description provided for @overtimeMultiplierField.
+  ///
+  /// In ar, this message translates to:
+  /// **'معامل الأجر الإضافي'**
+  String get overtimeMultiplierField;
+
+  /// No description provided for @overtimeMultiplierHelper.
+  ///
+  /// In ar, this message translates to:
+  /// **'مثال: 1.50 يعني أجر الساعة الإضافية = 1.5 ضعف الأجر العادي'**
+  String get overtimeMultiplierHelper;
+
+  /// No description provided for @standardDailyHoursField.
+  ///
+  /// In ar, this message translates to:
+  /// **'ساعات العمل اليومية'**
+  String get standardDailyHoursField;
+
+  /// No description provided for @standardDailyHoursHelper.
+  ///
+  /// In ar, this message translates to:
+  /// **'تُستخدم لاحتساب أجر الساعة الواحدة'**
+  String get standardDailyHoursHelper;
+
   /// No description provided for @payrollLineTapToAdjustHint.
   ///
   /// In ar, this message translates to:
-  /// **'اضغط على موظف لتعديل غيابه وإضافاته وخصوماته.'**
+  /// **'اضغط على موظف لتعديل غيابه وعمله الإضافي وإضافاته وخصوماته.'**
   String get payrollLineTapToAdjustHint;
 
   /// No description provided for @employeeNoPlanWarning.

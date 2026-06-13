@@ -232,6 +232,77 @@ class EmployeePayrollApiTests(TestCase):
         self.assertEqual(updated_line["deductions_amount"], "70.00")
         self.assertEqual(updated_line["net_amount"], "955.00")
 
+    def test_payroll_run_detail_adds_overtime_hours_manually(self):
+        employee = Employee.objects.create(full_name="عمر سعيد")
+        plan = CompensationPlan.objects.create(
+            employee=employee,
+            pay_type=CompensationPlan.PayType.MONTHLY_SALARY,
+            salary_type=CompensationPlan.SalaryType.MONTHLY_FIXED,
+            amount=Decimal("900.00"),
+        )
+        payroll = PayrollRun.objects.create(
+            period_start=date(2026, 6, 1),
+            period_end=date(2026, 6, 30),
+        )
+        line = payroll.lines.create(
+            employee=employee,
+            compensation_plan=plan,
+            units=Decimal("1.00"),
+        )
+        payroll.recalculate(save_lines=True)
+        payroll.save()
+
+        # Manual overtime entry through the payroll screen — no BioTime involved.
+        response = self.authenticated_client(self.accountant).patch(
+            reverse("payroll-run-update-line-adjustments", args=[payroll.pk, line.pk]),
+            {"overtime_hours": "10.00"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        updated_line = response.data["lines"][0]
+        self.assertEqual(updated_line["overtime_hours"], "10.00")
+        # 900/30 day rate = 30.00; /8h = 3.75 hourly; default 1.50× ⇒ 5.625/h.
+        self.assertEqual(updated_line["overtime_hourly_rate"], "3.75")
+        self.assertEqual(updated_line["overtime_multiplier"], "1.50")
+        self.assertEqual(updated_line["overtime_amount"], "56.25")
+        self.assertEqual(updated_line["additions_amount"], "56.25")
+        self.assertEqual(response.data["net_total"], "956.25")
+
+    def test_per_employee_overtime_multiplier_is_configurable(self):
+        employee = Employee.objects.create(full_name="ليلى حسن")
+        plan = CompensationPlan.objects.create(
+            employee=employee,
+            pay_type=CompensationPlan.PayType.MONTHLY_SALARY,
+            salary_type=CompensationPlan.SalaryType.MONTHLY_FIXED,
+            amount=Decimal("900.00"),
+            overtime_multiplier=Decimal("2.00"),
+        )
+        payroll = PayrollRun.objects.create(
+            period_start=date(2026, 6, 1),
+            period_end=date(2026, 6, 30),
+        )
+        line = payroll.lines.create(
+            employee=employee,
+            compensation_plan=plan,
+            units=Decimal("1.00"),
+        )
+        payroll.recalculate(save_lines=True)
+        payroll.save()
+
+        response = self.authenticated_client(self.accountant).patch(
+            reverse("payroll-run-update-line-adjustments", args=[payroll.pk, line.pk]),
+            {"overtime_hours": "10.00"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        updated_line = response.data["lines"][0]
+        # Same 10h, but this employee earns 2.0×: 10 × 3.75 × 2.00 = 75.00.
+        self.assertEqual(updated_line["overtime_multiplier"], "2.00")
+        self.assertEqual(updated_line["overtime_amount"], "75.00")
+        self.assertEqual(response.data["net_total"], "975.00")
+
     def test_payroll_line_adjustments_are_locked_after_draft_status(self):
         employee = Employee.objects.create(full_name="منى صالح")
         payroll = PayrollRun.objects.create(

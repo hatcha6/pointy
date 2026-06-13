@@ -28,6 +28,13 @@ class SaleCheckoutLossException implements Exception {
   final List<SaleLossLine> lossLines;
 }
 
+/// The backend has no open register session for this request owner — the
+/// frontend's cached session is stale (closed elsewhere, or the data was
+/// reset). The POS must send the user back to open a fresh session.
+class SaleCheckoutNoSessionException implements Exception {
+  const SaleCheckoutNoSessionException();
+}
+
 class SaleRepository {
   SaleRepository(this._service);
 
@@ -47,6 +54,9 @@ class SaleRepository {
       final lossLines = _lossLinesFromException(exception);
       if (lossLines.isNotEmpty) {
         return Error(SaleCheckoutLossException(lossLines));
+      }
+      if (_isNoOpenSessionError(exception)) {
+        return const Error(SaleCheckoutNoSessionException());
       }
       return Error(exception);
     } on Exception catch (exception) {
@@ -135,6 +145,18 @@ class SaleRepository {
           );
         })
         .toList(growable: false);
+  }
+
+  bool _isNoOpenSessionError(PosApiException exception) {
+    if (exception.statusCode != 400) {
+      return false;
+    }
+    final decoded = exception.decodedBody;
+    if (decoded is! Map<String, Object?>) {
+      return false;
+    }
+    final detail = decoded['detail']?.toString().toLowerCase() ?? '';
+    return detail.contains('register session');
   }
 
   List<SaleLossLine> _lossLinesFromException(PosApiException exception) {

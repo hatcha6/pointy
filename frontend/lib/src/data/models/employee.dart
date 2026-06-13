@@ -211,6 +211,8 @@ class CompensationPlan {
     required this.amount,
     required this.effectiveFrom,
     this.commissionPercent = 0,
+    this.overtimeMultiplier = 1.5,
+    this.standardDailyHours = 8,
     this.currency = 'LYD',
     this.expectedUnitsPerPeriod = 1,
     this.effectiveTo,
@@ -223,6 +225,8 @@ class CompensationPlan {
   final SalaryType? salaryType;
   final double amount;
   final double commissionPercent;
+  final double overtimeMultiplier;
+  final double standardDailyHours;
   final String currency;
   final double expectedUnitsPerPeriod;
   final DateTime? effectiveFrom;
@@ -237,6 +241,14 @@ class CompensationPlan {
       salaryType: SalaryType.fromJson(json['salary_type']),
       amount: _doubleFromJson(json['amount']),
       commissionPercent: _doubleFromJson(json['commission_percent']),
+      overtimeMultiplier: _doubleFromJson(
+        json['overtime_multiplier'],
+        fallback: 1.5,
+      ),
+      standardDailyHours: _doubleFromJson(
+        json['standard_daily_hours'],
+        fallback: 8,
+      ),
       currency: json['currency']?.toString() ?? 'LYD',
       expectedUnitsPerPeriod: _doubleFromJson(
         json['expected_units_per_period'],
@@ -556,6 +568,10 @@ class PayrollLine {
     this.absenceDays = 0,
     this.absenceDayRate = 0,
     this.absenceDeductionAmount = 0,
+    this.overtimeHours = 0,
+    this.overtimeHourlyRate = 0,
+    this.overtimeMultiplier = 1.5,
+    this.overtimeAmount = 0,
     this.raiseAmount = 0,
     this.manualAdditionAmount = 0,
     this.manualDeductionAmount = 0,
@@ -580,6 +596,10 @@ class PayrollLine {
   final double absenceDays;
   final double absenceDayRate;
   final double absenceDeductionAmount;
+  final double overtimeHours;
+  final double overtimeHourlyRate;
+  final double overtimeMultiplier;
+  final double overtimeAmount;
   final double raiseAmount;
   final double manualAdditionAmount;
   final double manualDeductionAmount;
@@ -610,6 +630,13 @@ class PayrollLine {
       absenceDays: _doubleFromJson(json['absence_days']),
       absenceDayRate: _doubleFromJson(json['absence_day_rate']),
       absenceDeductionAmount: _doubleFromJson(json['absence_deduction_amount']),
+      overtimeHours: _doubleFromJson(json['overtime_hours']),
+      overtimeHourlyRate: _doubleFromJson(json['overtime_hourly_rate']),
+      overtimeMultiplier: _doubleFromJson(
+        json['overtime_multiplier'],
+        fallback: 1.5,
+      ),
+      overtimeAmount: _doubleFromJson(json['overtime_amount']),
       raiseAmount: _doubleFromJson(json['raise_amount']),
       manualAdditionAmount: _doubleFromJson(json['manual_addition_amount']),
       manualDeductionAmount: _doubleFromJson(json['manual_deduction_amount']),
@@ -720,6 +747,8 @@ class CompensationPlanDraft {
     required this.salaryType,
     required this.amount,
     this.commissionPercent = '0.00',
+    this.overtimeMultiplier = '1.50',
+    this.standardDailyHours = '8.00',
     this.expectedUnitsPerPeriod = '1.00',
     this.notes = '',
   });
@@ -728,6 +757,8 @@ class CompensationPlanDraft {
   final SalaryType salaryType;
   final String amount;
   final String commissionPercent;
+  final String overtimeMultiplier;
+  final String standardDailyHours;
   final String expectedUnitsPerPeriod;
   final String notes;
   PayType get payType => salaryType.payType;
@@ -739,6 +770,8 @@ class CompensationPlanDraft {
       'salary_type': salaryType.toJson(),
       'amount': amount,
       'commission_percent': commissionPercent,
+      'overtime_multiplier': overtimeMultiplier,
+      'standard_daily_hours': standardDailyHours,
       'expected_units_per_period': expectedUnitsPerPeriod,
       if (notes.trim().isNotEmpty) 'notes': notes.trim(),
       'is_active': true,
@@ -764,6 +797,7 @@ class PayrollDraftResult {
 class PayrollLineAdjustmentDraft {
   const PayrollLineAdjustmentDraft({
     this.absenceDays = '0.00',
+    this.overtimeHours = '0.00',
     this.raiseAmount = '0.00',
     this.manualAdditionAmount = '0.00',
     this.manualDeductionAmount = '0.00',
@@ -771,6 +805,7 @@ class PayrollLineAdjustmentDraft {
   });
 
   final String absenceDays;
+  final String overtimeHours;
   final String raiseAmount;
   final String manualAdditionAmount;
   final String manualDeductionAmount;
@@ -779,6 +814,7 @@ class PayrollLineAdjustmentDraft {
   Map<String, Object?> toJson() {
     return {
       'absence_days': absenceDays,
+      'overtime_hours': overtimeHours,
       'raise_amount': raiseAmount,
       'manual_addition_amount': manualAdditionAmount,
       'manual_deduction_amount': manualDeductionAmount,

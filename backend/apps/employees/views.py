@@ -403,6 +403,8 @@ class PayrollRunViewSet(viewsets.ModelViewSet):
             },
             metrics={
                 "absence_days": float(line.absence_days),
+                "overtime_hours": float(line.overtime_hours),
+                "overtime_amount": float(line.overtime_amount),
                 "raise_amount": float(line.raise_amount),
                 "manual_addition_amount": float(line.manual_addition_amount),
                 "manual_deduction_amount": float(line.manual_deduction_amount),

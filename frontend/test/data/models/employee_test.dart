@@ -198,6 +198,7 @@ void main() {
 
     final adjustment = const PayrollLineAdjustmentDraft(
       absenceDays: '2.00',
+      overtimeHours: '6.00',
       raiseAmount: '100.00',
       manualAdditionAmount: '25.00',
       manualDeductionAmount: '10.00',
@@ -205,6 +206,7 @@ void main() {
     ).toJson();
     expect(adjustment, {
       'absence_days': '2.00',
+      'overtime_hours': '6.00',
       'raise_amount': '100.00',
       'manual_addition_amount': '25.00',
       'manual_deduction_amount': '10.00',

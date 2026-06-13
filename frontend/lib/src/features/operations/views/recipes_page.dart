@@ -205,6 +205,7 @@ class _RecipeEditorPageState extends State<_RecipeEditorPage> {
   String _outputVariantLabel = '';
   late List<_EditableLine> _lines;
   var _showValidation = false;
+  var _makeToOrder = true;
 
   @override
   void initState() {
@@ -214,6 +215,7 @@ class _RecipeEditorPageState extends State<_RecipeEditorPage> {
     _outputQuantityController = TextEditingController(
       text: '${recipe?.outputQuantity ?? 1}',
     );
+    _makeToOrder = recipe?.isPrepared ?? true;
     _outputVariantId = recipe?.variant;
     _outputVariantLabel = recipe == null
         ? ''
@@ -303,6 +305,27 @@ class _RecipeEditorPageState extends State<_RecipeEditorPage> {
                       decoration: InputDecoration(
                         labelText: l10n.recipeOutputQuantityLabel,
                       ),
+                    ),
+                    SizedBox(height: spacing.md),
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        side: BorderSide(
+                          color: Theme.of(context).colorScheme.outlineVariant,
+                        ),
+                      ),
+                      secondary: const Icon(Icons.restaurant_outlined),
+                      title: Text(l10n.recipeMakeToOrderLabel),
+                      subtitle: Text(
+                        _makeToOrder
+                            ? l10n.recipeMakeToOrderHelper
+                            : l10n.recipeProduceToStockHelper,
+                      ),
+                      value: _makeToOrder,
+                      onChanged: isSaving
+                          ? null
+                          : (value) => setState(() => _makeToOrder = value),
                     ),
                     SizedBox(height: spacing.lg),
                     PointySectionHeader(
@@ -460,6 +483,7 @@ class _RecipeEditorPageState extends State<_RecipeEditorPage> {
         variant: _outputVariantId!,
         outputQuantity:
             int.tryParse(_outputQuantityController.text.trim()) ?? 1,
+        makeToOrder: _makeToOrder,
         lines: [
           for (final line in _lines)
             BomLineDraft(

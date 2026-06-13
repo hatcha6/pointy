@@ -578,7 +578,8 @@ class _PayrollLineTile extends StatelessWidget {
     final hasModifiers =
         line.additionsAmount > 0 ||
         line.deductionsAmount > 0 ||
-        line.absenceDays > 0;
+        line.absenceDays > 0 ||
+        line.overtimeHours > 0;
 
     return Card(
       margin: EdgeInsets.zero,
@@ -685,6 +686,20 @@ class _PayrollLineTile extends StatelessWidget {
                         ),
                         icon: Icons.event_busy_outlined,
                         color: colors.warning,
+                      ),
+                    if (line.overtimeHours > 0)
+                      PointyStatusPill(
+                        label: l10n.payrollOvertimeChipLabel(
+                          line.overtimeHours.toStringAsFixed(
+                            line.overtimeHours.truncateToDouble() ==
+                                    line.overtimeHours
+                                ? 0
+                                : 1,
+                          ),
+                          formatMoney(line.overtimeAmount),
+                        ),
+                        icon: Icons.more_time_outlined,
+                        color: colors.success,
                       ),
                   ],
                 ),

@@ -1712,6 +1712,9 @@
   "recipeNameLabel": "اسم الوصفة",
   "recipeOutputVariantLabel": "المنتج الناتج",
   "recipeOutputQuantityLabel": "الكمية الناتجة لكل دفعة",
+  "recipeMakeToOrderLabel": "يُحضّر عند الطلب",
+  "recipeMakeToOrderHelper": "يُخصم المكوّنات عند بيع المنتج، دون الحاجة لمخزون خاص به.",
+  "recipeProduceToStockHelper": "يُنتَج إلى المخزون مسبقًا عبر أمر إنتاج، ثم يُباع من المخزون.",
   "recipeComponentsTitle": "المكونات",
   "recipeAddComponentButton": "إضافة مكوّن",
   "recipeComponentQuantityLabel": "الكمية",
@@ -3606,6 +3609,7 @@
     }
   },
   "saleCheckoutError": "تعذر تسجيل البيع. تحقق من جلسة الدرج وحاول مرة أخرى.",
+  "saleCheckoutSessionExpired": "لم تعد جلسة الدرج مفتوحة. يرجى فتح جلسة درج جديدة ثم إعادة المحاولة.",
   "oversellWarningTitle": "تنبيه المخزون",
   "oversellWarningMessage": "تتجاوز بعض عناصر السلة الكمية المتاحة. هل تريد إتمام البيع رغم ذلك؟",
   "oversellBlockedMessage": "لا يمكن إتمام البيع لأن الكمية المطلوبة تتجاوز المخزون المتاح.",
@@ -4702,7 +4706,37 @@
       }
     }
   },
-  "payrollLineTapToAdjustHint": "اضغط على موظف لتعديل غيابه وإضافاته وخصوماته.",
+  "payrollOvertimeChipLabel": "إضافي {hours} س ({amount})",
+  "@payrollOvertimeChipLabel": {
+    "description": "Payroll line overtime chip showing hours and pay.",
+    "placeholders": {
+      "hours": {
+        "type": "String"
+      },
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "payrollLineOvertimePayLabel": "أجر العمل الإضافي",
+  "overtimeHoursField": "ساعات العمل الإضافي",
+  "overtimeHoursHelper": "تُحتسب تلقائيًا: {rate} للساعة × {multiplier}",
+  "@overtimeHoursHelper": {
+    "description": "Helper under the overtime hours field showing hourly rate and multiplier.",
+    "placeholders": {
+      "rate": {
+        "type": "String"
+      },
+      "multiplier": {
+        "type": "String"
+      }
+    }
+  },
+  "overtimeMultiplierField": "معامل الأجر الإضافي",
+  "overtimeMultiplierHelper": "مثال: 1.50 يعني أجر الساعة الإضافية = 1.5 ضعف الأجر العادي",
+  "standardDailyHoursField": "ساعات العمل اليومية",
+  "standardDailyHoursHelper": "تُستخدم لاحتساب أجر الساعة الواحدة",
+  "payrollLineTapToAdjustHint": "اضغط على موظف لتعديل غيابه وعمله الإضافي وإضافاته وخصوماته.",
   "employeeNoPlanWarning": "لا توجد خطة راتب",
   "employeeCompensationButton": "خطة الراتب",
   "addEmployeeButton": "إضافة موظف",

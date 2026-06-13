@@ -452,6 +452,14 @@ class BillOfMaterialsSerializer(serializers.ModelSerializer):
         source="variant.product.name",
         read_only=True,
     )
+    # A recipe's output is made-to-order by default: selling it consumes the
+    # recipe ingredients (via the kitchen job) instead of drawing down its own
+    # stock. Untick this for goods produced into stock ahead of time.
+    make_to_order = serializers.BooleanField(write_only=True, required=False)
+    is_prepared = serializers.BooleanField(
+        source="variant.product.is_prepared",
+        read_only=True,
+    )
 
     class Meta:
         model = BillOfMaterials
@@ -463,6 +471,8 @@ class BillOfMaterialsSerializer(serializers.ModelSerializer):
             "product_name",
             "output_quantity",
             "is_active",
+            "make_to_order",
+            "is_prepared",
             "lines",
             "created_at",
             "updated_at",
@@ -484,19 +494,36 @@ class BillOfMaterialsSerializer(serializers.ModelSerializer):
         return attrs
 
     def create(self, validated_data):
+        # New recipes default to made-to-order so selling the output consumes
+        # the recipe instead of needing its own stock — the common case and the
+        # one the POS now expects.
+        make_to_order = validated_data.pop("make_to_order", True)
         lines = validated_data.pop("lines")
         bom = BillOfMaterials.objects.create(**validated_data)
         self._sync_lines(bom, lines)
+        self._apply_make_to_order(bom, make_to_order)
         return bom
 
     def update(self, instance, validated_data):
+        # On edit, only change the made-to-order flag when the client sends it,
+        # so a deliberate produce-to-stock choice is never silently reverted.
+        make_to_order = validated_data.pop("make_to_order", None)
         lines = validated_data.pop("lines", None)
         for field, value in validated_data.items():
             setattr(instance, field, value)
         instance.save()
         if lines is not None:
             self._sync_lines(instance, lines)
+        self._apply_make_to_order(instance, make_to_order)
         return instance
+
+    def _apply_make_to_order(self, bom, make_to_order):
+        if make_to_order is None:
+            return
+        product = bom.variant.product
+        if product.is_prepared != make_to_order:
+            product.is_prepared = make_to_order
+            product.save(update_fields=["is_prepared", "updated_at"])
 
     def _sync_lines(self, bom, lines):
         existing = {line.pk: line for line in bom.lines.all()}

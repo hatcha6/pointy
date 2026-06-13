@@ -1700,3 +1700,28 @@ class AuthThrottlingTests(TestCase):
             side_effect=RuntimeError("cache down"),
         ):
             self.assertTrue(throttle.allow_request(mock.Mock(), mock.Mock()))
+
+
+class CorsPreflightTests(TestCase):
+    """The browser must be told the POS's custom headers are allowed, or it
+    silently blocks the real request after a successful preflight.
+    """
+
+    @override_settings(CORS_ALLOWED_ORIGINS=["http://127.0.0.1:8080"])
+    def test_checkout_preflight_allows_idempotency_key_header(self):
+        response = self.client.options(
+            "/api/orders/checkout/",
+            HTTP_ORIGIN="http://127.0.0.1:8080",
+            HTTP_ACCESS_CONTROL_REQUEST_METHOD="POST",
+            HTTP_ACCESS_CONTROL_REQUEST_HEADERS="content-type,idempotency-key",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.headers.get("access-control-allow-origin"),
+            "http://127.0.0.1:8080",
+        )
+        allow_headers = response.headers.get(
+            "access-control-allow-headers", ""
+        ).lower()
+        self.assertIn("idempotency-key", allow_headers)
+        self.assertIn("x-pointy-relay-token", allow_headers)

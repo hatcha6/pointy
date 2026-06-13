@@ -369,6 +369,7 @@ class _PayrollLineAdjustmentSheet extends StatefulWidget {
 class _PayrollLineAdjustmentSheetState
     extends State<_PayrollLineAdjustmentSheet> {
   late final TextEditingController _absenceDaysController;
+  late final TextEditingController _overtimeHoursController;
   late final TextEditingController _raiseAmountController;
   late final TextEditingController _manualAdditionController;
   late final TextEditingController _manualDeductionController;
@@ -379,6 +380,9 @@ class _PayrollLineAdjustmentSheetState
     super.initState();
     _absenceDaysController = TextEditingController(
       text: decimalInput(widget.line.absenceDays),
+    );
+    _overtimeHoursController = TextEditingController(
+      text: decimalInput(widget.line.overtimeHours),
     );
     _raiseAmountController = TextEditingController(
       text: decimalInput(widget.line.raiseAmount),
@@ -397,6 +401,7 @@ class _PayrollLineAdjustmentSheetState
 
   List<TextEditingController> get _amountControllers => [
     _absenceDaysController,
+    _overtimeHoursController,
     _raiseAmountController,
     _manualAdditionController,
     _manualDeductionController,
@@ -462,6 +467,21 @@ class _PayrollLineAdjustmentSheetState
             ),
             SizedBox(height: spacing.sm),
             TextFormField(
+              controller: _overtimeHoursController,
+              decoration: InputDecoration(
+                labelText: l10n.overtimeHoursField,
+                helperText: l10n.overtimeHoursHelper(
+                  formatMoney(_overtimeHourlyRate),
+                  decimalInput(widget.line.overtimeMultiplier),
+                ),
+              ),
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
+              inputFormatters: [DecimalTextInputFormatter()],
+            ),
+            SizedBox(height: spacing.sm),
+            TextFormField(
               controller: _raiseAmountController,
               decoration: InputDecoration(
                 labelText: l10n.raiseAmountField,
@@ -516,6 +536,10 @@ class _PayrollLineAdjustmentSheetState
                   PointyDetailRow(
                     label: l10n.payrollLineAbsenceDeductionLabel,
                     value: formatMoney(absenceDeduction),
+                  ),
+                  PointyDetailRow(
+                    label: l10n.payrollLineOvertimePayLabel,
+                    value: formatMoney(_overtimeAmount),
                   ),
                   PointyDetailRow(
                     label: l10n.payrollLineAdditionsLabel,
@@ -604,9 +628,29 @@ class _PayrollLineAdjustmentSheetState
     );
   }
 
+  double get _overtimeHourlyRate {
+    // The backend computes the hourly wage from the employee's plan (day rate
+    // divided by standard daily hours); fall back to an 8h day for a fresh line.
+    if (widget.line.overtimeHourlyRate > 0) {
+      return widget.line.overtimeHourlyRate;
+    }
+    return _absenceDayRate / 8.0;
+  }
+
+  double get _overtimeAmount {
+    return roundMoney(
+      decimalValue(_overtimeHoursController.text) *
+          _overtimeHourlyRate *
+          (widget.line.overtimeMultiplier <= 0
+              ? 1.5
+              : widget.line.overtimeMultiplier),
+    );
+  }
+
   double get _projectedAdditions {
     return roundMoney(
       _existingAdjustmentAdditions +
+          _overtimeAmount +
           decimalValue(_raiseAmountController.text) +
           decimalValue(_manualAdditionController.text),
     );
@@ -644,6 +688,7 @@ class _PayrollLineAdjustmentSheetState
       widget.line,
       PayrollLineAdjustmentDraft(
         absenceDays: decimalPayload(_absenceDaysController.text),
+        overtimeHours: decimalPayload(_overtimeHoursController.text),
         raiseAmount: decimalPayload(_raiseAmountController.text),
         manualAdditionAmount: decimalPayload(_manualAdditionController.text),
         manualDeductionAmount: decimalPayload(_manualDeductionController.text),

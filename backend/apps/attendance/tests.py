@@ -18,7 +18,6 @@ from apps.core.roles import (
 from apps.employees.models import (
     CompensationPlan,
     Employee,
-    PayrollAdjustment,
     PayrollLine,
     PayrollRun,
 )
@@ -329,34 +328,44 @@ class ApplyAttendanceToPayrollTests(AttendanceTestBase):
             self.add_punch(aware(day, end_hour, 0))
             rebuild_attendance_day(self.employee, day)
 
-    def test_apply_sets_absences_and_overtime_adjustment(self):
+    def test_apply_sets_absences_and_overtime_hours(self):
         self.attend(days_present=4, overtime_day_hours=2)
         result = apply_attendance_to_run(self.run)
 
         self.line.refresh_from_db()
         self.assertEqual(self.line.absence_days, Decimal("1.00"))
-        adjustment = self.line.adjustments.get(
-            adjustment_type=PayrollAdjustment.AdjustmentType.OVERTIME
-        )
-        # 5 expected days × 480 minutes; gross 3000 → 1.25/minute; 120 min OT.
-        self.assertEqual(adjustment.amount, Decimal("150.00"))
-        self.assertEqual(result["applied_lines"][0]["absent_days"], 1)
+        # One day ended 2h late → 2.00 overtime hours on the line itself.
+        self.assertEqual(self.line.overtime_hours, Decimal("2.00"))
+        # Default multiplier (1.50): day rate 3000/7=428.57, hourly 53.57,
+        # 2h × 53.57 × 1.50 = 160.71.
+        self.assertEqual(self.line.overtime_multiplier, Decimal("1.50"))
+        self.assertEqual(self.line.overtime_amount, Decimal("160.71"))
+        self.assertGreater(self.line.additions_amount, Decimal("0.00"))
+        self.assertEqual(result["applied_lines"][0]["overtime_hours"], 2.0)
+        # No OVERTIME adjustment row is created; overtime lives on the line.
+        self.assertEqual(self.line.adjustments.count(), 0)
 
-        self.run.refresh_from_db()
-        self.assertGreater(self.run.deductions_total, Decimal("0.00"))
+    def test_per_employee_multiplier_changes_overtime_pay(self):
+        plan = self.employee.active_compensation_plan
+        plan.overtime_multiplier = Decimal("2.00")
+        plan.save()
+        self.attend(days_present=5, overtime_day_hours=2)
+        apply_attendance_to_run(self.run)
+
+        self.line.refresh_from_db()
+        # Same 2h, but at 2.0x: 2 × 53.57 × 2.00 = 214.28.
+        self.assertEqual(self.line.overtime_multiplier, Decimal("2.00"))
+        self.assertEqual(self.line.overtime_amount, Decimal("214.28"))
 
     def test_apply_is_idempotent_and_clears_stale_overtime(self):
         self.attend(days_present=5, overtime_day_hours=2)
         apply_attendance_to_run(self.run)
         apply_attendance_to_run(self.run)
-        self.assertEqual(
-            self.line.adjustments.filter(
-                adjustment_type=PayrollAdjustment.AdjustmentType.OVERTIME
-            ).count(),
-            1,
-        )
+        self.line.refresh_from_db()
+        self.assertEqual(self.line.overtime_hours, Decimal("2.00"))
+        self.assertEqual(self.line.adjustments.count(), 0)
 
-        # Remove the overtime punches and re-apply: adjustment disappears.
+        # Remove the overtime punches and re-apply: overtime clears to zero.
         AttendancePunch.objects.all().delete()
         for offset in range(5):
             day = self.monday + timedelta(days=offset)
@@ -364,11 +373,9 @@ class ApplyAttendanceToPayrollTests(AttendanceTestBase):
             self.add_punch(aware(day, 17, 0))
             rebuild_attendance_day(self.employee, day)
         apply_attendance_to_run(self.run)
-        self.assertFalse(
-            self.line.adjustments.filter(
-                adjustment_type=PayrollAdjustment.AdjustmentType.OVERTIME
-            ).exists()
-        )
+        self.line.refresh_from_db()
+        self.assertEqual(self.line.overtime_hours, Decimal("0.00"))
+        self.assertEqual(self.line.overtime_amount, Decimal("0.00"))
 
     def test_apply_requires_draft_run(self):
         from rest_framework.serializers import ValidationError

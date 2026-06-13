@@ -40,6 +40,7 @@ class BillOfMaterials {
     required this.outputQuantity,
     required this.isActive,
     required this.lines,
+    this.isPrepared = true,
     this.createdAt,
     this.updatedAt,
   });
@@ -51,6 +52,10 @@ class BillOfMaterials {
   final String productName;
   final int outputQuantity;
   final bool isActive;
+
+  /// Whether the output product is made-to-order (consumed from the recipe when
+  /// sold) rather than produced into stock ahead of time.
+  final bool isPrepared;
   final List<BomLine> lines;
   final DateTime? createdAt;
   final DateTime? updatedAt;
@@ -65,6 +70,7 @@ class BillOfMaterials {
       productName: json['product_name']?.toString() ?? '',
       outputQuantity: _intFromJson(json['output_quantity']),
       isActive: json['is_active'] == true,
+      isPrepared: json['is_prepared'] == true,
       lines: linesJson
           .whereType<Map<String, Object?>>()
           .map(BomLine.fromJson)
@@ -122,6 +128,7 @@ class BillOfMaterialsDraft {
     this.id,
     this.outputQuantity = 1,
     this.isActive = true,
+    this.makeToOrder = true,
   });
 
   final int? id;
@@ -129,6 +136,10 @@ class BillOfMaterialsDraft {
   final int variant;
   final int outputQuantity;
   final bool isActive;
+
+  /// When true (the default) the output product is marked made-to-order so the
+  /// POS sells it by consuming the recipe instead of its own stock.
+  final bool makeToOrder;
   final List<BomLineDraft> lines;
 
   Map<String, Object?> toJson() {
@@ -137,6 +148,7 @@ class BillOfMaterialsDraft {
       'variant': variant,
       'output_quantity': outputQuantity,
       'is_active': isActive,
+      'make_to_order': makeToOrder,
       'lines': lines.map((line) => line.toJson()).toList(growable: false),
     };
   }

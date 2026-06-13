@@ -173,6 +173,14 @@ class PosCartPane extends StatelessWidget {
       );
       return;
     }
+    if (outcome.isSessionExpired) {
+      messenger
+        ..clearSnackBars()
+        ..showSnackBar(
+          SnackBar(content: Text(l10n.saleCheckoutSessionExpired)),
+        );
+      return;
+    }
 
     final receiptNumber = outcome.order?.receiptNumber;
     var message = outcome.isSuccess
