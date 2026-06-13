@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../design/design.dart';
 import '../responsive/responsive.dart';
+import 'pointy_disclosure_chevron.dart';
 
 class PointySettingsSection extends StatelessWidget {
   const PointySettingsSection({
@@ -73,7 +74,6 @@ class PointySettingsTile extends StatelessWidget {
     final colors = context.pointyColors;
     final colorScheme = Theme.of(context).colorScheme;
     final resolvedColor = iconColor ?? colorScheme.primary;
-    final isRtl = Directionality.of(context) == TextDirection.rtl;
 
     return InkWell(
       onTap: onTap,
@@ -118,10 +118,7 @@ class PointySettingsTile extends StatelessWidget {
               ),
             ),
             SizedBox(width: spacing.sm),
-            Icon(
-              isRtl ? Icons.chevron_right : Icons.chevron_left,
-              color: colors.mutedInk,
-            ),
+            PointyDisclosureChevron(color: colors.mutedInk),
           ],
         ),
       ),

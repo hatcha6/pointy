@@ -2504,6 +2504,574 @@ class AppLocalizationsAr extends AppLocalizations {
       'تعذر تنفيذ العملية على القناة. حاول مرة أخرى.';
 
   @override
+  String get technicianRoleLabel => 'فني';
+
+  @override
+  String get navigationGroupOperations => 'العمليات';
+
+  @override
+  String get operationsDrawerLabel => 'المهام والتشغيل';
+
+  @override
+  String get jobsBoardTitle => 'المهام';
+
+  @override
+  String get refreshJobsTooltip => 'تحديث المهام';
+
+  @override
+  String get jobsLoadError => 'تعذر تحميل المهام.';
+
+  @override
+  String get operationsActionError => 'تعذر تنفيذ العملية. حاول مرة أخرى.';
+
+  @override
+  String get posWeightDialogTitle => 'أدخل الوزن';
+
+  @override
+  String get posWeightInvalid => 'أدخل وزنًا أكبر من صفر.';
+
+  @override
+  String get cartEditWeightTooltip => 'تعديل الوزن';
+
+  @override
+  String saleReturnQuantityHint(String quantity) {
+    return 'الكمية القابلة للإرجاع: $quantity';
+  }
+
+  @override
+  String get unitPiece => 'قطعة';
+
+  @override
+  String get unitKilogram => 'كجم';
+
+  @override
+  String get unitGram => 'جم';
+
+  @override
+  String get unitLiter => 'لتر';
+
+  @override
+  String get unitMilliliter => 'مل';
+
+  @override
+  String get productUnitLabel => 'وحدة القياس';
+
+  @override
+  String get productIsPreparedTitle => 'يُحضّر عند الطلب';
+
+  @override
+  String get productIsPreparedDescription =>
+      'طبق مطبخ: يُباع دون مخزون خاص به وتُخصم مكوناته من الوصفة عند التحضير.';
+
+  @override
+  String get productIsServiceTitle => 'منتج خدمي';
+
+  @override
+  String get productIsServiceDescription => 'خدمة أو رسوم تُباع دون أي مخزون.';
+
+  @override
+  String get jobsEmptyTitle => 'لا توجد مهام بعد';
+
+  @override
+  String get jobsEmptyMessage =>
+      'المهمة هي أي عمل تتابعه خطوة بخطوة: تصليح جهاز، دفعة إنتاج، أو طلب مطبخ. أنشئ أول مهمة وسيظهر مسارها هنا.';
+
+  @override
+  String get newJobButton => 'مهمة جديدة';
+
+  @override
+  String get jobSearchHint => 'ابحث برقم المهمة أو اسم الزبون أو رقم الجهاز';
+
+  @override
+  String get jobFilterAll => 'الكل';
+
+  @override
+  String get jobFilterMine => 'مهامي';
+
+  @override
+  String get jobFilterOpenOnly => 'قيد العمل';
+
+  @override
+  String get jobFilterDone => 'المنتهية';
+
+  @override
+  String get jobStatusOpen => 'قيد العمل';
+
+  @override
+  String get jobStatusCompleted => 'منتهية';
+
+  @override
+  String get jobStatusCancelled => 'ملغاة';
+
+  @override
+  String get jobPriorityLabel => 'الأولوية';
+
+  @override
+  String get jobPriorityLow => 'منخفضة';
+
+  @override
+  String get jobPriorityNormal => 'عادية';
+
+  @override
+  String get jobPriorityHigh => 'مرتفعة';
+
+  @override
+  String get jobPriorityUrgent => 'عاجلة';
+
+  @override
+  String get jobTypeRepair => 'تصليح';
+
+  @override
+  String get jobTypeProduction => 'إنتاج';
+
+  @override
+  String get jobTypeKitchen => 'مطبخ';
+
+  @override
+  String get jobTypeWorkOrder => 'أمر عمل';
+
+  @override
+  String get jobDetailsTitle => 'تفاصيل المهمة';
+
+  @override
+  String get jobTimelineTitle => 'مسار المهمة';
+
+  @override
+  String get jobCurrentStageLabel => 'المرحلة الحالية';
+
+  @override
+  String jobNextActionButton(String stageName) {
+    return 'الخطوة التالية: $stageName';
+  }
+
+  @override
+  String get jobMoveToStageAction => 'نقل إلى مرحلة أخرى';
+
+  @override
+  String get jobStageChangeNoteLabel => 'ملاحظة (اختياري)';
+
+  @override
+  String jobStageChangedMessage(String stageName) {
+    return 'انتقلت المهمة إلى «$stageName».';
+  }
+
+  @override
+  String get jobManagerOnlyMoveHint =>
+      'الرجوع للخلف أو تخطي مرحلة يحتاج صلاحية مدير.';
+
+  @override
+  String get jobCustomerSection => 'الزبون';
+
+  @override
+  String get jobNoCustomer => 'بدون زبون';
+
+  @override
+  String get jobAssetSection => 'الجهاز';
+
+  @override
+  String get assetHistoryTitle => 'سجل الجهاز';
+
+  @override
+  String get assetHistoryEmpty => 'لا يوجد سجل سابق لهذا الجهاز.';
+
+  @override
+  String get customerAssetsTitle => 'أجهزة الزبون';
+
+  @override
+  String get customerAssetsEmpty => 'لا توجد أجهزة مسجلة لهذا الزبون.';
+
+  @override
+  String get jobMaterialsSection => 'القطع والمواد';
+
+  @override
+  String get jobMaterialsEmpty =>
+      'لم تُستخدم قطع بعد. أضف كل قطعة تركّبها وسيُخصم المخزون تلقائيًا.';
+
+  @override
+  String get addMaterialButton => 'إضافة قطعة';
+
+  @override
+  String get materialQuantityLabel => 'الكمية';
+
+  @override
+  String get materialConsumedBadge => 'خُصمت من المخزون';
+
+  @override
+  String get materialPendingBadge => 'بانتظار الخصم';
+
+  @override
+  String get materialReversedBadge => 'أُرجعت للمخزون';
+
+  @override
+  String get reverseMaterialAction => 'إرجاع للمخزون';
+
+  @override
+  String get reverseMaterialConfirmTitle => 'إرجاع القطعة للمخزون؟';
+
+  @override
+  String get reverseMaterialConfirmMessage =>
+      'ستُعاد الكمية إلى المخزون وتُحذف من حساب المهمة.';
+
+  @override
+  String jobMaterialsTotalLabel(String amount) {
+    return 'إجمالي القطع: $amount';
+  }
+
+  @override
+  String get jobQuotedPriceLabel => 'السعر المبدئي';
+
+  @override
+  String get jobApprovedPriceLabel => 'السعر المعتمد من الزبون';
+
+  @override
+  String get jobApprovalRequiredHint =>
+      'سجّل السعر الذي وافق عليه الزبون قبل بدء العمل.';
+
+  @override
+  String get jobWarrantyDaysLabel => 'أيام الضمان';
+
+  @override
+  String get jobSymptomsLabel => 'وصف المشكلة';
+
+  @override
+  String get jobDiagnosisLabel => 'التشخيص';
+
+  @override
+  String get jobTechnicianNotesLabel => 'ملاحظات الفني';
+
+  @override
+  String get jobSaveButton => 'حفظ التعديلات';
+
+  @override
+  String get jobSavedMessage => 'تم حفظ المهمة.';
+
+  @override
+  String get jobAssignedToLabel => 'مسؤول التنفيذ';
+
+  @override
+  String get jobUnassigned => 'غير معيّن';
+
+  @override
+  String get jobDueAtLabel => 'موعد التسليم';
+
+  @override
+  String get jobCreatedAtLabel => 'تاريخ الاستلام';
+
+  @override
+  String get jobInvoiceButton => 'تحصيل وفوترة';
+
+  @override
+  String get jobInvoiceTitle => 'فاتورة المهمة';
+
+  @override
+  String get jobInvoiceExplainer =>
+      'ستُنشأ فاتورة عادية بالقطع المستخدمة وأجور العمل، ويدخل المبلغ في جلسة الدرج الحالية.';
+
+  @override
+  String get jobLaborTotalLabel => 'أجور العمل';
+
+  @override
+  String jobInvoiceTotalLabel(String amount) {
+    return 'الإجمالي: $amount';
+  }
+
+  @override
+  String jobInvoiceSuccess(String receiptNumber) {
+    return 'تم إنشاء الفاتورة $receiptNumber.';
+  }
+
+  @override
+  String get jobInvoiceNeedsRegister =>
+      'افتح جلسة الدرج أولًا حتى يُسجل المبلغ في حساباتك.';
+
+  @override
+  String jobInvoicedBadge(String receiptNumber) {
+    return 'مفوترة — $receiptNumber';
+  }
+
+  @override
+  String get jobCancelAction => 'إلغاء المهمة';
+
+  @override
+  String get jobCancelConfirmTitle => 'إلغاء المهمة؟';
+
+  @override
+  String get jobCancelConfirmMessage =>
+      'ستُلغى المهمة وتُعاد أي قطع مستخدمة إلى المخزون.';
+
+  @override
+  String get jobCancelReasonLabel => 'سبب الإلغاء';
+
+  @override
+  String get jobReopenAction => 'إعادة فتح المهمة';
+
+  @override
+  String get intakeTitle => 'استلام مهمة جديدة';
+
+  @override
+  String get intakeStepCustomer => 'الزبون';
+
+  @override
+  String get intakeStepAsset => 'الجهاز';
+
+  @override
+  String get intakeStepDetails => 'التفاصيل';
+
+  @override
+  String get intakeNextButton => 'التالي';
+
+  @override
+  String get intakeBackButton => 'السابق';
+
+  @override
+  String get intakeCreateButton => 'إنشاء المهمة';
+
+  @override
+  String get intakeSelectCustomerHint =>
+      'ابحث عن الزبون بالاسم أو الهاتف، أو أنشئ زبونًا جديدًا.';
+
+  @override
+  String get intakeNewCustomerButton => 'زبون جديد';
+
+  @override
+  String get intakeCustomerNameLabel => 'اسم الزبون';
+
+  @override
+  String get intakeCustomerPhoneLabel => 'رقم الهاتف';
+
+  @override
+  String get intakeCustomerRequired => 'اختر زبونًا للمتابعة.';
+
+  @override
+  String get intakeSelectAssetHint =>
+      'اختر جهاز الزبون أو أضف جهازًا جديدًا. يساعدك هذا لاحقًا في معرفة تاريخ كل جهاز.';
+
+  @override
+  String get intakeNewAssetButton => 'جهاز جديد';
+
+  @override
+  String get intakeSkipAssetButton => 'متابعة بدون جهاز';
+
+  @override
+  String get assetTypeLabel => 'نوع الجهاز';
+
+  @override
+  String get assetBrandLabel => 'الماركة';
+
+  @override
+  String get assetModelLabel => 'الموديل';
+
+  @override
+  String get assetSerialLabel => 'الرقم التسلسلي';
+
+  @override
+  String get assetImeiLabel => 'IMEI';
+
+  @override
+  String get assetColorLabel => 'اللون';
+
+  @override
+  String get assetNotesLabel => 'ملاحظات';
+
+  @override
+  String get assetTypePhone => 'هاتف';
+
+  @override
+  String get assetTypeTablet => 'تابلت';
+
+  @override
+  String get assetTypeLaptop => 'حاسوب محمول';
+
+  @override
+  String get assetTypeConsole => 'جهاز ألعاب';
+
+  @override
+  String get assetTypeAppliance => 'جهاز منزلي';
+
+  @override
+  String get assetTypeOther => 'أخرى';
+
+  @override
+  String get intakeWorkflowLabel => 'نوع المهمة';
+
+  @override
+  String intakeJobCreated(String jobNumber) {
+    return 'تم إنشاء المهمة $jobNumber.';
+  }
+
+  @override
+  String get productionNewBatchButton => 'دفعة إنتاج جديدة';
+
+  @override
+  String get productionRecipeLabel => 'الوصفة';
+
+  @override
+  String get productionBatchesLabel => 'عدد الدفعات';
+
+  @override
+  String productionOutputPreview(String quantity, String name) {
+    return 'سينتج $quantity × $name';
+  }
+
+  @override
+  String get productionMaterialsPreviewTitle => 'المكونات المطلوبة';
+
+  @override
+  String get productionOutputSection => 'ناتج الإنتاج';
+
+  @override
+  String get productionReceivedBadge => 'أُضيف للمخزون';
+
+  @override
+  String get productionNoRecipesMessage =>
+      'أنشئ وصفة أولًا من إعدادات المتجر حتى يعرف النظام مكونات كل منتج.';
+
+  @override
+  String get recipesTitle => 'الوصفات';
+
+  @override
+  String get recipesSubtitle =>
+      'حدد مكونات كل منتج تنتجه ليُخصم المخزون ويُحسب الناتج تلقائيًا';
+
+  @override
+  String get recipesEmptyMessage =>
+      'الوصفة تخبر النظام بمكونات كل منتج تنتجه — مثل الدقيق والخميرة لرغيف الخبز — ليخصم المخزون ويضيف الناتج تلقائيًا.';
+
+  @override
+  String get newRecipeButton => 'وصفة جديدة';
+
+  @override
+  String get recipeNameLabel => 'اسم الوصفة';
+
+  @override
+  String get recipeOutputVariantLabel => 'المنتج الناتج';
+
+  @override
+  String get recipeOutputQuantityLabel => 'الكمية الناتجة لكل دفعة';
+
+  @override
+  String get recipeComponentsTitle => 'المكونات';
+
+  @override
+  String get recipeAddComponentButton => 'إضافة مكوّن';
+
+  @override
+  String get recipeComponentQuantityLabel => 'الكمية';
+
+  @override
+  String get recipeWastePercentLabel => 'نسبة الهدر %';
+
+  @override
+  String get recipeDeleteAction => 'حذف الوصفة';
+
+  @override
+  String get recipeDeleteConfirmTitle => 'حذف الوصفة؟';
+
+  @override
+  String recipeDeleteConfirmMessage(String name) {
+    return 'سيتم حذف «$name» نهائيًا. الوصفات المستخدمة في دفعات إنتاج سابقة لا يمكن حذفها.';
+  }
+
+  @override
+  String get recipeSaveButton => 'حفظ الوصفة';
+
+  @override
+  String get recipeSavedMessage => 'تم حفظ الوصفة.';
+
+  @override
+  String get recipesLoadError => 'تعذر تحميل الوصفات.';
+
+  @override
+  String get recipeNameRequired => 'أدخل اسم الوصفة.';
+
+  @override
+  String get recipeComponentsRequired => 'أضف مكوّنًا واحدًا على الأقل.';
+
+  @override
+  String get operationsSettingsSectionTitle => 'العمليات والمهام';
+
+  @override
+  String get operationsSettingsSectionSubtitle =>
+      'تشغيل التصليح والإنتاج والمطبخ وإدارة مراحل العمل';
+
+  @override
+  String get operationsModesTitle => 'أقسام العمل';
+
+  @override
+  String get operationsModesHint =>
+      'فعّل ما يناسب نشاطك فقط — كل قسم يضيف نوع مهام جاهزًا بمراحله.';
+
+  @override
+  String get enableRepairOperationsTitle => 'التصليح والصيانة';
+
+  @override
+  String get enableRepairOperationsDescription =>
+      'استلام أجهزة الزبائن، تتبع التصليح خطوة بخطوة، وفوترة القطع والأجور.';
+
+  @override
+  String get enableProductionOperationsTitle => 'الإنتاج';
+
+  @override
+  String get enableProductionOperationsDescription =>
+      'دفعات إنتاج بوصفات محددة: تُخصم المكونات ويُضاف الناتج للمخزون تلقائيًا.';
+
+  @override
+  String get enableKitchenOperationsTitle => 'المطبخ';
+
+  @override
+  String get enableKitchenOperationsDescription =>
+      'طلبات مطبخ تمر بمراحل التحضير وتخصم المكونات عند الطبخ.';
+
+  @override
+  String get enableJobTrackingTitle => 'صفحة تتبع للزبائن';
+
+  @override
+  String get enableJobTrackingDescription =>
+      'رابط عام يطّلع منه الزبون على حالة مهمته دون الاتصال بك.';
+
+  @override
+  String get workflowsTitle => 'مراحل العمل';
+
+  @override
+  String get workflowStagesHint =>
+      'هذه هي الخطوات التي تمر بها كل مهمة من الاستلام حتى التسليم. يمكنك إعادة تسميتها أو إضافة مراحل تناسب طريقة عملك.';
+
+  @override
+  String get workflowStageNameLabel => 'اسم المرحلة';
+
+  @override
+  String get workflowAddStageButton => 'إضافة مرحلة';
+
+  @override
+  String get workflowStageInitialLabel => 'مرحلة البداية';
+
+  @override
+  String get workflowStageTerminalLabel => 'مرحلة النهاية';
+
+  @override
+  String get workflowStageApprovalLabel => 'تتطلب موافقة الزبون على السعر';
+
+  @override
+  String get workflowStageConsumesLabel => 'تخصم المواد من المخزون';
+
+  @override
+  String get workflowStageProducesLabel => 'تضيف الناتج إلى المخزون';
+
+  @override
+  String get workflowSaveButton => 'حفظ المراحل';
+
+  @override
+  String get workflowSavedMessage => 'تم حفظ مراحل العمل.';
+
+  @override
+  String get workflowsLoadError => 'تعذر تحميل مراحل العمل.';
+
+  @override
+  String jobCountLabel(int count) {
+    return '$count مهمة';
+  }
+
+  @override
   String get shopSettingsEmptyValue => 'غير محدد';
 
   @override
@@ -3963,7 +4531,7 @@ class AppLocalizationsAr extends AppLocalizations {
   String get stockMovementDamaged => 'تالف';
 
   @override
-  String stockMovementQuantityValue(int quantity) {
+  String stockMovementQuantityValue(String quantity) {
     return '$quantity قطعة';
   }
 
@@ -4071,7 +4639,7 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
-  String posVariantPickerStock(int quantity) {
+  String posVariantPickerStock(String quantity) {
     return 'المتاح $quantity';
   }
 
@@ -5571,7 +6139,7 @@ class AppLocalizationsAr extends AppLocalizations {
       'لا يمكن إتمام البيع لأن الكمية المطلوبة تتجاوز المخزون المتاح.';
 
   @override
-  String oversellLine(String productName, int requested, int available) {
+  String oversellLine(String productName, String requested, String available) {
     return '$productName: المطلوب $requested، المتاح $available';
   }
 
@@ -5990,7 +6558,7 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
-  String saleLineQuantityAndPrice(int quantity, String unitPrice) {
+  String saleLineQuantityAndPrice(String quantity, String unitPrice) {
     return '$quantity × $unitPrice';
   }
 
@@ -6052,7 +6620,7 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
-  String saleLineReturnedQuantity(int returned, int quantity) {
+  String saleLineReturnedQuantity(String returned, String quantity) {
     return 'تم إرجاع $returned من $quantity';
   }
 

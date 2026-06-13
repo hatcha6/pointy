@@ -209,7 +209,7 @@ def receipt_line_payload(line):
         "sku": variant.sku,
         "barcode": variant.barcode,
         "name": full_name,
-        "quantity": line.quantity,
+        "quantity": float(line.quantity),
         "unit_price": money(line.unit_price),
         "line_subtotal": money(line.line_subtotal),
         "discount_total": money(line.discount_total),

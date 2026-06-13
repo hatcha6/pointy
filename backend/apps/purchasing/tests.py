@@ -1966,7 +1966,7 @@ class PurchaseOrderApiTests(TestCase):
         )
         self.assertIn("stock", response.data)
         self.assertEqual(response.data["stock"][0]["requested"], "2")
-        self.assertEqual(response.data["stock"][0]["available"], "1")
+        self.assertEqual(float(response.data["stock"][0]["available"]), 1.0)
         self.assertEqual(StockItem.objects.get(variant=self.variant).quantity_on_hand, 1)
 
     def test_exchange_records_outbound_and_replacement_lines_with_new_cost(self):

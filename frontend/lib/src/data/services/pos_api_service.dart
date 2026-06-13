@@ -6,6 +6,7 @@ import '../models/attachment_summary.dart';
 import '../models/pos_user.dart';
 import '../models/analytics_export.dart';
 import '../models/analytics_event.dart';
+import '../models/bill_of_materials.dart';
 import '../models/business_alert.dart';
 import '../models/onboarding.dart';
 import '../models/print_audit_event.dart';
@@ -23,6 +24,8 @@ import '../models/product_variant_draft.dart';
 import '../models/product_variant_page.dart';
 import '../models/contact.dart';
 import '../models/customer_activity.dart';
+import '../models/customer_asset.dart';
+import '../models/operations_job.dart';
 import '../models/dashboard.dart';
 import '../models/discount_rule.dart';
 import '../models/employee.dart';
@@ -51,6 +54,7 @@ import '../models/variant_option_value.dart';
 import '../models/variant_option_value_draft.dart';
 import '../models/variant_option_value_page.dart';
 import '../models/user_activity.dart';
+import '../models/workflow.dart';
 import 'api_session.dart';
 import 'analytics_api_client.dart';
 import 'auth_api_client.dart';
@@ -62,6 +66,7 @@ import 'discount_api_client.dart';
 import 'employee_api_client.dart';
 import 'fraud_api_client.dart';
 import 'inventory_api_client.dart';
+import 'operations_api_client.dart';
 import 'pos_http_client.dart';
 import 'printing_api_client.dart';
 import 'purchasing_api_client.dart';
@@ -96,6 +101,7 @@ class PosApiService {
     _employees = EmployeeApiClient(_session);
     _fraud = FraudApiClient(_session);
     _inventory = InventoryApiClient(_session);
+    _operations = OperationsApiClient(_session);
     _registerSessions = RegisterSessionApiClient(_session);
     _relay = RelayApiClient(_session);
     _reports = ReportsApiClient(_session);
@@ -121,6 +127,7 @@ class PosApiService {
   late final EmployeeApiClient _employees;
   late final FraudApiClient _fraud;
   late final InventoryApiClient _inventory;
+  late final OperationsApiClient _operations;
   late final RegisterSessionApiClient _registerSessions;
   late final RelayApiClient _relay;
   late final ReportsApiClient _reports;
@@ -630,6 +637,150 @@ class PosApiService {
 
   Future<StockMovement> createStockMovement(StockMovementDraft draft) {
     return _inventory.createStockMovement(draft);
+  }
+
+  Future<OperationsJobPage> fetchJobs({
+    OperationsJobStatus? status,
+    OperationsJobType? jobType,
+    int? currentStage,
+    int? assignedTo,
+    int? customer,
+    int? asset,
+    int? workflowTemplate,
+    String search = '',
+    int page = 1,
+  }) {
+    return _operations.fetchJobs(
+      status: status,
+      jobType: jobType,
+      currentStage: currentStage,
+      assignedTo: assignedTo,
+      customer: customer,
+      asset: asset,
+      workflowTemplate: workflowTemplate,
+      search: search,
+      page: page,
+    );
+  }
+
+  Future<OperationsJob> fetchJob(int jobId) {
+    return _operations.fetchJob(jobId);
+  }
+
+  Future<OperationsJob> createJob(
+    OperationsJobDraft draft, {
+    String? idempotencyKey,
+  }) {
+    return _operations.createJob(draft, idempotencyKey: idempotencyKey);
+  }
+
+  Future<OperationsJob> updateJob(int jobId, Map<String, Object?> changes) {
+    return _operations.updateJob(jobId, changes);
+  }
+
+  Future<OperationsJob> transitionJob(
+    int jobId, {
+    required int toStage,
+    String note = '',
+    String? idempotencyKey,
+  }) {
+    return _operations.transitionJob(
+      jobId,
+      toStage: toStage,
+      note: note,
+      idempotencyKey: idempotencyKey,
+    );
+  }
+
+  Future<OperationsJob> addJobMaterial(
+    int jobId, {
+    required int variant,
+    required double quantity,
+    required bool consumeNow,
+    String? idempotencyKey,
+  }) {
+    return _operations.addJobMaterial(
+      jobId,
+      variant: variant,
+      quantity: quantity,
+      consumeNow: consumeNow,
+      idempotencyKey: idempotencyKey,
+    );
+  }
+
+  Future<OperationsJob> reverseJobMaterial(int jobId, int materialId) {
+    return _operations.reverseJobMaterial(jobId, materialId);
+  }
+
+  Future<OperationsJob> cancelJob(int jobId, {String reason = ''}) {
+    return _operations.cancelJob(jobId, reason: reason);
+  }
+
+  Future<OperationsJob> reopenJob(int jobId, {String note = ''}) {
+    return _operations.reopenJob(jobId, note: note);
+  }
+
+  Future<OperationsJob> invoiceJob(
+    int jobId,
+    JobInvoiceDraft draft, {
+    String? idempotencyKey,
+  }) {
+    return _operations.invoiceJob(jobId, draft, idempotencyKey: idempotencyKey);
+  }
+
+  Future<CustomerAssetPage> fetchCustomerAssets({
+    int? customer,
+    String search = '',
+    int page = 1,
+  }) {
+    return _operations.fetchCustomerAssets(
+      customer: customer,
+      search: search,
+      page: page,
+    );
+  }
+
+  Future<CustomerAsset> createCustomerAsset(CustomerAssetDraft draft) {
+    return _operations.createCustomerAsset(draft);
+  }
+
+  Future<CustomerAsset> updateCustomerAsset(
+    int assetId,
+    CustomerAssetDraft draft,
+  ) {
+    return _operations.updateCustomerAsset(assetId, draft);
+  }
+
+  Future<WorkflowTemplatePage> fetchWorkflowTemplates({
+    OperationsJobType? jobType,
+    bool? isActive,
+    int page = 1,
+  }) {
+    return _operations.fetchWorkflowTemplates(
+      jobType: jobType,
+      isActive: isActive,
+      page: page,
+    );
+  }
+
+  Future<WorkflowTemplate> saveWorkflowTemplate(WorkflowTemplateDraft draft) {
+    return _operations.saveWorkflowTemplate(draft);
+  }
+
+  Future<void> deleteWorkflowTemplate(int templateId) {
+    return _operations.deleteWorkflowTemplate(templateId);
+  }
+
+  Future<BillOfMaterialsPage> fetchBoms({bool? isActive, int page = 1}) {
+    return _operations.fetchBoms(isActive: isActive, page: page);
+  }
+
+  Future<BillOfMaterials> saveBom(BillOfMaterialsDraft draft) {
+    return _operations.saveBom(draft);
+  }
+
+  Future<void> deleteBom(int bomId) {
+    return _operations.deleteBom(bomId);
   }
 
   Future<RegisterSession?> fetchCurrentRegisterSession() {

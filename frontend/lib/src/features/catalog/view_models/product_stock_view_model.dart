@@ -229,7 +229,7 @@ class ProductStockViewModel extends ChangeNotifier {
 
   Future<bool> createMovement({
     required StockMovementType movementType,
-    required int quantity,
+    required double quantity,
     required String note,
   }) async {
     if (_isSavingMovement) {
@@ -302,7 +302,7 @@ class ProductStockViewModel extends ChangeNotifier {
 
   void _trackStockMovementFailed({
     required StockMovementType movementType,
-    required int quantity,
+    required double quantity,
     required String note,
   }) {
     trackAuditEvent(

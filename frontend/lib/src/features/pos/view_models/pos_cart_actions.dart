@@ -3,7 +3,7 @@ part of 'pos_view_model.dart';
 extension PosCartActions on PosViewModel {
   void addVariant(
     ProductVariant variant, {
-    int quantity = 1,
+    double quantity = 1,
     String source = 'cart_quantity_button',
   }) {
     if (_addVariantToCartAndTrack(
@@ -18,7 +18,7 @@ extension PosCartActions on PosViewModel {
 
   bool _addVariantToCartAndTrack(
     ProductVariant variant, {
-    required int quantity,
+    required double quantity,
     required String source,
   }) {
     final existingLine = _cart
@@ -75,6 +75,36 @@ extension PosCartActions on PosViewModel {
     unawaited(refreshDiscountPreview());
   }
 
+  void setVariantQuantity(
+    ProductVariant variant,
+    double quantity, {
+    String source = 'cart_weight_edit',
+  }) {
+    if (_isCheckingOut || quantity <= 0) {
+      return;
+    }
+    final index = _cart.indexWhere((line) => line.variant.id == variant.id);
+    if (index == -1) {
+      return;
+    }
+    final line = _cart[index];
+    if (line.quantity == quantity) {
+      return;
+    }
+    final updatedLine = line.copyWith(quantity: quantity);
+    _cart[index] = updatedLine;
+    _trackCartLineQuantityChanged(
+      updatedLine,
+      previousQuantity: line.quantity,
+      newQuantity: quantity,
+      reason: 'weight_edit',
+      source: source,
+    );
+    _touchActiveSaleSession();
+    _notifyChanged();
+    unawaited(refreshDiscountPreview());
+  }
+
   void removeVariant(
     ProductVariant variant, {
     String source = 'cart_delete_button',
@@ -112,7 +142,7 @@ extension PosCartActions on PosViewModel {
     _notifyChanged();
   }
 
-  bool _addVariantToCart(ProductVariant variant, {int quantity = 1}) {
+  bool _addVariantToCart(ProductVariant variant, {double quantity = 1}) {
     if (_isCheckingOut || quantity <= 0) {
       return false;
     }
@@ -130,8 +160,8 @@ extension PosCartActions on PosViewModel {
 
   void _trackCartLineAdded(
     CartLine line, {
-    required int addedQuantity,
-    required int previousQuantity,
+    required double addedQuantity,
+    required double previousQuantity,
     required String source,
   }) {
     final severity = previousQuantity == 0
@@ -163,8 +193,8 @@ extension PosCartActions on PosViewModel {
 
   void _trackCartLineQuantityChanged(
     CartLine line, {
-    required int previousQuantity,
-    required int newQuantity,
+    required double previousQuantity,
+    required double newQuantity,
     required String reason,
     required String source,
   }) {
@@ -302,8 +332,8 @@ extension PosCartActions on PosViewModel {
     ];
   }
 
-  int _cartItemCount(List<CartLine> lines) {
-    return lines.fold(0, (sum, line) => sum + line.quantity);
+  double _cartItemCount(List<CartLine> lines) {
+    return lines.fold(0.0, (sum, line) => sum + line.quantity);
   }
 
   double _cartTotal(List<CartLine> lines) {

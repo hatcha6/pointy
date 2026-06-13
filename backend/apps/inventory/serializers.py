@@ -15,6 +15,25 @@ class StockItemSerializer(serializers.ModelSerializer):
     variant_name = serializers.CharField(source="variant.display_name", read_only=True)
     variant_full_name = serializers.CharField(source="variant.full_name", read_only=True)
 
+    quantity_on_hand = serializers.DecimalField(
+        max_digits=12,
+        decimal_places=3,
+        coerce_to_string=False,
+        required=False,
+    )
+    quantity_committed = serializers.DecimalField(
+        max_digits=12,
+        decimal_places=3,
+        coerce_to_string=False,
+        required=False,
+    )
+    quantity_expected = serializers.DecimalField(
+        max_digits=12,
+        decimal_places=3,
+        coerce_to_string=False,
+        required=False,
+    )
+
     class Meta:
         model = StockItem
         fields = [
@@ -107,6 +126,18 @@ class StockMovementSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
+
+    quantity = serializers.DecimalField(
+        max_digits=12,
+        decimal_places=3,
+        coerce_to_string=False,
+    )
+    on_hand_before = serializers.FloatField(read_only=True)
+    on_hand_after = serializers.FloatField(read_only=True)
+    committed_before = serializers.FloatField(read_only=True)
+    committed_after = serializers.FloatField(read_only=True)
+    expected_before = serializers.FloatField(read_only=True)
+    expected_after = serializers.FloatField(read_only=True)
 
     def validate_quantity(self, value):
         if value <= 0:

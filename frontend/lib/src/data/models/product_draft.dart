@@ -7,6 +7,9 @@ class ProductDraft {
     required this.variantUnitPrice,
     required this.isActive,
     required this.tracksExpiry,
+    this.isService = false,
+    this.isPrepared = false,
+    this.unit = 'piece',
     this.variantName = '',
     this.variantBarcode = '',
     this.description = '',
@@ -22,6 +25,9 @@ class ProductDraft {
   final double variantUnitPrice;
   final bool isActive;
   final bool tracksExpiry;
+  final bool isService;
+  final bool isPrepared;
+  final String unit;
   final String variantBarcode;
   final String description;
   final List<int> categoryIds;
@@ -35,6 +41,9 @@ class ProductDraft {
       'description': description,
       'is_active': isActive,
       'tracks_expiry': tracksExpiry,
+      'is_service': isService,
+      'is_prepared': isPrepared,
+      'unit': unit,
       'categories': categoryIds,
       'variant_options': variantOptionIds,
       if (variants.isEmpty)

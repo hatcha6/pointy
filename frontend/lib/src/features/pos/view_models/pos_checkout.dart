@@ -346,7 +346,7 @@ extension PosCheckoutActions on PosViewModel {
   }
 
   void _applySoldQuantities(List<CartLine> soldLines) {
-    final soldByVariant = <int, int>{};
+    final soldByVariant = <int, double>{};
     for (final line in soldLines) {
       soldByVariant[line.variant.id] =
           (soldByVariant[line.variant.id] ?? 0) + line.quantity;
@@ -362,7 +362,7 @@ extension PosCheckoutActions on PosViewModel {
 
   Product _productWithAdjustedStock(
     Product product,
-    Map<int, int> soldByVariant,
+    Map<int, double> soldByVariant,
   ) {
     ProductVariant adjustVariant(ProductVariant variant) {
       final soldQuantity = soldByVariant[variant.id];
@@ -386,7 +386,7 @@ extension PosCheckoutActions on PosViewModel {
               product.variants.any((variant) => variant.id == entry.key) ||
               product.defaultVariant?.id == entry.key,
         )
-        .fold<int>(0, (sum, entry) => sum + entry.value);
+        .fold<double>(0, (sum, entry) => sum + entry.value);
     return product.copyWith(
       quantityOnHand: product.quantityOnHand - soldForProduct,
       defaultVariant: adjustedDefaultVariant,
@@ -411,8 +411,8 @@ List<Map<String, Object?>> _checkoutCartLineSnapshots(List<CartLine> lines) {
   ];
 }
 
-int _checkoutCartItemCount(List<CartLine> lines) {
-  return lines.fold(0, (sum, line) => sum + line.quantity);
+double _checkoutCartItemCount(List<CartLine> lines) {
+  return lines.fold(0.0, (sum, line) => sum + line.quantity);
 }
 
 double _checkoutCartTotal(List<CartLine> lines) {

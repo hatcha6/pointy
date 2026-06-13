@@ -20,6 +20,7 @@ class PointyOrderLineTile extends StatelessWidget {
     this.onIncrement,
     this.onDecrement,
     this.onRemove,
+    this.onQuantityTap,
   });
 
   final String title;
@@ -27,7 +28,7 @@ class PointyOrderLineTile extends StatelessWidget {
   final String? detail;
   final String unitPriceLabel;
   final String totalLabel;
-  final int quantity;
+  final double quantity;
   final String? imageUrl;
   final String incrementTooltip;
   final String decrementTooltip;
@@ -35,6 +36,7 @@ class PointyOrderLineTile extends StatelessWidget {
   final VoidCallback? onIncrement;
   final VoidCallback? onDecrement;
   final VoidCallback? onRemove;
+  final VoidCallback? onQuantityTap;
 
   @override
   Widget build(BuildContext context) {
@@ -55,6 +57,7 @@ class PointyOrderLineTile extends StatelessWidget {
           onIncrement: onIncrement,
           onDecrement: onDecrement,
           onRemove: onRemove,
+          onQuantityTap: onQuantityTap,
           isCompact: isCompact,
         );
 
@@ -83,6 +86,7 @@ class _LineContent extends StatelessWidget {
     required this.onDecrement,
     required this.onRemove,
     required this.isCompact,
+    this.onQuantityTap,
   });
 
   final String title;
@@ -90,7 +94,7 @@ class _LineContent extends StatelessWidget {
   final String? detail;
   final String unitPriceLabel;
   final String totalLabel;
-  final int quantity;
+  final double quantity;
   final String? imageUrl;
   final String incrementTooltip;
   final String decrementTooltip;
@@ -99,6 +103,7 @@ class _LineContent extends StatelessWidget {
   final VoidCallback? onDecrement;
   final VoidCallback? onRemove;
   final bool isCompact;
+  final VoidCallback? onQuantityTap;
 
   @override
   Widget build(BuildContext context) {
@@ -117,6 +122,7 @@ class _LineContent extends StatelessWidget {
       onIncrement: onIncrement,
       onDecrement: onDecrement,
       onRemove: onRemove,
+      onQuantityTap: onQuantityTap,
       compact: isCompact,
     );
 
@@ -246,10 +252,11 @@ class _LineActions extends StatelessWidget {
     required this.onDecrement,
     required this.onRemove,
     required this.compact,
+    this.onQuantityTap,
   });
 
   final String totalLabel;
-  final int quantity;
+  final double quantity;
   final String incrementTooltip;
   final String decrementTooltip;
   final String removeTooltip;
@@ -257,6 +264,7 @@ class _LineActions extends StatelessWidget {
   final VoidCallback? onDecrement;
   final VoidCallback? onRemove;
   final bool compact;
+  final VoidCallback? onQuantityTap;
 
   @override
   Widget build(BuildContext context) {
@@ -280,6 +288,7 @@ class _LineActions extends StatelessWidget {
       decrementTooltip: decrementTooltip,
       onIncrement: onIncrement,
       onDecrement: onDecrement,
+      onQuantityTap: onQuantityTap,
     );
     final removeButton = IconButton.filledTonal(
       tooltip: removeTooltip,

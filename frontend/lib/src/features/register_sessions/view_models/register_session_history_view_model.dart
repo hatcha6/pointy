@@ -339,7 +339,7 @@ class RegisterSessionHistoryViewModel extends ChangeNotifier {
       order: order,
       reason: reason,
       metrics: {
-        'returned_quantity': lines.fold<int>(
+        'returned_quantity': lines.fold<double>(
           0,
           (sum, line) => sum + line.quantity,
         ),

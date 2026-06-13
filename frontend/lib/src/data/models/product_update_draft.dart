@@ -6,6 +6,9 @@ class ProductUpdateDraft {
     required this.description,
     required this.isActive,
     required this.tracksExpiry,
+    this.isService = false,
+    this.isPrepared = false,
+    this.unit = 'piece',
     required this.categoryIds,
     this.variantOptionIds,
     this.variants = const [],
@@ -15,6 +18,9 @@ class ProductUpdateDraft {
   final String description;
   final bool isActive;
   final bool tracksExpiry;
+  final bool isService;
+  final bool isPrepared;
+  final String unit;
   final List<int> categoryIds;
   final List<int>? variantOptionIds;
   final List<ProductVariantDraft> variants;
@@ -25,6 +31,9 @@ class ProductUpdateDraft {
       'description': description,
       'is_active': isActive,
       'tracks_expiry': tracksExpiry,
+      'is_service': isService,
+      'is_prepared': isPrepared,
+      'unit': unit,
       'categories': categoryIds,
       if (variantOptionIds != null) 'variant_options': variantOptionIds,
       if (variants.isNotEmpty)

@@ -21,6 +21,10 @@ class ShopSettings {
     required this.trustedCardTerminalIds,
     required this.cardCommissionPercent,
     required this.transferCommissionPercent,
+    this.enableRepairOperations = false,
+    this.enableProductionOperations = false,
+    this.enableKitchenOperations = false,
+    this.enableJobTracking = false,
     this.logoAttachment,
   });
 
@@ -41,6 +45,10 @@ class ShopSettings {
   final List<String> trustedCardTerminalIds;
   final double cardCommissionPercent;
   final double transferCommissionPercent;
+  final bool enableRepairOperations;
+  final bool enableProductionOperations;
+  final bool enableKitchenOperations;
+  final bool enableJobTracking;
   final AttachmentSummary? logoAttachment;
 
   factory ShopSettings.fromJson(Map<String, Object?> json) {
@@ -87,6 +95,19 @@ class ShopSettings {
         json['transfer_commission_percent'],
         0,
       ),
+      enableRepairOperations: _boolFromJson(
+        json['enable_repair_operations'],
+        false,
+      ),
+      enableProductionOperations: _boolFromJson(
+        json['enable_production_operations'],
+        false,
+      ),
+      enableKitchenOperations: _boolFromJson(
+        json['enable_kitchen_operations'],
+        false,
+      ),
+      enableJobTracking: _boolFromJson(json['enable_job_tracking'], false),
       logoAttachment: logoJson is Map<String, Object?>
           ? AttachmentSummary.fromJson(logoJson)
           : null,
@@ -125,6 +146,10 @@ class ShopSettingsDraft {
     required this.trustedCardTerminalIds,
     required this.cardCommissionPercent,
     required this.transferCommissionPercent,
+    this.enableRepairOperations = false,
+    this.enableProductionOperations = false,
+    this.enableKitchenOperations = false,
+    this.enableJobTracking = false,
   });
 
   final String shopName;
@@ -144,6 +169,10 @@ class ShopSettingsDraft {
   final List<String> trustedCardTerminalIds;
   final double cardCommissionPercent;
   final double transferCommissionPercent;
+  final bool enableRepairOperations;
+  final bool enableProductionOperations;
+  final bool enableKitchenOperations;
+  final bool enableJobTracking;
 
   Map<String, Object?> toJson() {
     return {
@@ -166,6 +195,10 @@ class ShopSettingsDraft {
       'transfer_commission_percent': transferCommissionPercent.toStringAsFixed(
         2,
       ),
+      'enable_repair_operations': enableRepairOperations,
+      'enable_production_operations': enableProductionOperations,
+      'enable_kitchen_operations': enableKitchenOperations,
+      'enable_job_tracking': enableJobTracking,
     };
   }
 }

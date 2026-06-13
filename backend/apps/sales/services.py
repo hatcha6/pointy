@@ -191,7 +191,14 @@ def discount_usage_limit_error_payload(exc, field_name):
 def latest_sale_unit_cost(variant):
     from apps.purchasing.services import latest_variant_unit_cost
 
-    return latest_variant_unit_cost(variant.pk) or Decimal("0.00")
+    cost = latest_variant_unit_cost(variant.pk)
+    if cost is None:
+        # Produced goods (bakery output, assembled items) are never purchased;
+        # their cost comes from the production batch that made them.
+        from apps.operations.services import latest_production_unit_cost
+
+        cost = latest_production_unit_cost(variant.pk)
+    return cost or Decimal("0.00")
 
 
 def checkout_loss_lines(lines_data, discount_result=None):
@@ -203,7 +210,7 @@ def checkout_loss_lines(lines_data, discount_result=None):
     loss_lines = []
     for line_data in lines_data:
         variant = line_data["variant"]
-        quantity = int(line_data["quantity"])
+        quantity = Decimal(line_data["quantity"])
         unit_cost = money(latest_sale_unit_cost(variant))
         if quantity <= 0 or unit_cost <= 0:
             continue
@@ -275,7 +282,7 @@ def sale_loss_line_payload(
         "variant_id": variant.pk,
         "product_name": variant.product.name,
         "variant_name": variant.full_name,
-        "quantity": quantity,
+        "quantity": float(quantity),
         "unit_price": f"{unit_price:.2f}",
         "unit_cost": f"{unit_cost:.2f}",
         "discount_total": f"{discount_total:.2f}",
@@ -383,9 +390,16 @@ def checkout_order(
             "total": float(order.total),
             "discount_total": float(order.discount_total),
             "payment_count": len(payments_data),
-            "item_count": sum(int(line_data["quantity"]) for line_data in lines_data),
+            "item_count": float(
+                sum(Decimal(line_data["quantity"]) for line_data in lines_data)
+            ),
         },
     )
+    # Restaurant flow: a paid order containing made-to-order dishes lands on
+    # the kitchen board immediately, with its recipe ingredients pending.
+    from apps.operations.services import create_kitchen_job_for_order
+
+    create_kitchen_job_for_order(order=order, request=request)
     return order
 
 
@@ -395,6 +409,10 @@ def prepare_sale_stock_adjustments(lines_data, *, settings=None):
     variants_by_id = {}
     for line_data in lines_data:
         variant = line_data["variant"]
+        if variant.product.is_service or variant.product.is_prepared:
+            # Labor/fees have no stock, and made-to-order dishes consume their
+            # recipe ingredients through the kitchen job instead.
+            continue
         variants_by_id[variant.pk] = variant
         quantities_by_variant[variant.pk] = (
             quantities_by_variant.get(variant.pk, 0) + line_data["quantity"]
@@ -415,8 +433,8 @@ def prepare_sale_stock_adjustments(lines_data, *, settings=None):
                     "variant_id": variant.pk,
                     "product_name": variant.product.name,
                     "variant_name": variant.full_name,
-                    "requested": quantity,
-                    "available": stock_item.quantity_on_hand,
+                    "requested": float(quantity),
+                    "available": float(stock_item.quantity_on_hand),
                 }
             )
         stock_adjustments.append((variant, stock_item, quantity))
@@ -753,7 +771,7 @@ def void_order(*, order, reason, request=None, register_session=None):
         },
         metrics={
             "amount": float(adjustment.amount),
-            "item_count": sum(quantity for _, quantity in lines),
+            "item_count": float(sum(quantity for _, quantity in lines)),
         },
     )
     return adjustment
@@ -809,7 +827,7 @@ def return_order_items(*, order, lines, reason, request=None, register_session=N
         },
         metrics={
             "amount": float(adjustment.amount),
-            "item_count": sum(quantity for _, quantity in lines),
+            "item_count": float(sum(quantity for _, quantity in lines)),
         },
     )
     return adjustment

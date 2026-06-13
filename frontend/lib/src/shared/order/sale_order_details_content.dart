@@ -6,6 +6,7 @@ import '../../data/services/order_document_service.dart';
 import '../components/components.dart';
 import '../formatters.dart';
 import '../order_totals.dart';
+import 'pointy_quantity_stepper.dart' show formatSaleQuantity;
 import '../payment_labels.dart';
 import '../responsive/responsive.dart';
 import '../date_formatters.dart';
@@ -476,7 +477,7 @@ class _LinesSection extends StatelessWidget {
                     title: saleLineDisplayName(line, l10n),
                     subtitle: [
                       l10n.saleLineQuantityAndPrice(
-                        line.quantity,
+                        formatSaleQuantity(line.quantity),
                         formatMoney(line.unitPrice),
                       ),
                       if (line.profit != null)
@@ -485,8 +486,8 @@ class _LinesSection extends StatelessWidget {
                         l10n.discountLineValue(formatMoney(line.discountTotal)),
                       if (line.returnedQuantity > 0)
                         l10n.saleLineReturnedQuantity(
-                          line.returnedQuantity,
-                          line.quantity,
+                          formatSaleQuantity(line.returnedQuantity),
+                          formatSaleQuantity(line.quantity),
                         ),
                     ].join(' • '),
                     trailing: Text(formatMoney(line.total)),
@@ -612,7 +613,7 @@ class _SaleReturnDialog extends StatefulWidget {
 }
 
 class _SaleReturnDialogState extends State<_SaleReturnDialog> {
-  late final Map<int, int> _quantities = {
+  late final Map<int, double> _quantities = {
     for (final line in widget.order.lines) line.id: 0,
   };
   final TextEditingController _reasonController = TextEditingController();
@@ -701,8 +702,8 @@ class _ReturnLineStepper extends StatelessWidget {
   });
 
   final SaleOrderLine line;
-  final int value;
-  final ValueChanged<int> onChanged;
+  final double value;
+  final ValueChanged<double> onChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -714,11 +715,14 @@ class _ReturnLineStepper extends StatelessWidget {
       subtitle: Text(
         [
           l10n.saleLineQuantityAndPrice(
-            line.quantity,
+            formatSaleQuantity(line.quantity),
             formatMoney(line.unitPrice),
           ),
           if (line.returnedQuantity > 0)
-            l10n.saleLineReturnedQuantity(line.returnedQuantity, line.quantity),
+            l10n.saleLineReturnedQuantity(
+              formatSaleQuantity(line.returnedQuantity),
+              formatSaleQuantity(line.quantity),
+            ),
         ].join(' • '),
       ),
       trailing: Row(
@@ -730,23 +734,73 @@ class _ReturnLineStepper extends StatelessWidget {
             icon: const Icon(Icons.remove),
           ),
           SizedBox(
-            width: 32,
-            child: Text(
-              '$value',
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.titleMedium,
+            width: 56,
+            child: InkWell(
+              onTap: line.unit == 'piece'
+                  ? null
+                  : () => _editWeight(context),
+              child: Text(
+                formatSaleQuantity(value),
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
             ),
           ),
           IconButton(
             tooltip: l10n.addOneTooltip,
             onPressed: value >= line.returnableQuantity
                 ? null
-                : () => onChanged(value + 1),
+                : () => onChanged(
+                    (value + 1).clamp(0, line.returnableQuantity).toDouble(),
+                  ),
             icon: const Icon(Icons.add),
           ),
         ],
       ),
     );
+  }
+}
+
+extension on _ReturnLineStepper {
+  Future<void> _editWeight(BuildContext context) async {
+    final l10n = AppLocalizations.of(context)!;
+    final controller = TextEditingController(
+      text: value > 0 ? formatSaleQuantity(value) : '',
+    );
+    final entered = await showDialog<double>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(l10n.posWeightDialogTitle),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          decoration: InputDecoration(
+            labelText: l10n.posWeightDialogTitle,
+            helperText: l10n.saleReturnQuantityHint(
+              formatSaleQuantity(line.returnableQuantity),
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: Text(l10n.cancelButton),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(
+              double.tryParse(controller.text.trim()),
+            ),
+            child: Text(l10n.confirmButton),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (entered == null || entered < 0) {
+      return;
+    }
+    onChanged(entered.clamp(0, line.returnableQuantity).toDouble());
   }
 }
 

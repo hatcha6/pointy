@@ -16,6 +16,7 @@ import '../../../shared/formatters.dart';
 import '../../../shared/product_image_thumbnail.dart';
 import '../../../shared/product_status_pill.dart';
 import '../../../shared/responsive/responsive.dart';
+import '../../../shared/units.dart';
 import '../view_models/product_details_view_model.dart';
 import '../view_models/product_stock_view_model.dart';
 import 'barcode_label_print_action.dart';
@@ -687,7 +688,9 @@ class _VariantListTile extends StatelessWidget {
         [
           variant.sku,
           formatMoney(variant.unitPrice),
-          l10n.stockMovementQuantityValue(variant.quantityOnHand),
+          l10n.stockMovementQuantityValue(
+            formatQuantity(variant.quantityOnHand),
+          ),
           if (variant.barcode.isNotEmpty) variant.barcode,
         ].join(' / '),
         maxLines: 2,

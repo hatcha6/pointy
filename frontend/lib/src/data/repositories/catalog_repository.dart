@@ -1,4 +1,5 @@
 import '../../core/result.dart';
+import '../../shared/barcode/scale_barcode.dart';
 import '../models/attachment_summary.dart';
 import '../models/product.dart';
 import '../models/product_category.dart';
@@ -204,22 +205,52 @@ class CatalogRepository {
       return const Ok(null);
     }
 
-    final query = ProductQuery(
-      barcode: normalizedBarcode,
-      availability: activeOnly
-          ? ProductAvailabilityFilter.active
-          : ProductAvailabilityFilter.all,
-    );
-
     return Result.guard(() async {
-      final page = await _service.fetchProductVariants(query: query, page: 1);
-      for (final variant in page.variants) {
-        if (variant.barcode.trim() == normalizedBarcode) {
+      final direct = await _findVariantByExactBarcode(
+        normalizedBarcode,
+        activeOnly: activeOnly,
+      );
+      if (direct != null) {
+        return direct;
+      }
+      // Digital-scale labels embed the weight in the barcode; the catalog
+      // stores only the short item code, so retry with the parsed candidates.
+      final scaleBarcode = parseScaleBarcode(normalizedBarcode);
+      if (scaleBarcode == null) {
+        return null;
+      }
+      for (final candidate in scaleBarcode.candidateBarcodes) {
+        final variant = await _findVariantByExactBarcode(
+          candidate,
+          activeOnly: activeOnly,
+        );
+        if (variant != null) {
           return variant;
         }
       }
       return null;
     });
+  }
+
+  Future<ProductVariant?> _findVariantByExactBarcode(
+    String barcode, {
+    required bool activeOnly,
+  }) async {
+    final page = await _service.fetchProductVariants(
+      query: ProductQuery(
+        barcode: barcode,
+        availability: activeOnly
+            ? ProductAvailabilityFilter.active
+            : ProductAvailabilityFilter.all,
+      ),
+      page: 1,
+    );
+    for (final variant in page.variants) {
+      if (variant.barcode.trim() == barcode) {
+        return variant;
+      }
+    }
+    return null;
   }
 
   List<ProductVariant> sampleProductVariants(ProductQuery query) {

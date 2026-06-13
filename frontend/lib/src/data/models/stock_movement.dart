@@ -1,3 +1,5 @@
+import 'sale_order.dart' show formatQuantityForApi;
+
 enum StockMovementType {
   increase('increase'),
   decrease('decrease'),
@@ -36,15 +38,15 @@ class StockMovement {
   final int id;
   final int product;
   final StockMovementType movementType;
-  final int quantity;
+  final double quantity;
   final String note;
   final String? createdByName;
-  final int onHandBefore;
-  final int onHandAfter;
-  final int committedBefore;
-  final int committedAfter;
-  final int expectedBefore;
-  final int expectedAfter;
+  final double onHandBefore;
+  final double onHandAfter;
+  final double committedBefore;
+  final double committedAfter;
+  final double expectedBefore;
+  final double expectedAfter;
   final DateTime? createdAt;
 
   factory StockMovement.fromJson(Map<String, Object?> json) {
@@ -52,15 +54,15 @@ class StockMovement {
       id: json['id'] as int,
       product: json['product'] as int,
       movementType: StockMovementType.fromJson(json['movement_type']),
-      quantity: (json['quantity'] as num?)?.toInt() ?? 0,
+      quantity: _quantityFromJson(json['quantity']),
       note: json['note']?.toString() ?? '',
       createdByName: json['created_by_name']?.toString(),
-      onHandBefore: (json['on_hand_before'] as num?)?.toInt() ?? 0,
-      onHandAfter: (json['on_hand_after'] as num?)?.toInt() ?? 0,
-      committedBefore: (json['committed_before'] as num?)?.toInt() ?? 0,
-      committedAfter: (json['committed_after'] as num?)?.toInt() ?? 0,
-      expectedBefore: (json['expected_before'] as num?)?.toInt() ?? 0,
-      expectedAfter: (json['expected_after'] as num?)?.toInt() ?? 0,
+      onHandBefore: _quantityFromJson(json['on_hand_before']),
+      onHandAfter: _quantityFromJson(json['on_hand_after']),
+      committedBefore: _quantityFromJson(json['committed_before']),
+      committedAfter: _quantityFromJson(json['committed_after']),
+      expectedBefore: _quantityFromJson(json['expected_before']),
+      expectedAfter: _quantityFromJson(json['expected_after']),
       createdAt: _dateTimeFromJson(json['created_at']),
     );
   }
@@ -76,17 +78,24 @@ class StockMovementDraft {
 
   final int variant;
   final StockMovementType movementType;
-  final int quantity;
+  final double quantity;
   final String note;
 
   Map<String, Object?> toJson() {
     return {
       'variant': variant,
       'movement_type': movementType.apiValue,
-      'quantity': quantity,
+      'quantity': formatQuantityForApi(quantity),
       'note': note,
     };
   }
+}
+
+double _quantityFromJson(Object? value) {
+  if (value is num) {
+    return value.toDouble();
+  }
+  return double.tryParse(value?.toString() ?? '') ?? 0;
 }
 
 DateTime? _dateTimeFromJson(Object? value) {

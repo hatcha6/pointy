@@ -66,7 +66,7 @@ class ProductTile extends StatelessWidget {
   final String sku;
   final String barcode;
   final double unitPrice;
-  final int quantityOnHand;
+  final double quantityOnHand;
   final bool isActive;
   final String? imageUrl;
   final Product? _product;

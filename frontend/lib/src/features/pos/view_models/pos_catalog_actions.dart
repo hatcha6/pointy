@@ -159,7 +159,12 @@ extension PosCatalogActions on PosViewModel {
           return const PosProductSelectionResult.unavailable();
         }
         if (variants.length == 1) {
-          addVariant(variants.single, source: 'product_tile');
+          final variant = variants.single;
+          if (variant.unit != 'piece') {
+            // Weighted items need a weight before they can be priced.
+            return PosProductSelectionResult.weighVariant(variant);
+          }
+          addVariant(variant, source: 'product_tile');
           return const PosProductSelectionResult.added();
         }
         return PosProductSelectionResult.chooseVariant(variants);

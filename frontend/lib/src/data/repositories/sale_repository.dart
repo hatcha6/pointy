@@ -12,8 +12,8 @@ class SaleStockShortage {
   });
 
   final String productName;
-  final int requested;
-  final int available;
+  final double requested;
+  final double available;
 }
 
 class SaleCheckoutStockException implements Exception {
@@ -130,8 +130,8 @@ class SaleRepository {
                 item['variant_name']?.toString() ??
                 item['product_name']?.toString() ??
                 '',
-            requested: _intFromJson(item['requested']),
-            available: _intFromJson(item['available']),
+            requested: _shortageQtyFromJson(item['requested']),
+            available: _shortageQtyFromJson(item['available']),
           );
         })
         .toList(growable: false);
@@ -155,10 +155,11 @@ class SaleRepository {
         .toList(growable: false);
   }
 
-  int _intFromJson(Object? value) {
-    if (value is num) {
-      return value.toInt();
-    }
-    return int.tryParse(value?.toString() ?? '') ?? 0;
+}
+
+double _shortageQtyFromJson(Object? value) {
+  if (value is num) {
+    return value.toDouble();
   }
+  return double.tryParse((value ?? 0).toString()) ?? 0;
 }

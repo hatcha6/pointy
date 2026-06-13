@@ -844,7 +844,7 @@ class OrderCheckoutApiTests(TestCase):
         self.assertEqual(relayed_response.data["subtotal"], "7.00")
         self.assertEqual(relayed_response.data["discount_total"], "0.00")
         self.assertEqual(relayed_response.data["total"], "7.00")
-        self.assertEqual(relayed_response.data["lines"][0]["quantity"], 2)
+        self.assertEqual(float(relayed_response.data["lines"][0]["quantity"]), 2.0)
         # No logo configured: the field is present but empty.
         self.assertEqual(relayed_response.data["shop_logo_data_uri"], "")
         self.assertNotIn("total_profit", relayed_response.data)
@@ -1140,8 +1140,8 @@ class OrderCheckoutApiTests(TestCase):
         self.assertEqual(int(shortage["product_id"]), self.product.pk)
         self.assertEqual(int(shortage["variant_id"]), variant.pk)
         self.assertEqual(shortage["variant_name"], "Coffee - Small")
-        self.assertEqual(int(shortage["requested"]), 5)
-        self.assertEqual(int(shortage["available"]), 4)
+        self.assertEqual(float(shortage["requested"]), 5.0)
+        self.assertEqual(float(shortage["available"]), 4.0)
 
     def test_checkout_creates_paid_order_and_payment(self):
         self.start_session()

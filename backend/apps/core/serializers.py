@@ -8,7 +8,13 @@ from apps.attachments.serializers import AttachmentSummarySerializer
 from apps.attachments.services import active_attachments_for
 
 from .models import ShopSettings
-from .roles import ACCOUNTANT_GROUP, CASHIER_GROUP, MANAGER_GROUP, ROLE_GROUPS
+from .roles import (
+    ACCOUNTANT_GROUP,
+    CASHIER_GROUP,
+    MANAGER_GROUP,
+    ROLE_GROUPS,
+    TECHNICIAN_GROUP,
+)
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -36,6 +42,8 @@ class UserSerializer(serializers.ModelSerializer):
             return CASHIER_GROUP
         if user.groups.filter(name=ACCOUNTANT_GROUP).exists():
             return ACCOUNTANT_GROUP
+        if user.groups.filter(name=TECHNICIAN_GROUP).exists():
+            return TECHNICIAN_GROUP
         return None
 
     def get_permissions(self, user):
@@ -169,6 +177,8 @@ class PosUserSerializer(serializers.ModelSerializer):
             return CASHIER_GROUP
         if user.groups.filter(name=ACCOUNTANT_GROUP).exists():
             return ACCOUNTANT_GROUP
+        if user.groups.filter(name=TECHNICIAN_GROUP).exists():
+            return TECHNICIAN_GROUP
         return None
 
     def validate_username(self, value):
@@ -253,6 +263,10 @@ class ShopSettingsSerializer(serializers.ModelSerializer):
             "receipt_header",
             "receipt_footer",
             "enable_online_invoices",
+            "enable_repair_operations",
+            "enable_production_operations",
+            "enable_kitchen_operations",
+            "enable_job_tracking",
             "require_opening_cash",
             "auto_print_receipts",
             "allow_overselling",

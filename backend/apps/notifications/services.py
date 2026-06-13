@@ -283,7 +283,7 @@ def _expiry_notifications(now):
                 payload={
                     "product_name": batch.variant.full_name,
                     "sku": batch.variant.sku,
-                    "quantity": batch.remaining_quantity,
+                    "quantity": float(batch.remaining_quantity),
                     "expiry_date": batch.expiry_date.isoformat(),
                     "days": max(days, 0),
                     "order_number": order.order_number,
@@ -548,7 +548,23 @@ def _payroll_notifications(now):
     return specs
 
 
+def _json_safe_payload(value):
+    from decimal import Decimal
+
+    if isinstance(value, Decimal):
+        return float(value)
+    if isinstance(value, dict):
+        return {key: _json_safe_payload(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_safe_payload(item) for item in value]
+    return value
+
+
 def _upsert_notification(spec, now):
+    # Stock quantities are Decimals since weighted-product support; the
+    # payload column is JSON, so coerce them at the boundary.
+    if "payload" in spec:
+        spec = {**spec, "payload": _json_safe_payload(spec["payload"])}
     notification = BusinessNotification.objects.filter(
         fingerprint=spec["fingerprint"]
     ).first()
@@ -615,7 +631,7 @@ def _stock_payload(item):
     return {
         "product_name": display_name,
         "sku": item.variant.sku,
-        "quantity": item.quantity_on_hand,
+        "quantity": float(item.quantity_on_hand),
         "threshold": item.reorder_level,
         "expected": item.quantity_expected,
         "count": 1,

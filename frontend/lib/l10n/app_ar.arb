@@ -1499,6 +1499,272 @@
   "salesChannelApiKeyCopyButton": "نسخ المفتاح",
   "salesChannelApiKeyCopiedMessage": "تم نسخ المفتاح.",
   "salesChannelActionError": "تعذر تنفيذ العملية على القناة. حاول مرة أخرى.",
+  "technicianRoleLabel": "فني",
+  "navigationGroupOperations": "العمليات",
+  "operationsDrawerLabel": "المهام والتشغيل",
+  "jobsBoardTitle": "المهام",
+  "refreshJobsTooltip": "تحديث المهام",
+  "jobsLoadError": "تعذر تحميل المهام.",
+  "operationsActionError": "تعذر تنفيذ العملية. حاول مرة أخرى.",
+  "posWeightDialogTitle": "أدخل الوزن",
+  "posWeightInvalid": "أدخل وزنًا أكبر من صفر.",
+  "cartEditWeightTooltip": "تعديل الوزن",
+  "saleReturnQuantityHint": "الكمية القابلة للإرجاع: {quantity}",
+  "@saleReturnQuantityHint": {
+    "description": "Helper showing the maximum returnable quantity.",
+    "placeholders": {
+      "quantity": {
+        "type": "String"
+      }
+    }
+  },
+  "unitPiece": "قطعة",
+  "unitKilogram": "كجم",
+  "unitGram": "جم",
+  "unitLiter": "لتر",
+  "unitMilliliter": "مل",
+  "productUnitLabel": "وحدة القياس",
+  "productIsPreparedTitle": "يُحضّر عند الطلب",
+  "productIsPreparedDescription": "طبق مطبخ: يُباع دون مخزون خاص به وتُخصم مكوناته من الوصفة عند التحضير.",
+  "productIsServiceTitle": "منتج خدمي",
+  "productIsServiceDescription": "خدمة أو رسوم تُباع دون أي مخزون.",
+  "jobsEmptyTitle": "لا توجد مهام بعد",
+  "jobsEmptyMessage": "المهمة هي أي عمل تتابعه خطوة بخطوة: تصليح جهاز، دفعة إنتاج، أو طلب مطبخ. أنشئ أول مهمة وسيظهر مسارها هنا.",
+  "newJobButton": "مهمة جديدة",
+  "jobSearchHint": "ابحث برقم المهمة أو اسم الزبون أو رقم الجهاز",
+  "jobFilterAll": "الكل",
+  "jobFilterMine": "مهامي",
+  "jobFilterOpenOnly": "قيد العمل",
+  "jobFilterDone": "المنتهية",
+  "jobStatusOpen": "قيد العمل",
+  "jobStatusCompleted": "منتهية",
+  "jobStatusCancelled": "ملغاة",
+  "jobPriorityLabel": "الأولوية",
+  "jobPriorityLow": "منخفضة",
+  "jobPriorityNormal": "عادية",
+  "jobPriorityHigh": "مرتفعة",
+  "jobPriorityUrgent": "عاجلة",
+  "jobTypeRepair": "تصليح",
+  "jobTypeProduction": "إنتاج",
+  "jobTypeKitchen": "مطبخ",
+  "jobTypeWorkOrder": "أمر عمل",
+  "jobDetailsTitle": "تفاصيل المهمة",
+  "jobTimelineTitle": "مسار المهمة",
+  "jobCurrentStageLabel": "المرحلة الحالية",
+  "jobNextActionButton": "الخطوة التالية: {stageName}",
+  "@jobNextActionButton": {
+    "description": "Primary button advancing the job to its next stage.",
+    "placeholders": {
+      "stageName": {
+        "type": "String"
+      }
+    }
+  },
+  "jobMoveToStageAction": "نقل إلى مرحلة أخرى",
+  "jobStageChangeNoteLabel": "ملاحظة (اختياري)",
+  "jobStageChangedMessage": "انتقلت المهمة إلى «{stageName}».",
+  "@jobStageChangedMessage": {
+    "description": "Snackbar after a stage change.",
+    "placeholders": {
+      "stageName": {
+        "type": "String"
+      }
+    }
+  },
+  "jobManagerOnlyMoveHint": "الرجوع للخلف أو تخطي مرحلة يحتاج صلاحية مدير.",
+  "jobCustomerSection": "الزبون",
+  "jobNoCustomer": "بدون زبون",
+  "jobAssetSection": "الجهاز",
+  "assetHistoryTitle": "سجل الجهاز",
+  "assetHistoryEmpty": "لا يوجد سجل سابق لهذا الجهاز.",
+  "customerAssetsTitle": "أجهزة الزبون",
+  "customerAssetsEmpty": "لا توجد أجهزة مسجلة لهذا الزبون.",
+  "jobMaterialsSection": "القطع والمواد",
+  "jobMaterialsEmpty": "لم تُستخدم قطع بعد. أضف كل قطعة تركّبها وسيُخصم المخزون تلقائيًا.",
+  "addMaterialButton": "إضافة قطعة",
+  "materialQuantityLabel": "الكمية",
+  "materialConsumedBadge": "خُصمت من المخزون",
+  "materialPendingBadge": "بانتظار الخصم",
+  "materialReversedBadge": "أُرجعت للمخزون",
+  "reverseMaterialAction": "إرجاع للمخزون",
+  "reverseMaterialConfirmTitle": "إرجاع القطعة للمخزون؟",
+  "reverseMaterialConfirmMessage": "ستُعاد الكمية إلى المخزون وتُحذف من حساب المهمة.",
+  "jobMaterialsTotalLabel": "إجمالي القطع: {amount}",
+  "@jobMaterialsTotalLabel": {
+    "description": "Total price of materials used on a job.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "jobQuotedPriceLabel": "السعر المبدئي",
+  "jobApprovedPriceLabel": "السعر المعتمد من الزبون",
+  "jobApprovalRequiredHint": "سجّل السعر الذي وافق عليه الزبون قبل بدء العمل.",
+  "jobWarrantyDaysLabel": "أيام الضمان",
+  "jobSymptomsLabel": "وصف المشكلة",
+  "jobDiagnosisLabel": "التشخيص",
+  "jobTechnicianNotesLabel": "ملاحظات الفني",
+  "jobSaveButton": "حفظ التعديلات",
+  "jobSavedMessage": "تم حفظ المهمة.",
+  "jobAssignedToLabel": "مسؤول التنفيذ",
+  "jobUnassigned": "غير معيّن",
+  "jobDueAtLabel": "موعد التسليم",
+  "jobCreatedAtLabel": "تاريخ الاستلام",
+  "jobInvoiceButton": "تحصيل وفوترة",
+  "jobInvoiceTitle": "فاتورة المهمة",
+  "jobInvoiceExplainer": "ستُنشأ فاتورة عادية بالقطع المستخدمة وأجور العمل، ويدخل المبلغ في جلسة الدرج الحالية.",
+  "jobLaborTotalLabel": "أجور العمل",
+  "jobInvoiceTotalLabel": "الإجمالي: {amount}",
+  "@jobInvoiceTotalLabel": {
+    "description": "Job invoice grand total.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "jobInvoiceSuccess": "تم إنشاء الفاتورة {receiptNumber}.",
+  "@jobInvoiceSuccess": {
+    "description": "Snackbar after invoicing a job.",
+    "placeholders": {
+      "receiptNumber": {
+        "type": "String"
+      }
+    }
+  },
+  "jobInvoiceNeedsRegister": "افتح جلسة الدرج أولًا حتى يُسجل المبلغ في حساباتك.",
+  "jobInvoicedBadge": "مفوترة — {receiptNumber}",
+  "@jobInvoicedBadge": {
+    "description": "Badge linking a job to its receipt.",
+    "placeholders": {
+      "receiptNumber": {
+        "type": "String"
+      }
+    }
+  },
+  "jobCancelAction": "إلغاء المهمة",
+  "jobCancelConfirmTitle": "إلغاء المهمة؟",
+  "jobCancelConfirmMessage": "ستُلغى المهمة وتُعاد أي قطع مستخدمة إلى المخزون.",
+  "jobCancelReasonLabel": "سبب الإلغاء",
+  "jobReopenAction": "إعادة فتح المهمة",
+  "intakeTitle": "استلام مهمة جديدة",
+  "intakeStepCustomer": "الزبون",
+  "intakeStepAsset": "الجهاز",
+  "intakeStepDetails": "التفاصيل",
+  "intakeNextButton": "التالي",
+  "intakeBackButton": "السابق",
+  "intakeCreateButton": "إنشاء المهمة",
+  "intakeSelectCustomerHint": "ابحث عن الزبون بالاسم أو الهاتف، أو أنشئ زبونًا جديدًا.",
+  "intakeNewCustomerButton": "زبون جديد",
+  "intakeCustomerNameLabel": "اسم الزبون",
+  "intakeCustomerPhoneLabel": "رقم الهاتف",
+  "intakeCustomerRequired": "اختر زبونًا للمتابعة.",
+  "intakeSelectAssetHint": "اختر جهاز الزبون أو أضف جهازًا جديدًا. يساعدك هذا لاحقًا في معرفة تاريخ كل جهاز.",
+  "intakeNewAssetButton": "جهاز جديد",
+  "intakeSkipAssetButton": "متابعة بدون جهاز",
+  "assetTypeLabel": "نوع الجهاز",
+  "assetBrandLabel": "الماركة",
+  "assetModelLabel": "الموديل",
+  "assetSerialLabel": "الرقم التسلسلي",
+  "assetImeiLabel": "IMEI",
+  "assetColorLabel": "اللون",
+  "assetNotesLabel": "ملاحظات",
+  "assetTypePhone": "هاتف",
+  "assetTypeTablet": "تابلت",
+  "assetTypeLaptop": "حاسوب محمول",
+  "assetTypeConsole": "جهاز ألعاب",
+  "assetTypeAppliance": "جهاز منزلي",
+  "assetTypeOther": "أخرى",
+  "intakeWorkflowLabel": "نوع المهمة",
+  "intakeJobCreated": "تم إنشاء المهمة {jobNumber}.",
+  "@intakeJobCreated": {
+    "description": "Snackbar after intake wizard creates a job.",
+    "placeholders": {
+      "jobNumber": {
+        "type": "String"
+      }
+    }
+  },
+  "productionNewBatchButton": "دفعة إنتاج جديدة",
+  "productionRecipeLabel": "الوصفة",
+  "productionBatchesLabel": "عدد الدفعات",
+  "productionOutputPreview": "سينتج {quantity} × {name}",
+  "@productionOutputPreview": {
+    "description": "Preview of production output.",
+    "placeholders": {
+      "quantity": {
+        "type": "String"
+      },
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "productionMaterialsPreviewTitle": "المكونات المطلوبة",
+  "productionOutputSection": "ناتج الإنتاج",
+  "productionReceivedBadge": "أُضيف للمخزون",
+  "productionNoRecipesMessage": "أنشئ وصفة أولًا من إعدادات المتجر حتى يعرف النظام مكونات كل منتج.",
+  "recipesTitle": "الوصفات",
+  "recipesSubtitle": "حدد مكونات كل منتج تنتجه ليُخصم المخزون ويُحسب الناتج تلقائيًا",
+  "recipesEmptyMessage": "الوصفة تخبر النظام بمكونات كل منتج تنتجه — مثل الدقيق والخميرة لرغيف الخبز — ليخصم المخزون ويضيف الناتج تلقائيًا.",
+  "newRecipeButton": "وصفة جديدة",
+  "recipeNameLabel": "اسم الوصفة",
+  "recipeOutputVariantLabel": "المنتج الناتج",
+  "recipeOutputQuantityLabel": "الكمية الناتجة لكل دفعة",
+  "recipeComponentsTitle": "المكونات",
+  "recipeAddComponentButton": "إضافة مكوّن",
+  "recipeComponentQuantityLabel": "الكمية",
+  "recipeWastePercentLabel": "نسبة الهدر %",
+  "recipeDeleteAction": "حذف الوصفة",
+  "recipeDeleteConfirmTitle": "حذف الوصفة؟",
+  "recipeDeleteConfirmMessage": "سيتم حذف «{name}» نهائيًا. الوصفات المستخدمة في دفعات إنتاج سابقة لا يمكن حذفها.",
+  "@recipeDeleteConfirmMessage": {
+    "description": "Confirmation before deleting a recipe.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "recipeSaveButton": "حفظ الوصفة",
+  "recipeSavedMessage": "تم حفظ الوصفة.",
+  "recipesLoadError": "تعذر تحميل الوصفات.",
+  "recipeNameRequired": "أدخل اسم الوصفة.",
+  "recipeComponentsRequired": "أضف مكوّنًا واحدًا على الأقل.",
+  "operationsSettingsSectionTitle": "العمليات والمهام",
+  "operationsSettingsSectionSubtitle": "تشغيل التصليح والإنتاج والمطبخ وإدارة مراحل العمل",
+  "operationsModesTitle": "أقسام العمل",
+  "operationsModesHint": "فعّل ما يناسب نشاطك فقط — كل قسم يضيف نوع مهام جاهزًا بمراحله.",
+  "enableRepairOperationsTitle": "التصليح والصيانة",
+  "enableRepairOperationsDescription": "استلام أجهزة الزبائن، تتبع التصليح خطوة بخطوة، وفوترة القطع والأجور.",
+  "enableProductionOperationsTitle": "الإنتاج",
+  "enableProductionOperationsDescription": "دفعات إنتاج بوصفات محددة: تُخصم المكونات ويُضاف الناتج للمخزون تلقائيًا.",
+  "enableKitchenOperationsTitle": "المطبخ",
+  "enableKitchenOperationsDescription": "طلبات مطبخ تمر بمراحل التحضير وتخصم المكونات عند الطبخ.",
+  "enableJobTrackingTitle": "صفحة تتبع للزبائن",
+  "enableJobTrackingDescription": "رابط عام يطّلع منه الزبون على حالة مهمته دون الاتصال بك.",
+  "workflowsTitle": "مراحل العمل",
+  "workflowStagesHint": "هذه هي الخطوات التي تمر بها كل مهمة من الاستلام حتى التسليم. يمكنك إعادة تسميتها أو إضافة مراحل تناسب طريقة عملك.",
+  "workflowStageNameLabel": "اسم المرحلة",
+  "workflowAddStageButton": "إضافة مرحلة",
+  "workflowStageInitialLabel": "مرحلة البداية",
+  "workflowStageTerminalLabel": "مرحلة النهاية",
+  "workflowStageApprovalLabel": "تتطلب موافقة الزبون على السعر",
+  "workflowStageConsumesLabel": "تخصم المواد من المخزون",
+  "workflowStageProducesLabel": "تضيف الناتج إلى المخزون",
+  "workflowSaveButton": "حفظ المراحل",
+  "workflowSavedMessage": "تم حفظ مراحل العمل.",
+  "workflowsLoadError": "تعذر تحميل مراحل العمل.",
+  "jobCountLabel": "{count} مهمة",
+  "@jobCountLabel": {
+    "description": "Count of jobs in a stage column.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "shopSettingsEmptyValue": "غير محدد",
   "shopSettingsEnabledValue": "مفعل",
   "shopSettingsDisabledValue": "متوقف",
@@ -2172,8 +2438,12 @@
   "@reportLastCompletedMessage": {
     "description": "Inline confirmation in the reports output panel showing the last successfully generated report.",
     "placeholders": {
-      "action": {"type": "String"},
-      "report": {"type": "String"}
+      "action": {
+        "type": "String"
+      },
+      "report": {
+        "type": "String"
+      }
     }
   },
   "reportRunAgainButton": "تشغيل مجددًا",
@@ -2263,7 +2533,7 @@
     "description": "Quantity shown on a stock movement row.",
     "placeholders": {
       "quantity": {
-        "type": "int"
+        "type": "String"
       }
     }
   },
@@ -2332,7 +2602,7 @@
     "description": "Stock quantity shown for a variant in the POS variant picker.",
     "placeholders": {
       "quantity": {
-        "type": "int"
+        "type": "String"
       }
     }
   },
@@ -3347,10 +3617,10 @@
         "type": "String"
       },
       "requested": {
-        "type": "int"
+        "type": "String"
       },
       "available": {
-        "type": "int"
+        "type": "String"
       }
     }
   },
@@ -3592,7 +3862,7 @@
     "description": "Sale line quantity and unit price.",
     "placeholders": {
       "quantity": {
-        "type": "int"
+        "type": "String"
       },
       "unitPrice": {
         "type": "String"
@@ -3633,10 +3903,10 @@
     "description": "Returned quantity status for a sale line.",
     "placeholders": {
       "returned": {
-        "type": "int"
+        "type": "String"
       },
       "quantity": {
-        "type": "int"
+        "type": "String"
       }
     }
   },

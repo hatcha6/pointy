@@ -62,7 +62,9 @@ class ReportRun(TimeStampedModel):
 
     def mark_success(self, *, payload, row_count, checksum):
         self.status = self.Status.SUCCESS
-        self.payload = payload
+        # Stock quantities are Decimals since weighted-product support; the
+        # payload column is JSON, so coerce them at the boundary.
+        self.payload = _json_safe_payload(payload)
         self.row_count = row_count
         self.checksum = checksum
         self.completed_at = timezone.now()
@@ -94,3 +96,14 @@ class ReportRun(TimeStampedModel):
 
     def __str__(self):
         return f"{self.report_type} by {self.requested_by_id or 'system'}"
+
+def _json_safe_payload(value):
+    from decimal import Decimal
+
+    if isinstance(value, Decimal):
+        return float(value)
+    if isinstance(value, dict):
+        return {key: _json_safe_payload(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_safe_payload(item) for item in value]
+    return value

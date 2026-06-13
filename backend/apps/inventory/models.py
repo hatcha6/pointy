@@ -11,9 +11,9 @@ class StockItem(TimeStampedModel):
         on_delete=models.CASCADE,
         related_name="stock",
     )
-    quantity_on_hand = models.IntegerField(default=0)
-    quantity_committed = models.IntegerField(default=0)
-    quantity_expected = models.IntegerField(default=0)
+    quantity_on_hand = models.DecimalField(max_digits=12, decimal_places=3, default=0)
+    quantity_committed = models.DecimalField(max_digits=12, decimal_places=3, default=0)
+    quantity_expected = models.DecimalField(max_digits=12, decimal_places=3, default=0)
     reorder_level = models.PositiveIntegerField(default=5)
 
     class Meta:
@@ -44,7 +44,7 @@ class StockMovement(TimeStampedModel):
         related_name="movements",
     )
     movement_type = models.CharField(max_length=32, choices=Type.choices)
-    quantity = models.PositiveIntegerField()
+    quantity = models.DecimalField(max_digits=12, decimal_places=3)
     note = models.CharField(max_length=240, blank=True)
     created_by = models.ForeignKey(
         "auth.User",
@@ -53,12 +53,12 @@ class StockMovement(TimeStampedModel):
         blank=True,
         related_name="stock_movements",
     )
-    on_hand_before = models.IntegerField()
-    on_hand_after = models.IntegerField()
-    committed_before = models.IntegerField()
-    committed_after = models.IntegerField()
-    expected_before = models.IntegerField()
-    expected_after = models.IntegerField()
+    on_hand_before = models.DecimalField(max_digits=12, decimal_places=3)
+    on_hand_after = models.DecimalField(max_digits=12, decimal_places=3)
+    committed_before = models.DecimalField(max_digits=12, decimal_places=3)
+    committed_after = models.DecimalField(max_digits=12, decimal_places=3)
+    expected_before = models.DecimalField(max_digits=12, decimal_places=3)
+    expected_after = models.DecimalField(max_digits=12, decimal_places=3)
 
     class Meta:
         ordering = ["-created_at", "-id"]
@@ -79,8 +79,8 @@ class StockBatch(TimeStampedModel):
         related_name="stock_batch",
     )
     expiry_date = models.DateField(db_index=True)
-    received_quantity = models.PositiveIntegerField()
-    remaining_quantity = models.PositiveIntegerField()
+    received_quantity = models.DecimalField(max_digits=12, decimal_places=3)
+    remaining_quantity = models.DecimalField(max_digits=12, decimal_places=3)
 
     class Meta:
         ordering = ["expiry_date", "created_at", "id"]

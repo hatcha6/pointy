@@ -755,7 +755,7 @@ def validate_purchase_stock_available(lines):
                     "product_name": variant.product.name,
                     "variant_name": variant.full_name,
                     "requested": quantity,
-                    "available": stock_item.quantity_on_hand,
+                    "available": float(stock_item.quantity_on_hand),
                 }
             )
 

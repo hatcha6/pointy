@@ -41,6 +41,13 @@ class CustomerOrderAdjustmentLineSerializer(serializers.ModelSerializer):
         read_only=True,
     )
 
+    quantity = serializers.DecimalField(
+        max_digits=10,
+        decimal_places=3,
+        coerce_to_string=False,
+        read_only=True,
+    )
+
     class Meta:
         model = OrderAdjustmentLine
         fields = [

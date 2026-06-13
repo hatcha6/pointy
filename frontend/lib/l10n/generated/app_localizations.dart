@@ -4389,6 +4389,1056 @@ abstract class AppLocalizations {
   /// **'تعذر تنفيذ العملية على القناة. حاول مرة أخرى.'**
   String get salesChannelActionError;
 
+  /// No description provided for @technicianRoleLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'فني'**
+  String get technicianRoleLabel;
+
+  /// No description provided for @navigationGroupOperations.
+  ///
+  /// In ar, this message translates to:
+  /// **'العمليات'**
+  String get navigationGroupOperations;
+
+  /// No description provided for @operationsDrawerLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'المهام والتشغيل'**
+  String get operationsDrawerLabel;
+
+  /// No description provided for @jobsBoardTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'المهام'**
+  String get jobsBoardTitle;
+
+  /// No description provided for @refreshJobsTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحديث المهام'**
+  String get refreshJobsTooltip;
+
+  /// No description provided for @jobsLoadError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر تحميل المهام.'**
+  String get jobsLoadError;
+
+  /// No description provided for @operationsActionError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر تنفيذ العملية. حاول مرة أخرى.'**
+  String get operationsActionError;
+
+  /// No description provided for @posWeightDialogTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'أدخل الوزن'**
+  String get posWeightDialogTitle;
+
+  /// No description provided for @posWeightInvalid.
+  ///
+  /// In ar, this message translates to:
+  /// **'أدخل وزنًا أكبر من صفر.'**
+  String get posWeightInvalid;
+
+  /// No description provided for @cartEditWeightTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعديل الوزن'**
+  String get cartEditWeightTooltip;
+
+  /// Helper showing the maximum returnable quantity.
+  ///
+  /// In ar, this message translates to:
+  /// **'الكمية القابلة للإرجاع: {quantity}'**
+  String saleReturnQuantityHint(String quantity);
+
+  /// No description provided for @unitPiece.
+  ///
+  /// In ar, this message translates to:
+  /// **'قطعة'**
+  String get unitPiece;
+
+  /// No description provided for @unitKilogram.
+  ///
+  /// In ar, this message translates to:
+  /// **'كجم'**
+  String get unitKilogram;
+
+  /// No description provided for @unitGram.
+  ///
+  /// In ar, this message translates to:
+  /// **'جم'**
+  String get unitGram;
+
+  /// No description provided for @unitLiter.
+  ///
+  /// In ar, this message translates to:
+  /// **'لتر'**
+  String get unitLiter;
+
+  /// No description provided for @unitMilliliter.
+  ///
+  /// In ar, this message translates to:
+  /// **'مل'**
+  String get unitMilliliter;
+
+  /// No description provided for @productUnitLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'وحدة القياس'**
+  String get productUnitLabel;
+
+  /// No description provided for @productIsPreparedTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'يُحضّر عند الطلب'**
+  String get productIsPreparedTitle;
+
+  /// No description provided for @productIsPreparedDescription.
+  ///
+  /// In ar, this message translates to:
+  /// **'طبق مطبخ: يُباع دون مخزون خاص به وتُخصم مكوناته من الوصفة عند التحضير.'**
+  String get productIsPreparedDescription;
+
+  /// No description provided for @productIsServiceTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'منتج خدمي'**
+  String get productIsServiceTitle;
+
+  /// No description provided for @productIsServiceDescription.
+  ///
+  /// In ar, this message translates to:
+  /// **'خدمة أو رسوم تُباع دون أي مخزون.'**
+  String get productIsServiceDescription;
+
+  /// No description provided for @jobsEmptyTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد مهام بعد'**
+  String get jobsEmptyTitle;
+
+  /// No description provided for @jobsEmptyMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'المهمة هي أي عمل تتابعه خطوة بخطوة: تصليح جهاز، دفعة إنتاج، أو طلب مطبخ. أنشئ أول مهمة وسيظهر مسارها هنا.'**
+  String get jobsEmptyMessage;
+
+  /// No description provided for @newJobButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'مهمة جديدة'**
+  String get newJobButton;
+
+  /// No description provided for @jobSearchHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'ابحث برقم المهمة أو اسم الزبون أو رقم الجهاز'**
+  String get jobSearchHint;
+
+  /// No description provided for @jobFilterAll.
+  ///
+  /// In ar, this message translates to:
+  /// **'الكل'**
+  String get jobFilterAll;
+
+  /// No description provided for @jobFilterMine.
+  ///
+  /// In ar, this message translates to:
+  /// **'مهامي'**
+  String get jobFilterMine;
+
+  /// No description provided for @jobFilterOpenOnly.
+  ///
+  /// In ar, this message translates to:
+  /// **'قيد العمل'**
+  String get jobFilterOpenOnly;
+
+  /// No description provided for @jobFilterDone.
+  ///
+  /// In ar, this message translates to:
+  /// **'المنتهية'**
+  String get jobFilterDone;
+
+  /// No description provided for @jobStatusOpen.
+  ///
+  /// In ar, this message translates to:
+  /// **'قيد العمل'**
+  String get jobStatusOpen;
+
+  /// No description provided for @jobStatusCompleted.
+  ///
+  /// In ar, this message translates to:
+  /// **'منتهية'**
+  String get jobStatusCompleted;
+
+  /// No description provided for @jobStatusCancelled.
+  ///
+  /// In ar, this message translates to:
+  /// **'ملغاة'**
+  String get jobStatusCancelled;
+
+  /// No description provided for @jobPriorityLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الأولوية'**
+  String get jobPriorityLabel;
+
+  /// No description provided for @jobPriorityLow.
+  ///
+  /// In ar, this message translates to:
+  /// **'منخفضة'**
+  String get jobPriorityLow;
+
+  /// No description provided for @jobPriorityNormal.
+  ///
+  /// In ar, this message translates to:
+  /// **'عادية'**
+  String get jobPriorityNormal;
+
+  /// No description provided for @jobPriorityHigh.
+  ///
+  /// In ar, this message translates to:
+  /// **'مرتفعة'**
+  String get jobPriorityHigh;
+
+  /// No description provided for @jobPriorityUrgent.
+  ///
+  /// In ar, this message translates to:
+  /// **'عاجلة'**
+  String get jobPriorityUrgent;
+
+  /// No description provided for @jobTypeRepair.
+  ///
+  /// In ar, this message translates to:
+  /// **'تصليح'**
+  String get jobTypeRepair;
+
+  /// No description provided for @jobTypeProduction.
+  ///
+  /// In ar, this message translates to:
+  /// **'إنتاج'**
+  String get jobTypeProduction;
+
+  /// No description provided for @jobTypeKitchen.
+  ///
+  /// In ar, this message translates to:
+  /// **'مطبخ'**
+  String get jobTypeKitchen;
+
+  /// No description provided for @jobTypeWorkOrder.
+  ///
+  /// In ar, this message translates to:
+  /// **'أمر عمل'**
+  String get jobTypeWorkOrder;
+
+  /// No description provided for @jobDetailsTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'تفاصيل المهمة'**
+  String get jobDetailsTitle;
+
+  /// No description provided for @jobTimelineTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'مسار المهمة'**
+  String get jobTimelineTitle;
+
+  /// No description provided for @jobCurrentStageLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'المرحلة الحالية'**
+  String get jobCurrentStageLabel;
+
+  /// Primary button advancing the job to its next stage.
+  ///
+  /// In ar, this message translates to:
+  /// **'الخطوة التالية: {stageName}'**
+  String jobNextActionButton(String stageName);
+
+  /// No description provided for @jobMoveToStageAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'نقل إلى مرحلة أخرى'**
+  String get jobMoveToStageAction;
+
+  /// No description provided for @jobStageChangeNoteLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'ملاحظة (اختياري)'**
+  String get jobStageChangeNoteLabel;
+
+  /// Snackbar after a stage change.
+  ///
+  /// In ar, this message translates to:
+  /// **'انتقلت المهمة إلى «{stageName}».'**
+  String jobStageChangedMessage(String stageName);
+
+  /// No description provided for @jobManagerOnlyMoveHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'الرجوع للخلف أو تخطي مرحلة يحتاج صلاحية مدير.'**
+  String get jobManagerOnlyMoveHint;
+
+  /// No description provided for @jobCustomerSection.
+  ///
+  /// In ar, this message translates to:
+  /// **'الزبون'**
+  String get jobCustomerSection;
+
+  /// No description provided for @jobNoCustomer.
+  ///
+  /// In ar, this message translates to:
+  /// **'بدون زبون'**
+  String get jobNoCustomer;
+
+  /// No description provided for @jobAssetSection.
+  ///
+  /// In ar, this message translates to:
+  /// **'الجهاز'**
+  String get jobAssetSection;
+
+  /// No description provided for @assetHistoryTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'سجل الجهاز'**
+  String get assetHistoryTitle;
+
+  /// No description provided for @assetHistoryEmpty.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا يوجد سجل سابق لهذا الجهاز.'**
+  String get assetHistoryEmpty;
+
+  /// No description provided for @customerAssetsTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'أجهزة الزبون'**
+  String get customerAssetsTitle;
+
+  /// No description provided for @customerAssetsEmpty.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد أجهزة مسجلة لهذا الزبون.'**
+  String get customerAssetsEmpty;
+
+  /// No description provided for @jobMaterialsSection.
+  ///
+  /// In ar, this message translates to:
+  /// **'القطع والمواد'**
+  String get jobMaterialsSection;
+
+  /// No description provided for @jobMaterialsEmpty.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم تُستخدم قطع بعد. أضف كل قطعة تركّبها وسيُخصم المخزون تلقائيًا.'**
+  String get jobMaterialsEmpty;
+
+  /// No description provided for @addMaterialButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'إضافة قطعة'**
+  String get addMaterialButton;
+
+  /// No description provided for @materialQuantityLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الكمية'**
+  String get materialQuantityLabel;
+
+  /// No description provided for @materialConsumedBadge.
+  ///
+  /// In ar, this message translates to:
+  /// **'خُصمت من المخزون'**
+  String get materialConsumedBadge;
+
+  /// No description provided for @materialPendingBadge.
+  ///
+  /// In ar, this message translates to:
+  /// **'بانتظار الخصم'**
+  String get materialPendingBadge;
+
+  /// No description provided for @materialReversedBadge.
+  ///
+  /// In ar, this message translates to:
+  /// **'أُرجعت للمخزون'**
+  String get materialReversedBadge;
+
+  /// No description provided for @reverseMaterialAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'إرجاع للمخزون'**
+  String get reverseMaterialAction;
+
+  /// No description provided for @reverseMaterialConfirmTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'إرجاع القطعة للمخزون؟'**
+  String get reverseMaterialConfirmTitle;
+
+  /// No description provided for @reverseMaterialConfirmMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'ستُعاد الكمية إلى المخزون وتُحذف من حساب المهمة.'**
+  String get reverseMaterialConfirmMessage;
+
+  /// Total price of materials used on a job.
+  ///
+  /// In ar, this message translates to:
+  /// **'إجمالي القطع: {amount}'**
+  String jobMaterialsTotalLabel(String amount);
+
+  /// No description provided for @jobQuotedPriceLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'السعر المبدئي'**
+  String get jobQuotedPriceLabel;
+
+  /// No description provided for @jobApprovedPriceLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'السعر المعتمد من الزبون'**
+  String get jobApprovedPriceLabel;
+
+  /// No description provided for @jobApprovalRequiredHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'سجّل السعر الذي وافق عليه الزبون قبل بدء العمل.'**
+  String get jobApprovalRequiredHint;
+
+  /// No description provided for @jobWarrantyDaysLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'أيام الضمان'**
+  String get jobWarrantyDaysLabel;
+
+  /// No description provided for @jobSymptomsLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'وصف المشكلة'**
+  String get jobSymptomsLabel;
+
+  /// No description provided for @jobDiagnosisLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'التشخيص'**
+  String get jobDiagnosisLabel;
+
+  /// No description provided for @jobTechnicianNotesLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'ملاحظات الفني'**
+  String get jobTechnicianNotesLabel;
+
+  /// No description provided for @jobSaveButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'حفظ التعديلات'**
+  String get jobSaveButton;
+
+  /// No description provided for @jobSavedMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم حفظ المهمة.'**
+  String get jobSavedMessage;
+
+  /// No description provided for @jobAssignedToLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'مسؤول التنفيذ'**
+  String get jobAssignedToLabel;
+
+  /// No description provided for @jobUnassigned.
+  ///
+  /// In ar, this message translates to:
+  /// **'غير معيّن'**
+  String get jobUnassigned;
+
+  /// No description provided for @jobDueAtLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'موعد التسليم'**
+  String get jobDueAtLabel;
+
+  /// No description provided for @jobCreatedAtLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'تاريخ الاستلام'**
+  String get jobCreatedAtLabel;
+
+  /// No description provided for @jobInvoiceButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحصيل وفوترة'**
+  String get jobInvoiceButton;
+
+  /// No description provided for @jobInvoiceTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'فاتورة المهمة'**
+  String get jobInvoiceTitle;
+
+  /// No description provided for @jobInvoiceExplainer.
+  ///
+  /// In ar, this message translates to:
+  /// **'ستُنشأ فاتورة عادية بالقطع المستخدمة وأجور العمل، ويدخل المبلغ في جلسة الدرج الحالية.'**
+  String get jobInvoiceExplainer;
+
+  /// No description provided for @jobLaborTotalLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'أجور العمل'**
+  String get jobLaborTotalLabel;
+
+  /// Job invoice grand total.
+  ///
+  /// In ar, this message translates to:
+  /// **'الإجمالي: {amount}'**
+  String jobInvoiceTotalLabel(String amount);
+
+  /// Snackbar after invoicing a job.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم إنشاء الفاتورة {receiptNumber}.'**
+  String jobInvoiceSuccess(String receiptNumber);
+
+  /// No description provided for @jobInvoiceNeedsRegister.
+  ///
+  /// In ar, this message translates to:
+  /// **'افتح جلسة الدرج أولًا حتى يُسجل المبلغ في حساباتك.'**
+  String get jobInvoiceNeedsRegister;
+
+  /// Badge linking a job to its receipt.
+  ///
+  /// In ar, this message translates to:
+  /// **'مفوترة — {receiptNumber}'**
+  String jobInvoicedBadge(String receiptNumber);
+
+  /// No description provided for @jobCancelAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'إلغاء المهمة'**
+  String get jobCancelAction;
+
+  /// No description provided for @jobCancelConfirmTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'إلغاء المهمة؟'**
+  String get jobCancelConfirmTitle;
+
+  /// No description provided for @jobCancelConfirmMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'ستُلغى المهمة وتُعاد أي قطع مستخدمة إلى المخزون.'**
+  String get jobCancelConfirmMessage;
+
+  /// No description provided for @jobCancelReasonLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'سبب الإلغاء'**
+  String get jobCancelReasonLabel;
+
+  /// No description provided for @jobReopenAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'إعادة فتح المهمة'**
+  String get jobReopenAction;
+
+  /// No description provided for @intakeTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'استلام مهمة جديدة'**
+  String get intakeTitle;
+
+  /// No description provided for @intakeStepCustomer.
+  ///
+  /// In ar, this message translates to:
+  /// **'الزبون'**
+  String get intakeStepCustomer;
+
+  /// No description provided for @intakeStepAsset.
+  ///
+  /// In ar, this message translates to:
+  /// **'الجهاز'**
+  String get intakeStepAsset;
+
+  /// No description provided for @intakeStepDetails.
+  ///
+  /// In ar, this message translates to:
+  /// **'التفاصيل'**
+  String get intakeStepDetails;
+
+  /// No description provided for @intakeNextButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'التالي'**
+  String get intakeNextButton;
+
+  /// No description provided for @intakeBackButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'السابق'**
+  String get intakeBackButton;
+
+  /// No description provided for @intakeCreateButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'إنشاء المهمة'**
+  String get intakeCreateButton;
+
+  /// No description provided for @intakeSelectCustomerHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'ابحث عن الزبون بالاسم أو الهاتف، أو أنشئ زبونًا جديدًا.'**
+  String get intakeSelectCustomerHint;
+
+  /// No description provided for @intakeNewCustomerButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'زبون جديد'**
+  String get intakeNewCustomerButton;
+
+  /// No description provided for @intakeCustomerNameLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'اسم الزبون'**
+  String get intakeCustomerNameLabel;
+
+  /// No description provided for @intakeCustomerPhoneLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'رقم الهاتف'**
+  String get intakeCustomerPhoneLabel;
+
+  /// No description provided for @intakeCustomerRequired.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر زبونًا للمتابعة.'**
+  String get intakeCustomerRequired;
+
+  /// No description provided for @intakeSelectAssetHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر جهاز الزبون أو أضف جهازًا جديدًا. يساعدك هذا لاحقًا في معرفة تاريخ كل جهاز.'**
+  String get intakeSelectAssetHint;
+
+  /// No description provided for @intakeNewAssetButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'جهاز جديد'**
+  String get intakeNewAssetButton;
+
+  /// No description provided for @intakeSkipAssetButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'متابعة بدون جهاز'**
+  String get intakeSkipAssetButton;
+
+  /// No description provided for @assetTypeLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'نوع الجهاز'**
+  String get assetTypeLabel;
+
+  /// No description provided for @assetBrandLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الماركة'**
+  String get assetBrandLabel;
+
+  /// No description provided for @assetModelLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الموديل'**
+  String get assetModelLabel;
+
+  /// No description provided for @assetSerialLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الرقم التسلسلي'**
+  String get assetSerialLabel;
+
+  /// No description provided for @assetImeiLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'IMEI'**
+  String get assetImeiLabel;
+
+  /// No description provided for @assetColorLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'اللون'**
+  String get assetColorLabel;
+
+  /// No description provided for @assetNotesLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'ملاحظات'**
+  String get assetNotesLabel;
+
+  /// No description provided for @assetTypePhone.
+  ///
+  /// In ar, this message translates to:
+  /// **'هاتف'**
+  String get assetTypePhone;
+
+  /// No description provided for @assetTypeTablet.
+  ///
+  /// In ar, this message translates to:
+  /// **'تابلت'**
+  String get assetTypeTablet;
+
+  /// No description provided for @assetTypeLaptop.
+  ///
+  /// In ar, this message translates to:
+  /// **'حاسوب محمول'**
+  String get assetTypeLaptop;
+
+  /// No description provided for @assetTypeConsole.
+  ///
+  /// In ar, this message translates to:
+  /// **'جهاز ألعاب'**
+  String get assetTypeConsole;
+
+  /// No description provided for @assetTypeAppliance.
+  ///
+  /// In ar, this message translates to:
+  /// **'جهاز منزلي'**
+  String get assetTypeAppliance;
+
+  /// No description provided for @assetTypeOther.
+  ///
+  /// In ar, this message translates to:
+  /// **'أخرى'**
+  String get assetTypeOther;
+
+  /// No description provided for @intakeWorkflowLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'نوع المهمة'**
+  String get intakeWorkflowLabel;
+
+  /// Snackbar after intake wizard creates a job.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم إنشاء المهمة {jobNumber}.'**
+  String intakeJobCreated(String jobNumber);
+
+  /// No description provided for @productionNewBatchButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'دفعة إنتاج جديدة'**
+  String get productionNewBatchButton;
+
+  /// No description provided for @productionRecipeLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الوصفة'**
+  String get productionRecipeLabel;
+
+  /// No description provided for @productionBatchesLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'عدد الدفعات'**
+  String get productionBatchesLabel;
+
+  /// Preview of production output.
+  ///
+  /// In ar, this message translates to:
+  /// **'سينتج {quantity} × {name}'**
+  String productionOutputPreview(String quantity, String name);
+
+  /// No description provided for @productionMaterialsPreviewTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'المكونات المطلوبة'**
+  String get productionMaterialsPreviewTitle;
+
+  /// No description provided for @productionOutputSection.
+  ///
+  /// In ar, this message translates to:
+  /// **'ناتج الإنتاج'**
+  String get productionOutputSection;
+
+  /// No description provided for @productionReceivedBadge.
+  ///
+  /// In ar, this message translates to:
+  /// **'أُضيف للمخزون'**
+  String get productionReceivedBadge;
+
+  /// No description provided for @productionNoRecipesMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'أنشئ وصفة أولًا من إعدادات المتجر حتى يعرف النظام مكونات كل منتج.'**
+  String get productionNoRecipesMessage;
+
+  /// No description provided for @recipesTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'الوصفات'**
+  String get recipesTitle;
+
+  /// No description provided for @recipesSubtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'حدد مكونات كل منتج تنتجه ليُخصم المخزون ويُحسب الناتج تلقائيًا'**
+  String get recipesSubtitle;
+
+  /// No description provided for @recipesEmptyMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'الوصفة تخبر النظام بمكونات كل منتج تنتجه — مثل الدقيق والخميرة لرغيف الخبز — ليخصم المخزون ويضيف الناتج تلقائيًا.'**
+  String get recipesEmptyMessage;
+
+  /// No description provided for @newRecipeButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'وصفة جديدة'**
+  String get newRecipeButton;
+
+  /// No description provided for @recipeNameLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'اسم الوصفة'**
+  String get recipeNameLabel;
+
+  /// No description provided for @recipeOutputVariantLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'المنتج الناتج'**
+  String get recipeOutputVariantLabel;
+
+  /// No description provided for @recipeOutputQuantityLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الكمية الناتجة لكل دفعة'**
+  String get recipeOutputQuantityLabel;
+
+  /// No description provided for @recipeComponentsTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'المكونات'**
+  String get recipeComponentsTitle;
+
+  /// No description provided for @recipeAddComponentButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'إضافة مكوّن'**
+  String get recipeAddComponentButton;
+
+  /// No description provided for @recipeComponentQuantityLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الكمية'**
+  String get recipeComponentQuantityLabel;
+
+  /// No description provided for @recipeWastePercentLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'نسبة الهدر %'**
+  String get recipeWastePercentLabel;
+
+  /// No description provided for @recipeDeleteAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'حذف الوصفة'**
+  String get recipeDeleteAction;
+
+  /// No description provided for @recipeDeleteConfirmTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'حذف الوصفة؟'**
+  String get recipeDeleteConfirmTitle;
+
+  /// Confirmation before deleting a recipe.
+  ///
+  /// In ar, this message translates to:
+  /// **'سيتم حذف «{name}» نهائيًا. الوصفات المستخدمة في دفعات إنتاج سابقة لا يمكن حذفها.'**
+  String recipeDeleteConfirmMessage(String name);
+
+  /// No description provided for @recipeSaveButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'حفظ الوصفة'**
+  String get recipeSaveButton;
+
+  /// No description provided for @recipeSavedMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم حفظ الوصفة.'**
+  String get recipeSavedMessage;
+
+  /// No description provided for @recipesLoadError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر تحميل الوصفات.'**
+  String get recipesLoadError;
+
+  /// No description provided for @recipeNameRequired.
+  ///
+  /// In ar, this message translates to:
+  /// **'أدخل اسم الوصفة.'**
+  String get recipeNameRequired;
+
+  /// No description provided for @recipeComponentsRequired.
+  ///
+  /// In ar, this message translates to:
+  /// **'أضف مكوّنًا واحدًا على الأقل.'**
+  String get recipeComponentsRequired;
+
+  /// No description provided for @operationsSettingsSectionTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'العمليات والمهام'**
+  String get operationsSettingsSectionTitle;
+
+  /// No description provided for @operationsSettingsSectionSubtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'تشغيل التصليح والإنتاج والمطبخ وإدارة مراحل العمل'**
+  String get operationsSettingsSectionSubtitle;
+
+  /// No description provided for @operationsModesTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'أقسام العمل'**
+  String get operationsModesTitle;
+
+  /// No description provided for @operationsModesHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'فعّل ما يناسب نشاطك فقط — كل قسم يضيف نوع مهام جاهزًا بمراحله.'**
+  String get operationsModesHint;
+
+  /// No description provided for @enableRepairOperationsTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'التصليح والصيانة'**
+  String get enableRepairOperationsTitle;
+
+  /// No description provided for @enableRepairOperationsDescription.
+  ///
+  /// In ar, this message translates to:
+  /// **'استلام أجهزة الزبائن، تتبع التصليح خطوة بخطوة، وفوترة القطع والأجور.'**
+  String get enableRepairOperationsDescription;
+
+  /// No description provided for @enableProductionOperationsTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'الإنتاج'**
+  String get enableProductionOperationsTitle;
+
+  /// No description provided for @enableProductionOperationsDescription.
+  ///
+  /// In ar, this message translates to:
+  /// **'دفعات إنتاج بوصفات محددة: تُخصم المكونات ويُضاف الناتج للمخزون تلقائيًا.'**
+  String get enableProductionOperationsDescription;
+
+  /// No description provided for @enableKitchenOperationsTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'المطبخ'**
+  String get enableKitchenOperationsTitle;
+
+  /// No description provided for @enableKitchenOperationsDescription.
+  ///
+  /// In ar, this message translates to:
+  /// **'طلبات مطبخ تمر بمراحل التحضير وتخصم المكونات عند الطبخ.'**
+  String get enableKitchenOperationsDescription;
+
+  /// No description provided for @enableJobTrackingTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'صفحة تتبع للزبائن'**
+  String get enableJobTrackingTitle;
+
+  /// No description provided for @enableJobTrackingDescription.
+  ///
+  /// In ar, this message translates to:
+  /// **'رابط عام يطّلع منه الزبون على حالة مهمته دون الاتصال بك.'**
+  String get enableJobTrackingDescription;
+
+  /// No description provided for @workflowsTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'مراحل العمل'**
+  String get workflowsTitle;
+
+  /// No description provided for @workflowStagesHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'هذه هي الخطوات التي تمر بها كل مهمة من الاستلام حتى التسليم. يمكنك إعادة تسميتها أو إضافة مراحل تناسب طريقة عملك.'**
+  String get workflowStagesHint;
+
+  /// No description provided for @workflowStageNameLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'اسم المرحلة'**
+  String get workflowStageNameLabel;
+
+  /// No description provided for @workflowAddStageButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'إضافة مرحلة'**
+  String get workflowAddStageButton;
+
+  /// No description provided for @workflowStageInitialLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'مرحلة البداية'**
+  String get workflowStageInitialLabel;
+
+  /// No description provided for @workflowStageTerminalLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'مرحلة النهاية'**
+  String get workflowStageTerminalLabel;
+
+  /// No description provided for @workflowStageApprovalLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'تتطلب موافقة الزبون على السعر'**
+  String get workflowStageApprovalLabel;
+
+  /// No description provided for @workflowStageConsumesLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'تخصم المواد من المخزون'**
+  String get workflowStageConsumesLabel;
+
+  /// No description provided for @workflowStageProducesLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'تضيف الناتج إلى المخزون'**
+  String get workflowStageProducesLabel;
+
+  /// No description provided for @workflowSaveButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'حفظ المراحل'**
+  String get workflowSaveButton;
+
+  /// No description provided for @workflowSavedMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم حفظ مراحل العمل.'**
+  String get workflowSavedMessage;
+
+  /// No description provided for @workflowsLoadError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر تحميل مراحل العمل.'**
+  String get workflowsLoadError;
+
+  /// Count of jobs in a stage column.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count} مهمة'**
+  String jobCountLabel(int count);
+
   /// No description provided for @shopSettingsEmptyValue.
   ///
   /// In ar, this message translates to:
@@ -6985,7 +8035,7 @@ abstract class AppLocalizations {
   ///
   /// In ar, this message translates to:
   /// **'{quantity} قطعة'**
-  String stockMovementQuantityValue(int quantity);
+  String stockMovementQuantityValue(String quantity);
 
   /// No description provided for @barcodeLabelPrintTitle.
   ///
@@ -7159,7 +8209,7 @@ abstract class AppLocalizations {
   ///
   /// In ar, this message translates to:
   /// **'المتاح {quantity}'**
-  String posVariantPickerStock(int quantity);
+  String posVariantPickerStock(String quantity);
 
   /// No description provided for @posProductHasNoActiveVariants.
   ///
@@ -9605,7 +10655,7 @@ abstract class AppLocalizations {
   ///
   /// In ar, this message translates to:
   /// **'{productName}: المطلوب {requested}، المتاح {available}'**
-  String oversellLine(String productName, int requested, int available);
+  String oversellLine(String productName, String requested, String available);
 
   /// No description provided for @lossSaleWarningTitle.
   ///
@@ -10367,7 +11417,7 @@ abstract class AppLocalizations {
   ///
   /// In ar, this message translates to:
   /// **'{quantity} × {unitPrice}'**
-  String saleLineQuantityAndPrice(int quantity, String unitPrice);
+  String saleLineQuantityAndPrice(String quantity, String unitPrice);
 
   /// No description provided for @saleReprintButton.
   ///
@@ -10481,7 +11531,7 @@ abstract class AppLocalizations {
   ///
   /// In ar, this message translates to:
   /// **'تم إرجاع {returned} من {quantity}'**
-  String saleLineReturnedQuantity(int returned, int quantity);
+  String saleLineReturnedQuantity(String returned, String quantity);
 
   /// No description provided for @saleReturnNoItemsSelected.
   ///

@@ -199,7 +199,7 @@ class CustomerApiTests(APITestCase):
         self.assertEqual(adjustment["amount"], "3.50")
         self.assertEqual(adjustment["reason"], "Damaged item")
         self.assertEqual(adjustment["lines"][0]["product_name"], "Coffee")
-        self.assertEqual(adjustment["lines"][0]["quantity"], 1)
+        self.assertEqual(float(adjustment["lines"][0]["quantity"]), 1.0)
 
     def _checkout_customer_order(self, customer):
         variant = self._variant()

@@ -200,6 +200,7 @@ class _UserManagementBody extends StatelessWidget {
       UserRole.manager => l10n.managerRoleLabel,
       UserRole.cashier => l10n.cashierRoleLabel,
       UserRole.accountant => l10n.accountantRoleLabel,
+      UserRole.technician => l10n.technicianRoleLabel,
     };
   }
 }
@@ -370,6 +371,10 @@ class _CreateUserFormState extends State<_CreateUserForm> {
                           DropdownMenuItem(
                             value: UserRole.accountant,
                             child: Text(l10n.accountantRoleLabel),
+                          ),
+                          DropdownMenuItem(
+                            value: UserRole.technician,
+                            child: Text(l10n.technicianRoleLabel),
                           ),
                           DropdownMenuItem(
                             value: UserRole.manager,

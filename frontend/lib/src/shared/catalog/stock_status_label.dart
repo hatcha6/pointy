@@ -12,7 +12,7 @@ class StockStatusLabel extends StatelessWidget {
     this.compact = false,
   });
 
-  final int quantity;
+  final double quantity;
   final bool isActive;
   final int lowStockThreshold;
   final bool compact;
@@ -79,7 +79,7 @@ enum _StockStatus {
   inactive;
 
   static _StockStatus resolve({
-    required int quantity,
+    required double quantity,
     required bool isActive,
     required int lowStockThreshold,
   }) {

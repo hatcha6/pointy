@@ -103,7 +103,7 @@ Future<void> _pumpTable(
   );
 }
 
-Product _product({required int quantity, required String barcode}) {
+Product _product({required double quantity, required String barcode}) {
   return Product(
     id: 42,
     name: 'قهوة عربية',

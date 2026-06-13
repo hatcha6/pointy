@@ -31,6 +31,12 @@ import 'features/employees/views/employee_payroll_screen.dart';
 import 'features/invoices/views/invoice_details_screen.dart';
 import 'features/invoices/views/invoice_list_screen.dart';
 import 'features/notifications/views/notification_center_host.dart';
+import 'features/operations/view_models/job_details_view_model.dart';
+import 'features/operations/view_models/jobs_board_view_model.dart';
+import 'features/operations/view_models/recipes_view_model.dart';
+import 'features/operations/view_models/workflows_view_model.dart';
+import 'features/operations/views/job_details_screen.dart';
+import 'features/operations/views/jobs_screen.dart';
 import 'features/pos/view_models/pos_view_model.dart';
 import 'features/pos/views/pos_screen.dart';
 import 'features/purchasing/views/purchase_order_details_screen.dart';
@@ -69,8 +75,16 @@ class AuthenticatedHome extends StatelessWidget {
       currentUser: currentUser,
       capabilities: AuthorizationCapabilities.forUser(currentUser),
     );
-    final home = routes.capabilities.canViewDashboard
+    // Home follows the user's main responsibility: managers see the
+    // dashboard, register staff the POS, and workshop-only roles
+    // (technicians) land directly on the jobs board.
+    final capabilities = routes.capabilities;
+    final home = capabilities.canViewDashboard
         ? routes.buildDashboardScreen(context)
+        : capabilities.canAccessPos
+        ? routes.buildPosScreen(context)
+        : capabilities.canViewOperations
+        ? routes.operationsRouteBuilder(context)
         : routes.buildPosScreen(context);
     return NotificationCenterHost(
       viewModel: dependencies.notificationCenterViewModel,
@@ -170,6 +184,7 @@ class _AuthenticatedRoutes implements AppNavigation {
   ) {
     return switch (destination) {
       AppNavigationDestination.userSettings => userSettingsRouteBuilder,
+      AppNavigationDestination.operations => operationsRouteBuilder,
       AppNavigationDestination.invoices => invoicesRouteBuilder,
       AppNavigationDestination.purchasing => purchasingRouteBuilder,
       AppNavigationDestination.contacts => contactsRouteBuilder,
@@ -224,6 +239,45 @@ class _AuthenticatedRoutes implements AppNavigation {
 
   Widget posRouteBuilder(BuildContext routeContext) {
     return buildPosScreen(routeContext);
+  }
+
+  Widget operationsRouteBuilder(BuildContext routeContext) {
+    return _screen(
+      'operations',
+      JobsScreen(
+        viewModel: JobsBoardViewModel(
+          dependencies.operationsRepository,
+          analyticsEngine: dependencies.analyticsEngine,
+        ),
+        capabilities: capabilities,
+        navigation: this,
+        currentUser: currentUser,
+        contactRepository: dependencies.contactRepository,
+        operationsRepository: dependencies.operationsRepository,
+        catalogRepository: dependencies.catalogRepository,
+        recipesViewModel: RecipesViewModel(
+          dependencies.operationsRepository,
+          analyticsEngine: dependencies.analyticsEngine,
+        ),
+        onOpenJob: (job) {
+          _trackScreenView('job_details');
+          push(
+            routeContext,
+            (_) => JobDetailsScreen(
+              viewModel: JobDetailsViewModel(
+                dependencies.operationsRepository,
+                jobId: job.id,
+                analyticsEngine: dependencies.analyticsEngine,
+              ),
+              capabilities: capabilities,
+              currentUser: currentUser,
+              catalogRepository: dependencies.catalogRepository,
+              operationsRepository: dependencies.operationsRepository,
+            ),
+          );
+        },
+      ),
+    );
   }
 
   Widget catalogRouteBuilder(BuildContext routeContext) {
@@ -364,6 +418,10 @@ class _AuthenticatedRoutes implements AppNavigation {
         ),
         salesChannelsViewModel: SalesChannelsViewModel(
           dependencies.salesChannelRepository,
+          analyticsEngine: dependencies.analyticsEngine,
+        ),
+        workflowsViewModel: WorkflowsViewModel(
+          dependencies.operationsRepository,
           analyticsEngine: dependencies.analyticsEngine,
         ),
         capabilities: capabilities,

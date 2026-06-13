@@ -206,6 +206,20 @@ class PosApiSession {
     );
   }
 
+  Future<http.Response> put(String path, {required Object body}) async {
+    final encodedBody = jsonEncode(body);
+    return _send(
+      method: 'PUT',
+      path: path,
+      requestSizeBytes: _encodedSize(encodedBody),
+      request: () => client.put(
+        uri(path),
+        headers: headers(includeCsrf: true),
+        body: encodedBody,
+      ),
+    );
+  }
+
   Future<http.Response> delete(String path) async {
     return _send(
       method: 'DELETE',

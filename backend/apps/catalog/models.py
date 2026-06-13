@@ -35,6 +35,22 @@ class Product(TimeStampedModel):
     description = models.TextField(blank=True)
     is_active = models.BooleanField(default=True)
     tracks_expiry = models.BooleanField(default=False, db_index=True)
+    # Service products (labor, fees) are sold without touching stock.
+    is_service = models.BooleanField(default=False)
+    # Prepared (made-to-order) products — restaurant dishes — are also sold
+    # without stock of their own; the kitchen job consumes their recipe
+    # ingredients instead.
+    is_prepared = models.BooleanField(default=False)
+    # Metric base unit the product is counted in. Stock, recipes, and job
+    # materials all use this unit.
+    class Unit(models.TextChoices):
+        PIECE = "piece", "Piece"
+        KILOGRAM = "kg", "Kilogram"
+        GRAM = "g", "Gram"
+        LITER = "l", "Liter"
+        MILLILITER = "ml", "Milliliter"
+
+    unit = models.CharField(max_length=8, choices=Unit.choices, default=Unit.PIECE)
     categories = models.ManyToManyField(
         "ProductCategory",
         blank=True,
@@ -64,7 +80,11 @@ class Product(TimeStampedModel):
     @property
     def quantity_on_hand(self):
         return self.variants.aggregate(
-            quantity=Coalesce(Sum("stock__quantity_on_hand"), 0),
+            quantity=Coalesce(
+                Sum("stock__quantity_on_hand"),
+                Decimal("0"),
+                output_field=models.DecimalField(max_digits=12, decimal_places=3),
+            ),
         )["quantity"]
 
     def ensure_default_variant(self, **variant_data):
@@ -477,3 +497,55 @@ def validate_product_variant_option_schema(
                 )
             }
         )
+
+
+class BillOfMaterials(TimeStampedModel):
+    """Recipe: the components needed to produce ``output_quantity`` of a variant."""
+
+    variant = models.ForeignKey(
+        ProductVariant,
+        on_delete=models.PROTECT,
+        related_name="boms",
+    )
+    name = models.CharField(max_length=160)
+    output_quantity = models.PositiveIntegerField(default=1)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["name"]
+        verbose_name = "bill of materials"
+        verbose_name_plural = "bills of materials"
+
+    def __str__(self) -> str:
+        return self.name
+
+
+class BomLine(TimeStampedModel):
+    bom = models.ForeignKey(
+        BillOfMaterials,
+        on_delete=models.CASCADE,
+        related_name="lines",
+    )
+    component_variant = models.ForeignKey(
+        ProductVariant,
+        on_delete=models.PROTECT,
+        related_name="bom_usages",
+    )
+    quantity = models.DecimalField(
+        max_digits=10,
+        decimal_places=3,
+        validators=[MinValueValidator(Decimal("0.001"))],
+    )
+    waste_percent = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+
+    class Meta:
+        ordering = ["id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["bom", "component_variant"],
+                name="unique_component_per_bom",
+            )
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.bom_id}: {self.component_variant_id} ×{self.quantity}"

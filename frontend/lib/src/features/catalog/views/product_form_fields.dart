@@ -20,6 +20,12 @@ class ProductParentFormFields extends StatelessWidget {
     required this.onActiveChanged,
     required this.onTracksExpiryChanged,
     required this.requiredValidator,
+    this.unit = 'piece',
+    this.isService = false,
+    this.isPrepared = false,
+    this.onUnitChanged,
+    this.onIsServiceChanged,
+    this.onIsPreparedChanged,
   });
 
   final TextEditingController nameController;
@@ -32,6 +38,12 @@ class ProductParentFormFields extends StatelessWidget {
   final ValueChanged<bool> onActiveChanged;
   final ValueChanged<bool> onTracksExpiryChanged;
   final FormFieldValidator<String> requiredValidator;
+  final String unit;
+  final bool isService;
+  final bool isPrepared;
+  final ValueChanged<String>? onUnitChanged;
+  final ValueChanged<bool>? onIsServiceChanged;
+  final ValueChanged<bool>? onIsPreparedChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -85,6 +97,44 @@ class ProductParentFormFields extends StatelessWidget {
           value: tracksExpiry,
           onChanged: onTracksExpiryChanged,
         ),
+        if (onUnitChanged != null) ...[
+          const SizedBox(height: 8),
+          DropdownButtonFormField<String>(
+            initialValue: unit,
+            decoration: InputDecoration(
+              labelText: l10n.productUnitLabel,
+              prefixIcon: const Icon(Icons.straighten_outlined),
+            ),
+            items: [
+              DropdownMenuItem(value: 'piece', child: Text(l10n.unitPiece)),
+              DropdownMenuItem(value: 'kg', child: Text(l10n.unitKilogram)),
+              DropdownMenuItem(value: 'g', child: Text(l10n.unitGram)),
+              DropdownMenuItem(value: 'l', child: Text(l10n.unitLiter)),
+              DropdownMenuItem(value: 'ml', child: Text(l10n.unitMilliliter)),
+            ],
+            onChanged: (value) {
+              if (value != null) {
+                onUnitChanged!(value);
+              }
+            },
+          ),
+        ],
+        if (onIsPreparedChanged != null)
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            title: Text(l10n.productIsPreparedTitle),
+            subtitle: Text(l10n.productIsPreparedDescription),
+            value: isPrepared,
+            onChanged: onIsPreparedChanged,
+          ),
+        if (onIsServiceChanged != null)
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            title: Text(l10n.productIsServiceTitle),
+            subtitle: Text(l10n.productIsServiceDescription),
+            value: isService,
+            onChanged: onIsServiceChanged,
+          ),
       ],
     );
   }

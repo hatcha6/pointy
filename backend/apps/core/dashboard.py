@@ -43,6 +43,8 @@ from apps.sales.models import (
 
 MONEY_PLACES = Decimal("0.01")
 MONEY_FIELD = DecimalField(max_digits=12, decimal_places=2)
+QTY_FIELD = DecimalField(max_digits=14, decimal_places=3)
+ZERO_QTY = Value(Decimal("0"), output_field=QTY_FIELD)
 DASHBOARD_SECTION_CACHE_SECONDS = 30
 DASHBOARD_CACHE_VERSION = 1
 
@@ -291,7 +293,7 @@ def _inventory_section(period):
         )
         .values("movement_type")
         .annotate(
-            movement_quantity=Coalesce(Sum("quantity"), Value(0)),
+            movement_quantity=Coalesce(Sum("quantity"), ZERO_QTY),
             count=Count("id"),
         )
         .order_by("movement_type")
@@ -304,10 +306,10 @@ def _inventory_section(period):
             "stock_item_count": stock.count(),
             "low_stock_count": low_stock.count(),
             "out_of_stock_count": out_of_stock.count(),
-            "committed_units": stock.aggregate(total=Coalesce(Sum("quantity_committed"), Value(0)))[
+            "committed_units": stock.aggregate(total=Coalesce(Sum("quantity_committed"), ZERO_QTY))[
                 "total"
             ],
-            "expected_units": stock.aggregate(total=Coalesce(Sum("quantity_expected"), Value(0)))[
+            "expected_units": stock.aggregate(total=Coalesce(Sum("quantity_expected"), ZERO_QTY))[
                 "total"
             ],
             "retail_stock_value": _money(retail_value),
@@ -768,7 +770,7 @@ def _sales_summary(orders, adjustments):
         ),
     )
     line_values = OrderLine.objects.filter(order__in=orders).aggregate(
-        items_sold=Coalesce(Sum("quantity"), Value(0)),
+        items_sold=Coalesce(Sum("quantity"), ZERO_QTY),
         profit=Coalesce(
             Sum(
                 F("quantity") * (F("unit_price") - F("unit_cost")) - F("discount_total"),
@@ -872,7 +874,7 @@ def _product_sales_report(orders, *, order_by, limit):
             "variant__product__name",
         )
         .annotate(
-            units_sold=Coalesce(Sum("quantity"), Value(0)),
+            units_sold=Coalesce(Sum("quantity"), ZERO_QTY),
             revenue=Coalesce(
                 Sum(revenue_expr, output_field=MONEY_FIELD),
                 Value(Decimal("0.00")),
@@ -915,7 +917,7 @@ def _variant_sales_report(orders, *, order_by, limit):
             "variant__barcode",
         )
         .annotate(
-            units_sold=Coalesce(Sum("quantity"), Value(0)),
+            units_sold=Coalesce(Sum("quantity"), ZERO_QTY),
             revenue=Coalesce(
                 Sum(revenue_expr, output_field=MONEY_FIELD),
                 Value(Decimal("0.00")),
@@ -975,7 +977,7 @@ def _top_categories(orders):
                 Value(Decimal("0.00")),
                 output_field=MONEY_FIELD,
             ),
-            units_sold=Coalesce(Sum("quantity"), Value(0)),
+            units_sold=Coalesce(Sum("quantity"), ZERO_QTY),
         )
         .order_by("-revenue")[:6]
     )

@@ -127,6 +127,12 @@ class AppNavigationDrawer extends StatelessWidget {
             selectedIcon: const Icon(Icons.receipt_long),
             label: l10n.posDrawerLabel,
           ),
+          _DrawerDestination(
+            destination: AppNavigationDestination.operations,
+            icon: const Icon(Icons.handyman_outlined),
+            selectedIcon: const Icon(Icons.handyman),
+            label: l10n.operationsDrawerLabel,
+          ),
         ],
       ),
       _NavigationGroup(
@@ -310,6 +316,7 @@ class AppNavigationDrawer extends StatelessWidget {
       UserRole.manager => l10n.managerRoleLabel,
       UserRole.cashier => l10n.cashierRoleLabel,
       UserRole.accountant => l10n.accountantRoleLabel,
+      UserRole.technician => l10n.technicianRoleLabel,
     };
   }
 }

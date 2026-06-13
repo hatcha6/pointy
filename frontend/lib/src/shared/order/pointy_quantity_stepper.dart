@@ -10,13 +10,17 @@ class PointyQuantityStepper extends StatelessWidget {
     required this.decrementTooltip,
     this.onIncrement,
     this.onDecrement,
+    this.onQuantityTap,
   });
 
-  final int quantity;
+  final double quantity;
   final String incrementTooltip;
   final String decrementTooltip;
   final VoidCallback? onIncrement;
   final VoidCallback? onDecrement;
+
+  /// Tap-to-type entry for weighted lines; null keeps the text static.
+  final VoidCallback? onQuantityTap;
 
   @override
   Widget build(BuildContext context) {
@@ -30,15 +34,22 @@ class PointyQuantityStepper extends StatelessWidget {
         ),
         SizedBox(
           width: 38,
-          child: Center(
-            child: FittedBox(
-              fit: BoxFit.scaleDown,
-              child: Text(
-                '$quantity',
-                maxLines: 1,
-                style: Theme.of(
-                  context,
-                ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+          child: InkWell(
+            onTap: onQuantityTap,
+            borderRadius: BorderRadius.circular(6),
+            child: Center(
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  formatSaleQuantity(quantity),
+                  maxLines: 1,
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    decoration: onQuantityTap == null
+                        ? null
+                        : TextDecoration.underline,
+                  ),
+                ),
               ),
             ),
           ),
@@ -80,4 +91,12 @@ class _StepperButton extends StatelessWidget {
       icon: Icon(icon),
     );
   }
+}
+
+/// Whole counts render bare ("2"); weights keep up to three places ("1.250").
+String formatSaleQuantity(double quantity) {
+  if (quantity == quantity.roundToDouble()) {
+    return quantity.toStringAsFixed(0);
+  }
+  return quantity.toStringAsFixed(3);
 }

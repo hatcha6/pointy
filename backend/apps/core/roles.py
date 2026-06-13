@@ -9,7 +9,8 @@ from apps.catalog.variant_option_defaults import DEFAULT_VARIANT_OPTIONS
 MANAGER_GROUP = "manager"
 CASHIER_GROUP = "cashier"
 ACCOUNTANT_GROUP = "accountant"
-ROLE_GROUPS = (MANAGER_GROUP, CASHIER_GROUP, ACCOUNTANT_GROUP)
+TECHNICIAN_GROUP = "technician"
+ROLE_GROUPS = (MANAGER_GROUP, CASHIER_GROUP, ACCOUNTANT_GROUP, TECHNICIAN_GROUP)
 INITIAL_SETUP_IGNORED_MODELS = {
     ("admin", "logentry"),
     ("analytics", "analyticsevent"),
@@ -37,6 +38,7 @@ MANAGER_PERMISSION_DOMAINS = (
     "analytics",
     "channels",
     "core",
+    "operations",
     "inventory",
     "sales",
     "fraud",
@@ -76,6 +78,42 @@ CASHIER_PERMISSION_CODES = (
     "printing.add_printauditevent",
     "printing.change_printauditevent",
     "printing.view_printauditevent",
+    "analytics.add_analyticsevent",
+    "operations.add_job",
+    "operations.change_job",
+    "operations.view_job",
+    "operations.add_jobasset",
+    "operations.view_jobasset",
+    "operations.view_jobmaterial",
+    "operations.view_jobstageevent",
+    "operations.view_workflowtemplate",
+    "operations.view_workflowstage",
+    "customers.add_asset",
+    "customers.view_asset",
+)
+TECHNICIAN_PERMISSION_CODES = (
+    "operations.add_job",
+    "operations.change_job",
+    "operations.view_job",
+    "operations.add_jobasset",
+    "operations.view_jobasset",
+    "operations.add_jobmaterial",
+    "operations.change_jobmaterial",
+    "operations.view_jobmaterial",
+    "operations.view_jobstageevent",
+    "operations.view_workflowtemplate",
+    "operations.view_workflowstage",
+    "customers.view_customer",
+    "customers.add_customer",
+    "customers.change_customer",
+    "customers.add_asset",
+    "customers.change_asset",
+    "customers.view_asset",
+    "catalog.view_product",
+    "catalog.view_productcategory",
+    "core.view_shopsettings",
+    "attachments.add_attachment",
+    "attachments.view_attachment",
     "analytics.add_analyticsevent",
 )
 ACCOUNTANT_PERMISSION_CODES = (
@@ -135,10 +173,12 @@ def ensure_role_groups():
     manager_user_permissions = _permissions_for_codes(USER_PERMISSION_CODES)
     cashier_permissions = _permissions_for_codes(CASHIER_PERMISSION_CODES)
     accountant_permissions = _permissions_for_codes(ACCOUNTANT_PERMISSION_CODES)
+    technician_permissions = _permissions_for_codes(TECHNICIAN_PERMISSION_CODES)
 
     groups[MANAGER_GROUP].permissions.add(*manager_permissions, *manager_user_permissions)
     groups[CASHIER_GROUP].permissions.add(*cashier_permissions)
     groups[ACCOUNTANT_GROUP].permissions.add(*accountant_permissions)
+    groups[TECHNICIAN_GROUP].permissions.add(*technician_permissions)
     return groups
 
 
@@ -177,6 +217,11 @@ def _model_has_initial_setup_blocking_data(model, model_label):
     if model_label == ("channels", "saleschannel"):
         # The built-in POS channel is seeded data, not shop activity.
         return queryset.filter(is_system=False).exists()
+    if model_label == ("operations", "workflowtemplate"):
+        # Seeded default workflows are configuration, not shop activity.
+        return queryset.filter(is_system=False).exists()
+    if model_label == ("operations", "workflowstage"):
+        return queryset.filter(template__is_system=False).exists()
     if model_label == ("catalog", "variantoption"):
         return queryset.exclude(
             code__in=INITIAL_SETUP_VARIANT_OPTION_CODES,

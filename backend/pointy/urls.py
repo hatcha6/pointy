@@ -15,6 +15,13 @@ from apps.catalog.views import (
 )
 from apps.channels.views import SalesChannelViewSet
 from apps.customers.views import CustomerViewSet
+from apps.operations.views import (
+    AssetViewSet,
+    BillOfMaterialsViewSet,
+    JobViewSet,
+    PublicJobView,
+    WorkflowTemplateViewSet,
+)
 from apps.discounts.views import DiscountRuleViewSet
 from apps.employees.views import (
     CompensationPlanViewSet,
@@ -97,6 +104,14 @@ router.register("supplier-payments", SupplierPaymentViewSet)
 router.register("purchase-orders", PurchaseOrderViewSet)
 router.register("register-sessions", RegisterSessionViewSet, basename="register-session")
 router.register("sales-channels", SalesChannelViewSet, basename="sales-channel")
+router.register("jobs", JobViewSet, basename="job")
+router.register("assets", AssetViewSet, basename="asset")
+router.register(
+    "workflow-templates",
+    WorkflowTemplateViewSet,
+    basename="workflow-template",
+)
+router.register("boms", BillOfMaterialsViewSet, basename="bom")
 router.register("payments", PaymentViewSet)
 router.register("print-templates", PrintTemplateViewSet)
 router.register("print-template-versions", PrintTemplateVersionViewSet)
@@ -163,6 +178,11 @@ urlpatterns = [
         "api/public-invoices/<str:token>/",
         PublicInvoiceView.as_view({"get": "retrieve"}),
         name="public-invoice-detail",
+    ),
+    path(
+        "api/public-jobs/<str:token>/",
+        PublicJobView.as_view({"get": "retrieve"}),
+        name="public-job-detail",
     ),
     path(
         "api/backup/destinations/",

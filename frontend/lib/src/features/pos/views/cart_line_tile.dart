@@ -12,12 +12,16 @@ class CartLineTile extends StatelessWidget {
     required this.onAdd,
     required this.onRemove,
     this.onDelete,
+    this.onEditQuantity,
   });
 
   final CartLine line;
   final VoidCallback? onAdd;
   final VoidCallback? onRemove;
   final VoidCallback? onDelete;
+
+  /// Weighted lines open a weight-entry dialog instead of stepping by one.
+  final VoidCallback? onEditQuantity;
 
   @override
   Widget build(BuildContext context) {
@@ -39,6 +43,7 @@ class CartLineTile extends StatelessWidget {
       onIncrement: onAdd,
       onDecrement: onRemove,
       onRemove: onDelete,
+      onQuantityTap: line.variant.unit == 'piece' ? null : onEditQuantity,
     );
   }
 }

@@ -16,6 +16,7 @@ import '../../../shared/product_tile.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../view_models/pos_view_model.dart';
 import 'pos_variant_picker_sheet.dart';
+import 'weight_entry_sheet.dart';
 
 class PosCatalogPane extends StatelessWidget {
   const PosCatalogPane({
@@ -168,6 +169,17 @@ class _PosCatalogGrid extends StatelessWidget {
     );
   }
 
+  Future<void> _addWeighedVariant(
+    BuildContext context,
+    ProductVariant variant, {
+    required String source,
+  }) async {
+    final weight = await showWeightEntrySheet(context, variant: variant);
+    if (weight != null && context.mounted) {
+      viewModel.addVariant(variant, quantity: weight, source: source);
+    }
+  }
+
   Future<void> _selectProduct(BuildContext context, Product product) async {
     final messenger = ScaffoldMessenger.of(context);
     final l10n = AppLocalizations.of(context)!;
@@ -178,6 +190,11 @@ class _PosCatalogGrid extends StatelessWidget {
     switch (result.status) {
       case PosProductSelectionStatus.added:
         return;
+      case PosProductSelectionStatus.weighVariant:
+        final weighed = result.weighedVariant;
+        if (weighed != null && context.mounted) {
+          await _addWeighedVariant(context, weighed, source: 'product_tile');
+        }
       case PosProductSelectionStatus.chooseVariant:
         final variant = await showPosVariantPickerSheet(
           context,
@@ -185,7 +202,11 @@ class _PosCatalogGrid extends StatelessWidget {
           variants: result.variants,
         );
         if (variant != null && context.mounted) {
-          viewModel.addVariant(variant, source: 'variant_picker');
+          if (variant.unit != 'piece') {
+            await _addWeighedVariant(context, variant, source: 'variant_picker');
+          } else {
+            viewModel.addVariant(variant, source: 'variant_picker');
+          }
         }
       case PosProductSelectionStatus.unavailable:
         messenger
@@ -274,7 +295,7 @@ class _PosProductLookupControls extends StatelessWidget {
       }
       viewModel.addVariant(
         entry.variant,
-        quantity: entry.quantity,
+        quantity: entry.quantity.toDouble(),
         source: 'camera_scanner',
       );
     }

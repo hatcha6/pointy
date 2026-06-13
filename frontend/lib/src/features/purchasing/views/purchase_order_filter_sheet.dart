@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
+import '../../../shared/components/components.dart';
 import '../../../data/models/purchase_submission.dart';
 import '../../../data/repositories/contact_repository.dart';
 import '../../../shared/contact_picker_sheet.dart';
@@ -55,7 +56,7 @@ class _PurchaseOrderFilterSheetState extends State<PurchaseOrderFilterSheet> {
               leading: const Icon(Icons.local_shipping_outlined),
               title: Text(_supplierName ?? l10n.allSuppliersFilterLabel),
               trailing: _supplierId == null
-                  ? const Icon(Icons.chevron_right)
+                  ? const PointyDisclosureChevron()
                   : IconButton(
                       tooltip: l10n.clearSupplierFilterTooltip,
                       onPressed: () {

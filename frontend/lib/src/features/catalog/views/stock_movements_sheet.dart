@@ -6,6 +6,7 @@ import '../../../data/models/stock_movement.dart';
 import '../../../shared/authorization_guards.dart';
 import '../../../shared/date_formatters.dart';
 import '../../../shared/infinite_scroll_grid.dart';
+import '../../../shared/units.dart';
 import '../view_models/product_stock_view_model.dart';
 import 'stock_movement_labels.dart';
 
@@ -148,7 +149,9 @@ class _StockMovementTile extends StatelessWidget {
                   ),
                 ),
                 Text(
-                  l10n.stockMovementQuantityValue(movement.quantity),
+                  l10n.stockMovementQuantityValue(
+                    formatQuantity(movement.quantity),
+                  ),
                   style: Theme.of(context).textTheme.titleMedium,
                 ),
               ],
@@ -202,14 +205,16 @@ class _SnapshotChip extends StatelessWidget {
   });
 
   final String label;
-  final int before;
-  final int after;
+  final double before;
+  final double after;
 
   @override
   Widget build(BuildContext context) {
     return Chip(
       avatar: const Icon(Icons.timeline, size: 18),
-      label: Text('$label: $before -> $after'),
+      label: Text(
+        '$label: ${formatQuantity(before)} -> ${formatQuantity(after)}',
+      ),
     );
   }
 }

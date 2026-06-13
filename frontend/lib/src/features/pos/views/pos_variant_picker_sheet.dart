@@ -4,6 +4,7 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 import '../../../data/models/product.dart';
 import '../../../data/models/product_variant.dart';
 import '../../../shared/formatters.dart';
+import '../../../shared/units.dart';
 
 Future<ProductVariant?> showPosVariantPickerSheet(
   BuildContext context, {
@@ -69,7 +70,9 @@ class _PosVariantPickerSheet extends StatelessWidget {
                   subtitle: Text(
                     [
                       if (variant.sku.isNotEmpty) variant.sku,
-                      l10n.posVariantPickerStock(variant.quantityOnHand),
+                      l10n.posVariantPickerStock(
+                        formatQuantity(variant.quantityOnHand),
+                      ),
                       formatMoney(variant.unitPrice),
                     ].join(' • '),
                     maxLines: 1,

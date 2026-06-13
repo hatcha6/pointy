@@ -17,6 +17,9 @@ class ProductVariant {
     this.isActive = true,
     this.isDefault = false,
     this.tracksExpiry = false,
+    this.isService = false,
+    this.isPrepared = false,
+    this.unit = 'piece',
     this.quantityOnHand = 0,
     this.optionValueIds = const [],
     this.optionValues = const [],
@@ -37,7 +40,10 @@ class ProductVariant {
   final bool isActive;
   final bool isDefault;
   final bool tracksExpiry;
-  final int quantityOnHand;
+  final bool isService;
+  final bool isPrepared;
+  final String unit;
+  final double quantityOnHand;
   final List<int> optionValueIds;
   final List<VariantOptionValue> optionValues;
   final AttachmentSummary? primaryImage;
@@ -161,7 +167,10 @@ class ProductVariant {
         json['tracks_expiry'],
         fallback: productDetail?.tracksExpiry ?? false,
       ),
-      quantityOnHand: _intFromJson(json['quantity_on_hand']),
+      isService: json['is_service'] == true,
+      isPrepared: json['is_prepared'] == true,
+      unit: json['unit']?.toString() ?? 'piece',
+      quantityOnHand: _stockQuantityFromJson(json['quantity_on_hand']),
       optionValueIds: _optionValueIdsFromJson(
         json['option_values'],
         optionValues,
@@ -185,7 +194,7 @@ class ProductVariant {
     };
   }
 
-  ProductVariant copyWith({int? quantityOnHand}) {
+  ProductVariant copyWith({double? quantityOnHand}) {
     return ProductVariant(
       id: id,
       productId: productId,
@@ -200,6 +209,9 @@ class ProductVariant {
       isActive: isActive,
       isDefault: isDefault,
       tracksExpiry: tracksExpiry,
+      isService: isService,
+      isPrepared: isPrepared,
+      unit: unit,
       quantityOnHand: quantityOnHand ?? this.quantityOnHand,
       optionValueIds: optionValueIds,
       optionValues: optionValues,
@@ -331,4 +343,11 @@ List<int> _optionValueIdsFromJson(
     return details.map((optionValue) => optionValue.id).toList(growable: false);
   }
   return const [];
+}
+
+double _stockQuantityFromJson(Object? value) {
+  if (value is num) {
+    return value.toDouble();
+  }
+  return double.tryParse((value ?? 0).toString()) ?? 0;
 }

@@ -50,6 +50,11 @@ enum AppCapability {
   manageUsers,
   manageShopSettings,
   manageSalesChannels,
+  viewOperations,
+  createJobs,
+  manageJobMaterials,
+  manageWorkflows,
+  manageRecipes,
   viewDiscountRules,
   createDiscountRule,
   changeDiscountRule,
@@ -383,6 +388,32 @@ class AuthorizationCapabilities {
       ])) {
         capabilities.add(AppCapability.manageSalesChannels);
       }
+      if (_hasAny(user, const ['view_job', 'operations.view_job'])) {
+        capabilities.add(AppCapability.viewOperations);
+      }
+      if (_hasAny(user, const ['add_job', 'operations.add_job'])) {
+        capabilities
+          ..add(AppCapability.viewOperations)
+          ..add(AppCapability.createJobs);
+      }
+      if (_hasAny(user, const [
+        'add_jobmaterial',
+        'operations.add_jobmaterial',
+      ])) {
+        capabilities.add(AppCapability.manageJobMaterials);
+      }
+      if (_hasAny(user, const [
+        'change_workflowtemplate',
+        'operations.change_workflowtemplate',
+      ])) {
+        capabilities.add(AppCapability.manageWorkflows);
+      }
+      if (_hasAny(user, const [
+        'change_billofmaterials',
+        'catalog.change_billofmaterials',
+      ])) {
+        capabilities.add(AppCapability.manageRecipes);
+      }
       if (_hasAny(user, const [
         'view_discountrule',
         'discounts.view_discountrule',
@@ -538,6 +569,11 @@ class AuthorizationCapabilities {
   bool get canManageShopSettings => allows(AppCapability.manageShopSettings);
   bool get canManageSalesChannels =>
       allows(AppCapability.manageSalesChannels);
+  bool get canViewOperations => allows(AppCapability.viewOperations);
+  bool get canCreateJobs => allows(AppCapability.createJobs);
+  bool get canManageJobMaterials => allows(AppCapability.manageJobMaterials);
+  bool get canManageWorkflows => allows(AppCapability.manageWorkflows);
+  bool get canManageRecipes => allows(AppCapability.manageRecipes);
   bool get canViewDiscountRules => allows(AppCapability.viewDiscountRules);
   bool get canCreateDiscountRule => allows(AppCapability.createDiscountRule);
   bool get canChangeDiscountRule => allows(AppCapability.changeDiscountRule);

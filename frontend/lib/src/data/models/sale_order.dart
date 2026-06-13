@@ -241,11 +241,19 @@ class SaleCheckoutLineDraft {
   });
 
   final int variantId;
-  final int quantity;
+  final double quantity;
 
   Map<String, Object?> toJson() {
-    return {'variant': variantId, 'quantity': quantity};
+    return {'variant': variantId, 'quantity': formatQuantityForApi(quantity)};
   }
+}
+
+/// Whole quantities serialize as "2"; weights keep three places ("1.250").
+String formatQuantityForApi(double quantity) {
+  if (quantity == quantity.roundToDouble()) {
+    return quantity.toStringAsFixed(0);
+  }
+  return quantity.toStringAsFixed(3);
 }
 
 class SaleOrder {
@@ -448,6 +456,7 @@ class SaleOrderLine {
     required this.quantity,
     required this.returnedQuantity,
     required this.returnableQuantity,
+    this.unit = 'piece',
     required this.unitPrice,
     required this.total,
     this.productName,
@@ -462,9 +471,10 @@ class SaleOrderLine {
   final int variantId;
   final String? productName;
   final String? variantName;
-  final int quantity;
-  final int returnedQuantity;
-  final int returnableQuantity;
+  final double quantity;
+  final double returnedQuantity;
+  final double returnableQuantity;
+  final String unit;
   final double unitPrice;
   final double subtotal;
   final double discountTotal;
@@ -478,9 +488,10 @@ class SaleOrderLine {
       variantId: _productIdFromJson(json['variant']),
       productName: json['product_name']?.toString(),
       variantName: json['variant_name']?.toString(),
-      quantity: _intFromJson(json['quantity']),
-      returnedQuantity: _intFromJson(json['returned_quantity']),
-      returnableQuantity: _intFromJson(json['returnable_quantity']),
+      quantity: _saleQuantityFromJson(json['quantity']),
+      returnedQuantity: _saleQuantityFromJson(json['returned_quantity']),
+      returnableQuantity: _saleQuantityFromJson(json['returnable_quantity']),
+      unit: json['unit']?.toString() ?? 'piece',
       unitPrice: _moneyFromJson(json['unit_price']),
       subtotal: _moneyFromJson(json['line_subtotal']),
       discountTotal: _moneyFromJson(json['discount_total']),
@@ -649,10 +660,10 @@ class SaleReturnLineDraft {
   const SaleReturnLineDraft({required this.lineId, required this.quantity});
 
   final int lineId;
-  final int quantity;
+  final double quantity;
 
   Map<String, Object?> toJson() {
-    return {'line': lineId, 'quantity': quantity};
+    return {'line': lineId, 'quantity': formatQuantityForApi(quantity)};
   }
 }
 
@@ -713,4 +724,11 @@ DateTime? _dateTimeFromJson(Object? value) {
     return null;
   }
   return DateTime.tryParse(value.toString());
+}
+
+double _saleQuantityFromJson(Object? value) {
+  if (value is num) {
+    return value.toDouble();
+  }
+  return double.tryParse((value ?? 0).toString()) ?? 0;
 }

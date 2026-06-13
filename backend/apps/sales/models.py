@@ -257,7 +257,12 @@ class OrderLine(TimeStampedModel):
         on_delete=models.PROTECT,
         related_name="order_lines",
     )
-    quantity = models.PositiveIntegerField(default=1)
+    quantity = models.DecimalField(
+        max_digits=10,
+        decimal_places=3,
+        default=1,
+        validators=[MinValueValidator(Decimal("0.001"))],
+    )
     unit_price = models.DecimalField(max_digits=10, decimal_places=2)
     unit_cost = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     discount_total = models.DecimalField(max_digits=10, decimal_places=2, default=0)
@@ -346,7 +351,11 @@ class OrderAdjustmentLine(TimeStampedModel):
         on_delete=models.PROTECT,
         related_name="order_adjustment_lines",
     )
-    quantity = models.PositiveIntegerField()
+    quantity = models.DecimalField(
+        max_digits=10,
+        decimal_places=3,
+        validators=[MinValueValidator(Decimal("0.001"))],
+    )
     unit_price = models.DecimalField(max_digits=10, decimal_places=2)
     discount_total = models.DecimalField(max_digits=10, decimal_places=2, default=0)
 

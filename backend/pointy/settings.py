@@ -56,6 +56,7 @@ INSTALLED_APPS = [
     "rest_framework",
     "apps.core",
     "apps.channels",
+    "apps.operations",
     "apps.analytics",
     "apps.catalog",
     "apps.inventory",
@@ -259,6 +260,8 @@ POINTY_ATTACHMENT_ALLOWED_TARGETS = env.list(
         "inventory.stockmovement",
         "reports.reportrun",
         "core.shopsettings",
+        "operations.job",
+        "customers.asset",
     ],
 )
 POINTY_PRODUCT_IMAGE_IMPORT_MAX_BYTES = env("POINTY_PRODUCT_IMAGE_IMPORT_MAX_BYTES")

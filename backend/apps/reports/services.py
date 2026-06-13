@@ -10,6 +10,9 @@ from django.db.models.functions import Coalesce
 from django.utils import timezone
 from django.utils.dateparse import parse_date
 
+QTY_FIELD = DecimalField(max_digits=14, decimal_places=3)
+ZERO_QTY = Value(Decimal("0"), output_field=QTY_FIELD)
+
 from apps.analytics.models import AnalyticsEvent
 from apps.analytics.services import record_domain_event
 from apps.catalog.models import Product
@@ -290,7 +293,7 @@ def _sales_summary_report(user, period):
         ),
     )
     line_values = OrderLine.objects.filter(order__in=orders).aggregate(
-        items_sold=Coalesce(Sum("quantity"), Value(0)),
+        items_sold=Coalesce(Sum("quantity"), ZERO_QTY),
         profit=Coalesce(
             Sum(
                 F("quantity") * (F("unit_price") - F("unit_cost"))
@@ -693,7 +696,7 @@ def _stock_movements_report(user, period):
     ]
     mix_row_values = _bounded_queryset(
         movements.values("movement_type")
-        .annotate(quantity=Coalesce(Sum("quantity"), Value(0)), count=Count("id"))
+        .annotate(quantity=Coalesce(Sum("quantity"), ZERO_QTY), count=Count("id"))
         .order_by("movement_type"),
         limit=_section_row_limit("movement_mix"),
     )
@@ -706,7 +709,7 @@ def _stock_movements_report(user, period):
         for row in mix_row_values.rows
     ]
     quantity_moved = movements.aggregate(
-        quantity=Coalesce(Sum("quantity"), Value(0)),
+        quantity=Coalesce(Sum("quantity"), ZERO_QTY),
     )["quantity"]
     return {
         "summary": {
@@ -1212,7 +1215,7 @@ def _product_sales_rows(orders):
         OrderLine.objects.filter(order__in=orders)
         .values("variant__product__name")
         .annotate(
-            units_sold=Coalesce(Sum("quantity"), Value(0)),
+            units_sold=Coalesce(Sum("quantity"), ZERO_QTY),
             revenue=Coalesce(
                 Sum(revenue_expr, output_field=MONEY_FIELD),
                 Value(Decimal("0.00")),

@@ -504,7 +504,7 @@ void main() {
       {'method': 'cash', 'amount': '7.00'},
     ]);
     expect(checkoutBody?['lines'], [
-      {'variant': 1, 'quantity': 2},
+      {'variant': 1, 'quantity': '2'},
     ]);
     expect(find.text('لا توجد عناصر في السلة'), findsOneWidget);
     expect(find.text('تم تسجيل البيع. رقم الإيصال: R-100'), findsOneWidget);
@@ -2990,7 +2990,7 @@ void main() {
 
       expect(returnBody?['reason'], 'طلب العميل');
       expect(returnBody?['lines'], [
-        {'line': 1000, 'quantity': 1},
+        {'line': 1000, 'quantity': '1'},
       ]);
       expect(find.text('تم تسجيل الإرجاع.'), findsOneWidget);
     },
@@ -3724,7 +3724,7 @@ void main() {
 
     expect(movementBody?['variant'], 1);
     expect(movementBody?['movement_type'], 'increase');
-    expect(movementBody?['quantity'], 5);
+    expect(movementBody?['quantity'], '5');
     expect(movementBody?['note'], 'جرد الرف');
   });
 
@@ -3965,6 +3965,16 @@ Future<void> _openNavigationDestination(
 
     await expandVisibleGroups(railSurface(), railDestination);
     destination = railDestination();
+    for (
+      var attempts = 0;
+      attempts < 6 && !tester.any(destination);
+      attempts++
+    ) {
+      await tester.drag(railSurface(), const Offset(0, -240));
+      await tester.pumpAndSettle();
+      await expandVisibleGroups(railSurface(), railDestination);
+      destination = railDestination();
+    }
     if (tester.any(destination)) {
       return destination;
     }

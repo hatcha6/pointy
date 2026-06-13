@@ -7,6 +7,7 @@ import '../../../core/analytics_audit.dart';
 import '../../../core/analytics_engine.dart';
 import '../../../core/result.dart';
 import '../../../data/models/cart_line.dart';
+import '../../../shared/barcode/scale_barcode.dart';
 import '../../../data/models/analytics_event.dart';
 import '../../../data/models/contact.dart';
 import '../../../data/models/print_job.dart';
@@ -43,12 +44,13 @@ enum RegisterSessionGateStatus {
 
 enum BarcodeScanStatus { idle, resolving, found, notFound, error }
 
-enum PosProductSelectionStatus { added, chooseVariant, unavailable, error }
+enum PosProductSelectionStatus { added, chooseVariant, unavailable, error, weighVariant }
 
 class PosProductSelectionResult {
   const PosProductSelectionResult._({
     required this.status,
     this.variants = const [],
+    this.weighedVariant,
   });
 
   const PosProductSelectionResult.added()
@@ -66,8 +68,16 @@ class PosProductSelectionResult {
   const PosProductSelectionResult.error()
     : this._(status: PosProductSelectionStatus.error);
 
+  const PosProductSelectionResult.weighVariant(ProductVariant variant)
+    : this._(
+        status: PosProductSelectionStatus.weighVariant,
+        variants: const [],
+        weighedVariant: variant,
+      );
+
   final PosProductSelectionStatus status;
   final List<ProductVariant> variants;
+  final ProductVariant? weighedVariant;
 }
 
 class PosSaleSessionSummary {
@@ -85,7 +95,7 @@ class PosSaleSessionSummary {
   final int id;
   final int number;
   final int lineCount;
-  final int itemCount;
+  final double itemCount;
   final double subtotal;
   final double total;
   final bool isActive;
@@ -395,7 +405,7 @@ class PosViewModel extends ChangeNotifier {
       id: session.id,
       number: session.number,
       lineCount: session.cart.length,
-      itemCount: session.cart.fold(0, (sum, line) => sum + line.quantity),
+      itemCount: session.cart.fold(0.0, (sum, line) => sum + line.quantity),
       subtotal: subtotal,
       total: session.discountPreview?.total ?? subtotal,
       isActive: session.id == _activeSaleSessionId,

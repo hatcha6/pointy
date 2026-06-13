@@ -224,8 +224,14 @@ class OrderLineSerializer(serializers.ModelSerializer):
         decimal_places=2,
         read_only=True,
     )
-    returned_quantity = serializers.IntegerField(read_only=True)
-    returnable_quantity = serializers.IntegerField(read_only=True)
+    quantity = serializers.DecimalField(
+        max_digits=10,
+        decimal_places=3,
+        coerce_to_string=False,
+    )
+    unit = serializers.CharField(source="variant.product.unit", read_only=True)
+    returned_quantity = serializers.FloatField(read_only=True)
+    returnable_quantity = serializers.FloatField(read_only=True)
 
     class Meta:
         model = OrderLine
@@ -235,6 +241,7 @@ class OrderLineSerializer(serializers.ModelSerializer):
             "variant",
             "product_name",
             "variant_name",
+            "unit",
             "quantity",
             "returned_quantity",
             "returnable_quantity",
@@ -425,6 +432,12 @@ class OrderSerializer(serializers.ModelSerializer):
 class PublicInvoiceLineSerializer(serializers.ModelSerializer):
     product_name = serializers.CharField(source="variant.product.name", read_only=True)
     variant_name = serializers.CharField(source="variant.display_name", read_only=True)
+    quantity = serializers.DecimalField(
+        max_digits=10,
+        decimal_places=3,
+        coerce_to_string=False,
+        read_only=True,
+    )
     line_subtotal = serializers.DecimalField(
         max_digits=10,
         decimal_places=2,
@@ -521,12 +534,28 @@ class CheckoutLineSerializer(serializers.Serializer):
     variant = serializers.PrimaryKeyRelatedField(
         queryset=ProductVariant.objects.active().select_related("product"),
     )
-    quantity = serializers.IntegerField(min_value=1)
+    quantity = serializers.DecimalField(
+        max_digits=10,
+        decimal_places=3,
+        min_value=Decimal("0.001"),
+        coerce_to_string=False,
+    )
 
     def validate(self, attrs):
         variant = attrs.get("variant")
         if variant is None:
             raise serializers.ValidationError({"variant": "Variant is required."})
+        quantity = attrs.get("quantity")
+        # Only metric (weighted/volume) products sell in fractions; pieces
+        # stay whole so a scanner glitch can never ring up 0.5 of a phone.
+        if (
+            quantity is not None
+            and variant.product.unit == "piece"
+            and quantity != quantity.to_integral_value()
+        ):
+            raise serializers.ValidationError(
+                {"quantity": "Piece products sell in whole units."}
+            )
         attrs["variant"] = variant
         return attrs
 
@@ -767,7 +796,11 @@ def preview_allocation_dicts(application, lines_by_key):
 
 class OrderAdjustmentLineInputSerializer(serializers.Serializer):
     line = serializers.PrimaryKeyRelatedField(queryset=OrderLine.objects.all())
-    quantity = serializers.IntegerField(min_value=1)
+    quantity = serializers.DecimalField(
+        max_digits=10,
+        decimal_places=3,
+        min_value=Decimal("0.001"),
+    )
 
 
 class OrderAdjustmentSerializer(serializers.Serializer):

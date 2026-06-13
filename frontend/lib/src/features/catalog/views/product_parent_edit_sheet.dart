@@ -39,6 +39,9 @@ class _ProductParentEditSheetState extends State<ProductParentEditSheet> {
   var _variantOptionsLoadFailed = false;
   late bool _isActive;
   late bool _tracksExpiry;
+  late String _unit;
+  late bool _isService;
+  late bool _isPrepared;
 
   List<VariantOption> get _selectedVariantOptions {
     return [
@@ -66,6 +69,9 @@ class _ProductParentEditSheetState extends State<ProductParentEditSheet> {
     };
     _isActive = product.isActive;
     _tracksExpiry = product.tracksExpiry;
+    _unit = product.unit;
+    _isService = product.isService;
+    _isPrepared = product.isPrepared;
     _nameController.addListener(_refreshImageSearchSeed);
     _loadVariantOptions();
   }
@@ -121,6 +127,15 @@ class _ProductParentEditSheetState extends State<ProductParentEditSheet> {
                                   setState(() => _isActive = value),
                               onTracksExpiryChanged: (value) =>
                                   setState(() => _tracksExpiry = value),
+                              unit: _unit,
+                              isService: _isService,
+                              isPrepared: _isPrepared,
+                              onUnitChanged: (value) =>
+                                  setState(() => _unit = value),
+                              onIsServiceChanged: (value) =>
+                                  setState(() => _isService = value),
+                              onIsPreparedChanged: (value) =>
+                                  setState(() => _isPrepared = value),
                               requiredValidator: (value) =>
                                   _requiredValidator(context, value),
                             ),
@@ -230,6 +245,9 @@ class _ProductParentEditSheetState extends State<ProductParentEditSheet> {
         description: _descriptionController.text.trim(),
         isActive: _isActive,
         tracksExpiry: _tracksExpiry,
+        unit: _unit,
+        isService: _isService,
+        isPrepared: _isPrepared,
         categoryIds: [for (final category in _selectedCategories) category.id],
         variantOptionIds: [
           for (final optionId in _selectedVariantOptionIds) optionId,

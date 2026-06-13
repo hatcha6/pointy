@@ -3,7 +3,7 @@ part of 'pos_view_model.dart';
 extension PosBarcodeActions on PosViewModel {
   Future<bool> addVariantByBarcode(
     String barcode, {
-    int quantity = 1,
+    double quantity = 1,
     String source = 'barcode_lookup',
   }) async {
     final normalizedBarcode = barcode.trim();
@@ -29,7 +29,18 @@ extension PosBarcodeActions on PosViewModel {
         if (value == null) {
           _barcodeScanStatus = BarcodeScanStatus.notFound;
         } else {
-          _addVariantToCartAndTrack(value, quantity: quantity, source: source);
+          // Digital-scale labels carry the weight inside the barcode; for
+          // metric products that weight IS the sold quantity.
+          final scaleBarcode = parseScaleBarcode(normalizedBarcode);
+          final resolvedQuantity =
+              scaleBarcode != null && value.unit != 'piece'
+              ? scaleBarcode.weightKg
+              : quantity;
+          _addVariantToCartAndTrack(
+            value,
+            quantity: resolvedQuantity,
+            source: source,
+          );
           _lastScannedProductName = value.displayLabel;
           _barcodeScanStatus = BarcodeScanStatus.found;
           unawaited(refreshDiscountPreview());

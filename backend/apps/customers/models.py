@@ -46,3 +46,49 @@ class Customer(TimeStampedModel):
 
     def __str__(self) -> str:
         return self.full_name
+
+
+class Asset(TimeStampedModel):
+    """A customer-owned item the shop works on (phone, laptop, console, …).
+
+    Jobs link to assets so a returning customer's device history is one
+    lookup away.
+    """
+
+    class AssetType(models.TextChoices):
+        PHONE = "phone", "Phone"
+        TABLET = "tablet", "Tablet"
+        LAPTOP = "laptop", "Laptop"
+        CONSOLE = "console", "Game console"
+        APPLIANCE = "appliance", "Appliance"
+        OTHER = "other", "Other"
+
+    customer = models.ForeignKey(
+        Customer,
+        on_delete=models.PROTECT,
+        related_name="assets",
+    )
+    asset_type = models.CharField(
+        max_length=24,
+        choices=AssetType.choices,
+        default=AssetType.OTHER,
+    )
+    brand = models.CharField(max_length=120, blank=True)
+    model_name = models.CharField(max_length=120, blank=True)
+    serial_number = models.CharField(max_length=120, blank=True)
+    imei = models.CharField(max_length=64, blank=True)
+    color = models.CharField(max_length=64, blank=True)
+    notes = models.TextField(blank=True)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self) -> str:
+        label = " ".join(part for part in (self.brand, self.model_name) if part)
+        return label or f"Asset {self.pk}"
+
+    @property
+    def display_name(self) -> str:
+        label = " ".join(part for part in (self.brand, self.model_name) if part)
+        return label or self.get_asset_type_display()

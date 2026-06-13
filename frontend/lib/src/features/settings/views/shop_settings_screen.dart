@@ -17,8 +17,10 @@ import '../../../shared/components/components.dart';
 import '../../../shared/decimal_text_input_formatter.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../../../shared/shell/shell.dart';
+import '../../operations/view_models/workflows_view_model.dart';
 import '../view_models/sales_channels_view_model.dart';
 import '../view_models/shop_settings_view_model.dart';
+import 'operations_settings_page.dart';
 import 'sales_channels_page.dart';
 
 part 'shop_settings_widgets.dart';
@@ -29,12 +31,14 @@ class ShopSettingsScreen extends StatelessWidget {
     super.key,
     required this.viewModel,
     required this.salesChannelsViewModel,
+    required this.workflowsViewModel,
     required this.capabilities,
     required this.navigation,
   });
 
   final ShopSettingsViewModel viewModel;
   final SalesChannelsViewModel salesChannelsViewModel;
+  final WorkflowsViewModel workflowsViewModel;
   final AuthorizationCapabilities capabilities;
   final AppNavigation navigation;
 
@@ -72,7 +76,9 @@ class ShopSettingsScreen extends StatelessWidget {
             child: _ShopSettingsBody(
               viewModel: viewModel,
               salesChannelsViewModel: salesChannelsViewModel,
+              workflowsViewModel: workflowsViewModel,
               canManageSalesChannels: capabilities.canManageSalesChannels,
+              canManageWorkflows: capabilities.canManageWorkflows,
             ),
           ),
         );
@@ -85,12 +91,16 @@ class _ShopSettingsBody extends StatelessWidget {
   const _ShopSettingsBody({
     required this.viewModel,
     required this.salesChannelsViewModel,
+    required this.workflowsViewModel,
     required this.canManageSalesChannels,
+    required this.canManageWorkflows,
   });
 
   final ShopSettingsViewModel viewModel;
   final SalesChannelsViewModel salesChannelsViewModel;
+  final WorkflowsViewModel workflowsViewModel;
   final bool canManageSalesChannels;
+  final bool canManageWorkflows;
 
   @override
   Widget build(BuildContext context) {
@@ -120,7 +130,9 @@ class _ShopSettingsBody extends StatelessWidget {
     return _ShopSettingsForm(
       viewModel: viewModel,
       salesChannelsViewModel: salesChannelsViewModel,
+      workflowsViewModel: workflowsViewModel,
       canManageSalesChannels: canManageSalesChannels,
+      canManageWorkflows: canManageWorkflows,
       settings: settings,
     );
   }
@@ -130,13 +142,17 @@ class _ShopSettingsForm extends StatefulWidget {
   const _ShopSettingsForm({
     required this.viewModel,
     required this.salesChannelsViewModel,
+    required this.workflowsViewModel,
     required this.canManageSalesChannels,
+    required this.canManageWorkflows,
     required this.settings,
   });
 
   final ShopSettingsViewModel viewModel;
   final SalesChannelsViewModel salesChannelsViewModel;
+  final WorkflowsViewModel workflowsViewModel;
   final bool canManageSalesChannels;
+  final bool canManageWorkflows;
   final ShopSettings settings;
 
   @override
@@ -384,6 +400,15 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
                                   children: _buildInventoryFields,
                                 ),
                         ),
+                        if (widget.canManageWorkflows)
+                          PointySettingsTile(
+                            icon: Icons.handyman_outlined,
+                            title: l10n.operationsSettingsSectionTitle,
+                            subtitle: l10n.operationsSettingsSectionSubtitle,
+                            onTap: widget.viewModel.isSaving
+                                ? null
+                                : () => _openOperationsSettings(context),
+                          ),
                         if (widget.canManageSalesChannels)
                           PointySettingsTile(
                             icon: Icons.hub_outlined,
@@ -1077,6 +1102,17 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
     );
   }
 
+  Future<void> _openOperationsSettings(BuildContext context) {
+    return Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (routeContext) => OperationsSettingsPage(
+          shopSettingsViewModel: widget.viewModel,
+          workflowsViewModel: widget.workflowsViewModel,
+        ),
+      ),
+    );
+  }
+
   Future<void> _pickAnalyticsDate(
     BuildContext context, {
     required DateTime? initialDate,
@@ -1153,6 +1189,7 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
     }
 
     final messenger = ScaffoldMessenger.of(context);
+    final currentSettings = widget.viewModel.settings ?? widget.settings;
     var saved = await widget.viewModel.updateSettings(
       ShopSettingsDraft(
         shopName: _shopNameController.text.trim(),
@@ -1175,6 +1212,10 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
         transferCommissionPercent: _parsePercent(
           _transferCommissionController.text,
         ),
+        enableRepairOperations: currentSettings.enableRepairOperations,
+        enableProductionOperations: currentSettings.enableProductionOperations,
+        enableKitchenOperations: currentSettings.enableKitchenOperations,
+        enableJobTracking: currentSettings.enableJobTracking,
       ),
     );
     if (saved && _selectedLogoUpload != null) {

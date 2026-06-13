@@ -16,7 +16,9 @@ import '../../../shared/formatters.dart';
 import '../../../shared/order/order.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../view_models/pos_view_model.dart';
+import '../../../data/models/cart_line.dart';
 import 'cart_line_tile.dart';
+import 'weight_entry_sheet.dart';
 import 'cart_totals.dart';
 import 'payment/payment.dart';
 import 'pos_sale_session_strip.dart';
@@ -259,8 +261,8 @@ class PosCartPane extends StatelessWidget {
                     child: Text(
                       l10n.oversellLine(
                         shortage.productName,
-                        shortage.requested,
-                        shortage.available,
+                        formatSaleQuantity(shortage.requested),
+                        formatSaleQuantity(shortage.available),
                       ),
                     ),
                   ),
@@ -423,10 +425,23 @@ class _CartScrollContent extends StatelessWidget {
                       visibleLines[index].variant,
                       source: 'cart_delete_button',
                     ),
+              onEditQuantity: isCartLocked
+                  ? null
+                  : () => _editLineWeight(context, visibleLines[index]),
             ),
           ],
       ],
     );
+  }
+  Future<void> _editLineWeight(BuildContext context, CartLine line) async {
+    final weight = await showWeightEntrySheet(
+      context,
+      variant: line.variant,
+      initialQuantity: line.quantity,
+    );
+    if (weight != null && context.mounted) {
+      viewModel.setVariantQuantity(line.variant, weight);
+    }
   }
 }
 

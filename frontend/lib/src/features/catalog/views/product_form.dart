@@ -48,6 +48,9 @@ class _ProductFormState extends State<ProductForm> {
   ProductImageSelection? _selectedImage;
   var _isProductActive = true;
   var _tracksExpiry = false;
+  var _unit = 'piece';
+  var _isService = false;
+  var _isPrepared = false;
   var _isVariantActive = true;
   var _isDefaultVariant = true;
   var _isLoadingVariantOptions = false;
@@ -181,6 +184,20 @@ class _ProductFormState extends State<ProductForm> {
                                           onTracksExpiryChanged: (value) =>
                                               setState(
                                                 () => _tracksExpiry = value,
+                                              ),
+                                          unit: _unit,
+                                          isService: _isService,
+                                          isPrepared: _isPrepared,
+                                          onUnitChanged: (value) => setState(
+                                            () => _unit = value,
+                                          ),
+                                          onIsServiceChanged: (value) =>
+                                              setState(
+                                                () => _isService = value,
+                                              ),
+                                          onIsPreparedChanged: (value) =>
+                                              setState(
+                                                () => _isPrepared = value,
                                               ),
                                           requiredValidator: (value) =>
                                               _requiredValidator(
@@ -463,6 +480,9 @@ class _ProductFormState extends State<ProductForm> {
       description: _descriptionController.text.trim(),
       isActive: _isProductActive,
       tracksExpiry: _tracksExpiry,
+      unit: _unit,
+      isService: _isService,
+      isPrepared: _isPrepared,
       variantName: _variantNameController.text.trim(),
       variantSku: _skuController.text.trim(),
       variantBarcode: _barcodeController.text.trim(),

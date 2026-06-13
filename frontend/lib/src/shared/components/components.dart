@@ -3,6 +3,7 @@ export 'pointy_data_list.dart';
 export 'pointy_data_row.dart';
 export 'pointy_detail_section.dart';
 export 'pointy_destructive_confirmation_dialog.dart';
+export 'pointy_disclosure_chevron.dart';
 export 'pointy_empty_state.dart';
 export 'pointy_error_state.dart';
 export 'pointy_filter_summary_bar.dart';

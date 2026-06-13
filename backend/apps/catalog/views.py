@@ -1,6 +1,8 @@
 import django_filters
 from django.core.cache import cache
-from django.db.models import Count, Sum, Value
+from decimal import Decimal
+
+from django.db.models import DecimalField, Count, Sum, Value
 from django.db.models.functions import Coalesce
 from rest_framework import parsers, status, viewsets
 from rest_framework.decorators import action
@@ -218,7 +220,8 @@ class ProductViewSet(viewsets.ModelViewSet):
         return queryset.annotate(
             stock_quantity_on_hand=Coalesce(
                 Sum("variants__stock__quantity_on_hand"),
-                Value(0),
+                Value(Decimal("0")),
+                output_field=DecimalField(max_digits=12, decimal_places=3),
             ),
         )
 

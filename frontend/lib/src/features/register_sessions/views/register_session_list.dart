@@ -128,7 +128,7 @@ class RegisterSessionTile extends StatelessWidget {
                   _VarianceChip(amount: session.cashVariance ?? 0),
                   const SizedBox(width: 8),
                 ],
-                const Icon(Icons.chevron_right),
+                const PointyDisclosureChevron(),
               ],
             ),
       onTap: onTap,

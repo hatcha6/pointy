@@ -183,6 +183,9 @@ class ProductCatalogSummarySerializer(serializers.ModelSerializer):
             "description",
             "is_active",
             "tracks_expiry",
+            "is_service",
+            "is_prepared",
+            "unit",
             "categories",
             "category_details",
             "variant_options",
@@ -271,9 +274,15 @@ class ProductVariantSerializer(serializers.ModelSerializer):
         source="product.tracks_expiry",
         read_only=True,
     )
+    is_service = serializers.BooleanField(source="product.is_service", read_only=True)
+    is_prepared = serializers.BooleanField(
+        source="product.is_prepared",
+        read_only=True,
+    )
+    unit = serializers.CharField(source="product.unit", read_only=True)
     display_name = serializers.CharField(read_only=True)
     full_name = serializers.CharField(read_only=True)
-    quantity_on_hand = serializers.IntegerField(read_only=True)
+    quantity_on_hand = serializers.FloatField(read_only=True)
     option_values = serializers.PrimaryKeyRelatedField(
         queryset=VariantOptionValue.objects.all(),
         many=True,
@@ -302,6 +311,9 @@ class ProductVariantSerializer(serializers.ModelSerializer):
             "unit_price",
             "is_active",
             "tracks_expiry",
+            "is_service",
+            "is_prepared",
+            "unit",
             "is_default",
             "option_values",
             "option_value_details",
@@ -493,6 +505,9 @@ class ProductCatalogSerializer(serializers.ModelSerializer):
             "description",
             "is_active",
             "tracks_expiry",
+            "is_service",
+            "is_prepared",
+            "unit",
             "default_variant",
             "variants",
             "categories",

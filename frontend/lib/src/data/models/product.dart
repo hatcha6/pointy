@@ -11,6 +11,9 @@ class Product {
     this.description = '',
     this.isActive = true,
     this.tracksExpiry = false,
+    this.isService = false,
+    this.isPrepared = false,
+    this.unit = 'piece',
     this.categories = const [],
     this.variantOptions = const [],
     this.defaultVariant,
@@ -21,10 +24,13 @@ class Product {
 
   final int id;
   final String name;
-  final int quantityOnHand;
+  final double quantityOnHand;
   final String description;
   final bool isActive;
   final bool tracksExpiry;
+  final bool isService;
+  final bool isPrepared;
+  final String unit;
   final List<ProductCategory> categories;
   final List<VariantOption> variantOptions;
   final ProductVariant? defaultVariant;
@@ -48,7 +54,7 @@ class Product {
 
   double get effectiveUnitPrice => defaultVariant?.unitPrice ?? 0;
 
-  int get effectiveQuantityOnHand =>
+  double get effectiveQuantityOnHand =>
       defaultVariant?.quantityOnHand ?? quantityOnHand;
 
   List<ProductVariant> get activeVariants {
@@ -86,12 +92,15 @@ class Product {
     return Product(
       id: _intFromJson(json['id']),
       name: json['name']?.toString() ?? '',
-      quantityOnHand: _intFromJson(
+      quantityOnHand: _stockQtyFromJson(
         json['quantity_on_hand'] ?? defaultVariant?.quantityOnHand,
       ),
       description: (json['description'] as String?) ?? '',
       isActive: (json['is_active'] as bool?) ?? true,
       tracksExpiry: (json['tracks_expiry'] as bool?) ?? false,
+      isService: (json['is_service'] as bool?) ?? false,
+      isPrepared: (json['is_prepared'] as bool?) ?? false,
+      unit: json['unit']?.toString() ?? 'piece',
       categories: _categoriesFromJson(json),
       variantOptions: _variantOptionsFromJson(json),
       defaultVariant: defaultVariant,
@@ -123,7 +132,7 @@ class Product {
   }
 
   Product copyWith({
-    int? quantityOnHand,
+    double? quantityOnHand,
     ProductVariant? defaultVariant,
     List<ProductVariant>? variants,
     bool? tracksExpiry,
@@ -228,4 +237,11 @@ int _intFromJson(Object? value) {
     return value.toInt();
   }
   return int.tryParse((value ?? 0).toString()) ?? 0;
+}
+
+double _stockQtyFromJson(Object? value) {
+  if (value is num) {
+    return value.toDouble();
+  }
+  return double.tryParse((value ?? 0).toString()) ?? 0;
 }

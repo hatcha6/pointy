@@ -843,7 +843,7 @@ class _AlertRow extends StatelessWidget {
             ],
             if (alert.onTap != null) ...[
               const SizedBox(width: 4),
-              Icon(Icons.chevron_left, color: colors.mutedInk, size: 20),
+              PointyDisclosureChevron(color: colors.mutedInk, size: 20),
             ],
           ],
         ),

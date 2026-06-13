@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
+import '../../../shared/components/components.dart';
 import '../../../data/models/sale_order.dart';
 import '../../../data/repositories/contact_repository.dart';
 import '../../../shared/contact_picker_sheet.dart';
@@ -54,7 +55,7 @@ class _InvoiceFilterSheetState extends State<InvoiceFilterSheet> {
               leading: const Icon(Icons.person_outline),
               title: Text(_customerName ?? l10n.allCustomersFilterLabel),
               trailing: _customerId == null
-                  ? const Icon(Icons.chevron_right)
+                  ? const PointyDisclosureChevron()
                   : IconButton(
                       tooltip: l10n.clearCustomerFilterTooltip,
                       onPressed: () {

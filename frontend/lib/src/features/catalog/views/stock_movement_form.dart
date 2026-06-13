@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../data/models/stock_movement.dart';
+import '../../../shared/decimal_text_input_formatter.dart';
 import '../view_models/product_stock_view_model.dart';
 import 'stock_movement_labels.dart';
 
@@ -82,15 +82,17 @@ class _StockMovementFormState extends State<StockMovementForm> {
                     TextFormField(
                       controller: _quantityController,
                       enabled: !widget.viewModel.isSavingMovement,
-                      keyboardType: TextInputType.number,
-                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                      inputFormatters: [DecimalTextInputFormatter()],
                       decoration: InputDecoration(
                         labelText: l10n.stockMovementQuantityLabel,
                         border: const OutlineInputBorder(),
                         prefixIcon: const Icon(Icons.numbers_outlined),
                       ),
                       validator: (value) {
-                        final quantity = int.tryParse(value ?? '');
+                        final quantity = double.tryParse(value ?? '');
                         if (quantity == null || quantity <= 0) {
                           return l10n.invalidNumber;
                         }
@@ -152,7 +154,7 @@ class _StockMovementFormState extends State<StockMovementForm> {
     }
     final created = await widget.viewModel.createMovement(
       movementType: _movementType,
-      quantity: int.parse(_quantityController.text),
+      quantity: double.parse(_quantityController.text),
       note: _noteController.text,
     );
     if (created && mounted) {

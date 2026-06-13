@@ -47,6 +47,13 @@ class ShopSettings(TimeStampedModel):
     receipt_header = models.CharField(max_length=240, blank=True)
     receipt_footer = models.CharField(max_length=240, blank=True)
     enable_online_invoices = models.BooleanField(default=False)
+    # Operations modes: which job workflows this shop uses. All off by default
+    # so a pure retail shop never sees the feature.
+    enable_repair_operations = models.BooleanField(default=False)
+    enable_production_operations = models.BooleanField(default=False)
+    enable_kitchen_operations = models.BooleanField(default=False)
+    # Public job tracking page (relay-gated), like online invoices.
+    enable_job_tracking = models.BooleanField(default=False)
     require_opening_cash = models.BooleanField(default=True)
     auto_print_receipts = models.BooleanField(default=False)
     allow_overselling = models.BooleanField(default=False)
