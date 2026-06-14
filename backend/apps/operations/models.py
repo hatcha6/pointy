@@ -123,6 +123,16 @@ class Job(TimeStampedModel):
         blank=True,
         null=True,
     )
+    # Who gets credited for the work (drives operations-commission pay). Kept in
+    # sync with ``assigned_to`` when the employee has a linked user account, but
+    # works for technicians who never log in too.
+    assigned_employee = models.ForeignKey(
+        "employees.Employee",
+        on_delete=models.SET_NULL,
+        related_name="assigned_jobs",
+        blank=True,
+        null=True,
+    )
     priority = models.CharField(
         max_length=16,
         choices=Priority.choices,

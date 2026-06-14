@@ -128,6 +128,20 @@ class CatalogViewModel extends ChangeNotifier {
     await loadProducts();
   }
 
+  bool get isViewingArchived =>
+      _query.archived == ProductArchivedFilter.onlyArchived;
+
+  Future<void> setViewingArchived(bool value) async {
+    final target = value
+        ? ProductArchivedFilter.onlyArchived
+        : ProductArchivedFilter.excludeArchived;
+    if (_query.archived == target) {
+      return;
+    }
+    _query = _query.copyWith(archived: target);
+    await loadProducts();
+  }
+
   Future<CatalogBarcodeLookupOutcome> findVariantByBarcode(
     String barcode,
   ) async {

@@ -50,10 +50,13 @@ enum AppCapability {
   manageUsers,
   manageShopSettings,
   manageSalesChannels,
+  viewExpenses,
+  manageExpenses,
   viewAttendance,
   manageAttendance,
   viewOperations,
   createJobs,
+  assignJobs,
   manageJobMaterials,
   manageWorkflows,
   manageRecipes,
@@ -412,6 +415,11 @@ class AuthorizationCapabilities {
           ..add(AppCapability.viewOperations)
           ..add(AppCapability.createJobs);
       }
+      if (_hasAny(user, const ['assign_job', 'operations.assign_job'])) {
+        capabilities
+          ..add(AppCapability.viewOperations)
+          ..add(AppCapability.assignJobs);
+      }
       if (_hasAny(user, const [
         'add_jobmaterial',
         'operations.add_jobmaterial',
@@ -478,6 +486,21 @@ class AuthorizationCapabilities {
         'fraud.view_fraudfinding',
       ])) {
         capabilities.add(AppCapability.viewFraudFindings);
+      }
+      if (_hasAny(user, const ['view_expense', 'expenses.view_expense'])) {
+        capabilities.add(AppCapability.viewExpenses);
+      }
+      if (_hasAny(user, const [
+        'add_expense',
+        'change_expense',
+        'delete_expense',
+        'expenses.add_expense',
+        'expenses.change_expense',
+        'expenses.delete_expense',
+      ])) {
+        capabilities
+          ..add(AppCapability.viewExpenses)
+          ..add(AppCapability.manageExpenses);
       }
       if (_hasAny(user, const [
         'change_fraudfinding',
@@ -585,10 +608,12 @@ class AuthorizationCapabilities {
       allows(AppCapability.manageDeviceSettings);
   bool get canManageUsers => allows(AppCapability.manageUsers);
   bool get canManageShopSettings => allows(AppCapability.manageShopSettings);
-  bool get canManageSalesChannels =>
-      allows(AppCapability.manageSalesChannels);
+  bool get canManageSalesChannels => allows(AppCapability.manageSalesChannels);
+  bool get canViewExpenses => allows(AppCapability.viewExpenses);
+  bool get canManageExpenses => allows(AppCapability.manageExpenses);
   bool get canViewOperations => allows(AppCapability.viewOperations);
   bool get canCreateJobs => allows(AppCapability.createJobs);
+  bool get canAssignJobs => allows(AppCapability.assignJobs);
   bool get canManageJobMaterials => allows(AppCapability.manageJobMaterials);
   bool get canManageWorkflows => allows(AppCapability.manageWorkflows);
   bool get canManageRecipes => allows(AppCapability.manageRecipes);

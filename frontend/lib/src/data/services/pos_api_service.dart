@@ -29,6 +29,9 @@ import '../models/operations_job.dart';
 import '../models/dashboard.dart';
 import '../models/discount_rule.dart';
 import '../models/employee.dart';
+import '../models/expense.dart';
+import '../models/expense_category.dart';
+import '../models/expense_ledger_entry.dart';
 import '../models/fraud_finding.dart';
 import '../models/purchase_submission.dart';
 import '../models/query.dart';
@@ -68,6 +71,7 @@ import 'customer_api_client.dart';
 import 'dashboard_api_client.dart';
 import 'discount_api_client.dart';
 import 'employee_api_client.dart';
+import 'expense_api_client.dart';
 import 'fraud_api_client.dart';
 import 'inventory_api_client.dart';
 import 'operations_api_client.dart';
@@ -106,6 +110,7 @@ class PosApiService {
     _dashboard = DashboardApiClient(_session);
     _discounts = DiscountApiClient(_session);
     _employees = EmployeeApiClient(_session);
+    _expenses = ExpenseApiClient(_session);
     _fraud = FraudApiClient(_session);
     _inventory = InventoryApiClient(_session);
     _operations = OperationsApiClient(_session);
@@ -135,6 +140,7 @@ class PosApiService {
   late final DashboardApiClient _dashboard;
   late final DiscountApiClient _discounts;
   late final EmployeeApiClient _employees;
+  late final ExpenseApiClient _expenses;
   late final FraudApiClient _fraud;
   late final InventoryApiClient _inventory;
   late final OperationsApiClient _operations;
@@ -504,6 +510,14 @@ class PosApiService {
     return _catalog.fetchProduct(id);
   }
 
+  Future<Product> archiveProduct(int id) {
+    return _catalog.archiveProduct(id);
+  }
+
+  Future<Product> restoreProduct(int id) {
+    return _catalog.restoreProduct(id);
+  }
+
   Future<AttachmentSummary> uploadProductImage({
     required int productId,
     required ProductImageUpload upload,
@@ -758,6 +772,10 @@ class PosApiService {
     return _operations.updateJob(jobId, changes);
   }
 
+  Future<OperationsJob> assignJob(int jobId, int? employeeId) {
+    return _operations.assignJob(jobId, employeeId);
+  }
+
   Future<OperationsJob> transitionJob(
     int jobId, {
     required int toStage,
@@ -973,6 +991,48 @@ class PosApiService {
 
   Future<SalesChannelKeyGrant> rotateSalesChannelKey(int channelId) {
     return _salesChannels.rotateSalesChannelKey(channelId);
+  }
+
+  Future<ExpenseCategoryPage> fetchExpenseCategories({int page = 1}) {
+    return _expenses.fetchCategories(page: page);
+  }
+
+  Future<ExpenseCategory> createExpenseCategory(ExpenseCategoryDraft draft) {
+    return _expenses.createCategory(draft);
+  }
+
+  Future<ExpenseCategory> updateExpenseCategory(
+    int categoryId,
+    Map<String, Object?> changes,
+  ) {
+    return _expenses.updateCategory(categoryId, changes);
+  }
+
+  Future<void> deleteExpenseCategory(int categoryId) {
+    return _expenses.deleteCategory(categoryId);
+  }
+
+  Future<ExpenseLedger> fetchExpenseLedger({
+    required DateTime start,
+    required DateTime end,
+  }) {
+    return _expenses.fetchLedger(start: start, end: end);
+  }
+
+  Future<Expense> fetchExpense(int expenseId) {
+    return _expenses.fetchExpense(expenseId);
+  }
+
+  Future<Expense> createExpense(ExpenseDraft draft) {
+    return _expenses.createExpense(draft);
+  }
+
+  Future<Expense> updateExpense(int expenseId, ExpenseDraft draft) {
+    return _expenses.updateExpense(expenseId, draft);
+  }
+
+  Future<void> deleteExpense(int expenseId) {
+    return _expenses.deleteExpense(expenseId);
   }
 
   Future<PrepStationPage> fetchPrepStations({int page = 1}) {

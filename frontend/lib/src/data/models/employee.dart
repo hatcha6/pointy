@@ -102,6 +102,8 @@ enum SalaryType {
   perShift,
   salesCommissionOnly,
   monthlyFixedPlusSalesCommission,
+  operationsCommissionOnly,
+  monthlyFixedPlusOperationsCommission,
   contractFixed,
   customFixed;
 
@@ -115,6 +117,9 @@ enum SalaryType {
       'sales_commission_only' => SalaryType.salesCommissionOnly,
       'monthly_fixed_plus_sales_commission' =>
         SalaryType.monthlyFixedPlusSalesCommission,
+      'operations_commission_only' => SalaryType.operationsCommissionOnly,
+      'monthly_fixed_plus_operations_commission' =>
+        SalaryType.monthlyFixedPlusOperationsCommission,
       'contract_fixed' => SalaryType.contractFixed,
       'custom_fixed' => SalaryType.customFixed,
       _ => null,
@@ -131,6 +136,9 @@ enum SalaryType {
       SalaryType.salesCommissionOnly => 'sales_commission_only',
       SalaryType.monthlyFixedPlusSalesCommission =>
         'monthly_fixed_plus_sales_commission',
+      SalaryType.operationsCommissionOnly => 'operations_commission_only',
+      SalaryType.monthlyFixedPlusOperationsCommission =>
+        'monthly_fixed_plus_operations_commission',
       SalaryType.contractFixed => 'contract_fixed',
       SalaryType.customFixed => 'custom_fixed',
     };
@@ -139,6 +147,8 @@ enum SalaryType {
   PayType get payType {
     return switch (this) {
       SalaryType.salesCommissionOnly => PayType.commission,
+      SalaryType.operationsCommissionOnly => PayType.commission,
+      SalaryType.monthlyFixedPlusOperationsCommission => PayType.monthlySalary,
       SalaryType.monthlyFixed => PayType.monthlySalary,
       SalaryType.weeklyFixed => PayType.weeklySalary,
       SalaryType.dailyRate => PayType.dailyRate,
@@ -147,6 +157,28 @@ enum SalaryType {
       SalaryType.monthlyFixedPlusSalesCommission => PayType.monthlySalary,
       SalaryType.contractFixed => PayType.contract,
       SalaryType.customFixed => PayType.other,
+    };
+  }
+}
+
+enum OperationsCommissionBase {
+  approvedPrice,
+  labor,
+  orderTotal;
+
+  static OperationsCommissionBase fromJson(Object? value) {
+    return switch (value?.toString()) {
+      'labor' => OperationsCommissionBase.labor,
+      'order_total' => OperationsCommissionBase.orderTotal,
+      _ => OperationsCommissionBase.approvedPrice,
+    };
+  }
+
+  String toJson() {
+    return switch (this) {
+      OperationsCommissionBase.approvedPrice => 'approved_price',
+      OperationsCommissionBase.labor => 'labor',
+      OperationsCommissionBase.orderTotal => 'order_total',
     };
   }
 }
@@ -211,6 +243,7 @@ class CompensationPlan {
     required this.amount,
     required this.effectiveFrom,
     this.commissionPercent = 0,
+    this.operationsCommissionBase = OperationsCommissionBase.approvedPrice,
     this.overtimeMultiplier = 1.5,
     this.standardDailyHours = 8,
     this.currency = 'LYD',
@@ -225,6 +258,7 @@ class CompensationPlan {
   final SalaryType? salaryType;
   final double amount;
   final double commissionPercent;
+  final OperationsCommissionBase operationsCommissionBase;
   final double overtimeMultiplier;
   final double standardDailyHours;
   final String currency;
@@ -241,6 +275,9 @@ class CompensationPlan {
       salaryType: SalaryType.fromJson(json['salary_type']),
       amount: _doubleFromJson(json['amount']),
       commissionPercent: _doubleFromJson(json['commission_percent']),
+      operationsCommissionBase: OperationsCommissionBase.fromJson(
+        json['operations_commission_base'],
+      ),
       overtimeMultiplier: _doubleFromJson(
         json['overtime_multiplier'],
         fallback: 1.5,
@@ -747,6 +784,7 @@ class CompensationPlanDraft {
     required this.salaryType,
     required this.amount,
     this.commissionPercent = '0.00',
+    this.operationsCommissionBase = OperationsCommissionBase.approvedPrice,
     this.overtimeMultiplier = '1.50',
     this.standardDailyHours = '8.00',
     this.expectedUnitsPerPeriod = '1.00',
@@ -757,6 +795,7 @@ class CompensationPlanDraft {
   final SalaryType salaryType;
   final String amount;
   final String commissionPercent;
+  final OperationsCommissionBase operationsCommissionBase;
   final String overtimeMultiplier;
   final String standardDailyHours;
   final String expectedUnitsPerPeriod;
@@ -770,6 +809,7 @@ class CompensationPlanDraft {
       'salary_type': salaryType.toJson(),
       'amount': amount,
       'commission_percent': commissionPercent,
+      'operations_commission_base': operationsCommissionBase.toJson(),
       'overtime_multiplier': overtimeMultiplier,
       'standard_daily_hours': standardDailyHours,
       'expected_units_per_period': expectedUnitsPerPeriod,

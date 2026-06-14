@@ -90,6 +90,10 @@ class OperationsRepository {
     return Result.guard(() => _service.updateJob(jobId, changes));
   }
 
+  Future<Result<OperationsJob>> assignJob(int jobId, int? employeeId) async {
+    return Result.guard(() => _service.assignJob(jobId, employeeId));
+  }
+
   Future<Result<OperationsJob>> transitionJob(
     int jobId, {
     required int toStage,

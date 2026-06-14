@@ -17,6 +17,43 @@ enum ProductAvailabilityFilter implements QueryFilterSet {
   }
 }
 
+/// Whether archived (retired) products are included in a product listing.
+/// Archived products are hidden everywhere by default; only the dedicated
+/// "Archived" catalog view opts in via [onlyArchived].
+enum ProductArchivedFilter implements QueryFilterSet {
+  excludeArchived(null),
+  onlyArchived(QueryFilter(parameter: 'archived', value: 'true'));
+
+  const ProductArchivedFilter(this._filter);
+
+  final QueryFilter? _filter;
+
+  @override
+  Iterable<QueryFilter> get filters {
+    final filter = _filter;
+    return filter == null ? const [] : [filter];
+  }
+}
+
+/// Whether out-of-stock products are included. The POS opts into
+/// [inStockOnly] when overselling is disabled so cashiers never see (or sell)
+/// products that have run out; service and made-to-order products are kept
+/// server-side because they carry no stock of their own.
+enum ProductStockFilter implements QueryFilterSet {
+  all(null),
+  inStockOnly(QueryFilter(parameter: 'in_stock', value: 'true'));
+
+  const ProductStockFilter(this._filter);
+
+  final QueryFilter? _filter;
+
+  @override
+  Iterable<QueryFilter> get filters {
+    final filter = _filter;
+    return filter == null ? const [] : [filter];
+  }
+}
+
 enum ProductOrdering implements QueryOrdering {
   name('name'),
   priceAsc('unit_price'),
@@ -35,6 +72,8 @@ class ProductQuery extends ModelQuery {
     this.barcode = '',
     this.categories = const [],
     this.availability = ProductAvailabilityFilter.all,
+    this.archived = ProductArchivedFilter.excludeArchived,
+    this.stock = ProductStockFilter.all,
     this.ordering = ProductOrdering.name,
   });
 
@@ -43,12 +82,16 @@ class ProductQuery extends ModelQuery {
   final String barcode;
   final List<ProductCategory> categories;
   final ProductAvailabilityFilter availability;
+  final ProductArchivedFilter archived;
+  final ProductStockFilter stock;
   @override
   final ProductOrdering ordering;
 
   @override
   Iterable<QueryFilter> get filters => [
     ...availability.filters,
+    ...archived.filters,
+    ...stock.filters,
     if (barcode.trim().isNotEmpty)
       QueryFilter(parameter: 'barcode', value: barcode.trim()),
     if (categories.isNotEmpty)
@@ -63,6 +106,8 @@ class ProductQuery extends ModelQuery {
     String? barcode,
     List<ProductCategory>? categories,
     ProductAvailabilityFilter? availability,
+    ProductArchivedFilter? archived,
+    ProductStockFilter? stock,
     ProductOrdering? ordering,
   }) {
     return ProductQuery(
@@ -70,6 +115,8 @@ class ProductQuery extends ModelQuery {
       barcode: barcode ?? this.barcode,
       categories: categories ?? this.categories,
       availability: availability ?? this.availability,
+      archived: archived ?? this.archived,
+      stock: stock ?? this.stock,
       ordering: ordering ?? this.ordering,
     );
   }
@@ -81,6 +128,8 @@ class ProductQuery extends ModelQuery {
         other.barcode == barcode &&
         _sameCategoryIds(other.categories, categories) &&
         other.availability == availability &&
+        other.archived == archived &&
+        other.stock == stock &&
         other.ordering == ordering;
   }
 
@@ -90,6 +139,8 @@ class ProductQuery extends ModelQuery {
     barcode,
     Object.hashAll(categories.map((category) => category.id)),
     availability,
+    archived,
+    stock,
     ordering,
   );
 

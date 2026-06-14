@@ -16,6 +16,7 @@ enum AppNavigationDestination {
   categories,
   registerSessions,
   employees,
+  expenses,
   discounts,
   reports,
   activityLog,
@@ -45,6 +46,7 @@ AppCapability appNavigationDestinationCapability(
     AppNavigationDestination.registerSessions =>
       AppCapability.viewRegisterSessions,
     AppNavigationDestination.employees => AppCapability.viewEmployees,
+    AppNavigationDestination.expenses => AppCapability.viewExpenses,
     AppNavigationDestination.discounts => AppCapability.viewDiscountRules,
     AppNavigationDestination.reports => AppCapability.viewReports,
     AppNavigationDestination.activityLog => AppCapability.viewActivityLog,

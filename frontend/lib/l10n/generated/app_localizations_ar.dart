@@ -4393,6 +4393,38 @@ class AppLocalizationsAr extends AppLocalizations {
   String get inactiveStatus => 'متوقف';
 
   @override
+  String get archivedStatus => 'مؤرشف';
+
+  @override
+  String get archivedFilterLabel => 'المؤرشفة';
+
+  @override
+  String get archiveProductAction => 'أرشفة';
+
+  @override
+  String get restoreProductAction => 'استعادة';
+
+  @override
+  String get archiveProductConfirmTitle => 'أرشفة المنتج';
+
+  @override
+  String archiveProductConfirmMessage(String name) {
+    return 'سيتم إخفاء «$name» من نقطة البيع والمشتريات وقائمة المنتجات، مع إمكانية استعادته لاحقًا.';
+  }
+
+  @override
+  String get archiveProductSuccess => 'تمت أرشفة المنتج';
+
+  @override
+  String get archiveProductError => 'تعذرت أرشفة المنتج. حاول مرة أخرى.';
+
+  @override
+  String get restoreProductSuccess => 'تمت استعادة المنتج';
+
+  @override
+  String get restoreProductError => 'تعذرت استعادة المنتج. حاول مرة أخرى.';
+
+  @override
   String get productDetailsTitle => 'تفاصيل المنتج';
 
   @override
@@ -9069,4 +9101,224 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get weekdaySunday => 'الأحد';
+
+  @override
+  String get expensesTitle => 'المصروفات';
+
+  @override
+  String get expensesDrawerLabel => 'المصروفات';
+
+  @override
+  String get expensesRefreshTooltip => 'تحديث';
+
+  @override
+  String get expenseAddButton => 'إضافة مصروف';
+
+  @override
+  String get expensesLoadError => 'تعذّر تحميل المصروفات.';
+
+  @override
+  String get expensesEmptyMessage => 'لا توجد مصروفات في هذه الفترة.';
+
+  @override
+  String get expensesNoMatchingMessage => 'لا توجد بنود مطابقة للتصفية.';
+
+  @override
+  String get expensesPreviousMonth => 'الشهر السابق';
+
+  @override
+  String get expensesNextMonth => 'الشهر التالي';
+
+  @override
+  String expensesPeriodTotal(Object total) {
+    return 'الإجمالي: $total';
+  }
+
+  @override
+  String get expenseSourceAdHoc => 'مصروف';
+
+  @override
+  String get expenseSourceRegisterPayout => 'سحب نقدي';
+
+  @override
+  String get expenseSourcePurchase => 'مشتريات';
+
+  @override
+  String get expenseSourcePayroll => 'رواتب';
+
+  @override
+  String get expenseSourceCommission => 'عمولات';
+
+  @override
+  String get expenseSourceOther => 'أخرى';
+
+  @override
+  String get expensePaymentCash => 'نقدًا';
+
+  @override
+  String get expensePaymentCard => 'بطاقة';
+
+  @override
+  String get expensePaymentTransfer => 'تحويل';
+
+  @override
+  String get expenseLoadDetailsError => 'تعذّر تحميل تفاصيل المصروف.';
+
+  @override
+  String get expenseNeedsCategoryMessage =>
+      'أضِف فئة واحدة على الأقل قبل تسجيل مصروف.';
+
+  @override
+  String get expenseSaveError => 'تعذّر حفظ المصروف.';
+
+  @override
+  String get expenseDeleteTitle => 'حذف المصروف؟';
+
+  @override
+  String get expenseDeleteMessage => 'لا يمكن التراجع عن هذا الإجراء.';
+
+  @override
+  String get expenseDeleteError => 'تعذّر حذف المصروف.';
+
+  @override
+  String get expenseEditTitle => 'تعديل المصروف';
+
+  @override
+  String get expenseCategoryLabel => 'الفئة';
+
+  @override
+  String get expenseDescriptionLabel => 'الوصف';
+
+  @override
+  String get expenseAmountLabel => 'المبلغ';
+
+  @override
+  String get expensePaymentMethodLabel => 'طريقة الدفع';
+
+  @override
+  String get expenseDateLabel => 'التاريخ';
+
+  @override
+  String get expenseReferenceLabel => 'مرجع (اختياري)';
+
+  @override
+  String get expenseNotesLabel => 'ملاحظات (اختياري)';
+
+  @override
+  String get expensePayFromRegisterLabel => 'الدفع من الصندوق';
+
+  @override
+  String get expensePayFromRegisterHint =>
+      'يُسجَّل سحبًا نقديًا من الوردية المفتوحة إن وُجدت.';
+
+  @override
+  String get expenseCategoriesSectionTitle => 'فئات المصروفات';
+
+  @override
+  String get expenseCategoryAddButton => 'إضافة فئة';
+
+  @override
+  String get expenseCategoriesLoadError => 'تعذّر تحميل الفئات.';
+
+  @override
+  String get expenseCategoriesEmptyMessage => 'لا توجد فئات بعد.';
+
+  @override
+  String get expenseCategorySaveError => 'تعذّر حفظ الفئة.';
+
+  @override
+  String get expenseCategoryDeleteTitle => 'حذف الفئة؟';
+
+  @override
+  String get expenseCategoryDeleteMessage => 'لا يمكن حذف فئة مرتبطة بمصروفات.';
+
+  @override
+  String get expenseCategoryDeleteError => 'تعذّر حذف الفئة.';
+
+  @override
+  String get expenseCategoryInactiveBadge => 'غير مفعّلة';
+
+  @override
+  String get expenseCategoryNameLabel => 'اسم الفئة';
+
+  @override
+  String get expenseCategoryActiveLabel => 'مفعّلة';
+
+  @override
+  String get dashboardAdHocExpensesMetric => 'مصاريف عامة';
+
+  @override
+  String get jobAssignmentSection => 'الإسناد';
+
+  @override
+  String get jobAssignedEmployeeHint =>
+      'الموظف الذي تُحتسب له عمولة العمل على هذه المهمة.';
+
+  @override
+  String get jobAssignButton => 'إسناد';
+
+  @override
+  String get jobReassignButton => 'تغيير';
+
+  @override
+  String get jobAssignLoadError => 'تعذّر تحميل قائمة الموظفين.';
+
+  @override
+  String get jobAssignedMessage => 'تم تحديث الإسناد.';
+
+  @override
+  String get jobAssignSelectTitle => 'اختر الموظف';
+
+  @override
+  String get jobAssignNoEmployees => 'لا يوجد موظفون نشطون.';
+
+  @override
+  String get jobUnassignOption => 'إلغاء الإسناد';
+
+  @override
+  String get salaryTypeOperationsCommissionOnly => 'عمولة على الأعمال فقط';
+
+  @override
+  String get salaryTypeOperationsCommissionOnlyHelper =>
+      'تُحتسب نسبة على قيمة الأعمال (مثل الإصلاحات) التي أنجزها الموظف، بدون راتب ثابت.';
+
+  @override
+  String get salaryTypeMonthlyFixedPlusOperationsCommission =>
+      'راتب شهري + عمولة على الأعمال';
+
+  @override
+  String get salaryTypeMonthlyFixedPlusOperationsCommissionHelper =>
+      'راتب شهري ثابت بالإضافة إلى نسبة على قيمة الأعمال التي أنجزها الموظف.';
+
+  @override
+  String get operationsCommissionPercentField => 'نسبة العمولة على الأعمال';
+
+  @override
+  String get operationsCommissionPercentHelper =>
+      'نسبة مئوية من قيمة الأعمال المنجزة (السعر المعتمد) تُضاف إلى المسير.';
+
+  @override
+  String get operationsCommissionBaseField => 'أساس احتساب العمولة';
+
+  @override
+  String get operationsCommissionBaseApprovedPrice =>
+      'السعر المعتمد (قطع + أجور)';
+
+  @override
+  String get operationsCommissionBaseApprovedPriceHelper =>
+      'تُحتسب العمولة على كامل السعر المعتمد للمهمة.';
+
+  @override
+  String get operationsCommissionBaseLabor => 'الأجور فقط';
+
+  @override
+  String get operationsCommissionBaseLaborHelper =>
+      'تُحتسب العمولة على السعر المعتمد بعد خصم قيمة القطع المستهلكة.';
+
+  @override
+  String get operationsCommissionBaseOrderTotal => 'إجمالي الفاتورة';
+
+  @override
+  String get operationsCommissionBaseOrderTotalHelper =>
+      'تُحتسب العمولة على إجمالي فاتورة المهمة (للمهام التي صدرت لها فاتورة).';
 }

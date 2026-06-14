@@ -2451,6 +2451,51 @@
   "catalogLoadError": "تعذر تحميل المنتجات من الخادم.",
   "activeStatus": "متاح",
   "inactiveStatus": "متوقف",
+  "archivedStatus": "مؤرشف",
+  "@archivedStatus": {
+    "description": "Status pill text for an archived (retired) product."
+  },
+  "archivedFilterLabel": "المؤرشفة",
+  "@archivedFilterLabel": {
+    "description": "Toggle/chip label that switches the catalog list to show archived products."
+  },
+  "archiveProductAction": "أرشفة",
+  "@archiveProductAction": {
+    "description": "Label/tooltip for the action that archives a product."
+  },
+  "restoreProductAction": "استعادة",
+  "@restoreProductAction": {
+    "description": "Label/tooltip for the action that restores an archived product."
+  },
+  "archiveProductConfirmTitle": "أرشفة المنتج",
+  "@archiveProductConfirmTitle": {
+    "description": "Title of the confirmation dialog shown before archiving a product."
+  },
+  "archiveProductConfirmMessage": "سيتم إخفاء «{name}» من نقطة البيع والمشتريات وقائمة المنتجات، مع إمكانية استعادته لاحقًا.",
+  "@archiveProductConfirmMessage": {
+    "description": "Body of the confirmation dialog shown before archiving a product.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "archiveProductSuccess": "تمت أرشفة المنتج",
+  "@archiveProductSuccess": {
+    "description": "Snackbar confirmation shown after a product is archived."
+  },
+  "archiveProductError": "تعذرت أرشفة المنتج. حاول مرة أخرى.",
+  "@archiveProductError": {
+    "description": "Snackbar error shown when archiving a product fails."
+  },
+  "restoreProductSuccess": "تمت استعادة المنتج",
+  "@restoreProductSuccess": {
+    "description": "Snackbar confirmation shown after an archived product is restored."
+  },
+  "restoreProductError": "تعذرت استعادة المنتج. حاول مرة أخرى.",
+  "@restoreProductError": {
+    "description": "Snackbar error shown when restoring an archived product fails."
+  },
   "productDetailsTitle": "تفاصيل المنتج",
   "catalogSelectProductPlaceholder": "اختر منتجًا من القائمة لعرض تفاصيله.",
   "invoicesSelectInvoicePlaceholder": "اختر فاتورة من القائمة لعرض تفاصيلها.",
@@ -5512,5 +5557,74 @@
   "weekdayThursday": "الخميس",
   "weekdayFriday": "الجمعة",
   "weekdaySaturday": "السبت",
-  "weekdaySunday": "الأحد"
+  "weekdaySunday": "الأحد",
+  "expensesTitle": "المصروفات",
+  "expensesDrawerLabel": "المصروفات",
+  "expensesRefreshTooltip": "تحديث",
+  "expenseAddButton": "إضافة مصروف",
+  "expensesLoadError": "تعذّر تحميل المصروفات.",
+  "expensesEmptyMessage": "لا توجد مصروفات في هذه الفترة.",
+  "expensesNoMatchingMessage": "لا توجد بنود مطابقة للتصفية.",
+  "expensesPreviousMonth": "الشهر السابق",
+  "expensesNextMonth": "الشهر التالي",
+  "expensesPeriodTotal": "الإجمالي: {total}",
+  "expenseSourceAdHoc": "مصروف",
+  "expenseSourceRegisterPayout": "سحب نقدي",
+  "expenseSourcePurchase": "مشتريات",
+  "expenseSourcePayroll": "رواتب",
+  "expenseSourceCommission": "عمولات",
+  "expenseSourceOther": "أخرى",
+  "expensePaymentCash": "نقدًا",
+  "expensePaymentCard": "بطاقة",
+  "expensePaymentTransfer": "تحويل",
+  "expenseLoadDetailsError": "تعذّر تحميل تفاصيل المصروف.",
+  "expenseNeedsCategoryMessage": "أضِف فئة واحدة على الأقل قبل تسجيل مصروف.",
+  "expenseSaveError": "تعذّر حفظ المصروف.",
+  "expenseDeleteTitle": "حذف المصروف؟",
+  "expenseDeleteMessage": "لا يمكن التراجع عن هذا الإجراء.",
+  "expenseDeleteError": "تعذّر حذف المصروف.",
+  "expenseEditTitle": "تعديل المصروف",
+  "expenseCategoryLabel": "الفئة",
+  "expenseDescriptionLabel": "الوصف",
+  "expenseAmountLabel": "المبلغ",
+  "expensePaymentMethodLabel": "طريقة الدفع",
+  "expenseDateLabel": "التاريخ",
+  "expenseReferenceLabel": "مرجع (اختياري)",
+  "expenseNotesLabel": "ملاحظات (اختياري)",
+  "expensePayFromRegisterLabel": "الدفع من الصندوق",
+  "expensePayFromRegisterHint": "يُسجَّل سحبًا نقديًا من الوردية المفتوحة إن وُجدت.",
+  "expenseCategoriesSectionTitle": "فئات المصروفات",
+  "expenseCategoryAddButton": "إضافة فئة",
+  "expenseCategoriesLoadError": "تعذّر تحميل الفئات.",
+  "expenseCategoriesEmptyMessage": "لا توجد فئات بعد.",
+  "expenseCategorySaveError": "تعذّر حفظ الفئة.",
+  "expenseCategoryDeleteTitle": "حذف الفئة؟",
+  "expenseCategoryDeleteMessage": "لا يمكن حذف فئة مرتبطة بمصروفات.",
+  "expenseCategoryDeleteError": "تعذّر حذف الفئة.",
+  "expenseCategoryInactiveBadge": "غير مفعّلة",
+  "expenseCategoryNameLabel": "اسم الفئة",
+  "expenseCategoryActiveLabel": "مفعّلة",
+  "dashboardAdHocExpensesMetric": "مصاريف عامة",
+  "jobAssignmentSection": "الإسناد",
+  "jobAssignedEmployeeHint": "الموظف الذي تُحتسب له عمولة العمل على هذه المهمة.",
+  "jobAssignButton": "إسناد",
+  "jobReassignButton": "تغيير",
+  "jobAssignLoadError": "تعذّر تحميل قائمة الموظفين.",
+  "jobAssignedMessage": "تم تحديث الإسناد.",
+  "jobAssignSelectTitle": "اختر الموظف",
+  "jobAssignNoEmployees": "لا يوجد موظفون نشطون.",
+  "jobUnassignOption": "إلغاء الإسناد",
+  "salaryTypeOperationsCommissionOnly": "عمولة على الأعمال فقط",
+  "salaryTypeOperationsCommissionOnlyHelper": "تُحتسب نسبة على قيمة الأعمال (مثل الإصلاحات) التي أنجزها الموظف، بدون راتب ثابت.",
+  "salaryTypeMonthlyFixedPlusOperationsCommission": "راتب شهري + عمولة على الأعمال",
+  "salaryTypeMonthlyFixedPlusOperationsCommissionHelper": "راتب شهري ثابت بالإضافة إلى نسبة على قيمة الأعمال التي أنجزها الموظف.",
+  "operationsCommissionPercentField": "نسبة العمولة على الأعمال",
+  "operationsCommissionPercentHelper": "نسبة مئوية من قيمة الأعمال المنجزة (السعر المعتمد) تُضاف إلى المسير.",
+  "operationsCommissionBaseField": "أساس احتساب العمولة",
+  "operationsCommissionBaseApprovedPrice": "السعر المعتمد (قطع + أجور)",
+  "operationsCommissionBaseApprovedPriceHelper": "تُحتسب العمولة على كامل السعر المعتمد للمهمة.",
+  "operationsCommissionBaseLabor": "الأجور فقط",
+  "operationsCommissionBaseLaborHelper": "تُحتسب العمولة على السعر المعتمد بعد خصم قيمة القطع المستهلكة.",
+  "operationsCommissionBaseOrderTotal": "إجمالي الفاتورة",
+  "operationsCommissionBaseOrderTotalHelper": "تُحتسب العمولة على إجمالي فاتورة المهمة (للمهام التي صدرت لها فاتورة)."
 }

@@ -194,7 +194,8 @@ def draft_monthly_payroll_run(
                 amount=line_input["commission_amount"],
                 notes=(
                     f"{line_input['commission_percent']}% commission on "
-                    f"{line_input['sales_total']} sales"
+                    f"{line_input['commission_base']} "
+                    f"{'repairs' if line_input['commission_basis'] == 'operations' else 'sales'}"
                 ),
             )
         for loan_deduction in line_input["loan_deductions"]:
@@ -243,14 +244,27 @@ def _monthly_payroll_line_inputs(period_start, period_end):
         plan = _plan_for_period(employee, period_end)
         if plan is None:
             continue
-        sales_total = Decimal("0.00")
+        commission_base = Decimal("0.00")
         commission_percent = Decimal("0.00")
         commission_amount = Decimal("0.00")
+        commission_basis = ""
         if plan.uses_sales_commission:
-            sales_total = _commissionable_sales_total(employee, period_start, period_end)
+            commission_base = _commissionable_sales_total(
+                employee, period_start, period_end
+            )
+            commission_basis = "sales"
+        elif plan.uses_operations_commission:
+            commission_base = _commissionable_jobs_total(
+                employee,
+                period_start,
+                period_end,
+                plan.operations_commission_base,
+            )
+            commission_basis = "operations"
+        if commission_basis:
             commission_percent = Decimal(plan.commission_percent or "0.00")
             commission_amount = (
-                sales_total * commission_percent / Decimal("100")
+                commission_base * commission_percent / Decimal("100")
             ).quantize(MONEY_PLACES)
         units = (
             Decimal(plan.expected_units_per_period or "0.00")
@@ -268,7 +282,8 @@ def _monthly_payroll_line_inputs(period_start, period_end):
                 "plan": plan,
                 "units": units,
                 "gross_amount": gross_amount,
-                "sales_total": sales_total,
+                "commission_base": commission_base,
+                "commission_basis": commission_basis,
                 "commission_percent": commission_percent,
                 "commission_amount": commission_amount,
                 "loan_deductions": loan_deductions,
@@ -316,6 +331,53 @@ def _commissionable_sales_total(employee, period_start, period_end):
         created_at__date__gte=period_start,
         created_at__date__lte=period_end,
     ).aggregate(total=Sum("total"))["total"]
+    return (total or Decimal("0.00")).quantize(MONEY_PLACES)
+
+
+def _commissionable_jobs_total(employee, period_start, period_end, base):
+    """Total value of the repairs the employee completed in the period.
+
+    The valuation depends on the plan's ``operations_commission_base``:
+
+    - ``approved_price`` — the full price agreed with the customer (default);
+    - ``labor`` — that price minus the consumed parts (at their sale price), i.e.
+      the labor portion, available even before the job is invoiced;
+    - ``order_total`` — the total of the job's invoice (invoiced jobs only).
+    """
+    from apps.operations.models import Job
+
+    jobs = Job.objects.filter(
+        assigned_employee=employee,
+        status=Job.Status.COMPLETED,
+        completed_at__date__gte=period_start,
+        completed_at__date__lte=period_end,
+    )
+
+    if base == CompensationPlan.OperationsCommissionBase.ORDER_TOTAL:
+        total = jobs.filter(order__isnull=False).aggregate(
+            total=Sum("order__total"),
+        )["total"]
+        return (total or Decimal("0.00")).quantize(MONEY_PLACES)
+
+    jobs = jobs.filter(approved_price__isnull=False)
+
+    if base == CompensationPlan.OperationsCommissionBase.LABOR:
+        total = Decimal("0.00")
+        for job in jobs.prefetch_related("materials"):
+            parts = sum(
+                (
+                    material.unit_price * material.quantity
+                    for material in job.materials.all()
+                    if material.is_consumed
+                ),
+                Decimal("0.00"),
+            )
+            labor = job.approved_price - parts
+            if labor > Decimal("0.00"):
+                total += labor
+        return total.quantize(MONEY_PLACES)
+
+    total = jobs.aggregate(total=Sum("approved_price"))["total"]
     return (total or Decimal("0.00")).quantize(MONEY_PLACES)
 
 

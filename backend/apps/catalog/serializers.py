@@ -281,6 +281,7 @@ class ProductCatalogSummarySerializer(serializers.ModelSerializer):
     primary_image = serializers.SerializerMethodField()
     image_attachments = serializers.SerializerMethodField()
     modifier_group_details = serializers.SerializerMethodField()
+    is_archived = serializers.BooleanField(read_only=True)
 
     class Meta:
         model = Product
@@ -289,6 +290,8 @@ class ProductCatalogSummarySerializer(serializers.ModelSerializer):
             "name",
             "description",
             "is_active",
+            "is_archived",
+            "archived_at",
             "tracks_expiry",
             "is_service",
             "is_prepared",
@@ -303,7 +306,7 @@ class ProductCatalogSummarySerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ("created_at", "updated_at")
+        read_only_fields = ("created_at", "updated_at", "archived_at")
 
     def get_primary_image(self, product):
         return primary_attachment_summary(
@@ -613,6 +616,7 @@ class ProductCatalogSerializer(serializers.ModelSerializer):
     modifier_group_details = serializers.SerializerMethodField()
     primary_image = serializers.SerializerMethodField()
     image_attachments = serializers.SerializerMethodField()
+    is_archived = serializers.BooleanField(read_only=True)
 
     class Meta:
         model = Product
@@ -621,6 +625,8 @@ class ProductCatalogSerializer(serializers.ModelSerializer):
             "name",
             "description",
             "is_active",
+            "is_archived",
+            "archived_at",
             "tracks_expiry",
             "is_service",
             "is_prepared",
@@ -639,7 +645,7 @@ class ProductCatalogSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ("created_at", "updated_at")
+        read_only_fields = ("created_at", "updated_at", "archived_at")
 
     def get_quantity_on_hand(self, product):
         annotated_quantity = getattr(product, "stock_quantity_on_hand", None)

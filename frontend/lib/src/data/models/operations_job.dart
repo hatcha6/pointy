@@ -59,7 +59,11 @@ enum OperationsJobType {
 }
 
 class JobAssetLink {
-  const JobAssetLink({required this.id, required this.asset, this.assetDetails});
+  const JobAssetLink({
+    required this.id,
+    required this.asset,
+    this.assetDetails,
+  });
 
   final int id;
   final int asset;
@@ -70,7 +74,9 @@ class JobAssetLink {
       id: json['id'] as int,
       asset: _intFromJson(json['asset']),
       assetDetails: json['asset_details'] is Map<String, Object?>
-          ? CustomerAsset.fromJson(json['asset_details'] as Map<String, Object?>)
+          ? CustomerAsset.fromJson(
+              json['asset_details'] as Map<String, Object?>,
+            )
           : null,
     );
   }
@@ -177,6 +183,7 @@ class OperationsJob {
     required this.customerName,
     required this.customerPhone,
     required this.assignedToName,
+    required this.assignedEmployeeName,
     required this.priority,
     required this.symptoms,
     required this.diagnosis,
@@ -194,6 +201,7 @@ class OperationsJob {
     this.nextStage,
     this.customer,
     this.assignedTo,
+    this.assignedEmployee,
     this.dueAt,
     this.completedAt,
     this.cancelledAt,
@@ -223,6 +231,8 @@ class OperationsJob {
   final String customerPhone;
   final int? assignedTo;
   final String assignedToName;
+  final int? assignedEmployee;
+  final String assignedEmployeeName;
   final OperationsJobPriority priority;
   final DateTime? dueAt;
   final DateTime? completedAt;
@@ -278,6 +288,8 @@ class OperationsJob {
       customerPhone: json['customer_phone']?.toString() ?? '',
       assignedTo: _nullableIntFromJson(json['assigned_to']),
       assignedToName: json['assigned_to_name']?.toString() ?? '',
+      assignedEmployee: _nullableIntFromJson(json['assigned_employee']),
+      assignedEmployeeName: json['assigned_employee_name']?.toString() ?? '',
       priority: OperationsJobPriority.fromJson(json['priority']),
       dueAt: _dateTimeFromJson(json['due_at']),
       completedAt: _dateTimeFromJson(json['completed_at']),

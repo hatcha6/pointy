@@ -88,6 +88,7 @@ class CompensationPlanSerializer(serializers.ModelSerializer):
             "salary_type",
             "amount",
             "commission_percent",
+            "operations_commission_base",
             "overtime_multiplier",
             "standard_daily_hours",
             "currency",

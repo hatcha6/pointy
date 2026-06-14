@@ -206,6 +206,12 @@ class AppNavigationDrawer extends StatelessWidget {
         icon: Icons.query_stats_outlined,
         destinations: [
           _DrawerDestination(
+            destination: AppNavigationDestination.expenses,
+            icon: const Icon(Icons.receipt_long_outlined),
+            selectedIcon: const Icon(Icons.receipt_long),
+            label: l10n.expensesDrawerLabel,
+          ),
+          _DrawerDestination(
             destination: AppNavigationDestination.reports,
             icon: const Icon(Icons.summarize_outlined),
             selectedIcon: const Icon(Icons.summarize),

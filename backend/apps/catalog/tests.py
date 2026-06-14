@@ -1003,3 +1003,192 @@ class ProductApiTests(TestCase):
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("option_values", response.data)
+
+
+class ProductArchiveApiTests(TestCase):
+    def setUp(self):
+        ensure_role_groups()
+        self.client = APIClient()
+        self.user = get_user_model().objects.create_user(
+            username="archive-manager",
+            password="pass",
+        )
+        self.user.groups.add(Group.objects.get(name=MANAGER_GROUP))
+        self.client.force_authenticate(user=self.user)
+
+    def _make_product(self, *, sku, name, is_active=True):
+        return create_product_with_default_variant(
+            sku=sku,
+            name=name,
+            unit_price=Decimal("5.00"),
+            is_active=is_active,
+        )
+
+    def _result_ids(self, response):
+        return {row["id"] for row in response.data["results"]}
+
+    def test_archive_hides_product_from_default_list(self):
+        live = self._make_product(sku="LIVE", name="حالي")
+        archived = self._make_product(sku="OLD", name="قديم")
+
+        archive_response = self.client.post(
+            reverse("product-archive", args=[archived.pk])
+        )
+
+        self.assertEqual(archive_response.status_code, status.HTTP_200_OK)
+        self.assertTrue(archive_response.data["is_archived"])
+        self.assertIsNotNone(archive_response.data["archived_at"])
+
+        archived.refresh_from_db()
+        self.assertIsNotNone(archived.archived_at)
+        self.assertEqual(archived.archived_by, self.user)
+
+        list_response = self.client.get(reverse("product-list"))
+        self.assertEqual(self._result_ids(list_response), {live.id})
+
+    def test_archived_filter_returns_only_archived(self):
+        live = self._make_product(sku="LIVE", name="حالي")
+        archived = self._make_product(sku="OLD", name="قديم")
+        self.client.post(reverse("product-archive", args=[archived.pk]))
+
+        response = self.client.get(reverse("product-list"), {"archived": "true"})
+
+        self.assertEqual(self._result_ids(response), {archived.id})
+
+    def test_archived_product_excluded_from_pos_active_list(self):
+        archived = self._make_product(sku="OLD", name="قديم", is_active=True)
+        self.client.post(reverse("product-archive", args=[archived.pk]))
+
+        response = self.client.get(reverse("product-list"), {"is_active": "true"})
+
+        self.assertNotIn(archived.id, self._result_ids(response))
+
+    def test_archived_product_variants_excluded_from_variant_endpoint(self):
+        archived = self._make_product(sku="OLD", name="قديم")
+        self.client.post(reverse("product-archive", args=[archived.pk]))
+
+        response = self.client.get(reverse("product-variant-list"))
+
+        skus = {row["sku"] for row in response.data["results"]}
+        self.assertNotIn("OLD", skus)
+
+    def test_restore_brings_product_back_without_changing_is_active(self):
+        product = self._make_product(sku="OLD", name="قديم", is_active=True)
+        self.client.post(reverse("product-archive", args=[product.pk]))
+
+        restore_response = self.client.post(
+            reverse("product-restore", args=[product.pk])
+        )
+
+        self.assertEqual(restore_response.status_code, status.HTTP_200_OK)
+        self.assertFalse(restore_response.data["is_archived"])
+        product.refresh_from_db()
+        self.assertIsNone(product.archived_at)
+        self.assertIsNone(product.archived_by)
+        self.assertTrue(product.is_active)
+
+        list_response = self.client.get(reverse("product-list"))
+        self.assertIn(product.id, self._result_ids(list_response))
+
+    def test_delete_soft_archives_instead_of_removing(self):
+        product = self._make_product(sku="OLD", name="قديم")
+
+        response = self.client.delete(reverse("product-detail", args=[product.pk]))
+
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertTrue(Product.objects.filter(pk=product.pk).exists())
+        product.refresh_from_db()
+        self.assertIsNotNone(product.archived_at)
+
+    def test_cashier_cannot_archive(self):
+        product = self._make_product(sku="OLD", name="قديم")
+        cashier = get_user_model().objects.create_user(
+            username="archive-cashier",
+            password="pass",
+        )
+        cashier.groups.add(Group.objects.get(name=CASHIER_GROUP))
+        client = APIClient()
+        client.force_authenticate(user=cashier)
+
+        response = client.post(reverse("product-archive", args=[product.pk]))
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        product.refresh_from_db()
+        self.assertIsNone(product.archived_at)
+
+
+class ProductInStockFilterApiTests(TestCase):
+    def setUp(self):
+        ensure_role_groups()
+        self.client = APIClient()
+        self.user = get_user_model().objects.create_user(
+            username="instock-user",
+            password="pass",
+        )
+        self.user.groups.add(Group.objects.get(name=MANAGER_GROUP))
+        self.client.force_authenticate(user=self.user)
+
+    def _stocked_product(self, *, sku, name, quantity):
+        product = create_product_with_default_variant(
+            sku=sku,
+            name=name,
+            unit_price=Decimal("5.00"),
+        )
+        StockItem.objects.create(
+            variant=product.default_variant,
+            quantity_on_hand=Decimal(quantity),
+        )
+        return product
+
+    def _result_ids(self, response):
+        return {row["id"] for row in response.data["results"]}
+
+    def test_in_stock_hides_zero_quantity_products(self):
+        in_stock = self._stocked_product(sku="HAS", name="متوفر", quantity="5")
+        out_of_stock = self._stocked_product(sku="OUT", name="منتهٍ", quantity="0")
+
+        response = self.client.get(reverse("product-list"), {"in_stock": "true"})
+
+        ids = self._result_ids(response)
+        self.assertIn(in_stock.id, ids)
+        self.assertNotIn(out_of_stock.id, ids)
+
+    def test_in_stock_keeps_service_and_prepared_products(self):
+        service = create_product_with_default_variant(
+            sku="SVC", name="خدمة", unit_price=Decimal("5.00")
+        )
+        service.is_service = True
+        service.save(update_fields=["is_service"])
+        prepared = create_product_with_default_variant(
+            sku="DISH", name="طبق", unit_price=Decimal("5.00")
+        )
+        prepared.is_prepared = True
+        prepared.save(update_fields=["is_prepared"])
+        out_of_stock = self._stocked_product(sku="OUT", name="منتهٍ", quantity="0")
+
+        response = self.client.get(reverse("product-list"), {"in_stock": "true"})
+
+        ids = self._result_ids(response)
+        self.assertIn(service.id, ids)
+        self.assertIn(prepared.id, ids)
+        self.assertNotIn(out_of_stock.id, ids)
+
+    def test_without_in_stock_returns_zero_quantity_products(self):
+        out_of_stock = self._stocked_product(sku="OUT", name="منتهٍ", quantity="0")
+
+        response = self.client.get(reverse("product-list"))
+
+        self.assertIn(out_of_stock.id, self._result_ids(response))
+
+    def test_in_stock_combines_with_active_pos_filter(self):
+        in_stock = self._stocked_product(sku="HAS", name="متوفر", quantity="5")
+        out_of_stock = self._stocked_product(sku="OUT", name="منتهٍ", quantity="0")
+
+        response = self.client.get(
+            reverse("product-list"),
+            {"is_active": "true", "in_stock": "true"},
+        )
+
+        ids = self._result_ids(response)
+        self.assertIn(in_stock.id, ids)
+        self.assertNotIn(out_of_stock.id, ids)

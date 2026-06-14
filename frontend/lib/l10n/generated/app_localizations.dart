@@ -7773,6 +7773,66 @@ abstract class AppLocalizations {
   /// **'متوقف'**
   String get inactiveStatus;
 
+  /// Status pill text for an archived (retired) product.
+  ///
+  /// In ar, this message translates to:
+  /// **'مؤرشف'**
+  String get archivedStatus;
+
+  /// Toggle/chip label that switches the catalog list to show archived products.
+  ///
+  /// In ar, this message translates to:
+  /// **'المؤرشفة'**
+  String get archivedFilterLabel;
+
+  /// Label/tooltip for the action that archives a product.
+  ///
+  /// In ar, this message translates to:
+  /// **'أرشفة'**
+  String get archiveProductAction;
+
+  /// Label/tooltip for the action that restores an archived product.
+  ///
+  /// In ar, this message translates to:
+  /// **'استعادة'**
+  String get restoreProductAction;
+
+  /// Title of the confirmation dialog shown before archiving a product.
+  ///
+  /// In ar, this message translates to:
+  /// **'أرشفة المنتج'**
+  String get archiveProductConfirmTitle;
+
+  /// Body of the confirmation dialog shown before archiving a product.
+  ///
+  /// In ar, this message translates to:
+  /// **'سيتم إخفاء «{name}» من نقطة البيع والمشتريات وقائمة المنتجات، مع إمكانية استعادته لاحقًا.'**
+  String archiveProductConfirmMessage(String name);
+
+  /// Snackbar confirmation shown after a product is archived.
+  ///
+  /// In ar, this message translates to:
+  /// **'تمت أرشفة المنتج'**
+  String get archiveProductSuccess;
+
+  /// Snackbar error shown when archiving a product fails.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذرت أرشفة المنتج. حاول مرة أخرى.'**
+  String get archiveProductError;
+
+  /// Snackbar confirmation shown after an archived product is restored.
+  ///
+  /// In ar, this message translates to:
+  /// **'تمت استعادة المنتج'**
+  String get restoreProductSuccess;
+
+  /// Snackbar error shown when restoring an archived product fails.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذرت استعادة المنتج. حاول مرة أخرى.'**
+  String get restoreProductError;
+
   /// No description provided for @productDetailsTitle.
   ///
   /// In ar, this message translates to:
@@ -15629,6 +15689,420 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'الأحد'**
   String get weekdaySunday;
+
+  /// No description provided for @expensesTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'المصروفات'**
+  String get expensesTitle;
+
+  /// No description provided for @expensesDrawerLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'المصروفات'**
+  String get expensesDrawerLabel;
+
+  /// No description provided for @expensesRefreshTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحديث'**
+  String get expensesRefreshTooltip;
+
+  /// No description provided for @expenseAddButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'إضافة مصروف'**
+  String get expenseAddButton;
+
+  /// No description provided for @expensesLoadError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر تحميل المصروفات.'**
+  String get expensesLoadError;
+
+  /// No description provided for @expensesEmptyMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد مصروفات في هذه الفترة.'**
+  String get expensesEmptyMessage;
+
+  /// No description provided for @expensesNoMatchingMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد بنود مطابقة للتصفية.'**
+  String get expensesNoMatchingMessage;
+
+  /// No description provided for @expensesPreviousMonth.
+  ///
+  /// In ar, this message translates to:
+  /// **'الشهر السابق'**
+  String get expensesPreviousMonth;
+
+  /// No description provided for @expensesNextMonth.
+  ///
+  /// In ar, this message translates to:
+  /// **'الشهر التالي'**
+  String get expensesNextMonth;
+
+  /// No description provided for @expensesPeriodTotal.
+  ///
+  /// In ar, this message translates to:
+  /// **'الإجمالي: {total}'**
+  String expensesPeriodTotal(Object total);
+
+  /// No description provided for @expenseSourceAdHoc.
+  ///
+  /// In ar, this message translates to:
+  /// **'مصروف'**
+  String get expenseSourceAdHoc;
+
+  /// No description provided for @expenseSourceRegisterPayout.
+  ///
+  /// In ar, this message translates to:
+  /// **'سحب نقدي'**
+  String get expenseSourceRegisterPayout;
+
+  /// No description provided for @expenseSourcePurchase.
+  ///
+  /// In ar, this message translates to:
+  /// **'مشتريات'**
+  String get expenseSourcePurchase;
+
+  /// No description provided for @expenseSourcePayroll.
+  ///
+  /// In ar, this message translates to:
+  /// **'رواتب'**
+  String get expenseSourcePayroll;
+
+  /// No description provided for @expenseSourceCommission.
+  ///
+  /// In ar, this message translates to:
+  /// **'عمولات'**
+  String get expenseSourceCommission;
+
+  /// No description provided for @expenseSourceOther.
+  ///
+  /// In ar, this message translates to:
+  /// **'أخرى'**
+  String get expenseSourceOther;
+
+  /// No description provided for @expensePaymentCash.
+  ///
+  /// In ar, this message translates to:
+  /// **'نقدًا'**
+  String get expensePaymentCash;
+
+  /// No description provided for @expensePaymentCard.
+  ///
+  /// In ar, this message translates to:
+  /// **'بطاقة'**
+  String get expensePaymentCard;
+
+  /// No description provided for @expensePaymentTransfer.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحويل'**
+  String get expensePaymentTransfer;
+
+  /// No description provided for @expenseLoadDetailsError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر تحميل تفاصيل المصروف.'**
+  String get expenseLoadDetailsError;
+
+  /// No description provided for @expenseNeedsCategoryMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'أضِف فئة واحدة على الأقل قبل تسجيل مصروف.'**
+  String get expenseNeedsCategoryMessage;
+
+  /// No description provided for @expenseSaveError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر حفظ المصروف.'**
+  String get expenseSaveError;
+
+  /// No description provided for @expenseDeleteTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'حذف المصروف؟'**
+  String get expenseDeleteTitle;
+
+  /// No description provided for @expenseDeleteMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا يمكن التراجع عن هذا الإجراء.'**
+  String get expenseDeleteMessage;
+
+  /// No description provided for @expenseDeleteError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر حذف المصروف.'**
+  String get expenseDeleteError;
+
+  /// No description provided for @expenseEditTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعديل المصروف'**
+  String get expenseEditTitle;
+
+  /// No description provided for @expenseCategoryLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الفئة'**
+  String get expenseCategoryLabel;
+
+  /// No description provided for @expenseDescriptionLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الوصف'**
+  String get expenseDescriptionLabel;
+
+  /// No description provided for @expenseAmountLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'المبلغ'**
+  String get expenseAmountLabel;
+
+  /// No description provided for @expensePaymentMethodLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'طريقة الدفع'**
+  String get expensePaymentMethodLabel;
+
+  /// No description provided for @expenseDateLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'التاريخ'**
+  String get expenseDateLabel;
+
+  /// No description provided for @expenseReferenceLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'مرجع (اختياري)'**
+  String get expenseReferenceLabel;
+
+  /// No description provided for @expenseNotesLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'ملاحظات (اختياري)'**
+  String get expenseNotesLabel;
+
+  /// No description provided for @expensePayFromRegisterLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الدفع من الصندوق'**
+  String get expensePayFromRegisterLabel;
+
+  /// No description provided for @expensePayFromRegisterHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'يُسجَّل سحبًا نقديًا من الوردية المفتوحة إن وُجدت.'**
+  String get expensePayFromRegisterHint;
+
+  /// No description provided for @expenseCategoriesSectionTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'فئات المصروفات'**
+  String get expenseCategoriesSectionTitle;
+
+  /// No description provided for @expenseCategoryAddButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'إضافة فئة'**
+  String get expenseCategoryAddButton;
+
+  /// No description provided for @expenseCategoriesLoadError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر تحميل الفئات.'**
+  String get expenseCategoriesLoadError;
+
+  /// No description provided for @expenseCategoriesEmptyMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد فئات بعد.'**
+  String get expenseCategoriesEmptyMessage;
+
+  /// No description provided for @expenseCategorySaveError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر حفظ الفئة.'**
+  String get expenseCategorySaveError;
+
+  /// No description provided for @expenseCategoryDeleteTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'حذف الفئة؟'**
+  String get expenseCategoryDeleteTitle;
+
+  /// No description provided for @expenseCategoryDeleteMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا يمكن حذف فئة مرتبطة بمصروفات.'**
+  String get expenseCategoryDeleteMessage;
+
+  /// No description provided for @expenseCategoryDeleteError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر حذف الفئة.'**
+  String get expenseCategoryDeleteError;
+
+  /// No description provided for @expenseCategoryInactiveBadge.
+  ///
+  /// In ar, this message translates to:
+  /// **'غير مفعّلة'**
+  String get expenseCategoryInactiveBadge;
+
+  /// No description provided for @expenseCategoryNameLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'اسم الفئة'**
+  String get expenseCategoryNameLabel;
+
+  /// No description provided for @expenseCategoryActiveLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'مفعّلة'**
+  String get expenseCategoryActiveLabel;
+
+  /// No description provided for @dashboardAdHocExpensesMetric.
+  ///
+  /// In ar, this message translates to:
+  /// **'مصاريف عامة'**
+  String get dashboardAdHocExpensesMetric;
+
+  /// No description provided for @jobAssignmentSection.
+  ///
+  /// In ar, this message translates to:
+  /// **'الإسناد'**
+  String get jobAssignmentSection;
+
+  /// No description provided for @jobAssignedEmployeeHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'الموظف الذي تُحتسب له عمولة العمل على هذه المهمة.'**
+  String get jobAssignedEmployeeHint;
+
+  /// No description provided for @jobAssignButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'إسناد'**
+  String get jobAssignButton;
+
+  /// No description provided for @jobReassignButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'تغيير'**
+  String get jobReassignButton;
+
+  /// No description provided for @jobAssignLoadError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر تحميل قائمة الموظفين.'**
+  String get jobAssignLoadError;
+
+  /// No description provided for @jobAssignedMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم تحديث الإسناد.'**
+  String get jobAssignedMessage;
+
+  /// No description provided for @jobAssignSelectTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر الموظف'**
+  String get jobAssignSelectTitle;
+
+  /// No description provided for @jobAssignNoEmployees.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا يوجد موظفون نشطون.'**
+  String get jobAssignNoEmployees;
+
+  /// No description provided for @jobUnassignOption.
+  ///
+  /// In ar, this message translates to:
+  /// **'إلغاء الإسناد'**
+  String get jobUnassignOption;
+
+  /// No description provided for @salaryTypeOperationsCommissionOnly.
+  ///
+  /// In ar, this message translates to:
+  /// **'عمولة على الأعمال فقط'**
+  String get salaryTypeOperationsCommissionOnly;
+
+  /// No description provided for @salaryTypeOperationsCommissionOnlyHelper.
+  ///
+  /// In ar, this message translates to:
+  /// **'تُحتسب نسبة على قيمة الأعمال (مثل الإصلاحات) التي أنجزها الموظف، بدون راتب ثابت.'**
+  String get salaryTypeOperationsCommissionOnlyHelper;
+
+  /// No description provided for @salaryTypeMonthlyFixedPlusOperationsCommission.
+  ///
+  /// In ar, this message translates to:
+  /// **'راتب شهري + عمولة على الأعمال'**
+  String get salaryTypeMonthlyFixedPlusOperationsCommission;
+
+  /// No description provided for @salaryTypeMonthlyFixedPlusOperationsCommissionHelper.
+  ///
+  /// In ar, this message translates to:
+  /// **'راتب شهري ثابت بالإضافة إلى نسبة على قيمة الأعمال التي أنجزها الموظف.'**
+  String get salaryTypeMonthlyFixedPlusOperationsCommissionHelper;
+
+  /// No description provided for @operationsCommissionPercentField.
+  ///
+  /// In ar, this message translates to:
+  /// **'نسبة العمولة على الأعمال'**
+  String get operationsCommissionPercentField;
+
+  /// No description provided for @operationsCommissionPercentHelper.
+  ///
+  /// In ar, this message translates to:
+  /// **'نسبة مئوية من قيمة الأعمال المنجزة (السعر المعتمد) تُضاف إلى المسير.'**
+  String get operationsCommissionPercentHelper;
+
+  /// No description provided for @operationsCommissionBaseField.
+  ///
+  /// In ar, this message translates to:
+  /// **'أساس احتساب العمولة'**
+  String get operationsCommissionBaseField;
+
+  /// No description provided for @operationsCommissionBaseApprovedPrice.
+  ///
+  /// In ar, this message translates to:
+  /// **'السعر المعتمد (قطع + أجور)'**
+  String get operationsCommissionBaseApprovedPrice;
+
+  /// No description provided for @operationsCommissionBaseApprovedPriceHelper.
+  ///
+  /// In ar, this message translates to:
+  /// **'تُحتسب العمولة على كامل السعر المعتمد للمهمة.'**
+  String get operationsCommissionBaseApprovedPriceHelper;
+
+  /// No description provided for @operationsCommissionBaseLabor.
+  ///
+  /// In ar, this message translates to:
+  /// **'الأجور فقط'**
+  String get operationsCommissionBaseLabor;
+
+  /// No description provided for @operationsCommissionBaseLaborHelper.
+  ///
+  /// In ar, this message translates to:
+  /// **'تُحتسب العمولة على السعر المعتمد بعد خصم قيمة القطع المستهلكة.'**
+  String get operationsCommissionBaseLaborHelper;
+
+  /// No description provided for @operationsCommissionBaseOrderTotal.
+  ///
+  /// In ar, this message translates to:
+  /// **'إجمالي الفاتورة'**
+  String get operationsCommissionBaseOrderTotal;
+
+  /// No description provided for @operationsCommissionBaseOrderTotalHelper.
+  ///
+  /// In ar, this message translates to:
+  /// **'تُحتسب العمولة على إجمالي فاتورة المهمة (للمهام التي صدرت لها فاتورة).'**
+  String get operationsCommissionBaseOrderTotalHelper;
 }
 
 class _AppLocalizationsDelegate

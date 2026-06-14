@@ -28,6 +28,9 @@ import 'features/fraud/views/integrity_monitor_screen.dart';
 import 'features/device_settings/views/device_settings_screen.dart';
 import 'features/discounts/views/discount_management_screen.dart';
 import 'features/employees/views/employee_payroll_screen.dart';
+import 'features/expenses/view_models/expense_categories_view_model.dart';
+import 'features/expenses/view_models/expenses_view_model.dart';
+import 'features/expenses/views/expenses_screen.dart';
 import 'features/invoices/views/invoice_details_screen.dart';
 import 'features/invoices/views/invoice_list_screen.dart';
 import 'features/notifications/views/notification_center_host.dart';
@@ -195,6 +198,7 @@ class _AuthenticatedRoutes implements AppNavigation {
       AppNavigationDestination.registerSessions =>
         registerSessionsRouteBuilder,
       AppNavigationDestination.employees => employeePayrollRouteBuilder,
+      AppNavigationDestination.expenses => expensesRouteBuilder,
       AppNavigationDestination.discounts => discountsRouteBuilder,
       AppNavigationDestination.reports => reportsRouteBuilder,
       AppNavigationDestination.activityLog => activityLogRouteBuilder,
@@ -275,6 +279,7 @@ class _AuthenticatedRoutes implements AppNavigation {
               currentUser: currentUser,
               catalogRepository: dependencies.catalogRepository,
               operationsRepository: dependencies.operationsRepository,
+              employeeRepository: dependencies.employeeRepository,
             ),
           );
         },
@@ -405,6 +410,24 @@ class _AuthenticatedRoutes implements AppNavigation {
         viewModel: dependencies.employeePayrollViewModel,
         attendanceViewModel: dependencies.attendanceViewModel,
         userRepository: dependencies.userRepository,
+        capabilities: capabilities,
+        navigation: this,
+      ),
+    );
+  }
+
+  Widget expensesRouteBuilder(BuildContext routeContext) {
+    return _screen(
+      'expenses',
+      ExpensesScreen(
+        viewModel: ExpensesViewModel(
+          dependencies.expenseRepository,
+          analyticsEngine: dependencies.analyticsEngine,
+        ),
+        categoriesViewModel: ExpenseCategoriesViewModel(
+          dependencies.expenseRepository,
+          analyticsEngine: dependencies.analyticsEngine,
+        ),
         capabilities: capabilities,
         navigation: this,
       ),

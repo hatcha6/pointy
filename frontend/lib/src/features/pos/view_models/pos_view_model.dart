@@ -173,6 +173,10 @@ class PosViewModel extends ChangeNotifier {
   Future<void>? _registerSessionLoadFuture;
   ProductQuery _query = const ProductQuery(
     availability: ProductAvailabilityFilter.active,
+    // Overselling is disabled by default, so start by hiding out-of-stock
+    // products; this is reconciled against the real shop setting once the
+    // checkout settings load.
+    stock: ProductStockFilter.inStockOnly,
   );
 
   _PosSaleSession get _activeSaleSession {
@@ -288,6 +292,12 @@ class PosViewModel extends ChangeNotifier {
   ProductQuery get query => _query;
   bool get requireOpeningCash => _checkoutSettings?.requireOpeningCash ?? true;
   bool get allowOverselling => _checkoutSettings?.allowOverselling ?? false;
+
+  /// When overselling is disabled the POS catalog hides out-of-stock products
+  /// so cashiers can't see or sell them.
+  ProductStockFilter get _catalogStockFilter => allowOverselling
+      ? ProductStockFilter.all
+      : ProductStockFilter.inStockOnly;
   bool get preventSellingAtLoss =>
       _checkoutSettings?.preventSellingAtLoss ?? true;
   bool get shouldShowPrintInvoiceCheckbox =>
@@ -359,6 +369,10 @@ class PosViewModel extends ChangeNotifier {
 
     _isLoadingCheckoutSettings = false;
     _notifyChanged();
+
+    // The overselling setting decides whether out-of-stock products are hidden
+    // from the catalog; reconcile the active query now that it is known.
+    await syncCatalogStockVisibility();
   }
 
   Future<Uint8List?> _loadShopLogoBytes(ShopSettings? settings) async {

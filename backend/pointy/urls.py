@@ -32,6 +32,11 @@ from apps.operations.views import (
     WorkflowTemplateViewSet,
 )
 from apps.discounts.views import DiscountRuleViewSet
+from apps.expenses.views import (
+    ExpenseCategoryViewSet,
+    ExpenseLedgerView,
+    ExpenseViewSet,
+)
 from apps.employees.views import (
     CompensationPlanViewSet,
     EmployeeViewSet,
@@ -110,6 +115,8 @@ router.register("orders", OrderViewSet)
 router.register("fraud-findings", FraudFindingViewSet, basename="fraud-finding")
 router.register("customers", CustomerViewSet)
 router.register("discount-rules", DiscountRuleViewSet)
+router.register("expense-categories", ExpenseCategoryViewSet)
+router.register("expenses", ExpenseViewSet)
 router.register("suppliers", SupplierViewSet)
 router.register("supplier-payments", SupplierPaymentViewSet)
 router.register("purchase-orders", PurchaseOrderViewSet)
@@ -170,6 +177,11 @@ urlpatterns = [
         name="auth-password-change",
     ),
     path("api/dashboard/", DashboardView.as_view(), name="dashboard"),
+    path(
+        "api/expense-ledger/",
+        ExpenseLedgerView.as_view(),
+        name="expense-ledger",
+    ),
     path(
         "api/discovery/service/",
         DiscoveryServiceView.as_view(),

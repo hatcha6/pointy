@@ -966,6 +966,12 @@ class _ProfitSection extends StatelessWidget {
                   value: '− ${formatMoney(summary.paymentCommissionTotal)}',
                   color: colors.danger,
                 ),
+                if (summary.adHocExpenseTotal > 0)
+                  _ProfitRow(
+                    label: l10n.dashboardAdHocExpensesMetric,
+                    value: '− ${formatMoney(summary.adHocExpenseTotal)}',
+                    color: colors.danger,
+                  ),
                 Divider(height: spacing.lg, color: colors.line),
                 _ProfitRow(
                   label: l10n.dashboardNetOperatingProfitMetric,

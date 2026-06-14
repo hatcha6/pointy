@@ -18,6 +18,7 @@ from apps.analytics.services import record_domain_event
 from apps.catalog.models import Product
 from apps.core.roles import user_is_manager
 from apps.employees.models import Employee, PayrollLine, PayrollRun
+from apps.expenses.models import Expense
 from apps.inventory.models import StockItem, StockMovement
 from apps.payments.models import Payment
 from apps.purchasing.models import PurchaseOrder, Supplier, SupplierPayment
@@ -1101,7 +1102,17 @@ def _profit_costs_report(user, period):
             )
         )["total"]
     )
-    operating_expense = payroll_paid + payment_commissions
+    ad_hoc_expenses = Expense.objects.filter(
+        spent_at__gte=period["start_date"],
+        spent_at__lte=period["end_date"],
+    ).aggregate(
+        total=Coalesce(
+            Sum("amount"),
+            Value(Decimal("0.00")),
+            output_field=MONEY_FIELD,
+        )
+    )["total"]
+    operating_expense = payroll_paid + payment_commissions + ad_hoc_expenses
     net_operating_profit = gross_profit - operating_expense
 
     return {
@@ -1109,6 +1120,7 @@ def _profit_costs_report(user, period):
             "gross_profit": _money(gross_profit),
             "payroll_paid_total": _money(payroll_paid),
             "payment_commission_total": _money(payment_commissions),
+            "ad_hoc_expense_total": _money(ad_hoc_expenses),
             "purchase_spend_total": _money(purchase_spend),
             "operating_expense_total": _money(operating_expense),
             "net_operating_profit": _money(net_operating_profit),
@@ -1119,6 +1131,7 @@ def _profit_costs_report(user, period):
                     ("gross_profit", _money(gross_profit)),
                     ("payroll_paid_total", _money(payroll_paid)),
                     ("payment_commission_total", _money(payment_commissions)),
+                    ("ad_hoc_expense_total", _money(ad_hoc_expenses)),
                     ("purchase_spend_total", _money(purchase_spend)),
                     ("operating_expense_total", _money(operating_expense)),
                     ("net_operating_profit", _money(net_operating_profit)),
@@ -1135,6 +1148,10 @@ def _profit_costs_report(user, period):
                     {
                         "cost_item": "payment_commission_total",
                         "amount": _money(payment_commissions),
+                    },
+                    {
+                        "cost_item": "ad_hoc_expense_total",
+                        "amount": _money(ad_hoc_expenses),
                     },
                     {
                         "cost_item": "purchase_spend_total",

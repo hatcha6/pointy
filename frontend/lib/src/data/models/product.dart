@@ -11,6 +11,8 @@ class Product {
     required this.quantityOnHand,
     this.description = '',
     this.isActive = true,
+    this.isArchived = false,
+    this.archivedAt,
     this.tracksExpiry = false,
     this.isService = false,
     this.isPrepared = false,
@@ -29,6 +31,8 @@ class Product {
   final double quantityOnHand;
   final String description;
   final bool isActive;
+  final bool isArchived;
+  final DateTime? archivedAt;
   final bool tracksExpiry;
   final bool isService;
   final bool isPrepared;
@@ -100,6 +104,8 @@ class Product {
       ),
       description: (json['description'] as String?) ?? '',
       isActive: (json['is_active'] as bool?) ?? true,
+      isArchived: (json['is_archived'] as bool?) ?? false,
+      archivedAt: _dateTimeFromJson(json['archived_at']),
       tracksExpiry: (json['tracks_expiry'] as bool?) ?? false,
       isService: (json['is_service'] as bool?) ?? false,
       isPrepared: (json['is_prepared'] as bool?) ?? false,
@@ -141,6 +147,8 @@ class Product {
     ProductVariant? defaultVariant,
     List<ProductVariant>? variants,
     bool? tracksExpiry,
+    bool? isArchived,
+    DateTime? archivedAt,
   }) {
     final nextDefaultVariant =
         defaultVariant ??
@@ -153,6 +161,8 @@ class Product {
       quantityOnHand: quantityOnHand ?? this.quantityOnHand,
       description: description,
       isActive: isActive,
+      isArchived: isArchived ?? this.isArchived,
+      archivedAt: archivedAt ?? this.archivedAt,
       tracksExpiry: tracksExpiry ?? this.tracksExpiry,
       categories: categories,
       variantOptions: variantOptions,
@@ -261,4 +271,11 @@ double _stockQtyFromJson(Object? value) {
     return value.toDouble();
   }
   return double.tryParse((value ?? 0).toString()) ?? 0;
+}
+
+DateTime? _dateTimeFromJson(Object? value) {
+  if (value is String && value.isNotEmpty) {
+    return DateTime.tryParse(value);
+  }
+  return null;
 }

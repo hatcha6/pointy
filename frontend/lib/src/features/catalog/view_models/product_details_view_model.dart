@@ -141,6 +141,56 @@ class ProductDetailsViewModel extends ChangeNotifier {
     }
   }
 
+  Future<bool> archiveProduct() => _setArchived(archived: true);
+
+  Future<bool> restoreProduct() => _setArchived(archived: false);
+
+  Future<bool> _setArchived({required bool archived}) async {
+    if (_isSavingProduct) {
+      return false;
+    }
+
+    _isSavingProduct = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    final result = archived
+        ? await _catalogRepository.archiveProduct(_product.id)
+        : await _catalogRepository.restoreProduct(_product.id);
+    switch (result) {
+      case Ok<Product>():
+        _product = result.value;
+        _trackArchiveChange(result.value, archived: archived);
+        _isSavingProduct = false;
+        notifyListeners();
+        return true;
+      case Error<Product>():
+        _errorMessage = archived
+            ? 'product_archive_error'
+            : 'product_restore_error';
+        _isSavingProduct = false;
+        notifyListeners();
+        return false;
+    }
+  }
+
+  void _trackArchiveChange(Product product, {required bool archived}) {
+    trackAuditEvent(
+      _analyticsEngine,
+      name: archived
+          ? 'catalog.product.archived'
+          : 'catalog.product.restored',
+      entityType: 'product',
+      entityId: product.id,
+      attributes: {
+        'product_id': product.id,
+        'product_name': product.name,
+        'is_active': product.isActive,
+        'source': 'catalog_product_details',
+      },
+    );
+  }
+
   Future<bool> createVariant(ProductVariantDraft draft) async {
     if (_isSavingVariant) {
       return false;

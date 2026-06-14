@@ -5,6 +5,7 @@ from django.db import IntegrityError, transaction
 from django.db.models import Q
 
 from apps.catalog.variant_option_defaults import DEFAULT_VARIANT_OPTIONS
+from apps.expenses.category_defaults import DEFAULT_EXPENSE_CATEGORY_NAMES
 
 MANAGER_GROUP = "manager"
 CASHIER_GROUP = "cashier"
@@ -52,6 +53,7 @@ MANAGER_PERMISSION_DOMAINS = (
     "attachments",
     "employees",
     "attendance",
+    "expenses",
 )
 USER_PERMISSION_CODES = (
     "auth.add_user",
@@ -83,6 +85,7 @@ CASHIER_PERMISSION_CODES = (
     "operations.add_job",
     "operations.change_job",
     "operations.view_job",
+    "operations.assign_job",
     "operations.add_jobasset",
     "operations.view_jobasset",
     "operations.view_jobmaterial",
@@ -146,6 +149,15 @@ ACCOUNTANT_PERMISSION_CODES = (
     "reports.view_reportrun",
     "sales.view_order",
     "sales.view_registersession",
+    "sales.view_registercashmovement",
+    "expenses.add_expense",
+    "expenses.change_expense",
+    "expenses.delete_expense",
+    "expenses.view_expense",
+    "expenses.add_expensecategory",
+    "expenses.change_expensecategory",
+    "expenses.delete_expensecategory",
+    "expenses.view_expensecategory",
     "attendance.view_biotimeconnection",
     "attendance.change_biotimeconnection",
     "attendance.view_attendanceprofile",
@@ -230,6 +242,9 @@ def _model_has_initial_setup_blocking_data(model, model_label):
     if model_label == ("operations", "workflowtemplate"):
         # Seeded default workflows are configuration, not shop activity.
         return queryset.filter(is_system=False).exists()
+    if model_label == ("expenses", "expensecategory"):
+        # Seeded default expense categories are configuration, not activity.
+        return queryset.exclude(name__in=DEFAULT_EXPENSE_CATEGORY_NAMES).exists()
     if model_label == ("operations", "workflowstage"):
         return queryset.filter(template__is_system=False).exists()
     if model_label == ("catalog", "variantoption"):

@@ -1743,6 +1743,7 @@ void main() {
     expect(find.text('الموظفون والرواتب'), findsOneWidget);
 
     await _expandNavigationDrawerGroup(tester, 'التقارير والمراجعة');
+    expect(find.text('المصروفات'), findsOneWidget);
     expect(find.text('التقارير'), findsOneWidget);
     expect(find.text('سجل النشاط'), findsOneWidget);
 
@@ -4016,10 +4017,19 @@ Future<void> _expandNavigationDrawerGroup(
   WidgetTester tester,
   String label,
 ) async {
-  final group = find.descendant(
-    of: find.byType(NavigationDrawer),
-    matching: find.text(label),
-  );
+  final drawer = find.byType(NavigationDrawer);
+  final group = find.descendant(of: drawer, matching: find.text(label));
+  if (group.evaluate().isEmpty) {
+    // The drawer scrolls; a group lower than the viewport is not yet built.
+    await tester.scrollUntilVisible(
+      group,
+      150,
+      scrollable: find
+          .descendant(of: drawer, matching: find.byType(Scrollable))
+          .first,
+    );
+    await tester.pumpAndSettle();
+  }
   expect(group, findsWidgets);
   await tester.ensureVisible(group.first);
   await tester.pumpAndSettle();

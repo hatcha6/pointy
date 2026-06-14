@@ -96,6 +96,17 @@ class OperationsApiClient {
     );
   }
 
+  Future<OperationsJob> assignJob(int jobId, int? employeeId) async {
+    final response = await _session.post(
+      'jobs/$jobId/assign/',
+      body: {'employee_id': employeeId},
+    );
+    _session.ensureSuccess(response, 'Job assign failed with status');
+    return OperationsJob.fromJson(
+      _session.decodedBody(response) as Map<String, Object?>,
+    );
+  }
+
   Future<OperationsJob> addJobMaterial(
     int jobId, {
     required int variant,
@@ -105,7 +116,11 @@ class OperationsApiClient {
   }) async {
     final response = await _session.post(
       'jobs/$jobId/materials/',
-      body: {'variant': variant, 'quantity': quantity, 'consume_now': consumeNow},
+      body: {
+        'variant': variant,
+        'quantity': quantity,
+        'consume_now': consumeNow,
+      },
       idempotencyKey: idempotencyKey,
     );
     _session.ensureSuccess(response, 'Job material add failed with status');
@@ -189,7 +204,10 @@ class OperationsApiClient {
 
   Future<CustomerAsset> createCustomerAsset(CustomerAssetDraft draft) async {
     final response = await _session.post('assets/', body: draft.toJson());
-    _session.ensureSuccess(response, 'Customer asset create failed with status');
+    _session.ensureSuccess(
+      response,
+      'Customer asset create failed with status',
+    );
     return CustomerAsset.fromJson(
       _session.decodedBody(response) as Map<String, Object?>,
     );
@@ -203,7 +221,10 @@ class OperationsApiClient {
       'assets/$assetId/',
       body: draft.toJson(),
     );
-    _session.ensureSuccess(response, 'Customer asset update failed with status');
+    _session.ensureSuccess(
+      response,
+      'Customer asset update failed with status',
+    );
     return CustomerAsset.fromJson(
       _session.decodedBody(response) as Map<String, Object?>,
     );
@@ -261,10 +282,7 @@ class OperationsApiClient {
   Future<BillOfMaterialsPage> fetchBoms({bool? isActive, int page = 1}) async {
     final response = await _session.get(
       'boms/',
-      query: {
-        if (isActive != null) 'is_active': '$isActive',
-        'page': '$page',
-      },
+      query: {if (isActive != null) 'is_active': '$isActive', 'page': '$page'},
     );
     _session.ensureSuccess(response, 'BOM list request failed with status');
     return BillOfMaterialsPage.fromJson(

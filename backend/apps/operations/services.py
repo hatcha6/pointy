@@ -85,6 +85,38 @@ def create_job(*, workflow_template, request=None, **fields):
     return job
 
 
+@transaction.atomic
+def assign_job(*, job, employee, request=None):
+    """Credit a job's work to an employee (drives operations-commission pay).
+
+    ``assigned_to`` (the system user) is kept in sync so the "assigned to me"
+    board keeps working when the employee has a login, but assignment also works
+    for technicians who never sign in. Pass ``employee=None`` to unassign.
+    """
+    if job.status == Job.Status.CANCELLED:
+        raise serializers.ValidationError(
+            {"job": "Cannot assign a cancelled job."}
+        )
+    job.assigned_employee = employee
+    job.assigned_to = employee.user if employee is not None else None
+    job.save(update_fields=["assigned_employee", "assigned_to", "updated_at"])
+    record_domain_event(
+        name="operations.job.assigned",
+        event_type=AnalyticsEvent.EventType.AUDIT,
+        user=request_user(request),
+        entity_type="operations_job",
+        entity_id=job.pk,
+        attributes={
+            "job_number": job.job_number,
+            "assigned_employee_id": employee.pk if employee is not None else None,
+            "assigned_employee_name": (
+                employee.display_name if employee is not None else ""
+            ),
+        },
+    )
+    return job
+
+
 def _validate_transition(job, to_stage, user):
     if job.is_locked:
         raise serializers.ValidationError(

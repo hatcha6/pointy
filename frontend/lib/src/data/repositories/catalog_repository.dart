@@ -51,6 +51,14 @@ class CatalogRepository {
     return Result.guard(() => _service.fetchProduct(id));
   }
 
+  Future<Result<Product>> archiveProduct(int id) async {
+    return Result.guard(() => _service.archiveProduct(id));
+  }
+
+  Future<Result<Product>> restoreProduct(int id) async {
+    return Result.guard(() => _service.restoreProduct(id));
+  }
+
   Future<Result<AttachmentSummary>> uploadProductImage({
     required int productId,
     required ProductImageUpload upload,

@@ -71,6 +71,22 @@ class CatalogApiClient {
     );
   }
 
+  Future<Product> archiveProduct(int id) async {
+    final response = await _session.post('products/$id/archive/');
+    _session.ensureSuccess(response, 'Product archive failed with status');
+    return Product.fromJson(
+      _session.decodedBody(response) as Map<String, Object?>,
+    );
+  }
+
+  Future<Product> restoreProduct(int id) async {
+    final response = await _session.post('products/$id/restore/');
+    _session.ensureSuccess(response, 'Product restore failed with status');
+    return Product.fromJson(
+      _session.decodedBody(response) as Map<String, Object?>,
+    );
+  }
+
   Future<AttachmentSummary> uploadProductImage({
     required int productId,
     required ProductImageUpload upload,

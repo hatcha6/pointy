@@ -47,6 +47,10 @@ String salaryTypeLabel(AppLocalizations l10n, SalaryType type) {
     SalaryType.salesCommissionOnly => l10n.salaryTypeSalesCommissionOnly,
     SalaryType.monthlyFixedPlusSalesCommission =>
       l10n.salaryTypeMonthlyFixedPlusSalesCommission,
+    SalaryType.operationsCommissionOnly =>
+      l10n.salaryTypeOperationsCommissionOnly,
+    SalaryType.monthlyFixedPlusOperationsCommission =>
+      l10n.salaryTypeMonthlyFixedPlusOperationsCommission,
     SalaryType.contractFixed => l10n.salaryTypeContractFixed,
     SalaryType.customFixed => l10n.salaryTypeCustomFixed,
   };
@@ -62,6 +66,10 @@ String salaryTypeHelper(AppLocalizations l10n, SalaryType type) {
     SalaryType.salesCommissionOnly => l10n.salaryTypeSalesCommissionOnlyHelper,
     SalaryType.monthlyFixedPlusSalesCommission =>
       l10n.salaryTypeMonthlyFixedPlusSalesCommissionHelper,
+    SalaryType.operationsCommissionOnly =>
+      l10n.salaryTypeOperationsCommissionOnlyHelper,
+    SalaryType.monthlyFixedPlusOperationsCommission =>
+      l10n.salaryTypeMonthlyFixedPlusOperationsCommissionHelper,
     SalaryType.contractFixed => l10n.salaryTypeContractFixedHelper,
     SalaryType.customFixed => l10n.salaryTypeCustomFixedHelper,
   };
@@ -75,9 +83,12 @@ String amountFieldLabel(AppLocalizations l10n, SalaryType type) {
     SalaryType.hourlyRate => l10n.hourlyRateField,
     SalaryType.perShift => l10n.shiftRateField,
     SalaryType.monthlyFixedPlusSalesCommission => l10n.monthlyBaseSalaryField,
+    SalaryType.monthlyFixedPlusOperationsCommission =>
+      l10n.monthlyBaseSalaryField,
     SalaryType.contractFixed => l10n.contractAmountField,
     SalaryType.customFixed => l10n.customAmountField,
     SalaryType.salesCommissionOnly => l10n.compensationAmountField,
+    SalaryType.operationsCommissionOnly => l10n.compensationAmountField,
   };
 }
 
@@ -85,6 +96,8 @@ String amountFieldHelper(AppLocalizations l10n, SalaryType type) {
   return switch (type) {
     SalaryType.monthlyFixed => l10n.monthlyBaseSalaryHelper,
     SalaryType.monthlyFixedPlusSalesCommission => l10n.monthlyBaseSalaryHelper,
+    SalaryType.monthlyFixedPlusOperationsCommission =>
+      l10n.monthlyBaseSalaryHelper,
     _ => salaryTypeHelper(l10n, type),
   };
 }
@@ -201,19 +214,21 @@ String compensationPlanLabel(AppLocalizations l10n, CompensationPlan plan) {
         formatMoney(plan.amount),
         plan.expectedUnitsPerPeriod.toStringAsFixed(2),
       ),
-      SalaryType.salesCommissionOnly => l10n.employeeCommissionOnlyPlanLabel(
-        plan.commissionPercent.toStringAsFixed(2),
-      ),
-      SalaryType.monthlyFixedPlusSalesCommission =>
+      SalaryType.salesCommissionOnly || SalaryType.operationsCommissionOnly =>
+        l10n.employeeCommissionOnlyPlanLabel(
+          plan.commissionPercent.toStringAsFixed(2),
+        ),
+      SalaryType.monthlyFixedPlusSalesCommission ||
+      SalaryType.monthlyFixedPlusOperationsCommission =>
         l10n.employeeMonthlyFixedPlusCommissionPlanLabel(
           formatMoney(plan.amount),
           plan.commissionPercent.toStringAsFixed(2),
         ),
-      SalaryType.contractFixed || SalaryType.customFixed => l10n
-          .employeePayPlanLabel(
-            salaryTypeLabel(l10n, salaryType),
-            formatMoney(plan.amount),
-          ),
+      SalaryType.contractFixed ||
+      SalaryType.customFixed => l10n.employeePayPlanLabel(
+        salaryTypeLabel(l10n, salaryType),
+        formatMoney(plan.amount),
+      ),
     };
   }
   final baseLabel = l10n.employeePayPlanLabel(
@@ -310,5 +325,31 @@ String payrollAdjustmentTypeLabel(AppLocalizations l10n, String type) {
     'absence' => l10n.payrollAdjustmentAbsence,
     'penalty' => l10n.payrollAdjustmentPenalty,
     _ => l10n.payrollAdjustmentOther,
+  };
+}
+
+String operationsCommissionBaseLabel(
+  AppLocalizations l10n,
+  OperationsCommissionBase base,
+) {
+  return switch (base) {
+    OperationsCommissionBase.approvedPrice =>
+      l10n.operationsCommissionBaseApprovedPrice,
+    OperationsCommissionBase.labor => l10n.operationsCommissionBaseLabor,
+    OperationsCommissionBase.orderTotal =>
+      l10n.operationsCommissionBaseOrderTotal,
+  };
+}
+
+String operationsCommissionBaseHelper(
+  AppLocalizations l10n,
+  OperationsCommissionBase base,
+) {
+  return switch (base) {
+    OperationsCommissionBase.approvedPrice =>
+      l10n.operationsCommissionBaseApprovedPriceHelper,
+    OperationsCommissionBase.labor => l10n.operationsCommissionBaseLaborHelper,
+    OperationsCommissionBase.orderTotal =>
+      l10n.operationsCommissionBaseOrderTotalHelper,
   };
 }

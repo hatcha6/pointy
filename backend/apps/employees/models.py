@@ -139,8 +139,24 @@ class CompensationPlan(TimeStampedModel):
             "monthly_fixed_plus_sales_commission",
             "Monthly fixed plus sales commission",
         )
+        # Operations commission pays a percentage of the value of the jobs
+        # (repairs) the employee completed in the period, not their sales.
+        OPERATIONS_COMMISSION_ONLY = (
+            "operations_commission_only",
+            "Operations commission only",
+        )
+        MONTHLY_FIXED_PLUS_OPERATIONS_COMMISSION = (
+            "monthly_fixed_plus_operations_commission",
+            "Monthly fixed plus operations commission",
+        )
         CONTRACT_FIXED = "contract_fixed", "Contract fixed"
         CUSTOM_FIXED = "custom_fixed", "Custom fixed"
+
+    class OperationsCommissionBase(models.TextChoices):
+        # What the operations-commission percentage is applied to.
+        APPROVED_PRICE = "approved_price", "Approved repair price"
+        LABOR = "labor", "Labor only"
+        ORDER_TOTAL = "order_total", "Invoiced order total"
 
     employee = models.ForeignKey(
         Employee,
@@ -168,6 +184,13 @@ class CompensationPlan(TimeStampedModel):
             MinValueValidator(Decimal("0.00")),
             MaxValueValidator(Decimal("100.00")),
         ],
+    )
+    # Only used by operations-commission plans: the value the percentage applies
+    # to (the full approved price, labor only, or the invoiced order total).
+    operations_commission_base = models.CharField(
+        max_length=24,
+        choices=OperationsCommissionBase.choices,
+        default=OperationsCommissionBase.APPROVED_PRICE,
     )
     currency = models.CharField(max_length=8, default="LYD")
     expected_units_per_period = models.DecimalField(
@@ -234,6 +257,7 @@ class CompensationPlan(TimeStampedModel):
         return self.resolved_salary_type in {
             self.SalaryType.MONTHLY_FIXED,
             self.SalaryType.MONTHLY_FIXED_PLUS_SALES_COMMISSION,
+            self.SalaryType.MONTHLY_FIXED_PLUS_OPERATIONS_COMMISSION,
             self.SalaryType.CONTRACT_FIXED,
             self.SalaryType.CUSTOM_FIXED,
         }
@@ -255,6 +279,13 @@ class CompensationPlan(TimeStampedModel):
         }
 
     @property
+    def uses_operations_commission(self):
+        return self.resolved_salary_type in {
+            self.SalaryType.OPERATIONS_COMMISSION_ONLY,
+            self.SalaryType.MONTHLY_FIXED_PLUS_OPERATIONS_COMMISSION,
+        }
+
+    @property
     def is_automatic_monthly_salary(self):
         return self.resolved_salary_type in {
             *self.SalaryType.values,
@@ -271,14 +302,20 @@ class CompensationPlan(TimeStampedModel):
         amount = Decimal(self.amount or "0.00")
         commission_percent = Decimal(self.commission_percent or "0.00")
         errors = {}
-        if salary_type == self.SalaryType.SALES_COMMISSION_ONLY:
+        if salary_type in {
+            self.SalaryType.SALES_COMMISSION_ONLY,
+            self.SalaryType.OPERATIONS_COMMISSION_ONLY,
+        }:
             if amount != Decimal("0.00"):
                 errors["amount"] = "Commission-only salary must use a zero fixed amount."
             if commission_percent <= Decimal("0.00"):
                 errors["commission_percent"] = (
                     "Commission-only salary requires a commission percentage greater than zero."
                 )
-        elif salary_type == self.SalaryType.MONTHLY_FIXED_PLUS_SALES_COMMISSION:
+        elif salary_type in {
+            self.SalaryType.MONTHLY_FIXED_PLUS_SALES_COMMISSION,
+            self.SalaryType.MONTHLY_FIXED_PLUS_OPERATIONS_COMMISSION,
+        }:
             if amount <= Decimal("0.00"):
                 errors["amount"] = (
                     "Monthly fixed plus commission salary requires an amount greater than zero."
@@ -303,7 +340,10 @@ class CompensationPlan(TimeStampedModel):
 
     def amount_for_units(self, units):
         units = Decimal(units or "0.00")
-        if self.resolved_salary_type == self.SalaryType.SALES_COMMISSION_ONLY:
+        if self.resolved_salary_type in {
+            self.SalaryType.SALES_COMMISSION_ONLY,
+            self.SalaryType.OPERATIONS_COMMISSION_ONLY,
+        }:
             return Decimal("0.00").quantize(self.MONEY_PLACES)
         if self.has_fixed_monthly_amount:
             return self.amount.quantize(self.MONEY_PLACES)

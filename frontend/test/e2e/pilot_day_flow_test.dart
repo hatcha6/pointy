@@ -164,6 +164,8 @@ Future<void> _openDrawerDestination(WidgetTester tester, String label) async {
     await _expandNavigationGroups(tester, destination);
   }
   expect(destination(), findsWidgets);
+  await tester.ensureVisible(destination().last);
+  await tester.pumpAndSettle();
   await tester.tap(destination().last);
   await tester.pumpAndSettle(const Duration(seconds: 1));
 }

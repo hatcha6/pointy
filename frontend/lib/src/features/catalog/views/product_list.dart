@@ -91,6 +91,16 @@ class ProductList extends StatelessWidget {
             canCreateProduct: capabilities.canCreateProduct,
             onCreateProduct: onCreateProduct,
           ),
+          if (capabilities.canChangeProduct) ...[
+            SizedBox(height: spacing.sm),
+            Align(
+              alignment: AlignmentDirectional.centerStart,
+              child: _ArchivedFilterChip(
+                isViewingArchived: viewModel.isViewingArchived,
+                onChanged: viewModel.setViewingArchived,
+              ),
+            ),
+          ],
           SizedBox(height: spacing.md),
           Expanded(
             child: PointyProductTable(
@@ -125,6 +135,27 @@ class ProductList extends StatelessWidget {
       capabilities: capabilities,
       analyticsEngine: analyticsEngine,
       onChanged: viewModel.loadProducts,
+    );
+  }
+}
+
+class _ArchivedFilterChip extends StatelessWidget {
+  const _ArchivedFilterChip({
+    required this.isViewingArchived,
+    required this.onChanged,
+  });
+
+  final bool isViewingArchived;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    return FilterChip(
+      avatar: const Icon(Icons.archive_outlined, size: 18),
+      label: Text(l10n.archivedFilterLabel),
+      selected: isViewingArchived,
+      onSelected: onChanged,
     );
   }
 }

@@ -2,7 +2,7 @@ import django_filters
 from django.core.cache import cache
 from decimal import Decimal
 
-from django.db.models import DecimalField, Count, Sum, Value
+from django.db.models import DecimalField, Count, Q, Sum, Value
 from django.db.models.functions import Coalesce
 from rest_framework import parsers, status, viewsets
 from rest_framework.decorators import action
@@ -137,6 +137,8 @@ class ProductViewSet(viewsets.ModelViewSet):
         "update": ("catalog.change_product",),
         "partial_update": ("catalog.change_product",),
         "destroy": ("catalog.delete_product",),
+        "archive": ("catalog.delete_product",),
+        "restore": ("catalog.change_product",),
         "image_search": ("catalog.view_product",),
         "image_import": ("catalog.change_product", "attachments.add_attachment"),
     }
@@ -178,6 +180,8 @@ class ProductViewSet(viewsets.ModelViewSet):
         queryset = self._with_variant_rollups(super().get_queryset())
         queryset = self._filter_by_category(queryset)
         queryset = self._filter_by_barcode(queryset)
+        queryset = self._filter_by_archived(queryset)
+        queryset = self._filter_by_stock(queryset)
         queryset = queryset.order_by("name", "id")
         if self.request.query_params.get("is_active") == "true":
             if self._has_selective_list_filter():
@@ -191,6 +195,7 @@ class ProductViewSet(viewsets.ModelViewSet):
                     Product.objects.filter(
                         is_active=True,
                         variants__is_active=True,
+                        archived_at__isnull=True,
                     )
                     .distinct()
                     .values_list("id", flat=True)
@@ -198,6 +203,36 @@ class ProductViewSet(viewsets.ModelViewSet):
                 self._set_active_product_ids(product_ids)
             return queryset.filter(id__in=product_ids)
         return queryset
+
+    def _filter_by_archived(self, queryset):
+        # Archived products are hidden from the catalog list (and therefore POS
+        # and search) by default. The dedicated "Archived" view passes
+        # ?archived=true; ?archived=all opts out of the filter entirely. Only
+        # the list action is scoped — detail/retrieve/restore must still reach
+        # archived rows.
+        if self.action != "list":
+            return queryset
+        archived = self.request.query_params.get("archived")
+        if archived == "all":
+            return queryset
+        if archived in ("true", "1", "only"):
+            return queryset.filter(archived_at__isnull=False)
+        return queryset.filter(archived_at__isnull=True)
+
+    def _filter_by_stock(self, queryset):
+        # POS passes ?in_stock=true when overselling is disabled so cashiers
+        # never see (or accidentally sell) products that are out of stock.
+        # Service products (labor/fees) and made-to-order (prepared) dishes
+        # carry no stock of their own — the checkout stock guard skips them too
+        # (see apps.sales.services.prepare_sale_stock_adjustments) — so they
+        # always remain visible regardless of their rolled-up quantity.
+        if self.request.query_params.get("in_stock") != "true":
+            return queryset
+        return queryset.filter(
+            Q(is_service=True)
+            | Q(is_prepared=True)
+            | Q(stock_quantity_on_hand__gt=0)
+        )
 
     def _filter_by_category(self, queryset):
         category_ids = self._requested_category_ids()
@@ -395,6 +430,27 @@ class ProductViewSet(viewsets.ModelViewSet):
         self._clear_catalog_cache()
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
+    @action(detail=True, methods=["post"])
+    def archive(self, request, pk=None):
+        product = self.get_object()
+        product.archive(by=request.user)
+        self._clear_catalog_cache()
+        return Response(self.get_serializer(product).data)
+
+    @action(detail=True, methods=["post"])
+    def restore(self, request, pk=None):
+        product = self.get_object()
+        product.restore()
+        self._clear_catalog_cache()
+        return Response(self.get_serializer(product).data)
+
+    def perform_destroy(self, instance):
+        # Soft-delete: archive instead of removing the row so sales/purchase
+        # history (PurchaseLine.variant is on_delete=PROTECT) is preserved and
+        # the product stays restorable.
+        instance.archive(by=self.request.user)
+        self._clear_catalog_cache()
+
     def _clear_catalog_cache(self):
         try:
             cache.delete(self.active_cache_key)
@@ -435,6 +491,11 @@ class ProductVariantViewSet(viewsets.ModelViewSet):
     filterset_class = ProductVariantFilter
     search_fields = ("sku", "barcode", "name", "product__name")
     ordering_fields = ("product__name", "name", "sku", "unit_price", "created_at")
+
+    def get_queryset(self):
+        # Variants of archived products never appear in the purchasing picker
+        # (or anywhere this endpoint feeds).
+        return super().get_queryset().filter(product__archived_at__isnull=True)
 
     def perform_create(self, serializer):
         variant = serializer.save()

@@ -18,6 +18,7 @@ from apps.core.roles import (
     pointy_domain_data_exists,
 )
 from apps.customers.models import Asset, Customer
+from apps.employees.models import Employee
 from apps.inventory.models import StockItem
 from apps.sales.models import Order, RegisterSession
 from apps.sales.services import latest_sale_unit_cost
@@ -874,3 +875,103 @@ class RecipeMadeToOrderApiTests(OperationsTestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
         self.dish.refresh_from_db()
         self.assertFalse(self.dish.is_prepared)
+
+
+class AssignJobTests(OperationsTestCase):
+    def setUp(self):
+        super().setUp()
+        # An employee who also has a system login, and one who does not.
+        self.linked_employee = Employee.objects.create(
+            full_name="فني الإصلاح",
+            user=self.technician,
+        )
+        self.unlinked_employee = Employee.objects.create(full_name="فني بدون حساب")
+
+    def _new_job(self):
+        return Job.objects.get(pk=self.create_repair_job()["id"])
+
+    def test_manager_assigns_employee_and_syncs_user(self):
+        job = self._new_job()
+        response = authenticated_client(self.manager).post(
+            reverse("job-assign", args=[job.pk]),
+            {"employee_id": self.linked_employee.pk},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.assertEqual(response.data["assigned_employee"], self.linked_employee.pk)
+        self.assertEqual(response.data["assigned_employee_name"], "فني الإصلاح")
+        job.refresh_from_db()
+        self.assertEqual(job.assigned_employee_id, self.linked_employee.pk)
+        # The login is stamped so the "assigned to me" board keeps working.
+        self.assertEqual(job.assigned_to_id, self.technician.pk)
+
+    def test_assigning_unlinked_employee_clears_user(self):
+        job = self._new_job()
+        client = authenticated_client(self.manager)
+        client.post(
+            reverse("job-assign", args=[job.pk]),
+            {"employee_id": self.linked_employee.pk},
+            format="json",
+        )
+        client.post(
+            reverse("job-assign", args=[job.pk]),
+            {"employee_id": self.unlinked_employee.pk},
+            format="json",
+        )
+        job.refresh_from_db()
+        self.assertEqual(job.assigned_employee_id, self.unlinked_employee.pk)
+        self.assertIsNone(job.assigned_to_id)
+
+    def test_assign_null_unassigns(self):
+        job = self._new_job()
+        client = authenticated_client(self.manager)
+        client.post(
+            reverse("job-assign", args=[job.pk]),
+            {"employee_id": self.linked_employee.pk},
+            format="json",
+        )
+        client.post(
+            reverse("job-assign", args=[job.pk]),
+            {"employee_id": None},
+            format="json",
+        )
+        job.refresh_from_db()
+        self.assertIsNone(job.assigned_employee_id)
+        self.assertIsNone(job.assigned_to_id)
+
+    def test_technician_cannot_assign(self):
+        job = self._new_job()
+        response = authenticated_client(self.technician).post(
+            reverse("job-assign", args=[job.pk]),
+            {"employee_id": self.linked_employee.pk},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_cannot_assign_cancelled_job(self):
+        job = self._new_job()
+        client = authenticated_client(self.manager)
+        client.post(reverse("job-cancel", args=[job.pk]), {}, format="json")
+        response = client.post(
+            reverse("job-assign", args=[job.pk]),
+            {"employee_id": self.linked_employee.pk},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_create_job_assigned_to_employee(self):
+        response = authenticated_client(self.manager).post(
+            reverse("job-list"),
+            {
+                "workflow_template": repair_template().pk,
+                "customer": self.customer.pk,
+                "asset_ids": [self.asset.pk],
+                "symptoms": "بطارية",
+                "assigned_employee_id": self.linked_employee.pk,
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        job = Job.objects.get(pk=response.data["id"])
+        self.assertEqual(job.assigned_employee_id, self.linked_employee.pk)
+        self.assertEqual(job.assigned_to_id, self.technician.pk)

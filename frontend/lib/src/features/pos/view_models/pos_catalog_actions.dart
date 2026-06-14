@@ -136,11 +136,23 @@ extension PosCatalogActions on PosViewModel {
     final activeQuery = query.copyWith(
       search: query.search.trim(),
       availability: ProductAvailabilityFilter.active,
+      stock: _catalogStockFilter,
     );
     if (activeQuery == _query) {
       return;
     }
     _query = activeQuery;
+    await _loadCatalogForCurrentQuery(queryChanged: true);
+  }
+
+  /// Aligns the catalog's in-stock filter with the overselling setting and
+  /// reloads if it changed. Called once the checkout settings load (or change).
+  Future<void> syncCatalogStockVisibility() async {
+    final desired = _catalogStockFilter;
+    if (_query.stock == desired) {
+      return;
+    }
+    _query = _query.copyWith(stock: desired);
     await _loadCatalogForCurrentQuery(queryChanged: true);
   }
 

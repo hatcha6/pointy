@@ -217,6 +217,8 @@ class _CompensationPlanFormState extends State<CompensationPlanForm> {
   final _dailyHoursController = TextEditingController(text: '8.00');
   final _notesController = TextEditingController();
   SalaryType _salaryType = SalaryType.monthlyFixed;
+  OperationsCommissionBase _operationsCommissionBase =
+      OperationsCommissionBase.approvedPrice;
   bool _submitted = false;
 
   @override
@@ -302,8 +304,12 @@ class _CompensationPlanFormState extends State<CompensationPlanForm> {
           TextField(
             controller: _commissionController,
             decoration: InputDecoration(
-              labelText: l10n.salesCommissionPercentField,
-              helperText: l10n.salesCommissionPercentHelper,
+              labelText: _usesOperationsCommission
+                  ? l10n.operationsCommissionPercentField
+                  : l10n.salesCommissionPercentField,
+              helperText: _usesOperationsCommission
+                  ? l10n.operationsCommissionPercentHelper
+                  : l10n.salesCommissionPercentHelper,
               errorText: _submitted && !_hasPositiveValue(_commissionController)
                   ? l10n.commissionRequiredError
                   : null,
@@ -312,11 +318,34 @@ class _CompensationPlanFormState extends State<CompensationPlanForm> {
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
             inputFormatters: [DecimalTextInputFormatter()],
           ),
-        if (_requiresCommission && !widget.employee.hasSystemAccess)
+        if (_usesSalesCommission && !widget.employee.hasSystemAccess)
           PointyInlineMessage(
             message: l10n.salesCommissionNeedsLinkedUserWarning,
             icon: Icons.link_off_outlined,
             compact: true,
+          ),
+        if (_usesOperationsCommission)
+          DropdownButtonFormField<OperationsCommissionBase>(
+            initialValue: _operationsCommissionBase,
+            decoration: InputDecoration(
+              labelText: l10n.operationsCommissionBaseField,
+              helperText: operationsCommissionBaseHelper(
+                l10n,
+                _operationsCommissionBase,
+              ),
+            ),
+            items: OperationsCommissionBase.values
+                .map(
+                  (base) => DropdownMenuItem(
+                    value: base,
+                    child: Text(operationsCommissionBaseLabel(l10n, base)),
+                  ),
+                )
+                .toList(),
+            onChanged: (base) => setState(
+              () => _operationsCommissionBase =
+                  base ?? OperationsCommissionBase.approvedPrice,
+            ),
           ),
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -393,6 +422,9 @@ class _CompensationPlanFormState extends State<CompensationPlanForm> {
         commissionPercent: _requiresCommission
             ? _commissionController.text.trim()
             : '0.00',
+        operationsCommissionBase: _usesOperationsCommission
+            ? _operationsCommissionBase
+            : OperationsCommissionBase.approvedPrice,
         overtimeMultiplier: _overtimeMultiplierController.text.trim().isEmpty
             ? '1.50'
             : _overtimeMultiplierController.text.trim(),
@@ -411,12 +443,24 @@ class _CompensationPlanFormState extends State<CompensationPlanForm> {
   }
 
   bool get _requiresBaseSalary {
-    return _salaryType != SalaryType.salesCommissionOnly;
+    return _salaryType != SalaryType.salesCommissionOnly &&
+        _salaryType != SalaryType.operationsCommissionOnly;
   }
 
   bool get _requiresCommission {
+    return _usesSalesCommission || _usesOperationsCommission;
+  }
+
+  bool get _usesSalesCommission {
     return _salaryType == SalaryType.salesCommissionOnly ||
         _salaryType == SalaryType.monthlyFixedPlusSalesCommission;
+  }
+
+  // Operations commission pays a percentage of the repairs the employee
+  // completed; unlike sales commission it does not need a linked login.
+  bool get _usesOperationsCommission {
+    return _salaryType == SalaryType.operationsCommissionOnly ||
+        _salaryType == SalaryType.monthlyFixedPlusOperationsCommission;
   }
 
   bool get _requiresExpectedUnits {

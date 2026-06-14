@@ -5,6 +5,7 @@ from rest_framework import serializers
 
 from apps.catalog.models import BillOfMaterials, BomLine, ProductVariant
 from apps.customers.models import Asset, Customer
+from apps.employees.models import Employee
 from .models import (
     Job,
     JobAsset,
@@ -216,6 +217,11 @@ class JobSerializer(serializers.ModelSerializer):
         source="assigned_to.username",
         read_only=True,
     )
+    assigned_employee_name = serializers.CharField(
+        source="assigned_employee.display_name",
+        read_only=True,
+        default="",
+    )
     current_stage_details = WorkflowStageSerializer(
         source="current_stage",
         read_only=True,
@@ -254,6 +260,8 @@ class JobSerializer(serializers.ModelSerializer):
             "customer_phone",
             "assigned_to",
             "assigned_to_name",
+            "assigned_employee",
+            "assigned_employee_name",
             "priority",
             "due_at",
             "completed_at",
@@ -288,6 +296,7 @@ class JobSerializer(serializers.ModelSerializer):
             "workflow_template",
             "current_stage",
             "status",
+            "assigned_employee",
             "completed_at",
             "cancelled_at",
             "bom",
@@ -341,6 +350,12 @@ class JobCreateSerializer(serializers.Serializer):
         required=False,
     )
     assigned_to_id = serializers.IntegerField(required=False, allow_null=True)
+    assigned_employee_id = serializers.PrimaryKeyRelatedField(
+        source="assigned_employee",
+        queryset=Employee.objects.all(),
+        required=False,
+        allow_null=True,
+    )
     priority = serializers.ChoiceField(
         choices=Job.Priority.choices,
         default=Job.Priority.NORMAL,
@@ -378,6 +393,14 @@ class JobCreateSerializer(serializers.Serializer):
                     {"asset_ids": "Assets must belong to the job's customer."}
                 )
         return attrs
+
+
+class JobAssignSerializer(serializers.Serializer):
+    employee_id = serializers.PrimaryKeyRelatedField(
+        source="employee",
+        queryset=Employee.objects.all(),
+        allow_null=True,
+    )
 
 
 class JobTransitionSerializer(serializers.Serializer):

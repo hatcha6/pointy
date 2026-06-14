@@ -5,6 +5,7 @@ from decimal import Decimal
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.core.paginator import UnorderedObjectListWarning
 from django.test import TestCase
 from django.urls import reverse
@@ -1013,3 +1014,236 @@ class EmployeePayrollApiTests(TestCase):
         )
         self.assertEqual(cashier_response.status_code, status.HTTP_200_OK)
         self.assertNotIn("payroll", cashier_response.data["sections"])
+
+
+class OperationsCommissionPayrollTests(TestCase):
+    def setUp(self):
+        ensure_role_groups()
+
+    def _completed_repair_job(
+        self,
+        *,
+        employee,
+        approved_price,
+        completed_at=None,
+        job_status=None,
+    ):
+        from apps.operations.models import Job, WorkflowTemplate
+
+        template = WorkflowTemplate.objects.get(job_type="repair", is_system=True)
+        stage = template.stages.order_by("display_order").first()
+        job = Job.objects.create(
+            job_type="repair",
+            workflow_template=template,
+            current_stage=stage,
+            status=job_status or Job.Status.COMPLETED,
+            assigned_employee=employee,
+            approved_price=approved_price,
+        )
+        if completed_at is not None:
+            Job.objects.filter(pk=job.pk).update(completed_at=completed_at)
+        return job
+
+    def test_draft_pays_operations_commission_on_completed_repairs(self):
+        from apps.operations.models import Job
+
+        employee = Employee.objects.create(full_name="فني عمولة")
+        CompensationPlan.objects.create(
+            employee=employee,
+            pay_type=CompensationPlan.PayType.MONTHLY_SALARY,
+            salary_type=(
+                CompensationPlan.SalaryType.MONTHLY_FIXED_PLUS_OPERATIONS_COMMISSION
+            ),
+            amount=Decimal("500.00"),
+            commission_percent=Decimal("20.00"),
+        )
+        other = Employee.objects.create(full_name="فني آخر")
+        today = timezone.localdate()
+        period_start = today.replace(day=1)
+        in_period = timezone.now()
+        before_period = timezone.make_aware(
+            datetime(period_start.year, period_start.month, 1)
+        ) - timedelta(days=2)
+
+        # Counted: two completed repairs assigned to the employee, in period.
+        self._completed_repair_job(
+            employee=employee, approved_price=Decimal("100.00"), completed_at=in_period
+        )
+        self._completed_repair_job(
+            employee=employee, approved_price=Decimal("150.00"), completed_at=in_period
+        )
+        # Excluded: another employee's repair.
+        self._completed_repair_job(
+            employee=other, approved_price=Decimal("999.00"), completed_at=in_period
+        )
+        # Excluded: not yet completed.
+        self._completed_repair_job(
+            employee=employee,
+            approved_price=Decimal("80.00"),
+            completed_at=in_period,
+            job_status=Job.Status.OPEN,
+        )
+        # Excluded: completed but never priced.
+        self._completed_repair_job(
+            employee=employee, approved_price=None, completed_at=in_period
+        )
+        # Excluded: completed before the period.
+        self._completed_repair_job(
+            employee=employee,
+            approved_price=Decimal("300.00"),
+            completed_at=before_period,
+        )
+
+        payroll, created = draft_monthly_payroll_run(
+            period_start=period_start, period_end=today
+        )
+
+        self.assertTrue(created)
+        line = payroll.lines.get(employee=employee)
+        self.assertEqual(line.gross_amount, Decimal("500.00"))
+        # (100 + 150) * 20% = 50
+        self.assertEqual(line.additions_amount, Decimal("50.00"))
+        self.assertEqual(line.net_amount, Decimal("550.00"))
+        adjustment = line.adjustments.get()
+        self.assertEqual(
+            adjustment.adjustment_type, PayrollAdjustment.AdjustmentType.COMMISSION
+        )
+        self.assertEqual(adjustment.amount, Decimal("50.00"))
+        self.assertIn("repairs", adjustment.notes)
+
+    def test_draft_pays_operations_commission_only_plan(self):
+        employee = Employee.objects.create(full_name="فني بالعمولة فقط")
+        CompensationPlan.objects.create(
+            employee=employee,
+            pay_type=CompensationPlan.PayType.COMMISSION,
+            salary_type=CompensationPlan.SalaryType.OPERATIONS_COMMISSION_ONLY,
+            amount=Decimal("0.00"),
+            commission_percent=Decimal("10.00"),
+        )
+        self._completed_repair_job(
+            employee=employee,
+            approved_price=Decimal("300.00"),
+            completed_at=timezone.now(),
+        )
+        today = timezone.localdate()
+
+        payroll, _ = draft_monthly_payroll_run(
+            period_start=today.replace(day=1), period_end=today
+        )
+
+        line = payroll.lines.get(employee=employee)
+        self.assertEqual(line.gross_amount, Decimal("0.00"))
+        self.assertEqual(line.additions_amount, Decimal("30.00"))
+        self.assertEqual(line.net_amount, Decimal("30.00"))
+
+    def test_operations_commission_labor_base_excludes_parts(self):
+        from apps.operations.models import JobMaterial
+
+        employee = Employee.objects.create(full_name="فني الأجور")
+        CompensationPlan.objects.create(
+            employee=employee,
+            pay_type=CompensationPlan.PayType.COMMISSION,
+            salary_type=CompensationPlan.SalaryType.OPERATIONS_COMMISSION_ONLY,
+            amount=Decimal("0.00"),
+            commission_percent=Decimal("10.00"),
+            operations_commission_base=(
+                CompensationPlan.OperationsCommissionBase.LABOR
+            ),
+        )
+        job = self._completed_repair_job(
+            employee=employee,
+            approved_price=Decimal("200.00"),
+            completed_at=timezone.now(),
+        )
+        variant = create_product_with_default_variant(
+            sku="PART-X",
+            name="قطعة غيار",
+            unit_price=Decimal("40.00"),
+        ).default_variant
+        # Consumed part worth 80 (40 x 2); labor = 200 - 80 = 120.
+        JobMaterial.objects.create(
+            job=job,
+            variant=variant,
+            quantity=Decimal("2.000"),
+            unit_price=Decimal("40.00"),
+            unit_cost=Decimal("20.00"),
+            consumed_at=timezone.now(),
+        )
+        today = timezone.localdate()
+
+        payroll, _ = draft_monthly_payroll_run(
+            period_start=today.replace(day=1), period_end=today
+        )
+
+        line = payroll.lines.get(employee=employee)
+        # 120 * 10% = 12
+        self.assertEqual(line.additions_amount, Decimal("12.00"))
+        self.assertEqual(line.net_amount, Decimal("12.00"))
+
+    def test_operations_commission_order_total_base_uses_invoice(self):
+        from apps.operations.models import Job
+
+        employee = Employee.objects.create(full_name="فني الفاتورة")
+        CompensationPlan.objects.create(
+            employee=employee,
+            pay_type=CompensationPlan.PayType.COMMISSION,
+            salary_type=CompensationPlan.SalaryType.OPERATIONS_COMMISSION_ONLY,
+            amount=Decimal("0.00"),
+            commission_percent=Decimal("5.00"),
+            operations_commission_base=(
+                CompensationPlan.OperationsCommissionBase.ORDER_TOTAL
+            ),
+        )
+        invoiced = self._completed_repair_job(
+            employee=employee,
+            approved_price=Decimal("200.00"),
+            completed_at=timezone.now(),
+        )
+        order = Order.objects.create(
+            status=Order.Status.PAID,
+            subtotal=Decimal("300.00"),
+            total=Decimal("300.00"),
+        )
+        Job.objects.filter(pk=invoiced.pk).update(order=order)
+        # A completed but un-invoiced job contributes nothing to this base.
+        self._completed_repair_job(
+            employee=employee,
+            approved_price=Decimal("999.00"),
+            completed_at=timezone.now(),
+        )
+        today = timezone.localdate()
+
+        payroll, _ = draft_monthly_payroll_run(
+            period_start=today.replace(day=1), period_end=today
+        )
+
+        line = payroll.lines.get(employee=employee)
+        # 300 * 5% = 15
+        self.assertEqual(line.additions_amount, Decimal("15.00"))
+        self.assertEqual(line.net_amount, Decimal("15.00"))
+
+    def test_operations_commission_only_requires_percentage(self):
+        employee = Employee.objects.create(full_name="فني")
+        plan = CompensationPlan(
+            employee=employee,
+            pay_type=CompensationPlan.PayType.COMMISSION,
+            salary_type=CompensationPlan.SalaryType.OPERATIONS_COMMISSION_ONLY,
+            amount=Decimal("0.00"),
+            commission_percent=Decimal("0.00"),
+        )
+        with self.assertRaises(ValidationError):
+            plan.full_clean()
+
+    def test_operations_commission_fixed_requires_amount(self):
+        employee = Employee.objects.create(full_name="فني")
+        plan = CompensationPlan(
+            employee=employee,
+            pay_type=CompensationPlan.PayType.MONTHLY_SALARY,
+            salary_type=(
+                CompensationPlan.SalaryType.MONTHLY_FIXED_PLUS_OPERATIONS_COMMISSION
+            ),
+            amount=Decimal("0.00"),
+            commission_percent=Decimal("20.00"),
+        )
+        with self.assertRaises(ValidationError):
+            plan.full_clean()

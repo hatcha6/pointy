@@ -1,5 +1,6 @@
 from decimal import Decimal
 
+from django.conf import settings
 from django.contrib.contenttypes.fields import GenericRelation
 from django.core.exceptions import ValidationError
 from django.core.validators import MinValueValidator
@@ -8,6 +9,7 @@ from django.db.models import Q, Sum
 from django.db.models.functions import Coalesce
 from django.db.models.signals import m2m_changed
 from django.dispatch import receiver
+from django.utils import timezone
 
 from apps.core.models import TimeStampedModel
 
@@ -30,10 +32,30 @@ def variant_option_signature(option_values):
     return "|".join(str(value_id) for value_id in value_ids)
 
 
+class ProductQuerySet(models.QuerySet):
+    def active(self):
+        """Live (non-archived) products."""
+        return self.filter(archived_at__isnull=True)
+
+    def archived(self):
+        return self.filter(archived_at__isnull=False)
+
+
 class Product(TimeStampedModel):
     name = models.CharField(max_length=255)
     description = models.TextField(blank=True)
     is_active = models.BooleanField(default=True)
+    # Archived products are retired from the live catalog: hidden from the
+    # product list, POS, and purchasing, but kept (with their sales/purchase
+    # history) and restorable. Archive is independent of `is_active`.
+    archived_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    archived_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="archived_products",
+        blank=True,
+        null=True,
+    )
     tracks_expiry = models.BooleanField(default=False, db_index=True)
     # Service products (labor, fees) are sold without touching stock.
     is_service = models.BooleanField(default=False)
@@ -77,8 +99,24 @@ class Product(TimeStampedModel):
         related_query_name="products",
     )
 
+    objects = ProductQuerySet.as_manager()
+
     class Meta:
         ordering = ["name"]
+
+    @property
+    def is_archived(self) -> bool:
+        return self.archived_at is not None
+
+    def archive(self, *, by=None):
+        self.archived_at = timezone.now()
+        self.archived_by = by
+        self.save(update_fields=["archived_at", "archived_by", "updated_at"])
+
+    def restore(self):
+        self.archived_at = None
+        self.archived_by = None
+        self.save(update_fields=["archived_at", "archived_by", "updated_at"])
 
     @property
     def default_variant(self):
@@ -326,7 +364,11 @@ class ProductModifierGroup(TimeStampedModel):
 
 class ProductVariantQuerySet(models.QuerySet):
     def active(self):
-        return self.filter(is_active=True, product__is_active=True)
+        return self.filter(
+            is_active=True,
+            product__is_active=True,
+            product__archived_at__isnull=True,
+        )
 
     def default(self):
         return self.filter(is_default=True)

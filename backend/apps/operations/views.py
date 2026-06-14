@@ -12,12 +12,14 @@ from apps.core.idempotency import run_idempotent_request
 from apps.core.models import ShopSettings
 from apps.core.permissions import HasPointyPermission
 from apps.customers.models import Asset
+from apps.employees.models import Employee
 from apps.sales.models import RegisterSession
 from apps.sales.views import register_session_owner_key
 from .models import Job, JobAsset, WorkflowTemplate
 from .serializers import (
     AssetSerializer,
     BillOfMaterialsSerializer,
+    JobAssignSerializer,
     JobCreateSerializer,
     JobInvoiceSerializer,
     JobMaterialCreateSerializer,
@@ -28,6 +30,7 @@ from .serializers import (
 )
 from .services import (
     add_job_material,
+    assign_job,
     cancel_job,
     create_job,
     explode_bom_into_job,
@@ -54,6 +57,7 @@ class JobViewSet(
         "update": ("operations.change_job",),
         "partial_update": ("operations.change_job",),
         "transition": ("operations.change_job",),
+        "assign": ("operations.assign_job",),
         "add_material": ("operations.add_jobmaterial",),
         "reverse_material": ("operations.change_jobmaterial",),
         "cancel": ("operations.change_job",),
@@ -70,6 +74,7 @@ class JobViewSet(
             "current_stage",
             "customer",
             "assigned_to",
+            "assigned_employee",
             "sales_channel",
             "order",
             "output_variant",
@@ -122,11 +127,18 @@ class JobViewSet(
         if assigned_to_id:
             assigned_to = get_user_model().objects.filter(pk=assigned_to_id).first()
 
+        # Crediting an employee at intake also stamps the system user (when the
+        # employee has a login) so the "assigned to me" board stays consistent.
+        assigned_employee = data.get("assigned_employee")
+        if assigned_employee is not None:
+            assigned_to = assigned_employee.user
+
         bom = data.get("bom")
         batches = data.get("batches", 1)
         fields = {
             "customer": data.get("customer"),
             "assigned_to": assigned_to,
+            "assigned_employee": assigned_employee,
             "priority": data["priority"],
             "due_at": data.get("due_at"),
             "symptoms": data.get("symptoms", ""),
@@ -169,6 +181,21 @@ class JobViewSet(
             to_stage=serializer.validated_data["to_stage"],
             request=request,
             note=serializer.validated_data.get("note", ""),
+        )
+        return self._refreshed(request, job.pk)
+
+    @action(detail=True, methods=["post"])
+    def assign(self, request, pk=None):
+        return run_idempotent_request(request, lambda: self._assign(request))
+
+    def _assign(self, request):
+        job = self.get_object()
+        serializer = JobAssignSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        assign_job(
+            job=job,
+            employee=serializer.validated_data.get("employee"),
+            request=request,
         )
         return self._refreshed(request, job.pk)
 

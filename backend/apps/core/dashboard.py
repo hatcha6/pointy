@@ -23,6 +23,7 @@ from apps.core.roles import user_is_manager
 from apps.customers.models import Customer
 from apps.discounts.models import DiscountRedemption, DiscountRule
 from apps.employees.models import Employee, EmployeeLoan, PayrollRun
+from apps.expenses.models import Expense
 from apps.fraud.models import FraudFinding
 from apps.inventory.models import StockItem, StockMovement
 from apps.payments.models import Payment
@@ -546,13 +547,23 @@ def _profitability_section(request, period):
             total=Coalesce(Sum("total"), Value(Decimal("0.00")), output_field=MONEY_FIELD)
         )["total"]
 
-    operating_expenses = payroll_paid + payment_commissions
+    ad_hoc_expenses = Decimal("0.00")
+    if _can(request.user, "expenses.view_expense"):
+        ad_hoc_expenses = Expense.objects.filter(
+            spent_at__gte=period["start"].date(),
+            spent_at__lte=period["end"].date(),
+        ).aggregate(
+            total=Coalesce(Sum("amount"), Value(Decimal("0.00")), output_field=MONEY_FIELD)
+        )["total"]
+
+    operating_expenses = payroll_paid + payment_commissions + ad_hoc_expenses
     return {
         "summary": {
             "gross_profit": _money(gross_profit),
             "payroll_paid_total": _money(payroll_paid),
             "payroll_accrued_total": _money(payroll_accrued),
             "payment_commission_total": _money(payment_commissions),
+            "ad_hoc_expense_total": _money(ad_hoc_expenses),
             "purchase_spend_total": _money(purchase_spend),
             "operating_expense_total": _money(operating_expenses),
             "net_operating_profit": _money(gross_profit - operating_expenses),

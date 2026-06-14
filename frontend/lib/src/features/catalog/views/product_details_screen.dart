@@ -137,6 +137,8 @@ class ProductDetailsView extends StatelessWidget {
               analyticsEngine: analyticsEngine,
               onEdit: () =>
                   showProductParentEditor(context, viewModel, onChanged),
+              onArchive: () => _confirmArchive(context, l10n),
+              onRestore: () => _restore(context, l10n),
             ),
             const SizedBox(height: 12),
             _VariantsSection(
@@ -214,6 +216,63 @@ class ProductDetailsView extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+
+  Future<void> _confirmArchive(
+    BuildContext context,
+    AppLocalizations l10n,
+  ) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: Text(l10n.archiveProductConfirmTitle),
+          content: Text(
+            l10n.archiveProductConfirmMessage(viewModel.product.name),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: Text(l10n.cancelButton),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: Text(l10n.archiveProductAction),
+            ),
+          ],
+        );
+      },
+    );
+    if (confirmed != true) {
+      return;
+    }
+    final success = await viewModel.archiveProduct();
+    if (success) {
+      onChanged?.call();
+    }
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          success ? l10n.archiveProductSuccess : l10n.archiveProductError,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _restore(BuildContext context, AppLocalizations l10n) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final success = await viewModel.restoreProduct();
+    if (success) {
+      onChanged?.call();
+    }
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          success ? l10n.restoreProductSuccess : l10n.restoreProductError,
+        ),
+      ),
     );
   }
 
@@ -309,6 +368,8 @@ class _ParentSummaryCard extends StatelessWidget {
     required this.printingRepository,
     this.analyticsEngine,
     required this.onEdit,
+    required this.onArchive,
+    required this.onRestore,
   });
 
   final Product product;
@@ -317,6 +378,8 @@ class _ParentSummaryCard extends StatelessWidget {
   final PrintingRepository printingRepository;
   final AnalyticsEngine? analyticsEngine;
   final VoidCallback onEdit;
+  final VoidCallback onArchive;
+  final VoidCallback onRestore;
 
   @override
   Widget build(BuildContext context) {
@@ -349,7 +412,10 @@ class _ParentSummaryCard extends StatelessWidget {
                         style: Theme.of(context).textTheme.titleLarge,
                       ),
                       const SizedBox(height: 6),
-                      ProductStatusPill(isActive: product.isActive),
+                      ProductStatusPill(
+                        isActive: product.isActive,
+                        isArchived: product.isArchived,
+                      ),
                     ],
                   ),
                 ),
@@ -376,6 +442,20 @@ class _ParentSummaryCard extends StatelessWidget {
                     onPressed: onEdit,
                     icon: const Icon(Icons.edit_outlined),
                   ),
+                ),
+                ProductChangeGuard(
+                  capabilities: capabilities,
+                  child: product.isArchived
+                      ? IconButton(
+                          tooltip: l10n.restoreProductAction,
+                          onPressed: onRestore,
+                          icon: const Icon(Icons.unarchive_outlined),
+                        )
+                      : IconButton(
+                          tooltip: l10n.archiveProductAction,
+                          onPressed: onArchive,
+                          icon: const Icon(Icons.archive_outlined),
+                        ),
                 ),
               ],
             ),

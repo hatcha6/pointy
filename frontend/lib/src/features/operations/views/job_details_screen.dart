@@ -5,11 +5,13 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../core/authorization.dart';
 import '../../../core/result.dart';
+import '../../../data/models/employee.dart';
 import '../../../data/models/operations_job.dart';
 import '../../../data/models/pos_user.dart';
 import '../../../data/models/sale_order.dart';
 import '../../../data/models/workflow.dart';
 import '../../../data/repositories/catalog_repository.dart';
+import '../../../data/repositories/employee_repository.dart';
 import '../../../data/repositories/operations_repository.dart';
 import '../../../shared/components/components.dart';
 import '../../../shared/date_formatters.dart';
@@ -38,6 +40,7 @@ class JobDetailsScreen extends StatefulWidget {
     required this.currentUser,
     required this.catalogRepository,
     required this.operationsRepository,
+    required this.employeeRepository,
   });
 
   final JobDetailsViewModel viewModel;
@@ -45,6 +48,7 @@ class JobDetailsScreen extends StatefulWidget {
   final PosUser currentUser;
   final CatalogRepository catalogRepository;
   final OperationsRepository operationsRepository;
+  final EmployeeRepository employeeRepository;
 
   @override
   State<JobDetailsScreen> createState() => _JobDetailsScreenState();
@@ -120,6 +124,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
                   currentUser: widget.currentUser,
                   catalogRepository: widget.catalogRepository,
                   operationsRepository: widget.operationsRepository,
+                  employeeRepository: widget.employeeRepository,
                 ),
         );
       },
@@ -140,8 +145,8 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
   Future<void> _openMoveDialog(OperationsJob job) async {
     final l10n = AppLocalizations.of(context)!;
     final messenger = ScaffoldMessenger.of(context);
-    final templatesResult =
-        await widget.operationsRepository.loadAllWorkflowTemplates();
+    final templatesResult = await widget.operationsRepository
+        .loadAllWorkflowTemplates();
     if (!mounted) {
       return;
     }
@@ -233,9 +238,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
             const SizedBox(height: 12),
             TextField(
               controller: reasonController,
-              decoration: InputDecoration(
-                labelText: l10n.jobCancelReasonLabel,
-              ),
+              decoration: InputDecoration(labelText: l10n.jobCancelReasonLabel),
             ),
           ],
         ),
@@ -289,6 +292,7 @@ class _JobDetailsBody extends StatefulWidget {
     required this.currentUser,
     required this.catalogRepository,
     required this.operationsRepository,
+    required this.employeeRepository,
   });
 
   final OperationsJob job;
@@ -297,6 +301,7 @@ class _JobDetailsBody extends StatefulWidget {
   final PosUser currentUser;
   final CatalogRepository catalogRepository;
   final OperationsRepository operationsRepository;
+  final EmployeeRepository employeeRepository;
 
   @override
   State<_JobDetailsBody> createState() => _JobDetailsBodyState();
@@ -378,6 +383,8 @@ class _JobDetailsBodyState extends State<_JobDetailsBody> {
                     _timelineSection(context),
                     SizedBox(height: spacing.lg),
                     _customerSection(context),
+                    SizedBox(height: spacing.lg),
+                    _assignmentSection(context),
                     SizedBox(height: spacing.lg),
                     if (job.jobType == OperationsJobType.production) ...[
                       _productionSection(context),
@@ -496,10 +503,6 @@ class _JobDetailsBodyState extends State<_JobDetailsBody> {
                 '${l10n.jobCreatedAtLabel}: ${job.createdAt == null ? '' : formatDateTime(job.createdAt!)}',
                 if (job.dueAt != null)
                   '${l10n.jobDueAtLabel}: ${formatDateTime(job.dueAt!)}',
-                if (job.assignedToName.trim().isNotEmpty)
-                  '${l10n.jobAssignedToLabel}: ${job.assignedToName}'
-                else
-                  '${l10n.jobAssignedToLabel}: ${l10n.jobUnassigned}',
               ].join(' · '),
               style: Theme.of(context).textTheme.bodySmall,
             ),
@@ -554,9 +557,7 @@ class _JobDetailsBodyState extends State<_JobDetailsBody> {
                                 event.toStage == job.currentStage
                                     ? '${event.toStageName} — ${l10n.jobCurrentStageLabel}'
                                     : event.toStageName,
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .bodyMedium
+                                style: Theme.of(context).textTheme.bodyMedium
                                     ?.copyWith(fontWeight: FontWeight.w700),
                               ),
                               Text(
@@ -571,8 +572,7 @@ class _JobDetailsBodyState extends State<_JobDetailsBody> {
                               if (event.note.trim().isNotEmpty)
                                 Text(
                                   event.note,
-                                  style:
-                                      Theme.of(context).textTheme.bodySmall,
+                                  style: Theme.of(context).textTheme.bodySmall,
                                 ),
                             ],
                           ),
@@ -647,9 +647,10 @@ class _JobDetailsBodyState extends State<_JobDetailsBody> {
       return;
     }
     final jobs = switch (result) {
-      Ok<OperationsJobPage>(value: final page) => page.jobs
-          .where((other) => other.id != widget.job.id)
-          .toList(growable: false),
+      Ok<OperationsJobPage>(value: final page) =>
+        page.jobs
+            .where((other) => other.id != widget.job.id)
+            .toList(growable: false),
       Error<OperationsJobPage>() => const <OperationsJob>[],
     };
     await showAdaptiveModalBottomSheet<void>(
@@ -740,7 +741,8 @@ class _JobDetailsBodyState extends State<_JobDetailsBody> {
     final spacing = AdaptiveSpacing.of(context);
     final colors = context.pointyColors;
     final job = widget.job;
-    final canAddMaterials = widget.capabilities.canManageJobMaterials &&
+    final canAddMaterials =
+        widget.capabilities.canManageJobMaterials &&
         job.status == OperationsJobStatus.open &&
         job.order == null;
 
@@ -806,16 +808,13 @@ class _JobDetailsBodyState extends State<_JobDetailsBody> {
                               ),
                           ],
                         ),
-                        trailing: canAddMaterials &&
-                                material.reversedAt == null
+                        trailing: canAddMaterials && material.reversedAt == null
                             ? IconButton(
                                 tooltip: l10n.reverseMaterialAction,
                                 onPressed: widget.viewModel.isMutating
                                     ? null
                                     : () => _reverseMaterial(material),
-                                icon: const Icon(
-                                  Icons.settings_backup_restore,
-                                ),
+                                icon: const Icon(Icons.settings_backup_restore),
                               )
                             : null,
                       ),
@@ -827,9 +826,7 @@ class _JobDetailsBodyState extends State<_JobDetailsBody> {
                           l10n.jobMaterialsTotalLabel(
                             formatMoney(job.materialsTotal),
                           ),
-                          style: Theme.of(context)
-                              .textTheme
-                              .titleSmall
+                          style: Theme.of(context).textTheme.titleSmall
                               ?.copyWith(fontWeight: FontWeight.w800),
                         ),
                       ),
@@ -840,6 +837,113 @@ class _JobDetailsBodyState extends State<_JobDetailsBody> {
       ],
     );
   }
+
+  Widget _assignmentSection(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final spacing = AdaptiveSpacing.of(context);
+    final job = widget.job;
+    final assigned = job.assignedEmployeeName.trim();
+    final canAssign =
+        widget.capabilities.canAssignJobs &&
+        job.status != OperationsJobStatus.cancelled;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        PointySectionHeader(
+          title: l10n.jobAssignmentSection,
+          leading: const Icon(Icons.engineering_outlined),
+        ),
+        SizedBox(height: spacing.sm),
+        Card(
+          margin: EdgeInsets.zero,
+          child: ListTile(
+            leading: const Icon(Icons.badge_outlined),
+            title: Text(assigned.isEmpty ? l10n.jobUnassigned : assigned),
+            subtitle: Text(l10n.jobAssignedEmployeeHint),
+            trailing: canAssign
+                ? TextButton.icon(
+                    onPressed: widget.viewModel.isMutating
+                        ? null
+                        : () => _openAssignDialog(),
+                    icon: const Icon(Icons.person_add_alt_outlined),
+                    label: Text(
+                      assigned.isEmpty
+                          ? l10n.jobAssignButton
+                          : l10n.jobReassignButton,
+                    ),
+                  )
+                : null,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _openAssignDialog() async {
+    final l10n = AppLocalizations.of(context)!;
+    final messenger = ScaffoldMessenger.of(context);
+    final employees = await _loadAssignableEmployees();
+    if (!mounted) {
+      return;
+    }
+    if (employees == null) {
+      messenger.showSnackBar(SnackBar(content: Text(l10n.jobAssignLoadError)));
+      return;
+    }
+    final selection = await showDialog<_AssignSelection>(
+      context: context,
+      builder: (_) => _AssignEmployeeDialog(
+        employees: employees,
+        currentEmployeeId: widget.job.assignedEmployee,
+      ),
+    );
+    if (selection == null || !mounted) {
+      return;
+    }
+    final assigned = await widget.viewModel.assignEmployee(
+      selection.employeeId,
+    );
+    if (!mounted) {
+      return;
+    }
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          assigned ? l10n.jobAssignedMessage : l10n.operationsActionError,
+        ),
+      ),
+    );
+  }
+
+  Future<List<Employee>?> _loadAssignableEmployees() async {
+    final employees = <Employee>[];
+    var page = 1;
+    var hasMore = true;
+    while (hasMore) {
+      final result = await widget.employeeRepository.loadEmployees(page: page);
+      switch (result) {
+        case Ok<EmployeePage>():
+          employees.addAll(
+            result.value.employees.where(
+              (employee) => employee.status == EmployeeStatus.active,
+            ),
+          );
+          hasMore = result.value.hasMore;
+          page += 1;
+        case Error<EmployeePage>():
+          return null;
+      }
+    }
+    return employees;
+  }
+
+  // Symptoms/diagnosis/warranty are repair-only; a customer quote/approval
+  // applies to repairs and work orders, but not to kitchen or production jobs
+  // whose price comes from the sale order. Only show what fits the job type.
+  bool get _isRepair => widget.job.jobType == OperationsJobType.repair;
+  bool get _hasQuotePricing =>
+      _isRepair || widget.job.jobType == OperationsJobType.workOrder;
 
   Widget _editSection(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
@@ -853,70 +957,76 @@ class _JobDetailsBodyState extends State<_JobDetailsBody> {
           leading: const Icon(Icons.edit_note_outlined),
         ),
         SizedBox(height: spacing.sm),
-        TextField(
-          controller: _symptomsController,
-          enabled: _isEditable,
-          maxLines: 2,
-          decoration: InputDecoration(labelText: l10n.jobSymptomsLabel),
-        ),
-        SizedBox(height: spacing.sm),
-        TextField(
-          controller: _diagnosisController,
-          enabled: _isEditable,
-          maxLines: 2,
-          decoration: InputDecoration(labelText: l10n.jobDiagnosisLabel),
-        ),
-        SizedBox(height: spacing.sm),
+        if (_isRepair) ...[
+          TextField(
+            controller: _symptomsController,
+            enabled: _isEditable,
+            maxLines: 2,
+            decoration: InputDecoration(labelText: l10n.jobSymptomsLabel),
+          ),
+          SizedBox(height: spacing.sm),
+          TextField(
+            controller: _diagnosisController,
+            enabled: _isEditable,
+            maxLines: 2,
+            decoration: InputDecoration(labelText: l10n.jobDiagnosisLabel),
+          ),
+          SizedBox(height: spacing.sm),
+        ],
         TextField(
           controller: _notesController,
           enabled: _isEditable,
           maxLines: 2,
-          decoration: InputDecoration(
-            labelText: l10n.jobTechnicianNotesLabel,
+          decoration: InputDecoration(labelText: l10n.jobTechnicianNotesLabel),
+        ),
+        if (_hasQuotePricing) ...[
+          SizedBox(height: spacing.sm),
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _quotedPriceController,
+                  enabled: _isEditable,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  inputFormatters: [DecimalTextInputFormatter()],
+                  decoration: InputDecoration(
+                    labelText: l10n.jobQuotedPriceLabel,
+                  ),
+                ),
+              ),
+              SizedBox(width: spacing.sm),
+              Expanded(
+                child: TextField(
+                  controller: _approvedPriceController,
+                  enabled: _isEditable,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  inputFormatters: [DecimalTextInputFormatter()],
+                  decoration: InputDecoration(
+                    labelText: l10n.jobApprovedPriceLabel,
+                  ),
+                ),
+              ),
+              if (_isRepair) ...[
+                SizedBox(width: spacing.sm),
+                SizedBox(
+                  width: 120,
+                  child: TextField(
+                    controller: _warrantyDaysController,
+                    enabled: _isEditable,
+                    keyboardType: TextInputType.number,
+                    decoration: InputDecoration(
+                      labelText: l10n.jobWarrantyDaysLabel,
+                    ),
+                  ),
+                ),
+              ],
+            ],
           ),
-        ),
-        SizedBox(height: spacing.sm),
-        Row(
-          children: [
-            Expanded(
-              child: TextField(
-                controller: _quotedPriceController,
-                enabled: _isEditable,
-                keyboardType:
-                    const TextInputType.numberWithOptions(decimal: true),
-                inputFormatters: [DecimalTextInputFormatter()],
-                decoration: InputDecoration(
-                  labelText: l10n.jobQuotedPriceLabel,
-                ),
-              ),
-            ),
-            SizedBox(width: spacing.sm),
-            Expanded(
-              child: TextField(
-                controller: _approvedPriceController,
-                enabled: _isEditable,
-                keyboardType:
-                    const TextInputType.numberWithOptions(decimal: true),
-                inputFormatters: [DecimalTextInputFormatter()],
-                decoration: InputDecoration(
-                  labelText: l10n.jobApprovedPriceLabel,
-                ),
-              ),
-            ),
-            SizedBox(width: spacing.sm),
-            SizedBox(
-              width: 120,
-              child: TextField(
-                controller: _warrantyDaysController,
-                enabled: _isEditable,
-                keyboardType: TextInputType.number,
-                decoration: InputDecoration(
-                  labelText: l10n.jobWarrantyDaysLabel,
-                ),
-              ),
-            ),
-          ],
-        ),
+        ],
         SizedBox(height: spacing.md),
         FilledButton.tonalIcon(
           onPressed: _isEditable ? _saveEdits : null,
@@ -952,17 +1062,24 @@ class _JobDetailsBodyState extends State<_JobDetailsBody> {
   Future<void> _saveEdits() async {
     final l10n = AppLocalizations.of(context)!;
     final messenger = ScaffoldMessenger.of(context);
-    final quoted = _quotedPriceController.text.trim();
-    final approved = _approvedPriceController.text.trim();
-    final saved = await widget.viewModel.saveJob({
-      'symptoms': _symptomsController.text.trim(),
-      'diagnosis': _diagnosisController.text.trim(),
+    // Persist only the fields the job type actually shows, so editing a kitchen
+    // order never blanks out repair-only fields it doesn't display.
+    final changes = <String, Object?>{
       'technician_notes': _notesController.text.trim(),
-      'quoted_price': quoted.isEmpty ? null : quoted,
-      'approved_price': approved.isEmpty ? null : approved,
-      'warranty_days':
-          int.tryParse(_warrantyDaysController.text.trim()) ?? 0,
-    });
+    };
+    if (_isRepair) {
+      changes['symptoms'] = _symptomsController.text.trim();
+      changes['diagnosis'] = _diagnosisController.text.trim();
+      changes['warranty_days'] =
+          int.tryParse(_warrantyDaysController.text.trim()) ?? 0;
+    }
+    if (_hasQuotePricing) {
+      final quoted = _quotedPriceController.text.trim();
+      final approved = _approvedPriceController.text.trim();
+      changes['quoted_price'] = quoted.isEmpty ? null : quoted;
+      changes['approved_price'] = approved.isEmpty ? null : approved;
+    }
+    final saved = await widget.viewModel.saveJob(changes);
     if (!mounted) {
       return;
     }
@@ -1006,9 +1123,9 @@ class _JobDetailsBodyState extends State<_JobDetailsBody> {
             child: Text(l10n.cancelButton),
           ),
           FilledButton(
-            onPressed: () => Navigator.of(dialogContext).pop(
-              double.tryParse(quantityController.text.trim()) ?? 1,
-            ),
+            onPressed: () => Navigator.of(
+              dialogContext,
+            ).pop(double.tryParse(quantityController.text.trim()) ?? 1),
             child: Text(l10n.addMaterialButton),
           ),
         ],
@@ -1092,8 +1209,9 @@ class _JobDetailsBodyState extends State<_JobDetailsBody> {
                   const SizedBox(height: 12),
                   TextField(
                     controller: laborController,
-                    keyboardType:
-                        const TextInputType.numberWithOptions(decimal: true),
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
                     inputFormatters: [DecimalTextInputFormatter()],
                     decoration: InputDecoration(
                       labelText: l10n.jobLaborTotalLabel,
@@ -1175,6 +1293,76 @@ class _JobDetailsBodyState extends State<_JobDetailsBody> {
       SnackBar(
         content: Text(l10n.jobInvoiceSuccess(invoiced.orderReceiptNumber)),
       ),
+    );
+  }
+}
+
+class _AssignSelection {
+  const _AssignSelection(this.employeeId);
+
+  final int? employeeId;
+}
+
+class _AssignEmployeeDialog extends StatelessWidget {
+  const _AssignEmployeeDialog({
+    required this.employees,
+    required this.currentEmployeeId,
+  });
+
+  final List<Employee> employees;
+  final int? currentEmployeeId;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    return AlertDialog(
+      icon: const Icon(Icons.engineering_outlined),
+      title: Text(l10n.jobAssignSelectTitle),
+      content: SizedBox(
+        width: 420,
+        child: employees.isEmpty
+            ? Padding(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                child: Text(l10n.jobAssignNoEmployees),
+              )
+            : ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 360),
+                child: ListView(
+                  shrinkWrap: true,
+                  children: [
+                    if (currentEmployeeId != null)
+                      ListTile(
+                        leading: const Icon(Icons.person_off_outlined),
+                        title: Text(l10n.jobUnassignOption),
+                        onTap: () => Navigator.of(
+                          context,
+                        ).pop(const _AssignSelection(null)),
+                      ),
+                    for (final employee in employees)
+                      ListTile(
+                        leading: const Icon(Icons.person_outline),
+                        title: Text(employee.fullName),
+                        subtitle: employee.jobTitle.trim().isEmpty
+                            ? null
+                            : Text(employee.jobTitle),
+                        selected: employee.id == currentEmployeeId,
+                        trailing: employee.id == currentEmployeeId
+                            ? const Icon(Icons.check)
+                            : null,
+                        onTap: () => Navigator.of(
+                          context,
+                        ).pop(_AssignSelection(employee.id)),
+                      ),
+                  ],
+                ),
+              ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(l10n.cancelButton),
+        ),
+      ],
     );
   }
 }

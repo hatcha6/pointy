@@ -55,6 +55,14 @@ class JobDetailsViewModel extends ChangeNotifier {
     return updated != null;
   }
 
+  Future<bool> assignEmployee(int? employeeId) async {
+    final updated = await _mutate(
+      () => _repository.assignJob(jobId, employeeId),
+      eventName: 'operations.job.assigned',
+    );
+    return updated != null;
+  }
+
   Future<bool> transition(int toStage, {String note = ''}) async {
     final updated = await _mutate(
       () => _repository.transitionJob(

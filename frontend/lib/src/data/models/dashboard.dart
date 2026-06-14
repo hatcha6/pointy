@@ -863,6 +863,7 @@ class ProfitabilityDashboardSummary {
     required this.payrollPaidTotal,
     required this.payrollAccruedTotal,
     required this.paymentCommissionTotal,
+    required this.adHocExpenseTotal,
     required this.purchaseSpendTotal,
     required this.operatingExpenseTotal,
     required this.netOperatingProfit,
@@ -872,6 +873,7 @@ class ProfitabilityDashboardSummary {
   final double payrollPaidTotal;
   final double payrollAccruedTotal;
   final double paymentCommissionTotal;
+  final double adHocExpenseTotal;
   final double purchaseSpendTotal;
   final double operatingExpenseTotal;
   final double netOperatingProfit;
@@ -882,6 +884,7 @@ class ProfitabilityDashboardSummary {
       payrollPaidTotal: _moneyFromJson(json['payroll_paid_total']),
       payrollAccruedTotal: _moneyFromJson(json['payroll_accrued_total']),
       paymentCommissionTotal: _moneyFromJson(json['payment_commission_total']),
+      adHocExpenseTotal: _moneyFromJson(json['ad_hoc_expense_total']),
       purchaseSpendTotal: _moneyFromJson(json['purchase_spend_total']),
       operatingExpenseTotal: _moneyFromJson(json['operating_expense_total']),
       netOperatingProfit: _moneyFromJson(json['net_operating_profit']),
