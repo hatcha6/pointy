@@ -3708,6 +3708,9 @@ class AppLocalizationsAr extends AppLocalizations {
   String get printerTransportSystem => 'طابعة النظام';
 
   @override
+  String get printerTransportUsb => 'USB';
+
+  @override
   String get printerTransportFake => 'محاكاة';
 
   @override

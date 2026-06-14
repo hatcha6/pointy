@@ -843,6 +843,10 @@ class _SelectedPrinterSummary extends StatelessWidget {
         endpoint.address.isEmpty
             ? l10n.printerTransportSystem
             : '${l10n.printerTransportSystem} - ${endpoint.address}',
+      PrintTransportKind.usb =>
+        endpoint.address.isEmpty
+            ? l10n.printerTransportUsb
+            : '${l10n.printerTransportUsb} - ${endpoint.address}',
       PrintTransportKind.fake => l10n.printerTransportFake,
     };
     final outputMode = endpoint.usesDocumentInvoice
@@ -1012,6 +1016,7 @@ String _printerLabel(PrinterEndpoint printer, AppLocalizations l10n) {
     PrintTransportKind.bluetooth => printer.address,
     PrintTransportKind.wifi => '${printer.address}:${printer.port}',
     PrintTransportKind.system => printer.address,
+    PrintTransportKind.usb => printer.address,
     PrintTransportKind.fake => printer.address,
   };
   if (details.isEmpty || details == name) {
@@ -1022,10 +1027,11 @@ String _printerLabel(PrinterEndpoint printer, AppLocalizations l10n) {
 
 IconData _transportIcon(PrintTransportKind kind) {
   return switch (kind) {
-    PrintTransportKind.serial => Icons.usb_outlined,
+    PrintTransportKind.serial => Icons.cable_outlined,
     PrintTransportKind.bluetooth => Icons.bluetooth_outlined,
     PrintTransportKind.wifi => Icons.wifi_outlined,
     PrintTransportKind.system => Icons.print_outlined,
+    PrintTransportKind.usb => Icons.usb,
     PrintTransportKind.fake => Icons.science_outlined,
   };
 }

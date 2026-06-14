@@ -89,3 +89,31 @@ class WifiPrintTransport extends PrintTransport {
     return const PrintTransportResult.failure('network printing unavailable');
   }
 }
+
+class UsbPrintTransport extends PrintTransport {
+  const UsbPrintTransport();
+
+  @override
+  Future<List<PrinterEndpoint>> discover() async => const [];
+
+  @override
+  Future<PrintTransportStatus> status(PrinterEndpoint endpoint) async {
+    return const PrintTransportStatus(
+      isAvailable: false,
+      message: 'usb printing unavailable',
+    );
+  }
+
+  @override
+  Future<PrintTransportResult> printJob({
+    required PrintJob job,
+    required PrinterEndpoint endpoint,
+  }) async {
+    return const PrintTransportResult.failure('usb printing unavailable');
+  }
+
+  @override
+  Future<PrintTransportResult> printTest(PrinterEndpoint endpoint) async {
+    return const PrintTransportResult.failure('usb printing unavailable');
+  }
+}

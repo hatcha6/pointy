@@ -6525,6 +6525,12 @@ abstract class AppLocalizations {
   /// **'طابعة النظام'**
   String get printerTransportSystem;
 
+  /// No description provided for @printerTransportUsb.
+  ///
+  /// In ar, this message translates to:
+  /// **'USB'**
+  String get printerTransportUsb;
+
   /// No description provided for @printerTransportFake.
   ///
   /// In ar, this message translates to:

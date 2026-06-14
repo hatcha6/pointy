@@ -1,4 +1,4 @@
-enum PrintTransportKind { serial, bluetooth, wifi, system, fake }
+enum PrintTransportKind { serial, bluetooth, wifi, system, usb, fake }
 
 enum PrinterOutputMode { escPos, pdfA4 }
 
@@ -282,6 +282,7 @@ PrintTransportKind _transportKindFromJson(Object? value) {
     'bluetooth' => PrintTransportKind.bluetooth,
     'wifi' || 'network' => PrintTransportKind.wifi,
     'system' || 'pdf' || 'document' => PrintTransportKind.system,
+    'usb' => PrintTransportKind.usb,
     'fake' => PrintTransportKind.fake,
     _ => PrintTransportKind.serial,
   };
@@ -308,6 +309,7 @@ PrinterOutputMode _defaultOutputModeForKind(PrintTransportKind kind) {
     PrintTransportKind.serial ||
     PrintTransportKind.bluetooth ||
     PrintTransportKind.wifi ||
+    PrintTransportKind.usb ||
     PrintTransportKind.fake => PrinterOutputMode.escPos,
   };
 }

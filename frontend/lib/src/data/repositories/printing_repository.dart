@@ -24,6 +24,7 @@ class PrintingRepository {
     PrintTransport? serialTransport,
     PrintTransport? bluetoothTransport,
     PrintTransport? wifiTransport,
+    PrintTransport? usbTransport,
     PrintTransport fakeTransport = const FakePrintTransport(),
     BarcodeLabelCommandEncoder barcodeLabelEncoder =
         const BarcodeLabelCommandEncoder(),
@@ -36,6 +37,7 @@ class PrintingRepository {
   }) : _serialTransport = serialTransport ?? SerialPrintTransport(),
        _bluetoothTransport = bluetoothTransport ?? BluetoothPrintTransport(),
        _wifiTransport = wifiTransport ?? WifiPrintTransport(),
+       _usbTransport = usbTransport ?? UsbPrintTransport(),
        _fakeTransport = fakeTransport,
        _barcodeLabelEncoder = barcodeLabelEncoder,
        _barcodeLabelLanguageDetector = barcodeLabelLanguageDetector,
@@ -47,6 +49,7 @@ class PrintingRepository {
   final PrintTransport _serialTransport;
   final PrintTransport _bluetoothTransport;
   final PrintTransport _wifiTransport;
+  final PrintTransport _usbTransport;
   final PrintTransport _fakeTransport;
   final BarcodeLabelCommandEncoder _barcodeLabelEncoder;
   final BarcodeLabelLanguageDetector _barcodeLabelLanguageDetector;
@@ -158,6 +161,7 @@ class PrintingRepository {
         _serialTransport,
         _bluetoothTransport,
         _wifiTransport,
+        _usbTransport,
       ]) {
         final endpoints = await transport.discover();
         for (final endpoint in endpoints) {
@@ -633,6 +637,7 @@ class PrintingRepository {
       PrintTransportKind.serial => _serialTransport,
       PrintTransportKind.bluetooth => _bluetoothTransport,
       PrintTransportKind.wifi => _wifiTransport,
+      PrintTransportKind.usb => _usbTransport,
       PrintTransportKind.system => throw StateError(
         'system printers use document printing',
       ),

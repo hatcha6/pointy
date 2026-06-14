@@ -157,6 +157,11 @@ class PrintingSettingsViewModel extends ChangeNotifier {
         address: '',
         outputMode: PrinterOutputMode.pdfA4,
       ),
+      PrintTransportKind.usb => current.copyWith(
+        kind: kind,
+        address: current.address.startsWith('/dev/') ? '' : current.address,
+        outputMode: PrinterOutputMode.escPos,
+      ),
       PrintTransportKind.fake => current.copyWith(kind: kind),
     };
     _updateConfig(_config.copyWith(endpoint: endpoint), checkConnection: true);

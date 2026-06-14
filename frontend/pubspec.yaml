@@ -51,6 +51,7 @@ dependencies:
   file_picker: ^11.0.2
   http_parser: ^4.1.2
   web: ^1.1.1
+  usb_serial: ^0.5.2
 
 dev_dependencies:
   flutter_test:
