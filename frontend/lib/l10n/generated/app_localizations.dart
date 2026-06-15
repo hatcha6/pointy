@@ -15012,6 +15012,30 @@ abstract class AppLocalizations {
   /// **'صافي الربح التشغيلي'**
   String get dashboardNetOperatingProfitMetric;
 
+  /// No description provided for @dashboardProfitFromSalesMetric.
+  ///
+  /// In ar, this message translates to:
+  /// **'ربح المبيعات'**
+  String get dashboardProfitFromSalesMetric;
+
+  /// No description provided for @dashboardNetProfitMetric.
+  ///
+  /// In ar, this message translates to:
+  /// **'صافي الربح'**
+  String get dashboardNetProfitMetric;
+
+  /// No description provided for @dashboardAfterExpensesCaption.
+  ///
+  /// In ar, this message translates to:
+  /// **'بعد المصاريف'**
+  String get dashboardAfterExpensesCaption;
+
+  /// No description provided for @dashboardTopProductsByProfitTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'أفضل المنتجات ربحًا'**
+  String get dashboardTopProductsByProfitTitle;
+
   /// No description provided for @dashboardVsPreviousPeriodLabel.
   ///
   /// In ar, this message translates to:

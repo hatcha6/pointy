@@ -8640,6 +8640,18 @@ class AppLocalizationsAr extends AppLocalizations {
   String get dashboardNetOperatingProfitMetric => 'صافي الربح التشغيلي';
 
   @override
+  String get dashboardProfitFromSalesMetric => 'ربح المبيعات';
+
+  @override
+  String get dashboardNetProfitMetric => 'صافي الربح';
+
+  @override
+  String get dashboardAfterExpensesCaption => 'بعد المصاريف';
+
+  @override
+  String get dashboardTopProductsByProfitTitle => 'أفضل المنتجات ربحًا';
+
+  @override
   String get dashboardVsPreviousPeriodLabel => 'مقارنة بالفترة السابقة';
 
   @override

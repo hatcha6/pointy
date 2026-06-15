@@ -3373,6 +3373,121 @@ void main() {
     expect(openedCatalog, isTrue);
   });
 
+  testWidgets(
+    'dashboard surfaces profit-from-sales and net-profit without overflow '
+    'across phone, tablet, and desktop widths',
+    (WidgetTester tester) async {
+      final json = _richDashboardJson();
+      final sections = json['sections']! as Map<String, Object?>;
+      final sales = sections['sales']! as Map<String, Object?>;
+      const topProduct = {
+        'product_id': 1,
+        'product_name': 'قهوة مختصة',
+        'sku': 'C1',
+        'quantity': 30,
+        'revenue': '300.00',
+        'profit': '120.00',
+        'variant_count': 0,
+      };
+      sales['top_products'] = const [topProduct];
+      sales['reports'] = const {
+        'products': {
+          'top_sold': <Object?>[],
+          'revenue': <Object?>[],
+          'profit': [topProduct],
+        },
+        'variants': <String, Object?>{},
+      };
+      sections['customers'] = const {
+        'summary': {
+          'active_customer_count': 50,
+          'new_customer_count': 8,
+          'customers_with_sales_count': 30,
+          'repeat_customer_count': 12,
+          'marketing_consent_count': 20,
+        },
+        'top_customers': <Object?>[],
+        'recent_customers': <Object?>[],
+      };
+
+      final apiService = PosApiService(
+        client: MockClient((request) async {
+          if (request.url.path.endsWith('/dashboard/')) {
+            return _jsonResponse(json);
+          }
+          return http.Response('', 404);
+        }),
+      );
+      final viewModel = DashboardViewModel(DashboardRepository(apiService));
+      final user = PosUser.fromJson(
+        _userJson(
+          permissions: const [
+            'sales.view_order',
+            'sales.view_registersession',
+            'reports.view_reportrun',
+            'payments.view_payment',
+            'inventory.view_stockitem',
+            'employees.view_payrollrun',
+            'customers.view_customer',
+            'discounts.view_discountrule',
+            'fraud.view_fraudfinding',
+          ],
+        ),
+      );
+
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      for (final width in [390.0, 768.0, 1366.0]) {
+        tester.view.devicePixelRatio = 1.0;
+        tester.view.physicalSize = Size(width, 1600);
+
+        await tester.pumpWidget(
+          MaterialApp(
+            locale: const Locale('ar'),
+            supportedLocales: AppLocalizations.supportedLocales,
+            localizationsDelegates: const [
+              AppLocalizations.delegate,
+              GlobalMaterialLocalizations.delegate,
+              GlobalWidgetsLocalizations.delegate,
+              GlobalCupertinoLocalizations.delegate,
+            ],
+            home: DashboardScreen(
+              viewModel: viewModel,
+              capabilities: AuthorizationCapabilities.forUser(user),
+              navigation: FakeAppNavigation(currentUser: user),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        expect(
+          find.byKey(const ValueKey('dashboard_hero_card')),
+          findsOneWidget,
+          reason: 'hero missing at width $width',
+        );
+        // Profit from sales (gross profit) and net profit are both surfaced.
+        expect(
+          find.text('ربح المبيعات'),
+          findsWidgets,
+          reason: 'profit-from-sales label missing at width $width',
+        );
+        expect(
+          find.text('صافي الربح'),
+          findsWidgets,
+          reason: 'net-profit label missing at width $width',
+        );
+        // The new profit-led product card and team/customer cards render.
+        expect(find.text('أفضل المنتجات ربحًا'), findsWidgets);
+        expect(
+          tester.takeException(),
+          isNull,
+          reason: 'layout overflow at width $width',
+        );
+      }
+    },
+  );
+
   testWidgets('integrity monitor lists findings and records a review verdict', (
     WidgetTester tester,
   ) async {
@@ -3453,10 +3568,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(
-      find.byKey(const ValueKey('integrity_status_card')),
-      findsOneWidget,
-    );
+    expect(find.byKey(const ValueKey('integrity_status_card')), findsOneWidget);
     final card = find.byKey(const ValueKey('fraud_finding_card_11'));
     expect(card, findsOneWidget);
     expect(find.text('سالم الكاشير'), findsOneWidget);
@@ -5393,10 +5505,9 @@ PosApiService _mockApiService({
       if (path.endsWith('/orders/checkout/')) {
         onCheckout?.call(request);
         if (checkoutNoOpenSession) {
-          return _jsonResponse(
-            {'detail': 'No open register session for this request owner.'},
-            statusCode: 400,
-          );
+          return _jsonResponse({
+            'detail': 'No open register session for this request owner.',
+          }, statusCode: 400);
         }
         if (checkoutStatusCode < 200 || checkoutStatusCode >= 300) {
           return http.Response('bad request', checkoutStatusCode);
@@ -5722,7 +5833,9 @@ Widget _payrollApp(
       userRepository: UserRepository(apiService),
       capabilities: capabilities,
       navigation: FakeAppNavigation(
-        currentUser: PosUser.fromJson(_userJson(permissions: _payrollPermissions)),
+        currentUser: PosUser.fromJson(
+          _userJson(permissions: _payrollPermissions),
+        ),
         capabilities: capabilities,
       ),
     ),

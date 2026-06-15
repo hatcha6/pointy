@@ -181,34 +181,29 @@ class _DashboardBody extends StatelessWidget {
         padding: spacing.pagePadding,
         child: AdaptiveMaxWidth(
           width: AppContentWidth.workspace,
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  _DashboardToolbar(
-                    snapshot: snapshot,
-                    selectedDays: viewModel.selectedDays,
-                    isLoading: viewModel.isLoading,
-                    onChanged: viewModel.changePeriod,
-                  ),
-                  if (viewModel.hasError) ...[
-                    SizedBox(height: spacing.md),
-                    PointyInlineMessage.error(
-                      message: l10n.dashboardLoadError,
-                      icon: Icons.warning_amber_outlined,
-                    ),
-                  ],
-                  SizedBox(height: spacing.md),
-                  _DashboardSections(
-                    snapshot: snapshot,
-                    capabilities: capabilities,
-                    navigation: navigation,
-                    maxWidth: constraints.maxWidth,
-                  ),
-                ],
-              );
-            },
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _DashboardToolbar(
+                snapshot: snapshot,
+                selectedDays: viewModel.selectedDays,
+                isLoading: viewModel.isLoading,
+                onChanged: viewModel.changePeriod,
+              ),
+              if (viewModel.hasError) ...[
+                SizedBox(height: spacing.md),
+                PointyInlineMessage.error(
+                  message: l10n.dashboardLoadError,
+                  icon: Icons.warning_amber_outlined,
+                ),
+              ],
+              SizedBox(height: spacing.md),
+              _DashboardSections(
+                snapshot: snapshot,
+                capabilities: capabilities,
+                navigation: navigation,
+              ),
+            ],
           ),
         ),
       ),
@@ -261,80 +256,252 @@ class _DashboardSections extends StatelessWidget {
     required this.snapshot,
     required this.capabilities,
     required this.navigation,
-    required this.maxWidth,
   });
 
   final DashboardSnapshot snapshot;
   final AuthorizationCapabilities capabilities;
   final _DashboardNavigation navigation;
-  final double maxWidth;
 
   @override
   Widget build(BuildContext context) {
-    final sections = snapshot.sections;
+    final l10n = AppLocalizations.of(context)!;
     final spacing = AdaptiveSpacing.of(context);
-    final showSales =
-        sections.sales != null &&
-        capabilities.allows(AppCapability.viewSalesDashboard);
+    final sections = snapshot.sections;
+
+    bool can(AppCapability capability) => capabilities.allows(capability);
+
+    final sales = can(AppCapability.viewSalesDashboard) ? sections.sales : null;
+    final profitability = can(AppCapability.viewSalesDashboard)
+        ? sections.profitability
+        : null;
+    final fraud = can(AppCapability.viewFraudFindings) ? sections.fraud : null;
+    final inventory = can(AppCapability.viewInventoryDashboard)
+        ? sections.inventory
+        : null;
+    final purchasing = can(AppCapability.viewPurchasingDashboard)
+        ? sections.purchasing
+        : null;
+    final payments = can(AppCapability.viewPaymentDashboard)
+        ? sections.payments
+        : null;
+    final customers = can(AppCapability.viewCustomerDashboard)
+        ? sections.customers
+        : null;
+    final discounts = can(AppCapability.viewDiscountDashboard)
+        ? sections.discounts
+        : null;
+    final payroll = can(AppCapability.viewPayroll) ? sections.payroll : null;
+    final printing = can(AppCapability.viewPrintingDashboard)
+        ? sections.printing
+        : null;
+
+    // Every detail card flows into a single masonry grid so cards pack tightly
+    // across the whole page instead of leaving gaps inside per-section blocks.
+    // Tall charts come first to anchor the columns; shorter cards fill behind.
+    final cards = <Widget>[
+      if (sales != null)
+        PointyDetailSection(
+          title: l10n.dashboardSalesTrendTitle,
+          icon: Icons.show_chart,
+          minHeight: 300,
+          child: _SalesTrendChart(points: sales.trend),
+        ),
+      if (sales != null)
+        PointyDetailSection(
+          title: l10n.dashboardHourlySalesTitle,
+          icon: Icons.schedule,
+          minHeight: 300,
+          child: _HourlySalesChart(points: sales.hourlySales),
+        ),
+      if (payments != null)
+        PointyDetailSection(
+          title: l10n.dashboardPaymentMixTitle,
+          icon: Icons.pie_chart_outline,
+          minHeight: 300,
+          child: _PaymentMixChart(methods: payments.methods),
+        ),
+      if (profitability != null) _ProfitCard(section: profitability),
+      if (fraud != null)
+        _IntegrityCard(section: fraud, onOpen: navigation.openIntegrityMonitor),
+      if (sales != null)
+        PointyDetailSection(
+          title: l10n.dashboardTopProductsTitle,
+          icon: Icons.star_outline,
+          child: _TopProductsList(products: sales.topProducts),
+        ),
+      if (sales != null && sales.reports.productProfit.isNotEmpty)
+        PointyDetailSection(
+          title: l10n.dashboardTopProductsByProfitTitle,
+          icon: Icons.payments_outlined,
+          child: _TopProductsList(
+            products: sales.reports.productProfit,
+            showProfit: true,
+          ),
+        ),
+      if (sales != null)
+        PointyDetailSection(
+          title: l10n.dashboardTopCategoriesTitle,
+          icon: Icons.category_outlined,
+          child: _TopCategoriesList(categories: sales.topCategories),
+        ),
+      if (customers != null)
+        PointyDetailSection(
+          title: l10n.dashboardTopCustomersTitle,
+          icon: Icons.emoji_events_outlined,
+          child: _TopCustomerList(customers: customers.topCustomers),
+        ),
+      if (sales != null)
+        PointyDetailSection(
+          title: l10n.dashboardRecentOrdersTitle,
+          icon: Icons.history,
+          child: _RecentOrdersList(orders: sales.recentOrders),
+        ),
+      if (sales != null)
+        PointyDetailSection(
+          title: l10n.dashboardRegistersTitle,
+          icon: Icons.point_of_sale_outlined,
+          child: _RegisterSummaryView(summary: sales.registers),
+        ),
+      if (payments != null)
+        PointyDetailSection(
+          title: l10n.dashboardPaymentMethodsTitle,
+          icon: Icons.list_alt,
+          child: _PaymentMethodList(methods: payments.methods),
+        ),
+      if (payroll != null)
+        PointyDetailSection(
+          title: l10n.dashboardPayrollSectionTitle,
+          icon: Icons.badge_outlined,
+          child: _TeamSummaryView(summary: payroll.summary),
+        ),
+      if (customers != null)
+        PointyDetailSection(
+          title: l10n.dashboardCustomersSectionTitle,
+          icon: Icons.groups_outlined,
+          child: _CustomersSummaryView(summary: customers.summary),
+        ),
+      if (discounts != null)
+        PointyDetailSection(
+          title: l10n.dashboardTopDiscountsTitle,
+          icon: Icons.local_offer_outlined,
+          child: _DiscountRuleList(rules: discounts.topRules),
+        ),
+      if (sales != null)
+        PointyDetailSection(
+          title: l10n.dashboardSalesSectionTitle,
+          icon: Icons.receipt_long_outlined,
+          child: _SalesSummaryView(summary: sales.summary),
+        ),
+      if (inventory != null)
+        PointyDetailSection(
+          title: l10n.dashboardInventorySectionTitle,
+          icon: Icons.inventory_2,
+          child: _InventorySummaryView(summary: inventory.summary),
+        ),
+      if (inventory != null)
+        PointyDetailSection(
+          title: l10n.dashboardLowStockTitle,
+          icon: Icons.warning_amber,
+          child: _StockItemList(items: inventory.lowStockItems),
+        ),
+      if (inventory != null)
+        PointyDetailSection(
+          title: l10n.dashboardDustyInventoryTitle,
+          icon: Icons.hourglass_empty,
+          child: _StockItemList(items: inventory.dustyItems),
+        ),
+      if (purchasing != null)
+        PointyDetailSection(
+          title: l10n.dashboardPurchasingSectionTitle,
+          icon: Icons.add_shopping_cart,
+          child: _PurchasingSummaryView(summary: purchasing.summary),
+        ),
+      if (purchasing != null)
+        PointyDetailSection(
+          title: l10n.dashboardOverduePurchasesTitle,
+          icon: Icons.event_busy_outlined,
+          child: _OverduePurchaseList(orders: purchasing.overdueOrders),
+        ),
+      if (purchasing != null)
+        PointyDetailSection(
+          title: l10n.dashboardSupplierBalancesTitle,
+          icon: Icons.account_balance_wallet_outlined,
+          child: _SupplierBalanceList(balances: purchasing.topSupplierBalances),
+        ),
+      if (printing != null && printing.summary.failedCount > 0)
+        PointyDetailSection(
+          title: l10n.dashboardPrintFailuresTitle,
+          icon: Icons.print_disabled_outlined,
+          child: _PrintFailureList(failures: printing.recentFailures),
+        ),
+    ];
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (showSales) ...[
-          _HeroSection(summary: sections.sales!.summary),
-          SizedBox(height: spacing.md),
+        _OverviewBand(
+          hero: sales != null
+              ? _HeroSection(
+                  summary: sales.summary,
+                  profitability: profitability?.summary,
+                )
+              : null,
+          actionCenter: _ActionCenter(
+            snapshot: snapshot,
+            capabilities: capabilities,
+            navigation: navigation,
+          ),
+        ),
+        if (cards.isNotEmpty) ...[
+          SizedBox(height: spacing.lg),
+          PointyMasonryGrid(children: cards),
         ],
-        _ActionCenter(
-          snapshot: snapshot,
-          capabilities: capabilities,
-          navigation: navigation,
-        ),
-        SizedBox(height: spacing.xl),
-        if (showSales)
-          _SalesStorySection(section: sections.sales!, maxWidth: maxWidth),
-        if (sections.profitability != null)
-          DashboardWidgetGuard(
-            capabilities: capabilities,
-            capability: AppCapability.viewSalesDashboard,
-            child: _ProfitSection(section: sections.profitability!),
-          ),
-        if (sections.fraud != null &&
-            capabilities.allows(AppCapability.viewFraudFindings))
-          _IntegritySection(
-            section: sections.fraud!,
-            onOpen: navigation.openIntegrityMonitor,
-          ),
-        if (showSales)
-          _BestSellersSection(
-            sales: sections.sales!,
-            customers:
-                capabilities.allows(AppCapability.viewCustomerDashboard)
-                ? sections.customers
-                : null,
-          ),
-        if (sections.inventory != null)
-          DashboardWidgetGuard(
-            capabilities: capabilities,
-            capability: AppCapability.viewInventoryDashboard,
-            child: _InventoryHealthSection(
-              section: sections.inventory!,
-              maxWidth: maxWidth,
-            ),
-          ),
-        if (sections.purchasing != null)
-          DashboardWidgetGuard(
-            capabilities: capabilities,
-            capability: AppCapability.viewPurchasingDashboard,
-            child: _PurchasingSection(
-              section: sections.purchasing!,
-              maxWidth: maxWidth,
-            ),
-          ),
-        _OperationsSection(
-          snapshot: snapshot,
-          capabilities: capabilities,
-        ),
       ],
+    );
+  }
+}
+
+/// Lays the headline hero and the action center side by side on wide screens so
+/// the top of the dashboard uses its horizontal space instead of stacking two
+/// short full-width cards. Falls back to a vertical stack when narrow, or when
+/// there is no hero (e.g. the user cannot view sales).
+class _OverviewBand extends StatelessWidget {
+  const _OverviewBand({required this.hero, required this.actionCenter});
+
+  /// Side-by-side once the content band is at least this wide.
+  static const double _sideBySideMin = 900;
+
+  final Widget? hero;
+  final Widget actionCenter;
+
+  @override
+  Widget build(BuildContext context) {
+    final hero = this.hero;
+    if (hero == null) {
+      return actionCenter;
+    }
+    final spacing = AdaptiveSpacing.of(context);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth >= _sideBySideMin) {
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(flex: 3, child: hero),
+              SizedBox(width: spacing.md),
+              Expanded(flex: 2, child: actionCenter),
+            ],
+          );
+        }
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            hero,
+            SizedBox(height: spacing.md),
+            actionCenter,
+          ],
+        );
+      },
     );
   }
 }
@@ -344,9 +511,10 @@ class _DashboardSections extends StatelessWidget {
 // ---------------------------------------------------------------------------
 
 class _HeroSection extends StatelessWidget {
-  const _HeroSection({required this.summary});
+  const _HeroSection({required this.summary, this.profitability});
 
   final SalesDashboardSummary summary;
+  final ProfitabilityDashboardSummary? profitability;
 
   @override
   Widget build(BuildContext context) {
@@ -354,6 +522,7 @@ class _HeroSection extends StatelessWidget {
     final spacing = AdaptiveSpacing.of(context);
     final theme = Theme.of(context);
     final colors = context.pointyColors;
+    final profitability = this.profitability;
 
     return Card(
       key: const ValueKey('dashboard_hero_card'),
@@ -393,34 +562,39 @@ class _HeroSection extends StatelessWidget {
               ],
             ),
             SizedBox(height: spacing.md),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            _HeroStatBand(
               children: [
-                Expanded(
-                  child: _HeroStat(
-                    label: l10n.dashboardGrossProfitMetric,
-                    value: formatMoney(summary.grossProfit),
-                    caption: _formatPercent(summary.profitMarginPercent),
+                _HeroStat(
+                  label: l10n.dashboardProfitFromSalesMetric,
+                  value: formatMoney(summary.grossProfit),
+                  caption: _formatPercent(summary.profitMarginPercent),
+                  valueColor: colors.success,
+                ),
+                if (profitability != null)
+                  _HeroStat(
+                    label: l10n.dashboardNetProfitMetric,
+                    value: formatMoney(profitability.netOperatingProfit),
+                    caption: l10n.dashboardAfterExpensesCaption,
+                    valueColor: profitability.netOperatingProfit >= 0
+                        ? colors.success
+                        : colors.danger,
+                  ),
+                _HeroStat(
+                  label: l10n.dashboardOrdersMetric,
+                  value: _formatNumber(summary.orderCount),
+                  caption: _formatChange(summary.orderCountChangePercent),
+                  captionColor: _changeColor(
+                    context,
+                    summary.orderCountChangePercent,
                   ),
                 ),
-                SizedBox(width: spacing.sm),
-                Expanded(
-                  child: _HeroStat(
-                    label: l10n.dashboardOrdersMetric,
-                    value: _formatNumber(summary.orderCount),
-                    caption: _formatChange(summary.orderCountChangePercent),
-                    captionColor: _changeColor(
-                      context,
-                      summary.orderCountChangePercent,
-                    ),
-                  ),
+                _HeroStat(
+                  label: l10n.dashboardAverageOrderMetric,
+                  value: formatMoney(summary.averageOrderValue),
                 ),
-                SizedBox(width: spacing.sm),
-                Expanded(
-                  child: _HeroStat(
-                    label: l10n.dashboardAverageOrderMetric,
-                    value: formatMoney(summary.averageOrderValue),
-                  ),
+                _HeroStat(
+                  label: l10n.dashboardItemsSoldMetric,
+                  value: _formatNumber(summary.itemsSold),
                 ),
               ],
             ),
@@ -431,18 +605,53 @@ class _HeroSection extends StatelessWidget {
   }
 }
 
+/// Responsive band of hero KPI chips. Reflows from a single row on wide hero
+/// cards down to two-per-row on phones, sizing each chip to fill its row.
+class _HeroStatBand extends StatelessWidget {
+  const _HeroStatBand({required this.children});
+
+  static const double _minStatWidth = 150;
+
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    final gap = AdaptiveSpacing.of(context).sm;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth;
+        final perRow = (width / _minStatWidth).floor().clamp(
+          1,
+          children.length,
+        );
+        final tileWidth = (width - (perRow - 1) * gap) / perRow;
+        return Wrap(
+          spacing: gap,
+          runSpacing: gap,
+          children: [
+            for (final child in children)
+              SizedBox(width: tileWidth, child: child),
+          ],
+        );
+      },
+    );
+  }
+}
+
 class _HeroStat extends StatelessWidget {
   const _HeroStat({
     required this.label,
     required this.value,
     this.caption,
     this.captionColor,
+    this.valueColor,
   });
 
   final String label;
   final String value;
   final String? caption;
   final Color? captionColor;
+  final Color? valueColor;
 
   @override
   Widget build(BuildContext context) {
@@ -474,6 +683,7 @@ class _HeroStat extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               style: switch (theme.textTheme.titleMedium?.copyWith(
                 fontWeight: FontWeight.w800,
+                color: valueColor,
               )) {
                 final style? => PointyTypography.numeric(style),
                 null => null,
@@ -853,82 +1063,11 @@ class _AlertRow extends StatelessWidget {
 }
 
 // ---------------------------------------------------------------------------
-// Sales story: how did the period unfold?
-// ---------------------------------------------------------------------------
-
-class _SalesStorySection extends StatelessWidget {
-  const _SalesStorySection({required this.section, required this.maxWidth});
-
-  final DashboardSalesSection section;
-  final double maxWidth;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
-    final summary = section.summary;
-    return _DashboardSection(
-      title: l10n.dashboardSalesSectionTitle,
-      icon: Icons.trending_up,
-      children: [
-        PointyCardGrid(
-          children: [
-            PointyDetailSection(
-              title: l10n.dashboardSalesTrendTitle,
-              icon: Icons.show_chart,
-              minHeight: 300,
-              child: _SalesTrendChart(points: section.trend),
-            ),
-            PointyDetailSection(
-              title: l10n.dashboardHourlySalesTitle,
-              icon: Icons.schedule,
-              minHeight: 300,
-              child: _HourlySalesChart(points: section.hourlySales),
-            ),
-          ],
-        ),
-        SizedBox(height: AdaptiveSpacing.of(context).sm),
-        PointyMetricGrid(
-          maxWidth: maxWidth,
-          minTileWidth: 160,
-          maxColumns: 4,
-          metrics: [
-            PointyMetricGridItem(
-              label: l10n.dashboardItemsSoldMetric,
-              value: _formatNumber(summary.itemsSold),
-              icon: Icons.inventory_2_outlined,
-            ),
-            PointyMetricGridItem(
-              label: l10n.dashboardDiscountsMetric,
-              value: formatMoney(summary.discountTotal),
-              icon: Icons.local_offer_outlined,
-            ),
-            PointyMetricGridItem(
-              label: l10n.dashboardRefundsMetric,
-              value: formatMoney(summary.refundTotal),
-              icon: Icons.assignment_return_outlined,
-              subtitle: l10n.dashboardAdjustmentsDetail(
-                summary.voidCount,
-                summary.returnCount,
-              ),
-            ),
-            PointyMetricGridItem(
-              label: l10n.dashboardPaymentsTotalMetric,
-              value: formatMoney(summary.grossSales),
-              icon: Icons.payments_outlined,
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-}
-
-// ---------------------------------------------------------------------------
 // Profit: what is actually left?
 // ---------------------------------------------------------------------------
 
-class _ProfitSection extends StatelessWidget {
-  const _ProfitSection({required this.section});
+class _ProfitCard extends StatelessWidget {
+  const _ProfitCard({required this.section});
 
   final DashboardProfitabilitySection section;
 
@@ -940,61 +1079,53 @@ class _ProfitSection extends StatelessWidget {
     final summary = section.summary;
     final isPositive = summary.netOperatingProfit >= 0;
 
-    return _DashboardSection(
+    return PointyDetailSection(
+      key: const ValueKey('dashboard_profit_card'),
       title: l10n.dashboardProfitabilitySectionTitle,
       icon: Icons.account_balance_outlined,
-      children: [
-        Card(
-          key: const ValueKey('dashboard_profit_card'),
-          margin: EdgeInsets.zero,
-          child: Padding(
-            padding: spacing.compactPadding,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                _ProfitRow(
-                  label: l10n.dashboardGrossProfitMetric,
-                  value: formatMoney(summary.grossProfit),
-                ),
-                _ProfitRow(
-                  label: l10n.dashboardPayrollPaidMetric,
-                  value: '− ${formatMoney(summary.payrollPaidTotal)}',
-                  color: colors.danger,
-                ),
-                _ProfitRow(
-                  label: l10n.dashboardPaymentCommissionsMetric,
-                  value: '− ${formatMoney(summary.paymentCommissionTotal)}',
-                  color: colors.danger,
-                ),
-                if (summary.adHocExpenseTotal > 0)
-                  _ProfitRow(
-                    label: l10n.dashboardAdHocExpensesMetric,
-                    value: '− ${formatMoney(summary.adHocExpenseTotal)}',
-                    color: colors.danger,
-                  ),
-                Divider(height: spacing.lg, color: colors.line),
-                _ProfitRow(
-                  label: l10n.dashboardNetOperatingProfitMetric,
-                  value: formatMoney(summary.netOperatingProfit),
-                  color: isPositive ? colors.success : colors.danger,
-                  emphasized: true,
-                ),
-                if (summary.payrollAccruedTotal > 0) ...[
-                  SizedBox(height: spacing.xs),
-                  Text(
-                    l10n.dashboardApprovedAwaitingPaymentNote(
-                      formatMoney(summary.payrollAccruedTotal),
-                    ),
-                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: colors.mutedInk,
-                    ),
-                  ),
-                ],
-              ],
-            ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _ProfitRow(
+            label: l10n.dashboardGrossProfitMetric,
+            value: formatMoney(summary.grossProfit),
           ),
-        ),
-      ],
+          _ProfitRow(
+            label: l10n.dashboardPayrollPaidMetric,
+            value: '− ${formatMoney(summary.payrollPaidTotal)}',
+            color: colors.danger,
+          ),
+          _ProfitRow(
+            label: l10n.dashboardPaymentCommissionsMetric,
+            value: '− ${formatMoney(summary.paymentCommissionTotal)}',
+            color: colors.danger,
+          ),
+          if (summary.adHocExpenseTotal > 0)
+            _ProfitRow(
+              label: l10n.dashboardAdHocExpensesMetric,
+              value: '− ${formatMoney(summary.adHocExpenseTotal)}',
+              color: colors.danger,
+            ),
+          Divider(height: spacing.lg, color: colors.line),
+          _ProfitRow(
+            label: l10n.dashboardNetOperatingProfitMetric,
+            value: formatMoney(summary.netOperatingProfit),
+            color: isPositive ? colors.success : colors.danger,
+            emphasized: true,
+          ),
+          if (summary.payrollAccruedTotal > 0) ...[
+            SizedBox(height: spacing.xs),
+            Text(
+              l10n.dashboardApprovedAwaitingPaymentNote(
+                formatMoney(summary.payrollAccruedTotal),
+              ),
+              style: Theme.of(
+                context,
+              ).textTheme.labelSmall?.copyWith(color: colors.mutedInk),
+            ),
+          ],
+        ],
+      ),
     );
   }
 }
@@ -1048,181 +1179,113 @@ class _ProfitRow extends StatelessWidget {
 }
 
 // ---------------------------------------------------------------------------
-// Best sellers: what and who drives the business?
+// Compact metric summaries (rendered as cards in the unified grid)
 // ---------------------------------------------------------------------------
 
-class _BestSellersSection extends StatelessWidget {
-  const _BestSellersSection({required this.sales, required this.customers});
+class _SalesSummaryView extends StatelessWidget {
+  const _SalesSummaryView({required this.summary});
 
-  final DashboardSalesSection sales;
-  final DashboardCustomersSection? customers;
+  final SalesDashboardSummary summary;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    return _DashboardSection(
-      title: l10n.dashboardBestSellersTitle,
-      icon: Icons.star_outline,
-      children: [
-        PointyCardGrid(
-          children: [
-            PointyDetailSection(
-              title: l10n.dashboardTopProductsTitle,
-              icon: Icons.star_outline,
-              child: _TopProductsList(products: sales.topProducts),
-            ),
-            PointyDetailSection(
-              title: l10n.dashboardTopCategoriesTitle,
-              icon: Icons.category_outlined,
-              child: _TopCategoriesList(categories: sales.topCategories),
-            ),
-            if (customers != null)
-              PointyDetailSection(
-                title: l10n.dashboardTopCustomersTitle,
-                icon: Icons.emoji_events_outlined,
-                child: _TopCustomerList(customers: customers!.topCustomers),
-              ),
-          ],
+    return _InsightRows(
+      rows: [
+        _InsightRowData(
+          title: l10n.dashboardPaymentsTotalMetric,
+          trailing: formatMoney(summary.grossSales),
+        ),
+        _InsightRowData(
+          title: l10n.dashboardItemsSoldMetric,
+          trailing: _formatNumber(summary.itemsSold),
+        ),
+        _InsightRowData(
+          title: l10n.dashboardDiscountsMetric,
+          trailing: formatMoney(summary.discountTotal),
+        ),
+        _InsightRowData(
+          title: l10n.dashboardRefundsMetric,
+          subtitle: l10n.dashboardAdjustmentsDetail(
+            summary.voidCount,
+            summary.returnCount,
+          ),
+          trailing: formatMoney(summary.refundTotal),
         ),
       ],
     );
   }
 }
 
-// ---------------------------------------------------------------------------
-// Inventory health
-// ---------------------------------------------------------------------------
+class _InventorySummaryView extends StatelessWidget {
+  const _InventorySummaryView({required this.summary});
 
-class _InventoryHealthSection extends StatelessWidget {
-  const _InventoryHealthSection({
-    required this.section,
-    required this.maxWidth,
-  });
-
-  final DashboardInventorySection section;
-  final double maxWidth;
+  final InventoryDashboardSummary summary;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final colors = context.pointyColors;
-    final summary = section.summary;
-    return _DashboardSection(
-      title: l10n.dashboardInventorySectionTitle,
-      icon: Icons.inventory_2,
-      children: [
-        PointyMetricGrid(
-          maxWidth: maxWidth,
-          minTileWidth: 160,
-          maxColumns: 4,
-          includeBottomSpacing: true,
-          metrics: [
-            PointyMetricGridItem(
-              label: l10n.dashboardRetailStockValueMetric,
-              value: formatMoney(summary.retailStockValue),
-              icon: Icons.storefront_outlined,
-            ),
-            PointyMetricGridItem(
-              label: l10n.dashboardProductsMetric,
-              value: _formatNumber(summary.productCount),
-              icon: Icons.inventory_2_outlined,
-            ),
-            PointyMetricGridItem(
-              label: l10n.dashboardLowStockMetric,
-              value: _formatNumber(summary.lowStockCount),
-              icon: Icons.warning_amber,
-              accentColor: summary.lowStockCount > 0 ? colors.warning : null,
-            ),
-            PointyMetricGridItem(
-              label: l10n.dashboardOutOfStockMetric,
-              value: _formatNumber(summary.outOfStockCount),
-              icon: Icons.remove_shopping_cart_outlined,
-              accentColor: summary.outOfStockCount > 0 ? colors.danger : null,
-            ),
-          ],
+    return _InsightRows(
+      rows: [
+        _InsightRowData(
+          title: l10n.dashboardRetailStockValueMetric,
+          trailing: formatMoney(summary.retailStockValue),
         ),
-        PointyCardGrid(
-          children: [
-            PointyDetailSection(
-              title: l10n.dashboardLowStockTitle,
-              icon: Icons.warning_amber,
-              child: _StockItemList(items: section.lowStockItems),
-            ),
-            PointyDetailSection(
-              title: l10n.dashboardDustyInventoryTitle,
-              icon: Icons.hourglass_empty,
-              child: _StockItemList(items: section.dustyItems),
-            ),
-          ],
+        _InsightRowData(
+          title: l10n.dashboardProductsMetric,
+          trailing: _formatNumber(summary.productCount),
+        ),
+        _InsightRowData(
+          title: l10n.dashboardCommittedUnitsMetric,
+          trailing: _formatNumber(summary.committedUnits),
+        ),
+        _InsightRowData(
+          title: l10n.dashboardExpectedUnitsMetric,
+          trailing: _formatNumber(summary.expectedUnits),
+        ),
+        _InsightRowData(
+          title: l10n.dashboardLowStockMetric,
+          trailing: _formatNumber(summary.lowStockCount),
+          trailingColor: summary.lowStockCount > 0 ? colors.warning : null,
+        ),
+        _InsightRowData(
+          title: l10n.dashboardOutOfStockMetric,
+          trailing: _formatNumber(summary.outOfStockCount),
+          trailingColor: summary.outOfStockCount > 0 ? colors.danger : null,
         ),
       ],
     );
   }
 }
 
-// ---------------------------------------------------------------------------
-// Purchasing & suppliers
-// ---------------------------------------------------------------------------
+class _PurchasingSummaryView extends StatelessWidget {
+  const _PurchasingSummaryView({required this.summary});
 
-class _PurchasingSection extends StatelessWidget {
-  const _PurchasingSection({required this.section, required this.maxWidth});
-
-  final DashboardPurchasingSection section;
-  final double maxWidth;
+  final PurchasingDashboardSummary summary;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final colors = context.pointyColors;
-    final summary = section.summary;
-    return _DashboardSection(
-      title: l10n.dashboardPurchasingSectionTitle,
-      icon: Icons.add_shopping_cart,
-      children: [
-        PointyMetricGrid(
-          maxWidth: maxWidth,
-          minTileWidth: 160,
-          maxColumns: 4,
-          includeBottomSpacing: true,
-          metrics: [
-            PointyMetricGridItem(
-              label: l10n.dashboardPurchasesMetric,
-              value: formatMoney(summary.purchaseTotal),
-              icon: Icons.shopping_cart_checkout,
-            ),
-            PointyMetricGridItem(
-              label: l10n.dashboardDueToSuppliersMetric,
-              value: formatMoney(summary.dueTotal),
-              icon: Icons.account_balance_outlined,
-            ),
-            PointyMetricGridItem(
-              label: l10n.dashboardOpenPurchasesMetric,
-              value: _formatNumber(summary.openOrderCount),
-              icon: Icons.pending_actions_outlined,
-            ),
-            PointyMetricGridItem(
-              label: l10n.dashboardOverduePurchasesMetric,
-              value: _formatNumber(summary.overdueOrderCount),
-              icon: Icons.event_busy_outlined,
-              accentColor: summary.overdueOrderCount > 0 ? colors.danger : null,
-            ),
-          ],
+    return _InsightRows(
+      rows: [
+        _InsightRowData(
+          title: l10n.dashboardPurchasesMetric,
+          trailing: formatMoney(summary.purchaseTotal),
         ),
-        PointyCardGrid(
-          children: [
-            PointyDetailSection(
-              title: l10n.dashboardOverduePurchasesTitle,
-              icon: Icons.event_busy_outlined,
-              child: _OverduePurchaseList(orders: section.overdueOrders),
-            ),
-            PointyDetailSection(
-              title: l10n.dashboardSupplierBalancesTitle,
-              icon: Icons.account_balance_wallet_outlined,
-              child: _SupplierBalanceList(
-                balances: section.topSupplierBalances,
-              ),
-            ),
-          ],
+        _InsightRowData(
+          title: l10n.dashboardDueToSuppliersMetric,
+          trailing: formatMoney(summary.dueTotal),
+        ),
+        _InsightRowData(
+          title: l10n.dashboardOpenPurchasesMetric,
+          trailing: _formatNumber(summary.openOrderCount),
+        ),
+        _InsightRowData(
+          title: l10n.dashboardOverduePurchasesMetric,
+          trailing: _formatNumber(summary.overdueOrderCount),
+          trailingColor: summary.overdueOrderCount > 0 ? colors.danger : null,
         ),
       ],
     );
@@ -1230,101 +1293,11 @@ class _PurchasingSection extends StatelessWidget {
 }
 
 // ---------------------------------------------------------------------------
-// Daily operations: registers, payments, recent activity, devices
+// Integrity card and shared charts/lists
 // ---------------------------------------------------------------------------
 
-class _OperationsSection extends StatelessWidget {
-  const _OperationsSection({
-    required this.snapshot,
-    required this.capabilities,
-  });
-
-  final DashboardSnapshot snapshot;
-  final AuthorizationCapabilities capabilities;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
-    final sections = snapshot.sections;
-    final payments =
-        sections.payments != null &&
-            capabilities.allows(AppCapability.viewPaymentDashboard)
-        ? sections.payments
-        : null;
-    final sales =
-        sections.sales != null &&
-            capabilities.allows(AppCapability.viewSalesDashboard)
-        ? sections.sales
-        : null;
-    final discounts =
-        sections.discounts != null &&
-            capabilities.allows(AppCapability.viewDiscountDashboard)
-        ? sections.discounts
-        : null;
-    final printing =
-        sections.printing != null &&
-            capabilities.allows(AppCapability.viewPrintingDashboard)
-        ? sections.printing
-        : null;
-
-    final cards = <Widget>[
-      if (payments != null)
-        PointyDetailSection(
-          title: l10n.dashboardPaymentMixTitle,
-          icon: Icons.pie_chart_outline,
-          minHeight: 300,
-          child: _PaymentMixChart(methods: payments.methods),
-        ),
-      if (payments != null)
-        PointyDetailSection(
-          title: l10n.dashboardPaymentMethodsTitle,
-          icon: Icons.list_alt,
-          child: _PaymentMethodList(methods: payments.methods),
-        ),
-      if (sales != null)
-        PointyDetailSection(
-          title: l10n.dashboardRegistersTitle,
-          icon: Icons.point_of_sale_outlined,
-          child: _RegisterSummaryView(summary: sales.registers),
-        ),
-      if (sales != null)
-        PointyDetailSection(
-          title: l10n.dashboardRecentOrdersTitle,
-          icon: Icons.history,
-          child: _RecentOrdersList(orders: sales.recentOrders),
-        ),
-      if (discounts != null)
-        PointyDetailSection(
-          title: l10n.dashboardTopDiscountsTitle,
-          icon: Icons.local_offer_outlined,
-          child: _DiscountRuleList(rules: discounts.topRules),
-        ),
-      if (printing != null && printing.summary.failedCount > 0)
-        PointyDetailSection(
-          title: l10n.dashboardPrintFailuresTitle,
-          icon: Icons.print_disabled_outlined,
-          child: _PrintFailureList(failures: printing.recentFailures),
-        ),
-    ];
-
-    if (cards.isEmpty) {
-      return const SizedBox.shrink();
-    }
-
-    return _DashboardSection(
-      title: l10n.dashboardOperationsTitle,
-      icon: Icons.storefront_outlined,
-      children: [PointyCardGrid(children: cards)],
-    );
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Shared section scaffold, charts, and lists
-// ---------------------------------------------------------------------------
-
-class _IntegritySection extends StatelessWidget {
-  const _IntegritySection({required this.section, required this.onOpen});
+class _IntegrityCard extends StatelessWidget {
+  const _IntegrityCard({required this.section, required this.onOpen});
 
   final DashboardFraudSection section;
   final VoidCallback? onOpen;
@@ -1338,103 +1311,65 @@ class _IntegritySection extends StatelessWidget {
     final summary = section.summary;
     final allClear = summary.activeCount == 0;
 
-    return _DashboardSection(
+    return PointyDetailSection(
+      key: const ValueKey('dashboard_integrity_card'),
       title: l10n.dashboardIntegritySectionTitle,
       icon: Icons.verified_user_outlined,
-      children: [
-        Card(
-          key: const ValueKey('dashboard_integrity_card'),
-          margin: EdgeInsets.zero,
-          child: Padding(
-            padding: spacing.compactPadding,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Row(
-                  children: [
-                    Icon(
-                      allClear
-                          ? Icons.verified_user_outlined
-                          : Icons.gpp_maybe_outlined,
-                      color: allClear ? colors.success : colors.warning,
-                    ),
-                    SizedBox(width: spacing.sm),
-                    Expanded(
-                      child: Text(
-                        allClear
-                            ? l10n.dashboardIntegrityAllClear
-                            : l10n.dashboardAlertFraudFindings(
-                                summary.activeCount,
-                              ),
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          fontWeight: FontWeight.w700,
-                          color: allClear ? colors.success : colors.ink,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                if (!allClear) ...[
-                  SizedBox(height: spacing.sm),
-                  for (final finding in section.recentFindings.take(3))
-                    PointyDataRow(
-                      minHeight: 56,
-                      title: finding.userLabel,
-                      subtitle: finding.headline.isNotEmpty
-                          ? finding.headline
-                          : finding.ruleTitle,
-                      trailing: PointyStatusPill(
-                        label: '${finding.riskScore}',
-                        color: finding.severity == 'critical'
-                            ? colors.danger
-                            : colors.warning,
-                        icon: Icons.speed_outlined,
-                      ),
-                    ),
-                ],
-                if (onOpen != null) ...[
-                  SizedBox(height: spacing.sm),
-                  Align(
-                    alignment: AlignmentDirectional.centerStart,
-                    child: FilledButton.tonalIcon(
-                      key: const ValueKey('dashboard_open_integrity_button'),
-                      onPressed: onOpen,
-                      icon: const Icon(Icons.shield_outlined),
-                      label: Text(l10n.dashboardOpenIntegrityButton),
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _DashboardSection extends StatelessWidget {
-  const _DashboardSection({
-    required this.title,
-    required this.icon,
-    required this.children,
-  });
-
-  final String title;
-  final IconData icon;
-  final List<Widget> children;
-
-  @override
-  Widget build(BuildContext context) {
-    final spacing = AdaptiveSpacing.of(context);
-    return Padding(
-      padding: EdgeInsets.only(bottom: spacing.xl),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          PointySectionHeader(title: title, leading: Icon(icon, size: 22)),
-          SizedBox(height: spacing.sm),
-          ...children,
+          Row(
+            children: [
+              Icon(
+                allClear
+                    ? Icons.verified_user_outlined
+                    : Icons.gpp_maybe_outlined,
+                color: allClear ? colors.success : colors.warning,
+              ),
+              SizedBox(width: spacing.sm),
+              Expanded(
+                child: Text(
+                  allClear
+                      ? l10n.dashboardIntegrityAllClear
+                      : l10n.dashboardAlertFraudFindings(summary.activeCount),
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: allClear ? colors.success : colors.ink,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (!allClear) ...[
+            SizedBox(height: spacing.sm),
+            for (final finding in section.recentFindings.take(3))
+              PointyDataRow(
+                minHeight: 56,
+                title: finding.userLabel,
+                subtitle: finding.headline.isNotEmpty
+                    ? finding.headline
+                    : finding.ruleTitle,
+                trailing: PointyStatusPill(
+                  label: '${finding.riskScore}',
+                  color: finding.severity == 'critical'
+                      ? colors.danger
+                      : colors.warning,
+                  icon: Icons.speed_outlined,
+                ),
+              ),
+          ],
+          if (onOpen != null) ...[
+            SizedBox(height: spacing.sm),
+            Align(
+              alignment: AlignmentDirectional.centerStart,
+              child: FilledButton.tonalIcon(
+                key: const ValueKey('dashboard_open_integrity_button'),
+                onPressed: onOpen,
+                icon: const Icon(Icons.shield_outlined),
+                label: Text(l10n.dashboardOpenIntegrityButton),
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -1566,9 +1501,12 @@ class _PaymentMixChart extends StatelessWidget {
 }
 
 class _TopProductsList extends StatelessWidget {
-  const _TopProductsList({required this.products});
+  const _TopProductsList({required this.products, this.showProfit = false});
 
   final List<TopProductInsight> products;
+
+  /// When true the trailing value shows per-product profit instead of revenue.
+  final bool showProfit;
 
   @override
   Widget build(BuildContext context) {
@@ -1584,7 +1522,9 @@ class _TopProductsList extends StatelessWidget {
             subtitle: product.sku.isEmpty
                 ? l10n.dashboardQuantityOnly(product.quantity)
                 : l10n.dashboardQuantityWithSku(product.quantity, product.sku),
-            trailing: formatMoney(product.revenue),
+            trailing: formatMoney(
+              showProfit ? product.profit : product.revenue,
+            ),
           ),
       ],
     );
@@ -1665,6 +1605,69 @@ class _RegisterSummaryView extends StatelessWidget {
           title: l10n.dashboardVarianceRegistersLabel,
           subtitle: formatMoney(summary.varianceTotal),
           trailing: _formatNumber(summary.varianceCount),
+        ),
+      ],
+    );
+  }
+}
+
+class _TeamSummaryView extends StatelessWidget {
+  const _TeamSummaryView({required this.summary});
+
+  final PayrollDashboardSummary summary;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    return _InsightRows(
+      rows: [
+        _InsightRowData(
+          title: l10n.dashboardSalaryExpenseMetric,
+          trailing: formatMoney(summary.salaryExpense),
+        ),
+        _InsightRowData(
+          title: l10n.dashboardPayrollPaidMetric,
+          trailing: formatMoney(summary.paidTotal),
+        ),
+        if (summary.pendingTotal > 0)
+          _InsightRowData(
+            title: l10n.dashboardPayrollPendingMetric,
+            trailing: formatMoney(summary.pendingTotal),
+          ),
+        _InsightRowData(
+          title: l10n.dashboardActiveEmployeesMetric,
+          trailing: _formatNumber(summary.activeEmployeeCount),
+        ),
+      ],
+    );
+  }
+}
+
+class _CustomersSummaryView extends StatelessWidget {
+  const _CustomersSummaryView({required this.summary});
+
+  final CustomersDashboardSummary summary;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    return _InsightRows(
+      rows: [
+        _InsightRowData(
+          title: l10n.dashboardActiveCustomersMetric,
+          trailing: _formatNumber(summary.activeCustomerCount),
+        ),
+        _InsightRowData(
+          title: l10n.dashboardNewCustomersMetric,
+          trailing: _formatNumber(summary.newCustomerCount),
+        ),
+        _InsightRowData(
+          title: l10n.dashboardRepeatCustomersMetric,
+          trailing: _formatNumber(summary.repeatCustomerCount),
+        ),
+        _InsightRowData(
+          title: l10n.dashboardCustomersWithSalesMetric,
+          trailing: _formatNumber(summary.customersWithSalesCount),
         ),
       ],
     );
@@ -1844,11 +1847,17 @@ class _PrintFailureList extends StatelessWidget {
 }
 
 class _InsightRowData {
-  const _InsightRowData({required this.title, this.subtitle, this.trailing});
+  const _InsightRowData({
+    required this.title,
+    this.subtitle,
+    this.trailing,
+    this.trailingColor,
+  });
 
   final String title;
   final String? subtitle;
   final String? trailing;
+  final Color? trailingColor;
 }
 
 class _InsightRows extends StatelessWidget {
@@ -1888,9 +1897,10 @@ class _InsightRow extends StatelessWidget {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               textAlign: TextAlign.end,
-              style: switch (Theme.of(
-                context,
-              ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w700)) {
+              style: switch (Theme.of(context).textTheme.bodyMedium?.copyWith(
+                fontWeight: FontWeight.w700,
+                color: row.trailingColor,
+              )) {
                 final style? => PointyTypography.numeric(style),
                 null => null,
               },
