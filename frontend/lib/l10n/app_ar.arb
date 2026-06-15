@@ -5729,5 +5729,46 @@
     "placeholders": {
       "category": { "type": "String" }
     }
+  },
+  "stockCountOfTotal": "من {total}",
+  "@stockCountOfTotal": {
+    "description": "Trailing 'of N' for the counted/total progress label.",
+    "placeholders": {
+      "total": { "type": "int" }
+    }
+  },
+  "stockCountRemaining": "{count, plural, =0{اكتمل العدّ} =1{بقي صنف واحد} =2{بقي صنفان} other{بقي {count}}}",
+  "@stockCountRemaining": {
+    "description": "Remaining items still to count in the active session.",
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "stockCountActiveTitle": "جرد قيد التنفيذ",
+  "stockCountCameraScan": "المسح بالكاميرا",
+  "stockCountYourCount": "عدّتك",
+  "stockCountReentryCurrentLabel": "العدّة الحالية",
+  "stockCountReentryQuestion": "هل تضيف الكمية الجديدة إلى عدّتك أم تستبدلها؟",
+  "stockCountStartHeroTitle": "ابدأ جردًا جديدًا",
+  "stockCountStartHeroBody": "عُدّ مخزونك الفعلي وقارنه بالنظام لرصد الفروقات وتصحيحها.",
+  "stockCountHistoryEmptyHint": "ستظهر عمليات الجرد السابقة هنا.",
+  "stockCountMatched": "مطابق",
+  "stockCountAllMatched": "كل شيء مطابق",
+  "stockCountFinishCount": "إنهاء الجرد",
+  "stockCountShortage": "نقص",
+  "stockCountSurplus": "زيادة",
+  "stockCountApplySummary": "{count, plural, =1{سيتم تعديل صنف واحد} =2{سيتم تعديل صنفين} other{سيتم تعديل {count} أصناف}}",
+  "@stockCountApplySummary": {
+    "description": "Footer summary above the apply button.",
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "stockCountVarianceShort": "{count, plural, =1{فرق واحد} =2{فرقان} other{{count} فروق}}",
+  "@stockCountVarianceShort": {
+    "description": "Compact variance-count badge on a history row.",
+    "placeholders": {
+      "count": { "type": "int" }
+    }
   }
 }

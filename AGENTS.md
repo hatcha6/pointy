@@ -22,6 +22,70 @@ These rules apply to AI agents working anywhere in this repository.
 - Avoid large files and mixed-responsibility files. Split unrelated behavior into focused files, and extract reusable widgets, helpers, models, or view-model actions when a file starts to bundle multiple concepts.
 - When using the Flutter `pdf` package for RTL tables, keep visual column metadata in the same order as rendered cells: if headers/rows are reversed for correct RTL visual order, reverse the matching column widths and alignments at that same render boundary, or use a shared helper that does all of them together.
 
+## UI Preview Harness (Flutter web)
+
+When building or redesigning a screen, preview it visually instead of guessing.
+The pattern: a dev-only Flutter **web** entrypoint that renders the real screens
+with fake repositories (no backend, no auth, no login), served via `flutter run
+-d web-server`, then screenshotted through the preview tooling. The canonical,
+working example is `frontend/lib/dev/stock_count_preview.dart` (run it with
+`make frontend-preview`, or the `stock-count-preview` config in
+`.claude/launch.json`). Copy it as the starting point for any other route.
+
+It supports two complementary modes via a `?screen=` query param:
+
+- **Design board** (`?screen=board`): every screen and state laid out at once in
+  fixed device frames (phone + wide side by side) for a single overview
+  screenshot. Best for reviewing the whole route quickly and comparing widths.
+- **Single surface** (`?screen=sessions`, `counting-item`, `recon`, `variance`,
+  …): one screen full-viewport for deep, real-viewport responsive QA — resize the
+  browser to 390 / 430 / 768 / 1024 / 1366 and screenshot each.
+
+### How to run and drive it
+
+1. Add a `frontend-<feature>-preview` `make` target and a launch.json config (so
+   the preview tool can start it) pointing at `-t lib/dev/<feature>_preview.dart`.
+2. Start the server (preview tool `preview_start`, or `make`). First compile is
+   ~60–90s; wait for `flutter-view` to exist in the DOM, then screenshot.
+3. Navigate between surfaces by setting the URL, not by clicking — Flutter web
+   renders to a `<canvas>`, so DOM-based tools (clicks by selector, accessibility
+   snapshot, CSS inspect) do **not** see widgets. Use `preview_eval` with
+   `window.location.href = origin + '/?screen=counting-item'` (a reload reuses the
+   already-compiled bundle, so it is fast). Only **screenshots** are reliable for
+   Flutter web.
+4. For the board, size the viewport large (e.g. 1500x4000) before screenshotting
+   so Flutter paints every frame (it only paints what is inside the viewport).
+5. After editing Dart, you must recompile: stop and restart the preview server
+   (`flutter run` under the preview tool can't receive a hot-restart keypress).
+   Changing only the `?screen=` URL does not recompile.
+6. After `preview_resize`, the first screenshot can show a black band (a
+   repaint-timing artifact, not a layout bug); resize once more or re-screenshot.
+
+### Cloning the harness for another route
+
+- Wrap everything in a `MaterialApp` that matches `lib/src/app.dart`: `locale:
+  Locale('ar')`, the four localization delegates, `theme: PointyTheme.light()`,
+  and a `PointyNavigationRailScope` in the `builder`.
+- Fake repositories by subclassing the concrete repo and overriding only the
+  methods the screen calls: `class _FakeXRepository extends XRepository { _FakeXRepository() : super(PosApiService()); @override ... }`.
+  Return `Ok(...)` with hand-built fake models. For screens with a drawer, also
+  implement `AppNavigation` (no-op `navigateTo`/`logout`, real `capabilities`/`currentUser`).
+- For interactive states a screen only reaches via input (e.g. an item selected
+  after a scan), extract the screen body into a pure, parameter-driven public
+  widget (see `StockCountCountingBody`) so the preview/tests can render that state
+  directly. This also improves testability.
+- Device frame for the board: a `SizedBox(width, height)` wrapping a
+  `MediaQuery(data: MediaQuery.of(context).copyWith(size: Size(width, height), padding/viewInsets: zero), child: screen)`.
+  The `MediaQuery` size override makes `AdaptiveSpacing`/breakpoints behave as if
+  the viewport were that size. Keep board frame widths < 1024 for screens that
+  switch to a navigation rail, unless you want to preview the rail too.
+- Sheets/dialogs: render a host scaffold that calls the public `show…Sheet`
+  function in a post-frame callback so the sheet opens on load (no click needed).
+- Mark the file dev-only ("safe to delete") — it is a separate entrypoint, never
+  imported by `lib/main.dart`, so it does not ship. Do not run `dart format lib`
+  on the whole tree to format it (that reflows unrelated files); format just the
+  paths you touched.
+
 ## Backend
 
 - Keep Django apps grouped by domain: catalog, inventory, sales, payments, and core.

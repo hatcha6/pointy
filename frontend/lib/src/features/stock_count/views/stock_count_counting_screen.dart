@@ -20,6 +20,7 @@ import '../view_models/stock_count_session_view_model.dart';
 import 'stock_count_add_replace_sheet.dart';
 import 'stock_count_item_search_sheet.dart';
 import 'stock_count_reconciliation_screen.dart';
+import 'stock_count_ui.dart';
 import 'stock_count_variance_prompt.dart';
 
 /// The focused scan -> count -> next loop. Returns `true` up the stack when the
@@ -198,7 +199,7 @@ class _StockCountCountingScreenState extends State<StockCountCountingScreen> {
                 icon: const Icon(Icons.search),
               ),
               IconButton(
-                tooltip: l10n.stockCountBrowse,
+                tooltip: l10n.stockCountCameraScan,
                 onPressed: _openCamera,
                 icon: const Icon(Icons.document_scanner_outlined),
               ),
@@ -206,30 +207,24 @@ class _StockCountCountingScreenState extends State<StockCountCountingScreen> {
           ),
           body: BarcodeScanListener(
             onBarcodeScanned: _onScan,
-            child: Column(
-              children: [
-                _ProgressHeader(
-                  counted: _viewModel.countedCount,
-                  total: _viewModel.expectedCount,
-                  progress: _viewModel.progress,
-                ),
-                Expanded(
-                  child: SingleChildScrollView(
-                    padding: AdaptiveSpacing.of(context).pagePadding,
-                    child: _viewModel.currentVariant == null
-                        ? _ScanPrompt(onSearch: _openSearch)
-                        : _CurrentItem(
-                            variant: _viewModel.currentVariant!,
-                            input: _viewModel.input,
-                          ),
-                  ),
-                ),
-                _CountingControls(
-                  viewModel: _viewModel,
-                  onSave: _onSave,
-                  onFinish: _finish,
-                ),
-              ],
+            child: StockCountCountingBody(
+              session: _viewModel.session,
+              counted: _viewModel.countedCount,
+              total: _viewModel.expectedCount,
+              progress: _viewModel.progress,
+              variant: _viewModel.currentVariant,
+              input: _viewModel.input,
+              onSearch: _openSearch,
+              onCamera: _openCamera,
+              onDigit: _viewModel.appendDigit,
+              onDecimal: _viewModel.appendDecimal,
+              onBackspace: _viewModel.backspace,
+              onClear: _viewModel.clearInput,
+              footer: _CountingControls(
+                canSubmit: _viewModel.canSubmit,
+                onSave: _onSave,
+                onFinish: _finish,
+              ),
             ),
           ),
         );
@@ -238,80 +233,301 @@ class _StockCountCountingScreenState extends State<StockCountCountingScreen> {
   }
 }
 
-class _ProgressHeader extends StatelessWidget {
-  const _ProgressHeader({
+/// Presentational body for the counting loop: a focused header, the scan prompt
+/// or the current-item count panel, the keypad, and the sticky footer. Pure
+/// (no view model) so it renders identically in previews and tests.
+class StockCountCountingBody extends StatelessWidget {
+  const StockCountCountingBody({
+    super.key,
+    required this.session,
+    required this.counted,
+    required this.total,
+    required this.progress,
+    required this.variant,
+    required this.input,
+    required this.onSearch,
+    required this.onCamera,
+    required this.onDigit,
+    required this.onDecimal,
+    required this.onBackspace,
+    required this.onClear,
+    required this.footer,
+  });
+
+  final StockCount session;
+  final int counted;
+  final int total;
+  final double progress;
+  final ProductVariant? variant;
+  final String input;
+  final VoidCallback onSearch;
+  final VoidCallback onCamera;
+  final ValueChanged<String> onDigit;
+  final VoidCallback onDecimal;
+  final VoidCallback onBackspace;
+  final VoidCallback onClear;
+  final Widget footer;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        _CountingHeader(
+          session: session,
+          counted: counted,
+          total: total,
+          progress: progress,
+        ),
+        Expanded(
+          child: variant == null
+              ? _ScanPanel(onSearch: onSearch, onCamera: onCamera)
+              : _ItemAndKeypad(
+                  variant: variant!,
+                  input: input,
+                  onDigit: onDigit,
+                  onDecimal: onDecimal,
+                  onBackspace: onBackspace,
+                  onClear: onClear,
+                ),
+        ),
+        footer,
+      ],
+    );
+  }
+}
+
+/// The dark focus band beneath the app bar: count context + progress.
+class _CountingHeader extends StatelessWidget {
+  const _CountingHeader({
+    required this.session,
     required this.counted,
     required this.total,
     required this.progress,
   });
 
+  final StockCount session;
   final int counted;
   final int total;
   final double progress;
 
   @override
   Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
     final spacing = AdaptiveSpacing.of(context);
     final colors = context.pointyColors;
+    final textTheme = Theme.of(context).textTheme;
 
-    return Padding(
-      padding: EdgeInsetsDirectional.fromSTEB(
-        spacing.md,
-        spacing.sm,
-        spacing.md,
-        spacing.sm,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            l10n.stockCountProgress(counted, total),
-            style: Theme.of(
-              context,
-            ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700),
+    return DecoratedBox(
+      decoration: BoxDecoration(color: colors.darkTopBar),
+      child: Padding(
+        padding: EdgeInsetsDirectional.fromSTEB(
+          spacing.lg,
+          0,
+          spacing.lg,
+          spacing.md,
+        ),
+        child: AdaptiveMaxWidth(
+          width: AppContentWidth.detail,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      session.countNumber,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style:
+                          PointyTypography.numeric(
+                            textTheme.titleSmall ?? const TextStyle(),
+                          ).copyWith(
+                            color: colors.surface.withValues(alpha: 0.82),
+                            fontWeight: FontWeight.w700,
+                          ),
+                    ),
+                  ),
+                  SizedBox(width: spacing.sm),
+                  StockCountScopeChip(session: session, onDark: true),
+                ],
+              ),
+              SizedBox(height: spacing.md),
+              StockCountProgressBar(
+                counted: counted,
+                total: total,
+                progress: progress,
+                onDark: true,
+                compact: true,
+              ),
+            ],
           ),
-          SizedBox(height: spacing.xs),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(999),
-            child: LinearProgressIndicator(
-              value: progress,
-              minHeight: 8,
-              backgroundColor: colors.surfaceSunken,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ScanPrompt extends StatelessWidget {
-  const _ScanPrompt({required this.onSearch});
-
-  final VoidCallback onSearch;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 48),
-      child: PointyEmptyState(
-        icon: Icons.qr_code_scanner,
-        title: l10n.stockCountScanPrompt,
-        message: l10n.stockCountScanHint,
-        action: OutlinedButton.icon(
-          onPressed: onSearch,
-          icon: const Icon(Icons.search),
-          label: Text(l10n.stockCountSearchItem),
         ),
       ),
     );
   }
 }
 
-class _CurrentItem extends StatelessWidget {
-  const _CurrentItem({required this.variant, required this.input});
+/// Welcoming empty state: a scan target plus the two manual fallbacks.
+class _ScanPanel extends StatelessWidget {
+  const _ScanPanel({required this.onSearch, required this.onCamera});
+
+  final VoidCallback onSearch;
+  final VoidCallback onCamera;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final spacing = AdaptiveSpacing.of(context);
+    final colors = context.pointyColors;
+    final textTheme = Theme.of(context).textTheme;
+
+    return Center(
+      child: SingleChildScrollView(
+        padding: spacing.pagePadding,
+        child: AdaptiveMaxWidth(
+          width: AppContentWidth.compact,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Center(
+                child: Container(
+                  width: 132,
+                  height: 132,
+                  decoration: BoxDecoration(
+                    color: colors.primaryStrong.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(28),
+                    border: Border.all(
+                      color: colors.primaryStrong.withValues(alpha: 0.20),
+                      width: 1.5,
+                    ),
+                  ),
+                  child: Icon(
+                    Icons.qr_code_scanner_rounded,
+                    size: 60,
+                    color: colors.primaryStrong,
+                  ),
+                ),
+              ),
+              SizedBox(height: spacing.lg),
+              Text(
+                l10n.stockCountScanPrompt,
+                textAlign: TextAlign.center,
+                style: textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              SizedBox(height: spacing.sm),
+              Text(
+                l10n.stockCountScanHint,
+                textAlign: TextAlign.center,
+                style: textTheme.bodyMedium?.copyWith(color: colors.mutedInk),
+              ),
+              SizedBox(height: spacing.xl),
+              SizedBox(
+                height: 56,
+                child: FilledButton.icon(
+                  onPressed: onSearch,
+                  icon: const Icon(Icons.search),
+                  label: Text(l10n.stockCountSearchItem),
+                ),
+              ),
+              SizedBox(height: spacing.sm),
+              SizedBox(
+                height: 52,
+                child: OutlinedButton.icon(
+                  onPressed: onCamera,
+                  icon: const Icon(Icons.document_scanner_outlined),
+                  label: Text(l10n.stockCountCameraScan),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The current-item count panel + keypad. Stacks on phones, splits into two
+/// panes (item | keypad) once there is room.
+class _ItemAndKeypad extends StatelessWidget {
+  const _ItemAndKeypad({
+    required this.variant,
+    required this.input,
+    required this.onDigit,
+    required this.onDecimal,
+    required this.onBackspace,
+    required this.onClear,
+  });
+
+  final ProductVariant variant;
+  final String input;
+  final ValueChanged<String> onDigit;
+  final VoidCallback onDecimal;
+  final VoidCallback onBackspace;
+  final VoidCallback onClear;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final spacing = AdaptiveSpacing.of(context);
+
+    final keypad = PointyKeypad(
+      label: l10n.stockCountCountLabel,
+      backspaceTooltip: l10n.stockCountRecount,
+      clearTooltip: l10n.stockCountCountLabel,
+      onDigit: onDigit,
+      onDecimal: onDecimal,
+      onBackspace: onBackspace,
+      onClear: onClear,
+    );
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isWide = constraints.maxWidth >= AppBreakpoints.tabletMin;
+
+        if (isWide) {
+          return Padding(
+            padding: spacing.pagePadding,
+            child: AdaptiveMaxWidth(
+              width: AppContentWidth.detail,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: _ItemPanel(variant: variant, input: input),
+                  ),
+                  SizedBox(width: spacing.xl),
+                  SizedBox(width: 360, child: keypad),
+                ],
+              ),
+            ),
+          );
+        }
+
+        return SingleChildScrollView(
+          padding: spacing.pagePadding,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _ItemPanel(variant: variant, input: input),
+              SizedBox(height: spacing.lg),
+              Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 420),
+                  child: keypad,
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _ItemPanel extends StatelessWidget {
+  const _ItemPanel({required this.variant, required this.input});
 
   final ProductVariant variant;
   final String input;
@@ -322,120 +538,154 @@ class _CurrentItem extends StatelessWidget {
     final spacing = AdaptiveSpacing.of(context);
     final colors = context.pointyColors;
     final textTheme = Theme.of(context).textTheme;
+    final unit = unitLabel(l10n, variant.unit);
+    final subtitle = variant.sku.isEmpty
+        ? l10n.stockCountItemUnit(unit)
+        : '${l10n.stockCountItemUnit(unit)} · ${variant.sku}';
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Center(
-          child: ProductImageThumbnail(
-            imageUrl: variant.primaryImage?.contentUrl,
-            fallbackText: variant.displayLabel,
-            size: 120,
-            borderRadius: 16,
-          ),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            ProductImageThumbnail(
+              imageUrl: variant.primaryImage?.contentUrl,
+              fallbackText: variant.displayLabel,
+              size: 64,
+              borderRadius: 14,
+            ),
+            SizedBox(width: spacing.md),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    variant.displayLabel,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: textTheme.bodySmall?.copyWith(
+                      color: colors.mutedInk,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
-        SizedBox(height: spacing.md),
-        Text(
-          variant.displayLabel,
-          textAlign: TextAlign.center,
-          style: textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
-        ),
-        SizedBox(height: spacing.xs),
-        Text(
-          l10n.stockCountItemUnit(unitLabel(l10n, variant.unit)),
-          textAlign: TextAlign.center,
-          style: textTheme.bodyMedium?.copyWith(color: colors.mutedInk),
-        ),
-        if (variant.sku.isNotEmpty)
-          Text(
-            variant.sku,
-            textAlign: TextAlign.center,
-            style: textTheme.bodySmall?.copyWith(color: colors.mutedInk),
-          ),
         SizedBox(height: spacing.lg),
-        DecoratedBox(
-          decoration: BoxDecoration(
-            color: colors.surfaceSunken,
-            borderRadius: BorderRadius.circular(PointyRadii.input),
-          ),
-          child: Padding(
-            padding: EdgeInsets.symmetric(
-              vertical: spacing.md,
-              horizontal: spacing.lg,
-            ),
-            child: Text(
-              input.isEmpty ? '0' : input,
-              textAlign: TextAlign.center,
-              style: PointyTypography.numeric(
-                textTheme.displaySmall ??
-                    const TextStyle(fontSize: 40, fontWeight: FontWeight.w700),
-              ).copyWith(fontWeight: FontWeight.w700),
-            ),
-          ),
-        ),
+        _CountDisplay(input: input, unit: unit),
       ],
+    );
+  }
+}
+
+/// The large numeric readout of the entered count, framed like a focused field.
+class _CountDisplay extends StatelessWidget {
+  const _CountDisplay({required this.input, required this.unit});
+
+  final String input;
+  final String unit;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final spacing = AdaptiveSpacing.of(context);
+    final colors = context.pointyColors;
+    final textTheme = Theme.of(context).textTheme;
+    final hasInput = input.isNotEmpty;
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: colors.surface,
+        borderRadius: BorderRadius.circular(PointyRadii.input),
+        border: Border.all(color: PointyColors.primary, width: 1.5),
+      ),
+      child: Padding(
+        padding: EdgeInsets.symmetric(
+          vertical: spacing.lg,
+          horizontal: spacing.lg,
+        ),
+        child: Column(
+          children: [
+            Text(
+              l10n.stockCountCountLabel,
+              style: textTheme.labelMedium?.copyWith(
+                color: colors.mutedInk,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            SizedBox(height: spacing.xs),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.baseline,
+              textBaseline: TextBaseline.alphabetic,
+              children: [
+                Text(
+                  hasInput ? input : '0',
+                  style:
+                      PointyTypography.numeric(
+                        textTheme.displaySmall ?? const TextStyle(fontSize: 40),
+                      ).copyWith(
+                        fontWeight: FontWeight.w800,
+                        color: hasInput ? colors.ink : colors.lineStrong,
+                      ),
+                ),
+                SizedBox(width: spacing.sm),
+                Padding(
+                  padding: const EdgeInsetsDirectional.only(bottom: 6),
+                  child: Text(
+                    unit,
+                    style: textTheme.titleMedium?.copyWith(
+                      color: colors.mutedInk,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
 
 class _CountingControls extends StatelessWidget {
   const _CountingControls({
-    required this.viewModel,
+    required this.canSubmit,
     required this.onSave,
     required this.onFinish,
   });
 
-  final StockCountSessionViewModel viewModel;
+  final bool canSubmit;
   final VoidCallback onSave;
   final VoidCallback onFinish;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final spacing = AdaptiveSpacing.of(context);
-    final hasItem = viewModel.currentVariant != null;
 
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        if (hasItem)
-          Padding(
-            padding: EdgeInsetsDirectional.fromSTEB(
-              spacing.md,
-              0,
-              spacing.md,
-              spacing.sm,
-            ),
-            // Bound the keypad width: its 3-column grid derives button height
-            // from the cell width, so on a wide POS screen an unbounded keypad
-            // grows tall enough to overflow the column. A phone-sized cap keeps
-            // the buttons (and the keypad's height) sensible everywhere.
-            child: Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 420),
-                child: PointyKeypad(
-                  label: l10n.stockCountCountLabel,
-                  backspaceTooltip: l10n.stockCountRecount,
-                  clearTooltip: l10n.stockCountCountLabel,
-                  onDigit: viewModel.appendDigit,
-                  onDecimal: viewModel.appendDecimal,
-                  onBackspace: viewModel.backspace,
-                  onClear: viewModel.clearInput,
-                ),
-              ),
-            ),
-          ),
-        PointyStickyActionFooter(
-          primaryAction: FilledButton(
-            onPressed: viewModel.canSubmit ? onSave : null,
-            child: Text(l10n.stockCountSaveAndNext),
-          ),
-          secondaryActions: [
-            OutlinedButton(
-              onPressed: onFinish,
-              child: Text(l10n.stockCountFinishButton),
-            ),
-          ],
+    return PointyStickyActionFooter(
+      primaryAction: FilledButton.icon(
+        onPressed: canSubmit ? onSave : null,
+        icon: const Icon(Icons.check),
+        label: Text(l10n.stockCountSaveAndNext),
+      ),
+      secondaryActions: [
+        OutlinedButton.icon(
+          onPressed: onFinish,
+          icon: const Icon(Icons.fact_check_outlined),
+          label: Text(l10n.stockCountFinishButton),
         ),
       ],
     );

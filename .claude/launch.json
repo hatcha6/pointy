@@ -14,6 +14,12 @@
       "port": 8080
     },
     {
+      "name": "stock-count-preview",
+      "runtimeExecutable": "make",
+      "runtimeArgs": ["frontend-preview"],
+      "port": 8080
+    },
+    {
       "name": "relay",
       "runtimeExecutable": "make",
       "runtimeArgs": ["relay-run"],

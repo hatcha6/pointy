@@ -9538,4 +9538,87 @@ class AppLocalizationsAr extends AppLocalizations {
   String stockCountScopeCategoryLabel(String category) {
     return 'تصنيف: $category';
   }
+
+  @override
+  String stockCountOfTotal(int total) {
+    return 'من $total';
+  }
+
+  @override
+  String stockCountRemaining(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'بقي $count',
+      two: 'بقي صنفان',
+      one: 'بقي صنف واحد',
+      zero: 'اكتمل العدّ',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get stockCountActiveTitle => 'جرد قيد التنفيذ';
+
+  @override
+  String get stockCountCameraScan => 'المسح بالكاميرا';
+
+  @override
+  String get stockCountYourCount => 'عدّتك';
+
+  @override
+  String get stockCountReentryCurrentLabel => 'العدّة الحالية';
+
+  @override
+  String get stockCountReentryQuestion =>
+      'هل تضيف الكمية الجديدة إلى عدّتك أم تستبدلها؟';
+
+  @override
+  String get stockCountStartHeroTitle => 'ابدأ جردًا جديدًا';
+
+  @override
+  String get stockCountStartHeroBody =>
+      'عُدّ مخزونك الفعلي وقارنه بالنظام لرصد الفروقات وتصحيحها.';
+
+  @override
+  String get stockCountHistoryEmptyHint => 'ستظهر عمليات الجرد السابقة هنا.';
+
+  @override
+  String get stockCountMatched => 'مطابق';
+
+  @override
+  String get stockCountAllMatched => 'كل شيء مطابق';
+
+  @override
+  String get stockCountFinishCount => 'إنهاء الجرد';
+
+  @override
+  String get stockCountShortage => 'نقص';
+
+  @override
+  String get stockCountSurplus => 'زيادة';
+
+  @override
+  String stockCountApplySummary(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'سيتم تعديل $count أصناف',
+      two: 'سيتم تعديل صنفين',
+      one: 'سيتم تعديل صنف واحد',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String stockCountVarianceShort(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count فروق',
+      two: 'فرقان',
+      one: 'فرق واحد',
+    );
+    return '$_temp0';
+  }
 }

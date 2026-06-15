@@ -236,6 +236,9 @@ frontend-run: frontend-install ## Run the Flutter app on the default selected de
 frontend-web: frontend-install ## Run the Flutter app as a local web server.
 	cd "$(FRONTEND_DIR)" && $(FLUTTER) run -d web-server --web-hostname $(WEB_HOST) --web-port $(WEB_PORT)
 
+frontend-preview: frontend-install ## Run the stock-count UI preview harness as a local web server.
+	cd "$(FRONTEND_DIR)" && $(FLUTTER) run -d web-server --web-hostname $(WEB_HOST) --web-port $(WEB_PORT) -t lib/dev/stock_count_preview.dart
+
 frontend-test: frontend-install ## Run Flutter tests.
 	cd "$(FRONTEND_DIR)" && $(FLUTTER) test
 

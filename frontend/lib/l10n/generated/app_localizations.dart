@@ -16493,6 +16493,108 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'تصنيف: {category}'**
   String stockCountScopeCategoryLabel(String category);
+
+  /// Trailing 'of N' for the counted/total progress label.
+  ///
+  /// In ar, this message translates to:
+  /// **'من {total}'**
+  String stockCountOfTotal(int total);
+
+  /// Remaining items still to count in the active session.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, =0{اكتمل العدّ} =1{بقي صنف واحد} =2{بقي صنفان} other{بقي {count}}}'**
+  String stockCountRemaining(int count);
+
+  /// No description provided for @stockCountActiveTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'جرد قيد التنفيذ'**
+  String get stockCountActiveTitle;
+
+  /// No description provided for @stockCountCameraScan.
+  ///
+  /// In ar, this message translates to:
+  /// **'المسح بالكاميرا'**
+  String get stockCountCameraScan;
+
+  /// No description provided for @stockCountYourCount.
+  ///
+  /// In ar, this message translates to:
+  /// **'عدّتك'**
+  String get stockCountYourCount;
+
+  /// No description provided for @stockCountReentryCurrentLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'العدّة الحالية'**
+  String get stockCountReentryCurrentLabel;
+
+  /// No description provided for @stockCountReentryQuestion.
+  ///
+  /// In ar, this message translates to:
+  /// **'هل تضيف الكمية الجديدة إلى عدّتك أم تستبدلها؟'**
+  String get stockCountReentryQuestion;
+
+  /// No description provided for @stockCountStartHeroTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'ابدأ جردًا جديدًا'**
+  String get stockCountStartHeroTitle;
+
+  /// No description provided for @stockCountStartHeroBody.
+  ///
+  /// In ar, this message translates to:
+  /// **'عُدّ مخزونك الفعلي وقارنه بالنظام لرصد الفروقات وتصحيحها.'**
+  String get stockCountStartHeroBody;
+
+  /// No description provided for @stockCountHistoryEmptyHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'ستظهر عمليات الجرد السابقة هنا.'**
+  String get stockCountHistoryEmptyHint;
+
+  /// No description provided for @stockCountMatched.
+  ///
+  /// In ar, this message translates to:
+  /// **'مطابق'**
+  String get stockCountMatched;
+
+  /// No description provided for @stockCountAllMatched.
+  ///
+  /// In ar, this message translates to:
+  /// **'كل شيء مطابق'**
+  String get stockCountAllMatched;
+
+  /// No description provided for @stockCountFinishCount.
+  ///
+  /// In ar, this message translates to:
+  /// **'إنهاء الجرد'**
+  String get stockCountFinishCount;
+
+  /// No description provided for @stockCountShortage.
+  ///
+  /// In ar, this message translates to:
+  /// **'نقص'**
+  String get stockCountShortage;
+
+  /// No description provided for @stockCountSurplus.
+  ///
+  /// In ar, this message translates to:
+  /// **'زيادة'**
+  String get stockCountSurplus;
+
+  /// Footer summary above the apply button.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, =1{سيتم تعديل صنف واحد} =2{سيتم تعديل صنفين} other{سيتم تعديل {count} أصناف}}'**
+  String stockCountApplySummary(int count);
+
+  /// Compact variance-count badge on a history row.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, =1{فرق واحد} =2{فرقان} other{{count} فروق}}'**
+  String stockCountVarianceShort(int count);
 }
 
 class _AppLocalizationsDelegate
