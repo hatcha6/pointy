@@ -84,6 +84,25 @@ def create_expiring_stock_batch(*, receipt_line, expiry_date, quantity):
     return batch
 
 
+def stock_count_needs_review(*, expected, counted, min_units, percent):
+    """Decide whether a counted line should surface the variance prompt.
+
+    Flags only when the gap is at least ``min_units`` AND at least ``percent``
+    of the expected quantity, so neither tiny shops nor high-volume SKUs get
+    noisy. When ``expected`` is 0 (e.g. first count of a new item) the percent
+    rule can't apply, so the absolute floor alone decides.
+    """
+    gap = abs(counted - expected)
+    if gap == 0:
+        return False
+    if gap < min_units:
+        return False
+    if expected == 0:
+        return True
+    gap_fraction_pct = (gap / abs(expected)) * 100
+    return gap_fraction_pct >= percent
+
+
 def consume_expiring_stock_batches(*, variant, quantity):
     if quantity <= 0 or not getattr(variant.product, "tracks_expiry", False):
         return 0

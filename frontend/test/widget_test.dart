@@ -3708,6 +3708,7 @@ void main() {
     final apiService = _payrollApiService(
       employees: [_employeeJson()],
       runDetails: {5: draftRun},
+      bioTimeEnabled: true,
     );
     final viewModel = EmployeePayrollViewModel(EmployeeRepository(apiService));
     final capabilities = AuthorizationCapabilities.forUser(
@@ -3755,6 +3756,64 @@ void main() {
     // Net total falls after the BioTime absence deduction is applied.
     expect(find.textContaining('450'), findsWidgets);
   });
+
+  testWidgets(
+    'payroll run details hides the BioTime card when not configured',
+    (WidgetTester tester) async {
+      final draftRun = _payrollRunJson(
+        id: 6,
+        status: 'draft',
+        lines: [_payrollLineJson(id: 61, employeeName: 'سالم')],
+      );
+      final apiService = _payrollApiService(
+        employees: [_employeeJson()],
+        runDetails: {6: draftRun},
+        // BioTime not configured for this shop.
+      );
+      final viewModel = EmployeePayrollViewModel(
+        EmployeeRepository(apiService),
+      );
+      final capabilities = AuthorizationCapabilities.forUser(
+        PosUser.fromJson(
+          _userJson(
+            permissions: [
+              ..._payrollPermissions,
+              'attendance.view_attendanceday',
+              'attendance.change_biotimeconnection',
+            ],
+          ),
+        ),
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          locale: const Locale('ar'),
+          supportedLocales: AppLocalizations.supportedLocales,
+          localizationsDelegates: const [
+            AppLocalizations.delegate,
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
+          home: PayrollRunDetailsScreen(
+            viewModel: viewModel,
+            attendanceViewModel: AttendanceViewModel(
+              AttendanceRepository(apiService),
+            ),
+            capabilities: capabilities,
+            initialRun: PayrollRun.fromJson(draftRun),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Permission alone is not enough: without BioTime the card stays hidden.
+      expect(
+        find.byKey(const ValueKey('payroll_details_apply_attendance_button')),
+        findsNothing,
+      );
+    },
+  );
 
   testWidgets('payroll home surfaces pending loan requests for review', (
     WidgetTester tester,
@@ -5714,6 +5773,7 @@ PosApiService _payrollApiService({
   List<Map<String, Object?>> payrollRuns = const [],
   List<Map<String, Object?>> loans = const [],
   Map<int, Map<String, Object?>> runDetails = const {},
+  bool bioTimeEnabled = false,
 }) {
   var runs = [...payrollRuns];
   var loanList = [...loans];
@@ -5801,6 +5861,13 @@ PosApiService _payrollApiService({
 
       if (path.endsWith('/employees/')) {
         return _jsonResponse({'results': employees, 'next': null});
+      }
+
+      if (path.endsWith('/attendance/connection/')) {
+        return _jsonResponse({
+          'base_url': bioTimeEnabled ? 'https://biotime.example' : '',
+          'is_enabled': bioTimeEnabled,
+        });
       }
 
       return http.Response('', 404);

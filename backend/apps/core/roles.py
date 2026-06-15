@@ -64,6 +64,11 @@ USER_PERMISSION_CODES = (
 CASHIER_PERMISSION_CODES = (
     "catalog.view_product",
     "catalog.view_productcategory",
+    # Floor staff can run/record stock counts; only managers may apply them
+    # (apply_stockcount is granted to managers via MANAGER_PERMISSION_DOMAINS).
+    "inventory.view_stockcount",
+    "inventory.add_stockcount",
+    "inventory.change_stockcount",
     "sales.add_order",
     "sales.view_order",
     "sales.add_registersession",

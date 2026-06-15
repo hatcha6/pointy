@@ -273,6 +273,8 @@ class ShopSettingsSerializer(serializers.ModelSerializer):
             "allow_overselling",
             "prevent_selling_at_loss",
             "low_stock_threshold",
+            "stock_count_variance_min_units",
+            "stock_count_variance_percent",
             "cashier_return_window_hours",
             "enable_cash_payments",
             "enable_card_payments",

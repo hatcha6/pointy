@@ -45,6 +45,7 @@ import 'features/pos/views/pos_screen.dart';
 import 'features/purchasing/views/purchase_order_details_screen.dart';
 import 'features/purchasing/views/purchase_order_list_screen.dart';
 import 'features/purchasing/views/purchasing_screen.dart';
+import 'features/stock_count/views/stock_count_sessions_screen.dart';
 import 'features/register_sessions/view_models/register_session_history_view_model.dart';
 import 'features/register_sessions/views/register_session_history_screen.dart';
 import 'features/reports/pdf/report_document_builder.dart';
@@ -184,9 +185,7 @@ class _AuthenticatedRoutes implements AppNavigation {
     }
   }
 
-  WidgetBuilder _destinationRouteBuilder(
-    AppNavigationDestination destination,
-  ) {
+  WidgetBuilder _destinationRouteBuilder(AppNavigationDestination destination) {
     return switch (destination) {
       AppNavigationDestination.userSettings => userSettingsRouteBuilder,
       AppNavigationDestination.operations => operationsRouteBuilder,
@@ -195,8 +194,8 @@ class _AuthenticatedRoutes implements AppNavigation {
       AppNavigationDestination.contacts => contactsRouteBuilder,
       AppNavigationDestination.catalog => catalogRouteBuilder,
       AppNavigationDestination.categories => categoryRouteBuilder,
-      AppNavigationDestination.registerSessions =>
-        registerSessionsRouteBuilder,
+      AppNavigationDestination.stockCount => stockCountRouteBuilder,
+      AppNavigationDestination.registerSessions => registerSessionsRouteBuilder,
       AppNavigationDestination.employees => employeePayrollRouteBuilder,
       AppNavigationDestination.expenses => expensesRouteBuilder,
       AppNavigationDestination.discounts => discountsRouteBuilder,
@@ -578,6 +577,19 @@ class _AuthenticatedRoutes implements AppNavigation {
             await dependencies.purchaseOrderListViewModel.loadOrders();
           },
         ),
+      ),
+    );
+  }
+
+  Widget stockCountRouteBuilder(BuildContext routeContext) {
+    return _screen(
+      'stock_counts',
+      StockCountSessionsScreen(
+        viewModel: dependencies.stockCountSessionsViewModel,
+        stockCountRepository: dependencies.stockCountRepository,
+        catalogRepository: dependencies.catalogRepository,
+        capabilities: capabilities,
+        navigation: this,
       ),
     );
   }

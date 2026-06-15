@@ -42,6 +42,7 @@ from .serializers import (
     VariantOptionSerializer,
     VariantOptionValueSerializer,
 )
+from .services import category_ids_with_descendants
 
 
 class ProductCategoryFilter(django_filters.FilterSet):
@@ -65,21 +66,6 @@ def requested_category_ids(query_params):
             value = value.strip()
             if value.isdigit():
                 category_ids.append(int(value))
-    return category_ids
-
-
-def category_ids_with_descendants(category_ids):
-    category_ids = set(category_ids)
-    pending_ids = set(category_ids)
-    while pending_ids:
-        child_ids = set(
-            ProductCategory.objects.filter(parent_id__in=pending_ids).values_list(
-                "id",
-                flat=True,
-            )
-        )
-        pending_ids = child_ids - category_ids
-        category_ids.update(child_ids)
     return category_ids
 
 
@@ -279,10 +265,6 @@ class ProductViewSet(viewsets.ModelViewSet):
         product = serializer.save()
         self._clear_catalog_cache()
         return product
-
-    def perform_destroy(self, instance):
-        super().perform_destroy(instance)
-        self._clear_catalog_cache()
 
     @action(detail=True, methods=["get", "post"], url_path="variants")
     def variants(self, request, pk=None):

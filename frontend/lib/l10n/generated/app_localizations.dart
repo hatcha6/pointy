@@ -16133,6 +16133,366 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'تُحتسب العمولة على إجمالي فاتورة المهمة (للمهام التي صدرت لها فاتورة).'**
   String get operationsCommissionBaseOrderTotalHelper;
+
+  /// No description provided for @stockCountDrawerLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'جرد المخزون'**
+  String get stockCountDrawerLabel;
+
+  /// No description provided for @stockCountSessionsTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'عمليات الجرد'**
+  String get stockCountSessionsTitle;
+
+  /// No description provided for @stockCountRefreshTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحديث عمليات الجرد'**
+  String get stockCountRefreshTooltip;
+
+  /// No description provided for @stockCountCountingTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'الجرد'**
+  String get stockCountCountingTitle;
+
+  /// No description provided for @stockCountReconciliationTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'مراجعة الفروقات'**
+  String get stockCountReconciliationTitle;
+
+  /// No description provided for @stockCountStartNew.
+  ///
+  /// In ar, this message translates to:
+  /// **'بدء جرد جديد'**
+  String get stockCountStartNew;
+
+  /// No description provided for @stockCountResume.
+  ///
+  /// In ar, this message translates to:
+  /// **'متابعة الجرد الحالي'**
+  String get stockCountResume;
+
+  /// No description provided for @stockCountStartTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'جرد جديد'**
+  String get stockCountStartTitle;
+
+  /// No description provided for @stockCountScopeLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'نطاق الجرد'**
+  String get stockCountScopeLabel;
+
+  /// No description provided for @stockCountScopeFull.
+  ///
+  /// In ar, this message translates to:
+  /// **'كل المنتجات'**
+  String get stockCountScopeFull;
+
+  /// No description provided for @stockCountScopeCategory.
+  ///
+  /// In ar, this message translates to:
+  /// **'تصنيف محدد'**
+  String get stockCountScopeCategory;
+
+  /// No description provided for @stockCountSelectCategory.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر التصنيف'**
+  String get stockCountSelectCategory;
+
+  /// No description provided for @stockCountSelectCategoryError.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر تصنيفًا للمتابعة.'**
+  String get stockCountSelectCategoryError;
+
+  /// No description provided for @stockCountNoteLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'ملاحظة (اختياري)'**
+  String get stockCountNoteLabel;
+
+  /// No description provided for @stockCountStartButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'بدء الجرد'**
+  String get stockCountStartButton;
+
+  /// No description provided for @stockCountStartError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر بدء الجرد. حاول مرة أخرى.'**
+  String get stockCountStartError;
+
+  /// Counting progress, counted of total items.
+  ///
+  /// In ar, this message translates to:
+  /// **'{counted} من {total}'**
+  String stockCountProgress(int counted, int total);
+
+  /// No description provided for @stockCountScanPrompt.
+  ///
+  /// In ar, this message translates to:
+  /// **'امسح باركود الصنف للبدء'**
+  String get stockCountScanPrompt;
+
+  /// No description provided for @stockCountScanHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'امسح، أو ابحث، أو تصفّح المنتجات'**
+  String get stockCountScanHint;
+
+  /// No description provided for @stockCountCountLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الكمية المعدودة'**
+  String get stockCountCountLabel;
+
+  /// No description provided for @stockCountSaveAndNext.
+  ///
+  /// In ar, this message translates to:
+  /// **'حفظ والتالي'**
+  String get stockCountSaveAndNext;
+
+  /// No description provided for @stockCountSearchItem.
+  ///
+  /// In ar, this message translates to:
+  /// **'بحث عن صنف'**
+  String get stockCountSearchItem;
+
+  /// No description provided for @stockCountSearchHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'ابحث بالاسم أو الرمز'**
+  String get stockCountSearchHint;
+
+  /// No description provided for @stockCountBrowse.
+  ///
+  /// In ar, this message translates to:
+  /// **'تصفّح المنتجات'**
+  String get stockCountBrowse;
+
+  /// No description provided for @stockCountScanMiss.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم يتم العثور على صنف بهذا الباركود.'**
+  String get stockCountScanMiss;
+
+  /// No description provided for @stockCountSaveError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر حفظ العدّة. حاول مرة أخرى.'**
+  String get stockCountSaveError;
+
+  /// No description provided for @stockCountFinishButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'إنهاء ومراجعة'**
+  String get stockCountFinishButton;
+
+  /// No description provided for @stockCountSearchEmpty.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد أصناف مطابقة.'**
+  String get stockCountSearchEmpty;
+
+  /// Unit label on the counting item card.
+  ///
+  /// In ar, this message translates to:
+  /// **'الوحدة: {unit}'**
+  String stockCountItemUnit(String unit);
+
+  /// No description provided for @stockCountReentryTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'الصنف معدود مسبقًا'**
+  String get stockCountReentryTitle;
+
+  /// Add-or-replace prompt body, current counted quantity.
+  ///
+  /// In ar, this message translates to:
+  /// **'لديك عدّة حالية {current} لهذا الصنف.'**
+  String stockCountReentryBody(String current);
+
+  /// No description provided for @stockCountReentryAdd.
+  ///
+  /// In ar, this message translates to:
+  /// **'أضف إلى العدّة'**
+  String get stockCountReentryAdd;
+
+  /// No description provided for @stockCountReentryReplace.
+  ///
+  /// In ar, this message translates to:
+  /// **'استبدل العدّة'**
+  String get stockCountReentryReplace;
+
+  /// No description provided for @stockCountVarianceTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحقّق من العدّة'**
+  String get stockCountVarianceTitle;
+
+  /// Variance prompt comparing expected and counted quantities.
+  ///
+  /// In ar, this message translates to:
+  /// **'النظام يُسجّل {expected}، وأنت أدخلت {counted}.'**
+  String stockCountVarianceBody(String expected, String counted);
+
+  /// No description provided for @stockCountRecount.
+  ///
+  /// In ar, this message translates to:
+  /// **'إعادة العدّ'**
+  String get stockCountRecount;
+
+  /// No description provided for @stockCountConfirm.
+  ///
+  /// In ar, this message translates to:
+  /// **'تأكيد'**
+  String get stockCountConfirm;
+
+  /// Reconciliation summary of differing line count.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, =0{لا توجد فروقات} =1{صنف واحد لا يطابق} =2{صنفان لا يطابقان} other{{count} أصناف لا تطابق}}'**
+  String stockCountMismatchCount(int count);
+
+  /// No description provided for @stockCountColumnExpected.
+  ///
+  /// In ar, this message translates to:
+  /// **'النظام'**
+  String get stockCountColumnExpected;
+
+  /// No description provided for @stockCountColumnCounted.
+  ///
+  /// In ar, this message translates to:
+  /// **'المعدود'**
+  String get stockCountColumnCounted;
+
+  /// No description provided for @stockCountColumnGap.
+  ///
+  /// In ar, this message translates to:
+  /// **'الفرق'**
+  String get stockCountColumnGap;
+
+  /// No description provided for @stockCountApply.
+  ///
+  /// In ar, this message translates to:
+  /// **'تطبيق التعديلات'**
+  String get stockCountApply;
+
+  /// No description provided for @stockCountApplyConfirmTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'تطبيق الجرد؟'**
+  String get stockCountApplyConfirmTitle;
+
+  /// No description provided for @stockCountApplyConfirmBody.
+  ///
+  /// In ar, this message translates to:
+  /// **'سيتم تعديل المخزون بمقدار الفروقات المعدودة. لا يمكن التراجع عن هذا الإجراء.'**
+  String get stockCountApplyConfirmBody;
+
+  /// No description provided for @stockCountApplyConfirm.
+  ///
+  /// In ar, this message translates to:
+  /// **'تطبيق'**
+  String get stockCountApplyConfirm;
+
+  /// No description provided for @stockCountApplied.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم تطبيق الجرد'**
+  String get stockCountApplied;
+
+  /// No description provided for @stockCountApplyError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر تطبيق الجرد. حاول مرة أخرى.'**
+  String get stockCountApplyError;
+
+  /// No description provided for @stockCountApplyManagerOnly.
+  ///
+  /// In ar, this message translates to:
+  /// **'تطبيق التعديلات متاح للمدير فقط.'**
+  String get stockCountApplyManagerOnly;
+
+  /// No description provided for @stockCountNoVariances.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد فروقات. المخزون مطابق للمعدود.'**
+  String get stockCountNoVariances;
+
+  /// No description provided for @stockCountCancel.
+  ///
+  /// In ar, this message translates to:
+  /// **'إلغاء الجرد'**
+  String get stockCountCancel;
+
+  /// No description provided for @stockCountCancelConfirmTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'إلغاء الجرد؟'**
+  String get stockCountCancelConfirmTitle;
+
+  /// No description provided for @stockCountCancelConfirmBody.
+  ///
+  /// In ar, this message translates to:
+  /// **'سيتم تجاهل كل ما تم عدّه في هذه الجلسة.'**
+  String get stockCountCancelConfirmBody;
+
+  /// No description provided for @stockCountCancelConfirm.
+  ///
+  /// In ar, this message translates to:
+  /// **'إلغاء الجرد'**
+  String get stockCountCancelConfirm;
+
+  /// No description provided for @stockCountEmpty.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد عمليات جرد بعد.'**
+  String get stockCountEmpty;
+
+  /// No description provided for @stockCountLoadError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر تحميل عمليات الجرد.'**
+  String get stockCountLoadError;
+
+  /// No description provided for @stockCountHistoryTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'سجل عمليات الجرد'**
+  String get stockCountHistoryTitle;
+
+  /// No description provided for @stockCountStatusInProgress.
+  ///
+  /// In ar, this message translates to:
+  /// **'قيد التنفيذ'**
+  String get stockCountStatusInProgress;
+
+  /// No description provided for @stockCountStatusApplied.
+  ///
+  /// In ar, this message translates to:
+  /// **'مطبّق'**
+  String get stockCountStatusApplied;
+
+  /// No description provided for @stockCountStatusCancelled.
+  ///
+  /// In ar, this message translates to:
+  /// **'ملغى'**
+  String get stockCountStatusCancelled;
+
+  /// Category-scoped count label.
+  ///
+  /// In ar, this message translates to:
+  /// **'تصنيف: {category}'**
+  String stockCountScopeCategoryLabel(String category);
 }
 
 class _AppLocalizationsDelegate

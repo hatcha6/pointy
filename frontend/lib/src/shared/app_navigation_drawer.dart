@@ -181,6 +181,12 @@ class AppNavigationDrawer extends StatelessWidget {
             selectedIcon: const Icon(Icons.add_shopping_cart),
             label: l10n.purchasingDrawerLabel,
           ),
+          _DrawerDestination(
+            destination: AppNavigationDestination.stockCount,
+            icon: const Icon(Icons.fact_check_outlined),
+            selectedIcon: const Icon(Icons.fact_check),
+            label: l10n.stockCountDrawerLabel,
+          ),
         ],
       ),
       _NavigationGroup(

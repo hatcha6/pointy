@@ -47,6 +47,9 @@ class _PayrollRunDetailsScreenState extends State<PayrollRunDetailsScreen> {
   void initState() {
     super.initState();
     _load();
+    // Cheaply learn whether BioTime is set up so the attendance card only
+    // appears for shops that use it.
+    widget.attendanceViewModel.ensureConfigLoaded();
   }
 
   Future<void> _load() async {
@@ -75,7 +78,10 @@ class _PayrollRunDetailsScreenState extends State<PayrollRunDetailsScreen> {
     final canManage = widget.capabilities.canManagePayroll;
 
     return ListenableBuilder(
-      listenable: widget.viewModel,
+      listenable: Listenable.merge([
+        widget.viewModel,
+        widget.attendanceViewModel,
+      ]),
       builder: (context, _) {
         return Scaffold(
           appBar: AppBar(
@@ -102,12 +108,19 @@ class _PayrollRunDetailsScreenState extends State<PayrollRunDetailsScreen> {
                   run: run,
                   viewModel: widget.viewModel,
                   canManage: canManage,
-                  showAttendanceAction: widget.capabilities.canViewAttendance,
+                  showAttendanceAction:
+                      widget.capabilities.canViewAttendance &&
+                      widget.attendanceViewModel.isEnabled,
                   isApplyingAttendance: _isApplyingAttendance,
                   onApplyAttendance: _applyAttendance,
                   onRunChanged: (updated) => setState(() => _run = updated),
                 ),
-          bottomNavigationBar: _buildActionFooter(context, l10n, run, canManage),
+          bottomNavigationBar: _buildActionFooter(
+            context,
+            l10n,
+            run,
+            canManage,
+          ),
         );
       },
     );
@@ -344,9 +357,9 @@ class _PayrollRunDetailsBody extends StatelessWidget {
               icon: Icons.groups_outlined,
               trailing: Text(
                 l10n.payrollLineCount(run.lines.length),
-                style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                  color: colors.mutedInk,
-                ),
+                style: Theme.of(
+                  context,
+                ).textTheme.labelLarge?.copyWith(color: colors.mutedInk),
               ),
               child: run.lines.isEmpty
                   ? PointyEmptyState(
@@ -400,10 +413,7 @@ class _PayrollRunDetailsBody extends StatelessWidget {
 }
 
 class _AttendanceApplyCard extends StatelessWidget {
-  const _AttendanceApplyCard({
-    required this.isApplying,
-    required this.onApply,
-  });
+  const _AttendanceApplyCard({required this.isApplying, required this.onApply});
 
   final bool isApplying;
   final Future<void> Function() onApply;

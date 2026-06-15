@@ -9336,4 +9336,206 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get operationsCommissionBaseOrderTotalHelper =>
       'تُحتسب العمولة على إجمالي فاتورة المهمة (للمهام التي صدرت لها فاتورة).';
+
+  @override
+  String get stockCountDrawerLabel => 'جرد المخزون';
+
+  @override
+  String get stockCountSessionsTitle => 'عمليات الجرد';
+
+  @override
+  String get stockCountRefreshTooltip => 'تحديث عمليات الجرد';
+
+  @override
+  String get stockCountCountingTitle => 'الجرد';
+
+  @override
+  String get stockCountReconciliationTitle => 'مراجعة الفروقات';
+
+  @override
+  String get stockCountStartNew => 'بدء جرد جديد';
+
+  @override
+  String get stockCountResume => 'متابعة الجرد الحالي';
+
+  @override
+  String get stockCountStartTitle => 'جرد جديد';
+
+  @override
+  String get stockCountScopeLabel => 'نطاق الجرد';
+
+  @override
+  String get stockCountScopeFull => 'كل المنتجات';
+
+  @override
+  String get stockCountScopeCategory => 'تصنيف محدد';
+
+  @override
+  String get stockCountSelectCategory => 'اختر التصنيف';
+
+  @override
+  String get stockCountSelectCategoryError => 'اختر تصنيفًا للمتابعة.';
+
+  @override
+  String get stockCountNoteLabel => 'ملاحظة (اختياري)';
+
+  @override
+  String get stockCountStartButton => 'بدء الجرد';
+
+  @override
+  String get stockCountStartError => 'تعذّر بدء الجرد. حاول مرة أخرى.';
+
+  @override
+  String stockCountProgress(int counted, int total) {
+    return '$counted من $total';
+  }
+
+  @override
+  String get stockCountScanPrompt => 'امسح باركود الصنف للبدء';
+
+  @override
+  String get stockCountScanHint => 'امسح، أو ابحث، أو تصفّح المنتجات';
+
+  @override
+  String get stockCountCountLabel => 'الكمية المعدودة';
+
+  @override
+  String get stockCountSaveAndNext => 'حفظ والتالي';
+
+  @override
+  String get stockCountSearchItem => 'بحث عن صنف';
+
+  @override
+  String get stockCountSearchHint => 'ابحث بالاسم أو الرمز';
+
+  @override
+  String get stockCountBrowse => 'تصفّح المنتجات';
+
+  @override
+  String get stockCountScanMiss => 'لم يتم العثور على صنف بهذا الباركود.';
+
+  @override
+  String get stockCountSaveError => 'تعذّر حفظ العدّة. حاول مرة أخرى.';
+
+  @override
+  String get stockCountFinishButton => 'إنهاء ومراجعة';
+
+  @override
+  String get stockCountSearchEmpty => 'لا توجد أصناف مطابقة.';
+
+  @override
+  String stockCountItemUnit(String unit) {
+    return 'الوحدة: $unit';
+  }
+
+  @override
+  String get stockCountReentryTitle => 'الصنف معدود مسبقًا';
+
+  @override
+  String stockCountReentryBody(String current) {
+    return 'لديك عدّة حالية $current لهذا الصنف.';
+  }
+
+  @override
+  String get stockCountReentryAdd => 'أضف إلى العدّة';
+
+  @override
+  String get stockCountReentryReplace => 'استبدل العدّة';
+
+  @override
+  String get stockCountVarianceTitle => 'تحقّق من العدّة';
+
+  @override
+  String stockCountVarianceBody(String expected, String counted) {
+    return 'النظام يُسجّل $expected، وأنت أدخلت $counted.';
+  }
+
+  @override
+  String get stockCountRecount => 'إعادة العدّ';
+
+  @override
+  String get stockCountConfirm => 'تأكيد';
+
+  @override
+  String stockCountMismatchCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count أصناف لا تطابق',
+      two: 'صنفان لا يطابقان',
+      one: 'صنف واحد لا يطابق',
+      zero: 'لا توجد فروقات',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get stockCountColumnExpected => 'النظام';
+
+  @override
+  String get stockCountColumnCounted => 'المعدود';
+
+  @override
+  String get stockCountColumnGap => 'الفرق';
+
+  @override
+  String get stockCountApply => 'تطبيق التعديلات';
+
+  @override
+  String get stockCountApplyConfirmTitle => 'تطبيق الجرد؟';
+
+  @override
+  String get stockCountApplyConfirmBody =>
+      'سيتم تعديل المخزون بمقدار الفروقات المعدودة. لا يمكن التراجع عن هذا الإجراء.';
+
+  @override
+  String get stockCountApplyConfirm => 'تطبيق';
+
+  @override
+  String get stockCountApplied => 'تم تطبيق الجرد';
+
+  @override
+  String get stockCountApplyError => 'تعذّر تطبيق الجرد. حاول مرة أخرى.';
+
+  @override
+  String get stockCountApplyManagerOnly => 'تطبيق التعديلات متاح للمدير فقط.';
+
+  @override
+  String get stockCountNoVariances => 'لا توجد فروقات. المخزون مطابق للمعدود.';
+
+  @override
+  String get stockCountCancel => 'إلغاء الجرد';
+
+  @override
+  String get stockCountCancelConfirmTitle => 'إلغاء الجرد؟';
+
+  @override
+  String get stockCountCancelConfirmBody =>
+      'سيتم تجاهل كل ما تم عدّه في هذه الجلسة.';
+
+  @override
+  String get stockCountCancelConfirm => 'إلغاء الجرد';
+
+  @override
+  String get stockCountEmpty => 'لا توجد عمليات جرد بعد.';
+
+  @override
+  String get stockCountLoadError => 'تعذّر تحميل عمليات الجرد.';
+
+  @override
+  String get stockCountHistoryTitle => 'سجل عمليات الجرد';
+
+  @override
+  String get stockCountStatusInProgress => 'قيد التنفيذ';
+
+  @override
+  String get stockCountStatusApplied => 'مطبّق';
+
+  @override
+  String get stockCountStatusCancelled => 'ملغى';
+
+  @override
+  String stockCountScopeCategoryLabel(String category) {
+    return 'تصنيف: $category';
+  }
 }

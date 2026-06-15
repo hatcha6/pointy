@@ -47,6 +47,9 @@ import '../models/modifier_group.dart';
 import '../models/prep_station.dart';
 import '../models/sales_channel.dart';
 import '../models/shop_settings.dart';
+import '../models/stock_count.dart';
+import '../models/stock_count_draft.dart';
+import '../models/stock_count_line.dart';
 import '../models/stock_item.dart';
 import '../models/stock_movement.dart';
 import '../models/stock_movement_page.dart';
@@ -86,6 +89,7 @@ import 'modifier_group_api_client.dart';
 import 'prep_station_api_client.dart';
 import 'sales_channel_api_client.dart';
 import 'shop_settings_api_client.dart';
+import 'stock_count_api_client.dart';
 import 'user_api_client.dart';
 
 export 'api_session.dart' show PosApiException;
@@ -123,6 +127,7 @@ class PosApiService {
     _modifierGroups = ModifierGroupApiClient(_session);
     _purchasing = PurchasingApiClient(_session);
     _printing = PrintingApiClient(_session);
+    _stockCounts = StockCountApiClient(_session);
   }
 
   String get baseUrl => _session.baseUrl;
@@ -153,6 +158,7 @@ class PosApiService {
   late final ModifierGroupApiClient _modifierGroups;
   late final PurchasingApiClient _purchasing;
   late final PrintingApiClient _printing;
+  late final StockCountApiClient _stockCounts;
 
   set performanceRecorder(ApiPerformanceRecorder? recorder) {
     _session.performanceRecorder = recorder;
@@ -327,9 +333,7 @@ class PosApiService {
     return _attendance.fetchConfig();
   }
 
-  Future<AttendanceConfig> updateAttendanceConfig(
-    AttendanceConfigDraft draft,
-  ) {
+  Future<AttendanceConfig> updateAttendanceConfig(AttendanceConfigDraft draft) {
     return _attendance.updateConfig(draft);
   }
 
@@ -731,6 +735,44 @@ class PosApiService {
 
   Future<StockMovement> createStockMovement(StockMovementDraft draft) {
     return _inventory.createStockMovement(draft);
+  }
+
+  Future<StockCount> startStockCount(StockCountStartDraft draft) {
+    return _stockCounts.startCount(draft);
+  }
+
+  Future<StockCount?> fetchCurrentStockCount() {
+    return _stockCounts.fetchCurrentCount();
+  }
+
+  Future<StockCountPage> fetchStockCounts({String? status, int page = 1}) {
+    return _stockCounts.fetchCounts(status: status, page: page);
+  }
+
+  Future<StockCount> fetchStockCount(int countId) {
+    return _stockCounts.fetchCount(countId);
+  }
+
+  Future<StockCountLine> recordStockCountLine(
+    int countId,
+    StockCountLineDraft draft,
+  ) {
+    return _stockCounts.countLine(countId, draft);
+  }
+
+  Future<List<StockCountLine>> fetchStockCountReconciliation(int countId) {
+    return _stockCounts.fetchReconciliation(countId);
+  }
+
+  Future<StockCount> applyStockCount(
+    int countId, {
+    required String idempotencyKey,
+  }) {
+    return _stockCounts.applyCount(countId, idempotencyKey: idempotencyKey);
+  }
+
+  Future<StockCount> cancelStockCount(int countId) {
+    return _stockCounts.cancelCount(countId);
   }
 
   Future<OperationsJobPage> fetchJobs({

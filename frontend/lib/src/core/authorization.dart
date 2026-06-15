@@ -66,6 +66,8 @@ enum AppCapability {
   deleteDiscountRule,
   viewStock,
   createStockMovement,
+  countStock,
+  applyStockCount,
 }
 
 class AuthorizationCapabilities {
@@ -155,6 +157,18 @@ class AuthorizationCapabilities {
           ..add(AppCapability.viewInventoryDashboard)
           ..add(AppCapability.viewStock)
           ..add(AppCapability.createStockMovement);
+      }
+      // Stock counting is granted on its own permission so floor staff can run
+      // counts without seeing inventory dashboards. Applying adjustments is a
+      // separate, stronger permission (managers get it via their domain).
+      if (_hasAny(user, const ['add_stockcount', 'inventory.add_stockcount'])) {
+        capabilities.add(AppCapability.countStock);
+      }
+      if (_hasAny(user, const [
+        'apply_stockcount',
+        'inventory.apply_stockcount',
+      ])) {
+        capabilities.add(AppCapability.applyStockCount);
       }
       if (_hasAny(user, const [
         'view_purchaseorder',
@@ -623,6 +637,8 @@ class AuthorizationCapabilities {
   bool get canDeleteDiscountRule => allows(AppCapability.deleteDiscountRule);
   bool get canViewStock => allows(AppCapability.viewStock);
   bool get canCreateStockMovement => allows(AppCapability.createStockMovement);
+  bool get canCountStock => allows(AppCapability.countStock);
+  bool get canApplyStockCount => allows(AppCapability.applyStockCount);
 
   AuthorizedAction? actionFor(
     AppCapability capability,

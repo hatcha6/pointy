@@ -14,6 +14,7 @@ enum AppNavigationDestination {
   contacts,
   catalog,
   categories,
+  stockCount,
   registerSessions,
   employees,
   expenses,
@@ -43,6 +44,7 @@ AppCapability appNavigationDestinationCapability(
     AppNavigationDestination.contacts => AppCapability.manageContacts,
     AppNavigationDestination.catalog => AppCapability.viewCatalogManagement,
     AppNavigationDestination.categories => AppCapability.manageCategories,
+    AppNavigationDestination.stockCount => AppCapability.countStock,
     AppNavigationDestination.registerSessions =>
       AppCapability.viewRegisterSessions,
     AppNavigationDestination.employees => AppCapability.viewEmployees,

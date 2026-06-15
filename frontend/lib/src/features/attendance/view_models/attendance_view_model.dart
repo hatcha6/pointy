@@ -41,6 +41,20 @@ class AttendanceViewModel extends ChangeNotifier {
   bool get hasMutationError => _hasMutationError;
   bool get isEnabled => _config?.isEnabled ?? false;
 
+  /// Loads only the connection config (no profile fetch/creation) so other
+  /// screens can cheaply check whether BioTime is set up before showing
+  /// attendance-driven actions. No-op once the config is already loaded.
+  Future<void> ensureConfigLoaded() async {
+    if (_config != null) {
+      return;
+    }
+    final result = await _repository.loadConfig();
+    if (result is Ok<AttendanceConfig>) {
+      _config = result.value;
+      notifyListeners();
+    }
+  }
+
   Future<void> loadSettings() async {
     _isLoading = true;
     _hasLoadError = false;

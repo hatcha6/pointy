@@ -60,6 +60,21 @@ class ShopSettings(TimeStampedModel):
     allow_overselling = models.BooleanField(default=False)
     prevent_selling_at_loss = models.BooleanField(default=True)
     low_stock_threshold = models.PositiveIntegerField(default=5)
+    # Stock-count variance review thresholds. A counted line is flagged for
+    # review only when the gap is at least ``min_units`` AND at least
+    # ``percent`` of the expected quantity (see apps.inventory.services).
+    stock_count_variance_min_units = models.DecimalField(
+        max_digits=12,
+        decimal_places=3,
+        default=1,
+        validators=[MinValueValidator(0)],
+    )
+    stock_count_variance_percent = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=10,
+        validators=[MinValueValidator(0)],
+    )
     cashier_return_window_hours = models.PositiveIntegerField(default=42)
     enable_cash_payments = models.BooleanField(default=True)
     enable_card_payments = models.BooleanField(default=True)

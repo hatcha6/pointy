@@ -5631,5 +5631,103 @@
   "operationsCommissionBaseLabor": "الأجور فقط",
   "operationsCommissionBaseLaborHelper": "تُحتسب العمولة على السعر المعتمد بعد خصم قيمة القطع المستهلكة.",
   "operationsCommissionBaseOrderTotal": "إجمالي الفاتورة",
-  "operationsCommissionBaseOrderTotalHelper": "تُحتسب العمولة على إجمالي فاتورة المهمة (للمهام التي صدرت لها فاتورة)."
+  "operationsCommissionBaseOrderTotalHelper": "تُحتسب العمولة على إجمالي فاتورة المهمة (للمهام التي صدرت لها فاتورة).",
+  "stockCountDrawerLabel": "جرد المخزون",
+  "stockCountSessionsTitle": "عمليات الجرد",
+  "stockCountRefreshTooltip": "تحديث عمليات الجرد",
+  "stockCountCountingTitle": "الجرد",
+  "stockCountReconciliationTitle": "مراجعة الفروقات",
+  "stockCountStartNew": "بدء جرد جديد",
+  "stockCountResume": "متابعة الجرد الحالي",
+  "stockCountStartTitle": "جرد جديد",
+  "stockCountScopeLabel": "نطاق الجرد",
+  "stockCountScopeFull": "كل المنتجات",
+  "stockCountScopeCategory": "تصنيف محدد",
+  "stockCountSelectCategory": "اختر التصنيف",
+  "stockCountSelectCategoryError": "اختر تصنيفًا للمتابعة.",
+  "stockCountNoteLabel": "ملاحظة (اختياري)",
+  "stockCountStartButton": "بدء الجرد",
+  "stockCountStartError": "تعذّر بدء الجرد. حاول مرة أخرى.",
+  "stockCountProgress": "{counted} من {total}",
+  "@stockCountProgress": {
+    "description": "Counting progress, counted of total items.",
+    "placeholders": {
+      "counted": { "type": "int" },
+      "total": { "type": "int" }
+    }
+  },
+  "stockCountScanPrompt": "امسح باركود الصنف للبدء",
+  "stockCountScanHint": "امسح، أو ابحث، أو تصفّح المنتجات",
+  "stockCountCountLabel": "الكمية المعدودة",
+  "stockCountSaveAndNext": "حفظ والتالي",
+  "stockCountSearchItem": "بحث عن صنف",
+  "stockCountSearchHint": "ابحث بالاسم أو الرمز",
+  "stockCountBrowse": "تصفّح المنتجات",
+  "stockCountScanMiss": "لم يتم العثور على صنف بهذا الباركود.",
+  "stockCountSaveError": "تعذّر حفظ العدّة. حاول مرة أخرى.",
+  "stockCountFinishButton": "إنهاء ومراجعة",
+  "stockCountSearchEmpty": "لا توجد أصناف مطابقة.",
+  "stockCountItemUnit": "الوحدة: {unit}",
+  "@stockCountItemUnit": {
+    "description": "Unit label on the counting item card.",
+    "placeholders": {
+      "unit": { "type": "String" }
+    }
+  },
+  "stockCountReentryTitle": "الصنف معدود مسبقًا",
+  "stockCountReentryBody": "لديك عدّة حالية {current} لهذا الصنف.",
+  "@stockCountReentryBody": {
+    "description": "Add-or-replace prompt body, current counted quantity.",
+    "placeholders": {
+      "current": { "type": "String" }
+    }
+  },
+  "stockCountReentryAdd": "أضف إلى العدّة",
+  "stockCountReentryReplace": "استبدل العدّة",
+  "stockCountVarianceTitle": "تحقّق من العدّة",
+  "stockCountVarianceBody": "النظام يُسجّل {expected}، وأنت أدخلت {counted}.",
+  "@stockCountVarianceBody": {
+    "description": "Variance prompt comparing expected and counted quantities.",
+    "placeholders": {
+      "expected": { "type": "String" },
+      "counted": { "type": "String" }
+    }
+  },
+  "stockCountRecount": "إعادة العدّ",
+  "stockCountConfirm": "تأكيد",
+  "stockCountMismatchCount": "{count, plural, =0{لا توجد فروقات} =1{صنف واحد لا يطابق} =2{صنفان لا يطابقان} other{{count} أصناف لا تطابق}}",
+  "@stockCountMismatchCount": {
+    "description": "Reconciliation summary of differing line count.",
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "stockCountColumnExpected": "النظام",
+  "stockCountColumnCounted": "المعدود",
+  "stockCountColumnGap": "الفرق",
+  "stockCountApply": "تطبيق التعديلات",
+  "stockCountApplyConfirmTitle": "تطبيق الجرد؟",
+  "stockCountApplyConfirmBody": "سيتم تعديل المخزون بمقدار الفروقات المعدودة. لا يمكن التراجع عن هذا الإجراء.",
+  "stockCountApplyConfirm": "تطبيق",
+  "stockCountApplied": "تم تطبيق الجرد",
+  "stockCountApplyError": "تعذّر تطبيق الجرد. حاول مرة أخرى.",
+  "stockCountApplyManagerOnly": "تطبيق التعديلات متاح للمدير فقط.",
+  "stockCountNoVariances": "لا توجد فروقات. المخزون مطابق للمعدود.",
+  "stockCountCancel": "إلغاء الجرد",
+  "stockCountCancelConfirmTitle": "إلغاء الجرد؟",
+  "stockCountCancelConfirmBody": "سيتم تجاهل كل ما تم عدّه في هذه الجلسة.",
+  "stockCountCancelConfirm": "إلغاء الجرد",
+  "stockCountEmpty": "لا توجد عمليات جرد بعد.",
+  "stockCountLoadError": "تعذّر تحميل عمليات الجرد.",
+  "stockCountHistoryTitle": "سجل عمليات الجرد",
+  "stockCountStatusInProgress": "قيد التنفيذ",
+  "stockCountStatusApplied": "مطبّق",
+  "stockCountStatusCancelled": "ملغى",
+  "stockCountScopeCategoryLabel": "تصنيف: {category}",
+  "@stockCountScopeCategoryLabel": {
+    "description": "Category-scoped count label.",
+    "placeholders": {
+      "category": { "type": "String" }
+    }
+  }
 }

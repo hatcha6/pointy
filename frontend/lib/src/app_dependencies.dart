@@ -27,6 +27,7 @@ import 'data/repositories/prep_station_repository.dart';
 import 'data/repositories/sale_repository.dart';
 import 'data/repositories/sales_channel_repository.dart';
 import 'data/repositories/shop_settings_repository.dart';
+import 'data/repositories/stock_count_repository.dart';
 import 'data/repositories/user_repository.dart';
 import 'data/services/backend_discovery_service.dart';
 import 'data/services/connection_coordinator.dart';
@@ -47,6 +48,7 @@ import 'features/printing/view_models/printing_settings_view_model.dart';
 import 'features/invoices/view_models/invoice_list_view_model.dart';
 import 'features/purchasing/view_models/purchase_order_list_view_model.dart';
 import 'features/purchasing/view_models/purchase_view_model.dart';
+import 'features/stock_count/view_models/stock_count_sessions_view_model.dart';
 import 'features/user_settings/view_models/user_settings_view_model.dart';
 
 class PointyAppDependencies {
@@ -81,6 +83,7 @@ class PointyAppDependencies {
     shopSettingsRepository = ShopSettingsRepository(service);
     printingRepository = PrintingRepository(service);
     purchaseRepository = PurchaseRepository(service);
+    stockCountRepository = StockCountRepository(service);
     userRepository = UserRepository(service);
     connectionCoordinator = ConnectionCoordinator(
       service: service,
@@ -131,6 +134,7 @@ class PointyAppDependencies {
   late final ShopSettingsRepository shopSettingsRepository;
   late final PrintingRepository printingRepository;
   late final PurchaseRepository purchaseRepository;
+  late final StockCountRepository stockCountRepository;
   late final UserRepository userRepository;
   late final ConnectionCoordinator connectionCoordinator;
   late final AuthViewModel authViewModel;
@@ -147,6 +151,7 @@ class PointyAppDependencies {
   InvoiceListViewModel? _invoiceListViewModel;
   PurchaseViewModel? _purchaseViewModel;
   PurchaseOrderListViewModel? _purchaseOrderListViewModel;
+  StockCountSessionsViewModel? _stockCountSessionsViewModel;
   UserSettingsViewModel? _userSettingsViewModel;
 
   int? _lastAuthenticatedUserId;
@@ -232,6 +237,11 @@ class PointyAppDependencies {
         shopSettingsRepository,
       );
 
+  StockCountSessionsViewModel get stockCountSessionsViewModel =>
+      _stockCountSessionsViewModel ??= StockCountSessionsViewModel(
+        stockCountRepository,
+      );
+
   UserSettingsViewModel get userSettingsViewModel =>
       _userSettingsViewModel ??= UserSettingsViewModel(
         authRepository,
@@ -307,6 +317,8 @@ class PointyAppDependencies {
     _purchaseViewModel = null;
     _purchaseOrderListViewModel?.dispose();
     _purchaseOrderListViewModel = null;
+    _stockCountSessionsViewModel?.dispose();
+    _stockCountSessionsViewModel = null;
     _userSettingsViewModel?.dispose();
     _userSettingsViewModel = null;
   }

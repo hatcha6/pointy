@@ -68,7 +68,11 @@ from apps.core.relay_views import (
     RelayInstallationView,
     RelayPairingView,
 )
-from apps.inventory.views import StockItemViewSet, StockMovementViewSet
+from apps.inventory.views import (
+    StockCountViewSet,
+    StockItemViewSet,
+    StockMovementViewSet,
+)
 from apps.notifications.views import BusinessNotificationViewSet
 from apps.payments.views import PaymentViewSet
 from apps.printing.views import (
@@ -111,6 +115,7 @@ router.register("variant-option-values", VariantOptionValueViewSet)
 router.register("modifier-groups", ModifierGroupViewSet)
 router.register("stock", StockItemViewSet)
 router.register("stock-movements", StockMovementViewSet)
+router.register("stock-counts", StockCountViewSet, basename="stock-count")
 router.register("orders", OrderViewSet)
 router.register("fraud-findings", FraudFindingViewSet, basename="fraud-finding")
 router.register("customers", CustomerViewSet)
