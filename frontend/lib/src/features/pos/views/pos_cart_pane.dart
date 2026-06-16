@@ -402,13 +402,13 @@ class _CartScrollContent extends StatelessWidget {
         spacing.md,
       ),
       children: [
-        Divider(height: 1, color: colors.line),
         if (viewModel.cart.isEmpty)
           SizedBox(
-            height: 220,
+            height: 240,
             child: PointyEmptyState(
               icon: Icons.shopping_cart_outlined,
               title: l10n.emptyCart,
+              message: l10n.emptyCartMessage,
             ),
           )
         else
@@ -445,6 +445,7 @@ class _CartScrollContent extends StatelessWidget {
       ],
     );
   }
+
   Future<void> _editLineWeight(BuildContext context, CartLine line) async {
     final weight = await showWeightEntrySheet(
       context,
@@ -694,38 +695,11 @@ class _CheckoutFooter extends StatelessWidget {
         children: [
           CartTotals(viewModel: viewModel, compact: true),
           if (viewModel.shouldShowPrintInvoiceCheckbox)
-            InkWell(
-              onTap: viewModel.isCheckingOut
-                  ? null
-                  : () => viewModel.updatePrintInvoiceAfterPayment(
-                      !viewModel.printInvoiceAfterPayment,
-                    ),
-              child: Padding(
-                padding: const EdgeInsetsDirectional.only(top: 2),
-                child: Row(
-                  children: [
-                    Checkbox(
-                      value: viewModel.printInvoiceAfterPayment,
-                      onChanged: viewModel.isCheckingOut
-                          ? null
-                          : (value) => viewModel.updatePrintInvoiceAfterPayment(
-                              value ?? false,
-                            ),
-                      visualDensity: VisualDensity.compact,
-                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    ),
-                    const SizedBox(width: 4),
-                    Expanded(
-                      child: Text(
-                        l10n.printInvoiceAfterPaymentLabel,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+            PointyOrderToggleRow(
+              label: l10n.printInvoiceAfterPaymentLabel,
+              value: viewModel.printInvoiceAfterPayment,
+              enabled: !viewModel.isCheckingOut,
+              onChanged: viewModel.updatePrintInvoiceAfterPayment,
             ),
         ],
       ),

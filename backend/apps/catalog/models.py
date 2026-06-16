@@ -195,9 +195,16 @@ class ProductCategory(TimeStampedModel):
         on_delete=models.PROTECT,
     )
     is_active = models.BooleanField(default=True)
+    # Surfaced as a one-tap filter chip above the catalog search in POS and
+    # purchasing. The filter is recursive (the category plus its descendants),
+    # see apps.catalog.services.category_ids_with_descendants.
+    is_quick_access = models.BooleanField(default=False)
+    # Manual sort order, primarily used to arrange the quick-access strip.
+    # Lower values come first; ties fall back to name.
+    display_order = models.PositiveIntegerField(default=0)
 
     class Meta:
-        ordering = ["name"]
+        ordering = ["display_order", "name"]
         verbose_name_plural = "product categories"
         constraints = [
             models.UniqueConstraint(

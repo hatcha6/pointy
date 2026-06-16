@@ -16,6 +16,8 @@ class CartTotals extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
 
+    final appliedDiscounts = viewModel.appliedDiscounts;
+
     return Padding(
       padding: EdgeInsets.only(top: compact ? 0 : 8),
       child: PointyTotalsPanel(
@@ -25,14 +27,18 @@ class CartTotals extends StatelessWidget {
             label: l10n.subtotal,
             value: formatMoney(viewModel.subtotal),
           ),
-          if (viewModel.discountTotal > 0)
+          // Show the itemized discount breakdown when it is available;
+          // otherwise fall back to a single aggregate line. Never both — a
+          // lone discount used to render twice (rule line + aggregate line).
+          if (appliedDiscounts.isNotEmpty)
+            for (final discount in appliedDiscounts)
+              _discountLine(l10n, discount)
+          else if (viewModel.discountTotal > 0)
             PointyTotalLine(
               label: l10n.discountTotalLabel,
               value: formatMoney(-viewModel.discountTotal),
+              isMuted: true,
             ),
-          if (viewModel.appliedDiscounts.isNotEmpty)
-            for (final discount in viewModel.appliedDiscounts)
-              _discountLine(l10n, discount),
           PointyTotalLine(
             label: l10n.total,
             value: formatMoney(viewModel.total),
@@ -54,6 +60,7 @@ class CartTotals extends StatelessWidget {
     return PointyTotalLine(
       label: label,
       value: formatMoney(-discount.discountAmount),
+      isMuted: true,
     );
   }
 }

@@ -598,6 +598,17 @@ class PosApiService {
     return _catalog.createProductCategory(draft);
   }
 
+  Future<ProductCategory> updateProductCategory({
+    required int id,
+    required Map<String, Object?> changes,
+  }) {
+    return _catalog.updateProductCategory(id: id, changes: changes);
+  }
+
+  Future<void> deleteProductCategory(int id) {
+    return _catalog.deleteProductCategory(id);
+  }
+
   Future<VariantOptionValuePage> fetchVariantOptionValues({
     required ModelQuery query,
     int page = 1,

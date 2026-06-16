@@ -1551,6 +1551,16 @@
   "jobDetailsTitle": "تفاصيل المهمة",
   "jobTimelineTitle": "مسار المهمة",
   "jobCurrentStageLabel": "المرحلة الحالية",
+  "jobStageProgress": "المرحلة {current} من {total}",
+  "@jobStageProgress": {
+    "description": "Compact 'stage N of M' workflow progress caption.",
+    "placeholders": {
+      "current": { "type": "int" },
+      "total": { "type": "int" }
+    }
+  },
+  "jobOverdueBadge": "متأخرة",
+  "jobMaterialsTotalShort": "إجمالي المواد",
   "jobNextActionButton": "الخطوة التالية: {stageName}",
   "@jobNextActionButton": {
     "description": "Primary button advancing the job to its next stage.",
@@ -2414,6 +2424,68 @@
       }
     }
   },
+  "categoryProductCount": "{count, plural, =0{لا منتجات} =1{منتج واحد} =2{منتجان} other{{count} منتجات}}",
+  "@categoryProductCount": {
+    "description": "Number of products directly in a category.",
+    "placeholders": {
+      "count": {
+        "type": "num"
+      }
+    }
+  },
+  "allCategoriesSectionTitle": "كل التصنيفات",
+  "categorySearchResultsTitle": "نتائج البحث",
+  "categorySearchEmptyState": "لا توجد تصنيفات مطابقة لبحثك.",
+  "categoryEmptyHint": "أنشئ تصنيفك الأول لتنظيم منتجاتك.",
+  "categoryInactiveBadge": "غير نشط",
+  "categoryActionsTooltip": "خيارات",
+  "addSubcategoryAction": "إضافة تصنيف فرعي",
+  "editCategoryTitle": "تعديل التصنيف",
+  "savingCategoryButton": "جار الحفظ...",
+  "categoryUpdateError": "تعذر حفظ التغييرات. حاول مرة أخرى.",
+  "categoryDeletedMessage": "تم حذف التصنيف",
+  "categoryDeleteError": "تعذر حذف التصنيف.",
+  "deleteCategoryTitle": "حذف التصنيف",
+  "deleteCategoryConfirmMessage": "سيتم حذف «{name}» نهائيًا.",
+  "@deleteCategoryConfirmMessage": {
+    "description": "Delete category confirmation body.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "deleteCategoryHasChildrenTitle": "تعذر حذف التصنيف",
+  "deleteCategoryHasChildrenMessage": "يحتوي هذا التصنيف على فروع. احذف أو انقل التصنيفات الفرعية أولًا.",
+  "quickAccessSectionTitle": "الوصول السريع",
+  "quickAccessSectionSubtitle": "تظهر كأزرار تصفية فوق البحث في نقطة البيع والمشتريات.",
+  "quickAccessEmptyTitle": "لا توجد تصنيفات سريعة بعد",
+  "quickAccessEmptyMessage": "ثبّت تصنيفًا ليظهر كزر تصفية بنقرة واحدة. تشمل التصفية التصنيف وكل فروعه.",
+  "quickAccessReorderHint": "اسحب الأزرار لإعادة ترتيبها",
+  "quickAccessLoadError": "تعذر تحميل الوصول السريع.",
+  "quickAccessUpdateError": "تعذر تحديث الوصول السريع.",
+  "pinToQuickAccessTooltip": "تثبيت في الوصول السريع",
+  "unpinFromQuickAccessTooltip": "إزالة من الوصول السريع",
+  "quickAccessAddedMessage": "{name} في الوصول السريع الآن",
+  "@quickAccessAddedMessage": {
+    "description": "Snackbar after pinning a category.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "quickAccessRemovedMessage": "تمت إزالة {name} من الوصول السريع",
+  "@quickAccessRemovedMessage": {
+    "description": "Snackbar after unpinning a category.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "quickAccessSwitchLabel": "إظهار في الوصول السريع",
+  "quickAccessSwitchHelper": "زر تصفية سريع في نقطة البيع والمشتريات",
   "activeProductLabel": "متاح للبيع",
   "productTracksExpiryLabel": "يتابع تاريخ الانتهاء",
   "productTracksExpiryHint": "سيطلب تاريخ انتهاء عند شراء هذا المنتج ويظهر تنبيه قبل انتهائه.",
@@ -2789,6 +2861,7 @@
   "modifierGroupDeleteError": "تعذّر حذف المجموعة.",
   "productModifierGroupsLabel": "مجموعات الإضافات",
   "emptyCart": "لا توجد عناصر في السلة",
+  "emptyCartMessage": "ابحث عن منتج أو امسح الباركود لبدء البيع",
   "openCartSheetButton": "مراجعة السلة",
   "openSaleSessionsTitle": "الفواتير المفتوحة",
   "newSaleSessionButton": "فاتورة جديدة",
@@ -3288,6 +3361,7 @@
   "purchaseLandedCostActionTooltip": "تكاليف الوصول",
   "purchaseDiscountActionTooltip": "كود خصم المورد",
   "emptyPurchaseDraft": "لا توجد عناصر في مسودة الشراء",
+  "emptyPurchaseDraftMessage": "أضف منتجات من الكتالوج لبناء أمر الشراء",
   "purchaseLineCostLabel": "التكلفة",
   "purchaseLineExpiryDateLabel": "تاريخ الانتهاء",
   "purchaseLineExpiryDateHint": "مثال: 2026-12-31",
@@ -4118,6 +4192,24 @@
   "discountWizardContactScopeToggle": "تطبيقه على عملاء أو موردين محددين",
   "discountWizardScheduleToggle": "تحديد فترة للخصم",
   "discountWizardUsageLimitsToggle": "تحديد مرات الاستخدام",
+  "discountFormSummaryTitle": "ملخص الخصم",
+  "discountSummaryPlaceholder": "أدخل قيمة الخصم لمعاينة الملخص",
+  "discountSummaryAppliesAll": "كل المنتجات",
+  "discountTargetedShort": "أصناف محددة",
+  "discountSectionBasicsHint": "الاسم والقناة وطريقة التطبيق",
+  "discountSectionValueHint": "نوع الخصم وقيمته",
+  "discountSectionTargeting": "على ماذا ينطبق",
+  "discountSectionTargetingHint": "اتركه فارغًا لتطبيقه على كل شيء",
+  "discountSectionConditions": "الشروط",
+  "discountSectionConditionsHint": "حدود الحد الأدنى لتطبيق الخصم",
+  "discountSectionScheduleHint": "فترة السريان وعدد مرات الاستخدام",
+  "discountSectionAdvanced": "خيارات متقدمة",
+  "discountSectionAdvancedHint": "الأولوية والتكديس مع الخصومات الأخرى",
+  "discountScopeAutoNote": "ينطبق على كل صنف مطابق",
+  "discountValueTypePercentageHelp": "نسبة مئوية تُخصم من السعر",
+  "discountValueTypeFixedAmountHelp": "مبلغ ثابت يُخصم من الإجمالي",
+  "discountValueTypeFixedUnitAmountHelp": "مبلغ يُخصم عن كل وحدة",
+  "discountValueTypeFixedPriceHelp": "تثبيت سعر الصنف عند قيمة محددة",
   "discountWizardAdvancedToggle": "إظهار خيارات متقدمة",
   "discountWizardFixStepError": "راجع الخطوة المحددة وأكمل البيانات المطلوبة.",
   "discountWizardNoExtraRules": "بدون شروط إضافية",

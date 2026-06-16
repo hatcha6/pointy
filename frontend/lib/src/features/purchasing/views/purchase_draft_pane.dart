@@ -7,6 +7,7 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 import '../../../core/result.dart';
 import '../../../data/models/purchase_submission.dart';
 import '../../../data/repositories/contact_repository.dart';
+import '../../../shared/catalog/catalog.dart';
 import '../../../shared/contact_picker_sheet.dart';
 import '../../../shared/components/components.dart';
 import '../../../shared/decimal_text_input_formatter.dart';
@@ -102,25 +103,17 @@ class _PurchaseDraftPaneState extends State<PurchaseDraftPane> {
               ),
             ),
             if (viewModel.selectedSupplier == null) ...[
-              SizedBox(height: spacing.xs),
-              Text(
-                l10n.purchaseSupplierRequiredHint,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(
-                  context,
-                ).textTheme.bodySmall?.copyWith(color: colors.danger),
+              SizedBox(height: spacing.sm),
+              PointyInlineMessage.warning(
+                message: l10n.purchaseSupplierRequiredHint,
+                compact: true,
               ),
             ],
             if (viewModel.hasMissingExpiryDates) ...[
-              SizedBox(height: spacing.xs),
-              Text(
-                l10n.purchaseExpiryDatesRequired,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(
-                  context,
-                ).textTheme.bodySmall?.copyWith(color: colors.danger),
+              SizedBox(height: spacing.sm),
+              PointyInlineMessage.warning(
+                message: l10n.purchaseExpiryDatesRequired,
+                compact: true,
               ),
             ],
             SizedBox(height: spacing.sm),
@@ -358,10 +351,11 @@ class _PurchaseDraftScrollContent extends StatelessWidget {
       children: [
         if (viewModel.draft.isEmpty)
           SizedBox(
-            height: 220,
+            height: 240,
             child: PointyEmptyState(
               icon: Icons.inventory_2_outlined,
               title: l10n.emptyPurchaseDraft,
+              message: l10n.emptyPurchaseDraftMessage,
             ),
           )
         else
@@ -406,6 +400,8 @@ class _PurchaseDraftTotals extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
 
+    final appliedDiscounts = viewModel.appliedDiscounts;
+
     return PointyTotalsPanel(
       compact: true,
       lines: [
@@ -413,17 +409,22 @@ class _PurchaseDraftTotals extends StatelessWidget {
           label: l10n.subtotal,
           value: formatMoney(viewModel.subtotal),
         ),
-        if (viewModel.discountTotal > 0)
+        // Itemized discount breakdown when available, otherwise the aggregate
+        // line — never both (a lone discount used to render twice).
+        if (appliedDiscounts.isNotEmpty)
+          for (final discount in appliedDiscounts)
+            PointyTotalLine(
+              label: discount.couponCode.isEmpty
+                  ? discount.ruleName
+                  : l10n.discountCouponAppliedLabel(discount.couponCode),
+              value: formatMoney(-discount.discountAmount),
+              isMuted: true,
+            )
+        else if (viewModel.discountTotal > 0)
           PointyTotalLine(
             label: l10n.discountTotalLabel,
             value: formatMoney(-viewModel.discountTotal),
-          ),
-        for (final discount in viewModel.appliedDiscounts)
-          PointyTotalLine(
-            label: discount.couponCode.isEmpty
-                ? discount.ruleName
-                : l10n.discountCouponAppliedLabel(discount.couponCode),
-            value: formatMoney(-discount.discountAmount),
+            isMuted: true,
           ),
         if (viewModel.landedCostTotal > 0)
           PointyTotalLine(
@@ -449,37 +450,11 @@ class _ReceiveImmediatelyToggle extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
 
-    return InkWell(
-      onTap: viewModel.isSubmitting
-          ? null
-          : () => viewModel.updateReceiveImmediately(
-              !viewModel.receiveImmediately,
-            ),
-      child: Padding(
-        padding: const EdgeInsetsDirectional.only(top: 2),
-        child: Row(
-          children: [
-            Checkbox(
-              value: viewModel.receiveImmediately,
-              onChanged: viewModel.isSubmitting
-                  ? null
-                  : (value) =>
-                        viewModel.updateReceiveImmediately(value ?? true),
-              visualDensity: VisualDensity.compact,
-              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            ),
-            const SizedBox(width: 4),
-            Expanded(
-              child: Text(
-                l10n.receivePurchaseImmediatelyLabel,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-            ),
-          ],
-        ),
-      ),
+    return PointyOrderToggleRow(
+      label: l10n.receivePurchaseImmediatelyLabel,
+      value: viewModel.receiveImmediately,
+      enabled: !viewModel.isSubmitting,
+      onChanged: viewModel.updateReceiveImmediately,
     );
   }
 }
@@ -1121,107 +1096,155 @@ class _PurchaseDraftLineTileState extends State<PurchaseDraftLineTile> {
         ? previewLine!.effectiveLineTotal ?? line.total + allocatedLandedCost
         : line.total;
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 10),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  line.variant.displayLabel,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+    final colors = context.pointyColors;
+    final imageUrl =
+        line.variant.primaryImage?.contentUrl ??
+        line.variant.productDetail?.primaryImage?.contentUrl;
+
+    final info = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          line.variant.displayLabel,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: theme.textTheme.titleSmall?.copyWith(
+            color: colors.ink,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        if (line.variant.sku.isNotEmpty) ...[
+          const SizedBox(height: 3),
+          Text(
+            line.variant.sku,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: theme.textTheme.bodySmall?.copyWith(color: colors.mutedInk),
+          ),
+        ],
+        if (costDetails.isNotEmpty) ...[
+          const SizedBox(height: 3),
+          Text(
+            costDetails.join(' • '),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: colors.primaryStrong,
+            ),
+          ),
+        ],
+      ],
+    );
+
+    final costField = TextField(
+      controller: _costController,
+      focusNode: _costFocusNode,
+      enabled: widget.enabled,
+      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+      inputFormatters: [DecimalTextInputFormatter()],
+      decoration: InputDecoration(
+        labelText: l10n.purchaseLineCostLabel,
+        isDense: true,
+        prefixIcon: const Icon(Icons.sell_outlined),
+      ),
+      onChanged: (value) {
+        final parsed = double.tryParse(value.trim().replaceAll(',', '.'));
+        if (parsed != null && parsed >= 0) {
+          widget.onCostChanged(parsed);
+        }
+      },
+    );
+
+    final stepper = PointyQuantityStepper(
+      quantity: line.quantity.toDouble(),
+      incrementTooltip: l10n.addOneTooltip,
+      decrementTooltip: l10n.removeOneTooltip,
+      onIncrement: widget.enabled ? () => widget.onAdd() : null,
+      onDecrement: widget.enabled ? widget.onRemove : null,
+    );
+
+    final totalText = Text(
+      formatMoney(lineTotal),
+      maxLines: 1,
+      textAlign: TextAlign.end,
+      style: switch (theme.textTheme.titleMedium?.copyWith(
+        color: colors.ink,
+        fontWeight: FontWeight.w800,
+      )) {
+        final style? => PointyTypography.numeric(style),
+        null => null,
+      },
+    );
+
+    final expiryField = line.variant.tracksExpiry
+        ? Align(
+            alignment: AlignmentDirectional.centerStart,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 260),
+              child: TextField(
+                key: ValueKey('purchase_line_expiry_${line.variant.id}_field'),
+                controller: _expiryController,
+                focusNode: _expiryFocusNode,
+                enabled: widget.enabled,
+                keyboardType: TextInputType.datetime,
+                inputFormatters: const [_DateDashInputFormatter()],
+                decoration: InputDecoration(
+                  labelText: l10n.purchaseLineExpiryDateLabel,
+                  hintText: l10n.purchaseLineExpiryDateHint,
+                  isDense: true,
+                  prefixIcon: const Icon(Icons.event_busy_outlined),
+                  suffixIcon: IconButton(
+                    tooltip: l10n.purchaseLineExpiryDatePickerTooltip,
+                    onPressed: widget.enabled ? _pickExpiryDate : null,
+                    icon: const Icon(Icons.calendar_month_outlined),
+                  ),
+                  errorText: _expiryErrorText(l10n),
                 ),
-                if (line.variant.sku.isNotEmpty)
-                  Text(
-                    line.variant.sku,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.bodySmall,
-                  ),
-                if (costDetails.isNotEmpty)
-                  Text(
-                    costDetails.join(' • '),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.secondary,
-                    ),
-                  ),
-                if (line.variant.tracksExpiry) ...[
-                  const SizedBox(height: 8),
-                  ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 220),
-                    child: TextField(
-                      key: ValueKey(
-                        'purchase_line_expiry_${line.variant.id}_field',
-                      ),
-                      controller: _expiryController,
-                      focusNode: _expiryFocusNode,
-                      enabled: widget.enabled,
-                      keyboardType: TextInputType.datetime,
-                      inputFormatters: const [_DateDashInputFormatter()],
-                      decoration: InputDecoration(
-                        labelText: l10n.purchaseLineExpiryDateLabel,
-                        hintText: l10n.purchaseLineExpiryDateHint,
-                        isDense: true,
-                        prefixIcon: const Icon(Icons.event_busy_outlined),
-                        suffixIcon: IconButton(
-                          tooltip: l10n.purchaseLineExpiryDatePickerTooltip,
-                          onPressed: widget.enabled ? _pickExpiryDate : null,
-                          icon: const Icon(Icons.calendar_month_outlined),
-                        ),
-                        errorText: _expiryErrorText(l10n),
-                      ),
-                      onChanged: _handleExpiryInputChanged,
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-          SizedBox(
-            width: 108,
-            child: TextField(
-              controller: _costController,
-              focusNode: _costFocusNode,
-              enabled: widget.enabled,
-              keyboardType: const TextInputType.numberWithOptions(
-                decimal: true,
+                onChanged: _handleExpiryInputChanged,
               ),
-              inputFormatters: [DecimalTextInputFormatter()],
-              decoration: InputDecoration(
-                labelText: l10n.purchaseLineCostLabel,
-                isDense: true,
-              ),
-              onChanged: (value) {
-                final parsed = double.tryParse(
-                  value.trim().replaceAll(',', '.'),
-                );
-                if (parsed != null && parsed >= 0) {
-                  widget.onCostChanged(parsed);
-                }
-              },
             ),
+          )
+        : null;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              PointyProductImageFrame(
+                imageUrl: imageUrl,
+                fallbackText: line.variant.displayLabel,
+                width: 54,
+                height: 54,
+                padding: const EdgeInsets.all(6),
+              ),
+              const SizedBox(width: 12),
+              Expanded(child: info),
+              const SizedBox(width: 10),
+              totalText,
+            ],
           ),
-          const SizedBox(width: 8),
-          IconButton.filledTonal(
-            tooltip: l10n.removeOneTooltip,
-            onPressed: widget.enabled ? widget.onRemove : null,
-            icon: const Icon(Icons.remove),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: Align(
+                  alignment: AlignmentDirectional.centerStart,
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 190),
+                    child: costField,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              stepper,
+            ],
           ),
-          SizedBox(width: 36, child: Center(child: Text('${line.quantity}'))),
-          IconButton.filledTonal(
-            tooltip: l10n.addOneTooltip,
-            onPressed: widget.enabled ? () => widget.onAdd() : null,
-            icon: const Icon(Icons.add),
-          ),
-          SizedBox(
-            width: 72,
-            child: Text(formatMoney(lineTotal), textAlign: TextAlign.end),
-          ),
+          if (expiryField != null) ...[const SizedBox(height: 12), expiryField],
         ],
       ),
     );

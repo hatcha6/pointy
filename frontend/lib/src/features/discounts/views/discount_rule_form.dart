@@ -9,11 +9,16 @@ import '../../../data/models/product_query.dart';
 import '../../../data/repositories/catalog_repository.dart';
 import '../../../data/repositories/contact_repository.dart';
 import '../../../shared/async_selection/async_selection.dart';
+import '../../../shared/components/components.dart';
 import '../../../shared/decimal_text_input_formatter.dart';
+import '../../../shared/design/design.dart';
 import '../../../shared/product_category_picker.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../view_models/discount_management_view_model.dart';
 
+/// Single-scroll discount editor: a live plain-language summary anchors the
+/// form, and each concern lives in its own card with optional details revealed
+/// only when needed. Replaces the old 5-step wizard.
 class DiscountRuleForm extends StatefulWidget {
   const DiscountRuleForm({
     super.key,
@@ -35,8 +40,6 @@ class DiscountRuleForm extends StatefulWidget {
 }
 
 class _DiscountRuleFormState extends State<DiscountRuleForm> {
-  static const _stepCount = 5;
-
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _nameController;
   late final TextEditingController _descriptionController;
@@ -50,8 +53,8 @@ class _DiscountRuleFormState extends State<DiscountRuleForm> {
   late final TextEditingController _usageLimitController;
   late final TextEditingController _perCustomerLimitController;
   late final TextEditingController _perSupplierLimitController;
+  late final List<TextEditingController> _liveControllers;
 
-  int _step = 0;
   late DiscountChannel _channel;
   late DiscountApplicationType _applicationType;
   late DiscountScope _scope;
@@ -155,10 +158,29 @@ class _DiscountRuleFormState extends State<DiscountRuleForm> {
         rule?.perSupplierUsageLimit != null;
     _showAdvancedSettings =
         rule != null && (!rule.exclusive || rule.priority != 100);
+
+    // Keep the live summary in sync with free-text fields.
+    _liveControllers = [
+      _nameController,
+      _couponCodeController,
+      _valueController,
+      _maxDiscountController,
+      _roundingIncrementController,
+      _minSubtotalController,
+      _minLineQuantityController,
+      _priorityController,
+      _usageLimitController,
+    ];
+    for (final controller in _liveControllers) {
+      controller.addListener(_onLiveChanged);
+    }
   }
 
   @override
   void dispose() {
+    for (final controller in _liveControllers) {
+      controller.removeListener(_onLiveChanged);
+    }
     _nameController.dispose();
     _descriptionController.dispose();
     _couponCodeController.dispose();
@@ -174,9 +196,17 @@ class _DiscountRuleFormState extends State<DiscountRuleForm> {
     super.dispose();
   }
 
+  void _onLiveChanged() {
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    final spacing = AdaptiveSpacing.of(context);
+    final colors = context.pointyColors;
 
     return Column(
       children: [
@@ -185,122 +215,88 @@ class _DiscountRuleFormState extends State<DiscountRuleForm> {
             key: _formKey,
             child: ListView(
               key: const ValueKey('discount_rule_form_scroll'),
-              padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+              padding: EdgeInsets.fromLTRB(
+                spacing.lg,
+                spacing.sm,
+                spacing.lg,
+                spacing.lg,
+              ),
               children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        widget.rule == null
-                            ? l10n.discountCreateTitle
-                            : l10n.discountEditTitle,
-                        style: Theme.of(context).textTheme.titleLarge,
-                      ),
-                    ),
-                    Text(l10n.discountWizardStepLabel(_step + 1, _stepCount)),
-                  ],
+                Text(
+                  widget.rule == null
+                      ? l10n.discountCreateTitle
+                      : l10n.discountEditTitle,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
                 ),
-                const SizedBox(height: 10),
-                LinearProgressIndicator(value: (_step + 1) / _stepCount),
-                const SizedBox(height: 12),
-                _WizardStepBar(
-                  currentStep: _step,
-                  labels: [
-                    l10n.discountWizardStepBasics,
-                    l10n.discountWizardStepValue,
-                    l10n.discountWizardStepEligibility,
-                    l10n.discountWizardStepLimits,
-                    l10n.discountWizardStepReview,
-                  ],
+                SizedBox(height: spacing.md),
+                _DiscountSummaryCard(
+                  headline: _summaryHeadline(l10n),
+                  subhead: _summarySubhead(l10n),
+                  chips: _summaryChips(l10n),
                 ),
-                const SizedBox(height: 18),
-                AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 180),
-                  child: _buildCurrentStep(l10n),
-                ),
+                SizedBox(height: spacing.md),
+                _essentialsSection(l10n),
+                _valueSection(l10n),
+                _targetingSection(l10n),
+                _conditionsSection(l10n),
+                _scheduleLimitsSection(l10n),
+                _advancedSection(l10n),
               ],
             ),
           ),
         ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
-          child: Row(
-            children: [
-              if (_step > 0)
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: widget.viewModel.isSaving ? null : _goBack,
-                    icon: const Icon(Icons.arrow_back),
-                    label: Text(l10n.backButton),
-                  ),
-                ),
-              if (_step > 0) const SizedBox(width: 12),
-              Expanded(
-                child: FilledButton.icon(
-                  key: const ValueKey('discount_rule_save_button'),
-                  onPressed: widget.viewModel.isSaving
-                      ? null
-                      : _step == _stepCount - 1
-                      ? _submit
-                      : _goNext,
-                  icon: widget.viewModel.isSaving
-                      ? const SizedBox.square(
-                          dimension: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : Icon(
-                          _step == _stepCount - 1
-                              ? Icons.save_outlined
-                              : Icons.arrow_forward,
-                        ),
-                  label: Text(
-                    _step == _stepCount - 1
-                        ? l10n.discountSaveButton
-                        : l10n.nextButton,
-                  ),
-                ),
+        DecoratedBox(
+          decoration: BoxDecoration(
+            color: colors.surface,
+            border: Border(top: BorderSide(color: colors.line)),
+          ),
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(
+              spacing.lg,
+              spacing.sm,
+              spacing.lg,
+              spacing.md,
+            ),
+            child: SizedBox(
+              height: PointyDimensions.buttonHeight,
+              child: FilledButton.icon(
+                key: const ValueKey('discount_rule_save_button'),
+                onPressed: widget.viewModel.isSaving ? null : _submit,
+                icon: widget.viewModel.isSaving
+                    ? const SizedBox.square(
+                        dimension: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.check),
+                label: Text(l10n.discountSaveButton),
               ),
-            ],
+            ),
           ),
         ),
       ],
     );
   }
 
-  Widget _buildCurrentStep(AppLocalizations l10n) {
-    return switch (_step) {
-      0 => _buildBasicsStep(l10n),
-      1 => _buildValueStep(l10n),
-      2 => _buildEligibilityStep(l10n),
-      3 => _buildLimitsStep(l10n),
-      _ => _buildReviewStep(l10n),
-    };
-  }
+  // -- sections ----------------------------------------------------------
 
-  Widget _buildBasicsStep(AppLocalizations l10n) {
-    return _WizardSection(
-      key: const ValueKey('discount_wizard_basics_step'),
+  Widget _essentialsSection(AppLocalizations l10n) {
+    return _FormSection(
       icon: Icons.sell_outlined,
       title: l10n.discountWizardStepBasics,
+      subtitle: l10n.discountSectionBasicsHint,
       children: [
         TextFormField(
           controller: _nameController,
           textInputAction: TextInputAction.next,
           decoration: InputDecoration(
             labelText: l10n.discountNameLabel,
-            border: const OutlineInputBorder(),
-            isDense: true,
+            prefixIcon: const Icon(Icons.label_outline),
           ),
           validator: (value) => value == null || value.trim().isEmpty
               ? l10n.requiredFieldError
               : null,
-        ),
-        SwitchListTile(
-          value: _isActive,
-          dense: true,
-          contentPadding: EdgeInsets.zero,
-          title: Text(l10n.discountActiveLabel),
-          onChanged: (value) => setState(() => _isActive = value),
         ),
         _SegmentedField<DiscountChannel>(
           label: l10n.discountChannelLabel,
@@ -323,8 +319,7 @@ class _DiscountRuleFormState extends State<DiscountRuleForm> {
             decoration: InputDecoration(
               labelText: l10n.discountCouponCodeLabel,
               hintText: l10n.discountCouponCodeHint,
-              border: const OutlineInputBorder(),
-              isDense: true,
+              prefixIcon: const Icon(Icons.confirmation_number_outlined),
             ),
             validator: (value) {
               if (_applicationType == DiscountApplicationType.couponCode &&
@@ -334,11 +329,14 @@ class _DiscountRuleFormState extends State<DiscountRuleForm> {
               return null;
             },
           ),
-        SwitchListTile(
+        _InlineSwitch(
+          label: l10n.discountActiveLabel,
+          value: _isActive,
+          onChanged: (value) => setState(() => _isActive = value),
+        ),
+        _InlineSwitch(
+          label: l10n.discountWizardDescriptionToggle,
           value: _showDescription,
-          dense: true,
-          contentPadding: EdgeInsets.zero,
-          title: Text(l10n.discountWizardDescriptionToggle),
           onChanged: (value) => setState(() => _showDescription = value),
         ),
         if (_showDescription)
@@ -347,46 +345,27 @@ class _DiscountRuleFormState extends State<DiscountRuleForm> {
             maxLines: 2,
             decoration: InputDecoration(
               labelText: l10n.discountDescriptionLabel,
-              border: const OutlineInputBorder(),
-              isDense: true,
+              prefixIcon: const Icon(Icons.notes_outlined),
             ),
           ),
       ],
     );
   }
 
-  Widget _buildValueStep(AppLocalizations l10n) {
-    return _WizardSection(
-      key: const ValueKey('discount_wizard_value_step'),
+  Widget _valueSection(AppLocalizations l10n) {
+    final scopeLocked =
+        _valueType == DiscountValueType.fixedPrice ||
+        _valueType == DiscountValueType.fixedUnitAmount;
+    return _FormSection(
       icon: Icons.price_change_outlined,
       title: l10n.discountWizardStepValue,
+      subtitle: l10n.discountSectionValueHint,
       children: [
-        _SegmentedField<DiscountScope>(
-          label: l10n.discountScopeLabel,
-          selected: _scope,
-          values: DiscountScope.values,
-          labelFor: (value) => _scopeLabel(l10n, value),
-          onSelected: (value) => setState(() => _scope = value),
-        ),
-        DropdownButtonFormField<DiscountValueType>(
-          initialValue: _valueType,
-          isExpanded: true,
-          decoration: InputDecoration(
-            labelText: l10n.discountValueTypeLabel,
-            border: const OutlineInputBorder(),
-            isDense: true,
-          ),
-          items: [
-            for (final type in DiscountValueType.values)
-              DropdownMenuItem(
-                value: type,
-                child: Text(_valueTypeLabel(l10n, type)),
-              ),
-          ],
-          onChanged: (value) {
-            if (value == null) {
-              return;
-            }
+        _ValueTypeSelector(
+          selected: _valueType,
+          labelFor: (type) => _valueTypeLabel(l10n, type),
+          helpFor: (type) => _valueTypeHelp(l10n, type),
+          onSelected: (value) {
             setState(() {
               _valueType = value;
               if (value == DiscountValueType.fixedPrice ||
@@ -402,16 +381,24 @@ class _DiscountRuleFormState extends State<DiscountRuleForm> {
           inputFormatters: [DecimalTextInputFormatter()],
           decoration: InputDecoration(
             labelText: l10n.discountValueLabel,
-            border: const OutlineInputBorder(),
-            isDense: true,
+            prefixIcon: const Icon(Icons.tag_outlined),
+            suffixText: _valueType == DiscountValueType.percentage ? '%' : null,
           ),
           validator: _validatePositiveDecimal,
         ),
-        SwitchListTile(
+        if (scopeLocked)
+          _NoteLine(icon: Icons.info_outline, text: l10n.discountScopeAutoNote)
+        else
+          _SegmentedField<DiscountScope>(
+            label: l10n.discountScopeLabel,
+            selected: _scope,
+            values: DiscountScope.values,
+            labelFor: (value) => _scopeLabel(l10n, value),
+            onSelected: (value) => setState(() => _scope = value),
+          ),
+        _InlineSwitch(
+          label: l10n.discountWizardMaximumDiscountToggle,
           value: _showMaximumDiscount,
-          dense: true,
-          contentPadding: EdgeInsets.zero,
-          title: Text(l10n.discountWizardMaximumDiscountToggle),
           onChanged: (value) => setState(() => _showMaximumDiscount = value),
         ),
         if (_showMaximumDiscount)
@@ -421,16 +408,13 @@ class _DiscountRuleFormState extends State<DiscountRuleForm> {
             inputFormatters: [DecimalTextInputFormatter()],
             decoration: InputDecoration(
               labelText: l10n.discountMaxAmountLabel,
-              border: const OutlineInputBorder(),
-              isDense: true,
+              prefixIcon: const Icon(Icons.production_quantity_limits_outlined),
             ),
             validator: _validateOptionalPositiveAmount,
           ),
-        SwitchListTile(
+        _InlineSwitch(
+          label: l10n.discountWizardRoundingToggle,
           value: _enableRounding,
-          dense: true,
-          contentPadding: EdgeInsets.zero,
-          title: Text(l10n.discountWizardRoundingToggle),
           onChanged: (value) => setState(() => _enableRounding = value),
         ),
         if (_enableRounding) ...[
@@ -457,8 +441,7 @@ class _DiscountRuleFormState extends State<DiscountRuleForm> {
             inputFormatters: [DecimalTextInputFormatter()],
             decoration: InputDecoration(
               labelText: l10n.discountRoundingIncrementLabel,
-              border: const OutlineInputBorder(),
-              isDense: true,
+              prefixIcon: const Icon(Icons.straighten_outlined),
             ),
             validator: _validateRoundingIncrement,
           ),
@@ -467,67 +450,23 @@ class _DiscountRuleFormState extends State<DiscountRuleForm> {
     );
   }
 
-  Widget _buildEligibilityStep(AppLocalizations l10n) {
+  Widget _targetingSection(AppLocalizations l10n) {
     final showCustomerFields = _channel != DiscountChannel.purchasing;
     final showSupplierFields = _channel != DiscountChannel.sales;
-    return _WizardSection(
-      key: const ValueKey('discount_wizard_eligibility_step'),
-      icon: Icons.rule_outlined,
-      title: l10n.discountWizardStepEligibility,
+    return _FormSection(
+      icon: Icons.adjust_outlined,
+      title: l10n.discountSectionTargeting,
+      subtitle: l10n.discountSectionTargetingHint,
       children: [
-        SwitchListTile(
-          value: _limitByMinimumSubtotal,
-          dense: true,
-          contentPadding: EdgeInsets.zero,
-          title: Text(l10n.discountWizardMinimumSubtotalToggle),
-          onChanged: (value) => setState(() => _limitByMinimumSubtotal = value),
-        ),
-        if (_limitByMinimumSubtotal)
-          TextFormField(
-            controller: _minSubtotalController,
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            inputFormatters: [DecimalTextInputFormatter()],
-            decoration: InputDecoration(
-              labelText: l10n.discountMinSubtotalLabel,
-              border: const OutlineInputBorder(),
-              isDense: true,
-            ),
-            validator: _validateOptionalNonNegativeDecimal,
-          ),
-        if (_scope == DiscountScope.line)
-          SwitchListTile(
-            value: _limitByMinimumLineQuantity,
-            dense: true,
-            contentPadding: EdgeInsets.zero,
-            title: Text(l10n.discountWizardMinimumLineQuantityToggle),
-            onChanged: (value) =>
-                setState(() => _limitByMinimumLineQuantity = value),
-          ),
-        if (_scope == DiscountScope.line && _limitByMinimumLineQuantity)
-          TextFormField(
-            controller: _minLineQuantityController,
-            keyboardType: TextInputType.number,
-            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-            decoration: InputDecoration(
-              labelText: l10n.discountMinLineQuantityLabel,
-              border: const OutlineInputBorder(),
-              isDense: true,
-            ),
-            validator: _validateOptionalPositiveInteger,
-          ),
-        SwitchListTile(
+        _InlineSwitch(
+          label: l10n.discountWizardProductScopeToggle,
           value: _limitByProducts,
-          dense: true,
-          contentPadding: EdgeInsets.zero,
-          title: Text(l10n.discountWizardProductScopeToggle),
           onChanged: (value) => setState(() => _limitByProducts = value),
         ),
         if (_limitByProducts) _buildProductConstraints(l10n),
-        SwitchListTile(
+        _InlineSwitch(
+          label: l10n.discountWizardContactScopeToggle,
           value: _limitByContacts,
-          dense: true,
-          contentPadding: EdgeInsets.zero,
-          title: Text(l10n.discountWizardContactScopeToggle),
           onChanged: (value) => setState(() => _limitByContacts = value),
         ),
         if (_limitByContacts)
@@ -540,17 +479,59 @@ class _DiscountRuleFormState extends State<DiscountRuleForm> {
     );
   }
 
-  Widget _buildLimitsStep(AppLocalizations l10n) {
-    return _WizardSection(
-      key: const ValueKey('discount_wizard_limits_step'),
+  Widget _conditionsSection(AppLocalizations l10n) {
+    return _FormSection(
+      icon: Icons.rule_outlined,
+      title: l10n.discountSectionConditions,
+      subtitle: l10n.discountSectionConditionsHint,
+      children: [
+        _InlineSwitch(
+          label: l10n.discountWizardMinimumSubtotalToggle,
+          value: _limitByMinimumSubtotal,
+          onChanged: (value) => setState(() => _limitByMinimumSubtotal = value),
+        ),
+        if (_limitByMinimumSubtotal)
+          TextFormField(
+            controller: _minSubtotalController,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            inputFormatters: [DecimalTextInputFormatter()],
+            decoration: InputDecoration(
+              labelText: l10n.discountMinSubtotalLabel,
+              prefixIcon: const Icon(Icons.shopping_cart_outlined),
+            ),
+            validator: _validateOptionalNonNegativeDecimal,
+          ),
+        if (_scope == DiscountScope.line)
+          _InlineSwitch(
+            label: l10n.discountWizardMinimumLineQuantityToggle,
+            value: _limitByMinimumLineQuantity,
+            onChanged: (value) =>
+                setState(() => _limitByMinimumLineQuantity = value),
+          ),
+        if (_scope == DiscountScope.line && _limitByMinimumLineQuantity)
+          TextFormField(
+            controller: _minLineQuantityController,
+            keyboardType: TextInputType.number,
+            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+            decoration: InputDecoration(
+              labelText: l10n.discountMinLineQuantityLabel,
+              prefixIcon: const Icon(Icons.numbers_outlined),
+            ),
+            validator: _validateOptionalPositiveInteger,
+          ),
+      ],
+    );
+  }
+
+  Widget _scheduleLimitsSection(AppLocalizations l10n) {
+    return _FormSection(
       icon: Icons.event_available_outlined,
       title: l10n.discountWizardStepLimits,
+      subtitle: l10n.discountSectionScheduleHint,
       children: [
-        SwitchListTile(
+        _InlineSwitch(
+          label: l10n.discountWizardScheduleToggle,
           value: _showSchedule,
-          dense: true,
-          contentPadding: EdgeInsets.zero,
-          title: Text(l10n.discountWizardScheduleToggle),
           onChanged: (value) => setState(() => _showSchedule = value),
         ),
         if (_showSchedule)
@@ -570,11 +551,9 @@ class _DiscountRuleFormState extends State<DiscountRuleForm> {
               ),
             ],
           ),
-        SwitchListTile(
+        _InlineSwitch(
+          label: l10n.discountWizardUsageLimitsToggle,
           value: _showUsageLimits,
-          dense: true,
-          contentPadding: EdgeInsets.zero,
-          title: Text(l10n.discountWizardUsageLimitsToggle),
           onChanged: (value) => setState(() => _showUsageLimits = value),
         ),
         if (_showUsageLimits)
@@ -586,8 +565,7 @@ class _DiscountRuleFormState extends State<DiscountRuleForm> {
                 inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                 decoration: InputDecoration(
                   labelText: l10n.discountUsageLimitLabel,
-                  border: const OutlineInputBorder(),
-                  isDense: true,
+                  prefixIcon: const Icon(Icons.confirmation_number_outlined),
                 ),
                 validator: _validateOptionalPositiveInteger,
               ),
@@ -598,8 +576,7 @@ class _DiscountRuleFormState extends State<DiscountRuleForm> {
                   inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                   decoration: InputDecoration(
                     labelText: l10n.discountPerCustomerLimitLabel,
-                    border: const OutlineInputBorder(),
-                    isDense: true,
+                    prefixIcon: const Icon(Icons.person_outline),
                   ),
                   validator: _validatePerCustomerLimit,
                 ),
@@ -610,18 +587,25 @@ class _DiscountRuleFormState extends State<DiscountRuleForm> {
                   inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                   decoration: InputDecoration(
                     labelText: l10n.discountPerSupplierLimitLabel,
-                    border: const OutlineInputBorder(),
-                    isDense: true,
+                    prefixIcon: const Icon(Icons.local_shipping_outlined),
                   ),
                   validator: _validatePerSupplierLimit,
                 ),
             ],
           ),
-        SwitchListTile(
+      ],
+    );
+  }
+
+  Widget _advancedSection(AppLocalizations l10n) {
+    return _FormSection(
+      icon: Icons.tune_outlined,
+      title: l10n.discountSectionAdvanced,
+      subtitle: l10n.discountSectionAdvancedHint,
+      children: [
+        _InlineSwitch(
+          label: l10n.discountWizardAdvancedToggle,
           value: _showAdvancedSettings,
-          dense: true,
-          contentPadding: EdgeInsets.zero,
-          title: Text(l10n.discountWizardAdvancedToggle),
           onChanged: (value) => setState(() => _showAdvancedSettings = value),
         ),
         if (_showAdvancedSettings) ...[
@@ -631,66 +615,17 @@ class _DiscountRuleFormState extends State<DiscountRuleForm> {
             inputFormatters: [FilteringTextInputFormatter.digitsOnly],
             decoration: InputDecoration(
               labelText: l10n.discountPriorityLabel,
-              border: const OutlineInputBorder(),
-              isDense: true,
+              prefixIcon: const Icon(Icons.low_priority_outlined),
             ),
             validator: _validatePositiveInteger,
           ),
-          SwitchListTile(
+          _InlineSwitch(
+            label: l10n.discountExclusiveLabel,
+            subtitle: l10n.discountExclusiveHelper,
             value: _exclusive,
-            dense: true,
-            contentPadding: EdgeInsets.zero,
-            title: Text(l10n.discountExclusiveLabel),
-            subtitle: Text(l10n.discountExclusiveHelper),
             onChanged: (value) => setState(() => _exclusive = value),
           ),
         ],
-      ],
-    );
-  }
-
-  Widget _buildReviewStep(AppLocalizations l10n) {
-    return _WizardSection(
-      key: const ValueKey('discount_wizard_review_step'),
-      icon: Icons.fact_check_outlined,
-      title: l10n.discountWizardStepReview,
-      children: [
-        _ReviewRow(label: l10n.discountNameLabel, value: _nameController.text),
-        _ReviewRow(
-          label: l10n.discountChannelLabel,
-          value: _channelLabel(l10n, _channel),
-        ),
-        _ReviewRow(
-          label: l10n.discountApplicationTypeLabel,
-          value: _applicationReviewValue(l10n),
-        ),
-        _ReviewRow(
-          label: l10n.discountValueLabel,
-          value: l10n.discountValueSummary(
-            _valueTypeLabel(l10n, _valueType),
-            _valueController.text,
-          ),
-        ),
-        _ReviewRow(
-          label: l10n.discountScopeLabel,
-          value: _scopeLabel(l10n, _scope),
-        ),
-        if (_enableRounding)
-          _ReviewRow(
-            label: l10n.discountRoundingModeLabel,
-            value: l10n.discountRoundingSummary(
-              _roundingModeLabel(l10n, _roundingMode),
-              _roundingIncrementController.text,
-            ),
-          ),
-        _ReviewRow(
-          label: l10n.discountDetailsConstraintsSection,
-          value: _constraintsReviewValue(l10n),
-        ),
-        _ReviewRow(
-          label: l10n.discountUsageSection,
-          value: _limitsReviewValue(l10n),
-        ),
       ],
     );
   }
@@ -795,218 +730,129 @@ class _DiscountRuleFormState extends State<DiscountRuleForm> {
     );
   }
 
-  void _goBack() {
-    if (_step == 0) {
-      return;
+  // -- live summary ------------------------------------------------------
+
+  String _summaryHeadline(AppLocalizations l10n) {
+    final raw = _valueController.text.trim();
+    if (raw.isEmpty) {
+      return l10n.discountSummaryPlaceholder;
     }
-    setState(() => _step -= 1);
+    if (_valueType == DiscountValueType.percentage) {
+      return l10n.discountPercentageValue(raw);
+    }
+    return raw;
   }
 
-  void _goNext() {
-    if (!(_formKey.currentState?.validate() ?? false)) {
-      return;
-    }
-    final invalidStep = _firstInvalidStep();
-    if (invalidStep != null && invalidStep <= _step) {
-      _showFixStepMessage();
-      return;
-    }
-    setState(() => _step += 1);
+  String _summarySubhead(AppLocalizations l10n) {
+    return '${_valueTypeLabel(l10n, _valueType)} · ${_scopeLabel(l10n, _scope)}';
   }
 
-  int? _firstInvalidStep() {
-    if (_nameController.text.trim().isEmpty) {
-      return 0;
-    }
-    if (_applicationType == DiscountApplicationType.couponCode &&
-        _couponCodeController.text.trim().isEmpty) {
-      return 0;
-    }
-    if (_validatePositiveDecimal(_valueController.text) != null) {
-      return 1;
-    }
-    if (_showMaximumDiscount &&
-        _validateOptionalPositiveAmount(_maxDiscountController.text) != null) {
-      return 1;
-    }
-    if (_enableRounding &&
-        _validateRoundingIncrement(_roundingIncrementController.text) != null) {
-      return 1;
-    }
-    if (_limitByMinimumSubtotal &&
-        _validateOptionalNonNegativeDecimal(_minSubtotalController.text) !=
-            null) {
-      return 2;
-    }
-    if (_scope == DiscountScope.line &&
-        _limitByMinimumLineQuantity &&
-        _validateOptionalPositiveInteger(_minLineQuantityController.text) !=
-            null) {
-      return 2;
-    }
-    if (_limitByContacts &&
-        ((_channel != DiscountChannel.purchasing &&
-                _validateCustomerSelection() != null) ||
-            (_channel != DiscountChannel.sales &&
-                _validateSupplierSelection() != null))) {
-      return 2;
-    }
-    if (_showSchedule &&
-        _endsAt != null &&
-        _startsAt != null &&
-        !_endsAt!.isAfter(_startsAt!)) {
-      return 3;
-    }
-    if (_showUsageLimits &&
-        (_validateOptionalPositiveInteger(_usageLimitController.text) != null ||
-            (_channel != DiscountChannel.purchasing &&
-                _validatePerCustomerLimit(_perCustomerLimitController.text) !=
-                    null) ||
-            (_channel != DiscountChannel.sales &&
-                _validatePerSupplierLimit(_perSupplierLimitController.text) !=
-                    null))) {
-      return 3;
-    }
-    if (_showAdvancedSettings &&
-        _validatePositiveInteger(_priorityController.text) != null) {
-      return 3;
-    }
-    return null;
-  }
-
-  void _showFixStepMessage() {
-    final l10n = AppLocalizations.of(context)!;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(l10n.discountWizardFixStepError)));
-  }
-
-  String _applicationReviewValue(AppLocalizations l10n) {
+  List<String> _summaryChips(AppLocalizations l10n) {
+    final chips = <String>[_channelLabel(l10n, _channel)];
     if (_applicationType == DiscountApplicationType.couponCode) {
       final code = _couponCodeController.text.trim().toUpperCase();
-      return code.isEmpty
-          ? _applicationLabel(l10n, _applicationType)
-          : l10n.discountCouponSummary(code);
+      chips.add(
+        code.isEmpty
+            ? _applicationLabel(l10n, _applicationType)
+            : l10n.discountCouponSummary(code),
+      );
     }
-    return _applicationLabel(l10n, _applicationType);
-  }
 
-  String _constraintsReviewValue(AppLocalizations l10n) {
-    final parts = <String>[];
-    if (_limitByMinimumSubtotal &&
-        _minSubtotalController.text.trim().isNotEmpty) {
-      parts.add(
-        l10n.discountMinSubtotalSummary(_minSubtotalController.text.trim()),
-      );
-    }
-    if (_scope == DiscountScope.line &&
-        _limitByMinimumLineQuantity &&
-        _minLineQuantityController.text.trim().isNotEmpty) {
-      parts.add(
-        l10n.discountMinLineQuantitySummary(
-          int.tryParse(_minLineQuantityController.text.trim()) ?? 0,
-        ),
-      );
-    }
-    if (_limitByProducts) {
+    if (_limitByProducts &&
+        (_selectedProductCategories.isNotEmpty ||
+            _selectedProducts.isNotEmpty ||
+            _selectedVariants.isNotEmpty)) {
       if (_selectedProductCategories.isNotEmpty) {
-        parts.add(
+        chips.add(
           l10n.discountProductCategoryConstraintSummary(
             _selectedProductCategories.length,
           ),
         );
       }
       if (_selectedProducts.isNotEmpty) {
-        parts.add(
+        chips.add(
           l10n.discountProductConstraintSummary(_selectedProducts.length),
         );
       }
       if (_selectedVariants.isNotEmpty) {
-        parts.add(
+        chips.add(
           l10n.discountVariantConstraintSummary(_selectedVariants.length),
         );
       }
+    } else {
+      chips.add(l10n.discountSummaryAppliesAll);
     }
+
     if (_limitByContacts) {
-      if (_selectedCustomers.isNotEmpty &&
-          _channel != DiscountChannel.purchasing) {
-        parts.add(
+      if (_channel != DiscountChannel.purchasing &&
+          _selectedCustomers.isNotEmpty) {
+        chips.add(
           l10n.discountCustomerConstraintSummary(_selectedCustomers.length),
         );
       }
-      if (_selectedSuppliers.isNotEmpty && _channel != DiscountChannel.sales) {
-        parts.add(
+      if (_channel != DiscountChannel.sales && _selectedSuppliers.isNotEmpty) {
+        chips.add(
           l10n.discountSupplierConstraintSummary(_selectedSuppliers.length),
         );
       }
     }
-    return parts.isEmpty ? l10n.discountWizardNoExtraRules : parts.join(' • ');
-  }
 
-  String _limitsReviewValue(AppLocalizations l10n) {
-    final parts = <String>[];
-    if (_showSchedule) {
-      if (_startsAt != null) {
-        parts.add('${l10n.discountStartsAtLabel}: ${_formatDate(_startsAt!)}');
-      }
-      if (_endsAt != null) {
-        parts.add('${l10n.discountEndsAtLabel}: ${_formatDate(_endsAt!)}');
-      }
+    if (_limitByMinimumSubtotal &&
+        _minSubtotalController.text.trim().isNotEmpty) {
+      chips.add(
+        l10n.discountMinSubtotalSummary(_minSubtotalController.text.trim()),
+      );
+    }
+    if (_scope == DiscountScope.line &&
+        _limitByMinimumLineQuantity &&
+        _minLineQuantityController.text.trim().isNotEmpty) {
+      chips.add(
+        l10n.discountMinLineQuantitySummary(
+          int.tryParse(_minLineQuantityController.text.trim()) ?? 0,
+        ),
+      );
+    }
+    if (_showMaximumDiscount && _maxDiscountController.text.trim().isNotEmpty) {
+      chips.add(
+        l10n.discountMaxAmountSummary(_maxDiscountController.text.trim()),
+      );
+    }
+    if (_showSchedule && _startsAt != null) {
+      chips.add(l10n.discountStartsAtSummary(_formatDate(_startsAt!)));
+    }
+    if (_showSchedule && _endsAt != null) {
+      chips.add(l10n.discountEndsAtSummary(_formatDate(_endsAt!)));
     }
     if (_showUsageLimits && _usageLimitController.text.trim().isNotEmpty) {
-      parts.add(
+      chips.add(
         l10n.discountUsageSummary(
           0,
           int.tryParse(_usageLimitController.text.trim()) ?? 0,
         ),
       );
     }
-    if (_showAdvancedSettings) {
-      parts.add(
-        l10n.discountPrioritySummary(
-          int.tryParse(_priorityController.text.trim()) ?? 100,
-        ),
-      );
-      if (_exclusive) {
-        parts.add(l10n.discountExclusiveShort);
-      }
+    if (_showAdvancedSettings && _exclusive) {
+      chips.add(l10n.discountExclusiveShort);
     }
-    return parts.isEmpty ? l10n.discountWizardNoLimits : parts.join(' • ');
+    if (!_isActive) {
+      chips.add(l10n.discountStatusInactive);
+    }
+    return chips;
   }
 
-  String _formatDate(DateTime value) {
-    return '${value.year}/${value.month.toString().padLeft(2, '0')}/${value.day.toString().padLeft(2, '0')}';
-  }
-
-  Future<void> _pickDate({required bool isStart}) async {
-    final current = isStart ? _startsAt : _endsAt;
-    final selected = await showDatePicker(
-      context: context,
-      initialDate: current ?? DateTime.now(),
-      firstDate: DateTime(2020),
-      lastDate: DateTime(2100),
-    );
-    if (selected == null || !mounted) {
-      return;
-    }
-    setState(() {
-      if (isStart) {
-        _startsAt = DateTime(selected.year, selected.month, selected.day);
-      } else {
-        _endsAt = DateTime(selected.year, selected.month, selected.day, 23, 59);
-      }
-    });
-  }
+  // -- submit ------------------------------------------------------------
 
   Future<void> _submit() async {
     final l10n = AppLocalizations.of(context)!;
     if (!(_formKey.currentState?.validate() ?? false)) {
+      _showError(l10n.discountWizardFixStepError);
       return;
     }
-    final invalidStep = _firstInvalidStep();
-    if (invalidStep != null) {
-      setState(() => _step = invalidStep);
-      _showFixStepMessage();
+    if (_showSchedule &&
+        _startsAt != null &&
+        _endsAt != null &&
+        !_endsAt!.isAfter(_startsAt!)) {
+      _showError(l10n.discountWizardFixStepError);
       return;
     }
 
@@ -1075,11 +921,41 @@ class _DiscountRuleFormState extends State<DiscountRuleForm> {
     if (saved) {
       widget.onSaved();
     } else {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(l10n.discountSaveError)));
+      _showError(l10n.discountSaveError);
     }
   }
+
+  void _showError(String message) {
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  String _formatDate(DateTime value) {
+    return '${value.year}/${value.month.toString().padLeft(2, '0')}/${value.day.toString().padLeft(2, '0')}';
+  }
+
+  Future<void> _pickDate({required bool isStart}) async {
+    final current = isStart ? _startsAt : _endsAt;
+    final selected = await showDatePicker(
+      context: context,
+      initialDate: current ?? DateTime.now(),
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2100),
+    );
+    if (selected == null || !mounted) {
+      return;
+    }
+    setState(() {
+      if (isStart) {
+        _startsAt = DateTime(selected.year, selected.month, selected.day);
+      } else {
+        _endsAt = DateTime(selected.year, selected.month, selected.day, 23, 59);
+      }
+    });
+  }
+
+  // -- validators --------------------------------------------------------
 
   String? _validatePositiveDecimal(String? value) {
     final l10n = AppLocalizations.of(context)!;
@@ -1184,6 +1060,8 @@ class _DiscountRuleFormState extends State<DiscountRuleForm> {
     }
     return null;
   }
+
+  // -- pickers -----------------------------------------------------------
 
   AsyncSelectionFieldStrings<int> _constraintFieldStrings(
     AppLocalizations l10n, {
@@ -1433,7 +1311,19 @@ class _DiscountRuleFormState extends State<DiscountRuleForm> {
   }
 
   String _formatMoney(double value) => value.toStringAsFixed(2);
-  String _formatDecimal(double value) => value.toStringAsFixed(4);
+
+  /// Up to 4 decimals, with trailing zeros trimmed (20.0000 -> 20, 6.2500 ->
+  /// 6.25) so values read cleanly in the field and the live summary.
+  String _formatDecimal(double value) {
+    var text = value.toStringAsFixed(4);
+    if (text.contains('.')) {
+      text = text.replaceAll(RegExp(r'0+$'), '');
+      if (text.endsWith('.')) {
+        text = text.substring(0, text.length - 1);
+      }
+    }
+    return text;
+  }
 
   String _channelLabel(AppLocalizations l10n, DiscountChannel channel) {
     return switch (channel) {
@@ -1470,6 +1360,16 @@ class _DiscountRuleFormState extends State<DiscountRuleForm> {
     };
   }
 
+  String _valueTypeHelp(AppLocalizations l10n, DiscountValueType type) {
+    return switch (type) {
+      DiscountValueType.percentage => l10n.discountValueTypePercentageHelp,
+      DiscountValueType.fixedAmount => l10n.discountValueTypeFixedAmountHelp,
+      DiscountValueType.fixedUnitAmount =>
+        l10n.discountValueTypeFixedUnitAmountHelp,
+      DiscountValueType.fixedPrice => l10n.discountValueTypeFixedPriceHelp,
+    };
+  }
+
   String _roundingModeLabel(AppLocalizations l10n, DiscountRoundingMode mode) {
     return switch (mode) {
       DiscountRoundingMode.none => l10n.discountRoundingModeNone,
@@ -1480,78 +1380,71 @@ class _DiscountRuleFormState extends State<DiscountRuleForm> {
   }
 }
 
-class _WizardStepBar extends StatelessWidget {
-  const _WizardStepBar({required this.currentStep, required this.labels});
+// ---------------------------------------------------------------------------
+// Building blocks
+// ---------------------------------------------------------------------------
 
-  final int currentStep;
-  final List<String> labels;
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      children: [
-        for (var index = 0; index < labels.length; index++)
-          _WizardStepChip(
-            label: labels[index],
-            isCurrent: index == currentStep,
-            isComplete: index < currentStep,
-            colorScheme: colorScheme,
-          ),
-      ],
-    );
-  }
-}
-
-class _WizardStepChip extends StatelessWidget {
-  const _WizardStepChip({
-    required this.label,
-    required this.isCurrent,
-    required this.isComplete,
-    required this.colorScheme,
+class _DiscountSummaryCard extends StatelessWidget {
+  const _DiscountSummaryCard({
+    required this.headline,
+    required this.subhead,
+    required this.chips,
   });
 
-  final String label;
-  final bool isCurrent;
-  final bool isComplete;
-  final ColorScheme colorScheme;
+  final String headline;
+  final String subhead;
+  final List<String> chips;
 
   @override
   Widget build(BuildContext context) {
-    final background = isCurrent
-        ? colorScheme.primaryContainer
-        : isComplete
-        ? colorScheme.secondaryContainer
-        : colorScheme.surfaceContainerHighest;
-    final foreground = isCurrent
-        ? colorScheme.onPrimaryContainer
-        : isComplete
-        ? colorScheme.onSecondaryContainer
-        : colorScheme.onSurfaceVariant;
+    final colors = context.pointyColors;
+    final spacing = AdaptiveSpacing.of(context);
+    final textTheme = Theme.of(context).textTheme;
+
     return Container(
-      height: 32,
-      padding: const EdgeInsets.symmetric(horizontal: 10),
       decoration: BoxDecoration(
-        color: background,
-        borderRadius: BorderRadius.circular(8),
+        color: PointyColors.primaryContainer,
+        borderRadius: BorderRadius.circular(PointyRadii.card),
+        border: Border.all(color: colors.primaryStrong.withValues(alpha: 0.25)),
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
+      padding: EdgeInsets.all(spacing.md),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(
-            isComplete ? Icons.check : Icons.circle,
-            size: isComplete ? 16 : 8,
-            color: foreground,
+          Row(
+            children: [
+              Icon(
+                Icons.local_offer_outlined,
+                size: 18,
+                color: colors.primaryStrong,
+              ),
+              SizedBox(width: spacing.xs),
+              Text(
+                AppLocalizations.of(context)!.discountFormSummaryTitle,
+                style: textTheme.labelMedium?.copyWith(
+                  color: colors.primaryStrong,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
           ),
-          const SizedBox(width: 6),
+          SizedBox(height: spacing.sm),
           Text(
-            label,
-            style: Theme.of(context).textTheme.labelMedium?.copyWith(
-              color: foreground,
-              fontWeight: FontWeight.w700,
+            headline,
+            style: textTheme.headlineSmall?.copyWith(
+              color: colors.primaryDark,
+              fontWeight: FontWeight.w800,
             ),
+          ),
+          Text(
+            subhead,
+            style: textTheme.bodySmall?.copyWith(color: colors.primaryStrong),
+          ),
+          SizedBox(height: spacing.sm),
+          Wrap(
+            spacing: spacing.xs,
+            runSpacing: spacing.xs,
+            children: [for (final chip in chips) PointyStatusPill(label: chip)],
           ),
         ],
       ),
@@ -1559,40 +1452,234 @@ class _WizardStepChip extends StatelessWidget {
   }
 }
 
-class _WizardSection extends StatelessWidget {
-  const _WizardSection({
-    super.key,
+class _FormSection extends StatelessWidget {
+  const _FormSection({
     required this.icon,
     required this.title,
     required this.children,
+    this.subtitle,
   });
 
   final IconData icon;
   final String title;
+  final String? subtitle;
   final List<Widget> children;
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Row(
-          children: [
-            Icon(icon, color: colorScheme.primary),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                title,
-                style: Theme.of(
-                  context,
-                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+    final colors = context.pointyColors;
+    final spacing = AdaptiveSpacing.of(context);
+    final textTheme = Theme.of(context).textTheme;
+
+    return Container(
+      margin: EdgeInsetsDirectional.only(bottom: spacing.md),
+      decoration: BoxDecoration(
+        color: colors.surface,
+        border: Border.all(color: colors.line),
+        borderRadius: BorderRadius.circular(PointyRadii.card),
+        boxShadow: PointyShadows.raised,
+      ),
+      padding: EdgeInsets.all(spacing.md),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: colors.primaryStrong.withValues(alpha: 0.10),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(icon, size: 19, color: colors.primaryStrong),
               ),
-            ),
+              SizedBox(width: spacing.sm),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      title,
+                      style: textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    if (subtitle != null)
+                      Text(
+                        subtitle!,
+                        style: textTheme.bodySmall?.copyWith(
+                          color: colors.mutedInk,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: spacing.md),
+          for (var i = 0; i < children.length; i++) ...[
+            if (i > 0) SizedBox(height: spacing.sm),
+            children[i],
           ],
+        ],
+      ),
+    );
+  }
+}
+
+class _ValueTypeSelector extends StatelessWidget {
+  const _ValueTypeSelector({
+    required this.selected,
+    required this.labelFor,
+    required this.helpFor,
+    required this.onSelected,
+  });
+
+  final DiscountValueType selected;
+  final String Function(DiscountValueType type) labelFor;
+  final String Function(DiscountValueType type) helpFor;
+  final ValueChanged<DiscountValueType> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final spacing = AdaptiveSpacing.of(context);
+    return Column(
+      children: [
+        for (var i = 0; i < DiscountValueType.values.length; i++) ...[
+          if (i > 0) SizedBox(height: spacing.xs),
+          _ValueTypeOption(
+            label: labelFor(DiscountValueType.values[i]),
+            help: helpFor(DiscountValueType.values[i]),
+            selected: selected == DiscountValueType.values[i],
+            onTap: () => onSelected(DiscountValueType.values[i]),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _ValueTypeOption extends StatelessWidget {
+  const _ValueTypeOption({
+    required this.label,
+    required this.help,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final String help;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.pointyColors;
+    final textTheme = Theme.of(context).textTheme;
+
+    return Material(
+      color: selected ? PointyColors.primaryContainer : colors.surface,
+      borderRadius: BorderRadius.circular(PointyRadii.chip),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(PointyRadii.chip),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(PointyRadii.chip),
+            border: Border.all(
+              color: selected ? colors.primaryStrong : colors.line,
+              width: selected ? 1.4 : 1,
+            ),
+          ),
+          child: Row(
+            children: [
+              Icon(
+                selected ? Icons.radio_button_checked : Icons.radio_button_off,
+                size: 20,
+                color: selected ? colors.primaryStrong : colors.mutedInk,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      label,
+                      style: textTheme.bodyLarge?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: selected ? colors.primaryDark : colors.ink,
+                      ),
+                    ),
+                    Text(
+                      help,
+                      style: textTheme.bodySmall?.copyWith(
+                        color: colors.mutedInk,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
-        const SizedBox(height: 14),
-        for (final child in children) ...[child, const SizedBox(height: 12)],
+      ),
+    );
+  }
+}
+
+class _InlineSwitch extends StatelessWidget {
+  const _InlineSwitch({
+    required this.label,
+    required this.value,
+    required this.onChanged,
+    this.subtitle,
+  });
+
+  final String label;
+  final String? subtitle;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return SwitchListTile(
+      value: value,
+      dense: true,
+      contentPadding: EdgeInsets.zero,
+      visualDensity: VisualDensity.compact,
+      title: Text(label),
+      subtitle: subtitle == null ? null : Text(subtitle!),
+      onChanged: onChanged,
+    );
+  }
+}
+
+class _NoteLine extends StatelessWidget {
+  const _NoteLine({required this.icon, required this.text});
+
+  final IconData icon;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.pointyColors;
+    return Row(
+      children: [
+        Icon(icon, size: 16, color: colors.mutedInk),
+        const SizedBox(width: 6),
+        Expanded(
+          child: Text(
+            text,
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: colors.mutedInk),
+          ),
+        ),
       ],
     );
   }
@@ -1627,34 +1714,6 @@ class _RoundingPresetChips extends StatelessWidget {
   }
 }
 
-class _ReviewRow extends StatelessWidget {
-  const _ReviewRow({required this.label, required this.value});
-
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final displayValue = value.trim();
-    return InputDecorator(
-      decoration: InputDecoration(
-        labelText: label,
-        border: const OutlineInputBorder(),
-        isDense: true,
-      ),
-      child: Text(
-        displayValue,
-        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-          color: displayValue.isEmpty
-              ? colorScheme.onSurfaceVariant
-              : colorScheme.onSurface,
-        ),
-      ),
-    );
-  }
-}
-
 class _SegmentedField<T> extends StatelessWidget {
   const _SegmentedField({
     required this.label,
@@ -1672,10 +1731,16 @@ class _SegmentedField<T> extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.pointyColors;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(label, style: Theme.of(context).textTheme.labelMedium),
+        Text(
+          label,
+          style: Theme.of(
+            context,
+          ).textTheme.labelMedium?.copyWith(color: colors.mutedInk),
+        ),
         const SizedBox(height: 6),
         SegmentedButton<T>(
           showSelectedIcon: false,
@@ -1724,8 +1789,7 @@ class _DateField extends StatelessWidget {
     return InputDecorator(
       decoration: InputDecoration(
         labelText: label,
-        border: const OutlineInputBorder(),
-        isDense: true,
+        prefixIcon: const Icon(Icons.calendar_month_outlined),
       ),
       child: Row(
         children: [
@@ -1733,13 +1797,15 @@ class _DateField extends StatelessWidget {
           IconButton(
             tooltip: l10n.discountPickDateTooltip,
             onPressed: onPick,
-            icon: const Icon(Icons.calendar_month_outlined),
+            icon: const Icon(Icons.edit_calendar_outlined),
+            visualDensity: VisualDensity.compact,
           ),
           if (value != null)
             IconButton(
               tooltip: l10n.clearButton,
               onPressed: onClear,
               icon: const Icon(Icons.close),
+              visualDensity: VisualDensity.compact,
             ),
         ],
       ),

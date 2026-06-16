@@ -8,6 +8,7 @@ import '../../../data/repositories/contact_repository.dart';
 import '../../../data/repositories/discount_repository.dart';
 import '../../../shared/components/components.dart';
 import '../../../shared/date_formatters.dart';
+import '../../../shared/design/design.dart';
 import '../../../shared/formatters.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../view_models/discount_details_view_model.dart';
@@ -117,6 +118,7 @@ class DiscountDetailsView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    final spacing = AdaptiveSpacing.of(context);
 
     return ListenableBuilder(
       listenable: viewModel,
@@ -125,38 +127,38 @@ class DiscountDetailsView extends StatelessWidget {
         return AdaptiveMaxWidth(
           width: AppContentWidth.list,
           child: ListView(
-            padding: const EdgeInsets.all(16),
+            padding: EdgeInsets.all(spacing.lg),
             children: [
-              _DiscountDetailsHeader(rule: rule),
+              _DiscountHero(rule: rule),
               if (viewModel.hasLoadError) ...[
-                const SizedBox(height: 12),
+                SizedBox(height: spacing.md),
                 PointyInlineMessage.error(
                   message: l10n.discountDetailsLoadError,
                 ),
               ],
               if (viewModel.isLoading && viewModel.performance == null) ...[
-                const SizedBox(height: 12),
+                SizedBox(height: spacing.md),
                 const PointyLoadingArea(),
               ],
               if (viewModel.performance case final performance?) ...[
-                const SizedBox(height: 12),
+                SizedBox(height: spacing.md),
                 _PerformanceMetrics(performance: performance),
-                const SizedBox(height: 12),
-                _IncrementalitySection(
-                  incrementality: performance.incrementality,
-                ),
-                const SizedBox(height: 12),
+                SizedBox(height: spacing.md),
+                _ImpactSection(incrementality: performance.incrementality),
+                SizedBox(height: spacing.md),
                 _TrendSection(trend: performance.monthlyTrend),
-                const SizedBox(height: 12),
-                _ChannelBreakdownSection(
-                  breakdown: performance.channelBreakdown,
-                ),
+                if (performance.channelBreakdown.isNotEmpty) ...[
+                  SizedBox(height: spacing.md),
+                  _ChannelBreakdownSection(
+                    breakdown: performance.channelBreakdown,
+                  ),
+                ],
               ],
-              const SizedBox(height: 12),
-              _ConfigurationSection(rule: rule),
-              const SizedBox(height: 12),
-              _ConstraintsSection(rule: rule),
-              const SizedBox(height: 12),
+              SizedBox(height: spacing.md),
+              _HowItWorksSection(rule: rule),
+              SizedBox(height: spacing.md),
+              _AppliesToSection(rule: rule),
+              SizedBox(height: spacing.md),
               _BeneficiariesSection(viewModel: viewModel),
             ],
           ),
@@ -166,90 +168,171 @@ class DiscountDetailsView extends StatelessWidget {
   }
 }
 
-class _DiscountDetailsHeader extends StatelessWidget {
-  const _DiscountDetailsHeader({required this.rule});
+// ---------------------------------------------------------------------------
+// Hero
+// ---------------------------------------------------------------------------
+
+class _DiscountHero extends StatelessWidget {
+  const _DiscountHero({required this.rule});
 
   final DiscountRule rule;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final colorScheme = Theme.of(context).colorScheme;
-    final facts = [
-      if (rule.description.isNotEmpty) rule.description,
-      ...discountRuleFacts(l10n, rule),
-    ];
+    final spacing = AdaptiveSpacing.of(context);
+    final textTheme = Theme.of(context).textTheme;
+    const onPrimary = PointyColors.surface;
 
-    return DecoratedBox(
+    return Container(
       decoration: BoxDecoration(
-        color: colorScheme.primary,
-        borderRadius: BorderRadius.circular(8),
+        gradient: const LinearGradient(
+          begin: AlignmentDirectional.topStart,
+          end: AlignmentDirectional.bottomEnd,
+          colors: [PointyColors.primaryStrong, PointyColors.primaryDark],
+        ),
+        borderRadius: BorderRadius.circular(PointyRadii.card),
+        boxShadow: PointyShadows.raised,
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(18),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(
+      padding: EdgeInsets.all(spacing.lg),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: onPrimary.withValues(alpha: 0.16),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
                   rule.applicationType == DiscountApplicationType.couponCode
                       ? Icons.confirmation_number_outlined
                       : Icons.auto_awesome_outlined,
-                  color: colorScheme.onPrimary,
-                  size: 34,
+                  color: onPrimary,
                 ),
-                const SizedBox(width: 12),
-                Expanded(
+              ),
+              SizedBox(width: spacing.sm),
+              Expanded(
+                child: Text(
+                  rule.name,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: textTheme.titleLarge?.copyWith(
+                    color: onPrimary,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: spacing.md),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                discountValueText(l10n, rule),
+                style: textTheme.displaySmall?.copyWith(
+                  color: onPrimary,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              SizedBox(width: spacing.sm),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsetsDirectional.only(bottom: 6),
                   child: Text(
-                    rule.name,
+                    '${discountValueTypeLabel(l10n, rule.valueType)} · '
+                    '${discountScopeLabel(l10n, rule.scope)}',
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                      color: colorScheme.onPrimary,
+                    style: textTheme.bodyMedium?.copyWith(
+                      color: onPrimary.withValues(alpha: 0.85),
                     ),
                   ),
                 ),
-              ],
-            ),
-            if (facts.isNotEmpty) ...[
-              const SizedBox(height: 12),
-              Text(
-                facts.join(' • '),
-                maxLines: 3,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(
-                  context,
-                ).textTheme.bodyMedium?.copyWith(color: colorScheme.onPrimary),
               ),
             ],
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                PointyStatusPill(
-                  label: rule.isActive
-                      ? l10n.discountStatusActive
-                      : l10n.discountStatusInactive,
-                  icon: rule.isActive
-                      ? Icons.check_circle_outline
-                      : Icons.pause_circle_outline,
+          ),
+          if (rule.description.trim().isNotEmpty) ...[
+            SizedBox(height: spacing.sm),
+            Text(
+              rule.description.trim(),
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+              style: textTheme.bodyMedium?.copyWith(
+                color: onPrimary.withValues(alpha: 0.85),
+              ),
+            ),
+          ],
+          SizedBox(height: spacing.md),
+          Wrap(
+            spacing: spacing.xs,
+            runSpacing: spacing.xs,
+            children: [
+              _HeroPill(
+                label: rule.isActive
+                    ? l10n.discountStatusActive
+                    : l10n.discountStatusInactive,
+                icon: rule.isActive
+                    ? Icons.check_circle_outline
+                    : Icons.pause_circle_outline,
+              ),
+              _HeroPill(
+                label: discountChannelLabel(l10n, rule.channel),
+                icon: Icons.compare_arrows_outlined,
+              ),
+              _HeroPill(
+                label: rule.couponCode.isNotEmpty
+                    ? rule.couponCode
+                    : discountApplicationLabel(l10n, rule.applicationType),
+                icon: rule.applicationType == DiscountApplicationType.couponCode
+                    ? Icons.confirmation_number_outlined
+                    : Icons.bolt_outlined,
+              ),
+              if (rule.isArchived)
+                _HeroPill(
+                  label: l10n.discountArchivedLabel,
+                  icon: Icons.archive_outlined,
                 ),
-                PointyStatusPill(
-                  label: discountChannelLabel(l10n, rule.channel),
-                  icon: Icons.compare_arrows_outlined,
-                ),
-                PointyStatusPill(
-                  label: discountApplicationLabel(l10n, rule.applicationType),
-                  icon: Icons.rule_folder_outlined,
-                ),
-                if (rule.isArchived)
-                  PointyStatusPill(
-                    label: l10n.discountArchivedLabel,
-                    icon: Icons.archive_outlined,
-                  ),
-              ],
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _HeroPill extends StatelessWidget {
+  const _HeroPill({required this.label, required this.icon});
+
+  final String label;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    const onPrimary = PointyColors.surface;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: onPrimary.withValues(alpha: 0.16),
+        borderRadius: BorderRadius.circular(PointyRadii.chip),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 15, color: onPrimary),
+            const SizedBox(width: 5),
+            Text(
+              label,
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                color: onPrimary,
+                fontWeight: FontWeight.w700,
+              ),
             ),
           ],
         ),
@@ -257,6 +340,10 @@ class _DiscountDetailsHeader extends StatelessWidget {
     );
   }
 }
+
+// ---------------------------------------------------------------------------
+// Performance KPIs (already card-based)
+// ---------------------------------------------------------------------------
 
 class _PerformanceMetrics extends StatelessWidget {
   const _PerformanceMetrics({required this.performance});
@@ -266,6 +353,7 @@ class _PerformanceMetrics extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    final colors = context.pointyColors;
     final summary = performance.summary;
     final incrementality = performance.incrementality;
     return PointyDetailSection(
@@ -273,16 +361,47 @@ class _PerformanceMetrics extends StatelessWidget {
       icon: Icons.insights_outlined,
       child: PointyMetricGrid(
         maxColumns: 4,
-        minTileWidth: 180,
+        minTileWidth: 170,
         gap: PointyMetricGridGap.compact,
         metrics: [
           PointyMetricGridItem(
             label: l10n.discountDetailsRedemptionsMetric,
             value: summary.redemptionCount.toString(),
             icon: Icons.redeem_outlined,
+            accentColor: colors.primaryStrong,
             subtitle: l10n.discountDetailsApplicationsSubtitle(
               summary.applicationCount,
             ),
+          ),
+          PointyMetricGridItem(
+            label: l10n.discountDetailsDiscountCostMetric,
+            value: formatMoney(summary.discountAmount),
+            icon: Icons.price_change_outlined,
+            accentColor: colors.warning,
+            subtitle: l10n.discountDetailsDiscountRateSubtitle(
+              l10n.discountPercentageValue(
+                summary.discountRatePercent.toStringAsFixed(2),
+              ),
+            ),
+          ),
+          PointyMetricGridItem(
+            label: l10n.discountDetailsNetInfluencedMetric,
+            value: formatMoney(summary.influencedNet),
+            icon: Icons.payments_outlined,
+            accentColor: colors.success,
+          ),
+          PointyMetricGridItem(
+            label: l10n.discountDetailsIncrementalNetMetric,
+            value: formatMoney(incrementality.estimatedIncrementalNetValue),
+            icon: Icons.add_chart_outlined,
+            accentColor: colors.success,
+            subtitle: incrementality.liftPercent == null
+                ? l10n.discountDetailsLiftUnavailable
+                : l10n.discountDetailsLiftSubtitle(
+                    l10n.discountPercentageValue(
+                      incrementality.liftPercent!.toStringAsFixed(2),
+                    ),
+                  ),
           ),
           PointyMetricGridItem(
             label: l10n.discountDetailsBeneficiariesMetric,
@@ -299,39 +418,12 @@ class _PerformanceMetrics extends StatelessWidget {
             icon: Icons.trending_up_outlined,
           ),
           PointyMetricGridItem(
-            label: l10n.discountDetailsNetInfluencedMetric,
-            value: formatMoney(summary.influencedNet),
-            icon: Icons.payments_outlined,
-          ),
-          PointyMetricGridItem(
-            label: l10n.discountDetailsDiscountCostMetric,
-            value: formatMoney(summary.discountAmount),
-            icon: Icons.price_change_outlined,
-            subtitle: l10n.discountDetailsDiscountRateSubtitle(
-              l10n.discountPercentageValue(
-                summary.discountRatePercent.toStringAsFixed(2),
-              ),
-            ),
-          ),
-          PointyMetricGridItem(
             label: l10n.discountDetailsAverageDocumentMetric,
             value: formatMoney(summary.averageDocumentValue),
             icon: Icons.receipt_long_outlined,
             subtitle: l10n.discountDetailsAverageDiscountSubtitle(
               formatMoney(summary.averageDiscountAmount),
             ),
-          ),
-          PointyMetricGridItem(
-            label: l10n.discountDetailsIncrementalNetMetric,
-            value: formatMoney(incrementality.estimatedIncrementalNetValue),
-            icon: Icons.add_chart_outlined,
-            subtitle: incrementality.liftPercent == null
-                ? l10n.discountDetailsLiftUnavailable
-                : l10n.discountDetailsLiftSubtitle(
-                    l10n.discountPercentageValue(
-                      incrementality.liftPercent!.toStringAsFixed(2),
-                    ),
-                  ),
           ),
           PointyMetricGridItem(
             label: l10n.discountDetailsUsageLimitMetric,
@@ -355,71 +447,134 @@ class _PerformanceMetrics extends StatelessWidget {
   }
 }
 
-class _IncrementalitySection extends StatelessWidget {
-  const _IncrementalitySection({required this.incrementality});
+// ---------------------------------------------------------------------------
+// Estimated impact (incrementality)
+// ---------------------------------------------------------------------------
+
+class _ImpactSection extends StatelessWidget {
+  const _ImpactSection({required this.incrementality});
 
   final DiscountIncrementality incrementality;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    final spacing = AdaptiveSpacing.of(context);
     return PointyDetailSection(
       title: l10n.discountDetailsImpactSection,
       icon: Icons.query_stats_outlined,
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          PointyInlineMessage(
-            message: l10n.discountDetailsImpactMethodNote,
-            icon: Icons.functions_outlined,
-          ),
-          const SizedBox(height: 12),
-          PointyDetailRow(
-            label: l10n.discountDetailsExpectedDocumentsLabel,
-            value: incrementality.expectedDocumentsWithoutDiscount
-                .toStringAsFixed(2),
-          ),
-          const Divider(height: 20),
-          PointyDetailRow(
-            label: l10n.discountDetailsExpectedGrossLabel,
-            value: formatMoney(incrementality.expectedGrossWithoutDiscount),
-          ),
-          const Divider(height: 20),
-          PointyDetailRow(
-            label: l10n.discountDetailsIncrementalDocumentsLabel,
-            value: incrementality.incrementalDocuments.toStringAsFixed(2),
-          ),
-          const Divider(height: 20),
-          PointyDetailRow(
-            label: l10n.discountDetailsIncrementalGrossLabel,
-            value: formatMoney(incrementality.incrementalGross),
-          ),
-          const Divider(height: 20),
-          PointyDetailRow(
-            label: l10n.discountDetailsBaselinePeriodLabel,
-            value: _periodValue(
-              context,
-              incrementality.baselinePeriodStart,
-              incrementality.baselinePeriodEnd,
-            ),
-          ),
-          const Divider(height: 20),
-          PointyDetailRow(
-            label: l10n.discountDetailsBaselineDocumentsLabel,
-            value: l10n.discountDetailsBaselineDocumentsValue(
-              incrementality.baselineDocumentCount,
-              formatMoney(incrementality.baselineGross),
-            ),
-          ),
-          const Divider(height: 20),
-          PointyDetailRow(
-            label: l10n.discountDetailsConfidenceLabel,
-            value: _confidenceLabel(l10n, incrementality.confidence),
+          _ImpactCallout(incrementality: incrementality),
+          SizedBox(height: spacing.md),
+          PointyMetricGrid(
+            maxColumns: 4,
+            minTileWidth: 160,
+            gap: PointyMetricGridGap.compact,
+            metrics: [
+              PointyMetricGridItem(
+                label: l10n.discountDetailsExpectedGrossLabel,
+                value: formatMoney(incrementality.expectedGrossWithoutDiscount),
+                icon: Icons.timeline_outlined,
+              ),
+              PointyMetricGridItem(
+                label: l10n.discountDetailsIncrementalGrossLabel,
+                value: formatMoney(incrementality.incrementalGross),
+                icon: Icons.trending_up_outlined,
+                accentColor: context.pointyColors.success,
+              ),
+              PointyMetricGridItem(
+                label: l10n.discountDetailsIncrementalDocumentsLabel,
+                value: incrementality.incrementalDocuments.toStringAsFixed(1),
+                icon: Icons.receipt_long_outlined,
+              ),
+              PointyMetricGridItem(
+                label: l10n.discountDetailsBaselinePeriodLabel,
+                value: _periodValue(
+                  context,
+                  incrementality.baselinePeriodStart,
+                  incrementality.baselinePeriodEnd,
+                ),
+                icon: Icons.history_outlined,
+                subtitle: l10n.discountDetailsBaselineDocumentsValue(
+                  incrementality.baselineDocumentCount,
+                  formatMoney(incrementality.baselineGross),
+                ),
+              ),
+            ],
           ),
         ],
       ),
     );
   }
 }
+
+class _ImpactCallout extends StatelessWidget {
+  const _ImpactCallout({required this.incrementality});
+
+  final DiscountIncrementality incrementality;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final colors = context.pointyColors;
+    final spacing = AdaptiveSpacing.of(context);
+    final textTheme = Theme.of(context).textTheme;
+    final lift = incrementality.liftPercent;
+    final headline = lift == null
+        ? l10n.discountDetailsLiftUnavailable
+        : l10n.discountDetailsLiftSubtitle(
+            l10n.discountPercentageValue(lift.toStringAsFixed(2)),
+          );
+
+    return Container(
+      decoration: BoxDecoration(
+        color: PointyColors.primaryContainer,
+        borderRadius: BorderRadius.circular(PointyRadii.chip),
+        border: Border.all(color: colors.primaryStrong.withValues(alpha: 0.20)),
+      ),
+      padding: EdgeInsets.all(spacing.md),
+      child: Row(
+        children: [
+          Icon(Icons.insights_outlined, color: colors.primaryStrong),
+          SizedBox(width: spacing.sm),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  headline,
+                  style: textTheme.titleMedium?.copyWith(
+                    color: colors.primaryDark,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  l10n.discountDetailsImpactMethodNote,
+                  style: textTheme.bodySmall?.copyWith(
+                    color: colors.primaryStrong,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          SizedBox(width: spacing.sm),
+          PointyStatusPill(
+            label: _confidenceLabel(l10n, incrementality.confidence),
+            icon: Icons.verified_outlined,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Monthly trend
+// ---------------------------------------------------------------------------
 
 class _TrendSection extends StatelessWidget {
   const _TrendSection({required this.trend});
@@ -433,20 +588,25 @@ class _TrendSection extends StatelessWidget {
       title: l10n.discountDetailsTrendSection,
       icon: Icons.show_chart_outlined,
       child: trend.isEmpty
-          ? Text(l10n.discountDetailsTrendEmpty)
-          : _TrendRows(trend: trend),
+          ? PointyEmptyState(
+              icon: Icons.show_chart_outlined,
+              title: l10n.discountDetailsTrendEmpty,
+            )
+          : _TrendBars(trend: trend),
     );
   }
 }
 
-class _TrendRows extends StatelessWidget {
-  const _TrendRows({required this.trend});
+class _TrendBars extends StatelessWidget {
+  const _TrendBars({required this.trend});
 
   final List<DiscountTrendPoint> trend;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    final spacing = AdaptiveSpacing.of(context);
+    final colors = context.pointyColors;
     final maxGross = trend.fold<double>(
       0,
       (value, point) =>
@@ -454,26 +614,32 @@ class _TrendRows extends StatelessWidget {
     );
 
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        for (final point in trend) ...[
-          _TrendRow(point: point, maxGross: maxGross),
-          if (point != trend.last) const Divider(height: 20),
+        for (var i = 0; i < trend.length; i++) ...[
+          if (i > 0) SizedBox(height: spacing.md),
+          _TrendBar(point: trend[i], maxGross: maxGross),
         ],
-        const SizedBox(height: 4),
-        Align(
-          alignment: AlignmentDirectional.centerStart,
-          child: Text(
-            l10n.discountDetailsTrendGrossHint,
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
+        SizedBox(height: spacing.sm),
+        Row(
+          children: [
+            Icon(Icons.info_outline, size: 14, color: colors.mutedInk),
+            const SizedBox(width: 4),
+            Text(
+              l10n.discountDetailsTrendGrossHint,
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: colors.mutedInk),
+            ),
+          ],
         ),
       ],
     );
   }
 }
 
-class _TrendRow extends StatelessWidget {
-  const _TrendRow({required this.point, required this.maxGross});
+class _TrendBar extends StatelessWidget {
+  const _TrendBar({required this.point, required this.maxGross});
 
   final DiscountTrendPoint point;
   final double maxGross;
@@ -481,7 +647,12 @@ class _TrendRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final progress = maxGross <= 0 ? 0.0 : point.influencedGross / maxGross;
+    final colors = context.pointyColors;
+    final textTheme = Theme.of(context).textTheme;
+    final progress = maxGross <= 0
+        ? 0.0
+        : (point.influencedGross / maxGross).clamp(0.0, 1.0);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -490,9 +661,9 @@ class _TrendRow extends StatelessWidget {
             Expanded(
               child: Text(
                 point.period,
-                style: Theme.of(
-                  context,
-                ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800),
+                style: textTheme.labelLarge?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
               ),
             ),
             Text(
@@ -500,15 +671,38 @@ class _TrendRow extends StatelessWidget {
                 point.redemptionCount,
                 formatMoney(point.influencedGross),
               ),
+              style: textTheme.bodySmall?.copyWith(color: colors.mutedInk),
             ),
           ],
         ),
-        const SizedBox(height: 8),
-        LinearProgressIndicator(value: progress.clamp(0, 1).toDouble()),
+        const SizedBox(height: 6),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(999),
+          child: Container(
+            height: 10,
+            color: colors.surfaceSunken,
+            child: Align(
+              alignment: AlignmentDirectional.centerStart,
+              child: FractionallySizedBox(
+                widthFactor: progress == 0 ? 0.02 : progress,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: PointyColors.primary,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
       ],
     );
   }
 }
+
+// ---------------------------------------------------------------------------
+// Channel breakdown
+// ---------------------------------------------------------------------------
 
 class _ChannelBreakdownSection extends StatelessWidget {
   const _ChannelBreakdownSection({required this.breakdown});
@@ -521,29 +715,83 @@ class _ChannelBreakdownSection extends StatelessWidget {
     return PointyDetailSection(
       title: l10n.discountDetailsChannelBreakdownSection,
       icon: Icons.compare_arrows_outlined,
-      child: breakdown.isEmpty
-          ? Text(l10n.discountDetailsChannelBreakdownEmpty)
-          : Column(
-              children: [
-                for (final channel in breakdown) ...[
-                  PointyDetailRow(
-                    label: discountChannelLabel(l10n, channel.channel),
-                    value: l10n.discountDetailsChannelBreakdownValue(
-                      channel.redemptionCount,
-                      channel.documentCount,
-                      formatMoney(channel.influencedNet),
-                    ),
-                  ),
-                  if (channel != breakdown.last) const Divider(height: 20),
-                ],
-              ],
-            ),
+      child: ResponsiveFormGrid(
+        minChildWidth: 240,
+        maxColumns: 2,
+        children: [
+          for (final channel in breakdown) _ChannelCard(channel: channel),
+        ],
+      ),
     );
   }
 }
 
-class _ConfigurationSection extends StatelessWidget {
-  const _ConfigurationSection({required this.rule});
+class _ChannelCard extends StatelessWidget {
+  const _ChannelCard({required this.channel});
+
+  final DiscountChannelPerformance channel;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final colors = context.pointyColors;
+    final spacing = AdaptiveSpacing.of(context);
+    final textTheme = Theme.of(context).textTheme;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: colors.surfaceSunken,
+        borderRadius: BorderRadius.circular(PointyRadii.chip),
+        border: Border.all(color: colors.line),
+      ),
+      padding: EdgeInsets.all(spacing.md),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.compare_arrows_outlined,
+                size: 18,
+                color: colors.primaryStrong,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                discountChannelLabel(l10n, channel.channel),
+                style: textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: spacing.sm),
+          Text(
+            formatMoney(channel.influencedNet),
+            style: textTheme.titleMedium?.copyWith(
+              color: colors.success,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          Text(
+            l10n.discountDetailsChannelBreakdownValue(
+              channel.redemptionCount,
+              channel.documentCount,
+              formatMoney(channel.influencedNet),
+            ),
+            style: textTheme.bodySmall?.copyWith(color: colors.mutedInk),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// How it works (configuration)
+// ---------------------------------------------------------------------------
+
+class _HowItWorksSection extends StatelessWidget {
+  const _HowItWorksSection({required this.rule});
 
   final DiscountRule rule;
 
@@ -553,67 +801,46 @@ class _ConfigurationSection extends StatelessWidget {
     return PointyDetailSection(
       title: l10n.discountDetailsConfigurationSection,
       icon: Icons.tune_outlined,
-      child: Column(
-        children: [
-          PointyDetailRow(
-            label: l10n.discountStatusFilterLabel,
-            value: rule.isActive
-                ? l10n.discountStatusActive
-                : l10n.discountStatusInactive,
-          ),
-          const Divider(height: 20),
-          PointyDetailRow(
+      child: PointyMetricGrid(
+        maxColumns: 3,
+        minTileWidth: 160,
+        gap: PointyMetricGridGap.compact,
+        metrics: [
+          PointyMetricGridItem(
             label: l10n.discountChannelLabel,
             value: discountChannelLabel(l10n, rule.channel),
+            icon: Icons.compare_arrows_outlined,
           ),
-          const Divider(height: 20),
-          PointyDetailRow(
+          PointyMetricGridItem(
             label: l10n.discountApplicationTypeLabel,
             value: discountApplicationLabel(l10n, rule.applicationType),
+            icon: Icons.bolt_outlined,
+            subtitle: rule.couponCode.isNotEmpty ? rule.couponCode : null,
           ),
-          const Divider(height: 20),
-          PointyDetailRow(
+          PointyMetricGridItem(
             label: l10n.discountScopeLabel,
             value: discountScopeLabel(l10n, rule.scope),
+            icon: Icons.view_list_outlined,
           ),
-          const Divider(height: 20),
-          PointyDetailRow(
-            label: l10n.discountValueTypeLabel,
-            value: l10n.discountValueSummary(
-              discountValueTypeLabel(l10n, rule.valueType),
-              discountValueText(l10n, rule),
-            ),
-          ),
-          if (rule.couponCode.isNotEmpty) ...[
-            const Divider(height: 20),
-            PointyDetailRow(
-              label: l10n.discountCouponCodeLabel,
-              value: rule.couponCode,
-            ),
-          ],
-          const Divider(height: 20),
-          PointyDetailRow(
+          PointyMetricGridItem(
             label: l10n.discountPriorityLabel,
             value: rule.priority.toString(),
+            icon: Icons.low_priority_outlined,
+            subtitle: rule.exclusive ? l10n.discountExclusiveShort : null,
           ),
-          const Divider(height: 20),
-          PointyDetailRow(
-            label: l10n.discountExclusiveLabel,
-            value: rule.exclusive ? l10n.yesLabel : l10n.noLabel,
-          ),
-          const Divider(height: 20),
-          PointyDetailRow(
+          PointyMetricGridItem(
             label: l10n.discountStartsAtLabel,
             value: rule.startsAt == null
                 ? l10n.discountNoDateSelected
-                : formatDateTime(rule.startsAt!),
+                : formatDate(rule.startsAt!),
+            icon: Icons.play_circle_outline,
           ),
-          const Divider(height: 20),
-          PointyDetailRow(
+          PointyMetricGridItem(
             label: l10n.discountEndsAtLabel,
             value: rule.endsAt == null
                 ? l10n.discountNoDateSelected
-                : formatDateTime(rule.endsAt!),
+                : formatDate(rule.endsAt!),
+            icon: Icons.event_busy_outlined,
           ),
         ],
       ),
@@ -621,69 +848,131 @@ class _ConfigurationSection extends StatelessWidget {
   }
 }
 
-class _ConstraintsSection extends StatelessWidget {
-  const _ConstraintsSection({required this.rule});
+// ---------------------------------------------------------------------------
+// Applies to (constraints)
+// ---------------------------------------------------------------------------
+
+class _AppliesToSection extends StatelessWidget {
+  const _AppliesToSection({required this.rule});
 
   final DiscountRule rule;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    final spacing = AdaptiveSpacing.of(context);
+    final colors = context.pointyColors;
+
+    final targetingChips = <Widget>[
+      if (rule.productCategories.isNotEmpty)
+        _TargetChip(
+          icon: Icons.category_outlined,
+          label: l10n.discountProductCategoryConstraintSummary(
+            rule.productCategories.length,
+          ),
+        ),
+      if (rule.products.isNotEmpty)
+        _TargetChip(
+          icon: Icons.inventory_2_outlined,
+          label: l10n.discountProductConstraintSummary(rule.products.length),
+        ),
+      if (rule.variants.isNotEmpty)
+        _TargetChip(
+          icon: Icons.style_outlined,
+          label: l10n.discountVariantConstraintSummary(rule.variants.length),
+        ),
+      if (rule.customers.isNotEmpty)
+        _TargetChip(
+          icon: Icons.person_outline,
+          label: l10n.discountCustomerConstraintSummary(rule.customers.length),
+        ),
+      if (rule.suppliers.isNotEmpty)
+        _TargetChip(
+          icon: Icons.local_shipping_outlined,
+          label: l10n.discountSupplierConstraintSummary(rule.suppliers.length),
+        ),
+    ];
+
+    final conditions = <PointyMetricGridItem>[
+      if (rule.minOrderSubtotal > 0)
+        PointyMetricGridItem(
+          label: l10n.discountMinSubtotalLabel,
+          value: formatMoney(rule.minOrderSubtotal),
+          icon: Icons.shopping_cart_outlined,
+        ),
+      if (rule.minLineQuantity != null)
+        PointyMetricGridItem(
+          label: l10n.discountMinLineQuantityLabel,
+          value: rule.minLineQuantity!.toString(),
+          icon: Icons.numbers_outlined,
+        ),
+      if (rule.maxDiscountAmount != null)
+        PointyMetricGridItem(
+          label: l10n.discountMaxAmountLabel,
+          value: formatMoney(rule.maxDiscountAmount!),
+          icon: Icons.production_quantity_limits_outlined,
+        ),
+    ];
+
     return PointyDetailSection(
       title: l10n.discountDetailsConstraintsSection,
-      icon: Icons.rule_outlined,
+      icon: Icons.adjust_outlined,
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          PointyDetailRow(
-            label: l10n.discountMinSubtotalLabel,
-            value: rule.minOrderSubtotal <= 0
-                ? l10n.discountNoConstraintsSelected
-                : formatMoney(rule.minOrderSubtotal),
-          ),
-          const Divider(height: 20),
-          PointyDetailRow(
-            label: l10n.discountMinLineQuantityLabel,
-            value:
-                rule.minLineQuantity?.toString() ??
-                l10n.discountNoConstraintsSelected,
-          ),
-          const Divider(height: 20),
-          PointyDetailRow(
-            label: l10n.discountMaxAmountLabel,
-            value: rule.maxDiscountAmount == null
-                ? l10n.discountNoConstraintsSelected
-                : formatMoney(rule.maxDiscountAmount!),
-          ),
-          const Divider(height: 20),
-          PointyDetailRow(
-            label: l10n.discountProductIdsLabel,
-            value: _countOrAll(l10n, rule.products.length),
-          ),
-          const Divider(height: 20),
-          PointyDetailRow(
-            label: l10n.discountVariantIdsLabel,
-            value: _countOrAll(l10n, rule.variants.length),
-          ),
-          const Divider(height: 20),
-          PointyDetailRow(
-            label: l10n.discountProductCategoryIdsLabel,
-            value: _countOrAll(l10n, rule.productCategories.length),
-          ),
-          const Divider(height: 20),
-          PointyDetailRow(
-            label: l10n.discountCustomerIdsLabel,
-            value: _countOrAll(l10n, rule.customers.length),
-          ),
-          const Divider(height: 20),
-          PointyDetailRow(
-            label: l10n.discountSupplierIdsLabel,
-            value: _countOrAll(l10n, rule.suppliers.length),
-          ),
+          if (targetingChips.isEmpty)
+            Row(
+              children: [
+                Icon(
+                  Icons.all_inclusive_outlined,
+                  size: 18,
+                  color: colors.primaryStrong,
+                ),
+                SizedBox(width: spacing.xs),
+                Text(
+                  l10n.discountSummaryAppliesAll,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w700),
+                ),
+              ],
+            )
+          else
+            Wrap(
+              spacing: spacing.xs,
+              runSpacing: spacing.xs,
+              children: targetingChips,
+            ),
+          if (conditions.isNotEmpty) ...[
+            SizedBox(height: spacing.md),
+            PointyMetricGrid(
+              maxColumns: 3,
+              minTileWidth: 160,
+              gap: PointyMetricGridGap.compact,
+              metrics: conditions,
+            ),
+          ],
         ],
       ),
     );
   }
 }
+
+class _TargetChip extends StatelessWidget {
+  const _TargetChip({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return PointyStatusPill(label: label, icon: icon, compact: false);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Beneficiaries
+// ---------------------------------------------------------------------------
 
 class _BeneficiariesSection extends StatelessWidget {
   const _BeneficiariesSection({required this.viewModel});
@@ -731,7 +1020,7 @@ class _BeneficiariesSection extends StatelessWidget {
       return 220;
     }
     final visibleRows = (itemCount + (hasMore ? 1 : 0)).clamp(1, 5);
-    return visibleRows.toDouble() * 96.0;
+    return visibleRows.toDouble() * 88.0;
   }
 }
 
@@ -743,14 +1032,11 @@ class _BeneficiaryTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    final colors = context.pointyColors;
     final facts = [
       l10n.discountDetailsUseCountValue(beneficiary.redemptionCount),
-      l10n.discountDetailsDocumentCountValue(beneficiary.documentCount),
       l10n.discountDetailsBeneficiaryDiscountSummary(
         formatMoney(beneficiary.discountAmount),
-      ),
-      l10n.discountDetailsBeneficiaryGrossSummary(
-        formatMoney(beneficiary.influencedGross),
       ),
       if (beneficiary.lastRedeemedAt != null)
         l10n.discountDetailsLastUsedSummary(
@@ -760,21 +1046,26 @@ class _BeneficiaryTile extends StatelessWidget {
 
     return PointyDataRow(
       leading: CircleAvatar(
+        backgroundColor: PointyColors.primaryContainer,
+        foregroundColor: colors.primaryStrong,
         child: Icon(_beneficiaryIcon(beneficiary.partyType)),
       ),
       title: _beneficiaryName(l10n, beneficiary),
-      subtitle: facts.join(' • '),
+      subtitle: facts.join(' · '),
       badges: [
-        PointyStatusPill(
-          label: _beneficiaryTypeLabel(l10n, beneficiary.partyType),
-          icon: _beneficiaryIcon(beneficiary.partyType),
-        ),
         PointyStatusPill(
           label: discountChannelLabel(l10n, beneficiary.channel),
           icon: Icons.compare_arrows_outlined,
+          color: colors.mutedInk,
         ),
       ],
-      trailing: Text(formatMoney(beneficiary.influencedNet)),
+      trailing: Text(
+        formatMoney(beneficiary.influencedNet),
+        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+          color: colors.success,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
     );
   }
 }
@@ -792,26 +1083,11 @@ String _beneficiaryName(
   };
 }
 
-String _beneficiaryTypeLabel(AppLocalizations l10n, String partyType) {
-  return switch (partyType) {
-    'customer' => l10n.discountCustomerPickerTitle,
-    'supplier' => l10n.discountSupplierPickerTitle,
-    'unknown_supplier' => l10n.discountDetailsUnknownSupplier,
-    _ => l10n.discountDetailsWalkInCustomer,
-  };
-}
-
 IconData _beneficiaryIcon(String partyType) {
   return switch (partyType) {
     'supplier' || 'unknown_supplier' => Icons.local_shipping_outlined,
     _ => Icons.person_outline,
   };
-}
-
-String _countOrAll(AppLocalizations l10n, int count) {
-  return count == 0
-      ? l10n.discountNoConstraintsSelected
-      : l10n.discountDetailsCountValue(count);
 }
 
 String _periodValue(BuildContext context, DateTime? start, DateTime? end) {

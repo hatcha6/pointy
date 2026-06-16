@@ -564,6 +564,64 @@ class ProductApiTests(TestCase):
             [coffee.id],
         )
 
+    def test_filter_product_categories_by_quick_access_ordered(self):
+        ProductCategory.objects.create(name="عادي")
+        pinned_second = ProductCategory.objects.create(
+            name="مثبت ثان", is_quick_access=True, display_order=2
+        )
+        pinned_first = ProductCategory.objects.create(
+            name="مثبت أول", is_quick_access=True, display_order=1
+        )
+
+        response = self.client.get(
+            reverse("productcategory-list"), {"is_quick_access": "true"}
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        # Quick-access only, ordered by display_order (not name/creation).
+        self.assertEqual(
+            [category["id"] for category in response.data["results"]],
+            [pinned_first.id, pinned_second.id],
+        )
+
+    def test_product_category_exposes_counts_and_quick_access(self):
+        parent = ProductCategory.objects.create(
+            name="المشروبات", is_quick_access=True, display_order=3
+        )
+        ProductCategory.objects.create(name="قهوة", parent=parent)
+        product = create_product_with_default_variant(
+            sku="JUICE",
+            barcode="909",
+            name="عصير",
+            unit_price=Decimal("4.00"),
+            is_active=True,
+        )
+        product.categories.add(parent)
+
+        response = self.client.get(
+            reverse("productcategory-detail", args=[parent.id])
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data["is_quick_access"])
+        self.assertEqual(response.data["display_order"], 3)
+        self.assertEqual(response.data["children_count"], 1)
+        self.assertEqual(response.data["product_count"], 1)
+
+    def test_update_product_category_quick_access_and_order(self):
+        category = ProductCategory.objects.create(name="إكسسوارات")
+
+        response = self.client.patch(
+            reverse("productcategory-detail", args=[category.id]),
+            {"is_quick_access": True, "display_order": 5},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        category.refresh_from_db()
+        self.assertTrue(category.is_quick_access)
+        self.assertEqual(category.display_order, 5)
+
     def test_reject_category_parent_cycle(self):
         parent = ProductCategory.objects.create(name="الأصل")
         child = ProductCategory.objects.create(name="الفرع", parent=parent)
@@ -575,6 +633,28 @@ class ProductApiTests(TestCase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_delete_category_with_children_returns_400(self):
+        parent = ProductCategory.objects.create(name="الأصل")
+        ProductCategory.objects.create(name="الفرع", parent=parent)
+
+        response = self.client.delete(
+            reverse("productcategory-detail", args=[parent.id])
+        )
+
+        # PROTECT surfaces as a clean validation error, not a 500.
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertTrue(ProductCategory.objects.filter(id=parent.id).exists())
+
+    def test_delete_leaf_category(self):
+        category = ProductCategory.objects.create(name="قابل للحذف")
+
+        response = self.client.delete(
+            reverse("productcategory-detail", args=[category.id])
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertFalse(ProductCategory.objects.filter(id=category.id).exists())
 
     def test_filter_products_by_category_includes_descendants(self):
         drinks = ProductCategory.objects.create(name="مشروبات")

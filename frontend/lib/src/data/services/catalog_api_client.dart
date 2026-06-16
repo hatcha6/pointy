@@ -271,6 +271,31 @@ class CatalogApiClient {
     );
   }
 
+  Future<ProductCategory> updateProductCategory({
+    required int id,
+    required Map<String, Object?> changes,
+  }) async {
+    final response = await _session.patch(
+      'product-categories/$id/',
+      body: changes,
+    );
+    _session.ensureSuccess(
+      response,
+      'Product category update failed with status',
+    );
+    return ProductCategory.fromJson(
+      _session.decodedBody(response) as Map<String, Object?>,
+    );
+  }
+
+  Future<void> deleteProductCategory(int id) async {
+    final response = await _session.delete('product-categories/$id/');
+    _session.ensureSuccess(
+      response,
+      'Product category delete failed with status',
+    );
+  }
+
   Future<VariantOptionValuePage> fetchVariantOptionValues({
     required ModelQuery query,
     int page = 1,

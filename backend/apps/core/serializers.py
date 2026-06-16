@@ -266,6 +266,7 @@ class ShopSettingsSerializer(serializers.ModelSerializer):
             "enable_repair_operations",
             "enable_production_operations",
             "enable_kitchen_operations",
+            "kitchen_auto_complete",
             "enable_job_tracking",
             "require_opening_cash",
             "auto_print_receipts",

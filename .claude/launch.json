@@ -20,6 +20,30 @@
       "port": 8080
     },
     {
+      "name": "operations-preview",
+      "runtimeExecutable": "make",
+      "runtimeArgs": ["frontend-operations-preview"],
+      "port": 8080
+    },
+    {
+      "name": "categories-preview",
+      "runtimeExecutable": "make",
+      "runtimeArgs": ["frontend-categories-preview"],
+      "port": 8080
+    },
+    {
+      "name": "discounts-preview",
+      "runtimeExecutable": "make",
+      "runtimeArgs": ["frontend-discounts-preview"],
+      "port": 8080
+    },
+    {
+      "name": "pos-preview",
+      "runtimeExecutable": "make",
+      "runtimeArgs": ["frontend-pos-preview"],
+      "port": 8080
+    },
+    {
       "name": "relay",
       "runtimeExecutable": "make",
       "runtimeArgs": ["relay-run"],

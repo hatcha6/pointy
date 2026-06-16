@@ -22,14 +22,8 @@ import '../../../shared/responsive/responsive.dart';
 import '../../../shared/shell/shell.dart';
 import '../view_models/job_details_view_model.dart';
 import 'job_intake_wizard.dart' show assetTypeLabel;
-import 'jobs_screen.dart'
-    show
-        formatQuantity,
-        jobPriorityLabel,
-        jobStatusLabel,
-        jobTypeIcon,
-        jobTypeLabel,
-        unitLabel;
+import 'jobs_screen.dart' show formatQuantity, unitLabel;
+import 'operations_ui.dart';
 import 'variant_picker_sheet.dart';
 
 class JobDetailsScreen extends StatefulWidget {
@@ -443,69 +437,90 @@ class _JobDetailsBodyState extends State<_JobDetailsBody> {
     final l10n = AppLocalizations.of(context)!;
     final spacing = AdaptiveSpacing.of(context);
     final colors = context.pointyColors;
+    final textTheme = Theme.of(context).textTheme;
     final job = widget.job;
+    final statusVisual = JobStatusVisual.of(context, job.status);
+    final overdue =
+        job.isOpen && job.dueAt != null && job.dueAt!.isBefore(DateTime.now());
 
-    return Card(
-      margin: EdgeInsets.zero,
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: colors.surface,
+        border: Border.all(color: colors.line),
+        borderRadius: BorderRadius.circular(PointyRadii.card),
+        boxShadow: PointyShadows.raised,
+      ),
       child: Padding(
-        padding: EdgeInsets.all(spacing.md),
+        padding: EdgeInsets.all(spacing.lg),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(jobTypeIcon(job.jobType), color: colors.primaryStrong),
-                SizedBox(width: spacing.sm),
+                OperationsIconBadge(icon: jobTypeIcon(job.jobType), size: 52),
+                SizedBox(width: spacing.md),
                 Expanded(
-                  child: Text(
-                    job.jobNumber,
-                    style: Theme.of(context).textTheme.titleLarge,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        job.jobNumber,
+                        style: PointyTypography.numeric(
+                          textTheme.titleLarge ?? const TextStyle(),
+                        ).copyWith(fontWeight: FontWeight.w800),
+                      ),
+                      Text(
+                        jobTypeLabel(l10n, job.jobType),
+                        style: textTheme.bodySmall?.copyWith(
+                          color: colors.mutedInk,
+                        ),
+                      ),
+                    ],
                   ),
+                ),
+                SizedBox(width: spacing.sm),
+                PointyStatusPill(
+                  label: statusVisual.label,
+                  icon: statusVisual.icon,
+                  color: statusVisual.color,
                 ),
               ],
             ),
-            SizedBox(height: spacing.sm),
-            Wrap(
-              spacing: spacing.xs,
-              runSpacing: spacing.xs,
-              children: [
-                PointyStatusPill(
-                  label: jobTypeLabel(l10n, job.jobType),
-                  icon: jobTypeIcon(job.jobType),
-                ),
-                PointyStatusPill(
-                  label: jobStatusLabel(l10n, job.status),
-                  color: switch (job.status) {
-                    OperationsJobStatus.open => colors.primaryStrong,
-                    OperationsJobStatus.completed => colors.success,
-                    OperationsJobStatus.cancelled => colors.danger,
-                  },
-                ),
-                if (job.priority != OperationsJobPriority.normal)
-                  PointyStatusPill(
-                    label: jobPriorityLabel(l10n, job.priority),
-                    icon: Icons.flag_outlined,
-                    color: job.priority == OperationsJobPriority.urgent
-                        ? colors.danger
-                        : colors.warning,
-                  ),
-                if (job.orderReceiptNumber.trim().isNotEmpty)
-                  PointyStatusPill(
-                    label: l10n.jobInvoicedBadge(job.orderReceiptNumber),
-                    icon: Icons.receipt_long_outlined,
-                    color: colors.success,
-                  ),
-              ],
-            ),
-            SizedBox(height: spacing.sm),
-            Text(
-              [
-                '${l10n.jobCreatedAtLabel}: ${job.createdAt == null ? '' : formatDateTime(job.createdAt!)}',
-                if (job.dueAt != null)
-                  '${l10n.jobDueAtLabel}: ${formatDateTime(job.dueAt!)}',
-              ].join(' · '),
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
+            if (job.priority != OperationsJobPriority.normal ||
+                job.orderReceiptNumber.trim().isNotEmpty) ...[
+              SizedBox(height: spacing.md),
+              Wrap(
+                spacing: spacing.xs,
+                runSpacing: spacing.xs,
+                children: [
+                  if (job.priority != OperationsJobPriority.normal)
+                    JobPriorityBadge(priority: job.priority),
+                  if (job.orderReceiptNumber.trim().isNotEmpty)
+                    PointyStatusPill(
+                      label: l10n.jobInvoicedBadge(job.orderReceiptNumber),
+                      icon: Icons.receipt_long_outlined,
+                      color: colors.success,
+                    ),
+                ],
+              ),
+            ],
+            SizedBox(height: spacing.md),
+            if (job.createdAt != null)
+              _MetaRow(
+                icon: Icons.schedule_outlined,
+                label: l10n.jobCreatedAtLabel,
+                value: formatDateTime(job.createdAt!),
+              ),
+            if (job.dueAt != null) ...[
+              const SizedBox(height: 4),
+              _MetaRow(
+                icon: Icons.event_outlined,
+                label: l10n.jobDueAtLabel,
+                value: formatDateTime(job.dueAt!),
+                emphasizeColor: overdue ? colors.danger : null,
+              ),
+            ],
           ],
         ),
       ),
@@ -514,129 +529,72 @@ class _JobDetailsBodyState extends State<_JobDetailsBody> {
 
   Widget _timelineSection(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final spacing = AdaptiveSpacing.of(context);
-    final colors = context.pointyColors;
     final job = widget.job;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        PointySectionHeader(
-          title: l10n.jobTimelineTitle,
-          leading: const Icon(Icons.timeline_outlined),
-        ),
-        SizedBox(height: spacing.sm),
-        Card(
-          margin: EdgeInsets.zero,
-          child: Padding(
-            padding: EdgeInsets.all(spacing.md),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                for (final event in job.stageEvents)
-                  Padding(
-                    padding: EdgeInsets.only(bottom: spacing.sm),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Icon(
-                          event.toStage == job.currentStage
-                              ? Icons.radio_button_checked
-                              : Icons.check_circle_outline,
-                          size: 20,
-                          color: event.toStage == job.currentStage
-                              ? colors.primaryStrong
-                              : colors.success,
-                        ),
-                        SizedBox(width: spacing.sm),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                event.toStage == job.currentStage
-                                    ? '${event.toStageName} — ${l10n.jobCurrentStageLabel}'
-                                    : event.toStageName,
-                                style: Theme.of(context).textTheme.bodyMedium
-                                    ?.copyWith(fontWeight: FontWeight.w700),
-                              ),
-                              Text(
-                                [
-                                  if (event.changedByName.trim().isNotEmpty)
-                                    event.changedByName,
-                                  if (event.createdAt != null)
-                                    formatDateTime(event.createdAt!),
-                                ].join(' · '),
-                                style: Theme.of(context).textTheme.labelSmall,
-                              ),
-                              if (event.note.trim().isNotEmpty)
-                                Text(
-                                  event.note,
-                                  style: Theme.of(context).textTheme.bodySmall,
-                                ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-              ],
+    return PointyDetailSection(
+      title: l10n.jobTimelineTitle,
+      icon: Icons.timeline_outlined,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (var i = 0; i < job.stageEvents.length; i++)
+            _TimelineEntry(
+              event: job.stageEvents[i],
+              isCurrent: job.stageEvents[i].toStage == job.currentStage,
+              isLast: i == job.stageEvents.length - 1,
             ),
-          ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
   Widget _customerSection(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final spacing = AdaptiveSpacing.of(context);
     final job = widget.job;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        PointySectionHeader(
-          title: l10n.jobCustomerSection,
-          leading: const Icon(Icons.person_outline),
-        ),
-        SizedBox(height: spacing.sm),
-        Card(
-          margin: EdgeInsets.zero,
-          child: Column(
-            children: [
-              ListTile(
-                leading: const Icon(Icons.person_outline),
-                title: Text(
-                  job.customerName.trim().isEmpty
-                      ? l10n.jobNoCustomer
-                      : job.customerName,
-                ),
-                subtitle: job.customerPhone.trim().isEmpty
-                    ? null
-                    : Text(job.customerPhone),
-              ),
-              for (final link in job.assets)
-                if (link.assetDetails != null)
-                  ListTile(
-                    leading: const Icon(Icons.smartphone_outlined),
-                    title: Text(link.assetDetails!.displayName),
-                    subtitle: Text(
-                      [
-                        assetTypeLabel(l10n, link.assetDetails!.assetType),
-                        if (link.assetDetails!.imei.isNotEmpty)
-                          'IMEI ${link.assetDetails!.imei}',
-                        if (link.assetDetails!.serialNumber.isNotEmpty)
-                          link.assetDetails!.serialNumber,
-                      ].join(' · '),
-                    ),
-                    trailing: const Icon(Icons.history),
-                    onTap: () => _openAssetHistory(link.assetDetails!.id),
-                  ),
-            ],
+    return PointyDetailSection(
+      title: l10n.jobCustomerSection,
+      icon: Icons.person_outline,
+      child: Column(
+        children: [
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const OperationsIconBadge(
+              icon: Icons.person_outline,
+              size: 40,
+            ),
+            title: Text(
+              job.customerName.trim().isEmpty
+                  ? l10n.jobNoCustomer
+                  : job.customerName,
+            ),
+            subtitle: job.customerPhone.trim().isEmpty
+                ? null
+                : Text(job.customerPhone),
           ),
-        ),
-      ],
+          for (final link in job.assets)
+            if (link.assetDetails != null)
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const OperationsIconBadge(
+                  icon: Icons.smartphone_outlined,
+                  size: 40,
+                ),
+                title: Text(link.assetDetails!.displayName),
+                subtitle: Text(
+                  [
+                    assetTypeLabel(l10n, link.assetDetails!.assetType),
+                    if (link.assetDetails!.imei.isNotEmpty)
+                      'IMEI ${link.assetDetails!.imei}',
+                    if (link.assetDetails!.serialNumber.isNotEmpty)
+                      link.assetDetails!.serialNumber,
+                  ].join(' · '),
+                ),
+                trailing: const PointyDisclosureChevron(),
+                onTap: () => _openAssetHistory(link.assetDetails!.id),
+              ),
+        ],
+      ),
     );
   }
 
@@ -701,38 +659,32 @@ class _JobDetailsBodyState extends State<_JobDetailsBody> {
 
   Widget _productionSection(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final spacing = AdaptiveSpacing.of(context);
     final colors = context.pointyColors;
     final job = widget.job;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        PointySectionHeader(
-          title: l10n.productionOutputSection,
-          leading: const Icon(Icons.precision_manufacturing_outlined),
+    return PointyDetailSection(
+      title: l10n.productionOutputSection,
+      icon: Icons.precision_manufacturing_outlined,
+      child: ListTile(
+        contentPadding: EdgeInsets.zero,
+        leading: const OperationsIconBadge(
+          icon: Icons.inventory_2_outlined,
+          size: 40,
         ),
-        SizedBox(height: spacing.sm),
-        Card(
-          margin: EdgeInsets.zero,
-          child: ListTile(
-            leading: const Icon(Icons.inventory_2_outlined),
-            title: Text(
-              l10n.productionOutputPreview(
-                '${job.outputQuantity ?? 0}',
-                job.outputVariantName,
-              ),
-            ),
-            trailing: job.outputReceivedAt != null
-                ? PointyStatusPill(
-                    label: l10n.productionReceivedBadge,
-                    icon: Icons.check_circle_outline,
-                    color: colors.success,
-                  )
-                : null,
+        title: Text(
+          l10n.productionOutputPreview(
+            '${job.outputQuantity ?? 0}',
+            job.outputVariantName,
           ),
         ),
-      ],
+        trailing: job.outputReceivedAt != null
+            ? PointyStatusPill(
+                label: l10n.productionReceivedBadge,
+                icon: Icons.check_circle_outline,
+                color: colors.success,
+              )
+            : null,
+      ),
     );
   }
 
@@ -740,143 +692,103 @@ class _JobDetailsBodyState extends State<_JobDetailsBody> {
     final l10n = AppLocalizations.of(context)!;
     final spacing = AdaptiveSpacing.of(context);
     final colors = context.pointyColors;
+    final textTheme = Theme.of(context).textTheme;
     final job = widget.job;
     final canAddMaterials =
         widget.capabilities.canManageJobMaterials &&
         job.status == OperationsJobStatus.open &&
         job.order == null;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        PointySectionHeader(
-          title: l10n.jobMaterialsSection,
-          leading: const Icon(Icons.widgets_outlined),
-          actions: [
-            if (canAddMaterials)
-              FilledButton.tonalIcon(
-                onPressed: widget.viewModel.isMutating ? null : _addMaterial,
-                icon: const Icon(Icons.add, size: 18),
-                label: Text(l10n.addMaterialButton),
+    return PointyDetailSection(
+      title: l10n.jobMaterialsSection,
+      icon: Icons.widgets_outlined,
+      trailing: canAddMaterials
+          ? TextButton.icon(
+              onPressed: widget.viewModel.isMutating ? null : _addMaterial,
+              icon: const Icon(Icons.add, size: 18),
+              label: Text(l10n.addMaterialButton),
+            )
+          : null,
+      child: job.materials.isEmpty
+          ? Padding(
+              padding: EdgeInsets.symmetric(vertical: spacing.sm),
+              child: Text(
+                l10n.jobMaterialsEmpty,
+                style: textTheme.bodyMedium?.copyWith(color: colors.mutedInk),
               ),
-          ],
-        ),
-        SizedBox(height: spacing.sm),
-        Card(
-          margin: EdgeInsets.zero,
-          child: job.materials.isEmpty
-              ? Padding(
-                  padding: EdgeInsets.all(spacing.md),
-                  child: Text(
-                    l10n.jobMaterialsEmpty,
-                    style: Theme.of(context).textTheme.bodySmall,
+            )
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                for (final material in job.materials)
+                  _MaterialRow(
+                    material: material,
+                    canReverse: canAddMaterials && material.reversedAt == null,
+                    isBusy: widget.viewModel.isMutating,
+                    onReverse: () => _reverseMaterial(material),
                   ),
-                )
-              : Column(
+                Padding(
+                  padding: EdgeInsets.only(top: spacing.sm),
+                  child: Divider(height: 1, color: colors.line),
+                ),
+                SizedBox(height: spacing.sm),
+                Row(
                   children: [
-                    for (final material in job.materials)
-                      ListTile(
-                        leading: const Icon(Icons.widgets_outlined),
-                        title: Text(
-                          material.variantName.trim().isEmpty
-                              ? material.productName
-                              : material.variantName,
-                        ),
-                        subtitle: Wrap(
-                          spacing: spacing.xs,
-                          crossAxisAlignment: WrapCrossAlignment.center,
-                          children: [
-                            Text(
-                              '× ${formatQuantity(material.quantity)} '
-                              '${unitLabel(l10n, material.unit)}',
-                            ),
-                            Text(formatMoney(material.lineTotal)),
-                            if (material.reversedAt != null)
-                              PointyStatusPill(
-                                label: l10n.materialReversedBadge,
-                                color: colors.mutedInk,
-                              )
-                            else if (material.isConsumed)
-                              PointyStatusPill(
-                                label: l10n.materialConsumedBadge,
-                                color: colors.success,
-                              )
-                            else
-                              PointyStatusPill(
-                                label: l10n.materialPendingBadge,
-                                color: colors.warning,
-                              ),
-                          ],
-                        ),
-                        trailing: canAddMaterials && material.reversedAt == null
-                            ? IconButton(
-                                tooltip: l10n.reverseMaterialAction,
-                                onPressed: widget.viewModel.isMutating
-                                    ? null
-                                    : () => _reverseMaterial(material),
-                                icon: const Icon(Icons.settings_backup_restore),
-                              )
-                            : null,
-                      ),
-                    Padding(
-                      padding: EdgeInsets.all(spacing.sm),
-                      child: Align(
-                        alignment: AlignmentDirectional.centerStart,
-                        child: Text(
-                          l10n.jobMaterialsTotalLabel(
-                            formatMoney(job.materialsTotal),
-                          ),
-                          style: Theme.of(context).textTheme.titleSmall
-                              ?.copyWith(fontWeight: FontWeight.w800),
+                    Expanded(
+                      child: Text(
+                        l10n.jobMaterialsTotalShort,
+                        style: textTheme.bodyMedium?.copyWith(
+                          color: colors.mutedInk,
                         ),
                       ),
                     ),
+                    Text(
+                      formatMoney(job.materialsTotal),
+                      style: PointyTypography.numeric(
+                        textTheme.titleMedium ?? const TextStyle(),
+                      ).copyWith(fontWeight: FontWeight.w800),
+                    ),
                   ],
                 ),
-        ),
-      ],
+              ],
+            ),
     );
   }
 
   Widget _assignmentSection(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final spacing = AdaptiveSpacing.of(context);
     final job = widget.job;
     final assigned = job.assignedEmployeeName.trim();
     final canAssign =
         widget.capabilities.canAssignJobs &&
         job.status != OperationsJobStatus.cancelled;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        PointySectionHeader(
-          title: l10n.jobAssignmentSection,
-          leading: const Icon(Icons.engineering_outlined),
+    return PointyDetailSection(
+      title: l10n.jobAssignmentSection,
+      icon: Icons.engineering_outlined,
+      trailing: canAssign
+          ? TextButton.icon(
+              onPressed: widget.viewModel.isMutating ? null : _openAssignDialog,
+              icon: const Icon(Icons.person_add_alt_outlined, size: 18),
+              label: Text(
+                assigned.isEmpty
+                    ? l10n.jobAssignButton
+                    : l10n.jobReassignButton,
+              ),
+            )
+          : null,
+      child: ListTile(
+        contentPadding: EdgeInsets.zero,
+        leading: OperationsIconBadge(
+          icon: assigned.isEmpty
+              ? Icons.person_off_outlined
+              : Icons.badge_outlined,
+          size: 40,
+          color: assigned.isEmpty ? context.pointyColors.mutedInk : null,
         ),
-        SizedBox(height: spacing.sm),
-        Card(
-          margin: EdgeInsets.zero,
-          child: ListTile(
-            leading: const Icon(Icons.badge_outlined),
-            title: Text(assigned.isEmpty ? l10n.jobUnassigned : assigned),
-            subtitle: Text(l10n.jobAssignedEmployeeHint),
-            trailing: canAssign
-                ? TextButton.icon(
-                    onPressed: widget.viewModel.isMutating
-                        ? null
-                        : () => _openAssignDialog(),
-                    icon: const Icon(Icons.person_add_alt_outlined),
-                    label: Text(
-                      assigned.isEmpty
-                          ? l10n.jobAssignButton
-                          : l10n.jobReassignButton,
-                    ),
-                  )
-                : null,
-          ),
-        ),
-      ],
+        title: Text(assigned.isEmpty ? l10n.jobUnassigned : assigned),
+        subtitle: Text(l10n.jobAssignedEmployeeHint),
+      ),
     );
   }
 
@@ -1363,6 +1275,233 @@ class _AssignEmployeeDialog extends StatelessWidget {
           child: Text(l10n.cancelButton),
         ),
       ],
+    );
+  }
+}
+
+/// A compact icon + label + value line for the header meta block.
+class _MetaRow extends StatelessWidget {
+  const _MetaRow({
+    required this.icon,
+    required this.label,
+    required this.value,
+    this.emphasizeColor,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+  final Color? emphasizeColor;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.pointyColors;
+    final textTheme = Theme.of(context).textTheme;
+    final valueColor = emphasizeColor ?? colors.ink;
+    return Row(
+      children: [
+        Icon(icon, size: 16, color: emphasizeColor ?? colors.mutedInk),
+        const SizedBox(width: 8),
+        Text(
+          label,
+          style: textTheme.bodySmall?.copyWith(color: colors.mutedInk),
+        ),
+        const SizedBox(width: 6),
+        Expanded(
+          child: Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: textTheme.bodySmall?.copyWith(
+              color: valueColor,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// One entry in the job's stage history, drawn as a vertical timeline node.
+class _TimelineEntry extends StatelessWidget {
+  const _TimelineEntry({
+    required this.event,
+    required this.isCurrent,
+    required this.isLast,
+  });
+
+  final JobStageEvent event;
+  final bool isCurrent;
+  final bool isLast;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final colors = context.pointyColors;
+    final textTheme = Theme.of(context).textTheme;
+    final dotColor = isCurrent ? PointyColors.primary : colors.success;
+    final meta = [
+      if (event.changedByName.trim().isNotEmpty) event.changedByName,
+      if (event.createdAt != null) formatDateTime(event.createdAt!),
+    ].join(' · ');
+
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Column(
+            children: [
+              Container(
+                width: 16,
+                height: 16,
+                decoration: BoxDecoration(
+                  color: isCurrent
+                      ? dotColor
+                      : dotColor.withValues(alpha: 0.16),
+                  shape: BoxShape.circle,
+                  border: Border.all(color: dotColor, width: 2),
+                ),
+                child: isCurrent
+                    ? null
+                    : Icon(Icons.check, size: 10, color: dotColor),
+              ),
+              if (!isLast)
+                Expanded(
+                  child: Container(
+                    width: 2,
+                    margin: const EdgeInsets.symmetric(vertical: 2),
+                    color: colors.line,
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Padding(
+              padding: EdgeInsets.only(bottom: isLast ? 0 : 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          event.toStageName,
+                          style: textTheme.bodyMedium?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                      if (isCurrent) ...[
+                        const SizedBox(width: 6),
+                        Text(
+                          '· ${l10n.jobCurrentStageLabel}',
+                          style: textTheme.labelSmall?.copyWith(
+                            color: PointyColors.primary,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                  if (meta.isNotEmpty)
+                    Text(
+                      meta,
+                      style: textTheme.labelSmall?.copyWith(
+                        color: colors.mutedInk,
+                      ),
+                    ),
+                  if (event.note.trim().isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 2),
+                      child: Text(
+                        event.note,
+                        style: textTheme.bodySmall?.copyWith(color: colors.ink),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// One material line in the materials section: name, status, quantity + total.
+class _MaterialRow extends StatelessWidget {
+  const _MaterialRow({
+    required this.material,
+    required this.canReverse,
+    required this.isBusy,
+    required this.onReverse,
+  });
+
+  final JobMaterial material;
+  final bool canReverse;
+  final bool isBusy;
+  final VoidCallback onReverse;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final spacing = AdaptiveSpacing.of(context);
+    final colors = context.pointyColors;
+    final textTheme = Theme.of(context).textTheme;
+    final name = material.variantName.trim().isEmpty
+        ? material.productName
+        : material.variantName;
+    final (statusLabel, statusColor) = material.reversedAt != null
+        ? (l10n.materialReversedBadge, colors.mutedInk)
+        : material.isConsumed
+        ? (l10n.materialConsumedBadge, colors.success)
+        : (l10n.materialPendingBadge, colors.warning);
+
+    return Padding(
+      padding: EdgeInsets.symmetric(vertical: spacing.xs),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: textTheme.bodyLarge?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    SizedBox(width: spacing.sm),
+                    PointyStatusPill(label: statusLabel, color: statusColor),
+                  ],
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  '× ${formatQuantity(material.quantity)} '
+                  '${unitLabel(l10n, material.unit)} · '
+                  '${formatMoney(material.lineTotal)}',
+                  style: textTheme.bodySmall?.copyWith(color: colors.mutedInk),
+                ),
+              ],
+            ),
+          ),
+          if (canReverse)
+            IconButton(
+              tooltip: l10n.reverseMaterialAction,
+              onPressed: isBusy ? null : onReverse,
+              icon: const Icon(Icons.settings_backup_restore),
+            ),
+        ],
+      ),
     );
   }
 }

@@ -42,7 +42,7 @@ class CategoryManagementViewModel extends ChangeNotifier {
     this._catalogRepository, {
     AnalyticsEngine? analyticsEngine,
   }) : _analyticsEngine = analyticsEngine {
-    loadCategories();
+    refreshAll();
   }
 
   final CatalogRepository _catalogRepository;
@@ -52,12 +52,24 @@ class CategoryManagementViewModel extends ChangeNotifier {
 
   final _rootBranch = _CategoryBranchState();
   final _childBranches = <int, _CategoryBranchState>{};
+  final _searchBranch = _CategoryBranchState();
   final _expandedCategoryIds = <int>{};
+
+  List<ProductCategory> _quickAccess = [];
+  bool _isLoadingQuickAccess = false;
+  bool _quickAccessError = false;
+
+  String _search = '';
+  int _searchVersion = 0;
+
   bool _isSaving = false;
-  String? _errorMessage;
+  String? _loadError;
+
+  // -- tree --------------------------------------------------------------
 
   List<ProductCategory> get categories =>
       List.unmodifiable(_rootBranch.categories);
+
   List<CategoryTreeItem> get visibleItems {
     final items = <CategoryTreeItem>[];
     for (final category in _rootBranch.categories) {
@@ -68,16 +80,49 @@ class CategoryManagementViewModel extends ChangeNotifier {
 
   bool get isLoading => _rootBranch.isLoadingInitial;
   bool get isLoadingMore => _rootBranch.isLoadingMore;
-  bool get isSaving => _isSaving;
   bool get hasMoreCategories => _rootBranch.hasMore;
-  String? get errorMessage => _errorMessage;
+  bool get isEmpty =>
+      !isLoading && _rootBranch.categories.isEmpty && !hasLoadError;
+  bool get hasLoadError => _loadError == 'category_load_error';
+  bool get isSaving => _isSaving;
+  String? get loadError => _loadError;
 
-  bool isExpanded(ProductCategory category) {
-    return _expandedCategoryIds.contains(category.id);
-  }
+  bool isExpanded(ProductCategory category) =>
+      _expandedCategoryIds.contains(category.id);
 
-  bool isLoadingChildren(ProductCategory category) {
-    return _childBranches[category.id]?.isLoadingInitial ?? false;
+  bool isLoadingChildren(ProductCategory category) =>
+      _childBranches[category.id]?.isLoadingInitial ?? false;
+
+  // -- quick access ------------------------------------------------------
+
+  List<ProductCategory> get quickAccess => List.unmodifiable(_quickAccess);
+  bool get isLoadingQuickAccess => _isLoadingQuickAccess;
+  bool get quickAccessError => _quickAccessError;
+  bool get hasQuickAccess => _quickAccess.isNotEmpty;
+
+  // -- search ------------------------------------------------------------
+
+  String get search => _search;
+  bool get isSearching => _search.trim().isNotEmpty;
+  List<ProductCategory> get searchResults =>
+      List.unmodifiable(_searchBranch.categories);
+  bool get isLoadingSearch => _searchBranch.isLoadingInitial;
+  bool get isLoadingMoreSearch => _searchBranch.isLoadingMore;
+  bool get hasMoreSearch => _searchBranch.hasMore;
+  bool get hasSearchError => _searchBranch.hasError;
+  bool get hasNoSearchResults =>
+      isSearching &&
+      !isLoadingSearch &&
+      !hasSearchError &&
+      _searchBranch.categories.isEmpty;
+
+  // -- loading -----------------------------------------------------------
+
+  Future<void> refreshAll() async {
+    await Future.wait([loadCategories(), loadQuickAccess()]);
+    if (isSearching) {
+      await _loadSearch(reset: true);
+    }
   }
 
   Future<void> loadCategories() async {
@@ -87,12 +132,15 @@ class CategoryManagementViewModel extends ChangeNotifier {
       ..hasMore = true
       ..hasError = false
       ..nextPage = 1;
-    _errorMessage = null;
+    if (_loadError == 'category_load_error') {
+      _loadError = null;
+    }
     notifyListeners();
 
     final result = await _catalogRepository.loadProductCategories(
       query: const ProductCategoryQuery(
         availability: ProductCategoryAvailabilityFilter.all,
+        ordering: ProductCategoryOrdering.manual,
         rootOnly: true,
       ),
       page: _rootBranch.nextPage,
@@ -111,7 +159,7 @@ class CategoryManagementViewModel extends ChangeNotifier {
           ..categories = []
           ..hasMore = false
           ..hasError = true;
-        _errorMessage = 'category_load_error';
+        _loadError = 'category_load_error';
     }
 
     _rootBranch.isLoadingInitial = false;
@@ -131,6 +179,7 @@ class CategoryManagementViewModel extends ChangeNotifier {
     final result = await _catalogRepository.loadProductCategories(
       query: const ProductCategoryQuery(
         availability: ProductCategoryAvailabilityFilter.all,
+        ordering: ProductCategoryOrdering.manual,
         rootOnly: true,
       ),
       page: _rootBranch.nextPage,
@@ -146,10 +195,28 @@ class CategoryManagementViewModel extends ChangeNotifier {
         _rootBranch
           ..hasMore = false
           ..hasError = true;
-        _errorMessage = 'category_load_error';
+        _loadError = 'category_load_error';
     }
 
     _rootBranch.isLoadingMore = false;
+    notifyListeners();
+  }
+
+  Future<void> loadQuickAccess() async {
+    _isLoadingQuickAccess = true;
+    _quickAccessError = false;
+    notifyListeners();
+
+    final result = await _catalogRepository.loadQuickAccessCategories();
+    switch (result) {
+      case Ok<List<ProductCategory>>():
+        _quickAccess = result.value;
+        _quickAccessError = false;
+      case Error<List<ProductCategory>>():
+        _quickAccessError = true;
+    }
+
+    _isLoadingQuickAccess = false;
     notifyListeners();
   }
 
@@ -175,55 +242,240 @@ class CategoryManagementViewModel extends ChangeNotifier {
     }
   }
 
-  Future<void> loadMoreChildren(int parentId) {
-    return _loadChildren(parentId, reset: false);
+  Future<void> loadMoreChildren(int parentId) =>
+      _loadChildren(parentId, reset: false);
+
+  Future<void> retryLoadChildren(int parentId) =>
+      _loadChildren(parentId, reset: true);
+
+  // -- search ------------------------------------------------------------
+
+  Future<void> applySearch(String query) async {
+    final normalized = query.trim();
+    if (normalized == _search) {
+      return;
+    }
+    _search = normalized;
+    if (normalized.isEmpty) {
+      _searchVersion += 1;
+      _searchBranch.reset();
+      notifyListeners();
+      return;
+    }
+    await _loadSearch(reset: true);
   }
 
-  Future<void> retryLoadChildren(int parentId) {
-    return _loadChildren(parentId, reset: true);
+  Future<void> loadMoreSearchResults() => _loadSearch(reset: false);
+
+  Future<void> retrySearch() => _loadSearch(reset: true);
+
+  Future<void> _loadSearch({required bool reset}) async {
+    final searchSnapshot = _search;
+    if (searchSnapshot.isEmpty) {
+      return;
+    }
+    final version = ++_searchVersion;
+
+    if (reset) {
+      _searchBranch
+        ..isLoadingInitial = true
+        ..isLoadingMore = false
+        ..hasMore = true
+        ..hasError = false
+        ..nextPage = 1;
+    } else {
+      if (_searchBranch.isLoadingInitial ||
+          _searchBranch.isLoadingMore ||
+          !_searchBranch.hasMore) {
+        return;
+      }
+      _searchBranch
+        ..isLoadingMore = true
+        ..hasError = false;
+    }
+    notifyListeners();
+
+    final result = await _catalogRepository.loadProductCategories(
+      query: ProductCategoryQuery(
+        search: searchSnapshot,
+        availability: ProductCategoryAvailabilityFilter.all,
+        ordering: ProductCategoryOrdering.name,
+      ),
+      page: _searchBranch.nextPage,
+    );
+    if (version != _searchVersion || searchSnapshot != _search) {
+      return;
+    }
+
+    switch (result) {
+      case Ok<ProductCategoryPage>():
+        _searchBranch
+          ..categories = reset
+              ? result.value.categories
+              : [..._searchBranch.categories, ...result.value.categories]
+          ..hasMore = result.value.hasMore
+          ..nextPage += 1
+          ..hasError = false;
+      case Error<ProductCategoryPage>():
+        if (reset) {
+          _searchBranch.categories = [];
+        }
+        _searchBranch
+          ..hasMore = false
+          ..hasError = true;
+    }
+
+    _searchBranch
+      ..isLoadingInitial = false
+      ..isLoadingMore = false;
+    notifyListeners();
   }
+
+  // -- mutations ---------------------------------------------------------
 
   Future<bool> createCategory(ProductCategoryDraft draft) async {
     if (_isSaving) {
       return false;
     }
     _isSaving = true;
-    _errorMessage = null;
     notifyListeners();
 
     final result = await _catalogRepository.createProductCategory(draft);
     switch (result) {
       case Ok<ProductCategory>(value: final category):
-        _trackCategoryCreated(category, draft);
-        await loadCategories();
+        _trackCategoryEvent('catalog.category.created', category, draft);
+        await _reloadAfterMutation();
         _isSaving = false;
         notifyListeners();
         return true;
       case Error<ProductCategory>():
-        _errorMessage = 'category_create_error';
         _isSaving = false;
         notifyListeners();
         return false;
     }
   }
 
-  void _trackCategoryCreated(
-    ProductCategory category,
+  Future<bool> updateCategory(
+    ProductCategory original,
     ProductCategoryDraft draft,
-  ) {
-    trackAuditEvent(
-      _analyticsEngine,
-      name: 'catalog.category.created',
-      entityType: 'product_category',
-      entityId: category.id,
-      attributes: {
-        'category_id': category.id,
-        'category_name': category.name,
-        if (draft.parentId != null) 'parent_id': draft.parentId,
-        'is_active': category.isActive,
-        'source': 'category_management',
-      },
+  ) async {
+    if (_isSaving) {
+      return false;
+    }
+    _isSaving = true;
+    notifyListeners();
+
+    final result = await _catalogRepository.updateProductCategory(
+      id: original.id,
+      draft: draft,
     );
+    switch (result) {
+      case Ok<ProductCategory>(value: final category):
+        _trackCategoryEvent('catalog.category.updated', category, draft);
+        await _reloadAfterMutation();
+        _isSaving = false;
+        notifyListeners();
+        return true;
+      case Error<ProductCategory>():
+        _isSaving = false;
+        notifyListeners();
+        return false;
+    }
+  }
+
+  Future<bool> deleteCategory(ProductCategory category) async {
+    final result = await _catalogRepository.deleteProductCategory(category.id);
+    switch (result) {
+      case Ok<void>():
+        _trackCategoryDeleted(category);
+        await _reloadAfterMutation();
+        notifyListeners();
+        return true;
+      case Error<void>():
+        return false;
+    }
+  }
+
+  /// Pin/unpin a category from the quick-access strip. Optimistic: the tree and
+  /// the strip update immediately and reconcile with the server, so browsing
+  /// state (expanded branches) is preserved.
+  Future<bool> toggleQuickAccess(ProductCategory category) async {
+    final desired = !category.isQuickAccess;
+    final optimistic = category.copyWith(isQuickAccess: desired);
+    _replaceCategoryEverywhere(optimistic);
+    if (desired) {
+      if (!_quickAccess.any((item) => item.id == category.id)) {
+        _quickAccess = [..._quickAccess, optimistic];
+      }
+    } else {
+      _quickAccess = _quickAccess
+          .where((item) => item.id != category.id)
+          .toList(growable: false);
+    }
+    notifyListeners();
+
+    final result = await _catalogRepository.setCategoryQuickAccess(
+      id: category.id,
+      isQuickAccess: desired,
+    );
+    switch (result) {
+      case Ok<ProductCategory>(value: final saved):
+        _trackQuickAccessToggled(saved, desired);
+        _replaceCategoryEverywhere(saved);
+        await loadQuickAccess();
+        return true;
+      case Error<ProductCategory>():
+        _replaceCategoryEverywhere(category);
+        await loadQuickAccess();
+        return false;
+    }
+  }
+
+  Future<bool> reorderQuickAccess(int oldIndex, int newIndex) async {
+    if (oldIndex < 0 || oldIndex >= _quickAccess.length) {
+      return false;
+    }
+    var targetIndex = newIndex;
+    if (targetIndex > oldIndex) {
+      targetIndex -= 1;
+    }
+    final reordered = [..._quickAccess];
+    final moved = reordered.removeAt(oldIndex);
+    reordered.insert(targetIndex.clamp(0, reordered.length), moved);
+    _quickAccess = reordered;
+    notifyListeners();
+
+    final result = await _catalogRepository.reorderQuickAccessCategories(
+      reordered.map((category) => category.id).toList(growable: false),
+    );
+    if (result is Error<void>) {
+      await loadQuickAccess();
+      return false;
+    }
+    return true;
+  }
+
+  // -- internals ---------------------------------------------------------
+
+  Future<void> _reloadAfterMutation() async {
+    await loadCategories();
+    await loadQuickAccess();
+    if (isSearching) {
+      await _loadSearch(reset: true);
+    }
+  }
+
+  void _replaceCategoryEverywhere(ProductCategory updated) {
+    List<ProductCategory> replaceIn(List<ProductCategory> source) => [
+      for (final category in source)
+        if (category.id == updated.id) updated else category,
+    ];
+
+    _rootBranch.categories = replaceIn(_rootBranch.categories);
+    for (final branch in _childBranches.values) {
+      branch.categories = replaceIn(branch.categories);
+    }
+    _searchBranch.categories = replaceIn(_searchBranch.categories);
   }
 
   void _appendCategory(
@@ -288,6 +540,7 @@ class CategoryManagementViewModel extends ChangeNotifier {
     final result = await _catalogRepository.loadProductCategories(
       query: ProductCategoryQuery(
         availability: ProductCategoryAvailabilityFilter.all,
+        ordering: ProductCategoryOrdering.manual,
         parentId: parentId,
       ),
       page: branch.nextPage,
@@ -308,13 +561,62 @@ class CategoryManagementViewModel extends ChangeNotifier {
         branch
           ..hasMore = false
           ..hasError = true;
-        _errorMessage = 'category_load_error';
     }
 
     branch
       ..isLoadingInitial = false
       ..isLoadingMore = false;
     notifyListeners();
+  }
+
+  void _trackCategoryEvent(
+    String name,
+    ProductCategory category,
+    ProductCategoryDraft draft,
+  ) {
+    trackAuditEvent(
+      _analyticsEngine,
+      name: name,
+      entityType: 'product_category',
+      entityId: category.id,
+      attributes: {
+        'category_id': category.id,
+        'category_name': category.name,
+        if (draft.parentId != null) 'parent_id': draft.parentId,
+        'is_active': category.isActive,
+        'is_quick_access': category.isQuickAccess,
+        'source': 'category_management',
+      },
+    );
+  }
+
+  void _trackCategoryDeleted(ProductCategory category) {
+    trackAuditEvent(
+      _analyticsEngine,
+      name: 'catalog.category.deleted',
+      entityType: 'product_category',
+      entityId: category.id,
+      attributes: {
+        'category_id': category.id,
+        'category_name': category.name,
+        'source': 'category_management',
+      },
+    );
+  }
+
+  void _trackQuickAccessToggled(ProductCategory category, bool isQuickAccess) {
+    trackAuditEvent(
+      _analyticsEngine,
+      name: 'catalog.category.quick_access_toggled',
+      entityType: 'product_category',
+      entityId: category.id,
+      attributes: {
+        'category_id': category.id,
+        'category_name': category.name,
+        'is_quick_access': isQuickAccess,
+        'source': 'category_management',
+      },
+    );
   }
 }
 
@@ -325,4 +627,13 @@ class _CategoryBranchState {
   bool hasMore = true;
   bool hasError = false;
   int nextPage = 1;
+
+  void reset() {
+    categories = [];
+    isLoadingInitial = false;
+    isLoadingMore = false;
+    hasMore = true;
+    hasError = false;
+    nextPage = 1;
+  }
 }

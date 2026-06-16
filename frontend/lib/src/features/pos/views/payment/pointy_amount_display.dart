@@ -32,13 +32,25 @@ class PointyAmountDisplay extends StatelessWidget {
     return DecoratedBox(
       decoration: BoxDecoration(
         color: emphasized
-            ? Theme.of(context).colorScheme.primaryContainer
+            ? Color.alphaBlend(
+                colors.primaryStrong.withValues(alpha: 0.10),
+                colors.surface,
+              )
             : colors.subtleFill,
-        border: Border.all(color: colors.line),
+        border: Border.all(
+          color: emphasized
+              ? colors.primaryStrong.withValues(alpha: 0.30)
+              : colors.line,
+        ),
         borderRadius: BorderRadius.circular(PointyRadii.card),
       ),
       child: Padding(
-        padding: const EdgeInsetsDirectional.fromSTEB(12, 10, 12, 10),
+        padding: EdgeInsetsDirectional.fromSTEB(
+          12,
+          emphasized ? 12 : 10,
+          12,
+          emphasized ? 12 : 10,
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,

@@ -43,7 +43,6 @@ void main() {
       expect(find.byType(ProductTile), findsOneWidget);
       expect(find.textContaining('قهوة عربية'), findsOneWidget);
       expect(find.text('12.75 د.ل'), findsOneWidget);
-      expect(find.text('متاح'), findsOneWidget);
       expect(find.byIcon(Icons.add_shopping_cart_outlined), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
@@ -183,6 +182,66 @@ void main() {
       expect(discardedSessionId, 1);
     });
   }
+
+  testWidgets('active catalog card omits the redundant availability pill', (
+    tester,
+  ) async {
+    await _pumpAtWidth(
+      tester,
+      width: 768,
+      child: SizedBox(
+        width: 220,
+        height: 236,
+        child: ProductTile(product: _longNameProduct, onTap: () {}),
+      ),
+    );
+
+    expect(find.text('متاح'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('catalog card flags inactive products and shows in-cart count', (
+    tester,
+  ) async {
+    await _pumpAtWidth(
+      tester,
+      width: 768,
+      child: SizedBox(
+        width: 220,
+        height: 236,
+        child: ProductTile(
+          product: _inactiveProduct,
+          onTap: () {},
+          cartQuantity: 3,
+        ),
+      ),
+    );
+
+    expect(find.text('متوقف'), findsOneWidget);
+    expect(find.text('3'), findsOneWidget);
+    expect(find.byIcon(Icons.add_shopping_cart_outlined), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('purchasing card surfaces low-stock status', (tester) async {
+    await _pumpAtWidth(
+      tester,
+      width: 768,
+      child: SizedBox(
+        width: 220,
+        height: 236,
+        child: ProductTile.variant(
+          variant: _lowStockVariant,
+          onTap: () {},
+          showPrice: false,
+          showStock: true,
+        ),
+      ),
+    );
+
+    expect(find.text('منخفض'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 }
 
 Future<void> _pumpAtWidth(
@@ -238,4 +297,28 @@ const _cartLine = CartLine(
     unitPrice: 12.75,
     productName: 'قهوة عربية فاخرة بحبوب محمصة وطازجة للاختبار الطويل',
   ),
+);
+
+const _inactiveProduct = Product(
+  id: 2,
+  name: 'منتج متوقف عن البيع',
+  quantityOnHand: 0,
+  isActive: false,
+  defaultVariant: ProductVariant(
+    id: 20,
+    productId: 2,
+    sku: 'INACTIVE-AA',
+    unitPrice: 9.50,
+    productName: 'منتج متوقف عن البيع',
+  ),
+);
+
+const _lowStockVariant = ProductVariant(
+  id: 30,
+  productId: 3,
+  sku: 'LOW-AA',
+  unitPrice: 5.00,
+  productName: 'صنف مخزونه منخفض',
+  displayName: 'صنف مخزونه منخفض',
+  quantityOnHand: 4,
 );

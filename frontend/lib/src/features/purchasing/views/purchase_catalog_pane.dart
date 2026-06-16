@@ -6,6 +6,7 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 import '../../../data/models/product_variant.dart';
 import '../../../shared/barcode/camera_barcode_scanner_sheet.dart';
 import '../../../shared/catalog/catalog.dart';
+import '../../../shared/components/components.dart';
 import '../../../shared/infinite_scroll_grid.dart';
 import '../../../shared/product_query_controls.dart';
 import '../../../shared/product_tile.dart';
@@ -21,93 +22,95 @@ class PurchaseCatalogPane extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final spacing = AdaptiveSpacing.of(context);
+    final draftQuantities = _draftQuantitiesByVariant();
 
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Text(
-                l10n.purchaseCatalogTitle,
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
-              const Spacer(),
-              if (viewModel.isLoading)
-                const SizedBox.square(
-                  dimension: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                ),
-            ],
-          ),
-          if (viewModel.errorMessage != null)
-            Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child: Text(
-                l10n.sampleCatalogNotice,
-                style: TextStyle(
-                  color: Theme.of(context).colorScheme.secondary,
-                ),
-              ),
+    return PointyCatalogPane(
+      title: l10n.purchaseCatalogTitle,
+      isLoading: viewModel.isLoading,
+      resultCount: viewModel.isLoading && viewModel.variants.isEmpty
+          ? null
+          : viewModel.variants.length,
+      hasMoreResults: viewModel.hasMoreProducts,
+      notice: viewModel.errorMessage != null
+          ? PointyInlineMessage.warning(message: l10n.sampleCatalogNotice)
+          : null,
+      search: ProductQueryControls(
+        query: viewModel.query,
+        catalogRepository: viewModel.catalogRepository,
+        allowAvailabilityFilter: false,
+        searchHint: l10n.purchaseProductLookupHint,
+        searchFieldKey: const ValueKey('purchase_product_lookup_field'),
+        autofocus:
+            AppBreakpoints.of(context).index >= AppBreakpoint.tablet.index,
+        onSearchChanged: viewModel.updateSearch,
+        onOpenCameraScanner: viewModel.isSubmitting
+            ? null
+            : () => _openCameraScanner(context),
+        onSearchSubmitted: viewModel.isSubmitting
+            ? null
+            : (barcode) => _addBarcode(context, barcode),
+        onQueryChanged: viewModel.applyQuery,
+      ),
+      categoryStrip: QuickAccessCategoryStrip(
+        catalogRepository: viewModel.catalogRepository,
+        selectedCategories: viewModel.query.categories,
+        allLabel: l10n.posAllProductsFilterLabel,
+        onSelectAll: () => viewModel.applyQuery(
+          viewModel.query.copyWith(categories: const []),
+        ),
+        onSelectCategory: (category) => viewModel.applyQuery(
+          viewModel.query.copyWith(categories: [category]),
+        ),
+      ),
+      grid: LayoutBuilder(
+        builder: (context, constraints) {
+          final spacing = AdaptiveSpacing.of(context);
+          return InfiniteScrollGrid<ProductVariant>(
+            items: viewModel.variants,
+            onLoadMore: viewModel.loadMoreCatalog,
+            hasMore: viewModel.hasMoreProducts,
+            isLoadingInitial: viewModel.isLoading,
+            isLoadingMore: viewModel.isLoadingMore,
+            loadMoreExtent: PointyProductCardGrid.loadMoreExtent,
+            emptyBuilder: (context) => PointyEmptyState(
+              icon: Icons.inventory_2_outlined,
+              title: l10n.emptyCatalog,
             ),
-          const SizedBox(height: 12),
-          ProductQueryControls(
-            query: viewModel.query,
-            catalogRepository: viewModel.catalogRepository,
-            allowAvailabilityFilter: false,
-            searchHint: l10n.purchaseProductLookupHint,
-            searchFieldKey: const ValueKey('purchase_product_lookup_field'),
-            autofocus:
-                AppBreakpoints.of(context).index >= AppBreakpoint.tablet.index,
-            onSearchChanged: viewModel.updateSearch,
-            onOpenCameraScanner: viewModel.isSubmitting
-                ? null
-                : () => _openCameraScanner(context),
-            onSearchSubmitted: viewModel.isSubmitting
-                ? null
-                : (barcode) => _addBarcode(context, barcode),
-            onQueryChanged: viewModel.applyQuery,
-          ),
-          const SizedBox(height: 12),
-          Expanded(
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                return InfiniteScrollGrid<ProductVariant>(
-                  items: viewModel.variants,
-                  onLoadMore: viewModel.loadMoreCatalog,
-                  hasMore: viewModel.hasMoreProducts,
-                  isLoadingInitial: viewModel.isLoading,
-                  isLoadingMore: viewModel.isLoadingMore,
-                  loadMoreExtent: PointyProductCardGrid.loadMoreExtent,
-                  emptyBuilder: (context) =>
-                      Center(child: Text(l10n.emptyCatalog)),
-                  gridDelegate: PointyProductCardGrid.delegateFor(
-                    width: constraints.maxWidth,
-                    spacing: spacing.gutter,
-                  ),
-                  itemBuilder: (context, variant) {
-                    return ProductTile.variant(
-                      variant: variant,
-                      showPrice: false,
-                      onTap: viewModel.isSubmitting
-                          ? null
-                          : () => unawaited(
-                              viewModel.addVariant(
-                                variant,
-                                source: 'purchase_catalog_tile',
-                              ),
-                            ),
-                    );
-                  },
-                );
-              },
+            gridDelegate: PointyProductCardGrid.delegateFor(
+              width: constraints.maxWidth,
+              spacing: spacing.gutter,
             ),
-          ),
-        ],
+            itemBuilder: (context, variant) {
+              return ProductTile.variant(
+                key: ValueKey(variant.id),
+                variant: variant,
+                showPrice: false,
+                showStock: true,
+                cartQuantity: draftQuantities[variant.id] ?? 0,
+                onTap: viewModel.isSubmitting
+                    ? null
+                    : () => unawaited(
+                        viewModel.addVariant(
+                          variant,
+                          source: 'purchase_catalog_tile',
+                        ),
+                      ),
+              );
+            },
+          );
+        },
       ),
     );
+  }
+
+  /// Maps each variant in the draft to its quantity so catalog cards can show a
+  /// badge for items already added to the purchase.
+  Map<int, double> _draftQuantitiesByVariant() {
+    final quantities = <int, double>{};
+    for (final line in viewModel.draft) {
+      quantities[line.variant.id] = line.quantity.toDouble();
+    }
+    return quantities;
   }
 
   Future<bool> _addBarcode(BuildContext context, String barcode) async {

@@ -4653,6 +4653,24 @@ abstract class AppLocalizations {
   /// **'المرحلة الحالية'**
   String get jobCurrentStageLabel;
 
+  /// Compact 'stage N of M' workflow progress caption.
+  ///
+  /// In ar, this message translates to:
+  /// **'المرحلة {current} من {total}'**
+  String jobStageProgress(int current, int total);
+
+  /// No description provided for @jobOverdueBadge.
+  ///
+  /// In ar, this message translates to:
+  /// **'متأخرة'**
+  String get jobOverdueBadge;
+
+  /// No description provided for @jobMaterialsTotalShort.
+  ///
+  /// In ar, this message translates to:
+  /// **'إجمالي المواد'**
+  String get jobMaterialsTotalShort;
+
   /// Primary button advancing the job to its next stage.
   ///
   /// In ar, this message translates to:
@@ -7617,6 +7635,186 @@ abstract class AppLocalizations {
   /// **'{count, plural, =0{لا توجد فروع} =1{فرع واحد} =2{فرعان} other{{count} فروع}}'**
   String categoryChildrenCount(num count);
 
+  /// Number of products directly in a category.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, =0{لا منتجات} =1{منتج واحد} =2{منتجان} other{{count} منتجات}}'**
+  String categoryProductCount(num count);
+
+  /// No description provided for @allCategoriesSectionTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'كل التصنيفات'**
+  String get allCategoriesSectionTitle;
+
+  /// No description provided for @categorySearchResultsTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'نتائج البحث'**
+  String get categorySearchResultsTitle;
+
+  /// No description provided for @categorySearchEmptyState.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد تصنيفات مطابقة لبحثك.'**
+  String get categorySearchEmptyState;
+
+  /// No description provided for @categoryEmptyHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'أنشئ تصنيفك الأول لتنظيم منتجاتك.'**
+  String get categoryEmptyHint;
+
+  /// No description provided for @categoryInactiveBadge.
+  ///
+  /// In ar, this message translates to:
+  /// **'غير نشط'**
+  String get categoryInactiveBadge;
+
+  /// No description provided for @categoryActionsTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'خيارات'**
+  String get categoryActionsTooltip;
+
+  /// No description provided for @addSubcategoryAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'إضافة تصنيف فرعي'**
+  String get addSubcategoryAction;
+
+  /// No description provided for @editCategoryTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعديل التصنيف'**
+  String get editCategoryTitle;
+
+  /// No description provided for @savingCategoryButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'جار الحفظ...'**
+  String get savingCategoryButton;
+
+  /// No description provided for @categoryUpdateError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر حفظ التغييرات. حاول مرة أخرى.'**
+  String get categoryUpdateError;
+
+  /// No description provided for @categoryDeletedMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم حذف التصنيف'**
+  String get categoryDeletedMessage;
+
+  /// No description provided for @categoryDeleteError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر حذف التصنيف.'**
+  String get categoryDeleteError;
+
+  /// No description provided for @deleteCategoryTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'حذف التصنيف'**
+  String get deleteCategoryTitle;
+
+  /// Delete category confirmation body.
+  ///
+  /// In ar, this message translates to:
+  /// **'سيتم حذف «{name}» نهائيًا.'**
+  String deleteCategoryConfirmMessage(String name);
+
+  /// No description provided for @deleteCategoryHasChildrenTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر حذف التصنيف'**
+  String get deleteCategoryHasChildrenTitle;
+
+  /// No description provided for @deleteCategoryHasChildrenMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'يحتوي هذا التصنيف على فروع. احذف أو انقل التصنيفات الفرعية أولًا.'**
+  String get deleteCategoryHasChildrenMessage;
+
+  /// No description provided for @quickAccessSectionTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'الوصول السريع'**
+  String get quickAccessSectionTitle;
+
+  /// No description provided for @quickAccessSectionSubtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'تظهر كأزرار تصفية فوق البحث في نقطة البيع والمشتريات.'**
+  String get quickAccessSectionSubtitle;
+
+  /// No description provided for @quickAccessEmptyTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد تصنيفات سريعة بعد'**
+  String get quickAccessEmptyTitle;
+
+  /// No description provided for @quickAccessEmptyMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'ثبّت تصنيفًا ليظهر كزر تصفية بنقرة واحدة. تشمل التصفية التصنيف وكل فروعه.'**
+  String get quickAccessEmptyMessage;
+
+  /// No description provided for @quickAccessReorderHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'اسحب الأزرار لإعادة ترتيبها'**
+  String get quickAccessReorderHint;
+
+  /// No description provided for @quickAccessLoadError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر تحميل الوصول السريع.'**
+  String get quickAccessLoadError;
+
+  /// No description provided for @quickAccessUpdateError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر تحديث الوصول السريع.'**
+  String get quickAccessUpdateError;
+
+  /// No description provided for @pinToQuickAccessTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'تثبيت في الوصول السريع'**
+  String get pinToQuickAccessTooltip;
+
+  /// No description provided for @unpinFromQuickAccessTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'إزالة من الوصول السريع'**
+  String get unpinFromQuickAccessTooltip;
+
+  /// Snackbar after pinning a category.
+  ///
+  /// In ar, this message translates to:
+  /// **'{name} في الوصول السريع الآن'**
+  String quickAccessAddedMessage(String name);
+
+  /// Snackbar after unpinning a category.
+  ///
+  /// In ar, this message translates to:
+  /// **'تمت إزالة {name} من الوصول السريع'**
+  String quickAccessRemovedMessage(String name);
+
+  /// No description provided for @quickAccessSwitchLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'إظهار في الوصول السريع'**
+  String get quickAccessSwitchLabel;
+
+  /// No description provided for @quickAccessSwitchHelper.
+  ///
+  /// In ar, this message translates to:
+  /// **'زر تصفية سريع في نقطة البيع والمشتريات'**
+  String get quickAccessSwitchHelper;
+
   /// No description provided for @activeProductLabel.
   ///
   /// In ar, this message translates to:
@@ -8763,6 +8961,12 @@ abstract class AppLocalizations {
   /// **'لا توجد عناصر في السلة'**
   String get emptyCart;
 
+  /// No description provided for @emptyCartMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'ابحث عن منتج أو امسح الباركود لبدء البيع'**
+  String get emptyCartMessage;
+
   /// No description provided for @openCartSheetButton.
   ///
   /// In ar, this message translates to:
@@ -9798,6 +10002,12 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'لا توجد عناصر في مسودة الشراء'**
   String get emptyPurchaseDraft;
+
+  /// No description provided for @emptyPurchaseDraftMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'أضف منتجات من الكتالوج لبناء أمر الشراء'**
+  String get emptyPurchaseDraftMessage;
 
   /// No description provided for @purchaseLineCostLabel.
   ///
@@ -12168,6 +12378,114 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'تحديد مرات الاستخدام'**
   String get discountWizardUsageLimitsToggle;
+
+  /// No description provided for @discountFormSummaryTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'ملخص الخصم'**
+  String get discountFormSummaryTitle;
+
+  /// No description provided for @discountSummaryPlaceholder.
+  ///
+  /// In ar, this message translates to:
+  /// **'أدخل قيمة الخصم لمعاينة الملخص'**
+  String get discountSummaryPlaceholder;
+
+  /// No description provided for @discountSummaryAppliesAll.
+  ///
+  /// In ar, this message translates to:
+  /// **'كل المنتجات'**
+  String get discountSummaryAppliesAll;
+
+  /// No description provided for @discountTargetedShort.
+  ///
+  /// In ar, this message translates to:
+  /// **'أصناف محددة'**
+  String get discountTargetedShort;
+
+  /// No description provided for @discountSectionBasicsHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'الاسم والقناة وطريقة التطبيق'**
+  String get discountSectionBasicsHint;
+
+  /// No description provided for @discountSectionValueHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'نوع الخصم وقيمته'**
+  String get discountSectionValueHint;
+
+  /// No description provided for @discountSectionTargeting.
+  ///
+  /// In ar, this message translates to:
+  /// **'على ماذا ينطبق'**
+  String get discountSectionTargeting;
+
+  /// No description provided for @discountSectionTargetingHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'اتركه فارغًا لتطبيقه على كل شيء'**
+  String get discountSectionTargetingHint;
+
+  /// No description provided for @discountSectionConditions.
+  ///
+  /// In ar, this message translates to:
+  /// **'الشروط'**
+  String get discountSectionConditions;
+
+  /// No description provided for @discountSectionConditionsHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'حدود الحد الأدنى لتطبيق الخصم'**
+  String get discountSectionConditionsHint;
+
+  /// No description provided for @discountSectionScheduleHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'فترة السريان وعدد مرات الاستخدام'**
+  String get discountSectionScheduleHint;
+
+  /// No description provided for @discountSectionAdvanced.
+  ///
+  /// In ar, this message translates to:
+  /// **'خيارات متقدمة'**
+  String get discountSectionAdvanced;
+
+  /// No description provided for @discountSectionAdvancedHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'الأولوية والتكديس مع الخصومات الأخرى'**
+  String get discountSectionAdvancedHint;
+
+  /// No description provided for @discountScopeAutoNote.
+  ///
+  /// In ar, this message translates to:
+  /// **'ينطبق على كل صنف مطابق'**
+  String get discountScopeAutoNote;
+
+  /// No description provided for @discountValueTypePercentageHelp.
+  ///
+  /// In ar, this message translates to:
+  /// **'نسبة مئوية تُخصم من السعر'**
+  String get discountValueTypePercentageHelp;
+
+  /// No description provided for @discountValueTypeFixedAmountHelp.
+  ///
+  /// In ar, this message translates to:
+  /// **'مبلغ ثابت يُخصم من الإجمالي'**
+  String get discountValueTypeFixedAmountHelp;
+
+  /// No description provided for @discountValueTypeFixedUnitAmountHelp.
+  ///
+  /// In ar, this message translates to:
+  /// **'مبلغ يُخصم عن كل وحدة'**
+  String get discountValueTypeFixedUnitAmountHelp;
+
+  /// No description provided for @discountValueTypeFixedPriceHelp.
+  ///
+  /// In ar, this message translates to:
+  /// **'تثبيت سعر الصنف عند قيمة محددة'**
+  String get discountValueTypeFixedPriceHelp;
 
   /// No description provided for @discountWizardAdvancedToggle.
   ///

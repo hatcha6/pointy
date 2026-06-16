@@ -47,7 +47,7 @@ class PurchasingScreen extends StatelessWidget {
             selectedDestination: AppNavigationDestination.purchasing,
             navigation: navigation,
           ),
-          appBar: AppBar(
+          appBar: PointyAppBar(
             leading: showBackButton
                 ? IconButton(
                     tooltip: l10n.backTooltip,
@@ -106,6 +106,7 @@ class _PurchasingWorkspace extends StatelessWidget {
               : MediaQuery.sizeOf(context).width;
           if (AppBreakpoints.usesTwoPane(width)) {
             return TwoPaneLayout(
+              minPrimaryWidth: 390,
               primaryPane: PurchaseCatalogPane(viewModel: viewModel),
               secondaryPane: PurchaseDraftPane(
                 viewModel: viewModel,

@@ -17,6 +17,7 @@ import '../../../shared/design/design.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../../../shared/shell/shell.dart';
 import '../view_models/jobs_board_view_model.dart';
+import 'operations_ui.dart';
 
 String assetTypeLabel(AppLocalizations l10n, CustomerAssetType type) {
   return switch (type) {
@@ -159,11 +160,11 @@ class _JobIntakeWizardState extends State<JobIntakeWizard> {
         SizedBox(width: spacing.sm),
         FilledButton.icon(
           onPressed: _isWorking ? null : _onPrimaryPressed,
-          icon: Icon(
-            _step == _lastStep ? Icons.check : Icons.arrow_forward,
-          ),
+          icon: Icon(_step == _lastStep ? Icons.check : Icons.arrow_forward),
           label: Text(
-            _step == _lastStep ? l10n.intakeCreateButton : l10n.intakeNextButton,
+            _step == _lastStep
+                ? l10n.intakeCreateButton
+                : l10n.intakeNextButton,
           ),
         ),
       ],
@@ -226,28 +227,42 @@ class _JobIntakeWizardState extends State<JobIntakeWizard> {
           },
         ),
         SizedBox(height: spacing.sm),
-        if (_showCustomerValidation && _selectedCustomer == null &&
+        if (_showCustomerValidation &&
+            _selectedCustomer == null &&
             !_creatingCustomer)
           PointyInlineMessage.error(
             message: l10n.intakeCustomerRequired,
             icon: Icons.person_off_outlined,
           ),
         for (final customer in _customerResults.take(6))
-          Card(
-            margin: EdgeInsets.only(bottom: spacing.xs),
+          Padding(
+            padding: EdgeInsets.only(bottom: spacing.xs),
             child: ListTile(
-              leading: Icon(
-                _selectedCustomer?.id == customer.id
-                    ? Icons.check_circle
-                    : Icons.person_outline,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(PointyRadii.card),
+                side: BorderSide(
+                  color: _selectedCustomer?.id == customer.id
+                      ? PointyColors.primary
+                      : context.pointyColors.line,
+                ),
+              ),
+              selected: _selectedCustomer?.id == customer.id,
+              selectedTileColor: PointyColors.primaryContainer,
+              leading: OperationsIconBadge(
+                icon: Icons.person_outline,
+                size: 40,
                 color: _selectedCustomer?.id == customer.id
                     ? context.pointyColors.success
                     : null,
               ),
               title: Text(customer.fullName),
-              subtitle:
-                  customer.phone.isEmpty ? null : Text(customer.phone),
-              selected: _selectedCustomer?.id == customer.id,
+              subtitle: customer.phone.isEmpty ? null : Text(customer.phone),
+              trailing: _selectedCustomer?.id == customer.id
+                  ? Icon(
+                      Icons.check_circle,
+                      color: context.pointyColors.success,
+                    )
+                  : null,
               onTap: () => setState(() {
                 _selectedCustomer = customer;
                 _creatingCustomer = false;
@@ -269,7 +284,8 @@ class _JobIntakeWizardState extends State<JobIntakeWizard> {
             controller: _newCustomerNameController,
             decoration: InputDecoration(
               labelText: l10n.intakeCustomerNameLabel,
-              errorText: _showCustomerValidation &&
+              errorText:
+                  _showCustomerValidation &&
                       _newCustomerNameController.text.trim().isEmpty
                   ? l10n.intakeCustomerRequired
                   : null,
@@ -304,8 +320,7 @@ class _JobIntakeWizardState extends State<JobIntakeWizard> {
     if (_selectedCustomer != null) {
       return _selectedCustomer;
     }
-    if (!_creatingCustomer ||
-        _newCustomerNameController.text.trim().isEmpty) {
+    if (!_creatingCustomer || _newCustomerNameController.text.trim().isEmpty) {
       return null;
     }
     setState(() => _isWorking = true);
@@ -518,7 +533,9 @@ class _JobIntakeWizardState extends State<JobIntakeWizard> {
           leading: const Icon(Icons.event_outlined),
           title: Text(l10n.jobDueAtLabel),
           subtitle: Text(
-            _dueAt == null ? l10n.shopSettingsEmptyValue : formatDateTime(_dueAt!),
+            _dueAt == null
+                ? l10n.shopSettingsEmptyValue
+                : formatDateTime(_dueAt!),
           ),
           onTap: _pickDueDate,
         ),
@@ -550,7 +567,9 @@ class _JobIntakeWizardState extends State<JobIntakeWizard> {
       lastDate: now.add(const Duration(days: 365)),
     );
     if (picked != null && mounted) {
-      setState(() => _dueAt = DateTime(picked.year, picked.month, picked.day, 18));
+      setState(
+        () => _dueAt = DateTime(picked.year, picked.month, picked.day, 18),
+      );
     }
   }
 
@@ -670,15 +689,15 @@ class _StepHeader extends StatelessWidget {
                     : Text(
                         '${index + 1}',
                         style: TextStyle(
-                          color: index <= step
-                              ? Colors.white
-                              : colors.mutedInk,
+                          color: index <= step ? Colors.white : colors.mutedInk,
                         ),
                       ),
               ),
               const SizedBox(height: 4),
-              Text(labels[index],
-                  style: Theme.of(context).textTheme.labelSmall),
+              Text(
+                labels[index],
+                style: Theme.of(context).textTheme.labelSmall,
+              ),
             ],
           ),
         ],

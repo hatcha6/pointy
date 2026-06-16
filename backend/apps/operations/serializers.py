@@ -317,9 +317,12 @@ class JobSerializer(serializers.ModelSerializer):
         return None
 
     def get_materials_total(self, job) -> str:
+        # Round per line (matching OrderLine.line_subtotal) so this total equals
+        # the invoiced order's subtotal to the cent — the cashier pays exactly
+        # this plus labor, and the invoice's payment-total check must agree.
         total = sum(
             (
-                material.unit_price * material.quantity
+                (material.unit_price * material.quantity).quantize(Decimal("0.01"))
                 for material in job.materials.all()
                 if material.reversed_at is None
             ),

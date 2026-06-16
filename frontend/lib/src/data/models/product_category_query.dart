@@ -17,6 +17,8 @@ enum ProductCategoryAvailabilityFilter implements QueryFilterSet {
 }
 
 enum ProductCategoryOrdering implements QueryOrdering {
+  /// Manual sort order (the quick-access strip and the management tree).
+  manual('display_order'),
   name('name'),
   newest('-created_at');
 
@@ -33,6 +35,7 @@ class ProductCategoryQuery extends ModelQuery {
     this.ordering = ProductCategoryOrdering.name,
     this.parentId,
     this.rootOnly = false,
+    this.quickAccessOnly = false,
   });
 
   @override
@@ -42,10 +45,13 @@ class ProductCategoryQuery extends ModelQuery {
   final ProductCategoryOrdering ordering;
   final int? parentId;
   final bool rootOnly;
+  final bool quickAccessOnly;
 
   @override
   Iterable<QueryFilter> get filters => [
     ...availability.filters,
+    if (quickAccessOnly)
+      const QueryFilter(parameter: 'is_quick_access', value: 'true'),
     if (parentId != null)
       QueryFilter(parameter: 'parent', value: '$parentId')
     else if (rootOnly)

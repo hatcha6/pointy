@@ -2640,6 +2640,17 @@ class AppLocalizationsAr extends AppLocalizations {
   String get jobCurrentStageLabel => 'المرحلة الحالية';
 
   @override
+  String jobStageProgress(int current, int total) {
+    return 'المرحلة $current من $total';
+  }
+
+  @override
+  String get jobOverdueBadge => 'متأخرة';
+
+  @override
+  String get jobMaterialsTotalShort => 'إجمالي المواد';
+
+  @override
   String jobNextActionButton(String stageName) {
     return 'الخطوة التالية: $stageName';
   }
@@ -4309,6 +4320,116 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
+  String categoryProductCount(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count منتجات',
+      two: 'منتجان',
+      one: 'منتج واحد',
+      zero: 'لا منتجات',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get allCategoriesSectionTitle => 'كل التصنيفات';
+
+  @override
+  String get categorySearchResultsTitle => 'نتائج البحث';
+
+  @override
+  String get categorySearchEmptyState => 'لا توجد تصنيفات مطابقة لبحثك.';
+
+  @override
+  String get categoryEmptyHint => 'أنشئ تصنيفك الأول لتنظيم منتجاتك.';
+
+  @override
+  String get categoryInactiveBadge => 'غير نشط';
+
+  @override
+  String get categoryActionsTooltip => 'خيارات';
+
+  @override
+  String get addSubcategoryAction => 'إضافة تصنيف فرعي';
+
+  @override
+  String get editCategoryTitle => 'تعديل التصنيف';
+
+  @override
+  String get savingCategoryButton => 'جار الحفظ...';
+
+  @override
+  String get categoryUpdateError => 'تعذر حفظ التغييرات. حاول مرة أخرى.';
+
+  @override
+  String get categoryDeletedMessage => 'تم حذف التصنيف';
+
+  @override
+  String get categoryDeleteError => 'تعذر حذف التصنيف.';
+
+  @override
+  String get deleteCategoryTitle => 'حذف التصنيف';
+
+  @override
+  String deleteCategoryConfirmMessage(String name) {
+    return 'سيتم حذف «$name» نهائيًا.';
+  }
+
+  @override
+  String get deleteCategoryHasChildrenTitle => 'تعذر حذف التصنيف';
+
+  @override
+  String get deleteCategoryHasChildrenMessage =>
+      'يحتوي هذا التصنيف على فروع. احذف أو انقل التصنيفات الفرعية أولًا.';
+
+  @override
+  String get quickAccessSectionTitle => 'الوصول السريع';
+
+  @override
+  String get quickAccessSectionSubtitle =>
+      'تظهر كأزرار تصفية فوق البحث في نقطة البيع والمشتريات.';
+
+  @override
+  String get quickAccessEmptyTitle => 'لا توجد تصنيفات سريعة بعد';
+
+  @override
+  String get quickAccessEmptyMessage =>
+      'ثبّت تصنيفًا ليظهر كزر تصفية بنقرة واحدة. تشمل التصفية التصنيف وكل فروعه.';
+
+  @override
+  String get quickAccessReorderHint => 'اسحب الأزرار لإعادة ترتيبها';
+
+  @override
+  String get quickAccessLoadError => 'تعذر تحميل الوصول السريع.';
+
+  @override
+  String get quickAccessUpdateError => 'تعذر تحديث الوصول السريع.';
+
+  @override
+  String get pinToQuickAccessTooltip => 'تثبيت في الوصول السريع';
+
+  @override
+  String get unpinFromQuickAccessTooltip => 'إزالة من الوصول السريع';
+
+  @override
+  String quickAccessAddedMessage(String name) {
+    return '$name في الوصول السريع الآن';
+  }
+
+  @override
+  String quickAccessRemovedMessage(String name) {
+    return 'تمت إزالة $name من الوصول السريع';
+  }
+
+  @override
+  String get quickAccessSwitchLabel => 'إظهار في الوصول السريع';
+
+  @override
+  String get quickAccessSwitchHelper =>
+      'زر تصفية سريع في نقطة البيع والمشتريات';
+
+  @override
   String get activeProductLabel => 'متاح للبيع';
 
   @override
@@ -4945,6 +5066,9 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get emptyCart => 'لا توجد عناصر في السلة';
+
+  @override
+  String get emptyCartMessage => 'ابحث عن منتج أو امسح الباركود لبدء البيع';
 
   @override
   String get openCartSheetButton => 'مراجعة السلة';
@@ -5587,6 +5711,10 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get emptyPurchaseDraft => 'لا توجد عناصر في مسودة الشراء';
+
+  @override
+  String get emptyPurchaseDraftMessage =>
+      'أضف منتجات من الكتالوج لبناء أمر الشراء';
 
   @override
   String get purchaseLineCostLabel => 'التكلفة';
@@ -6970,6 +7098,62 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get discountWizardUsageLimitsToggle => 'تحديد مرات الاستخدام';
+
+  @override
+  String get discountFormSummaryTitle => 'ملخص الخصم';
+
+  @override
+  String get discountSummaryPlaceholder => 'أدخل قيمة الخصم لمعاينة الملخص';
+
+  @override
+  String get discountSummaryAppliesAll => 'كل المنتجات';
+
+  @override
+  String get discountTargetedShort => 'أصناف محددة';
+
+  @override
+  String get discountSectionBasicsHint => 'الاسم والقناة وطريقة التطبيق';
+
+  @override
+  String get discountSectionValueHint => 'نوع الخصم وقيمته';
+
+  @override
+  String get discountSectionTargeting => 'على ماذا ينطبق';
+
+  @override
+  String get discountSectionTargetingHint => 'اتركه فارغًا لتطبيقه على كل شيء';
+
+  @override
+  String get discountSectionConditions => 'الشروط';
+
+  @override
+  String get discountSectionConditionsHint => 'حدود الحد الأدنى لتطبيق الخصم';
+
+  @override
+  String get discountSectionScheduleHint => 'فترة السريان وعدد مرات الاستخدام';
+
+  @override
+  String get discountSectionAdvanced => 'خيارات متقدمة';
+
+  @override
+  String get discountSectionAdvancedHint =>
+      'الأولوية والتكديس مع الخصومات الأخرى';
+
+  @override
+  String get discountScopeAutoNote => 'ينطبق على كل صنف مطابق';
+
+  @override
+  String get discountValueTypePercentageHelp => 'نسبة مئوية تُخصم من السعر';
+
+  @override
+  String get discountValueTypeFixedAmountHelp => 'مبلغ ثابت يُخصم من الإجمالي';
+
+  @override
+  String get discountValueTypeFixedUnitAmountHelp => 'مبلغ يُخصم عن كل وحدة';
+
+  @override
+  String get discountValueTypeFixedPriceHelp =>
+      'تثبيت سعر الصنف عند قيمة محددة';
 
   @override
   String get discountWizardAdvancedToggle => 'إظهار خيارات متقدمة';

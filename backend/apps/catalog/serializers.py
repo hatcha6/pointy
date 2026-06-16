@@ -70,6 +70,7 @@ def raise_serializer_validation(error):
 class ProductCategorySerializer(serializers.ModelSerializer):
     parent_name = serializers.CharField(source="parent.name", read_only=True)
     children_count = serializers.IntegerField(read_only=True)
+    product_count = serializers.IntegerField(read_only=True)
 
     class Meta:
         model = ProductCategory
@@ -80,11 +81,19 @@ class ProductCategorySerializer(serializers.ModelSerializer):
             "parent",
             "parent_name",
             "children_count",
+            "product_count",
             "is_active",
+            "is_quick_access",
+            "display_order",
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ("created_at", "updated_at", "children_count")
+        read_only_fields = (
+            "created_at",
+            "updated_at",
+            "children_count",
+            "product_count",
+        )
 
     def validate_name(self, value):
         return value.strip()

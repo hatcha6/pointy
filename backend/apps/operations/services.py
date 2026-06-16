@@ -17,7 +17,7 @@ from apps.inventory.services import (
     save_stock_item_quantities,
     stock_snapshot,
 )
-from .models import Job, JobMaterial, JobStageEvent, WorkflowStage, WorkflowTemplate
+from .models import Job, JobMaterial, JobStageEvent, WorkflowTemplate
 
 MONEY_PLACES = Decimal("0.01")
 
@@ -304,7 +304,10 @@ def add_job_material(*, job, variant, quantity, request=None, consume_now=True):
 
 
 def consume_pending_materials(job, *, request=None):
-    pending = job.materials.filter(consumed_at__isnull=True).select_related(
+    pending = job.materials.filter(
+        consumed_at__isnull=True,
+        reversed_at__isnull=True,
+    ).select_related(
         "variant",
         "variant__product",
     )
@@ -518,15 +521,83 @@ def latest_production_unit_cost(variant_id):
     return None if job is None else job.output_unit_cost
 
 
+def _complete_job_at_terminal(job, *, request=None, note=""):
+    """Mark a job finished: move it onto its terminal stage and set COMPLETED.
+
+    Shared by the chit-only kitchen auto-complete and by invoicing — both mean
+    "the work is done". The terminal stage's own side effects still run (a
+    producing terminal stage still receives its output), mirroring
+    ``transition_job``; intermediate stages are not replayed. No-op when the job
+    is already completed.
+    """
+    if job.status == Job.Status.COMPLETED:
+        return job
+    terminal = (
+        job.workflow_template.stages.filter(is_terminal=True)
+        .order_by("display_order", "id")
+        .first()
+    )
+    from_stage = job.current_stage
+    update_fields = ["status", "completed_at", "updated_at"]
+    if terminal is not None and terminal.pk != job.current_stage_id:
+        job.current_stage = terminal
+        update_fields.append("current_stage")
+        if terminal.consumes_materials:
+            consume_pending_materials(job, request=request)
+        if terminal.produces_output:
+            receive_finished_goods(job, request=request)
+            update_fields += ["output_unit_cost", "output_received_at"]
+    job.status = Job.Status.COMPLETED
+    job.completed_at = timezone.now()
+    job.save(update_fields=update_fields)
+    if terminal is not None and (from_stage is None or terminal.pk != from_stage.pk):
+        JobStageEvent.objects.create(
+            job=job,
+            from_stage=from_stage,
+            to_stage=terminal,
+            changed_by=request_user(request),
+            note=note,
+        )
+    return job
+
+
+def auto_complete_kitchen_job(job, *, request=None):
+    """Chit-only kitchen: finish the job the moment the sale is paid.
+
+    No one taps a kitchen screen, so the job is driven straight to its terminal
+    stage — recipe ingredients are consumed (stock leaves now, at the sale) and
+    the job is marked complete. The printed kitchen chit is the only artifact the
+    cooks need. The staged received→preparing→served flow stays available (when
+    ``kitchen_auto_complete`` is off) as the foundation for a future KDS.
+    """
+    # Kitchen recipes consume at the "preparing" stage, not the terminal one, so
+    # consume them explicitly before jumping to the end.
+    consume_pending_materials(job, request=request)
+    _complete_job_at_terminal(job, request=request, note="إكمال تلقائي عند الدفع")
+    record_domain_event(
+        name="operations.job.auto_completed",
+        event_type=AnalyticsEvent.EventType.AUDIT,
+        user=request_user(request),
+        entity_type="operations_job",
+        entity_id=job.pk,
+        attributes={"job_number": job.job_number, "order_id": job.order_id},
+    )
+    return job
+
+
 def create_kitchen_job_for_order(*, order, request=None):
     """Open a kitchen job for a paid order's made-to-order (prepared) lines.
 
-    The restaurant flow: the customer pays at the register, the kitchen board
-    immediately shows the order with its recipe ingredients pending, and the
-    ingredients leave stock when the kitchen marks "preparing". The job is
-    born already linked to the paid order, so it can never be invoiced twice.
-    Failures are swallowed: a kitchen-board hiccup must never roll back or
-    crash a completed sale.
+    The restaurant flow: the customer pays at the register and the kitchen gets
+    the order. By default (``kitchen_auto_complete``) the job is finalized right
+    away — ingredients leave stock at the sale and the job completes — so cooks
+    work off the printed chit and never touch a screen. With that setting off,
+    the job instead waits in the staged received→preparing→served flow (the
+    future KDS), with ingredients pending until the kitchen marks "preparing".
+
+    Either way the job is born linked to the paid order, so it can never be
+    invoiced twice. Failures are swallowed: a kitchen hiccup must never roll
+    back or crash a completed sale.
     """
     from apps.catalog.models import BillOfMaterials
 
@@ -582,6 +653,8 @@ def create_kitchen_job_for_order(*, order, request=None):
                     bom=bom,
                     output_units=line.quantity,
                 )
+            if settings.kitchen_auto_complete:
+                auto_complete_kitchen_job(job, request=request)
             return job
     except Exception:
         import logging
@@ -620,12 +693,14 @@ def _labor_variant():
 
 @transaction.atomic
 def invoice_job(*, job, register_session, payments_data, labor_total, request=None):
-    """Turn a job into a paid order.
+    """Turn a job into a paid order and finish it.
 
     Stock for consumed materials already moved when the technician used
     them, so the order is marked paid with ``stock_already_recorded`` — the
     same flag checkout uses — and the cash lands in the open register
-    session, keeping drawer reconciliation and the blind close intact.
+    session, keeping drawer reconciliation and the blind close intact. Once
+    paid, the job is completed (moved to its terminal stage), since collecting
+    payment is the end of the work.
     """
     from apps.payments.serializers import PaymentSerializer
     from apps.sales.models import Order, OrderLine
@@ -636,6 +711,13 @@ def invoice_job(*, job, register_session, payments_data, labor_total, request=No
         raise serializers.ValidationError({"detail": "Cancelled jobs cannot be invoiced."})
     if job.order_id is not None:
         raise serializers.ValidationError({"detail": "Job is already invoiced."})
+
+    # Materials sit "pending" from when they are added until a consuming stage
+    # finalizes them. Invoicing is a finalizing step too, so consume any still
+    # pending materials now: this moves their stock exactly once (already
+    # consumed materials are skipped) and bills every non-reversed material on
+    # the job — matching the materials total the cashier sees and pays.
+    consume_pending_materials(job, request=request)
 
     materials = [
         material
@@ -702,6 +784,9 @@ def invoice_job(*, job, register_session, payments_data, labor_total, request=No
 
     job.order = order
     job.save(update_fields=["order", "updated_at"])
+    # Invoicing is the end of the line: collecting payment finishes the job, so
+    # mark it complete on its terminal stage (no-op if it was already there).
+    _complete_job_at_terminal(job, request=request, note="اكتمل بعد إصدار الفاتورة")
     record_domain_event(
         name="operations.job.invoiced",
         event_type=AnalyticsEvent.EventType.AUDIT,

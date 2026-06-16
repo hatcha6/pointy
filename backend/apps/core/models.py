@@ -52,6 +52,12 @@ class ShopSettings(TimeStampedModel):
     enable_repair_operations = models.BooleanField(default=False)
     enable_production_operations = models.BooleanField(default=False)
     enable_kitchen_operations = models.BooleanField(default=False)
+    # Kitchen lane. When on (the default), a paid POS order's kitchen job is
+    # finalized immediately — recipe ingredients leave stock at the sale and the
+    # job is marked complete — so cooks just read the printed chit and never
+    # touch a screen. Turn it off to keep the staged received→preparing→served
+    # flow (the foundation for a future kitchen display / KDS).
+    kitchen_auto_complete = models.BooleanField(default=True)
     # Public job tracking page (relay-gated), like online invoices.
     enable_job_tracking = models.BooleanField(default=False)
     require_opening_cash = models.BooleanField(default=True)

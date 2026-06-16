@@ -155,6 +155,71 @@ class CatalogRepository {
     return Result.guard(() => _service.createProductCategory(draft));
   }
 
+  Future<Result<ProductCategory>> updateProductCategory({
+    required int id,
+    required ProductCategoryDraft draft,
+  }) async {
+    return Result.guard(
+      () => _service.updateProductCategory(id: id, changes: draft.toJson()),
+    );
+  }
+
+  /// Pin/unpin a category from the quick-access filter strip without touching
+  /// its other fields.
+  Future<Result<ProductCategory>> setCategoryQuickAccess({
+    required int id,
+    required bool isQuickAccess,
+  }) async {
+    return Result.guard(
+      () => _service.updateProductCategory(
+        id: id,
+        changes: {'is_quick_access': isQuickAccess},
+      ),
+    );
+  }
+
+  /// Persist the order of the quick-access strip. [orderedIds] is the desired
+  /// order; each category's `display_order` is set to its index.
+  Future<Result<void>> reorderQuickAccessCategories(
+    List<int> orderedIds,
+  ) async {
+    return Result.guard(() async {
+      for (var index = 0; index < orderedIds.length; index += 1) {
+        await _service.updateProductCategory(
+          id: orderedIds[index],
+          changes: {'display_order': index},
+        );
+      }
+    });
+  }
+
+  Future<Result<void>> deleteProductCategory(int id) async {
+    return Result.guard(() => _service.deleteProductCategory(id));
+  }
+
+  /// All active quick-access categories, ordered for the POS/purchasing strip.
+  Future<Result<List<ProductCategory>>> loadQuickAccessCategories() async {
+    return Result.guard(() async {
+      final categories = <ProductCategory>[];
+      var page = 1;
+      var hasMore = true;
+      while (hasMore) {
+        final result = await _service.fetchProductCategories(
+          query: const ProductCategoryQuery(
+            availability: ProductCategoryAvailabilityFilter.active,
+            ordering: ProductCategoryOrdering.manual,
+            quickAccessOnly: true,
+          ),
+          page: page,
+        );
+        categories.addAll(result.categories);
+        hasMore = result.hasMore;
+        page += 1;
+      }
+      return categories;
+    });
+  }
+
   Future<Result<VariantOptionValuePage>> loadVariantOptionValues({
     VariantOptionValueQuery query = const VariantOptionValueQuery(),
     int page = 1,

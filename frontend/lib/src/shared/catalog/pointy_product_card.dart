@@ -3,6 +3,13 @@ import 'package:flutter/material.dart';
 import '../design/design.dart';
 import 'pointy_product_image_frame.dart';
 
+/// Catalog tile used across the POS and purchasing catalogs.
+///
+/// The card is built for fast, touch-first scanning: a large product image,
+/// the name, and one decision-critical line — the **price** at the POS, the
+/// **stock status** when restocking. When the product is already in the open
+/// order it gains a quantity badge and a selected border so the operator can
+/// see what they have added without looking away at the cart.
 class PointyProductCard extends StatelessWidget {
   const PointyProductCard({
     super.key,
@@ -12,8 +19,10 @@ class PointyProductCard extends StatelessWidget {
     required this.fallbackText,
     this.sku,
     this.status,
+    this.stockLabel,
     this.onTap,
     this.enabled = true,
+    this.cartQuantity = 0,
   });
 
   final String title;
@@ -22,8 +31,16 @@ class PointyProductCard extends StatelessWidget {
   final String fallbackText;
   final String? sku;
   final Widget? status;
+
+  /// Secondary information shown in place of the price when [priceLabel] is
+  /// empty (used by purchasing to surface stock instead of a sale price).
+  final Widget? stockLabel;
   final VoidCallback? onTap;
   final bool enabled;
+
+  /// Quantity of this product already in the open cart/draft. When greater
+  /// than zero the card shows a badge and a selected treatment.
+  final double cartQuantity;
 
   @override
   Widget build(BuildContext context) {
@@ -31,6 +48,11 @@ class PointyProductCard extends StatelessWidget {
     final theme = Theme.of(context);
     final resolvedSku = sku?.trim() ?? '';
     final resolvedPrice = priceLabel.trim();
+    final inCart = cartQuantity > 0;
+    final inCartFill = Color.alphaBlend(
+      colors.primaryStrong.withValues(alpha: 0.07),
+      colors.surface,
+    );
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -45,16 +67,22 @@ class PointyProductCard extends StatelessWidget {
         return Semantics(
           button: onTap != null,
           enabled: enabled,
+          selected: inCart,
           child: Opacity(
             opacity: enabled ? 1 : 0.58,
             child: Material(
-              color: colors.surface,
+              color: inCart ? inCartFill : colors.surface,
               elevation: enabled ? 1 : 0,
               shadowColor: colors.ink.withValues(alpha: 0.08),
               surfaceTintColor: Colors.transparent,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(PointyRadii.card),
-                side: BorderSide(color: colors.line.withValues(alpha: 0.88)),
+                side: BorderSide(
+                  color: inCart
+                      ? colors.primaryStrong
+                      : colors.line.withValues(alpha: 0.88),
+                  width: inCart ? 1.5 : 1,
+                ),
               ),
               clipBehavior: Clip.antiAlias,
               child: InkWell(
@@ -97,6 +125,14 @@ class PointyProductCard extends StatelessWidget {
                                 start: 8,
                                 child: _ProductCardBadge(child: status!),
                               ),
+                            if (inCart)
+                              PositionedDirectional(
+                                top: 8,
+                                end: 8,
+                                child: _CartQuantityBadge(
+                                  quantity: cartQuantity,
+                                ),
+                              ),
                           ],
                         ),
                       ),
@@ -129,24 +165,21 @@ class PointyProductCard extends StatelessWidget {
                       ),
                       if (resolvedPrice.isNotEmpty) ...[
                         SizedBox(height: contentGap),
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          children: [
-                            Expanded(
-                              child: Text(
-                                resolvedPrice,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: theme.textTheme.titleSmall?.copyWith(
-                                  color: colors.primaryStrong,
-                                  fontWeight: FontWeight.w900,
-                                ),
-                              ),
+                        _CardFooterRow(
+                          enabled: enabled,
+                          child: Text(
+                            resolvedPrice,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.titleSmall?.copyWith(
+                              color: colors.primaryStrong,
+                              fontWeight: FontWeight.w900,
                             ),
-                            const SizedBox(width: 8),
-                            _ProductCardActionCue(enabled: enabled),
-                          ],
+                          ),
                         ),
+                      ] else if (stockLabel != null) ...[
+                        SizedBox(height: contentGap),
+                        _CardFooterRow(enabled: enabled, child: stockLabel!),
                       ] else if (onTap != null) ...[
                         SizedBox(height: contentGap),
                         Align(
@@ -162,6 +195,27 @@ class PointyProductCard extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+/// A bottom row pairing a primary label (price/stock) with the add-to-order
+/// action cue, kept on one baseline so every card lines up.
+class _CardFooterRow extends StatelessWidget {
+  const _CardFooterRow({required this.enabled, required this.child});
+
+  final bool enabled;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Expanded(child: child),
+        const SizedBox(width: 8),
+        _ProductCardActionCue(enabled: enabled),
+      ],
     );
   }
 }
@@ -183,6 +237,52 @@ class _ProductCardBadge extends StatelessWidget {
       ),
       child: child,
     );
+  }
+}
+
+/// Filled badge showing how many of this product are already in the order.
+class _CartQuantityBadge extends StatelessWidget {
+  const _CartQuantityBadge({required this.quantity});
+
+  final double quantity;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.pointyColors;
+    final theme = Theme.of(context);
+
+    return Container(
+      constraints: const BoxConstraints(minWidth: 26),
+      height: 26,
+      padding: const EdgeInsets.symmetric(horizontal: 7),
+      decoration: BoxDecoration(
+        color: colors.primaryStrong,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: colors.surface, width: 1.5),
+        boxShadow: [
+          BoxShadow(
+            color: colors.ink.withValues(alpha: 0.16),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      alignment: Alignment.center,
+      child: Text(
+        _formatQuantity(quantity),
+        maxLines: 1,
+        style: PointyTypography.numeric(
+          theme.textTheme.labelMedium ?? const TextStyle(),
+        ).copyWith(color: colors.surface, fontWeight: FontWeight.w900),
+      ),
+    );
+  }
+
+  static String _formatQuantity(double quantity) {
+    if (quantity == quantity.roundToDouble()) {
+      return quantity.toInt().toString();
+    }
+    return quantity.toStringAsFixed(quantity < 10 ? 1 : 0);
   }
 }
 

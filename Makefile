@@ -239,6 +239,18 @@ frontend-web: frontend-install ## Run the Flutter app as a local web server.
 frontend-preview: frontend-install ## Run the stock-count UI preview harness as a local web server.
 	cd "$(FRONTEND_DIR)" && $(FLUTTER) run -d web-server --web-hostname $(WEB_HOST) --web-port $(WEB_PORT) -t lib/dev/stock_count_preview.dart
 
+frontend-operations-preview: frontend-install ## Run the operations UI preview harness as a local web server.
+	cd "$(FRONTEND_DIR)" && $(FLUTTER) run -d web-server --web-hostname $(WEB_HOST) --web-port $(WEB_PORT) -t lib/dev/operations_preview.dart
+
+frontend-categories-preview: frontend-install ## Run the categories UI preview harness as a local web server.
+	cd "$(FRONTEND_DIR)" && $(FLUTTER) run -d web-server --web-hostname $(WEB_HOST) --web-port $(WEB_PORT) -t lib/dev/categories_preview.dart
+
+frontend-discounts-preview: frontend-install ## Run the discounts UI preview harness as a local web server.
+	cd "$(FRONTEND_DIR)" && $(FLUTTER) run -d web-server --web-hostname $(WEB_HOST) --web-port $(WEB_PORT) -t lib/dev/discounts_preview.dart
+
+frontend-pos-preview: frontend-install ## Run the POS/purchasing catalog UI preview harness as a local web server.
+	cd "$(FRONTEND_DIR)" && $(FLUTTER) run -d web-server --web-hostname $(WEB_HOST) --web-port $(WEB_PORT) -t lib/dev/pos_preview.dart
+
 frontend-test: frontend-install ## Run Flutter tests.
 	cd "$(FRONTEND_DIR)" && $(FLUTTER) test
 

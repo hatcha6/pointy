@@ -45,8 +45,15 @@ It supports two complementary modes via a `?screen=` query param:
 
 1. Add a `frontend-<feature>-preview` `make` target and a launch.json config (so
    the preview tool can start it) pointing at `-t lib/dev/<feature>_preview.dart`.
-2. Start the server (preview tool `preview_start`, or `make`). First compile is
-   ~60–90s; wait for `flutter-view` to exist in the DOM, then screenshot.
+2. Start the server (preview tool `preview_start`, or `make`). **A black/blank
+   canvas after start is almost never a slow compile — it's that the preview
+   browser loaded the page before the dev server finished serving the built app
+   and it does NOT auto-refresh.** Once the server log shows "is being served
+   at" (a few seconds), force one reload — `preview_eval` with
+   `window.location.reload()`, or just navigate to a `?screen=` URL — and the app
+   paints immediately. Do NOT passively wait for `flutter-view`/a frame to
+   appear; reload to make it appear. (Compiling is fast; the wait was a browser
+   refresh bug.)
 3. Navigate between surfaces by setting the URL, not by clicking — Flutter web
    renders to a `<canvas>`, so DOM-based tools (clicks by selector, accessibility
    snapshot, CSS inspect) do **not** see widgets. Use `preview_eval` with
@@ -55,11 +62,13 @@ It supports two complementary modes via a `?screen=` query param:
    Flutter web.
 4. For the board, size the viewport large (e.g. 1500x4000) before screenshotting
    so Flutter paints every frame (it only paints what is inside the viewport).
-5. After editing Dart, you must recompile: stop and restart the preview server
-   (`flutter run` under the preview tool can't receive a hot-restart keypress).
-   Changing only the `?screen=` URL does not recompile.
-6. After `preview_resize`, the first screenshot can show a black band (a
-   repaint-timing artifact, not a layout bug); resize once more or re-screenshot.
+5. After editing Dart, recompile by stopping and restarting the preview server
+   (`flutter run` under the preview tool can't receive a hot-restart keypress),
+   then reload the page per step 2. Navigating to a `?screen=` URL reloads (so it
+   picks up a finished build and forces a paint) but does not itself recompile.
+6. If a screenshot is black/blank or shows a black band (e.g. right after
+   `preview_resize`), it's the same paint-nudge issue as step 2 — reload or
+   resize once more to force a repaint; it's not a layout bug.
 
 ### Cloning the harness for another route
 

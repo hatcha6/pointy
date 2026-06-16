@@ -2,10 +2,11 @@ import django_filters
 from django.core.cache import cache
 from decimal import Decimal
 
-from django.db.models import DecimalField, Count, Q, Sum, Value
+from django.db.models import DecimalField, Count, ProtectedError, Q, Sum, Value
 from django.db.models.functions import Coalesce
 from rest_framework import parsers, status, viewsets
 from rest_framework.decorators import action
+from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
@@ -50,7 +51,7 @@ class ProductCategoryFilter(django_filters.FilterSet):
 
     class Meta:
         model = ProductCategory
-        fields = ("is_active", "parent", "root")
+        fields = ("is_active", "parent", "root", "is_quick_access")
 
     def filter_root(self, queryset, name, value):
         return queryset.filter(parent__isnull=bool(value))
@@ -101,15 +102,35 @@ class ProductCategoryViewSet(viewsets.ModelViewSet):
     queryset = ProductCategory.objects.all()
     filterset_class = ProductCategoryFilter
     search_fields = ("name", "description")
-    ordering_fields = ("name", "created_at", "updated_at")
+    ordering_fields = ("display_order", "name", "created_at", "updated_at")
 
     def get_queryset(self):
+        # distinct=True on both aggregates: counting two separate reverse
+        # relations (children and products) in one query would otherwise
+        # multiply the rows via the join fan-out.
         return (
             super()
             .get_queryset()
-            .annotate(children_count=Count("children"))
-            .order_by("name", "id")
+            .annotate(
+                children_count=Count("children", distinct=True),
+                product_count=Count("products", distinct=True),
+            )
+            .order_by("display_order", "name", "id")
         )
+
+    def perform_destroy(self, instance):
+        # Subcategories use on_delete=PROTECT; turn the resulting ProtectedError
+        # into a clean 400 instead of a 500 so the client can explain it.
+        try:
+            instance.delete()
+        except ProtectedError:
+            raise ValidationError(
+                {
+                    "detail": "Move or delete the subcategories before "
+                    "deleting this category.",
+                    "code": "has_children",
+                }
+            )
 
 
 class ProductViewSet(viewsets.ModelViewSet):

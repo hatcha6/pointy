@@ -5,6 +5,7 @@ import '../../../../data/models/card_payment_receipt.dart';
 import '../../../../data/models/sale_order.dart';
 import '../../../../shared/components/components.dart';
 import '../../../../shared/decimal_text_input_formatter.dart';
+import '../../../../shared/design/design.dart';
 import '../../../../shared/formatters.dart';
 import '../../../../shared/payment_labels.dart';
 import '../../../../shared/responsive/responsive.dart';
@@ -55,13 +56,27 @@ class TenderLineEditor extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final spacing = AdaptiveSpacing.of(context);
+    final colors = context.pointyColors;
 
-    return Card(
-      margin: EdgeInsets.zero,
+    return Material(
+      color: isSelected
+          ? Color.alphaBlend(
+              colors.primaryStrong.withValues(alpha: 0.06),
+              colors.surface,
+            )
+          : colors.surface,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(PointyRadii.card),
+        side: BorderSide(
+          color: isSelected ? colors.primaryStrong : colors.line,
+          width: isSelected ? 1.5 : 1,
+        ),
+      ),
+      clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onSelected,
         child: Padding(
-          padding: EdgeInsetsDirectional.all(spacing.sm),
+          padding: EdgeInsetsDirectional.all(spacing.md),
           child: LayoutBuilder(
             builder: (context, constraints) {
               final amountField = TextField(

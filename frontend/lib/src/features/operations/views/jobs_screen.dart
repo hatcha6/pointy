@@ -15,51 +15,18 @@ import '../../../data/repositories/operations_repository.dart';
 import '../../../shared/app_navigation_drawer.dart';
 import '../../../shared/units.dart';
 import '../../../shared/components/components.dart';
-import '../../../shared/date_formatters.dart';
 import '../../../shared/design/design.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../../../shared/shell/shell.dart';
 import '../view_models/jobs_board_view_model.dart';
 import '../view_models/recipes_view_model.dart';
 import 'job_intake_wizard.dart';
+import 'operations_ui.dart';
 import 'recipes_page.dart';
 
 export '../../../shared/units.dart' show formatQuantity, unitLabel;
-
-String jobTypeLabel(AppLocalizations l10n, OperationsJobType type) {
-  return switch (type) {
-    OperationsJobType.repair => l10n.jobTypeRepair,
-    OperationsJobType.production => l10n.jobTypeProduction,
-    OperationsJobType.kitchen => l10n.jobTypeKitchen,
-    OperationsJobType.workOrder => l10n.jobTypeWorkOrder,
-  };
-}
-
-String jobPriorityLabel(AppLocalizations l10n, OperationsJobPriority priority) {
-  return switch (priority) {
-    OperationsJobPriority.low => l10n.jobPriorityLow,
-    OperationsJobPriority.normal => l10n.jobPriorityNormal,
-    OperationsJobPriority.high => l10n.jobPriorityHigh,
-    OperationsJobPriority.urgent => l10n.jobPriorityUrgent,
-  };
-}
-
-String jobStatusLabel(AppLocalizations l10n, OperationsJobStatus status) {
-  return switch (status) {
-    OperationsJobStatus.open => l10n.jobStatusOpen,
-    OperationsJobStatus.completed => l10n.jobStatusCompleted,
-    OperationsJobStatus.cancelled => l10n.jobStatusCancelled,
-  };
-}
-
-IconData jobTypeIcon(OperationsJobType type) {
-  return switch (type) {
-    OperationsJobType.repair => Icons.build_outlined,
-    OperationsJobType.production => Icons.precision_manufacturing_outlined,
-    OperationsJobType.kitchen => Icons.restaurant_outlined,
-    OperationsJobType.workOrder => Icons.assignment_outlined,
-  };
-}
+export 'operations_ui.dart'
+    show jobPriorityLabel, jobStatusLabel, jobTypeIcon, jobTypeLabel;
 
 class JobsScreen extends StatefulWidget {
   const JobsScreen({
@@ -144,7 +111,8 @@ class _JobsScreenState extends State<JobsScreen> {
               ),
             ],
           ),
-          floatingActionButton: widget.capabilities.canCreateJobs &&
+          floatingActionButton:
+              widget.capabilities.canCreateJobs &&
                   viewModel.enabledTemplates.isNotEmpty
               ? FloatingActionButton.extended(
                   onPressed: viewModel.isMutating ? null : _openNewJobMenu,
@@ -162,7 +130,8 @@ class _JobsScreenState extends State<JobsScreen> {
     final viewModel = widget.viewModel;
     final spacing = AdaptiveSpacing.of(context);
 
-    if (viewModel.isLoading && viewModel.jobs.isEmpty &&
+    if (viewModel.isLoading &&
+        viewModel.jobs.isEmpty &&
         viewModel.templates.isEmpty) {
       return const PointyLoadingArea();
     }
@@ -181,11 +150,19 @@ class _JobsScreenState extends State<JobsScreen> {
     return Column(
       children: [
         Padding(
-          padding: EdgeInsets.fromLTRB(spacing.md, spacing.sm, spacing.md, 0),
-          child: _FilterBar(
-            searchController: _searchController,
-            onSearchChanged: _onSearchChanged,
-            viewModel: viewModel,
+          padding: EdgeInsets.fromLTRB(
+            spacing.pageHorizontal,
+            spacing.sm,
+            spacing.pageHorizontal,
+            0,
+          ),
+          child: AdaptiveMaxWidth(
+            width: AppContentWidth.list,
+            child: _FilterBar(
+              searchController: _searchController,
+              onSearchChanged: _onSearchChanged,
+              viewModel: viewModel,
+            ),
           ),
         ),
         Expanded(child: _buildJobsArea(context, l10n)),
@@ -203,7 +180,8 @@ class _JobsScreenState extends State<JobsScreen> {
         icon: Icons.handyman_outlined,
         title: l10n.jobsEmptyTitle,
         message: l10n.jobsEmptyMessage,
-        action: widget.capabilities.canCreateJobs &&
+        action:
+            widget.capabilities.canCreateJobs &&
                 viewModel.enabledTemplates.isNotEmpty
             ? FilledButton.icon(
                 onPressed: _openNewJobMenu,
@@ -219,17 +197,20 @@ class _JobsScreenState extends State<JobsScreen> {
         padding: spacing.pagePadding,
         children: [
           AdaptiveMaxWidth(
-            width: AppContentWidth.form,
+            width: AppContentWidth.detail,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                for (final job in viewModel.jobs)
+                for (final job in viewModel.jobs) ...[
                   _JobCard(
                     job: job,
+                    stagePosition: jobStagePosition(job, viewModel.templates),
                     isBusy: _advancingJobIds.contains(job.id),
                     onTap: () => widget.onOpenJob(job),
                     onAdvance: null,
                   ),
+                  SizedBox(height: spacing.sm),
+                ],
               ],
             ),
           ),
@@ -261,23 +242,33 @@ class _JobsScreenState extends State<JobsScreen> {
       padding: spacing.pagePadding,
       children: [
         AdaptiveMaxWidth(
-          width: AppContentWidth.form,
+          width: AppContentWidth.detail,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               for (final template in templates) ...[
                 if (templates.length > 1)
-                  PointySectionHeader(
-                    title: template.name,
-                    leading: Icon(jobTypeIcon(template.jobType)),
+                  Padding(
+                    padding: EdgeInsetsDirectional.only(
+                      top: spacing.sm,
+                      bottom: spacing.xs,
+                    ),
+                    child: Row(
+                      children: [
+                        OperationsIconBadge(
+                          icon: jobTypeIcon(template.jobType),
+                          size: 32,
+                        ),
+                        SizedBox(width: spacing.sm),
+                        Text(
+                          template.name,
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(fontWeight: FontWeight.w800),
+                        ),
+                      ],
+                    ),
                   ),
-                for (final stage in template.stages)
-                  ..._stageGroup(
-                    context,
-                    stage,
-                    widget.viewModel.jobsByStage(template)[stage.id] ??
-                        const [],
-                  ),
+                ..._stageGroups(context, template),
                 SizedBox(height: spacing.md),
               ],
             ],
@@ -287,41 +278,34 @@ class _JobsScreenState extends State<JobsScreen> {
     );
   }
 
-  List<Widget> _stageGroup(
-    BuildContext context,
-    WorkflowStage stage,
-    List<OperationsJob> jobs,
-  ) {
-    final l10n = AppLocalizations.of(context)!;
+  List<Widget> _stageGroups(BuildContext context, WorkflowTemplate template) {
     final spacing = AdaptiveSpacing.of(context);
-    return [
-      Padding(
-        padding: EdgeInsets.symmetric(vertical: spacing.xs),
-        child: Row(
-          children: [
-            Expanded(
-              child: Text(
-                stage.name,
-                style: Theme.of(context).textTheme.titleSmall,
-              ),
-            ),
-            PointyStatusPill(
-              label: l10n.jobCountLabel(jobs.length),
-              color: jobs.isEmpty
-                  ? context.pointyColors.mutedInk
-                  : context.pointyColors.primaryStrong,
-            ),
-          ],
-        ),
-      ),
-      for (final job in jobs)
-        _JobCard(
-          job: job,
-          isBusy: _advancingJobIds.contains(job.id),
-          onTap: () => widget.onOpenJob(job),
-          onAdvance: job.nextStage == null ? null : () => _advanceJob(job),
-        ),
-    ];
+    final byStage = widget.viewModel.jobsByStage(template);
+    final widgets = <Widget>[];
+    for (final stage in template.stages) {
+      final jobs = byStage[stage.id] ?? const [];
+      // Hide empty stages: an active board should show work, not a wall of
+      // zero-count headers.
+      if (jobs.isEmpty) {
+        continue;
+      }
+      widgets.add(_StageHeader(name: stage.name, count: jobs.length));
+      widgets.add(SizedBox(height: spacing.sm));
+      for (final job in jobs) {
+        widgets.add(
+          _JobCard(
+            job: job,
+            stagePosition: jobStagePosition(job, widget.viewModel.templates),
+            isBusy: _advancingJobIds.contains(job.id),
+            onTap: () => widget.onOpenJob(job),
+            onAdvance: job.nextStage == null ? null : () => _advanceJob(job),
+          ),
+        );
+        widgets.add(SizedBox(height: spacing.sm));
+      }
+      widgets.add(SizedBox(height: spacing.sm));
+    }
+    return widgets;
   }
 
   Future<void> _openRecipes() async {
@@ -392,21 +376,29 @@ class _JobsScreenState extends State<JobsScreen> {
       builder: (sheetContext) => SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Padding(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsetsDirectional.fromSTEB(20, 8, 20, 4),
               child: Text(
                 l10n.newJobButton,
-                style: Theme.of(sheetContext).textTheme.titleMedium,
+                style: Theme.of(
+                  sheetContext,
+                ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
               ),
             ),
             for (final template in templates)
               ListTile(
-                leading: Icon(jobTypeIcon(template.jobType)),
+                leading: OperationsIconBadge(
+                  icon: jobTypeIcon(template.jobType),
+                  size: 40,
+                ),
                 title: Text(template.name),
                 subtitle: Text(jobTypeLabel(l10n, template.jobType)),
+                trailing: const PointyDisclosureChevron(),
                 onTap: () => Navigator.of(sheetContext).pop(template),
               ),
+            const SizedBox(height: 8),
           ],
         ),
       ),
@@ -454,10 +446,8 @@ class _JobsScreenState extends State<JobsScreen> {
 
     final draft = await showDialog<OperationsJobDraft>(
       context: context,
-      builder: (dialogContext) => _ProductionBatchDialog(
-        template: template,
-        boms: boms,
-      ),
+      builder: (dialogContext) =>
+          _ProductionBatchDialog(template: template, boms: boms),
     );
     if (draft == null || !mounted) {
       return;
@@ -510,40 +500,41 @@ class _FilterBar extends StatelessWidget {
           onChanged: onSearchChanged,
         ),
         SizedBox(height: spacing.sm),
+        SegmentedButton<OperationsJobStatus?>(
+          showSelectedIcon: false,
+          segments: [
+            ButtonSegment(
+              value: OperationsJobStatus.open,
+              label: Text(l10n.jobFilterOpenOnly),
+            ),
+            ButtonSegment(
+              value: OperationsJobStatus.completed,
+              label: Text(l10n.jobFilterDone),
+            ),
+            const ButtonSegment(value: null, label: _AllLabel()),
+          ],
+          selected: {viewModel.statusFilter},
+          onSelectionChanged: (selection) {
+            viewModel.statusFilter = selection.first;
+          },
+        ),
+        SizedBox(height: spacing.sm),
         SingleChildScrollView(
           scrollDirection: Axis.horizontal,
           child: Row(
             children: [
-              SegmentedButton<OperationsJobStatus?>(
-                segments: [
-                  ButtonSegment(
-                    value: OperationsJobStatus.open,
-                    label: Text(l10n.jobFilterOpenOnly),
-                  ),
-                  ButtonSegment(
-                    value: OperationsJobStatus.completed,
-                    label: Text(l10n.jobFilterDone),
-                  ),
-                  const ButtonSegment(value: null, label: _AllLabel()),
-                ],
-                selected: {viewModel.statusFilter},
-                onSelectionChanged: (selection) {
-                  viewModel.statusFilter = selection.first;
-                },
-              ),
-              SizedBox(width: spacing.sm),
               FilterChip(
+                avatar: const Icon(Icons.person_outline, size: 18),
                 label: Text(l10n.jobFilterMine),
                 selected: viewModel.assignedToMe,
                 onSelected: (selected) {
                   viewModel.assignedToMe = selected;
                 },
               ),
-              if (types.length > 1) ...[
-                SizedBox(width: spacing.sm),
+              if (types.length > 1)
                 for (final type in types)
                   Padding(
-                    padding: EdgeInsetsDirectional.only(end: spacing.xs),
+                    padding: EdgeInsetsDirectional.only(start: spacing.xs),
                     child: FilterChip(
                       avatar: Icon(jobTypeIcon(type), size: 18),
                       label: Text(jobTypeLabel(l10n, type)),
@@ -553,7 +544,6 @@ class _FilterBar extends StatelessWidget {
                       },
                     ),
                   ),
-              ],
             ],
           ),
         ),
@@ -571,15 +561,53 @@ class _AllLabel extends StatelessWidget {
   }
 }
 
+class _StageHeader extends StatelessWidget {
+  const _StageHeader({required this.name, required this.count});
+
+  final String name;
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.pointyColors;
+    final textTheme = Theme.of(context).textTheme;
+    return Row(
+      children: [
+        Expanded(
+          child: Text(
+            name,
+            style: textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800),
+          ),
+        ),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 2),
+          decoration: BoxDecoration(
+            color: colors.surfaceSunken,
+            borderRadius: BorderRadius.circular(999),
+          ),
+          child: Text(
+            '$count',
+            style: PointyTypography.numeric(
+              textTheme.labelMedium ?? const TextStyle(),
+            ).copyWith(color: colors.mutedInk, fontWeight: FontWeight.w800),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _JobCard extends StatelessWidget {
   const _JobCard({
     required this.job,
+    required this.stagePosition,
     required this.isBusy,
     required this.onTap,
     required this.onAdvance,
   });
 
   final OperationsJob job;
+  final ({int index, int total})? stagePosition;
   final bool isBusy;
   final VoidCallback onTap;
   final VoidCallback? onAdvance;
@@ -589,87 +617,181 @@ class _JobCard extends StatelessWidget {
     final l10n = AppLocalizations.of(context)!;
     final spacing = AdaptiveSpacing.of(context);
     final colors = context.pointyColors;
-    final subtitleParts = <String>[
+    final textTheme = Theme.of(context).textTheme;
+    final position = stagePosition;
+    final overdue =
+        job.isOpen && job.dueAt != null && job.dueAt!.isBefore(DateTime.now());
+    final subtitle = <String>[
       if (job.customerName.trim().isNotEmpty) job.customerName,
       if (job.outputVariantName.trim().isNotEmpty)
-        '${job.outputQuantity ?? ''} × ${job.outputVariantName}'.trim(),
-      if (job.dueAt != null)
-        '${l10n.jobDueAtLabel}: ${formatDateTime(job.dueAt!)}',
-    ];
+        '${job.outputQuantity ?? ''} × ${job.outputVariantName}'.trim()
+      else if (job.symptoms.trim().isNotEmpty)
+        job.symptoms,
+      if (job.assignedEmployeeName.trim().isNotEmpty)
+        '${l10n.jobAssignmentSection}: ${job.assignedEmployeeName}',
+    ].join(' · ');
 
-    return Card(
-      margin: EdgeInsets.only(bottom: spacing.sm),
+    return Material(
+      color: colors.surface,
+      borderRadius: BorderRadius.circular(PointyRadii.card),
       child: InkWell(
-        borderRadius: BorderRadius.circular(12),
         onTap: onTap,
-        child: Padding(
-          padding: EdgeInsets.all(spacing.sm),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      job.jobNumber,
-                      style: Theme.of(context).textTheme.titleSmall,
+        borderRadius: BorderRadius.circular(PointyRadii.card),
+        child: Ink(
+          decoration: BoxDecoration(
+            border: Border.all(color: colors.line),
+            borderRadius: BorderRadius.circular(PointyRadii.card),
+          ),
+          child: Padding(
+            padding: EdgeInsets.all(spacing.md),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    OperationsIconBadge(icon: jobTypeIcon(job.jobType)),
+                    SizedBox(width: spacing.md),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  job.jobNumber,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: PointyTypography.numeric(
+                                    textTheme.titleSmall ?? const TextStyle(),
+                                  ).copyWith(fontWeight: FontWeight.w800),
+                                ),
+                              ),
+                              if (job.priority != OperationsJobPriority.normal)
+                                Padding(
+                                  padding: EdgeInsetsDirectional.only(
+                                    start: spacing.xs,
+                                  ),
+                                  child: JobPriorityBadge(
+                                    priority: job.priority,
+                                  ),
+                                ),
+                              if (!job.isOpen)
+                                Padding(
+                                  padding: EdgeInsetsDirectional.only(
+                                    start: spacing.xs,
+                                  ),
+                                  child: _StatusPill(status: job.status),
+                                ),
+                            ],
+                          ),
+                          if (subtitle.isNotEmpty) ...[
+                            const SizedBox(height: 2),
+                            Text(
+                              subtitle,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: textTheme.bodySmall?.copyWith(
+                                color: colors.mutedInk,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                    SizedBox(width: spacing.xs),
+                    PointyDisclosureChevron(color: colors.mutedInk),
+                  ],
+                ),
+                if (position != null && job.isOpen) ...[
+                  SizedBox(height: spacing.md),
+                  JobStageProgressBar(
+                    currentIndex: position.index,
+                    total: position.total,
+                  ),
+                ],
+                if (overdue) ...[
+                  SizedBox(height: spacing.sm),
+                  Align(
+                    alignment: AlignmentDirectional.centerStart,
+                    child: PointyStatusPill(
+                      label: l10n.jobOverdueBadge,
+                      icon: Icons.schedule_outlined,
+                      color: colors.danger,
                     ),
                   ),
-                  if (job.priority != OperationsJobPriority.normal)
-                    PointyStatusPill(
-                      label: jobPriorityLabel(l10n, job.priority),
-                      icon: Icons.flag_outlined,
-                      color: switch (job.priority) {
-                        OperationsJobPriority.urgent => colors.danger,
-                        OperationsJobPriority.high => colors.warning,
-                        _ => colors.mutedInk,
-                      },
-                    ),
-                  if (job.status != OperationsJobStatus.open) ...[
-                    SizedBox(width: spacing.xs),
-                    PointyStatusPill(
-                      label: jobStatusLabel(l10n, job.status),
-                      color: job.status == OperationsJobStatus.completed
-                          ? colors.success
-                          : colors.danger,
-                    ),
-                  ],
-                  if (job.orderReceiptNumber.trim().isNotEmpty) ...[
-                    SizedBox(width: spacing.xs),
-                    PointyStatusPill(
-                      label: l10n.jobInvoicedBadge(job.orderReceiptNumber),
-                      icon: Icons.receipt_long_outlined,
-                      color: colors.success,
-                    ),
-                  ],
                 ],
-              ),
-              if (subtitleParts.isNotEmpty) ...[
-                SizedBox(height: spacing.xs),
-                Text(
-                  subtitleParts.join(' · '),
-                  style: Theme.of(context).textTheme.bodySmall,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
+                if (onAdvance != null && job.nextStage != null) ...[
+                  SizedBox(height: spacing.sm),
+                  _AdvanceButton(
+                    label: job.nextStage!.name,
+                    isBusy: isBusy,
+                    onPressed: onAdvance,
+                  ),
+                ],
               ],
-              if (onAdvance != null && job.nextStage != null) ...[
-                SizedBox(height: spacing.sm),
-                FilledButton.tonalIcon(
-                  onPressed: isBusy ? null : onAdvance,
-                  icon: isBusy
-                      ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.arrow_forward, size: 18),
-                  label: Text(l10n.jobNextActionButton(job.nextStage!.name)),
-                ),
-              ],
-            ],
+            ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _StatusPill extends StatelessWidget {
+  const _StatusPill({required this.status});
+
+  final OperationsJobStatus status;
+
+  @override
+  Widget build(BuildContext context) {
+    final visual = JobStatusVisual.of(context, status);
+    return PointyStatusPill(
+      label: visual.label,
+      icon: visual.icon,
+      color: visual.color,
+    );
+  }
+}
+
+class _AdvanceButton extends StatelessWidget {
+  const _AdvanceButton({
+    required this.label,
+    required this.isBusy,
+    required this.onPressed,
+  });
+
+  final String label;
+  final bool isBusy;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    return OutlinedButton(
+      onPressed: isBusy ? null : onPressed,
+      child: Row(
+        mainAxisSize: MainAxisSize.max,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          if (isBusy)
+            const SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          else
+            const Icon(Icons.arrow_forward, size: 18),
+          const SizedBox(width: 8),
+          Flexible(
+            child: Text(
+              l10n.jobNextActionButton(label),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -692,8 +814,8 @@ class _KanbanBoard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
     final spacing = AdaptiveSpacing.of(context);
+    final colors = context.pointyColors;
 
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
@@ -705,34 +827,34 @@ class _KanbanBoard extends StatelessWidget {
             Container(
               width: 320,
               margin: EdgeInsetsDirectional.only(end: spacing.md),
+              padding: EdgeInsets.all(spacing.sm),
+              decoration: BoxDecoration(
+                color: colors.surfaceSunken,
+                borderRadius: BorderRadius.circular(PointyRadii.card),
+              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          stage.name,
-                          style: Theme.of(context).textTheme.titleSmall,
-                        ),
-                      ),
-                      PointyStatusPill(
-                        label: l10n.jobCountLabel(
-                          (jobsByStage[stage.id] ?? const []).length,
-                        ),
-                      ),
-                    ],
+                  Padding(
+                    padding: EdgeInsets.all(spacing.xs),
+                    child: _StageHeader(
+                      name: stage.name,
+                      count: (jobsByStage[stage.id] ?? const []).length,
+                    ),
                   ),
-                  SizedBox(height: spacing.sm),
-                  for (final job in jobsByStage[stage.id] ?? const [])
+                  SizedBox(height: spacing.xs),
+                  for (final job in jobsByStage[stage.id] ?? const []) ...[
                     _JobCard(
                       job: job,
+                      stagePosition: jobStagePosition(job, [template]),
                       isBusy: advancingJobIds.contains(job.id),
                       onTap: () => onOpenJob(job),
                       onAdvance: job.nextStage == null
                           ? null
                           : () => onAdvance(job),
                     ),
+                    SizedBox(height: spacing.sm),
+                  ],
                 ],
               ),
             ),
@@ -766,8 +888,9 @@ class _ProductionBatchDialogState extends State<_ProductionBatchDialog> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final spacing = AdaptiveSpacing.of(context);
-    final outputName =
-        _bom.variantName.isEmpty ? _bom.productName : _bom.variantName;
+    final outputName = _bom.variantName.isEmpty
+        ? _bom.productName
+        : _bom.variantName;
 
     return AlertDialog(
       icon: const Icon(Icons.precision_manufacturing_outlined),

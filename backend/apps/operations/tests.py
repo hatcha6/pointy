@@ -22,7 +22,7 @@ from apps.employees.models import Employee
 from apps.inventory.models import StockItem
 from apps.sales.models import Order, RegisterSession
 from apps.sales.services import latest_sale_unit_cost
-from .models import Job, WorkflowStage, WorkflowTemplate
+from .models import Job, WorkflowTemplate
 from .services import LABOR_PRODUCT_SKU
 
 
@@ -326,12 +326,88 @@ class JobInvoiceTests(OperationsTestCase):
         self.assertEqual(job.order.status, Order.Status.PAID)
         self.assertEqual(job.order.total, Decimal("150.00"))
         self.assertEqual(job.order.sales_channel.slug, "pos")
+        # Collecting payment finishes the job: it lands on its terminal stage.
+        self.assertEqual(job.status, Job.Status.COMPLETED)
+        self.assertTrue(job.current_stage.is_terminal)
+        self.assertIsNotNone(job.completed_at)
         # Stock moved once, when the technician used the part.
         stock = StockItem.objects.get(variant=self.part_variant)
         self.assertEqual(stock.quantity_on_hand, 9)
         labor_line = job.order.lines.get(variant__sku=LABOR_PRODUCT_SKU)
         self.assertEqual(labor_line.unit_price, Decimal("30.00"))
         self.assertTrue(labor_line.variant.product.is_service)
+
+    def test_invoice_consumes_pending_materials_and_bills_them(self):
+        # The app adds materials "pending" (consume_now=False) by default, so
+        # invoicing must finalize them: move their stock and bill them, with the
+        # cashier's payment total matching the materials total they were shown.
+        client = authenticated_client(self.cashier)
+        data = self.create_repair_job(client=client)
+        tech_client = authenticated_client(self.technician)
+        material_response = tech_client.post(
+            reverse("job-add-material", args=[data["id"]]),
+            {"variant": self.part_variant.pk, "quantity": 1, "consume_now": False},
+            format="json",
+        )
+        self.assertEqual(material_response.status_code, status.HTTP_200_OK)
+        # Pending: stock has not moved yet.
+        self.assertEqual(
+            StockItem.objects.get(variant=self.part_variant).quantity_on_hand, 10
+        )
+        self.open_register(self.cashier)
+
+        response = client.post(
+            reverse("job-invoice", args=[data["id"]]),
+            {
+                "labor_total": "30.00",
+                "payments": [{"method": "cash", "amount": "150.00"}],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        job = Job.objects.get(pk=data["id"])
+        self.assertEqual(job.order.total, Decimal("150.00"))
+        self.assertEqual(job.status, Job.Status.COMPLETED)
+        self.assertTrue(job.materials.get().is_consumed)
+        # Stock moved exactly once, at invoice time.
+        self.assertEqual(
+            StockItem.objects.get(variant=self.part_variant).quantity_on_hand, 9
+        )
+
+    def test_invoice_skips_reversed_pending_material(self):
+        client = authenticated_client(self.cashier)
+        data = self.create_repair_job(client=client)
+        tech_client = authenticated_client(self.technician)
+        material_response = tech_client.post(
+            reverse("job-add-material", args=[data["id"]]),
+            {"variant": self.part_variant.pk, "quantity": 1, "consume_now": False},
+            format="json",
+        )
+        material_id = material_response.data["materials"][0]["id"]
+        reversal = tech_client.post(
+            reverse("job-reverse-material", args=[data["id"], material_id]),
+            format="json",
+        )
+        self.assertEqual(reversal.status_code, status.HTTP_200_OK, reversal.data)
+        self.open_register(self.cashier)
+
+        response = client.post(
+            reverse("job-invoice", args=[data["id"]]),
+            {
+                "labor_total": "30.00",
+                "payments": [{"method": "cash", "amount": "30.00"}],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        job = Job.objects.get(pk=data["id"])
+        self.assertEqual(job.order.total, Decimal("30.00"))
+        # A reversed pending material must never move stock.
+        self.assertEqual(
+            StockItem.objects.get(variant=self.part_variant).quantity_on_hand, 10
+        )
 
     def test_invoice_requires_matching_payment_total(self):
         client = authenticated_client(self.cashier)
@@ -582,7 +658,9 @@ class PublicJobTrackingTests(OperationsTestCase):
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
 
-class KitchenFromPosTests(OperationsTestCase):
+class _KitchenPosSetup(OperationsTestCase):
+    """Shared POS→kitchen fixture: a prepared 'burger' with a meat recipe."""
+
     def setUp(self):
         super().setUp()
         ShopSettings.load()
@@ -637,6 +715,14 @@ class KitchenFromPosTests(OperationsTestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
         return response.data
 
+
+class KitchenFromPosTests(_KitchenPosSetup):
+    """The staged lane (foundation for a future KDS): ingredients wait."""
+
+    def setUp(self):
+        super().setUp()
+        ShopSettings.objects.update(kitchen_auto_complete=False)
+
     def test_paid_order_opens_kitchen_job_with_weighted_ingredients(self):
         data = self.checkout_burgers(2)
 
@@ -680,6 +766,34 @@ class KitchenFromPosTests(OperationsTestCase):
         ShopSettings.objects.update(enable_kitchen_operations=False)
         data = self.checkout_burgers(1)
         self.assertFalse(Job.objects.filter(order_id=data["id"]).exists())
+
+
+class KitchenChitOnlyTests(_KitchenPosSetup):
+    """The default lane: the job auto-completes and consumes at checkout."""
+
+    def test_paid_order_auto_completes_job_and_consumes_ingredients(self):
+        data = self.checkout_burgers(2)
+
+        job = Job.objects.get(order_id=data["id"])
+        self.assertEqual(job.status, Job.Status.COMPLETED)
+        self.assertTrue(job.current_stage.is_terminal)
+        self.assertIsNotNone(job.completed_at)
+        material = job.materials.get()
+        self.assertEqual(material.quantity, Decimal("0.300"))
+        self.assertIsNotNone(material.consumed_at)
+        # Ingredients leave stock at the sale: 5.000 - 0.300.
+        self.assertEqual(
+            StockItem.objects.get(variant=self.meat.default_variant).quantity_on_hand,
+            Decimal("4.700"),
+        )
+        # Born linked to the paid POS order, so it is never invoiced separately.
+        self.assertEqual(job.order_id, data["id"])
+
+    def test_auto_completed_job_records_stage_event_to_terminal(self):
+        data = self.checkout_burgers(1)
+        job = Job.objects.get(order_id=data["id"])
+        terminal_event = job.stage_events.order_by("-id").first()
+        self.assertTrue(terminal_event.to_stage.is_terminal)
 
 
 class WeightedCheckoutTests(OperationsTestCase):

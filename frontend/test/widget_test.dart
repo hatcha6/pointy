@@ -2519,26 +2519,36 @@ void main() {
       find.widgetWithText(TextFormField, 'اسم الخصم'),
       'خصم الافتتاح',
     );
-    final wizardAction = find.byKey(
-      const ValueKey('discount_rule_save_button'),
+    final formScroll = find.byKey(const ValueKey('discount_rule_form_scroll'));
+    final saveButton = find.byKey(const ValueKey('discount_rule_save_button'));
+
+    // The form is a single scroll (no wizard steps): fill fields top to
+    // bottom, then save once.
+    final valueField = find.widgetWithText(TextFormField, 'قيمة الخصم');
+    await tester.dragUntilVisible(
+      valueField,
+      formScroll,
+      const Offset(0, -250),
     );
-    await tester.tap(wizardAction);
+    await tester.enterText(valueField, '10');
     await tester.pumpAndSettle();
-    await tester.enterText(
-      find.widgetWithText(TextFormField, 'قيمة الخصم'),
-      '10',
+
+    final productToggle = find.text('تطبيقه على منتجات محددة');
+    await tester.dragUntilVisible(
+      productToggle,
+      formScroll,
+      const Offset(0, -250),
     );
-    await tester.tap(wizardAction);
+    await tester.tap(productToggle);
     await tester.pumpAndSettle();
-    await tester.tap(find.text('تطبيقه على منتجات محددة'));
-    await tester.pumpAndSettle();
+
     final productPicker = find.byKey(
       const ValueKey('discount_product_picker_field'),
     );
     await tester.dragUntilVisible(
       productPicker,
-      find.byKey(const ValueKey('discount_rule_form_scroll')),
-      const Offset(0, -300),
+      formScroll,
+      const Offset(0, -250),
     );
     await tester.tap(productPicker);
     await tester.pumpAndSettle(const Duration(seconds: 1));
@@ -2556,11 +2566,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(wizardAction);
-    await tester.pumpAndSettle();
-    await tester.tap(wizardAction);
-    await tester.pumpAndSettle();
-    await tester.tap(wizardAction);
+    await tester.tap(saveButton);
     await tester.pumpAndSettle(const Duration(seconds: 1));
 
     expect(discountBody?['name'], 'خصم الافتتاح');
@@ -5063,6 +5069,17 @@ PosApiService _mockApiService({
         if (request.method == 'POST') {
           final body = jsonDecode(request.body) as Map<String, Object?>;
           return _jsonResponse({..._productCategoryJson(id: 9), ...body});
+        }
+
+        // The POS/purchasing quick-access strip and the category screen both
+        // request pinned categories; no fixture pins any, so return none.
+        if (request.url.queryParameters['is_quick_access'] == 'true') {
+          return _jsonResponse({
+            'count': 0,
+            'next': null,
+            'previous': null,
+            'results': <Object?>[],
+          });
         }
 
         final page =

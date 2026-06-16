@@ -1,5 +1,11 @@
 import 'package:flutter/material.dart';
 
+import '../design/design.dart';
+
+/// Shared scaffold for the filter / sort bottom sheets (product, invoice,
+/// purchase order, discount, activity log). Built on the Pointy palette so the
+/// sheets sit in lock-step with the rest of the app: a tinted header, quiet
+/// section labels, grouped option cards, and a sturdy reset / apply row.
 class QueryFilterSheet extends StatelessWidget {
   const QueryFilterSheet({
     super.key,
@@ -20,38 +26,28 @@ class QueryFilterSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
+    final colors = context.pointyColors;
+    final textTheme = Theme.of(context).textTheme;
 
     return Align(
       alignment: Alignment.topCenter,
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 640),
         child: ListView(
-          padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+          padding: const EdgeInsetsDirectional.fromSTEB(20, 4, 20, 20),
           shrinkWrap: true,
           children: [
             Row(
               children: [
-                DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: colorScheme.primaryContainer,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(10),
-                    child: Icon(
-                      Icons.tune,
-                      color: colorScheme.onPrimaryContainer,
-                    ),
-                  ),
-                ),
+                _HeaderIcon(),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Semantics(
                     header: true,
                     child: Text(
                       title,
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      style: textTheme.titleLarge?.copyWith(
+                        color: colors.ink,
                         fontWeight: FontWeight.w800,
                       ),
                     ),
@@ -60,17 +56,14 @@ class QueryFilterSheet extends StatelessWidget {
               ],
             ),
             ...children,
-            const SizedBox(height: 22),
+            const SizedBox(height: 24),
             Row(
               children: [
                 Expanded(
                   child: OutlinedButton(
                     onPressed: onReset,
                     style: OutlinedButton.styleFrom(
-                      minimumSize: const Size.fromHeight(50),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
+                      minimumSize: const Size.fromHeight(52),
                     ),
                     child: Text(resetLabel),
                   ),
@@ -80,10 +73,7 @@ class QueryFilterSheet extends StatelessWidget {
                   child: FilledButton(
                     onPressed: onApply,
                     style: FilledButton.styleFrom(
-                      minimumSize: const Size.fromHeight(50),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
+                      minimumSize: const Size.fromHeight(52),
                     ),
                     child: Text(applyLabel),
                   ),
@@ -92,6 +82,27 @@ class QueryFilterSheet extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _HeaderIcon extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.pointyColors;
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: Color.alphaBlend(
+          colors.primaryStrong.withValues(alpha: 0.10),
+          colors.surface,
+        ),
+        borderRadius: BorderRadius.circular(PointyRadii.card),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(10),
+        child: Icon(Icons.tune, color: colors.primaryStrong),
       ),
     );
   }
@@ -109,40 +120,47 @@ class QueryFilterSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
+    final colors = context.pointyColors;
+    final textTheme = Theme.of(context).textTheme;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Semantics(
-          header: true,
-          child: Text(
-            title,
-            style: Theme.of(
-              context,
-            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+        Padding(
+          padding: const EdgeInsetsDirectional.only(start: 2, bottom: 8),
+          child: Semantics(
+            header: true,
+            child: Text(
+              title,
+              style: textTheme.labelLarge?.copyWith(
+                color: colors.mutedInk,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
           ),
         ),
-        const SizedBox(height: 10),
         DecoratedBox(
           decoration: BoxDecoration(
-            color: colorScheme.surface,
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: colorScheme.outlineVariant),
+            color: colors.surface,
+            borderRadius: BorderRadius.circular(PointyRadii.card),
+            border: Border.all(color: colors.line),
           ),
-          child: Column(
-            children: [
-              for (final (index, child) in children.indexed) ...[
-                if (index > 0)
-                  Divider(
-                    height: 1,
-                    indent: 16,
-                    endIndent: 16,
-                    color: colorScheme.outlineVariant,
-                  ),
-                child,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(PointyRadii.card),
+            child: Column(
+              children: [
+                for (final (index, child) in children.indexed) ...[
+                  if (index > 0)
+                    Divider(
+                      height: 1,
+                      indent: 14,
+                      endIndent: 14,
+                      color: colors.line,
+                    ),
+                  child,
+                ],
               ],
-            ],
+            ),
           ),
         ),
       ],
@@ -166,31 +184,39 @@ class QueryFilterOptionTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final foreground = isSelected
-        ? colorScheme.onPrimaryContainer
-        : colorScheme.onSurface;
+    final colors = context.pointyColors;
+    final textTheme = Theme.of(context).textTheme;
+    final foreground = isSelected ? colors.primaryDark : colors.ink;
+    final selectedFill = Color.alphaBlend(
+      colors.primaryStrong.withValues(alpha: 0.10),
+      colors.surface,
+    );
 
     return Semantics(
       button: true,
       selected: isSelected,
       label: label,
       child: Material(
-        color: isSelected ? colorScheme.primaryContainer : Colors.transparent,
+        color: isSelected ? selectedFill : Colors.transparent,
         child: InkWell(
           onTap: onTap,
+          overlayColor: PointyComponentStyles.inkOverlay,
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
             child: Row(
               children: [
-                Icon(icon, color: foreground),
+                Icon(
+                  icon,
+                  size: 20,
+                  color: isSelected ? colors.primaryStrong : colors.mutedInk,
+                ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
                     label,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                    style: textTheme.bodyLarge?.copyWith(
                       color: foreground,
                       fontWeight: isSelected
                           ? FontWeight.w700
@@ -203,7 +229,8 @@ class QueryFilterOptionTile extends StatelessWidget {
                   isSelected
                       ? Icons.check_circle
                       : Icons.radio_button_unchecked,
-                  color: isSelected ? colorScheme.primary : colorScheme.outline,
+                  size: 22,
+                  color: isSelected ? colors.primaryStrong : colors.lineStrong,
                 ),
               ],
             ),

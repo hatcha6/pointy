@@ -8,6 +8,7 @@ import '../../../data/repositories/contact_repository.dart';
 import '../../../shared/app_navigation_drawer.dart';
 import '../../../shared/authorization_guards.dart';
 import '../../../shared/components/components.dart';
+import '../../../shared/design/design.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../../../shared/shell/shell.dart';
 import '../view_models/discount_details_view_model.dart';
@@ -262,23 +263,27 @@ class _DiscountRuleTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final colorScheme = Theme.of(context).colorScheme;
+    final colors = context.pointyColors;
     final canChange = capabilities.canChangeDiscountRule && !viewModel.isSaving;
     final canDelete = capabilities.canDeleteDiscountRule && !viewModel.isSaving;
-    final facts = [
-      if (rule.description.isNotEmpty) rule.description,
-      ...discountRuleFacts(l10n, rule),
-    ];
+    final targeted =
+        rule.products.isNotEmpty ||
+        rule.variants.isNotEmpty ||
+        rule.productCategories.isNotEmpty ||
+        rule.customers.isNotEmpty ||
+        rule.suppliers.isNotEmpty;
+    final subtitle = rule.description.trim().isNotEmpty
+        ? rule.description.trim()
+        : '${discountScopeLabel(l10n, rule.scope)} · '
+              '${targeted ? l10n.discountTargetedShort : l10n.discountSummaryAppliesAll}';
 
     return PointyDataRow(
       onTap: onOpenDetails,
       leading: CircleAvatar(
         backgroundColor: rule.isActive
-            ? colorScheme.primaryContainer
-            : colorScheme.surfaceContainerHighest,
-        foregroundColor: rule.isActive
-            ? colorScheme.onPrimaryContainer
-            : colorScheme.onSurfaceVariant,
+            ? PointyColors.primaryContainer
+            : colors.subtleFill,
+        foregroundColor: rule.isActive ? colors.primaryStrong : colors.mutedInk,
         child: Icon(
           rule.applicationType == DiscountApplicationType.couponCode
               ? Icons.confirmation_number_outlined
@@ -286,37 +291,38 @@ class _DiscountRuleTile extends StatelessWidget {
         ),
       ),
       title: rule.name,
-      subtitle: facts.join(' • '),
+      subtitle: subtitle,
       badges: [
-        _StatusChip(
+        PointyStatusPill(
+          label: discountValueText(l10n, rule),
+          icon: Icons.sell_outlined,
+          color: colors.primaryStrong,
+        ),
+        PointyStatusPill(
           label: rule.isActive
               ? l10n.discountStatusActive
               : l10n.discountStatusInactive,
           icon: rule.isActive
               ? Icons.check_circle_outline
               : Icons.pause_circle_outline,
+          color: rule.isActive ? colors.success : colors.mutedInk,
         ),
-        _StatusChip(
+        PointyStatusPill(
           label: discountChannelLabel(l10n, rule.channel),
           icon: Icons.compare_arrows_outlined,
+          color: colors.mutedInk,
         ),
-        _StatusChip(
-          label: discountApplicationLabel(l10n, rule.applicationType),
-          icon: Icons.rule_folder_outlined,
-        ),
-        _StatusChip(
-          label: discountScopeLabel(l10n, rule.scope),
-          icon: Icons.view_list_outlined,
-        ),
-        if (rule.exclusive)
-          _StatusChip(
-            label: l10n.discountExclusiveShort,
-            icon: Icons.block_outlined,
+        if (rule.couponCode.isNotEmpty)
+          PointyStatusPill(
+            label: rule.couponCode,
+            icon: Icons.confirmation_number_outlined,
+            color: PointyColors.accentAmber,
           ),
         if (rule.isArchived)
-          _StatusChip(
+          PointyStatusPill(
             label: l10n.discountArchivedLabel,
             icon: Icons.archive_outlined,
+            color: colors.mutedInk,
           ),
       ],
       actions: [
@@ -388,18 +394,6 @@ class _DiscountRuleTile extends StatelessWidget {
         ),
       ),
     );
-  }
-}
-
-class _StatusChip extends StatelessWidget {
-  const _StatusChip({required this.label, required this.icon});
-
-  final String label;
-  final IconData icon;
-
-  @override
-  Widget build(BuildContext context) {
-    return PointyStatusPill(label: label, icon: icon);
   }
 }
 

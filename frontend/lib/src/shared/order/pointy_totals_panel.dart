@@ -7,11 +7,16 @@ class PointyTotalLine {
     required this.label,
     required this.value,
     this.isStrong = false,
+    this.isMuted = false,
   });
 
   final String label;
   final String value;
   final bool isStrong;
+
+  /// Renders the line in a quieter tone — used for deductions (discounts) so
+  /// the subtotal and grand total keep the visual hierarchy.
+  final bool isMuted;
 }
 
 class PointyTotalsPanel extends StatelessWidget {
@@ -48,15 +53,20 @@ class _TotalLineView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.pointyColors;
-    final style = line.isStrong
-        ? (compact
-                  ? Theme.of(context).textTheme.titleMedium
-                  : Theme.of(context).textTheme.titleLarge)
-              ?.copyWith(color: colors.ink, fontWeight: FontWeight.w800)
-        : (compact
-                  ? Theme.of(context).textTheme.bodySmall
-                  : Theme.of(context).textTheme.bodyMedium)
-              ?.copyWith(color: colors.ink);
+    final textTheme = Theme.of(context).textTheme;
+    final TextStyle? style;
+    if (line.isStrong) {
+      style = (compact ? textTheme.titleMedium : textTheme.titleLarge)
+          ?.copyWith(color: colors.ink, fontWeight: FontWeight.w800);
+    } else if (line.isMuted) {
+      style = (compact ? textTheme.bodySmall : textTheme.bodyMedium)?.copyWith(
+        color: colors.mutedInk,
+      );
+    } else {
+      style = (compact ? textTheme.bodySmall : textTheme.bodyMedium)?.copyWith(
+        color: colors.ink,
+      );
+    }
 
     return Padding(
       padding: EdgeInsetsDirectional.symmetric(vertical: compact ? 1 : 3),

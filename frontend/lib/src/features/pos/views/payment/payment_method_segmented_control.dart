@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../../data/models/sale_order.dart';
+import '../../../../shared/design/design.dart';
 import '../../../../shared/payment_labels.dart';
 
 class PaymentMethodSegmentedControl extends StatelessWidget {
@@ -31,6 +32,7 @@ class PaymentMethodSegmentedControl extends StatelessWidget {
       return const SizedBox.shrink();
     }
 
+    final colors = context.pointyColors;
     final selectedSegment = splitTenderSelected
         ? _PaymentMethodSegment.splitTender
         : _PaymentMethodSegment.fromMethod(selectedMethod);
@@ -48,6 +50,22 @@ class PaymentMethodSegmentedControl extends StatelessWidget {
         const SizedBox(height: 8),
         SegmentedButton<_PaymentMethodSegment>(
           showSelectedIcon: false,
+          // Keep selection in the brand's teal language (the theme default is
+          // the amber secondaryContainer, which clashes with the rest of the
+          // checkout's teal selected states).
+          style: SegmentedButton.styleFrom(
+            backgroundColor: colors.surface,
+            foregroundColor: colors.ink,
+            selectedBackgroundColor: Color.alphaBlend(
+              colors.primaryStrong.withValues(alpha: 0.14),
+              colors.surface,
+            ),
+            selectedForegroundColor: colors.primaryDark,
+            side: BorderSide(color: colors.line),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(PointyRadii.chip),
+            ),
+          ),
           segments: [
             for (final method in enabledMethods)
               ButtonSegment(

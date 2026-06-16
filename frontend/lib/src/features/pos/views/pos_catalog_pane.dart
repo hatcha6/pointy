@@ -3,13 +3,13 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../core/authorization.dart';
 import '../../../core/result.dart';
+import '../../../data/models/cart_line.dart';
 import '../../../data/models/product.dart';
 import '../../../data/models/product_variant.dart';
 import '../../../shared/authorization_guards.dart';
 import '../../../shared/barcode/camera_barcode_scanner_sheet.dart';
 import '../../../shared/catalog/catalog.dart';
 import '../../../shared/components/components.dart';
-import '../../../shared/design/design.dart';
 import '../../../shared/infinite_scroll_grid.dart';
 import '../../../shared/product_query_controls.dart';
 import '../../../shared/product_tile.dart';
@@ -32,90 +32,58 @@ class PosCatalogPane extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final spacing = AdaptiveSpacing.of(context);
-    final colors = context.pointyColors;
 
-    return Padding(
-      padding: spacing.compactPadding,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          PointySectionHeader(
-            title: l10n.catalogTitle,
-            trailing: viewModel.isLoading
-                ? const SizedBox.square(
-                    dimension: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : null,
-            padding: EdgeInsetsDirectional.only(bottom: spacing.sm),
-          ),
-          if (viewModel.errorMessage != null) ...[
-            Text(
-              l10n.sampleCatalogNotice,
-              style: Theme.of(
-                context,
-              ).textTheme.bodySmall?.copyWith(color: colors.warning),
-            ),
-            SizedBox(height: spacing.sm),
-          ],
-          _PosProductLookupControls(
-            viewModel: viewModel,
-            capabilities: capabilities,
-          ),
-          SizedBox(height: spacing.sm),
-          PointyCategoryStrip<int>(
-            allLabel: l10n.posAllProductsFilterLabel,
-            items: [
-              for (final category in viewModel.query.categories)
-                if (category.name.trim().isNotEmpty)
-                  PointyCategoryStripItem(
-                    value: category.id,
-                    label: category.name,
-                  ),
-            ],
-            selectedValues: {
-              for (final category in viewModel.query.categories) category.id,
-            },
-            onSelectAll: () {
-              viewModel.applyQuery(
-                viewModel.query.copyWith(categories: const []),
-              );
-            },
-            onSelected: (categoryId) {
-              final category = viewModel.query.categories.firstWhere(
-                (category) => category.id == categoryId,
-              );
-              viewModel.applyQuery(
-                viewModel.query.copyWith(categories: [category]),
-              );
-            },
-          ),
-          if (viewModel.barcodeScanStatus != BarcodeScanStatus.idle) ...[
-            SizedBox(height: spacing.sm),
-            _BarcodeScanStatusLine(viewModel: viewModel),
-          ],
-          SizedBox(height: spacing.md),
-          Expanded(
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: colors.surface,
-                border: Border.all(color: colors.line),
-                borderRadius: BorderRadius.circular(PointyRadii.card),
-              ),
-              child: Padding(
-                padding: EdgeInsetsDirectional.all(spacing.sm),
-                child: _PosCatalogGrid(
-                  viewModel: viewModel,
-                  capabilities: capabilities,
-                  emptyMessage: l10n.emptyCatalog,
-                ),
-              ),
-            ),
-          ),
-        ],
+    return PointyCatalogPane(
+      title: l10n.catalogTitle,
+      isLoading: viewModel.isLoading,
+      resultCount: viewModel.isLoading && viewModel.products.isEmpty
+          ? null
+          : viewModel.products.length,
+      hasMoreResults: viewModel.hasMoreProducts,
+      notice: viewModel.errorMessage != null
+          ? PointyInlineMessage.warning(message: l10n.sampleCatalogNotice)
+          : null,
+      search: _PosProductLookupControls(
+        viewModel: viewModel,
+        capabilities: capabilities,
+      ),
+      categoryStrip: QuickAccessCategoryStrip(
+        catalogRepository: viewModel.catalogRepository,
+        selectedCategories: viewModel.query.categories,
+        allLabel: l10n.posAllProductsFilterLabel,
+        onSelectAll: () {
+          viewModel.applyQuery(viewModel.query.copyWith(categories: const []));
+        },
+        onSelectCategory: (category) {
+          viewModel.applyQuery(
+            viewModel.query.copyWith(categories: [category]),
+          );
+        },
+      ),
+      statusLine: viewModel.barcodeScanStatus != BarcodeScanStatus.idle
+          ? _BarcodeScanStatusLine(viewModel: viewModel)
+          : null,
+      grid: _PosCatalogGrid(
+        viewModel: viewModel,
+        capabilities: capabilities,
+        emptyMessage: l10n.emptyCatalog,
+        cartQuantities: _cartQuantitiesByProduct(viewModel.cart),
       ),
     );
+  }
+
+  /// Sums cart quantities per product so each catalog card can show how many
+  /// of that product are already in the open sale.
+  static Map<int, double> _cartQuantitiesByProduct(List<CartLine> cart) {
+    final quantities = <int, double>{};
+    for (final line in cart) {
+      quantities.update(
+        line.variant.productId,
+        (value) => value + line.quantity,
+        ifAbsent: () => line.quantity,
+      );
+    }
+    return quantities;
   }
 }
 
@@ -124,11 +92,13 @@ class _PosCatalogGrid extends StatelessWidget {
     required this.viewModel,
     required this.capabilities,
     required this.emptyMessage,
+    required this.cartQuantities,
   });
 
   final PosViewModel viewModel;
   final AuthorizationCapabilities capabilities;
   final String emptyMessage;
+  final Map<int, double> cartQuantities;
 
   @override
   Widget build(BuildContext context) {
@@ -158,6 +128,7 @@ class _PosCatalogGrid extends StatelessWidget {
                 return ProductTile(
                   key: ValueKey(product.id),
                   product: product,
+                  cartQuantity: cartQuantities[product.id] ?? 0,
                   onTap: canCheckout
                       ? () => _selectProduct(context, product)
                       : null,

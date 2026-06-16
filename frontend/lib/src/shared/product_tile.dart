@@ -6,6 +6,7 @@ import '../data/models/product_variant.dart';
 import 'formatters.dart';
 import 'catalog/pointy_product_card.dart';
 import 'catalog/pointy_product_row.dart';
+import 'catalog/stock_status_label.dart';
 import 'product_status_pill.dart';
 
 class ProductTile extends StatelessWidget {
@@ -14,6 +15,7 @@ class ProductTile extends StatelessWidget {
     required Product product,
     required this.onTap,
     this.showPrice = true,
+    this.cartQuantity = 0,
   }) : title = product.name,
        sku = product.effectiveSku,
        barcode = product.effectiveBarcode,
@@ -21,6 +23,7 @@ class ProductTile extends StatelessWidget {
        quantityOnHand = product.effectiveQuantityOnHand,
        isActive = product.isActive,
        imageUrl = product.primaryImage?.contentUrl,
+       _showStock = false,
        _product = product,
        _presentation = _ProductTilePresentation.card,
        _tableLayout = false;
@@ -30,6 +33,8 @@ class ProductTile extends StatelessWidget {
     required ProductVariant variant,
     required this.onTap,
     this.showPrice = true,
+    this.cartQuantity = 0,
+    bool showStock = false,
   }) : title = variant.displayLabel,
        sku = variant.sku,
        barcode = variant.barcode,
@@ -39,6 +44,7 @@ class ProductTile extends StatelessWidget {
        imageUrl =
            variant.primaryImage?.contentUrl ??
            variant.productDetail?.primaryImage?.contentUrl,
+       _showStock = showStock,
        _product = null,
        _presentation = _ProductTilePresentation.card,
        _tableLayout = false;
@@ -56,12 +62,18 @@ class ProductTile extends StatelessWidget {
        isActive = product.isActive,
        imageUrl = product.primaryImage?.contentUrl,
        showPrice = true,
+       cartQuantity = 0,
+       _showStock = false,
        _product = product,
        _presentation = _ProductTilePresentation.catalogRow,
        _tableLayout = tableLayout;
 
   final VoidCallback? onTap;
   final bool showPrice;
+
+  /// Quantity of this product already in the open cart/draft, surfaced as a
+  /// badge on the card so the operator can track what they have added.
+  final double cartQuantity;
   final String title;
   final String sku;
   final String barcode;
@@ -69,6 +81,7 @@ class ProductTile extends StatelessWidget {
   final double quantityOnHand;
   final bool isActive;
   final String? imageUrl;
+  final bool _showStock;
   final Product? _product;
   final _ProductTilePresentation _presentation;
   final bool _tableLayout;
@@ -91,7 +104,21 @@ class ProductTile extends StatelessWidget {
       priceLabel: showPrice ? formatMoney(unitPrice) : '',
       imageUrl: imageUrl,
       fallbackText: title,
-      status: ProductStatusPill(isActive: isActive, compact: true),
+      // The status pill is an exception flag, not decoration: an "available"
+      // tag on every card is noise (POS only lists active products, and the
+      // purchasing card already shows live stock). Surface it only when the
+      // product is inactive, which is the case the operator must notice.
+      status: isActive
+          ? null
+          : ProductStatusPill(isActive: isActive, compact: true),
+      stockLabel: _showStock
+          ? StockStatusLabel(
+              quantity: quantityOnHand,
+              isActive: isActive,
+              compact: true,
+            )
+          : null,
+      cartQuantity: cartQuantity,
       enabled: onTap != null,
       onTap: () => _handleTap(context),
     );
