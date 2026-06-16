@@ -3,6 +3,7 @@ import 'package:pointy_frontend/src/data/models/purchase_submission.dart';
 import 'package:pointy_frontend/src/data/models/sale_order.dart';
 import 'package:pointy_frontend/src/data/models/shop_settings.dart';
 import 'package:pointy_frontend/src/data/services/order_document_service.dart';
+import 'package:pointy_frontend/src/shared/pdf/pdf.dart';
 
 void main() {
   test('uses Arabic-safe filenames for sale and purchase PDFs', () {
@@ -144,12 +145,12 @@ void main() {
   });
 }
 
-class _TestFontLoader extends OrderDocumentFontLoader {
+class _TestFontLoader extends PointyPdfFontLoader {
   const _TestFontLoader();
 
   @override
-  Future<OrderDocumentFonts> load() async {
-    return OrderDocumentFonts.type1ForTests();
+  Future<PointyPdfFonts> load() async {
+    return PointyPdfFonts.type1ForTests();
   }
 }
 

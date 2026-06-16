@@ -19,6 +19,7 @@ import 'data/repositories/fraud_repository.dart';
 import 'data/repositories/inventory_repository.dart';
 import 'data/repositories/operations_repository.dart';
 import 'data/repositories/modifier_group_repository.dart';
+import 'data/repositories/price_checker_repository.dart';
 import 'data/repositories/printing_repository.dart';
 import 'data/repositories/purchase_repository.dart';
 import 'data/repositories/register_session_repository.dart';
@@ -82,6 +83,7 @@ class PointyAppDependencies {
     modifierGroupRepository = ModifierGroupRepository(service);
     shopSettingsRepository = ShopSettingsRepository(service);
     printingRepository = PrintingRepository(service);
+    priceCheckerRepository = PriceCheckerRepository(service);
     purchaseRepository = PurchaseRepository(service);
     stockCountRepository = StockCountRepository(service);
     userRepository = UserRepository(service);
@@ -133,6 +135,7 @@ class PointyAppDependencies {
   late final ModifierGroupRepository modifierGroupRepository;
   late final ShopSettingsRepository shopSettingsRepository;
   late final PrintingRepository printingRepository;
+  late final PriceCheckerRepository priceCheckerRepository;
   late final PurchaseRepository purchaseRepository;
   late final StockCountRepository stockCountRepository;
   late final UserRepository userRepository;

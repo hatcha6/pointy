@@ -222,7 +222,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
       builder: (dialogContext) => AlertDialog(
         icon: Icon(
           Icons.warning_amber_outlined,
-          color: Theme.of(dialogContext).colorScheme.error,
+          color: dialogContext.pointyColors.danger,
         ),
         title: Text(l10n.jobCancelConfirmTitle),
         content: Column(
@@ -243,7 +243,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
           ),
           FilledButton(
             style: FilledButton.styleFrom(
-              backgroundColor: Theme.of(dialogContext).colorScheme.error,
+              backgroundColor: dialogContext.pointyColors.danger,
             ),
             onPressed: () => Navigator.of(dialogContext).pop(true),
             child: Text(l10n.jobCancelAction),

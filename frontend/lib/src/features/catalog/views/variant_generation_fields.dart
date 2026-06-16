@@ -3,6 +3,7 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../data/models/variant_option.dart';
 import '../../../shared/decimal_text_input_formatter.dart';
+import '../../../shared/design/design.dart';
 import '../view_models/variant_generation.dart';
 
 class VariantOptionTemplateField extends StatelessWidget {
@@ -220,7 +221,7 @@ class _OptionValueGroup extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final colorScheme = Theme.of(context).colorScheme;
+    final colors = context.pointyColors;
     final visibleValues = [
       for (final value in option.values)
         if (value.isActive ||
@@ -230,9 +231,7 @@ class _OptionValueGroup extends StatelessWidget {
 
     return DecoratedBox(
       decoration: BoxDecoration(
-        border: Border.all(
-          color: hasError ? colorScheme.error : colorScheme.outlineVariant,
-        ),
+        border: Border.all(color: hasError ? colors.danger : colors.line),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Padding(
@@ -275,7 +274,7 @@ class _OptionValueGroup extends StatelessWidget {
               const SizedBox(height: 6),
               Text(
                 l10n.variantOptionValueRequired,
-                style: TextStyle(color: colorScheme.error),
+                style: TextStyle(color: colors.danger),
               ),
             ],
           ],
@@ -315,12 +314,12 @@ class _GeneratedVariantTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final colorScheme = Theme.of(context).colorScheme;
+    final colors = context.pointyColors;
 
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: colorScheme.surface,
-        border: Border.all(color: colorScheme.outlineVariant),
+        color: colors.surface,
+        border: Border.all(color: colors.line),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Padding(

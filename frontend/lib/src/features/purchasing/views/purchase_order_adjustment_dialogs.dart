@@ -61,7 +61,6 @@ class _PurchaseAdjustmentDialogState extends State<_PurchaseAdjustmentDialog> {
                 decoration: InputDecoration(
                   labelText: l10n.purchaseAdjustmentReasonLabel,
                   hintText: l10n.purchaseAdjustmentReasonHint,
-                  border: const OutlineInputBorder(),
                 ),
                 maxLines: 2,
               ),
@@ -136,6 +135,7 @@ class _PurchaseExchangeDialogState extends State<_PurchaseExchangeDialog> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    final colors = context.pointyColors;
     final screenWidth = MediaQuery.sizeOf(context).width;
     final dialogWidth = (screenWidth - 48).clamp(280.0, 640.0).toDouble();
     final isCompact = dialogWidth < 520;
@@ -217,7 +217,7 @@ class _PurchaseExchangeDialogState extends State<_PurchaseExchangeDialog> {
                 const SizedBox(height: 8),
                 Text(
                   l10n.purchaseExchangeInvalidLinesError,
-                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                  style: TextStyle(color: colors.danger),
                 ),
               ],
               const SizedBox(height: 12),
@@ -226,7 +226,6 @@ class _PurchaseExchangeDialogState extends State<_PurchaseExchangeDialog> {
                 decoration: InputDecoration(
                   labelText: l10n.purchaseAdjustmentReasonLabel,
                   hintText: l10n.purchaseAdjustmentReasonHint,
-                  border: const OutlineInputBorder(),
                 ),
                 maxLines: 2,
               ),
@@ -310,7 +309,6 @@ class _PurchaseReplacementLineInput extends StatelessWidget {
       initialValue: editor.option.variantId,
       decoration: InputDecoration(
         labelText: l10n.purchaseExchangeReplacementProductLabel,
-        border: const OutlineInputBorder(),
         isDense: true,
       ),
       items: [
@@ -345,7 +343,6 @@ class _PurchaseReplacementLineInput extends StatelessWidget {
       keyboardType: TextInputType.number,
       decoration: InputDecoration(
         labelText: l10n.purchaseExchangeReplacementQuantityLabel,
-        border: const OutlineInputBorder(),
         isDense: true,
       ),
       onChanged: (_) => onChanged(),
@@ -355,7 +352,6 @@ class _PurchaseReplacementLineInput extends StatelessWidget {
       keyboardType: const TextInputType.numberWithOptions(decimal: true),
       decoration: InputDecoration(
         labelText: l10n.purchaseExchangeReplacementUnitCostLabel,
-        border: const OutlineInputBorder(),
         isDense: true,
       ),
       onChanged: (_) => onChanged(),

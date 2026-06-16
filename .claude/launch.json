@@ -44,6 +44,18 @@
       "port": 8080
     },
     {
+      "name": "command-palette-preview",
+      "runtimeExecutable": "make",
+      "runtimeArgs": ["frontend-command-palette-preview"],
+      "port": 8080
+    },
+    {
+      "name": "price-checker-preview",
+      "runtimeExecutable": "make",
+      "runtimeArgs": ["frontend-price-checker-preview"],
+      "port": 8080
+    },
+    {
       "name": "relay",
       "runtimeExecutable": "make",
       "runtimeArgs": ["relay-run"],

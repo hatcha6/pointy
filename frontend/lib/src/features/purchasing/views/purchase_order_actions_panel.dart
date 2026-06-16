@@ -12,6 +12,7 @@ class _PurchaseOrderActions extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    final colors = context.pointyColors;
 
     return _Section(
       title: l10n.purchaseOrderActionsTitle,
@@ -22,21 +23,21 @@ class _PurchaseOrderActions extends StatelessWidget {
           if (viewModel.hasStatusError) ...[
             Text(
               _statusErrorMessage(l10n, viewModel.statusError),
-              style: TextStyle(color: Theme.of(context).colorScheme.error),
+              style: TextStyle(color: colors.danger),
             ),
             const SizedBox(height: 8),
           ],
           if (viewModel.hasAdjustmentError) ...[
             Text(
               _adjustmentErrorMessage(l10n, viewModel.adjustmentError),
-              style: TextStyle(color: Theme.of(context).colorScheme.error),
+              style: TextStyle(color: colors.danger),
             ),
             const SizedBox(height: 8),
           ],
           if (viewModel.hasPaymentError) ...[
             Text(
               l10n.purchaseOrderPaymentError,
-              style: TextStyle(color: Theme.of(context).colorScheme.error),
+              style: TextStyle(color: colors.danger),
             ),
             const SizedBox(height: 8),
           ],

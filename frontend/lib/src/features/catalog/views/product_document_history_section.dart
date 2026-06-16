@@ -8,6 +8,7 @@ import '../../../data/repositories/printing_repository.dart';
 import '../../../data/repositories/purchase_repository.dart';
 import '../../../data/repositories/shop_settings_repository.dart';
 import '../../../shared/components/components.dart';
+import '../../../shared/design/design.dart';
 import '../../purchasing/views/purchase_order_details_screen.dart';
 import '../../purchasing/views/purchase_order_list_screen.dart';
 import '../../register_sessions/views/session_orders.dart';
@@ -195,14 +196,14 @@ class _HistorySubsection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
+    final colors = context.pointyColors;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Row(
           children: [
-            Icon(icon, size: 20, color: colorScheme.primary),
+            Icon(icon, size: 20, color: colors.primaryStrong),
             const SizedBox(width: 8),
             Expanded(
               child: Text(

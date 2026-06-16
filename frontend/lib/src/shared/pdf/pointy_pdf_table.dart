@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
-import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
+
+import 'pointy_pdf_palette.dart';
 
 class PointyPdfTable {
   const PointyPdfTable({
@@ -49,23 +50,18 @@ class PointyPdfTable {
       valueFormatter: valueFormatter,
       border: null,
       headerDecoration: const pw.BoxDecoration(
-        color: _PointyPdfTableColors.tableHeader,
+        color: PointyPdfPalette.accent,
         borderRadius: pw.BorderRadius.all(pw.Radius.circular(6)),
       ),
-      rowDecoration: const pw.BoxDecoration(color: _PointyPdfTableColors.white),
+      rowDecoration: const pw.BoxDecoration(color: PointyPdfPalette.white),
       // Zebra striping keeps long tables readable at a glance.
-      oddRowDecoration: const pw.BoxDecoration(
-        color: _PointyPdfTableColors.zebra,
-      ),
+      oddRowDecoration: const pw.BoxDecoration(color: PointyPdfPalette.zebra),
       headerStyle: pw.TextStyle(
-        color: _PointyPdfTableColors.white,
+        color: PointyPdfPalette.white,
         fontSize: 11,
         fontWeight: pw.FontWeight.bold,
       ),
-      cellStyle: const pw.TextStyle(
-        color: _PointyPdfTableColors.ink,
-        fontSize: 11,
-      ),
+      cellStyle: const pw.TextStyle(color: PointyPdfPalette.ink, fontSize: 11),
       cellPadding: const pw.EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       headerPadding: const pw.EdgeInsets.symmetric(
         horizontal: 12,
@@ -206,11 +202,4 @@ class PointyPdfTableDisplayData {
   final List<List<String>> rows;
   final List<double> columnFlex;
   final List<pw.Alignment> columnAlignments;
-}
-
-class _PointyPdfTableColors {
-  static const ink = PdfColor.fromInt(0xff172026);
-  static const tableHeader = PdfColor.fromInt(0xff0b6b64);
-  static const white = PdfColor.fromInt(0xffffffff);
-  static const zebra = PdfColor.fromInt(0xfff4f7f6);
 }

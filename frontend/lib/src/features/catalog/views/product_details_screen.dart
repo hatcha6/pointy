@@ -12,6 +12,7 @@ import '../../../data/repositories/purchase_repository.dart';
 import '../../../data/repositories/shop_settings_repository.dart';
 import '../../../shared/authorization_guards.dart';
 import '../../../shared/components/components.dart';
+import '../../../shared/design/design.dart';
 import '../../../shared/formatters.dart';
 import '../../../shared/product_image_thumbnail.dart';
 import '../../../shared/product_status_pill.dart';
@@ -125,7 +126,7 @@ class ProductDetailsView extends StatelessWidget {
             if (viewModel.errorMessage == 'product_detail_load_error') ...[
               Text(
                 l10n.productDetailLoadError,
-                style: TextStyle(color: Theme.of(context).colorScheme.error),
+                style: TextStyle(color: context.pointyColors.danger),
               ),
               const SizedBox(height: 12),
             ],
@@ -534,10 +535,10 @@ class _SummaryChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
+    final colors = context.pointyColors;
     return DecoratedBox(
       decoration: BoxDecoration(
-        border: Border.all(color: colorScheme.outlineVariant),
+        border: Border.all(color: colors.line),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Padding(
@@ -545,7 +546,7 @@ class _SummaryChip extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 18, color: colorScheme.primary),
+            Icon(icon, size: 18, color: colors.primaryStrong),
             const SizedBox(width: 6),
             Text(label, style: Theme.of(context).textTheme.labelSmall),
             const SizedBox(width: 8),

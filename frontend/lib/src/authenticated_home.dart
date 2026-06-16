@@ -54,6 +54,7 @@ import 'features/reports/views/report_pdf_preview_screen.dart';
 import 'features/reports/views/reports_screen.dart';
 import 'features/settings/view_models/modifier_groups_view_model.dart';
 import 'features/settings/view_models/prep_stations_view_model.dart';
+import 'features/settings/view_models/price_checkers_view_model.dart';
 import 'features/settings/view_models/sales_channels_view_model.dart';
 import 'features/settings/view_models/shop_settings_view_model.dart';
 import 'features/settings/views/shop_settings_screen.dart';
@@ -62,6 +63,17 @@ import 'features/users/view_models/user_management_view_model.dart';
 import 'features/users/view_models/user_details_view_model.dart';
 import 'features/users/views/user_details_screen.dart';
 import 'features/users/views/user_management_screen.dart';
+import 'data/models/contact.dart';
+import 'data/models/product.dart';
+import 'data/models/product_page.dart';
+import 'data/models/product_query.dart';
+import 'data/models/sale_order_page.dart';
+import 'features/catalog/view_models/product_stock_view_model.dart';
+import 'features/catalog/views/product_variant_details_screen.dart';
+import 'features/contacts/views/customer_details_screen.dart';
+import 'features/contacts/views/supplier_details_screen.dart';
+import 'shared/command_palette/command_palette.dart';
+import 'shared/formatters.dart';
 import 'shared/navigation/app_navigation.dart';
 
 class AuthenticatedHome extends StatelessWidget {
@@ -92,10 +104,14 @@ class AuthenticatedHome extends StatelessWidget {
         : capabilities.canViewOperations
         ? routes.operationsRouteBuilder(context)
         : routes.buildPosScreen(context);
-    return NotificationCenterHost(
-      viewModel: dependencies.notificationCenterViewModel,
-      onOpenAlert: routes.openBusinessAlert,
-      child: home,
+    return CommandPaletteScope(
+      key: commandPaletteScopeKey,
+      sources: routes.buildCommandSources(context),
+      child: NotificationCenterHost(
+        viewModel: dependencies.notificationCenterViewModel,
+        onOpenAlert: routes.openBusinessAlert,
+        child: home,
+      ),
     );
   }
 }
@@ -142,6 +158,7 @@ class _AuthenticatedRoutes implements AppNavigation {
 
   @override
   void logout(BuildContext context) {
+    commandPaletteRecents.clear();
     Navigator.of(context).popUntil((route) => route.isFirst);
     dependencies.authViewModel.logout();
   }
@@ -444,6 +461,9 @@ class _AuthenticatedRoutes implements AppNavigation {
         salesChannelsViewModel: SalesChannelsViewModel(
           dependencies.salesChannelRepository,
           analyticsEngine: dependencies.analyticsEngine,
+        ),
+        priceCheckersViewModel: PriceCheckersViewModel(
+          dependencies.priceCheckerRepository,
         ),
         workflowsViewModel: WorkflowsViewModel(
           dependencies.operationsRepository,
@@ -1029,6 +1049,304 @@ class _AuthenticatedRoutes implements AppNavigation {
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  // ---------------------------------------------------------------------------
+  // Command palette
+  // ---------------------------------------------------------------------------
+
+  /// The sources the global command palette searches: quick actions and
+  /// recently opened items, instant screen navigation, plus debounced,
+  /// capability-gated entity search that opens the matching detail screen.
+  List<CommandSource> buildCommandSources(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final showStock = capabilities.canViewStock;
+    return [
+      _quickActionsSource(l10n),
+      RecentsCommandSource(l10n.commandPaletteRecentsSection),
+      NavigationCommandSource(this),
+      if (capabilities.canViewCatalogManagement)
+        AsyncCommandSource<Product>(
+          labelBuilder: (sectionL10n) =>
+              sectionL10n.commandPaletteProductsSection,
+          fetch: _searchProducts,
+          toItem: (product) => CommandItem(
+            id: 'product-${product.id}',
+            icon: Icons.inventory_2_outlined,
+            title: product.name,
+            subtitle: _productSubtitle(l10n, product, showStock: showStock),
+            trailing: formatMoney(product.effectiveUnitPrice),
+            recordRecent: true,
+            onSelect: (ctx) => _openProduct(ctx, product),
+          ),
+        ),
+      if (capabilities.canManageContacts) ...[
+        AsyncCommandSource<Customer>(
+          labelBuilder: (sectionL10n) =>
+              sectionL10n.commandPaletteCustomersSection,
+          fetch: _searchCustomers,
+          toItem: (customer) => CommandItem(
+            id: 'customer-${customer.id}',
+            icon: Icons.person_outline,
+            title: customer.fullName,
+            subtitle: [
+              if (customer.phone.trim().isNotEmpty) customer.phone.trim(),
+              if (customer.customerNumber.trim().isNotEmpty)
+                customer.customerNumber.trim(),
+            ].join(' · '),
+            recordRecent: true,
+            onSelect: (ctx) => _openCustomer(ctx, customer),
+          ),
+        ),
+        AsyncCommandSource<SupplierContact>(
+          labelBuilder: (sectionL10n) =>
+              sectionL10n.commandPaletteSuppliersSection,
+          fetch: _searchSuppliers,
+          toItem: (supplier) => CommandItem(
+            id: 'supplier-${supplier.id}',
+            icon: Icons.local_shipping_outlined,
+            title: supplier.name,
+            subtitle: [
+              if (supplier.contactName.trim().isNotEmpty)
+                supplier.contactName.trim(),
+              if (supplier.phone.trim().isNotEmpty) supplier.phone.trim(),
+            ].join(' · '),
+            recordRecent: true,
+            onSelect: (ctx) => _openSupplier(ctx, supplier),
+          ),
+        ),
+      ],
+      if (capabilities.canViewInvoices)
+        AsyncCommandSource<SaleOrder>(
+          labelBuilder: (sectionL10n) =>
+              sectionL10n.commandPaletteInvoicesSection,
+          fetch: _searchInvoices,
+          toItem: (order) {
+            final receipt = order.receiptNumber;
+            return CommandItem(
+              id: 'invoice-${order.id}',
+              icon: Icons.request_quote_outlined,
+              title: receipt == null || receipt.isEmpty
+                  ? '#${order.id}'
+                  : receipt,
+              trailing: formatMoney(order.total),
+              recordRecent: true,
+              onSelect: (ctx) => _openInvoice(ctx, order),
+            );
+          },
+        ),
+      if (capabilities.canAccessPurchasing)
+        AsyncCommandSource<PurchaseOrder>(
+          labelBuilder: (sectionL10n) =>
+              sectionL10n.commandPalettePurchaseOrdersSection,
+          fetch: _searchPurchaseOrders,
+          toItem: (order) => CommandItem(
+            id: 'po-${order.id}',
+            icon: Icons.add_shopping_cart_outlined,
+            title: order.orderNumber.isEmpty
+                ? '#${order.id}'
+                : order.orderNumber,
+            trailing: formatMoney(order.total),
+            recordRecent: true,
+            onSelect: (ctx) => _openPurchaseOrder(ctx, order),
+          ),
+        ),
+    ];
+  }
+
+  /// Quick actions — verbs that jump straight into a creation flow.
+  StaticCommandSource _quickActionsSource(AppLocalizations l10n) {
+    return StaticCommandSource(
+      label: l10n.commandPaletteActionsSection,
+      items: [
+        if (capabilities.canAccessPos)
+          CommandItem(
+            id: 'action-new-sale',
+            icon: Icons.point_of_sale_outlined,
+            title: l10n.commandPaletteActionNewSale,
+            keywords: const ['sale', 'pos', 'بيع'],
+            onSelect: (ctx) => navigateTo(ctx, AppNavigationDestination.pos),
+          ),
+        if (capabilities.canCreatePurchaseOrder)
+          CommandItem(
+            id: 'action-new-purchase-order',
+            icon: Icons.add_shopping_cart_outlined,
+            title: l10n.commandPaletteActionNewPurchaseOrder,
+            keywords: const ['purchase', 'po', 'شراء'],
+            onSelect: _openNewPurchaseOrder,
+          ),
+        if (capabilities.canManageExpenses)
+          CommandItem(
+            id: 'action-record-expense',
+            icon: Icons.payments_outlined,
+            title: l10n.commandPaletteActionRecordExpense,
+            keywords: const ['expense', 'مصروف'],
+            onSelect: (ctx) =>
+                navigateTo(ctx, AppNavigationDestination.expenses),
+          ),
+        if (capabilities.canCountStock)
+          CommandItem(
+            id: 'action-stock-count',
+            icon: Icons.fact_check_outlined,
+            title: l10n.commandPaletteActionStockCount,
+            keywords: const ['stock count', 'جرد'],
+            onSelect: (ctx) =>
+                navigateTo(ctx, AppNavigationDestination.stockCount),
+          ),
+      ],
+    );
+  }
+
+  String _productSubtitle(
+    AppLocalizations l10n,
+    Product product, {
+    required bool showStock,
+  }) {
+    return [
+      if (showStock)
+        l10n.commandPaletteStockLabel(
+          _formatStock(product.effectiveQuantityOnHand),
+        ),
+      if (product.effectiveBarcode.isNotEmpty)
+        product.effectiveBarcode
+      else if (product.effectiveSku.isNotEmpty)
+        product.effectiveSku,
+    ].join(' · ');
+  }
+
+  String _formatStock(double quantity) {
+    if (quantity == quantity.roundToDouble()) {
+      return quantity.toInt().toString();
+    }
+    return quantity.toStringAsFixed(2);
+  }
+
+  void _openNewPurchaseOrder(BuildContext context) {
+    dependencies.purchaseViewModel.clearDraft(trackLineDeletes: false);
+    push(context, createPurchaseOrderRouteBuilder);
+  }
+
+  Future<List<Product>> _searchProducts(String query) async {
+    final result = await dependencies.catalogRepository.loadProducts(
+      query: ProductQuery(search: query),
+    );
+    return switch (result) {
+      Ok<ProductPage>() => result.value.products,
+      Error<ProductPage>() => const [],
+    };
+  }
+
+  Future<List<Customer>> _searchCustomers(String query) async {
+    final result = await dependencies.contactRepository.loadCustomers(
+      query: ContactQuery(search: query),
+    );
+    return switch (result) {
+      Ok<CustomerPage>() => result.value.customers,
+      Error<CustomerPage>() => const [],
+    };
+  }
+
+  Future<List<SupplierContact>> _searchSuppliers(String query) async {
+    final result = await dependencies.contactRepository.loadSuppliers(
+      query: ContactQuery(search: query),
+    );
+    return switch (result) {
+      Ok<SupplierPage>() => result.value.suppliers,
+      Error<SupplierPage>() => const [],
+    };
+  }
+
+  Future<List<SaleOrder>> _searchInvoices(String query) async {
+    final result = await dependencies.saleRepository.loadOrders(
+      query: SaleOrderQuery(search: query),
+    );
+    return switch (result) {
+      Ok<SaleOrderPage>() => result.value.orders,
+      Error<SaleOrderPage>() => const [],
+    };
+  }
+
+  Future<List<PurchaseOrder>> _searchPurchaseOrders(String query) async {
+    final result = await dependencies.purchaseRepository.loadPurchaseOrders(
+      query: PurchaseOrderQuery(search: query),
+    );
+    return switch (result) {
+      Ok<PurchaseOrderPage>() => result.value.orders,
+      Error<PurchaseOrderPage>() => const [],
+    };
+  }
+
+  void _openProduct(BuildContext context, Product product) {
+    _trackScreenView('product_variant_details');
+    push(
+      context,
+      (_) => ProductVariantDetailsScreen(
+        viewModel: ProductStockViewModel(
+          dependencies.inventoryRepository,
+          dependencies.purchaseRepository,
+          product,
+          analyticsEngine: dependencies.analyticsEngine,
+        ),
+        printingRepository: dependencies.printingRepository,
+        capabilities: capabilities,
+        analyticsEngine: dependencies.analyticsEngine,
+      ),
+    );
+  }
+
+  void _openCustomer(BuildContext context, Customer customer) {
+    _trackScreenView('customer_details');
+    push(
+      context,
+      (_) => CustomerDetailsScreen(
+        customer: customer,
+        contactRepository: dependencies.contactRepository,
+      ),
+    );
+  }
+
+  void _openSupplier(BuildContext context, SupplierContact supplier) {
+    _trackScreenView('supplier_details');
+    push(
+      context,
+      (_) => SupplierDetailsScreen(
+        supplier: supplier,
+        contactRepository: dependencies.contactRepository,
+        purchaseRepository: dependencies.purchaseRepository,
+        printingRepository: dependencies.printingRepository,
+        shopSettingsRepository: dependencies.shopSettingsRepository,
+        capabilities: capabilities,
+      ),
+    );
+  }
+
+  void _openInvoice(BuildContext context, SaleOrder order) {
+    _trackScreenView('invoice_details');
+    push(
+      context,
+      (_) => InvoiceDetailsScreen(
+        saleRepository: dependencies.saleRepository,
+        printingRepository: dependencies.printingRepository,
+        shopSettingsRepository: dependencies.shopSettingsRepository,
+        initialOrder: order,
+        capabilities: capabilities,
+        analyticsEngine: dependencies.analyticsEngine,
+      ),
+    );
+  }
+
+  void _openPurchaseOrder(BuildContext context, PurchaseOrder order) {
+    _trackScreenView('purchase_order_details');
+    push(
+      context,
+      (_) => PurchaseOrderDetailsScreen(
+        purchaseRepository: dependencies.purchaseRepository,
+        printingRepository: dependencies.printingRepository,
+        shopSettingsRepository: dependencies.shopSettingsRepository,
+        initialOrder: order,
+        capabilities: capabilities,
+      ),
+    );
   }
 }
 

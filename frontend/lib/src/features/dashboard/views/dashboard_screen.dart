@@ -1386,6 +1386,7 @@ class _SalesTrendChart extends StatelessWidget {
     if (points.every((point) => point.netSales == 0)) {
       return const _EmptyWidgetData();
     }
+    final colors = context.pointyColors;
     final maxY = _maxValue(points.map((point) => point.netSales));
     return SizedBox(
       height: 220,
@@ -1403,14 +1404,12 @@ class _SalesTrendChart extends StatelessWidget {
                   FlSpot(index.toDouble(), points[index].netSales),
               ],
               isCurved: true,
-              color: Theme.of(context).colorScheme.primary,
+              color: colors.primaryStrong,
               barWidth: 3,
               dotData: const FlDotData(show: false),
               belowBarData: BarAreaData(
                 show: true,
-                color: Theme.of(
-                  context,
-                ).colorScheme.primary.withValues(alpha: 0.14),
+                color: colors.primaryStrong.withValues(alpha: 0.14),
               ),
             ),
           ],
@@ -1449,7 +1448,7 @@ class _HourlySalesChart extends StatelessWidget {
                     toY: point.netSales,
                     width: 9,
                     borderRadius: BorderRadius.circular(4),
-                    color: Theme.of(context).colorScheme.secondary,
+                    color: context.pointyColors.accentAmber,
                   ),
                 ],
               ),
@@ -1489,7 +1488,7 @@ class _PaymentMixChart extends StatelessWidget {
                 radius: 74,
                 color: colors[index % colors.length],
                 titleStyle: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: Theme.of(context).colorScheme.onPrimary,
+                  color: context.pointyColors.surface,
                   fontWeight: FontWeight.w700,
                 ),
               ),

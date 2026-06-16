@@ -6,6 +6,7 @@ import '../../../data/models/product_variant.dart';
 import '../../../data/models/product_variant_draft.dart';
 import '../../../data/models/variant_option.dart';
 import '../../../shared/decimal_text_input_formatter.dart';
+import '../../../shared/design/design.dart';
 import '../view_models/product_details_view_model.dart';
 import '../view_models/variant_generation.dart';
 import 'variant_option_creation_dialogs.dart';
@@ -157,7 +158,7 @@ class _ProductVariantGenerationSheetState
       listenable: widget.viewModel,
       builder: (context, _) {
         return Material(
-          color: Theme.of(context).colorScheme.surface,
+          color: context.pointyColors.surface,
           child: SingleChildScrollView(
             padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
             child: Form(
@@ -169,7 +170,7 @@ class _ProductVariantGenerationSheetState
                     children: [
                       Icon(
                         Icons.auto_awesome_motion_outlined,
-                        color: Theme.of(context).colorScheme.primary,
+                        color: context.pointyColors.primaryStrong,
                       ),
                       const SizedBox(width: 8),
                       Expanded(
@@ -249,9 +250,7 @@ class _ProductVariantGenerationSheetState
                     const SizedBox(height: 8),
                     Text(
                       _generationErrorText(context)!,
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.error,
-                      ),
+                      style: TextStyle(color: context.pointyColors.danger),
                     ),
                   ],
                   if (widget.viewModel.errorMessage ==
@@ -259,9 +258,7 @@ class _ProductVariantGenerationSheetState
                     const SizedBox(height: 8),
                     Text(
                       l10n.variantGenerateError,
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.error,
-                      ),
+                      style: TextStyle(color: context.pointyColors.danger),
                     ),
                   ],
                   const SizedBox(height: 16),

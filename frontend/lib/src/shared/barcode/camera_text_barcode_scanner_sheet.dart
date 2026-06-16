@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
+import '../design/design.dart';
+
 Future<String?> showCameraTextBarcodeScannerSheet(
   BuildContext context, {
   required String title,
@@ -177,15 +179,15 @@ class _ScannerMessage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
+    final colors = context.pointyColors;
 
     return ColoredBox(
-      color: colorScheme.surfaceContainerHighest,
+      color: colors.surfaceSunken,
       child: Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 36, color: colorScheme.primary),
+            Icon(icon, size: 36, color: colors.primaryStrong),
             const SizedBox(height: 8),
             Text(message, textAlign: TextAlign.center),
           ],

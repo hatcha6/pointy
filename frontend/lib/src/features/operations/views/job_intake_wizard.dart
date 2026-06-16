@@ -526,9 +526,7 @@ class _JobIntakeWizardState extends State<JobIntakeWizard> {
         ListTile(
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
-            side: BorderSide(
-              color: Theme.of(context).colorScheme.outlineVariant,
-            ),
+            side: BorderSide(color: context.pointyColors.line),
           ),
           leading: const Icon(Icons.event_outlined),
           title: Text(l10n.jobDueAtLabel),

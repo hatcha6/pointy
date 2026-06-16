@@ -180,163 +180,45 @@ class _DiscountHero extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final spacing = AdaptiveSpacing.of(context);
-    final textTheme = Theme.of(context).textTheme;
-    const onPrimary = PointyColors.surface;
+    final isCoupon = rule.applicationType == DiscountApplicationType.couponCode;
 
-    return Container(
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: AlignmentDirectional.topStart,
-          end: AlignmentDirectional.bottomEnd,
-          colors: [PointyColors.primaryStrong, PointyColors.primaryDark],
+    return PointyDetailHero(
+      icon: isCoupon
+          ? Icons.confirmation_number_outlined
+          : Icons.auto_awesome_outlined,
+      title: rule.name,
+      value: discountValueText(l10n, rule),
+      valueSubtitle:
+          '${discountValueTypeLabel(l10n, rule.valueType)} · '
+          '${discountScopeLabel(l10n, rule.scope)}',
+      description: rule.description,
+      pills: [
+        PointyHeroPill(
+          label: rule.isActive
+              ? l10n.discountStatusActive
+              : l10n.discountStatusInactive,
+          icon: rule.isActive
+              ? Icons.check_circle_outline
+              : Icons.pause_circle_outline,
         ),
-        borderRadius: BorderRadius.circular(PointyRadii.card),
-        boxShadow: PointyShadows.raised,
-      ),
-      padding: EdgeInsets.all(spacing.lg),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 44,
-                height: 44,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: onPrimary.withValues(alpha: 0.16),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(
-                  rule.applicationType == DiscountApplicationType.couponCode
-                      ? Icons.confirmation_number_outlined
-                      : Icons.auto_awesome_outlined,
-                  color: onPrimary,
-                ),
-              ),
-              SizedBox(width: spacing.sm),
-              Expanded(
-                child: Text(
-                  rule.name,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: textTheme.titleLarge?.copyWith(
-                    color: onPrimary,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          SizedBox(height: spacing.md),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                discountValueText(l10n, rule),
-                style: textTheme.displaySmall?.copyWith(
-                  color: onPrimary,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-              SizedBox(width: spacing.sm),
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsetsDirectional.only(bottom: 6),
-                  child: Text(
-                    '${discountValueTypeLabel(l10n, rule.valueType)} · '
-                    '${discountScopeLabel(l10n, rule.scope)}',
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: textTheme.bodyMedium?.copyWith(
-                      color: onPrimary.withValues(alpha: 0.85),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          if (rule.description.trim().isNotEmpty) ...[
-            SizedBox(height: spacing.sm),
-            Text(
-              rule.description.trim(),
-              maxLines: 3,
-              overflow: TextOverflow.ellipsis,
-              style: textTheme.bodyMedium?.copyWith(
-                color: onPrimary.withValues(alpha: 0.85),
-              ),
-            ),
-          ],
-          SizedBox(height: spacing.md),
-          Wrap(
-            spacing: spacing.xs,
-            runSpacing: spacing.xs,
-            children: [
-              _HeroPill(
-                label: rule.isActive
-                    ? l10n.discountStatusActive
-                    : l10n.discountStatusInactive,
-                icon: rule.isActive
-                    ? Icons.check_circle_outline
-                    : Icons.pause_circle_outline,
-              ),
-              _HeroPill(
-                label: discountChannelLabel(l10n, rule.channel),
-                icon: Icons.compare_arrows_outlined,
-              ),
-              _HeroPill(
-                label: rule.couponCode.isNotEmpty
-                    ? rule.couponCode
-                    : discountApplicationLabel(l10n, rule.applicationType),
-                icon: rule.applicationType == DiscountApplicationType.couponCode
-                    ? Icons.confirmation_number_outlined
-                    : Icons.bolt_outlined,
-              ),
-              if (rule.isArchived)
-                _HeroPill(
-                  label: l10n.discountArchivedLabel,
-                  icon: Icons.archive_outlined,
-                ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _HeroPill extends StatelessWidget {
-  const _HeroPill({required this.label, required this.icon});
-
-  final String label;
-  final IconData icon;
-
-  @override
-  Widget build(BuildContext context) {
-    const onPrimary = PointyColors.surface;
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: onPrimary.withValues(alpha: 0.16),
-        borderRadius: BorderRadius.circular(PointyRadii.chip),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 15, color: onPrimary),
-            const SizedBox(width: 5),
-            Text(
-              label,
-              style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                color: onPrimary,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ],
+        PointyHeroPill(
+          label: discountChannelLabel(l10n, rule.channel),
+          icon: Icons.compare_arrows_outlined,
         ),
-      ),
+        PointyHeroPill(
+          label: rule.couponCode.isNotEmpty
+              ? rule.couponCode
+              : discountApplicationLabel(l10n, rule.applicationType),
+          icon: isCoupon
+              ? Icons.confirmation_number_outlined
+              : Icons.bolt_outlined,
+        ),
+        if (rule.isArchived)
+          PointyHeroPill(
+            label: l10n.discountArchivedLabel,
+            icon: Icons.archive_outlined,
+          ),
+      ],
     );
   }
 }
@@ -518,9 +400,6 @@ class _ImpactCallout extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final colors = context.pointyColors;
-    final spacing = AdaptiveSpacing.of(context);
-    final textTheme = Theme.of(context).textTheme;
     final lift = incrementality.liftPercent;
     final headline = lift == null
         ? l10n.discountDetailsLiftUnavailable
@@ -528,45 +407,13 @@ class _ImpactCallout extends StatelessWidget {
             l10n.discountPercentageValue(lift.toStringAsFixed(2)),
           );
 
-    return Container(
-      decoration: BoxDecoration(
-        color: PointyColors.primaryContainer,
-        borderRadius: BorderRadius.circular(PointyRadii.chip),
-        border: Border.all(color: colors.primaryStrong.withValues(alpha: 0.20)),
-      ),
-      padding: EdgeInsets.all(spacing.md),
-      child: Row(
-        children: [
-          Icon(Icons.insights_outlined, color: colors.primaryStrong),
-          SizedBox(width: spacing.sm),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  headline,
-                  style: textTheme.titleMedium?.copyWith(
-                    color: colors.primaryDark,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  l10n.discountDetailsImpactMethodNote,
-                  style: textTheme.bodySmall?.copyWith(
-                    color: colors.primaryStrong,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          SizedBox(width: spacing.sm),
-          PointyStatusPill(
-            label: _confidenceLabel(l10n, incrementality.confidence),
-            icon: Icons.verified_outlined,
-          ),
-        ],
+    return PointyDetailCallout(
+      icon: Icons.insights_outlined,
+      title: headline,
+      message: l10n.discountDetailsImpactMethodNote,
+      trailing: PointyStatusPill(
+        label: _confidenceLabel(l10n, incrementality.confidence),
+        icon: Icons.verified_outlined,
       ),
     );
   }

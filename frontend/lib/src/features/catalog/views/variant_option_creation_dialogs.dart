@@ -7,6 +7,7 @@ import '../../../data/models/variant_option_draft.dart';
 import '../../../data/models/variant_option_value.dart';
 import '../../../data/models/variant_option_value_draft.dart';
 import '../../../data/repositories/catalog_repository.dart';
+import '../../../shared/design/design.dart';
 
 Future<VariantOption?> showCreateVariantOptionDialog({
   required BuildContext context,
@@ -97,7 +98,7 @@ class _CreateVariantOptionDialogState
               const SizedBox(height: 8),
               Text(
                 l10n.variantOptionCreateError,
-                style: TextStyle(color: Theme.of(context).colorScheme.error),
+                style: TextStyle(color: context.pointyColors.danger),
               ),
             ],
           ],
@@ -222,7 +223,7 @@ class _CreateVariantOptionValueDialogState
               const SizedBox(height: 8),
               Text(
                 l10n.variantOptionValueCreateError,
-                style: TextStyle(color: Theme.of(context).colorScheme.error),
+                style: TextStyle(color: context.pointyColors.danger),
               ),
             ],
           ],

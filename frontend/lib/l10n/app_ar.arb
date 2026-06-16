@@ -4,6 +4,87 @@
   "@appTitle": {
     "description": "Application title."
   },
+  "commandPaletteTitle": "تنقّل سريع",
+  "@commandPaletteTitle": {
+    "description": "Title of the global command palette overlay."
+  },
+  "commandPaletteSearchHint": "ابحث عن شاشة أو منتج أو عميل أو فاتورة…",
+  "@commandPaletteSearchHint": {
+    "description": "Search field hint inside the command palette."
+  },
+  "commandPaletteScreensSection": "الشاشات",
+  "@commandPaletteScreensSection": {
+    "description": "Section header for navigable screens in the command palette."
+  },
+  "commandPaletteProductsSection": "المنتجات",
+  "@commandPaletteProductsSection": {
+    "description": "Command palette section header for product results."
+  },
+  "commandPaletteCustomersSection": "العملاء",
+  "@commandPaletteCustomersSection": {
+    "description": "Command palette section header for customer results."
+  },
+  "commandPaletteSuppliersSection": "الموردون",
+  "@commandPaletteSuppliersSection": {
+    "description": "Command palette section header for supplier results."
+  },
+  "commandPaletteInvoicesSection": "الفواتير",
+  "@commandPaletteInvoicesSection": {
+    "description": "Command palette section header for invoice results."
+  },
+  "commandPalettePurchaseOrdersSection": "أوامر الشراء",
+  "@commandPalettePurchaseOrdersSection": {
+    "description": "Command palette section header for purchase order results."
+  },
+  "commandPaletteSearching": "جارٍ البحث…",
+  "@commandPaletteSearching": {
+    "description": "Shown while the command palette is searching entities."
+  },
+  "commandPaletteActionsSection": "إجراءات سريعة",
+  "@commandPaletteActionsSection": {
+    "description": "Command palette section header for quick actions."
+  },
+  "commandPaletteRecentsSection": "المفتوحة مؤخرًا",
+  "@commandPaletteRecentsSection": {
+    "description": "Command palette section header for recently opened items."
+  },
+  "commandPaletteActionNewSale": "بيع جديد",
+  "@commandPaletteActionNewSale": {
+    "description": "Quick action: go to the POS to start a new sale."
+  },
+  "commandPaletteActionNewPurchaseOrder": "أمر شراء جديد",
+  "@commandPaletteActionNewPurchaseOrder": {
+    "description": "Quick action: open a blank purchase order draft."
+  },
+  "commandPaletteActionRecordExpense": "تسجيل مصروف",
+  "@commandPaletteActionRecordExpense": {
+    "description": "Quick action: open the expenses screen to record an expense."
+  },
+  "commandPaletteActionStockCount": "بدء جرد",
+  "@commandPaletteActionStockCount": {
+    "description": "Quick action: open the stock count screen."
+  },
+  "commandPaletteStockLabel": "{count} في المخزون",
+  "@commandPaletteStockLabel": {
+    "description": "Live stock shown on a product row in the command palette.",
+    "placeholders": {
+      "count": {
+        "type": "String"
+      }
+    }
+  },
+  "commandPaletteNoResults": "لا توجد نتائج مطابقة",
+  "@commandPaletteNoResults": {
+    "description": "Empty state when no command palette results match the query."
+  },
+  "commandPaletteOpenLabel": "بحث وتنقّل سريع",
+  "@commandPaletteOpenLabel": {
+    "description": "Label for the entry point that opens the command palette."
+  },
+  "commandPaletteFooterHint": "↑↓ للتنقل · Enter للفتح · Esc للإغلاق",
+  "@commandPaletteFooterHint": {
+    "description": "Keyboard hint shown at the bottom of the command palette."
+  },
   "refreshCatalogTooltip": "تحديث المنتجات",
   "searchProductsHint": "ابحث باسم المنتج أو الرمز",
   "categorySearchHint": "ابحث باسم التصنيف",
@@ -5862,5 +5943,95 @@
     "placeholders": {
       "count": { "type": "int" }
     }
-  }
+  },
+  "priceCheckersSectionTitle": "أجهزة فحص الأسعار",
+  "priceCheckersSectionSubtitle": "متابعة أجهزة فحص الأسعار المتصلة في المتجر وحالتها",
+  "priceCheckersHeroDescription": "نظرة سريعة على كل جهاز متصل وآخر نشاط له.",
+  "priceCheckerDevicesUnit": "جهاز فحص أسعار",
+  "priceCheckerServingPillLabel": "{count} قيد الخدمة",
+  "@priceCheckerServingPillLabel": {
+    "description": "Hero pill: how many devices are actively serving lookups.",
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "priceCheckerDiscoveredPillLabel": "{count} بانتظار التفعيل",
+  "@priceCheckerDiscoveredPillLabel": {
+    "description": "Hero pill: how many discovered devices await activation.",
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "priceCheckerScanTooltip": "البحث عن أجهزة في الشبكة",
+  "priceCheckerScanButton": "بحث في الشبكة",
+  "priceCheckerRefreshTooltip": "تحديث",
+  "priceCheckerDevicesListTitle": "الأجهزة",
+  "priceCheckerDevicesCountSubtitle": "{count} جهاز",
+  "@priceCheckerDevicesCountSubtitle": {
+    "description": "Device-list section subtitle showing the device count.",
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "priceCheckersEmptyTitle": "لا توجد أجهزة بعد",
+  "priceCheckersEmptyMessage": "ابحث في الشبكة المحلية للعثور على أجهزة فحص الأسعار وتسجيلها تلقائيًا.",
+  "priceCheckersLoadError": "تعذر تحميل أجهزة فحص الأسعار",
+  "priceCheckerScanSuccess": "تم العثور على {found} جهاز، وسُجِّل منها {registered}.",
+  "@priceCheckerScanSuccess": {
+    "description": "Snackbar after a network scan finds devices.",
+    "placeholders": {
+      "found": { "type": "int" },
+      "registered": { "type": "int" }
+    }
+  },
+  "priceCheckerScanNone": "لم يُعثر على أجهزة جديدة في الشبكة.",
+  "priceCheckerScanError": "تعذر إجراء البحث في الشبكة. حاول مرة أخرى.",
+  "priceCheckerLastSeen": "آخر نشاط: {value}",
+  "@priceCheckerLastSeen": {
+    "description": "Last-activity timestamp line for a device.",
+    "placeholders": {
+      "value": { "type": "String" }
+    }
+  },
+  "priceCheckerNeverSeen": "لم يُسجَّل نشاط بعد",
+  "priceCheckerStatusActive": "نشِط",
+  "priceCheckerStatusDiscovered": "مكتشَف",
+  "priceCheckerStatusDisabled": "مُعطّل",
+  "priceCheckerDiscoveryManual": "إضافة يدوية",
+  "priceCheckerDiscoveryScan": "فحص الشبكة",
+  "priceCheckerDiscoverySelf": "تسجيل ذاتي",
+  "priceCheckerArabicNone": "غير مدعوم (لاتيني)",
+  "priceCheckerArabicUnicode": "يونيكود (الجهاز يُشكّل)",
+  "priceCheckerArabicCp1256": "CP1256 (الخادم يعيد الترتيب)",
+  "priceCheckerArabicGlyphs": "محارف مُشكّلة مسبقًا",
+  "priceCheckResultFound": "موجود",
+  "priceCheckResultNotFound": "غير موجود",
+  "priceCheckResultError": "خطأ",
+  "priceCheckerConnectionServing": "هذا الجهاز قيد الخدمة ويستقبل عمليات الفحص",
+  "priceCheckerConnectionDiscovered": "تم اكتشاف هذا الجهاز وهو بانتظار التفعيل",
+  "priceCheckerConnectionDisabled": "هذا الجهاز مُعطّل ولا يستجيب لعمليات الفحص",
+  "priceCheckerNetworkSection": "الشبكة",
+  "priceCheckerFieldIdentifier": "المعرّف",
+  "priceCheckerFieldTransport": "البروتوكول",
+  "priceCheckerFieldAddress": "العنوان",
+  "priceCheckerFieldMac": "عنوان MAC",
+  "priceCheckerFieldDriver": "المشغّل",
+  "priceCheckerFieldHardware": "الطراز",
+  "priceCheckerFieldDiscovery": "طريقة الاكتشاف",
+  "priceCheckerFieldLocation": "الموقع",
+  "priceCheckerDisplaySection": "الشاشة",
+  "priceCheckerFieldDisplaySize": "أبعاد الشاشة",
+  "priceCheckerDisplaySizeValue": "{rows} × {cols}",
+  "@priceCheckerDisplaySizeValue": {
+    "description": "Display grid dimensions, e.g. 5 × 20.",
+    "placeholders": {
+      "rows": { "type": "int" },
+      "cols": { "type": "int" }
+    }
+  },
+  "priceCheckerFieldArabic": "دعم العربية",
+  "priceCheckerFieldEncoding": "الترميز",
+  "priceCheckerActivitySection": "أحدث عمليات الفحص",
+  "priceCheckerActivityLoadError": "تعذر تحميل عمليات الفحص",
+  "priceCheckerActivityEmpty": "لا توجد عمليات فحص بعد لهذا الجهاز."
 }

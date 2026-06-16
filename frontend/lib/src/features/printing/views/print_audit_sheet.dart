@@ -6,6 +6,7 @@ import '../../../data/models/print_audit_event.dart';
 import '../../../data/repositories/printing_repository.dart';
 import '../../../shared/components/components.dart';
 import '../../../shared/date_formatters.dart';
+import '../../../shared/design/design.dart';
 import '../../../shared/responsive/responsive.dart';
 
 Future<void> showPrintAuditSheet({
@@ -291,11 +292,11 @@ IconData _statusIcon(PrintAuditStatus status) {
 }
 
 Color _statusColor(BuildContext context, PrintAuditStatus status) {
-  final colorScheme = Theme.of(context).colorScheme;
+  final colors = context.pointyColors;
   return switch (status) {
-    PrintAuditStatus.completed => colorScheme.primary,
-    PrintAuditStatus.canceled => colorScheme.secondary,
-    PrintAuditStatus.failed => colorScheme.error,
-    PrintAuditStatus.requested => colorScheme.tertiary,
+    PrintAuditStatus.completed => colors.primaryStrong,
+    PrintAuditStatus.canceled => colors.accentAmber,
+    PrintAuditStatus.failed => colors.danger,
+    PrintAuditStatus.requested => colors.success,
   };
 }

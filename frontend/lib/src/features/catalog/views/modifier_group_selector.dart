@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../data/models/modifier_group.dart';
+import '../../../shared/design/design.dart';
 
 /// Compact multi-select for assigning reusable modifier groups to a product.
 /// Shared by the create form and the parent-edit sheet.
@@ -27,6 +28,7 @@ class ModifierGroupSelector extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
+    final colors = context.pointyColors;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -52,7 +54,7 @@ class ModifierGroupSelector extends StatelessWidget {
               Expanded(
                 child: Text(
                   l10n.modifierGroupsLoadError,
-                  style: TextStyle(color: theme.colorScheme.error),
+                  style: TextStyle(color: colors.danger),
                 ),
               ),
               TextButton(onPressed: onReload, child: Text(l10n.retryButton)),

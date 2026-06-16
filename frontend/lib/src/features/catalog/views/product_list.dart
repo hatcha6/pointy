@@ -15,6 +15,7 @@ import '../../../data/repositories/sale_repository.dart';
 import '../../../data/repositories/shop_settings_repository.dart';
 import '../../../shared/catalog/catalog.dart';
 import '../../../shared/components/components.dart';
+import '../../../shared/design/design.dart';
 import '../../../shared/product_query_controls.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../view_models/catalog_view_model.dart';
@@ -77,7 +78,7 @@ class ProductList extends StatelessWidget {
             SizedBox(height: spacing.sm),
             Text(
               l10n.catalogLoadError,
-              style: TextStyle(color: Theme.of(context).colorScheme.error),
+              style: TextStyle(color: context.pointyColors.danger),
             ),
           ],
           SizedBox(height: spacing.sm),

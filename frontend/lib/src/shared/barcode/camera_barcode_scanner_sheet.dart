@@ -5,6 +5,7 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../data/models/product_variant.dart';
+import '../design/design.dart';
 import '../formatters.dart';
 
 enum CameraBarcodeScannerMode { single, multiple }
@@ -506,8 +507,8 @@ class _ScannerStatusLine extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final color = isError ? colorScheme.error : colorScheme.primary;
+    final colors = context.pointyColors;
+    final color = isError ? colors.danger : colors.primaryStrong;
 
     return Row(
       children: [

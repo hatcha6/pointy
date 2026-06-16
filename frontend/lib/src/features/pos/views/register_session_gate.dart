@@ -183,7 +183,6 @@ class _StartSessionGate extends StatelessWidget {
             errorText: showOpeningCashRequiredError
                 ? l10n.openingCashRequiredError
                 : null,
-            border: const OutlineInputBorder(),
             prefixIcon: const Icon(Icons.payments_outlined),
           ),
         ),

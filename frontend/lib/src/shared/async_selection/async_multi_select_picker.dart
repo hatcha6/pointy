@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../design/design.dart';
 import '../infinite_scroll_grid.dart';
 import '../query_controls/debounced_search_field.dart';
 import '../responsive/responsive.dart';
@@ -202,7 +203,7 @@ class _AsyncMultiSelectPickerSheetState<T extends Object>
               padding: const EdgeInsets.only(top: 8),
               child: Text(
                 strings.loadErrorText,
-                style: TextStyle(color: Theme.of(context).colorScheme.error),
+                style: TextStyle(color: context.pointyColors.danger),
               ),
             ),
           const SizedBox(height: 8),
@@ -340,7 +341,7 @@ class AsyncSelectionField<T extends Object> extends StatelessWidget {
       validator: (_) => validator(selected),
       builder: (field) {
         return Material(
-          color: Theme.of(context).colorScheme.surface,
+          color: context.pointyColors.surface,
           borderRadius: BorderRadius.circular(8),
           child: InkWell(
             key: fieldKey,
@@ -350,8 +351,6 @@ class AsyncSelectionField<T extends Object> extends StatelessWidget {
                 labelText: strings.label,
                 helperText: strings.helperText,
                 errorText: field.errorText,
-                border: const OutlineInputBorder(),
-                enabledBorder: const OutlineInputBorder(),
                 isDense: true,
               ),
               child: Row(
@@ -361,9 +360,7 @@ class AsyncSelectionField<T extends Object> extends StatelessWidget {
                         ? Text(
                             strings.emptyText,
                             style: TextStyle(
-                              color: Theme.of(
-                                context,
-                              ).colorScheme.onSurfaceVariant,
+                              color: context.pointyColors.mutedInk,
                             ),
                           )
                         : Wrap(

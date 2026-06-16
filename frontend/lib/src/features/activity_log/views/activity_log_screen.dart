@@ -7,6 +7,7 @@ import '../../../shared/app_navigation_drawer.dart';
 import '../../../shared/authorization_guards.dart';
 import '../../../shared/components/components.dart';
 import '../../../shared/date_formatters.dart';
+import '../../../shared/design/design.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../../../shared/shell/shell.dart';
 import '../view_models/activity_log_view_model.dart';
@@ -457,21 +458,21 @@ class _ActivityDetailsPane extends StatelessWidget {
           PointyDetailSection(
             title: l10n.activityLogDetailEventSection,
             icon: Icons.fact_check_outlined,
-            child: Column(
-              children: [
-                PointyDetailRow(
+            child: PointySummaryList(
+              rows: [
+                PointySummaryRow(
                   label: l10n.activityLogRawNameLabel,
                   value: event.name,
                 ),
-                PointyDetailRow(
+                PointySummaryRow(
                   label: l10n.activityLogTypeLabel,
                   value: analyticsEventTypeLabel(l10n, event.eventType),
                 ),
-                PointyDetailRow(
+                PointySummaryRow(
                   label: l10n.activityLogSeverityLabel,
                   value: analyticsSeverityLabel(l10n, event.severity),
                 ),
-                PointyDetailRow(
+                PointySummaryRow(
                   label: l10n.activityLogSourceLabel,
                   value: analyticsSourceLabel(l10n, event.source),
                 ),
@@ -482,25 +483,25 @@ class _ActivityDetailsPane extends StatelessWidget {
           PointyDetailSection(
             title: l10n.activityLogDetailContextSection,
             icon: Icons.hub_outlined,
-            child: Column(
-              children: [
-                PointyDetailRow(
+            child: PointySummaryList(
+              rows: [
+                PointySummaryRow(
                   label: l10n.activityLogSessionLabel,
                   value: _orEmpty(l10n, event.registerSessionReference),
                 ),
-                PointyDetailRow(
+                PointySummaryRow(
                   label: l10n.activityLogEntityTypeLabel,
                   value: _orEmpty(l10n, event.entityType),
                 ),
-                PointyDetailRow(
+                PointySummaryRow(
                   label: l10n.activityLogEntityIdLabel,
                   value: _orEmpty(l10n, event.entityId),
                 ),
-                PointyDetailRow(
+                PointySummaryRow(
                   label: l10n.activityLogTraceIdLabel,
                   value: _orEmpty(l10n, event.traceId),
                 ),
-                PointyDetailRow(
+                PointySummaryRow(
                   label: l10n.activityLogPlatformLabel,
                   value: _orEmpty(l10n, event.platform),
                 ),
@@ -545,10 +546,10 @@ class _MapDetails extends StatelessWidget {
 
     final entries = values.entries.toList()
       ..sort((left, right) => left.key.compareTo(right.key));
-    return Column(
-      children: [
+    return PointySummaryList(
+      rows: [
         for (final entry in entries)
-          PointyDetailRow(label: entry.key, value: _stringValue(entry.value)),
+          PointySummaryRow(label: entry.key, value: _stringValue(entry.value)),
       ],
     );
   }
@@ -623,23 +624,23 @@ IconData _eventSeverityIcon(AnalyticsEventSeverity severity) {
 }
 
 Color _severityColor(BuildContext context, AnalyticsEventSeverity severity) {
-  final colorScheme = Theme.of(context).colorScheme;
+  final colors = context.pointyColors;
   return switch (severity) {
-    AnalyticsEventSeverity.debug => colorScheme.outline,
-    AnalyticsEventSeverity.info => colorScheme.primary,
-    AnalyticsEventSeverity.warning => colorScheme.tertiary,
-    AnalyticsEventSeverity.error => colorScheme.error,
-    AnalyticsEventSeverity.critical => colorScheme.error,
+    AnalyticsEventSeverity.debug => colors.line,
+    AnalyticsEventSeverity.info => colors.primaryStrong,
+    AnalyticsEventSeverity.warning => colors.success,
+    AnalyticsEventSeverity.error => colors.danger,
+    AnalyticsEventSeverity.critical => colors.danger,
   };
 }
 
 Color _riskColor(BuildContext context, int riskScore) {
-  final colorScheme = Theme.of(context).colorScheme;
+  final colors = context.pointyColors;
   if (riskScore >= 70) {
-    return colorScheme.error;
+    return colors.danger;
   }
   if (riskScore >= 50) {
-    return colorScheme.tertiary;
+    return colors.success;
   }
-  return colorScheme.primary;
+  return colors.primaryStrong;
 }

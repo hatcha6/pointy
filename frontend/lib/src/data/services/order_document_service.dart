@@ -14,20 +14,19 @@ import '../models/shop_settings.dart';
 import 'order_document_action.dart';
 import 'order_document_web_delivery.dart';
 import 'print_transport.dart';
-import '../../shared/pdf/pointy_pdf_branding.dart';
-import '../../shared/pdf/pointy_pdf_table.dart';
+import '../../shared/pdf/pdf.dart';
 
 export 'order_document_action.dart';
 
 class OrderDocumentService {
   const OrderDocumentService({
     this.labels = const OrderDocumentLabels.arabic(),
-    this.fontLoader = const OrderDocumentFontLoader(),
+    this.fontLoader = const PointyPdfFontLoader(),
     this.webDelivery = const OrderDocumentWebDelivery(),
   });
 
   final OrderDocumentLabels labels;
-  final OrderDocumentFontLoader fontLoader;
+  final PointyPdfFontLoader fontLoader;
   final OrderDocumentWebDelivery webDelivery;
 
   String get deliveryChannel {
@@ -250,7 +249,7 @@ class OrderDocumentService {
       ]),
       details: [
         if (order.createdAt != null)
-          OrderDocumentField(labels.issueDate, _formatDate(order.createdAt!)),
+          OrderDocumentField(labels.issueDate, formatPdfDate(order.createdAt!)),
         if (balanceDue > 0)
           OrderDocumentField(
             labels.balanceDue,
@@ -270,7 +269,7 @@ class OrderDocumentService {
           for (final line in order.lines)
             [
               _saleLineName(line),
-              '${line.quantity}',
+              _formatQuantity(line.quantity),
               _formatMoney(line.unitPrice),
               _formatMoney(line.total),
             ],
@@ -315,11 +314,11 @@ class OrderDocumentService {
       ]),
       details: [
         if (order.createdAt != null)
-          OrderDocumentField(labels.issueDate, _formatDate(order.createdAt!)),
+          OrderDocumentField(labels.issueDate, formatPdfDate(order.createdAt!)),
         if (order.supplierInvoiceDate != null)
           OrderDocumentField(
             labels.supplierInvoiceDate,
-            _formatDate(order.supplierInvoiceDate!),
+            formatPdfDate(order.supplierInvoiceDate!),
           ),
         if (order.supplierInvoiceNumber.trim().isNotEmpty)
           OrderDocumentField(
@@ -327,7 +326,7 @@ class OrderDocumentService {
             order.supplierInvoiceNumber.trim(),
           ),
         if (order.dueDate != null)
-          OrderDocumentField(labels.dueDate, _formatDate(order.dueDate!)),
+          OrderDocumentField(labels.dueDate, formatPdfDate(order.dueDate!)),
         if (order.balanceDue > 0)
           OrderDocumentField(
             labels.balanceDue,
@@ -349,7 +348,7 @@ class OrderDocumentService {
               line.displayName.trim().isEmpty
                   ? labels.unknownProduct
                   : line.displayName.trim(),
-              '${line.quantity}',
+              _formatQuantity(line.quantity),
               _formatMoney(line.effectiveUnitCost ?? line.unitCost),
               _formatMoney(line.landedLineTotal ?? line.total),
             ],
@@ -688,44 +687,6 @@ class OrderDocumentLabels {
   }
 }
 
-class OrderDocumentFontLoader {
-  const OrderDocumentFontLoader();
-
-  Future<OrderDocumentFonts> load() async {
-    final regular = await PdfGoogleFonts.notoNaskhArabicRegular();
-    final bold = await PdfGoogleFonts.notoNaskhArabicBold();
-    final cairo = await PdfGoogleFonts.cairoRegular();
-    return OrderDocumentFonts(base: regular, bold: bold, fallback: [cairo]);
-  }
-}
-
-class OrderDocumentFonts {
-  const OrderDocumentFonts({
-    required this.base,
-    required this.bold,
-    this.fallback = const [],
-  });
-
-  factory OrderDocumentFonts.type1ForTests() {
-    return OrderDocumentFonts(
-      base: pw.Font.helvetica(),
-      bold: pw.Font.helveticaBold(),
-    );
-  }
-
-  final pw.Font base;
-  final pw.Font bold;
-  final List<pw.Font> fallback;
-
-  pw.ThemeData toThemeData() {
-    return pw.ThemeData.withFont(
-      base: base,
-      bold: bold,
-      fontFallback: fallback,
-    );
-  }
-}
-
 @immutable
 class OrderDocumentTemplate {
   const OrderDocumentTemplate({
@@ -768,7 +729,7 @@ class _DocumentFrame {
   final OrderDocumentTemplate template;
   final Uint8List? shopLogoBytes;
   final OrderDocumentLabels labels;
-  final OrderDocumentFonts fonts;
+  final PointyPdfFonts fonts;
 
   Future<Uint8List> build() async {
     final pdf = pw.Document(
@@ -779,18 +740,9 @@ class _DocumentFrame {
     );
 
     pdf.addPage(
-      pw.MultiPage(
-        pageTheme: pw.PageTheme(
-          pageFormat: PdfPageFormat.a4.applyMargin(
-            left: 16 * PdfPageFormat.mm,
-            top: 16 * PdfPageFormat.mm,
-            right: 16 * PdfPageFormat.mm,
-            bottom: 16 * PdfPageFormat.mm,
-          ),
-          theme: fonts.toThemeData(),
-          textDirection: pw.TextDirection.rtl,
-        ),
-        footer: (context) => _footer(context),
+      buildPointyPdfMultiPage(
+        fonts: fonts,
+        footer: _footer,
         build: (_) => [
           _hero(),
           pw.SizedBox(height: 32),
@@ -807,40 +759,33 @@ class _DocumentFrame {
   }
 
   pw.Widget _hero() {
-    final logoProvider = _logoProvider(shopLogoBytes);
-    final heroSide = _heroSide(logoProvider);
     return pw.Directionality(
       textDirection: pw.TextDirection.ltr,
-      child: pw.Row(
-        crossAxisAlignment: pw.CrossAxisAlignment.start,
-        children: [
-          pw.Expanded(
-            child: pw.Column(
-              crossAxisAlignment: pw.CrossAxisAlignment.start,
-              children: [
-                pw.Text(
-                  template.title,
-                  style: pw.TextStyle(
-                    fontSize: 32,
-                    fontWeight: pw.FontWeight.bold,
-                    color: _PdfColors.ink,
-                  ),
-                  textDirection: pw.TextDirection.rtl,
-                ),
-                pw.SizedBox(height: 4),
-                pw.Text(
-                  '# ${template.reference}',
-                  style: const pw.TextStyle(
-                    fontSize: 14,
-                    color: _PdfColors.muted,
-                  ),
-                  textDirection: pw.TextDirection.ltr,
-                ),
-              ],
+      child: PointyPdfMasthead(
+        leading: pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            pw.Text(
+              template.title,
+              style: pw.TextStyle(
+                fontSize: 32,
+                fontWeight: pw.FontWeight.bold,
+                color: PointyPdfPalette.ink,
+              ),
+              textDirection: pw.TextDirection.rtl,
             ),
-          ),
-          if (heroSide != null) ...[pw.SizedBox(width: 18), heroSide],
-        ],
+            pw.SizedBox(height: 4),
+            pw.Text(
+              '# ${template.reference}',
+              style: const pw.TextStyle(
+                fontSize: 14,
+                color: PointyPdfPalette.muted,
+              ),
+              textDirection: pw.TextDirection.ltr,
+            ),
+          ],
+        ),
+        trailing: _heroSide(pdfLogoProvider(shopLogoBytes)),
       ),
     );
   }
@@ -879,7 +824,7 @@ class _DocumentFrame {
       width: 100,
       padding: const pw.EdgeInsets.all(8),
       decoration: pw.BoxDecoration(
-        border: pw.Border.all(color: _PdfColors.border),
+        border: pw.Border.all(color: PointyPdfPalette.border),
         borderRadius: const pw.BorderRadius.all(pw.Radius.circular(6)),
       ),
       child: pw.Column(
@@ -890,7 +835,7 @@ class _DocumentFrame {
             labels.onlineInvoice,
             style: pw.TextStyle(
               fontSize: 9,
-              color: _PdfColors.ink,
+              color: PointyPdfPalette.ink,
               fontWeight: pw.FontWeight.bold,
             ),
             textAlign: pw.TextAlign.center,
@@ -907,7 +852,10 @@ class _DocumentFrame {
           pw.SizedBox(height: 4),
           pw.Text(
             labels.scanOnlineInvoice,
-            style: const pw.TextStyle(fontSize: 7, color: _PdfColors.muted),
+            style: const pw.TextStyle(
+              fontSize: 7,
+              color: PointyPdfPalette.muted,
+            ),
             textAlign: pw.TextAlign.center,
             textDirection: pw.TextDirection.rtl,
           ),
@@ -933,7 +881,7 @@ class _DocumentFrame {
                   template.shopName,
                   style: pw.TextStyle(
                     fontSize: 14,
-                    color: _PdfColors.ink,
+                    color: PointyPdfPalette.ink,
                     fontWeight: pw.FontWeight.bold,
                   ),
                   textDirection: pw.TextDirection.rtl,
@@ -944,7 +892,7 @@ class _DocumentFrame {
                     line,
                     style: const pw.TextStyle(
                       fontSize: 11,
-                      color: _PdfColors.ink,
+                      color: PointyPdfPalette.ink,
                     ),
                     textDirection: pw.TextDirection.rtl,
                   ),
@@ -956,7 +904,7 @@ class _DocumentFrame {
                     template.recipientTitle,
                     style: const pw.TextStyle(
                       fontSize: 11,
-                      color: _PdfColors.ink,
+                      color: PointyPdfPalette.ink,
                     ),
                     textDirection: pw.TextDirection.rtl,
                   ),
@@ -965,7 +913,7 @@ class _DocumentFrame {
                     template.recipientLines.first,
                     style: pw.TextStyle(
                       fontSize: 12,
-                      color: _PdfColors.ink,
+                      color: PointyPdfPalette.ink,
                       fontWeight: pw.FontWeight.bold,
                     ),
                     textDirection: pw.TextDirection.rtl,
@@ -976,7 +924,7 @@ class _DocumentFrame {
                       line,
                       style: const pw.TextStyle(
                         fontSize: 11,
-                        color: _PdfColors.ink,
+                        color: PointyPdfPalette.ink,
                       ),
                       textDirection: pw.TextDirection.rtl,
                     ),
@@ -999,45 +947,13 @@ class _DocumentFrame {
       crossAxisAlignment: pw.CrossAxisAlignment.start,
       children: [
         for (final row in rows)
-          pw.Container(
-            margin: const pw.EdgeInsets.only(bottom: 8),
-            padding: row.highlight
-                ? const pw.EdgeInsets.symmetric(horizontal: 12, vertical: 10)
-                : pw.EdgeInsets.zero,
-            decoration: row.highlight
-                ? const pw.BoxDecoration(
-                    color: _PdfColors.highlight,
-                    borderRadius: pw.BorderRadius.all(pw.Radius.circular(6)),
-                  )
-                : null,
-            child: pw.Directionality(
-              textDirection: pw.TextDirection.rtl,
-              child: pw.Row(
-                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                children: [
-                  pw.Text(
-                    '${row.label}:',
-                    style: pw.TextStyle(
-                      fontSize: row.highlight ? 12 : 11,
-                      fontWeight: row.highlight
-                          ? pw.FontWeight.bold
-                          : pw.FontWeight.normal,
-                      color: _PdfColors.ink,
-                    ),
-                  ),
-                  pw.Text(
-                    row.value,
-                    style: pw.TextStyle(
-                      fontSize: row.highlight ? 12 : 11,
-                      fontWeight: row.highlight
-                          ? pw.FontWeight.bold
-                          : pw.FontWeight.normal,
-                      color: _PdfColors.ink,
-                    ),
-                    textDirection: pw.TextDirection.ltr,
-                  ),
-                ],
-              ),
+          pw.Padding(
+            padding: const pw.EdgeInsets.only(bottom: 8),
+            child: PointyPdfFieldRow(
+              label: row.label,
+              value: row.value,
+              strong: row.strong,
+              highlighted: row.highlight,
             ),
           ),
       ],
@@ -1045,47 +961,14 @@ class _DocumentFrame {
   }
 
   pw.Widget _bottomSection() {
+    // Notes (the shop footer message) now live in the page footer; the body
+    // bottom section is the optional terms block beside the totals.
     return pw.Directionality(
       textDirection: pw.TextDirection.rtl,
       child: pw.Row(
         crossAxisAlignment: pw.CrossAxisAlignment.start,
         children: [
-          pw.Expanded(
-            child: pw.Column(
-              crossAxisAlignment: pw.CrossAxisAlignment.start,
-              children: [
-                if (template.notes != null) ...[
-                  pw.Text(
-                    '${labels.notes}:',
-                    style: pw.TextStyle(
-                      fontWeight: pw.FontWeight.bold,
-                      fontSize: 11,
-                    ),
-                  ),
-                  pw.SizedBox(height: 4),
-                  pw.Text(
-                    template.notes!,
-                    style: const pw.TextStyle(fontSize: 11),
-                  ),
-                  pw.SizedBox(height: 16),
-                ],
-                if (template.terms != null) ...[
-                  pw.Text(
-                    '${labels.terms}:',
-                    style: pw.TextStyle(
-                      fontWeight: pw.FontWeight.bold,
-                      fontSize: 11,
-                    ),
-                  ),
-                  pw.SizedBox(height: 4),
-                  pw.Text(
-                    template.terms!,
-                    style: const pw.TextStyle(fontSize: 11),
-                  ),
-                ],
-              ],
-            ),
-          ),
+          pw.Expanded(child: _termsBlock()),
           pw.SizedBox(width: 24),
           pw.SizedBox(
             width: 250,
@@ -1094,31 +977,10 @@ class _DocumentFrame {
                 for (final row in template.totals)
                   pw.Padding(
                     padding: const pw.EdgeInsets.only(bottom: 10),
-                    child: pw.Row(
-                      mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                      children: [
-                        pw.Text(
-                          '${row.label}:',
-                          style: pw.TextStyle(
-                            fontSize: row.strong ? 12 : 11,
-                            color: _PdfColors.ink,
-                            fontWeight: row.strong
-                                ? pw.FontWeight.bold
-                                : pw.FontWeight.normal,
-                          ),
-                        ),
-                        pw.Text(
-                          row.value,
-                          style: pw.TextStyle(
-                            fontSize: row.strong ? 12 : 11,
-                            color: _PdfColors.ink,
-                            fontWeight: row.strong
-                                ? pw.FontWeight.bold
-                                : pw.FontWeight.normal,
-                          ),
-                          textDirection: pw.TextDirection.ltr,
-                        ),
-                      ],
+                    child: PointyPdfFieldRow(
+                      label: row.label,
+                      value: row.value,
+                      strong: row.strong,
                     ),
                   ),
               ],
@@ -1129,22 +991,30 @@ class _DocumentFrame {
     );
   }
 
+  pw.Widget _termsBlock() {
+    final terms = template.terms;
+    if (terms == null) {
+      return pw.SizedBox();
+    }
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        pw.Text(
+          '${labels.terms}:',
+          style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 11),
+        ),
+        pw.SizedBox(height: 4),
+        pw.Text(terms, style: const pw.TextStyle(fontSize: 11)),
+      ],
+    );
+  }
+
   pw.Widget _footer(pw.Context context) {
     return PointyPdfFooter(
       pageLabel:
           '${labels.page} ${context.pageNumber} ${labels.ofPages} ${context.pagesCount}',
+      shopFooter: compactPdfText(template.notes, maxCharacters: 150),
     );
-  }
-}
-
-pw.ImageProvider? _logoProvider(Uint8List? bytes) {
-  if (bytes == null || bytes.isEmpty) {
-    return null;
-  }
-  try {
-    return pw.MemoryImage(bytes);
-  } on Object {
-    return null;
   }
 }
 
@@ -1190,13 +1060,6 @@ class OrderDocumentField {
   final String value;
   final bool strong;
   final bool highlight;
-}
-
-class _PdfColors {
-  static const ink = PdfColor.fromInt(0xff172026);
-  static const muted = PdfColor.fromInt(0xff64717a);
-  static const border = PdfColor.fromInt(0xffd6dde2);
-  static const highlight = PdfColor.fromInt(0xfff1f3f4);
 }
 
 String _saleReference(SaleOrder order) {
@@ -1267,12 +1130,21 @@ String _saleLineName(SaleOrderLine line) {
 
 String _formatMoney(double value) => '${value.toStringAsFixed(2)} د.ل';
 
-String _formatDateTime(DateTime value) {
-  return DateFormat('yyyy/MM/dd HH:mm').format(value.toLocal());
+/// Whole quantities render bare ("2"); fractional keep up to three places with
+/// trailing zeros trimmed ("1.5"), so the invoice never shows "2.0".
+String _formatQuantity(num value) {
+  final quantity = value.toDouble();
+  if (quantity == quantity.roundToDouble()) {
+    return quantity.toInt().toString();
+  }
+  return quantity
+      .toStringAsFixed(3)
+      .replaceFirst(RegExp(r'0+$'), '')
+      .replaceFirst(RegExp(r'\.$'), '');
 }
 
-String _formatDate(DateTime value) {
-  return DateFormat('yyyy/MM/dd').format(value.toLocal());
+String _formatDateTime(DateTime value) {
+  return DateFormat('yyyy/MM/dd HH:mm').format(value.toLocal());
 }
 
 String _safeReference(String value) {

@@ -12,6 +12,67 @@ class AppLocalizationsAr extends AppLocalizations {
   String get appTitle => 'نقطة البيع';
 
   @override
+  String get commandPaletteTitle => 'تنقّل سريع';
+
+  @override
+  String get commandPaletteSearchHint =>
+      'ابحث عن شاشة أو منتج أو عميل أو فاتورة…';
+
+  @override
+  String get commandPaletteScreensSection => 'الشاشات';
+
+  @override
+  String get commandPaletteProductsSection => 'المنتجات';
+
+  @override
+  String get commandPaletteCustomersSection => 'العملاء';
+
+  @override
+  String get commandPaletteSuppliersSection => 'الموردون';
+
+  @override
+  String get commandPaletteInvoicesSection => 'الفواتير';
+
+  @override
+  String get commandPalettePurchaseOrdersSection => 'أوامر الشراء';
+
+  @override
+  String get commandPaletteSearching => 'جارٍ البحث…';
+
+  @override
+  String get commandPaletteActionsSection => 'إجراءات سريعة';
+
+  @override
+  String get commandPaletteRecentsSection => 'المفتوحة مؤخرًا';
+
+  @override
+  String get commandPaletteActionNewSale => 'بيع جديد';
+
+  @override
+  String get commandPaletteActionNewPurchaseOrder => 'أمر شراء جديد';
+
+  @override
+  String get commandPaletteActionRecordExpense => 'تسجيل مصروف';
+
+  @override
+  String get commandPaletteActionStockCount => 'بدء جرد';
+
+  @override
+  String commandPaletteStockLabel(String count) {
+    return '$count في المخزون';
+  }
+
+  @override
+  String get commandPaletteNoResults => 'لا توجد نتائج مطابقة';
+
+  @override
+  String get commandPaletteOpenLabel => 'بحث وتنقّل سريع';
+
+  @override
+  String get commandPaletteFooterHint =>
+      '↑↓ للتنقل · Enter للفتح · Esc للإغلاق';
+
+  @override
   String get refreshCatalogTooltip => 'تحديث المنتجات';
 
   @override
@@ -9805,4 +9866,179 @@ class AppLocalizationsAr extends AppLocalizations {
     );
     return '$_temp0';
   }
+
+  @override
+  String get priceCheckersSectionTitle => 'أجهزة فحص الأسعار';
+
+  @override
+  String get priceCheckersSectionSubtitle =>
+      'متابعة أجهزة فحص الأسعار المتصلة في المتجر وحالتها';
+
+  @override
+  String get priceCheckersHeroDescription =>
+      'نظرة سريعة على كل جهاز متصل وآخر نشاط له.';
+
+  @override
+  String get priceCheckerDevicesUnit => 'جهاز فحص أسعار';
+
+  @override
+  String priceCheckerServingPillLabel(int count) {
+    return '$count قيد الخدمة';
+  }
+
+  @override
+  String priceCheckerDiscoveredPillLabel(int count) {
+    return '$count بانتظار التفعيل';
+  }
+
+  @override
+  String get priceCheckerScanTooltip => 'البحث عن أجهزة في الشبكة';
+
+  @override
+  String get priceCheckerScanButton => 'بحث في الشبكة';
+
+  @override
+  String get priceCheckerRefreshTooltip => 'تحديث';
+
+  @override
+  String get priceCheckerDevicesListTitle => 'الأجهزة';
+
+  @override
+  String priceCheckerDevicesCountSubtitle(int count) {
+    return '$count جهاز';
+  }
+
+  @override
+  String get priceCheckersEmptyTitle => 'لا توجد أجهزة بعد';
+
+  @override
+  String get priceCheckersEmptyMessage =>
+      'ابحث في الشبكة المحلية للعثور على أجهزة فحص الأسعار وتسجيلها تلقائيًا.';
+
+  @override
+  String get priceCheckersLoadError => 'تعذر تحميل أجهزة فحص الأسعار';
+
+  @override
+  String priceCheckerScanSuccess(int found, int registered) {
+    return 'تم العثور على $found جهاز، وسُجِّل منها $registered.';
+  }
+
+  @override
+  String get priceCheckerScanNone => 'لم يُعثر على أجهزة جديدة في الشبكة.';
+
+  @override
+  String get priceCheckerScanError =>
+      'تعذر إجراء البحث في الشبكة. حاول مرة أخرى.';
+
+  @override
+  String priceCheckerLastSeen(String value) {
+    return 'آخر نشاط: $value';
+  }
+
+  @override
+  String get priceCheckerNeverSeen => 'لم يُسجَّل نشاط بعد';
+
+  @override
+  String get priceCheckerStatusActive => 'نشِط';
+
+  @override
+  String get priceCheckerStatusDiscovered => 'مكتشَف';
+
+  @override
+  String get priceCheckerStatusDisabled => 'مُعطّل';
+
+  @override
+  String get priceCheckerDiscoveryManual => 'إضافة يدوية';
+
+  @override
+  String get priceCheckerDiscoveryScan => 'فحص الشبكة';
+
+  @override
+  String get priceCheckerDiscoverySelf => 'تسجيل ذاتي';
+
+  @override
+  String get priceCheckerArabicNone => 'غير مدعوم (لاتيني)';
+
+  @override
+  String get priceCheckerArabicUnicode => 'يونيكود (الجهاز يُشكّل)';
+
+  @override
+  String get priceCheckerArabicCp1256 => 'CP1256 (الخادم يعيد الترتيب)';
+
+  @override
+  String get priceCheckerArabicGlyphs => 'محارف مُشكّلة مسبقًا';
+
+  @override
+  String get priceCheckResultFound => 'موجود';
+
+  @override
+  String get priceCheckResultNotFound => 'غير موجود';
+
+  @override
+  String get priceCheckResultError => 'خطأ';
+
+  @override
+  String get priceCheckerConnectionServing =>
+      'هذا الجهاز قيد الخدمة ويستقبل عمليات الفحص';
+
+  @override
+  String get priceCheckerConnectionDiscovered =>
+      'تم اكتشاف هذا الجهاز وهو بانتظار التفعيل';
+
+  @override
+  String get priceCheckerConnectionDisabled =>
+      'هذا الجهاز مُعطّل ولا يستجيب لعمليات الفحص';
+
+  @override
+  String get priceCheckerNetworkSection => 'الشبكة';
+
+  @override
+  String get priceCheckerFieldIdentifier => 'المعرّف';
+
+  @override
+  String get priceCheckerFieldTransport => 'البروتوكول';
+
+  @override
+  String get priceCheckerFieldAddress => 'العنوان';
+
+  @override
+  String get priceCheckerFieldMac => 'عنوان MAC';
+
+  @override
+  String get priceCheckerFieldDriver => 'المشغّل';
+
+  @override
+  String get priceCheckerFieldHardware => 'الطراز';
+
+  @override
+  String get priceCheckerFieldDiscovery => 'طريقة الاكتشاف';
+
+  @override
+  String get priceCheckerFieldLocation => 'الموقع';
+
+  @override
+  String get priceCheckerDisplaySection => 'الشاشة';
+
+  @override
+  String get priceCheckerFieldDisplaySize => 'أبعاد الشاشة';
+
+  @override
+  String priceCheckerDisplaySizeValue(int rows, int cols) {
+    return '$rows × $cols';
+  }
+
+  @override
+  String get priceCheckerFieldArabic => 'دعم العربية';
+
+  @override
+  String get priceCheckerFieldEncoding => 'الترميز';
+
+  @override
+  String get priceCheckerActivitySection => 'أحدث عمليات الفحص';
+
+  @override
+  String get priceCheckerActivityLoadError => 'تعذر تحميل عمليات الفحص';
+
+  @override
+  String get priceCheckerActivityEmpty => 'لا توجد عمليات فحص بعد لهذا الجهاز.';
 }

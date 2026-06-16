@@ -6,6 +6,7 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../data/models/sales_channel.dart';
 import '../../../shared/components/components.dart';
+import '../../../shared/design/design.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../../../shared/shell/shell.dart';
 import '../view_models/sales_channels_view_model.dart';
@@ -53,9 +54,7 @@ class _SalesChannelsPageState extends State<SalesChannelsPage> {
               ),
               IconButton(
                 tooltip: l10n.refreshShopSettingsTooltip,
-                onPressed: viewModel.isLoading
-                    ? null
-                    : viewModel.loadChannels,
+                onPressed: viewModel.isLoading ? null : viewModel.loadChannels,
                 icon: const Icon(Icons.sync),
               ),
             ],
@@ -234,16 +233,15 @@ class _SalesChannelsPageState extends State<SalesChannelsPage> {
     await showDialog<void>(
       context: context,
       barrierDismissible: false,
-      builder: (dialogContext) =>
-          _SalesChannelApiKeyDialog(grant: grant),
+      builder: (dialogContext) => _SalesChannelApiKeyDialog(grant: grant),
     );
   }
 
   void _showActionError() {
     final l10n = AppLocalizations.of(context)!;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(l10n.salesChannelActionError)),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(l10n.salesChannelActionError)));
   }
 }
 
@@ -265,7 +263,7 @@ class _SalesChannelTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final colorScheme = Theme.of(context).colorScheme;
+    final colors = context.pointyColors;
     final spacing = AdaptiveSpacing.of(context);
 
     return Padding(
@@ -275,7 +273,7 @@ class _SalesChannelTile extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Icon(_channelIcon(channel.type), color: colorScheme.primary),
+          Icon(_channelIcon(channel.type), color: colors.primaryStrong),
           SizedBox(width: spacing.md),
           Expanded(
             child: Column(
@@ -298,8 +296,8 @@ class _SalesChannelTile extends StatelessWidget {
                           ? Icons.verified_outlined
                           : Icons.block_outlined,
                       color: channel.isActive
-                          ? colorScheme.primary
-                          : colorScheme.error,
+                          ? colors.primaryStrong
+                          : colors.danger,
                     ),
                     if (channel.isSystem)
                       PointyStatusPill(
@@ -423,8 +421,7 @@ class _SalesChannelCreateDialogState extends State<_SalesChannelCreateDialog> {
               decoration: InputDecoration(
                 labelText: l10n.salesChannelNameLabel,
                 errorText:
-                    _showValidationError &&
-                        _nameController.text.trim().isEmpty
+                    _showValidationError && _nameController.text.trim().isEmpty
                     ? l10n.salesChannelNameRequired
                     : null,
               ),
@@ -511,7 +508,7 @@ class _SalesChannelApiKeyDialog extends StatelessWidget {
             SizedBox(height: spacing.md),
             DecoratedBox(
               decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                color: context.pointyColors.surfaceSunken,
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Padding(

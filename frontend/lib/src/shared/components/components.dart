@@ -1,6 +1,8 @@
 export 'pointy_card_grid.dart';
 export 'pointy_data_list.dart';
 export 'pointy_data_row.dart';
+export 'pointy_detail_callout.dart';
+export 'pointy_detail_hero.dart';
 export 'pointy_detail_section.dart';
 export 'pointy_destructive_confirmation_dialog.dart';
 export 'pointy_disclosure_chevron.dart';
@@ -18,3 +20,4 @@ export 'pointy_section_header.dart';
 export 'pointy_settings_section.dart';
 export 'pointy_status_pill.dart';
 export 'pointy_sticky_action_footer.dart';
+export 'pointy_summary_list.dart';

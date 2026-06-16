@@ -8,6 +8,7 @@ import '../../../data/repositories/contact_repository.dart';
 import '../../../shared/components/components.dart';
 import '../../../shared/contact_picker_sheet.dart';
 import '../../../shared/date_formatters.dart';
+import '../../../shared/design/design.dart';
 import '../../../shared/formatters.dart';
 import '../../../shared/payment_labels.dart';
 import '../../../shared/responsive/responsive.dart';
@@ -77,6 +78,7 @@ class CustomerDetailsView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    final spacing = AdaptiveSpacing.of(context);
 
     return ListenableBuilder(
       listenable: viewModel,
@@ -85,28 +87,28 @@ class CustomerDetailsView extends StatelessWidget {
         return AdaptiveMaxWidth(
           width: AppContentWidth.detail,
           child: ListView(
-            padding: const EdgeInsets.all(16),
+            padding: EdgeInsets.all(spacing.lg),
             children: [
-              _CustomerHeader(customer: customer),
-              const SizedBox(height: 12),
+              _CustomerHero(customer: customer),
+              SizedBox(height: spacing.md),
               PointyDetailSection(
                 title: l10n.customerProfileTitle,
                 icon: Icons.badge_outlined,
                 child: _CustomerProfile(viewModel: viewModel),
               ),
-              const SizedBox(height: 12),
+              SizedBox(height: spacing.md),
               PointyDetailSection(
                 title: l10n.customerSalesSummaryTitle,
                 icon: Icons.summarize_outlined,
                 child: _CustomerSalesSummary(viewModel: viewModel),
               ),
-              const SizedBox(height: 12),
+              SizedBox(height: spacing.md),
               PointyDetailSection(
                 title: l10n.customerInvoiceHistoryTitle,
                 icon: Icons.receipt_long_outlined,
                 child: _CustomerInvoiceHistory(viewModel: viewModel),
               ),
-              const SizedBox(height: 12),
+              SizedBox(height: spacing.md),
               PointyDetailSection(
                 title: l10n.customerAdjustmentHistoryTitle,
                 icon: Icons.assignment_return_outlined,
@@ -120,64 +122,42 @@ class CustomerDetailsView extends StatelessWidget {
   }
 }
 
-class _CustomerHeader extends StatelessWidget {
-  const _CustomerHeader({required this.customer});
+class _CustomerHero extends StatelessWidget {
+  const _CustomerHero({required this.customer});
 
   final Customer customer;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final colorScheme = Theme.of(context).colorScheme;
 
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: colorScheme.primary,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(18),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(
-                  customer.marketingConsent
-                      ? Icons.campaign_outlined
-                      : Icons.person_outline,
-                  color: colorScheme.onPrimary,
-                  size: 34,
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    customer.fullName,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                      color: colorScheme.onPrimary,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Text(
-              [
-                if (customer.customerNumber.isNotEmpty)
-                  '${l10n.customerNumberLabel}: ${customer.customerNumber}',
-                if (customer.phone.isNotEmpty) customer.phone,
-                if (customer.email.isNotEmpty) customer.email,
-                if (!customer.isActive) l10n.inactiveContactLabel,
-              ].join(' • '),
-              style: Theme.of(
-                context,
-              ).textTheme.bodyMedium?.copyWith(color: colorScheme.onPrimary),
-            ),
-          ],
+    return PointyDetailHero(
+      icon: customer.marketingConsent
+          ? Icons.campaign_outlined
+          : Icons.person_outline,
+      title: customer.fullName,
+      pills: [
+        PointyHeroPill(
+          label: customer.isActive
+              ? l10n.activeContactLabel
+              : l10n.inactiveContactLabel,
+          icon: customer.isActive
+              ? Icons.check_circle_outline
+              : Icons.pause_circle_outline,
         ),
-      ),
+        if (customer.customerNumber.trim().isNotEmpty)
+          PointyHeroPill(
+            label: customer.customerNumber,
+            icon: Icons.badge_outlined,
+          ),
+        if (customer.phone.trim().isNotEmpty)
+          PointyHeroPill(label: customer.phone, icon: Icons.phone_outlined),
+        if (customer.marketingConsent)
+          PointyHeroPill(
+            label: l10n.marketingAllowedLabel,
+            icon: Icons.campaign_outlined,
+          ),
+      ],
     );
   }
 }
@@ -190,58 +170,48 @@ class _CustomerProfile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    final spacing = AdaptiveSpacing.of(context);
     final customer = viewModel.customer;
 
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (viewModel.hasCustomerError)
-          _ErrorText(text: l10n.customerDetailsLoadError),
-        PointyDetailRow(
-          label: l10n.customerNumberLabel,
-          value: _valueOrEmpty(l10n, customer.customerNumber),
-        ),
-        const Divider(height: 20),
-        PointyDetailRow(
-          label: l10n.phoneOptionalLabel,
-          value: _valueOrEmpty(l10n, customer.phone),
-        ),
-        const Divider(height: 20),
-        PointyDetailRow(
-          label: l10n.emailOptionalLabel,
-          value: _valueOrEmpty(l10n, customer.email),
-        ),
-        const Divider(height: 20),
-        PointyDetailRow(
-          label: l10n.genderLabel,
-          value: genderLabel(l10n, customer.gender),
-        ),
-        const Divider(height: 20),
-        PointyDetailRow(
-          label: l10n.customerBirthdayLabel,
-          value: customer.birthday == null
-              ? l10n.customerEmptyValue
-              : formatDate(customer.birthday!),
-        ),
-        const Divider(height: 20),
-        PointyDetailRow(
-          label: l10n.customerMarketingConsentLabel,
-          value: customer.marketingConsent
-              ? l10n.marketingAllowedLabel
-              : l10n.customerEmptyValue,
-        ),
-        const Divider(height: 20),
-        PointyDetailRow(
-          label: l10n.customerStatusLabel,
-          value: customer.isActive
-              ? l10n.activeContactLabel
-              : l10n.inactiveContactLabel,
+        if (viewModel.hasCustomerError) ...[
+          PointyInlineMessage.error(message: l10n.customerDetailsLoadError),
+          SizedBox(height: spacing.sm),
+        ],
+        PointyMetricGrid(
+          maxColumns: 2,
+          minTileWidth: 200,
+          gap: PointyMetricGridGap.compact,
+          metrics: [
+            PointyMetricGridItem(
+              label: l10n.phoneOptionalLabel,
+              value: _valueOrEmpty(l10n, customer.phone),
+              icon: Icons.phone_outlined,
+            ),
+            PointyMetricGridItem(
+              label: l10n.emailOptionalLabel,
+              value: _valueOrEmpty(l10n, customer.email),
+              icon: Icons.alternate_email_outlined,
+            ),
+            PointyMetricGridItem(
+              label: l10n.genderLabel,
+              value: genderLabel(l10n, customer.gender),
+              icon: Icons.person_outline,
+            ),
+            PointyMetricGridItem(
+              label: l10n.customerBirthdayLabel,
+              value: customer.birthday == null
+                  ? l10n.customerEmptyValue
+                  : formatDate(customer.birthday!),
+              icon: Icons.cake_outlined,
+            ),
+          ],
         ),
         if (customer.notes.trim().isNotEmpty) ...[
-          const Divider(height: 20),
-          _MultilineDetailRow(
-            label: l10n.customerNotesLabel,
-            value: customer.notes,
-          ),
+          SizedBox(height: spacing.md),
+          _NotesBlock(label: l10n.customerNotesLabel, value: customer.notes),
         ],
       ],
     );
@@ -256,82 +226,83 @@ class _CustomerSalesSummary extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    final colors = context.pointyColors;
+    final spacing = AdaptiveSpacing.of(context);
     final summary = viewModel.summary;
 
     if (viewModel.isLoadingSummary && summary.invoiceCount == 0) {
-      return const Center(child: CircularProgressIndicator());
+      return const PointyLoadingArea();
     }
 
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (viewModel.hasSummaryError)
-          _ErrorText(text: l10n.customerSalesSummaryLoadError),
-        PointyDetailRow(
-          label: l10n.customerTotalInvoicedLabel,
-          value: formatMoney(summary.totalInvoiced),
-        ),
-        const Divider(height: 20),
-        PointyDetailRow(
-          label: l10n.customerNetSalesLabel,
-          value: formatMoney(summary.netSales),
-        ),
-        const Divider(height: 20),
-        PointyDetailRow(
-          label: l10n.customerInvoiceCountLabel,
-          value: l10n.customerInvoiceCountValue(summary.invoiceCount),
-        ),
-        const Divider(height: 20),
-        PointyDetailRow(
-          label: l10n.customerPaidInvoiceCountLabel,
-          value: l10n.customerPaidInvoiceCountValue(summary.paidInvoiceCount),
-        ),
-        const Divider(height: 20),
-        PointyDetailRow(
-          label: l10n.customerVoidCountLabel,
-          value: l10n.customerVoidCountValue(summary.voidInvoiceCount),
-        ),
-        const Divider(height: 20),
-        PointyDetailRow(
-          label: l10n.customerVoidTotalLabel,
-          value: formatMoney(summary.voidTotal),
-        ),
-        const Divider(height: 20),
-        PointyDetailRow(
-          label: l10n.customerReturnCountLabel,
-          value: l10n.customerReturnCountValue(summary.returnCount),
-        ),
-        const Divider(height: 20),
-        PointyDetailRow(
-          label: l10n.customerReturnTotalLabel,
-          value: formatMoney(summary.returnTotal),
-        ),
-        const Divider(height: 20),
-        PointyDetailRow(
-          label: l10n.customerRefundCountLabel,
-          value: l10n.customerRefundCountValue(summary.refundCount),
-        ),
-        const Divider(height: 20),
-        PointyDetailRow(
-          label: l10n.customerRefundTotalLabel,
-          value: formatMoney(summary.refundTotal),
-        ),
-        const Divider(height: 20),
-        PointyDetailRow(
-          label: l10n.customerExchangeCountLabel,
-          value: l10n.customerExchangeCountValue(summary.exchangeCount),
-        ),
-        const Divider(height: 20),
-        PointyDetailRow(
-          label: l10n.customerExchangeTotalLabel,
-          value: formatMoney(summary.exchangeTotal),
-        ),
-        if (summary.lastInvoiceAt != null) ...[
-          const Divider(height: 20),
-          PointyDetailRow(
-            label: l10n.customerLastInvoiceAtLabel,
-            value: formatDateTime(summary.lastInvoiceAt!),
+        if (viewModel.hasSummaryError) ...[
+          PointyInlineMessage.error(
+            message: l10n.customerSalesSummaryLoadError,
           ),
+          SizedBox(height: spacing.sm),
         ],
+        PointyMetricGrid(
+          maxColumns: 3,
+          minTileWidth: 170,
+          gap: PointyMetricGridGap.compact,
+          metrics: [
+            PointyMetricGridItem(
+              label: l10n.customerTotalInvoicedLabel,
+              value: formatMoney(summary.totalInvoiced),
+              icon: Icons.receipt_long_outlined,
+              accentColor: colors.primaryStrong,
+            ),
+            PointyMetricGridItem(
+              label: l10n.customerNetSalesLabel,
+              value: formatMoney(summary.netSales),
+              icon: Icons.payments_outlined,
+              accentColor: colors.success,
+            ),
+            PointyMetricGridItem(
+              label: l10n.customerInvoiceCountLabel,
+              value: summary.invoiceCount.toString(),
+              icon: Icons.receipt_outlined,
+              subtitle: l10n.customerPaidInvoiceCountValue(
+                summary.paidInvoiceCount,
+              ),
+            ),
+            PointyMetricGridItem(
+              label: l10n.customerVoidCountLabel,
+              value: summary.voidInvoiceCount.toString(),
+              icon: Icons.block_outlined,
+              accentColor: summary.voidInvoiceCount > 0 ? colors.warning : null,
+              subtitle: formatMoney(summary.voidTotal),
+            ),
+            PointyMetricGridItem(
+              label: l10n.customerReturnCountLabel,
+              value: summary.returnCount.toString(),
+              icon: Icons.keyboard_return_outlined,
+              accentColor: summary.returnCount > 0 ? colors.warning : null,
+              subtitle: formatMoney(summary.returnTotal),
+            ),
+            PointyMetricGridItem(
+              label: l10n.customerRefundCountLabel,
+              value: summary.refundCount.toString(),
+              icon: Icons.currency_exchange_outlined,
+              accentColor: summary.refundCount > 0 ? colors.warning : null,
+              subtitle: formatMoney(summary.refundTotal),
+            ),
+            PointyMetricGridItem(
+              label: l10n.customerExchangeCountLabel,
+              value: summary.exchangeCount.toString(),
+              icon: Icons.swap_horiz_outlined,
+              subtitle: formatMoney(summary.exchangeTotal),
+            ),
+            if (summary.lastInvoiceAt != null)
+              PointyMetricGridItem(
+                label: l10n.customerLastInvoiceAtLabel,
+                value: formatDateTime(summary.lastInvoiceAt!),
+                icon: Icons.history_outlined,
+              ),
+          ],
+        ),
       ],
     );
   }
@@ -347,13 +318,18 @@ class _CustomerInvoiceHistory extends StatelessWidget {
     final l10n = AppLocalizations.of(context)!;
 
     if (viewModel.isLoadingOrders && viewModel.orderHistory.isEmpty) {
-      return const Center(child: CircularProgressIndicator());
+      return const PointyLoadingArea();
     }
     if (viewModel.hasOrderError && viewModel.orderHistory.isEmpty) {
-      return _ErrorText(text: l10n.customerInvoiceHistoryLoadError);
+      return PointyInlineMessage.error(
+        message: l10n.customerInvoiceHistoryLoadError,
+      );
     }
     if (viewModel.orderHistory.isEmpty) {
-      return Text(l10n.customerInvoiceHistoryEmpty);
+      return PointyEmptyState(
+        icon: Icons.receipt_long_outlined,
+        title: l10n.customerInvoiceHistoryEmpty,
+      );
     }
 
     return SizedBox(
@@ -367,7 +343,10 @@ class _CustomerInvoiceHistory extends StatelessWidget {
         hasMore: viewModel.hasMoreOrders,
         isLoadingInitial: viewModel.isLoadingOrders,
         isLoadingMore: viewModel.isLoadingMoreOrders,
-        emptyBuilder: (context) => Text(l10n.customerInvoiceHistoryEmpty),
+        emptyBuilder: (context) => PointyEmptyState(
+          icon: Icons.receipt_long_outlined,
+          title: l10n.customerInvoiceHistoryEmpty,
+        ),
         padding: EdgeInsets.zero,
         framed: false,
         itemBuilder: (context, order) {
@@ -402,13 +381,18 @@ class _CustomerAdjustmentHistory extends StatelessWidget {
     final l10n = AppLocalizations.of(context)!;
 
     if (viewModel.isLoadingAdjustments && viewModel.adjustmentHistory.isEmpty) {
-      return const Center(child: CircularProgressIndicator());
+      return const PointyLoadingArea();
     }
     if (viewModel.hasAdjustmentError && viewModel.adjustmentHistory.isEmpty) {
-      return _ErrorText(text: l10n.customerAdjustmentHistoryLoadError);
+      return PointyInlineMessage.error(
+        message: l10n.customerAdjustmentHistoryLoadError,
+      );
     }
     if (viewModel.adjustmentHistory.isEmpty) {
-      return Text(l10n.customerAdjustmentHistoryEmpty);
+      return PointyEmptyState(
+        icon: Icons.assignment_return_outlined,
+        title: l10n.customerAdjustmentHistoryEmpty,
+      );
     }
 
     return SizedBox(
@@ -422,7 +406,10 @@ class _CustomerAdjustmentHistory extends StatelessWidget {
         hasMore: viewModel.hasMoreAdjustments,
         isLoadingInitial: viewModel.isLoadingAdjustments,
         isLoadingMore: viewModel.isLoadingMoreAdjustments,
-        emptyBuilder: (context) => Text(l10n.customerAdjustmentHistoryEmpty),
+        emptyBuilder: (context) => PointyEmptyState(
+          icon: Icons.assignment_return_outlined,
+          title: l10n.customerAdjustmentHistoryEmpty,
+        ),
         padding: EdgeInsets.zero,
         framed: false,
         itemBuilder: (context, adjustment) {
@@ -502,38 +489,47 @@ double _historyListHeight(int itemCount, bool hasMore) {
   return 240;
 }
 
-class _ErrorText extends StatelessWidget {
-  const _ErrorText({required this.text});
-
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Text(
-        text,
-        style: TextStyle(color: Theme.of(context).colorScheme.error),
-      ),
-    );
-  }
-}
-
-class _MultilineDetailRow extends StatelessWidget {
-  const _MultilineDetailRow({required this.label, required this.value});
+class _NotesBlock extends StatelessWidget {
+  const _NotesBlock({required this.label, required this.value});
 
   final String label;
   final String value;
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(label, style: Theme.of(context).textTheme.labelLarge),
-        const SizedBox(height: 6),
-        Text(value),
-      ],
+    final colors = context.pointyColors;
+    final spacing = AdaptiveSpacing.of(context);
+    final textTheme = Theme.of(context).textTheme;
+
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: colors.surfaceSunken,
+        borderRadius: BorderRadius.circular(PointyRadii.chip),
+        border: Border.all(color: colors.line),
+      ),
+      padding: EdgeInsets.all(spacing.md),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.sticky_note_2_outlined,
+                size: 16,
+                color: colors.mutedInk,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: textTheme.labelMedium?.copyWith(color: colors.mutedInk),
+              ),
+            ],
+          ),
+          SizedBox(height: spacing.xs),
+          Text(value, style: textTheme.bodyMedium),
+        ],
+      ),
     );
   }
 }

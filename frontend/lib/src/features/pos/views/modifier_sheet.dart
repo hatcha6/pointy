@@ -4,6 +4,7 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 import '../../../data/models/modifier_group.dart';
 import '../../../data/models/product.dart';
 import '../../../data/models/product_variant.dart';
+import '../../../shared/design/design.dart';
 import '../../../shared/formatters.dart';
 
 /// Fast modifier picker. Opens with sensible defaults preselected so the common
@@ -307,13 +308,11 @@ class _ModifierChip extends StatelessWidget {
 
     // Quantifiable options always render with an inline stepper.
     if (option.isQuantifiable) {
-      final colorScheme = Theme.of(context).colorScheme;
+      final colors = context.pointyColors;
       return Material(
-        color: selected ? colorScheme.secondaryContainer : colorScheme.surface,
+        color: selected ? PointyColors.amberContainer : colors.surface,
         shape: StadiumBorder(
-          side: BorderSide(
-            color: selected ? colorScheme.secondary : colorScheme.outlineVariant,
-          ),
+          side: BorderSide(color: selected ? colors.accentAmber : colors.line),
         ),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 2),

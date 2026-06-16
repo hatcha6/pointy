@@ -3,6 +3,7 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../core/authorization.dart';
 import 'authorization_denied_view.dart';
+import 'design/design.dart';
 
 typedef AuthorizedWidgetBuilder = Widget Function(BuildContext context);
 
@@ -620,7 +621,7 @@ class _PaymentUnauthorizedMessage extends StatelessWidget {
     return Text(
       AppLocalizations.of(context)!.paymentUnauthorizedMessage,
       textAlign: TextAlign.center,
-      style: TextStyle(color: Theme.of(context).colorScheme.error),
+      style: TextStyle(color: context.pointyColors.danger),
     );
   }
 }

@@ -15,6 +15,7 @@ import '../../../shared/app_navigation_drawer.dart';
 import '../../../shared/authorization_guards.dart';
 import '../../../shared/components/components.dart';
 import '../../../shared/decimal_text_input_formatter.dart';
+import '../../../shared/design/design.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../../../shared/shell/shell.dart';
 import '../../attendance/view_models/attendance_view_model.dart';
@@ -22,9 +23,11 @@ import '../../attendance/views/attendance_settings_page.dart';
 import '../../operations/view_models/workflows_view_model.dart';
 import '../view_models/modifier_groups_view_model.dart';
 import '../view_models/prep_stations_view_model.dart';
+import '../view_models/price_checkers_view_model.dart';
 import '../view_models/sales_channels_view_model.dart';
 import '../view_models/shop_settings_view_model.dart';
 import 'operations_settings_page.dart';
+import 'price_checkers_page.dart';
 import 'sales_channels_page.dart';
 
 part 'shop_settings_widgets.dart';
@@ -35,6 +38,7 @@ class ShopSettingsScreen extends StatelessWidget {
     super.key,
     required this.viewModel,
     required this.salesChannelsViewModel,
+    required this.priceCheckersViewModel,
     required this.workflowsViewModel,
     required this.prepStationsViewModel,
     required this.modifierGroupsViewModel,
@@ -45,6 +49,7 @@ class ShopSettingsScreen extends StatelessWidget {
 
   final ShopSettingsViewModel viewModel;
   final SalesChannelsViewModel salesChannelsViewModel;
+  final PriceCheckersViewModel priceCheckersViewModel;
   final WorkflowsViewModel workflowsViewModel;
   final PrepStationsViewModel prepStationsViewModel;
   final ModifierGroupsViewModel modifierGroupsViewModel;
@@ -86,11 +91,13 @@ class ShopSettingsScreen extends StatelessWidget {
             child: _ShopSettingsBody(
               viewModel: viewModel,
               salesChannelsViewModel: salesChannelsViewModel,
+              priceCheckersViewModel: priceCheckersViewModel,
               workflowsViewModel: workflowsViewModel,
               prepStationsViewModel: prepStationsViewModel,
               modifierGroupsViewModel: modifierGroupsViewModel,
               attendanceViewModel: attendanceViewModel,
               canManageSalesChannels: capabilities.canManageSalesChannels,
+              canManagePriceCheckers: capabilities.canManagePriceCheckers,
               canManageWorkflows: capabilities.canManageWorkflows,
               canManageAttendance: capabilities.canManageAttendance,
             ),
@@ -105,22 +112,26 @@ class _ShopSettingsBody extends StatelessWidget {
   const _ShopSettingsBody({
     required this.viewModel,
     required this.salesChannelsViewModel,
+    required this.priceCheckersViewModel,
     required this.workflowsViewModel,
     required this.prepStationsViewModel,
     required this.modifierGroupsViewModel,
     required this.attendanceViewModel,
     required this.canManageSalesChannels,
+    required this.canManagePriceCheckers,
     required this.canManageWorkflows,
     required this.canManageAttendance,
   });
 
   final ShopSettingsViewModel viewModel;
   final SalesChannelsViewModel salesChannelsViewModel;
+  final PriceCheckersViewModel priceCheckersViewModel;
   final WorkflowsViewModel workflowsViewModel;
   final PrepStationsViewModel prepStationsViewModel;
   final ModifierGroupsViewModel modifierGroupsViewModel;
   final AttendanceViewModel attendanceViewModel;
   final bool canManageSalesChannels;
+  final bool canManagePriceCheckers;
   final bool canManageWorkflows;
   final bool canManageAttendance;
 
@@ -152,11 +163,13 @@ class _ShopSettingsBody extends StatelessWidget {
     return _ShopSettingsForm(
       viewModel: viewModel,
       salesChannelsViewModel: salesChannelsViewModel,
+      priceCheckersViewModel: priceCheckersViewModel,
       workflowsViewModel: workflowsViewModel,
       prepStationsViewModel: prepStationsViewModel,
       modifierGroupsViewModel: modifierGroupsViewModel,
       attendanceViewModel: attendanceViewModel,
       canManageSalesChannels: canManageSalesChannels,
+      canManagePriceCheckers: canManagePriceCheckers,
       canManageWorkflows: canManageWorkflows,
       canManageAttendance: canManageAttendance,
       settings: settings,
@@ -168,11 +181,13 @@ class _ShopSettingsForm extends StatefulWidget {
   const _ShopSettingsForm({
     required this.viewModel,
     required this.salesChannelsViewModel,
+    required this.priceCheckersViewModel,
     required this.workflowsViewModel,
     required this.prepStationsViewModel,
     required this.modifierGroupsViewModel,
     required this.attendanceViewModel,
     required this.canManageSalesChannels,
+    required this.canManagePriceCheckers,
     required this.canManageWorkflows,
     required this.canManageAttendance,
     required this.settings,
@@ -180,11 +195,13 @@ class _ShopSettingsForm extends StatefulWidget {
 
   final ShopSettingsViewModel viewModel;
   final SalesChannelsViewModel salesChannelsViewModel;
+  final PriceCheckersViewModel priceCheckersViewModel;
   final WorkflowsViewModel workflowsViewModel;
   final PrepStationsViewModel prepStationsViewModel;
   final ModifierGroupsViewModel modifierGroupsViewModel;
   final AttendanceViewModel attendanceViewModel;
   final bool canManageSalesChannels;
+  final bool canManagePriceCheckers;
   final bool canManageWorkflows;
   final bool canManageAttendance;
   final ShopSettings settings;
@@ -451,6 +468,15 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
                             onTap: widget.viewModel.isSaving
                                 ? null
                                 : () => _openSalesChannels(context),
+                          ),
+                        if (widget.canManagePriceCheckers)
+                          PointySettingsTile(
+                            icon: Icons.price_check_outlined,
+                            title: l10n.priceCheckersSectionTitle,
+                            subtitle: l10n.priceCheckersSectionSubtitle,
+                            onTap: widget.viewModel.isSaving
+                                ? null
+                                : () => _openPriceCheckers(context),
                           ),
                         if (widget.canManageAttendance)
                           PointySettingsTile(
@@ -1141,6 +1167,15 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
       MaterialPageRoute<void>(
         builder: (routeContext) =>
             SalesChannelsPage(viewModel: widget.salesChannelsViewModel),
+      ),
+    );
+  }
+
+  Future<void> _openPriceCheckers(BuildContext context) {
+    return Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (routeContext) =>
+            PriceCheckersPage(viewModel: widget.priceCheckersViewModel),
       ),
     );
   }

@@ -4,6 +4,7 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 import '../../../data/models/product_variant.dart';
 import '../../../data/models/product_variant_draft.dart';
 import '../../../data/models/variant_option.dart';
+import '../../../shared/design/design.dart';
 import '../view_models/product_details_view_model.dart';
 import 'product_form_fields.dart';
 import 'product_form_section.dart';
@@ -74,7 +75,7 @@ class _ProductVariantFormSheetState extends State<ProductVariantFormSheet> {
       listenable: widget.viewModel,
       builder: (context, _) {
         return Material(
-          color: Theme.of(context).colorScheme.surface,
+          color: context.pointyColors.surface,
           child: SingleChildScrollView(
             padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
             child: Form(
@@ -127,9 +128,7 @@ class _ProductVariantFormSheetState extends State<ProductVariantFormSheet> {
                       _saveErrorKey == 'variant_update_error'
                           ? l10n.variantUpdateError
                           : l10n.variantCreateError,
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.error,
-                      ),
+                      style: TextStyle(color: context.pointyColors.danger),
                     ),
                   ],
                   const SizedBox(height: 16),

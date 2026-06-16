@@ -10,6 +10,7 @@ import '../../../shared/app_navigation_drawer.dart';
 import '../../../shared/authorization_guards.dart';
 import '../../../shared/components/components.dart';
 import '../../../shared/contact_picker_sheet.dart';
+import '../../../shared/design/design.dart';
 import '../../../shared/formatters.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../../../shared/shell/shell.dart';
@@ -240,7 +241,7 @@ class _ContactManagementBody extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
             child: Text(
               l10n.contactsLoadError,
-              style: TextStyle(color: Theme.of(context).colorScheme.error),
+              style: TextStyle(color: context.pointyColors.danger),
             ),
           ),
         Expanded(

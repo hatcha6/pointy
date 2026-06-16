@@ -559,11 +559,11 @@ class _ReportTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
+    final colors = context.pointyColors;
 
     return Card.filled(
       margin: EdgeInsets.zero,
-      color: isSelected ? colorScheme.primaryContainer : colorScheme.surface,
+      color: isSelected ? PointyColors.primaryContainer : colors.surface,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
@@ -574,9 +574,7 @@ class _ReportTile extends StatelessWidget {
             children: [
               Icon(
                 definition.icon,
-                color: isSelected
-                    ? colorScheme.onPrimaryContainer
-                    : colorScheme.primary,
+                color: isSelected ? colors.primaryDark : colors.primaryStrong,
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -612,7 +610,7 @@ class _ReportTile extends StatelessWidget {
               ),
               if (isSelected) ...[
                 const SizedBox(width: 8),
-                Icon(Icons.check_circle, color: colorScheme.primary),
+                Icon(Icons.check_circle, color: colors.primaryStrong),
               ],
             ],
           ),

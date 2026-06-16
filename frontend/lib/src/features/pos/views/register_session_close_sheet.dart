@@ -124,7 +124,6 @@ class _RegisterSessionCloseSheetState extends State<RegisterSessionCloseSheet> {
                         textInputAction: TextInputAction.next,
                         decoration: InputDecoration(
                           labelText: l10n.closingCashInputLabel,
-                          border: const OutlineInputBorder(),
                           prefixIcon: const Icon(Icons.payments_outlined),
                         ),
                         validator: (value) => _validateMoney(value, l10n),
@@ -359,10 +358,7 @@ class _CountField extends StatelessWidget {
       keyboardType: TextInputType.number,
       inputFormatters: [FilteringTextInputFormatter.digitsOnly],
       textInputAction: TextInputAction.next,
-      decoration: InputDecoration(
-        labelText: label,
-        border: const OutlineInputBorder(),
-      ),
+      decoration: InputDecoration(labelText: label),
     );
   }
 }

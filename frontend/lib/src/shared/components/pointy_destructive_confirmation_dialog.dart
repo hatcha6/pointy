@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
+import '../design/design.dart';
 import '../responsive/responsive.dart';
 
 class PointyDestructiveConfirmationDialog extends StatelessWidget {
@@ -20,12 +21,12 @@ class PointyDestructiveConfirmationDialog extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final colorScheme = Theme.of(context).colorScheme;
+    final colors = context.pointyColors;
 
     return AdaptiveDialogSurface(
       size: AdaptiveModalSize.compact,
       child: AlertDialog(
-        icon: Icon(icon, color: colorScheme.error),
+        icon: Icon(icon, color: colors.danger),
         title: Text(title),
         content: Text(message),
         actions: [
@@ -36,8 +37,8 @@ class PointyDestructiveConfirmationDialog extends StatelessWidget {
           FilledButton(
             onPressed: () => Navigator.of(context).pop(true),
             style: FilledButton.styleFrom(
-              backgroundColor: colorScheme.error,
-              foregroundColor: colorScheme.onError,
+              backgroundColor: colors.danger,
+              foregroundColor: colors.surface,
             ),
             child: Text(confirmLabel),
           ),

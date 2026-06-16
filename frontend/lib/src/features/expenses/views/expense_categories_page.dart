@@ -5,6 +5,7 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../data/models/expense_category.dart';
 import '../../../shared/components/components.dart';
+import '../../../shared/design/design.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../../../shared/shell/shell.dart';
 import '../view_models/expense_categories_view_model.dart';
@@ -192,6 +193,7 @@ class _ExpenseCategoryTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
+    final colors = context.pointyColors;
     return ListTile(
       leading: const Icon(Icons.sell_outlined),
       title: Row(
@@ -202,14 +204,12 @@ class _ExpenseCategoryTile extends StatelessWidget {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
               decoration: BoxDecoration(
-                color: theme.colorScheme.secondaryContainer,
+                color: PointyColors.amberContainer,
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Text(
                 l10n.expenseCategoryInactiveBadge,
-                style: theme.textTheme.labelSmall?.copyWith(
-                  color: theme.colorScheme.onSecondaryContainer,
-                ),
+                style: theme.textTheme.labelSmall?.copyWith(color: colors.ink),
               ),
             ),
           ],

@@ -10,6 +10,7 @@ import '../../../data/repositories/purchase_repository.dart';
 import '../../../data/repositories/shop_settings_repository.dart';
 import '../../../shared/components/components.dart';
 import '../../../shared/date_formatters.dart';
+import '../../../shared/design/design.dart';
 import '../../../shared/formatters.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../../purchasing/views/purchase_order_details_screen.dart';
@@ -107,6 +108,7 @@ class SupplierDetailsView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    final spacing = AdaptiveSpacing.of(context);
 
     return ListenableBuilder(
       listenable: viewModel,
@@ -115,16 +117,16 @@ class SupplierDetailsView extends StatelessWidget {
         return AdaptiveMaxWidth(
           width: AppContentWidth.detail,
           child: ListView(
-            padding: const EdgeInsets.all(16),
+            padding: EdgeInsets.all(spacing.lg),
             children: [
-              _SupplierHeader(supplier: supplier),
-              const SizedBox(height: 12),
+              _SupplierHero(supplier: supplier),
+              SizedBox(height: spacing.md),
               PointyDetailSection(
                 title: l10n.supplierPurchaseSummaryTitle,
                 icon: Icons.summarize_outlined,
                 child: _SupplierTotals(viewModel: viewModel),
               ),
-              const SizedBox(height: 12),
+              SizedBox(height: spacing.md),
               PointyDetailSection(
                 title: l10n.supplierPurchaseHistoryTitle,
                 icon: Icons.receipt_long_outlined,
@@ -134,7 +136,7 @@ class SupplierDetailsView extends StatelessWidget {
                       _openPurchaseOrder(context, order),
                 ),
               ),
-              const SizedBox(height: 12),
+              SizedBox(height: spacing.md),
               PointyDetailSection(
                 title: l10n.supplierReturnRefundHistoryTitle,
                 icon: Icons.keyboard_return_outlined,
@@ -162,62 +164,37 @@ class SupplierDetailsView extends StatelessWidget {
   }
 }
 
-class _SupplierHeader extends StatelessWidget {
-  const _SupplierHeader({required this.supplier});
+class _SupplierHero extends StatelessWidget {
+  const _SupplierHero({required this.supplier});
 
   final SupplierContact supplier;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final colorScheme = Theme.of(context).colorScheme;
 
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: colorScheme.primary,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(18),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(
-                  Icons.local_shipping_outlined,
-                  color: colorScheme.onPrimary,
-                  size: 34,
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    supplier.name,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                      color: colorScheme.onPrimary,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Text(
-              [
-                if (supplier.contactName.isNotEmpty)
-                  l10n.supplierContactValue(supplier.contactName),
-                if (supplier.phone.isNotEmpty) supplier.phone,
-                if (supplier.email.isNotEmpty) supplier.email,
-                if (!supplier.isActive) l10n.inactiveContactLabel,
-              ].join(' • '),
-              style: Theme.of(
-                context,
-              ).textTheme.bodyMedium?.copyWith(color: colorScheme.onPrimary),
-            ),
-          ],
+    return PointyDetailHero(
+      icon: Icons.local_shipping_outlined,
+      title: supplier.name,
+      value: formatMoney(supplier.totalBought),
+      valueSubtitle: l10n.supplierPurchaseCountValue(supplier.purchaseCount),
+      pills: [
+        PointyHeroPill(
+          label: supplier.isActive
+              ? l10n.activeContactLabel
+              : l10n.inactiveContactLabel,
+          icon: supplier.isActive
+              ? Icons.check_circle_outline
+              : Icons.pause_circle_outline,
         ),
-      ),
+        if (supplier.contactName.trim().isNotEmpty)
+          PointyHeroPill(
+            label: supplier.contactName,
+            icon: Icons.person_outline,
+          ),
+        if (supplier.phone.trim().isNotEmpty)
+          PointyHeroPill(label: supplier.phone, icon: Icons.phone_outlined),
+      ],
     );
   }
 }
@@ -230,33 +207,50 @@ class _SupplierTotals extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    final colors = context.pointyColors;
+    final spacing = AdaptiveSpacing.of(context);
     final supplier = viewModel.supplier;
 
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (viewModel.hasSupplierError)
-          _ErrorText(text: l10n.supplierDetailsLoadError),
-        PointyDetailRow(
-          label: l10n.supplierTotalBoughtLabel,
-          value: formatMoney(supplier.totalBought),
-        ),
-        const Divider(height: 20),
-        PointyDetailRow(
-          label: l10n.supplierPurchaseCountLabel,
-          value: l10n.supplierPurchaseCountValue(supplier.purchaseCount),
-        ),
-        const Divider(height: 20),
-        PointyDetailRow(
-          label: l10n.purchaseOrderBalanceDueLabel,
-          value: formatMoney(supplier.payableBalance),
-        ),
-        if (supplier.creditBalance > 0) ...[
-          const Divider(height: 20),
-          PointyDetailRow(
-            label: l10n.purchaseOrderCreditAppliedLabel,
-            value: formatMoney(supplier.creditBalance),
-          ),
+        if (viewModel.hasSupplierError) ...[
+          PointyInlineMessage.error(message: l10n.supplierDetailsLoadError),
+          SizedBox(height: spacing.sm),
         ],
+        PointyMetricGrid(
+          maxColumns: 3,
+          minTileWidth: 170,
+          gap: PointyMetricGridGap.compact,
+          metrics: [
+            PointyMetricGridItem(
+              label: l10n.supplierTotalBoughtLabel,
+              value: formatMoney(supplier.totalBought),
+              icon: Icons.shopping_bag_outlined,
+              accentColor: colors.primaryStrong,
+            ),
+            PointyMetricGridItem(
+              label: l10n.supplierPurchaseCountLabel,
+              value: supplier.purchaseCount.toString(),
+              icon: Icons.receipt_long_outlined,
+            ),
+            PointyMetricGridItem(
+              label: l10n.purchaseOrderBalanceDueLabel,
+              value: formatMoney(supplier.payableBalance),
+              icon: Icons.account_balance_wallet_outlined,
+              accentColor: supplier.payableBalance > 0
+                  ? colors.danger
+                  : colors.success,
+            ),
+            if (supplier.creditBalance > 0)
+              PointyMetricGridItem(
+                label: l10n.purchaseOrderCreditAppliedLabel,
+                value: formatMoney(supplier.creditBalance),
+                icon: Icons.savings_outlined,
+                accentColor: colors.success,
+              ),
+          ],
+        ),
       ],
     );
   }
@@ -276,13 +270,18 @@ class _SupplierPurchaseHistory extends StatelessWidget {
     final l10n = AppLocalizations.of(context)!;
 
     if (viewModel.isLoadingHistory && viewModel.purchaseHistory.isEmpty) {
-      return const Center(child: CircularProgressIndicator());
+      return const PointyLoadingArea();
     }
     if (viewModel.hasHistoryError && viewModel.purchaseHistory.isEmpty) {
-      return _ErrorText(text: l10n.supplierPurchaseHistoryLoadError);
+      return PointyInlineMessage.error(
+        message: l10n.supplierPurchaseHistoryLoadError,
+      );
     }
     if (viewModel.purchaseHistory.isEmpty) {
-      return Text(l10n.supplierPurchaseHistoryEmpty);
+      return PointyEmptyState(
+        icon: Icons.receipt_long_outlined,
+        title: l10n.supplierPurchaseHistoryEmpty,
+      );
     }
 
     return SizedBox(
@@ -296,7 +295,10 @@ class _SupplierPurchaseHistory extends StatelessWidget {
         hasMore: viewModel.hasMorePurchaseHistory,
         isLoadingInitial: viewModel.isLoadingHistory,
         isLoadingMore: viewModel.isLoadingMoreHistory,
-        emptyBuilder: (context) => Text(l10n.supplierPurchaseHistoryEmpty),
+        emptyBuilder: (context) => PointyEmptyState(
+          icon: Icons.receipt_long_outlined,
+          title: l10n.supplierPurchaseHistoryEmpty,
+        ),
         padding: EdgeInsets.zero,
         framed: false,
         itemBuilder: (context, order) {
@@ -333,13 +335,18 @@ class _SupplierAdjustmentHistory extends StatelessWidget {
     final l10n = AppLocalizations.of(context)!;
 
     if (viewModel.isLoadingAdjustments && viewModel.adjustmentHistory.isEmpty) {
-      return const Center(child: CircularProgressIndicator());
+      return const PointyLoadingArea();
     }
     if (viewModel.hasAdjustmentError && viewModel.adjustmentHistory.isEmpty) {
-      return _ErrorText(text: l10n.supplierReturnRefundHistoryLoadError);
+      return PointyInlineMessage.error(
+        message: l10n.supplierReturnRefundHistoryLoadError,
+      );
     }
     if (viewModel.adjustmentHistory.isEmpty) {
-      return Text(l10n.supplierReturnRefundHistoryEmpty);
+      return PointyEmptyState(
+        icon: Icons.keyboard_return_outlined,
+        title: l10n.supplierReturnRefundHistoryEmpty,
+      );
     }
 
     return SizedBox(
@@ -353,7 +360,10 @@ class _SupplierAdjustmentHistory extends StatelessWidget {
         hasMore: viewModel.hasMoreAdjustments,
         isLoadingInitial: viewModel.isLoadingAdjustments,
         isLoadingMore: viewModel.isLoadingMoreAdjustments,
-        emptyBuilder: (context) => Text(l10n.supplierReturnRefundHistoryEmpty),
+        emptyBuilder: (context) => PointyEmptyState(
+          icon: Icons.keyboard_return_outlined,
+          title: l10n.supplierReturnRefundHistoryEmpty,
+        ),
         padding: EdgeInsets.zero,
         framed: false,
         itemBuilder: (context, adjustment) {
@@ -407,21 +417,4 @@ double _historyListHeight(int itemCount, bool hasMore) {
     return 160;
   }
   return 240;
-}
-
-class _ErrorText extends StatelessWidget {
-  const _ErrorText({required this.text});
-
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Text(
-        text,
-        style: TextStyle(color: Theme.of(context).colorScheme.error),
-      ),
-    );
-  }
 }

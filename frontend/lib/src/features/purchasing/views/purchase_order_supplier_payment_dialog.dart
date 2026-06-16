@@ -47,10 +47,7 @@ class _SupplierPaymentDialogState extends State<_SupplierPaymentDialog> {
             children: [
               DropdownButtonFormField<SupplierPaymentMethod>(
                 initialValue: _method,
-                decoration: InputDecoration(
-                  labelText: l10n.paymentMethodLabel,
-                  border: const OutlineInputBorder(),
-                ),
+                decoration: InputDecoration(labelText: l10n.paymentMethodLabel),
                 items: [
                   for (final method in methods)
                     DropdownMenuItem(
@@ -83,7 +80,6 @@ class _SupplierPaymentDialogState extends State<_SupplierPaymentDialog> {
                   errorText: _showAmountError
                       ? l10n.supplierPaymentPositiveAmountError
                       : null,
-                  border: const OutlineInputBorder(),
                 ),
               ),
               const SizedBox(height: 12),
@@ -91,7 +87,6 @@ class _SupplierPaymentDialogState extends State<_SupplierPaymentDialog> {
                 controller: _referenceController,
                 decoration: InputDecoration(
                   labelText: l10n.supplierPaymentReferenceLabel,
-                  border: const OutlineInputBorder(),
                 ),
               ),
               const SizedBox(height: 12),
@@ -99,7 +94,6 @@ class _SupplierPaymentDialogState extends State<_SupplierPaymentDialog> {
                 controller: _notesController,
                 decoration: InputDecoration(
                   labelText: l10n.supplierPaymentNotesLabel,
-                  border: const OutlineInputBorder(),
                 ),
                 maxLines: 2,
               ),

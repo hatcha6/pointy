@@ -22,7 +22,6 @@ class PointyEmptyState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final spacing = AdaptiveSpacing.of(context);
-    final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
 
     return Center(
@@ -34,7 +33,7 @@ class PointyEmptyState extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(icon, size: 40, color: colorScheme.primary),
+              Icon(icon, size: 40, color: context.pointyColors.primaryStrong),
               SizedBox(height: spacing.md),
               Text(
                 title,

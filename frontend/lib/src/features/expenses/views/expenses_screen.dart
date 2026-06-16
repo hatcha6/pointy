@@ -12,6 +12,7 @@ import '../../../shared/app_navigation_drawer.dart';
 import '../../../shared/authorization_guards.dart';
 import '../../../shared/components/components.dart';
 import '../../../shared/date_formatters.dart';
+import '../../../shared/design/design.dart';
 import '../../../shared/formatters.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../../../shared/shell/shell.dart';
@@ -317,7 +318,7 @@ class _PeriodHeader extends StatelessWidget {
                       formatMoney(viewModel.visibleTotal),
                     ),
                     style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
+                      color: context.pointyColors.mutedInk,
                     ),
                   ),
                 ],

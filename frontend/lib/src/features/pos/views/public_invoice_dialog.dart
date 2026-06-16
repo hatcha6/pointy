@@ -4,6 +4,7 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 import 'package:qr/qr.dart';
 
 import '../../../data/models/sale_order.dart';
+import '../../../shared/design/design.dart';
 
 Future<void> showPublicInvoiceDialog({
   required BuildContext context,
@@ -31,6 +32,7 @@ class _PublicInvoiceDialog extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
+    final colors = context.pointyColors;
     final receiptNumber = order.receiptNumber ?? '';
 
     return AlertDialog(
@@ -55,7 +57,7 @@ class _PublicInvoiceDialog extends StatelessWidget {
             const SizedBox(height: 6),
             DecoratedBox(
               decoration: BoxDecoration(
-                border: Border.all(color: theme.colorScheme.outlineVariant),
+                border: Border.all(color: colors.line),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Padding(
@@ -105,7 +107,7 @@ class _QrCodeImage extends StatelessWidget {
       errorCorrectLevel: QrErrorCorrectLevel.M,
     );
     final qrImage = QrImage(qrCode);
-    final colorScheme = Theme.of(context).colorScheme;
+    final colors = context.pointyColors;
 
     return Semantics(
       label: AppLocalizations.of(context)!.publicInvoiceQrSemanticsLabel,
@@ -114,8 +116,8 @@ class _QrCodeImage extends StatelessWidget {
         size: Size.square(size),
         painter: _QrCodePainter(
           qrImage: qrImage,
-          foreground: colorScheme.onSurface,
-          background: colorScheme.surface,
+          foreground: colors.ink,
+          background: colors.surface,
         ),
       ),
     );

@@ -336,7 +336,7 @@ class _NotificationAlertRow extends StatelessWidget {
   Color _severityColor(BuildContext context) {
     final colors = context.pointyColors;
     return switch (alert.severity) {
-      BusinessAlertSeverity.critical => Theme.of(context).colorScheme.error,
+      BusinessAlertSeverity.critical => colors.danger,
       BusinessAlertSeverity.warning => colors.warning,
       BusinessAlertSeverity.info => colors.primaryStrong,
     };

@@ -50,6 +50,7 @@ enum AppCapability {
   manageUsers,
   manageShopSettings,
   manageSalesChannels,
+  managePriceCheckers,
   viewExpenses,
   manageExpenses,
   viewAttendance,
@@ -408,6 +409,12 @@ class AuthorizationCapabilities {
         capabilities.add(AppCapability.manageSalesChannels);
       }
       if (_hasAny(user, const [
+        'view_pricecheckerdevice',
+        'price_checker.view_pricecheckerdevice',
+      ])) {
+        capabilities.add(AppCapability.managePriceCheckers);
+      }
+      if (_hasAny(user, const [
         'view_attendanceday',
         'attendance.view_attendanceday',
       ])) {
@@ -623,6 +630,8 @@ class AuthorizationCapabilities {
   bool get canManageUsers => allows(AppCapability.manageUsers);
   bool get canManageShopSettings => allows(AppCapability.manageShopSettings);
   bool get canManageSalesChannels => allows(AppCapability.manageSalesChannels);
+  bool get canManagePriceCheckers =>
+      allows(AppCapability.managePriceCheckers);
   bool get canViewExpenses => allows(AppCapability.viewExpenses);
   bool get canManageExpenses => allows(AppCapability.manageExpenses);
   bool get canViewOperations => allows(AppCapability.viewOperations);

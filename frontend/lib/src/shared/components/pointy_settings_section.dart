@@ -72,8 +72,7 @@ class PointySettingsTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final spacing = AdaptiveSpacing.of(context);
     final colors = context.pointyColors;
-    final colorScheme = Theme.of(context).colorScheme;
-    final resolvedColor = iconColor ?? colorScheme.primary;
+    final resolvedColor = iconColor ?? colors.primaryStrong;
 
     return InkWell(
       onTap: onTap,
@@ -111,7 +110,7 @@ class PointySettingsTile extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: hasError ? colorScheme.error : colors.mutedInk,
+                      color: hasError ? colors.danger : colors.mutedInk,
                     ),
                   ),
                 ],

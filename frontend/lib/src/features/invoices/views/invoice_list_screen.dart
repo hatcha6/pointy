@@ -10,6 +10,7 @@ import '../../../shared/authorization_denied_view.dart';
 import '../../../shared/authorization_guards.dart';
 import '../../../shared/components/components.dart';
 import '../../../shared/date_formatters.dart';
+import '../../../shared/design/design.dart';
 import '../../../shared/formatters.dart';
 import '../../../shared/order/sale_order_details_content.dart';
 import '../../../shared/responsive/responsive.dart';
@@ -244,13 +245,13 @@ class InvoiceTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final colorScheme = Theme.of(context).colorScheme;
+    final colors = context.pointyColors;
     final receiptNumber = invoice.receiptNumber ?? l10n.saleReceiptFallback;
 
     return PointyDataRow(
       leading: Icon(
         saleOrderStatusIcon(invoice.status),
-        color: colorScheme.primary,
+        color: colors.primaryStrong,
       ),
       title: l10n.invoiceNumberValue(receiptNumber),
       subtitle: [
@@ -314,7 +315,7 @@ class InvoiceTile extends StatelessWidget {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              color: colorScheme.onSurface,
+              color: colors.ink,
               fontWeight: FontWeight.w800,
             ),
           ),
@@ -324,7 +325,7 @@ class InvoiceTile extends StatelessWidget {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: colorScheme.primary,
+                color: colors.primaryStrong,
                 fontWeight: FontWeight.w700,
               ),
             ),

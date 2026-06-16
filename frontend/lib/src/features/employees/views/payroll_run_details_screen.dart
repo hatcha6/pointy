@@ -545,8 +545,12 @@ class _RunHeaderCard extends StatelessWidget {
             ),
             if (timeline.isNotEmpty) ...[
               Divider(height: spacing.lg, color: colors.line),
-              for (final (label, value) in timeline)
-                PointyDetailRow(label: label, value: value),
+              PointySummaryList(
+                rows: [
+                  for (final (label, value) in timeline)
+                    PointySummaryRow(label: label, value: value),
+                ],
+              ),
             ],
           ],
         ),
@@ -716,25 +720,29 @@ class _PayrollLineTile extends StatelessWidget {
               ],
               if (line.adjustments.isNotEmpty) ...[
                 Divider(height: spacing.lg, color: colors.line),
-                for (final adjustment in line.adjustments)
-                  PointyDetailRow(
-                    label: l10n.payrollAdjustmentDetailLabel(
-                      payrollAdjustmentDirectionLabel(
-                        l10n,
-                        adjustment.direction,
-                      ),
-                      payrollAdjustmentTypeLabel(
-                        l10n,
-                        adjustment.adjustmentType,
-                      ),
-                    ),
-                    value: adjustment.notes.trim().isEmpty
-                        ? formatMoney(adjustment.amount)
-                        : l10n.payrollAdjustmentAmountWithNotes(
-                            formatMoney(adjustment.amount),
-                            adjustment.notes.trim(),
+                PointySummaryList(
+                  rows: [
+                    for (final adjustment in line.adjustments)
+                      PointySummaryRow(
+                        label: l10n.payrollAdjustmentDetailLabel(
+                          payrollAdjustmentDirectionLabel(
+                            l10n,
+                            adjustment.direction,
                           ),
-                  ),
+                          payrollAdjustmentTypeLabel(
+                            l10n,
+                            adjustment.adjustmentType,
+                          ),
+                        ),
+                        value: adjustment.notes.trim().isEmpty
+                            ? formatMoney(adjustment.amount)
+                            : l10n.payrollAdjustmentAmountWithNotes(
+                                formatMoney(adjustment.amount),
+                                adjustment.notes.trim(),
+                              ),
+                      ),
+                  ],
+                ),
               ],
               if (line.notes.trim().isNotEmpty) ...[
                 SizedBox(height: spacing.xs),

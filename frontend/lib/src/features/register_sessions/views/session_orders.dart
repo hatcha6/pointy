@@ -10,6 +10,7 @@ import '../../../shared/authorization_guards.dart';
 import '../../../shared/components/components.dart';
 import '../../../shared/contact_picker_sheet.dart';
 import '../../../shared/date_formatters.dart';
+import '../../../shared/design/design.dart';
 import '../../../shared/formatters.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../view_models/register_session_history_view_model.dart';
@@ -98,7 +99,7 @@ class _SessionSummaryPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final colorScheme = Theme.of(context).colorScheme;
+    final colors = context.pointyColors;
     final variance = session.cashVariance;
 
     return ListView(
@@ -151,8 +152,8 @@ class _SessionSummaryPanel extends StatelessWidget {
               ? l10n.shopSettingsEmptyValue
               : formatMoney(variance),
           accentColor: session.hasCashVariance
-              ? colorScheme.error
-              : colorScheme.primary,
+              ? colors.danger
+              : colors.primaryStrong,
         ),
         const SizedBox(height: 16),
         PointySectionHeader(title: l10n.sessionDenominationsTitle),
@@ -348,6 +349,7 @@ class SessionOrderTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    final colors = context.pointyColors;
     final receiptNumber = order.receiptNumber ?? l10n.saleReceiptFallback;
 
     return PointyDataRow(
@@ -371,7 +373,7 @@ class SessionOrderTile extends StatelessWidget {
             Text(
               l10n.invoiceProfitValue(formatMoney(order.profit!)),
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Theme.of(context).colorScheme.primary,
+                color: colors.primaryStrong,
                 fontWeight: FontWeight.w700,
               ),
             ),
@@ -401,6 +403,7 @@ class SessionCashMovementTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    final colors = context.pointyColors;
     final isPayIn = movement.movementType == RegisterCashMovementType.payIn;
 
     return PointyDataRow(
@@ -415,9 +418,7 @@ class SessionCashMovementTile extends StatelessWidget {
       trailing: Text(
         formatMoney(movement.amount),
         style: Theme.of(context).textTheme.titleMedium?.copyWith(
-          color: isPayIn
-              ? Theme.of(context).colorScheme.primary
-              : Theme.of(context).colorScheme.error,
+          color: isPayIn ? colors.primaryStrong : colors.danger,
         ),
       ),
     );

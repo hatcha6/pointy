@@ -7,6 +7,7 @@ import '../../../data/models/attendance.dart';
 import '../../../data/models/employee.dart';
 import '../../../shared/components/components.dart';
 import '../../../shared/date_formatters.dart';
+import '../../../shared/design/design.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../view_models/attendance_view_model.dart';
 
@@ -114,8 +115,7 @@ class _AttendanceReviewTabState extends State<AttendanceReviewTab> {
                   icon: Icons.event_busy_outlined,
                 )
               else
-                for (final day in viewModel.days)
-                  _DayTile(day: day),
+                for (final day in viewModel.days) _DayTile(day: day),
             ],
           ],
         );
@@ -133,16 +133,12 @@ class _AttendanceReviewTabState extends State<AttendanceReviewTab> {
           decoration: InputDecoration(
             labelText: l10n.attendanceSelectEmployeeLabel,
             prefixIcon: const Icon(Icons.person_search_outlined),
-            border: const OutlineInputBorder(),
           ),
           items: [
             for (final employee in widget.employees)
               DropdownMenuItem(
                 value: employee.id,
-                child: Text(
-                  employee.fullName,
-                  overflow: TextOverflow.ellipsis,
-                ),
+                child: Text(employee.fullName, overflow: TextOverflow.ellipsis),
               ),
           ],
           onChanged: (value) {
@@ -233,12 +229,12 @@ class _SummaryChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
+    final colors = context.pointyColors;
     return Chip(
       avatar: Icon(
         icon,
         size: 18,
-        color: isWarning ? colorScheme.error : colorScheme.primary,
+        color: isWarning ? colors.danger : colors.primaryStrong,
       ),
       label: Text('$label: $value'),
     );
@@ -253,23 +249,20 @@ class _DayTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final colorScheme = Theme.of(context).colorScheme;
+    final colors = context.pointyColors;
     final isProblem = day.status == 'late' || day.status == 'partial';
     final worked = day.workedMinutes >= 60
         ? '${(day.workedMinutes / 60).toStringAsFixed(1)}h'
         : '${day.workedMinutes}m';
 
     return PointyDataRow(
-      leading: Icon(
-        switch (day.status) {
-          'present' => Icons.check_circle_outline,
-          'late' => Icons.schedule_outlined,
-          'partial' => Icons.error_outline,
-          'day_off' => Icons.weekend_outlined,
-          _ => Icons.help_outline,
-        },
-        color: isProblem ? colorScheme.error : colorScheme.primary,
-      ),
+      leading: Icon(switch (day.status) {
+        'present' => Icons.check_circle_outline,
+        'late' => Icons.schedule_outlined,
+        'partial' => Icons.error_outline,
+        'day_off' => Icons.weekend_outlined,
+        _ => Icons.help_outline,
+      }, color: isProblem ? colors.danger : colors.primaryStrong),
       title:
           '${formatDate(day.date)} — ${attendanceStatusLabel(l10n, day.status)}',
       subtitle: [

@@ -9,6 +9,8 @@ import '../models/analytics_event.dart';
 import '../models/bill_of_materials.dart';
 import '../models/business_alert.dart';
 import '../models/onboarding.dart';
+import '../models/price_check_event.dart';
+import '../models/price_checker_device.dart';
 import '../models/print_audit_event.dart';
 import '../models/print_job.dart';
 import '../models/printer_config.dart';
@@ -79,6 +81,7 @@ import 'fraud_api_client.dart';
 import 'inventory_api_client.dart';
 import 'operations_api_client.dart';
 import 'pos_http_client.dart';
+import 'price_checker_api_client.dart';
 import 'printing_api_client.dart';
 import 'purchasing_api_client.dart';
 import 'register_session_api_client.dart';
@@ -127,6 +130,7 @@ class PosApiService {
     _modifierGroups = ModifierGroupApiClient(_session);
     _purchasing = PurchasingApiClient(_session);
     _printing = PrintingApiClient(_session);
+    _priceChecker = PriceCheckerApiClient(_session);
     _stockCounts = StockCountApiClient(_session);
   }
 
@@ -158,6 +162,7 @@ class PosApiService {
   late final ModifierGroupApiClient _modifierGroups;
   late final PurchasingApiClient _purchasing;
   late final PrintingApiClient _printing;
+  late final PriceCheckerApiClient _priceChecker;
   late final StockCountApiClient _stockCounts;
 
   set performanceRecorder(ApiPerformanceRecorder? recorder) {
@@ -1392,6 +1397,21 @@ class PosApiService {
     required PrintAuditEventReportDraft report,
   }) {
     return _printing.reportPrintAuditEvent(eventId: eventId, report: report);
+  }
+
+  Future<List<PriceCheckerDevice>> fetchPriceCheckerDevices({int page = 1}) {
+    return _priceChecker.fetchDevices(page: page);
+  }
+
+  Future<PriceCheckerScanSummary> runPriceCheckerScan() {
+    return _priceChecker.runScan();
+  }
+
+  Future<List<PriceCheckEvent>> fetchPriceCheckEvents({
+    int? deviceId,
+    int page = 1,
+  }) {
+    return _priceChecker.fetchEvents(deviceId: deviceId, page: page);
   }
 }
 

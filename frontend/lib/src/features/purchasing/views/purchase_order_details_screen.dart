@@ -11,6 +11,7 @@ import '../../../data/repositories/shop_settings_repository.dart';
 import '../../../data/services/order_document_service.dart';
 import '../../../shared/components/components.dart';
 import '../../../shared/date_formatters.dart';
+import '../../../shared/design/design.dart';
 import '../../../shared/formatters.dart';
 import '../../../shared/order_totals.dart';
 import '../../../shared/responsive/responsive.dart';

@@ -209,7 +209,7 @@ class _DiscountManagementBody extends StatelessWidget {
               padding: const EdgeInsets.only(bottom: 8),
               child: Text(
                 l10n.discountSaveError,
-                style: TextStyle(color: Theme.of(context).colorScheme.error),
+                style: TextStyle(color: context.pointyColors.danger),
               ),
             ),
           Expanded(

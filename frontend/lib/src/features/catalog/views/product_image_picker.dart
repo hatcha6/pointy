@@ -7,6 +7,7 @@ import '../../../data/models/attachment_summary.dart';
 import '../../../data/models/product_image_search_result.dart';
 import '../../../data/models/product_image_upload.dart';
 import '../../../data/repositories/catalog_repository.dart';
+import '../../../shared/design/design.dart';
 import '../../../shared/infinite_scroll_grid.dart';
 import '../../../shared/product_image_thumbnail.dart';
 
@@ -65,12 +66,12 @@ class ProductImageField extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final colorScheme = Theme.of(context).colorScheme;
+    final colors = context.pointyColors;
     final selected = selection;
 
     return DecoratedBox(
       decoration: BoxDecoration(
-        border: Border.all(color: colorScheme.outlineVariant),
+        border: Border.all(color: colors.line),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Padding(
@@ -245,7 +246,7 @@ class _ProductImageSearchSheetState extends State<ProductImageSearchSheet> {
     final l10n = AppLocalizations.of(context)!;
 
     return Material(
-      color: Theme.of(context).colorScheme.surface,
+      color: context.pointyColors.surface,
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
         child: Column(
@@ -255,7 +256,7 @@ class _ProductImageSearchSheetState extends State<ProductImageSearchSheet> {
               children: [
                 Icon(
                   Icons.travel_explore_outlined,
-                  color: Theme.of(context).colorScheme.primary,
+                  color: context.pointyColors.primaryStrong,
                 ),
                 const SizedBox(width: 8),
                 Expanded(
@@ -297,7 +298,7 @@ class _ProductImageSearchSheetState extends State<ProductImageSearchSheet> {
               const SizedBox(height: 10),
               Text(
                 _errorText(l10n),
-                style: TextStyle(color: Theme.of(context).colorScheme.error),
+                style: TextStyle(color: context.pointyColors.danger),
               ),
             ],
             const SizedBox(height: 12),
@@ -413,7 +414,7 @@ class _ImageResultTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
+    final colors = context.pointyColors;
     return Material(
       color: Colors.white,
       borderRadius: BorderRadius.circular(8),
@@ -427,10 +428,8 @@ class _ImageResultTile extends StatelessWidget {
               child: Image.network(
                 result.thumbnailUrl,
                 fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) => Icon(
-                  Icons.broken_image_outlined,
-                  color: colorScheme.outline,
-                ),
+                errorBuilder: (context, error, stackTrace) =>
+                    Icon(Icons.broken_image_outlined, color: colors.line),
               ),
             ),
             Padding(

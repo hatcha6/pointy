@@ -434,7 +434,6 @@ class _BackupScheduleFields extends StatelessWidget {
           decoration: InputDecoration(
             labelText: l10n.backupDestinationLabel,
             errorText: destinationErrorText,
-            border: const OutlineInputBorder(),
             prefixIcon: const Icon(Icons.usb_outlined),
           ),
           items: [
@@ -566,12 +565,12 @@ class _BackupJobProgressCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
+    final colors = context.pointyColors;
     final progress = (job.progressPercent.clamp(0, 100)) / 100;
 
     return DecoratedBox(
       decoration: BoxDecoration(
-        border: Border.all(color: colorScheme.outlineVariant),
+        border: Border.all(color: colors.line),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Padding(
@@ -581,7 +580,7 @@ class _BackupJobProgressCard extends StatelessWidget {
           children: [
             Row(
               children: [
-                Icon(Icons.sync, color: colorScheme.primary),
+                Icon(Icons.sync, color: colors.primaryStrong),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
@@ -604,7 +603,7 @@ class _BackupJobProgressCard extends StatelessWidget {
               Text(
                 job.progressMessage,
                 style: theme.textTheme.bodySmall?.copyWith(
-                  color: colorScheme.onSurfaceVariant,
+                  color: colors.mutedInk,
                 ),
               ),
             ],
@@ -707,11 +706,11 @@ class _BackupJobHistoryRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
+    final colors = context.pointyColors;
 
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.32),
+        color: colors.surfaceSunken.withValues(alpha: 0.32),
         borderRadius: BorderRadius.circular(8),
       ),
       child: ListTile(

@@ -98,7 +98,6 @@ class _CardReceiptValidationDialogState
                 onSubmitted: _validateUrl,
                 decoration: InputDecoration(
                   labelText: l10n.cardReceiptUrlLabel,
-                  border: const OutlineInputBorder(),
                   prefixIcon: const Icon(Icons.link_outlined),
                   suffixIcon: IconButton(
                     tooltip: l10n.cardReceiptCameraTooltip,

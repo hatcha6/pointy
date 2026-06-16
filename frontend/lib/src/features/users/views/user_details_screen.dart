@@ -4,6 +4,7 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 import '../../../data/models/pos_user.dart';
 import '../../../data/models/user_activity.dart';
 import '../../../shared/date_formatters.dart';
+import '../../../shared/design/design.dart';
 import '../../../shared/formatters.dart';
 import '../../../shared/components/components.dart';
 import '../../../shared/responsive/responsive.dart';
@@ -158,8 +159,8 @@ class _UserHeader extends StatelessWidget {
                     ? Icons.check_circle_outline
                     : Icons.pause_circle_outline,
                 color: user.isActive
-                    ? Theme.of(context).colorScheme.primary
-                    : Theme.of(context).colorScheme.error,
+                    ? context.pointyColors.primaryStrong
+                    : context.pointyColors.danger,
               ),
             ],
           ),

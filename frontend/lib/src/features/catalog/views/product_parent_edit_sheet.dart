@@ -6,6 +6,7 @@ import '../../../data/models/modifier_group.dart';
 import '../../../data/models/product_update_draft.dart';
 import '../../../data/models/variant_option.dart';
 import '../../../shared/async_selection/async_multi_select_picker.dart';
+import '../../../shared/design/design.dart';
 import '../../../shared/product_category_picker.dart';
 import '../view_models/product_details_view_model.dart';
 import 'modifier_group_selector.dart';
@@ -108,7 +109,7 @@ class _ProductParentEditSheetState extends State<ProductParentEditSheet> {
       listenable: widget.viewModel,
       builder: (context, _) {
         return Material(
-          color: Theme.of(context).colorScheme.surface,
+          color: context.pointyColors.surface,
           child: Form(
             key: _formKey,
             child: Column(
@@ -191,7 +192,7 @@ class _ProductParentEditSheetState extends State<ProductParentEditSheet> {
                           Text(
                             l10n.productUpdateError,
                             style: TextStyle(
-                              color: Theme.of(context).colorScheme.error,
+                              color: context.pointyColors.danger,
                             ),
                           ),
                         ],
@@ -201,7 +202,7 @@ class _ProductParentEditSheetState extends State<ProductParentEditSheet> {
                           Text(
                             l10n.productImageAttachError,
                             style: TextStyle(
-                              color: Theme.of(context).colorScheme.error,
+                              color: context.pointyColors.danger,
                             ),
                           ),
                         ],

@@ -3,6 +3,7 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../data/models/register_cash_movement.dart';
 import '../../../shared/decimal_text_input_formatter.dart';
+import '../../../shared/design/design.dart';
 
 class RegisterCashMovementSheet extends StatefulWidget {
   const RegisterCashMovementSheet({
@@ -36,6 +37,7 @@ class _RegisterCashMovementSheetState extends State<RegisterCashMovementSheet> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    final colors = context.pointyColors;
     final isPayIn = widget.movementType == RegisterCashMovementType.payIn;
 
     return SafeArea(
@@ -82,7 +84,6 @@ class _RegisterCashMovementSheetState extends State<RegisterCashMovementSheet> {
                   textInputAction: TextInputAction.next,
                   decoration: InputDecoration(
                     labelText: l10n.cashMovementAmountLabel,
-                    border: const OutlineInputBorder(),
                     prefixIcon: const Icon(Icons.payments_outlined),
                   ),
                   validator: (value) => _validateAmount(value, l10n),
@@ -96,7 +97,6 @@ class _RegisterCashMovementSheetState extends State<RegisterCashMovementSheet> {
                   textInputAction: TextInputAction.done,
                   decoration: InputDecoration(
                     labelText: l10n.cashMovementReasonLabel,
-                    border: const OutlineInputBorder(),
                     prefixIcon: const Icon(Icons.notes_outlined),
                   ),
                   validator: (value) => _validateReason(value, l10n),
@@ -106,9 +106,7 @@ class _RegisterCashMovementSheetState extends State<RegisterCashMovementSheet> {
                   const SizedBox(height: 12),
                   Text(
                     l10n.cashMovementCreateError,
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.error,
-                    ),
+                    style: TextStyle(color: colors.danger),
                   ),
                 ],
                 const SizedBox(height: 16),

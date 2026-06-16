@@ -6,6 +6,7 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 import '../design/pointy_component_styles.dart';
 import '../design/pointy_elevations.dart';
 import '../design/pointy_motion.dart';
+import '../design/pointy_theme_extensions.dart';
 import 'adaptive_constraints.dart';
 import 'app_breakpoints.dart';
 
@@ -300,7 +301,7 @@ Future<T?> showAdaptiveFormSurface<T>({
           maxHeight: maxHeight,
           maxHeightFactor: maxHeightFactor,
           child: Material(
-            color: theme.colorScheme.surface,
+            color: theme.pointyColors.surface,
             shape: PointyComponentStyles.shape(PointyRadii.dialog),
             clipBehavior: Clip.antiAlias,
             child: _FormSurfaceContent(
@@ -338,7 +339,7 @@ Future<T?> showAdaptiveFormSurface<T>({
               width: panelWidth,
               height: double.infinity,
               child: Material(
-                color: theme.colorScheme.surface,
+                color: theme.pointyColors.surface,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadiusDirectional.horizontal(
                     start: Radius.circular(PointyRadii.dialog),

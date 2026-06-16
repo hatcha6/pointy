@@ -10,9 +10,11 @@ import '../../../data/repositories/printing_repository.dart';
 import '../../../shared/authorization_guards.dart';
 import '../../../shared/components/components.dart';
 import '../../../shared/date_formatters.dart';
+import '../../../shared/design/design.dart';
 import '../../../shared/formatters.dart';
 import '../../../shared/infinite_scroll_grid.dart';
 import '../../../shared/product_status_pill.dart';
+import '../../../shared/responsive/responsive.dart';
 import '../view_models/product_stock_view_model.dart';
 import 'barcode_label_print_action.dart';
 import 'product_details_hero.dart';
@@ -36,7 +38,6 @@ class ProductVariantDetailsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final colorScheme = Theme.of(context).colorScheme;
     final product = viewModel.product;
 
     return ListenableBuilder(
@@ -45,90 +46,96 @@ class ProductVariantDetailsScreen extends StatelessWidget {
         return Scaffold(
           appBar: AppBar(title: Text(l10n.variantDetailsTitle)),
           body: SafeArea(
-            child: ListView(
-              padding: const EdgeInsets.all(16),
-              children: [
-                ProductDetailsHero(product: product),
-                const SizedBox(height: 16),
-                StockViewGuard(
-                  capabilities: capabilities,
-                  child: _StockSummarySection(
-                    viewModel: viewModel,
+            child: AdaptiveMaxWidth(
+              width: AppContentWidth.detail,
+              child: ListView(
+                padding: const EdgeInsets.all(16),
+                children: [
+                  ProductDetailsHero(product: product),
+                  const SizedBox(height: 16),
+                  StockViewGuard(
                     capabilities: capabilities,
-                    onCreateMovement: () => _showMovementForm(context),
-                    onOpenMovements: () => _openMovements(context),
+                    child: _StockSummarySection(
+                      viewModel: viewModel,
+                      capabilities: capabilities,
+                      onCreateMovement: () => _showMovementForm(context),
+                      onOpenMovements: () => _openMovements(context),
+                    ),
                   ),
-                ),
-                if (capabilities.canViewStock) const SizedBox(height: 12),
-                PointyDetailSection(
-                  title: l10n.productAvailabilityTitle,
-                  icon: product.isActive
-                      ? Icons.check_circle_outline
-                      : Icons.pause_circle_outline,
-                  child: Row(
-                    children: [
-                      ProductStatusPill(isActive: product.isActive),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          product.isActive
-                              ? l10n.productAvailableForSale
-                              : l10n.productUnavailableForSale,
+                  if (capabilities.canViewStock) const SizedBox(height: 12),
+                  PointyDetailSection(
+                    title: l10n.productAvailabilityTitle,
+                    icon: product.isActive
+                        ? Icons.check_circle_outline
+                        : Icons.pause_circle_outline,
+                    child: Row(
+                      children: [
+                        ProductStatusPill(isActive: product.isActive),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            product.isActive
+                                ? l10n.productAvailableForSale
+                                : l10n.productUnavailableForSale,
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
-                const SizedBox(height: 12),
-                PointyDetailSection(
-                  title: l10n.productIdentifierTitle,
-                  icon: Icons.qr_code_2,
-                  child: Column(
-                    children: [
-                      PointyDetailRow(
-                        label: l10n.skuLabel,
-                        value: product.effectiveSku,
-                      ),
-                      const Divider(height: 20),
-                      PointyDetailRow(
-                        label: l10n.barcodeLabel,
-                        value: product.effectiveBarcode.isEmpty
-                            ? l10n.noBarcode
-                            : product.effectiveBarcode,
-                      ),
-                    ],
+                  const SizedBox(height: 12),
+                  PointyDetailSection(
+                    title: l10n.productIdentifierTitle,
+                    icon: Icons.qr_code_2,
+                    child: PointyMetricGrid(
+                      maxColumns: 2,
+                      minTileWidth: 200,
+                      gap: PointyMetricGridGap.compact,
+                      metrics: [
+                        PointyMetricGridItem(
+                          label: l10n.skuLabel,
+                          value: product.effectiveSku,
+                          icon: Icons.tag_outlined,
+                        ),
+                        PointyMetricGridItem(
+                          label: l10n.barcodeLabel,
+                          value: product.effectiveBarcode.isEmpty
+                              ? l10n.noBarcode
+                              : product.effectiveBarcode,
+                          icon: Icons.qr_code_2,
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-                const SizedBox(height: 12),
-                PointyDetailSection(
-                  title: l10n.barcodeLabelPrintTitle,
-                  icon: Icons.print_outlined,
-                  child: _BarcodeLabelPrintSection(
-                    product: product,
-                    printingRepository: printingRepository,
-                    analyticsEngine: analyticsEngine,
+                  const SizedBox(height: 12),
+                  PointyDetailSection(
+                    title: l10n.barcodeLabelPrintTitle,
+                    icon: Icons.print_outlined,
+                    child: _BarcodeLabelPrintSection(
+                      product: product,
+                      printingRepository: printingRepository,
+                      analyticsEngine: analyticsEngine,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 12),
-                PointyDetailSection(
-                  title: l10n.productDescriptionTitle,
-                  icon: Icons.notes_outlined,
-                  child: Text(
-                    product.description.isEmpty
-                        ? l10n.noDescription
-                        : product.description,
+                  const SizedBox(height: 12),
+                  PointyDetailSection(
+                    title: l10n.productDescriptionTitle,
+                    icon: Icons.notes_outlined,
+                    child: Text(
+                      product.description.isEmpty
+                          ? l10n.noDescription
+                          : product.description,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 12),
-                PointyDetailSection(
-                  title: l10n.productCostHistoryTitle,
-                  icon: Icons.trending_up_outlined,
-                  child: _ProductCostHistorySection(viewModel: viewModel),
-                ),
-              ],
+                  const SizedBox(height: 12),
+                  PointyDetailSection(
+                    title: l10n.productCostHistoryTitle,
+                    icon: Icons.trending_up_outlined,
+                    child: _ProductCostHistorySection(viewModel: viewModel),
+                  ),
+                ],
+              ),
             ),
           ),
-          backgroundColor: colorScheme.surface,
         );
       },
     );
@@ -191,14 +198,16 @@ class _ProductCostHistorySection extends StatelessWidget {
       return const Center(child: CircularProgressIndicator());
     }
     if (viewModel.hasCostInsightsError && impact == null && entries.isEmpty) {
-      return Text(
-        l10n.productCostHistoryLoadError,
-        style: TextStyle(color: Theme.of(context).colorScheme.error),
+      return PointyInlineMessage.error(
+        message: l10n.productCostHistoryLoadError,
       );
     }
 
     if (impact == null && entries.isEmpty) {
-      return Text(l10n.productCostHistoryEmpty);
+      return PointyEmptyState(
+        icon: Icons.trending_up_outlined,
+        title: l10n.productCostHistoryEmpty,
+      );
     }
 
     return Column(
@@ -299,25 +308,38 @@ class _MarginImpactGrid extends StatelessWidget {
         (grossProfit == null || unitPrice <= 0
             ? null
             : (grossProfit / unitPrice) * 100);
+    final colors = context.pointyColors;
+    final costChange = impact.costChange;
+    final marginChange = impact.marginChangePercent;
 
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      children: [
-        _MetricChip(
+    return PointyMetricGrid(
+      maxColumns: 3,
+      minTileWidth: 150,
+      gap: PointyMetricGridGap.compact,
+      metrics: [
+        PointyMetricGridItem(
           label: l10n.productLatestCostLabel,
           value: latestCost == null
               ? l10n.shopSettingsEmptyValue
               : formatMoney(latestCost),
+          icon: Icons.inventory_2_outlined,
         ),
-        _MetricChip(label: l10n.unitPriceLabel, value: formatMoney(unitPrice)),
-        _MetricChip(
+        PointyMetricGridItem(
+          label: l10n.unitPriceLabel,
+          value: formatMoney(unitPrice),
+          icon: Icons.sell_outlined,
+        ),
+        PointyMetricGridItem(
           label: l10n.productGrossProfitLabel,
           value: grossProfit == null
               ? l10n.shopSettingsEmptyValue
               : formatMoney(grossProfit),
+          icon: Icons.trending_up_outlined,
+          accentColor: grossProfit == null
+              ? null
+              : (grossProfit >= 0 ? colors.success : colors.danger),
         ),
-        _MetricChip(
+        PointyMetricGridItem(
           label: l10n.productMarginPercentLabel,
           value: marginPercent == null
               ? l10n.shopSettingsEmptyValue
@@ -327,50 +349,32 @@ class _MarginImpactGrid extends StatelessWidget {
                     includePositiveSign: false,
                   ),
                 ),
+          icon: Icons.percent,
+          accentColor: marginPercent == null
+              ? null
+              : (marginPercent >= 0 ? colors.success : colors.danger),
         ),
-        if (impact.costChange != null)
-          _MetricChip(
+        if (costChange != null)
+          PointyMetricGridItem(
             label: l10n.productCostChangeLabel,
-            value: _formatSignedMoney(impact.costChange!),
+            value: _formatSignedMoney(costChange),
+            icon: Icons.price_change_outlined,
+            accentColor: costChange > 0
+                ? colors.danger
+                : (costChange < 0 ? colors.success : null),
           ),
-        if (impact.marginChangePercent != null)
-          _MetricChip(
+        if (marginChange != null)
+          PointyMetricGridItem(
             label: l10n.productMarginChangeLabel,
             value: l10n.productMarginPercentValue(
-              _formatSignedPercent(impact.marginChangePercent!),
+              _formatSignedPercent(marginChange),
             ),
+            icon: Icons.show_chart_outlined,
+            accentColor: marginChange > 0
+                ? colors.success
+                : (marginChange < 0 ? colors.danger : null),
           ),
       ],
-    );
-  }
-}
-
-class _MetricChip extends StatelessWidget {
-  const _MetricChip({required this.label, required this.value});
-
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        border: Border.all(color: colorScheme.outlineVariant),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(label, style: Theme.of(context).textTheme.labelSmall),
-            const SizedBox(height: 2),
-            Text(value, style: Theme.of(context).textTheme.titleSmall),
-          ],
-        ),
-      ),
     );
   }
 }
@@ -389,7 +393,6 @@ class _BarcodeLabelPrintSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final colorScheme = Theme.of(context).colorScheme;
     final variant = product.defaultVariant;
     final label = variant == null
         ? BarcodeLabelDraft.fromProduct(product)
@@ -400,10 +403,7 @@ class _BarcodeLabelPrintSection extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         if (!hasBarcode) ...[
-          Text(
-            l10n.barcodeLabelPrintNoBarcode,
-            style: TextStyle(color: colorScheme.error),
-          ),
+          PointyInlineMessage.error(message: l10n.barcodeLabelPrintNoBarcode),
           const SizedBox(height: 12),
         ],
         Align(
@@ -457,13 +457,7 @@ class _StockSummarySection extends StatelessWidget {
           if (viewModel.isLoadingStock)
             const LinearProgressIndicator()
           else if (viewModel.errorMessage == 'stock_load_error')
-            Align(
-              alignment: AlignmentDirectional.centerStart,
-              child: Text(
-                l10n.stockLoadError,
-                style: TextStyle(color: Theme.of(context).colorScheme.error),
-              ),
-            )
+            PointyInlineMessage.error(message: l10n.stockLoadError)
           else
             _StockOnHandPanel(
               label: l10n.stockOnHandLabel,
@@ -509,13 +503,13 @@ class _StockOnHandPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
+    final colors = context.pointyColors;
 
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: colorScheme.outlineVariant),
+        color: colors.surfaceSunken,
+        borderRadius: BorderRadius.circular(PointyRadii.card),
+        border: Border.all(color: colors.line),
       ),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
@@ -523,8 +517,8 @@ class _StockOnHandPanel extends StatelessWidget {
           children: [
             CircleAvatar(
               radius: 24,
-              backgroundColor: colorScheme.primaryContainer,
-              foregroundColor: colorScheme.onPrimaryContainer,
+              backgroundColor: PointyColors.primaryContainer,
+              foregroundColor: colors.primaryStrong,
               child: const Icon(Icons.inventory_outlined),
             ),
             const SizedBox(width: 14),
@@ -537,7 +531,7 @@ class _StockOnHandPanel extends StatelessWidget {
             Text(
               '$value',
               style: Theme.of(context).textTheme.displaySmall?.copyWith(
-                color: colorScheme.primary,
+                color: colors.primaryStrong,
                 fontWeight: FontWeight.w700,
               ),
             ),

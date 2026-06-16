@@ -32,6 +32,11 @@ from apps.operations.views import (
     WorkflowTemplateViewSet,
 )
 from apps.discounts.views import DiscountRuleViewSet
+from apps.price_checker.views import (
+    PriceCheckEventViewSet,
+    PriceCheckerDeviceViewSet,
+    price_lookup_view,
+)
 from apps.expenses.views import (
     ExpenseCategoryViewSet,
     ExpenseLedgerView,
@@ -166,6 +171,16 @@ router.register(
     StorageVolumeViewSet,
     basename="storagevolume",
 )
+router.register(
+    "price-checker-devices",
+    PriceCheckerDeviceViewSet,
+    basename="price-checker-device",
+)
+router.register(
+    "price-check-events",
+    PriceCheckEventViewSet,
+    basename="price-check-event",
+)
 
 urlpatterns = [
     path("healthz/", healthz, name="healthz"),
@@ -242,6 +257,11 @@ urlpatterns = [
     ),
     path("api/backup/", BackupOperationsView.as_view(), name="backup-operations"),
     path("api/backup/restore/", RestoreUploadView.as_view(), name="backup-restore"),
+    path(
+        "api/price-checker/lookup/",
+        price_lookup_view,
+        name="price-checker-lookup",
+    ),
     path("api/", include(router.urls)),
     path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
     path("api/docs/", SpectacularSwaggerView.as_view(url_name="schema"), name="swagger-ui"),

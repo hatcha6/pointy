@@ -458,11 +458,7 @@ class _TextFilterField extends StatelessWidget {
       padding: const EdgeInsets.all(14),
       child: TextField(
         controller: controller,
-        decoration: InputDecoration(
-          labelText: label,
-          border: const OutlineInputBorder(),
-          prefixIcon: Icon(icon),
-        ),
+        decoration: InputDecoration(labelText: label, prefixIcon: Icon(icon)),
       ),
     );
   }

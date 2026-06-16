@@ -46,7 +46,6 @@ class _ShopIdentityFields extends StatelessWidget {
           decoration: InputDecoration(
             labelText: l10n.shopNameLabel,
             errorText: errorText,
-            border: const OutlineInputBorder(),
             prefixIcon: const Icon(Icons.storefront_outlined),
           ),
         ),
@@ -76,7 +75,7 @@ class _ShopLogoField extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
+    final colors = context.pointyColors;
     final hasLogo =
         selectedLogoUpload != null ||
         (!hasLogoMarkedForRemoval && logoAttachment != null);
@@ -88,7 +87,7 @@ class _ShopLogoField extends StatelessWidget {
         const SizedBox(height: 8),
         DecoratedBox(
           decoration: BoxDecoration(
-            border: Border.all(color: colorScheme.outlineVariant),
+            border: Border.all(color: colors.line),
             borderRadius: BorderRadius.circular(8),
           ),
           child: Padding(
@@ -125,7 +124,7 @@ class _ShopLogoField extends StatelessWidget {
                         Text(
                           l10n.shopLogoMarkedForRemoval,
                           style: theme.textTheme.bodySmall?.copyWith(
-                            color: colorScheme.error,
+                            color: colors.danger,
                           ),
                         ),
                       ],
@@ -208,7 +207,7 @@ class _ShopLogoPreview extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
+    final colors = context.pointyColors;
 
     Widget child;
     if (selectedLogoUpload != null) {
@@ -216,7 +215,7 @@ class _ShopLogoPreview extends StatelessWidget {
         selectedLogoUpload!.bytes,
         fit: BoxFit.contain,
         errorBuilder: (context, error, stackTrace) =>
-            Icon(Icons.storefront_outlined, color: colorScheme.primary),
+            Icon(Icons.storefront_outlined, color: colors.primaryStrong),
       );
     } else if (!hasLogoMarkedForRemoval &&
         (logoAttachment?.contentUrl.trim().isNotEmpty ?? false)) {
@@ -224,10 +223,10 @@ class _ShopLogoPreview extends StatelessWidget {
         logoAttachment!.contentUrl,
         fit: BoxFit.contain,
         errorBuilder: (context, error, stackTrace) =>
-            Icon(Icons.storefront_outlined, color: colorScheme.primary),
+            Icon(Icons.storefront_outlined, color: colors.primaryStrong),
       );
     } else {
-      child = Icon(Icons.storefront_outlined, color: colorScheme.primary);
+      child = Icon(Icons.storefront_outlined, color: colors.primaryStrong);
     }
 
     return Container(
@@ -236,7 +235,7 @@ class _ShopLogoPreview extends StatelessWidget {
       alignment: Alignment.center,
       padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(
-        color: colorScheme.primaryContainer.withValues(alpha: 0.24),
+        color: PointyColors.primaryContainer.withValues(alpha: 0.24),
         borderRadius: BorderRadius.circular(8),
       ),
       child: child,
@@ -284,7 +283,6 @@ class _ReceiptSettingsFields extends StatelessWidget {
           maxLines: 2,
           decoration: InputDecoration(
             labelText: l10n.receiptHeaderLabel,
-            border: const OutlineInputBorder(),
             prefixIcon: const Icon(Icons.notes_outlined),
           ),
         ),
@@ -295,7 +293,6 @@ class _ReceiptSettingsFields extends StatelessWidget {
           maxLines: 2,
           decoration: InputDecoration(
             labelText: l10n.receiptFooterLabel,
-            border: const OutlineInputBorder(),
             prefixIcon: const Icon(Icons.receipt_long_outlined),
           ),
         ),
@@ -440,7 +437,6 @@ class _PaymentSettingsFields extends StatelessWidget {
           decoration: InputDecoration(
             labelText: l10n.cardCommissionPercentLabel,
             errorText: cardCommissionError,
-            border: const OutlineInputBorder(),
             prefixIcon: const Icon(Icons.percent),
           ),
         ),
@@ -461,7 +457,6 @@ class _PaymentSettingsFields extends StatelessWidget {
           decoration: InputDecoration(
             labelText: l10n.transferCommissionPercentLabel,
             errorText: transferCommissionError,
-            border: const OutlineInputBorder(),
             prefixIcon: const Icon(Icons.percent),
           ),
         ),
@@ -469,7 +464,7 @@ class _PaymentSettingsFields extends StatelessWidget {
           const SizedBox(height: 12),
           Text(
             paymentMethodsError!,
-            style: TextStyle(color: Theme.of(context).colorScheme.error),
+            style: TextStyle(color: context.pointyColors.danger),
           ),
         ],
       ],
@@ -492,13 +487,11 @@ class _TrustedCardTerminalListField extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
+    final colors = context.pointyColors;
     final borderColor = enabled
-        ? colorScheme.outlineVariant
-        : colorScheme.outlineVariant.withValues(alpha: 0.55);
-    final foregroundColor = enabled
-        ? colorScheme.onSurface
-        : colorScheme.onSurfaceVariant;
+        ? colors.line
+        : colors.line.withValues(alpha: 0.55);
+    final foregroundColor = enabled ? colors.ink : colors.mutedInk;
 
     return DecoratedBox(
       key: const ValueKey('trusted_card_terminal_list_field'),
@@ -513,7 +506,7 @@ class _TrustedCardTerminalListField extends StatelessWidget {
           children: [
             Row(
               children: [
-                Icon(Icons.point_of_sale_outlined, color: colorScheme.primary),
+                Icon(Icons.point_of_sale_outlined, color: colors.primaryStrong),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Column(
@@ -530,7 +523,7 @@ class _TrustedCardTerminalListField extends StatelessWidget {
                       Text(
                         l10n.trustedCardTerminalIdsHelper,
                         style: theme.textTheme.bodySmall?.copyWith(
-                          color: colorScheme.onSurfaceVariant,
+                          color: colors.mutedInk,
                         ),
                       ),
                     ],
@@ -581,11 +574,11 @@ class _TrustedCardTerminalListRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
+    final colors = context.pointyColors;
 
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.38),
+        color: colors.surfaceSunken.withValues(alpha: 0.38),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Padding(
@@ -597,7 +590,7 @@ class _TrustedCardTerminalListRow extends StatelessWidget {
           children: [
             Icon(
               Icons.confirmation_number_outlined,
-              color: colorScheme.onSurfaceVariant,
+              color: colors.mutedInk,
               size: 20,
             ),
             const SizedBox(width: 10),
@@ -684,7 +677,6 @@ class _TrustedCardTerminalsDialogState
                       labelText: l10n.trustedCardTerminalIdFieldLabel,
                       hintText: l10n.trustedCardTerminalIdFieldHint,
                       errorText: _terminalIdError,
-                      border: const OutlineInputBorder(),
                       prefixIcon: const Icon(Icons.badge_outlined),
                     ),
                   );
@@ -807,9 +799,7 @@ class _EditableTrustedCardTerminalRow extends StatelessWidget {
     final l10n = AppLocalizations.of(context)!;
 
     return Material(
-      color: Theme.of(
-        context,
-      ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.38),
+      color: context.pointyColors.surfaceSunken.withValues(alpha: 0.38),
       borderRadius: BorderRadius.circular(8),
       child: ListTile(
         dense: true,
@@ -867,7 +857,6 @@ class _InventorySettingsFields extends StatelessWidget {
           decoration: InputDecoration(
             labelText: l10n.lowStockThresholdLabel,
             errorText: errorText,
-            border: const OutlineInputBorder(),
             prefixIcon: const Icon(Icons.inventory_outlined),
           ),
         ),
@@ -944,7 +933,6 @@ class _AnalyticsExportFields extends StatelessWidget {
           initialValue: format,
           decoration: InputDecoration(
             labelText: l10n.analyticsExportFormatLabel,
-            border: const OutlineInputBorder(),
             prefixIcon: const Icon(Icons.table_chart_outlined),
           ),
           items: [
@@ -1017,7 +1005,6 @@ class _AnalyticsExportFields extends StatelessWidget {
           initialValue: eventType,
           decoration: InputDecoration(
             labelText: l10n.analyticsExportEventTypeLabel,
-            border: const OutlineInputBorder(),
             prefixIcon: const Icon(Icons.category_outlined),
           ),
           items: [
@@ -1035,7 +1022,6 @@ class _AnalyticsExportFields extends StatelessWidget {
           initialValue: severity,
           decoration: InputDecoration(
             labelText: l10n.analyticsExportSeverityLabel,
-            border: const OutlineInputBorder(),
             prefixIcon: const Icon(Icons.priority_high_outlined),
           ),
           items: [
@@ -1051,7 +1037,6 @@ class _AnalyticsExportFields extends StatelessWidget {
           initialValue: source,
           decoration: InputDecoration(
             labelText: l10n.analyticsExportSourceLabel,
-            border: const OutlineInputBorder(),
             prefixIcon: const Icon(Icons.hub_outlined),
           ),
           items: [
@@ -1069,7 +1054,6 @@ class _AnalyticsExportFields extends StatelessWidget {
           onChanged: (_) => onTextFilterChanged(),
           decoration: InputDecoration(
             labelText: l10n.analyticsExportSearchLabel,
-            border: const OutlineInputBorder(),
             prefixIcon: const Icon(Icons.search_outlined),
           ),
         ),
@@ -1081,7 +1065,6 @@ class _AnalyticsExportFields extends StatelessWidget {
           onChanged: (_) => onTextFilterChanged(),
           decoration: InputDecoration(
             labelText: l10n.analyticsExportPlatformLabel,
-            border: const OutlineInputBorder(),
             prefixIcon: const Icon(Icons.devices_outlined),
           ),
         ),
@@ -1093,7 +1076,6 @@ class _AnalyticsExportFields extends StatelessWidget {
           onChanged: (_) => onTextFilterChanged(),
           decoration: InputDecoration(
             labelText: l10n.analyticsExportSessionLabel,
-            border: const OutlineInputBorder(),
             prefixIcon: const Icon(Icons.confirmation_number_outlined),
           ),
         ),
@@ -1105,7 +1087,6 @@ class _AnalyticsExportFields extends StatelessWidget {
           onChanged: (_) => onTextFilterChanged(),
           decoration: InputDecoration(
             labelText: l10n.analyticsExportDeviceLabel,
-            border: const OutlineInputBorder(),
             prefixIcon: const Icon(Icons.point_of_sale_outlined),
           ),
         ),
@@ -1136,7 +1117,6 @@ class _DateFilterTile extends StatelessWidget {
       child: InputDecorator(
         decoration: InputDecoration(
           labelText: label,
-          border: const OutlineInputBorder(),
           prefixIcon: const Icon(Icons.calendar_today_outlined),
           enabled: enabled,
         ),
@@ -1168,7 +1148,6 @@ class _DurationPickerTile extends StatelessWidget {
       child: InputDecorator(
         decoration: InputDecoration(
           labelText: label,
-          border: const OutlineInputBorder(),
           prefixIcon: const Icon(Icons.schedule_outlined),
           suffixIcon: const Icon(Icons.expand_more),
           enabled: enabled,
@@ -1193,7 +1172,7 @@ class _SettingsSaveBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final colorScheme = Theme.of(context).colorScheme;
+    final colors = context.pointyColors;
 
     return PointyStickyActionFooter(
       summary: hasSaveError
@@ -1201,7 +1180,7 @@ class _SettingsSaveBar extends StatelessWidget {
               l10n.shopSettingsSaveError,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
-              style: TextStyle(color: colorScheme.error),
+              style: TextStyle(color: colors.danger),
             )
           : null,
       primaryAction: FilledButton.icon(
@@ -1232,7 +1211,7 @@ class _AnalyticsExportActionBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final colorScheme = Theme.of(context).colorScheme;
+    final colors = context.pointyColors;
 
     return PointyStickyActionFooter(
       summary: hasExportError
@@ -1240,7 +1219,7 @@ class _AnalyticsExportActionBar extends StatelessWidget {
               l10n.analyticsExportFailedMessage,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
-              style: TextStyle(color: colorScheme.error),
+              style: TextStyle(color: colors.danger),
             )
           : null,
       primaryAction: FilledButton.icon(

@@ -6,6 +6,7 @@ import '../../../data/models/pos_user.dart';
 import '../../../shared/app_navigation_drawer.dart';
 import '../../../shared/authorization_guards.dart';
 import '../../../shared/components/components.dart';
+import '../../../shared/design/design.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../../../shared/shell/shell.dart';
 import '../view_models/user_management_view_model.dart';
@@ -170,8 +171,8 @@ class _UserManagementBody extends StatelessWidget {
                           ? Icons.check_circle_outline
                           : Icons.pause_circle_outline,
                       color: user.isActive
-                          ? Theme.of(context).colorScheme.primary
-                          : Theme.of(context).colorScheme.error,
+                          ? context.pointyColors.primaryStrong
+                          : context.pointyColors.danger,
                     ),
                   ],
                   actions: [
@@ -402,9 +403,7 @@ class _CreateUserFormState extends State<_CreateUserForm> {
                     SizedBox(height: spacing.sm),
                     Text(
                       l10n.createUserError,
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.error,
-                      ),
+                      style: TextStyle(color: context.pointyColors.danger),
                     ),
                   ],
                   SizedBox(height: spacing.md),

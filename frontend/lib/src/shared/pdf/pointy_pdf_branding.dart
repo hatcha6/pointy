@@ -1,7 +1,7 @@
-import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
 import '../branding.dart';
+import 'pointy_pdf_palette.dart';
 
 /// Shared identity for everything Pointy prints — A4 documents, business
 /// reports, and (textually) thermal receipts. Keep wording changes in
@@ -11,19 +11,9 @@ abstract final class PointyPrintBranding {
   static const String creditLine = pointyPrintCreditLine;
 }
 
-/// Shared palette so reports and invoices read as one family of documents.
-abstract final class PointyPdfPalette {
-  static const ink = PdfColor.fromInt(0xff172026);
-  static const muted = PdfColor.fromInt(0xff64717a);
-  static const border = PdfColor.fromInt(0xffd6dde2);
-  static const fill = PdfColor.fromInt(0xfff7f8f6);
-  static const accent = PdfColor.fromInt(0xff0b6b64);
-  static const accentSoft = PdfColor.fromInt(0xffe8f4f1);
-  static const white = PdfColor.fromInt(0xffffffff);
-}
-
 /// Unified page footer: page indicator on one side, the optional shop footer
-/// message in the middle, and the Pointy credit line on the other side.
+/// message in the middle, and the Pointy credit line on the other side. Used by
+/// every Pointy PDF via the shared page scaffold.
 class PointyPdfFooter extends pw.StatelessWidget {
   PointyPdfFooter({required this.pageLabel, this.shopFooter});
 
@@ -37,9 +27,7 @@ class PointyPdfFooter extends pw.StatelessWidget {
     return pw.Container(
       padding: const pw.EdgeInsets.only(top: 8),
       decoration: const pw.BoxDecoration(
-        border: pw.Border(
-          top: pw.BorderSide(color: PointyPdfPalette.border),
-        ),
+        border: pw.Border(top: pw.BorderSide(color: PointyPdfPalette.border)),
       ),
       child: pw.Row(
         crossAxisAlignment: pw.CrossAxisAlignment.center,

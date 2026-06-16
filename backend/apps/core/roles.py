@@ -48,6 +48,7 @@ MANAGER_PERMISSION_DOMAINS = (
     "purchasing",
     "payments",
     "printing",
+    "price_checker",
     "reports",
     "notifications",
     "attachments",

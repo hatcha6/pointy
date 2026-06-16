@@ -5,8 +5,11 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../core/analytics_interaction_tracker.dart';
 import '../data/models/pos_user.dart';
+import 'command_palette/command_palette.dart';
 import 'components/components.dart';
+import 'design/design.dart';
 import 'navigation/app_navigation.dart';
+import 'navigation/navigation_catalog.dart';
 
 export 'navigation/app_navigation.dart';
 
@@ -29,6 +32,7 @@ class AppNavigationDrawer extends StatelessWidget {
       userLabel: navigation.currentUser.label,
       roleLabel: _roleLabel(l10n, navigation.currentUser.role),
       navigationChildren: [
+        const _CommandPaletteTile(closeDrawer: true),
         for (final group in groups)
           _DrawerNavigationGroupTile(
             group: group,
@@ -71,6 +75,10 @@ class AppNavigationDrawer extends StatelessWidget {
       extended: extended,
       navigationChildren: [
         if (extended)
+          const _CommandPaletteTile(closeDrawer: false)
+        else
+          const _CollapsedCommandPaletteButton(),
+        if (extended)
           for (final group in groups)
             _RailNavigationGroupTile(
               group: group,
@@ -110,172 +118,25 @@ class AppNavigationDrawer extends StatelessWidget {
   }
 
   List<_NavigationGroup> _availableGroups(AppLocalizations l10n) {
-    final groups = [
-      _NavigationGroup(
-        label: l10n.navigationGroupPrimary,
-        icon: Icons.home_outlined,
-        destinations: [
-          _DrawerDestination(
-            destination: AppNavigationDestination.dashboard,
-            icon: const Icon(Icons.dashboard_outlined),
-            selectedIcon: const Icon(Icons.dashboard),
-            label: l10n.dashboardDrawerLabel,
-          ),
-          _DrawerDestination(
-            destination: AppNavigationDestination.pos,
-            icon: const Icon(Icons.receipt_long_outlined),
-            selectedIcon: const Icon(Icons.receipt_long),
-            label: l10n.posDrawerLabel,
-          ),
-          _DrawerDestination(
-            destination: AppNavigationDestination.operations,
-            icon: const Icon(Icons.handyman_outlined),
-            selectedIcon: const Icon(Icons.handyman),
-            label: l10n.operationsDrawerLabel,
-          ),
-        ],
-      ),
-      _NavigationGroup(
-        label: l10n.navigationGroupSales,
-        icon: Icons.point_of_sale_outlined,
-        destinations: [
-          _DrawerDestination(
-            destination: AppNavigationDestination.invoices,
-            icon: const Icon(Icons.request_quote_outlined),
-            selectedIcon: const Icon(Icons.request_quote),
-            label: l10n.invoicesDrawerLabel,
-          ),
-          _DrawerDestination(
-            destination: AppNavigationDestination.registerSessions,
-            icon: const Icon(Icons.manage_history_outlined),
-            selectedIcon: const Icon(Icons.manage_history),
-            label: l10n.registerSessionsDrawerLabel,
-          ),
-          _DrawerDestination(
-            destination: AppNavigationDestination.discounts,
-            icon: const Icon(Icons.local_offer_outlined),
-            selectedIcon: const Icon(Icons.local_offer),
-            label: l10n.discountsDrawerLabel,
-          ),
-        ],
-      ),
-      _NavigationGroup(
-        label: l10n.navigationGroupStock,
-        icon: Icons.inventory_2_outlined,
-        destinations: [
-          _DrawerDestination(
-            destination: AppNavigationDestination.catalog,
-            icon: const Icon(Icons.inventory_2_outlined),
-            selectedIcon: const Icon(Icons.inventory_2),
-            label: l10n.catalogDrawerLabel,
-          ),
-          _DrawerDestination(
-            destination: AppNavigationDestination.categories,
-            icon: const Icon(Icons.category_outlined),
-            selectedIcon: const Icon(Icons.category),
-            label: l10n.categoriesDrawerLabel,
-          ),
-          _DrawerDestination(
-            destination: AppNavigationDestination.purchasing,
-            icon: const Icon(Icons.add_shopping_cart_outlined),
-            selectedIcon: const Icon(Icons.add_shopping_cart),
-            label: l10n.purchasingDrawerLabel,
-          ),
-          _DrawerDestination(
-            destination: AppNavigationDestination.stockCount,
-            icon: const Icon(Icons.fact_check_outlined),
-            selectedIcon: const Icon(Icons.fact_check),
-            label: l10n.stockCountDrawerLabel,
-          ),
-        ],
-      ),
-      _NavigationGroup(
-        label: l10n.navigationGroupPeople,
-        icon: Icons.groups_outlined,
-        destinations: [
-          _DrawerDestination(
-            destination: AppNavigationDestination.contacts,
-            icon: const Icon(Icons.contacts_outlined),
-            selectedIcon: const Icon(Icons.contacts),
-            label: l10n.contactsDrawerLabel,
-          ),
-          _DrawerDestination(
-            destination: AppNavigationDestination.employees,
-            icon: const Icon(Icons.badge_outlined),
-            selectedIcon: const Icon(Icons.badge),
-            label: l10n.employeesDrawerLabel,
-          ),
-        ],
-      ),
-      _NavigationGroup(
-        label: l10n.navigationGroupReports,
-        icon: Icons.query_stats_outlined,
-        destinations: [
-          _DrawerDestination(
-            destination: AppNavigationDestination.expenses,
-            icon: const Icon(Icons.receipt_long_outlined),
-            selectedIcon: const Icon(Icons.receipt_long),
-            label: l10n.expensesDrawerLabel,
-          ),
-          _DrawerDestination(
-            destination: AppNavigationDestination.reports,
-            icon: const Icon(Icons.summarize_outlined),
-            selectedIcon: const Icon(Icons.summarize),
-            label: l10n.reportsDrawerLabel,
-          ),
-          _DrawerDestination(
-            destination: AppNavigationDestination.activityLog,
-            icon: const Icon(Icons.manage_search_outlined),
-            selectedIcon: const Icon(Icons.manage_search),
-            label: l10n.activityLogDrawerLabel,
-          ),
-        ],
-      ),
-      _NavigationGroup(
-        label: l10n.navigationGroupSettings,
-        icon: Icons.tune_outlined,
-        destinations: [
-          _DrawerDestination(
-            destination: AppNavigationDestination.userSettings,
-            icon: const Icon(Icons.manage_accounts_outlined),
-            selectedIcon: const Icon(Icons.manage_accounts),
-            label: l10n.userSettingsDrawerLabel,
-          ),
-          _DrawerDestination(
-            destination: AppNavigationDestination.deviceSettings,
-            icon: const Icon(Icons.devices_other_outlined),
-            selectedIcon: const Icon(Icons.devices_other),
-            label: l10n.deviceSettingsDrawerLabel,
-          ),
-          _DrawerDestination(
-            destination: AppNavigationDestination.users,
-            icon: const Icon(Icons.group_outlined),
-            selectedIcon: const Icon(Icons.group),
-            label: l10n.usersDrawerLabel,
-          ),
-          _DrawerDestination(
-            destination: AppNavigationDestination.settings,
-            icon: const Icon(Icons.settings_outlined),
-            selectedIcon: const Icon(Icons.settings),
-            label: l10n.settingsDrawerLabel,
-          ),
-        ],
-      ),
-    ];
-
-    // Availability is decided centrally from capabilities alone, so the same
-    // user always sees the same destinations on every screen.
+    // Built from the shared navigation catalog (the single source of truth that
+    // also feeds the command palette), filtered to the destinations this user's
+    // capabilities allow — so the same user sees the same destinations on every
+    // screen, and the drawer and palette can never drift apart.
     return [
-      for (final group in groups)
+      for (final group in appNavigationCatalog(l10n))
         _NavigationGroup(
           label: group.label,
           icon: group.icon,
-          destinations: group.destinations
-              .where(
-                (destination) =>
-                    navigation.isDestinationAvailable(destination.destination),
-              )
-              .toList(growable: false),
+          destinations: [
+            for (final entry in group.entries)
+              if (navigation.isDestinationAvailable(entry.destination))
+                _DrawerDestination(
+                  destination: entry.destination,
+                  icon: Icon(entry.icon),
+                  selectedIcon: Icon(entry.selectedIcon),
+                  label: entry.label,
+                ),
+          ],
         ),
     ].where((group) => group.destinations.isNotEmpty).toList(growable: false);
   }
@@ -479,7 +340,7 @@ class _CollapsedRailDestinationTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
+    final colors = context.pointyColors;
     return Tooltip(
       message: destination.label,
       child: Padding(
@@ -487,10 +348,8 @@ class _CollapsedRailDestinationTile extends StatelessWidget {
         child: IconButton(
           isSelected: selected,
           style: IconButton.styleFrom(
-            backgroundColor: selected ? colorScheme.primaryContainer : null,
-            foregroundColor: selected
-                ? colorScheme.onPrimaryContainer
-                : colorScheme.onSurfaceVariant,
+            backgroundColor: selected ? PointyColors.primaryContainer : null,
+            foregroundColor: selected ? colors.primaryDark : colors.mutedInk,
           ),
           onPressed: onTap,
           icon: selected ? destination.selectedIcon : destination.icon,
@@ -512,4 +371,79 @@ class _DrawerDestination {
   final Widget icon;
   final Widget selectedIcon;
   final String label;
+}
+
+/// Entry point that opens the global command palette from the drawer / rail.
+class _CommandPaletteTile extends StatelessWidget {
+  const _CommandPaletteTile({required this.closeDrawer});
+
+  final bool closeDrawer;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    return ListTile(
+      leading: const Icon(Icons.search),
+      title: Text(
+        l10n.commandPaletteOpenLabel,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      ),
+      trailing: const _ShortcutHint(),
+      onTap: () {
+        if (closeDrawer) {
+          Navigator.of(context).pop();
+        }
+        openCommandPalette();
+      },
+    );
+  }
+}
+
+class _CollapsedCommandPaletteButton extends StatelessWidget {
+  const _CollapsedCommandPaletteButton();
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: IconButton(
+        tooltip: l10n.commandPaletteOpenLabel,
+        onPressed: openCommandPalette,
+        icon: const Icon(Icons.search),
+      ),
+    );
+  }
+}
+
+/// A small keyboard-shortcut hint chip (⌘K / Ctrl K) shown on the palette tile.
+class _ShortcutHint extends StatelessWidget {
+  const _ShortcutHint();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = context.pointyColors;
+    final isApple =
+        theme.platform == TargetPlatform.macOS ||
+        theme.platform == TargetPlatform.iOS;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: colors.surfaceSunken,
+        borderRadius: BorderRadius.circular(PointyRadii.chip),
+        border: Border.all(color: colors.line),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        child: Text(
+          isApple ? '⌘K' : 'Ctrl K',
+          style: theme.textTheme.labelSmall?.copyWith(
+            color: colors.mutedInk,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ),
+    );
+  }
 }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../data/models/cart_line.dart';
+import '../../../shared/design/design.dart';
 import '../../../shared/formatters.dart';
 import '../../../shared/order/order.dart';
 
@@ -75,6 +76,7 @@ class _CartLineModifiers extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final colors = context.pointyColors;
     final label = line.modifiers
         .map(
           (modifier) => modifier.quantity > 1
@@ -87,11 +89,7 @@ class _CartLineModifiers extends StatelessWidget {
       padding: const EdgeInsetsDirectional.only(start: 12, end: 12, bottom: 4),
       child: Row(
         children: [
-          Icon(
-            Icons.tune_outlined,
-            size: 16,
-            color: theme.colorScheme.primary,
-          ),
+          Icon(Icons.tune_outlined, size: 16, color: colors.primaryStrong),
           const SizedBox(width: 6),
           Expanded(
             child: Text(
@@ -117,6 +115,7 @@ class _CartLineNote extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
+    final colors = context.pointyColors;
     final note = line.notes.trim();
     final hasNote = note.isNotEmpty;
 
@@ -134,7 +133,7 @@ class _CartLineNote extends StatelessWidget {
                     ? Icons.sticky_note_2_outlined
                     : Icons.note_add_outlined,
                 size: 16,
-                color: hasNote ? theme.colorScheme.primary : theme.hintColor,
+                color: hasNote ? colors.primaryStrong : theme.hintColor,
               ),
               const SizedBox(width: 6),
               Expanded(

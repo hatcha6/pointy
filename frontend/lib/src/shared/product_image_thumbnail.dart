@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'design/design.dart';
+
 class ProductImageThumbnail extends StatelessWidget {
   const ProductImageThumbnail({
     super.key,
@@ -16,14 +18,13 @@ class ProductImageThumbnail extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
     final url = imageUrl?.trim() ?? '';
     return ClipRRect(
       borderRadius: BorderRadius.circular(borderRadius),
       child: SizedBox.square(
         dimension: size,
         child: DecoratedBox(
-          decoration: BoxDecoration(color: colorScheme.primaryContainer),
+          decoration: const BoxDecoration(color: PointyColors.primaryContainer),
           child: url.isEmpty
               ? _FallbackLabel(text: fallbackText)
               : Image.network(
@@ -61,7 +62,7 @@ class _FallbackLabel extends StatelessWidget {
       child: Text(
         label,
         style: Theme.of(context).textTheme.titleLarge?.copyWith(
-          color: Theme.of(context).colorScheme.onPrimaryContainer,
+          color: context.pointyColors.primaryDark,
         ),
       ),
     );

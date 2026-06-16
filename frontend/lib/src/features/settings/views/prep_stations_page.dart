@@ -6,6 +6,7 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 import '../../../data/models/prep_station.dart';
 import '../../../data/models/product_category.dart';
 import '../../../shared/components/components.dart';
+import '../../../shared/design/design.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../../../shared/shell/shell.dart';
 import '../view_models/prep_stations_view_model.dart';
@@ -134,7 +135,9 @@ class _PrepStationsPageState extends State<PrepStationsPage> {
         ? await widget.viewModel.createStation(draft)
         : await widget.viewModel.updateStation(station.id, draft.toJson());
     if (!saved) {
-      messenger.showSnackBar(SnackBar(content: Text(l10n.prepStationSaveError)));
+      messenger.showSnackBar(
+        SnackBar(content: Text(l10n.prepStationSaveError)),
+      );
     }
   }
 
@@ -239,17 +242,16 @@ class _Badge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final colors = context.pointyColors;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(
-        color: theme.colorScheme.secondaryContainer,
+        color: PointyColors.amberContainer,
         borderRadius: BorderRadius.circular(12),
       ),
       child: Text(
         label,
-        style: theme.textTheme.labelSmall?.copyWith(
-          color: theme.colorScheme.onSecondaryContainer,
-        ),
+        style: theme.textTheme.labelSmall?.copyWith(color: colors.ink),
       ),
     );
   }
@@ -273,9 +275,7 @@ class _PrepStationEditorDialogState extends State<_PrepStationEditorDialog> {
   late final TextEditingController _nameController = TextEditingController(
     text: widget.station?.name ?? '',
   );
-  late final Set<int> _selectedCategoryIds = {
-    ...?widget.station?.categoryIds,
-  };
+  late final Set<int> _selectedCategoryIds = {...?widget.station?.categoryIds};
   late bool _isDefault = widget.station?.isDefault ?? false;
   late bool _isActive = widget.station?.isActive ?? true;
 

@@ -8,6 +8,7 @@ import '../../../data/models/register_session.dart';
 import '../../../shared/authorization_guards.dart';
 import '../../../shared/components/components.dart';
 import '../../../shared/date_formatters.dart';
+import '../../../shared/design/design.dart';
 import '../../../shared/formatters.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../view_models/register_session_history_view_model.dart';
@@ -27,10 +28,11 @@ class RegisterSessionList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    final colors = context.pointyColors;
     final spacing = AdaptiveSpacing.of(context);
 
     return ColoredBox(
-      color: Theme.of(context).colorScheme.surface,
+      color: colors.surface,
       child: Padding(
         padding: spacing.pagePadding,
         child: Column(
@@ -102,7 +104,7 @@ class RegisterSessionTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final colorScheme = Theme.of(context).colorScheme;
+    final colors = context.pointyColors;
     final statusLabel = session.status == 'closed'
         ? l10n.registerSessionStatusClosed
         : l10n.registerSessionStatusOpen;
@@ -112,7 +114,7 @@ class RegisterSessionTile extends StatelessWidget {
 
     return PointyDataRow(
       selected: isSelected,
-      leading: Icon(statusIcon, color: colorScheme.primary),
+      leading: Icon(statusIcon, color: colors.primaryStrong),
       title: l10n.resumeRegisterSessionTitle(session.sessionNumber),
       subtitle: [
         if (session.openedAt != null) formatDateTime(session.openedAt!),
@@ -144,7 +146,7 @@ class _VarianceChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final colorScheme = Theme.of(context).colorScheme;
+    final colors = context.pointyColors;
 
     return Tooltip(
       message: l10n.sessionCashVarianceMetric,
@@ -152,10 +154,10 @@ class _VarianceChip extends StatelessWidget {
         avatar: Icon(
           Icons.warning_amber_outlined,
           size: 18,
-          color: colorScheme.error,
+          color: colors.danger,
         ),
         label: Text(l10n.sessionVarianceFlag(formatMoney(amount))),
-        side: BorderSide(color: colorScheme.error),
+        side: BorderSide(color: colors.danger),
         visualDensity: VisualDensity.compact,
       ),
     );

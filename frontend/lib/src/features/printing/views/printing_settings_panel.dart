@@ -12,6 +12,7 @@ import '../../../data/models/printer_config.dart';
 import '../../../data/repositories/prep_station_repository.dart';
 import '../../../data/repositories/printing_repository.dart';
 import '../../../shared/components/components.dart';
+import '../../../shared/design/design.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../view_models/printing_settings_view_model.dart';
 
@@ -173,8 +174,7 @@ class _KitchenPrintersPanelState extends State<KitchenPrintersPanel> {
       _hasError = false;
     });
     final stationsResult = await widget.prepStationRepository.loadStations();
-    final configs = await widget.printingRepository
-        .loadKitchenStationConfigs();
+    final configs = await widget.printingRepository.loadKitchenStationConfigs();
     if (!mounted) {
       return;
     }
@@ -961,30 +961,27 @@ class _PrinterTestMessage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final colorScheme = Theme.of(context).colorScheme;
+    final colors = context.pointyColors;
     final (message, color) = switch (outcome) {
       PrinterTestOutcome.none => (null, null),
       PrinterTestOutcome.success => (
         l10n.printerTestSuccess,
-        colorScheme.primary,
+        colors.primaryStrong,
       ),
-      PrinterTestOutcome.failed => (l10n.printerTestFailure, colorScheme.error),
+      PrinterTestOutcome.failed => (l10n.printerTestFailure, colors.danger),
       PrinterTestOutcome.barcodeLabelSuccess => (
         l10n.barcodeLabelTestSuccess,
-        colorScheme.primary,
+        colors.primaryStrong,
       ),
       PrinterTestOutcome.barcodeLabelFailed => (
         l10n.barcodeLabelTestFailure,
-        colorScheme.error,
+        colors.danger,
       ),
       PrinterTestOutcome.fakeSuccess => (
         l10n.fakePrintSuccess,
-        colorScheme.primary,
+        colors.primaryStrong,
       ),
-      PrinterTestOutcome.fakeFailed => (
-        l10n.fakePrintFailure,
-        colorScheme.error,
-      ),
+      PrinterTestOutcome.fakeFailed => (l10n.fakePrintFailure, colors.danger),
     };
 
     if (message == null) {

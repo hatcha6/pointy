@@ -8,6 +8,7 @@ import '../../../data/models/product_variant_draft.dart';
 import '../../../data/models/variant_option.dart';
 import '../../../shared/async_selection/async_multi_select_picker.dart';
 import '../../../shared/decimal_text_input_formatter.dart';
+import '../../../shared/design/design.dart';
 import '../../../shared/product_category_picker.dart';
 import '../view_models/catalog_view_model.dart';
 import '../view_models/variant_generation.dart';
@@ -136,7 +137,7 @@ class _ProductFormState extends State<ProductForm> {
       listenable: widget.viewModel,
       builder: (context, _) {
         return Material(
-          color: Theme.of(context).colorScheme.surface,
+          color: context.pointyColors.surface,
           child: Column(
             children: [
               Expanded(
@@ -195,9 +196,8 @@ class _ProductFormState extends State<ProductForm> {
                                           unit: _unit,
                                           isService: _isService,
                                           isPrepared: _isPrepared,
-                                          onUnitChanged: (value) => setState(
-                                            () => _unit = value,
-                                          ),
+                                          onUnitChanged: (value) =>
+                                              setState(() => _unit = value),
                                           onIsServiceChanged: (value) =>
                                               setState(
                                                 () => _isService = value,
@@ -241,7 +241,8 @@ class _ProductFormState extends State<ProductForm> {
                                         const SizedBox(height: 12),
                                         ModifierGroupSelector(
                                           available: _availableModifierGroups,
-                                          selectedIds: _selectedModifierGroupIds,
+                                          selectedIds:
+                                              _selectedModifierGroupIds,
                                           isLoading: _isLoadingModifierGroups,
                                           hasError: _modifierGroupsLoadFailed,
                                           onReload: _loadModifierGroups,
@@ -362,9 +363,7 @@ class _ProductFormState extends State<ProductForm> {
                         const SizedBox(height: 8),
                         Text(
                           l10n.productCreateError,
-                          style: TextStyle(
-                            color: Theme.of(context).colorScheme.error,
-                          ),
+                          style: TextStyle(color: context.pointyColors.danger),
                         ),
                       ],
                     ],
@@ -950,7 +949,7 @@ class _GeneratedVariantFormStep extends StatelessWidget {
           const SizedBox(height: 8),
           Text(
             generationErrorText!,
-            style: TextStyle(color: Theme.of(context).colorScheme.error),
+            style: TextStyle(color: context.pointyColors.danger),
           ),
         ],
         const SizedBox(height: 12),

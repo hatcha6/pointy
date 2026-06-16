@@ -10,6 +10,7 @@ import '../../../data/models/analytics_event.dart';
 import '../../../data/models/barcode_label.dart';
 import '../../../data/repositories/printing_repository.dart';
 import '../../../shared/date_formatters.dart';
+import '../../../shared/design/design.dart';
 import '../../../shared/formatters.dart';
 
 class BarcodeLabelPrintDialogResult {
@@ -413,7 +414,7 @@ class _BarcodeLabelPreview extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final colorScheme = Theme.of(context).colorScheme;
+    final colors = context.pointyColors;
     final details = [
       if (includePrice)
         l10n.barcodeLabelPreviewPrice(formatMoney(label.unitPrice)),
@@ -425,8 +426,8 @@ class _BarcodeLabelPreview extends StatelessWidget {
 
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.45),
-        border: Border.all(color: colorScheme.outlineVariant),
+        color: colors.surfaceSunken.withValues(alpha: 0.45),
+        border: Border.all(color: colors.line),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Padding(
@@ -465,7 +466,7 @@ class _BarcodeLabelPreview extends StatelessWidget {
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.labelMedium?.copyWith(
                 letterSpacing: 0,
-                color: colorScheme.onSurfaceVariant,
+                color: colors.mutedInk,
               ),
             ),
           ],

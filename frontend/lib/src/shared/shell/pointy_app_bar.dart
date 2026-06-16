@@ -104,7 +104,7 @@ class _AppBarProgress extends StatelessWidget {
       dimension: 18,
       child: CircularProgressIndicator(
         strokeWidth: 2,
-        color: color ?? Theme.of(context).colorScheme.primary,
+        color: color ?? PointyColors.primary,
       ),
     );
   }

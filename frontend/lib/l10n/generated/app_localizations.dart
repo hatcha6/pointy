@@ -100,6 +100,120 @@ abstract class AppLocalizations {
   /// **'نقطة البيع'**
   String get appTitle;
 
+  /// Title of the global command palette overlay.
+  ///
+  /// In ar, this message translates to:
+  /// **'تنقّل سريع'**
+  String get commandPaletteTitle;
+
+  /// Search field hint inside the command palette.
+  ///
+  /// In ar, this message translates to:
+  /// **'ابحث عن شاشة أو منتج أو عميل أو فاتورة…'**
+  String get commandPaletteSearchHint;
+
+  /// Section header for navigable screens in the command palette.
+  ///
+  /// In ar, this message translates to:
+  /// **'الشاشات'**
+  String get commandPaletteScreensSection;
+
+  /// Command palette section header for product results.
+  ///
+  /// In ar, this message translates to:
+  /// **'المنتجات'**
+  String get commandPaletteProductsSection;
+
+  /// Command palette section header for customer results.
+  ///
+  /// In ar, this message translates to:
+  /// **'العملاء'**
+  String get commandPaletteCustomersSection;
+
+  /// Command palette section header for supplier results.
+  ///
+  /// In ar, this message translates to:
+  /// **'الموردون'**
+  String get commandPaletteSuppliersSection;
+
+  /// Command palette section header for invoice results.
+  ///
+  /// In ar, this message translates to:
+  /// **'الفواتير'**
+  String get commandPaletteInvoicesSection;
+
+  /// Command palette section header for purchase order results.
+  ///
+  /// In ar, this message translates to:
+  /// **'أوامر الشراء'**
+  String get commandPalettePurchaseOrdersSection;
+
+  /// Shown while the command palette is searching entities.
+  ///
+  /// In ar, this message translates to:
+  /// **'جارٍ البحث…'**
+  String get commandPaletteSearching;
+
+  /// Command palette section header for quick actions.
+  ///
+  /// In ar, this message translates to:
+  /// **'إجراءات سريعة'**
+  String get commandPaletteActionsSection;
+
+  /// Command palette section header for recently opened items.
+  ///
+  /// In ar, this message translates to:
+  /// **'المفتوحة مؤخرًا'**
+  String get commandPaletteRecentsSection;
+
+  /// Quick action: go to the POS to start a new sale.
+  ///
+  /// In ar, this message translates to:
+  /// **'بيع جديد'**
+  String get commandPaletteActionNewSale;
+
+  /// Quick action: open a blank purchase order draft.
+  ///
+  /// In ar, this message translates to:
+  /// **'أمر شراء جديد'**
+  String get commandPaletteActionNewPurchaseOrder;
+
+  /// Quick action: open the expenses screen to record an expense.
+  ///
+  /// In ar, this message translates to:
+  /// **'تسجيل مصروف'**
+  String get commandPaletteActionRecordExpense;
+
+  /// Quick action: open the stock count screen.
+  ///
+  /// In ar, this message translates to:
+  /// **'بدء جرد'**
+  String get commandPaletteActionStockCount;
+
+  /// Live stock shown on a product row in the command palette.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count} في المخزون'**
+  String commandPaletteStockLabel(String count);
+
+  /// Empty state when no command palette results match the query.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد نتائج مطابقة'**
+  String get commandPaletteNoResults;
+
+  /// Label for the entry point that opens the command palette.
+  ///
+  /// In ar, this message translates to:
+  /// **'بحث وتنقّل سريع'**
+  String get commandPaletteOpenLabel;
+
+  /// Keyboard hint shown at the bottom of the command palette.
+  ///
+  /// In ar, this message translates to:
+  /// **'↑↓ للتنقل · Enter للفتح · Esc للإغلاق'**
+  String get commandPaletteFooterHint;
+
   /// No description provided for @refreshCatalogTooltip.
   ///
   /// In ar, this message translates to:
@@ -16913,6 +17027,318 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'{count, plural, =1{فرق واحد} =2{فرقان} other{{count} فروق}}'**
   String stockCountVarianceShort(int count);
+
+  /// No description provided for @priceCheckersSectionTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'أجهزة فحص الأسعار'**
+  String get priceCheckersSectionTitle;
+
+  /// No description provided for @priceCheckersSectionSubtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'متابعة أجهزة فحص الأسعار المتصلة في المتجر وحالتها'**
+  String get priceCheckersSectionSubtitle;
+
+  /// No description provided for @priceCheckersHeroDescription.
+  ///
+  /// In ar, this message translates to:
+  /// **'نظرة سريعة على كل جهاز متصل وآخر نشاط له.'**
+  String get priceCheckersHeroDescription;
+
+  /// No description provided for @priceCheckerDevicesUnit.
+  ///
+  /// In ar, this message translates to:
+  /// **'جهاز فحص أسعار'**
+  String get priceCheckerDevicesUnit;
+
+  /// Hero pill: how many devices are actively serving lookups.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count} قيد الخدمة'**
+  String priceCheckerServingPillLabel(int count);
+
+  /// Hero pill: how many discovered devices await activation.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count} بانتظار التفعيل'**
+  String priceCheckerDiscoveredPillLabel(int count);
+
+  /// No description provided for @priceCheckerScanTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'البحث عن أجهزة في الشبكة'**
+  String get priceCheckerScanTooltip;
+
+  /// No description provided for @priceCheckerScanButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'بحث في الشبكة'**
+  String get priceCheckerScanButton;
+
+  /// No description provided for @priceCheckerRefreshTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحديث'**
+  String get priceCheckerRefreshTooltip;
+
+  /// No description provided for @priceCheckerDevicesListTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'الأجهزة'**
+  String get priceCheckerDevicesListTitle;
+
+  /// Device-list section subtitle showing the device count.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count} جهاز'**
+  String priceCheckerDevicesCountSubtitle(int count);
+
+  /// No description provided for @priceCheckersEmptyTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد أجهزة بعد'**
+  String get priceCheckersEmptyTitle;
+
+  /// No description provided for @priceCheckersEmptyMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'ابحث في الشبكة المحلية للعثور على أجهزة فحص الأسعار وتسجيلها تلقائيًا.'**
+  String get priceCheckersEmptyMessage;
+
+  /// No description provided for @priceCheckersLoadError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر تحميل أجهزة فحص الأسعار'**
+  String get priceCheckersLoadError;
+
+  /// Snackbar after a network scan finds devices.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم العثور على {found} جهاز، وسُجِّل منها {registered}.'**
+  String priceCheckerScanSuccess(int found, int registered);
+
+  /// No description provided for @priceCheckerScanNone.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم يُعثر على أجهزة جديدة في الشبكة.'**
+  String get priceCheckerScanNone;
+
+  /// No description provided for @priceCheckerScanError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر إجراء البحث في الشبكة. حاول مرة أخرى.'**
+  String get priceCheckerScanError;
+
+  /// Last-activity timestamp line for a device.
+  ///
+  /// In ar, this message translates to:
+  /// **'آخر نشاط: {value}'**
+  String priceCheckerLastSeen(String value);
+
+  /// No description provided for @priceCheckerNeverSeen.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم يُسجَّل نشاط بعد'**
+  String get priceCheckerNeverSeen;
+
+  /// No description provided for @priceCheckerStatusActive.
+  ///
+  /// In ar, this message translates to:
+  /// **'نشِط'**
+  String get priceCheckerStatusActive;
+
+  /// No description provided for @priceCheckerStatusDiscovered.
+  ///
+  /// In ar, this message translates to:
+  /// **'مكتشَف'**
+  String get priceCheckerStatusDiscovered;
+
+  /// No description provided for @priceCheckerStatusDisabled.
+  ///
+  /// In ar, this message translates to:
+  /// **'مُعطّل'**
+  String get priceCheckerStatusDisabled;
+
+  /// No description provided for @priceCheckerDiscoveryManual.
+  ///
+  /// In ar, this message translates to:
+  /// **'إضافة يدوية'**
+  String get priceCheckerDiscoveryManual;
+
+  /// No description provided for @priceCheckerDiscoveryScan.
+  ///
+  /// In ar, this message translates to:
+  /// **'فحص الشبكة'**
+  String get priceCheckerDiscoveryScan;
+
+  /// No description provided for @priceCheckerDiscoverySelf.
+  ///
+  /// In ar, this message translates to:
+  /// **'تسجيل ذاتي'**
+  String get priceCheckerDiscoverySelf;
+
+  /// No description provided for @priceCheckerArabicNone.
+  ///
+  /// In ar, this message translates to:
+  /// **'غير مدعوم (لاتيني)'**
+  String get priceCheckerArabicNone;
+
+  /// No description provided for @priceCheckerArabicUnicode.
+  ///
+  /// In ar, this message translates to:
+  /// **'يونيكود (الجهاز يُشكّل)'**
+  String get priceCheckerArabicUnicode;
+
+  /// No description provided for @priceCheckerArabicCp1256.
+  ///
+  /// In ar, this message translates to:
+  /// **'CP1256 (الخادم يعيد الترتيب)'**
+  String get priceCheckerArabicCp1256;
+
+  /// No description provided for @priceCheckerArabicGlyphs.
+  ///
+  /// In ar, this message translates to:
+  /// **'محارف مُشكّلة مسبقًا'**
+  String get priceCheckerArabicGlyphs;
+
+  /// No description provided for @priceCheckResultFound.
+  ///
+  /// In ar, this message translates to:
+  /// **'موجود'**
+  String get priceCheckResultFound;
+
+  /// No description provided for @priceCheckResultNotFound.
+  ///
+  /// In ar, this message translates to:
+  /// **'غير موجود'**
+  String get priceCheckResultNotFound;
+
+  /// No description provided for @priceCheckResultError.
+  ///
+  /// In ar, this message translates to:
+  /// **'خطأ'**
+  String get priceCheckResultError;
+
+  /// No description provided for @priceCheckerConnectionServing.
+  ///
+  /// In ar, this message translates to:
+  /// **'هذا الجهاز قيد الخدمة ويستقبل عمليات الفحص'**
+  String get priceCheckerConnectionServing;
+
+  /// No description provided for @priceCheckerConnectionDiscovered.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم اكتشاف هذا الجهاز وهو بانتظار التفعيل'**
+  String get priceCheckerConnectionDiscovered;
+
+  /// No description provided for @priceCheckerConnectionDisabled.
+  ///
+  /// In ar, this message translates to:
+  /// **'هذا الجهاز مُعطّل ولا يستجيب لعمليات الفحص'**
+  String get priceCheckerConnectionDisabled;
+
+  /// No description provided for @priceCheckerNetworkSection.
+  ///
+  /// In ar, this message translates to:
+  /// **'الشبكة'**
+  String get priceCheckerNetworkSection;
+
+  /// No description provided for @priceCheckerFieldIdentifier.
+  ///
+  /// In ar, this message translates to:
+  /// **'المعرّف'**
+  String get priceCheckerFieldIdentifier;
+
+  /// No description provided for @priceCheckerFieldTransport.
+  ///
+  /// In ar, this message translates to:
+  /// **'البروتوكول'**
+  String get priceCheckerFieldTransport;
+
+  /// No description provided for @priceCheckerFieldAddress.
+  ///
+  /// In ar, this message translates to:
+  /// **'العنوان'**
+  String get priceCheckerFieldAddress;
+
+  /// No description provided for @priceCheckerFieldMac.
+  ///
+  /// In ar, this message translates to:
+  /// **'عنوان MAC'**
+  String get priceCheckerFieldMac;
+
+  /// No description provided for @priceCheckerFieldDriver.
+  ///
+  /// In ar, this message translates to:
+  /// **'المشغّل'**
+  String get priceCheckerFieldDriver;
+
+  /// No description provided for @priceCheckerFieldHardware.
+  ///
+  /// In ar, this message translates to:
+  /// **'الطراز'**
+  String get priceCheckerFieldHardware;
+
+  /// No description provided for @priceCheckerFieldDiscovery.
+  ///
+  /// In ar, this message translates to:
+  /// **'طريقة الاكتشاف'**
+  String get priceCheckerFieldDiscovery;
+
+  /// No description provided for @priceCheckerFieldLocation.
+  ///
+  /// In ar, this message translates to:
+  /// **'الموقع'**
+  String get priceCheckerFieldLocation;
+
+  /// No description provided for @priceCheckerDisplaySection.
+  ///
+  /// In ar, this message translates to:
+  /// **'الشاشة'**
+  String get priceCheckerDisplaySection;
+
+  /// No description provided for @priceCheckerFieldDisplaySize.
+  ///
+  /// In ar, this message translates to:
+  /// **'أبعاد الشاشة'**
+  String get priceCheckerFieldDisplaySize;
+
+  /// Display grid dimensions, e.g. 5 × 20.
+  ///
+  /// In ar, this message translates to:
+  /// **'{rows} × {cols}'**
+  String priceCheckerDisplaySizeValue(int rows, int cols);
+
+  /// No description provided for @priceCheckerFieldArabic.
+  ///
+  /// In ar, this message translates to:
+  /// **'دعم العربية'**
+  String get priceCheckerFieldArabic;
+
+  /// No description provided for @priceCheckerFieldEncoding.
+  ///
+  /// In ar, this message translates to:
+  /// **'الترميز'**
+  String get priceCheckerFieldEncoding;
+
+  /// No description provided for @priceCheckerActivitySection.
+  ///
+  /// In ar, this message translates to:
+  /// **'أحدث عمليات الفحص'**
+  String get priceCheckerActivitySection;
+
+  /// No description provided for @priceCheckerActivityLoadError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر تحميل عمليات الفحص'**
+  String get priceCheckerActivityLoadError;
+
+  /// No description provided for @priceCheckerActivityEmpty.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد عمليات فحص بعد لهذا الجهاز.'**
+  String get priceCheckerActivityEmpty;
 }
 
 class _AppLocalizationsDelegate

@@ -24,7 +24,7 @@ class PointyMetricTile extends StatelessWidget {
     final spacing = AdaptiveSpacing.of(context);
     final theme = Theme.of(context);
     final colors = context.pointyColors;
-    final resolvedAccent = accentColor ?? theme.colorScheme.primary;
+    final resolvedAccent = accentColor ?? colors.primaryStrong;
 
     return DecoratedBox(
       decoration: const BoxDecoration(

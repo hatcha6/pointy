@@ -3,6 +3,7 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../data/models/stock_movement.dart';
 import '../../../shared/decimal_text_input_formatter.dart';
+import '../../../shared/design/design.dart';
 import '../view_models/product_stock_view_model.dart';
 import 'stock_movement_labels.dart';
 
@@ -59,7 +60,6 @@ class _StockMovementFormState extends State<StockMovementForm> {
                       initialValue: _movementType,
                       decoration: InputDecoration(
                         labelText: l10n.stockMovementTypeLabel,
-                        border: const OutlineInputBorder(),
                         prefixIcon: const Icon(Icons.swap_horiz_outlined),
                       ),
                       items: StockMovementType.values
@@ -88,7 +88,6 @@ class _StockMovementFormState extends State<StockMovementForm> {
                       inputFormatters: [DecimalTextInputFormatter()],
                       decoration: InputDecoration(
                         labelText: l10n.stockMovementQuantityLabel,
-                        border: const OutlineInputBorder(),
                         prefixIcon: const Icon(Icons.numbers_outlined),
                       ),
                       validator: (value) {
@@ -107,7 +106,6 @@ class _StockMovementFormState extends State<StockMovementForm> {
                       maxLines: 3,
                       decoration: InputDecoration(
                         labelText: l10n.stockMovementNoteLabel,
-                        border: const OutlineInputBorder(),
                         prefixIcon: const Icon(Icons.notes_outlined),
                       ),
                     ),
@@ -116,9 +114,7 @@ class _StockMovementFormState extends State<StockMovementForm> {
                       const SizedBox(height: 12),
                       Text(
                         l10n.stockMovementCreateError,
-                        style: TextStyle(
-                          color: Theme.of(context).colorScheme.error,
-                        ),
+                        style: TextStyle(color: context.pointyColors.danger),
                       ),
                     ],
                     const SizedBox(height: 16),

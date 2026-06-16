@@ -9,6 +9,7 @@ import '../../../data/repositories/printing_repository.dart';
 import '../../../shared/app_navigation_drawer.dart';
 import '../../../shared/authorization_guards.dart';
 import '../../../shared/components/components.dart';
+import '../../../shared/design/design.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../../../shared/shell/shell.dart';
 import '../view_models/device_settings_view_model.dart';
@@ -248,17 +249,15 @@ class _UsageModeOption extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final selected = value == selectedValue;
-    final colorScheme = Theme.of(context).colorScheme;
+    final colors = context.pointyColors;
 
     return Material(
       color: selected
-          ? colorScheme.primaryContainer.withValues(alpha: 0.35)
-          : colorScheme.surface,
+          ? PointyColors.primaryContainer.withValues(alpha: 0.35)
+          : colors.surface,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(8),
-        side: BorderSide(
-          color: selected ? colorScheme.primary : colorScheme.outlineVariant,
-        ),
+        side: BorderSide(color: selected ? colors.primaryStrong : colors.line),
       ),
       child: ListTile(
         enabled: enabled,
@@ -268,7 +267,7 @@ class _UsageModeOption extends StatelessWidget {
         subtitle: Text(description),
         trailing: Icon(
           selected ? Icons.radio_button_checked : Icons.radio_button_unchecked,
-          color: selected ? colorScheme.primary : colorScheme.outline,
+          color: selected ? colors.primaryStrong : colors.line,
         ),
       ),
     );

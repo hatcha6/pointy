@@ -6,6 +6,7 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 import '../../../data/models/bill_of_materials.dart';
 import '../../../data/repositories/catalog_repository.dart';
 import '../../../shared/components/components.dart';
+import '../../../shared/design/design.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../../../shared/shell/shell.dart';
 import '../view_models/recipes_view_model.dart';
@@ -219,7 +220,9 @@ class _RecipeEditorPageState extends State<_RecipeEditorPage> {
     _outputVariantId = recipe?.variant;
     _outputVariantLabel = recipe == null
         ? ''
-        : (recipe.variantName.isEmpty ? recipe.productName : recipe.variantName);
+        : (recipe.variantName.isEmpty
+              ? recipe.productName
+              : recipe.variantName);
     _lines = [
       for (final line in recipe?.lines ?? const <BomLine>[])
         _EditableLine(
@@ -282,9 +285,7 @@ class _RecipeEditorPageState extends State<_RecipeEditorPage> {
                     ListTile(
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
-                        side: BorderSide(
-                          color: Theme.of(context).colorScheme.outlineVariant,
-                        ),
+                        side: BorderSide(color: context.pointyColors.line),
                       ),
                       leading: const Icon(Icons.inventory_2_outlined),
                       title: Text(l10n.recipeOutputVariantLabel),
@@ -311,9 +312,7 @@ class _RecipeEditorPageState extends State<_RecipeEditorPage> {
                       contentPadding: EdgeInsets.zero,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
-                        side: BorderSide(
-                          color: Theme.of(context).colorScheme.outlineVariant,
-                        ),
+                        side: BorderSide(color: context.pointyColors.line),
                       ),
                       secondary: const Icon(Icons.restaurant_outlined),
                       title: Text(l10n.recipeMakeToOrderLabel),
@@ -386,8 +385,9 @@ class _RecipeEditorPageState extends State<_RecipeEditorPage> {
               child: TextFormField(
                 initialValue: formatQuantity(line.quantity),
                 enabled: !isSaving,
-                keyboardType:
-                    const TextInputType.numberWithOptions(decimal: true),
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
                 decoration: InputDecoration(
                   labelText: l10n.recipeComponentQuantityLabel,
                   suffixText: unitLabel(l10n, line.componentUnit),

@@ -1,11 +1,9 @@
 import 'dart:typed_data';
 
-import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
-import '../../../shared/pdf/pointy_pdf_branding.dart';
-import '../../../shared/pdf/pointy_pdf_table.dart';
+import '../../../shared/pdf/pdf.dart';
 import 'report_pdf_fonts.dart';
 import 'report_pdf_labels.dart';
 import 'report_pdf_models.dart';
@@ -26,7 +24,6 @@ class ReportPdfGenerator {
     ReportPdfFonts? fonts,
   }) async {
     final resolvedFonts = fonts ?? await fontLoader.load();
-    final theme = resolvedFonts.toThemeData();
     final pageFormat = options.resolvedPageFormat(requestedPageFormat);
     final pdf = pw.Document(
       title: report.title,
@@ -37,18 +34,10 @@ class ReportPdfGenerator {
     );
 
     pdf.addPage(
-      pw.MultiPage(
+      buildPointyPdfMultiPage(
+        fonts: resolvedFonts,
+        pageFormat: pageFormat,
         maxPages: options.maxPages,
-        pageTheme: pw.PageTheme(
-          pageFormat: pageFormat.applyMargin(
-            left: 16 * PdfPageFormat.mm,
-            top: 14 * PdfPageFormat.mm,
-            right: 16 * PdfPageFormat.mm,
-            bottom: 14 * PdfPageFormat.mm,
-          ),
-          theme: theme,
-          textDirection: pw.TextDirection.rtl,
-        ),
         header: (context) => _Header(report: report, labels: labels),
         footer: (context) => _Footer(report: report, labels: labels),
         build: (context) => [
@@ -89,27 +78,17 @@ class ReportPdfGenerator {
   }
 }
 
-class _ReportColors {
-  static const ink = PdfColor.fromInt(0xff172026);
-  static const muted = PdfColor.fromInt(0xff64717a);
-  static const border = PdfColor.fromInt(0xffd6dde2);
-  static const fill = PdfColor.fromInt(0xfff7f8f6);
-  static const accent = PdfColor.fromInt(0xff0b6b64);
-  static const accentSoft = PdfColor.fromInt(0xffe8f4f1);
-  static const white = PdfColor.fromInt(0xffffffff);
-}
-
 const _rowsPerTableChunk = 18;
 
 List<pw.Widget> _reportSectionWidgets(ReportPdfSection section) {
   return [
-    _SectionTitle(section.heading),
+    PointyPdfSectionTitle(section.heading),
     for (final paragraph in section.paragraphs) ...[
       pw.SizedBox(height: 6),
       pw.Text(
         paragraph,
         style: const pw.TextStyle(
-          color: _ReportColors.ink,
+          color: PointyPdfPalette.ink,
           fontSize: 10,
           lineSpacing: 3,
         ),
@@ -132,7 +111,7 @@ List<pw.Widget> _reportTableWidgets(ReportPdfTable table) {
 
   return [
     if (table.title != null) ...[
-      _SectionTitle(table.title!, fontSize: 11),
+      PointyPdfSectionTitle(table.title!, fontSize: 11),
       pw.SizedBox(height: 6),
     ],
     for (var index = 0; index < rowChunks.length; index += 1) ...[
@@ -192,7 +171,7 @@ ReportPdfTable _auditTrailTable(
     rows: [
       for (final entry in entries)
         [
-          _formatDateTime(entry.occurredAt),
+          formatPdfDateTime(entry.occurredAt),
           entry.action,
           entry.actor,
           entry.note ?? labels.emptyValue,
@@ -210,125 +189,59 @@ class _Header extends pw.StatelessWidget {
 
   @override
   pw.Widget build(pw.Context context) {
-    final logoProvider = _logoProvider(report.businessLogoBytes);
-    final headerText = _compactText(report.businessHeader, maxCharacters: 110);
-
-    return pw.Container(
-      padding: const pw.EdgeInsets.all(12),
-      decoration: pw.BoxDecoration(
-        color: _ReportColors.fill,
-        border: pw.Border.all(color: _ReportColors.border, width: 0.5),
-        borderRadius: const pw.BorderRadius.all(pw.Radius.circular(6)),
-      ),
-      child: pw.Row(
+    final headerText = compactPdfText(
+      report.businessHeader,
+      maxCharacters: 110,
+    );
+    return PointyPdfMasthead(
+      boxed: true,
+      leading: pw.Column(
         crossAxisAlignment: pw.CrossAxisAlignment.start,
         children: [
-          pw.Expanded(
-            child: pw.Column(
-              crossAxisAlignment: pw.CrossAxisAlignment.start,
-              children: [
-                pw.Text(
-                  report.businessName,
-                  style: pw.TextStyle(
-                    color: _ReportColors.accent,
-                    fontSize: 11,
-                    fontWeight: pw.FontWeight.bold,
-                  ),
-                  textAlign: pw.TextAlign.right,
-                ),
-                if (headerText != null) ...[
-                  pw.SizedBox(height: 3),
-                  pw.Text(
-                    headerText,
-                    style: const pw.TextStyle(
-                      color: _ReportColors.muted,
-                      fontSize: 8.5,
-                      lineSpacing: 2,
-                    ),
-                    textAlign: pw.TextAlign.right,
-                  ),
-                ],
-                pw.SizedBox(height: 6),
-                pw.Text(
-                  report.title,
-                  style: pw.TextStyle(
-                    color: _ReportColors.ink,
-                    fontSize: 21,
-                    fontWeight: pw.FontWeight.bold,
-                  ),
-                  textAlign: pw.TextAlign.right,
-                ),
-              ],
+          pw.Text(
+            report.businessName,
+            style: pw.TextStyle(
+              color: PointyPdfPalette.accent,
+              fontSize: 11,
+              fontWeight: pw.FontWeight.bold,
             ),
+            textAlign: pw.TextAlign.right,
           ),
-          pw.SizedBox(width: 12),
-          pw.Column(
-            crossAxisAlignment: pw.CrossAxisAlignment.end,
-            children: [
-              if (logoProvider != null) ...[
-                pw.Container(
-                  width: 48,
-                  height: 48,
-                  padding: const pw.EdgeInsets.all(5),
-                  decoration: pw.BoxDecoration(
-                    color: _ReportColors.white,
-                    border: pw.Border.all(color: _ReportColors.border),
-                    borderRadius: const pw.BorderRadius.all(
-                      pw.Radius.circular(5),
-                    ),
-                  ),
-                  child: pw.Image(logoProvider, fit: pw.BoxFit.contain),
-                ),
-                pw.SizedBox(height: 8),
-              ],
-              pw.Container(
-                padding: const pw.EdgeInsets.symmetric(
-                  horizontal: 9,
-                  vertical: 5,
-                ),
-                decoration: pw.BoxDecoration(
-                  color: _ReportColors.accentSoft,
-                  border: pw.Border.all(color: _ReportColors.border),
-                  borderRadius: const pw.BorderRadius.all(
-                    pw.Radius.circular(4),
-                  ),
-                ),
-                child: pw.Text(
-                  labels.typeLabel(report.type),
-                  style: pw.TextStyle(
-                    color: _ReportColors.accent,
-                    fontSize: 9,
-                    fontWeight: pw.FontWeight.bold,
-                  ),
-                ),
+          if (headerText != null) ...[
+            pw.SizedBox(height: 3),
+            pw.Text(
+              headerText,
+              style: const pw.TextStyle(
+                color: PointyPdfPalette.muted,
+                fontSize: 8.5,
+                lineSpacing: 2,
               ),
-            ],
+              textAlign: pw.TextAlign.right,
+            ),
+          ],
+          pw.SizedBox(height: 6),
+          pw.Text(
+            report.title,
+            style: pw.TextStyle(
+              color: PointyPdfPalette.ink,
+              fontSize: 21,
+              fontWeight: pw.FontWeight.bold,
+            ),
+            textAlign: pw.TextAlign.right,
           ),
         ],
       ),
+      trailing: pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.end,
+        children: [
+          if (pdfLogoProvider(report.businessLogoBytes) != null) ...[
+            PointyPdfLogo(logoBytes: report.businessLogoBytes),
+            pw.SizedBox(height: 8),
+          ],
+          PointyPdfBadge(labels.typeLabel(report.type)),
+        ],
+      ),
     );
-  }
-}
-
-String? _compactText(String? value, {required int maxCharacters}) {
-  final normalized = value?.replaceAll(RegExp(r'\s+'), ' ').trim() ?? '';
-  if (normalized.isEmpty) {
-    return null;
-  }
-  if (normalized.length <= maxCharacters) {
-    return normalized;
-  }
-  return '${normalized.substring(0, maxCharacters - 3)}...';
-}
-
-pw.ImageProvider? _logoProvider(Uint8List? bytes) {
-  if (bytes == null || bytes.isEmpty) {
-    return null;
-  }
-  try {
-    return pw.MemoryImage(bytes);
-  } on Object {
-    return null;
   }
 }
 
@@ -343,7 +256,7 @@ class _Footer extends pw.StatelessWidget {
     return PointyPdfFooter(
       pageLabel:
           '${labels.page} ${context.pageNumber} ${labels.ofPages} ${context.pagesCount}',
-      shopFooter: _compactText(report.businessFooter, maxCharacters: 150),
+      shopFooter: compactPdfText(report.businessFooter, maxCharacters: 150),
     );
   }
 }
@@ -359,7 +272,7 @@ class _MetadataPanel extends pw.StatelessWidget {
     final fields = [
       ReportPdfField(
         label: labels.generatedAt,
-        value: _formatDateTime(report.generatedAt),
+        value: formatPdfDateTime(report.generatedAt),
       ),
       if (report.generatedBy != null)
         ReportPdfField(label: labels.generatedBy, value: report.generatedBy!),
@@ -372,8 +285,8 @@ class _MetadataPanel extends pw.StatelessWidget {
       margin: const pw.EdgeInsets.only(top: 12),
       padding: const pw.EdgeInsets.all(11),
       decoration: pw.BoxDecoration(
-        color: _ReportColors.accentSoft,
-        border: pw.Border.all(color: _ReportColors.border),
+        color: PointyPdfPalette.accentSoft,
+        border: pw.Border.all(color: PointyPdfPalette.border),
         borderRadius: const pw.BorderRadius.all(pw.Radius.circular(6)),
       ),
       child: _FieldWrap(fields: fields),
@@ -397,8 +310,8 @@ class _MetricGrid extends pw.StatelessWidget {
             width: 128,
             padding: const pw.EdgeInsets.all(10),
             decoration: pw.BoxDecoration(
-              color: _ReportColors.white,
-              border: pw.Border.all(color: _ReportColors.border),
+              color: PointyPdfPalette.white,
+              border: pw.Border.all(color: PointyPdfPalette.border),
               borderRadius: const pw.BorderRadius.all(pw.Radius.circular(5)),
             ),
             child: pw.Column(
@@ -407,7 +320,7 @@ class _MetricGrid extends pw.StatelessWidget {
                 pw.Text(
                   metric.label,
                   style: const pw.TextStyle(
-                    color: _ReportColors.muted,
+                    color: PointyPdfPalette.muted,
                     fontSize: 9,
                   ),
                   textAlign: pw.TextAlign.right,
@@ -416,7 +329,7 @@ class _MetricGrid extends pw.StatelessWidget {
                 pw.Text(
                   metric.value,
                   style: pw.TextStyle(
-                    color: _ReportColors.ink,
+                    color: PointyPdfPalette.ink,
                     fontSize: 15,
                     fontWeight: pw.FontWeight.bold,
                   ),
@@ -427,7 +340,7 @@ class _MetricGrid extends pw.StatelessWidget {
                   pw.Text(
                     metric.note!,
                     style: const pw.TextStyle(
-                      color: _ReportColors.muted,
+                      color: PointyPdfPalette.muted,
                       fontSize: 8,
                     ),
                     textAlign: pw.TextAlign.right,
@@ -457,7 +370,7 @@ class _FieldSection extends pw.StatelessWidget {
     return pw.Column(
       crossAxisAlignment: pw.CrossAxisAlignment.start,
       children: [
-        _SectionTitle(title),
+        PointyPdfSectionTitle(title),
         pw.SizedBox(height: 6),
         _FieldWrap(fields: fields, compact: compact),
       ],
@@ -486,7 +399,7 @@ class _FieldWrap extends pw.StatelessWidget {
                 pw.Text(
                   field.label,
                   style: pw.TextStyle(
-                    color: _ReportColors.muted,
+                    color: PointyPdfPalette.muted,
                     fontSize: 8,
                     fontWeight: pw.FontWeight.bold,
                   ),
@@ -496,7 +409,7 @@ class _FieldWrap extends pw.StatelessWidget {
                 pw.Text(
                   field.value,
                   style: const pw.TextStyle(
-                    color: _ReportColors.ink,
+                    color: PointyPdfPalette.ink,
                     fontSize: 10,
                   ),
                   textAlign: pw.TextAlign.right,
@@ -509,26 +422,6 @@ class _FieldWrap extends pw.StatelessWidget {
   }
 }
 
-class _SectionTitle extends pw.StatelessWidget {
-  _SectionTitle(this.title, {this.fontSize = 12});
-
-  final String title;
-  final double fontSize;
-
-  @override
-  pw.Widget build(pw.Context context) {
-    return pw.Text(
-      title,
-      style: pw.TextStyle(
-        color: _ReportColors.ink,
-        fontSize: fontSize,
-        fontWeight: pw.FontWeight.bold,
-      ),
-      textAlign: pw.TextAlign.right,
-    );
-  }
-}
-
 List<ReportPdfField> _periodFields(
   ReportPdfPeriod period,
   ReportPdfLabels labels,
@@ -537,16 +430,11 @@ List<ReportPdfField> _periodFields(
     if (period.label != null)
       ReportPdfField(label: labels.period, value: period.label!),
     if (period.start != null)
-      ReportPdfField(label: labels.fromDate, value: _formatDate(period.start!)),
+      ReportPdfField(
+        label: labels.fromDate,
+        value: formatPdfDate(period.start!),
+      ),
     if (period.end != null)
-      ReportPdfField(label: labels.toDate, value: _formatDate(period.end!)),
+      ReportPdfField(label: labels.toDate, value: formatPdfDate(period.end!)),
   ];
-}
-
-String _formatDate(DateTime dateTime) {
-  return DateFormat('yyyy/MM/dd').format(dateTime.toLocal());
-}
-
-String _formatDateTime(DateTime dateTime) {
-  return DateFormat('yyyy/MM/dd HH:mm').format(dateTime.toLocal());
 }

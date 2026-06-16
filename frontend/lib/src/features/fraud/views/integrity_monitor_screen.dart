@@ -182,7 +182,9 @@ class _MonitorStatusCard extends StatelessWidget {
               child: Padding(
                 padding: const EdgeInsets.all(14),
                 child: Icon(
-                  allClear ? Icons.verified_user_outlined : Icons.gpp_maybe_outlined,
+                  allClear
+                      ? Icons.verified_user_outlined
+                      : Icons.gpp_maybe_outlined,
                   color: accent,
                   size: 34,
                 ),
@@ -459,31 +461,37 @@ class _FindingDetailsSheetState extends State<_FindingDetailsSheet> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    if (finding.windowStart != null &&
-                        finding.windowEnd != null)
-                      PointyDetailRow(
-                        label: l10n.integrityFindingWindowLabel,
-                        value: l10n.payrollPeriodSubtitle(
-                          formatDate(finding.windowStart!),
-                          formatDate(finding.windowEnd!),
+                    PointyMetricGrid(
+                      maxColumns: 2,
+                      minTileWidth: 180,
+                      gap: PointyMetricGridGap.compact,
+                      metrics: [
+                        if (finding.windowStart != null &&
+                            finding.windowEnd != null)
+                          PointyMetricGridItem(
+                            label: l10n.integrityFindingWindowLabel,
+                            value: l10n.payrollPeriodSubtitle(
+                              formatDate(finding.windowStart!),
+                              formatDate(finding.windowEnd!),
+                            ),
+                            icon: Icons.date_range_outlined,
+                          ),
+                        PointyMetricGridItem(
+                          label: l10n.integrityFindingPatternCountLabel,
+                          value: '${finding.patternCount}',
+                          icon: Icons.event_repeat_outlined,
                         ),
-                      ),
-                    PointyDetailRow(
-                      label: l10n.integrityFindingPatternCountLabel,
-                      value: '${finding.patternCount}',
+                      ],
                     ),
                     if (comparisons.isNotEmpty) ...[
                       SizedBox(height: spacing.md),
                       PointyDetailSection(
                         title: l10n.integrityPeerComparisonTitle,
                         icon: Icons.groups_outlined,
-                        child: Column(
-                          children: [
+                        child: PointySummaryList(
+                          rows: [
                             for (final row in comparisons)
-                              PointyDetailRow(
-                                label: row.$1,
-                                value: row.$2,
-                              ),
+                              PointySummaryRow(label: row.$1, value: row.$2),
                           ],
                         ),
                       ),
@@ -493,13 +501,10 @@ class _FindingDetailsSheetState extends State<_FindingDetailsSheet> {
                       PointyDetailSection(
                         title: l10n.integrityEvidenceTitle,
                         icon: Icons.receipt_long_outlined,
-                        child: Column(
-                          children: [
+                        child: PointySummaryList(
+                          rows: [
                             for (final row in evidenceRows.take(10))
-                              PointyDetailRow(
-                                label: row.$1,
-                                value: row.$2,
-                              ),
+                              PointySummaryRow(label: row.$1, value: row.$2),
                           ],
                         ),
                       ),
@@ -527,7 +532,6 @@ class _FindingDetailsSheetState extends State<_FindingDetailsSheet> {
                         decoration: InputDecoration(
                           labelText: l10n.integrityNoteFieldLabel,
                           helperText: l10n.integrityNoteFieldHelper,
-                          border: const OutlineInputBorder(),
                         ),
                         minLines: 2,
                         maxLines: 4,

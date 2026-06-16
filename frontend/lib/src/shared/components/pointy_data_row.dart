@@ -32,10 +32,9 @@ class PointyDataRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.pointyColors;
-    final colorScheme = Theme.of(context).colorScheme;
     final spacing = AdaptiveSpacing.of(context);
     final radius = BorderRadius.circular(PointyRadii.card);
-    final rowColor = selected ? colorScheme.primaryContainer : colors.surface;
+    final rowColor = selected ? PointyColors.primaryContainer : colors.surface;
 
     return Material(
       color: rowColor,

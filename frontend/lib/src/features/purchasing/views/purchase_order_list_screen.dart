@@ -9,6 +9,7 @@ import '../../../shared/app_navigation_drawer.dart';
 import '../../../shared/authorization_guards.dart';
 import '../../../shared/components/components.dart';
 import '../../../shared/date_formatters.dart';
+import '../../../shared/design/design.dart';
 import '../../../shared/formatters.dart';
 import '../../../shared/infinite_scroll_grid.dart';
 import '../../../shared/responsive/responsive.dart';
@@ -222,6 +223,7 @@ class _OutstandingPurchasesSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    final colors = context.pointyColors;
     final orders = viewModel.outstandingReceivedNotPaid;
 
     if (viewModel.isLoadingOutstanding) {
@@ -230,7 +232,7 @@ class _OutstandingPurchasesSection extends StatelessWidget {
     if (viewModel.hasOutstandingError && orders.isEmpty) {
       return Text(
         l10n.outstandingPurchasesLoadError,
-        style: TextStyle(color: Theme.of(context).colorScheme.error),
+        style: TextStyle(color: colors.danger),
       );
     }
     if (orders.isEmpty) {
@@ -244,9 +246,9 @@ class _OutstandingPurchasesSection extends StatelessWidget {
 
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        color: colors.surfaceSunken,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+        border: Border.all(color: colors.line),
       ),
       child: Padding(
         padding: const EdgeInsets.all(12),
@@ -356,7 +358,7 @@ class PurchaseOrderTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final colorScheme = Theme.of(context).colorScheme;
+    final colors = context.pointyColors;
     final title = order.orderNumber.isEmpty
         ? l10n.purchaseOrderFallbackTitle(order.id)
         : order.orderNumber;
@@ -365,7 +367,7 @@ class PurchaseOrderTile extends StatelessWidget {
     final date = receivedAt ?? submittedAt ?? order.createdAt;
 
     return PointyDataRow(
-      leading: Icon(_statusIcon(order.status), color: colorScheme.primary),
+      leading: Icon(_statusIcon(order.status), color: colors.primaryStrong),
       title: l10n.purchaseOrderNumberValue(title),
       subtitle: [
         if (order.supplierInvoiceNumber.isNotEmpty)
@@ -431,7 +433,7 @@ class PurchaseOrderTile extends StatelessWidget {
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
         style: Theme.of(context).textTheme.titleMedium?.copyWith(
-          color: colorScheme.onSurface,
+          color: colors.ink,
           fontWeight: FontWeight.w800,
         ),
       ),

@@ -204,7 +204,6 @@ class _SaleOrderDetailsContentState extends State<SaleOrderDetailsContent> {
                 decoration: InputDecoration(
                   labelText: l10n.saleAdjustmentReasonLabel,
                   hintText: l10n.saleAdjustmentReasonHint,
-                  border: const OutlineInputBorder(),
                 ),
                 maxLines: 2,
               ),
@@ -657,7 +656,6 @@ class _SaleReturnDialogState extends State<_SaleReturnDialog> {
                 decoration: InputDecoration(
                   labelText: l10n.saleAdjustmentReasonLabel,
                   hintText: l10n.saleAdjustmentReasonHint,
-                  border: const OutlineInputBorder(),
                 ),
                 maxLines: 2,
               ),
@@ -736,9 +734,7 @@ class _ReturnLineStepper extends StatelessWidget {
           SizedBox(
             width: 56,
             child: InkWell(
-              onTap: line.unit == 'piece'
-                  ? null
-                  : () => _editWeight(context),
+              onTap: line.unit == 'piece' ? null : () => _editWeight(context),
               child: Text(
                 formatSaleQuantity(value),
                 textAlign: TextAlign.center,
@@ -788,9 +784,9 @@ extension on _ReturnLineStepper {
             child: Text(l10n.cancelButton),
           ),
           FilledButton(
-            onPressed: () => Navigator.of(dialogContext).pop(
-              double.tryParse(controller.text.trim()),
-            ),
+            onPressed: () => Navigator.of(
+              dialogContext,
+            ).pop(double.tryParse(controller.text.trim())),
             child: Text(l10n.confirmButton),
           ),
         ],

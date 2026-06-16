@@ -5,6 +5,7 @@ import '../../../core/authorization.dart';
 import '../../../data/models/stock_movement.dart';
 import '../../../shared/authorization_guards.dart';
 import '../../../shared/date_formatters.dart';
+import '../../../shared/design/design.dart';
 import '../../../shared/infinite_scroll_grid.dart';
 import '../../../shared/units.dart';
 import '../view_models/product_stock_view_model.dart';
@@ -42,7 +43,7 @@ class StockMovementsSheet extends StatelessWidget {
                   children: [
                     Icon(
                       Icons.list_alt_outlined,
-                      color: Theme.of(context).colorScheme.primary,
+                      color: context.pointyColors.primaryStrong,
                     ),
                     const SizedBox(width: 10),
                     Expanded(
@@ -85,9 +86,7 @@ class StockMovementsSheet extends StatelessWidget {
                   const SizedBox(height: 12),
                   Text(
                     l10n.stockMovementLoadError,
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.error,
-                    ),
+                    style: TextStyle(color: context.pointyColors.danger),
                   ),
                 ],
                 const SizedBox(height: 12),
@@ -139,7 +138,7 @@ class _StockMovementTile extends StatelessWidget {
               children: [
                 Icon(
                   _movementIcon(movement.movementType),
-                  color: Theme.of(context).colorScheme.primary,
+                  color: context.pointyColors.primaryStrong,
                 ),
                 const SizedBox(width: 10),
                 Expanded(

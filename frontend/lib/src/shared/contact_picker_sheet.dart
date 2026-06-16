@@ -5,6 +5,7 @@ import '../core/result.dart';
 import '../data/models/contact.dart';
 import '../data/repositories/contact_repository.dart';
 import 'components/components.dart';
+import 'design/design.dart';
 import 'responsive/responsive.dart';
 
 class ContactSelectionTile extends StatelessWidget {
@@ -44,14 +45,14 @@ class ContactSelectionTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final colorScheme = Theme.of(context).colorScheme;
+    final colors = context.pointyColors;
     final hasValue = value.trim().isNotEmpty;
     final iconColor = enabled
-        ? colorScheme.onSurfaceVariant
-        : colorScheme.onSurface.withValues(alpha: 0.38);
+        ? colors.mutedInk
+        : colors.ink.withValues(alpha: 0.38);
 
     return Material(
-      color: colorScheme.surface,
+      color: colors.surface,
       borderRadius: BorderRadius.circular(8),
       child: InkWell(
         borderRadius: BorderRadius.circular(8),
@@ -60,7 +61,7 @@ class ContactSelectionTile extends StatelessWidget {
           padding: padding,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: colorScheme.outlineVariant),
+            border: Border.all(color: colors.line),
           ),
           child: Row(
             children: [
@@ -484,7 +485,6 @@ class _PickerShell extends StatelessWidget {
               decoration: InputDecoration(
                 hintText: searchHint,
                 prefixIcon: const Icon(Icons.search),
-                border: const OutlineInputBorder(),
                 isDense: true,
               ),
               onChanged: onSearchChanged,
@@ -624,7 +624,7 @@ class _CustomerFormState extends State<CustomerForm> {
               const SizedBox(height: 8),
               Text(
                 l10n.customerCreateError,
-                style: TextStyle(color: Theme.of(context).colorScheme.error),
+                style: TextStyle(color: context.pointyColors.danger),
               ),
             ],
             const SizedBox(height: 16),
@@ -796,7 +796,7 @@ class _SupplierFormState extends State<SupplierForm> {
               const SizedBox(height: 8),
               Text(
                 l10n.supplierCreateError,
-                style: TextStyle(color: Theme.of(context).colorScheme.error),
+                style: TextStyle(color: context.pointyColors.danger),
               ),
             ],
             const SizedBox(height: 16),

@@ -78,7 +78,7 @@ class _BellIcon extends StatelessWidget {
   Color _badgeColor(BuildContext context) {
     final colors = context.pointyColors;
     return switch (severity) {
-      BusinessAlertSeverity.critical => Theme.of(context).colorScheme.error,
+      BusinessAlertSeverity.critical => colors.danger,
       BusinessAlertSeverity.warning => colors.warning,
       BusinessAlertSeverity.info || null => colors.primaryStrong,
     };

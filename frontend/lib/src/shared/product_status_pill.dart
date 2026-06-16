@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
+import 'design/design.dart';
+
 class ProductStatusPill extends StatelessWidget {
   const ProductStatusPill({
     super.key,
@@ -17,6 +19,7 @@ class ProductStatusPill extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final colorScheme = Theme.of(context).colorScheme;
+    final colors = context.pointyColors;
 
     // Archived takes precedence over active/inactive: a retired product is no
     // longer sellable regardless of its `is_active` flag.
@@ -28,12 +31,12 @@ class ProductStatusPill extends StatelessWidget {
       foreground = colorScheme.onTertiaryContainer;
       label = l10n.archivedStatus;
     } else if (isActive) {
-      background = colorScheme.primaryContainer;
-      foreground = colorScheme.onPrimaryContainer;
+      background = PointyColors.primaryContainer;
+      foreground = colors.primaryDark;
       label = l10n.activeStatus;
     } else {
-      background = colorScheme.surfaceContainerHighest;
-      foreground = colorScheme.onSurfaceVariant;
+      background = colors.surfaceSunken;
+      foreground = colors.mutedInk;
       label = l10n.inactiveStatus;
     }
 

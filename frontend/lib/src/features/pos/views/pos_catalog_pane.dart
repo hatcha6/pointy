@@ -10,6 +10,7 @@ import '../../../shared/authorization_guards.dart';
 import '../../../shared/barcode/camera_barcode_scanner_sheet.dart';
 import '../../../shared/catalog/catalog.dart';
 import '../../../shared/components/components.dart';
+import '../../../shared/design/design.dart';
 import '../../../shared/infinite_scroll_grid.dart';
 import '../../../shared/product_query_controls.dart';
 import '../../../shared/product_tile.dart';
@@ -352,7 +353,7 @@ class _BarcodeScanStatusLine extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final colorScheme = Theme.of(context).colorScheme;
+    final colors = context.pointyColors;
     final status = viewModel.barcodeScanStatus;
     final message = switch (status) {
       BarcodeScanStatus.resolving => l10n.barcodeScanResolving,
@@ -366,11 +367,9 @@ class _BarcodeScanStatusLine extends StatelessWidget {
       BarcodeScanStatus.idle => '',
     };
     final color = switch (status) {
-      BarcodeScanStatus.found => colorScheme.primary,
-      BarcodeScanStatus.notFound ||
-      BarcodeScanStatus.error => colorScheme.error,
-      BarcodeScanStatus.resolving ||
-      BarcodeScanStatus.idle => colorScheme.onSurfaceVariant,
+      BarcodeScanStatus.found => colors.primaryStrong,
+      BarcodeScanStatus.notFound || BarcodeScanStatus.error => colors.danger,
+      BarcodeScanStatus.resolving || BarcodeScanStatus.idle => colors.mutedInk,
     };
 
     return Row(

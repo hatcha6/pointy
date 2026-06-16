@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../design/design.dart';
+
 class DebouncedSearchField extends StatefulWidget {
   const DebouncedSearchField({
     super.key,
@@ -62,10 +64,10 @@ class _DebouncedSearchFieldState extends State<DebouncedSearchField> {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
+    final colors = context.pointyColors;
 
     return Material(
-      color: colorScheme.surface,
+      color: colors.surface,
       borderRadius: BorderRadius.circular(8),
       clipBehavior: Clip.antiAlias,
       child: TextField(
@@ -78,7 +80,7 @@ class _DebouncedSearchFieldState extends State<DebouncedSearchField> {
           hintText: widget.hintText,
           filled: true,
           fillColor: Colors.transparent,
-          prefixIcon: Icon(Icons.search, color: colorScheme.primary),
+          prefixIcon: Icon(Icons.search, color: colors.primaryStrong),
           prefixIconConstraints: const BoxConstraints.tightFor(
             width: 48,
             height: 48,
@@ -107,9 +109,9 @@ class _DebouncedSearchFieldState extends State<DebouncedSearchField> {
             width: 48,
             height: 48,
           ),
-          border: _fieldBorder(colorScheme.outlineVariant),
-          enabledBorder: _fieldBorder(colorScheme.outlineVariant),
-          focusedBorder: _fieldBorder(colorScheme.primary, width: 1.4),
+          border: _fieldBorder(colors.line),
+          enabledBorder: _fieldBorder(colors.line),
+          focusedBorder: _fieldBorder(colors.primaryStrong, width: 1.4),
           contentPadding: const EdgeInsets.symmetric(
             horizontal: 4,
             vertical: 15,

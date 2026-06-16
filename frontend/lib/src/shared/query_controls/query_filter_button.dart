@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../design/design.dart';
+
 class QueryFilterButton extends StatelessWidget {
   const QueryFilterButton({
     super.key,
@@ -18,18 +20,16 @@ class QueryFilterButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final foreground = onPressed == null
-        ? colorScheme.onSurfaceVariant
-        : colorScheme.onPrimaryContainer;
+    final colors = context.pointyColors;
+    final foreground = onPressed == null ? colors.mutedInk : colors.primaryDark;
     final button = Semantics(
       button: true,
       label: label,
       hint: tooltip,
       child: Material(
         color: onPressed == null
-            ? colorScheme.surfaceContainerHighest
-            : colorScheme.primaryContainer,
+            ? colors.surfaceSunken
+            : PointyColors.primaryContainer,
         borderRadius: BorderRadius.circular(8),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
@@ -90,12 +90,12 @@ class _ActiveCountBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
+    final colors = context.pointyColors;
 
     return DecoratedBox(
-      decoration: BoxDecoration(
-        color: colorScheme.primary,
-        borderRadius: BorderRadius.circular(999),
+      decoration: const BoxDecoration(
+        color: PointyColors.primary,
+        borderRadius: BorderRadius.all(Radius.circular(999)),
       ),
       child: ConstrainedBox(
         constraints: const BoxConstraints(minWidth: 22),
@@ -106,7 +106,7 @@ class _ActiveCountBadge extends StatelessWidget {
             textAlign: TextAlign.center,
             style: Theme.of(
               context,
-            ).textTheme.labelSmall?.copyWith(color: colorScheme.onPrimary),
+            ).textTheme.labelSmall?.copyWith(color: colors.surface),
           ),
         ),
       ),

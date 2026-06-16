@@ -4,6 +4,7 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 import '../../../data/models/employee.dart';
 import '../../../shared/components/components.dart';
 import '../../../shared/decimal_text_input_formatter.dart';
+import '../../../shared/design/design.dart';
 import '../../../shared/formatters.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../view_models/employee_payroll_view_model.dart';
@@ -82,9 +83,11 @@ class _PayrollBulkAdjustmentSheetState
     final l10n = AppLocalizations.of(context)!;
     final spacing = AdaptiveSpacing.of(context);
     final theme = Theme.of(context);
+    final colors = context.pointyColors;
     final amount = decimalValue(_amountController.text);
     final selectedCount = _selectedLineIds.length;
     final totalImpact = roundMoney(amount * selectedCount);
+    final isDeduction = _type == PayrollBulkAdjustmentType.deduction;
     final showSelectionError = _submitted && selectedCount == 0;
     final showAmountError = _submitted && amount <= 0;
 
@@ -210,7 +213,7 @@ class _PayrollBulkAdjustmentSheetState
                       child: Text(
                         l10n.payrollBulkNoEmployeesSelected,
                         style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.error,
+                          color: colors.danger,
                         ),
                       ),
                     ),
@@ -222,21 +225,24 @@ class _PayrollBulkAdjustmentSheetState
             PointyDetailSection(
               title: l10n.payrollAdjustmentPreviewSection,
               icon: Icons.calculate_outlined,
-              child: Column(
-                children: [
-                  PointyDetailRow(
+              child: PointySummaryList(
+                rows: [
+                  PointySummaryRow(
                     label: l10n.payrollBulkSelectedEmployeesLabel,
                     value: l10n.payrollLineCount(selectedCount),
                   ),
-                  PointyDetailRow(
+                  PointySummaryRow(
                     label: l10n.payrollBulkAmountPerEmployeeLabel,
                     value: formatMoney(amount),
                   ),
-                  PointyDetailRow(
-                    label: _type == PayrollBulkAdjustmentType.deduction
+                  PointySummaryRow(
+                    label: isDeduction
                         ? l10n.payrollBulkTotalDeductionLabel
                         : l10n.payrollBulkTotalAdditionLabel,
                     value: formatMoney(totalImpact),
+                    emphasized: true,
+                    dividerAbove: true,
+                    valueColor: isDeduction ? colors.danger : colors.success,
                   ),
                 ],
               ),
@@ -269,11 +275,8 @@ class _PayrollBulkAdjustmentSheetState
             ),
             if (widget.viewModel.hasSaveError) ...[
               SizedBox(height: spacing.sm),
-              Text(
-                l10n.payrollBulkAdjustmentSaveError,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.error,
-                ),
+              PointyInlineMessage.error(
+                message: l10n.payrollBulkAdjustmentSaveError,
               ),
             ],
           ],
@@ -422,6 +425,7 @@ class _PayrollLineAdjustmentSheetState
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final spacing = AdaptiveSpacing.of(context);
+    final colors = context.pointyColors;
     final periodDays = payrollPeriodDays(widget.run);
     final absenceDays = decimalValue(_absenceDaysController.text);
     final absenceDeduction = _absenceDeduction;
@@ -455,7 +459,9 @@ class _PayrollLineAdjustmentSheetState
               controller: _absenceDaysController,
               decoration: InputDecoration(
                 labelText: l10n.absenceDaysField,
-                helperText: l10n.absenceDaysHelper(formatMoney(_absenceDayRate)),
+                helperText: l10n.absenceDaysHelper(
+                  formatMoney(_absenceDayRate),
+                ),
                 errorText: hasAbsenceError
                     ? l10n.absenceDaysExceedPeriodError(periodDays)
                     : null,
@@ -519,7 +525,9 @@ class _PayrollLineAdjustmentSheetState
             SizedBox(height: spacing.sm),
             TextFormField(
               controller: _notesController,
-              decoration: InputDecoration(labelText: l10n.payrollLineNotesLabel),
+              decoration: InputDecoration(
+                labelText: l10n.payrollLineNotesLabel,
+              ),
               minLines: 2,
               maxLines: 4,
             ),
@@ -527,42 +535,48 @@ class _PayrollLineAdjustmentSheetState
             PointyDetailSection(
               title: l10n.payrollAdjustmentPreviewSection,
               icon: Icons.calculate_outlined,
-              child: Column(
-                children: [
-                  PointyDetailRow(
+              child: PointySummaryList(
+                rows: [
+                  PointySummaryRow(
                     label: l10n.payrollLineGrossLabel,
                     value: formatMoney(widget.line.grossAmount),
                   ),
-                  PointyDetailRow(
+                  PointySummaryRow(
                     label: l10n.payrollLineAbsenceDeductionLabel,
                     value: formatMoney(absenceDeduction),
+                    valueColor: absenceDeduction > 0 ? colors.danger : null,
                   ),
-                  PointyDetailRow(
+                  PointySummaryRow(
                     label: l10n.payrollLineOvertimePayLabel,
                     value: formatMoney(_overtimeAmount),
+                    valueColor: _overtimeAmount > 0 ? colors.success : null,
                   ),
-                  PointyDetailRow(
+                  PointySummaryRow(
                     label: l10n.payrollLineAdditionsLabel,
                     value: formatMoney(projectedAdditions),
+                    valueColor: projectedAdditions > 0 ? colors.success : null,
                   ),
-                  PointyDetailRow(
+                  PointySummaryRow(
                     label: l10n.payrollLineDeductionsLabel,
                     value: formatMoney(projectedDeductions),
+                    valueColor: projectedDeductions > 0 ? colors.danger : null,
                   ),
-                  PointyDetailRow(
+                  PointySummaryRow(
                     label: l10n.payrollLineProjectedNetLabel,
                     value: formatMoney(projectedNet),
+                    emphasized: true,
+                    dividerAbove: true,
+                    valueColor: hasNetError
+                        ? colors.danger
+                        : colors.primaryStrong,
                   ),
                 ],
               ),
             ),
             if (hasNetError) ...[
               SizedBox(height: spacing.sm),
-              Text(
-                l10n.negativeNetPayrollLineError,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Theme.of(context).colorScheme.error,
-                ),
+              PointyInlineMessage.error(
+                message: l10n.negativeNetPayrollLineError,
               ),
             ],
             SizedBox(height: spacing.md),
@@ -598,11 +612,8 @@ class _PayrollLineAdjustmentSheetState
             ),
             if (widget.viewModel.hasSaveError) ...[
               SizedBox(height: spacing.sm),
-              Text(
-                l10n.payrollLineAdjustmentSaveError,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Theme.of(context).colorScheme.error,
-                ),
+              PointyInlineMessage.error(
+                message: l10n.payrollLineAdjustmentSaveError,
               ),
             ],
           ],

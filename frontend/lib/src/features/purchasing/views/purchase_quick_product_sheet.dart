@@ -5,6 +5,7 @@ import '../../../data/models/product_draft.dart';
 import '../../../data/models/product_variant.dart';
 import '../../../shared/async_selection/async_multi_select_picker.dart';
 import '../../../shared/decimal_text_input_formatter.dart';
+import '../../../shared/design/design.dart';
 import '../../../shared/product_category_picker.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../view_models/purchase_view_model.dart';
@@ -96,6 +97,7 @@ class _PurchaseQuickProductSheetState extends State<PurchaseQuickProductSheet> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    final colors = context.pointyColors;
 
     return Padding(
       padding: EdgeInsets.only(
@@ -196,7 +198,7 @@ class _PurchaseQuickProductSheetState extends State<PurchaseQuickProductSheet> {
                 const SizedBox(height: 8),
                 Text(
                   l10n.productCreateError,
-                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                  style: TextStyle(color: colors.danger),
                 ),
               ],
               const SizedBox(height: 16),

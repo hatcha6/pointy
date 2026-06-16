@@ -57,6 +57,7 @@ class _PurchaseReceiveDialogState extends State<_PurchaseReceiveDialog> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    final colors = context.pointyColors;
 
     return AlertDialog(
       icon: const Icon(Icons.inventory_2_outlined),
@@ -88,9 +89,7 @@ class _PurchaseReceiveDialogState extends State<_PurchaseReceiveDialog> {
                   alignment: AlignmentDirectional.centerStart,
                   child: Text(
                     l10n.purchaseReceiveInvalidQuantityError,
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.error,
-                    ),
+                    style: TextStyle(color: colors.danger),
                   ),
                 ),
               ],
@@ -100,9 +99,7 @@ class _PurchaseReceiveDialogState extends State<_PurchaseReceiveDialog> {
                   alignment: AlignmentDirectional.centerStart,
                   child: Text(
                     l10n.purchaseLineExpiryDateRequired,
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.error,
-                    ),
+                    style: TextStyle(color: colors.danger),
                   ),
                 ),
               ],
@@ -112,7 +109,6 @@ class _PurchaseReceiveDialogState extends State<_PurchaseReceiveDialog> {
                 decoration: InputDecoration(
                   labelText: l10n.purchaseReceiveNoteLabel,
                   hintText: l10n.purchaseReceiveNoteHint,
-                  border: const OutlineInputBorder(),
                 ),
                 maxLines: 2,
               ),
@@ -259,7 +255,6 @@ class _PurchaseReceiveLineInput extends StatelessWidget {
                   keyboardType: TextInputType.number,
                   decoration: InputDecoration(
                     labelText: l10n.purchaseReceiveReceivedLabel,
-                    border: const OutlineInputBorder(),
                     isDense: true,
                   ),
                   onChanged: (_) => onChanged(),
@@ -272,7 +267,6 @@ class _PurchaseReceiveLineInput extends StatelessWidget {
                   keyboardType: TextInputType.number,
                   decoration: InputDecoration(
                     labelText: l10n.purchaseReceiveDamagedLabel,
-                    border: const OutlineInputBorder(),
                     isDense: true,
                   ),
                   onChanged: (_) => onChanged(),
@@ -285,7 +279,6 @@ class _PurchaseReceiveLineInput extends StatelessWidget {
                   keyboardType: TextInputType.number,
                   decoration: InputDecoration(
                     labelText: l10n.purchaseReceiveRejectedLabel,
-                    border: const OutlineInputBorder(),
                     isDense: true,
                   ),
                   onChanged: (_) => onChanged(),
@@ -302,7 +295,6 @@ class _PurchaseReceiveLineInput extends StatelessWidget {
               decoration: InputDecoration(
                 labelText: l10n.purchaseLineExpiryDateLabel,
                 hintText: l10n.purchaseLineExpiryDateHint,
-                border: const OutlineInputBorder(),
                 isDense: true,
                 prefixIcon: const Icon(Icons.event_busy_outlined),
                 suffixIcon: IconButton(
