@@ -63,6 +63,33 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
+  String get commandPalettePrintLabelAction => 'طباعة الملصق';
+
+  @override
+  String get commandPaletteReorderAction => 'إعادة الطلب';
+
+  @override
+  String get commandPaletteReprintAction => 'إعادة طباعة الفاتورة';
+
+  @override
+  String get commandPaletteLabelPrinted => 'تمت طباعة الملصق';
+
+  @override
+  String get commandPaletteLabelPrintFailed => 'تعذرت طباعة الملصق';
+
+  @override
+  String get commandPaletteReorderNoVariant => 'لا يمكن إعادة طلب هذا المنتج';
+
+  @override
+  String get commandPaletteInvoicePrinted => 'تمت طباعة الفاتورة';
+
+  @override
+  String get commandPaletteInvoicePrintFailed => 'تعذرت طباعة الفاتورة';
+
+  @override
+  String get commandPaletteOpenError => 'تعذر فتح العنصر';
+
+  @override
   String get commandPaletteNoResults => 'لا توجد نتائج مطابقة';
 
   @override
@@ -71,6 +98,9 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get commandPaletteFooterHint =>
       '↑↓ للتنقل · Enter للفتح · Esc للإغلاق';
+
+  @override
+  String get commandPaletteActionsHint => 'Tab للإجراءات';
 
   @override
   String get refreshCatalogTooltip => 'تحديث المنتجات';
@@ -2592,6 +2622,20 @@ class AppLocalizationsAr extends AppLocalizations {
   String get posWeightInvalid => 'أدخل وزنًا أكبر من صفر.';
 
   @override
+  String get posUnitSelectLabel => 'الوحدة';
+
+  @override
+  String get posUnitQuantityLabel => 'الكمية';
+
+  @override
+  String posUnitSheetAdd(String total) {
+    return 'إضافة · $total';
+  }
+
+  @override
+  String get posCartSwitchUnitTooltip => 'تغيير الوحدة';
+
+  @override
   String get cartEditWeightTooltip => 'تعديل الوزن';
 
   @override
@@ -2615,7 +2659,214 @@ class AppLocalizationsAr extends AppLocalizations {
   String get unitMilliliter => 'مل';
 
   @override
+  String get unitDozen => 'دزينة';
+
+  @override
+  String get unitPair => 'زوج';
+
+  @override
+  String get unitPack => 'عبوة';
+
+  @override
+  String get unitBox => 'صندوق';
+
+  @override
+  String get unitCarton => 'كرتون';
+
+  @override
+  String get unitBag => 'كيس';
+
+  @override
+  String get unitTon => 'طن';
+
+  @override
+  String get unitMeter => 'متر';
+
+  @override
+  String get unitCentimeter => 'سم';
+
+  @override
   String get productUnitLabel => 'وحدة القياس';
+
+  @override
+  String get productUnitsSectionTitle => 'الوحدات والتحويلات';
+
+  @override
+  String get productUnitsSectionDescription =>
+      'أضف وحدات بيع وشراء إضافية (صندوق، كرتون، جملة) مع معامل التحويل إلى الوحدة الأساسية وسعر مخصّص اختياري لكل وحدة.';
+
+  @override
+  String get productUnitsAddButton => 'إضافة وحدة';
+
+  @override
+  String get productUnitPickLabel => 'الوحدة';
+
+  @override
+  String get productUnitRemoveTooltip => 'حذف الوحدة';
+
+  @override
+  String get productUnitPriceLabel => 'سعر مخصّص (اختياري)';
+
+  @override
+  String get productUnitPriceHelper =>
+      'اتركه فارغًا ليُحتسب من سعر الوحدة الأساسية × المعامل.';
+
+  @override
+  String get productUnitSellable => 'متاح للبيع';
+
+  @override
+  String get productUnitPurchasable => 'متاح للشراء';
+
+  @override
+  String get productDefaultSaleUnitLabel => 'وحدة البيع الافتراضية';
+
+  @override
+  String get productDefaultPurchaseUnitLabel => 'وحدة الشراء الافتراضية';
+
+  @override
+  String productUnitBaseOption(String unit) {
+    return '$unit (أساسية)';
+  }
+
+  @override
+  String get productUnitsLoadError => 'تعذّر تحميل الوحدات.';
+
+  @override
+  String get manageUnitsTooltip => 'إدارة وحدات القياس';
+
+  @override
+  String get moreActionsTooltip => 'إجراءات';
+
+  @override
+  String get unitsManagementTitle => 'وحدات القياس';
+
+  @override
+  String get unitsManagementIntroTitle => 'وحدات القياس';
+
+  @override
+  String get unitsManagementIntroMessage =>
+      'أنشئ وحدات مخصّصة للبيع والشراء (صندوق، كرتون، جملة) وعدّل الوحدات الجاهزة. الوحدات المضمّنة لا تُحذف بل تُعطَّل.';
+
+  @override
+  String get addUnitButton => 'إضافة وحدة';
+
+  @override
+  String unitsCountLabel(int count) {
+    return '$count وحدة';
+  }
+
+  @override
+  String get unitsLoadError => 'تعذّر تحميل الوحدات.';
+
+  @override
+  String get unitsEmptyTitle => 'لا توجد وحدات';
+
+  @override
+  String get unitsEmptyMessage => 'أضف أول وحدة قياس للبدء.';
+
+  @override
+  String get unitDimensionCount => 'العدد';
+
+  @override
+  String get unitDimensionWeight => 'الوزن';
+
+  @override
+  String get unitDimensionVolume => 'الحجم';
+
+  @override
+  String get unitDimensionLength => 'الطول';
+
+  @override
+  String get unitSystemBadge => 'مضمّنة';
+
+  @override
+  String get unitInactiveBadge => 'معطّلة';
+
+  @override
+  String unitInUseBadge(int count) {
+    return 'مستخدمة في $count';
+  }
+
+  @override
+  String unitReferenceSummary(String factor, String unit) {
+    return 'تعادل $factor $unit';
+  }
+
+  @override
+  String get unitEditTitle => 'تعديل وحدة';
+
+  @override
+  String get unitCreateTitle => 'وحدة جديدة';
+
+  @override
+  String get unitNameLabel => 'الاسم';
+
+  @override
+  String get unitCodeLabel => 'الرمز';
+
+  @override
+  String get unitCodeHelper => 'معرّف فريد بأحرف لاتينية صغيرة، مثل: box';
+
+  @override
+  String get unitAbbreviationLabel => 'الاختصار';
+
+  @override
+  String get unitDimensionLabel => 'النوع';
+
+  @override
+  String get unitReferenceFactorLabel => 'معامل التحويل المرجعي';
+
+  @override
+  String get unitReferenceFactorHelper =>
+      'كمية الوحدة المرجعية في وحدة واحدة (مثلاً: 1 كجم = 1000 جم).';
+
+  @override
+  String get unitAllowsFractionalLabel => 'يسمح بكميات كسرية';
+
+  @override
+  String get unitActiveLabel => 'مفعّلة';
+
+  @override
+  String get unitSystemLockedHint =>
+      'وحدة مضمّنة: لا يمكن تغيير الرمز أو النوع أو المعامل المرجعي.';
+
+  @override
+  String get unitSaveError => 'تعذّر حفظ الوحدة.';
+
+  @override
+  String get unitDeletedMessage => 'تم حذف الوحدة.';
+
+  @override
+  String get unitDeleteError => 'تعذّر حذف الوحدة.';
+
+  @override
+  String get unitDeleteTitle => 'حذف الوحدة';
+
+  @override
+  String unitDeleteConfirm(String name) {
+    return 'سيتم حذف الوحدة «$name» نهائيًا.';
+  }
+
+  @override
+  String get unitCannotDeleteSystemTitle => 'وحدة مضمّنة';
+
+  @override
+  String get unitCannotDeleteSystemMessage =>
+      'الوحدات المضمّنة لا تُحذف. يمكنك تعطيلها بدلاً من ذلك.';
+
+  @override
+  String get unitCannotDeleteInUseTitle => 'الوحدة قيد الاستخدام';
+
+  @override
+  String unitCannotDeleteInUseMessage(int count) {
+    return 'هذه الوحدة مستخدمة في $count منتج، لذا لا يمكن حذفها. عطّلها بدلاً من ذلك.';
+  }
+
+  @override
+  String get unitActivateAction => 'تفعيل';
+
+  @override
+  String get unitDeactivateAction => 'تعطيل';
 
   @override
   String get productIsPreparedTitle => 'يُحضّر عند الطلب';
@@ -5779,6 +6030,14 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get purchaseLineCostLabel => 'التكلفة';
+
+  @override
+  String get purchaseLineUnitLabel => 'وحدة الشراء';
+
+  @override
+  String purchaseLineBaseEquivalent(String quantity, String unit) {
+    return '= $quantity $unit';
+  }
 
   @override
   String get purchaseLineExpiryDateLabel => 'تاريخ الانتهاء';

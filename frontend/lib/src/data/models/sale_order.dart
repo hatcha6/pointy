@@ -34,6 +34,7 @@ class SaleCheckoutDraft {
               quantity: line.quantity,
               notes: line.notes,
               modifiers: line.modifiers,
+              unit: line.unitCode,
             ),
           )
           .toList(growable: false),
@@ -82,9 +83,10 @@ class SaleDiscountPreviewDraft {
             (line) => SaleCheckoutLineDraft(
               variantId: line.variant.id,
               quantity: line.quantity,
-              // Modifiers affect price, so the discount preview must carry them
-              // to return a total the cashier can trust. (Notes don't.)
+              // Modifiers and the unit affect price, so the discount preview must
+              // carry them to return a total the cashier can trust. (Notes don't.)
               modifiers: line.modifiers,
+              unit: line.unitCode,
             ),
           )
           .toList(growable: false),
@@ -246,6 +248,7 @@ class SaleCheckoutLineDraft {
     required this.quantity,
     this.notes = '',
     this.modifiers = const [],
+    this.unit = '',
   });
 
   final int variantId;
@@ -253,11 +256,17 @@ class SaleCheckoutLineDraft {
   final String notes;
   final List<CartLineModifier> modifiers;
 
+  /// Selected unit code; blank = the product's base unit. The backend resolves
+  /// the price and stock conversion from it.
+  final String unit;
+
   Map<String, Object?> toJson() {
     final normalizedNotes = notes.trim();
+    final normalizedUnit = unit.trim();
     return {
       'variant': variantId,
       'quantity': formatQuantityForApi(quantity),
+      if (normalizedUnit.isNotEmpty) 'unit': normalizedUnit,
       if (normalizedNotes.isNotEmpty) 'notes': normalizedNotes,
       if (modifiers.isNotEmpty)
         'modifiers': modifiers
@@ -487,6 +496,7 @@ class SaleOrderLine {
     required this.returnedQuantity,
     required this.returnableQuantity,
     this.unit = 'piece',
+    this.unitLabel = '',
     required this.unitPrice,
     required this.total,
     this.productName,
@@ -505,6 +515,9 @@ class SaleOrderLine {
   final double returnedQuantity;
   final double returnableQuantity;
   final String unit;
+
+  /// Short display label for [unit] (resolved by the backend).
+  final String unitLabel;
   final double unitPrice;
   final double subtotal;
   final double discountTotal;
@@ -522,6 +535,7 @@ class SaleOrderLine {
       returnedQuantity: _saleQuantityFromJson(json['returned_quantity']),
       returnableQuantity: _saleQuantityFromJson(json['returnable_quantity']),
       unit: json['unit']?.toString() ?? 'piece',
+      unitLabel: json['unit_label']?.toString() ?? '',
       unitPrice: _moneyFromJson(json['unit_price']),
       subtotal: _moneyFromJson(json['line_subtotal']),
       discountTotal: _moneyFromJson(json['discount_total']),

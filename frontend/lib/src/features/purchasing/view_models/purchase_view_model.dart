@@ -9,6 +9,7 @@ import '../../../data/models/contact.dart';
 import '../../../data/models/product.dart';
 import '../../../data/models/product_draft.dart';
 import '../../../data/models/product_query.dart';
+import '../../../data/models/product_unit.dart';
 import '../../../data/models/product_variant.dart';
 import '../../../data/models/product_variant_page.dart';
 import '../../../data/models/purchase_submission.dart';
@@ -243,11 +244,15 @@ class PurchaseViewModel extends ChangeNotifier {
       if (_isSubmitting) {
         return;
       }
+      final defaultUnit = _defaultPurchaseUnit(variant);
       _draft.add(
         PurchaseDraftLine(
           variant: variant,
           quantity: quantity.clamp(1, 999),
           unitCost: cost,
+          unitCode: defaultUnit?.code ?? '',
+          unitLabel: defaultUnit?.label ?? '',
+          unitFactor: defaultUnit?.factorToBase ?? 1,
         ),
       );
     } else {
@@ -321,6 +326,46 @@ class PurchaseViewModel extends ChangeNotifier {
     _touchSubmissionIntent();
     notifyListeners();
     unawaited(refreshDiscountPreview());
+  }
+
+  /// Switches the unit a draft line is purchased in. Cost is per unit, so the
+  /// discount preview is refreshed.
+  void updateLineUnit(
+    ProductVariant variant, {
+    required String unitCode,
+    required String unitLabel,
+    required double unitFactor,
+  }) {
+    if (_isSubmitting) {
+      return;
+    }
+    final index = _draft.indexWhere((line) => line.variant.id == variant.id);
+    if (index == -1) {
+      return;
+    }
+    _draft[index] = _draft[index].copyWith(
+      unitCode: unitCode,
+      unitLabel: unitLabel,
+      unitFactor: unitFactor,
+    );
+    _touchSubmissionIntent();
+    notifyListeners();
+    unawaited(refreshDiscountPreview());
+  }
+
+  /// The product's configured default purchase unit (if any), resolved from the
+  /// variant's embedded product detail. Null = the base unit.
+  ProductUnit? _defaultPurchaseUnit(ProductVariant variant) {
+    final product = variant.productDetail;
+    if (product == null || product.defaultPurchaseUnit.isEmpty) {
+      return null;
+    }
+    for (final unit in product.purchasableUnits) {
+      if (unit.code == product.defaultPurchaseUnit) {
+        return unit;
+      }
+    }
+    return null;
   }
 
   void updateLineExpiryDate(ProductVariant variant, DateTime? expiryDate) {

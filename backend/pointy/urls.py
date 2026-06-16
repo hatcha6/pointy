@@ -19,6 +19,7 @@ from apps.catalog.views import (
     ProductCategoryViewSet,
     ProductVariantViewSet,
     ProductViewSet,
+    UnitOfMeasureViewSet,
     VariantOptionValueViewSet,
     VariantOptionViewSet,
 )
@@ -118,6 +119,7 @@ router.register("product-categories", ProductCategoryViewSet)
 router.register("variant-options", VariantOptionViewSet)
 router.register("variant-option-values", VariantOptionValueViewSet)
 router.register("modifier-groups", ModifierGroupViewSet)
+router.register("units-of-measure", UnitOfMeasureViewSet)
 router.register("stock", StockItemViewSet)
 router.register("stock-movements", StockMovementViewSet)
 router.register("stock-counts", StockCountViewSet, basename="stock-count")

@@ -65,6 +65,7 @@ USER_PERMISSION_CODES = (
 CASHIER_PERMISSION_CODES = (
     "catalog.view_product",
     "catalog.view_productcategory",
+    "catalog.view_unitofmeasure",
     # Floor staff can run/record stock counts; only managers may apply them
     # (apply_stockcount is granted to managers via MANAGER_PERMISSION_DOMAINS).
     "inventory.view_stockcount",
@@ -121,6 +122,7 @@ TECHNICIAN_PERMISSION_CODES = (
     "customers.view_asset",
     "catalog.view_product",
     "catalog.view_productcategory",
+    "catalog.view_unitofmeasure",
     "core.view_shopsettings",
     "attachments.add_attachment",
     "attachments.view_attachment",
@@ -253,6 +255,9 @@ def _model_has_initial_setup_blocking_data(model, model_label):
         return queryset.exclude(name__in=DEFAULT_EXPENSE_CATEGORY_NAMES).exists()
     if model_label == ("operations", "workflowstage"):
         return queryset.filter(template__is_system=False).exists()
+    if model_label == ("catalog", "unitofmeasure"):
+        # Seeded built-in units are configuration scaffolding, not shop activity.
+        return queryset.filter(is_system=False).exists()
     if model_label == ("catalog", "variantoption"):
         return queryset.exclude(
             code__in=INITIAL_SETUP_VARIANT_OPTION_CODES,

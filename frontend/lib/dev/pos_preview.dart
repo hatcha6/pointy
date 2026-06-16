@@ -22,8 +22,10 @@ import 'package:pointy_frontend/src/data/models/product.dart';
 import 'package:pointy_frontend/src/data/models/product_category.dart';
 import 'package:pointy_frontend/src/data/models/product_page.dart';
 import 'package:pointy_frontend/src/data/models/product_query.dart';
+import 'package:pointy_frontend/src/data/models/product_unit.dart';
 import 'package:pointy_frontend/src/data/models/product_variant.dart';
 import 'package:pointy_frontend/src/data/models/product_variant_page.dart';
+import 'package:pointy_frontend/src/data/models/unit_of_measure.dart';
 import 'package:pointy_frontend/src/data/models/sale_order.dart';
 import 'package:pointy_frontend/src/data/repositories/catalog_repository.dart';
 import 'package:pointy_frontend/src/data/repositories/contact_repository.dart';
@@ -37,6 +39,8 @@ import 'package:pointy_frontend/src/features/pos/view_models/pos_view_model.dart
 import 'package:pointy_frontend/src/features/pos/views/pos_cart_pane.dart';
 import 'package:pointy_frontend/src/features/pos/views/payment/payment_sheet.dart';
 import 'package:pointy_frontend/src/features/pos/views/pos_catalog_pane.dart';
+import 'package:pointy_frontend/src/features/pos/views/unit_quantity_sheet.dart';
+import 'package:pointy_frontend/src/shared/unit_options.dart';
 import 'package:pointy_frontend/src/features/purchasing/view_models/purchase_view_model.dart';
 import 'package:pointy_frontend/src/features/purchasing/views/purchase_catalog_pane.dart';
 import 'package:pointy_frontend/src/features/purchasing/views/purchase_draft_pane.dart';
@@ -102,6 +106,8 @@ class _Router extends StatelessWidget {
         return const _PurchaseSurface(empty: true);
       case 'filter':
         return const _FilterSheetSurface();
+      case 'unit-sheet':
+        return const _UnitSheetSurface();
       case 'payment':
         return const _PaymentSurface();
       case 'board':
@@ -144,7 +150,21 @@ class _PosSurfaceState extends State<_PosSurface> {
     if (!widget.empty) {
       _viewModel
         ..addVariant(_variantFor(_items[0]), quantity: 2, source: 'seed')
-        ..addVariant(_variantFor(_items[5]), source: 'seed');
+        ..addVariant(_variantFor(_items[5]), source: 'seed')
+        // A pack-unit line so the cart shows its unit chip + base conversion.
+        ..addVariant(
+          _variantFor(_items[4]),
+          quantity: 2,
+          unit: const UnitOption(
+            code: 'carton',
+            label: 'كرتون',
+            unitPrice: 15,
+            factorToBase: 24,
+            allowsFractional: false,
+            isBase: false,
+          ),
+          source: 'seed',
+        );
     }
   }
 
@@ -438,6 +458,56 @@ class _FilterSheetSurfaceState extends State<_FilterSheetSurface> {
       body: Center(
         child: Text(
           l10n.filtersSheetTitle,
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+            color: context.pointyColors.mutedInk,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Unit + quantity sheet
+// ---------------------------------------------------------------------------
+
+class _UnitSheetSurface extends StatefulWidget {
+  const _UnitSheetSurface();
+
+  @override
+  State<_UnitSheetSurface> createState() => _UnitSheetSurfaceState();
+}
+
+class _UnitSheetSurfaceState extends State<_UnitSheetSurface> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _openSheet());
+  }
+
+  Future<void> _openSheet() async {
+    final item = _items[4]; // bottled water — sells by piece / pack / carton
+    await showUnitQuantitySheet(
+      context,
+      product: _productFor(item),
+      variant: _variantFor(item),
+    );
+    if (!mounted) {
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) => _openSheet());
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return PointyScaffold(
+      appBar: const PointyAppBar(
+        leading: Icon(Icons.straighten_outlined),
+        title: Text('اختيار الوحدة'),
+      ),
+      body: Center(
+        child: Text(
+          'وحدات المنتج',
           style: Theme.of(context).textTheme.titleMedium?.copyWith(
             color: context.pointyColors.mutedInk,
           ),
@@ -971,11 +1041,38 @@ double _costForProduct(int productId) {
   return 0;
 }
 
+// The bottled-water item also sells by the pack and the carton, to exercise the
+// fast unit picker and the cart unit chip.
+const List<ProductUnit> _waterUnits = [
+  ProductUnit(
+    unit: UnitOfMeasure(
+      id: 1,
+      code: 'pack',
+      name: 'عبوة (6)',
+      abbreviation: 'عبوة',
+    ),
+    factorToBase: 6,
+  ),
+  ProductUnit(
+    unit: UnitOfMeasure(
+      id: 2,
+      code: 'carton',
+      name: 'كرتون (24)',
+      abbreviation: 'كرتون',
+    ),
+    factorToBase: 24,
+    price: 15,
+  ),
+];
+
 Product _productFor(_Item item) {
   return Product(
     id: item.id,
     name: item.name,
     quantityOnHand: item.stock,
+    unit: 'piece',
+    defaultSaleUnit: item.id == 5 ? 'pack' : '',
+    units: item.id == 5 ? _waterUnits : const [],
     categories: [
       ProductCategory(
         id: item.categoryId,

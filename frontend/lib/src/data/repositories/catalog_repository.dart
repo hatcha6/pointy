@@ -3,6 +3,7 @@ import '../../shared/barcode/scale_barcode.dart';
 import '../models/attachment_summary.dart';
 import '../models/modifier_group.dart';
 import '../models/product.dart';
+import '../models/unit_of_measure.dart';
 import '../models/product_category.dart';
 import '../models/product_category_query.dart';
 import '../models/product_draft.dart';
@@ -282,6 +283,56 @@ class CatalogRepository {
         page += 1;
       }
       return groups;
+    });
+  }
+
+  Future<Result<List<UnitOfMeasure>>> loadAllUnits({
+    bool activeOnly = true,
+  }) async {
+    return Result.guard(() async {
+      final units = <UnitOfMeasure>[];
+      var page = 1;
+      var hasMore = true;
+      while (hasMore) {
+        final result = await _service.fetchUnitsOfMeasure(
+          page: page,
+          active: activeOnly ? true : null,
+        );
+        units.addAll(result.units);
+        hasMore = result.hasMore;
+        page += 1;
+      }
+      units.sort((a, b) => a.displayOrder.compareTo(b.displayOrder));
+      return units;
+    });
+  }
+
+  Future<Result<UnitOfMeasure>> createUnit(UnitOfMeasureDraft draft) async {
+    return Result.guard(() => _service.createUnitOfMeasure(draft));
+  }
+
+  Future<Result<UnitOfMeasure>> updateUnit({
+    required int id,
+    required UnitOfMeasureDraft draft,
+  }) async {
+    return Result.guard(
+      () => _service.updateUnitOfMeasure(id: id, changes: draft.toJson()),
+    );
+  }
+
+  Future<Result<void>> deleteUnit(int id) async {
+    return Result.guard(() => _service.deleteUnitOfMeasure(id));
+  }
+
+  /// Persists a new ordering by patching each unit's display_order to its index.
+  Future<Result<void>> reorderUnits(List<int> orderedUnitIds) async {
+    return Result.guard(() async {
+      for (var index = 0; index < orderedUnitIds.length; index += 1) {
+        await _service.updateUnitOfMeasure(
+          id: orderedUnitIds[index],
+          changes: {'display_order': index},
+        );
+      }
     });
   }
 

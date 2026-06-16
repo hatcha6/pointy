@@ -432,6 +432,7 @@ class PurchaseOrderDraft {
               variantId: line.variant.id,
               quantity: line.quantity,
               unitCost: line.unitCost,
+              unit: line.unitCode,
               expiryDate: line.expiryDate,
             ),
           )
@@ -497,6 +498,7 @@ class PurchaseDiscountPreviewDraft {
               variantId: line.variant.id,
               quantity: line.quantity,
               unitCost: line.unitCost,
+              unit: line.unitCode,
             ),
           )
           .toList(growable: false),
@@ -631,21 +633,39 @@ class PurchaseDraftLine {
     required this.variant,
     required this.quantity,
     required this.unitCost,
+    this.unitCode = '',
+    this.unitLabel = '',
+    this.unitFactor = 1,
     this.expiryDate,
   });
 
   final ProductVariant variant;
   final int quantity;
   final double unitCost;
+
+  /// The purchase unit (a UnitOfMeasure.code); blank = the product's base unit.
+  final String unitCode;
+  final String unitLabel;
+
+  /// Base units per one purchase unit, for showing the base equivalent.
+  final double unitFactor;
   final DateTime? expiryDate;
 
   double get subtotal => unitCost * quantity;
 
   double get total => subtotal;
 
+  bool get isBaseUnit => unitCode.isEmpty || unitFactor == 1;
+
+  /// Quantity converted to the product's base unit.
+  double get baseQuantity => quantity * unitFactor;
+
   PurchaseDraftLine copyWith({
     int? quantity,
     double? unitCost,
+    String? unitCode,
+    String? unitLabel,
+    double? unitFactor,
     DateTime? expiryDate,
     bool clearExpiryDate = false,
   }) {
@@ -653,6 +673,9 @@ class PurchaseDraftLine {
       variant: variant,
       quantity: quantity ?? this.quantity,
       unitCost: unitCost ?? this.unitCost,
+      unitCode: unitCode ?? this.unitCode,
+      unitLabel: unitLabel ?? this.unitLabel,
+      unitFactor: unitFactor ?? this.unitFactor,
       expiryDate: clearExpiryDate ? null : expiryDate ?? this.expiryDate,
     );
   }
@@ -663,18 +686,22 @@ class PurchaseOrderLineDraft {
     required this.variantId,
     required this.quantity,
     required this.unitCost,
+    this.unit = '',
     this.expiryDate,
   });
 
   final int variantId;
   final int quantity;
   final double unitCost;
+  final String unit;
   final DateTime? expiryDate;
 
   Map<String, Object?> toJson() {
+    final normalizedUnit = unit.trim();
     return {
       'variant': variantId,
       'quantity': quantity,
+      if (normalizedUnit.isNotEmpty) 'unit': normalizedUnit,
       'unit_cost': unitCost.toStringAsFixed(2),
       if (expiryDate != null) 'expiry_date': _dateOnlyString(expiryDate!),
     };
@@ -925,6 +952,8 @@ class PurchaseOrderLine {
     required this.openQuantity,
     required this.hasReceivingTotals,
     required this.unitCost,
+    this.unit = '',
+    this.unitLabel = '',
     this.discountAmount = 0,
     this.netLineTotal,
     this.netUnitCost,
@@ -960,6 +989,10 @@ class PurchaseOrderLine {
   final int openQuantity;
   final bool hasReceivingTotals;
   final double unitCost;
+
+  /// Purchase unit code and its short display label (resolved by the backend).
+  final String unit;
+  final String unitLabel;
   final double discountAmount;
   final double? netLineTotal;
   final double? netUnitCost;
@@ -1057,6 +1090,8 @@ class PurchaseOrderLine {
           rejectedQuantity != null ||
           openQuantity != null,
       unitCost: _moneyFromJson(json['unit_cost']),
+      unit: json['unit']?.toString() ?? '',
+      unitLabel: json['unit_label']?.toString() ?? '',
       discountAmount: _moneyFromJson(json['discount_amount']),
       netLineTotal: _nullableMoneyFromJson(json['net_line_total']),
       netUnitCost: _nullableMoneyFromJson(json['net_unit_cost']),
@@ -1115,6 +1150,8 @@ class PurchaseOrderLine {
       openQuantity: openQuantity ?? this.openQuantity,
       hasReceivingTotals: hasReceivingTotals ?? this.hasReceivingTotals,
       unitCost: unitCost,
+      unit: unit,
+      unitLabel: unitLabel,
       discountAmount: discountAmount,
       netLineTotal: netLineTotal,
       netUnitCost: netUnitCost,

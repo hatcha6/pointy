@@ -7,6 +7,7 @@ from rest_framework import serializers
 from apps.attachments.models import Attachment
 from apps.attachments.serializers import AttachmentSummarySerializer
 from apps.catalog.models import ProductVariant
+from apps.catalog.units import UnitConversionError, resolve_unit, unit_label_for
 from apps.discounts.models import AppliedDiscount, DiscountRule, normalize_coupon_code
 from apps.discounts.services import (
     DiscountContext,
@@ -161,6 +162,27 @@ class PurchaseLineSerializer(serializers.ModelSerializer):
     outstanding_quantity = serializers.IntegerField(read_only=True)
     backordered_quantity = serializers.IntegerField(read_only=True)
     over_received_quantity = serializers.IntegerField(read_only=True)
+    # The purchase unit is sent as a code; its base-conversion factor and the
+    # base-unit equivalents are resolved/derived server-side and read-only.
+    unit = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        max_length=32,
+        trim_whitespace=True,
+        default="",
+    )
+    unit_factor = serializers.DecimalField(
+        max_digits=18,
+        decimal_places=6,
+        read_only=True,
+    )
+    unit_label = serializers.SerializerMethodField()
+    base_quantity = serializers.SerializerMethodField()
+    base_unit_cost = serializers.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        read_only=True,
+    )
 
     class Meta:
         model = PurchaseLine
@@ -173,6 +195,11 @@ class PurchaseLineSerializer(serializers.ModelSerializer):
             "variant_name",
             "tracks_expiry",
             "quantity",
+            "unit",
+            "unit_factor",
+            "unit_label",
+            "base_quantity",
+            "base_unit_cost",
             "expiry_date",
             "adjusted_quantity",
             "accepted_quantity",
@@ -202,6 +229,10 @@ class PurchaseLineSerializer(serializers.ModelSerializer):
             "product_name",
             "variant_sku",
             "tracks_expiry",
+            "unit_factor",
+            "unit_label",
+            "base_quantity",
+            "base_unit_cost",
             "previous_unit_cost",
             "unit_cost_change",
             "unit_cost_change_percent",
@@ -259,6 +290,12 @@ class PurchaseLineSerializer(serializers.ModelSerializer):
             )
         return self._previous_unit_cost_cache[line.pk]
 
+    def get_base_quantity(self, line):
+        return str(line.to_base_quantity(line.quantity))
+
+    def get_unit_label(self, line):
+        return unit_label_for(line.unit or line.variant.product.unit, self.context)
+
     def validate_quantity(self, value):
         if value < 1:
             raise serializers.ValidationError("Quantity must be positive.")
@@ -286,6 +323,20 @@ class PurchaseLineSerializer(serializers.ModelSerializer):
                 }
             )
         attrs["variant"] = variant
+        # Resolve the purchase unit + snapshot its base-conversion factor. Purchase
+        # quantities stay whole (you buy whole packs); the factor only converts to
+        # base units when stock is touched at submit/receive time.
+        requested_unit = attrs.get("unit")
+        if requested_unit is None:
+            requested_unit = getattr(self.instance, "unit", "") or ""
+        try:
+            resolved = resolve_unit(
+                variant.product, requested_unit, field="unit", for_purchase=True
+            )
+        except UnitConversionError as error:
+            raise serializers.ValidationError({error.field: error.message})
+        attrs["unit"] = resolved.code
+        attrs["unit_factor"] = resolved.factor
         return attrs
 
 

@@ -16,10 +16,8 @@ Future<double?> showWeightEntrySheet(
 }) {
   return showDialog<double>(
     context: context,
-    builder: (dialogContext) => _WeightEntryDialog(
-      variant: variant,
-      initialQuantity: initialQuantity,
-    ),
+    builder: (dialogContext) =>
+        _WeightEntryDialog(variant: variant, initialQuantity: initialQuantity),
   );
 }
 
@@ -59,9 +57,7 @@ class _WeightEntryDialogState extends State<_WeightEntryDialog> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final quantity = _quantity;
-    final total = quantity == null
-        ? null
-        : widget.variant.unitPrice * quantity;
+    final total = quantity == null ? null : widget.variant.unitPrice * quantity;
 
     return AlertDialog(
       icon: const Icon(Icons.scale_outlined),
@@ -97,10 +93,7 @@ class _WeightEntryDialogState extends State<_WeightEntryDialog> {
           onPressed: () => Navigator.of(context).pop(),
           child: Text(l10n.cancelButton),
         ),
-        FilledButton(
-          onPressed: _submit,
-          child: Text(l10n.confirmButton),
-        ),
+        FilledButton(onPressed: _submit, child: Text(l10n.confirmButton)),
       ],
     );
   }

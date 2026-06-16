@@ -15,6 +15,7 @@ import '../models/print_audit_event.dart';
 import '../models/print_job.dart';
 import '../models/printer_config.dart';
 import '../models/product.dart';
+import '../models/unit_of_measure.dart';
 import '../models/product_category.dart';
 import '../models/product_draft.dart';
 import '../models/product_image_search_result.dart';
@@ -90,6 +91,7 @@ import 'reports_api_client.dart';
 import 'sales_api_client.dart';
 import 'modifier_group_api_client.dart';
 import 'prep_station_api_client.dart';
+import 'unit_of_measure_api_client.dart';
 import 'sales_channel_api_client.dart';
 import 'shop_settings_api_client.dart';
 import 'stock_count_api_client.dart';
@@ -128,6 +130,7 @@ class PosApiService {
     _salesChannels = SalesChannelApiClient(_session);
     _prepStations = PrepStationApiClient(_session);
     _modifierGroups = ModifierGroupApiClient(_session);
+    _unitsOfMeasure = UnitOfMeasureApiClient(_session);
     _purchasing = PurchasingApiClient(_session);
     _printing = PrintingApiClient(_session);
     _priceChecker = PriceCheckerApiClient(_session);
@@ -160,6 +163,7 @@ class PosApiService {
   late final SalesChannelApiClient _salesChannels;
   late final PrepStationApiClient _prepStations;
   late final ModifierGroupApiClient _modifierGroups;
+  late final UnitOfMeasureApiClient _unitsOfMeasure;
   late final PurchasingApiClient _purchasing;
   late final PrintingApiClient _printing;
   late final PriceCheckerApiClient _priceChecker;
@@ -1114,6 +1118,25 @@ class PosApiService {
 
   Future<ModifierGroupPage> fetchModifierGroups({int page = 1}) {
     return _modifierGroups.fetchModifierGroups(page: page);
+  }
+
+  Future<UnitOfMeasurePage> fetchUnitsOfMeasure({int page = 1, bool? active}) {
+    return _unitsOfMeasure.fetchUnits(page: page, active: active);
+  }
+
+  Future<UnitOfMeasure> createUnitOfMeasure(UnitOfMeasureDraft draft) {
+    return _unitsOfMeasure.createUnit(draft);
+  }
+
+  Future<UnitOfMeasure> updateUnitOfMeasure({
+    required int id,
+    required Map<String, Object?> changes,
+  }) {
+    return _unitsOfMeasure.updateUnit(id: id, changes: changes);
+  }
+
+  Future<void> deleteUnitOfMeasure(int id) {
+    return _unitsOfMeasure.deleteUnit(id);
   }
 
   Future<ModifierGroup> createModifierGroup(ModifierGroupDraft draft) {

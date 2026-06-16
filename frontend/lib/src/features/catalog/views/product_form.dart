@@ -4,7 +4,9 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 import '../../../core/result.dart';
 import '../../../data/models/modifier_group.dart';
 import '../../../data/models/product_draft.dart';
+import '../../../data/models/product_unit.dart';
 import '../../../data/models/product_variant_draft.dart';
+import '../../../data/models/unit_of_measure.dart';
 import '../../../data/models/variant_option.dart';
 import '../../../shared/async_selection/async_multi_select_picker.dart';
 import '../../../shared/decimal_text_input_formatter.dart';
@@ -16,6 +18,7 @@ import 'product_form_fields.dart';
 import 'modifier_group_selector.dart';
 import 'product_form_section.dart';
 import 'product_image_picker.dart';
+import 'product_units_editor.dart';
 import 'variant_option_creation_dialogs.dart';
 import 'variant_generation_fields.dart';
 
@@ -50,6 +53,12 @@ class _ProductFormState extends State<ProductForm> {
   final Set<int> _selectedModifierGroupIds = {};
   var _isLoadingModifierGroups = false;
   var _modifierGroupsLoadFailed = false;
+  List<UnitOfMeasure> _availableUnits = [];
+  List<ProductUnit> _units = [];
+  var _defaultSaleUnit = '';
+  var _defaultPurchaseUnit = '';
+  var _isLoadingUnits = false;
+  var _unitsLoadFailed = false;
   final Map<int, Set<int>> _selectedValueIdsByOption = {};
   Set<int> _valueErrorOptionIds = {};
   ProductImageSelection? _selectedImage;
@@ -95,6 +104,30 @@ class _ProductFormState extends State<ProductForm> {
     _priceController.addListener(_syncGeneratedPricesFromBase);
     _loadVariantOptions();
     _loadModifierGroups();
+    _loadUnits();
+  }
+
+  Future<void> _loadUnits() async {
+    setState(() {
+      _isLoadingUnits = true;
+      _unitsLoadFailed = false;
+    });
+    final result = await widget.viewModel.catalogRepository.loadAllUnits();
+    if (!mounted) {
+      return;
+    }
+    switch (result) {
+      case Ok<List<UnitOfMeasure>>():
+        setState(() {
+          _availableUnits = result.value;
+          _isLoadingUnits = false;
+        });
+      case Error<List<UnitOfMeasure>>():
+        setState(() {
+          _isLoadingUnits = false;
+          _unitsLoadFailed = true;
+        });
+    }
   }
 
   @override
@@ -247,6 +280,36 @@ class _ProductFormState extends State<ProductForm> {
                                           hasError: _modifierGroupsLoadFailed,
                                           onReload: _loadModifierGroups,
                                           onToggle: _toggleModifierGroup,
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 12),
+                                    ProductFormSection(
+                                      icon: Icons.straighten_outlined,
+                                      title: l10n.productUnitsSectionTitle,
+                                      children: [
+                                        ProductUnitsEditor(
+                                          availableUnits: _availableUnits,
+                                          baseUnitCode: _unit,
+                                          units: _units,
+                                          defaultSaleUnit: _defaultSaleUnit,
+                                          defaultPurchaseUnit:
+                                              _defaultPurchaseUnit,
+                                          enabled: !widget.viewModel.isSaving,
+                                          isLoading: _isLoadingUnits,
+                                          hasError: _unitsLoadFailed,
+                                          onReload: _loadUnits,
+                                          onUnitsChanged: (units) =>
+                                              setState(() => _units = units),
+                                          onDefaultSaleChanged: (code) =>
+                                              setState(
+                                                () => _defaultSaleUnit = code,
+                                              ),
+                                          onDefaultPurchaseChanged: (code) =>
+                                              setState(
+                                                () =>
+                                                    _defaultPurchaseUnit = code,
+                                              ),
                                         ),
                                       ],
                                     ),
@@ -496,6 +559,9 @@ class _ProductFormState extends State<ProductForm> {
       isActive: _isProductActive,
       tracksExpiry: _tracksExpiry,
       unit: _unit,
+      defaultSaleUnit: _defaultSaleUnit,
+      defaultPurchaseUnit: _defaultPurchaseUnit,
+      units: _units,
       isService: _isService,
       isPrepared: _isPrepared,
       variantName: _variantNameController.text.trim(),

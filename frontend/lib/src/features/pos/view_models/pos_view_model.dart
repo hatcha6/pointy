@@ -28,6 +28,7 @@ import '../../../data/repositories/register_session_repository.dart';
 import '../../../data/repositories/sale_repository.dart';
 import '../../../data/repositories/shop_settings_repository.dart';
 import '../../../data/services/order_document_service.dart';
+import '../../../shared/unit_options.dart';
 
 part 'pos_cart_actions.dart';
 part 'pos_catalog_actions.dart';
@@ -49,6 +50,7 @@ enum PosProductSelectionStatus {
   added,
   chooseVariant,
   chooseModifiers,
+  chooseUnit,
   unavailable,
   error,
   weighVariant,
@@ -60,6 +62,8 @@ class PosProductSelectionResult {
     this.variants = const [],
     this.weighedVariant,
     this.modifierVariant,
+    this.unitProduct,
+    this.unitVariant,
   });
 
   const PosProductSelectionResult.added()
@@ -90,10 +94,21 @@ class PosProductSelectionResult {
         modifierVariant: variant,
       );
 
+  const PosProductSelectionResult.chooseUnit(
+    Product product,
+    ProductVariant variant,
+  ) : this._(
+        status: PosProductSelectionStatus.chooseUnit,
+        unitProduct: product,
+        unitVariant: variant,
+      );
+
   final PosProductSelectionStatus status;
   final List<ProductVariant> variants;
   final ProductVariant? weighedVariant;
   final ProductVariant? modifierVariant;
+  final Product? unitProduct;
+  final ProductVariant? unitVariant;
 }
 
 class PosSaleSessionSummary {

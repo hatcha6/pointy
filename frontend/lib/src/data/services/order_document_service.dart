@@ -269,12 +269,12 @@ class OrderDocumentService {
           for (final line in order.lines)
             [
               _saleLineName(line),
-              _formatQuantity(line.quantity),
+              _formatQuantityWithUnit(line.quantity, line.unitLabel),
               _formatMoney(line.unitPrice),
               _formatMoney(line.total),
             ],
         ],
-        columnFlex: const [2.8, 0.8, 1.1, 1.1],
+        columnFlex: const [2.8, 0.9, 1.1, 1.1],
       ),
       totals: [
         OrderDocumentField(labels.subtotal, _formatMoney(order.subtotal)),
@@ -348,12 +348,12 @@ class OrderDocumentService {
               line.displayName.trim().isEmpty
                   ? labels.unknownProduct
                   : line.displayName.trim(),
-              _formatQuantity(line.quantity),
+              _formatQuantityWithUnit(line.quantity.toDouble(), line.unitLabel),
               _formatMoney(line.effectiveUnitCost ?? line.unitCost),
               _formatMoney(line.landedLineTotal ?? line.total),
             ],
         ],
-        columnFlex: const [2.8, 0.8, 1.1, 1.1],
+        columnFlex: const [2.8, 0.9, 1.1, 1.1],
       ),
       totals: [
         OrderDocumentField(labels.subtotal, _formatMoney(order.subtotal)),
@@ -1141,6 +1141,13 @@ String _formatQuantity(num value) {
       .toStringAsFixed(3)
       .replaceFirst(RegExp(r'0+$'), '')
       .replaceFirst(RegExp(r'\.$'), '');
+}
+
+/// "2 صندوق" — the quantity with its unit label appended for invoice/PO rows.
+String _formatQuantityWithUnit(num value, String unitLabel) {
+  final quantity = _formatQuantity(value);
+  final unit = unitLabel.trim();
+  return unit.isEmpty ? quantity : '$quantity $unit';
 }
 
 String _formatDateTime(DateTime value) {

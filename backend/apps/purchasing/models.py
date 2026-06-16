@@ -394,6 +394,18 @@ class PurchaseLine(TimeStampedModel):
         related_name="purchase_lines",
     )
     quantity = models.PositiveIntegerField(default=1)
+    # The unit this line is purchased in (a UnitOfMeasure.code); blank = the
+    # product's base unit. Purchase quantities stay whole (you buy whole packs);
+    # ``unit_factor`` snapshots how many base units one purchase unit is worth and
+    # converts to base only at the stock boundary. ``unit_cost`` is per purchase
+    # unit (cost of one carton), normalised to per-base for the sales cost lookup.
+    unit = models.CharField(max_length=32, blank=True, default="")
+    unit_factor = models.DecimalField(
+        max_digits=18,
+        decimal_places=6,
+        default=Decimal("1"),
+        validators=[MinValueValidator(Decimal("0.000001"))],
+    )
     unit_cost = models.DecimalField(
         max_digits=10,
         decimal_places=2,
@@ -443,6 +455,18 @@ class PurchaseLine(TimeStampedModel):
     @property
     def line_total(self):
         return (self.unit_cost * self.quantity).quantize(Decimal("0.01"))
+
+    def to_base_quantity(self, quantity) -> Decimal:
+        """A quantity in this line's purchase unit → the product's base unit."""
+        return (Decimal(quantity) * self.unit_factor).quantize(Decimal("0.001"))
+
+    @property
+    def base_unit_cost(self) -> Decimal:
+        """``unit_cost`` re-expressed per base unit (per piece, not per carton)."""
+        factor = self.unit_factor or Decimal("1")
+        if factor <= 0:
+            return self.unit_cost
+        return (self.unit_cost / factor).quantize(Decimal("0.01"))
 
     @property
     def effective_line_total(self):

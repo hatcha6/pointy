@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
@@ -7,6 +8,7 @@ import 'package:pointy_frontend/src/data/models/pos_user.dart';
 import 'package:pointy_frontend/src/shared/command_palette/command_palette.dart';
 import 'package:pointy_frontend/src/shared/design/design.dart';
 import 'package:pointy_frontend/src/shared/navigation/app_navigation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class _RecordingNavigation implements AppNavigation {
   final List<AppNavigationDestination> navigated = [];
@@ -79,7 +81,11 @@ Widget _harness(List<CommandSource> sources) {
 }
 
 void main() {
-  setUp(commandPaletteRecents.clear);
+  setUp(() {
+    TestWidgetsFlutterBinding.ensureInitialized();
+    SharedPreferences.setMockInitialValues({});
+    commandPaletteRecents.clear();
+  });
 
   testWidgets('opens, filters by query, and navigates on selection', (
     tester,
@@ -197,17 +203,18 @@ void main() {
         id: 'product-$value',
         icon: Icons.inventory_2_outlined,
         title: value,
-        recordRecent: true,
+        recent: RecentEntry(kind: RecentKind.product, id: 1, title: value),
         onSelect: (_) {},
       ),
     );
     await tester.pumpWidget(
       _harness([
-        const RecentsCommandSource('الأخيرة'),
+        RecentsCommandSource(label: 'الأخيرة', onOpen: (context, entry) {}),
         NavigationCommandSource(navigation),
         products,
       ]),
     );
+    await tester.pumpAndSettle();
 
     // Open the palette, search for and select a product.
     await tester.tap(find.text('open'));
@@ -223,6 +230,87 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('الأخيرة'), findsOneWidget);
     expect(find.text('قهوة عربية'), findsOneWidget);
+  });
+
+  testWidgets('a row action runs without triggering the primary open', (
+    tester,
+  ) async {
+    var opened = false;
+    var printed = false;
+    final products = AsyncCommandSource<String>(
+      labelBuilder: (l10n) => l10n.commandPaletteProductsSection,
+      fetch: (query) async =>
+          ['قهوة عربية'].where((value) => value.contains(query)).toList(),
+      toItem: (value) => CommandItem(
+        id: 'product-$value',
+        icon: Icons.inventory_2_outlined,
+        title: value,
+        actions: [
+          CommandRowAction(
+            icon: Icons.print_outlined,
+            tooltip: 'طباعة',
+            onRun: (_) => printed = true,
+          ),
+        ],
+        onSelect: (_) => opened = true,
+      ),
+    );
+    await tester.pumpWidget(
+      _harness([NavigationCommandSource(_RecordingNavigation()), products]),
+    );
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), 'قهوة');
+    await tester.pump(const Duration(milliseconds: 350));
+    await tester.pumpAndSettle();
+
+    // Tapping the action runs it and closes the palette — not the row's open.
+    await tester.tap(find.byTooltip('طباعة'));
+    await tester.pumpAndSettle();
+    expect(printed, isTrue);
+    expect(opened, isFalse);
+  });
+
+  testWidgets('Tab focuses a row action and Enter runs it (keyboard-only)', (
+    tester,
+  ) async {
+    var opened = false;
+    var printed = false;
+    final products = AsyncCommandSource<String>(
+      labelBuilder: (l10n) => l10n.commandPaletteProductsSection,
+      fetch: (query) async =>
+          ['قهوة عربية'].where((value) => value.contains(query)).toList(),
+      toItem: (value) => CommandItem(
+        id: 'product-$value',
+        icon: Icons.inventory_2_outlined,
+        title: value,
+        actions: [
+          CommandRowAction(
+            icon: Icons.print_outlined,
+            tooltip: 'طباعة',
+            onRun: (_) => printed = true,
+          ),
+        ],
+        onSelect: (_) => opened = true,
+      ),
+    );
+    await tester.pumpWidget(
+      _harness([NavigationCommandSource(_RecordingNavigation()), products]),
+    );
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), 'قهوة');
+    await tester.pump(const Duration(milliseconds: 350));
+    await tester.pumpAndSettle();
+
+    // The single result is selected; Tab focuses its action and Enter runs it,
+    // not the row's primary open.
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.pumpAndSettle();
+    await tester.testTextInput.receiveAction(TextInputAction.go);
+    await tester.pumpAndSettle();
+    expect(printed, isTrue);
+    expect(opened, isFalse);
   });
 
   testWidgets('shows an empty state when nothing matches', (tester) async {

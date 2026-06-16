@@ -65,7 +65,9 @@ def latest_purchase_line_for_product(product_id, *, variant_id=None, before_line
 
 def latest_variant_unit_cost(variant_id):
     line = latest_purchase_line_for_variant(variant_id)
-    return None if line is None else line.unit_cost
+    # Normalise to per *base* unit so the sales cost lookup (which multiplies by
+    # the line's own unit factor) stays correct even when the purchase was a pack.
+    return None if line is None else line.base_unit_cost
 
 
 def latest_product_unit_cost(product_id, *, variant_id=None):
@@ -314,13 +316,15 @@ def submit_purchase_order(purchase_order, *, request=None):
     ).order_by("variant_id"):
         stock_item = lock_stock_item(variant=line.variant)
         before = stock_snapshot(stock_item)
-        stock_item.quantity_expected += line.quantity
+        # Stock is kept in base units; a line bought in packs becomes base units.
+        expected_base = line.to_base_quantity(line.quantity)
+        stock_item.quantity_expected += expected_base
         save_stock_item_quantities(stock_item)
         create_stock_movement(
             stock_item=stock_item,
             variant=line.variant,
             movement_type=StockMovement.Type.EXPECTED,
-            quantity=line.quantity,
+            quantity=expected_base,
             note=f"شراء متوقع {locked_order.order_number}",
             created_by=created_by,
             before=before,
@@ -509,32 +513,36 @@ def apply_receipt_stock_changes(
 ):
     stock_item = lock_stock_item(variant=line.variant)
 
+    # Receipt quantities are in the line's purchase unit (whole packs); stock is
+    # kept in base units, so convert each at the boundary via the line's factor.
     accepted_expected = expected_quantities["accepted_expected"]
     accepted_overage = accepted_quantity - accepted_expected
     if accepted_expected > 0:
+        accepted_expected_base = line.to_base_quantity(accepted_expected)
         before = stock_snapshot(stock_item)
-        stock_item.quantity_on_hand += accepted_expected
-        decrement_expected(stock_item, accepted_expected)
+        stock_item.quantity_on_hand += accepted_expected_base
+        decrement_expected(stock_item, accepted_expected_base)
         save_stock_item_quantities(stock_item)
         create_stock_movement(
             stock_item=stock_item,
             variant=line.variant,
             movement_type=StockMovement.Type.RECEIVE_EXPECTED,
-            quantity=accepted_expected,
+            quantity=accepted_expected_base,
             note=f"استلام مشتريات {locked_order.order_number}",
             created_by=created_by,
             before=before,
         )
 
     if accepted_overage > 0:
+        accepted_overage_base = line.to_base_quantity(accepted_overage)
         before = stock_snapshot(stock_item)
-        stock_item.quantity_on_hand += accepted_overage
+        stock_item.quantity_on_hand += accepted_overage_base
         save_stock_item_quantities(stock_item)
         create_stock_movement(
             stock_item=stock_item,
             variant=line.variant,
             movement_type=StockMovement.Type.INCREASE,
-            quantity=accepted_overage,
+            quantity=accepted_overage_base,
             note=f"زيادة توريد {locked_order.order_number}",
             created_by=created_by,
             before=before,
@@ -543,13 +551,13 @@ def apply_receipt_stock_changes(
     damaged_expected = expected_quantities["damaged_expected"]
     if damaged_expected > 0:
         before = stock_snapshot(stock_item)
-        decrement_expected(stock_item, damaged_expected)
+        decrement_expected(stock_item, line.to_base_quantity(damaged_expected))
         save_stock_item_quantities(stock_item)
         create_stock_movement(
             stock_item=stock_item,
             variant=line.variant,
             movement_type=StockMovement.Type.RECEIVE_DAMAGED,
-            quantity=damaged_expected,
+            quantity=line.to_base_quantity(damaged_expected),
             note=f"تالف عند الاستلام {locked_order.order_number}",
             created_by=created_by,
             before=before,
@@ -558,13 +566,13 @@ def apply_receipt_stock_changes(
     cancelled_expected = expected_quantities["cancelled_expected"]
     if cancelled_expected > 0:
         before = stock_snapshot(stock_item)
-        decrement_expected(stock_item, cancelled_expected)
+        decrement_expected(stock_item, line.to_base_quantity(cancelled_expected))
         save_stock_item_quantities(stock_item)
         create_stock_movement(
             stock_item=stock_item,
             variant=line.variant,
             movement_type=StockMovement.Type.CANCEL_EXPECTED,
-            quantity=cancelled_expected,
+            quantity=line.to_base_quantity(cancelled_expected),
             note=f"إلغاء توريد {locked_order.order_number}",
             created_by=created_by,
             before=before,
@@ -656,7 +664,8 @@ def receive_purchase_order(purchase_order, *, request=None, lines_data=None, not
         create_expiring_stock_batch(
             receipt_line=receipt_line,
             expiry_date=expiry_date,
-            quantity=accepted_quantity,
+            # Batches are consumed in base units by FEFO, so store base units.
+            quantity=line.to_base_quantity(accepted_quantity),
         )
 
     has_outstanding = any(
@@ -730,22 +739,28 @@ def validate_purchase_order_adjustment_allowed(purchase_order, *, lines=None):
 
 
 def validate_purchase_stock_available(lines):
-    requested_by_variant = {}
+    # Compare against base-unit stock (a returned pack frees up base units), but
+    # report the shortage in the unit the user actually entered (packs).
+    requested_base_by_variant = {}
+    requested_display_by_variant = {}
     variants_by_id = {}
     for line, quantity in lines:
         variants_by_id[line.variant_id] = line.variant
-        requested_by_variant[line.variant_id] = (
-            requested_by_variant.get(line.variant_id, 0) + quantity
+        requested_base_by_variant[line.variant_id] = requested_base_by_variant.get(
+            line.variant_id, Decimal("0")
+        ) + line.to_base_quantity(quantity)
+        requested_display_by_variant[line.variant_id] = (
+            requested_display_by_variant.get(line.variant_id, 0) + quantity
         )
 
     stock_items = {}
     shortages = []
-    for variant_id in sorted(requested_by_variant):
+    for variant_id in sorted(requested_base_by_variant):
         variant = variants_by_id[variant_id]
-        quantity = requested_by_variant[variant_id]
+        base_needed = requested_base_by_variant[variant_id]
         stock_item = lock_stock_item(variant=variant)
         stock_items[variant_id] = stock_item
-        if stock_item.quantity_on_hand < quantity:
+        if stock_item.quantity_on_hand < base_needed:
             shortages.append(
                 {
                     "product": variant.product_id,
@@ -754,7 +769,7 @@ def validate_purchase_stock_available(lines):
                     "variant_id": variant.pk,
                     "product_name": variant.product.name,
                     "variant_name": variant.full_name,
-                    "requested": quantity,
+                    "requested": requested_display_by_variant[variant_id],
                     "available": float(stock_item.quantity_on_hand),
                 }
             )
@@ -797,14 +812,16 @@ def record_purchase_adjustment_stock_movements(
     for line, quantity in lines:
         stock_item = stock_items[line.variant_id]
         before = stock_snapshot(stock_item)
-        stock_item.quantity_on_hand -= quantity
+        # Returned packs leave stock in base units.
+        base_quantity = line.to_base_quantity(quantity)
+        stock_item.quantity_on_hand -= base_quantity
         save_stock_item_quantities(stock_item)
-        consume_expiring_stock_batches(variant=line.variant, quantity=quantity)
+        consume_expiring_stock_batches(variant=line.variant, quantity=base_quantity)
         create_stock_movement(
             variant=line.variant,
             stock_item=stock_item,
             movement_type=StockMovement.Type.DECREASE,
-            quantity=quantity,
+            quantity=base_quantity,
             note=purchase_adjustment_note(adjustment_type, purchase_order.order_number),
             created_by=created_by,
             before=before,
@@ -1122,7 +1139,10 @@ def cancel_purchase_order(purchase_order, *, request=None):
                 continue
             stock_item = lock_stock_item(variant=line.variant)
             before = stock_snapshot(stock_item)
-            expected_reduction = decrement_expected(stock_item, outstanding_quantity)
+            # quantity_expected is in base units; convert the outstanding packs.
+            expected_reduction = decrement_expected(
+                stock_item, line.to_base_quantity(outstanding_quantity)
+            )
             if expected_reduction <= 0:
                 continue
             save_stock_item_quantities(stock_item)

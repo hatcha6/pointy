@@ -736,6 +736,7 @@ class PrintingRepository {
                   ? 'منتج'
                   : line.displayName.trim(),
               'quantity': line.quantity,
+              'unit_label': line.unitLabel,
               'unit_price': line.unitCost.toStringAsFixed(2),
               'line_total': (line.landedLineTotal ?? line.total)
                   .toStringAsFixed(2),

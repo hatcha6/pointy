@@ -1,3 +1,4 @@
+import 'product_unit.dart';
 import 'product_variant_draft.dart';
 
 class ProductDraft {
@@ -10,6 +11,9 @@ class ProductDraft {
     this.isService = false,
     this.isPrepared = false,
     this.unit = 'piece',
+    this.defaultSaleUnit = '',
+    this.defaultPurchaseUnit = '',
+    this.units = const [],
     this.variantName = '',
     this.variantBarcode = '',
     this.description = '',
@@ -29,6 +33,9 @@ class ProductDraft {
   final bool isService;
   final bool isPrepared;
   final String unit;
+  final String defaultSaleUnit;
+  final String defaultPurchaseUnit;
+  final List<ProductUnit> units;
   final String variantBarcode;
   final String description;
   final List<int> categoryIds;
@@ -46,6 +53,9 @@ class ProductDraft {
       'is_service': isService,
       'is_prepared': isPrepared,
       'unit': unit,
+      'default_sale_unit': defaultSaleUnit,
+      'default_purchase_unit': defaultPurchaseUnit,
+      'units': [for (final unit in units) unit.toJson()],
       'categories': categoryIds,
       'variant_options': variantOptionIds,
       'modifier_groups': modifierGroupIds,

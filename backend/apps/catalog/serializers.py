@@ -12,7 +12,9 @@ from .models import (
     Product,
     ProductCategory,
     ProductModifierGroup,
+    ProductUnit,
     ProductVariant,
+    UnitOfMeasure,
     VariantOption,
     VariantOptionValue,
     variant_option_signature,
@@ -275,6 +277,85 @@ def product_modifier_group_details(product, context=None):
     ).data
 
 
+class UnitOfMeasureSerializer(serializers.ModelSerializer):
+    # How many products use this unit — surfaced so the management UI can show
+    # usage and explain why an in-use unit cannot be deleted.
+    product_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = UnitOfMeasure
+        fields = [
+            "id",
+            "code",
+            "name",
+            "abbreviation",
+            "dimension",
+            "reference_factor",
+            "allows_fractional",
+            "is_system",
+            "is_active",
+            "display_order",
+            "product_count",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ("created_at", "updated_at", "is_system")
+
+    def get_product_count(self, unit):
+        annotated = getattr(unit, "product_count", None)
+        if annotated is not None:
+            return annotated
+        return unit.product_units.count()
+
+    def validate_code(self, value):
+        return value.strip().lower()
+
+
+class ProductUnitSerializer(serializers.ModelSerializer):
+    # Referenced by code so the frontend never juggles UnitOfMeasure ids.
+    unit = serializers.SlugRelatedField(
+        slug_field="code",
+        queryset=UnitOfMeasure.objects.active(),
+    )
+    unit_detail = UnitOfMeasureSerializer(source="unit", read_only=True)
+
+    class Meta:
+        model = ProductUnit
+        fields = [
+            "id",
+            "unit",
+            "unit_detail",
+            "factor_to_base",
+            "price",
+            "is_sellable",
+            "is_purchasable",
+            "display_order",
+        ]
+
+
+class ProductUnitListField(serializers.Field):
+    """Read+write the per-product unit list inline on the product, mirroring
+    ``ProductVariantListField``."""
+
+    def to_representation(self, value):
+        units = value.all() if hasattr(value, "all") else value
+        return ProductUnitSerializer(units, many=True, context=self.context).data
+
+    def to_internal_value(self, data):
+        if not isinstance(data, list):
+            raise serializers.ValidationError("Expected a list of units.")
+        serializer = ProductUnitSerializer(data=data, many=True, context=self.context)
+        serializer.is_valid(raise_exception=True)
+        validated = serializer.validated_data
+        codes = [entry["unit"].code for entry in validated]
+        duplicates = sorted({code for code in codes if codes.count(code) > 1})
+        if duplicates:
+            raise serializers.ValidationError(
+                f"Each unit can be listed once. Duplicated: {', '.join(duplicates)}."
+            )
+        return validated
+
+
 class ProductCatalogSummarySerializer(serializers.ModelSerializer):
     variant_options = serializers.PrimaryKeyRelatedField(many=True, read_only=True)
     variant_option_details = VariantOptionSerializer(
@@ -290,6 +371,7 @@ class ProductCatalogSummarySerializer(serializers.ModelSerializer):
     primary_image = serializers.SerializerMethodField()
     image_attachments = serializers.SerializerMethodField()
     modifier_group_details = serializers.SerializerMethodField()
+    units = serializers.SerializerMethodField()
     is_archived = serializers.BooleanField(read_only=True)
 
     class Meta:
@@ -305,6 +387,9 @@ class ProductCatalogSummarySerializer(serializers.ModelSerializer):
             "is_service",
             "is_prepared",
             "unit",
+            "default_sale_unit",
+            "default_purchase_unit",
+            "units",
             "categories",
             "category_details",
             "variant_options",
@@ -333,6 +418,13 @@ class ProductCatalogSummarySerializer(serializers.ModelSerializer):
 
     def get_modifier_group_details(self, product):
         return product_modifier_group_details(product, self.context)
+
+    def get_units(self, product):
+        return ProductUnitSerializer(
+            product.units.all(),
+            many=True,
+            context=self.context,
+        ).data
 
 
 class DefaultProductVariantInputSerializer(serializers.Serializer):
@@ -597,6 +689,7 @@ class ProductCatalogSerializer(serializers.ModelSerializer):
     quantity_on_hand = serializers.SerializerMethodField()
     variants = ProductVariantListField(required=False)
     default_variant = DefaultProductVariantField(required=False)
+    units = ProductUnitListField(required=False)
     categories = serializers.PrimaryKeyRelatedField(
         queryset=ProductCategory.objects.all(),
         many=True,
@@ -640,6 +733,9 @@ class ProductCatalogSerializer(serializers.ModelSerializer):
             "is_service",
             "is_prepared",
             "unit",
+            "default_sale_unit",
+            "default_purchase_unit",
+            "units",
             "default_variant",
             "variants",
             "categories",
@@ -655,6 +751,37 @@ class ProductCatalogSerializer(serializers.ModelSerializer):
             "updated_at",
         ]
         read_only_fields = ("created_at", "updated_at", "archived_at")
+
+    def validate_unit(self, value):
+        value = (value or "").strip()
+        if value and not UnitOfMeasure.objects.filter(code=value, is_active=True).exists():
+            raise serializers.ValidationError(f"Unknown base unit '{value}'.")
+        return value
+
+    def validate(self, attrs):
+        base_unit = attrs.get("unit") or getattr(self.instance, "unit", None) or "piece"
+        units_payload = attrs.get("units")
+        if units_payload is not None:
+            available = {entry["unit"].code for entry in units_payload}
+        elif self.instance is not None:
+            available = {
+                product_unit.unit.code for product_unit in self.instance.units.all()
+            }
+        else:
+            available = set()
+        available.add(base_unit)
+        for field in ("default_sale_unit", "default_purchase_unit"):
+            if field in attrs:
+                code = attrs[field]
+            elif self.instance is not None:
+                code = getattr(self.instance, field, "")
+            else:
+                code = ""
+            if code and code not in available:
+                raise serializers.ValidationError(
+                    {field: "Default must be the base unit or one of the product's units."}
+                )
+        return attrs
 
     def get_quantity_on_hand(self, product):
         annotated_quantity = getattr(product, "stock_quantity_on_hand", None)
@@ -690,10 +817,30 @@ class ProductCatalogSerializer(serializers.ModelSerializer):
                 display_order=index,
             )
 
+    def _apply_units_data(self, product, units_data):
+        # Rebuild the per-product unit list. Transaction lines snapshot the unit
+        # code + factor, so dropping/recreating ProductUnit rows never rewrites
+        # history. A row matching the base unit is dropped (the base is implicit).
+        product.units.all().delete()
+        for index, data in enumerate(units_data):
+            unit = data["unit"]
+            if unit.code == product.unit:
+                continue
+            ProductUnit.objects.create(
+                product=product,
+                unit=unit,
+                factor_to_base=data["factor_to_base"],
+                price=data.get("price"),
+                is_sellable=data.get("is_sellable", True),
+                is_purchasable=data.get("is_purchasable", True),
+                display_order=data.get("display_order", index),
+            )
+
     def create(self, validated_data):
         categories = validated_data.pop("categories", [])
         variant_options = validated_data.pop("variant_options", None)
         modifier_groups = validated_data.pop("modifier_groups", None)
+        units_data = validated_data.pop("units", None)
         variants_data = validated_data.pop("variants", None)
         default_variant_data = validated_data.pop("default_variant", None)
         variant_options = self._variant_options_for_payload(
@@ -710,6 +857,8 @@ class ProductCatalogSerializer(serializers.ModelSerializer):
                     product.variant_options.set(variant_options)
                 if modifier_groups is not None:
                     self._sync_modifier_groups(product, modifier_groups)
+                if units_data is not None:
+                    self._apply_units_data(product, units_data)
                 if variants_data is not None:
                     self._apply_variants_data(product, variants_data)
                 else:
@@ -722,6 +871,7 @@ class ProductCatalogSerializer(serializers.ModelSerializer):
         categories = validated_data.pop("categories", None)
         variant_options = validated_data.pop("variant_options", None)
         modifier_groups = validated_data.pop("modifier_groups", None)
+        units_data = validated_data.pop("units", None)
         variants_data = validated_data.pop("variants", None)
         default_variant_data = validated_data.pop("default_variant", None)
         variant_options = self._variant_options_for_payload(
@@ -740,6 +890,8 @@ class ProductCatalogSerializer(serializers.ModelSerializer):
                     instance.variant_options.set(variant_options)
                 if modifier_groups is not None:
                     self._sync_modifier_groups(instance, modifier_groups)
+                if units_data is not None:
+                    self._apply_units_data(instance, units_data)
                 if variants_data is not None:
                     self._apply_variants_data(instance, variants_data)
                 else:

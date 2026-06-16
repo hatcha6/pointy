@@ -1,8 +1,10 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/analytics_interaction_tracker.dart';
 import '../design/design.dart';
@@ -29,7 +31,8 @@ class CommandItem {
     this.subtitle,
     this.trailing,
     this.keywords = const [],
-    this.recordRecent = false,
+    this.actions = const [],
+    this.recent,
   });
 
   final String id;
@@ -41,9 +44,12 @@ class CommandItem {
   final String? trailing;
   final List<String> keywords;
 
-  /// When true, choosing this item remembers it as a recent (entities do; the
-  /// always-listed screens and actions do not).
-  final bool recordRecent;
+  /// Inline secondary actions runnable straight from the row (print, reorder…).
+  final List<CommandRowAction> actions;
+
+  /// When non-null, choosing or acting on this item remembers it as a recent
+  /// (entities set this; the always-listed screens and quick actions do not).
+  final RecentEntry? recent;
 
   /// Runs when the item is chosen. Receives the scope's (home-route) context.
   final void Function(BuildContext context) onSelect;
@@ -56,6 +62,72 @@ class CommandItem {
       if (keyword.toLowerCase().contains(q)) return true;
     }
     return false;
+  }
+}
+
+/// An inline action on a [CommandItem] row (e.g. print a label, reorder).
+class CommandRowAction {
+  const CommandRowAction({
+    required this.icon,
+    required this.tooltip,
+    required this.onRun,
+  });
+
+  final IconData icon;
+  final String tooltip;
+  final void Function(BuildContext context) onRun;
+}
+
+/// The kind of entity a recent refers to, so it can be re-opened by id.
+enum RecentKind { product, customer, supplier, invoice, purchaseOrder }
+
+/// A serialisable pointer to a recently opened entity (persisted across
+/// restarts; re-opened by fetching the entity by id).
+class RecentEntry {
+  const RecentEntry({
+    required this.kind,
+    required this.id,
+    required this.title,
+    this.subtitle,
+    this.trailing,
+  });
+
+  final RecentKind kind;
+  final int id;
+  final String title;
+  final String? subtitle;
+  final String? trailing;
+
+  Map<String, Object?> toJson() => {
+    'kind': kind.name,
+    'id': id,
+    'title': title,
+    'subtitle': subtitle,
+    'trailing': trailing,
+  };
+
+  static RecentEntry? fromJson(Map<String, Object?> json) {
+    final id = json['id'];
+    if (id is! num) {
+      return null;
+    }
+    RecentKind? kind;
+    for (final candidate in RecentKind.values) {
+      if (candidate.name == json['kind']) {
+        kind = candidate;
+        break;
+      }
+    }
+    if (kind == null) {
+      return null;
+    }
+    return RecentEntry(
+      kind: kind,
+      id: id.toInt(),
+      title: (json['title'] as String?) ?? '',
+      subtitle: json['subtitle'] as String?,
+      trailing: json['trailing'] as String?,
+    );
   }
 }
 
@@ -168,35 +240,86 @@ class StaticCommandSource extends CommandSource {
   }
 }
 
-/// Session-scoped store of recently opened entities, shown on the empty query.
+/// Store of recently opened entities — shown on the empty query so ⌘K is
+/// useful before you type. Persists across restarts via [SharedPreferences].
 class CommandPaletteRecents {
-  CommandPaletteRecents({this.capacity = 6});
+  CommandPaletteRecents({
+    this.capacity = 8,
+    this.storageKey = 'command_palette.recents.v1',
+  });
 
   final int capacity;
-  final List<CommandItem> _items = [];
+  final String storageKey;
+  List<RecentEntry> _entries = [];
 
-  List<CommandItem> get items => List.unmodifiable(_items);
+  List<RecentEntry> get entries => List.unmodifiable(_entries);
 
-  void add(CommandItem item) {
-    _items.removeWhere((existing) => existing.id == item.id);
-    _items.insert(0, item);
-    if (_items.length > capacity) {
-      _items.removeRange(capacity, _items.length);
+  /// Loads persisted recents. Call once at startup; safe to call again.
+  Future<void> load() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(storageKey);
+      if (raw == null) {
+        return;
+      }
+      final decoded = jsonDecode(raw);
+      if (decoded is! List) {
+        return;
+      }
+      _entries = [
+        for (final item in decoded)
+          if (item is Map) ?RecentEntry.fromJson(item.cast<String, Object?>()),
+      ];
+    } catch (_) {
+      // Ignore missing or corrupt storage.
     }
   }
 
-  void clear() => _items.clear();
+  void add(RecentEntry entry) {
+    _entries.removeWhere((e) => e.kind == entry.kind && e.id == entry.id);
+    _entries.insert(0, entry);
+    if (_entries.length > capacity) {
+      _entries.removeRange(capacity, _entries.length);
+    }
+    unawaited(_persist());
+  }
+
+  void clear() {
+    _entries = [];
+    unawaited(_persist());
+  }
+
+  Future<void> _persist() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(
+        storageKey,
+        jsonEncode([for (final entry in _entries) entry.toJson()]),
+      );
+    } catch (_) {
+      // Best-effort; recents are a convenience, not critical state.
+    }
+  }
 }
 
-/// The app-wide recents store, cleared on logout.
+/// The app-wide recents store, persisted across restarts and cleared on logout.
 final CommandPaletteRecents commandPaletteRecents = CommandPaletteRecents();
 
-/// Surfaces [commandPaletteRecents] on the empty query, so ⌘K is useful before
-/// you type. Hidden once a query is entered (live search covers it then).
+IconData recentKindIcon(RecentKind kind) => switch (kind) {
+  RecentKind.product => Icons.inventory_2_outlined,
+  RecentKind.customer => Icons.person_outline,
+  RecentKind.supplier => Icons.local_shipping_outlined,
+  RecentKind.invoice => Icons.request_quote_outlined,
+  RecentKind.purchaseOrder => Icons.add_shopping_cart_outlined,
+};
+
+/// Surfaces [commandPaletteRecents] on the empty query, re-opening each entity
+/// by id via [onOpen]. Hidden once a query is entered (live search covers it).
 class RecentsCommandSource extends CommandSource {
-  const RecentsCommandSource(this.label);
+  const RecentsCommandSource({required this.label, required this.onOpen});
 
   final String label;
+  final void Function(BuildContext context, RecentEntry entry) onOpen;
 
   @override
   String sectionLabel(AppLocalizations l10n) => label;
@@ -209,8 +332,28 @@ class RecentsCommandSource extends CommandSource {
     if (query.isNotEmpty) {
       return const [];
     }
-    return commandPaletteRecents.items;
+    return [
+      for (final entry in commandPaletteRecents.entries)
+        CommandItem(
+          id: 'recent-${entry.kind.name}-${entry.id}',
+          icon: recentKindIcon(entry.kind),
+          title: entry.title,
+          subtitle: entry.subtitle,
+          trailing: entry.trailing,
+          recent: entry,
+          onSelect: (ctx) => onOpen(ctx, entry),
+        ),
+    ];
   }
+}
+
+/// What the sheet returns when a row is chosen or one of its actions is run:
+/// the callback to invoke, plus the recent to remember (if any).
+class _CommandInvocation {
+  const _CommandInvocation({required this.run, this.recent});
+
+  final void Function(BuildContext context) run;
+  final RecentEntry? recent;
 }
 
 /// Hosts the global command palette: a ⌘/Ctrl+K "find anything" overlay.
@@ -239,6 +382,7 @@ class CommandPaletteScopeState extends State<CommandPaletteScope> {
   void initState() {
     super.initState();
     HardwareKeyboard.instance.addHandler(_handleKey);
+    unawaited(commandPaletteRecents.load());
   }
 
   @override
@@ -272,7 +416,7 @@ class CommandPaletteScopeState extends State<CommandPaletteScope> {
           Future<void>.value(),
     );
 
-    final selected = await showGeneralDialog<CommandItem>(
+    final invocation = await showGeneralDialog<_CommandInvocation>(
       context: context,
       barrierDismissible: true,
       barrierLabel: MaterialLocalizations.of(context).modalBarrierDismissLabel,
@@ -296,14 +440,14 @@ class CommandPaletteScopeState extends State<CommandPaletteScope> {
     );
 
     _isOpen = false;
-    if (selected != null && mounted) {
-      if (selected.recordRecent) {
-        commandPaletteRecents.add(selected);
+    if (invocation != null && mounted) {
+      if (invocation.recent case final recent?) {
+        commandPaletteRecents.add(recent);
       }
       // Collapse any pushed sections back to home first, so palette navigation
       // yields the same depth-2 stack the drawer produces, then act.
       Navigator.of(context).popUntil((route) => route.isFirst);
-      selected.onSelect(context);
+      invocation.run(context);
     }
   }
 
@@ -330,6 +474,10 @@ class _CommandPaletteSheetState extends State<_CommandPaletteSheet> {
   Timer? _debounce;
   String _query = '';
   int _selectedIndex = 0;
+
+  /// Which inline action of the selected row is keyboard-focused (Tab cycles).
+  /// -1 means the row's primary action (open).
+  int _actionFocus = -1;
   int _searchToken = 0;
   bool _isSearching = false;
   List<CommandSection> _asyncSections = const [];
@@ -352,6 +500,7 @@ class _CommandPaletteSheetState extends State<_CommandPaletteSheet> {
     setState(() {
       _query = value;
       _selectedIndex = 0;
+      _actionFocus = -1;
     });
     if (trimmed.length < _minAsyncQueryLength || _asyncSources.isEmpty) {
       setState(() {
@@ -415,7 +564,10 @@ class _CommandPaletteSheetState extends State<_CommandPaletteSheet> {
     if (count == 0) {
       return;
     }
-    setState(() => _selectedIndex = (_selectedIndex + delta) % count);
+    setState(() {
+      _selectedIndex = (_selectedIndex + delta) % count;
+      _actionFocus = -1;
+    });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final rowContext = _selectedRowKey.currentContext;
       if (rowContext != null) {
@@ -429,12 +581,54 @@ class _CommandPaletteSheetState extends State<_CommandPaletteSheet> {
     });
   }
 
-  void _submit() {
+  CommandItem? _selectedItem() {
     final items = [for (final section in _sections()) ...section.items];
     if (items.isEmpty) {
+      return null;
+    }
+    return items[_selectedIndex.clamp(0, items.length - 1)];
+  }
+
+  /// Tab/Shift+Tab cycle the selected row's inline actions: -1 (open) → 0 → 1
+  /// → … → -1, so the workflow stays keyboard-only.
+  void _cycleAction(int direction) {
+    final item = _selectedItem();
+    if (item == null || item.actions.isEmpty) {
       return;
     }
-    Navigator.of(context).pop(items[_selectedIndex.clamp(0, items.length - 1)]);
+    final count = item.actions.length;
+    var next = _actionFocus + direction;
+    if (next >= count) {
+      next = -1;
+    } else if (next < -1) {
+      next = count - 1;
+    }
+    setState(() => _actionFocus = next);
+  }
+
+  void _handleEscape() {
+    if (_actionFocus >= 0) {
+      setState(() => _actionFocus = -1);
+      return;
+    }
+    Navigator.of(context).maybePop();
+  }
+
+  void _submit() {
+    final item = _selectedItem();
+    if (item == null) {
+      return;
+    }
+    if (_actionFocus >= 0 && _actionFocus < item.actions.length) {
+      final action = item.actions[_actionFocus];
+      Navigator.of(
+        context,
+      ).pop(_CommandInvocation(run: action.onRun, recent: item.recent));
+      return;
+    }
+    Navigator.of(
+      context,
+    ).pop(_CommandInvocation(run: item.onSelect, recent: item.recent));
   }
 
   @override
@@ -451,17 +645,27 @@ class _CommandPaletteSheetState extends State<_CommandPaletteSheet> {
         : _selectedIndex.clamp(0, itemCount - 1);
 
     final rows = <Widget>[];
+    CommandItem? selectedItem;
     var itemIndex = 0;
     for (final section in sections) {
       rows.add(_SectionHeader(label: section.label));
       for (final item in section.items) {
         final selected = itemIndex == selectedIndex;
+        if (selected) {
+          selectedItem = item;
+        }
         rows.add(
           _CommandRow(
             key: selected ? _selectedRowKey : null,
             item: item,
             selected: selected,
-            onTap: () => Navigator.of(context).pop(item),
+            actionFocusIndex: selected ? _actionFocus : -1,
+            onTap: () => Navigator.of(
+              context,
+            ).pop(_CommandInvocation(run: item.onSelect, recent: item.recent)),
+            onRunAction: (action) => Navigator.of(
+              context,
+            ).pop(_CommandInvocation(run: action.onRun, recent: item.recent)),
             onHover: _hover(itemIndex),
           ),
         );
@@ -482,8 +686,11 @@ class _CommandPaletteSheetState extends State<_CommandPaletteSheet> {
           bindings: {
             const SingleActivator(LogicalKeyboardKey.arrowDown): () => _move(1),
             const SingleActivator(LogicalKeyboardKey.arrowUp): () => _move(-1),
-            const SingleActivator(LogicalKeyboardKey.escape): () =>
-                Navigator.of(context).maybePop(),
+            const SingleActivator(LogicalKeyboardKey.tab): () =>
+                _cycleAction(1),
+            const SingleActivator(LogicalKeyboardKey.tab, shift: true): () =>
+                _cycleAction(-1),
+            const SingleActivator(LogicalKeyboardKey.escape): _handleEscape,
           },
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -540,7 +747,10 @@ class _CommandPaletteSheetState extends State<_CommandPaletteSheet> {
                     vertical: spacing.sm,
                   ),
                   child: Text(
-                    l10n.commandPaletteFooterHint,
+                    (selectedItem?.actions.isNotEmpty ?? false)
+                        ? '${l10n.commandPaletteFooterHint} · '
+                              '${l10n.commandPaletteActionsHint}'
+                        : l10n.commandPaletteFooterHint,
                     style: Theme.of(
                       context,
                     ).textTheme.bodySmall?.copyWith(color: colors.mutedInk),
@@ -614,13 +824,19 @@ class _CommandRow extends StatelessWidget {
     super.key,
     required this.item,
     required this.selected,
+    required this.actionFocusIndex,
     required this.onTap,
+    required this.onRunAction,
     required this.onHover,
   });
 
   final CommandItem item;
   final bool selected;
+
+  /// Index of the keyboard-focused inline action (-1 = none / primary open).
+  final int actionFocusIndex;
   final VoidCallback onTap;
+  final void Function(CommandRowAction action) onRunAction;
   final VoidCallback onHover;
 
   @override
@@ -678,6 +894,29 @@ class _CommandRow extends StatelessWidget {
                   ],
                 ),
               ),
+              for (var i = 0; i < item.actions.length; i++) ...[
+                SizedBox(width: spacing.xs),
+                IconButton(
+                  visualDensity: VisualDensity.compact,
+                  iconSize: 18,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(
+                    minWidth: 36,
+                    minHeight: 36,
+                  ),
+                  style: i == actionFocusIndex
+                      ? IconButton.styleFrom(
+                          backgroundColor: PointyColors.primaryContainer,
+                        )
+                      : null,
+                  tooltip: item.actions[i].tooltip,
+                  color: i == actionFocusIndex
+                      ? colors.primaryDark
+                      : (selected ? colors.primaryStrong : colors.mutedInk),
+                  onPressed: () => onRunAction(item.actions[i]),
+                  icon: Icon(item.actions[i].icon),
+                ),
+              ],
               if (item.trailing case final trailing?) ...[
                 SizedBox(width: spacing.sm),
                 Text(

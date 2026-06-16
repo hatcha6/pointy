@@ -32,6 +32,7 @@ from .models import (
     Product,
     ProductCategory,
     ProductVariant,
+    UnitOfMeasure,
     VariantOption,
     VariantOptionValue,
 )
@@ -40,6 +41,7 @@ from .serializers import (
     ProductCategorySerializer,
     ProductCatalogSerializer,
     ProductVariantSerializer,
+    UnitOfMeasureSerializer,
     VariantOptionSerializer,
     VariantOptionValueSerializer,
 )
@@ -152,6 +154,7 @@ class ProductViewSet(viewsets.ModelViewSet):
     queryset = Product.objects.prefetch_related(
         "attachments",
         "categories",
+        "units__unit",
         "variants",
         "variants__attachments",
         "variants__option_values",
@@ -488,6 +491,7 @@ class ProductVariantViewSet(viewsets.ModelViewSet):
     queryset = ProductVariant.objects.select_related("product").prefetch_related(
         "attachments",
         "product__attachments",
+        "product__units__unit",
         "option_values",
         "option_values__option",
     )
@@ -570,3 +574,43 @@ class ModifierGroupViewSet(viewsets.ModelViewSet):
     filterset_fields = ("is_active",)
     search_fields = ("name",)
     ordering_fields = ("display_order", "name", "created_at")
+
+
+class UnitOfMeasureViewSet(viewsets.ModelViewSet):
+    """The global, editable unit registry. Seeded (``is_system``) units can be
+    deactivated or relabelled but never deleted, and their ``code`` is locked so
+    existing products keep resolving."""
+
+    serializer_class = UnitOfMeasureSerializer
+    permission_classes = [IsAuthenticated, HasPointyPermission]
+    permission_map = {
+        "list": ("catalog.view_unitofmeasure",),
+        "retrieve": ("catalog.view_unitofmeasure",),
+        "create": ("catalog.add_unitofmeasure",),
+        "update": ("catalog.change_unitofmeasure",),
+        "partial_update": ("catalog.change_unitofmeasure",),
+        "destroy": ("catalog.delete_unitofmeasure",),
+    }
+    queryset = UnitOfMeasure.objects.annotate(
+        product_count=Count("product_units", distinct=True),
+    )
+    filterset_fields = ("is_active", "dimension", "is_system")
+    search_fields = ("code", "name", "abbreviation")
+    ordering_fields = ("display_order", "name", "dimension", "created_at")
+
+    def perform_update(self, serializer):
+        instance = serializer.instance
+        if instance is not None and instance.is_system:
+            new_code = serializer.validated_data.get("code")
+            if new_code and new_code != instance.code:
+                raise ValidationError(
+                    {"code": "The code of a built-in unit cannot be changed."}
+                )
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        if instance.is_system:
+            raise ValidationError("Built-in units cannot be deleted; deactivate instead.")
+        if instance.product_units.exists():
+            raise ValidationError("This unit is in use by products and cannot be deleted.")
+        super().perform_destroy(instance)

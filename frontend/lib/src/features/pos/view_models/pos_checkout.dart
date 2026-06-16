@@ -343,7 +343,8 @@ extension PosCheckoutActions on PosViewModel {
     if (jobs.isEmpty) {
       return;
     }
-    final stationConfigs = await _printingRepository.loadKitchenStationConfigs();
+    final stationConfigs = await _printingRepository
+        .loadKitchenStationConfigs();
     if (stationConfigs.isEmpty) {
       return;
     }

@@ -17,8 +17,10 @@ import '../../../shared/order/order.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../view_models/pos_view_model.dart';
 import '../../../data/models/cart_line.dart';
+import '../../../data/models/product.dart';
 import 'cart_line_note_sheet.dart';
 import 'cart_line_tile.dart';
+import 'unit_quantity_sheet.dart';
 import 'weight_entry_sheet.dart';
 import 'cart_totals.dart';
 import 'payment/payment.dart';
@@ -436,7 +438,14 @@ class _CartScrollContent extends StatelessWidget {
                     ),
               onEditQuantity: isCartLocked
                   ? null
-                  : () => _editLineWeight(context, visibleLines[index]),
+                  : () => _editLineQuantity(context, visibleLines[index]),
+              onSwitchUnit:
+                  isCartLocked ||
+                      !Product.fromVariant(
+                        visibleLines[index].variant,
+                      ).hasSellableUnits
+                  ? null
+                  : () => _editLineUnit(context, visibleLines[index]),
               onEditNote: isCartLocked
                   ? null
                   : () => _editLineNote(context, visibleLines[index]),
@@ -446,7 +455,13 @@ class _CartScrollContent extends StatelessWidget {
     );
   }
 
-  Future<void> _editLineWeight(BuildContext context, CartLine line) async {
+  Future<void> _editLineQuantity(BuildContext context, CartLine line) async {
+    // Multi-unit lines reuse the unit + quantity sheet so the cashier can change
+    // both at once; plain weighted lines keep the lighter weight entry.
+    if (Product.fromVariant(line.variant).hasSellableUnits) {
+      await _editLineUnit(context, line);
+      return;
+    }
     final weight = await showWeightEntrySheet(
       context,
       variant: line.variant,
@@ -454,6 +469,22 @@ class _CartScrollContent extends StatelessWidget {
     );
     if (weight != null && context.mounted) {
       viewModel.setCartLineQuantity(line.lineKey, weight);
+    }
+  }
+
+  Future<void> _editLineUnit(BuildContext context, CartLine line) async {
+    final selection = await showUnitQuantitySheet(
+      context,
+      product: Product.fromVariant(line.variant),
+      variant: line.variant,
+      initialUnitCode: line.unitCode.isEmpty
+          ? line.variant.unit
+          : line.unitCode,
+      initialQuantity: line.quantity,
+    );
+    if (selection != null && context.mounted) {
+      viewModel.setCartLineUnit(line.lineKey, selection.unit);
+      viewModel.setCartLineQuantity(line.lineKey, selection.quantity);
     }
   }
 

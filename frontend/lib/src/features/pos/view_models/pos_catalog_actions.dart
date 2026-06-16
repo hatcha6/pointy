@@ -172,6 +172,10 @@ extension PosCatalogActions on PosViewModel {
         }
         if (variants.length == 1) {
           final variant = variants.single;
+          if (product.hasSellableUnits) {
+            // Multi-unit items pick a unit + quantity (and price) up front.
+            return PosProductSelectionResult.chooseUnit(product, variant);
+          }
           if (variant.unit != 'piece') {
             // Weighted items need a weight before they can be priced.
             return PosProductSelectionResult.weighVariant(variant);

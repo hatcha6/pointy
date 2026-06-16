@@ -1,6 +1,7 @@
 import 'attachment_summary.dart';
 import 'modifier_group.dart';
 import 'product_category.dart';
+import 'product_unit.dart';
 import 'product_variant.dart';
 import 'variant_option.dart';
 
@@ -17,6 +18,9 @@ class Product {
     this.isService = false,
     this.isPrepared = false,
     this.unit = 'piece',
+    this.defaultSaleUnit = '',
+    this.defaultPurchaseUnit = '',
+    this.units = const [],
     this.categories = const [],
     this.variantOptions = const [],
     this.modifierGroups = const [],
@@ -36,7 +40,16 @@ class Product {
   final bool tracksExpiry;
   final bool isService;
   final bool isPrepared;
+
+  /// Base (stock) unit code. Stock, recipes, and totals are kept in this unit.
   final String unit;
+
+  /// Units pre-selected in POS / purchasing. Blank = the base [unit].
+  final String defaultSaleUnit;
+  final String defaultPurchaseUnit;
+
+  /// Additional transactable units beyond the base unit.
+  final List<ProductUnit> units;
   final List<ProductCategory> categories;
   final List<VariantOption> variantOptions;
   final List<ModifierGroup> modifierGroups;
@@ -110,6 +123,9 @@ class Product {
       isService: (json['is_service'] as bool?) ?? false,
       isPrepared: (json['is_prepared'] as bool?) ?? false,
       unit: json['unit']?.toString() ?? 'piece',
+      defaultSaleUnit: json['default_sale_unit']?.toString() ?? '',
+      defaultPurchaseUnit: json['default_purchase_unit']?.toString() ?? '',
+      units: _unitsFromJson(json),
       categories: _categoriesFromJson(json),
       variantOptions: _variantOptionsFromJson(json),
       modifierGroups: _modifierGroupsFromJson(json),
@@ -131,6 +147,10 @@ class Product {
       description: detail?.description ?? '',
       isActive: variant.isSellable,
       tracksExpiry: detail?.tracksExpiry ?? variant.tracksExpiry,
+      unit: variant.unit,
+      defaultSaleUnit: detail?.defaultSaleUnit ?? '',
+      defaultPurchaseUnit: detail?.defaultPurchaseUnit ?? '',
+      units: detail?.units ?? const [],
       categories: detail?.categories ?? const [],
       variantOptions: detail?.variantOptions ?? const [],
       modifierGroups: detail?.modifierGroups ?? const [],
@@ -164,6 +184,12 @@ class Product {
       isArchived: isArchived ?? this.isArchived,
       archivedAt: archivedAt ?? this.archivedAt,
       tracksExpiry: tracksExpiry ?? this.tracksExpiry,
+      isService: isService,
+      isPrepared: isPrepared,
+      unit: unit,
+      defaultSaleUnit: defaultSaleUnit,
+      defaultPurchaseUnit: defaultPurchaseUnit,
+      units: units,
       categories: categories,
       variantOptions: variantOptions,
       modifierGroups: modifierGroups,
@@ -173,6 +199,22 @@ class Product {
       imageAttachments: imageAttachments,
     );
   }
+
+  /// Units offered in POS (the base unit plus sellable additional units).
+  List<ProductUnit> get sellableUnits => [
+    for (final unit in units)
+      if (unit.isSellable && unit.unit.isActive) unit,
+  ];
+
+  /// Units offered in purchasing (the base unit plus purchasable units).
+  List<ProductUnit> get purchasableUnits => [
+    for (final unit in units)
+      if (unit.isPurchasable && unit.unit.isActive) unit,
+  ];
+
+  /// Whether the product can be transacted in more than just its base unit.
+  bool get hasSellableUnits => sellableUnits.isNotEmpty;
+  bool get hasPurchasableUnits => purchasableUnits.isNotEmpty;
 
   static List<ProductCategory> _categoriesFromJson(Map<String, Object?> json) {
     final details = json['category_details'];
@@ -192,6 +234,17 @@ class Product {
     return const [];
   }
 
+  static List<ProductUnit> _unitsFromJson(Map<String, Object?> json) {
+    final units = json['units'];
+    if (units is List<Object?>) {
+      return units
+          .whereType<Map<String, Object?>>()
+          .map(ProductUnit.fromJson)
+          .toList(growable: false);
+    }
+    return const [];
+  }
+
   static List<ProductVariant> _variantsFromJson(Map<String, Object?> json) {
     final variants = json['variants'];
     if (variants is List<Object?>) {
@@ -203,7 +256,9 @@ class Product {
     return const [];
   }
 
-  static List<ModifierGroup> _modifierGroupsFromJson(Map<String, Object?> json) {
+  static List<ModifierGroup> _modifierGroupsFromJson(
+    Map<String, Object?> json,
+  ) {
     final details = json['modifier_group_details'];
     if (details is List<Object?>) {
       return details

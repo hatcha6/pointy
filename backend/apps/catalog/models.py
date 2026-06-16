@@ -32,6 +32,72 @@ def variant_option_signature(option_values):
     return "|".join(str(value_id) for value_id in value_ids)
 
 
+class UnitDimension(models.TextChoices):
+    COUNT = "count", "Count"
+    WEIGHT = "weight", "Weight"
+    VOLUME = "volume", "Volume"
+    LENGTH = "length", "Length"
+
+
+# Physical dimensions sell/buy in fractions (1.5 kg); counted things do not.
+FRACTIONAL_DIMENSIONS = frozenset(
+    {UnitDimension.WEIGHT, UnitDimension.VOLUME, UnitDimension.LENGTH}
+)
+
+
+class UnitOfMeasureQuerySet(models.QuerySet):
+    def active(self):
+        return self.filter(is_active=True)
+
+
+class UnitOfMeasure(TimeStampedModel):
+    """A unit a product can be counted, sold, or purchased in.
+
+    A global, editable registry (seeded with sensible defaults). Physical-measure
+    units (weight/volume/length) carry a ``reference_factor`` so the app can
+    *suggest* predictable conversions (1 kg = 1000 g); packaging units (box,
+    carton, pack) have no global factor — their real conversion is per-product and
+    lives on :class:`ProductUnit`. Conversions never cross dimensions."""
+
+    code = models.SlugField(max_length=32, unique=True)
+    name = models.CharField(max_length=64)
+    abbreviation = models.CharField(max_length=16, blank=True)
+    dimension = models.CharField(
+        max_length=8,
+        choices=UnitDimension.choices,
+        default=UnitDimension.COUNT,
+    )
+    # For physical units only: how many of the dimension's reference unit fit in
+    # one of this unit (g -> 0.001 when kg is the weight reference). Null for
+    # packaging/count units. Powers *suggested* per-product factors only.
+    reference_factor = models.DecimalField(
+        max_digits=18,
+        decimal_places=6,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(Decimal("0.000001"))],
+    )
+    # Whether quantities of this unit may be fractional. Defaults from dimension
+    # but stays editable so a shop can, e.g., forbid half-pieces explicitly.
+    allows_fractional = models.BooleanField(default=False)
+    # Seeded built-in units; protected from deletion in the admin/API.
+    is_system = models.BooleanField(default=False)
+    is_active = models.BooleanField(default=True)
+    display_order = models.PositiveIntegerField(default=0)
+
+    objects = UnitOfMeasureQuerySet.as_manager()
+
+    class Meta:
+        ordering = ["display_order", "name"]
+
+    def save(self, *args, **kwargs):
+        self.code = (self.code or "").strip().lower()
+        return super().save(*args, **kwargs)
+
+    def __str__(self) -> str:
+        return self.name
+
+
 class ProductQuerySet(models.QuerySet):
     def active(self):
         """Live (non-archived) products."""
@@ -63,8 +129,10 @@ class Product(TimeStampedModel):
     # without stock of their own; the kitchen job consumes their recipe
     # ingredients instead.
     is_prepared = models.BooleanField(default=False)
-    # Metric base unit the product is counted in. Stock, recipes, and job
-    # materials all use this unit.
+    # Base (stock-keeping) unit the product is counted in. Stock, recipes, and
+    # job materials all use this unit. Its value is a ``UnitOfMeasure.code``; the
+    # built-in codes below stay the defaults, but the unit list is now editable so
+    # the field is no longer restricted to these choices.
     class Unit(models.TextChoices):
         PIECE = "piece", "Piece"
         KILOGRAM = "kg", "Kilogram"
@@ -72,7 +140,11 @@ class Product(TimeStampedModel):
         LITER = "l", "Liter"
         MILLILITER = "ml", "Milliliter"
 
-    unit = models.CharField(max_length=8, choices=Unit.choices, default=Unit.PIECE)
+    unit = models.CharField(max_length=32, default=Unit.PIECE)
+    # Units pre-selected in POS / purchasing. Blank = the base ``unit``. Stored as
+    # a ``UnitOfMeasure.code`` and resolved against this product's ProductUnit set.
+    default_sale_unit = models.CharField(max_length=32, blank=True, default="")
+    default_purchase_unit = models.CharField(max_length=32, blank=True, default="")
     categories = models.ManyToManyField(
         "ProductCategory",
         blank=True,
@@ -182,6 +254,80 @@ class Product(TimeStampedModel):
 
     def __str__(self) -> str:
         return self.name
+
+
+class ProductUnitQuerySet(models.QuerySet):
+    def active(self):
+        return self.filter(unit__is_active=True)
+
+    def sellable(self):
+        return self.active().filter(is_sellable=True)
+
+    def purchasable(self):
+        return self.active().filter(is_purchasable=True)
+
+
+class ProductUnit(TimeStampedModel):
+    """An additional unit a specific product can be transacted in, with its
+    per-product conversion to the product's base (stock) unit and an optional
+    custom price.
+
+    The base unit itself is implicit and is never stored here — it always has
+    factor 1 and its price is the variant ``unit_price``. Packaging units (box,
+    carton, pack) may wrap any base unit with an arbitrary per-product factor
+    (1 box = 12 pieces, or 1 sack = 25 kg); the unit's dimension only drives the
+    whole-number rule and the *suggested* factor, never a hard constraint."""
+
+    product = models.ForeignKey(
+        Product,
+        on_delete=models.CASCADE,
+        related_name="units",
+    )
+    unit = models.ForeignKey(
+        UnitOfMeasure,
+        on_delete=models.PROTECT,
+        related_name="product_units",
+    )
+    # How many base units make up one of this unit, for THIS product (box -> 12).
+    factor_to_base = models.DecimalField(
+        max_digits=18,
+        decimal_places=6,
+        validators=[MinValueValidator(Decimal("0.000001"))],
+    )
+    # Custom price for one of this unit. Null -> derived = variant.unit_price *
+    # factor_to_base. Lets a shop price a wholesale box below 12x the piece price.
+    price = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(Decimal("0.00"))],
+    )
+    is_sellable = models.BooleanField(default=True)
+    is_purchasable = models.BooleanField(default=True)
+    display_order = models.PositiveIntegerField(default=0)
+
+    objects = ProductUnitQuerySet.as_manager()
+
+    class Meta:
+        ordering = ["display_order", "id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["product", "unit"],
+                name="unique_product_unit",
+            ),
+            models.CheckConstraint(
+                condition=Q(factor_to_base__gt=0),
+                name="product_unit_factor_positive",
+            ),
+            models.CheckConstraint(
+                condition=Q(price__isnull=True) | Q(price__gte=0),
+                name="product_unit_price_non_negative",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.product_id}: {self.unit_id} ×{self.factor_to_base}"
 
 
 class ProductCategory(TimeStampedModel):

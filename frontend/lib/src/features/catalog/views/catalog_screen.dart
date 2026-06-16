@@ -19,9 +19,11 @@ import '../../../shared/shell/shell.dart';
 import '../../../shared/components/components.dart';
 import '../view_models/catalog_view_model.dart';
 import '../view_models/product_details_view_model.dart';
+import '../view_models/units_management_view_model.dart';
 import 'product_details_screen.dart';
 import 'product_form.dart';
 import 'product_list.dart';
+import 'units_management_screen.dart';
 
 class CatalogScreen extends StatefulWidget {
   const CatalogScreen({
@@ -100,6 +102,15 @@ class _CatalogScreenState extends State<CatalogScreen> {
                 capabilities: capabilities,
                 fallback: const SizedBox.shrink(),
                 child: IconButton(
+                  tooltip: l10n.manageUnitsTooltip,
+                  onPressed: () => _openUnitsManagement(context),
+                  icon: const Icon(Icons.straighten_outlined),
+                ),
+              ),
+              CatalogManagementGuard(
+                capabilities: capabilities,
+                fallback: const SizedBox.shrink(),
+                child: IconButton(
                   tooltip: l10n.refreshCatalogTooltip,
                   onPressed: viewModel.loadProducts,
                   icon: const Icon(Icons.sync),
@@ -152,6 +163,19 @@ class _CatalogScreenState extends State<CatalogScreen> {
           ),
         );
       },
+    );
+  }
+
+  void _openUnitsManagement(BuildContext context) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => UnitsManagementScreen(
+          viewModel: UnitsManagementViewModel(
+            viewModel.catalogRepository,
+            analyticsEngine: analyticsEngine,
+          ),
+        ),
+      ),
     );
   }
 

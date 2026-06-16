@@ -3,7 +3,9 @@ from django.contrib import admin
 from .models import (
     Product,
     ProductCategory,
+    ProductUnit,
     ProductVariant,
+    UnitOfMeasure,
     VariantOption,
     VariantOptionValue,
 )
@@ -21,6 +23,20 @@ class ProductVariantInline(admin.TabularInline):
         "is_active",
     )
     show_change_link = True
+
+
+class ProductUnitInline(admin.TabularInline):
+    model = ProductUnit
+    extra = 0
+    fields = (
+        "unit",
+        "factor_to_base",
+        "price",
+        "is_sellable",
+        "is_purchasable",
+        "display_order",
+    )
+    autocomplete_fields = ("unit",)
 
 
 class VariantOptionValueInline(admin.TabularInline):
@@ -50,7 +66,7 @@ class ProductAdmin(admin.ModelAdmin):
     list_filter = ("is_active", "tracks_expiry", "categories")
     search_fields = ("variants__sku", "variants__barcode", "name")
     filter_horizontal = ("categories", "variant_options")
-    inlines = (ProductVariantInline,)
+    inlines = (ProductVariantInline, ProductUnitInline)
 
     @admin.display(description="Default variant SKU", ordering="variants__sku")
     def default_variant_sku(self, product):
@@ -91,3 +107,19 @@ class VariantOptionValueAdmin(admin.ModelAdmin):
     list_display = ("name", "option", "code", "display_order", "is_active")
     list_filter = ("is_active", "option")
     search_fields = ("name", "code", "option__name")
+
+
+@admin.register(UnitOfMeasure)
+class UnitOfMeasureAdmin(admin.ModelAdmin):
+    list_display = (
+        "name",
+        "code",
+        "abbreviation",
+        "dimension",
+        "reference_factor",
+        "allows_fractional",
+        "is_system",
+        "is_active",
+    )
+    list_filter = ("dimension", "is_system", "is_active", "allows_fractional")
+    search_fields = ("code", "name", "abbreviation")

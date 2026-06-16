@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../core/result.dart';
+import '../../../data/models/product.dart';
 import '../../../data/models/purchase_submission.dart';
 import '../../../data/repositories/contact_repository.dart';
 import '../../../shared/catalog/catalog.dart';
@@ -15,6 +16,8 @@ import '../../../shared/design/design.dart';
 import '../../../shared/formatters.dart';
 import '../../../shared/order/order.dart';
 import '../../../shared/responsive/responsive.dart';
+import '../../../shared/unit_options.dart';
+import '../../../shared/units.dart';
 import '../view_models/purchase_view_model.dart';
 
 class PurchaseDraftPane extends StatefulWidget {
@@ -383,6 +386,14 @@ class _PurchaseDraftScrollContent extends StatelessWidget {
                 viewModel.updateLineExpiryDate(
                   visibleDraft[index].variant,
                   expiryDate,
+                );
+              },
+              onUnitChanged: (code, label, factor) {
+                viewModel.updateLineUnit(
+                  visibleDraft[index].variant,
+                  unitCode: code,
+                  unitLabel: label,
+                  unitFactor: factor,
                 );
               },
             ),
@@ -1027,6 +1038,7 @@ class PurchaseDraftLineTile extends StatefulWidget {
     required this.onRemove,
     required this.onCostChanged,
     required this.onExpiryDateChanged,
+    this.onUnitChanged,
   });
 
   final PurchaseDraftLine line;
@@ -1036,6 +1048,10 @@ class PurchaseDraftLineTile extends StatefulWidget {
   final VoidCallback onRemove;
   final ValueChanged<double> onCostChanged;
   final ValueChanged<DateTime?> onExpiryDateChanged;
+
+  /// Selected purchase unit changed: (code, label, factorToBase). Base unit is
+  /// reported with an empty code.
+  final void Function(String code, String label, double factor)? onUnitChanged;
 
   @override
   State<PurchaseDraftLineTile> createState() => _PurchaseDraftLineTileState();
@@ -1165,6 +1181,53 @@ class _PurchaseDraftLineTileState extends State<PurchaseDraftLineTile> {
       onDecrement: widget.enabled ? widget.onRemove : null,
     );
 
+    final unitOptions = purchasableUnitOptions(
+      l10n,
+      Product.fromVariant(line.variant),
+    );
+    final selectedUnitCode = line.isBaseUnit
+        ? unitOptions.first.code
+        : line.unitCode;
+    final unitField = unitOptions.length <= 1 || widget.onUnitChanged == null
+        ? null
+        : DropdownButtonFormField<String>(
+            initialValue: selectedUnitCode,
+            isDense: true,
+            decoration: InputDecoration(
+              labelText: l10n.purchaseLineUnitLabel,
+              isDense: true,
+              prefixIcon: const Icon(Icons.straighten_outlined),
+            ),
+            items: [
+              for (final option in unitOptions)
+                DropdownMenuItem(value: option.code, child: Text(option.label)),
+            ],
+            onChanged: widget.enabled
+                ? (value) {
+                    final option = unitOptions.firstWhere(
+                      (option) => option.code == value,
+                      orElse: () => unitOptions.first,
+                    );
+                    widget.onUnitChanged!(
+                      option.isBase ? '' : option.code,
+                      option.label,
+                      option.factorToBase,
+                    );
+                  }
+                : null,
+          );
+
+    // For a pack unit, show how many base units the line resolves to.
+    final baseEquivalent = line.isBaseUnit
+        ? null
+        : Text(
+            l10n.purchaseLineBaseEquivalent(
+              formatQuantity(line.baseQuantity),
+              unitLabel(l10n, line.variant.unit),
+            ),
+            style: theme.textTheme.bodySmall?.copyWith(color: colors.mutedInk),
+          );
+
     final totalText = Text(
       formatMoney(lineTotal),
       maxLines: 1,
@@ -1231,6 +1294,7 @@ class _PurchaseDraftLineTileState extends State<PurchaseDraftLineTile> {
           ),
           const SizedBox(height: 12),
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
                 child: Align(
@@ -1241,10 +1305,24 @@ class _PurchaseDraftLineTileState extends State<PurchaseDraftLineTile> {
                   ),
                 ),
               ),
+              if (unitField != null) ...[
+                const SizedBox(width: 12),
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 150),
+                  child: unitField,
+                ),
+              ],
               const SizedBox(width: 12),
               stepper,
             ],
           ),
+          if (baseEquivalent != null) ...[
+            const SizedBox(height: 6),
+            Align(
+              alignment: AlignmentDirectional.centerStart,
+              child: baseEquivalent,
+            ),
+          ],
           if (expiryField != null) ...[const SizedBox(height: 12), expiryField],
         ],
       ),

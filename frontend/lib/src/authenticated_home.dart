@@ -63,6 +63,7 @@ import 'features/users/view_models/user_management_view_model.dart';
 import 'features/users/view_models/user_details_view_model.dart';
 import 'features/users/views/user_details_screen.dart';
 import 'features/users/views/user_management_screen.dart';
+import 'data/models/barcode_label.dart';
 import 'data/models/contact.dart';
 import 'data/models/product.dart';
 import 'data/models/product_page.dart';
@@ -1061,59 +1062,101 @@ class _AuthenticatedRoutes implements AppNavigation {
   List<CommandSource> buildCommandSources(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final showStock = capabilities.canViewStock;
+    final canReorder = capabilities.canCreatePurchaseOrder;
     return [
       _quickActionsSource(l10n),
-      RecentsCommandSource(l10n.commandPaletteRecentsSection),
+      RecentsCommandSource(
+        label: l10n.commandPaletteRecentsSection,
+        onOpen: _openRecent,
+      ),
       NavigationCommandSource(this),
       if (capabilities.canViewCatalogManagement)
         AsyncCommandSource<Product>(
           labelBuilder: (sectionL10n) =>
               sectionL10n.commandPaletteProductsSection,
           fetch: _searchProducts,
-          toItem: (product) => CommandItem(
-            id: 'product-${product.id}',
-            icon: Icons.inventory_2_outlined,
-            title: product.name,
-            subtitle: _productSubtitle(l10n, product, showStock: showStock),
-            trailing: formatMoney(product.effectiveUnitPrice),
-            recordRecent: true,
-            onSelect: (ctx) => _openProduct(ctx, product),
-          ),
+          toItem: (product) {
+            final price = formatMoney(product.effectiveUnitPrice);
+            return CommandItem(
+              id: 'product-${product.id}',
+              icon: Icons.inventory_2_outlined,
+              title: product.name,
+              subtitle: _productSubtitle(l10n, product, showStock: showStock),
+              trailing: price,
+              recent: RecentEntry(
+                kind: RecentKind.product,
+                id: product.id,
+                title: product.name,
+                subtitle: _productRecentSubtitle(product),
+                trailing: price,
+              ),
+              actions: [
+                CommandRowAction(
+                  icon: Icons.print_outlined,
+                  tooltip: l10n.commandPalettePrintLabelAction,
+                  onRun: (ctx) => _printProductLabel(ctx, product),
+                ),
+                if (canReorder)
+                  CommandRowAction(
+                    icon: Icons.add_shopping_cart_outlined,
+                    tooltip: l10n.commandPaletteReorderAction,
+                    onRun: (ctx) => _reorderProduct(ctx, product),
+                  ),
+              ],
+              onSelect: (ctx) => _openProduct(ctx, product),
+            );
+          },
         ),
       if (capabilities.canManageContacts) ...[
         AsyncCommandSource<Customer>(
           labelBuilder: (sectionL10n) =>
               sectionL10n.commandPaletteCustomersSection,
           fetch: _searchCustomers,
-          toItem: (customer) => CommandItem(
-            id: 'customer-${customer.id}',
-            icon: Icons.person_outline,
-            title: customer.fullName,
-            subtitle: [
+          toItem: (customer) {
+            final subtitle = [
               if (customer.phone.trim().isNotEmpty) customer.phone.trim(),
               if (customer.customerNumber.trim().isNotEmpty)
                 customer.customerNumber.trim(),
-            ].join(' · '),
-            recordRecent: true,
-            onSelect: (ctx) => _openCustomer(ctx, customer),
-          ),
+            ].join(' · ');
+            return CommandItem(
+              id: 'customer-${customer.id}',
+              icon: Icons.person_outline,
+              title: customer.fullName,
+              subtitle: subtitle,
+              recent: RecentEntry(
+                kind: RecentKind.customer,
+                id: customer.id,
+                title: customer.fullName,
+                subtitle: subtitle,
+              ),
+              onSelect: (ctx) => _openCustomer(ctx, customer),
+            );
+          },
         ),
         AsyncCommandSource<SupplierContact>(
           labelBuilder: (sectionL10n) =>
               sectionL10n.commandPaletteSuppliersSection,
           fetch: _searchSuppliers,
-          toItem: (supplier) => CommandItem(
-            id: 'supplier-${supplier.id}',
-            icon: Icons.local_shipping_outlined,
-            title: supplier.name,
-            subtitle: [
+          toItem: (supplier) {
+            final subtitle = [
               if (supplier.contactName.trim().isNotEmpty)
                 supplier.contactName.trim(),
               if (supplier.phone.trim().isNotEmpty) supplier.phone.trim(),
-            ].join(' · '),
-            recordRecent: true,
-            onSelect: (ctx) => _openSupplier(ctx, supplier),
-          ),
+            ].join(' · ');
+            return CommandItem(
+              id: 'supplier-${supplier.id}',
+              icon: Icons.local_shipping_outlined,
+              title: supplier.name,
+              subtitle: subtitle,
+              recent: RecentEntry(
+                kind: RecentKind.supplier,
+                id: supplier.id,
+                title: supplier.name,
+                subtitle: subtitle,
+              ),
+              onSelect: (ctx) => _openSupplier(ctx, supplier),
+            );
+          },
         ),
       ],
       if (capabilities.canViewInvoices)
@@ -1123,14 +1166,28 @@ class _AuthenticatedRoutes implements AppNavigation {
           fetch: _searchInvoices,
           toItem: (order) {
             final receipt = order.receiptNumber;
+            final title = receipt == null || receipt.isEmpty
+                ? '#${order.id}'
+                : receipt;
+            final total = formatMoney(order.total);
             return CommandItem(
               id: 'invoice-${order.id}',
               icon: Icons.request_quote_outlined,
-              title: receipt == null || receipt.isEmpty
-                  ? '#${order.id}'
-                  : receipt,
-              trailing: formatMoney(order.total),
-              recordRecent: true,
+              title: title,
+              trailing: total,
+              recent: RecentEntry(
+                kind: RecentKind.invoice,
+                id: order.id,
+                title: title,
+                trailing: total,
+              ),
+              actions: [
+                CommandRowAction(
+                  icon: Icons.print_outlined,
+                  tooltip: l10n.commandPaletteReprintAction,
+                  onRun: (ctx) => _reprintInvoice(ctx, order),
+                ),
+              ],
               onSelect: (ctx) => _openInvoice(ctx, order),
             );
           },
@@ -1140,16 +1197,25 @@ class _AuthenticatedRoutes implements AppNavigation {
           labelBuilder: (sectionL10n) =>
               sectionL10n.commandPalettePurchaseOrdersSection,
           fetch: _searchPurchaseOrders,
-          toItem: (order) => CommandItem(
-            id: 'po-${order.id}',
-            icon: Icons.add_shopping_cart_outlined,
-            title: order.orderNumber.isEmpty
+          toItem: (order) {
+            final title = order.orderNumber.isEmpty
                 ? '#${order.id}'
-                : order.orderNumber,
-            trailing: formatMoney(order.total),
-            recordRecent: true,
-            onSelect: (ctx) => _openPurchaseOrder(ctx, order),
-          ),
+                : order.orderNumber;
+            final total = formatMoney(order.total);
+            return CommandItem(
+              id: 'po-${order.id}',
+              icon: Icons.add_shopping_cart_outlined,
+              title: title,
+              trailing: total,
+              recent: RecentEntry(
+                kind: RecentKind.purchaseOrder,
+                id: order.id,
+                title: title,
+                trailing: total,
+              ),
+              onSelect: (ctx) => _openPurchaseOrder(ctx, order),
+            );
+          },
         ),
     ];
   }
@@ -1224,6 +1290,141 @@ class _AuthenticatedRoutes implements AppNavigation {
   void _openNewPurchaseOrder(BuildContext context) {
     dependencies.purchaseViewModel.clearDraft(trackLineDeletes: false);
     push(context, createPurchaseOrderRouteBuilder);
+  }
+
+  String _productRecentSubtitle(Product product) {
+    if (product.effectiveBarcode.isNotEmpty) {
+      return product.effectiveBarcode;
+    }
+    return product.effectiveSku;
+  }
+
+  Future<void> _printProductLabel(BuildContext context, Product product) async {
+    final l10n = AppLocalizations.of(context)!;
+    final messenger = ScaffoldMessenger.of(context);
+    final result = await dependencies.printingRepository.printBarcodeLabels([
+      BarcodeLabelPrintLine(
+        label: BarcodeLabelDraft.fromProduct(product),
+        copies: 1,
+      ),
+    ]);
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          result.isSuccess
+              ? l10n.commandPaletteLabelPrinted
+              : l10n.commandPaletteLabelPrintFailed,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _reorderProduct(BuildContext context, Product product) async {
+    final l10n = AppLocalizations.of(context)!;
+    final messenger = ScaffoldMessenger.of(context);
+    final variant = product.defaultVariant;
+    if (variant == null) {
+      messenger.showSnackBar(
+        SnackBar(content: Text(l10n.commandPaletteReorderNoVariant)),
+      );
+      return;
+    }
+    dependencies.purchaseViewModel.clearDraft(trackLineDeletes: false);
+    await dependencies.purchaseViewModel.addVariant(
+      variant,
+      source: 'command_palette_reorder',
+    );
+    if (!context.mounted) {
+      return;
+    }
+    push(context, createPurchaseOrderRouteBuilder);
+  }
+
+  Future<void> _reprintInvoice(BuildContext context, SaleOrder order) async {
+    final l10n = AppLocalizations.of(context)!;
+    final messenger = ScaffoldMessenger.of(context);
+    final shopSettings = await _loadShopSettingsForReport();
+    final logoBytes = await _loadShopLogoBytes(shopSettings);
+    final result = await dependencies.printingRepository.printSaleInvoice(
+      order: order,
+      shopSettings: shopSettings,
+      shopLogoBytes: logoBytes,
+    );
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          result.isSuccess
+              ? l10n.commandPaletteInvoicePrinted
+              : l10n.commandPaletteInvoicePrintFailed,
+        ),
+      ),
+    );
+  }
+
+  void _openRecent(BuildContext context, RecentEntry entry) {
+    switch (entry.kind) {
+      case RecentKind.product:
+        unawaited(
+          _openRecentEntity<Product>(
+            context,
+            () => dependencies.catalogRepository.loadProduct(entry.id),
+            _openProduct,
+          ),
+        );
+      case RecentKind.customer:
+        unawaited(
+          _openRecentEntity<Customer>(
+            context,
+            () => dependencies.contactRepository.loadCustomer(entry.id),
+            _openCustomer,
+          ),
+        );
+      case RecentKind.supplier:
+        unawaited(
+          _openRecentEntity<SupplierContact>(
+            context,
+            () => dependencies.contactRepository.loadSupplier(entry.id),
+            _openSupplier,
+          ),
+        );
+      case RecentKind.invoice:
+        unawaited(
+          _openRecentEntity<SaleOrder>(
+            context,
+            () => dependencies.saleRepository.loadOrder(entry.id),
+            _openInvoice,
+          ),
+        );
+      case RecentKind.purchaseOrder:
+        unawaited(
+          _openRecentEntity<PurchaseOrder>(
+            context,
+            () => dependencies.purchaseRepository.loadPurchaseOrder(entry.id),
+            _openPurchaseOrder,
+          ),
+        );
+    }
+  }
+
+  Future<void> _openRecentEntity<T>(
+    BuildContext context,
+    Future<Result<T>> Function() fetch,
+    void Function(BuildContext context, T value) open,
+  ) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final l10n = AppLocalizations.of(context)!;
+    final result = await fetch();
+    if (!context.mounted) {
+      return;
+    }
+    switch (result) {
+      case Ok<T>():
+        open(context, result.value);
+      case Error<T>():
+        messenger.showSnackBar(
+          SnackBar(content: Text(l10n.commandPaletteOpenError)),
+        );
+    }
   }
 
   Future<List<Product>> _searchProducts(String query) async {

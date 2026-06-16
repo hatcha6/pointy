@@ -266,12 +266,28 @@ class OrderLine(TimeStampedModel):
     unit_price = models.DecimalField(max_digits=10, decimal_places=2)
     unit_cost = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     discount_total = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    # The unit this line was sold in (a UnitOfMeasure.code); blank = the product's
+    # base unit. ``unit_factor`` is a snapshot of how many base units one of that
+    # unit is worth, so quantity/price/cost stay self-consistent and stock can be
+    # reconciled in base units even after the product's units are later edited.
+    unit = models.CharField(max_length=32, blank=True, default="")
+    unit_factor = models.DecimalField(
+        max_digits=18,
+        decimal_places=6,
+        default=Decimal("1"),
+        validators=[MinValueValidator(Decimal("0.000001"))],
+    )
     # Free-text kitchen instruction for a single line (e.g. "no onions").
     # Short by design so it never blows out a thermal kitchen chit.
     notes = models.CharField(max_length=255, blank=True, default="")
 
     class Meta:
         ordering = ["created_at"]
+
+    @property
+    def base_quantity(self):
+        # Quantity converted into the product's base (stock) unit.
+        return (self.quantity * self.unit_factor).quantize(Decimal("0.001"))
 
     @property
     def line_subtotal(self):

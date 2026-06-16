@@ -21,6 +21,7 @@ from apps.discounts.services import (
     DiscountUsageLimitExceeded,
     persist_applied_discounts,
 )
+from apps.catalog.units import quantize_quantity
 from apps.inventory.models import StockMovement
 from apps.inventory.services import (
     consume_expiring_stock_batches,
@@ -93,14 +94,21 @@ def create_order_with_lines(
     for line_data in lines_data:
         variant = line_data["variant"]
         line_key = checkout_line_key(line_data)
+        # The transacted unit + its base-conversion factor are snapshots so price,
+        # cost, and stock all stay self-consistent if the product's units change
+        # later. unit_cost is per base unit, scaled to the transacted unit so
+        # line_cost = unit_cost * quantity stays correct.
+        unit_factor = line_data.get("unit_factor", Decimal("1"))
         line = OrderLine.objects.create(
             order=order,
             variant=variant,
             quantity=line_data["quantity"],
-            # Effective price folds in the server-computed modifier deltas; falls
-            # back to the bare variant price for lines without modifiers.
+            unit=line_data.get("unit", ""),
+            unit_factor=unit_factor,
+            # Effective price folds in the selected unit's price + modifier deltas;
+            # falls back to the bare variant price for lines without either.
             unit_price=line_data.get("effective_unit_price", variant.unit_price),
-            unit_cost=latest_sale_unit_cost(variant),
+            unit_cost=money(latest_sale_unit_cost(variant) * unit_factor),
             discount_total=discount_by_line_key.get(line_key, Decimal("0.00")),
             notes=line_data.get("notes", ""),
         )
@@ -236,7 +244,10 @@ def checkout_loss_lines(lines_data, discount_result=None):
     for line_data in lines_data:
         variant = line_data["variant"]
         quantity = Decimal(line_data["quantity"])
-        unit_cost = money(latest_sale_unit_cost(variant))
+        # Cost is per base unit; scale it to the transacted unit so it lines up
+        # with the per-unit price (a box costs 12x a piece).
+        unit_factor = Decimal(line_data.get("unit_factor", 1))
+        unit_cost = money(latest_sale_unit_cost(variant) * unit_factor)
         if quantity <= 0 or unit_cost <= 0:
             continue
 
@@ -439,8 +450,13 @@ def prepare_sale_stock_adjustments(lines_data, *, settings=None):
             # recipe ingredients through the kitchen job instead.
             continue
         variants_by_id[variant.pk] = variant
+        # Stock is kept in the product's base unit, so convert the transacted
+        # quantity (e.g. 2 boxes) to base units (24 pieces) before aggregating.
+        base_quantity = quantize_quantity(
+            line_data["quantity"] * line_data.get("unit_factor", Decimal("1"))
+        )
         quantities_by_variant[variant.pk] = (
-            quantities_by_variant.get(variant.pk, 0) + line_data["quantity"]
+            quantities_by_variant.get(variant.pk, Decimal("0")) + base_quantity
         )
 
     stock_adjustments = []
@@ -485,6 +501,7 @@ def prepare_sale_stock_adjustments_for_order(order):
             {
                 "variant": line.variant,
                 "quantity": line.quantity,
+                "unit_factor": line.unit_factor,
             }
             for line in lines
         ]
@@ -678,7 +695,8 @@ def create_order_adjustment(
         record_return_stock_movement(
             order=order,
             variant=line.variant,
-            quantity=quantity,
+            # Returned quantity is in the line's transacted unit; stock is base.
+            quantity=quantize_quantity(Decimal(quantity) * line.unit_factor),
             created_by=created_by,
         )
 

@@ -53,7 +53,12 @@ class _PreviewApp extends StatelessWidget {
         key: commandPaletteScopeKey,
         sources: [
           _fakeActionsSource(),
-          const RecentsCommandSource('المفتوحة مؤخرًا'),
+          RecentsCommandSource(
+            label: 'المفتوحة مؤخرًا',
+            onOpen: (context, entry) => ScaffoldMessenger.of(
+              context,
+            ).showSnackBar(SnackBar(content: Text('open ${entry.title}'))),
+          ),
           NavigationCommandSource(_navigation),
           _fakeProductSource(),
         ],
@@ -138,7 +143,29 @@ AsyncCommandSource<_FakeProduct> _fakeProductSource() {
       title: product.name,
       subtitle: '8 في المخزون · ${product.barcode}',
       trailing: product.price,
-      recordRecent: true,
+      recent: RecentEntry(
+        kind: RecentKind.product,
+        id: product.barcode.hashCode,
+        title: product.name,
+        subtitle: product.barcode,
+        trailing: product.price,
+      ),
+      actions: [
+        CommandRowAction(
+          icon: Icons.print_outlined,
+          tooltip: 'طباعة الملصق',
+          onRun: (ctx) => ScaffoldMessenger.of(
+            ctx,
+          ).showSnackBar(SnackBar(content: Text('print ${product.name}'))),
+        ),
+        CommandRowAction(
+          icon: Icons.add_shopping_cart_outlined,
+          tooltip: 'إعادة الطلب',
+          onRun: (ctx) => ScaffoldMessenger.of(
+            ctx,
+          ).showSnackBar(SnackBar(content: Text('reorder ${product.name}'))),
+        ),
+      ],
       onSelect: (ctx) => ScaffoldMessenger.of(
         ctx,
       ).showSnackBar(SnackBar(content: Text('open ${product.name}'))),

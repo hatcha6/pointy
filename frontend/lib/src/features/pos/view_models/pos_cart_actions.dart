@@ -5,12 +5,14 @@ extension PosCartActions on PosViewModel {
     ProductVariant variant, {
     double quantity = 1,
     List<CartLineModifier> modifiers = const [],
+    UnitOption? unit,
     String source = 'cart_quantity_button',
   }) {
     if (_addVariantToCartAndTrack(
       variant,
       quantity: quantity,
       modifiers: modifiers,
+      unit: unit,
       source: source,
     )) {
       _notifyChanged();
@@ -22,12 +24,19 @@ extension PosCartActions on PosViewModel {
     ProductVariant variant, {
     required double quantity,
     List<CartLineModifier> modifiers = const [],
+    UnitOption? unit,
     required String source,
   }) {
-    final existingLine = _mergeableLineFor(variant, modifiers);
+    final unitCode = _unitCodeFor(unit);
+    final existingLine = _mergeableLineFor(variant, modifiers, unitCode);
     final previousQuantity = existingLine?.quantity ?? 0;
-    if (_addVariantToCart(variant, quantity: quantity, modifiers: modifiers)) {
-      final updatedLine = _mergeableLineFor(variant, modifiers);
+    if (_addVariantToCart(
+      variant,
+      quantity: quantity,
+      modifiers: modifiers,
+      unit: unit,
+    )) {
+      final updatedLine = _mergeableLineFor(variant, modifiers, unitCode);
       if (updatedLine != null) {
         _trackCartLineAdded(
           updatedLine,
@@ -41,13 +50,19 @@ extension PosCartActions on PosViewModel {
     return false;
   }
 
+  // A non-base unit becomes the line's [CartLine.unitCode]; the base unit stays
+  // blank so it merges with plain adds and serialises as the product default.
+  String _unitCodeFor(UnitOption? unit) =>
+      (unit == null || unit.isBase) ? '' : unit.code;
+
   /// The line a fresh add of [variant] should merge into: same variant, no
-  /// kitchen note, and the same modifier selection. A noted line or a different
-  /// modifier choice ("oat" vs "whole") stays separate so it never absorbs a
-  /// plain add.
+  /// kitchen note, the same modifier selection, and the same unit. A noted line,
+  /// a different modifier choice ("oat" vs "whole"), or a different unit ("box"
+  /// vs "piece") stays separate so it never absorbs a plain add.
   CartLine? _mergeableLineFor(
     ProductVariant variant,
     List<CartLineModifier> modifiers,
+    String unitCode,
   ) {
     final signature = _modifierSignature(modifiers);
     return _cart
@@ -55,16 +70,18 @@ extension PosCartActions on PosViewModel {
           (line) =>
               line.variant.id == variant.id &&
               line.notes.isEmpty &&
-              line.modifierSignature == signature,
+              line.modifierSignature == signature &&
+              line.unitCode == unitCode,
         )
         .firstOrNull;
   }
 
   String _modifierSignature(List<CartLineModifier> modifiers) {
-    final parts = modifiers
-        .map((modifier) => '${modifier.optionId}:${modifier.quantity}')
-        .toList()
-      ..sort();
+    final parts =
+        modifiers
+            .map((modifier) => '${modifier.optionId}:${modifier.quantity}')
+            .toList()
+          ..sort();
     return parts.join(',');
   }
 
@@ -158,10 +175,7 @@ extension PosCartActions on PosViewModel {
     unawaited(refreshDiscountPreview());
   }
 
-  void removeCartLine(
-    String lineKey, {
-    String source = 'cart_delete_button',
-  }) {
+  void removeCartLine(String lineKey, {String source = 'cart_delete_button'}) {
     if (_isCheckingOut) {
       return;
     }
@@ -265,17 +279,20 @@ extension PosCartActions on PosViewModel {
     ProductVariant variant, {
     double quantity = 1,
     List<CartLineModifier> modifiers = const [],
+    UnitOption? unit,
   }) {
     if (_isCheckingOut || quantity <= 0) {
       return false;
     }
 
     final signature = _modifierSignature(modifiers);
+    final unitCode = _unitCodeFor(unit);
     final index = _cart.indexWhere(
       (line) =>
           line.variant.id == variant.id &&
           line.notes.isEmpty &&
-          line.modifierSignature == signature,
+          line.modifierSignature == signature &&
+          line.unitCode == unitCode,
     );
     if (index == -1) {
       _cart.add(
@@ -283,6 +300,12 @@ extension PosCartActions on PosViewModel {
           variant: variant,
           quantity: quantity,
           modifiers: modifiers,
+          unitCode: unitCode,
+          unitLabel: unit?.label ?? '',
+          unitFactor: unit?.factorToBase ?? 1,
+          unitPriceOverride: (unit == null || unit.isBase)
+              ? null
+              : unit.unitPrice,
         ),
       );
     } else {
@@ -291,6 +314,29 @@ extension PosCartActions on PosViewModel {
     }
     _touchActiveSaleSession();
     return true;
+  }
+
+  /// Switches the unit a cart line is sold in (used from the cart). Changes the
+  /// per-unit price and stock conversion, so the discount preview is refreshed.
+  void setCartLineUnit(String lineKey, UnitOption unit) {
+    if (_isCheckingOut) {
+      return;
+    }
+    final index = _cart.indexWhere((line) => line.lineKey == lineKey);
+    if (index == -1) {
+      return;
+    }
+    final line = _cart[index];
+    final isBase = unit.isBase;
+    _cart[index] = line.copyWith(
+      unitCode: isBase ? '' : unit.code,
+      unitLabel: unit.label,
+      unitFactor: unit.factorToBase,
+      unitPriceOverride: isBase ? null : unit.unitPrice,
+    );
+    _touchActiveSaleSession();
+    _notifyChanged();
+    unawaited(refreshDiscountPreview());
   }
 
   /// Replaces the modifier selection on a cart line (used when editing from the

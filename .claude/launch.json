@@ -44,6 +44,12 @@
       "port": 8080
     },
     {
+      "name": "units-preview",
+      "runtimeExecutable": "make",
+      "runtimeArgs": ["frontend-units-preview"],
+      "port": 8080
+    },
+    {
       "name": "command-palette-preview",
       "runtimeExecutable": "make",
       "runtimeArgs": ["frontend-command-palette-preview"],

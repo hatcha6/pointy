@@ -142,6 +142,7 @@ class EscPosReceiptEncoder {
         fallback: _string(line['name'], fallback: 'منتج'),
       );
       final quantity = _string(line['quantity'], fallback: '1');
+      final unitLabel = _string(line['unit_label'], fallback: '');
       for (final wrappedName in _wrap(
         name,
         _charsPerLine(endpoint.paperWidthMm),
@@ -154,8 +155,12 @@ class EscPosReceiptEncoder {
           ),
         );
       }
+      // "2 صندوق × 12.000 = 24.000" — the unit makes pack sales unambiguous.
+      final quantityLabel = unitLabel.isEmpty
+          ? quantity
+          : '$quantity $unitLabel';
       final lineDetails =
-          '$quantity × ${_money(line['unit_price'])} = ${_money(line['line_total'])}';
+          '$quantityLabel × ${_money(line['unit_price'])} = ${_money(line['line_total'])}';
       for (final wrappedDetail in _wrap(
         lineDetails,
         _charsPerLine(endpoint.paperWidthMm),
@@ -369,7 +374,9 @@ class EscPosReceiptEncoder {
         final option = _map(rawOption);
         final optionName = _string(option['option_name']);
         final valueName = _string(option['value_name']);
-        final label = optionName.isEmpty ? valueName : '$optionName: $valueName';
+        final label = optionName.isEmpty
+            ? valueName
+            : '$optionName: $valueName';
         if (label.isEmpty) {
           continue;
         }

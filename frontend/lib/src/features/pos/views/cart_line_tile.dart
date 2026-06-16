@@ -5,6 +5,7 @@ import '../../../data/models/cart_line.dart';
 import '../../../shared/design/design.dart';
 import '../../../shared/formatters.dart';
 import '../../../shared/order/order.dart';
+import '../../../shared/units.dart';
 
 class CartLineTile extends StatelessWidget {
   const CartLineTile({
@@ -15,6 +16,7 @@ class CartLineTile extends StatelessWidget {
     this.onDelete,
     this.onEditQuantity,
     this.onEditNote,
+    this.onSwitchUnit,
   });
 
   final CartLine line;
@@ -22,11 +24,18 @@ class CartLineTile extends StatelessWidget {
   final VoidCallback? onRemove;
   final VoidCallback? onDelete;
 
-  /// Weighted lines open a weight-entry dialog instead of stepping by one.
+  /// Weighted / multi-unit lines open an entry sheet instead of stepping by one.
   final VoidCallback? onEditQuantity;
 
   /// Opens the kitchen-note editor for this line. Null hides the affordance.
   final VoidCallback? onEditNote;
+
+  /// Opens the unit switcher for this line. Null when the product has only its
+  /// base unit.
+  final VoidCallback? onSwitchUnit;
+
+  bool get _showsUnitRow =>
+      onSwitchUnit != null || (!line.isBaseUnit && line.unitLabel.isNotEmpty);
 
   @override
   Widget build(BuildContext context) {
@@ -36,7 +45,7 @@ class CartLineTile extends StatelessWidget {
       title: line.variant.productLabel,
       subtitle: line.variant.variantLabel,
       detail: line.variant.sku,
-      // Effective unit price reflects any modifier deltas on this line.
+      // Effective unit price reflects the selected unit and any modifier deltas.
       unitPriceLabel: l10n.unitPriceEach(formatMoney(line.unitPrice)),
       totalLabel: formatMoney(line.total),
       quantity: line.quantity,
@@ -49,11 +58,13 @@ class CartLineTile extends StatelessWidget {
       onIncrement: onAdd,
       onDecrement: onRemove,
       onRemove: onDelete,
-      onQuantityTap: line.variant.unit == 'piece' ? null : onEditQuantity,
+      onQuantityTap: (line.variant.unit == 'piece' && line.isBaseUnit)
+          ? null
+          : onEditQuantity,
     );
 
     final hasNoteRow = onEditNote != null || line.notes.trim().isNotEmpty;
-    if (line.modifiers.isEmpty && !hasNoteRow) {
+    if (line.modifiers.isEmpty && !hasNoteRow && !_showsUnitRow) {
       return tile;
     }
 
@@ -61,9 +72,68 @@ class CartLineTile extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         tile,
+        if (_showsUnitRow)
+          _CartLineUnit(line: line, onSwitchUnit: onSwitchUnit),
         if (line.modifiers.isNotEmpty) _CartLineModifiers(line: line),
         if (hasNoteRow) _CartLineNote(line: line, onEditNote: onEditNote),
       ],
+    );
+  }
+}
+
+class _CartLineUnit extends StatelessWidget {
+  const _CartLineUnit({required this.line, this.onSwitchUnit});
+
+  final CartLine line;
+  final VoidCallback? onSwitchUnit;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final theme = Theme.of(context);
+    final colors = context.pointyColors;
+    final unitText = line.unitLabel.isNotEmpty
+        ? line.unitLabel
+        : unitLabel(l10n, line.variant.unit);
+    // For a pack unit, show the base-unit equivalent ("= 24 قطعة").
+    final conversion = line.isBaseUnit
+        ? ''
+        : ' · = ${formatQuantity(line.baseQuantity)} '
+              '${unitLabel(l10n, line.variant.unit)}';
+
+    return Padding(
+      padding: const EdgeInsetsDirectional.only(start: 12, end: 12, bottom: 6),
+      child: InkWell(
+        onTap: onSwitchUnit,
+        borderRadius: BorderRadius.circular(8),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 4),
+          child: Row(
+            children: [
+              Icon(
+                Icons.straighten_outlined,
+                size: 16,
+                color: colors.primaryStrong,
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  '$unitText$conversion',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodySmall,
+                ),
+              ),
+              if (onSwitchUnit != null)
+                Icon(
+                  Icons.swap_horiz_rounded,
+                  size: 18,
+                  color: colors.primaryStrong,
+                ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

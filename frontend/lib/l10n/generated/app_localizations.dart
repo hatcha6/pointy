@@ -196,6 +196,60 @@ abstract class AppLocalizations {
   /// **'{count} في المخزون'**
   String commandPaletteStockLabel(String count);
 
+  /// Row action tooltip: print the product's barcode label.
+  ///
+  /// In ar, this message translates to:
+  /// **'طباعة الملصق'**
+  String get commandPalettePrintLabelAction;
+
+  /// Row action tooltip: reorder the product (new purchase order).
+  ///
+  /// In ar, this message translates to:
+  /// **'إعادة الطلب'**
+  String get commandPaletteReorderAction;
+
+  /// Row action tooltip: reprint the invoice.
+  ///
+  /// In ar, this message translates to:
+  /// **'إعادة طباعة الفاتورة'**
+  String get commandPaletteReprintAction;
+
+  /// Snackbar after a barcode label prints from the palette.
+  ///
+  /// In ar, this message translates to:
+  /// **'تمت طباعة الملصق'**
+  String get commandPaletteLabelPrinted;
+
+  /// Snackbar when a barcode label fails to print from the palette.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذرت طباعة الملصق'**
+  String get commandPaletteLabelPrintFailed;
+
+  /// Snackbar when a product has no variant to reorder.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا يمكن إعادة طلب هذا المنتج'**
+  String get commandPaletteReorderNoVariant;
+
+  /// Snackbar after an invoice reprints from the palette.
+  ///
+  /// In ar, this message translates to:
+  /// **'تمت طباعة الفاتورة'**
+  String get commandPaletteInvoicePrinted;
+
+  /// Snackbar when an invoice fails to reprint from the palette.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذرت طباعة الفاتورة'**
+  String get commandPaletteInvoicePrintFailed;
+
+  /// Snackbar when a recent item can no longer be opened.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر فتح العنصر'**
+  String get commandPaletteOpenError;
+
   /// Empty state when no command palette results match the query.
   ///
   /// In ar, this message translates to:
@@ -213,6 +267,12 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'↑↓ للتنقل · Enter للفتح · Esc للإغلاق'**
   String get commandPaletteFooterHint;
+
+  /// Hint shown when the selected row has inline actions (Tab cycles them).
+  ///
+  /// In ar, this message translates to:
+  /// **'Tab للإجراءات'**
+  String get commandPaletteActionsHint;
 
   /// No description provided for @refreshCatalogTooltip.
   ///
@@ -4557,6 +4617,30 @@ abstract class AppLocalizations {
   /// **'أدخل وزنًا أكبر من صفر.'**
   String get posWeightInvalid;
 
+  /// No description provided for @posUnitSelectLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الوحدة'**
+  String get posUnitSelectLabel;
+
+  /// No description provided for @posUnitQuantityLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الكمية'**
+  String get posUnitQuantityLabel;
+
+  /// No description provided for @posUnitSheetAdd.
+  ///
+  /// In ar, this message translates to:
+  /// **'إضافة · {total}'**
+  String posUnitSheetAdd(String total);
+
+  /// No description provided for @posCartSwitchUnitTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'تغيير الوحدة'**
+  String get posCartSwitchUnitTooltip;
+
   /// No description provided for @cartEditWeightTooltip.
   ///
   /// In ar, this message translates to:
@@ -4599,11 +4683,389 @@ abstract class AppLocalizations {
   /// **'مل'**
   String get unitMilliliter;
 
+  /// No description provided for @unitDozen.
+  ///
+  /// In ar, this message translates to:
+  /// **'دزينة'**
+  String get unitDozen;
+
+  /// No description provided for @unitPair.
+  ///
+  /// In ar, this message translates to:
+  /// **'زوج'**
+  String get unitPair;
+
+  /// No description provided for @unitPack.
+  ///
+  /// In ar, this message translates to:
+  /// **'عبوة'**
+  String get unitPack;
+
+  /// No description provided for @unitBox.
+  ///
+  /// In ar, this message translates to:
+  /// **'صندوق'**
+  String get unitBox;
+
+  /// No description provided for @unitCarton.
+  ///
+  /// In ar, this message translates to:
+  /// **'كرتون'**
+  String get unitCarton;
+
+  /// No description provided for @unitBag.
+  ///
+  /// In ar, this message translates to:
+  /// **'كيس'**
+  String get unitBag;
+
+  /// No description provided for @unitTon.
+  ///
+  /// In ar, this message translates to:
+  /// **'طن'**
+  String get unitTon;
+
+  /// No description provided for @unitMeter.
+  ///
+  /// In ar, this message translates to:
+  /// **'متر'**
+  String get unitMeter;
+
+  /// No description provided for @unitCentimeter.
+  ///
+  /// In ar, this message translates to:
+  /// **'سم'**
+  String get unitCentimeter;
+
   /// No description provided for @productUnitLabel.
   ///
   /// In ar, this message translates to:
   /// **'وحدة القياس'**
   String get productUnitLabel;
+
+  /// No description provided for @productUnitsSectionTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'الوحدات والتحويلات'**
+  String get productUnitsSectionTitle;
+
+  /// No description provided for @productUnitsSectionDescription.
+  ///
+  /// In ar, this message translates to:
+  /// **'أضف وحدات بيع وشراء إضافية (صندوق، كرتون، جملة) مع معامل التحويل إلى الوحدة الأساسية وسعر مخصّص اختياري لكل وحدة.'**
+  String get productUnitsSectionDescription;
+
+  /// No description provided for @productUnitsAddButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'إضافة وحدة'**
+  String get productUnitsAddButton;
+
+  /// No description provided for @productUnitPickLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الوحدة'**
+  String get productUnitPickLabel;
+
+  /// No description provided for @productUnitRemoveTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'حذف الوحدة'**
+  String get productUnitRemoveTooltip;
+
+  /// No description provided for @productUnitPriceLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'سعر مخصّص (اختياري)'**
+  String get productUnitPriceLabel;
+
+  /// No description provided for @productUnitPriceHelper.
+  ///
+  /// In ar, this message translates to:
+  /// **'اتركه فارغًا ليُحتسب من سعر الوحدة الأساسية × المعامل.'**
+  String get productUnitPriceHelper;
+
+  /// No description provided for @productUnitSellable.
+  ///
+  /// In ar, this message translates to:
+  /// **'متاح للبيع'**
+  String get productUnitSellable;
+
+  /// No description provided for @productUnitPurchasable.
+  ///
+  /// In ar, this message translates to:
+  /// **'متاح للشراء'**
+  String get productUnitPurchasable;
+
+  /// No description provided for @productDefaultSaleUnitLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'وحدة البيع الافتراضية'**
+  String get productDefaultSaleUnitLabel;
+
+  /// No description provided for @productDefaultPurchaseUnitLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'وحدة الشراء الافتراضية'**
+  String get productDefaultPurchaseUnitLabel;
+
+  /// No description provided for @productUnitBaseOption.
+  ///
+  /// In ar, this message translates to:
+  /// **'{unit} (أساسية)'**
+  String productUnitBaseOption(String unit);
+
+  /// No description provided for @productUnitsLoadError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر تحميل الوحدات.'**
+  String get productUnitsLoadError;
+
+  /// No description provided for @manageUnitsTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'إدارة وحدات القياس'**
+  String get manageUnitsTooltip;
+
+  /// No description provided for @moreActionsTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'إجراءات'**
+  String get moreActionsTooltip;
+
+  /// No description provided for @unitsManagementTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'وحدات القياس'**
+  String get unitsManagementTitle;
+
+  /// No description provided for @unitsManagementIntroTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'وحدات القياس'**
+  String get unitsManagementIntroTitle;
+
+  /// No description provided for @unitsManagementIntroMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'أنشئ وحدات مخصّصة للبيع والشراء (صندوق، كرتون، جملة) وعدّل الوحدات الجاهزة. الوحدات المضمّنة لا تُحذف بل تُعطَّل.'**
+  String get unitsManagementIntroMessage;
+
+  /// No description provided for @addUnitButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'إضافة وحدة'**
+  String get addUnitButton;
+
+  /// No description provided for @unitsCountLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count} وحدة'**
+  String unitsCountLabel(int count);
+
+  /// No description provided for @unitsLoadError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر تحميل الوحدات.'**
+  String get unitsLoadError;
+
+  /// No description provided for @unitsEmptyTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد وحدات'**
+  String get unitsEmptyTitle;
+
+  /// No description provided for @unitsEmptyMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'أضف أول وحدة قياس للبدء.'**
+  String get unitsEmptyMessage;
+
+  /// No description provided for @unitDimensionCount.
+  ///
+  /// In ar, this message translates to:
+  /// **'العدد'**
+  String get unitDimensionCount;
+
+  /// No description provided for @unitDimensionWeight.
+  ///
+  /// In ar, this message translates to:
+  /// **'الوزن'**
+  String get unitDimensionWeight;
+
+  /// No description provided for @unitDimensionVolume.
+  ///
+  /// In ar, this message translates to:
+  /// **'الحجم'**
+  String get unitDimensionVolume;
+
+  /// No description provided for @unitDimensionLength.
+  ///
+  /// In ar, this message translates to:
+  /// **'الطول'**
+  String get unitDimensionLength;
+
+  /// No description provided for @unitSystemBadge.
+  ///
+  /// In ar, this message translates to:
+  /// **'مضمّنة'**
+  String get unitSystemBadge;
+
+  /// No description provided for @unitInactiveBadge.
+  ///
+  /// In ar, this message translates to:
+  /// **'معطّلة'**
+  String get unitInactiveBadge;
+
+  /// No description provided for @unitInUseBadge.
+  ///
+  /// In ar, this message translates to:
+  /// **'مستخدمة في {count}'**
+  String unitInUseBadge(int count);
+
+  /// No description provided for @unitReferenceSummary.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعادل {factor} {unit}'**
+  String unitReferenceSummary(String factor, String unit);
+
+  /// No description provided for @unitEditTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعديل وحدة'**
+  String get unitEditTitle;
+
+  /// No description provided for @unitCreateTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'وحدة جديدة'**
+  String get unitCreateTitle;
+
+  /// No description provided for @unitNameLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الاسم'**
+  String get unitNameLabel;
+
+  /// No description provided for @unitCodeLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الرمز'**
+  String get unitCodeLabel;
+
+  /// No description provided for @unitCodeHelper.
+  ///
+  /// In ar, this message translates to:
+  /// **'معرّف فريد بأحرف لاتينية صغيرة، مثل: box'**
+  String get unitCodeHelper;
+
+  /// No description provided for @unitAbbreviationLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الاختصار'**
+  String get unitAbbreviationLabel;
+
+  /// No description provided for @unitDimensionLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'النوع'**
+  String get unitDimensionLabel;
+
+  /// No description provided for @unitReferenceFactorLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'معامل التحويل المرجعي'**
+  String get unitReferenceFactorLabel;
+
+  /// No description provided for @unitReferenceFactorHelper.
+  ///
+  /// In ar, this message translates to:
+  /// **'كمية الوحدة المرجعية في وحدة واحدة (مثلاً: 1 كجم = 1000 جم).'**
+  String get unitReferenceFactorHelper;
+
+  /// No description provided for @unitAllowsFractionalLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'يسمح بكميات كسرية'**
+  String get unitAllowsFractionalLabel;
+
+  /// No description provided for @unitActiveLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'مفعّلة'**
+  String get unitActiveLabel;
+
+  /// No description provided for @unitSystemLockedHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'وحدة مضمّنة: لا يمكن تغيير الرمز أو النوع أو المعامل المرجعي.'**
+  String get unitSystemLockedHint;
+
+  /// No description provided for @unitSaveError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر حفظ الوحدة.'**
+  String get unitSaveError;
+
+  /// No description provided for @unitDeletedMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم حذف الوحدة.'**
+  String get unitDeletedMessage;
+
+  /// No description provided for @unitDeleteError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر حذف الوحدة.'**
+  String get unitDeleteError;
+
+  /// No description provided for @unitDeleteTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'حذف الوحدة'**
+  String get unitDeleteTitle;
+
+  /// No description provided for @unitDeleteConfirm.
+  ///
+  /// In ar, this message translates to:
+  /// **'سيتم حذف الوحدة «{name}» نهائيًا.'**
+  String unitDeleteConfirm(String name);
+
+  /// No description provided for @unitCannotDeleteSystemTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'وحدة مضمّنة'**
+  String get unitCannotDeleteSystemTitle;
+
+  /// No description provided for @unitCannotDeleteSystemMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'الوحدات المضمّنة لا تُحذف. يمكنك تعطيلها بدلاً من ذلك.'**
+  String get unitCannotDeleteSystemMessage;
+
+  /// No description provided for @unitCannotDeleteInUseTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'الوحدة قيد الاستخدام'**
+  String get unitCannotDeleteInUseTitle;
+
+  /// No description provided for @unitCannotDeleteInUseMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'هذه الوحدة مستخدمة في {count} منتج، لذا لا يمكن حذفها. عطّلها بدلاً من ذلك.'**
+  String unitCannotDeleteInUseMessage(int count);
+
+  /// No description provided for @unitActivateAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'تفعيل'**
+  String get unitActivateAction;
+
+  /// No description provided for @unitDeactivateAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعطيل'**
+  String get unitDeactivateAction;
 
   /// No description provided for @productIsPreparedTitle.
   ///
@@ -10128,6 +10590,18 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'التكلفة'**
   String get purchaseLineCostLabel;
+
+  /// No description provided for @purchaseLineUnitLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'وحدة الشراء'**
+  String get purchaseLineUnitLabel;
+
+  /// No description provided for @purchaseLineBaseEquivalent.
+  ///
+  /// In ar, this message translates to:
+  /// **'= {quantity} {unit}'**
+  String purchaseLineBaseEquivalent(String quantity, String unit);
 
   /// No description provided for @purchaseLineExpiryDateLabel.
   ///

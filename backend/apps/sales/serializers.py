@@ -4,6 +4,13 @@ from django.contrib.contenttypes.models import ContentType
 from rest_framework import serializers
 
 from apps.catalog.models import ModifierOption, ProductVariant
+from apps.catalog.units import (
+    UnitConversionError,
+    resolve_unit,
+    unit_label_for,
+    unit_sale_price,
+    validate_quantity,
+)
 from apps.core.models import RelayInstallation, ShopSettings
 from apps.core.roles import user_is_manager
 from apps.customers.models import Customer
@@ -229,7 +236,20 @@ class OrderLineSerializer(serializers.ModelSerializer):
         decimal_places=3,
         coerce_to_string=False,
     )
-    unit = serializers.CharField(source="variant.product.unit", read_only=True)
+    # The unit actually sold (transacted), falling back to the product's base unit
+    # for legacy lines saved before per-line units existed.
+    unit = serializers.SerializerMethodField()
+    unit_label = serializers.SerializerMethodField()
+    unit_factor = serializers.DecimalField(
+        max_digits=18,
+        decimal_places=6,
+        read_only=True,
+    )
+    base_quantity = serializers.DecimalField(
+        max_digits=12,
+        decimal_places=3,
+        read_only=True,
+    )
     returned_quantity = serializers.FloatField(read_only=True)
     returnable_quantity = serializers.FloatField(read_only=True)
 
@@ -242,6 +262,9 @@ class OrderLineSerializer(serializers.ModelSerializer):
             "product_name",
             "variant_name",
             "unit",
+            "unit_label",
+            "unit_factor",
+            "base_quantity",
             "quantity",
             "returned_quantity",
             "returnable_quantity",
@@ -255,6 +278,12 @@ class OrderLineSerializer(serializers.ModelSerializer):
             "notes",
         ]
         read_only_fields = ("unit_price", "unit_cost", "discount_total")
+
+    def get_unit(self, line):
+        return line.unit or line.variant.product.unit
+
+    def get_unit_label(self, line):
+        return unit_label_for(self.get_unit(line), self.context)
 
     def validate_quantity(self, value):
         if value < 1:
@@ -557,6 +586,15 @@ class CheckoutLineSerializer(serializers.Serializer):
         trim_whitespace=True,
         default="",
     )
+    # The unit this line is sold in (a UnitOfMeasure.code). Blank = the product's
+    # base unit. The price and stock conversion are resolved server-side.
+    unit = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        max_length=32,
+        trim_whitespace=True,
+        default="",
+    )
     modifiers = CheckoutLineModifierSerializer(
         many=True,
         required=False,
@@ -567,26 +605,30 @@ class CheckoutLineSerializer(serializers.Serializer):
         variant = attrs.get("variant")
         if variant is None:
             raise serializers.ValidationError({"variant": "Variant is required."})
+        try:
+            resolved = resolve_unit(variant.product, attrs.get("unit") or "", field="unit")
+        except UnitConversionError as error:
+            raise serializers.ValidationError({error.field: error.message})
+
         quantity = attrs.get("quantity")
-        # Only metric (weighted/volume) products sell in fractions; pieces
-        # stay whole so a scanner glitch can never ring up 0.5 of a phone.
-        if (
-            quantity is not None
-            and variant.product.unit == "piece"
-            and quantity != quantity.to_integral_value()
-        ):
-            raise serializers.ValidationError(
-                {"quantity": "Piece products sell in whole units."}
-            )
+        # Whole-number guard is keyed off the *selected* unit: a box is whole even
+        # for a kg-based product, a weighed kg may be fractional. A scanner glitch
+        # can still never ring up 0.5 of a piece.
+        if quantity is not None:
+            try:
+                validate_quantity(quantity, resolved, field="quantity")
+            except UnitConversionError as error:
+                raise serializers.ValidationError({error.field: error.message})
+
         attrs["variant"] = variant
+        attrs["unit"] = resolved.code
+        attrs["unit_factor"] = resolved.factor
         # Validate the chosen modifiers against the product's assigned groups and
-        # price them server-side; the client price is never trusted. The
-        # effective per-unit price (base + modifier deltas) rides on the line
-        # data so the discount engine and OrderLine creation both use it.
-        attrs["effective_unit_price"] = self._validate_and_price_modifiers(
-            variant,
-            attrs.get("modifiers", []),
-        )
+        # price them server-side; the client price is never trusted. The effective
+        # per-unit price (the selected unit's price + modifier deltas) rides on the
+        # line data so the discount engine and OrderLine creation both use it.
+        delta = self._validate_and_price_modifiers(variant, attrs.get("modifiers", []))
+        attrs["effective_unit_price"] = unit_sale_price(variant, resolved) + delta
         return attrs
 
     def _validate_and_price_modifiers(self, variant, selections):
@@ -627,7 +669,7 @@ class CheckoutLineSerializer(serializers.Serializer):
                 raise serializers.ValidationError(
                     {"modifiers": f"'{group.name}' allows at most {group.max_select} choice(s)."}
                 )
-        return variant.unit_price + delta
+        return delta
 
 
 class CheckoutPaymentSerializer(serializers.Serializer):

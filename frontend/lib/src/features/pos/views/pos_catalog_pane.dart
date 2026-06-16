@@ -18,6 +18,7 @@ import '../../../shared/responsive/responsive.dart';
 import '../view_models/pos_view_model.dart';
 import 'modifier_sheet.dart';
 import 'pos_variant_picker_sheet.dart';
+import 'unit_quantity_sheet.dart';
 import 'weight_entry_sheet.dart';
 
 class PosCatalogPane extends StatelessWidget {
@@ -187,6 +188,45 @@ class _PosCatalogGrid extends StatelessWidget {
     }
   }
 
+  Future<void> _addWithUnit(
+    BuildContext context,
+    Product product,
+    ProductVariant variant, {
+    required String source,
+  }) async {
+    final selection = await showUnitQuantitySheet(
+      context,
+      product: product,
+      variant: variant,
+    );
+    if (selection == null || !context.mounted) {
+      return;
+    }
+    if (product.modifierGroups.isEmpty) {
+      viewModel.addVariant(
+        variant,
+        quantity: selection.quantity,
+        unit: selection.unit,
+        source: source,
+      );
+      return;
+    }
+    final modifiers = await showModifierSheet(
+      context,
+      product: product,
+      variant: variant,
+    );
+    if (modifiers != null && context.mounted) {
+      viewModel.addVariant(
+        variant,
+        quantity: selection.quantity,
+        unit: selection.unit,
+        modifiers: modifiers,
+        source: source,
+      );
+    }
+  }
+
   Future<void> _selectProduct(BuildContext context, Product product) async {
     final messenger = ScaffoldMessenger.of(context);
     final l10n = AppLocalizations.of(context)!;
@@ -217,6 +257,17 @@ class _PosCatalogGrid extends StatelessWidget {
             source: 'product_tile',
           );
         }
+      case PosProductSelectionStatus.chooseUnit:
+        final variant = result.unitVariant;
+        final unitProduct = result.unitProduct;
+        if (variant != null && unitProduct != null && context.mounted) {
+          await _addWithUnit(
+            context,
+            unitProduct,
+            variant,
+            source: 'product_tile',
+          );
+        }
       case PosProductSelectionStatus.chooseVariant:
         final variant = await showPosVariantPickerSheet(
           context,
@@ -224,7 +275,14 @@ class _PosCatalogGrid extends StatelessWidget {
           variants: result.variants,
         );
         if (variant != null && context.mounted) {
-          if (variant.unit != 'piece') {
+          if (product.hasSellableUnits) {
+            await _addWithUnit(
+              context,
+              product,
+              variant,
+              source: 'variant_picker',
+            );
+          } else if (variant.unit != 'piece') {
             await _addWeighedVariant(
               context,
               product,

@@ -18,6 +18,7 @@ from apps.attachments.services import (
     open_attachment,
     sign_attachment_content_token,
 )
+from apps.catalog.models import UnitOfMeasure
 from apps.core.models import ShopSettings
 from apps.discounts.models import AppliedDiscount
 from apps.discounts.services import rounding_metadata_payload
@@ -164,6 +165,7 @@ def build_receipt_payload(order):
         .get(pk=order.pk)
     )
     applied_discounts = order_applied_discounts(order)
+    unit_labels = receipt_unit_labels()
     return {
         "shop": {
             "name": shop_settings.shop_name,
@@ -194,8 +196,20 @@ def build_receipt_payload(order):
                 if order.register_session_id
                 else None
             ),
-            "lines": [receipt_line_payload(line) for line in order.lines.all()],
+            "lines": [
+                receipt_line_payload(line, unit_labels=unit_labels)
+                for line in order.lines.all()
+            ],
         },
+    }
+
+
+def receipt_unit_labels():
+    """Map of unit code → short Arabic label for receipt rendering, resolved in
+    one query so per-line payloads stay cheap."""
+    return {
+        unit.code: (unit.abbreviation or unit.name or unit.code)
+        for unit in UnitOfMeasure.objects.all()
     }
 
 
@@ -212,11 +226,13 @@ def order_line_modifier_payloads(line):
     ]
 
 
-def receipt_line_payload(line):
+def receipt_line_payload(line, *, unit_labels=None):
     variant = line.variant
     product = variant.product
     full_name = variant.full_name
     variant_name = variant.name.strip() or variant.display_name
+    unit_code = line.unit or product.unit
+    unit_label = (unit_labels or {}).get(unit_code, unit_code)
     return {
         "id": line.pk,
         "product_id": product.pk,
@@ -229,6 +245,8 @@ def receipt_line_payload(line):
         "barcode": variant.barcode,
         "name": full_name,
         "quantity": float(line.quantity),
+        "unit": unit_code,
+        "unit_label": unit_label,
         "unit_price": money(line.unit_price),
         "line_subtotal": money(line.line_subtotal),
         "discount_total": money(line.discount_total),

@@ -32,8 +32,7 @@ extension PosBarcodeActions on PosViewModel {
           // Digital-scale labels carry the weight inside the barcode; for
           // metric products that weight IS the sold quantity.
           final scaleBarcode = parseScaleBarcode(normalizedBarcode);
-          final resolvedQuantity =
-              scaleBarcode != null && value.unit != 'piece'
+          final resolvedQuantity = scaleBarcode != null && value.unit != 'piece'
               ? scaleBarcode.weightKg
               : quantity;
           _addVariantToCartAndTrack(
