@@ -256,20 +256,7 @@ class _PaymentSheetState extends State<PaymentSheet> {
           label: l10n.paymentMethodLabel,
           enabledMethods: _enabledMethods,
           selectedMethod: activeTender?.method,
-          splitTenderEnabled: _canUseSplitTenderMode,
-          splitTenderSelected: _isSplitTenderMode,
           onSelected: _selectSinglePaymentMethod,
-          onSplitTenderSelected: _selectSplitTenderMode,
-        ),
-        SizedBox(height: spacing.sm),
-        Align(
-          alignment: AlignmentDirectional.centerStart,
-          child: OutlinedButton.icon(
-            key: const ValueKey('payment_add_tender'),
-            onPressed: _addTender,
-            icon: const Icon(Icons.add),
-            label: Text(l10n.addSplitTenderButton),
-          ),
         ),
         SizedBox(height: spacing.md),
         if (activeTender?.method == PaymentMethod.cash) ...[
@@ -310,6 +297,16 @@ class _PaymentSheetState extends State<PaymentSheet> {
             onValidateCardReceipt: () => _validateCardReceipt(entry.$1),
           ),
         ],
+        SizedBox(height: spacing.sm),
+        OutlinedButton.icon(
+          key: const ValueKey('payment_add_tender'),
+          onPressed: _addTender,
+          icon: const Icon(Icons.add),
+          label: Text(l10n.addSplitTenderButton),
+          style: OutlinedButton.styleFrom(
+            minimumSize: const Size.fromHeight(48),
+          ),
+        ),
         if (widget.showPrintInvoiceToggle) ...[
           SizedBox(height: spacing.md),
           ReceiptToggleRow(
@@ -558,13 +555,6 @@ class _PaymentSheetState extends State<PaymentSheet> {
     });
   }
 
-  void _selectSplitTenderMode() {
-    if (!_canUseSplitTenderMode || _tenders.length > 1) {
-      return;
-    }
-    _addTender();
-  }
-
   void _appendDigit(String digit) {
     final tender = _activeTender;
     if (tender == null) {
@@ -692,10 +682,6 @@ class _PaymentSheetState extends State<PaymentSheet> {
           tender.cardReceipt == null;
     });
   }
-
-  bool get _canUseSplitTenderMode => _enabledMethods.length > 1;
-
-  bool get _isSplitTenderMode => _tenders.length > 1;
 
   _TenderLineInput? get _activeTender {
     if (_activeTenderIndex < 0 || _activeTenderIndex >= _tenders.length) {

@@ -168,37 +168,37 @@ void main() {
     expect(submitted?.payments.single.amount, 7);
   });
 
-  testWidgets('wide layout exposes split tender mode without scrolling', (
-    tester,
-  ) async {
-    await _pumpPaymentSheet(tester, total: 7, width: 1366, height: 768);
+  testWidgets(
+    'split tender uses the add-payment button, not a fourth segment',
+    (tester) async {
+      await _pumpPaymentSheet(tester, total: 7, width: 1366, height: 768);
 
-    expect(
-      find.byKey(const ValueKey('payment_method_split_tender')),
-      findsOneWidget,
-    );
+      // Splitting is an explicit action, not a crowded fourth method segment.
+      expect(
+        find.byKey(const ValueKey('payment_method_split_tender')),
+        findsNothing,
+      );
 
-    await tester.tap(find.byKey(const ValueKey('payment_method_split_tender')));
-    await tester.pump();
+      await _tapKey(tester, 'payment_add_tender');
 
-    expect(
-      find.byKey(const ValueKey('payment_tender_amount_1')),
-      findsOneWidget,
-    );
+      expect(
+        find.byKey(const ValueKey('payment_tender_amount_1')),
+        findsOneWidget,
+      );
 
-    await tester.enterText(
-      find.byKey(const ValueKey('payment_tender_amount_0')),
-      '5.00',
-    );
-    await tester.pump();
+      await tester.enterText(
+        find.byKey(const ValueKey('payment_tender_amount_0')),
+        '5.00',
+      );
+      await tester.pump();
 
-    expect(_amountText(tester, 1), '2.00');
+      expect(_amountText(tester, 1), '2.00');
 
-    await tester.tap(find.byKey(const ValueKey('payment_tender_remove_0')));
-    await tester.pump();
+      await _tapKey(tester, 'payment_tender_remove_0');
 
-    expect(_amountText(tester, 0), '7.00');
-  });
+      expect(_amountText(tester, 0), '7.00');
+    },
+  );
 }
 
 Future<void> _pumpPaymentSheet(

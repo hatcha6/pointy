@@ -33,10 +33,14 @@ class PointyTotalsPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         for (var index = 0; index < lines.length; index += 1) ...[
           if (index > 0 && lines[index].isStrong)
-            Divider(height: compact ? 8 : 14, color: context.pointyColors.line),
+            Divider(
+              height: compact ? 10 : 16,
+              color: context.pointyColors.line,
+            ),
           _TotalLineView(line: lines[index], compact: compact),
         ],
       ],
@@ -54,45 +58,60 @@ class _TotalLineView extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.pointyColors;
     final textTheme = Theme.of(context).textTheme;
-    final TextStyle? style;
+
+    // Three tiers of emphasis: the grand total dominates (large, bold, primary
+    // value), the subtotal is plain ink, and deductions recede in muted grey.
+    final TextStyle? labelStyle;
+    final TextStyle? valueStyle;
     if (line.isStrong) {
-      style = (compact ? textTheme.titleMedium : textTheme.titleLarge)
+      labelStyle = (compact ? textTheme.titleMedium : textTheme.titleLarge)
           ?.copyWith(color: colors.ink, fontWeight: FontWeight.w800);
+      valueStyle = (compact ? textTheme.titleLarge : textTheme.headlineSmall)
+          ?.copyWith(color: colors.primaryStrong, fontWeight: FontWeight.w900);
     } else if (line.isMuted) {
-      style = (compact ? textTheme.bodySmall : textTheme.bodyMedium)?.copyWith(
+      final base = compact ? textTheme.bodySmall : textTheme.bodyMedium;
+      labelStyle = base?.copyWith(color: colors.mutedInk);
+      valueStyle = base?.copyWith(
         color: colors.mutedInk,
+        fontWeight: FontWeight.w600,
       );
     } else {
-      style = (compact ? textTheme.bodySmall : textTheme.bodyMedium)?.copyWith(
+      final base = compact ? textTheme.bodyMedium : textTheme.bodyLarge;
+      labelStyle = base?.copyWith(
+        color: colors.mutedInk,
+        fontWeight: FontWeight.w500,
+      );
+      valueStyle = base?.copyWith(
         color: colors.ink,
+        fontWeight: FontWeight.w700,
       );
     }
 
     return Padding(
-      padding: EdgeInsetsDirectional.symmetric(vertical: compact ? 1 : 3),
+      padding: EdgeInsetsDirectional.symmetric(
+        vertical: line.isStrong ? (compact ? 3 : 5) : (compact ? 2 : 3),
+      ),
       child: Row(
         children: [
-          Flexible(
+          // The label takes all the slack so the value is pushed hard to the
+          // trailing edge (the far left in RTL) instead of floating mid-row.
+          Expanded(
             child: Text(
               line.label,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: style,
+              style: labelStyle,
             ),
           ),
           const SizedBox(width: 12),
-          Expanded(
-            child: Align(
-              alignment: AlignmentDirectional.centerEnd,
-              child: FittedBox(
-                fit: BoxFit.scaleDown,
-                child: Text(
-                  line.value,
-                  maxLines: 1,
-                  textAlign: TextAlign.end,
-                  style: style == null ? null : PointyTypography.numeric(style),
-                ),
-              ),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              line.value,
+              maxLines: 1,
+              style: valueStyle == null
+                  ? null
+                  : PointyTypography.numeric(valueStyle),
             ),
           ),
         ],

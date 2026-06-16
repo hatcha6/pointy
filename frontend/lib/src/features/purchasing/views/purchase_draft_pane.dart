@@ -127,6 +127,7 @@ class _PurchaseDraftPaneState extends State<PurchaseDraftPane> {
               primaryActionHeight: 52,
               summary: Column(
                 mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   _PurchaseDraftTotals(viewModel: viewModel),
                   _ReceiveImmediatelyToggle(viewModel: viewModel),

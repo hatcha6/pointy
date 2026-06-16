@@ -692,6 +692,7 @@ class _CheckoutFooter extends StatelessWidget {
       primaryActionHeight: 52,
       summary: Column(
         mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           CartTotals(viewModel: viewModel, compact: true),
           if (viewModel.shouldShowPrintInvoiceCheckbox)
