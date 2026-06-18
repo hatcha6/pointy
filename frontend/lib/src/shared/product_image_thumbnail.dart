@@ -19,17 +19,24 @@ class ProductImageThumbnail extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final url = imageUrl?.trim() ?? '';
+    // Decode at the thumbnail's display resolution so a full-size source image
+    // doesn't load into a small tile (memory + image-cache thrash on scroll).
+    final cacheEdge = (size * MediaQuery.devicePixelRatioOf(context)).round();
     return ClipRRect(
       borderRadius: BorderRadius.circular(borderRadius),
       child: SizedBox.square(
         dimension: size,
         child: DecoratedBox(
-          decoration: const BoxDecoration(color: PointyColors.primaryContainer),
+          decoration: BoxDecoration(
+            color: context.pointyColors.primaryContainer,
+          ),
           child: url.isEmpty
               ? _FallbackLabel(text: fallbackText)
               : Image.network(
                   url,
                   fit: BoxFit.cover,
+                  cacheWidth: cacheEdge,
+                  cacheHeight: cacheEdge,
                   errorBuilder: (context, error, stackTrace) =>
                       _FallbackLabel(text: fallbackText),
                   loadingBuilder: (context, child, progress) {

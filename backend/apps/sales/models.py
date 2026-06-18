@@ -202,6 +202,14 @@ class Order(TimeStampedModel):
 
     class Meta:
         ordering = ["-created_at"]
+        # Almost every aggregate filters status IN (paid, void) over a date
+        # range; this composite serves those plus the default -created_at listing.
+        indexes = [
+            models.Index(
+                fields=["status", "-created_at"],
+                name="sales_order_status_created_idx",
+            ),
+        ]
 
     def recalculate(self) -> None:
         subtotal = Decimal("0.00")

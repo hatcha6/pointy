@@ -517,7 +517,7 @@ class _StockOnHandPanel extends StatelessWidget {
           children: [
             CircleAvatar(
               radius: 24,
-              backgroundColor: PointyColors.primaryContainer,
+              backgroundColor: colors.primaryContainer,
               foregroundColor: colors.primaryStrong,
               child: const Icon(Icons.inventory_outlined),
             ),

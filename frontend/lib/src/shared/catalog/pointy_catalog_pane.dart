@@ -148,7 +148,7 @@ class _CountPill extends StatelessWidget {
     return DecoratedBox(
       decoration: BoxDecoration(
         color: colors.subtleFill,
-        borderRadius: BorderRadius.circular(999),
+        borderRadius: BorderRadius.circular(PointyRadii.pill),
         border: Border.all(color: colors.line),
       ),
       child: Padding(

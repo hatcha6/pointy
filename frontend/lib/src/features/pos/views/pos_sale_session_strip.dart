@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
+import '../../../shared/components/components.dart';
 import '../../../shared/design/design.dart';
 import '../../../shared/formatters.dart';
 import '../../../shared/responsive/responsive.dart';
@@ -90,9 +91,7 @@ class _SaleSessionSwitcherButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.pointyColors;
     final foreground = isBusy ? colors.primaryStrong : colors.ink;
-    final background = isBusy
-        ? PointyColors.primaryContainer
-        : colors.subtleFill;
+    final background = isBusy ? colors.primaryContainer : colors.subtleFill;
 
     return Opacity(
       opacity: isLocked ? 0.55 : 1,
@@ -213,9 +212,23 @@ class _SaleSessionsSheet extends StatelessWidget {
                     onSelectSession(session.id);
                     Navigator.of(context).pop();
                   },
-                  onDiscard: () {
+                  onDiscard: () async {
+                    final confirmed = await showDialog<bool>(
+                      context: context,
+                      builder: (_) => PointyDestructiveConfirmationDialog(
+                        icon: Icons.remove_shopping_cart_outlined,
+                        title: l10n.discardSaleConfirmTitle,
+                        message: l10n.discardSaleConfirmMessage,
+                        confirmLabel: l10n.discardSaleConfirmButton,
+                      ),
+                    );
+                    if (confirmed != true) {
+                      return;
+                    }
                     onDiscardSession(session.id);
-                    Navigator.of(context).pop();
+                    if (context.mounted) {
+                      Navigator.of(context).pop();
+                    }
                   },
                 ),
                 if (session != sessions.last) const Divider(height: 1),

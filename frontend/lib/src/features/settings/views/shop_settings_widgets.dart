@@ -235,7 +235,7 @@ class _ShopLogoPreview extends StatelessWidget {
       alignment: Alignment.center,
       padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(
-        color: PointyColors.primaryContainer.withValues(alpha: 0.24),
+        color: colors.primaryContainer.withValues(alpha: 0.24),
         borderRadius: BorderRadius.circular(8),
       ),
       child: child,

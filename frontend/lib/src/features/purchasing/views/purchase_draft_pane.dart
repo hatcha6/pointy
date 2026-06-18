@@ -233,7 +233,21 @@ class _PurchaseDraftPaneState extends State<PurchaseDraftPane> {
 
     messenger
       ..clearSnackBars()
-      ..showSnackBar(SnackBar(content: Text(message)));
+      ..showSnackBar(
+        SnackBar(
+          content: Text(message),
+          action: result is Ok<PurchaseSubmission>
+              ? null
+              : SnackBarAction(
+                  label: l10n.retryButton,
+                  onPressed: () {
+                    if (context.mounted) {
+                      _submitDraft(context);
+                    }
+                  },
+                ),
+        ),
+      );
 
     if (result is Ok<PurchaseSubmission>) {
       widget.onSubmitSuccess?.call();
@@ -323,8 +337,20 @@ class _PurchaseDraftHeaderActions extends StatelessWidget {
           tooltip: l10n.clearPurchaseDraftTooltip,
           onPressed: viewModel.draft.isEmpty || viewModel.isSubmitting
               ? null
-              : () =>
-                    viewModel.clearDraft(source: 'purchase_draft_clear_button'),
+              : () async {
+                  final confirmed = await showDialog<bool>(
+                    context: context,
+                    builder: (_) => PointyDestructiveConfirmationDialog(
+                      icon: Icons.delete_sweep_outlined,
+                      title: l10n.clearPurchaseDraftConfirmTitle,
+                      message: l10n.clearPurchaseDraftConfirmMessage,
+                      confirmLabel: l10n.clearButton,
+                    ),
+                  );
+                  if (confirmed == true) {
+                    viewModel.clearDraft(source: 'purchase_draft_clear_button');
+                  }
+                },
           icon: const Icon(Icons.delete_outline),
           color: colors.danger,
         ),

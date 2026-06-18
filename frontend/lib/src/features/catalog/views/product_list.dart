@@ -136,6 +136,13 @@ class ProductList extends StatelessWidget {
               emptyBuilder: (context) => PointyEmptyState(
                 icon: Icons.inventory_2_outlined,
                 title: l10n.emptyCatalog,
+                action: capabilities.canCreateProduct
+                    ? FilledButton.icon(
+                        onPressed: onCreateProduct,
+                        icon: const Icon(Icons.add),
+                        label: Text(l10n.addProductButton),
+                      )
+                    : null,
               ),
               onOpenProduct: (product) =>
                   (onOpenProduct ?? (p) => _openProduct(context, p))(product),

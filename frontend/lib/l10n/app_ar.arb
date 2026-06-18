@@ -6287,5 +6287,19 @@
   "priceCheckerFieldEncoding": "الترميز",
   "priceCheckerActivitySection": "أحدث عمليات الفحص",
   "priceCheckerActivityLoadError": "تعذر تحميل عمليات الفحص",
-  "priceCheckerActivityEmpty": "لا توجد عمليات فحص بعد لهذا الجهاز."
+  "priceCheckerActivityEmpty": "لا توجد عمليات فحص بعد لهذا الجهاز.",
+  "clearCartConfirmTitle": "مسح السلة؟",
+  "clearCartConfirmMessage": "سيؤدي هذا إلى إزالة جميع العناصر من السلة الحالية، ولا يمكن التراجع عنه.",
+  "discardSaleConfirmTitle": "تجاهل البيع المُعلّق؟",
+  "discardSaleConfirmMessage": "سيتم حذف هذا البيع المُعلّق وجميع عناصره، ولا يمكن التراجع عنه.",
+  "discardSaleConfirmButton": "تجاهل",
+  "cartLineRemovedMessage": "تم حذف العنصر",
+  "undoButton": "تراجع",
+  "clearPurchaseDraftConfirmTitle": "مسح مسودة الشراء؟",
+  "clearPurchaseDraftConfirmMessage": "سيؤدي هذا إلى إزالة جميع العناصر من المسودة الحالية، ولا يمكن التراجع عنه.",
+  "submitPurchaseOrderConfirmTitle": "إرسال أمر الشراء؟",
+  "submitPurchaseOrderConfirmMessage": "سيتم إرسال أمر الشراء إلى المورّد للاعتماد.",
+  "cancelPurchaseOrderConfirmTitle": "إلغاء أمر الشراء؟",
+  "cancelPurchaseOrderConfirmMessage": "سيؤدي إلغاء أمر الشراء إلى عكس أي مخزون تم استلامه منه، ولا يمكن التراجع عن هذا الإجراء.",
+  "cancelPurchaseOrderConfirmButton": "تأكيد الإلغاء"
 }

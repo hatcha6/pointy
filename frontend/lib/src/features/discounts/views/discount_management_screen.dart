@@ -227,6 +227,13 @@ class _DiscountManagementBody extends StatelessWidget {
               emptyBuilder: (context) => PointyEmptyState(
                 icon: Icons.local_offer_outlined,
                 title: l10n.discountEmptyRules,
+                action: capabilities.canCreateDiscountRule
+                    ? FilledButton.icon(
+                        onPressed: onCreateRule,
+                        icon: const Icon(Icons.add),
+                        label: Text(l10n.discountCreateButton),
+                      )
+                    : null,
               ),
               itemBuilder: (context, rule) {
                 return _DiscountRuleTile(
@@ -281,7 +288,7 @@ class _DiscountRuleTile extends StatelessWidget {
       onTap: onOpenDetails,
       leading: CircleAvatar(
         backgroundColor: rule.isActive
-            ? PointyColors.primaryContainer
+            ? colors.primaryContainer
             : colors.subtleFill,
         foregroundColor: rule.isActive ? colors.primaryStrong : colors.mutedInk,
         child: Icon(
@@ -316,7 +323,7 @@ class _DiscountRuleTile extends StatelessWidget {
           PointyStatusPill(
             label: rule.couponCode,
             icon: Icons.confirmation_number_outlined,
-            color: PointyColors.accentAmber,
+            color: colors.accentAmber,
           ),
         if (rule.isArchived)
           PointyStatusPill(

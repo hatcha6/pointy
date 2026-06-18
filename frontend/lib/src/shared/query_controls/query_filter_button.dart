@@ -95,7 +95,7 @@ class _ActiveCountBadge extends StatelessWidget {
     return DecoratedBox(
       decoration: const BoxDecoration(
         color: PointyColors.primary,
-        borderRadius: BorderRadius.all(Radius.circular(999)),
+        borderRadius: BorderRadius.all(Radius.circular(PointyRadii.pill)),
       ),
       child: ConstrainedBox(
         constraints: const BoxConstraints(minWidth: 22),

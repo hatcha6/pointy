@@ -256,7 +256,7 @@ class JobStageProgressBar extends StatelessWidget {
                   height: 6,
                   decoration: BoxDecoration(
                     color: i < reached ? fill : track,
-                    borderRadius: BorderRadius.circular(999),
+                    borderRadius: BorderRadius.circular(PointyRadii.pill),
                   ),
                 ),
               ),

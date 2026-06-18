@@ -18299,6 +18299,90 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'لا توجد عمليات فحص بعد لهذا الجهاز.'**
   String get priceCheckerActivityEmpty;
+
+  /// No description provided for @clearCartConfirmTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'مسح السلة؟'**
+  String get clearCartConfirmTitle;
+
+  /// No description provided for @clearCartConfirmMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'سيؤدي هذا إلى إزالة جميع العناصر من السلة الحالية، ولا يمكن التراجع عنه.'**
+  String get clearCartConfirmMessage;
+
+  /// No description provided for @discardSaleConfirmTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'تجاهل البيع المُعلّق؟'**
+  String get discardSaleConfirmTitle;
+
+  /// No description provided for @discardSaleConfirmMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'سيتم حذف هذا البيع المُعلّق وجميع عناصره، ولا يمكن التراجع عنه.'**
+  String get discardSaleConfirmMessage;
+
+  /// No description provided for @discardSaleConfirmButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'تجاهل'**
+  String get discardSaleConfirmButton;
+
+  /// No description provided for @cartLineRemovedMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم حذف العنصر'**
+  String get cartLineRemovedMessage;
+
+  /// No description provided for @undoButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'تراجع'**
+  String get undoButton;
+
+  /// No description provided for @clearPurchaseDraftConfirmTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'مسح مسودة الشراء؟'**
+  String get clearPurchaseDraftConfirmTitle;
+
+  /// No description provided for @clearPurchaseDraftConfirmMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'سيؤدي هذا إلى إزالة جميع العناصر من المسودة الحالية، ولا يمكن التراجع عنه.'**
+  String get clearPurchaseDraftConfirmMessage;
+
+  /// No description provided for @submitPurchaseOrderConfirmTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'إرسال أمر الشراء؟'**
+  String get submitPurchaseOrderConfirmTitle;
+
+  /// No description provided for @submitPurchaseOrderConfirmMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'سيتم إرسال أمر الشراء إلى المورّد للاعتماد.'**
+  String get submitPurchaseOrderConfirmMessage;
+
+  /// No description provided for @cancelPurchaseOrderConfirmTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'إلغاء أمر الشراء؟'**
+  String get cancelPurchaseOrderConfirmTitle;
+
+  /// No description provided for @cancelPurchaseOrderConfirmMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'سيؤدي إلغاء أمر الشراء إلى عكس أي مخزون تم استلامه منه، ولا يمكن التراجع عن هذا الإجراء.'**
+  String get cancelPurchaseOrderConfirmMessage;
+
+  /// No description provided for @cancelPurchaseOrderConfirmButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'تأكيد الإلغاء'**
+  String get cancelPurchaseOrderConfirmButton;
 }
 
 class _AppLocalizationsDelegate

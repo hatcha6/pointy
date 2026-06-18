@@ -175,16 +175,37 @@ extension PosCartActions on PosViewModel {
     unawaited(refreshDiscountPreview());
   }
 
-  void removeCartLine(String lineKey, {String source = 'cart_delete_button'}) {
+  /// Removes a line and returns it with its prior index so the caller can offer
+  /// an undo. Returns null when nothing matched (or checkout is in progress).
+  ({CartLine line, int index})? removeCartLine(
+    String lineKey, {
+    String source = 'cart_delete_button',
+  }) {
     if (_isCheckingOut) {
-      return;
+      return null;
     }
     final index = _cart.indexWhere((line) => line.lineKey == lineKey);
     if (index == -1) {
-      return;
+      return null;
     }
     final line = _cart.removeAt(index);
     _trackCartLineDeleted(line, reason: 'remove_line', source: source);
+    _touchActiveSaleSession();
+    _notifyChanged();
+    unawaited(refreshDiscountPreview());
+    return (line: line, index: index);
+  }
+
+  /// Re-inserts a line removed via [removeCartLine] at its original position
+  /// (clamped if the cart changed meanwhile). Backs the cart-line undo action.
+  void restoreCartLine(CartLine line, int index) {
+    if (_isCheckingOut) {
+      return;
+    }
+    final position = index < 0
+        ? 0
+        : (index > _cart.length ? _cart.length : index);
+    _cart.insert(position, line);
     _touchActiveSaleSession();
     _notifyChanged();
     unawaited(refreshDiscountPreview());

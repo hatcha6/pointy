@@ -146,6 +146,13 @@ class _PurchaseOrderListBody extends StatelessWidget {
               emptyBuilder: (context) => PointyEmptyState(
                 icon: Icons.receipt_long_outlined,
                 title: l10n.emptyPurchaseOrders,
+                action: capabilities.canCreatePurchaseOrder
+                    ? FilledButton.icon(
+                        onPressed: onCreatePurchaseOrder,
+                        icon: const Icon(Icons.add),
+                        label: Text(l10n.newPurchaseOrderButton),
+                      )
+                    : null,
               ),
               itemBuilder: (context, order) {
                 return PurchaseOrderTile(

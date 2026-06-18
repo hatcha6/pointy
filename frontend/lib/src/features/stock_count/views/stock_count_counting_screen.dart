@@ -395,7 +395,7 @@ class _ScanPanel extends StatelessWidget {
                   height: 132,
                   decoration: BoxDecoration(
                     color: colors.primaryStrong.withValues(alpha: 0.08),
-                    borderRadius: BorderRadius.circular(28),
+                    borderRadius: BorderRadius.circular(PointyRadii.sheet),
                     border: Border.all(
                       color: colors.primaryStrong.withValues(alpha: 0.20),
                       width: 1.5,

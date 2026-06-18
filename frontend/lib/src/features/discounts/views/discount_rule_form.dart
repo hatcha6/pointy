@@ -1403,7 +1403,7 @@ class _DiscountSummaryCard extends StatelessWidget {
 
     return Container(
       decoration: BoxDecoration(
-        color: PointyColors.primaryContainer,
+        color: colors.primaryContainer,
         borderRadius: BorderRadius.circular(PointyRadii.card),
         border: Border.all(color: colors.primaryStrong.withValues(alpha: 0.25)),
       ),
@@ -1581,7 +1581,7 @@ class _ValueTypeOption extends StatelessWidget {
     final textTheme = Theme.of(context).textTheme;
 
     return Material(
-      color: selected ? PointyColors.primaryContainer : colors.surface,
+      color: selected ? colors.primaryContainer : colors.surface,
       borderRadius: BorderRadius.circular(PointyRadii.chip),
       child: InkWell(
         onTap: onTap,

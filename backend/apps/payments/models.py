@@ -26,6 +26,14 @@ class Payment(TimeStampedModel):
 
     class Meta:
         ordering = ["-created_at"]
+        # Payment-mix dashboard and payment-method reports group by method over a
+        # date range.
+        indexes = [
+            models.Index(
+                fields=["method", "-created_at"],
+                name="payments_method_created_idx",
+            ),
+        ]
 
     def __str__(self) -> str:
         return f"{self.method} {self.amount} for {self.order_id}"

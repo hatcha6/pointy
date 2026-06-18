@@ -394,6 +394,21 @@ class _CustomerList extends StatelessWidget {
       emptyBuilder: (context) => PointyEmptyState(
         icon: Icons.person_outline,
         title: l10n.emptyCustomers,
+        action: FilledButton.icon(
+          onPressed: viewModel.isSaving
+              ? null
+              : () async {
+                  final created = await showCreateCustomerSheet(
+                    context: context,
+                    repository: viewModel.repository,
+                  );
+                  if (created != null) {
+                    await viewModel.loadContacts();
+                  }
+                },
+          icon: const Icon(Icons.person_add_alt_1),
+          label: Text(l10n.addCustomerButton),
+        ),
       ),
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
       framed: false,
@@ -473,6 +488,21 @@ class _SupplierList extends StatelessWidget {
       emptyBuilder: (context) => PointyEmptyState(
         icon: Icons.local_shipping_outlined,
         title: l10n.emptySuppliers,
+        action: FilledButton.icon(
+          onPressed: viewModel.isSaving
+              ? null
+              : () async {
+                  final created = await showCreateSupplierSheet(
+                    context: context,
+                    repository: viewModel.repository,
+                  );
+                  if (created != null) {
+                    await viewModel.loadContacts();
+                  }
+                },
+          icon: const Icon(Icons.add_business_outlined),
+          label: Text(l10n.addSupplierButton),
+        ),
       ),
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
       framed: false,

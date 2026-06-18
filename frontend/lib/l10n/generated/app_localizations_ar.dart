@@ -10566,4 +10566,51 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get priceCheckerActivityEmpty => 'لا توجد عمليات فحص بعد لهذا الجهاز.';
+
+  @override
+  String get clearCartConfirmTitle => 'مسح السلة؟';
+
+  @override
+  String get clearCartConfirmMessage =>
+      'سيؤدي هذا إلى إزالة جميع العناصر من السلة الحالية، ولا يمكن التراجع عنه.';
+
+  @override
+  String get discardSaleConfirmTitle => 'تجاهل البيع المُعلّق؟';
+
+  @override
+  String get discardSaleConfirmMessage =>
+      'سيتم حذف هذا البيع المُعلّق وجميع عناصره، ولا يمكن التراجع عنه.';
+
+  @override
+  String get discardSaleConfirmButton => 'تجاهل';
+
+  @override
+  String get cartLineRemovedMessage => 'تم حذف العنصر';
+
+  @override
+  String get undoButton => 'تراجع';
+
+  @override
+  String get clearPurchaseDraftConfirmTitle => 'مسح مسودة الشراء؟';
+
+  @override
+  String get clearPurchaseDraftConfirmMessage =>
+      'سيؤدي هذا إلى إزالة جميع العناصر من المسودة الحالية، ولا يمكن التراجع عنه.';
+
+  @override
+  String get submitPurchaseOrderConfirmTitle => 'إرسال أمر الشراء؟';
+
+  @override
+  String get submitPurchaseOrderConfirmMessage =>
+      'سيتم إرسال أمر الشراء إلى المورّد للاعتماد.';
+
+  @override
+  String get cancelPurchaseOrderConfirmTitle => 'إلغاء أمر الشراء؟';
+
+  @override
+  String get cancelPurchaseOrderConfirmMessage =>
+      'سيؤدي إلغاء أمر الشراء إلى عكس أي مخزون تم استلامه منه، ولا يمكن التراجع عن هذا الإجراء.';
+
+  @override
+  String get cancelPurchaseOrderConfirmButton => 'تأكيد الإلغاء';
 }

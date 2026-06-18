@@ -387,7 +387,7 @@ class _LedgerEntryTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
-    final color = expenseSourceColor(entry.source);
+    final color = expenseSourceColor(context.pointyColors, entry.source);
     final subtitleParts = <String>[
       formatDate(entry.date),
       if (entry.category != null && entry.category!.isNotEmpty) entry.category!,
@@ -487,14 +487,19 @@ IconData expenseSourceIcon(ExpenseLedgerSource source) {
   };
 }
 
-Color expenseSourceColor(ExpenseLedgerSource source) {
+Color expenseSourceColor(
+  PointySemanticColors colors,
+  ExpenseLedgerSource source,
+) {
+  // Distinct, palette-driven hues per ledger source so the badges read
+  // correctly in both light and dark mode (raw Material colors did not adapt).
   return switch (source) {
-    ExpenseLedgerSource.expense => Colors.teal,
-    ExpenseLedgerSource.registerPayout => Colors.orange,
-    ExpenseLedgerSource.purchase => Colors.indigo,
-    ExpenseLedgerSource.payroll => Colors.purple,
-    ExpenseLedgerSource.commission => Colors.blueGrey,
-    ExpenseLedgerSource.unknown => Colors.grey,
+    ExpenseLedgerSource.expense => colors.primary,
+    ExpenseLedgerSource.registerPayout => colors.warning,
+    ExpenseLedgerSource.purchase => colors.accentAmber,
+    ExpenseLedgerSource.payroll => colors.success,
+    ExpenseLedgerSource.commission => colors.danger,
+    ExpenseLedgerSource.unknown => colors.mutedInk,
   };
 }
 

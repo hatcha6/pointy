@@ -419,7 +419,7 @@ class _UnitGlyph extends StatelessWidget {
       width: 40,
       height: 40,
       decoration: BoxDecoration(
-        color: active ? PointyColors.primaryContainer : colors.subtleFill,
+        color: active ? colors.primaryContainer : colors.subtleFill,
         borderRadius: BorderRadius.circular(PointyRadii.chip),
       ),
       child: Icon(

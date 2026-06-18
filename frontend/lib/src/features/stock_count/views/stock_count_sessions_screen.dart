@@ -333,10 +333,10 @@ class _StartHero extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const Center(
+            Center(
               child: _IconBadge(
                 icon: Icons.fact_check_outlined,
-                color: PointyColors.primaryStrong,
+                color: colors.primaryStrong,
                 size: 64,
                 iconSize: 32,
               ),

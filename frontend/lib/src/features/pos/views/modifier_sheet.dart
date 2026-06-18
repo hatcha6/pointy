@@ -310,7 +310,7 @@ class _ModifierChip extends StatelessWidget {
     if (option.isQuantifiable) {
       final colors = context.pointyColors;
       return Material(
-        color: selected ? PointyColors.amberContainer : colors.surface,
+        color: selected ? colors.amberContainer : colors.surface,
         shape: StadiumBorder(
           side: BorderSide(color: selected ? colors.accentAmber : colors.line),
         ),

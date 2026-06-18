@@ -7,7 +7,9 @@ from django.utils import timezone
 
 
 class TimeStampedModel(models.Model):
-    created_at = models.DateTimeField(auto_now_add=True)
+    # Indexed because nearly every list, dashboard, and report query filters or
+    # orders on created_at; without this they full-scan + filesort as data grows.
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:

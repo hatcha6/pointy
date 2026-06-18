@@ -10,6 +10,9 @@ abstract final class PointyRadii {
   static const double chip = 10;
   static const double sheet = 28;
   static const double dialog = 18;
+
+  /// Fully-rounded "pill" radius for status chips, badges, and progress tracks.
+  static const double pill = 999;
 }
 
 abstract final class PointyDimensions {
@@ -127,9 +130,7 @@ abstract final class PointyComponentStyles {
       focusedBorder: border.copyWith(
         borderSide: BorderSide(color: c.primary, width: 1.4),
       ),
-      errorBorder: border.copyWith(
-        borderSide: BorderSide(color: c.danger),
-      ),
+      errorBorder: border.copyWith(borderSide: BorderSide(color: c.danger)),
       focusedErrorBorder: border.copyWith(
         borderSide: BorderSide(color: c.danger, width: 1.4),
       ),
@@ -235,9 +236,7 @@ abstract final class PointyComponentStyles {
       }),
       iconTheme: WidgetStateProperty.resolveWith((states) {
         final isSelected = states.contains(WidgetState.selected);
-        return IconThemeData(
-          color: isSelected ? c.primaryDark : c.mutedInk,
-        );
+        return IconThemeData(color: isSelected ? c.primaryDark : c.mutedInk);
       }),
     );
   }

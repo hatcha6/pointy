@@ -98,11 +98,24 @@ class _PurchaseOrderActions extends StatelessWidget {
                 FilledButton.icon(
                   onPressed: viewModel.isChangingStatus
                       ? null
-                      : () => _runAction(
-                          context,
-                          viewModel.submit,
-                          l10n.purchaseOrderSubmitSuccess,
-                        ),
+                      : () async {
+                          final confirmed = await showDialog<bool>(
+                            context: context,
+                            builder: (_) => PointyConfirmationDialog(
+                              icon: Icons.send_outlined,
+                              title: l10n.submitPurchaseOrderConfirmTitle,
+                              message: l10n.submitPurchaseOrderConfirmMessage,
+                              confirmLabel: l10n.submitPurchaseOrderAction,
+                            ),
+                          );
+                          if (confirmed == true && context.mounted) {
+                            _runAction(
+                              context,
+                              viewModel.submit,
+                              l10n.purchaseOrderSubmitSuccess,
+                            );
+                          }
+                        },
                   icon: const Icon(Icons.send_outlined),
                   label: Text(l10n.submitPurchaseOrderAction),
                 ),
@@ -118,11 +131,25 @@ class _PurchaseOrderActions extends StatelessWidget {
                 OutlinedButton.icon(
                   onPressed: viewModel.isChangingStatus
                       ? null
-                      : () => _runAction(
-                          context,
-                          viewModel.cancel,
-                          l10n.purchaseOrderCancelSuccess,
-                        ),
+                      : () async {
+                          final confirmed = await showDialog<bool>(
+                            context: context,
+                            builder: (_) => PointyDestructiveConfirmationDialog(
+                              icon: Icons.cancel_outlined,
+                              title: l10n.cancelPurchaseOrderConfirmTitle,
+                              message: l10n.cancelPurchaseOrderConfirmMessage,
+                              confirmLabel:
+                                  l10n.cancelPurchaseOrderConfirmButton,
+                            ),
+                          );
+                          if (confirmed == true && context.mounted) {
+                            _runAction(
+                              context,
+                              viewModel.cancel,
+                              l10n.purchaseOrderCancelSuccess,
+                            );
+                          }
+                        },
                   icon: const Icon(Icons.cancel_outlined),
                   label: Text(l10n.cancelButton),
                 ),

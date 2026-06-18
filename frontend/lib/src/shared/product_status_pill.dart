@@ -46,7 +46,7 @@ class ProductStatusPill extends StatelessWidget {
     return DecoratedBox(
       decoration: BoxDecoration(
         color: background,
-        borderRadius: BorderRadius.circular(999),
+        borderRadius: BorderRadius.circular(PointyRadii.pill),
       ),
       child: Padding(
         padding: compact

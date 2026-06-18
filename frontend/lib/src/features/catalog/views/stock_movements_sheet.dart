@@ -127,7 +127,7 @@ class _StockMovementTile extends StatelessWidget {
         : formatDateTime(movement.createdAt!);
 
     return Material(
-      color: Colors.white,
+      color: context.pointyColors.surface,
       borderRadius: BorderRadius.circular(8),
       child: Padding(
         padding: const EdgeInsets.all(14),

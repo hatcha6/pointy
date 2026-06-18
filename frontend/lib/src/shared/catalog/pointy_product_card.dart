@@ -232,7 +232,7 @@ class _ProductCardBadge extends StatelessWidget {
     return DecoratedBox(
       decoration: BoxDecoration(
         color: colors.surface.withValues(alpha: 0.88),
-        borderRadius: BorderRadius.circular(999),
+        borderRadius: BorderRadius.circular(PointyRadii.pill),
         border: Border.all(color: colors.line.withValues(alpha: 0.72)),
       ),
       child: child,
@@ -257,7 +257,7 @@ class _CartQuantityBadge extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 7),
       decoration: BoxDecoration(
         color: colors.primaryStrong,
-        borderRadius: BorderRadius.circular(999),
+        borderRadius: BorderRadius.circular(PointyRadii.pill),
         border: Border.all(color: colors.surface, width: 1.5),
         boxShadow: [
           BoxShadow(

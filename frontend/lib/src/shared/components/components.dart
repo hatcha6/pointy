@@ -1,4 +1,5 @@
 export 'pointy_card_grid.dart';
+export 'pointy_confirmation_dialog.dart';
 export 'pointy_data_list.dart';
 export 'pointy_data_row.dart';
 export 'pointy_detail_callout.dart';

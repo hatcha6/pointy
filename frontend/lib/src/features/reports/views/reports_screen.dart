@@ -563,7 +563,7 @@ class _ReportTile extends StatelessWidget {
 
     return Card.filled(
       margin: EdgeInsets.zero,
-      color: isSelected ? PointyColors.primaryContainer : colors.surface,
+      color: isSelected ? colors.primaryContainer : colors.surface,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       clipBehavior: Clip.antiAlias,
       child: InkWell(

@@ -238,7 +238,21 @@ class PosCartPane extends StatelessWidget {
 
     messenger
       ..clearSnackBars()
-      ..showSnackBar(SnackBar(content: Text(message)));
+      ..showSnackBar(
+        SnackBar(
+          content: Text(message),
+          action: outcome.isSuccess
+              ? null
+              : SnackBarAction(
+                  label: l10n.retryButton,
+                  onPressed: () {
+                    if (context.mounted) {
+                      _checkout(context);
+                    }
+                  },
+                ),
+        ),
+      );
 
     if (outcome.isSuccess) {
       final order = outcome.order;
@@ -548,6 +562,32 @@ class _CartScrollContentState extends State<_CartScrollContent> {
     }
   }
 
+  /// Removes a cart line and surfaces a SnackBar with an Undo action, so a
+  /// mis-tap on a customer's in-progress order is one tap to recover.
+  void _deleteCartLineWithUndo(String lineKey) {
+    final l10n = AppLocalizations.of(context)!;
+    final messenger = ScaffoldMessenger.of(context);
+    final removed = _viewModel.removeCartLine(
+      lineKey,
+      source: 'cart_delete_button',
+    );
+    if (removed == null) {
+      return;
+    }
+    messenger
+      ..clearSnackBars()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(l10n.cartLineRemovedMessage),
+          action: SnackBarAction(
+            label: l10n.undoButton,
+            onPressed: () =>
+                _viewModel.restoreCartLine(removed.line, removed.index),
+          ),
+        ),
+      );
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
@@ -615,9 +655,8 @@ class _CartScrollContentState extends State<_CartScrollContent> {
                             ),
                       onDelete: widget.isCartLocked
                           ? null
-                          : () => _viewModel.removeCartLine(
+                          : () => _deleteCartLineWithUndo(
                               visibleLines[index].lineKey,
-                              source: 'cart_delete_button',
                             ),
                       onEditQuantity: widget.isCartLocked
                           ? null
@@ -817,7 +856,20 @@ class _PosCartHeaderActions extends StatelessWidget {
           tooltip: l10n.clearCartTooltip,
           onPressed: viewModel.cart.isEmpty || isCartLocked
               ? null
-              : viewModel.clearCart,
+              : () async {
+                  final confirmed = await showDialog<bool>(
+                    context: context,
+                    builder: (_) => PointyDestructiveConfirmationDialog(
+                      icon: Icons.remove_shopping_cart_outlined,
+                      title: l10n.clearCartConfirmTitle,
+                      message: l10n.clearCartConfirmMessage,
+                      confirmLabel: l10n.clearButton,
+                    ),
+                  );
+                  if (confirmed == true) {
+                    viewModel.clearCart();
+                  }
+                },
           icon: const Icon(Icons.delete_outline),
           color: colors.danger,
         ),

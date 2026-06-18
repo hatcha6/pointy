@@ -168,7 +168,7 @@ class StockCountProgressBar extends StatelessWidget {
         ),
         SizedBox(height: compact ? 6 : 10),
         ClipRRect(
-          borderRadius: BorderRadius.circular(999),
+          borderRadius: BorderRadius.circular(PointyRadii.pill),
           child: LinearProgressIndicator(
             value: total <= 0 ? null : progress,
             minHeight: compact ? 8 : 10,

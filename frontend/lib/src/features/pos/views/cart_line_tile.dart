@@ -142,9 +142,7 @@ class _CartLineUnit extends StatelessWidget {
             borderRadius: BorderRadius.circular(PointyRadii.chip),
             child: Container(
               decoration: BoxDecoration(
-                color: tappable
-                    ? PointyColors.primaryContainer
-                    : colors.subtleFill,
+                color: tappable ? colors.primaryContainer : colors.subtleFill,
                 borderRadius: BorderRadius.circular(PointyRadii.chip),
                 border: Border.all(color: colors.line),
               ),

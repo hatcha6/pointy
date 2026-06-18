@@ -416,7 +416,7 @@ class _ImageResultTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.pointyColors;
     return Material(
-      color: Colors.white,
+      color: colors.surface,
       borderRadius: BorderRadius.circular(8),
       clipBehavior: Clip.antiAlias,
       child: InkWell(

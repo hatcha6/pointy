@@ -44,17 +44,37 @@ class PointyProductImageFrame extends StatelessWidget {
               ? _FallbackLabel(text: fallbackText)
               : Padding(
                   padding: padding,
-                  child: Image.network(
-                    url,
-                    fit: fit,
-                    errorBuilder: (context, error, stackTrace) {
-                      return _FallbackLabel(text: fallbackText);
-                    },
-                    loadingBuilder: (context, child, progress) {
-                      if (progress == null) {
-                        return child;
-                      }
-                      return _FallbackLabel(text: fallbackText);
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      // Decode at display resolution: a ~1000px source image in
+                      // a small card tile otherwise wastes memory and thrashes
+                      // the image cache on scroll. Cap by the larger finite
+                      // dimension so aspect ratio is preserved (single axis).
+                      final dpr = MediaQuery.devicePixelRatioOf(context);
+                      final logical =
+                          [
+                                width ?? constraints.maxWidth,
+                                height ?? constraints.maxHeight,
+                              ]
+                              .where((v) => v.isFinite && v > 0)
+                              .fold<double>(0, (a, b) => a > b ? a : b);
+                      final cacheWidth = logical > 0
+                          ? (logical * dpr).round()
+                          : null;
+                      return Image.network(
+                        url,
+                        fit: fit,
+                        cacheWidth: cacheWidth,
+                        errorBuilder: (context, error, stackTrace) {
+                          return _FallbackLabel(text: fallbackText);
+                        },
+                        loadingBuilder: (context, child, progress) {
+                          if (progress == null) {
+                            return child;
+                          }
+                          return _FallbackLabel(text: fallbackText);
+                        },
+                      );
                     },
                   ),
                 ),

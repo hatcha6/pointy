@@ -141,6 +141,13 @@ class _UserManagementBody extends StatelessWidget {
               emptyBuilder: (context) => PointyEmptyState(
                 icon: Icons.group_outlined,
                 title: l10n.emptyUsers,
+                action: onCreateUser == null
+                    ? null
+                    : FilledButton.icon(
+                        onPressed: onCreateUser,
+                        icon: const Icon(Icons.person_add_alt_1),
+                        label: Text(l10n.addUserButton),
+                      ),
               ),
               padding: EdgeInsets.zero,
               framed: false,

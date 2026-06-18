@@ -583,7 +583,7 @@ class _StageHeader extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 2),
           decoration: BoxDecoration(
             color: colors.surfaceSunken,
-            borderRadius: BorderRadius.circular(999),
+            borderRadius: BorderRadius.circular(PointyRadii.pill),
           ),
           child: Text(
             '$count',

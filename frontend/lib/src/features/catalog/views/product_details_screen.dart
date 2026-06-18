@@ -387,7 +387,7 @@ class _ParentSummaryCard extends StatelessWidget {
     final l10n = AppLocalizations.of(context)!;
 
     return Material(
-      color: Colors.white,
+      color: context.pointyColors.surface,
       borderRadius: BorderRadius.circular(8),
       child: Padding(
         padding: const EdgeInsets.all(16),

@@ -524,7 +524,7 @@ class _TrendBar extends StatelessWidget {
         ),
         const SizedBox(height: 6),
         ClipRRect(
-          borderRadius: BorderRadius.circular(999),
+          borderRadius: BorderRadius.circular(PointyRadii.pill),
           child: Container(
             height: 10,
             color: colors.surfaceSunken,
@@ -535,7 +535,7 @@ class _TrendBar extends StatelessWidget {
                 child: DecoratedBox(
                   decoration: BoxDecoration(
                     color: PointyColors.primary,
-                    borderRadius: BorderRadius.circular(999),
+                    borderRadius: BorderRadius.circular(PointyRadii.pill),
                   ),
                 ),
               ),
@@ -893,7 +893,7 @@ class _BeneficiaryTile extends StatelessWidget {
 
     return PointyDataRow(
       leading: CircleAvatar(
-        backgroundColor: PointyColors.primaryContainer,
+        backgroundColor: colors.primaryContainer,
         foregroundColor: colors.primaryStrong,
         child: Icon(_beneficiaryIcon(beneficiary.partyType)),
       ),

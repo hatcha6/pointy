@@ -242,12 +242,12 @@ class _JobIntakeWizardState extends State<JobIntakeWizard> {
                 borderRadius: BorderRadius.circular(PointyRadii.card),
                 side: BorderSide(
                   color: _selectedCustomer?.id == customer.id
-                      ? PointyColors.primary
+                      ? context.pointyColors.primary
                       : context.pointyColors.line,
                 ),
               ),
               selected: _selectedCustomer?.id == customer.id,
-              selectedTileColor: PointyColors.primaryContainer,
+              selectedTileColor: context.pointyColors.primaryContainer,
               leading: OperationsIconBadge(
                 icon: Icons.person_outline,
                 size: 40,
@@ -683,11 +683,13 @@ class _StepHeader extends StatelessWidget {
                     ? colors.primaryStrong
                     : colors.subtleFill,
                 child: index < step
-                    ? const Icon(Icons.check, size: 18, color: Colors.white)
+                    ? Icon(Icons.check, size: 18, color: colors.surface)
                     : Text(
                         '${index + 1}',
                         style: TextStyle(
-                          color: index <= step ? Colors.white : colors.mutedInk,
+                          color: index <= step
+                              ? colors.surface
+                              : colors.mutedInk,
                         ),
                       ),
               ),

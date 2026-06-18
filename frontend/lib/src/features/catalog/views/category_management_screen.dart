@@ -521,7 +521,7 @@ class _QuickAccessChip extends StatelessWidget {
 
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: PointyColors.primaryContainer,
+        color: colors.primaryContainer,
         borderRadius: BorderRadius.circular(PointyRadii.chip),
         border: Border.all(color: colors.primaryStrong.withValues(alpha: 0.35)),
       ),
