@@ -1,11 +1,36 @@
 import 'dart:convert';
 
 import 'package:esc_pos_utils_plus/esc_pos_utils_plus.dart';
+import 'package:flutter/foundation.dart';
 import 'package:image/image.dart' as img;
 
 import '../../shared/branding.dart';
 import '../models/print_job.dart';
 import '../models/printer_config.dart';
+
+/// Sendable bundle for the ESC/POS isolate: payload + endpoint are plain data,
+/// and the capability profile is loaded on the caller isolate and passed across.
+class _EscPosEncodeRequest {
+  const _EscPosEncodeRequest({
+    required this.payload,
+    required this.endpoint,
+    required this.profile,
+  });
+
+  final Map<String, Object?> payload;
+  final PrinterEndpoint endpoint;
+  final CapabilityProfile profile;
+}
+
+/// Top-level isolate entry point. The encoder is stateless, so a const instance
+/// runs the synchronous encode off the UI thread.
+List<int> _encodeEscPosResolved(_EscPosEncodeRequest request) {
+  return const EscPosReceiptEncoder()._encodeWithProfile(request);
+}
+
+/// Decoded + downscaled shop/station logos keyed by their base64 source, so a
+/// busy printer doesn't re-decode the same image for every ticket.
+final Map<String, img.Image?> _logoRasterCache = {};
 
 class EscPosReceiptEncoder {
   const EscPosReceiptEncoder();
@@ -65,7 +90,29 @@ class EscPosReceiptEncoder {
     required PrinterEndpoint endpoint,
   }) async {
     final profile = await _loadProfile(endpoint);
-    final generator = Generator(_paperSize(endpoint.paperWidthMm), profile);
+    final request = _EscPosEncodeRequest(
+      payload: payload,
+      endpoint: endpoint,
+      profile: profile,
+    );
+    // Encoding (text layout, QR generation, and logo raster) is heavy and fully
+    // synchronous; run it in a background isolate so a checkout never blocks the
+    // UI. The web target has no isolates, so it runs inline.
+    if (kIsWeb) {
+      return _encodeWithProfile(request);
+    }
+    return compute(_encodeEscPosResolved, request);
+  }
+
+  /// Synchronous encode against an already-loaded [CapabilityProfile]. Public so
+  /// the isolate entry point can reach it; call [encodePayload] instead.
+  List<int> _encodeWithProfile(_EscPosEncodeRequest request) {
+    final payload = request.payload;
+    final endpoint = request.endpoint;
+    final generator = Generator(
+      _paperSize(endpoint.paperWidthMm),
+      request.profile,
+    );
     final codeTable = endpoint.codeTable.trim().isEmpty
         ? 'CP864'
         : endpoint.codeTable.trim();
@@ -445,15 +492,23 @@ class EscPosReceiptEncoder {
       return const [];
     }
     try {
-      final decoded = img.decodeImage(base64Decode(encoded));
-      if (decoded == null) {
+      final img.Image? image;
+      if (_logoRasterCache.containsKey(encoded)) {
+        image = _logoRasterCache[encoded];
+      } else {
+        final decoded = img.decodeImage(base64Decode(encoded));
+        image = decoded == null
+            ? null
+            : (decoded.width > 384
+                  ? img.copyResize(decoded, width: 384)
+                  : decoded);
+        _logoRasterCache[encoded] = image;
+      }
+      if (image == null) {
         return const [];
       }
-      final resized = decoded.width > 384
-          ? img.copyResize(decoded, width: 384)
-          : decoded;
       return [
-        ...generator.imageRaster(resized, align: PosAlign.center),
+        ...generator.imageRaster(image, align: PosAlign.center),
         ...generator.feed(1),
       ];
     } on Object {

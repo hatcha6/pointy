@@ -88,7 +88,13 @@ flutter:
         - asset: assets/fonts/IBMPlexSansArabic-Bold.ttf
           weight: 700
 
-  # To add assets to your application, add an assets section, like this:
+  # Also exposed as plain assets so PDF generation can read the raw font bytes
+  # via rootBundle and hand them to a background isolate.
+  assets:
+    - assets/fonts/IBMPlexSansArabic-Regular.ttf
+    - assets/fonts/IBMPlexSansArabic-Bold.ttf
+
+  # To add more assets to your application, add an assets section, like this:
   # assets:
   #   - images/a_dot_burr.jpeg
   #   - images/a_dot_ham.jpeg

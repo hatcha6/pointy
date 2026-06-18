@@ -609,73 +609,76 @@ class _CartScrollContentState extends State<_CartScrollContent> {
       child: Column(
         children: [
           Expanded(
-            child: ListView(
-              padding: EdgeInsetsDirectional.fromSTEB(
-                spacing.md,
-                spacing.sm,
-                spacing.md,
-                spacing.md,
-              ),
-              children: [
-                if (visibleLines.isEmpty)
-                  SizedBox(
-                    height: 240,
-                    child: PointyEmptyState(
-                      icon: Icons.shopping_cart_outlined,
-                      title: l10n.emptyCart,
-                      message: l10n.emptyCartMessage,
+            child: visibleLines.isEmpty
+                ? ListView(
+                    padding: EdgeInsetsDirectional.fromSTEB(
+                      spacing.md,
+                      spacing.sm,
+                      spacing.md,
+                      spacing.md,
                     ),
+                    children: [
+                      SizedBox(
+                        height: 240,
+                        child: PointyEmptyState(
+                          icon: Icons.shopping_cart_outlined,
+                          title: l10n.emptyCart,
+                          message: l10n.emptyCartMessage,
+                        ),
+                      ),
+                    ],
                   )
-                else
-                  for (
-                    var index = 0;
-                    index < visibleLines.length;
-                    index += 1
-                  ) ...[
-                    if (index > 0) Divider(height: 1, color: colors.line),
-                    CartLineTile(
-                      line: visibleLines[index],
-                      selected:
-                          scopeFocused &&
-                          focusedLine?.lineKey == visibleLines[index].lineKey,
-                      onSelect: widget.isCartLocked
-                          ? null
-                          : () => _focusLine(visibleLines[index]),
-                      onAdd: widget.isCartLocked
-                          ? null
-                          : () => _viewModel.incrementCartLine(
-                              visibleLines[index].lineKey,
-                              source: 'cart_quantity_button',
-                            ),
-                      onRemove: widget.isCartLocked
-                          ? null
-                          : () => _viewModel.decrementCartLine(
-                              visibleLines[index].lineKey,
-                              source: 'cart_quantity_button',
-                            ),
-                      onDelete: widget.isCartLocked
-                          ? null
-                          : () => _deleteCartLineWithUndo(
-                              visibleLines[index].lineKey,
-                            ),
-                      onEditQuantity: widget.isCartLocked
-                          ? null
-                          : () =>
-                                _editLineQuantity(context, visibleLines[index]),
-                      onSwitchUnit:
-                          widget.isCartLocked ||
-                              !Product.fromVariant(
-                                visibleLines[index].variant,
-                              ).hasSellableUnits
-                          ? null
-                          : () => _editLineUnit(context, visibleLines[index]),
-                      onEditNote: widget.isCartLocked
-                          ? null
-                          : () => _editLineNote(context, visibleLines[index]),
+                : ListView.separated(
+                    padding: EdgeInsetsDirectional.fromSTEB(
+                      spacing.md,
+                      spacing.sm,
+                      spacing.md,
+                      spacing.md,
                     ),
-                  ],
-              ],
-            ),
+                    itemCount: visibleLines.length,
+                    separatorBuilder: (context, index) =>
+                        Divider(height: 1, color: colors.line),
+                    itemBuilder: (context, index) {
+                      final line = visibleLines[index];
+                      return CartLineTile(
+                        line: line,
+                        selected:
+                            scopeFocused &&
+                            focusedLine?.lineKey == line.lineKey,
+                        onSelect: widget.isCartLocked
+                            ? null
+                            : () => _focusLine(line),
+                        onAdd: widget.isCartLocked
+                            ? null
+                            : () => _viewModel.incrementCartLine(
+                                line.lineKey,
+                                source: 'cart_quantity_button',
+                              ),
+                        onRemove: widget.isCartLocked
+                            ? null
+                            : () => _viewModel.decrementCartLine(
+                                line.lineKey,
+                                source: 'cart_quantity_button',
+                              ),
+                        onDelete: widget.isCartLocked
+                            ? null
+                            : () => _deleteCartLineWithUndo(line.lineKey),
+                        onEditQuantity: widget.isCartLocked
+                            ? null
+                            : () => _editLineQuantity(context, line),
+                        onSwitchUnit:
+                            widget.isCartLocked ||
+                                !Product.fromVariant(
+                                  line.variant,
+                                ).hasSellableUnits
+                            ? null
+                            : () => _editLineUnit(context, line),
+                        onEditNote: widget.isCartLocked
+                            ? null
+                            : () => _editLineNote(context, line),
+                      );
+                    },
+                  ),
           ),
           if (_pendingQuantity.isNotEmpty && focusedLine != null)
             _PendingQuantityBanner(

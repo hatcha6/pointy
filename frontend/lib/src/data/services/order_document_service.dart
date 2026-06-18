@@ -200,14 +200,12 @@ class OrderDocumentService {
     ShopSettings? shopSettings,
     Uint8List? shopLogoBytes,
   }) async {
-    final fonts = await fontLoader.load();
-    final document = _DocumentFrame(
-      template: saleInvoiceTemplate(order: order, shopSettings: shopSettings),
-      shopLogoBytes: shopLogoBytes,
-      labels: labels,
-      fonts: fonts,
+    final fontData = await fontLoader.loadData();
+    final template = saleInvoiceTemplate(
+      order: order,
+      shopSettings: shopSettings,
     );
-    return document.build();
+    return _renderDocument(template, shopLogoBytes, fontData);
   }
 
   Future<Uint8List> buildPurchaseOrderBytes({
@@ -215,14 +213,33 @@ class OrderDocumentService {
     ShopSettings? shopSettings,
     Uint8List? shopLogoBytes,
   }) async {
-    final fonts = await fontLoader.load();
-    final document = _DocumentFrame(
-      template: purchaseOrderTemplate(order: order, shopSettings: shopSettings),
-      shopLogoBytes: shopLogoBytes,
-      labels: labels,
-      fonts: fonts,
+    final fontData = await fontLoader.loadData();
+    final template = purchaseOrderTemplate(
+      order: order,
+      shopSettings: shopSettings,
     );
-    return document.build();
+    return _renderDocument(template, shopLogoBytes, fontData);
+  }
+
+  /// Renders [template] to PDF bytes. On native platforms the heavy synchronous
+  /// `pw.Document.save()` runs in a background isolate so a checkout (or a
+  /// share/print) never blocks the UI thread; the web target has no isolates,
+  /// so it renders inline.
+  Future<Uint8List> _renderDocument(
+    OrderDocumentTemplate template,
+    Uint8List? logoBytes,
+    PointyPdfFontData fontData,
+  ) {
+    final request = _OrderDocumentBuildRequest(
+      template: template,
+      logoBytes: logoBytes,
+      labels: labels,
+      fontData: fontData,
+    );
+    if (kIsWeb) {
+      return _buildOrderDocumentBytes(request);
+    }
+    return compute(_buildOrderDocumentBytes, request);
   }
 
   OrderDocumentTemplate saleInvoiceTemplate({
@@ -508,6 +525,34 @@ class OrderDocumentService {
       fonts: fonts,
     ).build();
   }
+}
+
+/// Sendable bundle for [_buildOrderDocumentBytes] so PDF rendering can run in a
+/// background isolate. Every field is plain data (the template and labels) or
+/// raw bytes (the logo and font data) — no pdf widgets or closures cross over.
+class _OrderDocumentBuildRequest {
+  const _OrderDocumentBuildRequest({
+    required this.template,
+    required this.logoBytes,
+    required this.labels,
+    required this.fontData,
+  });
+
+  final OrderDocumentTemplate template;
+  final Uint8List? logoBytes;
+  final OrderDocumentLabels labels;
+  final PointyPdfFontData fontData;
+}
+
+/// Top-level so it can serve as an isolate entry point: parses the font bytes
+/// and performs the heavy synchronous PDF encoding.
+Future<Uint8List> _buildOrderDocumentBytes(_OrderDocumentBuildRequest request) {
+  return _DocumentFrame(
+    template: request.template,
+    shopLogoBytes: request.logoBytes,
+    labels: request.labels,
+    fonts: request.fontData.toFonts(),
+  ).build();
 }
 
 class OrderDocumentLabels {

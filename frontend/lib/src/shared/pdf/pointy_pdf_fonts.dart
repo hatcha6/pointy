@@ -1,7 +1,7 @@
 import 'dart:typed_data';
 
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:pdf/widgets.dart' as pw;
-import 'package:printing/printing.dart';
 
 /// Fonts for every Pointy PDF. Arabic-first: a Naskh base/bold with a Cairo
 /// fallback so digits and Latin tokens stay legible. Shared by invoices,
@@ -58,15 +58,56 @@ class PointyPdfFonts {
   }
 }
 
-/// Loads the bundled-by-Google fonts at runtime. Injectable so tests (and the
-/// offline preview) can supply local TTFs instead of hitting the network.
+/// A PDF font payload that can cross an isolate boundary. [toFonts] rebuilds the
+/// pdf [pw.Font] objects (cheap, pure computation) on whichever isolate ends up
+/// rendering the document.
+sealed class PointyPdfFontData {
+  const PointyPdfFontData();
+
+  PointyPdfFonts toFonts();
+}
+
+/// Real (bundled TTF) fonts carried as raw bytes — sendable to a background
+/// isolate, where they are parsed into [pw.Font]s.
+class TtfPointyPdfFontData extends PointyPdfFontData {
+  const TtfPointyPdfFontData({
+    required this.base,
+    required this.bold,
+    this.fallback = const [],
+  });
+
+  final ByteData base;
+  final ByteData bold;
+  final List<ByteData> fallback;
+
+  @override
+  PointyPdfFonts toFonts() =>
+      PointyPdfFonts.ttf(base: base, bold: bold, fallback: fallback);
+}
+
+/// Built-in Helvetica set for tests/previews that don't render Arabic glyphs.
+class Type1PointyPdfFontData extends PointyPdfFontData {
+  const Type1PointyPdfFontData();
+
+  @override
+  PointyPdfFonts toFonts() => PointyPdfFonts.type1ForTests();
+}
+
+/// Loads the PDF fonts. Reuses the app's bundled IBM Plex Sans Arabic so PDFs
+/// render offline and the raw bytes can be handed to a background isolate.
+/// Injectable so tests/previews can swap in lighter fonts; point the asset
+/// paths at other bundled TTFs to change the PDF typeface.
 class PointyPdfFontLoader {
   const PointyPdfFontLoader();
 
-  Future<PointyPdfFonts> load() async {
-    final regular = await PdfGoogleFonts.notoNaskhArabicRegular();
-    final bold = await PdfGoogleFonts.notoNaskhArabicBold();
-    final cairo = await PdfGoogleFonts.cairoRegular();
-    return PointyPdfFonts(base: regular, bold: bold, fallback: [cairo]);
+  static const _baseFontAsset = 'assets/fonts/IBMPlexSansArabic-Regular.ttf';
+  static const _boldFontAsset = 'assets/fonts/IBMPlexSansArabic-Bold.ttf';
+
+  Future<PointyPdfFontData> loadData() async {
+    final base = await rootBundle.load(_baseFontAsset);
+    final bold = await rootBundle.load(_boldFontAsset);
+    return TtfPointyPdfFontData(base: base, bold: bold);
   }
+
+  Future<PointyPdfFonts> load() async => (await loadData()).toFonts();
 }

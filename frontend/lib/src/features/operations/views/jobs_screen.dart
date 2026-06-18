@@ -193,28 +193,28 @@ class _JobsScreenState extends State<JobsScreen> {
     }
 
     if (!showBoard) {
-      return ListView(
+      final jobs = viewModel.jobs;
+      // Lazily build the filtered job list so a long backlog doesn't construct
+      // every card up front.
+      return ListView.builder(
         padding: spacing.pagePadding,
-        children: [
-          AdaptiveMaxWidth(
+        itemCount: jobs.length,
+        itemBuilder: (context, index) {
+          final job = jobs[index];
+          return AdaptiveMaxWidth(
             width: AppContentWidth.detail,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                for (final job in viewModel.jobs) ...[
-                  _JobCard(
-                    job: job,
-                    stagePosition: jobStagePosition(job, viewModel.templates),
-                    isBusy: _advancingJobIds.contains(job.id),
-                    onTap: () => widget.onOpenJob(job),
-                    onAdvance: null,
-                  ),
-                  SizedBox(height: spacing.sm),
-                ],
-              ],
+            child: Padding(
+              padding: EdgeInsetsDirectional.only(bottom: spacing.sm),
+              child: _JobCard(
+                job: job,
+                stagePosition: jobStagePosition(job, viewModel.templates),
+                isBusy: _advancingJobIds.contains(job.id),
+                onTap: () => widget.onOpenJob(job),
+                onAdvance: null,
+              ),
             ),
-          ),
-        ],
+          );
+        },
       );
     }
 

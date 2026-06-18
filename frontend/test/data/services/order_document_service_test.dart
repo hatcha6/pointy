@@ -130,6 +130,13 @@ void main() {
     },
   );
 
+  testWidgets('font loader reads the bundled PDF font bytes via rootBundle', (
+    tester,
+  ) async {
+    final data = await const PointyPdfFontLoader().loadData();
+    expect(data, isA<TtfPointyPdfFontData>());
+  });
+
   test('sale invoice PDF renders with an online invoice QR URL', () async {
     const service = OrderDocumentService(fontLoader: _TestFontLoader());
 
@@ -149,9 +156,7 @@ class _TestFontLoader extends PointyPdfFontLoader {
   const _TestFontLoader();
 
   @override
-  Future<PointyPdfFonts> load() async {
-    return PointyPdfFonts.type1ForTests();
-  }
+  Future<PointyPdfFontData> loadData() async => const Type1PointyPdfFontData();
 }
 
 SaleOrder _saleOrder({

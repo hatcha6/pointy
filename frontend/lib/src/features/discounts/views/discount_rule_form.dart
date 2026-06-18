@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
@@ -54,6 +56,7 @@ class _DiscountRuleFormState extends State<DiscountRuleForm> {
   late final TextEditingController _perCustomerLimitController;
   late final TextEditingController _perSupplierLimitController;
   late final List<TextEditingController> _liveControllers;
+  Timer? _summaryDebounce;
 
   late DiscountChannel _channel;
   late DiscountApplicationType _applicationType;
@@ -183,6 +186,7 @@ class _DiscountRuleFormState extends State<DiscountRuleForm> {
 
   @override
   void dispose() {
+    _summaryDebounce?.cancel();
     for (final controller in _liveControllers) {
       controller.removeListener(_onLiveChanged);
     }
@@ -202,9 +206,15 @@ class _DiscountRuleFormState extends State<DiscountRuleForm> {
   }
 
   void _onLiveChanged() {
-    if (mounted) {
-      setState(() {});
-    }
+    // The live summary rebuilds the whole form, including the constraint chips
+    // computed over the selected products/categories/customers. Debounce so a
+    // burst of keystrokes only rebuilds once the user pauses typing.
+    _summaryDebounce?.cancel();
+    _summaryDebounce = Timer(const Duration(milliseconds: 250), () {
+      if (mounted) {
+        setState(() {});
+      }
+    });
   }
 
   /// A stable string of every editable field (excluding pure UI-expansion

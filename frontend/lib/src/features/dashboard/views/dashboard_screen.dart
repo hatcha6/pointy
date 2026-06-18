@@ -2167,8 +2167,12 @@ Color _changeColor(BuildContext context, double value) {
   return colors.mutedInk;
 }
 
-String _formatNumber(num value) =>
-    NumberFormat.decimalPattern('ar').format(value);
+// Hoisted so the ICU locale data is parsed once, not rebuilt on every call
+// (these format the dashboard's metric tiles and every insight-list row).
+final NumberFormat _decimalFormat = NumberFormat.decimalPattern('ar');
+final NumberFormat _compactFormat = NumberFormat.compact(locale: 'ar');
+
+String _formatNumber(num value) => _decimalFormat.format(value);
 
 String _formatPercent(double value) => '${value.toStringAsFixed(2)}%';
 
@@ -2177,9 +2181,7 @@ String _formatChange(double value) {
   return '$prefix${value.toStringAsFixed(2)}%';
 }
 
-String _compactNumber(double value) {
-  return NumberFormat.compact(locale: 'ar').format(value);
-}
+String _compactNumber(double value) => _compactFormat.format(value);
 
 String _paymentMethodLabel(AppLocalizations l10n, String method) {
   return switch (method) {
