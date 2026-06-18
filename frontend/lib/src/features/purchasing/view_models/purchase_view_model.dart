@@ -217,7 +217,9 @@ class PurchaseViewModel extends ChangeNotifier {
     );
     return switch (result) {
       Ok<ProductVariant?>(:final value) => value,
-      Error<ProductVariant?>() => throw Exception('barcode lookup failed'),
+      // A lookup failure (network/server) degrades to "not found" instead of
+      // throwing into the scan handler; the nullable return already signals it.
+      Error<ProductVariant?>() => null,
     };
   }
 
