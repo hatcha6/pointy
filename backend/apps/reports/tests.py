@@ -10,8 +10,9 @@ from rest_framework.test import APIClient
 
 from apps.catalog.testing import create_product_with_default_variant
 from apps.core.roles import CASHIER_GROUP, MANAGER_GROUP, ensure_role_groups
-from apps.inventory.models import StockItem
+from apps.inventory.models import StockItem, StockMovement
 from apps.payments.models import Payment
+from apps.purchasing.models import PurchaseOrder, Supplier
 from apps.sales.models import Order, OrderLine, RegisterCashMovement, RegisterSession
 
 from .models import ReportRun
@@ -388,3 +389,97 @@ class ReportRunApiTests(TestCase):
             inventory_section["metadata"]["total_count"],
             inventory_section["metadata"]["returned_count"],
         )
+
+
+class UntestedReportBuilderTests(TestCase):
+    """Covers the report builders that previously had no test: payment methods,
+    stock movements, and purchasing summary."""
+
+    def setUp(self):
+        ensure_role_groups()
+        self.manager = get_user_model().objects.create_user(
+            username="report-builders-manager",
+            password="pass",
+        )
+        self.manager.groups.add(Group.objects.get(name=MANAGER_GROUP))
+        self.client = APIClient()
+        self.client.force_authenticate(user=self.manager)
+
+    def _run(self, report_type):
+        response = self.client.post(
+            reverse("report-list"),
+            {
+                "report_type": report_type,
+                "output_format": ReportRun.OutputFormat.PDF,
+                "params": {},
+            },
+            format="json",
+        )
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_201_CREATED,
+            response.data,
+        )
+        self.assertEqual(response.data["status"], ReportRun.Status.SUCCESS)
+        return response.data["payload"]
+
+    def test_payment_methods_report_totals_cash(self):
+        session = RegisterSession.objects.create(
+            owner=self.manager,
+            owner_key=f"user:{self.manager.pk}",
+            opening_cash=Decimal("0.00"),
+        )
+        order = Order.objects.create(
+            register_session=session,
+            status=Order.Status.PAID,
+            subtotal=Decimal("30.00"),
+            total=Decimal("30.00"),
+        )
+        Payment.objects.create(
+            order=order,
+            method=Payment.Method.CASH,
+            amount=Decimal("30.00"),
+        )
+
+        payload = self._run(ReportRun.ReportType.PAYMENT_METHODS)
+
+        self.assertEqual(payload["summary"]["payment_total"], "30.00")
+        self.assertEqual(payload["summary"]["payment_count"], 1)
+
+    def test_stock_movements_report_counts_movements(self):
+        variant = create_product_with_default_variant(
+            sku="REPORT-MOVE",
+            name="حركة المخزون",
+            unit_price=Decimal("1.00"),
+        ).default_variant
+        stock_item = StockItem.objects.create(variant=variant, quantity_on_hand=10)
+        StockMovement.objects.create(
+            variant=variant,
+            stock_item=stock_item,
+            movement_type=StockMovement.Type.INCREASE,
+            quantity=10,
+            on_hand_before=0,
+            on_hand_after=10,
+            committed_before=0,
+            committed_after=0,
+            expected_before=0,
+            expected_after=0,
+        )
+
+        payload = self._run(ReportRun.ReportType.STOCK_MOVEMENTS)
+
+        self.assertEqual(payload["summary"]["movement_count"], 1)
+
+    def test_purchasing_summary_report_totals_orders(self):
+        supplier = Supplier.objects.create(name="مورد التقرير")
+        PurchaseOrder.objects.create(
+            supplier=supplier,
+            status=PurchaseOrder.Status.RECEIVED,
+            subtotal=Decimal("500.00"),
+            total=Decimal("500.00"),
+        )
+
+        payload = self._run(ReportRun.ReportType.PURCHASING_SUMMARY)
+
+        self.assertEqual(payload["summary"]["purchase_total"], "500.00")
+        self.assertEqual(payload["summary"]["purchase_order_count"], 1)
