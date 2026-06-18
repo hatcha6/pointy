@@ -2423,6 +2423,13 @@ void main() {
 
     expect(setupPayload?['username'], 'owner');
     expect(setupPayload?['password'], 'Owner-Strong-Pass-2026!');
+
+    // The first-run shop-setup wizard now appears right after admin creation;
+    // skip it to land on the dashboard.
+    expect(find.text('إعداد المتجر'), findsOneWidget);
+    await tester.tap(find.text('تخطٍّ'));
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+
     expect(find.text('لوحة التحكم'), findsOneWidget);
   });
 

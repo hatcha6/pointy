@@ -283,7 +283,9 @@ void main() {
         ),
       ),
     );
-    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    // First-load shows a content skeleton (not a spinner) so the layout doesn't
+    // jump when the data arrives.
+    expect(find.byType(PointySkeleton), findsOneWidget);
 
     await _pumpSurface(
       tester,
