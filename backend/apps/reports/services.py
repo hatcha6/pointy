@@ -403,18 +403,19 @@ def _payment_methods_report(user, period):
         (_decimal_from(row["commission"]) for row in rows),
         Decimal("0.00"),
     )
+    payment_count = payments.count()
     return {
         "summary": {
             "payment_total": _money(total),
             "commission_total": _money(commission),
-            "payment_count": payments.count(),
+            "payment_count": payment_count,
         },
         "sections": [
             _metric_section(
                 [
                     ("payment_total", _money(total)),
                     ("commission_total", _money(commission)),
-                    ("payment_count", payments.count()),
+                    ("payment_count", payment_count),
                 ]
             ),
             _report_section(
@@ -626,24 +627,25 @@ def _inventory_status_report(user, period):
         }
         for item in stock_rows.rows
     ]
+    product_count = Product.objects.count()
+    stock_item_count = stock.count()
+    low_stock_count = low_stock.count()
+    out_of_stock_count = stock.filter(quantity_on_hand__lte=0).count()
     return {
         "summary": {
-            "product_count": Product.objects.count(),
-            "stock_item_count": stock.count(),
-            "low_stock_count": low_stock.count(),
-            "out_of_stock_count": stock.filter(quantity_on_hand__lte=0).count(),
+            "product_count": product_count,
+            "stock_item_count": stock_item_count,
+            "low_stock_count": low_stock_count,
+            "out_of_stock_count": out_of_stock_count,
             "retail_stock_value": _money(retail_value),
         },
         "sections": [
             _metric_section(
                 [
-                    ("product_count", Product.objects.count()),
-                    ("stock_item_count", stock.count()),
-                    ("low_stock_count", low_stock.count()),
-                    (
-                        "out_of_stock_count",
-                        stock.filter(quantity_on_hand__lte=0).count(),
-                    ),
+                    ("product_count", product_count),
+                    ("stock_item_count", stock_item_count),
+                    ("low_stock_count", low_stock_count),
+                    ("out_of_stock_count", out_of_stock_count),
                     ("retail_stock_value", _money(retail_value)),
                 ]
             ),
@@ -712,15 +714,16 @@ def _stock_movements_report(user, period):
     quantity_moved = movements.aggregate(
         quantity=Coalesce(Sum("quantity"), ZERO_QTY),
     )["quantity"]
+    movement_count = movements.count()
     return {
         "summary": {
-            "movement_count": movements.count(),
+            "movement_count": movement_count,
             "quantity_moved": quantity_moved,
         },
         "sections": [
             _metric_section(
                 [
-                    ("movement_count", movements.count()),
+                    ("movement_count", movement_count),
                     ("quantity_moved", quantity_moved),
                 ]
             ),
@@ -796,25 +799,23 @@ def _purchasing_summary_report(user, period):
         }
         for supplier in supplier_row_values.rows
     ]
+    purchase_order_count = period_orders.count()
+    open_order_count = orders.exclude(status=PurchaseOrder.Status.RECEIVED).count()
+    supplier_count = Supplier.objects.filter(is_active=True).count()
     return {
         "summary": {
             "purchase_total": _money(purchase_total),
-            "purchase_order_count": period_orders.count(),
-            "open_order_count": orders.exclude(
-                status=PurchaseOrder.Status.RECEIVED,
-            ).count(),
-            "supplier_count": Supplier.objects.filter(is_active=True).count(),
+            "purchase_order_count": purchase_order_count,
+            "open_order_count": open_order_count,
+            "supplier_count": supplier_count,
         },
         "sections": [
             _metric_section(
                 [
                     ("purchase_total", _money(purchase_total)),
-                    ("purchase_order_count", period_orders.count()),
-                    (
-                        "open_order_count",
-                        orders.exclude(status=PurchaseOrder.Status.RECEIVED).count(),
-                    ),
-                    ("supplier_count", Supplier.objects.filter(is_active=True).count()),
+                    ("purchase_order_count", purchase_order_count),
+                    ("open_order_count", open_order_count),
+                    ("supplier_count", supplier_count),
                 ]
             ),
             _report_section(
@@ -883,20 +884,18 @@ def _reorder_items_report(user, period):
             }
         )
 
+    out_of_stock_count = stock.filter(quantity_on_hand__lte=0).count()
     return {
         "summary": {
             "reorder_item_count": bounded.total_count,
-            "out_of_stock_count": stock.filter(quantity_on_hand__lte=0).count(),
+            "out_of_stock_count": out_of_stock_count,
             "suggested_units": suggested_units,
         },
         "sections": [
             _metric_section(
                 [
                     ("reorder_item_count", bounded.total_count),
-                    (
-                        "out_of_stock_count",
-                        stock.filter(quantity_on_hand__lte=0).count(),
-                    ),
+                    ("out_of_stock_count", out_of_stock_count),
                     ("suggested_units", suggested_units),
                 ]
             ),
@@ -981,15 +980,17 @@ def _payroll_summary_report(user, period):
         for row in bounded_employees.rows
     ]
 
+    payroll_run_count = runs.count()
+    active_employee_count = Employee.objects.filter(
+        status=Employee.Status.ACTIVE,
+    ).count()
     return {
         "summary": {
             "salary_expense": _money(salary_expense),
             "paid_total": _money(paid_total),
             "pending_total": _money(pending_total),
-            "payroll_run_count": runs.count(),
-            "active_employee_count": Employee.objects.filter(
-                status=Employee.Status.ACTIVE,
-            ).count(),
+            "payroll_run_count": payroll_run_count,
+            "active_employee_count": active_employee_count,
         },
         "sections": [
             _metric_section(
@@ -997,13 +998,8 @@ def _payroll_summary_report(user, period):
                     ("salary_expense", _money(salary_expense)),
                     ("paid_total", _money(paid_total)),
                     ("pending_total", _money(pending_total)),
-                    ("payroll_run_count", runs.count()),
-                    (
-                        "active_employee_count",
-                        Employee.objects.filter(
-                            status=Employee.Status.ACTIVE,
-                        ).count(),
-                    ),
+                    ("payroll_run_count", payroll_run_count),
+                    ("active_employee_count", active_employee_count),
                 ]
             ),
             _report_section(

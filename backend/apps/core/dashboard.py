@@ -6,12 +6,16 @@ from django.core.cache import cache
 from django.db.models import (
     Count,
     DecimalField,
+    ExpressionWrapper,
     F,
+    IntegerField,
+    OuterRef,
     Q,
+    Subquery,
     Sum,
     Value,
 )
-from django.db.models.functions import Coalesce, ExtractHour, TruncDate
+from django.db.models.functions import Coalesce, ExtractHour, Greatest, TruncDate
 from django.utils import timezone
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -79,7 +83,12 @@ class DashboardView(APIView):
             request.user,
             ("sales.view_order", "sales.view_registersession"),
         ):
-            data["sections"]["sales"] = _sales_section(request, period)
+            data["sections"]["sales"] = _cached_dashboard_section(
+                "sales",
+                request,
+                period,
+                lambda: _sales_section(request, period),
+            )
         if _can(request.user, "reports.view_reportrun") and _can(
             request.user,
             "payments.view_payment",
@@ -91,7 +100,12 @@ class DashboardView(APIView):
                 lambda: _payments_section(request, period),
             )
         if _can_any(request.user, ("inventory.view_stockitem", "inventory.view_stockmovement")):
-            data["sections"]["inventory"] = _inventory_section(period)
+            data["sections"]["inventory"] = _cached_dashboard_section(
+                "inventory",
+                request,
+                period,
+                lambda: _inventory_section(period),
+            )
         if _can_any(request.user, ("purchasing.view_purchaseorder", "purchasing.view_supplier")):
             data["sections"]["purchasing"] = _cached_dashboard_section(
                 "purchasing",
@@ -101,18 +115,43 @@ class DashboardView(APIView):
                 scope="global",
             )
         if _can(request.user, "employees.view_payrollrun"):
-            data["sections"]["payroll"] = _payroll_section(period)
+            data["sections"]["payroll"] = _cached_dashboard_section(
+                "payroll",
+                request,
+                period,
+                lambda: _payroll_section(period),
+            )
         if _can(request.user, "reports.view_reportrun") and _can(
             request.user,
             "sales.view_order",
         ):
-            data["sections"]["profitability"] = _profitability_section(request, period)
+            data["sections"]["profitability"] = _cached_dashboard_section(
+                "profitability",
+                request,
+                period,
+                lambda: _profitability_section(request, period),
+            )
         if _can(request.user, "customers.view_customer"):
-            data["sections"]["customers"] = _customers_section(period)
+            data["sections"]["customers"] = _cached_dashboard_section(
+                "customers",
+                request,
+                period,
+                lambda: _customers_section(period),
+            )
         if _can(request.user, "discounts.view_discountrule"):
-            data["sections"]["discounts"] = _discounts_section(period)
+            data["sections"]["discounts"] = _cached_dashboard_section(
+                "discounts",
+                request,
+                period,
+                lambda: _discounts_section(period),
+            )
         if _can(request.user, "fraud.view_fraudfinding"):
-            data["sections"]["fraud"] = _fraud_section()
+            data["sections"]["fraud"] = _cached_dashboard_section(
+                "fraud",
+                request,
+                period,
+                lambda: _fraud_section(),
+            )
         if _can(request.user, "printing.view_printjob"):
             data["sections"]["printing"] = _cached_dashboard_section(
                 "printing",
@@ -266,15 +305,24 @@ def _payments_section(request, period):
 def _inventory_section(period):
     stock = StockItem.objects.select_related("variant", "variant__product")
     low_stock = stock.filter(quantity_on_hand__lte=F("reorder_level"))
-    out_of_stock = stock.filter(quantity_on_hand__lte=0)
     value_expr = F("quantity_on_hand") * F("variant__unit_price")
-    retail_value = stock.aggregate(
-        total=Coalesce(
+    # One pass over the stock table for every count and sum the summary needs.
+    stock_totals = stock.aggregate(
+        stock_item_count=Count("id"),
+        low_stock_count=Count("id", filter=Q(quantity_on_hand__lte=F("reorder_level"))),
+        out_of_stock_count=Count("id", filter=Q(quantity_on_hand__lte=0)),
+        committed_units=Coalesce(Sum("quantity_committed"), ZERO_QTY),
+        expected_units=Coalesce(Sum("quantity_expected"), ZERO_QTY),
+        retail_stock_value=Coalesce(
             Sum(value_expr, output_field=MONEY_FIELD),
             Value(Decimal("0.00")),
             output_field=MONEY_FIELD,
-        )
-    )["total"]
+        ),
+    )
+    product_totals = Product.objects.aggregate(
+        product_count=Count("id"),
+        active_product_count=Count("id", filter=Q(is_active=True)),
+    )
 
     sold_variant_ids = OrderLine.objects.filter(
         order__status__in=(Order.Status.PAID, Order.Status.VOID),
@@ -302,18 +350,14 @@ def _inventory_section(period):
 
     return {
         "summary": {
-            "product_count": Product.objects.count(),
-            "active_product_count": Product.objects.filter(is_active=True).count(),
-            "stock_item_count": stock.count(),
-            "low_stock_count": low_stock.count(),
-            "out_of_stock_count": out_of_stock.count(),
-            "committed_units": stock.aggregate(total=Coalesce(Sum("quantity_committed"), ZERO_QTY))[
-                "total"
-            ],
-            "expected_units": stock.aggregate(total=Coalesce(Sum("quantity_expected"), ZERO_QTY))[
-                "total"
-            ],
-            "retail_stock_value": _money(retail_value),
+            "product_count": product_totals["product_count"],
+            "active_product_count": product_totals["active_product_count"],
+            "stock_item_count": stock_totals["stock_item_count"],
+            "low_stock_count": stock_totals["low_stock_count"],
+            "out_of_stock_count": stock_totals["out_of_stock_count"],
+            "committed_units": stock_totals["committed_units"],
+            "expected_units": stock_totals["expected_units"],
+            "retail_stock_value": _money(stock_totals["retail_stock_value"]),
         },
         "low_stock_items": [
             _stock_item_row(item)
@@ -436,42 +480,51 @@ def _payroll_section(period):
     period_start = period["start"].date()
     period_end = period["end"].date()
     payroll_runs = PayrollRun.objects.exclude(status=PayrollRun.Status.VOID)
-    period_runs = payroll_runs.filter(
-        period_end__gte=period_start,
-        period_start__lte=period_end,
+    in_period = Q(period_end__gte=period_start, period_start__lte=period_end)
+    # Collapse every payroll total and count the summary needs into one pass.
+    totals = payroll_runs.aggregate(
+        salary_expense=Coalesce(
+            Sum(
+                "net_total",
+                filter=in_period
+                & Q(status__in=(PayrollRun.Status.APPROVED, PayrollRun.Status.PAID)),
+            ),
+            Value(Decimal("0.00")),
+            output_field=MONEY_FIELD,
+        ),
+        paid_total=Coalesce(
+            Sum(
+                "net_total",
+                filter=Q(
+                    status=PayrollRun.Status.PAID,
+                    payment_date__gte=period_start,
+                    payment_date__lte=period_end,
+                ),
+            ),
+            Value(Decimal("0.00")),
+            output_field=MONEY_FIELD,
+        ),
+        pending_total=Coalesce(
+            Sum("net_total", filter=Q(status=PayrollRun.Status.APPROVED)),
+            Value(Decimal("0.00")),
+            output_field=MONEY_FIELD,
+        ),
+        payroll_run_count=Count("id", filter=in_period),
+        draft_run_count=Count("id", filter=Q(status=PayrollRun.Status.DRAFT)),
+        pending_run_count=Count("id", filter=Q(status=PayrollRun.Status.APPROVED)),
     )
-    paid_runs = payroll_runs.filter(
-        status=PayrollRun.Status.PAID,
-        payment_date__gte=period_start,
-        payment_date__lte=period_end,
-    )
-    pending_runs = payroll_runs.filter(status=PayrollRun.Status.APPROVED)
-
-    salary_expense = period_runs.filter(
-        status__in=(PayrollRun.Status.APPROVED, PayrollRun.Status.PAID),
-    ).aggregate(
-        total=Coalesce(Sum("net_total"), Value(Decimal("0.00")), output_field=MONEY_FIELD)
-    )["total"]
-    paid_total = paid_runs.aggregate(
-        total=Coalesce(Sum("net_total"), Value(Decimal("0.00")), output_field=MONEY_FIELD)
-    )["total"]
-    pending_total = pending_runs.aggregate(
-        total=Coalesce(Sum("net_total"), Value(Decimal("0.00")), output_field=MONEY_FIELD)
-    )["total"]
 
     return {
         "summary": {
-            "salary_expense": _money(salary_expense),
-            "paid_total": _money(paid_total),
-            "pending_total": _money(pending_total),
+            "salary_expense": _money(totals["salary_expense"]),
+            "paid_total": _money(totals["paid_total"]),
+            "pending_total": _money(totals["pending_total"]),
             "active_employee_count": Employee.objects.filter(
                 status=Employee.Status.ACTIVE,
             ).count(),
-            "payroll_run_count": period_runs.count(),
-            "draft_run_count": payroll_runs.filter(
-                status=PayrollRun.Status.DRAFT,
-            ).count(),
-            "pending_run_count": pending_runs.count(),
+            "payroll_run_count": totals["payroll_run_count"],
+            "draft_run_count": totals["draft_run_count"],
+            "pending_run_count": totals["pending_run_count"],
             "pending_loan_request_count": EmployeeLoan.objects.filter(
                 status=EmployeeLoan.Status.REQUESTED,
             ).count(),
@@ -508,20 +561,34 @@ def _profitability_section(request, period):
     if _can(request.user, "employees.view_payrollrun"):
         period_start = period["start"].date()
         period_end = period["end"].date()
-        payroll_paid = PayrollRun.objects.filter(
-            status=PayrollRun.Status.PAID,
-            payment_date__gte=period_start,
-            payment_date__lte=period_end,
-        ).aggregate(
-            total=Coalesce(Sum("net_total"), Value(Decimal("0.00")), output_field=MONEY_FIELD)
-        )["total"]
-        payroll_accrued = PayrollRun.objects.filter(
-            status__in=(PayrollRun.Status.APPROVED, PayrollRun.Status.PAID),
-            period_end__gte=period_start,
-            period_start__lte=period_end,
-        ).aggregate(
-            total=Coalesce(Sum("net_total"), Value(Decimal("0.00")), output_field=MONEY_FIELD)
-        )["total"]
+        payroll_totals = PayrollRun.objects.aggregate(
+            paid=Coalesce(
+                Sum(
+                    "net_total",
+                    filter=Q(
+                        status=PayrollRun.Status.PAID,
+                        payment_date__gte=period_start,
+                        payment_date__lte=period_end,
+                    ),
+                ),
+                Value(Decimal("0.00")),
+                output_field=MONEY_FIELD,
+            ),
+            accrued=Coalesce(
+                Sum(
+                    "net_total",
+                    filter=Q(
+                        status__in=(PayrollRun.Status.APPROVED, PayrollRun.Status.PAID),
+                        period_end__gte=period_start,
+                        period_start__lte=period_end,
+                    ),
+                ),
+                Value(Decimal("0.00")),
+                output_field=MONEY_FIELD,
+            ),
+        )
+        payroll_paid = payroll_totals["paid"]
+        payroll_accrued = payroll_totals["accrued"]
 
     payment_commissions = Decimal("0.00")
     if _can(request.user, "payments.view_payment"):
@@ -978,17 +1045,43 @@ def _sales_report_ordering(order_by):
 
 
 def _top_categories(orders):
+    # A product can belong to several categories (M2M). Joining order lines to
+    # ``categories`` repeats each line once per category, so summing the raw
+    # revenue would credit a product in N categories N times over. Divide each
+    # line's revenue and units evenly across its product's categories so the
+    # breakdown reconciles with real sales; lines on uncategorised products
+    # (count 0) divide by 1 and fall into the blank "uncategorised" bucket.
+    category_count = Greatest(
+        Coalesce(
+            Subquery(
+                Product.objects.filter(pk=OuterRef("variant__product_id"))
+                .annotate(_count=Count("categories"))
+                .values("_count")[:1],
+                output_field=IntegerField(),
+            ),
+            Value(0),
+        ),
+        Value(1),
+    )
     revenue_expr = F("quantity") * F("unit_price") - F("discount_total")
+    allocated_revenue = ExpressionWrapper(
+        revenue_expr / category_count,
+        output_field=MONEY_FIELD,
+    )
+    allocated_units = ExpressionWrapper(
+        F("quantity") / category_count,
+        output_field=QTY_FIELD,
+    )
     rows = (
         OrderLine.objects.filter(order__in=orders)
         .values("variant__product__categories__name")
         .annotate(
             revenue=Coalesce(
-                Sum(revenue_expr, output_field=MONEY_FIELD),
+                Sum(allocated_revenue),
                 Value(Decimal("0.00")),
                 output_field=MONEY_FIELD,
             ),
-            units_sold=Coalesce(Sum("quantity"), ZERO_QTY),
+            units_sold=Coalesce(Sum(allocated_units), ZERO_QTY),
         )
         .order_by("-revenue")[:6]
     )

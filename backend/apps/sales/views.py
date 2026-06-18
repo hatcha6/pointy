@@ -1,6 +1,7 @@
 import logging
 
 from django.db import IntegrityError, transaction
+from django.db.models import Prefetch
 from django.utils import timezone
 from rest_framework import mixins, serializers, status, viewsets
 from rest_framework.decorators import action
@@ -9,6 +10,7 @@ from rest_framework.response import Response
 
 from apps.analytics.models import AnalyticsEvent
 from apps.analytics.services import record_domain_event
+from apps.catalog.models import VariantOptionValue
 from apps.channels.services import require_active_sales_channel
 from apps.core.idempotency import run_idempotent_request
 from apps.core.discovery import request_is_relayed
@@ -63,7 +65,13 @@ class OrderViewSet(
         "sales_channel",
     ).prefetch_related(
         "lines__variant__product",
+        "lines__adjustment_lines",
+        Prefetch(
+            "lines__variant__option_values",
+            queryset=VariantOptionValue.objects.select_related("option"),
+        ),
         "payments",
+        "applied_discounts",
     )
     filterset_fields = (
         "status",

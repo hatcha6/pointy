@@ -1,6 +1,7 @@
 from datetime import date
 from decimal import Decimal
 
+from django.db.models import Count, Prefetch, Q, Sum
 from rest_framework import mixins, parsers, serializers, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
@@ -8,7 +9,7 @@ from rest_framework.response import Response
 
 from apps.attachments.models import Attachment
 from apps.attachments.serializers import AttachmentSerializer, AttachmentSummarySerializer
-from apps.catalog.models import Product, ProductVariant
+from apps.catalog.models import Product, ProductVariant, VariantOptionValue
 from apps.core.idempotency import run_idempotent_request
 from apps.core.permissions import HasPointyPermission
 from .models import (
@@ -27,6 +28,7 @@ from .serializers import (
     PurchaseOrderRefundSerializer,
     PurchaseReceiptInputSerializer,
     PurchaseOrderReturnSerializer,
+    PurchaseOrderListSerializer,
     PurchaseOrderSerializer,
     SupplierPaymentSerializer,
     SupplierSerializer,
@@ -57,6 +59,26 @@ class SupplierViewSet(viewsets.ModelViewSet):
     filterset_fields = ("is_active",)
     search_fields = ("name", "contact_name", "phone", "email", "address")
     ordering_fields = ("name", "created_at", "updated_at")
+
+    def get_queryset(self):
+        # Annotate the purchase totals/counts the serializer needs so a list of
+        # suppliers does not run an aggregate + count per row.
+        not_cancelled = ~Q(
+            purchase_orders__status=PurchaseOrder.Status.CANCELLED,
+        )
+        return (
+            super()
+            .get_queryset()
+            .annotate(
+                purchases_total=Sum("purchase_orders__total", filter=not_cancelled),
+                purchases_count=Count("purchase_orders", filter=not_cancelled),
+            )
+            # Reassert the supplier ordering: aggregating over purchase_orders
+            # otherwise leaks that model's default ordering into the GROUP BY,
+            # which reorders the list and can split multi-order suppliers into
+            # duplicate rows.
+            .order_by("name")
+        )
 
     @action(detail=True, methods=["get"], url_path="purchase-history")
     def purchase_history(self, request, pk=None):
@@ -204,8 +226,26 @@ class PurchaseOrderViewSet(viewsets.ModelViewSet):
             return ("purchasing.view_purchaseorder", "attachments.add_attachment")
         return self.permission_map.get(self.action)
 
+    def get_serializer_class(self):
+        if self.action == "list":
+            return PurchaseOrderListSerializer
+        return PurchaseOrderSerializer
+
     def get_queryset(self):
         queryset = super().get_queryset()
+        if self.action == "list":
+            # The list serializer omits the receipt/adjustment/audit/attachment
+            # trees, so drop those prefetches and keep only what the summary,
+            # line count, and balance need.
+            queryset = queryset.prefetch_related(None).prefetch_related(
+                "lines__variant__product",
+                "lines__receipt_lines",
+                Prefetch(
+                    "lines__variant__option_values",
+                    queryset=VariantOptionValue.objects.select_related("option"),
+                ),
+                "supplier_payments",
+            )
         product_id = self.request.query_params.get("product")
         variant_id = self.request.query_params.get("variant")
         if product_id:

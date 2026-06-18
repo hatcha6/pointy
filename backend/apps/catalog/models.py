@@ -596,9 +596,17 @@ class ProductVariant(TimeStampedModel):
 
     @property
     def option_values_label(self):
+        # Reuse a prefetched ``option_values`` (e.g. when serialising lists of
+        # order/purchase lines) instead of a per-variant query; fall back to a
+        # ``select_related`` fetch for un-prefetched callers.
+        prefetched = getattr(self, "_prefetched_objects_cache", None)
+        if prefetched is not None and "option_values" in prefetched:
+            option_values = self.option_values.all()
+        else:
+            option_values = self.option_values.select_related("option").all()
         labels = [
             str(option_value).strip()
-            for option_value in self.option_values.select_related("option").all()
+            for option_value in option_values
             if str(option_value).strip()
         ]
         return " / ".join(labels)

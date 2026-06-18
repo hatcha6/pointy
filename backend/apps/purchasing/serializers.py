@@ -90,12 +90,19 @@ class SupplierSerializer(serializers.ModelSerializer):
         )
 
     def get_total_bought(self, supplier):
-        total = supplier.purchase_orders.exclude(
-            status=PurchaseOrder.Status.CANCELLED,
-        ).aggregate(total=Sum("total"))["total"]
+        # Prefer the queryset annotation (supplier list); fall back to a direct
+        # aggregate for un-annotated instances (e.g. create/update responses).
+        if hasattr(supplier, "purchases_total"):
+            total = supplier.purchases_total
+        else:
+            total = supplier.purchase_orders.exclude(
+                status=PurchaseOrder.Status.CANCELLED,
+            ).aggregate(total=Sum("total"))["total"]
         return money_string(total or Decimal("0.00"))
 
     def get_purchase_count(self, supplier):
+        if hasattr(supplier, "purchases_count"):
+            return supplier.purchases_count
         return supplier.purchase_orders.exclude(
             status=PurchaseOrder.Status.CANCELLED,
         ).count()
@@ -961,6 +968,51 @@ class PurchaseOrderAuditEventSerializer(serializers.ModelSerializer):
             "created_by",
             "created_by_username",
             "created_at",
+        ]
+        read_only_fields = fields
+
+
+class PurchaseOrderListSerializer(serializers.ModelSerializer):
+    """Lightweight serializer for the purchase-order list. Carries the summary
+    fields, the lines (the UI shows a line count), and the payment status, but
+    omits the heavy receipt/adjustment/audit/attachment trees the detail screen
+    re-fetches on open."""
+
+    lines = PurchaseLineSerializer(many=True, read_only=True)
+    supplier_name = serializers.CharField(source="supplier.name", read_only=True)
+    supplier_reference = serializers.CharField(
+        source="supplier_invoice_number",
+        read_only=True,
+    )
+    balance_due = serializers.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        read_only=True,
+    )
+    payment_status = serializers.CharField(read_only=True)
+
+    class Meta:
+        model = PurchaseOrder
+        fields = [
+            "id",
+            "order_number",
+            "supplier",
+            "supplier_name",
+            "supplier_invoice_number",
+            "supplier_invoice_date",
+            "supplier_reference",
+            "status",
+            "due_date",
+            "lines",
+            "subtotal",
+            "discount_total",
+            "total",
+            "balance_due",
+            "payment_status",
+            "submitted_at",
+            "received_at",
+            "created_at",
+            "updated_at",
         ]
         read_only_fields = fields
 

@@ -28,14 +28,29 @@ class Supplier(TimeStampedModel):
 
     @property
     def payable_balance(self):
-        total = Decimal("0.00")
-        for order in self.purchase_orders.exclude(status=PurchaseOrder.Status.CANCELLED):
-            total += max(order.raw_balance_due, Decimal("0.00"))
-        unallocated = self.payments.filter(purchase_order__isnull=True).exclude(
-            method=SupplierPayment.Method.SUPPLIER_CREDIT,
+        # Each order owes its total minus everything paid against it (cash or
+        # applied credit) — i.e. ``raw_balance_due``. Batch the per-order paid
+        # totals into one aggregate so a supplier with many orders does not fan
+        # out into two queries per order.
+        po_rows = (
+            self.purchase_orders.exclude(status=PurchaseOrder.Status.CANCELLED)
+            .annotate(_paid=Sum("supplier_payments__amount"))
+            .values_list("total", "_paid")
         )
-        paid_total = unallocated.aggregate(total=Sum("amount"))["total"] or Decimal("0.00")
-        return max(total - paid_total, Decimal("0.00")).quantize(Decimal("0.01"))
+        outstanding = sum(
+            (
+                max(po_total - (paid or Decimal("0.00")), Decimal("0.00"))
+                for po_total, paid in po_rows
+            ),
+            Decimal("0.00"),
+        )
+        unallocated = (
+            self.payments.filter(purchase_order__isnull=True)
+            .exclude(method=SupplierPayment.Method.SUPPLIER_CREDIT)
+            .aggregate(total=Sum("amount"))["total"]
+            or Decimal("0.00")
+        )
+        return max(outstanding - unallocated, Decimal("0.00")).quantize(Decimal("0.01"))
 
     @property
     def credit_balance(self):
@@ -309,17 +324,29 @@ class PurchaseOrder(TimeStampedModel):
 
     @property
     def paid_total(self):
-        total = self.supplier_payments.exclude(
-            method=SupplierPayment.Method.SUPPLIER_CREDIT,
-        ).aggregate(total=Sum("amount"))["total"]
-        return (total or Decimal("0.00")).quantize(Decimal("0.01"))
+        # Sum in Python so a prefetched ``supplier_payments`` is reused instead
+        # of a per-order aggregate when serialising lists of purchase orders.
+        total = sum(
+            (
+                payment.amount
+                for payment in self.supplier_payments.all()
+                if payment.method != SupplierPayment.Method.SUPPLIER_CREDIT
+            ),
+            Decimal("0.00"),
+        )
+        return total.quantize(Decimal("0.01"))
 
     @property
     def credit_applied_total(self):
-        total = self.supplier_payments.filter(
-            method=SupplierPayment.Method.SUPPLIER_CREDIT,
-        ).aggregate(total=Sum("amount"))["total"]
-        return (total or Decimal("0.00")).quantize(Decimal("0.01"))
+        total = sum(
+            (
+                payment.amount
+                for payment in self.supplier_payments.all()
+                if payment.method == SupplierPayment.Method.SUPPLIER_CREDIT
+            ),
+            Decimal("0.00"),
+        )
+        return total.quantize(Decimal("0.01"))
 
     @property
     def adjustment_credit_total(self):

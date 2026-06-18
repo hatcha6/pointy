@@ -1,6 +1,5 @@
 from decimal import Decimal
 
-from django.contrib.contenttypes.models import ContentType
 from rest_framework import serializers
 
 from apps.catalog.models import ModifierOption, ProductVariant
@@ -14,7 +13,6 @@ from apps.catalog.units import (
 from apps.core.models import RelayInstallation, ShopSettings
 from apps.core.roles import user_is_manager
 from apps.customers.models import Customer
-from apps.discounts.models import AppliedDiscount
 from apps.discounts.services import rounding_metadata_payload
 from .models import (
     Order,
@@ -408,21 +406,36 @@ class OrderSerializer(serializers.ModelSerializer):
         return self._can_adjust_order(order)
 
     def get_requires_manager_adjustment(self, order):
-        return cashier_window_expired(order)
+        return cashier_window_expired(order, settings=self._shop_settings())
 
     def _can_adjust_order(self, order):
-        request = self.context.get("request")
-        return can_adjust_order(order, request.user if request is not None else None)
+        return can_adjust_order(
+            order,
+            is_manager=self._is_manager(),
+            settings=self._shop_settings(),
+        )
+
+    def _shop_settings(self):
+        # Cache the singleton in the shared serializer context so a page of
+        # orders loads it once instead of once per row.
+        settings = self.context.get("shop_settings")
+        if settings is None:
+            settings = ShopSettings.load()
+            self.context["shop_settings"] = settings
+        return settings
+
+    def _is_manager(self):
+        if "_is_manager" not in self.context:
+            request = self.context.get("request")
+            user = request.user if request is not None else None
+            self.context["_is_manager"] = bool(
+                user is not None and user_is_manager(user)
+            )
+        return self.context["_is_manager"]
 
     def get_applied_discounts(self, order):
-        document_content_type = ContentType.objects.get_for_model(
-            order,
-            for_concrete_model=False,
-        )
-        discounts = AppliedDiscount.objects.filter(
-            document_content_type=document_content_type,
-            document_object_id=order.pk,
-        )
+        # ``applied_discounts`` is a GenericRelation prefetched by the viewset,
+        # so this reuses the prefetch cache instead of querying per order row.
         return [
             {
                 "id": discount.pk,
@@ -436,7 +449,7 @@ class OrderSerializer(serializers.ModelSerializer):
                 "allocations": discount.allocations,
                 **rounding_metadata_payload(discount.metadata),
             }
-            for discount in discounts
+            for discount in order.applied_discounts.all()
         ]
 
     def get_public_invoice_url(self, order):

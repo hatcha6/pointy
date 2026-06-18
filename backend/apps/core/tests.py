@@ -27,7 +27,7 @@ from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APIClient
 
-from apps.catalog.models import ProductVariant
+from apps.catalog.models import ProductCategory, ProductVariant
 from apps.catalog.testing import create_product_with_default_variant
 from apps.attachments.models import Attachment
 from apps.inventory.models import StockItem, StockMovement
@@ -1369,6 +1369,30 @@ class DashboardApiTests(TestCase):
             for item in response.data["sections"]["inventory"]["low_stock_variants"]
         }
         self.assertIn(large_variant.pk, low_stock_variant_ids)
+
+    def test_dashboard_top_categories_split_revenue_across_categories(self):
+        # A product can sit in several categories (M2M). Its sales must be
+        # allocated evenly across them, not counted once per category, so the
+        # category breakdown reconciles with real revenue.
+        hot = ProductCategory.objects.create(name="ساخن")
+        seasonal = ProductCategory.objects.create(name="موسمي")
+        self.product.categories.add(hot, seasonal)
+        client = APIClient()
+        client.force_authenticate(user=self.manager)
+
+        response = client.get(reverse("dashboard"))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        categories = {
+            row["category_name"]: row
+            for row in response.data["sections"]["sales"]["top_categories"]
+        }
+        # setUp sold 10 units of this product for 50.00 across two orders;
+        # split over two categories that is 25.00 and 5 units each.
+        self.assertEqual(categories["ساخن"]["revenue"], "25.00")
+        self.assertEqual(categories["موسمي"]["revenue"], "25.00")
+        self.assertEqual(categories["ساخن"]["quantity"], 5)
+        self.assertEqual(categories["موسمي"]["quantity"], 5)
 
     def _create_paid_order(
         self,

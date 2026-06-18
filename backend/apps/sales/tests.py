@@ -4,7 +4,9 @@ from decimal import Decimal
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.core.exceptions import FieldError
+from django.db import connection
 from django.test import SimpleTestCase, TestCase
+from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from django.utils import timezone
 from rest_framework import serializers, status
@@ -2244,3 +2246,64 @@ class ModifierGroupApiTests(TestCase):
             format="json",
         )
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+
+class OrderListQueryCountTests(TestCase):
+    """Guards the orders-list against re-introducing an N+1: the query count
+    must stay constant as the number of orders on the page grows."""
+
+    def setUp(self):
+        ensure_role_groups()
+        User = get_user_model()
+        self.cashier = User.objects.create_user(username="nplus1-cashier", password="pass")
+        self.cashier.groups.add(Group.objects.get(name=CASHIER_GROUP))
+        self.manager = User.objects.create_user(username="nplus1-manager", password="pass")
+        self.manager.groups.add(Group.objects.get(name=MANAGER_GROUP))
+        product = create_product_with_default_variant(
+            sku="NPLUS1",
+            barcode="",
+            name="N+1 guard coffee",
+            unit_price=Decimal("4.00"),
+        )
+        self.variant = product.default_variant
+        StockItem.objects.create(variant=self.variant, quantity_on_hand=1000)
+        self.cashier_client = APIClient()
+        self.cashier_client.force_authenticate(user=self.cashier)
+        self.cashier_client.post(
+            reverse("register-session-start"),
+            {"opening_cash": "0.00"},
+            format="json",
+        )
+
+    def _checkout_order(self):
+        response = self.cashier_client.post(
+            reverse("order-checkout"),
+            {"lines": [{"variant": self.variant.pk, "quantity": 1}]},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+    def test_order_list_query_count_does_not_grow_with_orders(self):
+        manager_client = APIClient()
+        manager_client.force_authenticate(user=self.manager)
+
+        for _ in range(2):
+            self._checkout_order()
+        with CaptureQueriesContext(connection) as few_orders:
+            few_response = manager_client.get(reverse("order-list"))
+
+        for _ in range(3):
+            self._checkout_order()
+        with CaptureQueriesContext(connection) as more_orders:
+            more_response = manager_client.get(reverse("order-list"))
+
+        self.assertEqual(few_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(more_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(few_response.data["results"]), 2)
+        self.assertEqual(len(more_response.data["results"]), 5)
+        # Prefetching + context-cached settings/role keep the orders list at a
+        # constant number of queries; an N+1 over lines, payments, applied
+        # discounts, returned quantities, variant option labels, the shop
+        # settings, or the manager check would make the five-order page issue
+        # strictly more queries than the two-order page.
+        self.assertEqual(len(few_orders), len(more_orders))

@@ -46,24 +46,27 @@ def money(value):
     return Decimal(value).quantize(MONEY_PLACES)
 
 
-def cashier_window_expired(order):
+def cashier_window_expired(order, settings=None):
     if order.created_at is None:
         return False
-    settings = ShopSettings.load()
+    if settings is None:
+        settings = ShopSettings.load()
     deadline = order.created_at + timedelta(
         hours=settings.cashier_return_window_hours,
     )
     return timezone.now() > deadline
 
 
-def can_adjust_order(order, user=None):
+def can_adjust_order(order, user=None, *, is_manager=None, settings=None):
     if order.status != Order.Status.PAID:
         return False
     if not any(line.returnable_quantity > 0 for line in order.lines.all()):
         return False
-    if user is not None and user_is_manager(user):
+    if is_manager is None:
+        is_manager = user is not None and user_is_manager(user)
+    if is_manager:
         return True
-    return not cashier_window_expired(order)
+    return not cashier_window_expired(order, settings=settings)
 
 
 def adjustment_created_by(request):

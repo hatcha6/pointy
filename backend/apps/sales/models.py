@@ -2,6 +2,7 @@ from decimal import Decimal
 import secrets
 
 from django.conf import settings
+from django.contrib.contenttypes.fields import GenericRelation
 from django.core.validators import MinValueValidator
 from django.db import models, transaction
 from django.db.models import Q, Sum
@@ -199,6 +200,14 @@ class Order(TimeStampedModel):
     subtotal = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     discount_total = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     total = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    # Reverse accessor for the discounts applied to this order document so the
+    # API can prefetch them in a single query instead of one lookup per order
+    # row when serialising lists of orders.
+    applied_discounts = GenericRelation(
+        "discounts.AppliedDiscount",
+        content_type_field="document_content_type",
+        object_id_field="document_object_id",
+    )
 
     class Meta:
         ordering = ["-created_at"]
@@ -315,7 +324,9 @@ class OrderLine(TimeStampedModel):
 
     @property
     def returned_quantity(self) -> int:
-        total = self.adjustment_lines.aggregate(total=Sum("quantity"))["total"]
+        # Sum in Python so a prefetched ``adjustment_lines`` is reused instead of
+        # firing a per-line aggregate query when serialising lists of orders.
+        total = sum((line.quantity for line in self.adjustment_lines.all()), 0)
         return total or 0
 
     @property
@@ -324,8 +335,11 @@ class OrderLine(TimeStampedModel):
 
     @property
     def returned_discount_total(self) -> Decimal:
-        total = self.adjustment_lines.aggregate(total=Sum("discount_total"))["total"]
-        return (total or Decimal("0.00")).quantize(Decimal("0.01"))
+        total = sum(
+            (line.discount_total for line in self.adjustment_lines.all()),
+            Decimal("0.00"),
+        )
+        return total.quantize(Decimal("0.01"))
 
 
 class OrderLineModifier(TimeStampedModel):
