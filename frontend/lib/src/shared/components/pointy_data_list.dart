@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../design/design.dart';
 import '../infinite_scroll_grid.dart';
-import 'pointy_loading_area.dart';
+import 'pointy_skeleton.dart';
 
 class PointyDataList<T> extends StatelessWidget {
   const PointyDataList({
@@ -21,6 +21,8 @@ class PointyDataList<T> extends StatelessWidget {
     this.header,
     this.framed = true,
     this.loadMoreExtent = 480,
+    this.skeletonItemBuilder,
+    this.skeletonItemCount = 6,
   });
 
   final List<T> items;
@@ -41,12 +43,26 @@ class PointyDataList<T> extends StatelessWidget {
   final bool framed;
   final double loadMoreExtent;
 
+  /// Placeholder row shown (×[skeletonItemCount]) while the first page loads.
+  /// Defaults to a generic [PointySkeletonListTile]; override to match an
+  /// unusual row shape.
+  final WidgetBuilder? skeletonItemBuilder;
+  final int skeletonItemCount;
+
   @override
   Widget build(BuildContext context) {
-    final Widget? stateBody;
+    // A content-shaped skeleton (not a spinner) makes the first paint feel
+    // instant; framed so it matches the loaded list.
     if (isLoadingInitial && items.isEmpty) {
-      stateBody = const PointyLoadingArea();
-    } else if (hasError && items.isEmpty && errorBuilder != null) {
+      final skeleton = _framed(context, _skeletonList(context));
+      if (header == null) {
+        return skeleton;
+      }
+      return ListView(children: [header!, skeleton]);
+    }
+
+    final Widget? stateBody;
+    if (hasError && items.isEmpty && errorBuilder != null) {
       stateBody = errorBuilder!(context);
     } else if (items.isEmpty) {
       stateBody = emptyBuilder(context);
@@ -60,7 +76,6 @@ class PointyDataList<T> extends StatelessWidget {
       return ListView(children: [header!, stateBody]);
     }
 
-    final colors = context.pointyColors;
     final list = InfiniteScrollList<T>(
       items: items,
       itemBuilder: itemBuilder,
@@ -75,10 +90,14 @@ class PointyDataList<T> extends StatelessWidget {
       separatorBuilder: separatorBuilder ?? (_, _) => const SizedBox(height: 8),
     );
 
-    if (!framed) {
-      return list;
-    }
+    return _framed(context, list);
+  }
 
+  Widget _framed(BuildContext context, Widget child) {
+    if (!framed) {
+      return child;
+    }
+    final colors = context.pointyColors;
     return DecoratedBox(
       decoration: BoxDecoration(
         color: colors.surface,
@@ -88,7 +107,24 @@ class PointyDataList<T> extends StatelessWidget {
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(PointyRadii.card),
-        child: list,
+        child: child,
+      ),
+    );
+  }
+
+  Widget _skeletonList(BuildContext context) {
+    final builder =
+        skeletonItemBuilder ?? (_) => const PointySkeletonListTile();
+    final separator =
+        separatorBuilder ?? (_, _) => const SizedBox(height: 8);
+    return PointySkeleton(
+      child: ListView.separated(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        padding: padding,
+        itemCount: skeletonItemCount,
+        itemBuilder: (context, index) => builder(context),
+        separatorBuilder: separator,
       ),
     );
   }

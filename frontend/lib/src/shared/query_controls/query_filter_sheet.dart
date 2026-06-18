@@ -200,7 +200,7 @@ class QueryFilterOptionTile extends StatelessWidget {
         color: isSelected ? selectedFill : Colors.transparent,
         child: InkWell(
           onTap: onTap,
-          overlayColor: PointyComponentStyles.inkOverlay,
+          overlayColor: PointyComponentStyles.inkOverlay(colors.ink),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
             child: Row(

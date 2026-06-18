@@ -4299,6 +4299,252 @@ abstract class AppLocalizations {
   /// **'ينسى الجهاز المستخدم المسجل عند فتح التطبيق ويطلب تسجيل الدخول كل مرة.'**
   String get deviceUsageMultiUserDescription;
 
+  /// No description provided for @appearanceSectionTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'المظهر'**
+  String get appearanceSectionTitle;
+
+  /// No description provided for @appearanceSectionSubtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'يُحفظ هذا الاختيار على هذا الجهاز فقط، مناسب للمتاجر ذات الإضاءة المنخفضة.'**
+  String get appearanceSectionSubtitle;
+
+  /// No description provided for @themeModeLight.
+  ///
+  /// In ar, this message translates to:
+  /// **'فاتح'**
+  String get themeModeLight;
+
+  /// No description provided for @themeModeDark.
+  ///
+  /// In ar, this message translates to:
+  /// **'داكن'**
+  String get themeModeDark;
+
+  /// No description provided for @themeModeSystem.
+  ///
+  /// In ar, this message translates to:
+  /// **'تلقائي'**
+  String get themeModeSystem;
+
+  /// No description provided for @themeModeSystemHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'يتبع إعداد النظام'**
+  String get themeModeSystemHint;
+
+  /// No description provided for @appearanceToggleTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'تبديل بين الفاتح والداكن'**
+  String get appearanceToggleTooltip;
+
+  /// No description provided for @switchToDarkAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'التبديل إلى الوضع الداكن'**
+  String get switchToDarkAction;
+
+  /// No description provided for @switchToLightAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'التبديل إلى الوضع الفاتح'**
+  String get switchToLightAction;
+
+  /// No description provided for @shopSetupTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'إعداد المتجر'**
+  String get shopSetupTitle;
+
+  /// No description provided for @shopSetupSkip.
+  ///
+  /// In ar, this message translates to:
+  /// **'تخطٍّ'**
+  String get shopSetupSkip;
+
+  /// No description provided for @shopSetupPickTypeTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'ما نوع متجرك؟'**
+  String get shopSetupPickTypeTitle;
+
+  /// No description provided for @shopSetupPickTypeSubtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'نفعّل لك الإعدادات المناسبة تلقائيًا — يمكنك تغيير أي شيء لاحقًا.'**
+  String get shopSetupPickTypeSubtitle;
+
+  /// No description provided for @shopSetupTuneTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'إعدادات سريعة'**
+  String get shopSetupTuneTitle;
+
+  /// No description provided for @shopSetupTuneSubtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'اضبط القليل من الإعدادات الأساسية للبدء.'**
+  String get shopSetupTuneSubtitle;
+
+  /// No description provided for @shopSetupFinish.
+  ///
+  /// In ar, this message translates to:
+  /// **'إنهاء الإعداد'**
+  String get shopSetupFinish;
+
+  /// No description provided for @shopSetupError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر حفظ الإعداد، حاول مرة أخرى.'**
+  String get shopSetupError;
+
+  /// No description provided for @shopSetupShopNameLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'اسم المتجر'**
+  String get shopSetupShopNameLabel;
+
+  /// No description provided for @shopSetupCurrencyLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'العملة'**
+  String get shopSetupCurrencyLabel;
+
+  /// No description provided for @shopSetupCurrencyValue.
+  ///
+  /// In ar, this message translates to:
+  /// **'د.ل (دينار ليبي)'**
+  String get shopSetupCurrencyValue;
+
+  /// No description provided for @shopSetupCurrencyHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'دعم العملات المتعددة قادم قريبًا.'**
+  String get shopSetupCurrencyHint;
+
+  /// No description provided for @shopSetupOversellingTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'السماح بالبيع رغم نفاد المخزون'**
+  String get shopSetupOversellingTitle;
+
+  /// No description provided for @shopSetupOversellingSubtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'يسمح ببيع المنتجات غير المتوفرة في المخزون.'**
+  String get shopSetupOversellingSubtitle;
+
+  /// No description provided for @shopSetupOpeningCashTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'طلب رصيد افتتاحي للدرج'**
+  String get shopSetupOpeningCashTitle;
+
+  /// No description provided for @shopSetupOpeningCashSubtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'يطلب من الكاشير إدخال النقد الافتتاحي عند بدء جلسة الدرج.'**
+  String get shopSetupOpeningCashSubtitle;
+
+  /// No description provided for @shopSetupReceiptsTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'طباعة الإيصالات تلقائيًا'**
+  String get shopSetupReceiptsTitle;
+
+  /// No description provided for @shopSetupReceiptsSubtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'يطبع إيصال العميل تلقائيًا بعد كل عملية بيع.'**
+  String get shopSetupReceiptsSubtitle;
+
+  /// No description provided for @shopTypeGeneral.
+  ///
+  /// In ar, this message translates to:
+  /// **'متجر عام'**
+  String get shopTypeGeneral;
+
+  /// No description provided for @shopTypeGeneralDescription.
+  ///
+  /// In ar, this message translates to:
+  /// **'بيع بالتجزئة بسيط دون ميزات إضافية.'**
+  String get shopTypeGeneralDescription;
+
+  /// No description provided for @shopTypeRestaurant.
+  ///
+  /// In ar, this message translates to:
+  /// **'مطعم / مقهى'**
+  String get shopTypeRestaurant;
+
+  /// No description provided for @shopTypeRestaurantDescription.
+  ///
+  /// In ar, this message translates to:
+  /// **'عمليات المطبخ وطباعة طلبات المطبخ والتحضير عند الطلب.'**
+  String get shopTypeRestaurantDescription;
+
+  /// No description provided for @shopTypeGrocery.
+  ///
+  /// In ar, this message translates to:
+  /// **'بقالة / سوبر ماركت'**
+  String get shopTypeGrocery;
+
+  /// No description provided for @shopTypeGroceryDescription.
+  ///
+  /// In ar, this message translates to:
+  /// **'وحدات قياس متعددة وتنبيهات نقص المخزون ومراقبة صارمة.'**
+  String get shopTypeGroceryDescription;
+
+  /// No description provided for @shopTypePharmacy.
+  ///
+  /// In ar, this message translates to:
+  /// **'صيدلية'**
+  String get shopTypePharmacy;
+
+  /// No description provided for @shopTypePharmacyDescription.
+  ///
+  /// In ar, this message translates to:
+  /// **'مراقبة مخزون صارمة ومنع البيع بخسارة.'**
+  String get shopTypePharmacyDescription;
+
+  /// No description provided for @shopTypePhoneRepair.
+  ///
+  /// In ar, this message translates to:
+  /// **'هواتف وصيانة'**
+  String get shopTypePhoneRepair;
+
+  /// No description provided for @shopTypePhoneRepairDescription.
+  ///
+  /// In ar, this message translates to:
+  /// **'عمليات الصيانة وتتبّع الأعمال.'**
+  String get shopTypePhoneRepairDescription;
+
+  /// No description provided for @shopTypeBakery.
+  ///
+  /// In ar, this message translates to:
+  /// **'مخبز / حلويات'**
+  String get shopTypeBakery;
+
+  /// No description provided for @shopTypeBakeryDescription.
+  ///
+  /// In ar, this message translates to:
+  /// **'عمليات المطبخ والإنتاج للتحضير المسبق.'**
+  String get shopTypeBakeryDescription;
+
+  /// No description provided for @shopTypeRetail.
+  ///
+  /// In ar, this message translates to:
+  /// **'ملابس وتجزئة'**
+  String get shopTypeRetail;
+
+  /// No description provided for @shopTypeRetailDescription.
+  ///
+  /// In ar, this message translates to:
+  /// **'متجر تجزئة مع مراقبة مخزون صارمة.'**
+  String get shopTypeRetailDescription;
+
   /// No description provided for @devicePrinterSectionTitle.
   ///
   /// In ar, this message translates to:
@@ -8397,6 +8643,234 @@ abstract class AppLocalizations {
   /// **'متاح للبيع'**
   String get activeProductLabel;
 
+  /// No description provided for @applyButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'تطبيق'**
+  String get applyButton;
+
+  /// No description provided for @bulkSelectTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحديد متعدد'**
+  String get bulkSelectTooltip;
+
+  /// No description provided for @bulkSelectedCount.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count} محدد'**
+  String bulkSelectedCount(int count);
+
+  /// No description provided for @bulkSelectAllAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحديد الكل'**
+  String get bulkSelectAllAction;
+
+  /// No description provided for @bulkClearSelectionAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'مسح التحديد'**
+  String get bulkClearSelectionAction;
+
+  /// No description provided for @bulkArchiveAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'أرشفة'**
+  String get bulkArchiveAction;
+
+  /// No description provided for @bulkRestoreAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'استعادة'**
+  String get bulkRestoreAction;
+
+  /// No description provided for @bulkRepriceAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعديل السعر'**
+  String get bulkRepriceAction;
+
+  /// No description provided for @bulkCategorizeAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'تصنيف'**
+  String get bulkCategorizeAction;
+
+  /// No description provided for @bulkFlagsAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'الخصائص'**
+  String get bulkFlagsAction;
+
+  /// No description provided for @bulkArchiveConfirmTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'أرشفة المنتجات المحددة؟'**
+  String get bulkArchiveConfirmTitle;
+
+  /// No description provided for @bulkArchiveConfirmMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'سيتم أرشفة {count} منتج وإخفاؤها من القوائم ونقطة البيع. يمكن استعادتها لاحقًا.'**
+  String bulkArchiveConfirmMessage(int count);
+
+  /// No description provided for @bulkRestoreConfirmTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'استعادة المنتجات المحددة؟'**
+  String get bulkRestoreConfirmTitle;
+
+  /// No description provided for @bulkRestoreConfirmMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'سيتم إعادة {count} منتج إلى القوائم.'**
+  String bulkRestoreConfirmMessage(int count);
+
+  /// No description provided for @bulkActionSuccess.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم تحديث {count} منتج'**
+  String bulkActionSuccess(int count);
+
+  /// No description provided for @bulkActionError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر تنفيذ العملية، حاول مرة أخرى.'**
+  String get bulkActionError;
+
+  /// No description provided for @bulkActionNoChanges.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم يتغيّر أي منتج.'**
+  String get bulkActionNoChanges;
+
+  /// No description provided for @bulkRepriceTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعديل أسعار المنتجات المحددة'**
+  String get bulkRepriceTitle;
+
+  /// No description provided for @bulkRepriceModeLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'طريقة التعديل'**
+  String get bulkRepriceModeLabel;
+
+  /// No description provided for @bulkRepriceModeSet.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعيين سعر موحّد'**
+  String get bulkRepriceModeSet;
+
+  /// No description provided for @bulkRepriceModeIncreasePercent.
+  ///
+  /// In ar, this message translates to:
+  /// **'زيادة بنسبة %'**
+  String get bulkRepriceModeIncreasePercent;
+
+  /// No description provided for @bulkRepriceModeDecreasePercent.
+  ///
+  /// In ar, this message translates to:
+  /// **'خصم بنسبة %'**
+  String get bulkRepriceModeDecreasePercent;
+
+  /// No description provided for @bulkRepriceModeIncreaseAmount.
+  ///
+  /// In ar, this message translates to:
+  /// **'زيادة بمبلغ'**
+  String get bulkRepriceModeIncreaseAmount;
+
+  /// No description provided for @bulkRepriceModeDecreaseAmount.
+  ///
+  /// In ar, this message translates to:
+  /// **'خصم بمبلغ'**
+  String get bulkRepriceModeDecreaseAmount;
+
+  /// No description provided for @bulkRepricePercentLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'النسبة'**
+  String get bulkRepricePercentLabel;
+
+  /// No description provided for @bulkRepriceAmountLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'المبلغ'**
+  String get bulkRepriceAmountLabel;
+
+  /// No description provided for @bulkRepriceValueRequired.
+  ///
+  /// In ar, this message translates to:
+  /// **'أدخل قيمة صحيحة.'**
+  String get bulkRepriceValueRequired;
+
+  /// No description provided for @bulkCategorizeTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'تصنيف المنتجات المحددة'**
+  String get bulkCategorizeTitle;
+
+  /// No description provided for @bulkCategorizeModeLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الإجراء'**
+  String get bulkCategorizeModeLabel;
+
+  /// No description provided for @bulkCategorizeModeAdd.
+  ///
+  /// In ar, this message translates to:
+  /// **'إضافة تصنيفات'**
+  String get bulkCategorizeModeAdd;
+
+  /// No description provided for @bulkCategorizeModeReplace.
+  ///
+  /// In ar, this message translates to:
+  /// **'استبدال التصنيفات'**
+  String get bulkCategorizeModeReplace;
+
+  /// No description provided for @bulkCategorizeModeRemove.
+  ///
+  /// In ar, this message translates to:
+  /// **'إزالة تصنيفات'**
+  String get bulkCategorizeModeRemove;
+
+  /// No description provided for @bulkCategorizePickButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختيار التصنيفات'**
+  String get bulkCategorizePickButton;
+
+  /// No description provided for @bulkCategorizePickedCount.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count} تصنيف محدد'**
+  String bulkCategorizePickedCount(int count);
+
+  /// No description provided for @bulkFlagsTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعديل خصائص المنتجات المحددة'**
+  String get bulkFlagsTitle;
+
+  /// No description provided for @bulkFlagNoChange.
+  ///
+  /// In ar, this message translates to:
+  /// **'بدون تغيير'**
+  String get bulkFlagNoChange;
+
+  /// No description provided for @bulkFlagOn.
+  ///
+  /// In ar, this message translates to:
+  /// **'تشغيل'**
+  String get bulkFlagOn;
+
+  /// No description provided for @bulkFlagOff.
+  ///
+  /// In ar, this message translates to:
+  /// **'إيقاف'**
+  String get bulkFlagOff;
+
   /// No description provided for @productTracksExpiryLabel.
   ///
   /// In ar, this message translates to:
@@ -9542,6 +10016,18 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'ابحث عن منتج أو امسح الباركود لبدء البيع'**
   String get emptyCartMessage;
+
+  /// Live indicator while typing a quantity for the focused cart line.
+  ///
+  /// In ar, this message translates to:
+  /// **'{productName} — الكمية: {quantity}'**
+  String cartQuantityPendingLabel(String productName, String quantity);
+
+  /// No description provided for @cartQuantityPendingHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'Enter للتأكيد'**
+  String get cartQuantityPendingHint;
 
   /// No description provided for @openCartSheetButton.
   ///

@@ -29,11 +29,23 @@ class AuthViewModel extends ChangeNotifier {
   PosUser? _currentUser;
   bool _isSubmitting = false;
   bool _hasError = false;
+  bool _requiresShopSetup = false;
 
   AuthStatus get status => _status;
   PosUser? get currentUser => _currentUser;
   bool get isSubmitting => _isSubmitting;
   bool get hasError => _hasError;
+
+  /// True for the one session right after the initial admin is created, so the
+  /// app shows the first-run shop-setup wizard before the main shell.
+  bool get requiresShopSetup => _requiresShopSetup;
+
+  void completeShopSetup() {
+    if (_requiresShopSetup) {
+      _requiresShopSetup = false;
+      notifyListeners();
+    }
+  }
 
   void replaceCurrentUser(PosUser user) {
     if (_currentUser?.id != user.id) {
@@ -141,6 +153,8 @@ class AuthViewModel extends ChangeNotifier {
       case Ok<PosUser>(value: final user):
         _currentUser = user;
         _status = AuthStatus.authenticated;
+        // Fresh install: walk the new admin through shop setup once.
+        _requiresShopSetup = true;
         _analyticsEngine?.setCurrentUser(user.id);
         notifyListeners();
         return true;
@@ -169,6 +183,7 @@ class AuthViewModel extends ChangeNotifier {
 
     _isSubmitting = false;
     _currentUser = null;
+    _requiresShopSetup = false;
     _status = await _resolveUnauthenticatedStatus();
     notifyListeners();
   }

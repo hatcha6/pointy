@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'pointy_colors.dart';
+import 'pointy_theme_extensions.dart';
 
 abstract final class PointyRadii {
   static const double card = 8;
@@ -23,34 +24,36 @@ abstract final class PointyDimensions {
 abstract final class PointyComponentStyles {
   static const BorderSide defaultBorder = BorderSide(color: PointyColors.line);
 
-  /// Hover/focus/pressed feedback for controls on light surfaces.
+  /// Hover/focus/pressed feedback for controls, tinted by the surface's [ink]
+  /// colour so the overlay reads correctly on both light and dark surfaces.
   /// POS terminals run with a mouse, so hover states matter as much as ripples.
-  static WidgetStateProperty<Color?> get inkOverlay {
+  static WidgetStateProperty<Color?> inkOverlay(Color ink) {
     return WidgetStateProperty.resolveWith((states) {
       if (states.contains(WidgetState.pressed)) {
-        return PointyColors.ink.withValues(alpha: 0.10);
+        return ink.withValues(alpha: 0.10);
       }
       if (states.contains(WidgetState.hovered)) {
-        return PointyColors.ink.withValues(alpha: 0.04);
+        return ink.withValues(alpha: 0.04);
       }
       if (states.contains(WidgetState.focused)) {
-        return PointyColors.ink.withValues(alpha: 0.08);
+        return ink.withValues(alpha: 0.08);
       }
       return null;
     });
   }
 
-  /// Feedback for controls on the primary green fill.
+  /// Feedback for controls on the primary green fill. White in both themes
+  /// because the primary fill stays brand teal regardless of mode.
   static WidgetStateProperty<Color?> get onPrimaryOverlay {
     return WidgetStateProperty.resolveWith((states) {
       if (states.contains(WidgetState.pressed)) {
-        return PointyColors.surface.withValues(alpha: 0.16);
+        return Colors.white.withValues(alpha: 0.16);
       }
       if (states.contains(WidgetState.hovered)) {
-        return PointyColors.surface.withValues(alpha: 0.08);
+        return Colors.white.withValues(alpha: 0.08);
       }
       if (states.contains(WidgetState.focused)) {
-        return PointyColors.surface.withValues(alpha: 0.12);
+        return Colors.white.withValues(alpha: 0.12);
       }
       return null;
     });
@@ -60,30 +63,35 @@ abstract final class PointyComponentStyles {
     return RoundedRectangleBorder(borderRadius: BorderRadius.circular(radius));
   }
 
-  static RoundedRectangleBorder outlinedShape(double radius) {
+  static RoundedRectangleBorder outlinedShape(double radius, [Color? line]) {
     return RoundedRectangleBorder(
       borderRadius: BorderRadius.circular(radius),
-      side: defaultBorder,
+      side: line == null ? defaultBorder : BorderSide(color: line),
     );
   }
 
-  static AppBarThemeData appBarTheme(TextTheme textTheme) {
+  static AppBarThemeData appBarTheme(
+    PointySemanticColors c,
+    TextTheme textTheme,
+  ) {
     return AppBarThemeData(
-      backgroundColor: PointyColors.page,
-      foregroundColor: PointyColors.ink,
+      backgroundColor: c.page,
+      foregroundColor: c.ink,
       surfaceTintColor: Colors.transparent,
       elevation: 0,
       scrolledUnderElevation: 0,
       centerTitle: true,
       titleTextStyle: textTheme.titleLarge?.copyWith(
-        color: PointyColors.ink,
+        color: c.ink,
         fontWeight: FontWeight.w700,
       ),
-      iconTheme: const IconThemeData(color: PointyColors.ink),
-      actionsIconTheme: const IconThemeData(color: PointyColors.ink),
+      iconTheme: IconThemeData(color: c.ink),
+      actionsIconTheme: IconThemeData(color: c.ink),
     );
   }
 
+  /// Fixed dark top bar for high-focus screens (e.g. POS). Intentionally the
+  /// same in light and dark themes, so it stays separate from the palette.
   static AppBarThemeData darkAppBarTheme(TextTheme textTheme) {
     return AppBarThemeData(
       backgroundColor: PointyColors.darkTopBar,
@@ -102,121 +110,133 @@ abstract final class PointyComponentStyles {
     );
   }
 
-  static InputDecorationThemeData inputDecorationTheme(TextTheme textTheme) {
+  static InputDecorationThemeData inputDecorationTheme(
+    PointySemanticColors c,
+    TextTheme textTheme,
+  ) {
     final border = OutlineInputBorder(
       borderRadius: BorderRadius.circular(PointyRadii.input),
-      borderSide: defaultBorder,
+      borderSide: BorderSide(color: c.line),
     );
 
     return InputDecorationThemeData(
       filled: true,
-      fillColor: PointyColors.surface,
+      fillColor: c.surface,
       border: border,
       enabledBorder: border,
       focusedBorder: border.copyWith(
-        borderSide: const BorderSide(color: PointyColors.primary, width: 1.4),
+        borderSide: BorderSide(color: c.primary, width: 1.4),
       ),
       errorBorder: border.copyWith(
-        borderSide: const BorderSide(color: PointyColors.danger),
+        borderSide: BorderSide(color: c.danger),
       ),
       focusedErrorBorder: border.copyWith(
-        borderSide: const BorderSide(color: PointyColors.danger, width: 1.4),
+        borderSide: BorderSide(color: c.danger, width: 1.4),
       ),
       contentPadding: const EdgeInsetsDirectional.fromSTEB(16, 14, 16, 14),
-      labelStyle: textTheme.bodyMedium?.copyWith(color: PointyColors.mutedInk),
-      hintStyle: textTheme.bodyMedium?.copyWith(color: PointyColors.mutedInk),
-      helperStyle: textTheme.bodySmall?.copyWith(color: PointyColors.mutedInk),
-      errorStyle: textTheme.bodySmall?.copyWith(color: PointyColors.danger),
-      prefixIconColor: PointyColors.mutedInk,
-      suffixIconColor: PointyColors.mutedInk,
+      labelStyle: textTheme.bodyMedium?.copyWith(color: c.mutedInk),
+      hintStyle: textTheme.bodyMedium?.copyWith(color: c.mutedInk),
+      helperStyle: textTheme.bodySmall?.copyWith(color: c.mutedInk),
+      errorStyle: textTheme.bodySmall?.copyWith(color: c.danger),
+      prefixIconColor: c.mutedInk,
+      suffixIconColor: c.mutedInk,
     );
   }
 
-  static FilledButtonThemeData filledButtonTheme(ColorScheme colorScheme) {
+  static FilledButtonThemeData filledButtonTheme(
+    PointySemanticColors c,
+    ColorScheme colorScheme,
+  ) {
     return FilledButtonThemeData(
       style: FilledButton.styleFrom(
         minimumSize: const Size(64, PointyDimensions.buttonHeight),
-        backgroundColor: PointyColors.primary,
+        backgroundColor: c.primary,
         foregroundColor: colorScheme.onPrimary,
-        disabledBackgroundColor: PointyColors.line,
-        disabledForegroundColor: PointyColors.mutedInk,
+        disabledBackgroundColor: c.line,
+        disabledForegroundColor: c.mutedInk,
         shape: shape(PointyRadii.button),
         textStyle: const TextStyle(fontWeight: FontWeight.w700),
       ).copyWith(overlayColor: onPrimaryOverlay),
     );
   }
 
-  static OutlinedButtonThemeData outlinedButtonTheme(ColorScheme colorScheme) {
+  static OutlinedButtonThemeData outlinedButtonTheme(
+    PointySemanticColors c,
+    ColorScheme colorScheme,
+  ) {
     return OutlinedButtonThemeData(
       style: OutlinedButton.styleFrom(
         minimumSize: const Size(64, PointyDimensions.buttonHeight),
-        foregroundColor: PointyColors.primaryStrong,
-        disabledForegroundColor: PointyColors.mutedInk,
-        side: const BorderSide(color: PointyColors.line),
+        foregroundColor: c.primaryStrong,
+        disabledForegroundColor: c.mutedInk,
+        side: BorderSide(color: c.line),
         shape: shape(PointyRadii.button),
         textStyle: const TextStyle(fontWeight: FontWeight.w600),
-      ).copyWith(overlayColor: inkOverlay),
+      ).copyWith(overlayColor: inkOverlay(c.ink)),
     );
   }
 
-  static TextButtonThemeData textButtonTheme() {
+  static TextButtonThemeData textButtonTheme(PointySemanticColors c) {
     return TextButtonThemeData(
       style: TextButton.styleFrom(
         minimumSize: const Size(48, PointyDimensions.buttonHeight),
-        foregroundColor: PointyColors.primaryStrong,
-        disabledForegroundColor: PointyColors.mutedInk,
+        foregroundColor: c.primaryStrong,
+        disabledForegroundColor: c.mutedInk,
         shape: shape(PointyRadii.button),
         textStyle: const TextStyle(fontWeight: FontWeight.w600),
-      ).copyWith(overlayColor: inkOverlay),
+      ).copyWith(overlayColor: inkOverlay(c.ink)),
     );
   }
 
-  static IconButtonThemeData iconButtonTheme() {
+  static IconButtonThemeData iconButtonTheme(PointySemanticColors c) {
     return IconButtonThemeData(
       style: IconButton.styleFrom(
         minimumSize: const Size.square(PointyDimensions.iconButton),
-        foregroundColor: PointyColors.ink,
-        disabledForegroundColor: PointyColors.mutedInk,
+        foregroundColor: c.ink,
+        disabledForegroundColor: c.mutedInk,
         shape: shape(PointyRadii.button),
-      ).copyWith(overlayColor: inkOverlay),
+      ).copyWith(overlayColor: inkOverlay(c.ink)),
     );
   }
 
-  static ChipThemeData chipTheme(TextTheme textTheme) {
+  static ChipThemeData chipTheme(PointySemanticColors c, TextTheme textTheme) {
     return ChipThemeData(
-      backgroundColor: PointyColors.subtleFill,
-      selectedColor: PointyColors.primaryContainer,
-      disabledColor: PointyColors.line,
+      backgroundColor: c.subtleFill,
+      selectedColor: c.primaryContainer,
+      disabledColor: c.line,
       surfaceTintColor: Colors.transparent,
-      side: const BorderSide(color: PointyColors.line),
+      side: BorderSide(color: c.line),
       shape: shape(PointyRadii.chip),
-      labelStyle: textTheme.labelLarge?.copyWith(color: PointyColors.ink),
+      labelStyle: textTheme.labelLarge?.copyWith(color: c.ink),
       secondaryLabelStyle: textTheme.labelLarge?.copyWith(
-        color: PointyColors.primaryStrong,
+        color: c.primaryStrong,
         fontWeight: FontWeight.w600,
       ),
-      iconTheme: const IconThemeData(color: PointyColors.primaryStrong),
+      iconTheme: IconThemeData(color: c.primaryStrong),
       padding: const EdgeInsets.symmetric(horizontal: 8),
     );
   }
 
-  static NavigationDrawerThemeData navigationDrawerTheme(TextTheme textTheme) {
+  static NavigationDrawerThemeData navigationDrawerTheme(
+    PointySemanticColors c,
+    TextTheme textTheme,
+  ) {
     return NavigationDrawerThemeData(
-      backgroundColor: PointyColors.surface,
+      backgroundColor: c.surface,
       surfaceTintColor: Colors.transparent,
-      indicatorColor: PointyColors.primaryContainer,
+      indicatorColor: c.primaryContainer,
       indicatorShape: shape(PointyRadii.button),
       labelTextStyle: WidgetStateProperty.resolveWith((states) {
         final isSelected = states.contains(WidgetState.selected);
         return textTheme.labelLarge?.copyWith(
-          color: isSelected ? PointyColors.primaryDark : PointyColors.ink,
+          color: isSelected ? c.primaryDark : c.ink,
           fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
         );
       }),
       iconTheme: WidgetStateProperty.resolveWith((states) {
         final isSelected = states.contains(WidgetState.selected);
         return IconThemeData(
-          color: isSelected ? PointyColors.primaryDark : PointyColors.mutedInk,
+          color: isSelected ? c.primaryDark : c.mutedInk,
         );
       }),
     );

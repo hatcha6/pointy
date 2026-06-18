@@ -2451,6 +2451,140 @@ class AppLocalizationsAr extends AppLocalizations {
       'ينسى الجهاز المستخدم المسجل عند فتح التطبيق ويطلب تسجيل الدخول كل مرة.';
 
   @override
+  String get appearanceSectionTitle => 'المظهر';
+
+  @override
+  String get appearanceSectionSubtitle =>
+      'يُحفظ هذا الاختيار على هذا الجهاز فقط، مناسب للمتاجر ذات الإضاءة المنخفضة.';
+
+  @override
+  String get themeModeLight => 'فاتح';
+
+  @override
+  String get themeModeDark => 'داكن';
+
+  @override
+  String get themeModeSystem => 'تلقائي';
+
+  @override
+  String get themeModeSystemHint => 'يتبع إعداد النظام';
+
+  @override
+  String get appearanceToggleTooltip => 'تبديل بين الفاتح والداكن';
+
+  @override
+  String get switchToDarkAction => 'التبديل إلى الوضع الداكن';
+
+  @override
+  String get switchToLightAction => 'التبديل إلى الوضع الفاتح';
+
+  @override
+  String get shopSetupTitle => 'إعداد المتجر';
+
+  @override
+  String get shopSetupSkip => 'تخطٍّ';
+
+  @override
+  String get shopSetupPickTypeTitle => 'ما نوع متجرك؟';
+
+  @override
+  String get shopSetupPickTypeSubtitle =>
+      'نفعّل لك الإعدادات المناسبة تلقائيًا — يمكنك تغيير أي شيء لاحقًا.';
+
+  @override
+  String get shopSetupTuneTitle => 'إعدادات سريعة';
+
+  @override
+  String get shopSetupTuneSubtitle =>
+      'اضبط القليل من الإعدادات الأساسية للبدء.';
+
+  @override
+  String get shopSetupFinish => 'إنهاء الإعداد';
+
+  @override
+  String get shopSetupError => 'تعذّر حفظ الإعداد، حاول مرة أخرى.';
+
+  @override
+  String get shopSetupShopNameLabel => 'اسم المتجر';
+
+  @override
+  String get shopSetupCurrencyLabel => 'العملة';
+
+  @override
+  String get shopSetupCurrencyValue => 'د.ل (دينار ليبي)';
+
+  @override
+  String get shopSetupCurrencyHint => 'دعم العملات المتعددة قادم قريبًا.';
+
+  @override
+  String get shopSetupOversellingTitle => 'السماح بالبيع رغم نفاد المخزون';
+
+  @override
+  String get shopSetupOversellingSubtitle =>
+      'يسمح ببيع المنتجات غير المتوفرة في المخزون.';
+
+  @override
+  String get shopSetupOpeningCashTitle => 'طلب رصيد افتتاحي للدرج';
+
+  @override
+  String get shopSetupOpeningCashSubtitle =>
+      'يطلب من الكاشير إدخال النقد الافتتاحي عند بدء جلسة الدرج.';
+
+  @override
+  String get shopSetupReceiptsTitle => 'طباعة الإيصالات تلقائيًا';
+
+  @override
+  String get shopSetupReceiptsSubtitle =>
+      'يطبع إيصال العميل تلقائيًا بعد كل عملية بيع.';
+
+  @override
+  String get shopTypeGeneral => 'متجر عام';
+
+  @override
+  String get shopTypeGeneralDescription =>
+      'بيع بالتجزئة بسيط دون ميزات إضافية.';
+
+  @override
+  String get shopTypeRestaurant => 'مطعم / مقهى';
+
+  @override
+  String get shopTypeRestaurantDescription =>
+      'عمليات المطبخ وطباعة طلبات المطبخ والتحضير عند الطلب.';
+
+  @override
+  String get shopTypeGrocery => 'بقالة / سوبر ماركت';
+
+  @override
+  String get shopTypeGroceryDescription =>
+      'وحدات قياس متعددة وتنبيهات نقص المخزون ومراقبة صارمة.';
+
+  @override
+  String get shopTypePharmacy => 'صيدلية';
+
+  @override
+  String get shopTypePharmacyDescription =>
+      'مراقبة مخزون صارمة ومنع البيع بخسارة.';
+
+  @override
+  String get shopTypePhoneRepair => 'هواتف وصيانة';
+
+  @override
+  String get shopTypePhoneRepairDescription => 'عمليات الصيانة وتتبّع الأعمال.';
+
+  @override
+  String get shopTypeBakery => 'مخبز / حلويات';
+
+  @override
+  String get shopTypeBakeryDescription =>
+      'عمليات المطبخ والإنتاج للتحضير المسبق.';
+
+  @override
+  String get shopTypeRetail => 'ملابس وتجزئة';
+
+  @override
+  String get shopTypeRetailDescription => 'متجر تجزئة مع مراقبة مخزون صارمة.';
+
+  @override
   String get devicePrinterSectionTitle => 'أدوار الطباعة';
 
   @override
@@ -4745,6 +4879,130 @@ class AppLocalizationsAr extends AppLocalizations {
   String get activeProductLabel => 'متاح للبيع';
 
   @override
+  String get applyButton => 'تطبيق';
+
+  @override
+  String get bulkSelectTooltip => 'تحديد متعدد';
+
+  @override
+  String bulkSelectedCount(int count) {
+    return '$count محدد';
+  }
+
+  @override
+  String get bulkSelectAllAction => 'تحديد الكل';
+
+  @override
+  String get bulkClearSelectionAction => 'مسح التحديد';
+
+  @override
+  String get bulkArchiveAction => 'أرشفة';
+
+  @override
+  String get bulkRestoreAction => 'استعادة';
+
+  @override
+  String get bulkRepriceAction => 'تعديل السعر';
+
+  @override
+  String get bulkCategorizeAction => 'تصنيف';
+
+  @override
+  String get bulkFlagsAction => 'الخصائص';
+
+  @override
+  String get bulkArchiveConfirmTitle => 'أرشفة المنتجات المحددة؟';
+
+  @override
+  String bulkArchiveConfirmMessage(int count) {
+    return 'سيتم أرشفة $count منتج وإخفاؤها من القوائم ونقطة البيع. يمكن استعادتها لاحقًا.';
+  }
+
+  @override
+  String get bulkRestoreConfirmTitle => 'استعادة المنتجات المحددة؟';
+
+  @override
+  String bulkRestoreConfirmMessage(int count) {
+    return 'سيتم إعادة $count منتج إلى القوائم.';
+  }
+
+  @override
+  String bulkActionSuccess(int count) {
+    return 'تم تحديث $count منتج';
+  }
+
+  @override
+  String get bulkActionError => 'تعذّر تنفيذ العملية، حاول مرة أخرى.';
+
+  @override
+  String get bulkActionNoChanges => 'لم يتغيّر أي منتج.';
+
+  @override
+  String get bulkRepriceTitle => 'تعديل أسعار المنتجات المحددة';
+
+  @override
+  String get bulkRepriceModeLabel => 'طريقة التعديل';
+
+  @override
+  String get bulkRepriceModeSet => 'تعيين سعر موحّد';
+
+  @override
+  String get bulkRepriceModeIncreasePercent => 'زيادة بنسبة %';
+
+  @override
+  String get bulkRepriceModeDecreasePercent => 'خصم بنسبة %';
+
+  @override
+  String get bulkRepriceModeIncreaseAmount => 'زيادة بمبلغ';
+
+  @override
+  String get bulkRepriceModeDecreaseAmount => 'خصم بمبلغ';
+
+  @override
+  String get bulkRepricePercentLabel => 'النسبة';
+
+  @override
+  String get bulkRepriceAmountLabel => 'المبلغ';
+
+  @override
+  String get bulkRepriceValueRequired => 'أدخل قيمة صحيحة.';
+
+  @override
+  String get bulkCategorizeTitle => 'تصنيف المنتجات المحددة';
+
+  @override
+  String get bulkCategorizeModeLabel => 'الإجراء';
+
+  @override
+  String get bulkCategorizeModeAdd => 'إضافة تصنيفات';
+
+  @override
+  String get bulkCategorizeModeReplace => 'استبدال التصنيفات';
+
+  @override
+  String get bulkCategorizeModeRemove => 'إزالة تصنيفات';
+
+  @override
+  String get bulkCategorizePickButton => 'اختيار التصنيفات';
+
+  @override
+  String bulkCategorizePickedCount(int count) {
+    return '$count تصنيف محدد';
+  }
+
+  @override
+  String get bulkFlagsTitle => 'تعديل خصائص المنتجات المحددة';
+
+  @override
+  String get bulkFlagNoChange => 'بدون تغيير';
+
+  @override
+  String get bulkFlagOn => 'تشغيل';
+
+  @override
+  String get bulkFlagOff => 'إيقاف';
+
+  @override
   String get productTracksExpiryLabel => 'يتابع تاريخ الانتهاء';
 
   @override
@@ -5381,6 +5639,14 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get emptyCartMessage => 'ابحث عن منتج أو امسح الباركود لبدء البيع';
+
+  @override
+  String cartQuantityPendingLabel(String productName, String quantity) {
+    return '$productName — الكمية: $quantity';
+  }
+
+  @override
+  String get cartQuantityPendingHint => 'Enter للتأكيد';
 
   @override
   String get openCartSheetButton => 'مراجعة السلة';

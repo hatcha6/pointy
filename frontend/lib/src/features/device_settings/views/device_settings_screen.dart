@@ -12,6 +12,7 @@ import '../../../shared/components/components.dart';
 import '../../../shared/design/design.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../../../shared/shell/shell.dart';
+import '../../../shared/theme/theme_mode_controls.dart';
 import '../view_models/device_settings_view_model.dart';
 import '../../printing/view_models/printing_settings_view_model.dart';
 import '../../printing/views/printing_settings_panel.dart';
@@ -123,6 +124,30 @@ class _DeviceSettingsBody extends StatelessWidget {
     return ListView(
       padding: spacing.pagePadding,
       children: [
+        AdaptiveMaxWidth(
+          width: AppContentWidth.form,
+          child: PointyDetailSection(
+            icon: Icons.palette_outlined,
+            title: l10n.appearanceSectionTitle,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Padding(
+                  padding: EdgeInsets.only(bottom: spacing.sm),
+                  child: Text(
+                    l10n.appearanceSectionSubtitle,
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ),
+                const Align(
+                  alignment: AlignmentDirectional.centerStart,
+                  child: ThemeModeSelector(),
+                ),
+              ],
+            ),
+          ),
+        ),
+        SizedBox(height: spacing.lg),
         AdaptiveMaxWidth(
           width: AppContentWidth.form,
           child: PointyDetailSection(

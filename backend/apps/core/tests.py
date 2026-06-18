@@ -1725,3 +1725,58 @@ class CorsPreflightTests(TestCase):
         ).lower()
         self.assertIn("idempotency-key", allow_headers)
         self.assertIn("x-pointy-relay-token", allow_headers)
+
+
+class ShopSetupTests(TestCase):
+    def setUp(self):
+        ensure_role_groups()
+        self.client = APIClient()
+        self.user = get_user_model().objects.create_user(
+            username="setup-user",
+            password="pass",
+        )
+        self.user.groups.add(Group.objects.get(name=MANAGER_GROUP))
+        self.client.force_authenticate(user=self.user)
+
+    def test_setup_applies_restaurant_preset_with_overrides(self):
+        response = self.client.post(
+            reverse("shop-setup"),
+            {
+                "shop_type": "restaurant",
+                "shop_name": "مطعمي",
+                "allow_overselling": True,
+                "require_opening_cash": False,
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        settings = ShopSettings.load()
+        self.assertEqual(settings.shop_type, "restaurant")
+        # Preset turns the kitchen lane on.
+        self.assertTrue(settings.enable_kitchen_operations)
+        self.assertTrue(settings.auto_print_kitchen_tickets)
+        # Explicit wizard choices win over the preset.
+        self.assertEqual(settings.shop_name, "مطعمي")
+        self.assertTrue(settings.allow_overselling)
+        self.assertFalse(settings.require_opening_cash)
+
+    def test_setup_phone_repair_enables_repair(self):
+        response = self.client.post(
+            reverse("shop-setup"),
+            {"shop_type": "phone_repair"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        settings = ShopSettings.load()
+        self.assertEqual(settings.shop_type, "phone_repair")
+        self.assertTrue(settings.enable_repair_operations)
+        self.assertTrue(settings.enable_job_tracking)
+        self.assertFalse(settings.enable_kitchen_operations)
+
+    def test_setup_rejects_unknown_type(self):
+        response = self.client.post(
+            reverse("shop-setup"),
+            {"shop_type": "spaceship"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)

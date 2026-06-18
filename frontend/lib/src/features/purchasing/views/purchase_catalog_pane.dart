@@ -72,6 +72,8 @@ class PurchaseCatalogPane extends StatelessWidget {
             isLoadingInitial: viewModel.isLoading,
             isLoadingMore: viewModel.isLoadingMore,
             loadMoreExtent: PointyProductCardGrid.loadMoreExtent,
+            skeletonItemBuilder: (_) => const PointySkeletonCard(),
+            skeletonItemCount: 12,
             emptyBuilder: (context) => PointyEmptyState(
               icon: Icons.inventory_2_outlined,
               title: l10n.emptyCatalog,

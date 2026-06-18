@@ -15,10 +15,10 @@ import '../../../shared/infinite_scroll_grid.dart';
 import '../../../shared/product_query_controls.dart';
 import '../../../shared/product_tile.dart';
 import '../../../shared/responsive/responsive.dart';
+import '../../../shared/unit_options.dart';
 import '../view_models/pos_view_model.dart';
 import 'modifier_sheet.dart';
 import 'pos_variant_picker_sheet.dart';
-import 'unit_quantity_sheet.dart';
 import 'weight_entry_sheet.dart';
 
 class PosCatalogPane extends StatelessWidget {
@@ -120,6 +120,8 @@ class _PosCatalogGrid extends StatelessWidget {
               isLoadingInitial: viewModel.isLoading,
               isLoadingMore: viewModel.isLoadingMore,
               loadMoreExtent: PointyProductCardGrid.loadMoreExtent,
+              skeletonItemBuilder: (_) => const PointySkeletonCard(),
+              skeletonItemCount: 12,
               emptyBuilder: (context) =>
                   _PosCatalogEmptyState(message: emptyMessage),
               gridDelegate: PointyProductCardGrid.delegateFor(
@@ -184,44 +186,11 @@ class _PosCatalogGrid extends StatelessWidget {
       variant: variant,
     );
     if (modifiers != null && context.mounted) {
-      viewModel.addVariant(variant, modifiers: modifiers, source: source);
-    }
-  }
-
-  Future<void> _addWithUnit(
-    BuildContext context,
-    Product product,
-    ProductVariant variant, {
-    required String source,
-  }) async {
-    final selection = await showUnitQuantitySheet(
-      context,
-      product: product,
-      variant: variant,
-    );
-    if (selection == null || !context.mounted) {
-      return;
-    }
-    if (product.modifierGroups.isEmpty) {
+      final unit = defaultSaleUnitOption(product, variant.unitPrice);
       viewModel.addVariant(
         variant,
-        quantity: selection.quantity,
-        unit: selection.unit,
-        source: source,
-      );
-      return;
-    }
-    final modifiers = await showModifierSheet(
-      context,
-      product: product,
-      variant: variant,
-    );
-    if (modifiers != null && context.mounted) {
-      viewModel.addVariant(
-        variant,
-        quantity: selection.quantity,
-        unit: selection.unit,
         modifiers: modifiers,
+        unit: unit.isBase ? null : unit,
         source: source,
       );
     }
@@ -257,17 +226,6 @@ class _PosCatalogGrid extends StatelessWidget {
             source: 'product_tile',
           );
         }
-      case PosProductSelectionStatus.chooseUnit:
-        final variant = result.unitVariant;
-        final unitProduct = result.unitProduct;
-        if (variant != null && unitProduct != null && context.mounted) {
-          await _addWithUnit(
-            context,
-            unitProduct,
-            variant,
-            source: 'product_tile',
-          );
-        }
       case PosProductSelectionStatus.chooseVariant:
         final variant = await showPosVariantPickerSheet(
           context,
@@ -275,14 +233,8 @@ class _PosCatalogGrid extends StatelessWidget {
           variants: result.variants,
         );
         if (variant != null && context.mounted) {
-          if (product.hasSellableUnits) {
-            await _addWithUnit(
-              context,
-              product,
-              variant,
-              source: 'variant_picker',
-            );
-          } else if (variant.unit != 'piece') {
+          final defaultUnit = defaultSaleUnitOption(product, variant.unitPrice);
+          if (defaultUnit.allowsFractional) {
             await _addWeighedVariant(
               context,
               product,
@@ -297,7 +249,11 @@ class _PosCatalogGrid extends StatelessWidget {
               source: 'variant_picker',
             );
           } else {
-            viewModel.addVariant(variant, source: 'variant_picker');
+            viewModel.addVariant(
+              variant,
+              unit: defaultUnit.isBase ? null : defaultUnit,
+              source: 'variant_picker',
+            );
           }
         }
       case PosProductSelectionStatus.unavailable:

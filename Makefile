@@ -260,6 +260,12 @@ frontend-command-palette-preview: frontend-install ## Run the global command pal
 frontend-price-checker-preview: frontend-install ## Run the price-checker settings UI preview harness as a local web server.
 	cd "$(FRONTEND_DIR)" && $(FLUTTER) run -d web-server --web-hostname $(WEB_HOST) --web-port $(WEB_PORT) -t lib/dev/price_checker_preview.dart
 
+frontend-theme-preview: frontend-install ## Run the light/dark theme gallery preview harness as a local web server.
+	cd "$(FRONTEND_DIR)" && $(FLUTTER) run -d web-server --web-hostname $(WEB_HOST) --web-port $(WEB_PORT) -t lib/dev/theme_preview.dart
+
+frontend-shop-setup-preview: frontend-install ## Run the first-run shop-setup wizard preview harness as a local web server.
+	cd "$(FRONTEND_DIR)" && $(FLUTTER) run -d web-server --web-hostname $(WEB_HOST) --web-port $(WEB_PORT) -t lib/dev/shop_setup_preview.dart
+
 frontend-test: frontend-install ## Run Flutter tests.
 	cd "$(FRONTEND_DIR)" && $(FLUTTER) test
 

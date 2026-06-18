@@ -92,3 +92,33 @@ UnitOption defaultUnitOption(List<UnitOption> options, String preferredCode) {
   }
   return options.first;
 }
+
+/// The product's default sale unit as a [UnitOption], resolved without l10n (the
+/// base unit's display label is filled in at render time). Falls back to the
+/// base unit when no default is set or it isn't a sellable unit. Used to add a
+/// product to the cart at its default unit, with no up-front dialog.
+UnitOption defaultSaleUnitOption(Product product, double baseUnitPrice) {
+  final code = product.defaultSaleUnit;
+  if (code.isNotEmpty && code != product.unit) {
+    for (final unit in product.sellableUnits) {
+      if (unit.code == code) {
+        return UnitOption(
+          code: unit.code,
+          label: unit.label,
+          unitPrice: unit.resolvedPrice(baseUnitPrice),
+          factorToBase: unit.factorToBase,
+          allowsFractional: unit.allowsFractional,
+          isBase: false,
+        );
+      }
+    }
+  }
+  return UnitOption(
+    code: product.unit,
+    label: '',
+    unitPrice: baseUnitPrice,
+    factorToBase: 1,
+    allowsFractional: baseUnitAllowsFractional(product.unit),
+    isBase: true,
+  );
+}

@@ -54,6 +54,7 @@ from apps.core.views import (
     PosUserViewSet,
     ShopSettingsLogoView,
     ShopSettingsView,
+    ShopSetupView,
     login_view,
     logout_view,
     me_view,
@@ -237,6 +238,7 @@ urlpatterns = [
     ),
     path("api/attendance/sync/", BioTimeSyncView.as_view(), name="attendance-sync"),
     path("api/shop-settings/", ShopSettingsView.as_view(), name="shop-settings"),
+    path("api/shop-settings/setup/", ShopSetupView.as_view(), name="shop-setup"),
     path(
         "api/shop-settings/logo/",
         ShopSettingsLogoView.as_view(),

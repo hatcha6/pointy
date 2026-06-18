@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'components/pointy_skeleton.dart';
+
 class InfiniteScrollView<T> extends StatefulWidget {
   const InfiniteScrollView({
     super.key,
@@ -14,6 +16,8 @@ class InfiniteScrollView<T> extends StatefulWidget {
     this.header,
     this.padding = EdgeInsets.zero,
     this.loadMoreExtent = 480,
+    this.skeletonItemBuilder,
+    this.skeletonItemCount = 8,
   });
 
   final List<T> items;
@@ -31,6 +35,12 @@ class InfiniteScrollView<T> extends StatefulWidget {
   final Widget? header;
   final EdgeInsetsGeometry padding;
   final double loadMoreExtent;
+
+  /// When provided, the initial-load state shows [skeletonItemCount] shimmering
+  /// placeholders laid out with the real sliver shape (list or grid) instead of
+  /// a centered spinner.
+  final WidgetBuilder? skeletonItemBuilder;
+  final int skeletonItemCount;
 
   @override
   State<InfiniteScrollView<T>> createState() => _InfiniteScrollViewState<T>();
@@ -86,6 +96,28 @@ class _InfiniteScrollViewState<T> extends State<InfiniteScrollView<T>> {
   @override
   Widget build(BuildContext context) {
     if (widget.isLoadingInitial && widget.items.isEmpty) {
+      final skeletonItemBuilder = widget.skeletonItemBuilder;
+      if (skeletonItemBuilder != null) {
+        return PointySkeleton(
+          child: CustomScrollView(
+            physics: const NeverScrollableScrollPhysics(),
+            slivers: [
+              if (widget.header != null)
+                SliverToBoxAdapter(child: widget.header),
+              SliverPadding(
+                padding: widget.padding,
+                sliver: widget.sliverBuilder(
+                  context,
+                  SliverChildBuilderDelegate(
+                    (context, index) => skeletonItemBuilder(context),
+                    childCount: widget.skeletonItemCount,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      }
       return _withHeader(
         const Padding(
           padding: EdgeInsets.all(24),
@@ -148,6 +180,8 @@ class InfiniteScrollGrid<T> extends StatefulWidget {
     required this.gridDelegate,
     this.padding = EdgeInsets.zero,
     this.loadMoreExtent = 480,
+    this.skeletonItemBuilder,
+    this.skeletonItemCount = 8,
   });
 
   final List<T> items;
@@ -160,6 +194,8 @@ class InfiniteScrollGrid<T> extends StatefulWidget {
   final SliverGridDelegate gridDelegate;
   final EdgeInsetsGeometry padding;
   final double loadMoreExtent;
+  final WidgetBuilder? skeletonItemBuilder;
+  final int skeletonItemCount;
 
   @override
   State<InfiniteScrollGrid<T>> createState() => _InfiniteScrollGridState<T>();
@@ -178,6 +214,8 @@ class _InfiniteScrollGridState<T> extends State<InfiniteScrollGrid<T>> {
       emptyBuilder: widget.emptyBuilder,
       padding: widget.padding,
       loadMoreExtent: widget.loadMoreExtent,
+      skeletonItemBuilder: widget.skeletonItemBuilder,
+      skeletonItemCount: widget.skeletonItemCount,
       sliverBuilder: (context, delegate) {
         return SliverGrid(
           gridDelegate: widget.gridDelegate,
@@ -202,6 +240,8 @@ class InfiniteScrollList<T> extends StatelessWidget {
     this.header,
     this.padding = EdgeInsets.zero,
     this.loadMoreExtent = 480,
+    this.skeletonItemBuilder,
+    this.skeletonItemCount = 8,
   });
 
   final List<T> items;
@@ -215,6 +255,8 @@ class InfiniteScrollList<T> extends StatelessWidget {
   final Widget? header;
   final EdgeInsetsGeometry padding;
   final double loadMoreExtent;
+  final WidgetBuilder? skeletonItemBuilder;
+  final int skeletonItemCount;
 
   @override
   Widget build(BuildContext context) {
@@ -229,6 +271,8 @@ class InfiniteScrollList<T> extends StatelessWidget {
       header: header,
       padding: padding,
       loadMoreExtent: loadMoreExtent,
+      skeletonItemBuilder: skeletonItemBuilder,
+      skeletonItemCount: skeletonItemCount,
       sliverBuilder: (context, delegate) {
         if (separatorBuilder == null) {
           return SliverList(delegate: delegate);

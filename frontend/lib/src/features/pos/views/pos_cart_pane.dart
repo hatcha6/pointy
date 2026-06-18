@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../core/authorization.dart';
@@ -27,6 +28,13 @@ import 'payment/payment.dart';
 import 'pos_sale_session_strip.dart';
 import 'public_invoice_dialog.dart';
 
+/// Lets an ancestor (the POS workspace) trigger the cart's checkout flow from a
+/// keyboard shortcut. The cart pane publishes its current checkout closure here
+/// on every build — `null` when checkout isn't currently possible.
+class PosCheckoutController {
+  Future<void> Function()? onCheckout;
+}
+
 class PosCartPane extends StatelessWidget {
   const PosCartPane({
     super.key,
@@ -34,12 +42,14 @@ class PosCartPane extends StatelessWidget {
     required this.contactRepository,
     required this.capabilities,
     this.onCheckoutSuccess,
+    this.checkoutController,
   });
 
   final PosViewModel viewModel;
   final ContactRepository contactRepository;
   final AuthorizationCapabilities capabilities;
   final VoidCallback? onCheckoutSuccess;
+  final PosCheckoutController? checkoutController;
 
   @override
   Widget build(BuildContext context) {
@@ -51,6 +61,16 @@ class PosCartPane extends StatelessWidget {
         final isCartLocked = viewModel.isCheckingOut || !canCheckout;
         final spacing = AdaptiveSpacing.of(context);
         final colors = context.pointyColors;
+
+        // Publish the current checkout closure so the workspace's Ctrl/Cmd+Enter
+        // shortcut runs the exact same flow as the footer button.
+        final canCheckoutNow =
+            canCheckout &&
+            viewModel.cart.isNotEmpty &&
+            !viewModel.isCheckingOut;
+        checkoutController?.onCheckout = canCheckoutNow
+            ? () => _checkout(context)
+            : null;
 
         return ColoredBox(
           color: colors.page,
@@ -380,7 +400,7 @@ String _saleDraftSubtitle(AppLocalizations l10n, PosViewModel viewModel) {
   return l10n.walkInCustomerLabel;
 }
 
-class _CartScrollContent extends StatelessWidget {
+class _CartScrollContent extends StatefulWidget {
   const _CartScrollContent({
     required this.viewModel,
     required this.isCartLocked,
@@ -390,68 +410,241 @@ class _CartScrollContent extends StatelessWidget {
   final bool isCartLocked;
 
   @override
+  State<_CartScrollContent> createState() => _CartScrollContentState();
+}
+
+class _CartScrollContentState extends State<_CartScrollContent> {
+  // The cart's keyboard scope. It only steals focus from the catalog search
+  // when the cashier taps a line, so plain typing keeps scanning barcodes. Once
+  // a line is focused, +/- step its quantity and digits set an exact quantity.
+  final FocusNode _focusNode = FocusNode(debugLabel: 'pos_cart_keyboard');
+  String? _focusedLineKey;
+  String _pendingQuantity = '';
+  int _lastLineCount = -1;
+
+  PosViewModel get _viewModel => widget.viewModel;
+
+  @override
+  void initState() {
+    super.initState();
+    _focusNode.addListener(_onFocusChanged);
+  }
+
+  @override
+  void dispose() {
+    _focusNode.removeListener(_onFocusChanged);
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  void _onFocusChanged() {
+    setState(() {
+      if (!_focusNode.hasFocus) {
+        _pendingQuantity = '';
+      }
+    });
+  }
+
+  List<CartLine> get _visibleLines =>
+      _viewModel.cart.reversed.toList(growable: false);
+
+  CartLine? _focusedLine(List<CartLine> lines) {
+    if (lines.isEmpty) {
+      return null;
+    }
+    final key = _focusedLineKey;
+    if (key != null) {
+      for (final line in lines) {
+        if (line.lineKey == key) {
+          return line;
+        }
+      }
+    }
+    return lines.first;
+  }
+
+  void _focusLine(CartLine line) {
+    setState(() {
+      _focusedLineKey = line.lineKey;
+      _pendingQuantity = '';
+    });
+    _focusNode.requestFocus();
+  }
+
+  KeyEventResult _handleKey(FocusNode node, KeyEvent event) {
+    if (event is KeyUpEvent || widget.isCartLocked) {
+      return KeyEventResult.ignored;
+    }
+    // Let modified combos (e.g. Ctrl/Cmd+Enter for checkout) bubble up to the
+    // workspace shortcuts instead of being treated as quantity entry.
+    if (HardwareKeyboard.instance.isControlPressed ||
+        HardwareKeyboard.instance.isAltPressed ||
+        HardwareKeyboard.instance.isMetaPressed) {
+      return KeyEventResult.ignored;
+    }
+    final line = _focusedLine(_visibleLines);
+    if (line == null) {
+      return KeyEventResult.ignored;
+    }
+    final key = event.logicalKey;
+
+    final digit = _digitFor(key);
+    if (digit != null) {
+      if (_pendingQuantity.length < 5) {
+        setState(() => _pendingQuantity = '$_pendingQuantity$digit');
+      }
+      return KeyEventResult.handled;
+    }
+    if (key == LogicalKeyboardKey.backspace) {
+      if (_pendingQuantity.isEmpty) {
+        return KeyEventResult.ignored;
+      }
+      setState(
+        () => _pendingQuantity = _pendingQuantity.substring(
+          0,
+          _pendingQuantity.length - 1,
+        ),
+      );
+      return KeyEventResult.handled;
+    }
+    if (key == LogicalKeyboardKey.enter ||
+        key == LogicalKeyboardKey.numpadEnter) {
+      _applyPendingQuantity(line);
+      return KeyEventResult.handled;
+    }
+    if (key == LogicalKeyboardKey.add ||
+        key == LogicalKeyboardKey.numpadAdd ||
+        key == LogicalKeyboardKey.equal) {
+      setState(() => _pendingQuantity = '');
+      _viewModel.incrementCartLine(line.lineKey, source: 'keyboard');
+      return KeyEventResult.handled;
+    }
+    if (key == LogicalKeyboardKey.minus ||
+        key == LogicalKeyboardKey.numpadSubtract) {
+      setState(() => _pendingQuantity = '');
+      _viewModel.decrementCartLine(line.lineKey, source: 'keyboard');
+      return KeyEventResult.handled;
+    }
+    if (key == LogicalKeyboardKey.escape) {
+      if (_pendingQuantity.isNotEmpty) {
+        setState(() => _pendingQuantity = '');
+      } else {
+        _focusNode.unfocus();
+      }
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
+  }
+
+  void _applyPendingQuantity(CartLine line) {
+    final quantity = int.tryParse(_pendingQuantity);
+    setState(() => _pendingQuantity = '');
+    if (quantity != null && quantity > 0) {
+      _viewModel.setCartLineQuantity(
+        line.lineKey,
+        quantity.toDouble(),
+        source: 'keyboard',
+      );
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final spacing = AdaptiveSpacing.of(context);
     final colors = context.pointyColors;
-    final visibleLines = viewModel.cart.reversed.toList(growable: false);
+    final visibleLines = _visibleLines;
+    // A structural cart change (a scan/tap added or removed a line) invalidates
+    // any half-typed quantity, so the banner can't show stale scanned digits.
+    if (visibleLines.length != _lastLineCount) {
+      _lastLineCount = visibleLines.length;
+      _pendingQuantity = '';
+    }
+    final focusedLine = _focusedLine(visibleLines);
+    final scopeFocused = _focusNode.hasFocus;
 
-    return ListView(
-      padding: EdgeInsetsDirectional.fromSTEB(
-        spacing.md,
-        spacing.sm,
-        spacing.md,
-        spacing.md,
+    return Focus(
+      focusNode: _focusNode,
+      onKeyEvent: _handleKey,
+      child: Column(
+        children: [
+          Expanded(
+            child: ListView(
+              padding: EdgeInsetsDirectional.fromSTEB(
+                spacing.md,
+                spacing.sm,
+                spacing.md,
+                spacing.md,
+              ),
+              children: [
+                if (visibleLines.isEmpty)
+                  SizedBox(
+                    height: 240,
+                    child: PointyEmptyState(
+                      icon: Icons.shopping_cart_outlined,
+                      title: l10n.emptyCart,
+                      message: l10n.emptyCartMessage,
+                    ),
+                  )
+                else
+                  for (
+                    var index = 0;
+                    index < visibleLines.length;
+                    index += 1
+                  ) ...[
+                    if (index > 0) Divider(height: 1, color: colors.line),
+                    CartLineTile(
+                      line: visibleLines[index],
+                      selected:
+                          scopeFocused &&
+                          focusedLine?.lineKey == visibleLines[index].lineKey,
+                      onSelect: widget.isCartLocked
+                          ? null
+                          : () => _focusLine(visibleLines[index]),
+                      onAdd: widget.isCartLocked
+                          ? null
+                          : () => _viewModel.incrementCartLine(
+                              visibleLines[index].lineKey,
+                              source: 'cart_quantity_button',
+                            ),
+                      onRemove: widget.isCartLocked
+                          ? null
+                          : () => _viewModel.decrementCartLine(
+                              visibleLines[index].lineKey,
+                              source: 'cart_quantity_button',
+                            ),
+                      onDelete: widget.isCartLocked
+                          ? null
+                          : () => _viewModel.removeCartLine(
+                              visibleLines[index].lineKey,
+                              source: 'cart_delete_button',
+                            ),
+                      onEditQuantity: widget.isCartLocked
+                          ? null
+                          : () =>
+                                _editLineQuantity(context, visibleLines[index]),
+                      onSwitchUnit:
+                          widget.isCartLocked ||
+                              !Product.fromVariant(
+                                visibleLines[index].variant,
+                              ).hasSellableUnits
+                          ? null
+                          : () => _editLineUnit(context, visibleLines[index]),
+                      onEditNote: widget.isCartLocked
+                          ? null
+                          : () => _editLineNote(context, visibleLines[index]),
+                    ),
+                  ],
+              ],
+            ),
+          ),
+          if (_pendingQuantity.isNotEmpty && focusedLine != null)
+            _PendingQuantityBanner(
+              quantity: _pendingQuantity,
+              productName: focusedLine.variant.productLabel,
+            ),
+        ],
       ),
-      children: [
-        if (viewModel.cart.isEmpty)
-          SizedBox(
-            height: 240,
-            child: PointyEmptyState(
-              icon: Icons.shopping_cart_outlined,
-              title: l10n.emptyCart,
-              message: l10n.emptyCartMessage,
-            ),
-          )
-        else
-          for (var index = 0; index < visibleLines.length; index += 1) ...[
-            if (index > 0) Divider(height: 1, color: colors.line),
-            CartLineTile(
-              line: visibleLines[index],
-              onAdd: isCartLocked
-                  ? null
-                  : () => viewModel.incrementCartLine(
-                      visibleLines[index].lineKey,
-                      source: 'cart_quantity_button',
-                    ),
-              onRemove: isCartLocked
-                  ? null
-                  : () => viewModel.decrementCartLine(
-                      visibleLines[index].lineKey,
-                      source: 'cart_quantity_button',
-                    ),
-              onDelete: isCartLocked
-                  ? null
-                  : () => viewModel.removeCartLine(
-                      visibleLines[index].lineKey,
-                      source: 'cart_delete_button',
-                    ),
-              onEditQuantity: isCartLocked
-                  ? null
-                  : () => _editLineQuantity(context, visibleLines[index]),
-              onSwitchUnit:
-                  isCartLocked ||
-                      !Product.fromVariant(
-                        visibleLines[index].variant,
-                      ).hasSellableUnits
-                  ? null
-                  : () => _editLineUnit(context, visibleLines[index]),
-              onEditNote: isCartLocked
-                  ? null
-                  : () => _editLineNote(context, visibleLines[index]),
-            ),
-          ],
-      ],
     );
   }
 
@@ -468,7 +661,7 @@ class _CartScrollContent extends StatelessWidget {
       initialQuantity: line.quantity,
     );
     if (weight != null && context.mounted) {
-      viewModel.setCartLineQuantity(line.lineKey, weight);
+      _viewModel.setCartLineQuantity(line.lineKey, weight);
     }
   }
 
@@ -483,16 +676,93 @@ class _CartScrollContent extends StatelessWidget {
       initialQuantity: line.quantity,
     );
     if (selection != null && context.mounted) {
-      viewModel.setCartLineUnit(line.lineKey, selection.unit);
-      viewModel.setCartLineQuantity(line.lineKey, selection.quantity);
+      _viewModel.setCartLineUnit(line.lineKey, selection.unit);
+      _viewModel.setCartLineQuantity(line.lineKey, selection.quantity);
     }
   }
 
   Future<void> _editLineNote(BuildContext context, CartLine line) async {
     final note = await showCartLineNoteSheet(context, line: line);
     if (note != null && context.mounted) {
-      viewModel.setCartLineNote(line.lineKey, note);
+      _viewModel.setCartLineNote(line.lineKey, note);
     }
+  }
+
+  static String? _digitFor(LogicalKeyboardKey key) => _digitKeys[key];
+}
+
+final Map<LogicalKeyboardKey, String> _digitKeys = {
+  LogicalKeyboardKey.digit0: '0',
+  LogicalKeyboardKey.digit1: '1',
+  LogicalKeyboardKey.digit2: '2',
+  LogicalKeyboardKey.digit3: '3',
+  LogicalKeyboardKey.digit4: '4',
+  LogicalKeyboardKey.digit5: '5',
+  LogicalKeyboardKey.digit6: '6',
+  LogicalKeyboardKey.digit7: '7',
+  LogicalKeyboardKey.digit8: '8',
+  LogicalKeyboardKey.digit9: '9',
+  LogicalKeyboardKey.numpad0: '0',
+  LogicalKeyboardKey.numpad1: '1',
+  LogicalKeyboardKey.numpad2: '2',
+  LogicalKeyboardKey.numpad3: '3',
+  LogicalKeyboardKey.numpad4: '4',
+  LogicalKeyboardKey.numpad5: '5',
+  LogicalKeyboardKey.numpad6: '6',
+  LogicalKeyboardKey.numpad7: '7',
+  LogicalKeyboardKey.numpad8: '8',
+  LogicalKeyboardKey.numpad9: '9',
+};
+
+class _PendingQuantityBanner extends StatelessWidget {
+  const _PendingQuantityBanner({
+    required this.quantity,
+    required this.productName,
+  });
+
+  final String quantity;
+  final String productName;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final theme = Theme.of(context);
+    final colors = context.pointyColors;
+
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsetsDirectional.fromSTEB(12, 0, 12, 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: colors.primaryContainer,
+        borderRadius: BorderRadius.circular(PointyRadii.chip),
+        border: Border.all(color: colors.primaryStrong),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.tag_outlined, size: 18, color: colors.primaryStrong),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              l10n.cartQuantityPendingLabel(quantity, productName),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.labelLarge?.copyWith(
+                color: colors.primaryDark,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            l10n.cartQuantityPendingHint,
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: colors.primaryStrong,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 

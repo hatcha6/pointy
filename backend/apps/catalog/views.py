@@ -1,9 +1,11 @@
 import django_filters
 from django.core.cache import cache
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 
+from django.db import transaction
 from django.db.models import DecimalField, Count, ProtectedError, Q, Sum, Value
 from django.db.models.functions import Coalesce
+from django.utils import timezone
 from rest_framework import parsers, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
@@ -38,6 +40,10 @@ from .models import (
 )
 from .serializers import (
     ModifierGroupSerializer,
+    ProductBulkArchiveSerializer,
+    ProductBulkCategorizeSerializer,
+    ProductBulkFlagsSerializer,
+    ProductBulkRepriceSerializer,
     ProductCategorySerializer,
     ProductCatalogSerializer,
     ProductVariantSerializer,
@@ -148,6 +154,10 @@ class ProductViewSet(viewsets.ModelViewSet):
         "destroy": ("catalog.delete_product",),
         "archive": ("catalog.delete_product",),
         "restore": ("catalog.change_product",),
+        "bulk_archive": ("catalog.change_product", "catalog.delete_product"),
+        "bulk_reprice": ("catalog.change_product",),
+        "bulk_categorize": ("catalog.change_product",),
+        "bulk_set_flags": ("catalog.change_product",),
         "image_search": ("catalog.view_product",),
         "image_import": ("catalog.change_product", "attachments.add_attachment"),
     }
@@ -449,6 +459,118 @@ class ProductViewSet(viewsets.ModelViewSet):
         product.restore()
         self._clear_catalog_cache()
         return Response(self.get_serializer(product).data)
+
+    @action(detail=False, methods=["post"], url_path="bulk-archive")
+    def bulk_archive(self, request):
+        serializer = ProductBulkArchiveSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        ids = serializer.validated_data["ids"]
+        archived = serializer.validated_data["archived"]
+
+        updated = 0
+        with transaction.atomic():
+            products = Product.objects.select_for_update().filter(pk__in=ids)
+            for product in products:
+                if archived and not product.is_archived:
+                    product.archive(by=request.user)
+                    updated += 1
+                elif not archived and product.is_archived:
+                    product.restore()
+                    updated += 1
+        self._clear_catalog_cache()
+        return Response({"updated": updated})
+
+    @action(detail=False, methods=["post"], url_path="bulk-reprice")
+    def bulk_reprice(self, request):
+        serializer = ProductBulkRepriceSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        ids = serializer.validated_data["ids"]
+        mode = serializer.validated_data["mode"]
+        value = serializer.validated_data["value"]
+
+        now = timezone.now()
+        changed = []
+        with transaction.atomic():
+            # Reprice the default (sellable) variant of each selected product.
+            variants = ProductVariant.objects.select_for_update().filter(
+                product_id__in=ids,
+                is_default=True,
+            )
+            for variant in variants:
+                new_price = self._reprice_value(variant.unit_price, mode, value)
+                if new_price != variant.unit_price:
+                    variant.unit_price = new_price
+                    variant.updated_at = now
+                    changed.append(variant)
+            if changed:
+                ProductVariant.objects.bulk_update(
+                    changed, ["unit_price", "updated_at"]
+                )
+        self._clear_catalog_cache()
+        return Response({"updated": len(changed)})
+
+    @staticmethod
+    def _reprice_value(current, mode, value):
+        current = Decimal(current)
+        if mode == "set":
+            result = value
+        elif mode == "increase_percent":
+            result = current * (Decimal("1") + value / Decimal("100"))
+        elif mode == "decrease_percent":
+            result = current * (Decimal("1") - value / Decimal("100"))
+        elif mode == "increase_amount":
+            result = current + value
+        elif mode == "decrease_amount":
+            result = current - value
+        else:
+            result = current
+        result = result.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        return result if result > 0 else Decimal("0.00")
+
+    @action(detail=False, methods=["post"], url_path="bulk-categorize")
+    def bulk_categorize(self, request):
+        serializer = ProductBulkCategorizeSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        ids = serializer.validated_data["ids"]
+        mode = serializer.validated_data["mode"]
+        categories = list(
+            ProductCategory.objects.filter(
+                pk__in=serializer.validated_data["category_ids"]
+            )
+        )
+
+        updated = 0
+        with transaction.atomic():
+            products = Product.objects.select_for_update().filter(pk__in=ids)
+            for product in products:
+                if mode == "replace":
+                    product.categories.set(categories)
+                elif mode == "add":
+                    product.categories.add(*categories)
+                else:  # remove
+                    product.categories.remove(*categories)
+                updated += 1
+        self._clear_catalog_cache()
+        return Response({"updated": updated})
+
+    @action(detail=False, methods=["post"], url_path="bulk-set-flags")
+    def bulk_set_flags(self, request):
+        serializer = ProductBulkFlagsSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        ids = serializer.validated_data["ids"]
+        flags = {
+            field: serializer.validated_data[field]
+            for field in ProductBulkFlagsSerializer.FLAG_FIELDS
+            if field in serializer.validated_data
+        }
+
+        with transaction.atomic():
+            updated = (
+                Product.objects.filter(pk__in=ids)
+                .update(updated_at=timezone.now(), **flags)
+            )
+        self._clear_catalog_cache()
+        return Response({"updated": updated})
 
     def perform_destroy(self, instance):
         # Soft-delete: archive instead of removing the row so sales/purchase

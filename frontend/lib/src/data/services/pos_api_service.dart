@@ -468,6 +468,24 @@ class PosApiService {
     return _shopSettings.updateShopSettings(draft);
   }
 
+  Future<ShopSettings> setupShop({
+    required String shopType,
+    String? shopName,
+    bool? allowOverselling,
+    bool? requireOpeningCash,
+    bool? autoPrintReceipts,
+    bool? autoPrintKitchenTickets,
+  }) {
+    return _shopSettings.setupShop(
+      shopType: shopType,
+      shopName: shopName,
+      allowOverselling: allowOverselling,
+      requireOpeningCash: requireOpeningCash,
+      autoPrintReceipts: autoPrintReceipts,
+      autoPrintKitchenTickets: autoPrintKitchenTickets,
+    );
+  }
+
   Future<ShopSettings> uploadShopLogo(ShopLogoUpload upload) {
     return _shopSettings.uploadShopLogo(upload);
   }
@@ -529,6 +547,49 @@ class PosApiService {
 
   Future<Product> restoreProduct(int id) {
     return _catalog.restoreProduct(id);
+  }
+
+  Future<int> bulkArchiveProducts({
+    required List<int> ids,
+    required bool archived,
+  }) {
+    return _catalog.bulkArchiveProducts(ids: ids, archived: archived);
+  }
+
+  Future<int> bulkRepriceProducts({
+    required List<int> ids,
+    required String mode,
+    required double value,
+  }) {
+    return _catalog.bulkRepriceProducts(ids: ids, mode: mode, value: value);
+  }
+
+  Future<int> bulkCategorizeProducts({
+    required List<int> ids,
+    required List<int> categoryIds,
+    required String mode,
+  }) {
+    return _catalog.bulkCategorizeProducts(
+      ids: ids,
+      categoryIds: categoryIds,
+      mode: mode,
+    );
+  }
+
+  Future<int> bulkSetProductFlags({
+    required List<int> ids,
+    bool? isActive,
+    bool? tracksExpiry,
+    bool? isService,
+    bool? isPrepared,
+  }) {
+    return _catalog.bulkSetProductFlags(
+      ids: ids,
+      isActive: isActive,
+      tracksExpiry: tracksExpiry,
+      isService: isService,
+      isPrepared: isPrepared,
+    );
   }
 
   Future<AttachmentSummary> uploadProductImage({

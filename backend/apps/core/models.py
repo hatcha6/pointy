@@ -43,7 +43,19 @@ class IdempotencyRecord(TimeStampedModel):
 
 
 class ShopSettings(TimeStampedModel):
+    class ShopType(models.TextChoices):
+        GENERAL = "general", "General retail"
+        RESTAURANT = "restaurant", "Restaurant / Café"
+        GROCERY = "grocery", "Grocery / Supermarket"
+        PHARMACY = "pharmacy", "Pharmacy"
+        PHONE_REPAIR = "phone_repair", "Phone shop & repair"
+        BAKERY = "bakery", "Bakery / Pastry"
+        RETAIL = "retail", "Clothing / Retail"
+
     shop_name = models.CharField(max_length=120, default="نقطة البيع")
+    # The shop's vertical, chosen in the first-run setup wizard. Empty until
+    # then; drives the preset defaults but every setting stays editable after.
+    shop_type = models.CharField(max_length=32, blank=True, default="")
     receipt_header = models.CharField(max_length=240, blank=True)
     receipt_footer = models.CharField(max_length=240, blank=True)
     enable_online_invoices = models.BooleanField(default=False)
@@ -124,6 +136,66 @@ class ShopSettings(TimeStampedModel):
             "card": self.card_commission_percent,
             "transfer": self.transfer_commission_percent,
         }.get(method, 0)
+
+    def apply_shop_type_preset(self, shop_type: str):
+        """Flip the feature defaults for a shop vertical, then record the type.
+
+        Presets are non-destructive defaults — every field stays editable in
+        Settings afterwards; the wizard simply gives a sensible starting point.
+        """
+        for field, value in SHOP_TYPE_PRESETS.get(shop_type, {}).items():
+            setattr(self, field, value)
+        self.shop_type = shop_type
+
+
+# Per-vertical default toggles applied by the first-run setup wizard. Only the
+# fields that differ from a plain retail shop are listed; everything else keeps
+# the model default. All of these remain editable in Settings afterwards.
+SHOP_TYPE_PRESETS = {
+    ShopSettings.ShopType.GENERAL: {
+        "enable_kitchen_operations": False,
+        "enable_repair_operations": False,
+        "enable_production_operations": False,
+        "allow_overselling": False,
+        "prevent_selling_at_loss": True,
+    },
+    ShopSettings.ShopType.RESTAURANT: {
+        "enable_kitchen_operations": True,
+        "auto_print_kitchen_tickets": True,
+        "kitchen_auto_complete": True,
+        "enable_repair_operations": False,
+        "enable_production_operations": False,
+    },
+    ShopSettings.ShopType.GROCERY: {
+        "enable_kitchen_operations": False,
+        "enable_repair_operations": False,
+        "allow_overselling": False,
+        "prevent_selling_at_loss": True,
+        "low_stock_threshold": 10,
+    },
+    ShopSettings.ShopType.PHARMACY: {
+        "enable_kitchen_operations": False,
+        "enable_repair_operations": False,
+        "allow_overselling": False,
+        "prevent_selling_at_loss": True,
+    },
+    ShopSettings.ShopType.PHONE_REPAIR: {
+        "enable_repair_operations": True,
+        "enable_job_tracking": True,
+        "enable_kitchen_operations": False,
+    },
+    ShopSettings.ShopType.BAKERY: {
+        "enable_kitchen_operations": True,
+        "enable_production_operations": True,
+        "auto_print_kitchen_tickets": False,
+    },
+    ShopSettings.ShopType.RETAIL: {
+        "enable_kitchen_operations": False,
+        "enable_repair_operations": False,
+        "allow_overselling": False,
+        "prevent_selling_at_loss": True,
+    },
+}
 
 
 class SystemBackupSchedule(TimeStampedModel):

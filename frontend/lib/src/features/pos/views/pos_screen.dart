@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../core/authorization.dart';
@@ -200,7 +201,7 @@ class PosScreen extends StatelessWidget {
   }
 }
 
-class _PosWorkspace extends StatelessWidget {
+class _PosWorkspace extends StatefulWidget {
   const _PosWorkspace({
     required this.viewModel,
     required this.contactRepository,
@@ -212,7 +213,21 @@ class _PosWorkspace extends StatelessWidget {
   final AuthorizationCapabilities capabilities;
 
   @override
+  State<_PosWorkspace> createState() => _PosWorkspaceState();
+}
+
+class _PosWorkspaceState extends State<_PosWorkspace> {
+  // The cart pane publishes its checkout closure here so Ctrl/Cmd+Enter runs the
+  // same flow as the footer button, even while the catalog search has focus.
+  final PosCheckoutController _checkoutController = PosCheckoutController();
+
+  void _requestCheckout() => _checkoutController.onCheckout?.call();
+
+  @override
   Widget build(BuildContext context) {
+    final viewModel = widget.viewModel;
+    final capabilities = widget.capabilities;
+
     return BarcodeScanListener(
       enabled:
           capabilities.canCheckoutSale &&
@@ -220,32 +235,45 @@ class _PosWorkspace extends StatelessWidget {
           !viewModel.isResolvingBarcode,
       onBarcodeScanned: (barcode) =>
           viewModel.addVariantByBarcode(barcode, source: 'hardware_scanner'),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final width = constraints.hasBoundedWidth
-              ? constraints.maxWidth
-              : MediaQuery.sizeOf(context).width;
-          if (AppBreakpoints.usesTwoPane(width)) {
-            return TwoPaneLayout(
-              minPrimaryWidth: 390,
-              primaryPane: PosCatalogPane(
-                viewModel: viewModel,
-                capabilities: capabilities,
-              ),
-              secondaryPane: PosCartPane(
-                viewModel: viewModel,
-                contactRepository: contactRepository,
-                capabilities: capabilities,
-              ),
-            );
-          }
-
-          return _CompactPosWorkspace(
-            viewModel: viewModel,
-            contactRepository: contactRepository,
-            capabilities: capabilities,
-          );
+      child: CallbackShortcuts(
+        bindings: {
+          const SingleActivator(LogicalKeyboardKey.enter, control: true):
+              _requestCheckout,
+          const SingleActivator(LogicalKeyboardKey.enter, meta: true):
+              _requestCheckout,
+          const SingleActivator(LogicalKeyboardKey.numpadEnter, control: true):
+              _requestCheckout,
+          const SingleActivator(LogicalKeyboardKey.numpadEnter, meta: true):
+              _requestCheckout,
         },
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final width = constraints.hasBoundedWidth
+                ? constraints.maxWidth
+                : MediaQuery.sizeOf(context).width;
+            if (AppBreakpoints.usesTwoPane(width)) {
+              return TwoPaneLayout(
+                minPrimaryWidth: 390,
+                primaryPane: PosCatalogPane(
+                  viewModel: viewModel,
+                  capabilities: capabilities,
+                ),
+                secondaryPane: PosCartPane(
+                  viewModel: viewModel,
+                  contactRepository: widget.contactRepository,
+                  capabilities: capabilities,
+                  checkoutController: _checkoutController,
+                ),
+              );
+            }
+
+            return _CompactPosWorkspace(
+              viewModel: viewModel,
+              contactRepository: widget.contactRepository,
+              capabilities: capabilities,
+            );
+          },
+        ),
       ),
     );
   }

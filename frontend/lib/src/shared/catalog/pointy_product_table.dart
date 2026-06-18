@@ -18,6 +18,9 @@ class PointyProductTable extends StatelessWidget {
     required this.isLoadingInitial,
     required this.isLoadingMore,
     required this.emptyBuilder,
+    this.selectionMode = false,
+    this.selectedIds = const {},
+    this.onToggleSelect,
   });
 
   final List<Product> products;
@@ -28,6 +31,12 @@ class PointyProductTable extends StatelessWidget {
   final bool isLoadingMore;
   final WidgetBuilder emptyBuilder;
 
+  /// When true each row shows a leading checkbox and tapping it toggles
+  /// selection instead of opening the product.
+  final bool selectionMode;
+  final Set<int> selectedIds;
+  final ValueChanged<Product>? onToggleSelect;
+
   @override
   Widget build(BuildContext context) {
     final colors = context.pointyColors;
@@ -37,7 +46,37 @@ class PointyProductTable extends StatelessWidget {
         final isTable = constraints.maxWidth >= AppBreakpoints.tabletMin;
 
         if (isLoadingInitial && products.isEmpty) {
-          return const PointyLoadingArea();
+          return DecoratedBox(
+            decoration: BoxDecoration(
+              color: colors.surface,
+              border: Border.all(color: colors.line),
+              borderRadius: BorderRadius.circular(PointyRadii.card),
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(PointyRadii.card),
+              child: Column(
+                children: [
+                  if (isTable) const _ProductTableHeader(),
+                  Expanded(
+                    child: PointySkeleton(
+                      child: ListView.separated(
+                        physics: const NeverScrollableScrollPhysics(),
+                        padding: isTable
+                            ? EdgeInsets.zero
+                            : const EdgeInsetsDirectional.all(8),
+                        itemCount: 12,
+                        separatorBuilder: (context, index) => isTable
+                            ? Divider(height: 1, color: colors.line)
+                            : const SizedBox(height: 8),
+                        itemBuilder: (context, index) =>
+                            const PointySkeletonListTile(),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
         }
 
         if (products.isEmpty) {
@@ -70,11 +109,21 @@ class PointyProductTable extends StatelessWidget {
                         ? Divider(height: 1, color: colors.line)
                         : const SizedBox(height: 8),
                     itemBuilder: (context, product) {
-                      return ProductTile.catalogRow(
+                      final tile = ProductTile.catalogRow(
                         key: ValueKey('catalog_product_${product.id}'),
                         product: product,
                         tableLayout: isTable,
-                        onTap: () => onOpenProduct(product),
+                        onTap: selectionMode
+                            ? () => onToggleSelect?.call(product)
+                            : () => onOpenProduct(product),
+                      );
+                      if (!selectionMode) {
+                        return tile;
+                      }
+                      return _SelectableRow(
+                        selected: selectedIds.contains(product.id),
+                        onToggle: () => onToggleSelect?.call(product),
+                        child: tile,
                       );
                     },
                   ),
@@ -129,6 +178,40 @@ class _ProductTableHeader extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _SelectableRow extends StatelessWidget {
+  const _SelectableRow({
+    required this.selected,
+    required this.onToggle,
+    required this.child,
+  });
+
+  final bool selected;
+  final VoidCallback onToggle;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.pointyColors;
+    return ColoredBox(
+      color: selected
+          ? colors.primaryContainer.withValues(alpha: 0.35)
+          : Colors.transparent,
+      child: Row(
+        children: [
+          Padding(
+            padding: const EdgeInsetsDirectional.only(start: 8),
+            child: Checkbox(
+              value: selected,
+              onChanged: (_) => onToggle(),
+            ),
+          ),
+          Expanded(child: child),
+        ],
       ),
     );
   }

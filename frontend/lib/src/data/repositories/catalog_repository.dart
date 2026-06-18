@@ -3,6 +3,7 @@ import '../../shared/barcode/scale_barcode.dart';
 import '../models/attachment_summary.dart';
 import '../models/modifier_group.dart';
 import '../models/product.dart';
+import '../models/product_bulk_action.dart';
 import '../models/unit_of_measure.dart';
 import '../models/product_category.dart';
 import '../models/product_category_query.dart';
@@ -58,6 +59,61 @@ class CatalogRepository {
 
   Future<Result<Product>> restoreProduct(int id) async {
     return Result.guard(() => _service.restoreProduct(id));
+  }
+
+  Future<Result<int>> bulkArchiveProducts({
+    required List<int> ids,
+    required bool archived,
+  }) async {
+    return Result.guard(
+      () => _service.bulkArchiveProducts(ids: ids, archived: archived),
+    );
+  }
+
+  Future<Result<int>> bulkRepriceProducts({
+    required List<int> ids,
+    required ProductBulkRepriceMode mode,
+    required double value,
+  }) async {
+    return Result.guard(
+      () => _service.bulkRepriceProducts(
+        ids: ids,
+        mode: mode.apiValue,
+        value: value,
+      ),
+    );
+  }
+
+  Future<Result<int>> bulkCategorizeProducts({
+    required List<int> ids,
+    required List<int> categoryIds,
+    required ProductBulkCategorizeMode mode,
+  }) async {
+    return Result.guard(
+      () => _service.bulkCategorizeProducts(
+        ids: ids,
+        categoryIds: categoryIds,
+        mode: mode.apiValue,
+      ),
+    );
+  }
+
+  Future<Result<int>> bulkSetProductFlags({
+    required List<int> ids,
+    bool? isActive,
+    bool? tracksExpiry,
+    bool? isService,
+    bool? isPrepared,
+  }) async {
+    return Result.guard(
+      () => _service.bulkSetProductFlags(
+        ids: ids,
+        isActive: isActive,
+        tracksExpiry: tracksExpiry,
+        isService: isService,
+        isPrepared: isPrepared,
+      ),
+    );
   }
 
   Future<Result<AttachmentSummary>> uploadProductImage({

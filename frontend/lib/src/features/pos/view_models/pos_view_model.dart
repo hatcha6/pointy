@@ -50,7 +50,6 @@ enum PosProductSelectionStatus {
   added,
   chooseVariant,
   chooseModifiers,
-  chooseUnit,
   unavailable,
   error,
   weighVariant,
@@ -62,8 +61,6 @@ class PosProductSelectionResult {
     this.variants = const [],
     this.weighedVariant,
     this.modifierVariant,
-    this.unitProduct,
-    this.unitVariant,
   });
 
   const PosProductSelectionResult.added()
@@ -94,21 +91,10 @@ class PosProductSelectionResult {
         modifierVariant: variant,
       );
 
-  const PosProductSelectionResult.chooseUnit(
-    Product product,
-    ProductVariant variant,
-  ) : this._(
-        status: PosProductSelectionStatus.chooseUnit,
-        unitProduct: product,
-        unitVariant: variant,
-      );
-
   final PosProductSelectionStatus status;
   final List<ProductVariant> variants;
   final ProductVariant? weighedVariant;
   final ProductVariant? modifierVariant;
-  final Product? unitProduct;
-  final ProductVariant? unitVariant;
 }
 
 class PosSaleSessionSummary {

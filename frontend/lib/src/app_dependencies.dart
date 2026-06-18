@@ -51,6 +51,7 @@ import 'features/purchasing/view_models/purchase_order_list_view_model.dart';
 import 'features/purchasing/view_models/purchase_view_model.dart';
 import 'features/stock_count/view_models/stock_count_sessions_view_model.dart';
 import 'features/user_settings/view_models/user_settings_view_model.dart';
+import 'shared/theme/theme_controller.dart';
 
 class PointyAppDependencies {
   PointyAppDependencies({
@@ -68,6 +69,7 @@ class PointyAppDependencies {
     contactRepository = ContactRepository(service);
     dashboardRepository = DashboardRepository(service);
     deviceSettingsRepository = const DeviceSettingsRepository();
+    themeController = ThemeController();
     businessAlertRepository = BusinessAlertRepository(service);
     discountRepository = DiscountRepository(service);
     employeeRepository = EmployeeRepository(service);
@@ -120,6 +122,7 @@ class PointyAppDependencies {
   late final ContactRepository contactRepository;
   late final DashboardRepository dashboardRepository;
   late final DeviceSettingsRepository deviceSettingsRepository;
+  late final ThemeController themeController;
   late final BusinessAlertRepository businessAlertRepository;
   late final DiscountRepository discountRepository;
   late final EmployeeRepository employeeRepository;
@@ -160,6 +163,9 @@ class PointyAppDependencies {
   int? _lastAuthenticatedUserId;
 
   Future<void> start() async {
+    // Resolve the saved theme first so the app paints in the right mode without
+    // a flash from the default.
+    await themeController.load();
     if (_enableAutomaticConnection) {
       await connectionCoordinator.bootstrap();
     }
@@ -294,6 +300,7 @@ class PointyAppDependencies {
   void dispose() {
     connectionCoordinator.dispose();
     analyticsEngine.dispose();
+    themeController.dispose();
     authViewModel.dispose();
     posViewModel.dispose();
     _deviceSettingsViewModel?.dispose();

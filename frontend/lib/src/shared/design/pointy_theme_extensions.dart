@@ -5,10 +5,13 @@ import 'pointy_colors.dart';
 @immutable
 class PointySemanticColors extends ThemeExtension<PointySemanticColors> {
   const PointySemanticColors({
+    required this.primary,
     required this.primaryStrong,
     required this.primaryDark,
+    required this.primaryContainer,
     required this.darkTopBar,
     required this.accentAmber,
+    required this.amberContainer,
     required this.danger,
     required this.warning,
     required this.success,
@@ -25,10 +28,13 @@ class PointySemanticColors extends ThemeExtension<PointySemanticColors> {
   });
 
   const PointySemanticColors.light()
-    : primaryStrong = PointyColors.primaryStrong,
+    : primary = PointyColors.primary,
+      primaryStrong = PointyColors.primaryStrong,
       primaryDark = PointyColors.primaryDark,
+      primaryContainer = PointyColors.primaryContainer,
       darkTopBar = PointyColors.darkTopBar,
       accentAmber = PointyColors.accentAmber,
+      amberContainer = PointyColors.amberContainer,
       danger = PointyColors.danger,
       warning = PointyColors.warning,
       success = PointyColors.success,
@@ -43,10 +49,35 @@ class PointySemanticColors extends ThemeExtension<PointySemanticColors> {
       onDarkTopBar = PointyColors.surface,
       shadow = PointyColors.ink;
 
+  const PointySemanticColors.dark()
+    : primary = PointyColorsDark.primary,
+      primaryStrong = PointyColorsDark.primaryStrong,
+      primaryDark = PointyColorsDark.primaryDark,
+      primaryContainer = PointyColorsDark.primaryContainer,
+      darkTopBar = PointyColorsDark.darkTopBar,
+      accentAmber = PointyColorsDark.accentAmber,
+      amberContainer = PointyColorsDark.amberContainer,
+      danger = PointyColorsDark.danger,
+      warning = PointyColorsDark.warning,
+      success = PointyColorsDark.success,
+      ink = PointyColorsDark.ink,
+      mutedInk = PointyColorsDark.mutedInk,
+      line = PointyColorsDark.line,
+      lineStrong = PointyColorsDark.lineStrong,
+      page = PointyColorsDark.page,
+      surface = PointyColorsDark.surface,
+      surfaceSunken = PointyColorsDark.surfaceSunken,
+      subtleFill = PointyColorsDark.subtleFill,
+      onDarkTopBar = PointyColors.surface,
+      shadow = const Color(0xFF000000);
+
+  final Color primary;
   final Color primaryStrong;
   final Color primaryDark;
+  final Color primaryContainer;
   final Color darkTopBar;
   final Color accentAmber;
+  final Color amberContainer;
   final Color danger;
   final Color warning;
   final Color success;
@@ -63,10 +94,13 @@ class PointySemanticColors extends ThemeExtension<PointySemanticColors> {
 
   @override
   PointySemanticColors copyWith({
+    Color? primary,
     Color? primaryStrong,
     Color? primaryDark,
+    Color? primaryContainer,
     Color? darkTopBar,
     Color? accentAmber,
+    Color? amberContainer,
     Color? danger,
     Color? warning,
     Color? success,
@@ -82,10 +116,13 @@ class PointySemanticColors extends ThemeExtension<PointySemanticColors> {
     Color? shadow,
   }) {
     return PointySemanticColors(
+      primary: primary ?? this.primary,
       primaryStrong: primaryStrong ?? this.primaryStrong,
       primaryDark: primaryDark ?? this.primaryDark,
+      primaryContainer: primaryContainer ?? this.primaryContainer,
       darkTopBar: darkTopBar ?? this.darkTopBar,
       accentAmber: accentAmber ?? this.accentAmber,
+      amberContainer: amberContainer ?? this.amberContainer,
       danger: danger ?? this.danger,
       warning: warning ?? this.warning,
       success: success ?? this.success,
@@ -111,10 +148,13 @@ class PointySemanticColors extends ThemeExtension<PointySemanticColors> {
       return this;
     }
     return PointySemanticColors(
+      primary: Color.lerp(primary, other.primary, t)!,
       primaryStrong: Color.lerp(primaryStrong, other.primaryStrong, t)!,
       primaryDark: Color.lerp(primaryDark, other.primaryDark, t)!,
+      primaryContainer: Color.lerp(primaryContainer, other.primaryContainer, t)!,
       darkTopBar: Color.lerp(darkTopBar, other.darkTopBar, t)!,
       accentAmber: Color.lerp(accentAmber, other.accentAmber, t)!,
+      amberContainer: Color.lerp(amberContainer, other.amberContainer, t)!,
       danger: Color.lerp(danger, other.danger, t)!,
       warning: Color.lerp(warning, other.warning, t)!,
       success: Color.lerp(success, other.success, t)!,

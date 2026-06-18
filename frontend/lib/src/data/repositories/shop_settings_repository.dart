@@ -23,6 +23,26 @@ class ShopSettingsRepository {
     return Result.guard(() => _service.updateShopSettings(draft));
   }
 
+  Future<Result<ShopSettings>> setupShop({
+    required String shopType,
+    String? shopName,
+    bool? allowOverselling,
+    bool? requireOpeningCash,
+    bool? autoPrintReceipts,
+    bool? autoPrintKitchenTickets,
+  }) async {
+    return Result.guard(
+      () => _service.setupShop(
+        shopType: shopType,
+        shopName: shopName,
+        allowOverselling: allowOverselling,
+        requireOpeningCash: requireOpeningCash,
+        autoPrintReceipts: autoPrintReceipts,
+        autoPrintKitchenTickets: autoPrintKitchenTickets,
+      ),
+    );
+  }
+
   Future<Result<ShopSettings>> uploadLogo(ShopLogoUpload upload) async {
     return Result.guard(() => _service.uploadShopLogo(upload));
   }

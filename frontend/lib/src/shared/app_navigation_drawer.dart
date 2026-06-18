@@ -10,6 +10,7 @@ import 'components/components.dart';
 import 'design/design.dart';
 import 'navigation/app_navigation.dart';
 import 'navigation/navigation_catalog.dart';
+import 'theme/theme_mode_controls.dart';
 
 export 'navigation/app_navigation.dart';
 
@@ -46,6 +47,8 @@ class AppNavigationDrawer extends StatelessWidget {
               );
             },
           ),
+        const Divider(height: 12),
+        const ThemeModeDrawerTile(),
       ],
       logoutTile: ListTile(
         leading: const Icon(Icons.logout),
@@ -113,6 +116,11 @@ class AppNavigationDrawer extends StatelessWidget {
                 },
               ),
           ],
+        const Divider(height: 12),
+        if (extended)
+          const ThemeModeDrawerTile()
+        else
+          const ThemeModeToggleButton(),
       ],
     );
   }

@@ -87,6 +87,74 @@ class CatalogApiClient {
     );
   }
 
+  Future<int> bulkArchiveProducts({
+    required List<int> ids,
+    required bool archived,
+  }) async {
+    final response = await _session.post(
+      'products/bulk-archive/',
+      body: {'ids': ids, 'archived': archived},
+    );
+    _session.ensureSuccess(response, 'Bulk archive failed with status');
+    return _updatedCount(_session.decodedBody(response));
+  }
+
+  Future<int> bulkRepriceProducts({
+    required List<int> ids,
+    required String mode,
+    required double value,
+  }) async {
+    final response = await _session.post(
+      'products/bulk-reprice/',
+      body: {'ids': ids, 'mode': mode, 'value': value.toStringAsFixed(2)},
+    );
+    _session.ensureSuccess(response, 'Bulk reprice failed with status');
+    return _updatedCount(_session.decodedBody(response));
+  }
+
+  Future<int> bulkCategorizeProducts({
+    required List<int> ids,
+    required List<int> categoryIds,
+    required String mode,
+  }) async {
+    final response = await _session.post(
+      'products/bulk-categorize/',
+      body: {'ids': ids, 'category_ids': categoryIds, 'mode': mode},
+    );
+    _session.ensureSuccess(response, 'Bulk categorize failed with status');
+    return _updatedCount(_session.decodedBody(response));
+  }
+
+  Future<int> bulkSetProductFlags({
+    required List<int> ids,
+    bool? isActive,
+    bool? tracksExpiry,
+    bool? isService,
+    bool? isPrepared,
+  }) async {
+    final body = <String, Object?>{'ids': ids};
+    if (isActive != null) body['is_active'] = isActive;
+    if (tracksExpiry != null) body['tracks_expiry'] = tracksExpiry;
+    if (isService != null) body['is_service'] = isService;
+    if (isPrepared != null) body['is_prepared'] = isPrepared;
+    final response = await _session.post(
+      'products/bulk-set-flags/',
+      body: body,
+    );
+    _session.ensureSuccess(response, 'Bulk flags failed with status');
+    return _updatedCount(_session.decodedBody(response));
+  }
+
+  int _updatedCount(Object? decoded) {
+    if (decoded is Map<String, Object?>) {
+      final updated = decoded['updated'];
+      if (updated is num) {
+        return updated.toInt();
+      }
+    }
+    return 0;
+  }
+
   Future<AttachmentSummary> uploadProductImage({
     required int productId,
     required ProductImageUpload upload,

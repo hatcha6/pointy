@@ -30,6 +30,33 @@ class ShopSettingsApiClient {
     );
   }
 
+  Future<ShopSettings> setupShop({
+    required String shopType,
+    String? shopName,
+    bool? allowOverselling,
+    bool? requireOpeningCash,
+    bool? autoPrintReceipts,
+    bool? autoPrintKitchenTickets,
+  }) async {
+    final body = <String, Object?>{'shop_type': shopType};
+    if (shopName != null) body['shop_name'] = shopName;
+    if (allowOverselling != null) body['allow_overselling'] = allowOverselling;
+    if (requireOpeningCash != null) {
+      body['require_opening_cash'] = requireOpeningCash;
+    }
+    if (autoPrintReceipts != null) {
+      body['auto_print_receipts'] = autoPrintReceipts;
+    }
+    if (autoPrintKitchenTickets != null) {
+      body['auto_print_kitchen_tickets'] = autoPrintKitchenTickets;
+    }
+    final response = await _session.post('shop-settings/setup/', body: body);
+    _session.ensureSuccess(response, 'Shop setup failed with status');
+    return ShopSettings.fromJson(
+      _session.decodedBody(response) as Map<String, Object?>,
+    );
+  }
+
   Future<ShopSettings> uploadShopLogo(ShopLogoUpload upload) async {
     final response = await _session.postMultipart(
       'shop-settings/logo/',

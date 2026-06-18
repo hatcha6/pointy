@@ -172,19 +172,23 @@ extension PosCatalogActions on PosViewModel {
         }
         if (variants.length == 1) {
           final variant = variants.single;
-          if (product.hasSellableUnits) {
-            // Multi-unit items pick a unit + quantity (and price) up front.
-            return PosProductSelectionResult.chooseUnit(product, variant);
-          }
-          if (variant.unit != 'piece') {
-            // Weighted items need a weight before they can be priced.
+          final defaultUnit = defaultSaleUnitOption(product, variant.unitPrice);
+          if (defaultUnit.allowsFractional) {
+            // Weighed/measured items still need a quantity before pricing.
             return PosProductSelectionResult.weighVariant(variant);
           }
           if (product.modifierGroups.isNotEmpty) {
             // Let the cashier pick modifiers before the line is added.
             return PosProductSelectionResult.chooseModifiers(variant);
           }
-          addVariant(variant, source: 'product_tile');
+          // Whole units (piece, box, carton…) add directly at the product's
+          // default unit — no dialog. The cashier switches units from the cart
+          // line's unit chip instead.
+          addVariant(
+            variant,
+            unit: defaultUnit.isBase ? null : defaultUnit,
+            source: 'product_tile',
+          );
           return const PosProductSelectionResult.added();
         }
         return PosProductSelectionResult.chooseVariant(variants);

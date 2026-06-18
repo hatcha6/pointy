@@ -154,7 +154,7 @@ class _DashboardBody extends StatelessWidget {
     final spacing = AdaptiveSpacing.of(context);
 
     if (viewModel.isLoading && snapshot == null) {
-      return const PointyLoadingArea();
+      return const _DashboardSkeleton();
     }
     if (viewModel.hasError && snapshot == null) {
       return PointyErrorState(
@@ -2011,4 +2011,85 @@ String _discountChannelLabel(AppLocalizations l10n, String channel) {
     'both' => l10n.discountChannelBoth,
     _ => channel,
   };
+}
+
+/// Content-shaped placeholder for the dashboard's first paint: a toolbar bar
+/// and a responsive grid of metric-tile skeletons, matching the real layout.
+class _DashboardSkeleton extends StatelessWidget {
+  const _DashboardSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    final spacing = AdaptiveSpacing.of(context);
+    return SingleChildScrollView(
+      physics: const NeverScrollableScrollPhysics(),
+      padding: spacing.pagePadding,
+      child: AdaptiveMaxWidth(
+        width: AppContentWidth.workspace,
+        child: PointySkeleton(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: const [
+                  PointySkeletonBox(width: 180, height: 30),
+                  Spacer(),
+                  PointySkeletonBox(width: 120, height: 36),
+                ],
+              ),
+              SizedBox(height: spacing.lg),
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final columns = constraints.maxWidth >= 900
+                      ? 3
+                      : constraints.maxWidth >= 560
+                      ? 2
+                      : 1;
+                  final gap = spacing.gutter;
+                  final tileWidth =
+                      (constraints.maxWidth - gap * (columns - 1)) / columns;
+                  return Wrap(
+                    spacing: gap,
+                    runSpacing: gap,
+                    children: [
+                      for (var i = 0; i < 6; i++)
+                        SizedBox(
+                          width: tileWidth,
+                          child: const _MetricSkeletonTile(),
+                        ),
+                    ],
+                  );
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _MetricSkeletonTile extends StatelessWidget {
+  const _MetricSkeletonTile();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: PointyDimensions.metricTileMinHeight,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        border: Border.all(color: context.pointyColors.line),
+        borderRadius: BorderRadius.circular(PointyRadii.card),
+      ),
+      child: const Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          PointySkeletonBox(width: 90, height: 12),
+          PointySkeletonBox(width: 130, height: 26),
+          PointySkeletonBox(width: 70, height: 12),
+        ],
+      ),
+    );
+  }
 }

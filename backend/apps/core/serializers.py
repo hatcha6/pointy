@@ -260,6 +260,7 @@ class ShopSettingsSerializer(serializers.ModelSerializer):
         model = ShopSettings
         fields = [
             "shop_name",
+            "shop_type",
             "receipt_header",
             "receipt_footer",
             "enable_online_invoices",
@@ -287,4 +288,16 @@ class ShopSettingsSerializer(serializers.ModelSerializer):
             "logo_attachment",
             "updated_at",
         ]
-        read_only_fields = ["logo_attachment", "updated_at"]
+        read_only_fields = ["shop_type", "logo_attachment", "updated_at"]
+
+
+class ShopSetupSerializer(serializers.Serializer):
+    """First-run wizard input: the chosen vertical plus the few settings the
+    wizard exposes directly. Everything else comes from the preset."""
+
+    shop_type = serializers.ChoiceField(choices=ShopSettings.ShopType.choices)
+    shop_name = serializers.CharField(max_length=120, required=False)
+    allow_overselling = serializers.BooleanField(required=False)
+    require_opening_cash = serializers.BooleanField(required=False)
+    auto_print_receipts = serializers.BooleanField(required=False)
+    auto_print_kitchen_tickets = serializers.BooleanField(required=False)

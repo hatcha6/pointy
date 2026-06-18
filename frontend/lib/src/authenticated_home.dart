@@ -1259,6 +1259,22 @@ class _AuthenticatedRoutes implements AppNavigation {
             onSelect: (ctx) =>
                 navigateTo(ctx, AppNavigationDestination.stockCount),
           ),
+        CommandItem(
+          id: 'action-toggle-theme',
+          icon: Icons.brightness_6_outlined,
+          title: l10n.appearanceToggleTooltip,
+          keywords: const [
+            'theme',
+            'dark',
+            'light',
+            'mode',
+            'مظهر',
+            'داكن',
+            'فاتح',
+            'وضع',
+          ],
+          onSelect: (_) => dependencies.themeController.toggleLightDark(),
+        ),
       ],
     );
   }

@@ -6,53 +6,60 @@ import 'pointy_theme_extensions.dart';
 import 'pointy_typography.dart';
 
 abstract final class PointyTheme {
-  static ThemeData light() {
-    const semanticColors = PointySemanticColors.light();
+  static ThemeData light() =>
+      _build(const PointySemanticColors.light(), Brightness.light);
+
+  static ThemeData dark() =>
+      _build(const PointySemanticColors.dark(), Brightness.dark);
+
+  static ThemeData _build(PointySemanticColors c, Brightness brightness) {
     final seedScheme = ColorScheme.fromSeed(
-      seedColor: PointyColors.primary,
-      brightness: Brightness.light,
+      seedColor: c.primary,
+      brightness: brightness,
     );
     final colorScheme = seedScheme.copyWith(
-      primary: PointyColors.primary,
-      onPrimary: PointyColors.surface,
-      primaryContainer: PointyColors.primaryContainer,
-      onPrimaryContainer: PointyColors.primaryDark,
-      secondary: PointyColors.accentAmber,
+      primary: c.primary,
+      // The primary fill stays brand teal in both themes, so white reads on it.
+      onPrimary: Colors.white,
+      primaryContainer: c.primaryContainer,
+      onPrimaryContainer: c.primaryDark,
+      secondary: c.accentAmber,
+      // Amber stays light in both themes; dark ink keeps text legible on it.
       onSecondary: PointyColors.ink,
-      secondaryContainer: PointyColors.amberContainer,
-      onSecondaryContainer: PointyColors.ink,
-      tertiary: PointyColors.success,
-      error: PointyColors.danger,
-      onError: PointyColors.surface,
-      surface: PointyColors.surface,
-      onSurface: PointyColors.ink,
-      outline: PointyColors.line,
-      outlineVariant: PointyColors.line,
+      secondaryContainer: c.amberContainer,
+      onSecondaryContainer: c.ink,
+      tertiary: c.success,
+      error: c.danger,
+      onError: c.surface,
+      surface: c.surface,
+      onSurface: c.ink,
+      outline: c.line,
+      outlineVariant: c.line,
     );
     final baseTheme = ThemeData(
       useMaterial3: true,
       colorScheme: colorScheme,
-      brightness: Brightness.light,
+      brightness: brightness,
       fontFamily: PointyTypography.fontFamily,
     );
     final textTheme = PointyTypography.textTheme(
       baseTheme.textTheme,
-    ).apply(bodyColor: PointyColors.ink, displayColor: PointyColors.ink);
+    ).apply(bodyColor: c.ink, displayColor: c.ink);
 
     return baseTheme.copyWith(
-      scaffoldBackgroundColor: PointyColors.page,
+      scaffoldBackgroundColor: c.page,
       textTheme: textTheme,
-      hoverColor: PointyColors.ink.withValues(alpha: 0.04),
-      focusColor: PointyColors.ink.withValues(alpha: 0.08),
-      highlightColor: PointyColors.ink.withValues(alpha: 0.06),
-      splashColor: PointyColors.ink.withValues(alpha: 0.10),
-      extensions: const [semanticColors],
-      appBarTheme: PointyComponentStyles.appBarTheme(textTheme),
+      hoverColor: c.ink.withValues(alpha: 0.04),
+      focusColor: c.ink.withValues(alpha: 0.08),
+      highlightColor: c.ink.withValues(alpha: 0.06),
+      splashColor: c.ink.withValues(alpha: 0.10),
+      extensions: [c],
+      appBarTheme: PointyComponentStyles.appBarTheme(c, textTheme),
       bottomSheetTheme: BottomSheetThemeData(
-        backgroundColor: PointyColors.surface,
+        backgroundColor: c.surface,
         surfaceTintColor: Colors.transparent,
-        modalBackgroundColor: PointyColors.surface,
-        modalBarrierColor: PointyColors.ink.withValues(alpha: 0.42),
+        modalBackgroundColor: c.surface,
+        modalBarrierColor: c.shadow.withValues(alpha: 0.42),
         showDragHandle: true,
         shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(
@@ -61,15 +68,15 @@ abstract final class PointyTheme {
         ),
       ),
       cardTheme: CardThemeData(
-        color: PointyColors.surface,
+        color: c.surface,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         margin: EdgeInsets.zero,
-        shape: PointyComponentStyles.outlinedShape(PointyRadii.card),
+        shape: PointyComponentStyles.outlinedShape(PointyRadii.card, c.line),
       ),
-      chipTheme: PointyComponentStyles.chipTheme(textTheme),
+      chipTheme: PointyComponentStyles.chipTheme(c, textTheme),
       dialogTheme: DialogThemeData(
-        backgroundColor: PointyColors.surface,
+        backgroundColor: c.surface,
         surfaceTintColor: Colors.transparent,
         shape: PointyComponentStyles.shape(PointyRadii.dialog),
         titleTextStyle: textTheme.titleLarge?.copyWith(
@@ -77,44 +84,47 @@ abstract final class PointyTheme {
         ),
         contentTextStyle: textTheme.bodyMedium,
       ),
-      dividerTheme: const DividerThemeData(
-        color: PointyColors.line,
+      dividerTheme: DividerThemeData(
+        color: c.line,
         thickness: 1,
         space: 1,
       ),
-      filledButtonTheme: PointyComponentStyles.filledButtonTheme(colorScheme),
-      floatingActionButtonTheme: const FloatingActionButtonThemeData(
-        backgroundColor: PointyColors.primary,
-        foregroundColor: PointyColors.surface,
+      filledButtonTheme: PointyComponentStyles.filledButtonTheme(c, colorScheme),
+      floatingActionButtonTheme: FloatingActionButtonThemeData(
+        backgroundColor: c.primary,
+        foregroundColor: Colors.white,
         elevation: 0,
         focusElevation: 1,
         hoverElevation: 1,
         highlightElevation: 1,
       ),
-      iconButtonTheme: PointyComponentStyles.iconButtonTheme(),
+      iconButtonTheme: PointyComponentStyles.iconButtonTheme(c),
       inputDecorationTheme: PointyComponentStyles.inputDecorationTheme(
+        c,
         textTheme,
       ),
-      listTileTheme: const ListTileThemeData(
-        iconColor: PointyColors.mutedInk,
-        textColor: PointyColors.ink,
+      listTileTheme: ListTileThemeData(
+        iconColor: c.mutedInk,
+        textColor: c.ink,
         minVerticalPadding: 8,
       ),
       navigationDrawerTheme: PointyComponentStyles.navigationDrawerTheme(
+        c,
         textTheme,
       ),
       outlinedButtonTheme: PointyComponentStyles.outlinedButtonTheme(
+        c,
         colorScheme,
       ),
       snackBarTheme: SnackBarThemeData(
-        backgroundColor: PointyColors.ink,
+        backgroundColor: c.ink,
         contentTextStyle: textTheme.bodyMedium?.copyWith(
-          color: PointyColors.surface,
+          color: c.surface,
         ),
         behavior: SnackBarBehavior.floating,
         shape: PointyComponentStyles.shape(PointyRadii.button),
       ),
-      textButtonTheme: PointyComponentStyles.textButtonTheme(),
+      textButtonTheme: PointyComponentStyles.textButtonTheme(c),
     );
   }
 }

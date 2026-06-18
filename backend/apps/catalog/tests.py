@@ -1272,3 +1272,137 @@ class ProductInStockFilterApiTests(TestCase):
         ids = self._result_ids(response)
         self.assertIn(in_stock.id, ids)
         self.assertNotIn(out_of_stock.id, ids)
+
+
+class ProductBulkActionTests(TestCase):
+    def setUp(self):
+        ensure_role_groups()
+        self.client = APIClient()
+        self.user = get_user_model().objects.create_user(
+            username="bulk-user",
+            password="pass",
+        )
+        self.user.groups.add(Group.objects.get(name=MANAGER_GROUP))
+        self.client.force_authenticate(user=self.user)
+
+    def _product(self, name, sku, price):
+        return create_product_with_default_variant(
+            name=name,
+            sku=sku,
+            unit_price=Decimal(price),
+        )
+
+    def test_bulk_archive_and_restore(self):
+        a = self._product("a", "BA-1", "1.00")
+        b = self._product("b", "BA-2", "2.00")
+
+        response = self.client.post(
+            reverse("product-bulk-archive"),
+            {"ids": [a.id, b.id], "archived": True},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["updated"], 2)
+        a.refresh_from_db()
+        b.refresh_from_db()
+        self.assertTrue(a.is_archived)
+        self.assertTrue(b.is_archived)
+
+        response = self.client.post(
+            reverse("product-bulk-archive"),
+            {"ids": [a.id], "archived": False},
+            format="json",
+        )
+        self.assertEqual(response.data["updated"], 1)
+        a.refresh_from_db()
+        self.assertFalse(a.is_archived)
+
+    def test_bulk_reprice_modes(self):
+        a = self._product("a", "BR-1", "10.00")
+        b = self._product("b", "BR-2", "20.00")
+
+        response = self.client.post(
+            reverse("product-bulk-reprice"),
+            {"ids": [a.id, b.id], "mode": "increase_percent", "value": "10"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(a.default_variant.unit_price, Decimal("11.00"))
+        self.assertEqual(b.default_variant.unit_price, Decimal("22.00"))
+
+        self.client.post(
+            reverse("product-bulk-reprice"),
+            {"ids": [a.id], "mode": "set", "value": "5.55"},
+            format="json",
+        )
+        self.assertEqual(a.default_variant.unit_price, Decimal("5.55"))
+
+        # A decrease that would go negative is clamped to zero.
+        self.client.post(
+            reverse("product-bulk-reprice"),
+            {"ids": [a.id], "mode": "decrease_amount", "value": "9.99"},
+            format="json",
+        )
+        self.assertEqual(a.default_variant.unit_price, Decimal("0.00"))
+
+    def test_bulk_categorize_add_then_replace(self):
+        a = self._product("a", "BC-1", "1.00")
+        drinks = ProductCategory.objects.create(name="drinks")
+        food = ProductCategory.objects.create(name="food")
+
+        self.client.post(
+            reverse("product-bulk-categorize"),
+            {"ids": [a.id], "category_ids": [drinks.id], "mode": "add"},
+            format="json",
+        )
+        self.assertEqual(
+            set(a.categories.values_list("id", flat=True)), {drinks.id}
+        )
+
+        self.client.post(
+            reverse("product-bulk-categorize"),
+            {"ids": [a.id], "category_ids": [food.id], "mode": "replace"},
+            format="json",
+        )
+        self.assertEqual(
+            set(a.categories.values_list("id", flat=True)), {food.id}
+        )
+
+    def test_bulk_set_flags(self):
+        a = self._product("a", "BF-1", "1.00")
+        b = self._product("b", "BF-2", "2.00")
+
+        response = self.client.post(
+            reverse("product-bulk-set-flags"),
+            {"ids": [a.id, b.id], "is_active": False, "is_service": True},
+            format="json",
+        )
+        self.assertEqual(response.data["updated"], 2)
+        a.refresh_from_db()
+        self.assertFalse(a.is_active)
+        self.assertTrue(a.is_service)
+
+    def test_bulk_action_requires_ids(self):
+        response = self.client.post(
+            reverse("product-bulk-archive"),
+            {"ids": [], "archived": True},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_bulk_action_forbidden_for_cashier(self):
+        cashier = get_user_model().objects.create_user(
+            username="bulk-cashier",
+            password="pass",
+        )
+        cashier.groups.add(Group.objects.get(name=CASHIER_GROUP))
+        client = APIClient()
+        client.force_authenticate(user=cashier)
+        a = self._product("a", "BX-1", "1.00")
+
+        response = client.post(
+            reverse("product-bulk-set-flags"),
+            {"ids": [a.id], "is_active": False},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)

@@ -37,6 +37,7 @@ from .serializers import (
     PasswordChangeSerializer,
     PosUserSerializer,
     ShopSettingsSerializer,
+    ShopSetupSerializer,
     UserSerializer,
 )
 from .user_activity import build_user_activity
@@ -314,6 +315,46 @@ class ShopSettingsView(views.APIView):
                     settings.trusted_card_terminal_ids or []
                 ),
             },
+        )
+        return Response(
+            ShopSettingsSerializer(settings, context={"request": request}).data
+        )
+
+
+class ShopSetupView(views.APIView):
+    """First-run wizard: apply a shop-type preset plus the user's explicit
+    choices in one shot, then record the chosen vertical."""
+
+    permission_classes = [IsAuthenticated, HasPointyPermission]
+
+    def get_required_permissions(self, request):
+        return ("core.change_shopsettings",)
+
+    def post(self, request):
+        serializer = ShopSetupSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        settings = ShopSettings.load()
+        settings.apply_shop_type_preset(data["shop_type"])
+        for field in (
+            "shop_name",
+            "allow_overselling",
+            "require_opening_cash",
+            "auto_print_receipts",
+            "auto_print_kitchen_tickets",
+        ):
+            if field in data:
+                setattr(settings, field, data[field])
+        settings.save()
+
+        record_domain_event(
+            name="settings.shop.setup_completed",
+            event_type=AnalyticsEvent.EventType.AUDIT,
+            user=request.user,
+            entity_type="shop_settings",
+            entity_id=settings.pk,
+            attributes={"shop_type": settings.shop_type},
         )
         return Response(
             ShopSettingsSerializer(settings, context={"request": request}).data

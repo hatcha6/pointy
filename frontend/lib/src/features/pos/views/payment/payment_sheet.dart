@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../../data/models/card_payment_receipt.dart';
@@ -150,54 +151,92 @@ class _PaymentSheetState extends State<PaymentSheet> {
     final colors = context.pointyColors;
     final summary = _summary;
 
-    return Material(
-      key: const ValueKey('payment_sheet'),
-      color: colors.surface,
-      borderRadius: BorderRadius.circular(PointyRadii.sheet),
-      clipBehavior: Clip.antiAlias,
-      child: SafeArea(
-        top: false,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _PaymentHeader(
-              title: l10n.paymentDialogTitle,
-              onCancel: widget.onCancel,
-            ),
-            Divider(height: 1, color: colors.line),
-            Flexible(
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  final isWide =
-                      constraints.maxWidth >= AppBreakpoints.tabletMin;
-                  return SingleChildScrollView(
-                    padding: spacing.sectionPadding,
-                    child: isWide
-                        ? _buildWidePaymentLayout(l10n, summary)
-                        : _buildNarrowPaymentLayout(l10n, summary),
-                  );
-                },
-              ),
-            ),
-            PointyStickyActionFooter(
-              secondaryActions: [
-                TextButton(
-                  key: const ValueKey('payment_cancel_button'),
-                  onPressed: widget.onCancel,
-                  child: Text(l10n.cancelButton),
+    // Keyboard-first checkout: 1/2/3 pick cash/card/transfer, Enter confirms,
+    // Esc cancels. These fire only when a text field isn't consuming the key,
+    // so editing a tender amount still works normally.
+    return CallbackShortcuts(
+      bindings: {
+        const SingleActivator(LogicalKeyboardKey.escape): widget.onCancel,
+        const SingleActivator(LogicalKeyboardKey.enter): _submitIfPossible,
+        const SingleActivator(LogicalKeyboardKey.numpadEnter):
+            _submitIfPossible,
+        const SingleActivator(LogicalKeyboardKey.digit1): () =>
+            _selectMethodByHotkey(PaymentMethod.cash),
+        const SingleActivator(LogicalKeyboardKey.numpad1): () =>
+            _selectMethodByHotkey(PaymentMethod.cash),
+        const SingleActivator(LogicalKeyboardKey.digit2): () =>
+            _selectMethodByHotkey(PaymentMethod.card),
+        const SingleActivator(LogicalKeyboardKey.numpad2): () =>
+            _selectMethodByHotkey(PaymentMethod.card),
+        const SingleActivator(LogicalKeyboardKey.digit3): () =>
+            _selectMethodByHotkey(PaymentMethod.transfer),
+        const SingleActivator(LogicalKeyboardKey.numpad3): () =>
+            _selectMethodByHotkey(PaymentMethod.transfer),
+      },
+      child: Focus(
+        autofocus: true,
+        child: Material(
+          key: const ValueKey('payment_sheet'),
+          color: colors.surface,
+          borderRadius: BorderRadius.circular(PointyRadii.sheet),
+          clipBehavior: Clip.antiAlias,
+          child: SafeArea(
+            top: false,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _PaymentHeader(
+                  title: l10n.paymentDialogTitle,
+                  onCancel: widget.onCancel,
+                ),
+                Divider(height: 1, color: colors.line),
+                Flexible(
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      final isWide =
+                          constraints.maxWidth >= AppBreakpoints.tabletMin;
+                      return SingleChildScrollView(
+                        padding: spacing.sectionPadding,
+                        child: isWide
+                            ? _buildWidePaymentLayout(l10n, summary)
+                            : _buildNarrowPaymentLayout(l10n, summary),
+                      );
+                    },
+                  ),
+                ),
+                PointyStickyActionFooter(
+                  secondaryActions: [
+                    TextButton(
+                      key: const ValueKey('payment_cancel_button'),
+                      onPressed: widget.onCancel,
+                      child: Text(l10n.cancelButton),
+                    ),
+                  ],
+                  primaryAction: FilledButton.icon(
+                    key: const ValueKey('payment_confirm_button'),
+                    onPressed: _canSubmit ? _submit : null,
+                    icon: const Icon(Icons.check),
+                    label: Text(l10n.confirmPaymentButton),
+                  ),
                 ),
               ],
-              primaryAction: FilledButton.icon(
-                key: const ValueKey('payment_confirm_button'),
-                onPressed: _canSubmit ? _submit : null,
-                icon: const Icon(Icons.check),
-                label: Text(l10n.confirmPaymentButton),
-              ),
             ),
-          ],
+          ),
         ),
       ),
     );
+  }
+
+  void _submitIfPossible() {
+    if (_canSubmit) {
+      _submit();
+    }
+  }
+
+  void _selectMethodByHotkey(PaymentMethod method) {
+    if (_enabledMethods.contains(method)) {
+      _selectSinglePaymentMethod(method);
+    }
   }
 
   Widget _buildWidePaymentLayout(

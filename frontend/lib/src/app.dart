@@ -13,9 +13,11 @@ import 'data/models/analytics_event.dart';
 import 'data/services/pos_api_service.dart';
 import 'features/auth/view_models/auth_view_model.dart';
 import 'features/auth/views/auth_gate.dart';
+import 'features/onboarding/views/shop_setup_wizard.dart';
 import 'features/printing/view_models/printing_settings_view_model.dart';
 import 'shared/design/design.dart';
 import 'shared/shell/shell.dart';
+import 'shared/theme/theme_controller.dart';
 
 class PointyApp extends StatefulWidget {
   const PointyApp({super.key, this.apiService});
@@ -85,6 +87,13 @@ class _PointyAppState extends State<PointyApp> {
 
   @override
   Widget build(BuildContext context) {
+    return ListenableBuilder(
+      listenable: _dependencies.themeController,
+      builder: (context, _) => _buildApp(),
+    );
+  }
+
+  Widget _buildApp() {
     return MaterialApp(
       onGenerateTitle: (context) => AppLocalizations.of(context)!.appTitle,
       debugShowCheckedModeBanner: false,
@@ -97,15 +106,20 @@ class _PointyAppState extends State<PointyApp> {
         GlobalCupertinoLocalizations.delegate,
       ],
       theme: PointyTheme.light(),
-      builder: (context, child) => AnalyticsInteractionTracker(
-        analyticsEngine: _dependencies.analyticsEngine,
-        child: _PrinterConnectionNotifier(
-          authViewModel: _dependencies.authViewModel,
-          printingSettingsViewModel: _dependencies.printingSettingsViewModel,
-          child: PointyNavigationRailScope(
-            isActive: false,
-            controller: _navigationRailController,
-            child: child ?? const SizedBox.shrink(),
+      darkTheme: PointyTheme.dark(),
+      themeMode: _dependencies.themeController.mode,
+      builder: (context, child) => ThemeControllerScope(
+        controller: _dependencies.themeController,
+        child: AnalyticsInteractionTracker(
+          analyticsEngine: _dependencies.analyticsEngine,
+          child: _PrinterConnectionNotifier(
+            authViewModel: _dependencies.authViewModel,
+            printingSettingsViewModel: _dependencies.printingSettingsViewModel,
+            child: PointyNavigationRailScope(
+              isActive: false,
+              controller: _navigationRailController,
+              child: child ?? const SizedBox.shrink(),
+            ),
           ),
         ),
       ),
@@ -124,6 +138,13 @@ class _PointyAppState extends State<PointyApp> {
         viewModel: _dependencies.authViewModel,
         analyticsEngine: _dependencies.analyticsEngine,
         authenticatedBuilder: _buildAuthenticatedHome,
+      );
+    }
+
+    if (_dependencies.authViewModel.requiresShopSetup) {
+      return ShopSetupWizard(
+        shopSettingsRepository: _dependencies.shopSettingsRepository,
+        onComplete: _dependencies.authViewModel.completeShopSetup,
       );
     }
 

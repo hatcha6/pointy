@@ -4,6 +4,7 @@ import '../../../core/analytics_audit.dart';
 import '../../../core/analytics_engine.dart';
 import '../../../core/result.dart';
 import '../../../data/models/product.dart';
+import '../../../data/models/product_bulk_action.dart';
 import '../../../data/models/product_draft.dart';
 import '../../../data/models/product_image_upload.dart';
 import '../../../data/models/product_page.dart';
@@ -14,6 +15,13 @@ import '../../../data/repositories/catalog_repository.dart';
 enum CatalogBarcodeLookupStatus { found, notFound, error }
 
 enum ProductCreateOutcome { failed, created, createdWithImageError }
+
+class BulkActionResult {
+  const BulkActionResult({required this.ok, required this.updated});
+
+  final bool ok;
+  final int updated;
+}
 
 class CatalogBarcodeLookupOutcome {
   const CatalogBarcodeLookupOutcome._({required this.status, this.variant});
@@ -56,6 +64,10 @@ class CatalogViewModel extends ChangeNotifier {
   String? _errorMessage;
   ProductQuery _query = const ProductQuery();
 
+  final Set<int> _selectedIds = {};
+  bool _selectionMode = false;
+  bool _isBulkRunning = false;
+
   List<Product> get products => List.unmodifiable(_products);
   bool get isLoading => _isLoading;
   bool get isLoadingMore => _isLoadingMore;
@@ -64,11 +76,136 @@ class CatalogViewModel extends ChangeNotifier {
   String? get errorMessage => _errorMessage;
   ProductQuery get query => _query;
 
+  // ---- Multi-select / bulk operations ----
+  bool get selectionMode => _selectionMode;
+  bool get isBulkRunning => _isBulkRunning;
+  Set<int> get selectedIds => Set.unmodifiable(_selectedIds);
+  int get selectedCount => _selectedIds.length;
+  bool isSelected(int id) => _selectedIds.contains(id);
+  bool get allVisibleSelected =>
+      _products.isNotEmpty && _products.every((p) => _selectedIds.contains(p.id));
+
+  void enterSelectionMode() {
+    if (!_selectionMode) {
+      _selectionMode = true;
+      notifyListeners();
+    }
+  }
+
+  void exitSelectionMode() {
+    if (_selectionMode || _selectedIds.isNotEmpty) {
+      _selectionMode = false;
+      _selectedIds.clear();
+      notifyListeners();
+    }
+  }
+
+  void toggleSelection(int id) {
+    if (!_selectedIds.remove(id)) {
+      _selectedIds.add(id);
+    }
+    _selectionMode = true;
+    notifyListeners();
+  }
+
+  void selectAllVisible() {
+    _selectedIds.addAll(_products.map((p) => p.id));
+    _selectionMode = true;
+    notifyListeners();
+  }
+
+  void clearSelection() {
+    if (_selectedIds.isNotEmpty) {
+      _selectedIds.clear();
+      notifyListeners();
+    }
+  }
+
+  Future<BulkActionResult> bulkArchive({required bool archived}) {
+    return _runBulk(
+      (ids) =>
+          _catalogRepository.bulkArchiveProducts(ids: ids, archived: archived),
+    );
+  }
+
+  Future<BulkActionResult> bulkReprice({
+    required ProductBulkRepriceMode mode,
+    required double value,
+  }) {
+    return _runBulk(
+      (ids) => _catalogRepository.bulkRepriceProducts(
+        ids: ids,
+        mode: mode,
+        value: value,
+      ),
+    );
+  }
+
+  Future<BulkActionResult> bulkCategorize({
+    required List<int> categoryIds,
+    required ProductBulkCategorizeMode mode,
+  }) {
+    return _runBulk(
+      (ids) => _catalogRepository.bulkCategorizeProducts(
+        ids: ids,
+        categoryIds: categoryIds,
+        mode: mode,
+      ),
+    );
+  }
+
+  Future<BulkActionResult> bulkSetFlags({
+    bool? isActive,
+    bool? tracksExpiry,
+    bool? isService,
+    bool? isPrepared,
+  }) {
+    return _runBulk(
+      (ids) => _catalogRepository.bulkSetProductFlags(
+        ids: ids,
+        isActive: isActive,
+        tracksExpiry: tracksExpiry,
+        isService: isService,
+        isPrepared: isPrepared,
+      ),
+    );
+  }
+
+  Future<BulkActionResult> _runBulk(
+    Future<Result<int>> Function(List<int> ids) action,
+  ) async {
+    if (_selectedIds.isEmpty || _isBulkRunning) {
+      return const BulkActionResult(ok: false, updated: 0);
+    }
+    _isBulkRunning = true;
+    notifyListeners();
+
+    final result = await action(_selectedIds.toList());
+    final BulkActionResult outcome;
+    switch (result) {
+      case Ok<int>(:final value):
+        outcome = BulkActionResult(ok: true, updated: value);
+        _isBulkRunning = false;
+        // Refetch from the server (clears selection) so prices/flags/archive
+        // state and ordering reflect the change.
+        await loadProducts();
+        return outcome;
+      case Error<int>():
+        outcome = const BulkActionResult(ok: false, updated: 0);
+    }
+
+    _isBulkRunning = false;
+    notifyListeners();
+    return outcome;
+  }
+
   Future<void> loadProducts() async {
     _isLoading = true;
     _errorMessage = null;
     _nextProductPage = 1;
     _hasMoreProducts = true;
+    _selectedIds.clear();
+    _selectionMode = false;
     notifyListeners();
 
     final result = await _catalogRepository.loadProducts(

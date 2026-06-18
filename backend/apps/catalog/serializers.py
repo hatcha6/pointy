@@ -1002,3 +1002,71 @@ class ProductCatalogSerializer(serializers.ModelSerializer):
                 setattr(variant, field, value)
             variant.save()
         variant.option_values.set(option_values)
+
+
+class ProductBulkActionSerializer(serializers.Serializer):
+    """Shared input for the products-list bulk actions: the selected ids."""
+
+    ids = serializers.ListField(
+        child=serializers.IntegerField(min_value=1),
+        allow_empty=False,
+    )
+
+
+class ProductBulkArchiveSerializer(ProductBulkActionSerializer):
+    # True archives the selection, False restores it.
+    archived = serializers.BooleanField()
+
+
+class ProductBulkRepriceSerializer(ProductBulkActionSerializer):
+    MODE_CHOICES = (
+        "set",
+        "increase_percent",
+        "decrease_percent",
+        "increase_amount",
+        "decrease_amount",
+    )
+    mode = serializers.ChoiceField(choices=MODE_CHOICES)
+    value = serializers.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        min_value=Decimal("0"),
+    )
+
+    def validate(self, attrs):
+        if attrs["mode"] == "decrease_percent" and attrs["value"] > Decimal("100"):
+            raise serializers.ValidationError(
+                {"value": "A percentage decrease cannot exceed 100%."}
+            )
+        return attrs
+
+
+class ProductBulkCategorizeSerializer(ProductBulkActionSerializer):
+    MODE_CHOICES = ("replace", "add", "remove")
+    category_ids = serializers.ListField(
+        child=serializers.IntegerField(min_value=1),
+        allow_empty=True,
+    )
+    mode = serializers.ChoiceField(choices=MODE_CHOICES)
+
+    def validate(self, attrs):
+        if attrs["mode"] in {"add", "remove"} and not attrs["category_ids"]:
+            raise serializers.ValidationError(
+                {"category_ids": "Select at least one category."}
+            )
+        return attrs
+
+
+class ProductBulkFlagsSerializer(ProductBulkActionSerializer):
+    FLAG_FIELDS = ("is_active", "tracks_expiry", "is_service", "is_prepared")
+    is_active = serializers.BooleanField(required=False)
+    tracks_expiry = serializers.BooleanField(required=False)
+    is_service = serializers.BooleanField(required=False)
+    is_prepared = serializers.BooleanField(required=False)
+
+    def validate(self, attrs):
+        if not any(field in attrs for field in self.FLAG_FIELDS):
+            raise serializers.ValidationError(
+                "Provide at least one flag to change."
+            )
+        return attrs

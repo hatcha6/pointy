@@ -1095,6 +1095,17 @@ ProductVariant _variantFor(_Item item) {
     barcode: item.barcode,
     quantityOnHand: item.stock,
     isDefault: true,
+    // Multi-unit items carry their product detail so the cart's unit chip can
+    // resolve the switchable units (mirrors the real product_detail payload).
+    productDetail: item.id == 5
+        ? Product(
+            id: item.id,
+            name: item.name,
+            quantityOnHand: item.stock,
+            defaultSaleUnit: 'pack',
+            units: _waterUnits,
+          )
+        : null,
   );
 }
 

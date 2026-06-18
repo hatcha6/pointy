@@ -175,7 +175,7 @@ Frontend — DONE (full `lib` analyzes clean; model + POS + document tests green
 - [x] Dart models: UnitOfMeasure, ProductUnit, Product, CartLine, purchase + order lines
 - [x] `UnitOfMeasureApiClient` + `CatalogRepository.loadAllUnits`
 - [x] Repos/VMs: unit threaded through checkout + purchase payloads + cart merge key (`setCartLineUnit`, `updateLineUnit`)
-- [x] POS unit picker sheet (`unit_quantity_sheet.dart`, chips + default preselected + live total) + cart-line unit chip & switch + `shared/unit_options.dart`
+- [x] POS adds at the product's default unit (no dialog); cart-line shows a tappable unit **pill** that opens `unit_quantity_sheet.dart` to switch unit/qty (`defaultSaleUnitOption`, `setCartLineUnit`, `shared/unit_options.dart`)
 - [x] Purchasing per-line unit selector + base-equivalent hint + default purchase unit preselect
 - [x] Product form "Units & conversions" editor (`product_units_editor.dart`) — rows, factors, custom price, sellable/purchasable, default sale/purchase unit, suggested same-dimension factors
 - [x] Invoice + PO quantity cells show the unit (RTL-safe fold); receipt + PO thermal show `unit_label`
