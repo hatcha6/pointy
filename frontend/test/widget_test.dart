@@ -1997,6 +1997,14 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.tap(find.text('إرسال'));
+    await tester.pumpAndSettle();
+    // Submitting a purchase order now asks for confirmation first.
+    await tester.tap(
+      find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.text('إرسال'),
+      ),
+    );
     await tester.pumpAndSettle(const Duration(seconds: 1));
 
     expect(find.text('استلام كميات'), findsOneWidget);
@@ -2136,6 +2144,14 @@ void main() {
       await tester.pumpAndSettle(const Duration(seconds: 1));
 
       await tester.tap(find.text('إرسال'));
+      await tester.pumpAndSettle();
+      // Submitting a purchase order now asks for confirmation first.
+      await tester.tap(
+        find.descendant(
+          of: find.byType(AlertDialog),
+          matching: find.text('إرسال'),
+        ),
+      );
       await tester.pumpAndSettle(const Duration(seconds: 1));
       await tester.tap(find.text('استلام كميات'));
       await tester.pumpAndSettle();

@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
 
 import '../../../core/result.dart';
@@ -7,6 +10,7 @@ import '../../../data/models/stock_count_draft.dart';
 import '../../../data/models/stock_count_line.dart';
 import '../../../data/repositories/catalog_repository.dart';
 import '../../../data/repositories/stock_count_repository.dart';
+import '../../../data/services/local_scoped_json_storage.dart';
 
 /// The one quiet variance question, surfaced once after an entry crosses the
 /// threshold. Holding [expected] here is the ONLY place the system quantity is
@@ -49,14 +53,26 @@ class StockCountSessionViewModel extends ChangeNotifier {
     this._repository,
     this._catalogRepository, {
     required StockCount session,
-  }) : _session = session {
+    ScopedJsonStorage entryStorage = const SharedPreferencesScopedJsonStorage(
+      'pointy.stockcount.entry.v1',
+    ),
+  }) : _session = session,
+       _entryStorage = entryStorage {
     _seedFromSession(session);
+    unawaited(_restoreEntry());
   }
 
   final StockCountRepository _repository;
   final CatalogRepository _catalogRepository;
+  final ScopedJsonStorage _entryStorage;
 
   final StockCount _session;
+
+  // Local persistence of the un-submitted keypad entry. Counted lines already
+  // persist server-side via recordLine; this only covers the in-flight item +
+  // typed quantity. Keyed by the server session id.
+  Timer? _persistDebounce;
+  bool _entryRestored = false;
 
   // variantId -> the running counted quantity for already-counted lines.
   final Map<int, double> _countedByVariant = {};
@@ -96,6 +112,83 @@ class StockCountSessionViewModel extends ChangeNotifier {
     _countedByVariant.clear();
     for (final line in session.lines) {
       _countedByVariant[line.variantId] = line.countedQuantity;
+    }
+  }
+
+  String get _entryScope => '${_session.id}';
+
+  @override
+  void notifyListeners() {
+    super.notifyListeners();
+    _scheduleEntryPersist();
+  }
+
+  @override
+  void dispose() {
+    _persistDebounce?.cancel();
+    super.dispose();
+  }
+
+  void _scheduleEntryPersist() {
+    // Skip until the prior entry has been restored, so we never clobber it.
+    if (!_entryRestored) {
+      return;
+    }
+    _persistDebounce?.cancel();
+    _persistDebounce = Timer(const Duration(milliseconds: 400), () {
+      unawaited(_flushEntry());
+    });
+  }
+
+  Future<void> _flushEntry() async {
+    try {
+      final variant = _currentVariant;
+      if (variant == null || _input.isEmpty) {
+        await _entryStorage.clear(_entryScope);
+        return;
+      }
+      await _entryStorage.save(
+        _entryScope,
+        jsonEncode({'variant': variant.toCartJson(), 'input': _input}),
+      );
+    } catch (_) {
+      // Best-effort — storage may be unavailable (e.g. in tests).
+    }
+  }
+
+  /// Restores an un-submitted keypad entry (current item + typed quantity) so a
+  /// crash mid-count doesn't lose the in-progress entry. Confirmed counts come
+  /// back from the server via [_seedFromSession].
+  Future<void> _restoreEntry() async {
+    String? raw;
+    try {
+      raw = await _entryStorage.load(_entryScope);
+    } catch (_) {
+      raw = null;
+    }
+    _entryRestored = true;
+    if (raw == null || raw.isEmpty) {
+      return;
+    }
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map) {
+        return;
+      }
+      final map = decoded.cast<String, Object?>();
+      final variantJson = map['variant'];
+      final input = map['input']?.toString() ?? '';
+      // Don't clobber a selection the user made during the async load.
+      if (variantJson is! Map || input.isEmpty || _currentVariant != null) {
+        return;
+      }
+      _currentVariant = ProductVariant.fromJson(
+        variantJson.cast<String, Object?>(),
+      );
+      _input = input;
+      notifyListeners();
+    } on FormatException {
+      // Corrupt entry — ignore.
     }
   }
 

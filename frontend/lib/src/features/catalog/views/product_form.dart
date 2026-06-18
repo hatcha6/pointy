@@ -9,6 +9,7 @@ import '../../../data/models/product_variant_draft.dart';
 import '../../../data/models/unit_of_measure.dart';
 import '../../../data/models/variant_option.dart';
 import '../../../shared/async_selection/async_multi_select_picker.dart';
+import '../../../shared/components/components.dart';
 import '../../../shared/decimal_text_input_formatter.dart';
 import '../../../shared/design/design.dart';
 import '../../../shared/product_category_picker.dart';
@@ -162,10 +163,31 @@ class _ProductFormState extends State<ProductForm> {
     }
   }
 
+  /// Any entry the user would lose on an accidental dismiss. Used by the
+  /// unsaved-changes guard (evaluated fresh on each back/dismiss attempt).
+  bool get _isDirty =>
+      _nameController.text.trim().isNotEmpty ||
+      _descriptionController.text.trim().isNotEmpty ||
+      _variantNameController.text.trim().isNotEmpty ||
+      _skuController.text.trim().isNotEmpty ||
+      _barcodeController.text.trim().isNotEmpty ||
+      _priceController.text.trim().isNotEmpty ||
+      _selectedImage != null ||
+      _selectedCategories.isNotEmpty ||
+      _selectedVariantOptionIds.isNotEmpty ||
+      _selectedModifierGroupIds.isNotEmpty ||
+      _units.isNotEmpty;
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    return PointyUnsavedChangesGuard(
+      isDirty: () => _isDirty,
+      child: _buildForm(context, l10n),
+    );
+  }
 
+  Widget _buildForm(BuildContext context, AppLocalizations l10n) {
     return ListenableBuilder(
       listenable: widget.viewModel,
       builder: (context, _) {

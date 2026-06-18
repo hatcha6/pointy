@@ -194,6 +194,34 @@ class ProductVariant {
     };
   }
 
+  /// Full-fidelity serialization for local persistence (the POS cart and the
+  /// purchase draft), as opposed to [toJson] which is the lossy API write shape.
+  /// Round-trips through [fromJson]. The heavy product/option/image graph is
+  /// intentionally omitted — the denormalized name fields are enough to render
+  /// and check out a restored line, and the backend re-validates at submit.
+  Map<String, Object?> toCartJson() {
+    return {
+      'id': id,
+      'product': productId,
+      'product_name': productName,
+      'name': name,
+      'display_name': displayName,
+      'full_name': fullName,
+      'sku': sku,
+      'barcode': barcode,
+      'unit_price': unitPrice.toStringAsFixed(2),
+      'is_active': isActive,
+      'is_default': isDefault,
+      'tracks_expiry': tracksExpiry,
+      'is_service': isService,
+      'is_prepared': isPrepared,
+      'unit': unit,
+      'quantity_on_hand': quantityOnHand,
+      'option_values': optionValueIds,
+      'product_detail': productDetail?.toCartJson(),
+    };
+  }
+
   ProductVariant copyWith({double? quantityOnHand}) {
     return ProductVariant(
       id: id,

@@ -6301,5 +6301,19 @@
   "submitPurchaseOrderConfirmMessage": "سيتم إرسال أمر الشراء إلى المورّد للاعتماد.",
   "cancelPurchaseOrderConfirmTitle": "إلغاء أمر الشراء؟",
   "cancelPurchaseOrderConfirmMessage": "سيؤدي إلغاء أمر الشراء إلى عكس أي مخزون تم استلامه منه، ولا يمكن التراجع عن هذا الإجراء.",
-  "cancelPurchaseOrderConfirmButton": "تأكيد الإلغاء"
+  "cancelPurchaseOrderConfirmButton": "تأكيد الإلغاء",
+  "unauthorizedAskManagerHint": "اطلب من المدير منحك صلاحية الوصول إلى هذه الشاشة.",
+  "backToHomeButton": "العودة إلى الرئيسية",
+  "unsavedChangesTitle": "تجاهل التغييرات؟",
+  "unsavedChangesMessage": "لديك تغييرات لم تُحفظ بعد. ستُفقد إذا غادرت الآن.",
+  "discardChangesButton": "تجاهل التغييرات",
+  "keepEditingButton": "متابعة التعديل",
+  "dashboardGetStartedTitle": "لنبدأ",
+  "dashboardGetStartedSubtitle": "أكمل هذه الخطوات لتجهيز متجرك للعمل.",
+  "dashboardGetStartedAddProduct": "أضف أول منتج",
+  "dashboardGetStartedAddCustomer": "أضف أول عميل",
+  "dashboardGetStartedFirstSale": "سجّل أول عملية بيع",
+  "dashboardGetStartedDone": "تم",
+  "posCartRestoredMessage": "تمت استعادة سلة بيع غير مكتملة",
+  "purchaseDraftRestoredMessage": "تمت استعادة مسودة شراء محفوظة"
 }

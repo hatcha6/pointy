@@ -71,6 +71,14 @@ class DashboardScreen extends StatelessWidget {
                   context,
                   AppNavigationDestination.catalog,
                 ),
+                openContacts: _destinationAction(
+                  context,
+                  AppNavigationDestination.contacts,
+                ),
+                openPos: _destinationAction(
+                  context,
+                  AppNavigationDestination.pos,
+                ),
                 openPurchasing: _destinationAction(
                   context,
                   AppNavigationDestination.purchasing,
@@ -119,6 +127,8 @@ class DashboardScreen extends StatelessWidget {
 class _DashboardNavigation {
   const _DashboardNavigation({
     required this.openCatalog,
+    required this.openContacts,
+    required this.openPos,
     required this.openPurchasing,
     required this.openRegisterSessions,
     required this.openEmployees,
@@ -128,6 +138,8 @@ class _DashboardNavigation {
   });
 
   final VoidCallback? openCatalog;
+  final VoidCallback? openContacts;
+  final VoidCallback? openPos;
   final VoidCallback? openPurchasing;
   final VoidCallback? openRegisterSessions;
   final VoidCallback? openEmployees;
@@ -295,6 +307,19 @@ class _DashboardSections extends StatelessWidget {
         ? sections.printing
         : null;
 
+    final productCount = inventory?.summary.productCount;
+    final orderCount = sales?.summary.orderCount;
+    final customerCount = customers?.summary.activeCustomerCount;
+    // Only nudge a genuinely fresh shop: we must be able to see both inventory
+    // and sales, and both are empty. This gates the card to owners/managers
+    // (cashiers never have these capabilities) and auto-hides once the first
+    // product and first sale exist.
+    final showGetStarted =
+        productCount != null &&
+        productCount == 0 &&
+        orderCount != null &&
+        orderCount == 0;
+
     // Every detail card flows into a single masonry grid so cards pack tightly
     // across the whole page instead of leaving gaps inside per-section blocks.
     // Tall charts come first to anchor the columns; shorter cards fill behind.
@@ -439,6 +464,19 @@ class _DashboardSections extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        if (showGetStarted) ...[
+          _GetStartedChecklist(
+            // showGetStarted guarantees zero products and zero sales here; only
+            // the customer step can already be done.
+            hasProduct: false,
+            hasCustomer: (customerCount ?? 0) > 0,
+            hasSale: false,
+            onAddProduct: navigation.openCatalog,
+            onAddCustomer: navigation.openContacts,
+            onFirstSale: navigation.openPos,
+          ),
+          SizedBox(height: spacing.lg),
+        ],
         _OverviewBand(
           hero: sales != null
               ? _HeroSection(
@@ -457,6 +495,163 @@ class _DashboardSections extends StatelessWidget {
           PointyMasonryGrid(children: cards),
         ],
       ],
+    );
+  }
+}
+
+/// First-run "Get started" card shown to a brand-new shop, nudging the owner
+/// through the first product, customer, and sale. Each step deep-links to its
+/// screen and self-hides when its capability is unavailable.
+class _GetStartedChecklist extends StatelessWidget {
+  const _GetStartedChecklist({
+    required this.hasProduct,
+    required this.hasCustomer,
+    required this.hasSale,
+    required this.onAddProduct,
+    required this.onAddCustomer,
+    required this.onFirstSale,
+  });
+
+  final bool hasProduct;
+  final bool hasCustomer;
+  final bool hasSale;
+  final VoidCallback? onAddProduct;
+  final VoidCallback? onAddCustomer;
+  final VoidCallback? onFirstSale;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final spacing = AdaptiveSpacing.of(context);
+    final colors = context.pointyColors;
+    final textTheme = Theme.of(context).textTheme;
+
+    final rows = <Widget>[
+      if (onAddProduct != null)
+        _GetStartedRow(
+          icon: Icons.inventory_2_outlined,
+          label: l10n.dashboardGetStartedAddProduct,
+          done: hasProduct,
+          onTap: onAddProduct!,
+        ),
+      if (onAddCustomer != null)
+        _GetStartedRow(
+          icon: Icons.person_add_alt_outlined,
+          label: l10n.dashboardGetStartedAddCustomer,
+          done: hasCustomer,
+          onTap: onAddCustomer!,
+        ),
+      if (onFirstSale != null)
+        _GetStartedRow(
+          icon: Icons.point_of_sale_outlined,
+          label: l10n.dashboardGetStartedFirstSale,
+          done: hasSale,
+          onTap: onFirstSale!,
+        ),
+    ];
+
+    if (rows.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: colors.surface,
+        borderRadius: BorderRadius.circular(PointyRadii.card),
+        border: Border.all(color: colors.line),
+        boxShadow: PointyShadows.raised,
+      ),
+      child: Padding(
+        padding: EdgeInsets.all(spacing.lg),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.rocket_launch_outlined, color: colors.primaryStrong),
+                SizedBox(width: spacing.sm),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        l10n.dashboardGetStartedTitle,
+                        style: textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      Text(
+                        l10n.dashboardGetStartedSubtitle,
+                        style: textTheme.bodySmall?.copyWith(
+                          color: colors.mutedInk,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            SizedBox(height: spacing.sm),
+            ...rows,
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _GetStartedRow extends StatelessWidget {
+  const _GetStartedRow({
+    required this.icon,
+    required this.label,
+    required this.done,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final bool done;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final spacing = AdaptiveSpacing.of(context);
+    final colors = context.pointyColors;
+    final textTheme = Theme.of(context).textTheme;
+
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(PointyRadii.card),
+      child: Padding(
+        padding: EdgeInsets.symmetric(vertical: spacing.sm),
+        child: Row(
+          children: [
+            Icon(
+              done ? Icons.check_circle : icon,
+              color: done ? colors.success : colors.primaryStrong,
+            ),
+            SizedBox(width: spacing.md),
+            Expanded(
+              child: Text(
+                label,
+                style: textTheme.bodyLarge?.copyWith(
+                  decoration: done ? TextDecoration.lineThrough : null,
+                  color: done ? colors.mutedInk : null,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            if (done)
+              Text(
+                l10n.dashboardGetStartedDone,
+                style: textTheme.labelMedium?.copyWith(color: colors.success),
+              )
+            else
+              const PointyDisclosureChevron(),
+          ],
+        ),
+      ),
     );
   }
 }

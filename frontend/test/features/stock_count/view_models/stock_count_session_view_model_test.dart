@@ -6,6 +6,7 @@ import 'package:pointy_frontend/src/data/models/stock_count_draft.dart';
 import 'package:pointy_frontend/src/data/models/stock_count_line.dart';
 import 'package:pointy_frontend/src/data/repositories/catalog_repository.dart';
 import 'package:pointy_frontend/src/data/repositories/stock_count_repository.dart';
+import 'package:pointy_frontend/src/data/services/local_scoped_json_storage.dart';
 import 'package:pointy_frontend/src/data/services/pos_api_service.dart';
 import 'package:pointy_frontend/src/features/stock_count/view_models/stock_count_session_view_model.dart';
 
@@ -55,6 +56,39 @@ void main() {
       expect(vm.pendingVariance, isNull);
     },
   );
+
+  test('an un-submitted keypad entry is restored on re-entry', () async {
+    final storage = MemoryScopedJsonStorage();
+    final variant = _variant(id: 42);
+    final first = StockCountSessionViewModel(
+      _FakeStockCountRepository(),
+      _FakeCatalogRepository(variant),
+      session: _session(),
+      entryStorage: storage,
+    );
+    addTearDown(first.dispose);
+    // Let the (empty) restore complete so persistence is armed.
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+
+    first.selectVariant(variant);
+    first.appendDigit('7');
+    expect(first.input, '7');
+
+    // Let the debounced entry save flush to storage.
+    await Future<void>.delayed(const Duration(milliseconds: 500));
+
+    final second = StockCountSessionViewModel(
+      _FakeStockCountRepository(),
+      _FakeCatalogRepository(variant),
+      session: _session(),
+      entryStorage: storage,
+    );
+    addTearDown(second.dispose);
+    await Future<void>.delayed(const Duration(milliseconds: 50));
+
+    expect(second.currentVariant?.id, 42);
+    expect(second.input, '7');
+  });
 
   test('a flagged entry surfaces the variance prompt once', () async {
     final repo = _FakeStockCountRepository()

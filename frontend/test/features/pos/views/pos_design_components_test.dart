@@ -179,6 +179,11 @@ void main() {
       await tester.tap(find.byIcon(Icons.close).first);
       await tester.pumpAndSettle();
 
+      // Discarding a parked sale now asks for confirmation first.
+      expect(discardedSessionId, isNull);
+      await tester.tap(find.text('تجاهل'));
+      await tester.pumpAndSettle();
+
       expect(discardedSessionId, 1);
     });
   }

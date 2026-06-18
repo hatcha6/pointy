@@ -16,7 +16,7 @@ that can be lost**.
 | Wave | Theme | Status |
 |---|---|---|
 | 1 | Quick wins — visible polish + cheapest perf | ✅ Shipped |
-| 2 | Protect the user's work | ⬜ Planned |
+| 2 | Protect the user's work | ✅ Shipped |
 | 3 | Heavy paths — kill freezes & N+1s | ⬜ Planned |
 | 4 | Structural / maintainability | ⬜ Planned |
 
@@ -73,21 +73,30 @@ Postgres tables consider `AddIndexConcurrently` to avoid a write-lock.
 
 ---
 
-## Wave 2 — Protect the user's work
+## Wave 2 — Protect the user's work ✅ Shipped
 
 The highest-leverage UX work. "I lost my cart" makes a cashier distrust the tool.
+All items shipped and verified (`flutter analyze` clean; POS/stock-count/draft
+persistence covered by round-trip + save→restore tests; no Wave-2 regressions in
+the suite).
 
-- [ ] **App-wide unsaved-changes guard.** Confirmed **zero** `PopScope`/`WillPopScope`
-  in the codebase. Product form, purchase draft, stock-count screen, discount
-  form all discard work on back/swipe/scrim. Add a shared `PointyUnsavedChangesGuard`.
-- [ ] **Persist work-in-progress.** POS cart (`pos_view_model.dart:464`), purchase
-  draft, and in-progress stock-count scans are in-memory only — lost on
-  crash/restart. Auto-save locally, restore on entry.
-- [ ] **Cold-start guidance.** After the setup wizard a new shop sees four blank
-  no-CTA screens. Add a dashboard "Get started" checklist (add product → add
-  customer → first sale).
-- [ ] **Actionable permission-denied wall.** `PointyPermissionDeniedView` shows a
-  lock with no "ask a manager to grant X" or "back to home." Make it actionable.
+- [x] **App-wide unsaved-changes guard.** New shared `PointyUnsavedChangesGuard`
+  (always-intercept `PopScope` + "discard changes?" dialog, evaluated live so it
+  works with text controllers). Applied to the product form, discount form, and
+  stock-count counting screen. The purchase draft is protected by persistence
+  instead (dismissing its sheet no longer loses it), so a guard there would
+  mislead.
+- [x] **Persist work-in-progress.** New generic `ScopedJsonStorage`
+  (per-user-scoped). POS cart/sale-sessions persist on change and restore on
+  launch (clear on checkout); the purchase draft persists/restores/clears on
+  submit; the stock-count un-submitted keypad entry persists (counted lines were
+  already server-side via `recordLine`). Added full-fidelity `toCartJson`/
+  `fromJson` to the cart/variant/customer/supplier/draft-line models.
+- [x] **Cold-start guidance.** Dashboard "Get started" checklist (add product →
+  add customer → first sale) shown only to a genuinely empty shop, each step
+  deep-linking via the existing nav and self-hiding by capability.
+- [x] **Actionable permission-denied wall.** `PointyPermissionDeniedView` now
+  shows an "ask a manager to grant access" hint and a "Back to home" action.
 
 ---
 

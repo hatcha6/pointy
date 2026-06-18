@@ -1,4 +1,8 @@
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
+import 'package:pointy_frontend/src/data/models/product.dart';
+import 'package:pointy_frontend/src/data/models/product_variant.dart';
 import 'package:pointy_frontend/src/data/models/purchase_submission.dart';
 
 void main() {
@@ -25,6 +29,49 @@ void main() {
       {'name': 'شحن', 'amount': '0.60'},
       {'name': 'تخليص', 'amount': '0.40'},
     ]);
+  });
+
+  test('a purchase draft line round-trips through json persistence', () {
+    const variant = ProductVariant(
+      id: 55,
+      productId: 9,
+      productName: 'دقيق',
+      sku: 'FL-1',
+      unitPrice: 2.0,
+      unit: 'kg',
+      tracksExpiry: true,
+      productDetail: Product(
+        id: 9,
+        name: 'دقيق',
+        quantityOnHand: 0,
+        tracksExpiry: true,
+      ),
+    );
+    final line = PurchaseDraftLine(
+      variant: variant,
+      quantity: 4,
+      unitCost: 18.5,
+      unitCode: 'bag',
+      unitLabel: 'كيس',
+      unitFactor: 25,
+      expiryDate: DateTime(2026, 12, 31),
+    );
+
+    final restored = PurchaseDraftLine.fromJson(
+      (jsonDecode(jsonEncode(line.toJson())) as Map).cast<String, Object?>(),
+    );
+
+    expect(restored.variant.id, 55);
+    expect(restored.variant.tracksExpiry, isTrue);
+    // productDetail is carried so the restored line keeps its unit metadata
+    // (the per-line unit dropdown depends on it).
+    expect(restored.variant.productDetail?.id, 9);
+    expect(restored.variant.productDetail?.tracksExpiry, isTrue);
+    expect(restored.quantity, 4);
+    expect(restored.unitCost, 18.5);
+    expect(restored.unitCode, 'bag');
+    expect(restored.unitFactor, 25);
+    expect(restored.expiryDate, DateTime(2026, 12, 31));
   });
 
   test('purchase lines serialize and parse expiry tracking fields', () {

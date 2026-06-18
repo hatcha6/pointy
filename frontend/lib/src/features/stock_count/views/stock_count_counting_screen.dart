@@ -187,43 +187,46 @@ class _StockCountCountingScreenState extends State<StockCountCountingScreen> {
     return ListenableBuilder(
       listenable: _viewModel,
       builder: (context, _) {
-        return PointyScaffold(
-          appBar: PointyAppBar(
-            title: Text(l10n.stockCountCountingTitle),
-            style: PointyAppBarStyle.highFocus,
-            isLoading: _viewModel.isResolving || _viewModel.isSaving,
-            actions: [
-              IconButton(
-                tooltip: l10n.stockCountSearchItem,
-                onPressed: _openSearch,
-                icon: const Icon(Icons.search),
-              ),
-              IconButton(
-                tooltip: l10n.stockCountCameraScan,
-                onPressed: _openCamera,
-                icon: const Icon(Icons.document_scanner_outlined),
-              ),
-            ],
-          ),
-          body: BarcodeScanListener(
-            onBarcodeScanned: _onScan,
-            child: StockCountCountingBody(
-              session: _viewModel.session,
-              counted: _viewModel.countedCount,
-              total: _viewModel.expectedCount,
-              progress: _viewModel.progress,
-              variant: _viewModel.currentVariant,
-              input: _viewModel.input,
-              onSearch: _openSearch,
-              onCamera: _openCamera,
-              onDigit: _viewModel.appendDigit,
-              onDecimal: _viewModel.appendDecimal,
-              onBackspace: _viewModel.backspace,
-              onClear: _viewModel.clearInput,
-              footer: _CountingControls(
-                canSubmit: _viewModel.canSubmit,
-                onSave: _onSave,
-                onFinish: _finish,
+        return PointyUnsavedChangesGuard(
+          isDirty: () => _viewModel.canSubmit,
+          child: PointyScaffold(
+            appBar: PointyAppBar(
+              title: Text(l10n.stockCountCountingTitle),
+              style: PointyAppBarStyle.highFocus,
+              isLoading: _viewModel.isResolving || _viewModel.isSaving,
+              actions: [
+                IconButton(
+                  tooltip: l10n.stockCountSearchItem,
+                  onPressed: _openSearch,
+                  icon: const Icon(Icons.search),
+                ),
+                IconButton(
+                  tooltip: l10n.stockCountCameraScan,
+                  onPressed: _openCamera,
+                  icon: const Icon(Icons.document_scanner_outlined),
+                ),
+              ],
+            ),
+            body: BarcodeScanListener(
+              onBarcodeScanned: _onScan,
+              child: StockCountCountingBody(
+                session: _viewModel.session,
+                counted: _viewModel.countedCount,
+                total: _viewModel.expectedCount,
+                progress: _viewModel.progress,
+                variant: _viewModel.currentVariant,
+                input: _viewModel.input,
+                onSearch: _openSearch,
+                onCamera: _openCamera,
+                onDigit: _viewModel.appendDigit,
+                onDecimal: _viewModel.appendDecimal,
+                onBackspace: _viewModel.backspace,
+                onClear: _viewModel.clearInput,
+                footer: _CountingControls(
+                  canSubmit: _viewModel.canSubmit,
+                  onSave: _onSave,
+                  onFinish: _finish,
+                ),
               ),
             ),
           ),

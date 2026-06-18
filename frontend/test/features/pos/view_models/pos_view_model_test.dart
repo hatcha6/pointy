@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -6,6 +7,7 @@ import 'package:http/testing.dart';
 import 'package:pointy_frontend/src/core/analytics_engine.dart';
 import 'package:pointy_frontend/src/core/result.dart';
 import 'package:pointy_frontend/src/data/models/analytics_event.dart';
+import 'package:pointy_frontend/src/data/models/cart_line.dart';
 import 'package:pointy_frontend/src/data/models/print_job.dart';
 import 'package:pointy_frontend/src/data/models/modifier_group.dart';
 import 'package:pointy_frontend/src/data/models/printer_config.dart';
@@ -26,6 +28,7 @@ import 'package:pointy_frontend/src/data/repositories/sale_repository.dart';
 import 'package:pointy_frontend/src/data/repositories/shop_settings_repository.dart';
 import 'package:pointy_frontend/src/data/services/analytics_queue_storage.dart';
 import 'package:pointy_frontend/src/data/services/pos_api_service.dart';
+import 'package:pointy_frontend/src/data/services/local_scoped_json_storage.dart';
 import 'package:pointy_frontend/src/data/services/print_transport.dart';
 import 'package:pointy_frontend/src/features/pos/view_models/pos_view_model.dart';
 
@@ -581,11 +584,104 @@ void main() {
       );
     },
   );
+
+  test('a cart line round-trips through json persistence', () {
+    final line = CartLine.create(
+      variant: _coffeeVariant,
+      quantity: 3,
+      notes: 'no sugar',
+      modifiers: const [
+        CartLineModifier(
+          groupId: 7,
+          optionId: 9,
+          groupName: 'Milk',
+          optionName: 'Oat',
+          priceDelta: 0.5,
+          quantity: 2,
+        ),
+      ],
+      unitCode: 'box',
+      unitLabel: 'Box',
+      unitFactor: 12,
+      unitPriceOverride: 40,
+    );
+
+    final restored = CartLine.fromJson(
+      (jsonDecode(jsonEncode(line.toJson())) as Map).cast<String, Object?>(),
+    );
+
+    expect(restored.variant.id, _coffeeVariant.id);
+    expect(restored.variant.productName, _coffeeVariant.productName);
+    expect(restored.variant.unitPrice, _coffeeVariant.unitPrice);
+    expect(restored.quantity, 3);
+    expect(restored.notes, 'no sugar');
+    expect(restored.unitCode, 'box');
+    expect(restored.unitFactor, 12);
+    expect(restored.unitPriceOverride, 40);
+    expect(restored.lineKey, line.lineKey);
+    expect(restored.modifiers, hasLength(1));
+    expect(restored.modifiers.single.optionName, 'Oat');
+    expect(restored.modifiers.single.priceDelta, 0.5);
+    expect(restored.modifiers.single.quantity, 2);
+    // 40 (override) + 0.5 * 2 (modifier) = 41
+    expect(restored.unitPrice, 41);
+  });
+
+  test(
+    'an in-progress cart is persisted and restored for the same user',
+    () async {
+      final storage = MemoryScopedJsonStorage();
+      final first = _viewModel(
+        _FakePosApiService(
+          catalogPages: const {
+            1: [_coffeeVariant, _teaVariant],
+          },
+        ),
+        sessionStorage: storage,
+      );
+      addTearDown(first.dispose);
+      await first.loadCurrentRegisterSession();
+      await first.resumeRegisterSession();
+      await first.restorePersistedSessions('user-1');
+
+      first.addVariant(_coffeeVariant);
+      first.addVariant(_coffeeVariant);
+      expect(first.cart, hasLength(1));
+
+      // Let the debounced save flush to storage.
+      await Future<void>.delayed(const Duration(milliseconds: 700));
+
+      final second = _viewModel(
+        _FakePosApiService(
+          catalogPages: const {
+            1: [_coffeeVariant, _teaVariant],
+          },
+        ),
+        sessionStorage: storage,
+      );
+      addTearDown(second.dispose);
+      await second.restorePersistedSessions('user-1');
+
+      expect(second.cart, hasLength(1));
+      expect(second.cart.single.variant.id, _coffeeVariant.id);
+      expect(second.cart.single.quantity, 2);
+
+      // A different user on the same device never inherits the cart.
+      final third = _viewModel(
+        _FakePosApiService(catalogPages: const {}),
+        sessionStorage: storage,
+      );
+      addTearDown(third.dispose);
+      await third.restorePersistedSessions('user-2');
+      expect(third.cart, isEmpty);
+    },
+  );
 }
 
 PosViewModel _viewModel(
   _FakePosApiService apiService, {
   AnalyticsEngine? analyticsEngine,
+  ScopedJsonStorage? sessionStorage,
 }) {
   return PosViewModel(
     CatalogRepository(apiService),
@@ -600,6 +696,7 @@ PosViewModel _viewModel(
       fakeTransport: const _NoopPrintTransport(),
     ),
     analyticsEngine: analyticsEngine,
+    sessionStorage: sessionStorage ?? MemoryScopedJsonStorage(),
   );
 }
 

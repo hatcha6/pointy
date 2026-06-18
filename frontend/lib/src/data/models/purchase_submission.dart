@@ -679,6 +679,35 @@ class PurchaseDraftLine {
       expiryDate: clearExpiryDate ? null : expiryDate ?? this.expiryDate,
     );
   }
+
+  Map<String, Object?> toJson() {
+    return {
+      'variant': variant.toCartJson(),
+      'quantity': quantity,
+      'unit_cost': unitCost,
+      'unit_code': unitCode,
+      'unit_label': unitLabel,
+      'unit_factor': unitFactor,
+      'expiry_date': expiryDate?.toIso8601String(),
+    };
+  }
+
+  factory PurchaseDraftLine.fromJson(Map<String, Object?> json) {
+    final variantJson = json['variant'];
+    if (variantJson is! Map<String, Object?>) {
+      throw const FormatException('purchase draft line is missing its variant');
+    }
+    final expiry = json['expiry_date'];
+    return PurchaseDraftLine(
+      variant: ProductVariant.fromJson(variantJson),
+      quantity: (json['quantity'] as num?)?.toInt() ?? 0,
+      unitCost: (json['unit_cost'] as num?)?.toDouble() ?? 0,
+      unitCode: json['unit_code']?.toString() ?? '',
+      unitLabel: json['unit_label']?.toString() ?? '',
+      unitFactor: (json['unit_factor'] as num?)?.toDouble() ?? 1,
+      expiryDate: expiry == null ? null : DateTime.tryParse(expiry.toString()),
+    );
+  }
 }
 
 class PurchaseOrderLineDraft {

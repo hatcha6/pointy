@@ -80,6 +80,10 @@ class _DiscountRuleFormState extends State<DiscountRuleForm> {
   DateTime? _startsAt;
   DateTime? _endsAt;
 
+  /// Snapshot of all editable state captured after initState seeding, so the
+  /// unsaved-changes guard can diff both create and edit forms accurately.
+  late final String _initialSignature;
+
   @override
   void initState() {
     super.initState();
@@ -174,6 +178,7 @@ class _DiscountRuleFormState extends State<DiscountRuleForm> {
     for (final controller in _liveControllers) {
       controller.addListener(_onLiveChanged);
     }
+    _initialSignature = _formSignature();
   }
 
   @override
@@ -202,8 +207,57 @@ class _DiscountRuleFormState extends State<DiscountRuleForm> {
     }
   }
 
+  /// A stable string of every editable field (excluding pure UI-expansion
+  /// toggles), compared against [_initialSignature] to detect unsaved edits.
+  String _formSignature() {
+    String ids(List<AsyncSelectionOption<int>> options) =>
+        (options.map((option) => option.id).toList()..sort()).join(',');
+    return <Object?>[
+      _nameController.text,
+      _descriptionController.text,
+      _couponCodeController.text,
+      _valueController.text,
+      _maxDiscountController.text,
+      _roundingIncrementController.text,
+      _minSubtotalController.text,
+      _minLineQuantityController.text,
+      _priorityController.text,
+      _usageLimitController.text,
+      _perCustomerLimitController.text,
+      _perSupplierLimitController.text,
+      _channel,
+      _applicationType,
+      _scope,
+      _valueType,
+      _roundingMode,
+      _exclusive,
+      _isActive,
+      _enableRounding,
+      _limitByMinimumSubtotal,
+      _limitByMinimumLineQuantity,
+      _limitByProducts,
+      _limitByContacts,
+      ids(_selectedProducts),
+      ids(_selectedVariants),
+      ids(_selectedProductCategories),
+      ids(_selectedCustomers),
+      ids(_selectedSuppliers),
+      _startsAt?.toIso8601String(),
+      _endsAt?.toIso8601String(),
+    ].join('|');
+  }
+
+  bool get _isDirty => _formSignature() != _initialSignature;
+
   @override
   Widget build(BuildContext context) {
+    return PointyUnsavedChangesGuard(
+      isDirty: () => _isDirty,
+      child: _buildForm(context),
+    );
+  }
+
+  Widget _buildForm(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final spacing = AdaptiveSpacing.of(context);
     final colors = context.pointyColors;

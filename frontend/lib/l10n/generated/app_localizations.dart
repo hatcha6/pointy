@@ -18383,6 +18383,90 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'تأكيد الإلغاء'**
   String get cancelPurchaseOrderConfirmButton;
+
+  /// No description provided for @unauthorizedAskManagerHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'اطلب من المدير منحك صلاحية الوصول إلى هذه الشاشة.'**
+  String get unauthorizedAskManagerHint;
+
+  /// No description provided for @backToHomeButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'العودة إلى الرئيسية'**
+  String get backToHomeButton;
+
+  /// No description provided for @unsavedChangesTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'تجاهل التغييرات؟'**
+  String get unsavedChangesTitle;
+
+  /// No description provided for @unsavedChangesMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'لديك تغييرات لم تُحفظ بعد. ستُفقد إذا غادرت الآن.'**
+  String get unsavedChangesMessage;
+
+  /// No description provided for @discardChangesButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'تجاهل التغييرات'**
+  String get discardChangesButton;
+
+  /// No description provided for @keepEditingButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'متابعة التعديل'**
+  String get keepEditingButton;
+
+  /// No description provided for @dashboardGetStartedTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'لنبدأ'**
+  String get dashboardGetStartedTitle;
+
+  /// No description provided for @dashboardGetStartedSubtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'أكمل هذه الخطوات لتجهيز متجرك للعمل.'**
+  String get dashboardGetStartedSubtitle;
+
+  /// No description provided for @dashboardGetStartedAddProduct.
+  ///
+  /// In ar, this message translates to:
+  /// **'أضف أول منتج'**
+  String get dashboardGetStartedAddProduct;
+
+  /// No description provided for @dashboardGetStartedAddCustomer.
+  ///
+  /// In ar, this message translates to:
+  /// **'أضف أول عميل'**
+  String get dashboardGetStartedAddCustomer;
+
+  /// No description provided for @dashboardGetStartedFirstSale.
+  ///
+  /// In ar, this message translates to:
+  /// **'سجّل أول عملية بيع'**
+  String get dashboardGetStartedFirstSale;
+
+  /// No description provided for @dashboardGetStartedDone.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم'**
+  String get dashboardGetStartedDone;
+
+  /// No description provided for @posCartRestoredMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'تمت استعادة سلة بيع غير مكتملة'**
+  String get posCartRestoredMessage;
+
+  /// No description provided for @purchaseDraftRestoredMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'تمت استعادة مسودة شراء محفوظة'**
+  String get purchaseDraftRestoredMessage;
 }
 
 class _AppLocalizationsDelegate

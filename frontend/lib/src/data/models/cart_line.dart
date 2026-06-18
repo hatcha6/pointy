@@ -120,6 +120,61 @@ class CartLine {
       lineKey: lineKey ?? this.lineKey,
     );
   }
+
+  Map<String, Object?> toJson() {
+    return {
+      'variant': variant.toCartJson(),
+      'quantity': quantity,
+      'notes': notes,
+      'modifiers': modifiers
+          .map((modifier) => modifier.toJson())
+          .toList(growable: false),
+      'unit_code': unitCode,
+      'unit_label': unitLabel,
+      'unit_factor': unitFactor,
+      'unit_price_override': unitPriceOverride,
+      'line_key': lineKey,
+    };
+  }
+
+  factory CartLine.fromJson(Map<String, Object?> json) {
+    final variantJson = json['variant'];
+    if (variantJson is! Map<String, Object?>) {
+      throw const FormatException('cart line is missing its variant');
+    }
+    final lineKey = json['line_key']?.toString() ?? '';
+    // Keep the local sequence ahead of any restored key so newly-added lines
+    // never collide with a restored one.
+    final suffix = int.tryParse(lineKey.split('-').last);
+    if (suffix != null && suffix > _sequence) {
+      _sequence = suffix;
+    }
+    final modifiersJson = json['modifiers'];
+    final override = json['unit_price_override'];
+    return CartLine(
+      variant: ProductVariant.fromJson(variantJson),
+      quantity: _doubleFromJson(json['quantity']),
+      notes: json['notes']?.toString() ?? '',
+      modifiers: modifiersJson is List<Object?>
+          ? modifiersJson
+                .whereType<Map<String, Object?>>()
+                .map(CartLineModifier.fromJson)
+                .toList(growable: false)
+          : const [],
+      unitCode: json['unit_code']?.toString() ?? '',
+      unitLabel: json['unit_label']?.toString() ?? '',
+      unitFactor: _doubleFromJson(json['unit_factor'], fallback: 1),
+      unitPriceOverride: override == null ? null : _doubleFromJson(override),
+      lineKey: lineKey,
+    );
+  }
 }
 
 const Object _noChange = Object();
+
+double _doubleFromJson(Object? value, {double fallback = 0}) {
+  if (value is num) {
+    return value.toDouble();
+  }
+  return double.tryParse((value ?? '').toString()) ?? fallback;
+}

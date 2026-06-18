@@ -237,6 +237,7 @@ class PointyAppDependencies {
         catalogRepository,
         purchaseRepository,
         analyticsEngine: analyticsEngine,
+        persistScope: authViewModel.currentUser?.id.toString(),
       );
 
   PurchaseOrderListViewModel get purchaseOrderListViewModel =>
@@ -273,6 +274,7 @@ class PointyAppDependencies {
       );
       posViewModel.loadCurrentRegisterSession();
       posViewModel.loadCheckoutSettings();
+      unawaited(posViewModel.restorePersistedSessions('${currentUser.id}'));
       unawaited(notificationCenterViewModel.loadAlerts());
       if (_enableAutomaticConnection) {
         unawaited(connectionCoordinator.pairAuthenticatedDevice());

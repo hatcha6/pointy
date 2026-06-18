@@ -144,6 +144,23 @@ class Customer {
       isActive: json['is_active'] != false,
     );
   }
+
+  /// Serialization for local persistence (a restored POS cart keeps its
+  /// selected customer). Round-trips through [Customer.fromJson].
+  Map<String, Object?> toJson() {
+    return {
+      'id': id,
+      'customer_number': customerNumber,
+      'full_name': fullName,
+      'phone': phone,
+      'email': email,
+      'gender': gender.apiValue,
+      'birthday': birthday?.toIso8601String().split('T').first,
+      'marketing_consent': marketingConsent,
+      'notes': notes,
+      'is_active': isActive,
+    };
+  }
 }
 
 class CustomerDraft {
@@ -211,6 +228,22 @@ class SupplierContact {
   final double netBalance;
   final double totalBought;
   final int purchaseCount;
+
+  /// Serialization for local persistence (a restored purchase draft keeps its
+  /// selected supplier). Derived balances are intentionally omitted — they go
+  /// stale and are recomputed from the server.
+  Map<String, Object?> toJson() {
+    return {
+      'id': id,
+      'name': name,
+      'contact_name': contactName,
+      'phone': phone,
+      'email': email,
+      'address': address,
+      'notes': notes,
+      'is_active': isActive,
+    };
+  }
 
   factory SupplierContact.fromJson(Map<String, Object?> json) {
     return SupplierContact(

@@ -190,4 +190,28 @@ class CartLineModifier {
   Map<String, Object?> toCheckoutJson() {
     return {'option': optionId, 'quantity': quantity};
   }
+
+  /// Full serialization for local cart persistence (keeps the snapshot display
+  /// data that [toCheckoutJson] drops).
+  Map<String, Object?> toJson() {
+    return {
+      'group_id': groupId,
+      'option_id': optionId,
+      'group_name': groupName,
+      'option_name': optionName,
+      'price_delta': priceDelta,
+      'quantity': quantity,
+    };
+  }
+
+  factory CartLineModifier.fromJson(Map<String, Object?> json) {
+    return CartLineModifier(
+      groupId: (json['group_id'] as num?)?.toInt() ?? 0,
+      optionId: (json['option_id'] as num?)?.toInt() ?? 0,
+      groupName: json['group_name']?.toString() ?? '',
+      optionName: json['option_name']?.toString() ?? '',
+      priceDelta: (json['price_delta'] as num?)?.toDouble() ?? 0,
+      quantity: (json['quantity'] as num?)?.toInt() ?? 1,
+    );
+  }
 }

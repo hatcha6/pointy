@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 
@@ -15,19 +16,34 @@ import '../../../data/models/product_variant_page.dart';
 import '../../../data/models/purchase_submission.dart';
 import '../../../data/repositories/catalog_repository.dart';
 import '../../../data/repositories/purchase_repository.dart';
+import '../../../data/services/local_scoped_json_storage.dart';
 
 class PurchaseViewModel extends ChangeNotifier {
   PurchaseViewModel(
     this._catalogRepository,
     this._purchaseRepository, {
     AnalyticsEngine? analyticsEngine,
-  }) : _analyticsEngine = analyticsEngine {
+    ScopedJsonStorage draftStorage = const SharedPreferencesScopedJsonStorage(
+      'pointy.purchase.draft.v1',
+    ),
+    String? persistScope,
+  }) : _analyticsEngine = analyticsEngine,
+       _draftStorage = draftStorage {
     loadCatalog();
+    if (persistScope != null) {
+      unawaited(restorePersistedDraft(persistScope));
+    }
   }
 
   final CatalogRepository _catalogRepository;
   final PurchaseRepository _purchaseRepository;
   final AnalyticsEngine? _analyticsEngine;
+  final ScopedJsonStorage _draftStorage;
+
+  // Local persistence of the in-progress purchase draft.
+  String? _persistScope;
+  bool _draftRestored = false;
+  Timer? _persistDebounce;
 
   CatalogRepository get catalogRepository => _catalogRepository;
 
@@ -622,6 +638,127 @@ class PurchaseViewModel extends ChangeNotifier {
 
   void _touchSubmissionIntent() {
     _submitIdempotencyKey = _newPurchaseIdempotencyKey('purchase-draft');
+    _schedulePersist();
+  }
+
+  @override
+  void dispose() {
+    _persistDebounce?.cancel();
+    super.dispose();
+  }
+
+  /// Restores the persisted draft for [scope] (the signed-in user id). Safe to
+  /// call repeatedly; only re-applies when the scope changes.
+  Future<void> restorePersistedDraft(String scope) async {
+    if (_draftRestored && _persistScope == scope) {
+      return;
+    }
+    final scopeChanged = _persistScope != null && _persistScope != scope;
+    _persistScope = scope;
+    _draftRestored = true;
+    if (scopeChanged) {
+      // Different user on this device — never inherit the previous draft.
+      clearDraft(trackLineDeletes: false);
+    }
+
+    final raw = await _draftStorage.load(scope);
+    if (raw == null || raw.isEmpty) {
+      return;
+    }
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map) {
+        return;
+      }
+      final map = decoded.cast<String, Object?>();
+      final linesJson = map['lines'];
+      if (linesJson is! List) {
+        return;
+      }
+      final lines = <PurchaseDraftLine>[];
+      for (final item in linesJson) {
+        if (item is! Map) {
+          continue;
+        }
+        try {
+          lines.add(PurchaseDraftLine.fromJson(item.cast<String, Object?>()));
+        } on FormatException {
+          // Skip a corrupt line rather than dropping the whole draft.
+        }
+      }
+      if (lines.isEmpty) {
+        return;
+      }
+      _draft
+        ..clear()
+        ..addAll(lines);
+      final supplierJson = map['supplier'];
+      _selectedSupplier = supplierJson is Map
+          ? SupplierContact.fromJson(supplierJson.cast<String, Object?>())
+          : null;
+      _receiveImmediately = map['receiveImmediately'] != false;
+      _supplierInvoiceNumber = map['supplierInvoiceNumber']?.toString() ?? '';
+      _supplierInvoiceDateInput =
+          map['supplierInvoiceDateInput']?.toString() ?? '';
+      _discountCode = map['discountCode']?.toString() ?? '';
+      final landedJson = map['landedCostEntries'];
+      _landedCostEntries = landedJson is List
+          ? landedJson
+                .whereType<Map>()
+                .map(
+                  (entry) => PurchaseLandedCostEntry.fromJson(
+                    entry.cast<String, Object?>(),
+                  ),
+                )
+                .toList()
+          : <PurchaseLandedCostEntry>[];
+      _landedCostAllocationMethod = LandedCostAllocationMethod.fromApiValue(
+        map['landedCostAllocationMethod'],
+      );
+      // Fresh idempotency key so a restored draft submits as a new order.
+      _submitIdempotencyKey = _newPurchaseIdempotencyKey('purchase-draft');
+      notifyListeners();
+      if (_selectedSupplier != null) {
+        unawaited(refreshDiscountPreview());
+      }
+    } on FormatException {
+      // Corrupt payload — ignore and start fresh.
+    }
+  }
+
+  void _schedulePersist() {
+    final scope = _persistScope;
+    if (scope == null) {
+      return;
+    }
+    _persistDebounce?.cancel();
+    _persistDebounce = Timer(const Duration(milliseconds: 500), () {
+      unawaited(_flushPersist(scope));
+    });
+  }
+
+  Future<void> _flushPersist(String scope) async {
+    if (_draft.isEmpty) {
+      await _draftStorage.clear(scope);
+      return;
+    }
+    await _draftStorage.save(scope, _serializeDraft());
+  }
+
+  String _serializeDraft() {
+    return jsonEncode({
+      'version': 1,
+      'lines': [for (final line in _draft) line.toJson()],
+      'supplier': _selectedSupplier?.toJson(),
+      'receiveImmediately': _receiveImmediately,
+      'supplierInvoiceNumber': _supplierInvoiceNumber,
+      'supplierInvoiceDateInput': _supplierInvoiceDateInput,
+      'discountCode': _discountCode,
+      'landedCostEntries': [
+        for (final entry in _landedCostEntries) entry.toJson(),
+      ],
+      'landedCostAllocationMethod': _landedCostAllocationMethod.apiValue,
+    });
   }
 
   void _trackDraftLineAdded(

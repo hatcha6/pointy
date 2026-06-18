@@ -8,11 +8,22 @@ class PointyPermissionDeniedView extends StatelessWidget {
     super.key,
     required this.title,
     required this.message,
+    this.hint,
+    this.homeLabel,
+    this.onGoHome,
     this.compact = false,
   });
 
   final String title;
   final String message;
+
+  /// Optional secondary line, e.g. "ask a manager to grant access".
+  final String? hint;
+
+  /// Label for the "back to home" action. The action only renders when this is
+  /// provided and either [onGoHome] is set or the navigator can pop.
+  final String? homeLabel;
+  final VoidCallback? onGoHome;
   final bool compact;
 
   @override
@@ -20,6 +31,9 @@ class PointyPermissionDeniedView extends StatelessWidget {
     final spacing = AdaptiveSpacing.of(context);
     final colors = context.pointyColors;
     final textTheme = Theme.of(context).textTheme;
+    final canGoHome =
+        homeLabel != null &&
+        (onGoHome != null || Navigator.of(context).canPop());
 
     return Center(
       child: SingleChildScrollView(
@@ -61,6 +75,22 @@ class PointyPermissionDeniedView extends StatelessWidget {
                 textAlign: TextAlign.center,
                 style: textTheme.bodyMedium?.copyWith(color: colors.mutedInk),
               ),
+              if (hint != null && hint!.isNotEmpty) ...[
+                SizedBox(height: spacing.sm),
+                Text(
+                  hint!,
+                  textAlign: TextAlign.center,
+                  style: textTheme.bodySmall?.copyWith(color: colors.mutedInk),
+                ),
+              ],
+              if (canGoHome) ...[
+                SizedBox(height: spacing.lg),
+                FilledButton.tonalIcon(
+                  onPressed: onGoHome ?? () => Navigator.of(context).maybePop(),
+                  icon: const Icon(Icons.home_outlined),
+                  label: Text(homeLabel!),
+                ),
+              ],
             ],
           ),
         ),

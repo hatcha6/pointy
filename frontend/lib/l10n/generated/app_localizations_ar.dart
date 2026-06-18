@@ -10613,4 +10613,49 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get cancelPurchaseOrderConfirmButton => 'تأكيد الإلغاء';
+
+  @override
+  String get unauthorizedAskManagerHint =>
+      'اطلب من المدير منحك صلاحية الوصول إلى هذه الشاشة.';
+
+  @override
+  String get backToHomeButton => 'العودة إلى الرئيسية';
+
+  @override
+  String get unsavedChangesTitle => 'تجاهل التغييرات؟';
+
+  @override
+  String get unsavedChangesMessage =>
+      'لديك تغييرات لم تُحفظ بعد. ستُفقد إذا غادرت الآن.';
+
+  @override
+  String get discardChangesButton => 'تجاهل التغييرات';
+
+  @override
+  String get keepEditingButton => 'متابعة التعديل';
+
+  @override
+  String get dashboardGetStartedTitle => 'لنبدأ';
+
+  @override
+  String get dashboardGetStartedSubtitle =>
+      'أكمل هذه الخطوات لتجهيز متجرك للعمل.';
+
+  @override
+  String get dashboardGetStartedAddProduct => 'أضف أول منتج';
+
+  @override
+  String get dashboardGetStartedAddCustomer => 'أضف أول عميل';
+
+  @override
+  String get dashboardGetStartedFirstSale => 'سجّل أول عملية بيع';
+
+  @override
+  String get dashboardGetStartedDone => 'تم';
+
+  @override
+  String get posCartRestoredMessage => 'تمت استعادة سلة بيع غير مكتملة';
+
+  @override
+  String get purchaseDraftRestoredMessage => 'تمت استعادة مسودة شراء محفوظة';
 }

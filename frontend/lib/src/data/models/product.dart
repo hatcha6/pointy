@@ -162,6 +162,26 @@ class Product {
     );
   }
 
+  /// Slim serialization for local persistence — only the unit metadata a
+  /// restored cart/draft line needs (no variants/categories, avoiding
+  /// recursion). The omitted relations default to empty on [Product.fromJson].
+  Map<String, Object?> toCartJson() {
+    return {
+      'id': id,
+      'name': name,
+      'quantity_on_hand': quantityOnHand,
+      'tracks_expiry': tracksExpiry,
+      'is_service': isService,
+      'is_prepared': isPrepared,
+      'unit': unit,
+      'default_sale_unit': defaultSaleUnit,
+      'default_purchase_unit': defaultPurchaseUnit,
+      'units': units
+          .map((productUnit) => productUnit.toJson())
+          .toList(growable: false),
+    };
+  }
+
   Product copyWith({
     double? quantityOnHand,
     ProductVariant? defaultVariant,

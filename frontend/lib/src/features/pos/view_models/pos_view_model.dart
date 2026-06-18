@@ -28,6 +28,7 @@ import '../../../data/repositories/register_session_repository.dart';
 import '../../../data/repositories/sale_repository.dart';
 import '../../../data/repositories/shop_settings_repository.dart';
 import '../../../data/services/order_document_service.dart';
+import '../../../data/services/local_scoped_json_storage.dart';
 import '../../../shared/unit_options.dart';
 
 part 'pos_cart_actions.dart';
@@ -36,6 +37,7 @@ part 'pos_barcode_actions.dart';
 part 'pos_checkout.dart';
 part 'pos_register_session_actions.dart';
 part 'pos_sale_session_actions.dart';
+part 'pos_persistence.dart';
 
 enum RegisterSessionGateStatus {
   loading,
@@ -129,7 +131,11 @@ class PosViewModel extends ChangeNotifier {
     this._shopSettingsRepository,
     this._printingRepository, {
     AnalyticsEngine? analyticsEngine,
-  }) : _analyticsEngine = analyticsEngine;
+    ScopedJsonStorage sessionStorage = const SharedPreferencesScopedJsonStorage(
+      'pointy.pos.sessions.v1',
+    ),
+  }) : _analyticsEngine = analyticsEngine,
+       _sessionStorage = sessionStorage;
 
   final CatalogRepository _catalogRepository;
   final RegisterSessionRepository _registerSessionRepository;
@@ -137,6 +143,12 @@ class PosViewModel extends ChangeNotifier {
   final ShopSettingsRepository _shopSettingsRepository;
   final PrintingRepository _printingRepository;
   final AnalyticsEngine? _analyticsEngine;
+  final ScopedJsonStorage _sessionStorage;
+
+  // Local persistence of in-progress sale sessions (see pos_persistence.dart).
+  String? _persistScope;
+  bool _sessionsRestored = false;
+  Timer? _persistDebounce;
 
   CatalogRepository get catalogRepository => _catalogRepository;
 
@@ -328,8 +340,23 @@ class PosViewModel extends ChangeNotifier {
     return RegisterSessionGateStatus.noOpenSession;
   }
 
+  bool _disposed = false;
+
   void _notifyChanged() {
+    // Async tasks (e.g. discount-preview refresh after a restore) can resolve
+    // after disposal; guard so we never notify a disposed notifier.
+    if (_disposed) {
+      return;
+    }
     notifyListeners();
+    _schedulePersist();
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    _persistDebounce?.cancel();
+    super.dispose();
   }
 
   Future<void> loadCheckoutSettings() {

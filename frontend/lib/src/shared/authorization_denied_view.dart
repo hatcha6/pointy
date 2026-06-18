@@ -15,6 +15,8 @@ class AuthorizationDeniedView extends StatelessWidget {
     return PointyPermissionDeniedView(
       title: l10n.unauthorizedTitle,
       message: l10n.unauthorizedMessage,
+      hint: l10n.unauthorizedAskManagerHint,
+      homeLabel: l10n.backToHomeButton,
       compact: compact,
     );
   }
