@@ -1,6 +1,11 @@
 # Operations Framework Plan (Job Engine)
 
-**Status:** proposed — not yet implemented.
+**Status:** Phases 1–2 shipped. The `apps.operations` job/workflow engine,
+customer assets, materials consumption, invoicing into `sales.Order`, the
+technician role, BOM/recipes, kitchen-printer routing, and the Flutter Jobs
+board (board/intake/details + commission pay) are all built. Phases 3–4
+(MRP-lite planning, the customer tracking portal) remain future work. The design
+below is retained as the reference for how the engine is structured.
 **Goal:** let Pointy serve phone repair shops, bakeries, restaurants, and light
 manufacturing without building three separate modules. One job engine, one
 workflow engine, one asset registry, one BOM engine — each industry is a

@@ -1,3 +1,4 @@
+import '../../../core/parsing.dart';
 import '../../../data/models/card_payment_receipt.dart';
 import '../../../data/models/sale_order.dart';
 
@@ -29,7 +30,7 @@ class SplitTenderPaymentCalculator {
   const SplitTenderPaymentCalculator();
 
   double parseAmount(String value) {
-    return double.tryParse(value.replaceAll(',', '.')) ?? 0;
+    return parseDecimalOr(value);
   }
 
   SplitTenderPaymentSummary summary({

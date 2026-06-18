@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+
+import '../../../core/parsing.dart';
 import 'package:flutter/services.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
@@ -60,9 +62,7 @@ class _RegisterSessionCloseSheetState extends State<RegisterSessionCloseSheet> {
   }
 
   double get _closingCashTotal {
-    final cash =
-        double.tryParse(_closingCashController.text.replaceAll(',', '.')) ??
-        0.0;
+    final cash = parseDecimal(_closingCashController.text) ?? 0.0;
     return cash + _denominationTotal;
   }
 
@@ -264,7 +264,7 @@ class _RegisterSessionCloseSheetState extends State<RegisterSessionCloseSheet> {
   }
 
   double _parseMoney(String value) {
-    return double.parse(value.replaceAll(',', '.'));
+    return parseDecimal(value) ?? 0;
   }
 
   int _parseCount(String value) {

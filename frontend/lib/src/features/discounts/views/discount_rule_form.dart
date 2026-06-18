@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
+import '../../../core/parsing.dart';
 import '../../../core/result.dart';
 import '../../../data/models/contact.dart';
 import '../../../data/models/discount_rule.dart';
@@ -1023,7 +1024,7 @@ class _DiscountRuleFormState extends State<DiscountRuleForm> {
 
   String? _validatePositiveDecimal(String? value) {
     final l10n = AppLocalizations.of(context)!;
-    final parsed = double.tryParse((value ?? '').replaceAll(',', '.'));
+    final parsed = parseDecimal(value);
     if (parsed == null || parsed <= 0) {
       return l10n.positiveNumberError;
     }
@@ -1042,7 +1043,7 @@ class _DiscountRuleFormState extends State<DiscountRuleForm> {
     if (value == null || value.trim().isEmpty) {
       return null;
     }
-    final parsed = double.tryParse(value.replaceAll(',', '.'));
+    final parsed = parseDecimal(value);
     if (parsed == null || parsed <= 0) {
       return AppLocalizations.of(context)!.positiveNumberError;
     }
@@ -1053,7 +1054,7 @@ class _DiscountRuleFormState extends State<DiscountRuleForm> {
     if (!_enableRounding) {
       return null;
     }
-    final parsed = double.tryParse((value ?? '').replaceAll(',', '.'));
+    final parsed = parseDecimal(value);
     if (parsed == null || parsed <= 0) {
       return AppLocalizations.of(context)!.discountRoundingIncrementError;
     }
@@ -1064,7 +1065,7 @@ class _DiscountRuleFormState extends State<DiscountRuleForm> {
     if (value == null || value.trim().isEmpty) {
       return null;
     }
-    final parsed = double.tryParse(value.replaceAll(',', '.'));
+    final parsed = parseDecimal(value);
     if (parsed == null || parsed < 0) {
       return AppLocalizations.of(context)!.nonNegativeNumberError;
     }

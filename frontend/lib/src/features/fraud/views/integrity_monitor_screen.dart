@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../core/authorization.dart';
+import '../../../core/parsing.dart';
 import '../../../data/models/fraud_finding.dart';
 import '../../../shared/components/components.dart';
 import '../../../shared/date_formatters.dart';
@@ -675,7 +676,7 @@ String _shortDate(String value) {
 }
 
 double _amountValue(String value) {
-  return double.tryParse(value.replaceAll(',', '.')) ?? 0;
+  return parseDecimalOr(value);
 }
 
 Color _severityColor(BuildContext context, FraudFindingSeverity severity) {

@@ -6,6 +6,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../core/authorization.dart';
+import '../../../core/parsing.dart';
 import '../../../data/models/analytics_export.dart';
 import '../../../data/models/attachment_summary.dart';
 import '../../../data/models/shop_settings.dart';
@@ -1329,7 +1330,7 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
   }
 
   double _parsePercent(String value) {
-    return double.parse(value.trim().replaceAll(',', '.'));
+    return parseDecimal(value) ?? 0;
   }
 
   static List<String> _normalizeTrustedTerminalIds(Iterable<String> values) {

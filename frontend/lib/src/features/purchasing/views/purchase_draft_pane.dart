@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
+import '../../../core/parsing.dart';
 import '../../../core/result.dart';
 import '../../../data/models/product.dart';
 import '../../../data/models/purchase_submission.dart';
@@ -1192,7 +1193,7 @@ class _PurchaseDraftLineTileState extends State<PurchaseDraftLineTile> {
         prefixIcon: const Icon(Icons.sell_outlined),
       ),
       onChanged: (value) {
-        final parsed = double.tryParse(value.trim().replaceAll(',', '.'));
+        final parsed = parseDecimal(value);
         if (parsed != null && parsed >= 0) {
           widget.onCostChanged(parsed);
         }

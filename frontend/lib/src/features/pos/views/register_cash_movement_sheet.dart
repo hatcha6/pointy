@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+
+import '../../../core/parsing.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../data/models/register_cash_movement.dart';
@@ -146,7 +148,7 @@ class _RegisterCashMovementSheetState extends State<RegisterCashMovementSheet> {
   }
 
   String? _validateAmount(String? value, AppLocalizations l10n) {
-    final amount = double.tryParse((value ?? '').replaceAll(',', '.'));
+    final amount = parseDecimal(value);
     if (amount == null || amount <= 0) {
       return l10n.positiveAmountRequiredError;
     }
@@ -173,7 +175,7 @@ class _RegisterCashMovementSheetState extends State<RegisterCashMovementSheet> {
     final didCreate = await widget.onSubmit(
       RegisterCashMovementInput(
         movementType: widget.movementType,
-        amount: double.parse(_amountController.text.replaceAll(',', '.')),
+        amount: parseDecimal(_amountController.text) ?? 0,
         reason: _reasonController.text.trim(),
       ),
     );

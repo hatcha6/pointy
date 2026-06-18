@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+
+import '../../../core/parsing.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../data/models/product_unit.dart';
@@ -149,7 +151,7 @@ class _ProductUnitsEditorState extends State<ProductUnitsEditor> {
   double? _parsePrice(String text) {
     final trimmed = text.trim();
     if (trimmed.isEmpty) return null;
-    return double.tryParse(trimmed.replaceAll(',', '.'));
+    return parseDecimal(trimmed);
   }
 
   void _addRow() {

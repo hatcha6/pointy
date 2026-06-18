@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+
+import '../../../core/parsing.dart';
 import 'package:intl/intl.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
@@ -174,7 +176,7 @@ String decimalPayload(String value) {
 }
 
 double decimalValue(String value) {
-  return double.tryParse(value.trim().replaceAll(',', '.')) ?? 0;
+  return parseDecimalOr(value);
 }
 
 double roundMoney(double value) {

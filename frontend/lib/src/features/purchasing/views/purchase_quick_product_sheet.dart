@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+
+import '../../../core/parsing.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../data/models/product_draft.dart';
@@ -259,7 +261,7 @@ class _PurchaseQuickProductSheetState extends State<PurchaseQuickProductSheet> {
     if (value == null) {
       return null;
     }
-    return double.tryParse(value.trim().replaceAll(',', '.'));
+    return parseDecimal(value);
   }
 
   Future<void> _submit() async {

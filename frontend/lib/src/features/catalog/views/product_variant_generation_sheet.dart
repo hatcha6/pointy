@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
+import '../../../core/parsing.dart';
 import '../../../core/result.dart';
 import '../../../data/models/product_variant.dart';
 import '../../../data/models/product_variant_draft.dart';
@@ -647,7 +648,7 @@ class _ProductVariantGenerationSheetState
     if (value == null) {
       return null;
     }
-    return double.tryParse(value.trim().replaceAll(',', '.'));
+    return parseDecimal(value);
   }
 
   String? _generationErrorText(BuildContext context) {
