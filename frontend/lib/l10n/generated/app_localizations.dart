@@ -100,6 +100,18 @@ abstract class AppLocalizations {
   /// **'نقطة البيع'**
   String get appTitle;
 
+  /// Generic fallback shown when an action fails without a specific message.
+  ///
+  /// In ar, this message translates to:
+  /// **'حدث خطأ غير متوقع. حاول مرة أخرى.'**
+  String get errorUnexpectedMessage;
+
+  /// Shown when the server returns a 5xx error without a specific message.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر إكمال العملية على الخادم. حاول مرة أخرى لاحقًا.'**
+  String get errorServerMessage;
+
   /// Title of the global command palette overlay.
   ///
   /// In ar, this message translates to:

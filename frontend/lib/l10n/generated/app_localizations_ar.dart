@@ -12,6 +12,13 @@ class AppLocalizationsAr extends AppLocalizations {
   String get appTitle => 'نقطة البيع';
 
   @override
+  String get errorUnexpectedMessage => 'حدث خطأ غير متوقع. حاول مرة أخرى.';
+
+  @override
+  String get errorServerMessage =>
+      'تعذّر إكمال العملية على الخادم. حاول مرة أخرى لاحقًا.';
+
+  @override
   String get commandPaletteTitle => 'تنقّل سريع';
 
   @override

@@ -4,6 +4,14 @@
   "@appTitle": {
     "description": "Application title."
   },
+  "errorUnexpectedMessage": "حدث خطأ غير متوقع. حاول مرة أخرى.",
+  "@errorUnexpectedMessage": {
+    "description": "Generic fallback shown when an action fails without a specific message."
+  },
+  "errorServerMessage": "تعذّر إكمال العملية على الخادم. حاول مرة أخرى لاحقًا.",
+  "@errorServerMessage": {
+    "description": "Shown when the server returns a 5xx error without a specific message."
+  },
   "commandPaletteTitle": "تنقّل سريع",
   "@commandPaletteTitle": {
     "description": "Title of the global command palette overlay."
