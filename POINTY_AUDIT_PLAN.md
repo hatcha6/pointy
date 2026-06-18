@@ -17,16 +17,17 @@ that can be lost**.
 |---|---|---|
 | 1 | Quick wins — visible polish + cheapest perf | ✅ Shipped |
 | 2 | Protect the user's work | ✅ Shipped |
-| 3 | Heavy paths — kill freezes & N+1s | ⬜ Planned |
+| 3 | Heavy paths — kill freezes & N+1s | ✅ Shipped |
 | 4 | Structural / maintainability | ⬜ Planned |
 
 ---
 
 ## 0. Actual correctness bugs (fix regardless of wave)
 
-- [ ] **Dashboard "top categories" over-counts revenue.** `apps/core/dashboard.py:984`
-  groups `OrderLine` by `variant__product__categories__name` (a many-to-many),
-  so a product in 3 categories counts 3×. Allocate per category or document it.
+- [x] **Dashboard "top categories" over-counts revenue.** Fixed in Wave 3:
+  `_top_categories` now allocates each order line's revenue and units evenly
+  across its product's categories (uncategorised lines divide by 1), so the
+  breakdown reconciles with real sales (+ regression test).
 - [ ] **Coupon usage-limit race.** `DISCOUNTS_IMPLEMENTATION_LOG.md:201` — usage
   limits enforced in app logic with no DB-level counter/lock; concurrent
   redemptions can both pass. Needs `select_for_update` counter.
@@ -100,28 +101,44 @@ the suite).
 
 ---
 
-## Wave 3 — Heavy paths (kill freezes & N+1s)
+## Wave 3 — Heavy paths (kill freezes & N+1s) ✅ Shipped
 
-- [ ] **Move PDF generation off the UI isolate.** `order_document_service.dart:198`
-  — `pw.Document.build()` runs synchronously at checkout. `Isolate.run`.
-- [ ] **Move ESC/POS encoding + logo raster off the UI isolate, cache the logo.**
-  `esc_pos_receipt_encoder.dart:63` / `:442`.
-- [ ] **Dashboard: cache all sections + collapse multi-`.count()` into single
-  conditional `aggregate()`.** Infra (`_cached_dashboard_section`) already exists
-  but wraps only 4 of ~11 sections.
-- [ ] **`OrderSerializer` N+1** (`apps/sales/serializers.py:320`) — prefetch
-  `lines__adjustment_lines` + `AppliedDiscount`, cache `ShopSettings` in context.
-  ~200 queries/page → ~5.
-- [ ] **`SupplierSerializer` N+1** (`apps/purchasing/serializers.py:43`) — annotate
-  balances on the queryset instead of Python-looping POs per row.
-- [ ] **Reports double-run aggregates** (`apps/reports/services.py`) — compute once,
-  reuse in `summary` + `sections`. Slim list serializer for Order/PO viewsets.
-- [ ] **Lazy lists** — operations board (`jobs_screen.dart:196`) and POS cart
-  (`pos_cart_pane.dart:572`) wrap a `Column` of all rows in a `ListView`; use
-  `ListView.builder`.
-- [ ] **Debounce + scope the discount-form live summary** (`discount_rule_form.dart:199`).
-- [ ] **Dashboard frontend**: hoist `NumberFormat` to `static final`, precompute
-  chart series in the view model.
+Shipped across two commits (backend + frontend). Verified: backend `manage.py
+check` clean + 656 tests pass (incl. a new top-categories allocation test and a
+constant-query orders-list guard); frontend `flutter analyze` clean + 304 tests
+pass. The PDF/ESC-POS tests run on the Dart VM, so they exercise the real
+`compute()` isolate and prove the payloads are sendable.
+
+- [x] **PDF generation off the UI isolate.** `order_document_service.dart` renders
+  via `compute()` on native (inline on web — no isolates). Fonts are bundled
+  (IBM Plex Sans Arabic) and passed as raw `ByteData`, so PDFs also render
+  offline. Typeface changed Noto Naskh → IBM Plex; revert via the loader assets.
+- [x] **ESC/POS encoding + logo raster off the UI isolate, cache the logo.**
+  `encodePayload` runs via `compute()` on native; the `CapabilityProfile` is
+  loaded on the caller isolate and passed across; decoded logos are memoised.
+- [x] **Dashboard: cache all sections + collapse multi-`.count()`.** All 7
+  remaining sections now use `_cached_dashboard_section`; inventory/payroll/
+  profitability count+sum fan-outs collapsed into single conditional aggregates.
+- [x] **`OrderSerializer` N+1.** GenericRelation + prefetch for applied discounts,
+  `lines__adjustment_lines`, and variant option values; context-cached
+  ShopSettings + manager flag; prefetch-aware `returned_*`. Orders list is now a
+  constant query count regardless of page size (guard test).
+- [x] **`SupplierSerializer` N+1.** `total_bought`/`purchase_count` annotated on
+  the queryset; `payable_balance` batched into one aggregate (+ fixed a latent
+  GROUP-BY ordering-leak that could duplicate multi-order suppliers).
+- [x] **Reports double-run aggregates.** Each summary aggregate computed once and
+  reused in the metric section. Slim `PurchaseOrderListSerializer` for the PO list
+  (drops the receipt/adjustment/audit/attachment trees the detail re-fetches).
+  *(Orders list keeps the full serializer — the UI reads `lines`; its N+1 was
+  fixed by prefetch instead.)*
+- [x] **Lazy lists.** POS cart → `ListView.separated`; operations filtered list →
+  `ListView.builder`. *(Deferred: the grouped operations BOARD view — its varied
+  template/stage spacing in the redesigned UI needs visual QA, and board job
+  counts are bounded.)*
+- [x] **Debounce the discount-form live summary** (250ms).
+- [x] **Dashboard frontend:** `NumberFormat` hoisted to top-level finals.
+  *(Deferred: precomputing chart series in the view model — marginal; the charts
+  rebuild on data-load, not in a tight loop.)*
 
 ---
 
