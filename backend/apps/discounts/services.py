@@ -128,6 +128,12 @@ def discount_rule_usage_available(
     customer_id: int | None = None,
     supplier_id: int | None = None,
 ) -> bool:
+    # Counts live redemption rows rather than a denormalised counter on the
+    # rule. That keeps the check correct when redemptions are removed (e.g. the
+    # purchasing revise flow clears and re-applies a PO's discounts), which a
+    # cached counter would silently drift away from. When called from the
+    # locked persist path the rule row is held FOR UPDATE, so these counts are
+    # the authoritative, serialised view of usage.
     if (
         rule.usage_limit is not None
         and rule.redemptions.count() >= rule.usage_limit
@@ -603,6 +609,18 @@ def persist_applied_discounts(
 
 
 def lock_and_validate_usage_limits(result: DiscountCalculationResult) -> None:
+    """Re-check usage limits under a row lock, closing the redemption race.
+
+    Discounts are priced (and usage pre-checked) without a lock, so two
+    requests can both price the same single-use coupon while it still looks
+    available. This runs inside the caller's order/PO transaction (every caller
+    is ``@transaction.atomic``) and takes ``SELECT ... FOR UPDATE`` on each rule
+    about to be redeemed. Concurrent redemptions of the same rule therefore
+    serialise here: the loser blocks until the winner commits, then re-counts
+    and sees the winner's redemption, so the limit can never be overshot. Rule
+    ids are locked in sorted order so a checkout redeeming several rules can't
+    deadlock against another doing the same.
+    """
     rule_ids = sorted({application.rule_id for application in result.applications})
     if not rule_ids:
         return

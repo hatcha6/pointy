@@ -4,7 +4,9 @@ from decimal import Decimal
 from django.contrib.contenttypes.models import ContentType
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Permission
+from django.db import connection
 from django.test import TestCase
+from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 from rest_framework.test import APIClient
 
@@ -541,6 +543,98 @@ class DiscountEngineTests(TestCase):
         self.assertEqual(error.exception.coupon_codes, ("LOCKME",))
         self.assertEqual(AppliedDiscount.objects.count(), 0)
         self.assertEqual(DiscountRedemption.objects.count(), 1)
+
+    def test_concurrent_stale_results_cannot_both_redeem_single_use_coupon(self):
+        # The race: two checkouts both price the coupon while it is still
+        # available (zero redemptions), so each independently believes it may
+        # apply. Persisting the first redeems it; the second must be rejected by
+        # the locked recheck — the usage limit can never be overshot.
+        DiscountRule.objects.create(
+            name="One-shot coupon",
+            channel=DiscountRule.Channel.SALES,
+            application_type=DiscountRule.ApplicationType.COUPON_CODE,
+            coupon_code="ONESHOT",
+            value_type=DiscountRule.ValueType.FIXED_AMOUNT,
+            value=Decimal("4.00"),
+            usage_limit=1,
+        )
+        # Both results are calculated up front, before either is persisted, so
+        # each sees an available coupon — exactly what two racing requests see.
+        result_a = self.engine.calculate(self.context(coupon_codes=("ONESHOT",)))
+        result_b = self.engine.calculate(self.context(coupon_codes=("ONESHOT",)))
+        self.assertEqual(result_a.discount_total, Decimal("4.00"))
+        self.assertEqual(result_b.discount_total, Decimal("4.00"))
+
+        persist_applied_discounts(document=Order.objects.create(), result=result_a)
+
+        with self.assertRaises(DiscountUsageLimitExceeded) as error:
+            persist_applied_discounts(document=Order.objects.create(), result=result_b)
+
+        self.assertEqual(error.exception.coupon_codes, ("ONESHOT",))
+        self.assertEqual(DiscountRedemption.objects.count(), 1)
+        self.assertEqual(AppliedDiscount.objects.count(), 1)
+
+    def test_concurrent_stale_results_respect_per_customer_limit(self):
+        # Same race, but the cap is per-customer: a customer who races two
+        # checkouts of a once-per-customer coupon may only redeem it once.
+        customer = Customer.objects.create(full_name="Repeat buyer")
+        DiscountRule.objects.create(
+            name="Once per customer",
+            channel=DiscountRule.Channel.SALES,
+            application_type=DiscountRule.ApplicationType.COUPON_CODE,
+            coupon_code="ONCEEACH",
+            value_type=DiscountRule.ValueType.FIXED_AMOUNT,
+            value=Decimal("4.00"),
+            per_customer_usage_limit=1,
+        )
+        stale_context = self.context(
+            customer_id=customer.pk,
+            coupon_codes=("ONCEEACH",),
+        )
+        result_a = self.engine.calculate(stale_context)
+        result_b = self.engine.calculate(stale_context)
+        self.assertEqual(result_a.discount_total, Decimal("4.00"))
+        self.assertEqual(result_b.discount_total, Decimal("4.00"))
+
+        persist_applied_discounts(document=Order.objects.create(), result=result_a)
+
+        with self.assertRaises(DiscountUsageLimitExceeded):
+            persist_applied_discounts(document=Order.objects.create(), result=result_b)
+
+        self.assertEqual(
+            DiscountRedemption.objects.filter(customer=customer).count(), 1
+        )
+
+    def test_persist_locks_discount_rules_for_update(self):
+        # Guards the lock itself (the recheck tests above would still pass if the
+        # FOR UPDATE were dropped): persistence must take a row lock on every
+        # rule it redeems so the recheck is serialized against concurrent
+        # redemptions. Skipped on backends without row locking (e.g. SQLite).
+        if not connection.features.has_select_for_update:
+            self.skipTest("backend does not support select_for_update")
+        DiscountRule.objects.create(
+            name="Locked coupon",
+            channel=DiscountRule.Channel.SALES,
+            application_type=DiscountRule.ApplicationType.COUPON_CODE,
+            coupon_code="LOCKSQL",
+            value_type=DiscountRule.ValueType.FIXED_AMOUNT,
+            value=Decimal("4.00"),
+            usage_limit=5,
+        )
+        result = self.engine.calculate(self.context(coupon_codes=("LOCKSQL",)))
+        order = Order.objects.create()
+
+        with CaptureQueriesContext(connection) as captured:
+            persist_applied_discounts(document=order, result=result)
+
+        self.assertTrue(
+            any(
+                "discounts_discountrule" in query["sql"].lower()
+                and "for update" in query["sql"].lower()
+                for query in captured.captured_queries
+            ),
+            "expected a SELECT ... FOR UPDATE on the discount rule during persist",
+        )
 
     def test_applied_discount_snapshot_survives_rule_edits(self):
         rule = DiscountRule.objects.create(

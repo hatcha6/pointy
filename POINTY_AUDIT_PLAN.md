@@ -28,9 +28,17 @@ that can be lost**.
   `_top_categories` now allocates each order line's revenue and units evenly
   across its product's categories (uncategorised lines divide by 1), so the
   breakdown reconciles with real sales (+ regression test).
-- [ ] **Coupon usage-limit race.** `DISCOUNTS_IMPLEMENTATION_LOG.md:201` — usage
-  limits enforced in app logic with no DB-level counter/lock; concurrent
-  redemptions can both pass. Needs `select_for_update` counter.
+- [x] **Coupon usage-limit race.** Verified closed. The authoritative guard
+  already existed: `persist_applied_discounts` →
+  `lock_and_validate_usage_limits` takes `SELECT ... FOR UPDATE` on each
+  redeemed rule inside the order/PO transaction and re-counts live redemptions
+  before writing, so concurrent redemptions of a single-use coupon serialise
+  and only one passes (the audit cited the stale `DISCOUNTS_IMPLEMENTATION_LOG`
+  note, not the code). Hardened with regression tests that pin both the
+  recheck (global + per-customer) and the lock acquisition itself
+  (`FOR UPDATE` in the persist SQL), plus code comments explaining why live
+  counts beat a denormalised counter (the purchasing revise flow deletes
+  redemptions). No schema change.
 
 ---
 

@@ -198,7 +198,7 @@ Subagent 6 performed the final discount-system pass. No broad rewrites were made
 ### Known Limitations / Deferred Cases
 
 - Purchasing still has no draft-time discount preview; it validates and persists discounts on save.
-- Discount usage limits are enforced during calculation/persistence but are not protected by a database-level counter or lock; concurrent redemption hardening remains a future improvement if high-volume coupon races become a concern.
+- Discount usage limits are enforced both at calculation time (an unlocked pre-check that hides exhausted coupons from the buyer) and, authoritatively, at persistence time. `persist_applied_discounts` calls `lock_and_validate_usage_limits`, which takes `SELECT ... FOR UPDATE` on each redeemed rule inside the caller's order/PO transaction and re-counts live redemptions before writing — so two requests that both priced the same single-use coupon while it looked available cannot both redeem it (the loser blocks on the lock, re-counts the winner's redemption, and is rejected). Live redemption rows are counted rather than a denormalised counter so the purchasing revise flow's clear-and-reapply stays correct. Covered by `apps/discounts/tests.py` (`test_persist_rechecks_usage_limits_under_rule_lock`, `test_concurrent_stale_results_cannot_both_redeem_single_use_coupon`, `test_concurrent_stale_results_respect_per_customer_limit`, `test_persist_locks_discount_rules_for_update`).
 - No tax support was added; discount documentation and tests intentionally preserve the current no-tax product surface.
 
 ## Follow-up - Flutter Discount Management Screen
