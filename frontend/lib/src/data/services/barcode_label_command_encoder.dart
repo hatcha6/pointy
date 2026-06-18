@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:math' as math;
 
+import '../../shared/formatters.dart';
 import '../models/barcode_label.dart';
 import '../models/printer_config.dart';
 
@@ -257,7 +258,8 @@ class BarcodeLabelCommandEncoder {
     return value.replaceAll(RegExp(r'[\r\n]'), '').trim();
   }
 
-  String _money(double value) => '${value.toStringAsFixed(2)} د.ل';
+  String _money(double value) =>
+      '${value.toStringAsFixed(2)} $currencySymbol';
 
   String _date(DateTime value) {
     final local = value.toLocal();

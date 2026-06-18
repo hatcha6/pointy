@@ -32,6 +32,11 @@ List<int> _encodeEscPosResolved(_EscPosEncodeRequest request) {
 /// busy printer doesn't re-decode the same image for every ticket.
 final Map<String, img.Image?> _logoRasterCache = {};
 
+/// The currency symbol the current receipt renders. Set per-encode from the
+/// payload so it works inside the print isolate, where the main isolate's
+/// configured currency global isn't visible.
+String _receiptCurrencySymbol = 'د.ل';
+
 class EscPosReceiptEncoder {
   const EscPosReceiptEncoder();
 
@@ -126,6 +131,7 @@ class EscPosReceiptEncoder {
     }
     final order = _map(payload['order']);
     final shop = _map(payload['shop']);
+    _receiptCurrencySymbol = _string(shop['currency_symbol'], fallback: 'د.ل');
     final receiptNumber = _string(order['receipt_number'], fallback: '-');
     final documentTitle = _string(order['document_title'], fallback: 'إيصال');
     final totalLabel = _string(order['total_label'], fallback: 'الإجمالي');
@@ -613,9 +619,11 @@ String _money(Object? value) {
   final number = num.tryParse(value?.toString() ?? '');
   if (number == null) {
     final fallback = _string(value, fallback: '0.00');
-    return fallback.contains('د.ل') ? fallback : '$fallback د.ل';
+    return fallback.contains(_receiptCurrencySymbol)
+        ? fallback
+        : '$fallback $_receiptCurrencySymbol';
   }
-  return '${number.toStringAsFixed(2)} د.ل';
+  return '${number.toStringAsFixed(2)} $_receiptCurrencySymbol';
 }
 
 String _formatDateTime(Object? value) {

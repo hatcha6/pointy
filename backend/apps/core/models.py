@@ -58,6 +58,11 @@ class ShopSettings(TimeStampedModel):
     # The shop's vertical, chosen in the first-run setup wizard. Empty until
     # then; drives the preset defaults but every setting stays editable after.
     shop_type = models.CharField(max_length=32, blank=True, default="")
+    # Display currency. One currency per shop for now; ``currency_symbol`` is
+    # what the apps and printed documents render next to amounts (the setup
+    # wizard hints at fuller multi-currency support as a future step).
+    currency_code = models.CharField(max_length=8, default="LYD")
+    currency_symbol = models.CharField(max_length=8, default="د.ل")
     receipt_header = models.CharField(max_length=240, blank=True)
     receipt_footer = models.CharField(max_length=240, blank=True)
     enable_online_invoices = models.BooleanField(default=False)

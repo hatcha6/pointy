@@ -5,6 +5,7 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 import '../../../data/models/pos_user.dart';
 import '../../../data/models/report_run.dart';
 import '../../../data/models/shop_settings.dart';
+import '../../../shared/formatters.dart';
 import 'report_pdf.dart';
 
 BusinessReportPdfDocument buildBusinessReportPdfDocument({
@@ -302,14 +303,14 @@ String _formatMoney(Object? value) {
   if (normalized.isEmpty) {
     return '-';
   }
-  if (normalized.contains('د.ل')) {
+  if (normalized.contains(currencySymbol)) {
     return normalized;
   }
   final amount = num.tryParse(normalized);
   if (amount == null) {
     return _compactCellValue(normalized);
   }
-  return '${amount.toStringAsFixed(2)} د.ل';
+  return '${amount.toStringAsFixed(2)} $currencySymbol';
 }
 
 String _formatPercent(Object? value) {

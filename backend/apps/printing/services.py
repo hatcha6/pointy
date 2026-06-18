@@ -171,6 +171,7 @@ def build_receipt_payload(order):
             "name": shop_settings.shop_name,
             "receipt_header": shop_settings.receipt_header,
             "receipt_footer": shop_settings.receipt_footer,
+            "currency_symbol": shop_settings.currency_symbol,
             "logo": shop_logo_payload(shop_settings),
             "logo_bytes": shop_logo_base64(shop_settings),
         },

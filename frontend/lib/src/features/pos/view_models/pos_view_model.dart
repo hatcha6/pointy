@@ -9,6 +9,7 @@ import '../../../core/result.dart';
 import '../../../data/models/cart_line.dart';
 import '../../../data/models/modifier_group.dart';
 import '../../../shared/barcode/scale_barcode.dart';
+import '../../../shared/formatters.dart';
 import '../../../data/models/analytics_event.dart';
 import '../../../data/models/contact.dart';
 import '../../../data/models/print_job.dart';
@@ -384,6 +385,8 @@ class PosViewModel extends ChangeNotifier {
     switch (result) {
       case Ok<ShopSettings>():
         _checkoutSettings = result.value;
+        // Make every on-screen money display use the shop's currency symbol.
+        configureCurrencySymbol(result.value.currencySymbol);
         _checkoutShopLogoBytes = await _loadShopLogoBytes(result.value);
         if (result.value.autoPrintReceipts) {
           _clearManualInvoiceActionsForSaleSessions();

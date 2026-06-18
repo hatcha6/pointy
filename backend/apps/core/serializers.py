@@ -261,6 +261,8 @@ class ShopSettingsSerializer(serializers.ModelSerializer):
         fields = [
             "shop_name",
             "shop_type",
+            "currency_code",
+            "currency_symbol",
             "receipt_header",
             "receipt_footer",
             "enable_online_invoices",

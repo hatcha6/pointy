@@ -14,6 +14,7 @@ import '../models/shop_settings.dart';
 import 'order_document_action.dart';
 import 'order_document_web_delivery.dart';
 import 'print_transport.dart';
+import '../../shared/formatters.dart';
 import '../../shared/pdf/pdf.dart';
 
 export 'order_document_action.dart';
@@ -1173,7 +1174,8 @@ String _saleLineName(SaleOrderLine line) {
   return '$product - $variant';
 }
 
-String _formatMoney(double value) => '${value.toStringAsFixed(2)} د.ل';
+String _formatMoney(double value) =>
+    '${value.toStringAsFixed(2)} $currencySymbol';
 
 /// Whole quantities render bare ("2"); fractional keep up to three places with
 /// trailing zeros trimmed ("1.5"), so the invoice never shows "2.0".

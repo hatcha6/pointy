@@ -26,6 +26,8 @@ class ShopSettings {
     this.enableProductionOperations = false,
     this.enableKitchenOperations = false,
     this.enableJobTracking = false,
+    this.currencyCode = 'LYD',
+    this.currencySymbol = 'د.ل',
     this.logoAttachment,
   });
 
@@ -51,6 +53,8 @@ class ShopSettings {
   final bool enableProductionOperations;
   final bool enableKitchenOperations;
   final bool enableJobTracking;
+  final String currencyCode;
+  final String currencySymbol;
   final AttachmentSummary? logoAttachment;
 
   factory ShopSettings.fromJson(Map<String, Object?> json) {
@@ -114,6 +118,8 @@ class ShopSettings {
         false,
       ),
       enableJobTracking: _boolFromJson(json['enable_job_tracking'], false),
+      currencyCode: json['currency_code']?.toString() ?? 'LYD',
+      currencySymbol: json['currency_symbol']?.toString() ?? 'د.ل',
       logoAttachment: logoJson is Map<String, Object?>
           ? AttachmentSummary.fromJson(logoJson)
           : null,
