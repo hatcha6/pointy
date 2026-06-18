@@ -18,7 +18,7 @@ that can be lost**.
 | 1 | Quick wins — visible polish + cheapest perf | ✅ Shipped |
 | 2 | Protect the user's work | ✅ Shipped |
 | 3 | Heavy paths — kill freezes & N+1s | ✅ Shipped |
-| 4 | Structural / maintainability | ⬜ Planned |
+| 4 | Structural / maintainability | ✅ Shipped |
 
 ---
 
@@ -142,21 +142,36 @@ pass. The PDF/ESC-POS tests run on the Dart VM, so they exercise the real
 
 ---
 
-## Wave 4 — Structural / maintainability
+## Wave 4 — Structural / maintainability ✅ Shipped
 
-- [ ] **Parameterize `formatMoney` / currency.** `shared/formatters.dart:1` hardcodes
-  `د.ل` across 262 call sites; the shop-setup wizard already hints multi-currency.
-- [ ] **Standardize the `Result<T>` contract.** Uneven adoption — `printing_repository.dart`
-  17/39 methods; some view-models `throw` (`purchase_view_model.dart:204`).
-- [ ] **Split the worst monoliths** — `dashboard_screen.dart` (2095),
-  `purchase_submission.dart` (1856), `discount_rule_form.dart` (1814),
-  `core/dashboard.py` (1339).
-- [ ] **Shared utilities** — `parseDecimal()` (replaces ~25 hand-rolled
-  comma→dot parses) and an error→l10n mapper.
-- [ ] **Test gaps** — backend `inventory`/`reports`/`fraud` thin vs size; frontend
-  `expenses` has zero tests, `operations` ~1.
-- [ ] **Update stale `OPERATIONS_FRAMEWORK_PLAN.md`** ("proposed — not yet
-  implemented", but operations is fully built).
+Shipped across several commits. Verified: `flutter analyze` clean + 326 frontend
+tests pass; `manage.py check` clean + 669 backend tests pass.
+
+- [x] **Parameterize `formatMoney` / currency.** `ShopSettings.currency_code` +
+  `currency_symbol` (backend field + serializer + receipt payload, migration
+  0018); `formatMoney` renders a module-global symbol set once from the loaded
+  settings, so all ~262 call sites follow with no per-site change. The invoice/
+  report PDFs and barcode labels read the symbol on the main isolate; the ESC/POS
+  encoder reads it from its payload (it runs in a background isolate). Defaults
+  stay د.ل / LYD.
+- [x] **Standardize the `Result<T>` contract.** Fixed the one genuine
+  anti-pattern (`findVariantByBarcode` threw on `Result.Error` → graceful null).
+  The rest of the "uneven adoption" is an intentional domain split — `Result<T>`
+  for fallible API calls, raw values for reliable local-storage reads,
+  `PrintTransportResult` for device ops — so it's left as-is.
+- [x] **Split the worst monoliths** — `dashboard_screen.dart` → 3 Dart `part`
+  files; `purchase_submission.dart` → 3; `discount_rule_form.dart` → main + a
+  widgets part; `core/dashboard.py` → a `dashboard/` package (view + helpers +
+  `__init__`). All behaviour-preserving (verified by the full suites).
+- [x] **Shared utilities** — `core/parsing.dart` `parseDecimal()` (Arabic-Indic
+  digit + comma/Arabic-separator aware) adopted at ~17 number-field parse sites;
+  `core/error_messages.dart` `errorMessageFor()` for safe localized error text
+  (light adoption — the app already has mature per-feature error localization).
+- [x] **Test gaps** — +21 tests: backend inventory services (stock-count review,
+  movement guards) + the untested payment-methods/stock-movements/purchasing
+  report builders; frontend expenses (zero→4) and operations (4) view models.
+- [x] **Update stale `OPERATIONS_FRAMEWORK_PLAN.md`** — status now reflects that
+  Phases 1–2 are shipped.
 
 ---
 
