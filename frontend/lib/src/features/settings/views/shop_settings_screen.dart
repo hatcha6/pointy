@@ -21,6 +21,8 @@ import '../../../shared/responsive/responsive.dart';
 import '../../../shared/shell/shell.dart';
 import '../../attendance/view_models/attendance_view_model.dart';
 import '../../attendance/views/attendance_settings_page.dart';
+import '../../migration/view_models/migration_view_model.dart';
+import '../../migration/views/data_migration_page.dart';
 import '../../operations/view_models/workflows_view_model.dart';
 import '../view_models/modifier_groups_view_model.dart';
 import '../view_models/prep_stations_view_model.dart';
@@ -44,6 +46,7 @@ class ShopSettingsScreen extends StatelessWidget {
     required this.prepStationsViewModel,
     required this.modifierGroupsViewModel,
     required this.attendanceViewModel,
+    required this.migrationViewModel,
     required this.capabilities,
     required this.navigation,
   });
@@ -55,6 +58,7 @@ class ShopSettingsScreen extends StatelessWidget {
   final PrepStationsViewModel prepStationsViewModel;
   final ModifierGroupsViewModel modifierGroupsViewModel;
   final AttendanceViewModel attendanceViewModel;
+  final MigrationViewModel migrationViewModel;
   final AuthorizationCapabilities capabilities;
   final AppNavigation navigation;
 
@@ -97,6 +101,7 @@ class ShopSettingsScreen extends StatelessWidget {
               prepStationsViewModel: prepStationsViewModel,
               modifierGroupsViewModel: modifierGroupsViewModel,
               attendanceViewModel: attendanceViewModel,
+              migrationViewModel: migrationViewModel,
               canManageSalesChannels: capabilities.canManageSalesChannels,
               canManagePriceCheckers: capabilities.canManagePriceCheckers,
               canManageWorkflows: capabilities.canManageWorkflows,
@@ -118,6 +123,7 @@ class _ShopSettingsBody extends StatelessWidget {
     required this.prepStationsViewModel,
     required this.modifierGroupsViewModel,
     required this.attendanceViewModel,
+    required this.migrationViewModel,
     required this.canManageSalesChannels,
     required this.canManagePriceCheckers,
     required this.canManageWorkflows,
@@ -131,6 +137,7 @@ class _ShopSettingsBody extends StatelessWidget {
   final PrepStationsViewModel prepStationsViewModel;
   final ModifierGroupsViewModel modifierGroupsViewModel;
   final AttendanceViewModel attendanceViewModel;
+  final MigrationViewModel migrationViewModel;
   final bool canManageSalesChannels;
   final bool canManagePriceCheckers;
   final bool canManageWorkflows;
@@ -169,6 +176,7 @@ class _ShopSettingsBody extends StatelessWidget {
       prepStationsViewModel: prepStationsViewModel,
       modifierGroupsViewModel: modifierGroupsViewModel,
       attendanceViewModel: attendanceViewModel,
+      migrationViewModel: migrationViewModel,
       canManageSalesChannels: canManageSalesChannels,
       canManagePriceCheckers: canManagePriceCheckers,
       canManageWorkflows: canManageWorkflows,
@@ -187,6 +195,7 @@ class _ShopSettingsForm extends StatefulWidget {
     required this.prepStationsViewModel,
     required this.modifierGroupsViewModel,
     required this.attendanceViewModel,
+    required this.migrationViewModel,
     required this.canManageSalesChannels,
     required this.canManagePriceCheckers,
     required this.canManageWorkflows,
@@ -201,6 +210,7 @@ class _ShopSettingsForm extends StatefulWidget {
   final PrepStationsViewModel prepStationsViewModel;
   final ModifierGroupsViewModel modifierGroupsViewModel;
   final AttendanceViewModel attendanceViewModel;
+  final MigrationViewModel migrationViewModel;
   final bool canManageSalesChannels;
   final bool canManagePriceCheckers;
   final bool canManageWorkflows;
@@ -496,6 +506,14 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
                           onTap: widget.viewModel.isSaving
                               ? null
                               : () => _openBackupOperations(context),
+                        ),
+                        PointySettingsTile(
+                          icon: Icons.cloud_sync_outlined,
+                          title: l10n.migrationTitle,
+                          subtitle: l10n.migrationSubtitle,
+                          onTap: widget.viewModel.isSaving
+                              ? null
+                              : () => _openDataMigration(context),
                         ),
                         PointySettingsTile(
                           icon: Icons.file_download_outlined,
@@ -1159,6 +1177,15 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
       MaterialPageRoute<void>(
         builder: (routeContext) =>
             _BackupOperationsPage(viewModel: widget.viewModel),
+      ),
+    );
+  }
+
+  Future<void> _openDataMigration(BuildContext context) {
+    return Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (routeContext) =>
+            DataMigrationPage(viewModel: widget.migrationViewModel),
       ),
     );
   }

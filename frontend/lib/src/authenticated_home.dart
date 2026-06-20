@@ -525,6 +525,7 @@ class _AuthenticatedRoutes implements AppNavigation {
           analyticsEngine: dependencies.analyticsEngine,
         ),
         attendanceViewModel: dependencies.attendanceViewModel,
+        migrationViewModel: dependencies.migrationViewModel,
         capabilities: capabilities,
         navigation: this,
       ),

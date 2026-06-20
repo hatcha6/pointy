@@ -1,0 +1,209 @@
+"""Catalog loaders: units, categories, products, variants."""
+
+from __future__ import annotations
+
+from decimal import Decimal
+
+from apps.catalog.models import (
+    Product,
+    ProductCategory,
+    ProductVariant,
+    UnitDimension,
+    UnitOfMeasure,
+    normalize_barcode,
+    normalize_sku,
+)
+
+from ..entity_plan import CATEGORY, PRODUCT, UNIT, VARIANT
+from .base import (
+    CREATED,
+    UPDATED,
+    WARNING,
+    BaseLoader,
+    Issue,
+    LoaderError,
+    LoadOutcome,
+    clean_str,
+    to_bool,
+)
+
+_VALID_DIMENSIONS = set(UnitDimension.values)
+
+
+class UnitLoader(BaseLoader):
+    entity_type = UNIT
+
+    def load(self, record, resolver, *, dry_run):
+        code = clean_str(record.code).lower()
+        if not code:
+            raise LoaderError("Unit code is required.", code="missing_code")
+        name = clean_str(record.name) or code
+        dimension = (
+            record.dimension if record.dimension in _VALID_DIMENSIONS else UnitDimension.COUNT
+        )
+
+        instance = resolver.existing(UnitOfMeasure, self.entity_type, record.source_key)
+        if instance is None:
+            instance = UnitOfMeasure.objects.filter(code=code).first()
+        action = UPDATED if instance is not None else CREATED
+        if instance is None:
+            instance = UnitOfMeasure()
+        instance.code = code
+        instance.name = name
+        instance.abbreviation = clean_str(record.abbreviation)
+        instance.dimension = dimension
+        instance.allows_fractional = to_bool(record.allows_fractional, default=False)
+        instance.save()
+        resolver.remember(self.entity_type, record.source_key, instance)
+        return LoadOutcome(action, instance.pk)
+
+
+class CategoryLoader(BaseLoader):
+    entity_type = CATEGORY
+
+    def load(self, record, resolver, *, dry_run):
+        name = clean_str(record.name)
+        if not name:
+            raise LoaderError("Category name is required.", code="missing_name")
+
+        issues: list[Issue] = []
+        parent = None
+        if record.parent_source_key:
+            parent = resolver.existing(ProductCategory, CATEGORY, record.parent_source_key)
+            if parent is None:
+                issues.append(
+                    Issue(
+                        WARNING,
+                        "unresolved_parent",
+                        "Parent category not found; imported at the top level.",
+                        source_key=str(record.source_key),
+                    )
+                )
+
+        instance = resolver.existing(ProductCategory, self.entity_type, record.source_key)
+        if instance is None:
+            instance = ProductCategory.objects.filter(parent=parent, name=name).first()
+        action = UPDATED if instance is not None else CREATED
+        if instance is None:
+            instance = ProductCategory()
+        instance.name = name
+        instance.parent = parent
+        instance.description = clean_str(record.description)
+        instance.is_active = to_bool(record.is_active)
+        instance.save()
+        resolver.remember(self.entity_type, record.source_key, instance)
+        return LoadOutcome(action, instance.pk, issues)
+
+
+class ProductLoader(BaseLoader):
+    entity_type = PRODUCT
+
+    def load(self, record, resolver, *, dry_run):
+        name = clean_str(record.name)
+        if not name:
+            raise LoaderError("Product name is required.", code="missing_name")
+
+        issues: list[Issue] = []
+        instance = resolver.existing(Product, self.entity_type, record.source_key)
+        action = UPDATED if instance is not None else CREATED
+        if instance is None:
+            instance = Product()
+        instance.name = name
+        instance.description = clean_str(record.description)
+        instance.unit = clean_str(record.unit) or Product.Unit.PIECE
+        instance.is_active = to_bool(record.is_active)
+        instance.is_service = to_bool(record.is_service, default=False)
+        instance.is_prepared = to_bool(record.is_prepared, default=False)
+        instance.save()
+
+        # Categories (resolved through the identity map; unresolved ones warn).
+        category_ids = []
+        for category_key in record.category_source_keys or []:
+            category = resolver.existing(ProductCategory, CATEGORY, category_key)
+            if category is None:
+                issues.append(
+                    Issue(
+                        WARNING,
+                        "unresolved_category",
+                        f"Category {category_key!r} not found; skipped.",
+                        source_key=str(record.source_key),
+                    )
+                )
+            else:
+                category_ids.append(category.pk)
+        instance.categories.set(category_ids)
+
+        resolver.remember(self.entity_type, record.source_key, instance)
+
+        # Product-level pricing (no separate variant table in the source): create
+        # the sellable default variant and register it under the VARIANT key with
+        # the product's source key, so stock/sales can resolve it.
+        if record.unit_price is not None or record.sku or record.barcode:
+            variant = instance.ensure_default_variant(
+                name="",
+                sku=normalize_sku(record.sku),
+                barcode=normalize_barcode(record.barcode),
+                unit_price=record.unit_price if record.unit_price is not None else Decimal("0"),
+                is_active=instance.is_active,
+            )
+            if variant is not None:
+                resolver.remember(VARIANT, record.source_key, variant)
+
+        return LoadOutcome(action, instance.pk, issues)
+
+
+class VariantLoader(BaseLoader):
+    entity_type = VARIANT
+
+    def load(self, record, resolver, *, dry_run):
+        product = resolver.existing(Product, PRODUCT, record.product_source_key)
+        if product is None:
+            raise LoaderError(
+                f"Variant references unknown product {record.product_source_key!r}.",
+                code="unresolved_product",
+            )
+        sku = normalize_sku(record.sku)
+        if not sku:
+            raise LoaderError("Variant SKU is required.", code="missing_sku")
+        barcode = normalize_barcode(record.barcode)
+
+        issues: list[Issue] = []
+        instance = resolver.existing(ProductVariant, self.entity_type, record.source_key)
+        if instance is None:
+            instance = ProductVariant.objects.filter(sku=sku).first()
+        if instance is None and barcode:
+            instance = ProductVariant.objects.filter(barcode=barcode).first()
+        action = UPDATED if instance is not None else CREATED
+        if instance is None:
+            instance = ProductVariant(product=product)
+
+        # Only one default variant per product is allowed; don't fight an
+        # existing default — downgrade and warn instead of failing the row.
+        is_default = bool(record.is_default)
+        if is_default:
+            clash = (
+                ProductVariant.objects.filter(product=product, is_default=True)
+                .exclude(pk=instance.pk)
+                .exists()
+            )
+            if clash:
+                is_default = False
+                issues.append(
+                    Issue(
+                        WARNING,
+                        "default_variant_exists",
+                        "Product already has a default variant; imported as non-default.",
+                        source_key=str(record.source_key),
+                    )
+                )
+
+        instance.product = product
+        instance.name = clean_str(record.name)
+        instance.sku = sku
+        instance.barcode = barcode
+        instance.unit_price = record.unit_price
+        instance.is_active = to_bool(record.is_active)
+        instance.is_default = is_default
+        instance.save()
+        resolver.remember(self.entity_type, record.source_key, instance)
+        return LoadOutcome(action, instance.pk, issues)

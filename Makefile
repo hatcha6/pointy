@@ -269,6 +269,9 @@ frontend-theme-preview: frontend-install ## Run the light/dark theme gallery pre
 frontend-shop-setup-preview: frontend-install ## Run the first-run shop-setup wizard preview harness as a local web server.
 	cd "$(FRONTEND_DIR)" && $(FLUTTER) run -d web-server --web-hostname $(WEB_HOST) --web-port $(WEB_PORT) -t lib/dev/shop_setup_preview.dart
 
+frontend-migration-preview: frontend-install ## Run the data-migration settings UI preview harness as a local web server.
+	cd "$(FRONTEND_DIR)" && $(FLUTTER) run -d web-server --web-hostname $(WEB_HOST) --web-port $(WEB_PORT) -t lib/dev/migration_preview.dart
+
 frontend-test: frontend-install ## Run Flutter tests.
 	cd "$(FRONTEND_DIR)" && $(FLUTTER) test
 

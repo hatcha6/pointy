@@ -39,6 +39,7 @@ import '../models/fraud_finding.dart';
 import '../models/purchase_submission.dart';
 import '../models/query.dart';
 import '../models/register_cash_movement.dart';
+import '../models/migration.dart';
 import '../models/register_cash_movement_page.dart';
 import '../models/register_session.dart';
 import '../models/register_session_page.dart';
@@ -86,6 +87,7 @@ import 'operations_api_client.dart';
 import 'pos_http_client.dart';
 import 'price_checker_api_client.dart';
 import 'printing_api_client.dart';
+import 'migration_api_client.dart';
 import 'purchasing_api_client.dart';
 import 'register_session_api_client.dart';
 import 'relay_api_client.dart';
@@ -112,6 +114,7 @@ class PosApiService {
     );
     _analytics = AnalyticsApiClient(_session);
     _attendance = AttendanceApiClient(_session);
+    _migration = MigrationApiClient(_session);
     _auth = AuthApiClient(_session);
     _businessNotifications = BusinessNotificationApiClient(_session);
     _users = UserApiClient(_session);
@@ -145,6 +148,7 @@ class PosApiService {
 
   late final PosApiSession _session;
   late final AttendanceApiClient _attendance;
+  late final MigrationApiClient _migration;
   late final AuthApiClient _auth;
   late final BusinessNotificationApiClient _businessNotifications;
   late final AnalyticsApiClient _analytics;
@@ -340,6 +344,58 @@ class PosApiService {
 
   Future<PayrollDraftResult> draftMonthlyPayrollRun() {
     return _employees.draftMonthlyPayrollRun();
+  }
+
+  Future<MigrationCatalog> fetchMigrationCatalog() {
+    return _migration.fetchCatalog();
+  }
+
+  Future<List<MigrationSource>> fetchMigrationSources() {
+    return _migration.fetchSources();
+  }
+
+  Future<MigrationSource> createMigrationSource(MigrationSourceDraft draft) {
+    return _migration.createSource(draft);
+  }
+
+  Future<MigrationSource> updateMigrationSource(int id, MigrationSourceDraft draft) {
+    return _migration.updateSource(id, draft);
+  }
+
+  Future<void> deleteMigrationSource(int id) {
+    return _migration.deleteSource(id);
+  }
+
+  Future<MigrationConnectionTest> testMigrationConnection(int id) {
+    return _migration.testConnection(id);
+  }
+
+  Future<CompatibilityReport> checkMigrationCompatibility(int id) {
+    return _migration.checkCompatibility(id);
+  }
+
+  Future<MigrationRun> startMigrationRun({
+    required int sourceId,
+    required String mode,
+    required List<String> entities,
+  }) {
+    return _migration.startRun(sourceId: sourceId, mode: mode, entities: entities);
+  }
+
+  Future<MigrationRun> fetchMigrationRun(int id) {
+    return _migration.fetchRun(id);
+  }
+
+  Future<List<MigrationRun>> fetchMigrationRuns({int? sourceId}) {
+    return _migration.fetchRuns(sourceId: sourceId);
+  }
+
+  Future<MigrationIssuePage> fetchMigrationIssues(
+    int runId, {
+    int page = 1,
+    String? severity,
+  }) {
+    return _migration.fetchIssues(runId, page: page, severity: severity);
   }
 
   Future<AttendanceConfig> fetchAttendanceConfig() {

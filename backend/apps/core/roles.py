@@ -55,6 +55,7 @@ MANAGER_PERMISSION_DOMAINS = (
     "employees",
     "attendance",
     "expenses",
+    "migration",
 )
 USER_PERMISSION_CODES = (
     "auth.add_user",

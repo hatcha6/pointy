@@ -10881,4 +10881,165 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get aiAssistantAskUserPendingComposer =>
       'أجب عن السؤال أعلاه للمتابعة';
+
+  @override
+  String get migrationTitle => 'نقل البيانات';
+
+  @override
+  String get migrationSubtitle => 'استيراد بياناتك من نظام نقاط البيع القديم';
+
+  @override
+  String get migrationHeroDescription =>
+      'انقل منتجاتك وفئاتك وعملاءك ومورّديك ومخزونك من نظامك القديم إلى Pointy.';
+
+  @override
+  String get migrationLoadError => 'تعذّر تحميل أدوات النقل';
+
+  @override
+  String get migrationConnectionSectionTitle =>
+      'الاتصال بقاعدة البيانات القديمة';
+
+  @override
+  String get migrationConnectionSectionSubtitle =>
+      'اختر نظامك القديم وأدخل بيانات الاتصال بقاعدة بياناته.';
+
+  @override
+  String get migrationSourceNameLabel => 'اسم مصدر البيانات';
+
+  @override
+  String get migrationSystemLabel => 'النظام القديم';
+
+  @override
+  String get migrationStubSystemNotice =>
+      'هذا النظام متاح لفحص التوافق فقط حاليًا؛ سيُفعَّل الاستيراد لاحقًا.';
+
+  @override
+  String get migrationDatabaseFileLabel => 'مسار ملف قاعدة البيانات';
+
+  @override
+  String get migrationHostLabel => 'المضيف';
+
+  @override
+  String get migrationPortLabel => 'المنفذ';
+
+  @override
+  String get migrationDatabaseLabel => 'قاعدة البيانات';
+
+  @override
+  String get migrationUsernameLabel => 'اسم المستخدم';
+
+  @override
+  String get migrationPasswordLabel => 'كلمة المرور';
+
+  @override
+  String get migrationPasswordKeepHint =>
+      'اتركها فارغة للإبقاء على كلمة المرور المحفوظة';
+
+  @override
+  String get migrationSaveSourceButton => 'حفظ المصدر';
+
+  @override
+  String get migrationTestButton => 'اختبار الاتصال';
+
+  @override
+  String get migrationCheckButton => 'فحص التوافق';
+
+  @override
+  String migrationTestSuccess(int count) {
+    return 'تم الاتصال — $count جدول';
+  }
+
+  @override
+  String get migrationTestFailed => 'فشل الاتصال بقاعدة البيانات';
+
+  @override
+  String get migrationCompatTitle => 'التوافق';
+
+  @override
+  String get migrationNotChecked => 'لم يتم فحص التوافق بعد';
+
+  @override
+  String get migrationCompatibleMessage =>
+      'قاعدة البيانات متوافقة وجاهزة للنقل.';
+
+  @override
+  String get migrationIncompatibleMessage =>
+      'قاعدة البيانات غير متوافقة مع هذا النظام.';
+
+  @override
+  String migrationDetectedVersion(String version) {
+    return 'الإصدار المكتشف: $version';
+  }
+
+  @override
+  String get migrationCompatible => 'متوافق';
+
+  @override
+  String get migrationIncompatible => 'غير متوافق';
+
+  @override
+  String get migrationMissingTables => 'جداول مفقودة';
+
+  @override
+  String get migrationEntitiesSectionTitle => 'البيانات المراد نقلها';
+
+  @override
+  String get migrationEntitiesSectionSubtitle =>
+      'اختر أنواع البيانات التي تريد نقلها.';
+
+  @override
+  String get migrationRunSectionTitle => 'النقل';
+
+  @override
+  String get migrationRunningLabel => 'جارٍ التنفيذ…';
+
+  @override
+  String get migrationDryRunHint =>
+      'نفّذ تشغيلًا تجريبيًا أولًا للتحقق من البيانات قبل النقل الفعلي.';
+
+  @override
+  String get migrationRunSucceeded => 'اكتمل بنجاح';
+
+  @override
+  String get migrationRunPartial => 'اكتمل مع وجود مشكلات';
+
+  @override
+  String get migrationRunFailed => 'فشل';
+
+  @override
+  String get migrationSummaryCreated => 'جديد';
+
+  @override
+  String get migrationSummaryUpdated => 'محدّث';
+
+  @override
+  String get migrationSummaryFailed => 'فاشل';
+
+  @override
+  String get migrationViewIssuesButton => 'عرض المشكلات';
+
+  @override
+  String get migrationImportGatedHint =>
+      'أكمِل تشغيلًا تجريبيًا ناجحًا بلا أخطاء لتفعيل النقل.';
+
+  @override
+  String get migrationImportButton => 'بدء النقل';
+
+  @override
+  String get migrationDryRunButton => 'تشغيل تجريبي';
+
+  @override
+  String get migrationSourceSaved => 'تم حفظ المصدر';
+
+  @override
+  String get migrationSourceSaveError => 'تعذّر حفظ المصدر';
+
+  @override
+  String get migrationRunStartError => 'تعذّر بدء العملية';
+
+  @override
+  String get migrationDryRunStarted => 'بدأ التشغيل التجريبي';
+
+  @override
+  String get migrationImportStarted => 'بدأ النقل';
 }

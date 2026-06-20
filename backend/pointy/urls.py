@@ -14,6 +14,11 @@ from apps.attendance.views import (
     BioTimeSyncView,
     BioTimeTestConnectionView,
 )
+from apps.migration.views import (
+    MigrationRunViewSet,
+    MigrationSourceViewSet,
+    MigrationSystemsView,
+)
 from apps.catalog.views import (
     ModifierGroupViewSet,
     ProductCategoryViewSet,
@@ -177,6 +182,16 @@ router.register(
 )
 router.register("attendance/days", AttendanceDayViewSet, basename="attendance-day")
 router.register(
+    "migration/sources",
+    MigrationSourceViewSet,
+    basename="migration-source",
+)
+router.register(
+    "migration/runs",
+    MigrationRunViewSet,
+    basename="migration-run",
+)
+router.register(
     "attachment-storage-volumes",
     StorageVolumeViewSet,
     basename="storagevolume",
@@ -257,6 +272,11 @@ urlpatterns = [
         name="attendance-connection-test",
     ),
     path("api/attendance/sync/", BioTimeSyncView.as_view(), name="attendance-sync"),
+    path(
+        "api/migration/systems/",
+        MigrationSystemsView.as_view(),
+        name="migration-systems",
+    ),
     path("api/shop-settings/", ShopSettingsView.as_view(), name="shop-settings"),
     path("api/shop-settings/setup/", ShopSetupView.as_view(), name="shop-setup"),
     path(

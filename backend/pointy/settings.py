@@ -87,6 +87,7 @@ INSTALLED_APPS = [
     "apps.expenses",
     "apps.price_checker",
     "apps.ai",
+    "apps.migration",
 ]
 
 MIDDLEWARE = [

@@ -18863,6 +18863,300 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'أجب عن السؤال أعلاه للمتابعة'**
   String get aiAssistantAskUserPendingComposer;
+
+  /// No description provided for @migrationTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'نقل البيانات'**
+  String get migrationTitle;
+
+  /// No description provided for @migrationSubtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'استيراد بياناتك من نظام نقاط البيع القديم'**
+  String get migrationSubtitle;
+
+  /// No description provided for @migrationHeroDescription.
+  ///
+  /// In ar, this message translates to:
+  /// **'انقل منتجاتك وفئاتك وعملاءك ومورّديك ومخزونك من نظامك القديم إلى Pointy.'**
+  String get migrationHeroDescription;
+
+  /// No description provided for @migrationLoadError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر تحميل أدوات النقل'**
+  String get migrationLoadError;
+
+  /// No description provided for @migrationConnectionSectionTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'الاتصال بقاعدة البيانات القديمة'**
+  String get migrationConnectionSectionTitle;
+
+  /// No description provided for @migrationConnectionSectionSubtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر نظامك القديم وأدخل بيانات الاتصال بقاعدة بياناته.'**
+  String get migrationConnectionSectionSubtitle;
+
+  /// No description provided for @migrationSourceNameLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'اسم مصدر البيانات'**
+  String get migrationSourceNameLabel;
+
+  /// No description provided for @migrationSystemLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'النظام القديم'**
+  String get migrationSystemLabel;
+
+  /// No description provided for @migrationStubSystemNotice.
+  ///
+  /// In ar, this message translates to:
+  /// **'هذا النظام متاح لفحص التوافق فقط حاليًا؛ سيُفعَّل الاستيراد لاحقًا.'**
+  String get migrationStubSystemNotice;
+
+  /// No description provided for @migrationDatabaseFileLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'مسار ملف قاعدة البيانات'**
+  String get migrationDatabaseFileLabel;
+
+  /// No description provided for @migrationHostLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'المضيف'**
+  String get migrationHostLabel;
+
+  /// No description provided for @migrationPortLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'المنفذ'**
+  String get migrationPortLabel;
+
+  /// No description provided for @migrationDatabaseLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'قاعدة البيانات'**
+  String get migrationDatabaseLabel;
+
+  /// No description provided for @migrationUsernameLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'اسم المستخدم'**
+  String get migrationUsernameLabel;
+
+  /// No description provided for @migrationPasswordLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'كلمة المرور'**
+  String get migrationPasswordLabel;
+
+  /// No description provided for @migrationPasswordKeepHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'اتركها فارغة للإبقاء على كلمة المرور المحفوظة'**
+  String get migrationPasswordKeepHint;
+
+  /// No description provided for @migrationSaveSourceButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'حفظ المصدر'**
+  String get migrationSaveSourceButton;
+
+  /// No description provided for @migrationTestButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختبار الاتصال'**
+  String get migrationTestButton;
+
+  /// No description provided for @migrationCheckButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'فحص التوافق'**
+  String get migrationCheckButton;
+
+  /// No description provided for @migrationTestSuccess.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم الاتصال — {count} جدول'**
+  String migrationTestSuccess(int count);
+
+  /// No description provided for @migrationTestFailed.
+  ///
+  /// In ar, this message translates to:
+  /// **'فشل الاتصال بقاعدة البيانات'**
+  String get migrationTestFailed;
+
+  /// No description provided for @migrationCompatTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'التوافق'**
+  String get migrationCompatTitle;
+
+  /// No description provided for @migrationNotChecked.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم يتم فحص التوافق بعد'**
+  String get migrationNotChecked;
+
+  /// No description provided for @migrationCompatibleMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'قاعدة البيانات متوافقة وجاهزة للنقل.'**
+  String get migrationCompatibleMessage;
+
+  /// No description provided for @migrationIncompatibleMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'قاعدة البيانات غير متوافقة مع هذا النظام.'**
+  String get migrationIncompatibleMessage;
+
+  /// No description provided for @migrationDetectedVersion.
+  ///
+  /// In ar, this message translates to:
+  /// **'الإصدار المكتشف: {version}'**
+  String migrationDetectedVersion(String version);
+
+  /// No description provided for @migrationCompatible.
+  ///
+  /// In ar, this message translates to:
+  /// **'متوافق'**
+  String get migrationCompatible;
+
+  /// No description provided for @migrationIncompatible.
+  ///
+  /// In ar, this message translates to:
+  /// **'غير متوافق'**
+  String get migrationIncompatible;
+
+  /// No description provided for @migrationMissingTables.
+  ///
+  /// In ar, this message translates to:
+  /// **'جداول مفقودة'**
+  String get migrationMissingTables;
+
+  /// No description provided for @migrationEntitiesSectionTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'البيانات المراد نقلها'**
+  String get migrationEntitiesSectionTitle;
+
+  /// No description provided for @migrationEntitiesSectionSubtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر أنواع البيانات التي تريد نقلها.'**
+  String get migrationEntitiesSectionSubtitle;
+
+  /// No description provided for @migrationRunSectionTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'النقل'**
+  String get migrationRunSectionTitle;
+
+  /// No description provided for @migrationRunningLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'جارٍ التنفيذ…'**
+  String get migrationRunningLabel;
+
+  /// No description provided for @migrationDryRunHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'نفّذ تشغيلًا تجريبيًا أولًا للتحقق من البيانات قبل النقل الفعلي.'**
+  String get migrationDryRunHint;
+
+  /// No description provided for @migrationRunSucceeded.
+  ///
+  /// In ar, this message translates to:
+  /// **'اكتمل بنجاح'**
+  String get migrationRunSucceeded;
+
+  /// No description provided for @migrationRunPartial.
+  ///
+  /// In ar, this message translates to:
+  /// **'اكتمل مع وجود مشكلات'**
+  String get migrationRunPartial;
+
+  /// No description provided for @migrationRunFailed.
+  ///
+  /// In ar, this message translates to:
+  /// **'فشل'**
+  String get migrationRunFailed;
+
+  /// No description provided for @migrationSummaryCreated.
+  ///
+  /// In ar, this message translates to:
+  /// **'جديد'**
+  String get migrationSummaryCreated;
+
+  /// No description provided for @migrationSummaryUpdated.
+  ///
+  /// In ar, this message translates to:
+  /// **'محدّث'**
+  String get migrationSummaryUpdated;
+
+  /// No description provided for @migrationSummaryFailed.
+  ///
+  /// In ar, this message translates to:
+  /// **'فاشل'**
+  String get migrationSummaryFailed;
+
+  /// No description provided for @migrationViewIssuesButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'عرض المشكلات'**
+  String get migrationViewIssuesButton;
+
+  /// No description provided for @migrationImportGatedHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'أكمِل تشغيلًا تجريبيًا ناجحًا بلا أخطاء لتفعيل النقل.'**
+  String get migrationImportGatedHint;
+
+  /// No description provided for @migrationImportButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'بدء النقل'**
+  String get migrationImportButton;
+
+  /// No description provided for @migrationDryRunButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'تشغيل تجريبي'**
+  String get migrationDryRunButton;
+
+  /// No description provided for @migrationSourceSaved.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم حفظ المصدر'**
+  String get migrationSourceSaved;
+
+  /// No description provided for @migrationSourceSaveError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر حفظ المصدر'**
+  String get migrationSourceSaveError;
+
+  /// No description provided for @migrationRunStartError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر بدء العملية'**
+  String get migrationRunStartError;
+
+  /// No description provided for @migrationDryRunStarted.
+  ///
+  /// In ar, this message translates to:
+  /// **'بدأ التشغيل التجريبي'**
+  String get migrationDryRunStarted;
+
+  /// No description provided for @migrationImportStarted.
+  ///
+  /// In ar, this message translates to:
+  /// **'بدأ النقل'**
+  String get migrationImportStarted;
 }
 
 class _AppLocalizationsDelegate
