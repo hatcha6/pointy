@@ -10800,4 +10800,61 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get aiAssistantToolWorking => 'يجمع البيانات';
+
+  @override
+  String get aiAssistantAskUserSubmit => 'إرسال الإجابة';
+
+  @override
+  String get aiAssistantAskUserSkip => 'تخطّي';
+
+  @override
+  String get aiAssistantAskUserOther => 'أخرى…';
+
+  @override
+  String get aiAssistantAskUserOtherHint => 'اكتب إجابتك هنا';
+
+  @override
+  String get aiAssistantAskUserTextHint => 'اكتب إجابتك';
+
+  @override
+  String get aiAssistantAskUserAnswered => 'تم إرسال إجابتك';
+
+  @override
+  String get aiAssistantAskUserSkipped => 'تم تخطّي السؤال';
+
+  @override
+  String get aiAssistantAskUserConfirmYes => 'نعم';
+
+  @override
+  String get aiAssistantAskUserConfirmNo => 'لا';
+
+  @override
+  String get aiAssistantAskUserRequired => 'هذا السؤال مطلوب';
+
+  @override
+  String get aiAssistantAskUserNumberInvalid => 'أدخل رقمًا صحيحًا';
+
+  @override
+  String aiAssistantAskUserNumberMin(String value) {
+    return 'الحد الأدنى $value';
+  }
+
+  @override
+  String aiAssistantAskUserNumberMax(String value) {
+    return 'الحد الأقصى $value';
+  }
+
+  @override
+  String aiAssistantAskUserSelectRange(int min, int max) {
+    return 'اختر من $min إلى $max';
+  }
+
+  @override
+  String aiAssistantAskUserSelectAtLeast(int min) {
+    return 'اختر $min على الأقل';
+  }
+
+  @override
+  String get aiAssistantAskUserPendingComposer =>
+      'أجب عن السؤال أعلاه للمتابعة';
 }

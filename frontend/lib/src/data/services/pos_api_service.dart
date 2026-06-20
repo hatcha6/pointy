@@ -1514,6 +1514,22 @@ class PosApiService {
     );
   }
 
+  Stream<AiChatEvent> streamAiChatResume({
+    required int conversationId,
+    required int messageId,
+    required String toolCallId,
+    List<AiAnswer> answers = const [],
+    bool declined = false,
+  }) {
+    return _ai.resumeChat(
+      conversationId: conversationId,
+      messageId: messageId,
+      toolCallId: toolCallId,
+      answers: answers,
+      declined: declined,
+    );
+  }
+
   Future<AiUsage> fetchAiUsage() {
     return _ai.fetchUsage();
   }

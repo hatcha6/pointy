@@ -156,7 +156,7 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
   }
 
   void _send() {
-    if (widget.viewModel.isStreaming) {
+    if (widget.viewModel.isStreaming || widget.viewModel.hasPendingQuestion) {
       return;
     }
     final text = _controller.text;
@@ -165,6 +165,14 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
     }
     _controller.clear();
     unawaited(widget.viewModel.sendMessage(text));
+  }
+
+  void _submitAnswer(List<AiAnswer> answers) {
+    unawaited(widget.viewModel.submitAnswer(answers));
+  }
+
+  void _skipQuestion() {
+    unawaited(widget.viewModel.skipQuestion());
   }
 
   Future<void> _openAttachSheet() async {
@@ -223,7 +231,7 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
   }
 
   void _sendSuggestion(String text) {
-    if (widget.viewModel.isStreaming) {
+    if (widget.viewModel.isStreaming || widget.viewModel.hasPendingQuestion) {
       return;
     }
     unawaited(widget.viewModel.sendMessage(text));
@@ -300,6 +308,8 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
                             onRetry: _retry,
                             onEdit: _edit,
                             onCopy: _copy,
+                            onAnswer: _submitAnswer,
+                            onSkip: _skipQuestion,
                           )
                         : _EmptyState(onSuggestion: _sendSuggestion),
                   ),
@@ -353,6 +363,8 @@ class _MessageList extends StatelessWidget {
     required this.onRetry,
     required this.onEdit,
     required this.onCopy,
+    required this.onAnswer,
+    required this.onSkip,
   });
 
   final ScrollController controller;
@@ -361,6 +373,8 @@ class _MessageList extends StatelessWidget {
   final ValueChanged<AiMessage> onRetry;
   final ValueChanged<AiMessage> onEdit;
   final ValueChanged<AiMessage> onCopy;
+  final ValueChanged<List<AiAnswer>> onAnswer;
+  final VoidCallback onSkip;
 
   @override
   Widget build(BuildContext context) {
@@ -390,6 +404,8 @@ class _MessageList extends StatelessWidget {
             message: message,
             showCopy: !isStreaming && message.content.isNotEmpty,
             onCopy: () => onCopy(message),
+            onAnswer: onAnswer,
+            onSkip: onSkip,
           );
         }
         // A stable per-message key preserves each bubble's element (and so its
@@ -489,11 +505,15 @@ class _AssistantMessage extends StatelessWidget {
     required this.message,
     required this.showCopy,
     required this.onCopy,
+    required this.onAnswer,
+    required this.onSkip,
   });
 
   final AiMessage message;
   final bool showCopy;
   final VoidCallback onCopy;
+  final ValueChanged<List<AiAnswer>> onAnswer;
+  final VoidCallback onSkip;
 
   @override
   Widget build(BuildContext context) {
@@ -524,8 +544,16 @@ class _AssistantMessage extends StatelessWidget {
                 padding: EdgeInsets.symmetric(vertical: 4),
                 child: _TypingIndicator(),
               )
-            else
+            else if (message.content.isNotEmpty)
               _AssistantText(message: message),
+            if (message.pendingQuestion != null) ...[
+              if (message.content.isNotEmpty) SizedBox(height: spacing.sm),
+              _QuestionCard(
+                message: message,
+                onSubmit: onAnswer,
+                onSkip: onSkip,
+              ),
+            ],
             if (showCopy)
               _MessageActions(
                 actions: [
@@ -646,6 +674,549 @@ class _AssistantTextState extends State<_AssistantText> {
   }
 }
 
+/// Sentinel value for the user-entered "other" option on select questions.
+const String _kQuestionOther = '__ask_user_other__';
+
+/// The interactive card for an assistant's ask_user question(s): one control per
+/// question type (single/multi-select with an "other" entry, free text, number,
+/// yes/no), validated, with Submit + Skip. On submit it builds the structured
+/// answers and resumes the agentic turn; after submitting it flips to a compact
+/// read-only summary. RTL throughout (AlignmentDirectional / pointyColors).
+class _QuestionCard extends StatefulWidget {
+  const _QuestionCard({
+    required this.message,
+    required this.onSubmit,
+    required this.onSkip,
+  });
+
+  final AiMessage message;
+  final ValueChanged<List<AiAnswer>> onSubmit;
+  final VoidCallback onSkip;
+
+  @override
+  State<_QuestionCard> createState() => _QuestionCardState();
+}
+
+class _QuestionCardState extends State<_QuestionCard> {
+  final Map<String, String?> _single = {}; // option value or _kQuestionOther
+  final Map<String, Set<String>> _multi = {};
+  final Map<String, bool?> _confirm = {};
+  final Map<String, TextEditingController> _text = {};
+  final Map<String, String?> _errors = {};
+  bool _submitting = false;
+
+  List<AiQuestion> get _questions =>
+      widget.message.pendingQuestion?.questions ?? const [];
+
+  // Every editable field (free text, number, and the "other" entry) is backed by
+  // a persisted controller so the visible text is the single source of truth —
+  // it survives the field being unmounted (e.g. deselecting then reselecting the
+  // "other" chip), so the submitted value always matches what the user sees.
+  TextEditingController _controllerFor(String id) =>
+      _text.putIfAbsent(id, TextEditingController.new);
+
+  String _otherKey(String id) => '$id::other';
+
+  @override
+  void dispose() {
+    for (final controller in _text.values) {
+      controller.dispose();
+    }
+    super.dispose();
+  }
+
+  void _submit() {
+    if (_submitting) {
+      return;
+    }
+    final l10n = AppLocalizations.of(context)!;
+    final answers = <AiAnswer>[];
+    final errors = <String, String?>{};
+    for (final question in _questions) {
+      final resolved = _resolve(question, l10n);
+      if (resolved.error != null) {
+        errors[question.id] = resolved.error;
+      } else if (resolved.answer != null) {
+        answers.add(resolved.answer!);
+      }
+    }
+    if (errors.isNotEmpty) {
+      setState(() {
+        _errors
+          ..clear()
+          ..addAll(errors);
+      });
+      return;
+    }
+    setState(() => _submitting = true);
+    widget.onSubmit(answers);
+  }
+
+  ({AiAnswer? answer, String? error}) _resolve(
+    AiQuestion question,
+    AppLocalizations l10n,
+  ) {
+    String? required() => question.isRequired ? l10n.aiAssistantAskUserRequired : null;
+    switch (question.type) {
+      case AiQuestionType.singleSelect:
+        final selected = _single[question.id];
+        if (selected == null) {
+          return (answer: null, error: required());
+        }
+        if (selected == _kQuestionOther) {
+          final text = _controllerFor(_otherKey(question.id)).text.trim();
+          if (text.isEmpty) {
+            return (answer: null, error: l10n.aiAssistantAskUserRequired);
+          }
+          return (
+            answer: AiAnswer(
+              questionId: question.id,
+              type: question.type,
+              value: text,
+              isOther: true,
+            ),
+            error: null,
+          );
+        }
+        return (
+          answer: AiAnswer(
+            questionId: question.id,
+            type: question.type,
+            value: selected,
+          ),
+          error: null,
+        );
+      case AiQuestionType.multiSelect:
+        final set = _multi[question.id] ?? const <String>{};
+        final hasOther = set.contains(_kQuestionOther);
+        final otherText = _controllerFor(_otherKey(question.id)).text.trim();
+        if (hasOther && otherText.isEmpty) {
+          return (answer: null, error: l10n.aiAssistantAskUserRequired);
+        }
+        final values = set.where((v) => v != _kQuestionOther).toList();
+        final count = values.length + (hasOther ? 1 : 0);
+        final minSelect = question.minSelect ?? (question.isRequired ? 1 : 0);
+        if (count < minSelect) {
+          final error = question.maxSelect != null
+              ? l10n.aiAssistantAskUserSelectRange(minSelect, question.maxSelect!)
+              : l10n.aiAssistantAskUserSelectAtLeast(minSelect);
+          return (answer: null, error: count == 0 ? required() ?? error : error);
+        }
+        if (question.maxSelect != null && count > question.maxSelect!) {
+          return (
+            answer: null,
+            error: l10n.aiAssistantAskUserSelectRange(minSelect, question.maxSelect!),
+          );
+        }
+        return (
+          answer: AiAnswer(
+            questionId: question.id,
+            type: question.type,
+            values: values,
+            otherText: hasOther ? otherText : null,
+            isOther: hasOther,
+          ),
+          error: null,
+        );
+      case AiQuestionType.confirm:
+        final value = _confirm[question.id];
+        if (value == null) {
+          return (answer: null, error: required());
+        }
+        return (
+          answer: AiAnswer(questionId: question.id, type: question.type, value: value),
+          error: null,
+        );
+      case AiQuestionType.number:
+        final raw = _controllerFor(question.id).text.trim();
+        if (raw.isEmpty) {
+          return (answer: null, error: required());
+        }
+        final parsed = num.tryParse(raw);
+        if (parsed == null) {
+          return (answer: null, error: l10n.aiAssistantAskUserNumberInvalid);
+        }
+        if (question.min != null && parsed < question.min!) {
+          return (
+            answer: null,
+            error: l10n.aiAssistantAskUserNumberMin('${question.min}'),
+          );
+        }
+        if (question.max != null && parsed > question.max!) {
+          return (
+            answer: null,
+            error: l10n.aiAssistantAskUserNumberMax('${question.max}'),
+          );
+        }
+        // Honour an integer question (decimals: 0) — reject a fractional value.
+        if (question.decimals == 0 && parsed != parsed.truncate()) {
+          return (answer: null, error: l10n.aiAssistantAskUserNumberInvalid);
+        }
+        return (
+          answer: AiAnswer(questionId: question.id, type: question.type, value: parsed),
+          error: null,
+        );
+      case AiQuestionType.freeText:
+      case AiQuestionType.unknown:
+        final text = _controllerFor(question.id).text.trim();
+        if (text.isEmpty) {
+          return (answer: null, error: required());
+        }
+        return (
+          answer: AiAnswer(questionId: question.id, type: question.type, value: text),
+          error: null,
+        );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.pointyColors;
+    final spacing = AdaptiveSpacing.of(context);
+    final answered = widget.message.submittedAnswers != null;
+
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(top: 2),
+      padding: EdgeInsets.all(spacing.md),
+      decoration: BoxDecoration(
+        color: colors.surface,
+        borderRadius: BorderRadius.circular(PointyRadii.card),
+        border: Border.all(color: colors.line),
+      ),
+      child: answered
+          ? _AnswerSummary(message: widget.message)
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (var i = 0; i < _questions.length; i++) ...[
+                  if (i > 0) Divider(height: spacing.lg * 1.4, color: colors.line),
+                  _buildQuestion(_questions[i]),
+                ],
+                SizedBox(height: spacing.md),
+                _buildActions(),
+              ],
+            ),
+    );
+  }
+
+  Widget _buildQuestion(AiQuestion question) {
+    final colors = context.pointyColors;
+    final spacing = AdaptiveSpacing.of(context);
+    final textTheme = Theme.of(context).textTheme;
+    final error = _errors[question.id];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          question.prompt,
+          style: textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
+        ),
+        if (question.help != null) ...[
+          SizedBox(height: spacing.xs),
+          Text(
+            question.help!,
+            style: textTheme.bodySmall?.copyWith(color: colors.mutedInk),
+          ),
+        ],
+        SizedBox(height: spacing.sm),
+        _buildControl(question),
+        if (error != null) ...[
+          SizedBox(height: spacing.xs),
+          Text(
+            error,
+            style: textTheme.bodySmall?.copyWith(color: colors.danger),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildControl(AiQuestion question) {
+    switch (question.type) {
+      case AiQuestionType.singleSelect:
+        return _buildSingleSelect(question);
+      case AiQuestionType.multiSelect:
+        return _buildMultiSelect(question);
+      case AiQuestionType.confirm:
+        return _buildConfirm(question);
+      case AiQuestionType.number:
+        return _buildNumber(question);
+      case AiQuestionType.freeText:
+      case AiQuestionType.unknown:
+        return _buildText(question);
+    }
+  }
+
+  Widget _buildSingleSelect(AiQuestion question) {
+    final spacing = AdaptiveSpacing.of(context);
+    final l10n = AppLocalizations.of(context)!;
+    final selected = _single[question.id];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Wrap(
+          spacing: spacing.xs,
+          runSpacing: spacing.xs,
+          children: [
+            for (final option in question.options)
+              ChoiceChip(
+                label: Text(option.label),
+                selected: selected == option.value,
+                onSelected: (_) => setState(() {
+                  _single[question.id] = option.value;
+                  _errors.remove(question.id);
+                }),
+              ),
+            if (question.allowOther)
+              ChoiceChip(
+                label: Text(question.otherLabel ?? l10n.aiAssistantAskUserOther),
+                selected: selected == _kQuestionOther,
+                onSelected: (_) => setState(() {
+                  _single[question.id] = _kQuestionOther;
+                  _errors.remove(question.id);
+                }),
+              ),
+          ],
+        ),
+        if (selected == _kQuestionOther) ...[
+          SizedBox(height: spacing.sm),
+          _buildOtherField(question),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildMultiSelect(AiQuestion question) {
+    final spacing = AdaptiveSpacing.of(context);
+    final l10n = AppLocalizations.of(context)!;
+    final set = _multi.putIfAbsent(question.id, () => <String>{});
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Wrap(
+          spacing: spacing.xs,
+          runSpacing: spacing.xs,
+          children: [
+            for (final option in question.options)
+              FilterChip(
+                label: Text(option.label),
+                selected: set.contains(option.value),
+                onSelected: (on) => setState(() {
+                  on ? set.add(option.value) : set.remove(option.value);
+                  _errors.remove(question.id);
+                }),
+              ),
+            if (question.allowOther)
+              FilterChip(
+                label: Text(question.otherLabel ?? l10n.aiAssistantAskUserOther),
+                selected: set.contains(_kQuestionOther),
+                onSelected: (on) => setState(() {
+                  on ? set.add(_kQuestionOther) : set.remove(_kQuestionOther);
+                  _errors.remove(question.id);
+                }),
+              ),
+          ],
+        ),
+        if (set.contains(_kQuestionOther)) ...[
+          SizedBox(height: spacing.sm),
+          _buildOtherField(question),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildOtherField(AiQuestion question) {
+    final l10n = AppLocalizations.of(context)!;
+    return TextField(
+      controller: _controllerFor(_otherKey(question.id)),
+      decoration: InputDecoration(hintText: l10n.aiAssistantAskUserOtherHint),
+      textInputAction: TextInputAction.done,
+      onChanged: (_) {
+        if (_errors[question.id] != null) {
+          setState(() => _errors.remove(question.id));
+        }
+      },
+    );
+  }
+
+  Widget _buildText(AiQuestion question) {
+    final l10n = AppLocalizations.of(context)!;
+    return TextField(
+      controller: _controllerFor(question.id),
+      minLines: question.multiline ? 3 : 1,
+      maxLines: question.multiline ? 6 : 1,
+      maxLength: question.maxLength,
+      textInputAction:
+          question.multiline ? TextInputAction.newline : TextInputAction.done,
+      decoration: InputDecoration(
+        hintText: question.placeholder ?? l10n.aiAssistantAskUserTextHint,
+      ),
+      onChanged: (_) {
+        if (_errors[question.id] != null) {
+          setState(() => _errors.remove(question.id));
+        }
+      },
+    );
+  }
+
+  Widget _buildNumber(AiQuestion question) {
+    return TextField(
+      controller: _controllerFor(question.id),
+      keyboardType: TextInputType.numberWithOptions(
+        decimal: question.decimals > 0,
+        signed: (question.min ?? 0) < 0,
+      ),
+      inputFormatters: [
+        // No decimal point for an integer question (decimals: 0).
+        FilteringTextInputFormatter.allow(
+          RegExp(question.decimals > 0 ? r'[0-9.\-]' : r'[0-9\-]'),
+        ),
+      ],
+      decoration: InputDecoration(
+        hintText: question.placeholder,
+        suffixText: question.unit,
+      ),
+      onChanged: (_) {
+        if (_errors[question.id] != null) {
+          setState(() => _errors.remove(question.id));
+        }
+      },
+    );
+  }
+
+  Widget _buildConfirm(AiQuestion question) {
+    final spacing = AdaptiveSpacing.of(context);
+    final l10n = AppLocalizations.of(context)!;
+    final value = _confirm[question.id];
+    return Wrap(
+      spacing: spacing.xs,
+      children: [
+        ChoiceChip(
+          label: Text(question.confirmLabel ?? l10n.aiAssistantAskUserConfirmYes),
+          selected: value == true,
+          onSelected: (_) => setState(() {
+            _confirm[question.id] = true;
+            _errors.remove(question.id);
+          }),
+        ),
+        ChoiceChip(
+          label: Text(question.denyLabel ?? l10n.aiAssistantAskUserConfirmNo),
+          selected: value == false,
+          onSelected: (_) => setState(() {
+            _confirm[question.id] = false;
+            _errors.remove(question.id);
+          }),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildActions() {
+    final spacing = AdaptiveSpacing.of(context);
+    final l10n = AppLocalizations.of(context)!;
+    return Row(
+      children: [
+        FilledButton(
+          onPressed: _submitting ? null : _submit,
+          child: Text(l10n.aiAssistantAskUserSubmit),
+        ),
+        SizedBox(width: spacing.xs),
+        TextButton(
+          onPressed: _submitting ? null : widget.onSkip,
+          child: Text(l10n.aiAssistantAskUserSkip),
+        ),
+      ],
+    );
+  }
+}
+
+/// The read-only recap shown on a question card after the user answers.
+class _AnswerSummary extends StatelessWidget {
+  const _AnswerSummary({required this.message});
+
+  final AiMessage message;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.pointyColors;
+    final spacing = AdaptiveSpacing.of(context);
+    final l10n = AppLocalizations.of(context)!;
+    final textTheme = Theme.of(context).textTheme;
+    final questions = message.pendingQuestion?.questions ?? const [];
+    final answers = {
+      for (final a in message.submittedAnswers ?? const <AiAnswer>[]) a.questionId: a,
+    };
+    final skipped = (message.submittedAnswers ?? const []).isEmpty;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(Icons.check_circle_outline, size: 16, color: colors.success),
+            SizedBox(width: spacing.xs),
+            Text(
+              skipped
+                  ? l10n.aiAssistantAskUserSkipped
+                  : l10n.aiAssistantAskUserAnswered,
+              style: textTheme.bodySmall?.copyWith(
+                color: colors.mutedInk,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+        if (!skipped)
+          for (final question in questions)
+            if (answers[question.id] != null) ...[
+              SizedBox(height: spacing.sm),
+              Text(
+                question.prompt,
+                style: textTheme.bodySmall?.copyWith(color: colors.mutedInk),
+              ),
+              SizedBox(height: 2),
+              Text(
+                _displayAnswer(question, answers[question.id]!),
+                style: textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
+              ),
+            ],
+      ],
+    );
+  }
+
+  String _displayAnswer(AiQuestion question, AiAnswer answer) {
+    String labelFor(String value) {
+      for (final option in question.options) {
+        if (option.value == value) {
+          return option.label;
+        }
+      }
+      return value;
+    }
+
+    switch (question.type) {
+      case AiQuestionType.singleSelect:
+        return answer.isOther ? '${answer.value}' : labelFor('${answer.value}');
+      case AiQuestionType.multiSelect:
+        final parts = [
+          for (final v in answer.values ?? const []) labelFor(v),
+          if (answer.isOther && answer.otherText != null) answer.otherText!,
+        ];
+        return parts.join('، ');
+      case AiQuestionType.confirm:
+        return answer.value == true ? 'نعم' : 'لا';
+      case AiQuestionType.number:
+        final unit = question.unit;
+        return unit != null ? '${answer.value} $unit' : '${answer.value}';
+      case AiQuestionType.freeText:
+      case AiQuestionType.unknown:
+        return '${answer.value ?? ''}';
+    }
+  }
+}
+
 /// A faint row of small icon actions shown under a message (edit/retry/copy).
 /// Aligned by the parent: trailing under user turns, leading under assistant.
 class _MessageActions extends StatelessWidget {
@@ -721,13 +1292,20 @@ class _ToolRunChip extends StatelessWidget {
         ? run.label!
         : (run.resource ?? l10n.aiAssistantToolWorking);
     final failed = run.done && run.ok == false;
+    final mutating = run.mutates;
+
+    // A create/edit "action" chip is accented and kept as a durable record of
+    // what the assistant changed; a read "query" chip stays muted. The action
+    // label is already self-describing ("إنشاء: المصروفات"), so it's shown as-is
+    // rather than wrapped in the "querying…" phrasing.
+    final text = mutating ? label : l10n.aiAssistantToolQuerying(label);
 
     return Container(
       padding: EdgeInsets.symmetric(horizontal: spacing.sm, vertical: spacing.xs),
       decoration: BoxDecoration(
-        color: colors.surfaceSunken,
+        color: mutating ? colors.primaryContainer : colors.surfaceSunken,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: colors.line),
+        border: Border.all(color: mutating ? colors.primary : colors.line),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -743,16 +1321,19 @@ class _ToolRunChip extends StatelessWidget {
             )
           else
             Icon(
-              failed ? Icons.error_outline : Icons.check_circle_outline,
+              failed
+                  ? Icons.error_outline
+                  : (mutating ? Icons.check_circle : Icons.check_circle_outline),
               size: 14,
               color: failed ? colors.danger : colors.success,
             ),
           SizedBox(width: spacing.xs),
           Text(
-            l10n.aiAssistantToolQuerying(label),
-            style: Theme.of(
-              context,
-            ).textTheme.bodySmall?.copyWith(color: colors.mutedInk),
+            text,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: mutating ? colors.ink : colors.mutedInk,
+              fontWeight: mutating ? FontWeight.w600 : null,
+            ),
           ),
         ],
       ),
@@ -1089,6 +1670,9 @@ class _Composer extends StatelessWidget {
     final l10n = AppLocalizations.of(context)!;
     final usage = viewModel.usage;
     final showRing = usage != null && usage.hasAnyLimit;
+    // While the assistant is waiting on an answer, the composer is locked so the
+    // user resolves the question (or skips it) rather than typing past it.
+    final locked = viewModel.isStreaming || viewModel.hasPendingQuestion;
 
     return Padding(
       padding: EdgeInsets.fromLTRB(
@@ -1115,18 +1699,21 @@ class _Composer extends StatelessWidget {
                 children: [
                   _AttachButton(
                     tooltip: l10n.aiAssistantAttachTooltip,
-                    onTap: viewModel.isStreaming ? null : onAttach,
+                    onTap: locked ? null : onAttach,
                   ),
                   Expanded(
                     child: TextField(
                       controller: controller,
                       focusNode: focusNode,
+                      enabled: !locked,
                       minLines: 1,
                       maxLines: 6,
                       textInputAction: TextInputAction.send,
                       onSubmitted: (_) => onSend(),
                       decoration: InputDecoration(
-                        hintText: l10n.aiAssistantInputHint,
+                        hintText: viewModel.hasPendingQuestion
+                            ? l10n.aiAssistantAskUserPendingComposer
+                            : l10n.aiAssistantInputHint,
                         border: InputBorder.none,
                         isCollapsed: true,
                         contentPadding: const EdgeInsets.symmetric(
@@ -1256,8 +1843,9 @@ class _SendButton extends StatelessWidget {
           );
         }
         final canSend =
-            controller.text.trim().isNotEmpty ||
-            viewModel.hasPendingAttachments;
+            !viewModel.hasPendingQuestion &&
+            (controller.text.trim().isNotEmpty ||
+                viewModel.hasPendingAttachments);
         return Tooltip(
           message: l10n.aiAssistantSendTooltip,
           child: Material(

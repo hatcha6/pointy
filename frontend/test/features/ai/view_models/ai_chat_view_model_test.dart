@@ -28,6 +28,29 @@ class _FakeAiChatRepository extends AiChatRepository {
     }
   }
 
+  List<AiChatEvent> resumeEvents = const [];
+  int? resumeMessageId;
+  String? resumeToolCallId;
+  List<AiAnswer> resumeAnswers = const [];
+  bool resumeDeclined = false;
+
+  @override
+  Stream<AiChatEvent> resumeChat({
+    required int conversationId,
+    required int messageId,
+    required String toolCallId,
+    List<AiAnswer> answers = const [],
+    bool declined = false,
+  }) async* {
+    resumeMessageId = messageId;
+    resumeToolCallId = toolCallId;
+    resumeAnswers = answers;
+    resumeDeclined = declined;
+    for (final event in resumeEvents) {
+      yield event;
+    }
+  }
+
   @override
   Future<Result<bool>> truncateConversation(
     int conversationId,
@@ -320,6 +343,118 @@ void main() {
     expect(viewModel.errorKind, AiChatErrorKind.network);
   });
 
+  AiChatAskUser askUser({
+    int conversationId = 5,
+    int messageId = 10,
+    String toolCallId = 'call_1',
+    AiQuestionType type = AiQuestionType.singleSelect,
+  }) {
+    return AiChatAskUser(
+      conversationId: conversationId,
+      messageId: messageId,
+      toolCallId: toolCallId,
+      questions: [
+        AiQuestion(
+          id: 'q1',
+          type: type,
+          prompt: 'أي فرع؟',
+          config: const {
+            'options': [
+              {'value': 'main', 'label': 'الرئيسي'},
+            ],
+          },
+        ),
+      ],
+    );
+  }
+
+  test('an ask_user event attaches a question and keeps the bubble', () async {
+    final repo = _FakeAiChatRepository([askUser()]);
+    final viewModel = AiChatViewModel(repo);
+    addTearDown(viewModel.dispose);
+
+    await viewModel.sendMessage('أضف منتجًا');
+
+    expect(viewModel.messages.length, 2);
+    final assistant = viewModel.messages.last;
+    expect(assistant.pendingQuestion, isNotNull);
+    expect(assistant.pendingQuestion!.questions.single.id, 'q1');
+    expect(assistant.isStreaming, isFalse); // typing indicator yields to the card
+    expect(viewModel.hasPendingQuestion, isTrue);
+    expect(viewModel.isStreaming, isFalse);
+    expect(viewModel.conversationId, 5); // captured from the ask_user event
+  });
+
+  test('submitAnswer resumes with the answer and streams a new bubble', () async {
+    final repo = _FakeAiChatRepository([askUser()]);
+    final viewModel = AiChatViewModel(repo);
+    addTearDown(viewModel.dispose);
+
+    await viewModel.sendMessage('أضف منتجًا');
+    repo.resumeEvents = [
+      const AiChatDelta('تمام'),
+      const AiChatDone(conversationId: 5),
+    ];
+
+    await viewModel.submitAnswer([
+      const AiAnswer(
+        questionId: 'q1',
+        type: AiQuestionType.singleSelect,
+        value: 'main',
+      ),
+    ]);
+
+    expect(repo.resumeMessageId, 10);
+    expect(repo.resumeToolCallId, 'call_1');
+    expect(repo.resumeAnswers.single.value, 'main');
+    expect(repo.resumeDeclined, isFalse);
+    expect(viewModel.hasPendingQuestion, isFalse);
+    // A fresh assistant bubble carries the continuation; the question bubble
+    // stays and is marked resolved (read-only summary).
+    expect(viewModel.messages.length, 3);
+    expect(viewModel.messages.last.content, 'تمام');
+    expect(viewModel.messages[1].submittedAnswers, isNotNull);
+  });
+
+  test('skipQuestion resumes with declined and unblocks the composer', () async {
+    final repo = _FakeAiChatRepository([askUser(type: AiQuestionType.confirm)]);
+    final viewModel = AiChatViewModel(repo);
+    addTearDown(viewModel.dispose);
+
+    await viewModel.sendMessage('احذف المنتج');
+    repo.resumeEvents = [const AiChatDone(conversationId: 5)];
+
+    await viewModel.skipQuestion();
+
+    expect(repo.resumeDeclined, isTrue);
+    expect(repo.resumeAnswers, isEmpty);
+    expect(viewModel.hasPendingQuestion, isFalse);
+  });
+
+  test('a resumed turn can itself ask another question', () async {
+    final repo = _FakeAiChatRepository([askUser(messageId: 10, toolCallId: 'call_1')]);
+    final viewModel = AiChatViewModel(repo);
+    addTearDown(viewModel.dispose);
+
+    await viewModel.sendMessage('ابدأ');
+    repo.resumeEvents = [
+      askUser(messageId: 20, toolCallId: 'call_2', type: AiQuestionType.number),
+    ];
+
+    await viewModel.submitAnswer([
+      const AiAnswer(
+        questionId: 'q1',
+        type: AiQuestionType.singleSelect,
+        value: 'main',
+      ),
+    ]);
+
+    // The new question is now the active one, on a fresh bubble.
+    expect(viewModel.hasPendingQuestion, isTrue);
+    expect(viewModel.pendingQuestion!.toolCallId, 'call_2');
+    expect(viewModel.pendingQuestion!.questions.single.type, AiQuestionType.number);
+  });
+
   test('surfaces tool activity as chips on the assistant turn', () async {
     final repo = _FakeAiChatRepository([
       const AiChatToolActivity(
@@ -349,5 +484,36 @@ void main() {
     expect(assistant.toolRuns.first.done, isTrue);
     expect(assistant.toolRuns.first.ok, isTrue);
     expect(assistant.content, '٥ مبيعات');
+  });
+
+  test('a create/edit tool activity is flagged as a mutation on its chip', () async {
+    final repo = _FakeAiChatRepository([
+      const AiChatToolActivity(
+        name: 'create_resource',
+        resource: 'expenses',
+        label: 'إنشاء: المصروفات',
+        phase: 'start',
+        mutates: true,
+      ),
+      const AiChatToolActivity(
+        name: 'create_resource',
+        resource: 'expenses',
+        label: 'إنشاء: المصروفات',
+        phase: 'done',
+        ok: true,
+        mutates: true,
+      ),
+      const AiChatDelta('تم تسجيل المصروف'),
+      const AiChatDone(conversationId: 1),
+    ]);
+    final viewModel = AiChatViewModel(repo);
+    addTearDown(viewModel.dispose);
+
+    await viewModel.sendMessage('سجّل مصروف كهرباء');
+
+    final run = viewModel.messages.last.toolRuns.single;
+    expect(run.mutates, isTrue);
+    expect(run.done, isTrue);
+    expect(run.label, 'إنشاء: المصروفات');
   });
 }

@@ -18,11 +18,13 @@ from itertools import combinations
 from django.conf import settings
 from django.core.serializers.json import DjangoJSONEncoder
 from django.db.models import Count, DecimalField, ExpressionWrapper, F, Sum
+from rest_framework import serializers as drf_serializers
 from rest_framework.exceptions import NotAuthenticated, PermissionDenied
 from rest_framework.pagination import PageNumberPagination
+from rest_framework.relations import ManyRelatedField, PrimaryKeyRelatedField, SlugRelatedField
 from rest_framework.test import APIRequestFactory, force_authenticate
 
-from .tool_registry import get_registry
+from .tool_registry import WRITE_DENY_RESOURCES, get_registry, resource_for_model
 
 logger = logging.getLogger(__name__)
 
@@ -76,6 +78,29 @@ def _run_apiview(view_class, *, user, query_params=None):
     return view_class.as_view()(request)
 
 
+def _run_write_viewset(view_class, *, action, method, user, data=None, kwargs=None, idempotency_key=None):
+    """Dispatch a write/action through the resource's REAL viewset, exactly like
+    the read dispatchers but for POST/PATCH. ``force_authenticate`` sets the user
+    without invoking SessionAuthentication, so CSRF is not enforced (the synthetic
+    request never carried a session); the viewset's permission classes, the
+    serializer's validation, ``perform_create``/``perform_update`` (created_by
+    stamping, register linkage, discount/stock side effects) and row-scoped
+    ``get_object`` all run unchanged. The body is JSON-encoded (``format="json"``)
+    so DRF parses it as it would a real API call.
+
+    ``idempotency_key`` (set for mutating calls by the agentic loop, derived from
+    the turn id + the call's args) is forwarded as the ``Idempotency-Key`` header,
+    so the viewsets that wrap create/checkout in ``run_idempotent_request``
+    (orders, expenses, ...) collapse an accidental *duplicate within one turn* —
+    e.g. the model emitting the same sale twice — into a single committed write."""
+    extra = {"SERVER_NAME": _safe_host()}
+    if idempotency_key:
+        extra["HTTP_IDEMPOTENCY_KEY"] = idempotency_key
+    request = getattr(_factory, method)("/", data=data or {}, format="json", **extra)
+    force_authenticate(request, user=user)
+    return view_class.as_view({method: action})(request, **(kwargs or {}))
+
+
 def _scoped_queryset(view_class, *, user, filters):
     """The resource's permission-scoped, filtered queryset for ``user`` — the same
     one a real ``list`` builds — handed back raw (no serialization/pagination) so
@@ -125,6 +150,18 @@ def _result_from_response(response):
             "ok": False,
             "error": "invalid_arguments",
             "detail": _json_safe(response.data),
+        }
+    if code == 405:
+        return {
+            "ok": False,
+            "error": "method_not_allowed",
+            "message": "هذه العملية غير مدعومة لهذا المورد.",
+        }
+    if code == 409:
+        return {
+            "ok": False,
+            "error": "conflict",
+            "detail": _json_safe(getattr(response, "data", None)),
         }
     return {"ok": False, "error": "api_error", "status": code}
 
@@ -442,7 +479,379 @@ def frequently_bought_together(*, user, filters=None, limit=10, min_count=2):
     }
 
 
+# ── Write / action tools ─────────────────────────────────────────────────────
+#
+# Creating/editing reuses the exact same security model as reading: a write
+# dispatches through the resource's real DRF viewset (``_run_write_viewset``), so
+# the serializer's validation, the viewset's permission stack, and every business
+# side effect (a recipe flipping ``is_prepared``, an expense booking a drawer
+# pay-out, the discount engine running on checkout) all execute. Nothing is
+# re-implemented, so a write can never diverge from what the API itself would do
+# or bypass a permission. Writability is gated three ways: the viewset must
+# support the action, the resource must not be on ``WRITE_DENY_RESOURCES``, and
+# the user must hold the permission (enforced at dispatch → 403).
+
+# The tools that change state — surfaced distinctly in the UI as completed
+# actions (not transient "querying…" chips).
+WRITE_TOOL_NAMES = frozenset({"create_resource", "update_resource", "create_sale"})
+
+
+def is_mutating_tool(name):
+    """Whether a tool changes shop data (drives action-vs-query chip styling)."""
+    return name in WRITE_TOOL_NAMES
+
+
+def _write_denied_message(resource):
+    if resource == "orders":
+        return (
+            "لا يمكن إنشاء/تعديل الطلبات مباشرةً. لتسجيل عملية بيع كاملة استخدم أداة "
+            "create_sale (التي تمرّ بمسار الدفع وتطبّق الخصومات وتخصم المخزون)."
+        )
+    if resource == "stock":
+        return (
+            "لا تُعدّل مستويات المخزون مباشرةً. أنشئ حركة مخزون عبر create_resource على "
+            "المورد stock-movements (increase/decrease/damaged) ليُسجَّل التغيير ويُدقَّق."
+        )
+    return f"المورد '{resource}' غير قابل للإنشاء/التعديل عبر المساعد."
+
+
+# ── Write-schema introspection (so the model can resolve FKs / M2M / nesting) ──
+
+
+def _field_type(field):
+    """A coarse, model-friendly type name for a serializer field."""
+    if isinstance(field, drf_serializers.BooleanField):
+        return "boolean"
+    if isinstance(field, drf_serializers.IntegerField):
+        return "integer"
+    if isinstance(field, drf_serializers.DecimalField):
+        return "decimal"
+    if isinstance(field, drf_serializers.FloatField):
+        return "number"
+    if isinstance(field, drf_serializers.DateTimeField):
+        return "datetime"
+    if isinstance(field, drf_serializers.DateField):
+        return "date"
+    if isinstance(field, drf_serializers.JSONField):
+        return "object"
+    if isinstance(field, drf_serializers.ListField):
+        return "array"
+    return "string"
+
+
+def _relation_target(field):
+    """Map a relation field's target model to the tool resource that owns it, so
+    the model knows where to look up (or create) the related id."""
+    model = getattr(getattr(field, "queryset", None), "model", None)
+    resource = resource_for_model(model)
+    if resource:
+        return {"resource": resource}
+    if model is not None:
+        return {"model": model._meta.model_name}
+    return {}
+
+
+def _relation_info(field):
+    """A ``{kind, by, resource}`` descriptor when ``field`` is a relation (FK or
+    M2M, referenced by id or by a slug like a unit code), else None."""
+    if isinstance(field, ManyRelatedField):
+        child = field.child_relation
+        by = child.slug_field if isinstance(child, SlugRelatedField) else "id"
+        return {"kind": "m2m", "by": by, **_relation_target(child)}
+    if isinstance(field, SlugRelatedField):
+        return {"kind": "fk", "by": getattr(field, "slug_field", "slug"), **_relation_target(field)}
+    if isinstance(field, PrimaryKeyRelatedField):
+        return {"kind": "fk", "by": "id", **_relation_target(field)}
+    return None
+
+
+def _nested_descriptor(field, *, depth):
+    """For a nested writable object / list-of-objects, the item's sub-fields —
+    descended a single level so a deep tree can't explode the schema (or recurse
+    forever on a self-referential serializer)."""
+    if depth >= 1:
+        return None
+    if isinstance(field, drf_serializers.ListSerializer):
+        child = field.child
+        if isinstance(child, drf_serializers.BaseSerializer):
+            return {"type": "array_of_objects", "fields": _introspect_write_schema(child, depth=depth + 1)}
+    elif isinstance(field, drf_serializers.BaseSerializer):
+        return {"type": "object", "fields": _introspect_write_schema(field, depth=depth + 1)}
+    return None
+
+
+def _field_descriptor(name, field, *, depth):
+    desc = {"name": name, "type": _field_type(field), "required": bool(field.required)}
+    if getattr(field, "allow_null", False):
+        desc["nullable"] = True
+    help_text = getattr(field, "help_text", None)
+    if help_text:
+        desc["help"] = str(help_text)
+
+    relation = _relation_info(field)
+    if relation is not None:
+        desc["type"] = "array" if relation["kind"] == "m2m" else "id"
+        desc["relation"] = relation
+        return desc
+
+    nested = _nested_descriptor(field, depth=depth)
+    if nested is not None:
+        desc["type"] = nested["type"]
+        desc["fields"] = nested["fields"]
+        return desc
+
+    # A plain ChoiceField (not a relation) — surface the accepted values.
+    if isinstance(field, drf_serializers.ChoiceField):
+        try:
+            desc["choices"] = list(field.choices.keys())[:40]
+        except Exception:
+            pass
+    return desc
+
+
+def _introspect_write_schema(serializer, *, depth=0):
+    """The writable fields of a serializer, each with type/required/relation/
+    nesting/choices. Defensive: a field that won't introspect degrades to a
+    bare string entry rather than failing the whole describe call."""
+    try:
+        fields = serializer.fields
+    except Exception:
+        return []
+    out = []
+    for name, field in fields.items():
+        if field.read_only:
+            continue
+        try:
+            out.append(_field_descriptor(name, field, depth=depth))
+        except Exception:
+            out.append({"name": name, "type": "string", "required": bool(getattr(field, "required", False))})
+    return out
+
+
+def _writable_serializer_instance(meta, user):
+    """Build the serializer the viewset uses for create (or update), with a
+    synthetic authenticated request in context — some ``get_serializer_class`` /
+    ``get_fields`` implementations read ``request.user`` (e.g. manager-gated
+    fields). Returns an instance or None."""
+    try:
+        request = _factory.post("/", data={}, format="json", SERVER_NAME=_safe_host())
+        force_authenticate(request, user=user)
+        view = meta.view_class()
+        view.action = "create" if meta.can_create else "partial_update"
+        view.action_map = {"post": "create"}
+        view.request = view.initialize_request(request)
+        view.args = ()
+        view.kwargs = {}
+        view.format_kwarg = None
+        serializer_class = view.get_serializer_class()
+        return serializer_class(context={"request": view.request, "view": view})
+    except Exception:
+        logger.exception("AI describe_resource serializer build failed for %s", meta.resource)
+        return None
+
+
+def describe_resource(*, user, resource):
+    """The WRITE schema of a resource: which fields are writable, their types,
+    which are required, and — crucially — which are relations (FK/M2M) and to
+    which resource, plus nested object/line shapes. The model calls this before
+    create/update so it can fill foreign keys (look up or create the related
+    record first) and nested structures (a recipe's lines, a product's variants)
+    correctly. Read-only resources report ``can_create/can_update=false``."""
+    meta = get_registry().get(resource)
+    if meta is None:
+        return {"ok": False, "error": "unknown_resource"}
+    denied = resource in WRITE_DENY_RESOURCES
+    can_create = bool(meta.can_create) and not denied
+    can_update = bool(meta.can_update) and not denied
+    payload = {
+        "ok": True,
+        "resource": resource,
+        "description": meta.description,
+        "can_create": can_create,
+        "can_update": can_update,
+    }
+    if denied:
+        payload["note"] = _write_denied_message(resource)
+    if not (can_create or can_update):
+        payload["write_fields"] = []
+        return payload
+    serializer = _writable_serializer_instance(meta, user)
+    fields = _introspect_write_schema(serializer) if serializer is not None else []
+    payload["write_fields"] = fields
+    payload["required_fields"] = [f["name"] for f in fields if f.get("required")]
+    return payload
+
+
+def _write_result(response, *, action, resource):
+    result = _result_from_response(response)
+    if result.get("ok"):
+        result["action"] = action
+        result["resource"] = resource
+    return result
+
+
+def create_resource(*, user, resource, data, idempotency_key=None):
+    """Create one record in a business resource by dispatching a real POST to its
+    viewset. Returns the created record (so the model can chain — e.g. read a new
+    product's default variant id to attach a recipe) or a structured permission/
+    validation error the model can act on."""
+    meta = get_registry().get(resource)
+    if meta is None:
+        return {"ok": False, "error": "unknown_resource"}
+    if resource in WRITE_DENY_RESOURCES:
+        return {"ok": False, "error": "write_not_allowed", "message": _write_denied_message(resource)}
+    if not meta.can_create:
+        return {
+            "ok": False,
+            "error": "not_creatable",
+            "message": f"المورد '{resource}' لا يدعم الإنشاء.",
+        }
+    if not isinstance(data, dict):
+        return {"ok": False, "error": "invalid_arguments", "message": "data يجب أن يكون كائنًا (حقول السجل)."}
+    try:
+        response = _run_write_viewset(
+            meta.view_class, action="create", method="post", user=user, data=data, idempotency_key=idempotency_key
+        )
+    except Exception:
+        logger.exception("AI create_resource dispatch crashed for %s", resource)
+        return {"ok": False, "error": "internal_error"}
+    return _write_result(response, action="create", resource=resource)
+
+
+def update_resource(*, user, resource, id, data, idempotency_key=None):
+    """Partially update one record (PATCH semantics — pass only changed fields).
+    Row-scoped by the viewset's ``get_object``, so the user can only edit records
+    they're allowed to see."""
+    meta = get_registry().get(resource)
+    if meta is None:
+        return {"ok": False, "error": "unknown_resource"}
+    if resource in WRITE_DENY_RESOURCES:
+        return {"ok": False, "error": "write_not_allowed", "message": _write_denied_message(resource)}
+    if not meta.can_update:
+        return {
+            "ok": False,
+            "error": "not_updatable",
+            "message": f"المورد '{resource}' لا يدعم التعديل.",
+        }
+    if id in (None, ""):
+        return {"ok": False, "error": "invalid_arguments", "message": "id مطلوب لتحديد السجل."}
+    if not isinstance(data, dict):
+        return {"ok": False, "error": "invalid_arguments", "message": "data يجب أن يكون كائنًا (الحقول المراد تعديلها)."}
+    try:
+        response = _run_write_viewset(
+            meta.view_class,
+            action="partial_update",
+            method="patch",
+            user=user,
+            data=data,
+            kwargs={"pk": id},
+            idempotency_key=idempotency_key,
+        )
+    except Exception:
+        logger.exception("AI update_resource dispatch crashed for %s", resource)
+        return {"ok": False, "error": "internal_error"}
+    return _write_result(response, action="update", resource=resource)
+
+
+# A sale can carry many lines, but an unbounded list is a needless amplifier
+# (each line is a variant lookup + discount allocation). Well above any real cart.
+_MAX_SALE_LINES = 200
+
+
+def create_sale(
+    *,
+    user,
+    lines,
+    customer=None,
+    coupon_codes=None,
+    payment_method=None,
+    amount_received=None,
+    confirm=False,
+    idempotency_key=None,
+):
+    """Record a complete point-of-sale sale through the real checkout flow —
+    discounts auto-apply, stock is decremented, payment + receipt are recorded.
+
+    Because a sale is irreversible, this is two-step: with ``confirm`` false (the
+    default) it only PREVIEWS — returning exact subtotal/discount/total and the
+    auto-applied discounts WITHOUT creating anything, so the model can show the
+    numbers and confirm with the user (via ask_user). With ``confirm`` true it
+    commits via the checkout action, which requires an open register session for
+    the user (a clear error is returned otherwise)."""
+    from apps.sales.views import OrderViewSet
+
+    if not isinstance(lines, list) or not lines:
+        return {"ok": False, "error": "invalid_arguments", "message": "lines مطلوبة: قائمة بنود البيع [{variant, quantity}]."}
+    if len(lines) > _MAX_SALE_LINES:
+        return {
+            "ok": False,
+            "error": "invalid_arguments",
+            "message": f"عدد بنود البيع كبير جدًا (الحد {_MAX_SALE_LINES}).",
+        }
+
+    body = {"lines": lines}
+    if customer not in (None, ""):
+        body["customer"] = customer
+    if coupon_codes:
+        body["coupon_codes"] = coupon_codes
+
+    if not confirm:
+        try:
+            response = _run_write_viewset(
+                OrderViewSet, action="discount_preview", method="post", user=user, data=body
+            )
+        except Exception:
+            logger.exception("AI create_sale preview crashed")
+            return {"ok": False, "error": "internal_error"}
+        result = _result_from_response(response)
+        if not result.get("ok"):
+            return result
+        return {
+            "ok": True,
+            "needs_confirmation": True,
+            "preview": result["data"],
+            "message": (
+                "هذه معاينة فقط ولم يُنشأ بيع. اعرض الإجمالي والخصومات للمستخدم وأكّد عبر "
+                "ask_user، ثم استدعِ create_sale مرة أخرى مع confirm=true لإتمام البيع."
+            ),
+        }
+
+    commit = dict(body)
+    if payment_method:
+        commit["payment_method"] = payment_method
+    if amount_received not in (None, ""):
+        commit["amount_received"] = amount_received
+    try:
+        response = _run_write_viewset(
+            OrderViewSet,
+            action="checkout",
+            method="post",
+            user=user,
+            data=commit,
+            idempotency_key=idempotency_key,
+        )
+    except Exception:
+        logger.exception("AI create_sale checkout crashed")
+        return {"ok": False, "error": "internal_error"}
+    return _write_result(response, action="create_sale", resource="orders")
+
+
 # ── Dispatch + schemas ──────────────────────────────────────────────────────
+
+# The interactive "ask the user" tool. Unlike every other tool it has NO server
+# handler in _TOOLS: the agentic loop intercepts it, surfaces the question to the
+# client, and pauses until the user answers (see views.AiChatView._agentic_stream).
+ASK_USER_TOOL_NAME = "ask_user"
+
+# Question types the client can render. Unknown types degrade to free text both
+# here (sanitiser) and on the client, so adding a type is a non-breaking change.
+ASK_USER_QUESTION_TYPES = (
+    "single_select",
+    "multi_select",
+    "free_text",
+    "confirm",
+    "number",
+)
 
 _TOOL_LABELS = {
     "list_resources": "قائمة الموارد",
@@ -450,16 +859,199 @@ _TOOL_LABELS = {
     "get_expense_ledger": "سجل المصروفات",
     "aggregate": "تحليل البيانات",
     "frequently_bought_together": "المنتجات التي تُشترى معًا",
+    "describe_resource": "فحص الحقول",
+    "create_sale": "تسجيل بيع",
+    ASK_USER_TOOL_NAME: "بانتظار ردك",
+}
+
+# Action verbs for the mutating tools, so a write chip reads "إنشاء: المنتجات"
+# rather than the bare read description of the resource.
+_WRITE_TOOL_VERBS = {
+    "create_resource": "إنشاء",
+    "update_resource": "تعديل",
 }
 
 
+def validate_ask_user_spec(arguments):
+    """Coerce a model-emitted ``ask_user`` payload into a safe, well-formed spec.
+
+    The model can emit malformed/partial JSON, so this never raises and always
+    returns ``{"questions": [...]}`` with at least one usable question: ids are
+    backfilled, unknown types fall back to ``free_text``, select options are
+    normalised, and the list is capped. The backend treats the spec as opaque
+    beyond this — it persists it, streams it to the client, and never interprets
+    per-type ``config`` (so new question types need no backend change)."""
+    raw = arguments.get("questions") if isinstance(arguments, dict) else None
+    questions = []
+    if isinstance(raw, list):
+        for index, item in enumerate(raw):
+            if not isinstance(item, dict):
+                continue
+            prompt = str(item.get("prompt") or "").strip()
+            if not prompt:
+                continue
+            qtype = item.get("type")
+            if qtype not in ASK_USER_QUESTION_TYPES:
+                qtype = "free_text"
+            qid = str(item.get("id") or "").strip() or f"q{index + 1}"
+            config = item.get("config")
+            config = dict(config) if isinstance(config, dict) else {}
+            if qtype in ("single_select", "multi_select"):
+                config["options"] = _normalise_options(config.get("options"))
+            help_text = str(item.get("help") or "").strip()
+            questions.append(
+                {
+                    "id": qid,
+                    "type": qtype,
+                    "prompt": prompt,
+                    "help": help_text or None,
+                    "required": bool(item.get("required", True)),
+                    "config": config,
+                }
+            )
+            if len(questions) >= 5:
+                break
+    if not questions:
+        # ask_user was called with nothing usable — still surface *a* question so
+        # the loop pauses meaningfully rather than silently dropping the call.
+        questions = [
+            {
+                "id": "q1",
+                "type": "free_text",
+                "prompt": "ما الذي تريد توضيحه؟",
+                "help": None,
+                "required": True,
+                "config": {},
+            }
+        ]
+    return {"questions": questions}
+
+
+def _normalise_options(options):
+    normalised = []
+    if isinstance(options, list):
+        for option in options:
+            if isinstance(option, dict) and option.get("value") is not None:
+                value = str(option["value"])
+                label = str(option.get("label") or value)
+                normalised.append({"value": value, "label": label})
+            elif isinstance(option, str):
+                normalised.append({"value": option, "label": option})
+    return normalised
+
+
+def ask_user_tool_definition():
+    """The OpenAI function schema for the interactive ask_user tool."""
+    return {
+        "type": "function",
+        "function": {
+            "name": ASK_USER_TOOL_NAME,
+            "description": (
+                "اطرح على المستخدم سؤالًا أو أكثر عندما تحتاج فعلًا إلى توضيح أو "
+                "قرار لا يمكنك افتراضه بأمان (تأكيد عملية، الاختيار من بدائل، أو "
+                "قيمة مطلوبة ناقصة). استدعِ هذه الأداة بدلًا من طرح السؤال كنص عادي. "
+                "ضع كل ما تحتاجه في استدعاء واحد (يمكن تمرير عدة أسئلة في questions)، "
+                "ولا تستدعِ أي أداة أخرى في نفس الدور. لا تُكثر منها — اسأل فقط عند "
+                "الضرورة الحقيقية."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "questions": {
+                        "type": "array",
+                        "minItems": 1,
+                        "maxItems": 5,
+                        "description": "الأسئلة المطلوب طرحها على المستخدم.",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "id": {
+                                    "type": "string",
+                                    "description": "معرّف قصير فريد للسؤال (مثل q1)؛ يُعاد مع الإجابة.",
+                                },
+                                "type": {
+                                    "type": "string",
+                                    "enum": list(ASK_USER_QUESTION_TYPES),
+                                    "description": (
+                                        "single_select=اختيار واحد، multi_select=اختيار "
+                                        "متعدد، free_text=نص حر، confirm=نعم/لا، number=رقم."
+                                    ),
+                                },
+                                "prompt": {
+                                    "type": "string",
+                                    "description": "نص السؤال المعروض للمستخدم.",
+                                },
+                                "help": {
+                                    "type": "string",
+                                    "description": "اختياري: نص توضيحي قصير أسفل السؤال.",
+                                },
+                                "required": {
+                                    "type": "boolean",
+                                    "description": "هل الإجابة إلزامية (افتراضيًا true).",
+                                },
+                                "config": {
+                                    "type": "object",
+                                    "description": (
+                                        "إعدادات خاصة بالنوع. للاختيار "
+                                        "(single_select/multi_select): "
+                                        "options=[{value,label}] و allow_other (سماح بإجابة "
+                                        "أخرى) و min_select/max_select. للنص (free_text): "
+                                        "placeholder و multiline و max_length. للرقم "
+                                        "(number): min و max و unit و decimals. للتأكيد "
+                                        "(confirm): confirm_label و deny_label."
+                                    ),
+                                    "properties": {
+                                        "options": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "object",
+                                                "properties": {
+                                                    "value": {"type": "string"},
+                                                    "label": {"type": "string"},
+                                                },
+                                                "required": ["value", "label"],
+                                            },
+                                        },
+                                        "allow_other": {"type": "boolean"},
+                                        "other_label": {"type": "string"},
+                                        "min_select": {"type": "integer", "minimum": 0},
+                                        "max_select": {"type": "integer", "minimum": 1},
+                                        "placeholder": {"type": "string"},
+                                        "multiline": {"type": "boolean"},
+                                        "max_length": {"type": "integer", "minimum": 1},
+                                        "min": {"type": "number"},
+                                        "max": {"type": "number"},
+                                        "unit": {"type": "string"},
+                                        "decimals": {"type": "integer", "minimum": 0},
+                                        "confirm_label": {"type": "string"},
+                                        "deny_label": {"type": "string"},
+                                    },
+                                    "additionalProperties": True,
+                                },
+                            },
+                            "required": ["id", "type", "prompt"],
+                        },
+                    }
+                },
+                "required": ["questions"],
+                "additionalProperties": False,
+            },
+        },
+    }
+
+
 def tool_label(name, resource=None):
-    """Friendly Arabic label for a running tool — the resource's description when
-    it has one, else a per-tool label, else the raw name. Used for status chips."""
+    """Friendly Arabic label for a running tool — for a write tool the action verb
+    plus the resource ("إنشاء: المصروفات"); otherwise the resource's description
+    when it has one, else a per-tool label, else the raw name. Used for chips."""
+    verb = _WRITE_TOOL_VERBS.get(name)
     if resource:
         meta = get_registry().get(resource)
+        resource_name = meta.description if meta is not None else resource
+        if verb:
+            return f"{verb}: {resource_name}"
         if meta is not None:
-            return meta.description
+            return resource_name
     return _TOOL_LABELS.get(name, name)
 
 
@@ -497,27 +1089,184 @@ _TOOLS = {
         limit=args.get("limit", 10),
         min_count=args.get("min_count", 2),
     ),
+    "describe_resource": lambda user, args: describe_resource(
+        user=user, resource=args.get("resource")
+    ),
+    "create_resource": lambda user, args, key=None: create_resource(
+        user=user, resource=args.get("resource"), data=args.get("data"), idempotency_key=key
+    ),
+    "update_resource": lambda user, args, key=None: update_resource(
+        user=user,
+        resource=args.get("resource"),
+        id=args.get("id"),
+        data=args.get("data"),
+        idempotency_key=key,
+    ),
+    "create_sale": lambda user, args, key=None: create_sale(
+        user=user,
+        lines=args.get("lines"),
+        customer=args.get("customer"),
+        coupon_codes=args.get("coupon_codes"),
+        payment_method=args.get("payment_method"),
+        amount_received=args.get("amount_received"),
+        confirm=bool(args.get("confirm")),
+        idempotency_key=key,
+    ),
 }
 
 
-def execute_tool(name, arguments, *, user):
+def execute_tool(name, arguments, *, user, idempotency_key=None):
     """Run a tool by name with parsed arguments, as ``user``. Always returns a
-    JSON-serializable dict (never raises)."""
+    JSON-serializable dict (never raises). ``idempotency_key`` is forwarded to the
+    mutating tools so a duplicate write within one agentic turn collapses to one."""
     handler = _TOOLS.get(name)
     if handler is None:
         return {"ok": False, "error": "unknown_tool", "name": name}
     args = arguments if isinstance(arguments, dict) else {}
     try:
+        if name in WRITE_TOOL_NAMES:
+            return handler(user, args, idempotency_key)
         return handler(user, args)
     except Exception:
         logger.exception("AI tool %s failed", name)
         return {"ok": False, "error": "internal_error"}
 
 
-def tools_definitions():
-    """The OpenAI tool/function-calling array advertised to the model."""
-    resources = sorted(get_registry().keys())
+def action_tool_definitions():
+    """The create/edit tool schemas (describe/create/update/create_sale). Gated by
+    the caller's ``supports_actions`` capability so an older client is never told
+    the assistant can change data when it can't surface those actions."""
+    registry = get_registry()
+    resources = sorted(registry.keys())
+    writable = sorted(name for name, meta in registry.items() if meta.writable)
     return [
+        {
+            "type": "function",
+            "function": {
+                "name": "describe_resource",
+                "description": (
+                    "اعرض حقول الكتابة لمورد: الأنواع، الحقول المطلوبة، والعلاقات (FK/M2M) "
+                    "وإلى أي مورد تشير، والحقول المتداخلة (مثل بنود الوصفة أو متغيّرات المنتج). "
+                    "استدعِها قبل create_resource/update_resource لتعرف كيف تملأ المفاتيح "
+                    "الأجنبية (ابحث عن السجل المرتبط أو أنشئه أولًا) والبُنى المتداخلة."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {"resource": {"type": "string", "enum": resources}},
+                    "required": ["resource"],
+                    "additionalProperties": False,
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "create_resource",
+                "description": (
+                    "أنشئ سجلًا جديدًا في مورد عمل (تُطبَّق صلاحيات المستخدم والتحقق من "
+                    "الصحة تلقائيًا، ويُعاد السجل المُنشأ بمعرّفه). ضع الحقول في data: "
+                    "المفاتيح الأجنبية بالـ id، وعلاقات M2M كقائمة id. استدعِ describe_resource "
+                    "أولًا إن لم تكن متأكدًا من الحقول. لإتمام عملية بيع كاملة استخدم create_sale."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "resource": {"type": "string", "enum": writable},
+                        "data": {
+                            "type": "object",
+                            "description": "حقول السجل المراد إنشاؤه.",
+                        },
+                    },
+                    "required": ["resource", "data"],
+                    "additionalProperties": False,
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "update_resource",
+                "description": (
+                    "عدّل سجلًا موجودًا جزئيًا: مرّر id السجل و data بالحقول المتغيّرة فقط."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "resource": {"type": "string", "enum": writable},
+                        "id": {"type": ["integer", "string"]},
+                        "data": {"type": "object", "description": "الحقول المراد تعديلها فقط."},
+                    },
+                    "required": ["resource", "id", "data"],
+                    "additionalProperties": False,
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "create_sale",
+                "description": (
+                    "سجّل عملية بيع كاملة عبر مسار الدفع الحقيقي: تُطبَّق الخصومات المؤهَّلة "
+                    "تلقائيًا، ويُخصَم المخزون، ويُسجَّل الدفع والإيصال. عملية غير قابلة للتراجع، "
+                    "لذلك على خطوتين: استدعِها أولًا بـ confirm=false لتُرجع معاينة (الإجمالي "
+                    "والخصومات المطبَّقة) دون إنشاء، اعرض الأرقام وأكّد مع المستخدم عبر ask_user، "
+                    "ثم استدعِها مجددًا بـ confirm=true لإتمام البيع. يتطلّب الإتمام وردية صندوق مفتوحة."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "lines": {
+                            "type": "array",
+                            "minItems": 1,
+                            "description": "بنود البيع.",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "variant": {"type": "integer", "description": "معرّف متغيّر المنتج."},
+                                    "quantity": {"type": "number"},
+                                    "unit": {"type": "string", "description": "رمز وحدة البيع (اختياري)."},
+                                    "notes": {"type": "string"},
+                                },
+                                "required": ["variant", "quantity"],
+                            },
+                        },
+                        "customer": {"type": ["integer", "null"], "description": "معرّف العميل (اختياري)."},
+                        "coupon_codes": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "أكواد خصم اختيارية تُطبَّق إن كانت صالحة.",
+                        },
+                        "payment_method": {
+                            "type": "string",
+                            "description": "طريقة الدفع cash/card/transfer (افتراضيًا cash).",
+                        },
+                        "amount_received": {
+                            "type": "string",
+                            "description": "المبلغ المستلَم (افتراضيًا يساوي الإجمالي).",
+                        },
+                        "confirm": {
+                            "type": "boolean",
+                            "description": "false=معاينة فقط (الافتراضي)، true=إتمام البيع.",
+                        },
+                    },
+                    "required": ["lines"],
+                    "additionalProperties": False,
+                },
+            },
+        },
+    ]
+
+
+def tools_definitions(*, supports_ask_user=False, supports_actions=False):
+    """The OpenAI tool/function-calling array advertised to the model.
+
+    ``ask_user`` and the create/edit action tools are each appended only when the
+    requesting client declares it can surface them (``supports_ask_user`` /
+    ``supports_actions``) — an older client is never offered a capability it can't
+    render or that would change data without the user seeing it.
+    """
+    resources = sorted(get_registry().keys())
+    definitions = [
         {
             "type": "function",
             "function": {
@@ -693,3 +1442,8 @@ def tools_definitions():
             },
         },
     ]
+    if supports_actions:
+        definitions.extend(action_tool_definitions())
+    if supports_ask_user:
+        definitions.append(ask_user_tool_definition())
+    return definitions

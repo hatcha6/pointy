@@ -44,6 +44,8 @@ class AiChatViewModel extends ChangeNotifier {
   bool _isLoadingHistory = false;
   bool _imageLimitReached = false;
   AiChatErrorKind? _errorKind;
+  // The assistant turn whose ask_user question is awaiting the user's answer.
+  AiMessage? _pendingMessage;
 
   List<AiMessage> get messages => _messages;
   List<AiAttachment> get pendingAttachments => _pendingAttachments;
@@ -67,6 +69,11 @@ class AiChatViewModel extends ChangeNotifier {
   bool get hasPendingAttachments => _pendingAttachments.isNotEmpty;
   AiChatErrorKind? get errorKind => _errorKind;
 
+  /// The question the assistant is currently asking the user, if any. The screen
+  /// renders its card and locks the composer until it's answered or skipped.
+  AiPendingQuestion? get pendingQuestion => _pendingMessage?.pendingQuestion;
+  bool get hasPendingQuestion => _pendingMessage?.hasPendingQuestion ?? false;
+
   int get _pendingImageCount =>
       _pendingAttachments.where((a) => a.isImage).length;
 
@@ -85,6 +92,7 @@ class AiChatViewModel extends ChangeNotifier {
     _pendingAttachments.clear();
     _conversationId = null;
     _errorKind = null;
+    _pendingMessage = null;
     notifyListeners();
   }
 
@@ -120,6 +128,14 @@ class AiChatViewModel extends ChangeNotifier {
         _pendingAttachments.clear();
         _conversationId = conversation.id;
         _errorKind = null;
+        // Re-open an unanswered question from history so it can be answered after
+        // a reload — the last awaiting turn, if any.
+        _pendingMessage = null;
+        for (final message in _messages) {
+          if (message.hasPendingQuestion) {
+            _pendingMessage = message;
+          }
+        }
       case Error<AiConversation>():
         _errorKind = AiChatErrorKind.network;
     }
@@ -211,11 +227,70 @@ class AiChatViewModel extends ChangeNotifier {
     _isStreaming = true;
     notifyListeners();
 
-    await for (final event in _repository.streamChat(
-      conversationId: _conversationId,
-      message: trimmed,
-      attachments: attachments,
-    )) {
+    await _drive(
+      _repository.streamChat(
+        conversationId: _conversationId,
+        message: trimmed,
+        attachments: attachments,
+      ),
+      assistant,
+      userMessage: userMessage,
+    );
+  }
+
+  /// Answer the pending ask_user question and resume the agentic turn: a fresh
+  /// assistant bubble streams the model's continuation. [declined] resumes with a
+  /// skip instead of answers, so a flow never deadlocks on an ignored question.
+  Future<void> submitAnswer(List<AiAnswer> answers, {bool declined = false}) async {
+    final pending = _pendingMessage;
+    final question = pending?.pendingQuestion;
+    final conversationId = _conversationId;
+    final messageId = question?.messageId;
+    if (pending == null ||
+        question == null ||
+        conversationId == null ||
+        messageId == null ||
+        _isStreaming) {
+      return;
+    }
+
+    _errorKind = null;
+    pending.resolveQuestion(declined ? const [] : answers);
+    _pendingMessage = null;
+    final assistant = AiMessage(
+      role: AiMessageRole.assistant,
+      content: '',
+      isStreaming: true,
+    );
+    _messages.add(assistant);
+    _isStreaming = true;
+    notifyListeners();
+
+    await _drive(
+      _repository.resumeChat(
+        conversationId: conversationId,
+        messageId: messageId,
+        toolCallId: question.toolCallId,
+        answers: declined ? const [] : answers,
+        declined: declined,
+      ),
+      assistant,
+    );
+  }
+
+  /// Dismiss the pending question without answering — resumes the AI with a
+  /// "declined" result so it can proceed (or ask differently).
+  Future<void> skipQuestion() => submitAnswer(const [], declined: true);
+
+  /// Consume a chat/resume SSE stream into [assistant], finalize the turn, and
+  /// drop an empty bubble. Shared by the initial send and the resume so a resumed
+  /// turn can itself stream tools, text, or another ask_user question.
+  Future<void> _drive(
+    Stream<AiChatEvent> stream,
+    AiMessage assistant, {
+    AiMessage? userMessage,
+  }) async {
+    await for (final event in stream) {
       switch (event) {
         // Deltas/reasoning/tool updates notify *the message*, not the view
         // model, so a streamed token rebuilds only its own bubble — never the
@@ -232,21 +307,40 @@ class AiChatViewModel extends ChangeNotifier {
           if (conversationId != 0) {
             _conversationId = conversationId;
           }
-          if (userMessageId != null) {
+          if (userMessageId != null && userMessage != null) {
             userMessage.id = userMessageId;
           }
           if (usage != null) {
             _usage = usage;
           }
+        case AiChatAskUser(
+          :final conversationId,
+          :final messageId,
+          :final toolCallId,
+          :final questions,
+        ):
+          if (conversationId != 0) {
+            _conversationId = conversationId;
+          }
+          assistant.id = messageId;
+          assistant.attachQuestion(
+            AiPendingQuestion(
+              toolCallId: toolCallId,
+              messageId: messageId,
+              questions: questions,
+            ),
+          );
+          _pendingMessage = assistant;
         case AiChatToolActivity(
           :final name,
           :final resource,
           :final label,
           :final ok,
+          :final mutates,
         ):
           if (event.isStart) {
             assistant.startToolRun(
-              AiToolRun(name: name, resource: resource, label: label),
+              AiToolRun(name: name, resource: resource, label: label, mutates: mutates),
             );
           } else {
             assistant.finishToolRun(name: name, resource: resource, ok: ok);
@@ -258,11 +352,12 @@ class AiChatViewModel extends ChangeNotifier {
 
     assistant.markStreamingComplete();
     _isStreaming = false;
-    // Drop an empty assistant bubble if the turn failed before any output (but
-    // keep it if it ran tools — that's meaningful activity worth showing).
+    // Drop an empty assistant bubble if the turn failed before any output — but
+    // keep it if it ran tools or is asking a question (meaningful activity).
     if (assistant.content.isEmpty &&
         assistant.reasoning.isEmpty &&
-        assistant.toolRuns.isEmpty) {
+        assistant.toolRuns.isEmpty &&
+        assistant.pendingQuestion == null) {
       _messages.remove(assistant);
     }
     notifyListeners();
@@ -320,6 +415,11 @@ class AiChatViewModel extends ChangeNotifier {
       }
     }
     _messages.removeRange(index, _messages.length);
+    // If the rewind dropped a turn that was awaiting an answer, the question goes
+    // with it (the server truncates the paused turn too), so clear pending state.
+    if (_pendingMessage != null && !_messages.contains(_pendingMessage)) {
+      _pendingMessage = null;
+    }
     _errorKind = null;
     notifyListeners();
     return true;

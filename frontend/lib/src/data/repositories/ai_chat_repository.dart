@@ -29,6 +29,31 @@ class AiChatRepository {
     }
   }
 
+  /// Answer a paused ask_user question and stream the assistant's continuation.
+  /// Transport failures become terminal [AiChatError] events, so the view model
+  /// only ever sees [AiChatEvent]s — same contract as [streamChat].
+  Stream<AiChatEvent> resumeChat({
+    required int conversationId,
+    required int messageId,
+    required String toolCallId,
+    List<AiAnswer> answers = const [],
+    bool declined = false,
+  }) async* {
+    try {
+      yield* _service.streamAiChatResume(
+        conversationId: conversationId,
+        messageId: messageId,
+        toolCallId: toolCallId,
+        answers: answers,
+        declined: declined,
+      );
+    } on PosApiException catch (exception) {
+      yield AiChatError(exception.message, statusCode: exception.statusCode);
+    } on Exception catch (exception) {
+      yield AiChatError(exception.toString());
+    }
+  }
+
   Future<Result<AiUsage>> loadUsage() {
     return Result.guard(() => _service.fetchAiUsage());
   }

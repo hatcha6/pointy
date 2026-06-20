@@ -19,11 +19,48 @@ class AiApiClient {
     final body = <String, Object?>{
       'message': message,
       'conversation_id': ?conversationId,
+      // This client can render the interactive question UI, so the backend may
+      // advertise the ask_user tool to the model.
+      'supports_ask_user': true,
+      // This client surfaces create/edit actions (what the AI changed), so the
+      // backend may advertise the create_resource/update_resource/create_sale
+      // tools. An older client omits this and stays read-only.
+      'supports_actions': true,
       if (attachments.isNotEmpty)
         'attachments': attachments.map((a) => a.toJson()).toList(),
     };
     await for (final event in _session.openEventStream(
       'ai/chat/',
+      body: body,
+    )) {
+      final parsed = _parseEvent(event);
+      if (parsed != null) {
+        yield parsed;
+      }
+    }
+  }
+
+  /// Answer a paused ask_user question and stream the assistant's continuation.
+  /// Same SSE shape as [streamChat]; [declined] resumes with a "skip" instead of
+  /// answers so an agentic flow never deadlocks.
+  Stream<AiChatEvent> resumeChat({
+    required int conversationId,
+    required int messageId,
+    required String toolCallId,
+    List<AiAnswer> answers = const [],
+    bool declined = false,
+  }) async* {
+    final body = <String, Object?>{
+      'conversation_id': conversationId,
+      'message_id': messageId,
+      'tool_call_id': toolCallId,
+      'declined': declined,
+      'supports_ask_user': true,
+      'supports_actions': true,
+      if (!declined) 'answers': answers.map((a) => a.toJson()).toList(),
+    };
+    await for (final event in _session.openEventStream(
+      'ai/chat/resume/',
       body: body,
     )) {
       final parsed = _parseEvent(event);
@@ -57,6 +94,7 @@ class AiApiClient {
           label: data['label'] as String?,
           phase: (data['phase'] as String?) ?? 'start',
           ok: data['ok'] as bool?,
+          mutates: (data['mutates'] as bool?) ?? false,
         );
       case 'done':
         final limits = data['usage_limits'];
@@ -68,6 +106,20 @@ class AiApiClient {
           usage: limits is Map<String, Object?>
               ? AiUsage.fromJson(limits)
               : null,
+        );
+      case 'ask_user':
+        final rawQuestions = data['questions'];
+        return AiChatAskUser(
+          conversationId: (data['conversation_id'] as num?)?.toInt() ?? 0,
+          messageId: (data['message_id'] as num?)?.toInt(),
+          toolCallId: (data['tool_call_id'] as String?) ?? '',
+          questions: rawQuestions is List
+              ? rawQuestions
+                    .whereType<Map<String, Object?>>()
+                    .map(AiQuestion.fromJson)
+                    .where((q) => q.prompt.isNotEmpty)
+                    .toList(growable: false)
+              : const <AiQuestion>[],
         );
       case 'error':
         return AiChatError((data['detail'] as String?) ?? 'error');

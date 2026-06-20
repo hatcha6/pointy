@@ -107,6 +107,7 @@ class AiToolRun {
     this.label,
     this.done = false,
     this.ok,
+    this.mutates = false,
   });
 
   final String name;
@@ -114,6 +115,9 @@ class AiToolRun {
   final String? label;
   bool done;
   bool? ok;
+  // True for a create/edit action (vs a read query) — drives a distinct,
+  // persistent "action" chip so the user can see what the assistant changed.
+  final bool mutates;
 }
 
 /// A single chat turn. Extends [ChangeNotifier] so a streaming reply can notify
@@ -122,6 +126,194 @@ class AiToolRun {
 /// settled messages above it (which would re-parse all their markdown). Mutations
 /// during streaming go through the [appendContent]/[appendReasoning]/tool-run
 /// methods so the notification stays scoped to this message.
+/// The kind of an interactive question the assistant asks via the ask_user tool.
+/// [unknown] is the graceful fallback for a server-introduced type this client
+/// doesn't know — it renders as free text so a newer backend never breaks an
+/// older app.
+enum AiQuestionType { singleSelect, multiSelect, freeText, confirm, number, unknown }
+
+AiQuestionType _aiQuestionTypeFrom(String? raw) {
+  switch (raw) {
+    case 'single_select':
+      return AiQuestionType.singleSelect;
+    case 'multi_select':
+      return AiQuestionType.multiSelect;
+    case 'free_text':
+      return AiQuestionType.freeText;
+    case 'confirm':
+      return AiQuestionType.confirm;
+    case 'number':
+      return AiQuestionType.number;
+    default:
+      return AiQuestionType.unknown;
+  }
+}
+
+/// The wire name for a question type — sent back inside the answer so the model
+/// can correlate it with what it asked.
+String aiQuestionTypeWire(AiQuestionType type) {
+  switch (type) {
+    case AiQuestionType.singleSelect:
+      return 'single_select';
+    case AiQuestionType.multiSelect:
+      return 'multi_select';
+    case AiQuestionType.freeText:
+    case AiQuestionType.unknown:
+      return 'free_text';
+    case AiQuestionType.confirm:
+      return 'confirm';
+    case AiQuestionType.number:
+      return 'number';
+  }
+}
+
+/// One selectable option in a single/multi-select question.
+class AiQuestionOption {
+  const AiQuestionOption({required this.value, required this.label});
+
+  final String value;
+  final String label;
+
+  factory AiQuestionOption.fromJson(Map<String, Object?> json) {
+    final value = (json['value'] as String?) ?? '';
+    return AiQuestionOption(
+      value: value,
+      label: (json['label'] as String?)?.trim().isNotEmpty == true
+          ? json['label'] as String
+          : value,
+    );
+  }
+}
+
+/// A single question the assistant asks the user. The per-type knobs live in
+/// [config] (an opaque map the backend never interprets) and are read through the
+/// typed getters below, so adding a question type is a client-only change.
+class AiQuestion {
+  const AiQuestion({
+    required this.id,
+    required this.type,
+    required this.prompt,
+    this.help,
+    this.isRequired = true,
+    this.config = const {},
+  });
+
+  final String id;
+  final AiQuestionType type;
+  final String prompt;
+  final String? help;
+  final bool isRequired;
+  final Map<String, Object?> config;
+
+  List<AiQuestionOption> get options {
+    final raw = config['options'];
+    if (raw is List) {
+      return raw
+          .whereType<Map<String, Object?>>()
+          .map(AiQuestionOption.fromJson)
+          .toList(growable: false);
+    }
+    return const [];
+  }
+
+  bool get allowOther => config['allow_other'] == true;
+  String? get otherLabel => config['other_label'] as String?;
+  int? get minSelect => (config['min_select'] as num?)?.toInt();
+  int? get maxSelect => (config['max_select'] as num?)?.toInt();
+  String? get placeholder => config['placeholder'] as String?;
+  bool get multiline => config['multiline'] == true;
+  int? get maxLength => (config['max_length'] as num?)?.toInt();
+  num? get min => config['min'] as num?;
+  num? get max => config['max'] as num?;
+  String? get unit => (config['unit'] as String?)?.trim();
+  int get decimals => (config['decimals'] as num?)?.toInt() ?? 0;
+  String? get confirmLabel => config['confirm_label'] as String?;
+  String? get denyLabel => config['deny_label'] as String?;
+
+  factory AiQuestion.fromJson(Map<String, Object?> json) {
+    return AiQuestion(
+      id: (json['id'] as String?) ?? '',
+      type: _aiQuestionTypeFrom(json['type'] as String?),
+      prompt: (json['prompt'] as String?) ?? '',
+      help: (json['help'] as String?)?.trim().isNotEmpty == true
+          ? json['help'] as String
+          : null,
+      isRequired: json['required'] != false,
+      config: json['config'] is Map<String, Object?>
+          ? json['config'] as Map<String, Object?>
+          : const {},
+    );
+  }
+}
+
+/// A pending elicitation attached to an assistant turn: one ask_user tool call
+/// (identified by [toolCallId] on server message [messageId]) carrying one or
+/// more [questions] to answer. Answering resumes the paused agentic turn.
+class AiPendingQuestion {
+  const AiPendingQuestion({
+    required this.toolCallId,
+    required this.messageId,
+    required this.questions,
+  });
+
+  final String toolCallId;
+  final int? messageId;
+  final List<AiQuestion> questions;
+
+  static AiPendingQuestion? fromParts({
+    required String? toolCallId,
+    required int? messageId,
+    required Object? questionsRaw,
+  }) {
+    if (toolCallId == null || toolCallId.isEmpty || questionsRaw is! List) {
+      return null;
+    }
+    final questions = questionsRaw
+        .whereType<Map<String, Object?>>()
+        .map(AiQuestion.fromJson)
+        .where((q) => q.prompt.isNotEmpty)
+        .toList(growable: false);
+    if (questions.isEmpty) {
+      return null;
+    }
+    return AiPendingQuestion(
+      toolCallId: toolCallId,
+      messageId: messageId,
+      questions: questions,
+    );
+  }
+}
+
+/// One answer the user gives to one [AiQuestion]. Exactly one of [value]/[values]
+/// is set depending on the question type; [otherText]/[isOther] cover the "other"
+/// free-entry option on select questions. Serialized straight to the resume call.
+class AiAnswer {
+  const AiAnswer({
+    required this.questionId,
+    required this.type,
+    this.value,
+    this.values,
+    this.otherText,
+    this.isOther = false,
+  });
+
+  final String questionId;
+  final AiQuestionType type;
+  final Object? value;
+  final List<String>? values;
+  final String? otherText;
+  final bool isOther;
+
+  Map<String, Object?> toJson() => {
+    'question_id': questionId,
+    'type': aiQuestionTypeWire(type),
+    if (value != null) 'value': value,
+    if (values != null) 'values': values,
+    if (otherText != null && otherText!.isNotEmpty) 'other_text': otherText,
+    'is_other': isOther,
+  };
+}
+
 class AiMessage extends ChangeNotifier {
   AiMessage({
     required this.role,
@@ -131,6 +323,7 @@ class AiMessage extends ChangeNotifier {
     this.model = '',
     this.reasoning = '',
     this.attachments = const [],
+    this.pendingQuestion,
     List<AiToolRun>? toolRuns,
   }) : toolRuns = toolRuns ?? <AiToolRun>[];
 
@@ -155,7 +348,19 @@ class AiMessage extends ChangeNotifier {
   /// Tools the assistant ran while producing this turn (transient status chips).
   final List<AiToolRun> toolRuns;
 
+  /// An interactive question the assistant is asking on this turn (ask_user). The
+  /// turn pauses until the user answers; answering resumes the agentic loop.
+  AiPendingQuestion? pendingQuestion;
+
+  /// The user's submitted answers, kept in-session so the card can show a
+  /// read-only summary after submit (cleared question state isn't re-fetched).
+  List<AiAnswer>? submittedAnswers;
+
   bool get isUser => role == AiMessageRole.user;
+
+  /// Whether this turn still has an unanswered question awaiting input.
+  bool get hasPendingQuestion =>
+      pendingQuestion != null && submittedAnswers == null;
 
   /// Append a streamed answer fragment and notify this message's listeners only.
   void appendContent(String delta) {
@@ -202,6 +407,20 @@ class AiMessage extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// The assistant asked the user something — attach the question and stop
+  /// streaming so the bubble shows the interactive card instead of a cursor.
+  void attachQuestion(AiPendingQuestion question) {
+    pendingQuestion = question;
+    isStreaming = false;
+    notifyListeners();
+  }
+
+  /// Record the user's answers locally so the card flips to a read-only summary.
+  void resolveQuestion(List<AiAnswer> answers) {
+    submittedAnswers = answers;
+    notifyListeners();
+  }
+
   factory AiMessage.fromJson(Map<String, Object?> json) {
     final rawAttachments = json['attachments'];
     final attachments = rawAttachments is List
@@ -210,6 +429,39 @@ class AiMessage extends ChangeNotifier {
               .map(AiAttachment.fromMetadata)
               .toList(growable: false)
         : const <AiAttachment>[];
+    // A still-open ask_user turn rehydrates its interactive question from history,
+    // so a question survives a reload/reconnect and can be answered afterwards.
+    final pendingSpec = json['pending_question'];
+    final pending = (json['status'] as String?) == 'awaiting_answer'
+        ? AiPendingQuestion.fromParts(
+            toolCallId: json['tool_call_id'] as String?,
+            messageId: (json['id'] as num?)?.toInt(),
+            questionsRaw: pendingSpec is Map<String, Object?>
+                ? pendingSpec['questions']
+                : null,
+          )
+        : null;
+    // Rehydrate only the *mutating* tool runs from the persisted trace, as
+    // completed action chips — so a reload still shows what the assistant
+    // created/edited. Read queries stay transient (they're decoration, and the
+    // durable record of an answer is its text).
+    final rawEvents = json['tool_events'];
+    final toolRuns = rawEvents is List
+        ? rawEvents
+              .whereType<Map<String, Object?>>()
+              .where((e) => e['mutates'] == true)
+              .map(
+                (e) => AiToolRun(
+                  name: (e['name'] as String?) ?? '',
+                  resource: e['resource'] as String?,
+                  label: e['label'] as String?,
+                  done: true,
+                  ok: e['ok'] as bool?,
+                  mutates: true,
+                ),
+              )
+              .toList()
+        : <AiToolRun>[];
     return AiMessage(
       id: (json['id'] as num?)?.toInt(),
       role: (json['role'] as String?) == 'user'
@@ -219,6 +471,8 @@ class AiMessage extends ChangeNotifier {
       reasoning: (json['reasoning'] as String?) ?? '',
       model: (json['model'] as String?) ?? '',
       attachments: attachments,
+      pendingQuestion: pending,
+      toolRuns: toolRuns,
     );
   }
 }
@@ -262,6 +516,9 @@ class AiConversation {
     final messages = rawMessages is List
         ? rawMessages
               .whereType<Map<String, Object?>>()
+              // Only user + assistant turns are bubbles. tool rows (ask_user
+              // answers) and system rows are internal context, not shown.
+              .where((m) => m['role'] == 'user' || m['role'] == 'assistant')
               .map(AiMessage.fromJson)
               .toList(growable: false)
         : <AiMessage>[];
@@ -300,6 +557,7 @@ class AiChatToolActivity extends AiChatEvent {
     this.label,
     required this.phase,
     this.ok,
+    this.mutates = false,
   });
 
   final String name;
@@ -307,8 +565,27 @@ class AiChatToolActivity extends AiChatEvent {
   final String? label;
   final String phase;
   final bool? ok;
+  // The tool changed shop data (create/edit/sale), not just read it.
+  final bool mutates;
 
   bool get isStart => phase == 'start';
+}
+
+/// The assistant paused to ask the user something. Carries the question spec and
+/// the ids needed to resume the agentic turn once the user answers. Terminal for
+/// this stream — no `done` follows; the answer is submitted via the resume call.
+class AiChatAskUser extends AiChatEvent {
+  const AiChatAskUser({
+    required this.conversationId,
+    required this.messageId,
+    required this.toolCallId,
+    required this.questions,
+  });
+
+  final int conversationId;
+  final int? messageId;
+  final String toolCallId;
+  final List<AiQuestion> questions;
 }
 
 class AiChatDone extends AiChatEvent {

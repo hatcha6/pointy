@@ -50,6 +50,7 @@ from apps.employees.views import (
     PayrollRunViewSet,
 )
 from apps.ai.views import (
+    AiChatResumeView,
     AiChatView,
     AiConversationTruncateView,
     AiConversationViewSet,
@@ -228,6 +229,7 @@ urlpatterns = [
     ),
     path("api/relay/pairing/", RelayPairingView.as_view(), name="relay-pairing"),
     path("api/ai/chat/", AiChatView.as_view(), name="ai-chat"),
+    path("api/ai/chat/resume/", AiChatResumeView.as_view(), name="ai-chat-resume"),
     path("api/ai/usage/", AiUsageView.as_view(), name="ai-usage"),
     path(
         "api/ai/conversations/<int:pk>/truncate/",

@@ -6378,5 +6378,33 @@
   "@aiAssistantToolQuerying": {
     "placeholders": { "label": { "type": "String" } }
   },
-  "aiAssistantToolWorking": "يجمع البيانات"
+  "aiAssistantToolWorking": "يجمع البيانات",
+  "aiAssistantAskUserSubmit": "إرسال الإجابة",
+  "aiAssistantAskUserSkip": "تخطّي",
+  "aiAssistantAskUserOther": "أخرى…",
+  "aiAssistantAskUserOtherHint": "اكتب إجابتك هنا",
+  "aiAssistantAskUserTextHint": "اكتب إجابتك",
+  "aiAssistantAskUserAnswered": "تم إرسال إجابتك",
+  "aiAssistantAskUserSkipped": "تم تخطّي السؤال",
+  "aiAssistantAskUserConfirmYes": "نعم",
+  "aiAssistantAskUserConfirmNo": "لا",
+  "aiAssistantAskUserRequired": "هذا السؤال مطلوب",
+  "aiAssistantAskUserNumberInvalid": "أدخل رقمًا صحيحًا",
+  "aiAssistantAskUserNumberMin": "الحد الأدنى {value}",
+  "@aiAssistantAskUserNumberMin": {
+    "placeholders": { "value": { "type": "String" } }
+  },
+  "aiAssistantAskUserNumberMax": "الحد الأقصى {value}",
+  "@aiAssistantAskUserNumberMax": {
+    "placeholders": { "value": { "type": "String" } }
+  },
+  "aiAssistantAskUserSelectRange": "اختر من {min} إلى {max}",
+  "@aiAssistantAskUserSelectRange": {
+    "placeholders": { "min": { "type": "int" }, "max": { "type": "int" } }
+  },
+  "aiAssistantAskUserSelectAtLeast": "اختر {min} على الأقل",
+  "@aiAssistantAskUserSelectAtLeast": {
+    "placeholders": { "min": { "type": "int" } }
+  },
+  "aiAssistantAskUserPendingComposer": "أجب عن السؤال أعلاه للمتابعة"
 }

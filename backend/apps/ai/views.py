@@ -1,4 +1,6 @@
+import hashlib
 import json
+from uuid import uuid4
 
 from django.http import StreamingHttpResponse
 from django.utils import timezone
@@ -13,17 +15,44 @@ from .models import AiConversation, AiMessage
 from .relay_stream import build_system_prompt, iter_relay_sse, sse_event
 from .serializers import (
     AiChatRequestSerializer,
+    AiChatResumeRequestSerializer,
     AiConversationDetailSerializer,
     AiConversationSerializer,
 )
-from .tools import execute_tool, tool_label, tools_definitions
+from .tools import (
+    ASK_USER_TOOL_NAME,
+    execute_tool,
+    is_mutating_tool,
+    tool_label,
+    tools_definitions,
+    validate_ask_user_spec,
+)
 
 # How many prior messages to include as context per turn.
 HISTORY_WINDOW = 20
 
 # Max tool rounds per user message before the model is forced to answer. Bounds
 # runaway tool loops + cost; each round is one (uncharged) relay continuation.
-MAX_TOOL_ITERS = 6
+# Generous enough for a multi-step composite action (e.g. create a product, then
+# its variants/ingredients, then its recipe — each step needs the prior step's
+# returned ids), which a tighter budget would cut off mid-creation.
+MAX_TOOL_ITERS = 10
+
+# Blast-radius backstop: the most *successful* create/edit/sale writes one user
+# turn may commit. Well above any real composite (a dish + variant + recipe + a
+# dozen ingredient products ≈ 30), but it bounds a runaway/prompt-injected loop
+# from committing an unbounded number of irreversible writes (e.g. many sales).
+MAX_MUTATING_WRITES_PER_TURN = 40
+
+
+def _ai_idempotency_key(turn_id, name, args):
+    """A turn-scoped idempotency key for a mutating tool call: identical calls
+    *within the same turn* collapse to one committed write (guards an accidental
+    double-emit), while a legitimately-repeated operation in a later turn gets a
+    fresh ``turn_id`` and commits normally. Matches IDEMPOTENCY_KEY_PATTERN."""
+    canonical = json.dumps({"n": name, "a": args}, sort_keys=True, ensure_ascii=False, default=str)
+    digest = hashlib.sha256(canonical.encode("utf-8")).hexdigest()[:32]
+    return f"ai-{turn_id}-{digest}"
 
 
 class AiConversationViewSet(viewsets.ModelViewSet):
@@ -81,7 +110,9 @@ class AiChatView(APIView):
 
         # Build the prompt (prior history + this turn) BEFORE persisting so an
         # attachment-only (empty-text) turn still reaches the model.
-        messages = self._build_messages(conversation, user_text)
+        messages = self._build_messages(
+            conversation, user_text, supports_actions=payload.get("supports_actions", False)
+        )
 
         user_message = AiMessage.objects.create(
             conversation=conversation,
@@ -102,8 +133,16 @@ class AiChatView(APIView):
 
         # Tools let the model query real shop data (as the current user). Skip
         # them for attachment turns, which route to a vision model that may not
-        # support tool-calling.
-        tools = None if attachments else tools_definitions()
+        # support tool-calling. ask_user is advertised only to clients that can
+        # render the question UI (see AiChatRequestSerializer.supports_ask_user).
+        tools = (
+            None
+            if attachments
+            else tools_definitions(
+                supports_ask_user=payload.get("supports_ask_user", False),
+                supports_actions=payload.get("supports_actions", False),
+            )
+        )
 
         client = RelayControlClient()
         try:
@@ -139,21 +178,76 @@ class AiChatView(APIView):
             return AiConversation.objects.filter(user=user, pk=conversation_id).first()
         return AiConversation.objects.create(user=user)
 
-    def _build_messages(self, conversation, user_text):
+    def _build_messages(self, conversation, user_text="", *, append_user=True, supports_actions=False):
+        """Rebuild the model context from the DB.
+
+        Plain user/assistant text turns flow through as before. An assistant turn
+        that asked for tools (only ever persisted for a paused ask_user turn) is
+        replayed *with* its ``tool_calls``, and each call is immediately followed
+        by its tool result — the user's persisted answer when present, otherwise a
+        synthesized "no answer" reply. That pairing invariant means a still-open or
+        abandoned question never leaves a dangling tool_call, which OpenRouter would
+        reject. ``append_user=False`` is used on resume, where the trailing turn is
+        the answer (a tool result already in history), not a new user message.
+        """
         history = list(
             conversation.messages.filter(
-                role__in=[AiMessage.ROLE_USER, AiMessage.ROLE_ASSISTANT]
+                role__in=[
+                    AiMessage.ROLE_USER,
+                    AiMessage.ROLE_ASSISTANT,
+                    AiMessage.ROLE_TOOL,
+                ]
             ).order_by("-created_at")[:HISTORY_WINDOW]
         )
         history.reverse()
-        messages = [{"role": "system", "content": build_system_prompt()}]
+        # Index tool replies by the call id they answer, to splice each in right
+        # after its assistant tool_call (OpenRouter requires that adjacency).
+        tool_replies = {
+            message.tool_call_id: message
+            for message in history
+            if message.role == AiMessage.ROLE_TOOL and message.tool_call_id
+        }
+        messages = [{"role": "system", "content": build_system_prompt(supports_actions=supports_actions)}]
         for message in history:
+            if message.role == AiMessage.ROLE_TOOL:
+                continue  # emitted via its assistant turn below
+            if message.role == AiMessage.ROLE_ASSISTANT and message.tool_calls:
+                messages.append(
+                    {
+                        "role": "assistant",
+                        "content": message.content or "",
+                        "tool_calls": message.tool_calls,
+                    }
+                )
+                for call in message.tool_calls:
+                    messages.append(self._tool_reply_message(call, tool_replies))
+                continue
             if message.content:
                 messages.append({"role": message.role, "content": message.content})
         # Always include the current turn (even with empty text) so the relay can
-        # attach images/files to it.
-        messages.append({"role": "user", "content": user_text})
+        # attach images/files to it — unless this is a resume (answer already in
+        # history as a tool result).
+        if append_user:
+            messages.append({"role": "user", "content": user_text})
         return messages
+
+    def _tool_reply_message(self, call, tool_replies):
+        """The ``role:tool`` reply for one assistant tool_call: the persisted
+        answer if we have it, else a synthesized placeholder so the call is never
+        left unanswered (which would invalidate the whole prompt)."""
+        call_id = call.get("id", "")
+        name = (call.get("function") or {}).get("name", "")
+        reply = tool_replies.get(call_id)
+        if reply is not None and reply.content:
+            content = reply.content
+        else:
+            content = json.dumps({"status": "no_answer"}, ensure_ascii=False)
+        return {
+            "role": "tool",
+            "tool_call_id": call_id,
+            "name": name,
+            "content": content,
+        }
 
     def _agentic_stream(
         self,
@@ -177,6 +271,16 @@ class AiChatView(APIView):
         usage_limits = None
         done_data = {}
         saved = False
+        # Set once the model calls ask_user: the turn is persisted as a paused
+        # assistant message and the stream ends without a `done` (the client renders
+        # the question and resumes via /api/ai/chat/resume/). Guards the finally
+        # block so the paused turn isn't re-saved as an ordinary one.
+        paused = False
+        # Per-turn idempotency salt + a running count of committed writes, both
+        # spanning every tool round in this stream (see MAX_MUTATING_WRITES_PER_TURN
+        # and _ai_idempotency_key).
+        turn_id = uuid4().hex
+        mutating_writes = 0
         response = first_response
         try:
             for iteration in range(MAX_TOOL_ITERS + 1):
@@ -221,6 +325,39 @@ class AiChatView(APIView):
                         "tool_calls": turn_tool_calls,
                     }
                 )
+
+                # ask_user is a client-side tool with no server handler: pause the
+                # loop, persist the question, surface it to the client, and stop.
+                # The user's answer arrives later via the resume endpoint, which
+                # re-enters this same loop. Any sibling data-tool calls in the same
+                # turn are intentionally deferred (the model re-issues them after
+                # the answer if still needed) — _build_messages synthesizes their
+                # replies so the paused turn stays a valid prompt.
+                ask_user = self._find_ask_user_call(turn_tool_calls)
+                if ask_user is not None:
+                    call, spec = ask_user
+                    paused = True
+                    paused_message = self._save_paused_assistant(
+                        conversation,
+                        content="".join(turn_text),
+                        reasoning="".join(turn_reasoning),
+                        tool_calls=turn_tool_calls,
+                        ask_call_id=call.get("id", ""),
+                        question=spec,
+                        data=done_data,
+                        tool_events=tool_events,
+                    )
+                    yield sse_event(
+                        "ask_user",
+                        {
+                            "conversation_id": conversation.pk,
+                            "message_id": paused_message.pk,
+                            "tool_call_id": call.get("id", ""),
+                            "questions": spec["questions"],
+                        },
+                    )
+                    return
+
                 for call in turn_tool_calls:
                     function = call.get("function") or {}
                     name = function.get("name", "")
@@ -232,6 +369,7 @@ class AiChatView(APIView):
                         args = {}
                     resource = args.get("resource")
                     label = tool_label(name, resource)
+                    mutates = is_mutating_tool(name)
                     yield sse_event(
                         "tool",
                         {
@@ -239,17 +377,35 @@ class AiChatView(APIView):
                             "resource": resource,
                             "label": label,
                             "phase": "start",
+                            "mutates": mutates,
                         },
                     )
-                    result = execute_tool(name, args, user=user)
+                    if mutates and mutating_writes >= MAX_MUTATING_WRITES_PER_TURN:
+                        # Backstop tripped: refuse to commit further writes this
+                        # turn and let the model wrap up (it sees the error).
+                        result = {
+                            "ok": False,
+                            "error": "write_limit_reached",
+                            "message": (
+                                "بلغت الحد الأقصى لعمليات الإنشاء/التعديل في هذا الدور. "
+                                "توقّف وأخبر المستخدم بما أُنجز."
+                            ),
+                        }
+                    else:
+                        idem = _ai_idempotency_key(turn_id, name, args) if mutates else None
+                        result = execute_tool(name, args, user=user, idempotency_key=idem)
                     ok = bool(result.get("ok"))
+                    if mutates and ok:
+                        mutating_writes += 1
                     tool_events.append(
                         {
                             "name": name,
                             "resource": resource,
+                            "label": label,
                             "arguments": args,
                             "ok": ok,
                             "error": result.get("error"),
+                            "mutates": mutates,
                         }
                     )
                     yield sse_event(
@@ -260,6 +416,7 @@ class AiChatView(APIView):
                             "label": label,
                             "phase": "done",
                             "ok": ok,
+                            "mutates": mutates,
                         },
                     )
                     messages.append(
@@ -298,7 +455,8 @@ class AiChatView(APIView):
                 {
                     "conversation_id": conversation.pk,
                     "message_id": message.pk,
-                    "user_message_id": user_message.pk,
+                    # None on resume turns, which continue an existing user turn.
+                    "user_message_id": user_message.pk if user_message is not None else None,
                     "model": done_data.get("model", ""),
                     "tier": done_data.get("tier", ""),
                     "usage": done_data.get("usage"),
@@ -306,7 +464,7 @@ class AiChatView(APIView):
                 },
             )
         finally:
-            if not saved and ("".join(answer) or "".join(reasoning) or tool_events):
+            if not saved and not paused and ("".join(answer) or "".join(reasoning) or tool_events):
                 self._save_assistant(
                     conversation,
                     "".join(answer),
@@ -334,6 +492,174 @@ class AiChatView(APIView):
         )
         AiConversation.objects.filter(pk=conversation.pk).update(updated_at=timezone.now())
         return message
+
+    def _find_ask_user_call(self, tool_calls):
+        """Return ``(call, validated_spec)`` for the first ask_user call in the
+        batch, or None. The spec is defensively sanitised (the model's JSON can be
+        malformed) so the persisted/streamed question is always well-formed."""
+        for call in tool_calls or []:
+            function = call.get("function") or {}
+            if function.get("name") != ASK_USER_TOOL_NAME:
+                continue
+            # Guarantee a non-empty call id (the model/relay usually supplies one,
+            # but defend against an id-less call). Mutating the dict keeps it
+            # consistent everywhere the same object is used: the persisted
+            # tool_calls, the streamed event, and the resume matcher.
+            if not call.get("id"):
+                call["id"] = f"ask_{uuid4().hex[:16]}"
+            try:
+                args = json.loads(function.get("arguments") or "{}")
+            except (ValueError, TypeError):
+                args = {}
+            if not isinstance(args, dict):
+                args = {}
+            return call, validate_ask_user_spec(args)
+        return None
+
+    def _save_paused_assistant(
+        self,
+        conversation,
+        *,
+        content,
+        reasoning,
+        tool_calls,
+        ask_call_id,
+        question,
+        data,
+        tool_events=None,
+    ):
+        """Persist a paused ask_user turn: the assistant message carries its
+        ``tool_calls`` (for replay) and ``pending_question`` (for the client to
+        render), marked ``awaiting_answer`` until the resume endpoint answers it.
+        Any data tools the model ran before pausing are kept in ``tool_events`` so
+        the turn's trace survives the pause."""
+        usage = data.get("usage") or {}
+        message = AiMessage.objects.create(
+            conversation=conversation,
+            role=AiMessage.ROLE_ASSISTANT,
+            content=content,
+            reasoning=reasoning,
+            tool_calls=tool_calls,
+            tool_call_id=ask_call_id,
+            pending_question=question,
+            status=AiMessage.STATUS_AWAITING_ANSWER,
+            tool_events=tool_events or [],
+            model=data.get("model", ""),
+            tier=data.get("tier", ""),
+            prompt_tokens=int(usage.get("prompt_tokens") or 0),
+            completion_tokens=int(usage.get("completion_tokens") or 0),
+        )
+        AiConversation.objects.filter(pk=conversation.pk).update(updated_at=timezone.now())
+        return message
+
+
+class AiChatResumeView(AiChatView):
+    """Answer a paused ask_user question and resume the agentic turn.
+
+    Subclasses AiChatView purely to reuse its streaming machinery (_build_messages,
+    _agentic_stream, _save_assistant). The user's answer is persisted as the tool
+    result that satisfies the pending ask_user call, then the same loop re-opens the
+    relay (count_usage=False — one ask→answer is one logical turn) and continues
+    from where the model paused. A skip ("declined") resumes too, so an agentic flow
+    never deadlocks on an unanswered question.
+    """
+
+    def post(self, request):
+        serializer = AiChatResumeRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        payload = serializer.validated_data
+
+        installation = RelayInstallation.load()
+        if not relay_ai_available(installation):
+            return Response(
+                {"detail": "AI is not enabled for this shop."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        conversation = AiConversation.objects.filter(
+            user=request.user, pk=payload["conversation_id"]
+        ).first()
+        if conversation is None:
+            return Response(
+                {"detail": "Conversation not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        paused = conversation.messages.filter(
+            pk=payload["message_id"],
+            role=AiMessage.ROLE_ASSISTANT,
+            status=AiMessage.STATUS_AWAITING_ANSWER,
+        ).first()
+        if paused is None:
+            return Response(
+                {"detail": "No pending question for this message."},
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        tool_call_id = payload["tool_call_id"]
+        matches = any(
+            call.get("id") == tool_call_id
+            and (call.get("function") or {}).get("name") == ASK_USER_TOOL_NAME
+            for call in (paused.tool_calls or [])
+        )
+        if not matches:
+            return Response(
+                {"detail": "tool_call_id does not match the pending question."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Persist the user's answer (or skip) as the tool result that satisfies the
+        # ask_user call — this is exactly what gets replayed to the model on resume.
+        if payload.get("declined"):
+            result = {"declined": True}
+        else:
+            result = {"answers": payload.get("answers") or []}
+        AiMessage.objects.create(
+            conversation=conversation,
+            role=AiMessage.ROLE_TOOL,
+            tool_call_id=tool_call_id,
+            content=json.dumps(result, ensure_ascii=False),
+        )
+        paused.status = AiMessage.STATUS_ANSWERED
+        paused.pending_question = None
+        paused.save(update_fields=["status", "pending_question"])
+
+        supports_actions = payload.get("supports_actions", True)
+        messages = self._build_messages(
+            conversation, append_user=False, supports_actions=supports_actions
+        )
+        tools = tools_definitions(
+            supports_ask_user=payload.get("supports_ask_user", True),
+            supports_actions=supports_actions,
+        )
+
+        client = RelayControlClient()
+        try:
+            first_response = client.open_ai_stream(
+                access_token=installation.access_token,
+                messages=messages,
+                tools=tools,
+                count_usage=False,
+            )
+        except RelayControlError as exc:
+            return _relay_error_response(exc)
+
+        streaming = StreamingHttpResponse(
+            self._agentic_stream(
+                client=client,
+                installation=installation,
+                conversation=conversation,
+                user_message=None,
+                messages=messages,
+                tools=tools,
+                user=request.user,
+                first_response=first_response,
+            ),
+            content_type="text/event-stream",
+        )
+        streaming["Cache-Control"] = "no-cache"
+        streaming["X-Accel-Buffering"] = "no"
+        return streaming
 
 
 class AiUsageView(APIView):

@@ -18719,6 +18719,102 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'يجمع البيانات'**
   String get aiAssistantToolWorking;
+
+  /// No description provided for @aiAssistantAskUserSubmit.
+  ///
+  /// In ar, this message translates to:
+  /// **'إرسال الإجابة'**
+  String get aiAssistantAskUserSubmit;
+
+  /// No description provided for @aiAssistantAskUserSkip.
+  ///
+  /// In ar, this message translates to:
+  /// **'تخطّي'**
+  String get aiAssistantAskUserSkip;
+
+  /// No description provided for @aiAssistantAskUserOther.
+  ///
+  /// In ar, this message translates to:
+  /// **'أخرى…'**
+  String get aiAssistantAskUserOther;
+
+  /// No description provided for @aiAssistantAskUserOtherHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'اكتب إجابتك هنا'**
+  String get aiAssistantAskUserOtherHint;
+
+  /// No description provided for @aiAssistantAskUserTextHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'اكتب إجابتك'**
+  String get aiAssistantAskUserTextHint;
+
+  /// No description provided for @aiAssistantAskUserAnswered.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم إرسال إجابتك'**
+  String get aiAssistantAskUserAnswered;
+
+  /// No description provided for @aiAssistantAskUserSkipped.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم تخطّي السؤال'**
+  String get aiAssistantAskUserSkipped;
+
+  /// No description provided for @aiAssistantAskUserConfirmYes.
+  ///
+  /// In ar, this message translates to:
+  /// **'نعم'**
+  String get aiAssistantAskUserConfirmYes;
+
+  /// No description provided for @aiAssistantAskUserConfirmNo.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا'**
+  String get aiAssistantAskUserConfirmNo;
+
+  /// No description provided for @aiAssistantAskUserRequired.
+  ///
+  /// In ar, this message translates to:
+  /// **'هذا السؤال مطلوب'**
+  String get aiAssistantAskUserRequired;
+
+  /// No description provided for @aiAssistantAskUserNumberInvalid.
+  ///
+  /// In ar, this message translates to:
+  /// **'أدخل رقمًا صحيحًا'**
+  String get aiAssistantAskUserNumberInvalid;
+
+  /// No description provided for @aiAssistantAskUserNumberMin.
+  ///
+  /// In ar, this message translates to:
+  /// **'الحد الأدنى {value}'**
+  String aiAssistantAskUserNumberMin(String value);
+
+  /// No description provided for @aiAssistantAskUserNumberMax.
+  ///
+  /// In ar, this message translates to:
+  /// **'الحد الأقصى {value}'**
+  String aiAssistantAskUserNumberMax(String value);
+
+  /// No description provided for @aiAssistantAskUserSelectRange.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر من {min} إلى {max}'**
+  String aiAssistantAskUserSelectRange(int min, int max);
+
+  /// No description provided for @aiAssistantAskUserSelectAtLeast.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر {min} على الأقل'**
+  String aiAssistantAskUserSelectAtLeast(int min);
+
+  /// No description provided for @aiAssistantAskUserPendingComposer.
+  ///
+  /// In ar, this message translates to:
+  /// **'أجب عن السؤال أعلاه للمتابعة'**
+  String get aiAssistantAskUserPendingComposer;
 }
 
 class _AppLocalizationsDelegate
