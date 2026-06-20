@@ -812,6 +812,27 @@ class AiChatActionToolTests(TestCase):
         self.assertNotIn("create_resource", without)
         self.assertNotIn("create_sale", without)
 
+    def test_attachment_turn_still_advertises_tools(self):
+        # A supplier-invoice upload must carry tools so the vision model can read
+        # it AND act (match products, draft the PO) — previously tools were nulled
+        # on any attachment turn.
+        names = self._advertised_tools(
+            {
+                "message": "أنشئ أمر شراء من هذه الفاتورة",
+                "supports_actions": True,
+                "attachments": [
+                    {
+                        "kind": "image",
+                        "data_uri": "data:image/jpeg;base64,/9j/4AAQSkZJRg==",
+                        "name": "invoice.jpg",
+                        "mime": "image/jpeg",
+                    }
+                ],
+            }
+        )
+        self.assertIn("match_invoice_products", names)
+        self.assertIn("create_resource", names)
+
     def test_create_tool_executes_in_loop_and_marks_mutation(self):
         from apps.expenses.models import Expense, ExpenseCategory
 

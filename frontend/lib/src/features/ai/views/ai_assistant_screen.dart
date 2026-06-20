@@ -9,6 +9,7 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../data/models/ai_chat.dart';
 import '../../../shared/app_navigation_drawer.dart';
+import '../../../shared/async_selection/async_multi_select_picker.dart';
 import '../../../shared/date_formatters.dart';
 import '../../../shared/components/components.dart';
 import '../../../shared/design/design.dart';
@@ -20,6 +21,14 @@ const double _maxContentWidth = 860;
 const double _bubbleRadius = 18;
 const double _bubbleTail = 6;
 
+/// Loads a page of products for the ask_user product_picker question — the same
+/// shape the shared async picker expects, with each option keyed by the product's
+/// default VARIANT id (what a purchase-order line references) and labelled by
+/// product name. Injected from the app shell (where the catalog repository lives)
+/// so the AI feature stays decoupled from the catalog data layer.
+typedef AiProductSearch =
+    Future<AsyncSelectionPage<int>> Function(String search, int page);
+
 /// The AI assistant: a streaming chat with the relay-hosted model. The relay
 /// auto-selects the model from the prompt's difficulty, so the user just types.
 /// Arabic-first and RTL; only reachable when the shop's AI entitlement is active.
@@ -28,10 +37,15 @@ class AiAssistantScreen extends StatefulWidget {
     super.key,
     required this.viewModel,
     required this.navigation,
+    this.productSearch,
   });
 
   final AiChatViewModel viewModel;
   final AppNavigation navigation;
+
+  /// Loads products for a product_picker question. Null when the host didn't wire
+  /// a catalog source — the picker degrades to "create new product" only.
+  final AiProductSearch? productSearch;
 
   @override
   State<AiAssistantScreen> createState() => _AiAssistantScreenState();
@@ -310,6 +324,7 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
                             onCopy: _copy,
                             onAnswer: _submitAnswer,
                             onSkip: _skipQuestion,
+                            productSearch: widget.productSearch,
                           )
                         : _EmptyState(onSuggestion: _sendSuggestion),
                   ),
@@ -365,6 +380,7 @@ class _MessageList extends StatelessWidget {
     required this.onCopy,
     required this.onAnswer,
     required this.onSkip,
+    required this.productSearch,
   });
 
   final ScrollController controller;
@@ -375,6 +391,7 @@ class _MessageList extends StatelessWidget {
   final ValueChanged<AiMessage> onCopy;
   final ValueChanged<List<AiAnswer>> onAnswer;
   final VoidCallback onSkip;
+  final AiProductSearch? productSearch;
 
   @override
   Widget build(BuildContext context) {
@@ -406,6 +423,7 @@ class _MessageList extends StatelessWidget {
             onCopy: () => onCopy(message),
             onAnswer: onAnswer,
             onSkip: onSkip,
+            productSearch: productSearch,
           );
         }
         // A stable per-message key preserves each bubble's element (and so its
@@ -507,6 +525,7 @@ class _AssistantMessage extends StatelessWidget {
     required this.onCopy,
     required this.onAnswer,
     required this.onSkip,
+    required this.productSearch,
   });
 
   final AiMessage message;
@@ -514,6 +533,7 @@ class _AssistantMessage extends StatelessWidget {
   final VoidCallback onCopy;
   final ValueChanged<List<AiAnswer>> onAnswer;
   final VoidCallback onSkip;
+  final AiProductSearch? productSearch;
 
   @override
   Widget build(BuildContext context) {
@@ -552,6 +572,7 @@ class _AssistantMessage extends StatelessWidget {
                 message: message,
                 onSubmit: onAnswer,
                 onSkip: onSkip,
+                productSearch: productSearch,
               ),
             ],
             if (showCopy)
@@ -687,14 +708,27 @@ class _QuestionCard extends StatefulWidget {
     required this.message,
     required this.onSubmit,
     required this.onSkip,
+    required this.productSearch,
   });
 
   final AiMessage message;
   final ValueChanged<List<AiAnswer>> onSubmit;
   final VoidCallback onSkip;
+  final AiProductSearch? productSearch;
 
   @override
   State<_QuestionCard> createState() => _QuestionCardState();
+}
+
+/// A product_picker choice in progress: an existing product (its default variant
+/// id + name) or the "create a new product" path.
+class _ProductChoice {
+  const _ProductChoice.existing(this.variantId, this.name) : createNew = false;
+  const _ProductChoice.createNew() : variantId = null, name = null, createNew = true;
+
+  final int? variantId;
+  final String? name;
+  final bool createNew;
 }
 
 class _QuestionCardState extends State<_QuestionCard> {
@@ -702,6 +736,7 @@ class _QuestionCardState extends State<_QuestionCard> {
   final Map<String, Set<String>> _multi = {};
   final Map<String, bool?> _confirm = {};
   final Map<String, TextEditingController> _text = {};
+  final Map<String, _ProductChoice> _product = {};
   final Map<String, String?> _errors = {};
   bool _submitting = false;
 
@@ -856,6 +891,31 @@ class _QuestionCardState extends State<_QuestionCard> {
           answer: AiAnswer(questionId: question.id, type: question.type, value: parsed),
           error: null,
         );
+      case AiQuestionType.productPicker:
+        final choice = _product[question.id];
+        if (choice == null) {
+          return (answer: null, error: required());
+        }
+        if (choice.createNew) {
+          // "Create a new product" — the AI reads is_other and creates it.
+          return (
+            answer: AiAnswer(questionId: question.id, type: question.type, isOther: true),
+            error: null,
+          );
+        }
+        // Defensive: a picked product must carry its variant id (the PO line key).
+        if (choice.variantId == null) {
+          return (answer: null, error: required());
+        }
+        return (
+          answer: AiAnswer(
+            questionId: question.id,
+            type: question.type,
+            value: choice.variantId,
+            otherText: choice.name,
+          ),
+          error: null,
+        );
       case AiQuestionType.freeText:
       case AiQuestionType.unknown:
         final text = _controllerFor(question.id).text.trim();
@@ -943,6 +1003,8 @@ class _QuestionCardState extends State<_QuestionCard> {
         return _buildConfirm(question);
       case AiQuestionType.number:
         return _buildNumber(question);
+      case AiQuestionType.productPicker:
+        return _buildProductPicker(question);
       case AiQuestionType.freeText:
       case AiQuestionType.unknown:
         return _buildText(question);
@@ -1113,6 +1175,114 @@ class _QuestionCardState extends State<_QuestionCard> {
     );
   }
 
+  Widget _buildProductPicker(AiQuestion question) {
+    final spacing = AdaptiveSpacing.of(context);
+    final colors = context.pointyColors;
+    final textTheme = Theme.of(context).textTheme;
+    final l10n = AppLocalizations.of(context)!;
+    final choice = _product[question.id];
+    final canSearch = widget.productSearch != null;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (choice != null) ...[
+          Container(
+            padding: EdgeInsets.symmetric(horizontal: spacing.sm, vertical: spacing.xs),
+            decoration: BoxDecoration(
+              color: colors.primaryContainer,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: colors.primary),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  choice.createNew ? Icons.add_circle_outline : Icons.check_circle,
+                  size: 16,
+                  color: colors.success,
+                ),
+                SizedBox(width: spacing.xs),
+                Flexible(
+                  child: Text(
+                    choice.createNew
+                        ? l10n.aiAssistantProductPickerCreateNewChosen
+                        : (choice.name ?? ''),
+                    style: textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          SizedBox(height: spacing.sm),
+        ],
+        Wrap(
+          spacing: spacing.xs,
+          runSpacing: spacing.xs,
+          children: [
+            if (canSearch)
+              OutlinedButton.icon(
+                key: ValueKey('ai_product_pick_${question.id}'),
+                onPressed: () => _openProductPicker(question),
+                icon: const Icon(Icons.search, size: 18),
+                label: Text(l10n.aiAssistantProductPickerChoose),
+              ),
+            // Always offer "create new" when search isn't available, so there's
+            // never a dead card with no way to answer.
+            if (question.allowCreateNew || !canSearch)
+              OutlinedButton.icon(
+                key: ValueKey('ai_product_create_${question.id}'),
+                onPressed: () => setState(() {
+                  _product[question.id] = const _ProductChoice.createNew();
+                  _errors.remove(question.id);
+                }),
+                icon: const Icon(Icons.add, size: 18),
+                label: Text(l10n.aiAssistantProductPickerCreateNew),
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Future<void> _openProductPicker(AiQuestion question) async {
+    final search = widget.productSearch;
+    if (search == null) {
+      return;
+    }
+    final l10n = AppLocalizations.of(context)!;
+    final picked = await showAsyncMultiSelectPicker<int>(
+      context: context,
+      singleSelection: true,
+      initialSearch: question.productName ?? '',
+      selected: const [],
+      searchFieldKey: const ValueKey('ai_product_picker_search'),
+      applyButtonKey: const ValueKey('ai_product_picker_apply'),
+      strings: AsyncSelectionPickerStrings<int>(
+        title: l10n.aiAssistantProductPickerTitle,
+        searchHint: l10n.aiAssistantProductPickerSearchHint,
+        emptyText: l10n.aiAssistantProductPickerEmpty,
+        clearText: l10n.clearButton,
+        clearSearchTooltip: l10n.clearSearchTooltip,
+        loadErrorText: l10n.aiAssistantProductPickerLoadError,
+        confirmText: l10n.confirmButton,
+        fallbackLabelForId: (id) => '#$id',
+      ),
+      loadPage: search,
+    );
+    if (!mounted || picked == null || picked.isEmpty) {
+      return;
+    }
+    final option = picked.first;
+    setState(() {
+      _product[question.id] = _ProductChoice.existing(
+        option.id,
+        option.displayLabel((id) => '#$id'),
+      );
+      _errors.remove(question.id);
+    });
+  }
+
   Widget _buildActions() {
     final spacing = AdaptiveSpacing.of(context);
     final l10n = AppLocalizations.of(context)!;
@@ -1178,7 +1348,7 @@ class _AnswerSummary extends StatelessWidget {
               ),
               SizedBox(height: 2),
               Text(
-                _displayAnswer(question, answers[question.id]!),
+                _displayAnswer(question, answers[question.id]!, l10n),
                 style: textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
               ),
             ],
@@ -1186,7 +1356,7 @@ class _AnswerSummary extends StatelessWidget {
     );
   }
 
-  String _displayAnswer(AiQuestion question, AiAnswer answer) {
+  String _displayAnswer(AiQuestion question, AiAnswer answer, AppLocalizations l10n) {
     String labelFor(String value) {
       for (final option in question.options) {
         if (option.value == value) {
@@ -1206,10 +1376,16 @@ class _AnswerSummary extends StatelessWidget {
         ];
         return parts.join('، ');
       case AiQuestionType.confirm:
-        return answer.value == true ? 'نعم' : 'لا';
+        return answer.value == true
+            ? l10n.aiAssistantAskUserConfirmYes
+            : l10n.aiAssistantAskUserConfirmNo;
       case AiQuestionType.number:
         final unit = question.unit;
         return unit != null ? '${answer.value} $unit' : '${answer.value}';
+      case AiQuestionType.productPicker:
+        return answer.isOther
+            ? l10n.aiAssistantProductPickerCreateNewChosen
+            : (answer.otherText ?? '${answer.value ?? ''}');
       case AiQuestionType.freeText:
       case AiQuestionType.unknown:
         return '${answer.value ?? ''}';

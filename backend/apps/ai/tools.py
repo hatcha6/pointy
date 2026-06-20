@@ -836,6 +836,232 @@ def create_sale(
     return _write_result(response, action="create_sale", resource="orders")
 
 
+# ── Invoice → purchase-order helpers (dedup matching + auto pricing) ──────────
+#
+# The PO-from-image flow's robustness rests on one idea: the model sees the
+# invoice ONLY on its first (vision) turn, so it must capture the whole
+# extraction in ONE call. match_invoice_products is that call — the model passes
+# the extracted supplier + lines, and the server does the deterministic
+# dedup-matching (barcode, then exact name) + price suggestion and returns a
+# durable draft. Matching is intentionally CONSERVATIVE (auto-match only on an
+# exact barcode or exact name) so the model never silently links the wrong
+# product; anything ambiguous comes back as candidates for the user to resolve
+# via a product_picker question.
+
+_MAX_INVOICE_LINES = 100
+
+
+def _positive_number(value):
+    """True when ``value`` is a number (or numeric string) strictly > 0 — used to
+    flag invoice lines whose quantity/cost the vision model failed to read."""
+    if value in (None, ""):
+        return False
+    try:
+        return float(value) > 0
+    except (TypeError, ValueError):
+        return False
+
+
+def _list_results(meta, *, user, params):
+    """Run a resource's real list action as the user and return its result rows
+    (permission-scoped), or None on any failure — never raises."""
+    if meta is None:
+        return None
+    try:
+        response = _run_viewset(meta.view_class, action="list", user=user, query_params=params)
+    except Exception:
+        logger.exception("AI invoice match list failed for %s", getattr(meta, "resource", "?"))
+        return None
+    if not (200 <= response.status_code < 300):
+        return None
+    data = _json_safe(_shape(response.data))
+    return data.get("results", []) if isinstance(data, dict) else []
+
+
+def _match_supplier(meta, *, user, supplier_name):
+    name = (supplier_name or "").strip()
+    if not name:
+        return {"name": None, "matched": False, "candidates": []}
+    results = _list_results(meta, user=user, params={"search": name}) or []
+    lowered = name.casefold()
+    exact = next(
+        (r for r in results if str(r.get("name", "")).strip().casefold() == lowered),
+        None,
+    )
+    if exact is not None:
+        return {"name": name, "matched": True, "id": exact.get("id"), "matched_name": exact.get("name")}
+    candidates = [{"id": r.get("id"), "name": r.get("name")} for r in results[:5]]
+    return {"name": name, "matched": False, "candidates": candidates}
+
+
+def _match_invoice_line(products_meta, variants_meta, *, user, name, barcode):
+    """Resolve one invoice line to an existing product variant. Barcode-exact
+    wins; else an exact (case-insensitive) name match; else up to 5 candidates."""
+    if barcode:
+        rows = _list_results(variants_meta, user=user, params={"barcode": barcode}) or []
+        if rows:
+            variant = rows[0]
+            return {
+                "matched": True,
+                "match_by": "barcode",
+                "variant_id": variant.get("id"),
+                "product_id": variant.get("product"),
+                "product_name": variant.get("product_name") or variant.get("display_name") or "",
+                "current_price": variant.get("unit_price"),
+            }
+
+    candidates = []
+    if name:
+        rows = _list_results(products_meta, user=user, params={"search": name}) or []
+        lowered = name.casefold()
+        for product in rows:
+            default_variant = product.get("default_variant") or {}
+            if str(product.get("name", "")).strip().casefold() == lowered and default_variant.get("id"):
+                return {
+                    "matched": True,
+                    "match_by": "name",
+                    "variant_id": default_variant.get("id"),
+                    "product_id": product.get("id"),
+                    "product_name": product.get("name"),
+                    "current_price": default_variant.get("unit_price"),
+                }
+        for product in rows[:5]:
+            default_variant = product.get("default_variant") or {}
+            if default_variant.get("id"):
+                candidates.append(
+                    {
+                        "product_id": product.get("id"),
+                        "variant_id": default_variant.get("id"),
+                        "name": product.get("name"),
+                        "barcode": default_variant.get("barcode"),
+                        "price": default_variant.get("unit_price"),
+                    }
+                )
+    return {"matched": False, "candidates": candidates}
+
+
+def match_invoice_products(*, user, supplier_name=None, lines=None):
+    """Match extracted supplier-invoice lines against the shop's existing products
+    (to avoid duplicates) and match/propose the supplier, returning a durable
+    draft the model works from across the rest of the agentic turn (it won't see
+    the image again). Unmatched lines carry a suggested sale price for the
+    create-new path. Permission-scoped via the real viewsets; never raises."""
+    from apps.purchasing.pricing import suggest_sale_price as _suggest_price
+    from apps.purchasing.services import latest_variant_unit_cost
+
+    registry = get_registry()
+    products_meta = registry.get("products")
+    variants_meta = registry.get("product-variants")
+    suppliers_meta = registry.get("suppliers")
+    if products_meta is None or variants_meta is None:
+        return {"ok": False, "error": "internal_error"}
+
+    valid_lines = [raw for raw in lines if isinstance(raw, dict)] if isinstance(lines, list) else []
+    if not valid_lines:
+        # Called with nothing usable — almost always because the model tried to use
+        # this on a continuation turn (the invoice image is gone) instead of
+        # extracting everything on the first turn. Fail loudly so it self-corrects
+        # rather than silently "matching" an empty list.
+        return {
+            "ok": False,
+            "error": "no_lines",
+            "message": (
+                "لم تُمرَّر بنود فاتورة صالحة. استخرج المورّد وكل البنود من صورة الفاتورة "
+                "في دورك الأول (وأنت ترى الصورة) ومرّرها هنا؛ لا تختلق بنودًا."
+            ),
+        }
+
+    truncated = len(valid_lines) > _MAX_INVOICE_LINES
+    supplier = _match_supplier(suppliers_meta, user=user, supplier_name=supplier_name)
+
+    out_lines = []
+    for index, raw in enumerate(valid_lines[:_MAX_INVOICE_LINES]):
+        name = str(raw.get("name") or "").strip()
+        barcode = str(raw.get("barcode") or "").strip()
+        unit_cost = raw.get("unit_cost")
+        match = _match_invoice_line(products_meta, variants_meta, user=user, name=name, barcode=barcode)
+        line_out = {
+            "index": index,
+            "name": name,
+            "barcode": barcode or None,
+            "quantity": raw.get("quantity"),
+            "unit_cost": None if unit_cost in (None, "") else str(unit_cost),
+            "unit": str(raw.get("unit") or "").strip() or None,
+            "matched": bool(match["matched"]),
+        }
+        # Flag extraction gaps so the model asks the user (via ask_user) instead of
+        # building an invalid PO line that the serializer would reject at create.
+        issues = []
+        if not _positive_number(raw.get("quantity")):
+            issues.append("quantity")
+        if not _positive_number(unit_cost):
+            issues.append("unit_cost")
+        if issues:
+            line_out["issues"] = issues
+
+        if match["matched"]:
+            line_out["variant_id"] = match.get("variant_id")
+            line_out["product_id"] = match.get("product_id")
+            line_out["product_name"] = match.get("product_name")
+            line_out["match_by"] = match.get("match_by")
+            line_out["current_price"] = match.get("current_price")
+            try:
+                cost = latest_variant_unit_cost(match.get("variant_id"))
+            except Exception:
+                cost = None
+            line_out["current_cost"] = None if cost is None else f"{cost:.2f}"
+        else:
+            line_out["candidates"] = match.get("candidates", [])
+            suggested = None
+            if "unit_cost" not in issues:
+                try:
+                    suggested = _suggest_price(unit_cost)
+                except Exception:
+                    logger.exception("AI invoice price suggestion failed")
+                    suggested = None
+            line_out["suggested_price"] = None if suggested is None else f"{suggested:.2f}"
+        out_lines.append(line_out)
+
+    matched = sum(1 for line in out_lines if line["matched"])
+    result = {
+        "ok": True,
+        "supplier": supplier,
+        "lines": out_lines,
+        "summary": {
+            "total": len(out_lines),
+            "matched": matched,
+            "unmatched": len(out_lines) - matched,
+            "with_issues": sum(1 for line in out_lines if line.get("issues")),
+        },
+    }
+    if truncated:
+        result["truncated"] = True
+        result["note"] = (
+            f"الفاتورة تحوي {len(valid_lines)} بندًا؛ عولج أول {_MAX_INVOICE_LINES} فقط — "
+            "أبلغ المستخدم بأن البقية لم تُدرَج."
+        )
+    return result
+
+
+def suggest_sale_price(*, user, unit_cost):
+    """Suggest a sale price from a purchase cost using the shop's typical markup
+    (for auto-pricing a newly-created product)."""
+    from apps.purchasing.pricing import pricing_suggestion
+
+    try:
+        bundle = pricing_suggestion(unit_cost)
+    except Exception:
+        logger.exception("AI suggest_sale_price crashed")
+        return {"ok": False, "error": "internal_error"}
+    if bundle.get("suggested_price") is None:
+        return {
+            "ok": False,
+            "error": "invalid_arguments",
+            "message": "تعذّر اقتراح سعر: التكلفة يجب أن تكون رقمًا أكبر من صفر.",
+        }
+    return {"ok": True, "unit_cost": str(unit_cost), **bundle}
+
+
 # ── Dispatch + schemas ──────────────────────────────────────────────────────
 
 # The interactive "ask the user" tool. Unlike every other tool it has NO server
@@ -851,6 +1077,10 @@ ASK_USER_QUESTION_TYPES = (
     "free_text",
     "confirm",
     "number",
+    # The user searches/picks an existing product (resolving an invoice line) or
+    # signals "create a new product". Rendered by the client's async product
+    # picker; the backend treats its config opaquely like every other type.
+    "product_picker",
 )
 
 _TOOL_LABELS = {
@@ -861,6 +1091,8 @@ _TOOL_LABELS = {
     "frequently_bought_together": "المنتجات التي تُشترى معًا",
     "describe_resource": "فحص الحقول",
     "create_sale": "تسجيل بيع",
+    "match_invoice_products": "مطابقة منتجات الفاتورة",
+    "suggest_sale_price": "اقتراح سعر",
     ASK_USER_TOOL_NAME: "بانتظار ردك",
 }
 
@@ -974,7 +1206,9 @@ def ask_user_tool_definition():
                                     "enum": list(ASK_USER_QUESTION_TYPES),
                                     "description": (
                                         "single_select=اختيار واحد، multi_select=اختيار "
-                                        "متعدد، free_text=نص حر، confirm=نعم/لا، number=رقم."
+                                        "متعدد، free_text=نص حر، confirm=نعم/لا، number=رقم، "
+                                        "product_picker=بحث/اختيار منتج موجود أو طلب إنشاء "
+                                        "منتج جديد (لبنود الفاتورة غير المطابقة)."
                                     ),
                                 },
                                 "prompt": {
@@ -998,7 +1232,12 @@ def ask_user_tool_definition():
                                         "أخرى) و min_select/max_select. للنص (free_text): "
                                         "placeholder و multiline و max_length. للرقم "
                                         "(number): min و max و unit و decimals. للتأكيد "
-                                        "(confirm): confirm_label و deny_label."
+                                        "(confirm): confirm_label و deny_label. لاختيار "
+                                        "المنتج (product_picker): name (اسم المنتج من "
+                                        "الفاتورة) و barcode و unit_cost و suggested_price — "
+                                        "تُعرض للمستخدم وتُستخدم إن طلب إنشاء منتج جديد. "
+                                        "إجابة product_picker: value=معرّف متغيّر المنتج "
+                                        "المختار، أو is_other=true أي «أنشئ منتجًا جديدًا»."
                                     ),
                                     "properties": {
                                         "options": {
@@ -1111,6 +1350,12 @@ _TOOLS = {
         amount_received=args.get("amount_received"),
         confirm=bool(args.get("confirm")),
         idempotency_key=key,
+    ),
+    "match_invoice_products": lambda user, args: match_invoice_products(
+        user=user, supplier_name=args.get("supplier_name"), lines=args.get("lines")
+    ),
+    "suggest_sale_price": lambda user, args: suggest_sale_price(
+        user=user, unit_cost=args.get("unit_cost")
     ),
 }
 
@@ -1250,6 +1495,70 @@ def action_tool_definitions():
                         },
                     },
                     "required": ["lines"],
+                    "additionalProperties": False,
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "match_invoice_products",
+                "description": (
+                    "لإنشاء أمر شراء من صورة/ملف فاتورة مورّد: استخرج من الفاتورة في "
+                    "دورك الأول (لأنك لن ترى الصورة بعده) اسم المورّد وكل البنود، ومرّرها "
+                    "هنا. تطابق كل بند مع منتجات المتجر الموجودة (بالباركود ثم بالاسم "
+                    "المطابق تمامًا) لتفادي إنشاء منتجات مكرّرة، وتطابق المورّد، وتقترح "
+                    "سعر بيع للبنود الجديدة. النتيجة: لكل بند matched=true مع variant_id "
+                    "(استخدمه مباشرة في أمر الشراء)، أو matched=false مع candidates و "
+                    "suggested_price (اسأل المستخدم حينها بسؤال product_picker)."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "supplier_name": {
+                            "type": "string",
+                            "description": "اسم المورّد كما يظهر في الفاتورة.",
+                        },
+                        "lines": {
+                            "type": "array",
+                            "minItems": 1,
+                            "description": "بنود الفاتورة المستخرجة.",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "name": {"type": "string", "description": "اسم المنتج كما في الفاتورة."},
+                                    "quantity": {"type": "number"},
+                                    "unit_cost": {"type": "string", "description": "تكلفة الوحدة من الفاتورة."},
+                                    "barcode": {"type": "string", "description": "الباركود إن ظهر في الفاتورة."},
+                                    "unit": {"type": "string", "description": "وحدة الشراء إن ذُكرت (مثل carton)."},
+                                },
+                                "required": ["name", "quantity", "unit_cost"],
+                            },
+                        },
+                    },
+                    "required": ["lines"],
+                    "additionalProperties": False,
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "suggest_sale_price",
+                "description": (
+                    "اقترح سعر بيع لمنتج بناءً على تكلفة شرائه باستخدام هامش الربح المعتاد "
+                    "في المتجر (يُحسب من منتجاتك، أو هامش افتراضي عند قلّة البيانات). "
+                    "استخدمه لتسعير منتج جديد تلقائيًا عند إنشائه من فاتورة."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "unit_cost": {
+                            "type": "string",
+                            "description": "تكلفة الوحدة (لكل وحدة أساسية).",
+                        }
+                    },
+                    "required": ["unit_cost"],
                     "additionalProperties": False,
                 },
             },

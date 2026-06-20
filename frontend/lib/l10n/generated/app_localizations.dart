@@ -18774,6 +18774,48 @@ abstract class AppLocalizations {
   /// **'لا'**
   String get aiAssistantAskUserConfirmNo;
 
+  /// No description provided for @aiAssistantProductPickerChoose.
+  ///
+  /// In ar, this message translates to:
+  /// **'ابحث واختر منتجًا'**
+  String get aiAssistantProductPickerChoose;
+
+  /// No description provided for @aiAssistantProductPickerCreateNew.
+  ///
+  /// In ar, this message translates to:
+  /// **'إنشاء منتج جديد'**
+  String get aiAssistantProductPickerCreateNew;
+
+  /// No description provided for @aiAssistantProductPickerCreateNewChosen.
+  ///
+  /// In ar, this message translates to:
+  /// **'سيُنشأ منتج جديد'**
+  String get aiAssistantProductPickerCreateNewChosen;
+
+  /// No description provided for @aiAssistantProductPickerTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر المنتج'**
+  String get aiAssistantProductPickerTitle;
+
+  /// No description provided for @aiAssistantProductPickerSearchHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'ابحث بالاسم أو الباركود'**
+  String get aiAssistantProductPickerSearchHint;
+
+  /// No description provided for @aiAssistantProductPickerEmpty.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد منتجات مطابقة'**
+  String get aiAssistantProductPickerEmpty;
+
+  /// No description provided for @aiAssistantProductPickerLoadError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر تحميل المنتجات'**
+  String get aiAssistantProductPickerLoadError;
+
   /// No description provided for @aiAssistantAskUserRequired.
   ///
   /// In ar, this message translates to:

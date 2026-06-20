@@ -131,17 +131,16 @@ class AiChatView(APIView):
             conversation.title = user_text[:60]
         conversation.save(update_fields=["title", "updated_at"])
 
-        # Tools let the model query real shop data (as the current user). Skip
-        # them for attachment turns, which route to a vision model that may not
-        # support tool-calling. ask_user is advertised only to clients that can
-        # render the question UI (see AiChatRequestSerializer.supports_ask_user).
-        tools = (
-            None
-            if attachments
-            else tools_definitions(
-                supports_ask_user=payload.get("supports_ask_user", False),
-                supports_actions=payload.get("supports_actions", False),
-            )
+        # Tools let the model query/write real shop data (as the current user).
+        # They're advertised on attachment turns TOO, so a vision model can read
+        # an uploaded supplier invoice AND act on it (match products, create a
+        # purchase order) in one agentic flow — the relay forwards tools on the
+        # vision path unchanged. A vision model that can't tool-call simply emits
+        # text and the loop ends gracefully (no error). ask_user / action tools
+        # are each still gated by the client's declared capability.
+        tools = tools_definitions(
+            supports_ask_user=payload.get("supports_ask_user", False),
+            supports_actions=payload.get("supports_actions", False),
         )
 
         client = RelayControlClient()

@@ -33,6 +33,7 @@ import 'package:pointy_frontend/src/features/ai/ai_attachment_picker.dart';
 import 'package:pointy_frontend/src/features/ai/view_models/ai_chat_view_model.dart';
 import 'package:pointy_frontend/src/features/ai/views/ai_assistant_screen.dart';
 import 'package:pointy_frontend/src/shared/app_navigation_drawer.dart';
+import 'package:pointy_frontend/src/shared/async_selection/async_multi_select_picker.dart';
 import 'package:pointy_frontend/src/shared/design/design.dart';
 import 'package:pointy_frontend/src/shared/shell/shell.dart';
 
@@ -91,6 +92,7 @@ class _PreviewHostState extends State<_PreviewHost> {
     _FakeAiChatRepository(
       askUserMode: widget.screen == 'ask',
       actionsMode: widget.screen == 'actions',
+      pickerMode: widget.screen == 'po',
     ),
     picker: _FakeAttachmentPicker(),
   );
@@ -128,6 +130,10 @@ class _PreviewHostState extends State<_PreviewHost> {
         // accented, persistent "action" chips can be screenshotted next to a
         // muted read chip.
         await _viewModel.sendMessage('أضف برغر لحم إلى قائمة المطعم');
+      case 'po':
+        // A supplier-invoice flow that asks a product_picker question for an
+        // unmatched line (search existing product, or create new).
+        await _viewModel.sendMessage('أنشئ أمر شراء من هذه الفاتورة');
       default:
         await _viewModel.sendMessage('كيف أضيف منتجًا جديدًا إلى المتجر؟');
     }
@@ -141,15 +147,47 @@ class _PreviewHostState extends State<_PreviewHost> {
 
   @override
   Widget build(BuildContext context) {
-    return AiAssistantScreen(viewModel: _viewModel, navigation: _navigation);
+    return AiAssistantScreen(
+      viewModel: _viewModel,
+      navigation: _navigation,
+      productSearch: _fakeProductSearch,
+    );
+  }
+
+  /// A handful of fake products so the product_picker sheet can be exercised.
+  Future<AsyncSelectionPage<int>> _fakeProductSearch(String search, int page) async {
+    await Future<void>.delayed(const Duration(milliseconds: 200));
+    const all = [
+      (10, 'حليب المراعي ١ لتر', 'MILK-1L • 6291000111'),
+      (11, 'حليب نادك ١ لتر', 'MILK-N1L • 6291000222'),
+      (12, 'حليب المراعي ٢٠٠ مل', 'MILK-200 • 6291000333'),
+    ];
+    final query = search.trim();
+    final matches = query.isEmpty
+        ? all
+        : all.where((p) => p.$2.contains(query)).toList();
+    return AsyncSelectionPage<int>(
+      options: [
+        for (final product in matches)
+          AsyncSelectionOption<int>(
+            id: product.$1,
+            label: product.$2,
+            subtitle: product.$3,
+          ),
+      ],
+      hasMore: false,
+    );
   }
 }
 
 /// Streams a scripted Arabic reply with per-word delays so the live-typing
 /// cursor and bubbles can be screenshotted.
 class _FakeAiChatRepository extends AiChatRepository {
-  _FakeAiChatRepository({this.askUserMode = false, this.actionsMode = false})
-    : super(PosApiService());
+  _FakeAiChatRepository({
+    this.askUserMode = false,
+    this.actionsMode = false,
+    this.pickerMode = false,
+  }) : super(PosApiService());
 
   /// When set, the scripted reply asks an interactive question (all 5 types)
   /// instead of answering, so the ask_user card can be screenshotted.
@@ -158,6 +196,10 @@ class _FakeAiChatRepository extends AiChatRepository {
   /// When set, the scripted reply performs a composite create (product +
   /// recipe), so the accented action chips can be screenshotted.
   final bool actionsMode;
+
+  /// When set, the scripted reply asks a product_picker question (an unmatched
+  /// invoice line), so the picker card can be screenshotted.
+  final bool pickerMode;
 
   @override
   Stream<AiChatEvent> streamChat({
@@ -171,6 +213,10 @@ class _FakeAiChatRepository extends AiChatRepository {
     }
     if (actionsMode) {
       yield* _actionsScript();
+      return;
+    }
+    if (pickerMode) {
+      yield* _pickerScript();
       return;
     }
     // A scripted tool round so the "querying sales…" chip can be screenshotted.
@@ -285,6 +331,50 @@ class _FakeAiChatRepository extends AiChatRepository {
       userMessageId: 1,
       model: 'preview/model',
       usage: _fakeUsage(fiveUsed: 24, weekUsed: 97),
+    );
+  }
+
+  /// Streams a supplier-invoice flow: a read of the catalogue, then a
+  /// product_picker question for a line that didn't match an existing product.
+  Stream<AiChatEvent> _pickerScript() async* {
+    yield const AiChatToolActivity(
+      name: 'match_invoice_products',
+      resource: null,
+      label: 'مطابقة منتجات الفاتورة',
+      phase: 'start',
+    );
+    await Future<void>.delayed(const Duration(milliseconds: 700));
+    yield const AiChatToolActivity(
+      name: 'match_invoice_products',
+      resource: null,
+      label: 'مطابقة منتجات الفاتورة',
+      phase: 'done',
+      ok: true,
+    );
+    const reasoning = 'طابقتُ معظم البنود؛ بقي بند واحد لم أجد له منتجًا مطابقًا.';
+    for (final word in reasoning.split(' ')) {
+      await Future<void>.delayed(const Duration(milliseconds: 35));
+      yield AiChatReasoning('$word ');
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 200));
+    yield AiChatAskUser(
+      conversationId: 1,
+      messageId: 77,
+      toolCallId: 'call_po',
+      questions: [
+        AiQuestion(
+          id: 'line3',
+          type: AiQuestionType.productPicker,
+          prompt: 'لم أجد «حليب المراعي ١ لتر» في منتجاتك — اختر المطابق أو أنشئ منتجًا جديدًا.',
+          help: 'الكمية 12 — التكلفة 2.50 د.ل — سعر بيع مقترح 3.25 د.ل',
+          config: const {
+            'name': 'حليب المراعي ١ لتر',
+            'barcode': '6291000111',
+            'unit_cost': '2.50',
+            'suggested_price': '3.25',
+          },
+        ),
+      ],
     );
   }
 

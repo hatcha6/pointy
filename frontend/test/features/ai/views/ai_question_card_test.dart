@@ -11,6 +11,7 @@ import 'package:pointy_frontend/src/data/services/pos_api_service.dart';
 import 'package:pointy_frontend/src/features/ai/view_models/ai_chat_view_model.dart';
 import 'package:pointy_frontend/src/features/ai/views/ai_assistant_screen.dart';
 import 'package:pointy_frontend/src/shared/app_navigation_drawer.dart';
+import 'package:pointy_frontend/src/shared/async_selection/async_multi_select_picker.dart';
 import 'package:pointy_frontend/src/shared/design/design.dart';
 import 'package:pointy_frontend/src/shared/shell/shell.dart';
 
@@ -84,7 +85,21 @@ class _FakeNavigation implements AppNavigation {
   void logout(BuildContext context) {}
 }
 
-Future<void> _pump(WidgetTester tester, AiChatViewModel viewModel) async {
+Future<AsyncSelectionPage<int>> _fakeProductSearch(String search, int page) async {
+  return const AsyncSelectionPage<int>(
+    options: [
+      AsyncSelectionOption<int>(id: 10, label: 'حليب المراعي ١ لتر', subtitle: '6291000111'),
+      AsyncSelectionOption<int>(id: 11, label: 'حليب نادك ١ لتر', subtitle: '6291000222'),
+    ],
+    hasMore: false,
+  );
+}
+
+Future<void> _pump(
+  WidgetTester tester,
+  AiChatViewModel viewModel, {
+  AiProductSearch? productSearch,
+}) async {
   await tester.pumpWidget(
     MaterialApp(
       locale: const Locale('ar'),
@@ -101,7 +116,11 @@ Future<void> _pump(WidgetTester tester, AiChatViewModel viewModel) async {
         controller: PointyNavigationRailController(),
         child: child ?? const SizedBox.shrink(),
       ),
-      home: AiAssistantScreen(viewModel: viewModel, navigation: _FakeNavigation()),
+      home: AiAssistantScreen(
+        viewModel: viewModel,
+        navigation: _FakeNavigation(),
+        productSearch: productSearch,
+      ),
     ),
   );
   await tester.pump();
@@ -231,6 +250,65 @@ void main() {
 
     expect(repo.resumeCalled, isTrue);
     expect(repo.resumeAnswers.single.value, 7);
+  });
+
+  testWidgets('product picker "create new" resumes with is_other', (tester) async {
+    final repo = _AskRepo([
+      AiQuestion(
+        id: 'line1',
+        type: AiQuestionType.productPicker,
+        prompt: 'لم أجد «حليب المراعي» — اختره أو أنشئه',
+        config: const {'name': 'حليب المراعي', 'suggested_price': '3.25'},
+      ),
+    ]);
+    final viewModel = AiChatViewModel(repo);
+    addTearDown(viewModel.dispose);
+
+    await _pump(tester, viewModel, productSearch: _fakeProductSearch);
+    await viewModel.sendMessage('hi');
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('إنشاء منتج جديد'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('إرسال الإجابة'));
+    await tester.pumpAndSettle();
+
+    expect(repo.resumeCalled, isTrue);
+    expect(repo.resumeAnswers.single.questionId, 'line1');
+    expect(repo.resumeAnswers.single.isOther, isTrue);
+    // The summary reflects the "new product" choice (localized).
+    expect(find.text('سيُنشأ منتج جديد'), findsWidgets);
+  });
+
+  testWidgets('product picker resumes with the chosen variant id', (tester) async {
+    final repo = _AskRepo([
+      AiQuestion(
+        id: 'line1',
+        type: AiQuestionType.productPicker,
+        prompt: 'اختر المنتج',
+        config: const {'name': 'حليب'},
+      ),
+    ]);
+    final viewModel = AiChatViewModel(repo);
+    addTearDown(viewModel.dispose);
+
+    await _pump(tester, viewModel, productSearch: _fakeProductSearch);
+    await viewModel.sendMessage('hi');
+    await tester.pumpAndSettle();
+
+    // Open the async picker sheet, choose a product, apply, then submit.
+    await tester.tap(find.text('ابحث واختر منتجًا'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('حليب المراعي ١ لتر'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('ai_product_picker_apply')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('إرسال الإجابة'));
+    await tester.pumpAndSettle();
+
+    expect(repo.resumeCalled, isTrue);
+    expect(repo.resumeAnswers.single.value, 10);
+    expect(repo.resumeAnswers.single.isOther, isFalse);
   });
 
   testWidgets('skip resumes with a declined result', (tester) async {

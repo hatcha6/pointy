@@ -75,6 +75,7 @@ import 'features/catalog/view_models/product_stock_view_model.dart';
 import 'features/catalog/views/product_variant_details_screen.dart';
 import 'features/contacts/views/customer_details_screen.dart';
 import 'features/contacts/views/supplier_details_screen.dart';
+import 'shared/async_selection/async_multi_select_picker.dart';
 import 'shared/command_palette/command_palette.dart';
 import 'shared/formatters.dart';
 import 'shared/navigation/app_navigation.dart';
@@ -442,8 +443,37 @@ class _AuthenticatedRoutes implements AppNavigation {
       AiAssistantScreen(
         viewModel: AiChatViewModel(dependencies.aiChatRepository),
         navigation: this,
+        productSearch: _aiProductSearch,
       ),
     );
+  }
+
+  /// Loads products for the AI's product_picker question — keyed by each
+  /// product's default VARIANT id (what a purchase-order line references), so the
+  /// answer the AI receives is directly usable.
+  Future<AsyncSelectionPage<int>> _aiProductSearch(String search, int page) async {
+    final result = await dependencies.catalogRepository.loadProducts(
+      query: ProductQuery(search: search, availability: ProductAvailabilityFilter.active),
+      page: page,
+    );
+    return switch (result) {
+      Ok(value: final productPage) => AsyncSelectionPage<int>(
+        options: [
+          for (final product in productPage.products)
+            if (product.variantId != null)
+              AsyncSelectionOption<int>(
+                id: product.variantId!,
+                label: product.name,
+                subtitle: [
+                  if (product.effectiveSku.isNotEmpty) product.effectiveSku,
+                  if (product.effectiveBarcode.isNotEmpty) product.effectiveBarcode,
+                ].join(' • '),
+              ),
+        ],
+        hasMore: productPage.hasMore,
+      ),
+      Error() => throw Exception('ai product search failed'),
+    };
   }
 
   Widget expensesRouteBuilder(BuildContext routeContext) {

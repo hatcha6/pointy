@@ -82,6 +82,7 @@ showAsyncMultiSelectPicker<T extends Object>({
   Key Function(T id)? optionKeyForId,
   double heightFactor = 0.82,
   bool singleSelection = false,
+  String initialSearch = '',
 }) {
   return showAdaptiveModalBottomSheet<List<AsyncSelectionOption<T>>>(
     context: context,
@@ -96,6 +97,7 @@ showAsyncMultiSelectPicker<T extends Object>({
         applyButtonKey: applyButtonKey,
         optionKeyForId: optionKeyForId,
         singleSelection: singleSelection,
+        initialSearch: initialSearch,
       );
     },
   );
@@ -110,6 +112,7 @@ class _AsyncMultiSelectPickerSheet<T extends Object> extends StatefulWidget {
     required this.applyButtonKey,
     required this.optionKeyForId,
     required this.singleSelection,
+    required this.initialSearch,
   });
 
   final AsyncSelectionPickerStrings<T> strings;
@@ -119,6 +122,7 @@ class _AsyncMultiSelectPickerSheet<T extends Object> extends StatefulWidget {
   final Key applyButtonKey;
   final Key Function(T id)? optionKeyForId;
   final bool singleSelection;
+  final String initialSearch;
 
   @override
   State<_AsyncMultiSelectPickerSheet<T>> createState() =>
@@ -140,6 +144,7 @@ class _AsyncMultiSelectPickerSheetState<T extends Object>
   void initState() {
     super.initState();
     _selected = {for (final item in widget.selected) item.id: item};
+    _search = widget.initialSearch;
     _load(reset: true);
   }
 

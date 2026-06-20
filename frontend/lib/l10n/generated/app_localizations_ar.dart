@@ -10829,6 +10829,27 @@ class AppLocalizationsAr extends AppLocalizations {
   String get aiAssistantAskUserConfirmNo => 'لا';
 
   @override
+  String get aiAssistantProductPickerChoose => 'ابحث واختر منتجًا';
+
+  @override
+  String get aiAssistantProductPickerCreateNew => 'إنشاء منتج جديد';
+
+  @override
+  String get aiAssistantProductPickerCreateNewChosen => 'سيُنشأ منتج جديد';
+
+  @override
+  String get aiAssistantProductPickerTitle => 'اختر المنتج';
+
+  @override
+  String get aiAssistantProductPickerSearchHint => 'ابحث بالاسم أو الباركود';
+
+  @override
+  String get aiAssistantProductPickerEmpty => 'لا توجد منتجات مطابقة';
+
+  @override
+  String get aiAssistantProductPickerLoadError => 'تعذّر تحميل المنتجات';
+
+  @override
   String get aiAssistantAskUserRequired => 'هذا السؤال مطلوب';
 
   @override

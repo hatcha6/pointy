@@ -197,4 +197,38 @@ void main() {
       expect(message.toolRuns, isEmpty);
     });
   });
+
+  group('product_picker question', () {
+    test('parses the type and config getters', () {
+      final question = AiQuestion.fromJson({
+        'id': 'line1',
+        'type': 'product_picker',
+        'prompt': 'اختر المنتج',
+        'config': {
+          'name': 'حليب المراعي',
+          'barcode': '6291000111',
+          'unit_cost': '2.50',
+          'suggested_price': '3.25',
+        },
+      });
+      expect(question.type, AiQuestionType.productPicker);
+      expect(question.productName, 'حليب المراعي');
+      expect(question.productBarcode, '6291000111');
+      expect(question.productUnitCost, '2.50');
+      expect(question.productSuggestedPrice, '3.25');
+      expect(question.allowCreateNew, isTrue);
+    });
+
+    test('round-trips the wire name and coerces a numeric config value', () {
+      expect(aiQuestionTypeWire(AiQuestionType.productPicker), 'product_picker');
+      final question = AiQuestion.fromJson({
+        'id': 'l',
+        'type': 'product_picker',
+        'prompt': 'x',
+        'config': {'unit_cost': 2.5, 'allow_create_new': false},
+      });
+      expect(question.productUnitCost, '2.5');
+      expect(question.allowCreateNew, isFalse);
+    });
+  });
 }

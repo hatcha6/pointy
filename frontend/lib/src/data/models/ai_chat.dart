@@ -130,7 +130,15 @@ class AiToolRun {
 /// [unknown] is the graceful fallback for a server-introduced type this client
 /// doesn't know — it renders as free text so a newer backend never breaks an
 /// older app.
-enum AiQuestionType { singleSelect, multiSelect, freeText, confirm, number, unknown }
+enum AiQuestionType {
+  singleSelect,
+  multiSelect,
+  freeText,
+  confirm,
+  number,
+  productPicker,
+  unknown,
+}
 
 AiQuestionType _aiQuestionTypeFrom(String? raw) {
   switch (raw) {
@@ -144,6 +152,8 @@ AiQuestionType _aiQuestionTypeFrom(String? raw) {
       return AiQuestionType.confirm;
     case 'number':
       return AiQuestionType.number;
+    case 'product_picker':
+      return AiQuestionType.productPicker;
     default:
       return AiQuestionType.unknown;
   }
@@ -164,6 +174,8 @@ String aiQuestionTypeWire(AiQuestionType type) {
       return 'confirm';
     case AiQuestionType.number:
       return 'number';
+    case AiQuestionType.productPicker:
+      return 'product_picker';
   }
 }
 
@@ -229,6 +241,23 @@ class AiQuestion {
   int get decimals => (config['decimals'] as num?)?.toInt() ?? 0;
   String? get confirmLabel => config['confirm_label'] as String?;
   String? get denyLabel => config['deny_label'] as String?;
+
+  // product_picker config: the invoice line the AI couldn't match. Shown to the
+  // user and reused if they choose "create new product".
+  String? get productName => (config['name'] as String?)?.trim();
+  String? get productBarcode => (config['barcode'] as String?)?.trim();
+  String? get productUnitCost => _configString('unit_cost');
+  String? get productSuggestedPrice => _configString('suggested_price');
+  bool get allowCreateNew => config['allow_create_new'] != false;
+
+  String? _configString(String key) {
+    final value = config[key];
+    if (value == null) {
+      return null;
+    }
+    final text = value is num ? value.toString() : value.toString().trim();
+    return text.isEmpty ? null : text;
+  }
 
   factory AiQuestion.fromJson(Map<String, Object?> json) {
     return AiQuestion(

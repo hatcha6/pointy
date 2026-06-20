@@ -30,6 +30,8 @@ from .tools import (
     describe_resource,
     execute_tool,
     is_mutating_tool,
+    match_invoice_products,
+    suggest_sale_price,
     tools_definitions,
     update_resource,
 )
@@ -354,3 +356,146 @@ class CapabilityGatingTests(_Fixtures):
         self.assertTrue(is_mutating_tool("create_resource"))
         self.assertTrue(is_mutating_tool("create_sale"))
         self.assertFalse(is_mutating_tool("query_resource"))
+        # The invoice helpers are read-only (no mutation) despite being action tools.
+        self.assertFalse(is_mutating_tool("match_invoice_products"))
+        self.assertFalse(is_mutating_tool("suggest_sale_price"))
+
+
+class _PurchasingFixtures(_Fixtures):
+    def _supplier(self, name="Acme Foods"):
+        from apps.purchasing.models import Supplier
+
+        return Supplier.objects.create(name=name)
+
+    def _purchase_line(self, variant, unit_cost):
+        from apps.purchasing.models import PurchaseLine, PurchaseOrder
+
+        po = PurchaseOrder.objects.create(supplier=self._supplier(f"sup-{variant.sku}"))
+        return PurchaseLine.objects.create(
+            purchase_order=po,
+            variant=variant,
+            quantity=10,
+            unit_cost=Decimal(unit_cost),
+            unit_factor=Decimal("1"),
+        )
+
+
+class MatchInvoiceProductsTests(_PurchasingFixtures):
+    def test_matches_existing_product_by_barcode(self):
+        variant = self._sellable(name="حليب", sku="MILK-1", price="3.00")
+        variant.barcode = "6291000111"
+        variant.save(update_fields=["barcode"])
+
+        result = match_invoice_products(
+            user=self.manager,
+            lines=[{"name": "اسم مختلف تمامًا", "quantity": 12, "unit_cost": "2.00", "barcode": "6291000111"}],
+        )
+        line = result["lines"][0]
+        self.assertTrue(line["matched"])
+        self.assertEqual(line["variant_id"], variant.id)
+        self.assertEqual(line["match_by"], "barcode")
+
+    def test_matches_existing_product_by_exact_name(self):
+        variant = self._sellable(name="حليب المراعي", sku="MILK-2", price="3.00")
+        result = match_invoice_products(
+            user=self.manager,
+            lines=[{"name": "حليب المراعي", "quantity": 6, "unit_cost": "2.00"}],
+        )
+        line = result["lines"][0]
+        self.assertTrue(line["matched"])
+        self.assertEqual(line["variant_id"], variant.id)
+        self.assertEqual(line["match_by"], "name")
+
+    def test_unmatched_line_returns_suggested_price_and_no_false_match(self):
+        result = match_invoice_products(
+            user=self.manager,
+            lines=[{"name": "منتج غير موجود إطلاقًا", "quantity": 3, "unit_cost": "10.00"}],
+        )
+        line = result["lines"][0]
+        self.assertFalse(line["matched"])
+        self.assertNotIn("variant_id", line)
+        self.assertEqual(line["suggested_price"], "13.00")  # 30% default markup
+        self.assertEqual(
+            result["summary"], {"total": 1, "matched": 0, "unmatched": 1, "with_issues": 0}
+        )
+
+    def test_matched_line_reports_current_cost(self):
+        variant = self._sellable(name="سكر", sku="SUG-1", price="5.00")
+        self._purchase_line(variant, "4.00")
+        result = match_invoice_products(
+            user=self.manager,
+            lines=[{"name": "سكر", "quantity": 1, "unit_cost": "4.50"}],
+        )
+        self.assertEqual(result["lines"][0]["current_cost"], "4.00")
+
+    def test_supplier_matched_by_exact_name(self):
+        supplier = self._supplier("Acme Foods")
+        result = match_invoice_products(
+            user=self.manager,
+            supplier_name="acme foods",  # case-insensitive
+            lines=[{"name": "x", "quantity": 1, "unit_cost": "1.00"}],
+        )
+        self.assertTrue(result["supplier"]["matched"])
+        self.assertEqual(result["supplier"]["id"], supplier.id)
+
+    def test_supplier_unmatched_is_not_a_false_positive(self):
+        self._supplier("Acme Foods")
+        result = match_invoice_products(
+            user=self.manager,
+            supplier_name="Totally Different Vendor",
+            lines=[{"name": "x", "quantity": 1, "unit_cost": "1.00"}],
+        )
+        self.assertFalse(result["supplier"]["matched"])
+        self.assertNotIn("id", result["supplier"])
+
+    def test_no_usable_lines_fails_loudly(self):
+        # Guards the "called on a continuation turn without the image" trap — it
+        # must error, not silently return an empty match.
+        for bad in ([], None, ["not a dict"]):
+            result = match_invoice_products(user=self.manager, lines=bad)
+            self.assertFalse(result["ok"], bad)
+            self.assertEqual(result["error"], "no_lines", bad)
+
+    def test_missing_quantity_and_zero_cost_are_flagged(self):
+        result = match_invoice_products(
+            user=self.manager,
+            lines=[
+                {"name": "بلا كمية", "unit_cost": "5.00"},  # quantity missing
+                {"name": "بتكلفة صفر", "quantity": 2, "unit_cost": "0"},  # bad cost
+            ],
+        )
+        first, second = result["lines"]
+        self.assertIn("quantity", first["issues"])
+        self.assertIn("unit_cost", second["issues"])
+        # A line with an invalid cost gets no fabricated price suggestion.
+        self.assertIsNone(second["suggested_price"])
+        self.assertEqual(result["summary"]["with_issues"], 2)
+
+    def test_truncation_is_reported(self):
+        lines = [{"name": f"بند {i}", "quantity": 1, "unit_cost": "1.00"} for i in range(150)]
+        result = match_invoice_products(user=self.manager, lines=lines)
+        self.assertTrue(result["truncated"])
+        self.assertEqual(result["summary"]["total"], 100)
+        self.assertIn("note", result)
+
+
+class PricingHelperTests(_PurchasingFixtures):
+    def test_suggest_sale_price_tool_default_markup(self):
+        out = suggest_sale_price(user=self.manager, unit_cost="10.00")
+        self.assertTrue(out["ok"])
+        self.assertEqual(out["suggested_price"], "13.00")
+        self.assertEqual(out["markup_source"], "default")
+
+    def test_suggest_sale_price_rejects_zero_cost(self):
+        self.assertEqual(suggest_sale_price(user=self.manager, unit_cost="0")["error"], "invalid_arguments")
+
+    def test_markup_is_inferred_from_shop_data(self):
+        from apps.purchasing.pricing import shop_typical_markup_percent, suggest_sale_price as price_for
+
+        # Five products each priced at 2× cost → a 100% shop markup.
+        for index in range(5):
+            variant = self._sellable(name=f"بند {index}", sku=f"MK-{index}", price="20.00")
+            self._purchase_line(variant, "10.00")
+        self.assertEqual(shop_typical_markup_percent(), Decimal("100"))
+        # A new product costing 7 is then suggested at 14 (100% markup), not 9.10.
+        self.assertEqual(price_for(Decimal("7.00")), Decimal("14.00"))
