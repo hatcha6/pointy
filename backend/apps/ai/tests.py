@@ -812,6 +812,24 @@ class AiChatActionToolTests(TestCase):
         self.assertNotIn("create_resource", without)
         self.assertNotIn("create_sale", without)
 
+    def _system_prompt_for(self, payload):
+        with patch("apps.ai.views.RelayControlClient") as mock_client:
+            mock_client.return_value.open_ai_stream.return_value = FakeRelayResponse(
+                fake_sse_lines(["ok"])
+            )
+            self.client.post(reverse("ai-chat"), payload, format="json")
+            _, kwargs = mock_client.return_value.open_ai_stream.call_args
+            return kwargs["messages"][0]["content"]
+
+    def test_navigation_link_guidance_gated_by_capability(self):
+        # A capable client is told it can emit pointy:// deep links; an older one
+        # never is (so it can't render an inert link).
+        with_nav = self._system_prompt_for({"message": "x", "supports_navigation": True})
+        self.assertIn("pointy://", with_nav)
+        self.assertIn("pointy://screen/", with_nav)
+        without = self._system_prompt_for({"message": "x"})
+        self.assertNotIn("pointy://", without)
+
     def test_attachment_turn_still_advertises_tools(self):
         # A supplier-invoice upload must carry tools so the vision model can read
         # it AND act (match products, draft the PO) — previously tools were nulled

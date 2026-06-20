@@ -107,7 +107,26 @@ def _action_guidance(shop):
     )
 
 
-def build_system_prompt(*, supports_actions=False):
+def _navigation_guidance():
+    """How to emit an in-app deep link the user can tap to jump to a page —
+    appended only for clients that render `pointy://` links (supports_navigation).
+    Like Codex linking files, but for screens and records."""
+    return (
+        "يمكنك توجيه المستخدم إلى أي صفحة داخل التطبيق بإدراج رابط Markdown قابل للنقر في "
+        "ردك (تمامًا كما يربط Codex الملفات): للسجلات استخدم "
+        "[النص الظاهر](pointy://النوع/المعرّف) والنوع ∈ product (منتج)، customer (عميل)، "
+        "supplier (مورّد)، order (فاتورة بيع)، purchase-order (أمر شراء)، job (مهمة/صيانة). "
+        "مثال: [قهوة تركي](pointy://product/42) أو [الفاتورة ٩٩](pointy://order/99). وللصفحات "
+        "الرئيسية استخدم [النص](pointy://screen/المفتاح) والمفاتيح: dashboard، pos، catalog، "
+        "invoices، purchasing، contacts، categories، stockCount، registerSessions، employees، "
+        "expenses، discounts، reports، activityLog، operations، users، settings. أدرج الرابط "
+        "طبيعيًا داخل الجملة حين يساعد المستخدم على بلوغ صفحة يحتاجها، أو لمراجعة سجل ذكرته، أو "
+        "للتأكيد. استخدم فقط المعرّفات التي حصلت عليها فعلًا من الأدوات؛ لا تختلق معرّفًا ولا "
+        "تربط سجلًا غير متأكد من وجوده. "
+    )
+
+
+def build_system_prompt(*, supports_actions=False, supports_navigation=False):
     """Compose the shop-aware Arabic system prompt.
 
     Injects the current date + live shop context and lays out the tool-use
@@ -152,6 +171,8 @@ def build_system_prompt(*, supports_actions=False):
     )
     if supports_actions:
         prompt += _action_guidance(shop)
+    if supports_navigation:
+        prompt += _navigation_guidance()
     return prompt
 
 

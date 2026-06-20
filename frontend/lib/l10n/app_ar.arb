@@ -6395,6 +6395,7 @@
   "aiAssistantProductPickerSearchHint": "ابحث بالاسم أو الباركود",
   "aiAssistantProductPickerEmpty": "لا توجد منتجات مطابقة",
   "aiAssistantProductPickerLoadError": "تعذّر تحميل المنتجات",
+  "aiAssistantLinkUnavailable": "تعذّر فتح الصفحة المطلوبة.",
   "aiAssistantAskUserRequired": "هذا السؤال مطلوب",
   "aiAssistantAskUserNumberInvalid": "أدخل رقمًا صحيحًا",
   "aiAssistantAskUserNumberMin": "الحد الأدنى {value}",

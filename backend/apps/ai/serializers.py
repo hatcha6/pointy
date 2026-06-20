@@ -65,6 +65,10 @@ class AiChatRequestSerializer(serializers.Serializer):
     # clients, so an older app can never be steered into mutating shop data without
     # the user seeing it happen.
     supports_actions = serializers.BooleanField(required=False, default=False)
+    # Whether this client renders the AI's in-app deep links (pointy://...). Only
+    # then is the model told it can link the user to pages, so an older app never
+    # shows an inert link it can't route.
+    supports_navigation = serializers.BooleanField(required=False, default=False)
 
 
 class AiAnswerSerializer(serializers.Serializer):
@@ -97,3 +101,4 @@ class AiChatResumeRequestSerializer(serializers.Serializer):
     # A resume continues a turn the client already proved it can render; default
     # the action capability on so the resumed loop keeps its create/edit tools.
     supports_actions = serializers.BooleanField(required=False, default=True)
+    supports_navigation = serializers.BooleanField(required=False, default=True)

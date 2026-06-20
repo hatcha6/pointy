@@ -10,6 +10,7 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 import '../../../data/models/ai_chat.dart';
 import '../../../shared/app_navigation_drawer.dart';
 import '../../../shared/async_selection/async_multi_select_picker.dart';
+import '../../../shared/navigation/ai_deep_link.dart';
 import '../../../shared/date_formatters.dart';
 import '../../../shared/components/components.dart';
 import '../../../shared/design/design.dart';
@@ -29,6 +30,12 @@ const double _bubbleTail = 6;
 typedef AiProductSearch =
     Future<AsyncSelectionPage<int>> Function(String search, int page);
 
+/// Opens a deep link the AI emitted (a screen or an entity detail). Injected
+/// from the app shell, which owns navigation + the repositories. Returns false
+/// if the target can't be opened (unknown / no permission / load failed).
+typedef AiLinkHandler =
+    Future<bool> Function(BuildContext context, AiDeepLink link);
+
 /// The AI assistant: a streaming chat with the relay-hosted model. The relay
 /// auto-selects the model from the prompt's difficulty, so the user just types.
 /// Arabic-first and RTL; only reachable when the shop's AI entitlement is active.
@@ -38,6 +45,7 @@ class AiAssistantScreen extends StatefulWidget {
     required this.viewModel,
     required this.navigation,
     this.productSearch,
+    this.onOpenAiLink,
   });
 
   final AiChatViewModel viewModel;
@@ -46,6 +54,10 @@ class AiAssistantScreen extends StatefulWidget {
   /// Loads products for a product_picker question. Null when the host didn't wire
   /// a catalog source — the picker degrades to "create new product" only.
   final AiProductSearch? productSearch;
+
+  /// Opens an in-app deep link the AI emitted in its reply. Null when the host
+  /// didn't wire navigation — links then render as plain (inert) text.
+  final AiLinkHandler? onOpenAiLink;
 
   @override
   State<AiAssistantScreen> createState() => _AiAssistantScreenState();
@@ -189,6 +201,31 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
     unawaited(widget.viewModel.skipQuestion());
   }
 
+  /// A tapped link inside an assistant reply. In-app `pointy://` links route via
+  /// the injected handler; anything else (a plain web URL) is left alone rather
+  /// than opening a browser.
+  void _handleAssistantLink(String url) {
+    final handler = widget.onOpenAiLink;
+    if (handler == null) {
+      return;
+    }
+    final link = AiDeepLink.tryParse(url);
+    if (link == null) {
+      return;
+    }
+    unawaited(_openAssistantLink(handler, link));
+  }
+
+  Future<void> _openAssistantLink(AiLinkHandler handler, AiDeepLink link) async {
+    final opened = await handler(context, link);
+    if (!opened && mounted) {
+      final l10n = AppLocalizations.of(context)!;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.aiAssistantLinkUnavailable)),
+      );
+    }
+  }
+
   Future<void> _openAttachSheet() async {
     final viewModel = widget.viewModel;
     final choice = await showModalBottomSheet<_AttachChoice>(
@@ -325,6 +362,7 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
                             onAnswer: _submitAnswer,
                             onSkip: _skipQuestion,
                             productSearch: widget.productSearch,
+                            onLinkTap: _handleAssistantLink,
                           )
                         : _EmptyState(onSuggestion: _sendSuggestion),
                   ),
@@ -381,6 +419,7 @@ class _MessageList extends StatelessWidget {
     required this.onAnswer,
     required this.onSkip,
     required this.productSearch,
+    required this.onLinkTap,
   });
 
   final ScrollController controller;
@@ -392,6 +431,7 @@ class _MessageList extends StatelessWidget {
   final ValueChanged<List<AiAnswer>> onAnswer;
   final VoidCallback onSkip;
   final AiProductSearch? productSearch;
+  final ValueChanged<String> onLinkTap;
 
   @override
   Widget build(BuildContext context) {
@@ -424,6 +464,7 @@ class _MessageList extends StatelessWidget {
             onAnswer: onAnswer,
             onSkip: onSkip,
             productSearch: productSearch,
+            onLinkTap: onLinkTap,
           );
         }
         // A stable per-message key preserves each bubble's element (and so its
@@ -526,6 +567,7 @@ class _AssistantMessage extends StatelessWidget {
     required this.onAnswer,
     required this.onSkip,
     required this.productSearch,
+    required this.onLinkTap,
   });
 
   final AiMessage message;
@@ -534,6 +576,7 @@ class _AssistantMessage extends StatelessWidget {
   final ValueChanged<List<AiAnswer>> onAnswer;
   final VoidCallback onSkip;
   final AiProductSearch? productSearch;
+  final ValueChanged<String> onLinkTap;
 
   @override
   Widget build(BuildContext context) {
@@ -565,7 +608,7 @@ class _AssistantMessage extends StatelessWidget {
                 child: _TypingIndicator(),
               )
             else if (message.content.isNotEmpty)
-              _AssistantText(message: message),
+              _AssistantText(message: message, onLinkTap: onLinkTap),
             if (message.pendingQuestion != null) ...[
               if (message.content.isNotEmpty) SizedBox(height: spacing.sm),
               _QuestionCard(
@@ -655,9 +698,10 @@ class _CoalescedBuilderState extends State<_CoalescedBuilder> {
 /// tokens arrive. Wrapped in a SelectionArea so the rendered text stays
 /// selectable. RTL/LTR follows the ambient direction.
 class _AssistantText extends StatefulWidget {
-  const _AssistantText({required this.message});
+  const _AssistantText({required this.message, required this.onLinkTap});
 
   final AiMessage message;
+  final ValueChanged<String> onLinkTap;
 
   @override
   State<_AssistantText> createState() => _AssistantTextState();
@@ -668,6 +712,11 @@ class _AssistantTextState extends State<_AssistantText> {
   String? _content;
   TextStyle? _style;
   TextDirection? _direction;
+
+  // A stable method reference (not a fresh closure), so it's NOT a memoization
+  // input — the cached GptMarkdown keeps it across rebuilds, and it reads the
+  // current widget's callback at tap time (links stay live even when memoized).
+  void _handleLinkTap(String url, String title) => widget.onLinkTap(url);
 
   @override
   Widget build(BuildContext context) {
@@ -689,7 +738,12 @@ class _AssistantTextState extends State<_AssistantText> {
       _content = content;
       _style = style;
       _direction = direction;
-      _cached = GptMarkdown(content, style: style, textDirection: direction);
+      _cached = GptMarkdown(
+        content,
+        style: style,
+        textDirection: direction,
+        onLinkTap: _handleLinkTap,
+      );
     }
     return SelectionArea(child: _cached!);
   }

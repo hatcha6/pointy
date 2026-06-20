@@ -78,6 +78,7 @@ import 'features/contacts/views/supplier_details_screen.dart';
 import 'shared/async_selection/async_multi_select_picker.dart';
 import 'shared/command_palette/command_palette.dart';
 import 'shared/formatters.dart';
+import 'shared/navigation/ai_deep_link.dart';
 import 'shared/navigation/app_navigation.dart';
 
 class AuthenticatedHome extends StatelessWidget {
@@ -444,6 +445,7 @@ class _AuthenticatedRoutes implements AppNavigation {
         viewModel: AiChatViewModel(dependencies.aiChatRepository),
         navigation: this,
         productSearch: _aiProductSearch,
+        onOpenAiLink: openAiLink,
       ),
     );
   }
@@ -1607,6 +1609,124 @@ class _AuthenticatedRoutes implements AppNavigation {
         capabilities: capabilities,
       ),
     );
+  }
+
+  void _openJobById(BuildContext context, int jobId) {
+    _trackScreenView('job_details');
+    push(
+      context,
+      (_) => JobDetailsScreen(
+        viewModel: JobDetailsViewModel(
+          dependencies.operationsRepository,
+          jobId: jobId,
+          analyticsEngine: dependencies.analyticsEngine,
+        ),
+        capabilities: capabilities,
+        currentUser: currentUser,
+        catalogRepository: dependencies.catalogRepository,
+        operationsRepository: dependencies.operationsRepository,
+        employeeRepository: dependencies.employeeRepository,
+      ),
+    );
+  }
+
+  /// Open a deep link the AI assistant emitted. Passed to [AiAssistantScreen]
+  /// as a callback (not on AppNavigation, to keep the interface lean). Returns
+  /// false when the target is unknown, gated by capability, or fails to load.
+  Future<bool> openAiLink(BuildContext context, AiDeepLink link) async {
+    switch (link) {
+      case AiScreenLink(:final key):
+        final destination = _destinationForKey(key);
+        if (destination == null || !isDestinationAvailable(destination)) {
+          return false;
+        }
+        navigateTo(context, destination, from: AppNavigationDestination.aiAssistant);
+        return true;
+      case AiEntityLink(:final type, :final id):
+        return _openEntityDeepLink(context, type, id);
+    }
+  }
+
+  AppNavigationDestination? _destinationForKey(String key) {
+    for (final destination in AppNavigationDestination.values) {
+      if (destination.name.toLowerCase() == key) {
+        return destination;
+      }
+    }
+    return null;
+  }
+
+  Future<bool> _openEntityDeepLink(BuildContext context, String type, int id) {
+    switch (type) {
+      case 'product':
+        return _loadThenOpen(
+          context,
+          AppCapability.viewCatalogManagement,
+          () => dependencies.catalogRepository.loadProduct(id),
+          _openProduct,
+        );
+      case 'customer':
+        return _loadThenOpen(
+          context,
+          AppCapability.manageContacts,
+          () => dependencies.contactRepository.loadCustomer(id),
+          _openCustomer,
+        );
+      case 'supplier':
+        return _loadThenOpen(
+          context,
+          AppCapability.manageContacts,
+          () => dependencies.contactRepository.loadSupplier(id),
+          _openSupplier,
+        );
+      case 'order' || 'sale' || 'invoice':
+        return _loadThenOpen(
+          context,
+          AppCapability.viewInvoices,
+          () => dependencies.saleRepository.loadOrder(id),
+          _openInvoice,
+        );
+      case 'purchase-order' || 'purchase' || 'po':
+        return _loadThenOpen(
+          context,
+          AppCapability.accessPurchasing,
+          () => dependencies.purchaseRepository.loadPurchaseOrder(id),
+          _openPurchaseOrder,
+        );
+      case 'job':
+        if (!capabilities.allows(AppCapability.viewOperations)) {
+          return Future.value(false);
+        }
+        _openJobById(context, id);
+        return Future.value(true);
+      default:
+        return Future.value(false);
+    }
+  }
+
+  /// Capability-gate, load the record by id, then push its detail screen —
+  /// reusing the same `_openX` push helpers the list screens use. Returns false
+  /// (so the caller can message the user) when blocked or the load fails.
+  Future<bool> _loadThenOpen<T>(
+    BuildContext context,
+    AppCapability capability,
+    Future<Result<T>> Function() load,
+    void Function(BuildContext, T) open,
+  ) async {
+    if (!capabilities.allows(capability)) {
+      return false;
+    }
+    final result = await load();
+    if (!context.mounted) {
+      return false;
+    }
+    switch (result) {
+      case Ok(value: final entity):
+        open(context, entity);
+        return true;
+      case Error():
+        return false;
+    }
   }
 }
 

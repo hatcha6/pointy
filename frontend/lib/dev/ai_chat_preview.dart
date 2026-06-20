@@ -93,6 +93,7 @@ class _PreviewHostState extends State<_PreviewHost> {
       askUserMode: widget.screen == 'ask',
       actionsMode: widget.screen == 'actions',
       pickerMode: widget.screen == 'po',
+      linksMode: widget.screen == 'links',
     ),
     picker: _FakeAttachmentPicker(),
   );
@@ -134,6 +135,9 @@ class _PreviewHostState extends State<_PreviewHost> {
         // A supplier-invoice flow that asks a product_picker question for an
         // unmatched line (search existing product, or create new).
         await _viewModel.sendMessage('أنشئ أمر شراء من هذه الفاتورة');
+      case 'links':
+        // A reply peppered with in-app deep links (tap to navigate).
+        await _viewModel.sendMessage('أين أجد منتج القهوة وآخر فاتورة؟');
       default:
         await _viewModel.sendMessage('كيف أضيف منتجًا جديدًا إلى المتجر؟');
     }
@@ -151,6 +155,12 @@ class _PreviewHostState extends State<_PreviewHost> {
       viewModel: _viewModel,
       navigation: _navigation,
       productSearch: _fakeProductSearch,
+      onOpenAiLink: (context, link) async {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('فتح: $link'), duration: const Duration(seconds: 1)),
+        );
+        return true;
+      },
     );
   }
 
@@ -187,6 +197,7 @@ class _FakeAiChatRepository extends AiChatRepository {
     this.askUserMode = false,
     this.actionsMode = false,
     this.pickerMode = false,
+    this.linksMode = false,
   }) : super(PosApiService());
 
   /// When set, the scripted reply asks an interactive question (all 5 types)
@@ -200,6 +211,9 @@ class _FakeAiChatRepository extends AiChatRepository {
   /// When set, the scripted reply asks a product_picker question (an unmatched
   /// invoice line), so the picker card can be screenshotted.
   final bool pickerMode;
+
+  /// When set, the scripted reply contains in-app deep links (pointy://…).
+  final bool linksMode;
 
   @override
   Stream<AiChatEvent> streamChat({
@@ -217,6 +231,26 @@ class _FakeAiChatRepository extends AiChatRepository {
     }
     if (pickerMode) {
       yield* _pickerScript();
+      return;
+    }
+    if (linksMode) {
+      const reply =
+          'وجدت ما تبحث عنه:\n\n'
+          '- المنتج: [قهوة عربية](pointy://product/42) — راجع المخزون والسعر.\n'
+          '- آخر فاتورة: [الفاتورة ٩٩](pointy://order/99).\n'
+          '- المورّد: [بُن اليمن](pointy://supplier/7).\n\n'
+          'يمكنك أيضًا فتح [صفحة المشتريات](pointy://screen/purchasing) لمتابعة الطلبات.';
+      for (final word in reply.split(' ')) {
+        await Future<void>.delayed(const Duration(milliseconds: 35));
+        yield AiChatDelta('$word ');
+      }
+      yield AiChatDone(
+        conversationId: 1,
+        messageId: 2,
+        userMessageId: 1,
+        model: 'preview/model',
+        usage: _fakeUsage(fiveUsed: 24, weekUsed: 97),
+      );
       return;
     }
     // A scripted tool round so the "querying sales…" chip can be screenshotted.

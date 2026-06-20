@@ -10850,6 +10850,9 @@ class AppLocalizationsAr extends AppLocalizations {
   String get aiAssistantProductPickerLoadError => 'تعذّر تحميل المنتجات';
 
   @override
+  String get aiAssistantLinkUnavailable => 'تعذّر فتح الصفحة المطلوبة.';
+
+  @override
   String get aiAssistantAskUserRequired => 'هذا السؤال مطلوب';
 
   @override

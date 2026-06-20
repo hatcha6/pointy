@@ -26,6 +26,9 @@ class AiApiClient {
       // backend may advertise the create_resource/update_resource/create_sale
       // tools. An older client omits this and stays read-only.
       'supports_actions': true,
+      // This client renders the AI's in-app deep links (pointy://...), so the
+      // backend may tell the model it can link the user to pages.
+      'supports_navigation': true,
       if (attachments.isNotEmpty)
         'attachments': attachments.map((a) => a.toJson()).toList(),
     };
@@ -57,6 +60,7 @@ class AiApiClient {
       'declined': declined,
       'supports_ask_user': true,
       'supports_actions': true,
+      'supports_navigation': true,
       if (!declined) 'answers': answers.map((a) => a.toJson()).toList(),
     };
     await for (final event in _session.openEventStream(

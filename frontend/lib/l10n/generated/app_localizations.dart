@@ -18816,6 +18816,12 @@ abstract class AppLocalizations {
   /// **'تعذّر تحميل المنتجات'**
   String get aiAssistantProductPickerLoadError;
 
+  /// No description provided for @aiAssistantLinkUnavailable.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر فتح الصفحة المطلوبة.'**
+  String get aiAssistantLinkUnavailable;
+
   /// No description provided for @aiAssistantAskUserRequired.
   ///
   /// In ar, this message translates to:

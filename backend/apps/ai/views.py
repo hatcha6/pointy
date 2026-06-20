@@ -111,7 +111,10 @@ class AiChatView(APIView):
         # Build the prompt (prior history + this turn) BEFORE persisting so an
         # attachment-only (empty-text) turn still reaches the model.
         messages = self._build_messages(
-            conversation, user_text, supports_actions=payload.get("supports_actions", False)
+            conversation,
+            user_text,
+            supports_actions=payload.get("supports_actions", False),
+            supports_navigation=payload.get("supports_navigation", False),
         )
 
         user_message = AiMessage.objects.create(
@@ -177,7 +180,15 @@ class AiChatView(APIView):
             return AiConversation.objects.filter(user=user, pk=conversation_id).first()
         return AiConversation.objects.create(user=user)
 
-    def _build_messages(self, conversation, user_text="", *, append_user=True, supports_actions=False):
+    def _build_messages(
+        self,
+        conversation,
+        user_text="",
+        *,
+        append_user=True,
+        supports_actions=False,
+        supports_navigation=False,
+    ):
         """Rebuild the model context from the DB.
 
         Plain user/assistant text turns flow through as before. An assistant turn
@@ -206,7 +217,15 @@ class AiChatView(APIView):
             for message in history
             if message.role == AiMessage.ROLE_TOOL and message.tool_call_id
         }
-        messages = [{"role": "system", "content": build_system_prompt(supports_actions=supports_actions)}]
+        messages = [
+            {
+                "role": "system",
+                "content": build_system_prompt(
+                    supports_actions=supports_actions,
+                    supports_navigation=supports_navigation,
+                ),
+            }
+        ]
         for message in history:
             if message.role == AiMessage.ROLE_TOOL:
                 continue  # emitted via its assistant turn below
@@ -625,7 +644,10 @@ class AiChatResumeView(AiChatView):
 
         supports_actions = payload.get("supports_actions", True)
         messages = self._build_messages(
-            conversation, append_user=False, supports_actions=supports_actions
+            conversation,
+            append_user=False,
+            supports_actions=supports_actions,
+            supports_navigation=payload.get("supports_navigation", True),
         )
         tools = tools_definitions(
             supports_ask_user=payload.get("supports_ask_user", True),
