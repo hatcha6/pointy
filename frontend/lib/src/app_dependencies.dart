@@ -4,6 +4,7 @@ import 'core/analytics_engine.dart';
 import 'core/result.dart';
 import 'data/models/analytics_event.dart';
 import 'data/models/device_settings.dart';
+import 'data/repositories/ai_chat_repository.dart';
 import 'data/repositories/analytics_repository.dart';
 import 'data/repositories/auth_repository.dart';
 import 'data/repositories/business_alert_repository.dart';
@@ -86,6 +87,7 @@ class PointyAppDependencies {
     shopSettingsRepository = ShopSettingsRepository(service);
     printingRepository = PrintingRepository(service);
     priceCheckerRepository = PriceCheckerRepository(service);
+    aiChatRepository = AiChatRepository(service);
     purchaseRepository = PurchaseRepository(service);
     stockCountRepository = StockCountRepository(service);
     userRepository = UserRepository(service);
@@ -139,6 +141,7 @@ class PointyAppDependencies {
   late final ShopSettingsRepository shopSettingsRepository;
   late final PrintingRepository printingRepository;
   late final PriceCheckerRepository priceCheckerRepository;
+  late final AiChatRepository aiChatRepository;
   late final PurchaseRepository purchaseRepository;
   late final StockCountRepository stockCountRepository;
   late final UserRepository userRepository;

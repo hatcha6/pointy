@@ -69,6 +69,7 @@ enum AppCapability {
   createStockMovement,
   countStock,
   applyStockCount,
+  useAiAssistant,
 }
 
 class AuthorizationCapabilities {
@@ -76,7 +77,13 @@ class AuthorizationCapabilities {
 
   factory AuthorizationCapabilities.forUser(PosUser user) {
     if (user.role.isManager) {
-      return AuthorizationCapabilities._(Set.of(AppCapability.values));
+      final all = Set.of(AppCapability.values);
+      // AI is a paid shop entitlement, so even managers only see the assistant
+      // when the shop's subscription has it active.
+      if (!user.aiAvailable) {
+        all.remove(AppCapability.useAiAssistant);
+      }
+      return AuthorizationCapabilities._(all);
     }
 
     // Deliberately no dashboard capabilities here: revenue aggregates would
@@ -557,6 +564,10 @@ class AuthorizationCapabilities {
       }
     }
 
+    if (user.aiAvailable) {
+      capabilities.add(AppCapability.useAiAssistant);
+    }
+
     return AuthorizationCapabilities._(capabilities);
   }
 
@@ -630,8 +641,7 @@ class AuthorizationCapabilities {
   bool get canManageUsers => allows(AppCapability.manageUsers);
   bool get canManageShopSettings => allows(AppCapability.manageShopSettings);
   bool get canManageSalesChannels => allows(AppCapability.manageSalesChannels);
-  bool get canManagePriceCheckers =>
-      allows(AppCapability.managePriceCheckers);
+  bool get canManagePriceCheckers => allows(AppCapability.managePriceCheckers);
   bool get canViewExpenses => allows(AppCapability.viewExpenses);
   bool get canManageExpenses => allows(AppCapability.manageExpenses);
   bool get canViewOperations => allows(AppCapability.viewOperations);

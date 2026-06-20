@@ -76,8 +76,13 @@ class AuthApiClient {
     final decoded = _session.decodedBody(response) as Map<String, Object?>;
     _session.updateCsrfToken(decoded);
     final userJson = decoded['user'] is Map<String, Object?>
-        ? decoded['user'] as Map<String, Object?>
-        : decoded;
+        ? Map<String, Object?>.from(decoded['user'] as Map<String, Object?>)
+        : Map<String, Object?>.from(decoded);
+    // ai_available is a sibling of `user` in the auth payload; fold it onto the
+    // user so capability computation can gate the AI assistant on it.
+    if (decoded.containsKey('ai_available')) {
+      userJson['ai_available'] = decoded['ai_available'];
+    }
     return PosUser.fromJson(userJson);
   }
 }

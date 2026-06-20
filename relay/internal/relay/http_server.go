@@ -276,6 +276,26 @@ type HTTPServer struct {
 	Clock                         control.Clock
 	ConnectorCertificateIssuer    ConnectorCertificateIssuer
 	ConnectorCertificateTTL       time.Duration
+	// Relay-hosted AI (OpenRouter). The key and tier->model catalog live only
+	// here so AI billing and model routing stay company-controlled.
+	OpenRouterAPIKey  string
+	OpenRouterBaseURL string
+	AIModelTiers      map[string]string
+	AIDefaultTier     string
+	// AIRouterModel classifies prompt difficulty to auto-pick a tier; empty
+	// falls back to the fast-tier model.
+	AIRouterModel    string
+	AIRequestTimeout time.Duration
+	AIChatRateLimit  ratelimit.Policy
+	AIHTTPClient     *http.Client
+	// Vision/multimodal model used when a prompt carries attachments.
+	AIVisionModel string
+	// Per-shop usage limits (fixed window, TTL-reset) + the image cap. Surfaced
+	// to the app for the usage ring and enforced here.
+	AILimit5H            ratelimit.Policy
+	AILimitWeekly        ratelimit.Policy
+	AIMaxImagesPerPrompt int
+	AIMaxRequestBytes    int64
 }
 
 type RouteMode int
@@ -387,6 +407,18 @@ func (s HTTPServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		s.handleRefreshRelayTicket(w, r)
+	case r.URL.Path == "/v1/ai/chat" && r.Method == http.MethodPost:
+		if !s.RouteMode.allowsPublic() {
+			writeNotFound(w)
+			return
+		}
+		s.handleAIChat(w, r)
+	case r.URL.Path == "/v1/ai/usage" && r.Method == http.MethodGet:
+		if !s.RouteMode.allowsPublic() {
+			writeNotFound(w)
+			return
+		}
+		s.handleAIUsage(w, r)
 	case r.URL.Path == "/v1/status" && r.Method == http.MethodGet:
 		if !s.RouteMode.allowsAdmin() {
 			writeNotFound(w)

@@ -1,0 +1,353 @@
+import 'package:flutter_test/flutter_test.dart';
+import 'package:pointy_frontend/src/core/result.dart';
+import 'package:pointy_frontend/src/data/models/ai_chat.dart';
+import 'package:pointy_frontend/src/data/repositories/ai_chat_repository.dart';
+import 'package:pointy_frontend/src/data/services/pos_api_service.dart';
+import 'package:pointy_frontend/src/features/ai/ai_attachment_picker.dart';
+import 'package:pointy_frontend/src/features/ai/view_models/ai_chat_view_model.dart';
+
+class _FakeAiChatRepository extends AiChatRepository {
+  _FakeAiChatRepository(this.events) : super(PosApiService());
+
+  List<AiChatEvent> events;
+  int? lastConversationId;
+  List<AiAttachment> lastAttachments = const [];
+  final List<int> truncatedMessageIds = [];
+  bool truncateSucceeds = true;
+
+  @override
+  Stream<AiChatEvent> streamChat({
+    int? conversationId,
+    required String message,
+    List<AiAttachment> attachments = const [],
+  }) async* {
+    lastConversationId = conversationId;
+    lastAttachments = attachments;
+    for (final event in events) {
+      yield event;
+    }
+  }
+
+  @override
+  Future<Result<bool>> truncateConversation(
+    int conversationId,
+    int messageId,
+  ) async {
+    truncatedMessageIds.add(messageId);
+    return truncateSucceeds ? const Ok(true) : Error(Exception('fail'));
+  }
+
+  // Keep the rate-limit refresh deterministic (and off the real service).
+  @override
+  Future<Result<AiUsage>> loadUsage() async => Error(Exception('no usage'));
+}
+
+/// Returns a canned image/file so attachment paths can be tested without the
+/// platform pickers.
+class _FakePicker extends AiAttachmentPicker {
+  int imageCalls = 0;
+
+  @override
+  Future<AiAttachment?> pickImage({required bool fromCamera}) async {
+    imageCalls++;
+    return AiAttachment(
+      kind: AiAttachmentKind.image,
+      dataUri: 'data:image/jpeg;base64,AAAA',
+      name: 'p$imageCalls.jpg',
+      mime: 'image/jpeg',
+    );
+  }
+
+  @override
+  Future<List<AiAttachment>> pickFiles() async {
+    return [
+      AiAttachment(
+        kind: AiAttachmentKind.file,
+        dataUri: 'data:application/pdf;base64,AAAA',
+        name: 'f.pdf',
+        mime: 'application/pdf',
+      ),
+    ];
+  }
+}
+
+void main() {
+  test('accumulates deltas in place and finalizes on done', () async {
+    final repo = _FakeAiChatRepository([
+      const AiChatDelta('Hel'),
+      const AiChatDelta('lo'),
+      const AiChatDone(conversationId: 7, model: 'm'),
+    ]);
+    final viewModel = AiChatViewModel(repo);
+    addTearDown(viewModel.dispose);
+
+    await viewModel.sendMessage('مرحبا');
+
+    expect(viewModel.messages.length, 2);
+    expect(viewModel.messages[0].isUser, isTrue);
+    expect(viewModel.messages[0].content, 'مرحبا');
+    expect(viewModel.messages[1].isUser, isFalse);
+    expect(viewModel.messages[1].content, 'Hello');
+    expect(viewModel.messages[1].isStreaming, isFalse);
+    expect(viewModel.conversationId, 7);
+    expect(viewModel.isStreaming, isFalse);
+    expect(viewModel.errorKind, isNull);
+  });
+
+  test(
+    'streamed deltas notify the message, not the whole view model (jank fix)',
+    () async {
+      final repo = _FakeAiChatRepository([
+        const AiChatDelta('a'),
+        const AiChatDelta('b'),
+        const AiChatDelta('c'),
+        const AiChatDone(conversationId: 1, userMessageId: 1),
+      ]);
+      final viewModel = AiChatViewModel(repo);
+      addTearDown(viewModel.dispose);
+
+      var vmNotifications = 0;
+      viewModel.addListener(() => vmNotifications++);
+
+      await viewModel.sendMessage('hi');
+
+      // The view model fires ONLY on structural change: once for the send (the
+      // user + assistant bubbles appear) and once to finalize (streaming flag
+      // off). The three deltas in between never reach it — otherwise the app bar,
+      // list and composer would rebuild ~25×/sec and every settled reply would
+      // re-parse its markdown. That O(messages × tokens) churn was the jank.
+      expect(vmNotifications, 2);
+      expect(viewModel.messages.last.content, 'abc');
+    },
+  );
+
+  test('continues the active conversation on the next turn', () async {
+    final repo = _FakeAiChatRepository([const AiChatDone(conversationId: 9)]);
+    final viewModel = AiChatViewModel(repo);
+    addTearDown(viewModel.dispose);
+
+    await viewModel.sendMessage('first');
+    expect(viewModel.conversationId, 9);
+
+    await viewModel.sendMessage('second');
+    expect(repo.lastConversationId, 9);
+  });
+
+  test('maps a 403 error to notEntitled and drops the empty reply', () async {
+    final repo = _FakeAiChatRepository([
+      const AiChatError('disabled', statusCode: 403),
+    ]);
+    final viewModel = AiChatViewModel(repo);
+    addTearDown(viewModel.dispose);
+
+    await viewModel.sendMessage('hi');
+
+    expect(viewModel.errorKind, AiChatErrorKind.notEntitled);
+    expect(viewModel.messages.length, 1);
+    expect(viewModel.messages.single.isUser, isTrue);
+  });
+
+  test('an in-band error event maps to aiError', () async {
+    final repo = _FakeAiChatRepository([
+      const AiChatDelta('partial'),
+      const AiChatError('model exploded'),
+    ]);
+    final viewModel = AiChatViewModel(repo);
+    addTearDown(viewModel.dispose);
+
+    await viewModel.sendMessage('hi');
+
+    expect(viewModel.errorKind, AiChatErrorKind.aiError);
+    // Partial text was produced, so the assistant bubble is kept.
+    expect(viewModel.messages.last.content, 'partial');
+  });
+
+  test(
+    'continues without the caller choosing a model (relay auto-routes)',
+    () async {
+      final repo = _FakeAiChatRepository([const AiChatDone(conversationId: 1)]);
+      final viewModel = AiChatViewModel(repo);
+      addTearDown(viewModel.dispose);
+
+      await viewModel.sendMessage('hi');
+      expect(repo.lastConversationId, isNull);
+    },
+  );
+
+  test('accumulates reasoning separately from the answer', () async {
+    final repo = _FakeAiChatRepository([
+      const AiChatReasoning('think '),
+      const AiChatReasoning('more'),
+      const AiChatDelta('answer'),
+      const AiChatDone(conversationId: 3),
+    ]);
+    final viewModel = AiChatViewModel(repo);
+    addTearDown(viewModel.dispose);
+
+    await viewModel.sendMessage('hi');
+
+    final assistant = viewModel.messages.last;
+    expect(assistant.reasoning, 'think more');
+    expect(assistant.content, 'answer');
+  });
+
+  test('caps attached images at the limit and flags it', () async {
+    final repo = _FakeAiChatRepository([]);
+    final picker = _FakePicker();
+    final viewModel = AiChatViewModel(repo, picker: picker, maxImages: 5);
+    addTearDown(viewModel.dispose);
+
+    for (var i = 0; i < 6; i++) {
+      await viewModel.addImage(fromCamera: false);
+    }
+
+    expect(viewModel.pendingAttachments.length, 5);
+    expect(viewModel.canAddImage, isFalse);
+    expect(viewModel.imageLimitReached, isTrue);
+    // The 6th request was rejected before the picker was invoked.
+    expect(picker.imageCalls, 5);
+  });
+
+  test('sends an attachment-only turn and forwards the attachments', () async {
+    final repo = _FakeAiChatRepository([const AiChatDone(conversationId: 1)]);
+    final viewModel = AiChatViewModel(repo, picker: _FakePicker());
+    addTearDown(viewModel.dispose);
+
+    await viewModel.addImage(fromCamera: false);
+    await viewModel.sendMessage(''); // no text, image only
+
+    expect(repo.lastAttachments.length, 1);
+    expect(viewModel.pendingAttachments, isEmpty);
+    expect(viewModel.messages.first.attachments.length, 1);
+  });
+
+  test('updates the usage snapshot from the done event', () async {
+    final repo = _FakeAiChatRepository([
+      const AiChatDelta('ok'),
+      const AiChatDone(
+        conversationId: 1,
+        usage: AiUsage(
+          fiveHour: AiUsageWindow(used: 6, limit: 30),
+          weekly: AiUsageWindow(used: 6, limit: 200),
+        ),
+      ),
+    ]);
+    final viewModel = AiChatViewModel(repo);
+    addTearDown(viewModel.dispose);
+
+    await viewModel.sendMessage('hi');
+
+    expect(viewModel.usage?.fiveHour.used, 6);
+    expect(viewModel.usage?.fiveHour.remaining, 24);
+  });
+
+  test('maps a 429 to rateLimited', () async {
+    final repo = _FakeAiChatRepository([
+      const AiChatError('limit reached', statusCode: 429),
+    ]);
+    final viewModel = AiChatViewModel(repo);
+    addTearDown(viewModel.dispose);
+
+    await viewModel.sendMessage('hi');
+
+    expect(viewModel.errorKind, AiChatErrorKind.rateLimited);
+  });
+
+  test('assigns the user message id from the done event', () async {
+    final repo = _FakeAiChatRepository([
+      const AiChatDelta('hi'),
+      const AiChatDone(conversationId: 1, userMessageId: 42),
+    ]);
+    final viewModel = AiChatViewModel(repo);
+    addTearDown(viewModel.dispose);
+
+    await viewModel.sendMessage('q');
+
+    expect(viewModel.messages.first.id, 42);
+  });
+
+  test('retry rewinds (truncates) and regenerates the answer', () async {
+    final repo = _FakeAiChatRepository([
+      const AiChatDelta('first'),
+      const AiChatDone(conversationId: 1, userMessageId: 7),
+    ]);
+    final viewModel = AiChatViewModel(repo);
+    addTearDown(viewModel.dispose);
+
+    await viewModel.sendMessage('q1');
+    repo.events = [
+      const AiChatDelta('second'),
+      const AiChatDone(conversationId: 1, userMessageId: 8),
+    ];
+
+    await viewModel.retry(viewModel.messages.first);
+
+    expect(repo.truncatedMessageIds, [7]);
+    expect(viewModel.messages.length, 2);
+    expect(viewModel.messages.first.content, 'q1');
+    expect(viewModel.messages.last.content, 'second');
+  });
+
+  test('rewindForEdit returns the text and drops the turn', () async {
+    final repo = _FakeAiChatRepository([
+      const AiChatDelta('a'),
+      const AiChatDone(conversationId: 1, userMessageId: 5),
+    ]);
+    final viewModel = AiChatViewModel(repo);
+    addTearDown(viewModel.dispose);
+
+    await viewModel.sendMessage('hello');
+    final text = await viewModel.rewindForEdit(viewModel.messages.first);
+
+    expect(text, 'hello');
+    expect(viewModel.messages, isEmpty);
+    expect(repo.truncatedMessageIds, [5]);
+  });
+
+  test('rewind aborts and flags an error when truncation fails', () async {
+    final repo = _FakeAiChatRepository([
+      const AiChatDelta('a'),
+      const AiChatDone(conversationId: 1, userMessageId: 5),
+    ])..truncateSucceeds = false;
+    final viewModel = AiChatViewModel(repo);
+    addTearDown(viewModel.dispose);
+
+    await viewModel.sendMessage('hello');
+    final text = await viewModel.rewindForEdit(viewModel.messages.first);
+
+    expect(text, isNull);
+    expect(viewModel.messages.length, 2); // unchanged
+    expect(viewModel.errorKind, AiChatErrorKind.network);
+  });
+
+  test('surfaces tool activity as chips on the assistant turn', () async {
+    final repo = _FakeAiChatRepository([
+      const AiChatToolActivity(
+        name: 'query_resource',
+        resource: 'orders',
+        label: 'المبيعات',
+        phase: 'start',
+      ),
+      const AiChatToolActivity(
+        name: 'query_resource',
+        resource: 'orders',
+        label: 'المبيعات',
+        phase: 'done',
+        ok: true,
+      ),
+      const AiChatDelta('٥ مبيعات'),
+      const AiChatDone(conversationId: 1),
+    ]);
+    final viewModel = AiChatViewModel(repo);
+    addTearDown(viewModel.dispose);
+
+    await viewModel.sendMessage('كم مبيعات اليوم؟');
+
+    final assistant = viewModel.messages.last;
+    expect(assistant.toolRuns.length, 1);
+    expect(assistant.toolRuns.first.resource, 'orders');
+    expect(assistant.toolRuns.first.done, isTrue);
+    expect(assistant.toolRuns.first.ok, isTrue);
+    expect(assistant.content, '٥ مبيعات');
+  });
+}

@@ -74,6 +74,12 @@
       "port": 8080
     },
     {
+      "name": "ai-chat-preview",
+      "runtimeExecutable": "make",
+      "runtimeArgs": ["frontend-ai-preview"],
+      "port": 8080
+    },
+    {
       "name": "relay",
       "runtimeExecutable": "make",
       "runtimeArgs": ["relay-run"],

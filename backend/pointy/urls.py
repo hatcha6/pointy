@@ -49,6 +49,12 @@ from apps.employees.views import (
     EmployeeLoanViewSet,
     PayrollRunViewSet,
 )
+from apps.ai.views import (
+    AiChatView,
+    AiConversationTruncateView,
+    AiConversationViewSet,
+    AiUsageView,
+)
 from apps.fraud.views import FraudFindingViewSet
 from apps.core.views import (
     PosUserViewSet,
@@ -184,6 +190,11 @@ router.register(
     PriceCheckEventViewSet,
     basename="price-check-event",
 )
+router.register(
+    "ai/conversations",
+    AiConversationViewSet,
+    basename="ai-conversation",
+)
 
 urlpatterns = [
     path("healthz/", healthz, name="healthz"),
@@ -216,6 +227,13 @@ urlpatterns = [
         name="relay-installation",
     ),
     path("api/relay/pairing/", RelayPairingView.as_view(), name="relay-pairing"),
+    path("api/ai/chat/", AiChatView.as_view(), name="ai-chat"),
+    path("api/ai/usage/", AiUsageView.as_view(), name="ai-usage"),
+    path(
+        "api/ai/conversations/<int:pk>/truncate/",
+        AiConversationTruncateView.as_view(),
+        name="ai-conversation-truncate",
+    ),
     path(
         "api/relay/connector-config/",
         RelayConnectorConfigView.as_view(),

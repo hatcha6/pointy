@@ -27,6 +27,8 @@ type Decision struct {
 
 type Limiter interface {
 	Allow(ctx context.Context, key string, policy Policy) (Decision, error)
+	// Peek reports current usage for a key without consuming any quota.
+	Peek(ctx context.Context, key string, policy Policy) (Decision, error)
 }
 
 type MemoryLimiter struct {
@@ -85,6 +87,39 @@ func (l *MemoryLimiter) Allow(
 	l.entries[key] = entry
 	return Decision{
 		Allowed:   true,
+		Remaining: max(policy.Limit-entry.count, 0),
+		ResetAt:   entry.resetAt,
+	}, nil
+}
+
+func (l *MemoryLimiter) Peek(
+	ctx context.Context,
+	key string,
+	policy Policy,
+) (Decision, error) {
+	if err := ctx.Err(); err != nil {
+		return Decision{}, err
+	}
+	if !policy.Enabled() {
+		return Decision{Allowed: true, Remaining: policy.Limit}, nil
+	}
+
+	now := l.clock().UTC()
+	key = normalizeKey(key)
+
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	entry, ok := l.entries[key]
+	if !ok || !now.Before(entry.resetAt) {
+		return Decision{
+			Allowed:   true,
+			Remaining: policy.Limit,
+			ResetAt:   now.Add(policy.Window),
+		}, nil
+	}
+	return Decision{
+		Allowed:   entry.count < policy.Limit,
 		Remaining: max(policy.Limit-entry.count, 0),
 		ResetAt:   entry.resetAt,
 	}, nil
@@ -154,6 +189,52 @@ func (l *RedisLimiter) Allow(
 	}, nil
 }
 
+func (l *RedisLimiter) Peek(
+	ctx context.Context,
+	key string,
+	policy Policy,
+) (Decision, error) {
+	if !policy.Enabled() {
+		return Decision{Allowed: true, Remaining: policy.Limit}, nil
+	}
+	if l == nil || l.client == nil {
+		return Decision{}, fmt.Errorf("redis rate limiter is not configured")
+	}
+
+	result, err := redisPeekScript.Run(ctx, l.client, []string{l.redisKey(key)}).Result()
+	if err != nil {
+		return Decision{}, err
+	}
+	values, ok := result.([]interface{})
+	if !ok || len(values) != 2 {
+		return Decision{}, fmt.Errorf("unexpected redis rate limiter response")
+	}
+	count, err := int64Value(values[0])
+	if err != nil {
+		return Decision{}, err
+	}
+	ttlMS, err := int64Value(values[1])
+	if err != nil {
+		return Decision{}, err
+	}
+
+	remaining := policy.Limit - int(count)
+	if remaining < 0 {
+		remaining = 0
+	}
+	resetAt := l.clock().UTC()
+	if ttlMS > 0 {
+		resetAt = resetAt.Add(time.Duration(ttlMS) * time.Millisecond)
+	} else {
+		resetAt = resetAt.Add(policy.Window)
+	}
+	return Decision{
+		Allowed:   count < int64(policy.Limit),
+		Remaining: remaining,
+		ResetAt:   resetAt,
+	}, nil
+}
+
 func (l *RedisLimiter) redisKey(key string) string {
 	return l.keyPrefix + ":rate-limit:" + normalizeKey(key)
 }
@@ -194,6 +275,14 @@ local current = redis.call("INCR", KEYS[1])
 if current == 1 then
 	redis.call("PEXPIRE", KEYS[1], ARGV[1])
 end
+local ttl = redis.call("PTTL", KEYS[1])
+return {current, ttl}
+`)
+
+// redisPeekScript reads the current count + TTL without consuming quota.
+var redisPeekScript = redis.NewScript(`
+local current = redis.call("GET", KEYS[1])
+if current == false then current = 0 end
 local ttl = redis.call("PTTL", KEYS[1])
 return {current, ttl}
 `)

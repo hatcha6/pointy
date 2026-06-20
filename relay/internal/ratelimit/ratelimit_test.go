@@ -56,3 +56,39 @@ func TestMemoryLimiterTracksKeysIndependently(t *testing.T) {
 		t.Fatalf("expected second key to be allowed, decision=%#v err=%v", decision, err)
 	}
 }
+
+func TestMemoryLimiterPeekDoesNotConsume(t *testing.T) {
+	now := time.Date(2026, 6, 2, 12, 0, 0, 0, time.UTC)
+	limiter := NewMemoryLimiter(func() time.Time { return now })
+	policy := Policy{Limit: 3, Window: time.Minute}
+
+	peek, err := limiter.Peek(context.Background(), "i", policy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !peek.Allowed || peek.Remaining != 3 {
+		t.Fatalf("unexpected empty peek %#v", peek)
+	}
+
+	if _, err := limiter.Allow(context.Background(), "i", policy); err != nil {
+		t.Fatal(err)
+	}
+	// Peeking repeatedly must not change the count.
+	for range 2 {
+		peek, err = limiter.Peek(context.Background(), "i", policy)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if peek.Remaining != 2 {
+			t.Fatalf("peek changed usage: %#v", peek)
+		}
+	}
+
+	next, err := limiter.Allow(context.Background(), "i", policy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if next.Remaining != 1 {
+		t.Fatalf("expected remaining 1 after one consume + peeks, got %#v", next)
+	}
+}

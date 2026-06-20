@@ -18479,6 +18479,246 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'تمت استعادة مسودة شراء محفوظة'**
   String get purchaseDraftRestoredMessage;
+
+  /// No description provided for @aiAssistantDrawerLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'المساعد الذكي'**
+  String get aiAssistantDrawerLabel;
+
+  /// No description provided for @aiAssistantTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'المساعد الذكي'**
+  String get aiAssistantTitle;
+
+  /// No description provided for @aiAssistantInputHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'اكتب رسالتك هنا…'**
+  String get aiAssistantInputHint;
+
+  /// No description provided for @aiAssistantSendTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'إرسال'**
+  String get aiAssistantSendTooltip;
+
+  /// No description provided for @aiAssistantNewChat.
+  ///
+  /// In ar, this message translates to:
+  /// **'محادثة جديدة'**
+  String get aiAssistantNewChat;
+
+  /// No description provided for @aiAssistantHistoryTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'المحادثات السابقة'**
+  String get aiAssistantHistoryTitle;
+
+  /// No description provided for @aiAssistantHistoryEmpty.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد محادثات بعد'**
+  String get aiAssistantHistoryEmpty;
+
+  /// No description provided for @aiAssistantDeleteConversation.
+  ///
+  /// In ar, this message translates to:
+  /// **'حذف المحادثة'**
+  String get aiAssistantDeleteConversation;
+
+  /// No description provided for @aiAssistantEmptyTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'كيف يمكنني مساعدتك؟'**
+  String get aiAssistantEmptyTitle;
+
+  /// No description provided for @aiAssistantEmptySubtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'اسأل المساعد عن أي شيء يخص متجرك.'**
+  String get aiAssistantEmptySubtitle;
+
+  /// No description provided for @aiAssistantThinking.
+  ///
+  /// In ar, this message translates to:
+  /// **'يكتب…'**
+  String get aiAssistantThinking;
+
+  /// No description provided for @aiAssistantThinkingLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'طريقة التفكير'**
+  String get aiAssistantThinkingLabel;
+
+  /// No description provided for @aiAssistantSuggestion1.
+  ///
+  /// In ar, this message translates to:
+  /// **'اكتب رسالة ترحيب لعملاء متجري'**
+  String get aiAssistantSuggestion1;
+
+  /// No description provided for @aiAssistantSuggestion2.
+  ///
+  /// In ar, this message translates to:
+  /// **'اقترح أفكارًا لعرض ترويجي لهذا الأسبوع'**
+  String get aiAssistantSuggestion2;
+
+  /// No description provided for @aiAssistantSuggestion3.
+  ///
+  /// In ar, this message translates to:
+  /// **'اكتب وصفًا جذابًا لمنتج جديد'**
+  String get aiAssistantSuggestion3;
+
+  /// No description provided for @aiAssistantErrorNotEntitled.
+  ///
+  /// In ar, this message translates to:
+  /// **'المساعد الذكي غير مفعّل لهذا المتجر.'**
+  String get aiAssistantErrorNotEntitled;
+
+  /// No description provided for @aiAssistantErrorNetwork.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر الاتصال بالمساعد. تحقق من الشبكة وحاول مجددًا.'**
+  String get aiAssistantErrorNetwork;
+
+  /// No description provided for @aiAssistantErrorGeneric.
+  ///
+  /// In ar, this message translates to:
+  /// **'حدث خطأ أثناء معالجة طلبك. حاول مرة أخرى.'**
+  String get aiAssistantErrorGeneric;
+
+  /// No description provided for @aiAssistantErrorRateLimited.
+  ///
+  /// In ar, this message translates to:
+  /// **'لقد بلغت حدّ الاستخدام. حاول مرة أخرى لاحقًا.'**
+  String get aiAssistantErrorRateLimited;
+
+  /// No description provided for @aiAssistantErrorTooManyImages.
+  ///
+  /// In ar, this message translates to:
+  /// **'عدد الصور كبير جدًا. الحد الأقصى ٥ صور.'**
+  String get aiAssistantErrorTooManyImages;
+
+  /// No description provided for @aiAssistantAttachTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'إرفاق'**
+  String get aiAssistantAttachTooltip;
+
+  /// No description provided for @aiAssistantAttachImage.
+  ///
+  /// In ar, this message translates to:
+  /// **'صورة من المعرض'**
+  String get aiAssistantAttachImage;
+
+  /// No description provided for @aiAssistantAttachCamera.
+  ///
+  /// In ar, this message translates to:
+  /// **'التقاط صورة'**
+  String get aiAssistantAttachCamera;
+
+  /// No description provided for @aiAssistantAttachFile.
+  ///
+  /// In ar, this message translates to:
+  /// **'ملف'**
+  String get aiAssistantAttachFile;
+
+  /// No description provided for @aiAssistantRemoveAttachment.
+  ///
+  /// In ar, this message translates to:
+  /// **'إزالة المرفق'**
+  String get aiAssistantRemoveAttachment;
+
+  /// No description provided for @aiAssistantAttachmentImage.
+  ///
+  /// In ar, this message translates to:
+  /// **'صورة'**
+  String get aiAssistantAttachmentImage;
+
+  /// No description provided for @aiAssistantImageLimit.
+  ///
+  /// In ar, this message translates to:
+  /// **'يمكنك إرفاق {count} صور كحد أقصى'**
+  String aiAssistantImageLimit(int count);
+
+  /// No description provided for @aiAssistantUsageTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'حدود الاستخدام'**
+  String get aiAssistantUsageTitle;
+
+  /// No description provided for @aiAssistantUsageFiveHour.
+  ///
+  /// In ar, this message translates to:
+  /// **'آخر ٥ ساعات'**
+  String get aiAssistantUsageFiveHour;
+
+  /// No description provided for @aiAssistantUsageWeekly.
+  ///
+  /// In ar, this message translates to:
+  /// **'هذا الأسبوع'**
+  String get aiAssistantUsageWeekly;
+
+  /// No description provided for @aiAssistantUsageUnlimited.
+  ///
+  /// In ar, this message translates to:
+  /// **'غير محدود'**
+  String get aiAssistantUsageUnlimited;
+
+  /// No description provided for @aiAssistantUsageRemaining.
+  ///
+  /// In ar, this message translates to:
+  /// **'متبقٍ {count}'**
+  String aiAssistantUsageRemaining(int count);
+
+  /// No description provided for @aiAssistantUsageUsedOfLimit.
+  ///
+  /// In ar, this message translates to:
+  /// **'{used} من {limit}'**
+  String aiAssistantUsageUsedOfLimit(int used, int limit);
+
+  /// No description provided for @aiAssistantUsageResets.
+  ///
+  /// In ar, this message translates to:
+  /// **'يتجدد {time}'**
+  String aiAssistantUsageResets(String time);
+
+  /// No description provided for @aiAssistantActionEdit.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعديل الرسالة'**
+  String get aiAssistantActionEdit;
+
+  /// No description provided for @aiAssistantActionRetry.
+  ///
+  /// In ar, this message translates to:
+  /// **'إعادة المحاولة'**
+  String get aiAssistantActionRetry;
+
+  /// No description provided for @aiAssistantActionCopy.
+  ///
+  /// In ar, this message translates to:
+  /// **'نسخ'**
+  String get aiAssistantActionCopy;
+
+  /// No description provided for @aiAssistantCopied.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم نسخ الرد'**
+  String get aiAssistantCopied;
+
+  /// No description provided for @aiAssistantToolQuerying.
+  ///
+  /// In ar, this message translates to:
+  /// **'يستعلم عن {label}'**
+  String aiAssistantToolQuerying(String label);
+
+  /// No description provided for @aiAssistantToolWorking.
+  ///
+  /// In ar, this message translates to:
+  /// **'يجمع البيانات'**
+  String get aiAssistantToolWorking;
 }
 
 class _AppLocalizationsDelegate

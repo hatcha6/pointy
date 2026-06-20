@@ -40,6 +40,7 @@ class PosUser {
     this.email = '',
     this.permissions = const {},
     this.hasPermissionSnapshot = false,
+    this.aiAvailable = false,
   });
 
   final int id;
@@ -52,6 +53,10 @@ class PosUser {
   final bool isActive;
   final Set<String> permissions;
   final bool hasPermissionSnapshot;
+
+  /// Whether the shop's AI entitlement is active for this session. Sourced from
+  /// the auth response's top-level `ai_available` flag, not a user attribute.
+  final bool aiAvailable;
 
   String get label => displayName.trim().isEmpty ? username : displayName;
 
@@ -77,6 +82,7 @@ class PosUser {
           : json['is_active']?.toString() != 'false',
       permissions: _permissionsFromJson(_permissionPayload(json)),
       hasPermissionSnapshot: _permissionPayload(json) != null,
+      aiAvailable: json['ai_available'] == true,
     );
   }
 

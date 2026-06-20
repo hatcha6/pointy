@@ -15,6 +15,7 @@ import (
 var (
 	ErrNotFound                                = errors.New("installation not found")
 	ErrSubscriptionInactive                    = errors.New("relay subscription is inactive")
+	ErrAINotEntitled                           = errors.New("relay AI is not entitled for this installation")
 	ErrConnectorCertificateFingerprintRequired = errors.New("connector certificate fingerprint is required")
 	ErrConnectorCertificateRevoked             = errors.New("connector certificate fingerprint is revoked")
 	ErrCertificateMaterialNameRequired         = errors.New("certificate material name is required")
@@ -51,6 +52,23 @@ type Installation struct {
 
 func (i Installation) RelayActive(now time.Time) bool {
 	if !i.RelayEnabled {
+		return false
+	}
+	if !i.SubscriptionActive {
+		return false
+	}
+	if i.SubscriptionEndsAt == nil {
+		return true
+	}
+	return now.Before(*i.SubscriptionEndsAt)
+}
+
+// AIActive reports whether the installation may use relay-hosted AI right now.
+// AI is its own entitlement: it requires an active, unexpired subscription and
+// the AI feature flag, but deliberately does NOT require RelayEnabled (remote
+// access). A shop can subscribe to AI without buying remote relay access.
+func (i Installation) AIActive(now time.Time) bool {
+	if !i.AIEnabled {
 		return false
 	}
 	if !i.SubscriptionActive {
@@ -134,6 +152,7 @@ type InstallationStore interface {
 	UpdateSubscription(ctx context.Context, id string, update SubscriptionUpdate) (Installation, error)
 	ValidateConnectorToken(ctx context.Context, rawToken string) (Installation, error)
 	ValidateAccessToken(ctx context.Context, rawToken string) (Installation, error)
+	ValidateAIAccessToken(ctx context.Context, rawToken string) (Installation, error)
 	SetConnectorCertificate(ctx context.Context, id string, certificate ConnectorCertificateMetadata) (Installation, error)
 	RevokeConnectorCertificateFingerprint(ctx context.Context, revocation ConnectorCertificateRevocation) error
 	IsConnectorCertificateFingerprintRevoked(ctx context.Context, fingerprintSHA256 string) (bool, error)
@@ -150,11 +169,13 @@ type AdminSubscriptionStore interface {
 	ListAdminAuditEvents(ctx context.Context, installationID string, limit int) ([]AdminAuditEvent, error)
 }
 
-func validateInstallationToken(
+// installationTokenIdentityValid verifies that rawToken is a well-formed token
+// of the given purpose that belongs to installation, without applying any
+// entitlement/subscription gate. Callers layer the appropriate gate on top.
+func installationTokenIdentityValid(
 	rawToken string,
 	purpose TokenPurpose,
 	installation Installation,
-	now time.Time,
 ) error {
 	parsed, err := ParseToken(rawToken)
 	if err != nil {
@@ -179,8 +200,37 @@ func validateInstallationToken(
 	if !ConstantTimeTokenEqual(rawToken, expectedHash) {
 		return ErrInvalidToken
 	}
+	return nil
+}
+
+func validateInstallationToken(
+	rawToken string,
+	purpose TokenPurpose,
+	installation Installation,
+	now time.Time,
+) error {
+	if err := installationTokenIdentityValid(rawToken, purpose, installation); err != nil {
+		return err
+	}
 	if purpose != TokenPurposeConnector && !installation.RelayActive(now) {
 		return ErrSubscriptionInactive
+	}
+	return nil
+}
+
+// validateInstallationAccessTokenForAI validates a long-lived access token and
+// gates on the AI entitlement (subscription + ai_enabled) rather than the
+// remote-access entitlement, so AI can be sold independently of relay access.
+func validateInstallationAccessTokenForAI(
+	rawToken string,
+	installation Installation,
+	now time.Time,
+) error {
+	if err := installationTokenIdentityValid(rawToken, TokenPurposeAccess, installation); err != nil {
+		return err
+	}
+	if !installation.AIActive(now) {
+		return ErrAINotEntitled
 	}
 	return nil
 }
@@ -379,6 +429,28 @@ func (s *FileStore) ValidateConnectorToken(
 
 func (s *FileStore) ValidateAccessToken(ctx context.Context, rawToken string) (Installation, error) {
 	return s.validateToken(ctx, rawToken, TokenPurposeAccess)
+}
+
+func (s *FileStore) ValidateAIAccessToken(_ context.Context, rawToken string) (Installation, error) {
+	parsed, err := ParseToken(rawToken)
+	if err != nil {
+		return Installation{}, err
+	}
+	if parsed.Purpose != TokenPurposeAccess {
+		return Installation{}, ErrWrongPurpose
+	}
+
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	installation, ok := s.data.Installations[parsed.InstallationID]
+	if !ok {
+		return Installation{}, ErrNotFound
+	}
+	if err := validateInstallationAccessTokenForAI(rawToken, installation, s.clock.Now()); err != nil {
+		return Installation{}, err
+	}
+	return installation, nil
 }
 
 func (s *FileStore) SetConnectorCertificate(

@@ -52,6 +52,8 @@ dependencies:
   http_parser: ^4.1.2
   web: ^1.1.1
   usb_serial: ^0.5.2
+  image_picker: ^1.2.2
+  gpt_markdown: ^1.1.7
 
 dev_dependencies:
   flutter_test:

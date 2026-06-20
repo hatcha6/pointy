@@ -61,6 +61,20 @@ List<NavCatalogGroup> appNavigationCatalog(AppLocalizations l10n) {
           keywords: const ['pos', 'cashier', 'sell', 'بيع', 'كاشير'],
         ),
         NavCatalogEntry(
+          destination: AppNavigationDestination.aiAssistant,
+          icon: Icons.smart_toy_outlined,
+          selectedIcon: Icons.smart_toy,
+          label: l10n.aiAssistantDrawerLabel,
+          keywords: const [
+            'ai',
+            'assistant',
+            'chat',
+            'مساعد',
+            'ذكاء',
+            'محادثة',
+          ],
+        ),
+        NavCatalogEntry(
           destination: AppNavigationDestination.operations,
           icon: Icons.handyman_outlined,
           selectedIcon: Icons.handyman,

@@ -349,6 +349,58 @@ Remote relay access is denied when an installation's relay entitlement is
 disabled, the subscription flag is inactive, or its subscription end time has
 passed. Local LAN access to the on-prem backend is unaffected.
 
+## AI Assistant
+
+The relay also hosts a streaming, multi-model AI assistant. The Flutter app
+talks to the on-prem Django backend (`POST /api/ai/chat/`, normal session auth),
+Django brokers the call to the relay (`POST /v1/ai/chat`) using the
+installation's access token, and the relay calls OpenRouter and streams the
+reply back as Server-Sent Events. The OpenRouter key and the Fast/Smart/Frontier
+model catalog live only on the relay; Django owns conversation history on-prem.
+The relay also auto-routes by prompt difficulty, accepts image/file attachments
+(routing them to a vision model), and meters per-shop usage with rolling 5-hour
+and weekly limits surfaced in-app as a usage ring. The assistant can also **query
+the shop's own data** (sales, products, inventory, expenses…) through read-only
+tools: Django runs an agentic tool loop that dispatches each query through the
+real DRF viewsets **as the current user**, so the existing permission stack
+(role gating, per-user row scoping, manager-only fields) is reused and never
+bypassed. The app shows what it queried as a live "querying sales…" chip.
+
+AI is a per-shop entitlement, independent of remote access: it needs an active
+subscription plus the `ai_enabled` flag (set by our company through the relay
+admin, e.g. `pointy-relay subscription update --ai-enabled=true`). The app shows
+the assistant only when the shop's AI entitlement is active. Configure the relay
+with `POINTY_RELAY_OPENROUTER_API_KEY` and the `POINTY_RELAY_AI_*` model/tier
+variables — see `relay/README.md` ("Relay-Hosted AI") for the full list.
+
+### Run the AI stack locally
+
+One command brings up the whole AI stack — PostgreSQL, Redis, the relay, Django,
+and the Flutter web app — and enables the AI entitlement for a local shop:
+
+```sh
+make dev-ai
+```
+
+Before running it once, add your OpenRouter key to `relay/.env`
+(`cp relay/.env.example relay/.env`, then set `POINTY_RELAY_OPENROUTER_API_KEY`).
+`make dev-ai` then starts the services and, once the relay and backend are
+healthy, automatically creates a local manager (`admin` / `admin12345`),
+provisions the relay installation, flips the AI entitlement on, and syncs Django.
+When it prints "AI is enabled locally", open <http://127.0.0.1:8080>, sign in,
+and open "المساعد الذكي". Stop everything with Ctrl+C.
+
+The AI-enable step is also available on its own (handy if the stack is already
+running) and is safe to re-run:
+
+```sh
+make ai-enable
+```
+
+For Django to reach the relay, `backend/.env` needs the relay control settings
+(`POINTY_RELAY_CONTROL_URL`, `POINTY_RELAY_ADMIN_TOKEN=local-admin`, etc.); see
+`backend/.env.example`. The `admin` token must match `relay/.env`.
+
 ## Quality Gates
 
 Fast checks stay on the normal targets:

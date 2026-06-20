@@ -283,6 +283,111 @@ func TestConnectorCertificateExpiryAndRotationHelpers(t *testing.T) {
 	}
 }
 
+func TestInstallationAIActive(t *testing.T) {
+	now := time.Date(2026, 6, 2, 12, 0, 0, 0, time.UTC)
+	cases := []struct {
+		name         string
+		installation Installation
+		want         bool
+	}{
+		{
+			name:         "ai enabled with active open-ended subscription",
+			installation: Installation{AIEnabled: true, SubscriptionActive: true},
+			want:         true,
+		},
+		{
+			name:         "ai does not require remote relay access",
+			installation: Installation{AIEnabled: true, SubscriptionActive: true, RelayEnabled: false},
+			want:         true,
+		},
+		{
+			name:         "ai disabled",
+			installation: Installation{AIEnabled: false, SubscriptionActive: true},
+			want:         false,
+		},
+		{
+			name:         "subscription inactive",
+			installation: Installation{AIEnabled: true, SubscriptionActive: false},
+			want:         false,
+		},
+		{
+			name:         "subscription not yet expired",
+			installation: Installation{AIEnabled: true, SubscriptionActive: true, SubscriptionEndsAt: endsAtPtr(now.Add(time.Hour))},
+			want:         true,
+		},
+		{
+			name:         "subscription expired",
+			installation: Installation{AIEnabled: true, SubscriptionActive: true, SubscriptionEndsAt: endsAtPtr(now.Add(-time.Hour))},
+			want:         false,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := tc.installation.AIActive(now); got != tc.want {
+				t.Fatalf("AIActive = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestFileStoreValidateAIAccessToken(t *testing.T) {
+	now := time.Date(2026, 6, 2, 12, 0, 0, 0, time.UTC)
+	store, err := NewFileStore(filepath.Join(t.TempDir(), "installations.json"), fixedClock{now: now})
+	if err != nil {
+		t.Fatal(err)
+	}
+	enabled := true
+	relayDisabled := false
+
+	// AI enabled + active subscription, remote relay access OFF: AI must still work.
+	provisioned, err := store.ProvisionInstallation(context.Background(), ProvisionInstallationRequest{
+		BusinessID:         "business-ai",
+		RelayEnabled:       &relayDisabled,
+		SubscriptionActive: &enabled,
+		AIEnabled:          true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	installation, err := store.ValidateAIAccessToken(context.Background(), provisioned.AccessToken)
+	if err != nil {
+		t.Fatalf("expected AI access token to validate without relay access, got %v", err)
+	}
+	if installation.ID != provisioned.Installation.ID {
+		t.Fatalf("expected installation %q, got %q", provisioned.Installation.ID, installation.ID)
+	}
+
+	// A connector token is the wrong purpose for AI access.
+	if _, err := store.ValidateAIAccessToken(context.Background(), provisioned.ConnectorToken); !errors.Is(err, ErrWrongPurpose) {
+		t.Fatalf("expected wrong purpose, got %v", err)
+	}
+
+	// AI flag off: not entitled even with an active subscription.
+	aiOff, err := store.ProvisionInstallation(context.Background(), ProvisionInstallationRequest{
+		BusinessID:         "business-no-ai",
+		SubscriptionActive: &enabled,
+		AIEnabled:          false,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.ValidateAIAccessToken(context.Background(), aiOff.AccessToken); !errors.Is(err, ErrAINotEntitled) {
+		t.Fatalf("expected ErrAINotEntitled when ai disabled, got %v", err)
+	}
+
+	// Subscription inactive: not entitled even with the AI flag on.
+	subOff, err := store.ProvisionInstallation(context.Background(), ProvisionInstallationRequest{
+		BusinessID: "business-sub-off",
+		AIEnabled:  true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.ValidateAIAccessToken(context.Background(), subOff.AccessToken); !errors.Is(err, ErrAINotEntitled) {
+		t.Fatalf("expected ErrAINotEntitled when subscription inactive, got %v", err)
+	}
+}
+
 func endsAtPtr(value time.Time) *time.Time {
 	return &value
 }

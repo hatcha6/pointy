@@ -45,7 +45,12 @@ class ExpenseViewSet(viewsets.ModelViewSet):
         "cash_movement",
         "register_session",
     )
-    filterset_fields = ("category", "payment_method")
+    filterset_fields = {
+        "category": ["exact"],
+        "payment_method": ["exact"],
+        # spent_at is a DateField, so range lookups only (no __date transform).
+        "spent_at": ["exact", "gte", "lte"],
+    }
     search_fields = ("description", "reference")
     ordering_fields = ("spent_at", "amount", "created_at")
 

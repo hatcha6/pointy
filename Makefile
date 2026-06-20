@@ -106,7 +106,7 @@ ENDURANCE_WORKERS ?= 4
 	backend-shell backend-superuser backend-test backend-check backend-celery backend-celery-beat \
 	frontend-install frontend-l10n frontend-run frontend-web frontend-test frontend-e2e frontend-analyze frontend-format \
 	relay-install relay-format relay-check relay-test relay-production-test relay-run relay-connector relay-migrate relay-provision relay-subscription-update \
-	format check test e2e dev dev-local dev-no-redis clean
+	format check test e2e dev dev-local dev-no-redis dev-ai ai-enable postgres-ready clean
 
 help: ## Show available commands.
 	@awk 'BEGIN {FS = ":.*##"; printf "\nPointy POS commands\n\n"} /^[a-zA-Z0-9_-]+:.*##/ {printf "  %-22s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -260,6 +260,9 @@ frontend-command-palette-preview: frontend-install ## Run the global command pal
 frontend-price-checker-preview: frontend-install ## Run the price-checker settings UI preview harness as a local web server.
 	cd "$(FRONTEND_DIR)" && $(FLUTTER) run -d web-server --web-hostname $(WEB_HOST) --web-port $(WEB_PORT) -t lib/dev/price_checker_preview.dart
 
+frontend-ai-preview: frontend-install ## Run the AI assistant UI preview harness as a local web server.
+	cd "$(FRONTEND_DIR)" && $(FLUTTER) run -d web-server --web-hostname $(WEB_HOST) --web-port $(WEB_PORT) -t lib/dev/ai_chat_preview.dart
+
 frontend-theme-preview: frontend-install ## Run the light/dark theme gallery preview harness as a local web server.
 	cd "$(FRONTEND_DIR)" && $(FLUTTER) run -d web-server --web-hostname $(WEB_HOST) --web-port $(WEB_PORT) -t lib/dev/theme_preview.dart
 
@@ -319,6 +322,21 @@ relay-run: ## Run the relay server.
 		POINTY_RELAY_RATE_LIMIT_RELAY_REQUESTS="$(RELAY_RATE_LIMIT_RELAY_REQUESTS)" \
 		POINTY_RELAY_RATE_LIMIT_TICKET_ISSUE="$(RELAY_RATE_LIMIT_TICKET_ISSUE)" \
 		POINTY_RELAY_RATE_LIMIT_TICKET_REFRESH="$(RELAY_RATE_LIMIT_TICKET_REFRESH)" \
+		POINTY_RELAY_OPENROUTER_API_KEY="$(RELAY_OPENROUTER_API_KEY)" \
+		POINTY_RELAY_OPENROUTER_BASE_URL="$(RELAY_OPENROUTER_BASE_URL)" \
+		POINTY_RELAY_AI_MODEL_FAST="$(RELAY_AI_MODEL_FAST)" \
+		POINTY_RELAY_AI_MODEL_SMART="$(RELAY_AI_MODEL_SMART)" \
+		POINTY_RELAY_AI_MODEL_FRONTIER="$(RELAY_AI_MODEL_FRONTIER)" \
+		POINTY_RELAY_AI_DEFAULT_TIER="$(RELAY_AI_DEFAULT_TIER)" \
+		POINTY_RELAY_AI_REQUEST_TIMEOUT="$(RELAY_AI_REQUEST_TIMEOUT)" \
+		POINTY_RELAY_AI_RATE_LIMIT="$(RELAY_AI_RATE_LIMIT)" \
+		POINTY_RELAY_AI_VISION_MODEL="$(RELAY_AI_VISION_MODEL)" \
+		POINTY_RELAY_AI_LIMIT_5H="$(RELAY_AI_LIMIT_5H)" \
+		POINTY_RELAY_AI_LIMIT_5H_WINDOW="$(RELAY_AI_LIMIT_5H_WINDOW)" \
+		POINTY_RELAY_AI_LIMIT_WEEKLY="$(RELAY_AI_LIMIT_WEEKLY)" \
+		POINTY_RELAY_AI_LIMIT_WEEKLY_WINDOW="$(RELAY_AI_LIMIT_WEEKLY_WINDOW)" \
+		POINTY_RELAY_AI_MAX_IMAGES="$(RELAY_AI_MAX_IMAGES)" \
+		POINTY_RELAY_AI_MAX_REQUEST_BYTES="$(RELAY_AI_MAX_REQUEST_BYTES)" \
 		POINTY_RELAY_ALLOW_INSECURE_HTTP="$(RELAY_ALLOW_INSECURE_HTTP)" \
 		POINTY_RELAY_ALLOW_INSECURE_CONNECTOR="$(RELAY_ALLOW_INSECURE_CONNECTOR)" \
 		POINTY_RELAY_HTTP_TLS_CERT="$(RELAY_HTTP_TLS_CERT)" \
@@ -402,6 +420,22 @@ dev-local: backend-dev-migrate ## Run local Redis, Django, and Flutter web toget
 
 dev-no-redis: backend-dev-migrate ## Run Django and Flutter web without starting Redis.
 	$(MAKE) -j2 backend-run frontend-web
+
+postgres-ready: docker-check ## Wait until PostgreSQL accepts connections.
+	@printf 'Waiting for PostgreSQL'
+	@for i in $$(seq 1 60); do \
+		if docker compose exec -T postgres pg_isready -U postgres >/dev/null 2>&1; then \
+			echo ' ready.'; exit 0; \
+		fi; \
+		printf '.'; sleep 1; \
+	done; \
+	echo ' not ready after 60s.'; exit 1
+
+ai-enable: ## Provision the relay installation, enable AI, and sync Django (waits for the relay + backend).
+	@bash deploy/enable-local-ai.sh
+
+dev-ai: postgres redis postgres-ready relay-migrate backend-dev-migrate frontend-install ## Run the full AI stack (Postgres, Redis, relay, Django, Flutter) and enable AI.
+	$(MAKE) -j4 relay-run backend-run frontend-web ai-enable
 
 clean: ## Remove generated local caches and build output.
 	find "$(BACKEND_DIR)" -type d -name __pycache__ -prune -exec rm -rf {} +

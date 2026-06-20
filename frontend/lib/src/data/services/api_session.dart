@@ -65,6 +65,14 @@ class PosApiException implements Exception {
   String toString() => message;
 }
 
+/// One parsed Server-Sent Event: an `event:` name plus its raw `data:` payload.
+class SseEvent {
+  const SseEvent({required this.event, required this.data});
+
+  final String event;
+  final String data;
+}
+
 class PosApiSession {
   PosApiSession({required this.client, required String baseUrl})
     : _baseUrl = _normalizeBaseUrl(baseUrl);
@@ -153,6 +161,60 @@ class PosApiSession {
         body: encodedBody,
       ),
     );
+  }
+
+  /// Opens a Server-Sent Events stream (POST) and yields parsed [SseEvent]s as
+  /// they arrive. Used by the AI assistant for token-by-token replies. Carries
+  /// the same session cookie / CSRF / relay-token headers as other requests, so
+  /// it works over LAN and through the relay tunnel. On non-2xx it reads the
+  /// (small) error body and throws [PosApiException]. Native platforms stream
+  /// incrementally; web delivers the buffered body at once (same code path).
+  Stream<SseEvent> openEventStream(String path, {Object? body}) async* {
+    final request = http.Request('POST', uri(path));
+    request.headers.addAll(headers(includeCsrf: true));
+    if (body != null) {
+      request.body = jsonEncode(body);
+    }
+
+    final streamed = await client.send(request);
+    if (streamed.statusCode < 200 || streamed.statusCode >= 300) {
+      final errorBody = await streamed.stream.bytesToString();
+      throw PosApiException(
+        message: 'Stream request failed with status ${streamed.statusCode}',
+        statusCode: streamed.statusCode,
+        responseBody: errorBody,
+      );
+    }
+
+    final lines = streamed.stream
+        .transform(utf8.decoder)
+        .transform(const LineSplitter());
+    String? eventType;
+    final dataLines = <String>[];
+    await for (final line in lines) {
+      if (line.isEmpty) {
+        if (dataLines.isNotEmpty) {
+          yield SseEvent(
+            event: eventType ?? 'message',
+            data: dataLines.join('\n'),
+          );
+        }
+        eventType = null;
+        dataLines.clear();
+        continue;
+      }
+      if (line.startsWith(':')) {
+        continue;
+      }
+      if (line.startsWith('event:')) {
+        eventType = line.substring('event:'.length).trim();
+      } else if (line.startsWith('data:')) {
+        dataLines.add(line.substring('data:'.length).trim());
+      }
+    }
+    if (dataLines.isNotEmpty) {
+      yield SseEvent(event: eventType ?? 'message', data: dataLines.join('\n'));
+    }
   }
 
   Future<http.Response> postMultipart(

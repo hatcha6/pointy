@@ -73,13 +73,17 @@ class OrderViewSet(
         "payments",
         "applied_discounts",
     )
-    filterset_fields = (
-        "status",
-        "customer",
-        "register_session",
-        "register_session__status",
-        "sales_channel",
-    )
+    # Dict form (vs a plain tuple) so the date field also exposes range/day
+    # lookups (created_at__gte / __lte / __date) — additive, existing exact
+    # filters are unchanged. Lets the assistant ask for "today's sales" etc.
+    filterset_fields = {
+        "status": ["exact"],
+        "customer": ["exact"],
+        "register_session": ["exact"],
+        "register_session__status": ["exact"],
+        "sales_channel": ["exact"],
+        "created_at": ["exact", "gte", "lte", "date"],
+    }
     search_fields = (
         "receipt_number",
         "lines__variant__product__name",
@@ -100,9 +104,7 @@ class OrderViewSet(
             queryset = queryset.distinct()
         if user_is_manager(self.request.user):
             return queryset
-        return queryset.filter(
-            register_session__owner_key=register_session_owner_key(self.request)
-        )
+        return queryset.filter(register_session__owner_key=register_session_owner_key(self.request))
 
     def _open_register_session(self, request):
         return RegisterSession.objects.filter(
@@ -311,8 +313,7 @@ class OrderViewSet(
             return enqueue_kitchen_print_jobs(order.pk)
         except Exception:
             logger.exception(
-                "Failed to enqueue kitchen tickets for order %s; the sale is "
-                "unaffected.",
+                "Failed to enqueue kitchen tickets for order %s; the sale is unaffected.",
                 order.pk,
             )
             return []
@@ -385,9 +386,7 @@ class RegisterSessionViewSet(
         return queryset.filter(owner_key=register_session_owner_key(self.request))
 
     def get_owner_queryset(self):
-        return super().get_queryset().filter(
-            owner_key=register_session_owner_key(self.request)
-        )
+        return super().get_queryset().filter(owner_key=register_session_owner_key(self.request))
 
     @action(detail=True, methods=["get"])
     def orders(self, request, pk=None):

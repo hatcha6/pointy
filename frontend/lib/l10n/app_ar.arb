@@ -6323,5 +6323,60 @@
   "dashboardGetStartedFirstSale": "سجّل أول عملية بيع",
   "dashboardGetStartedDone": "تم",
   "posCartRestoredMessage": "تمت استعادة سلة بيع غير مكتملة",
-  "purchaseDraftRestoredMessage": "تمت استعادة مسودة شراء محفوظة"
+  "purchaseDraftRestoredMessage": "تمت استعادة مسودة شراء محفوظة",
+  "aiAssistantDrawerLabel": "المساعد الذكي",
+  "aiAssistantTitle": "المساعد الذكي",
+  "aiAssistantInputHint": "اكتب رسالتك هنا…",
+  "aiAssistantSendTooltip": "إرسال",
+  "aiAssistantNewChat": "محادثة جديدة",
+  "aiAssistantHistoryTitle": "المحادثات السابقة",
+  "aiAssistantHistoryEmpty": "لا توجد محادثات بعد",
+  "aiAssistantDeleteConversation": "حذف المحادثة",
+  "aiAssistantEmptyTitle": "كيف يمكنني مساعدتك؟",
+  "aiAssistantEmptySubtitle": "اسأل المساعد عن أي شيء يخص متجرك.",
+  "aiAssistantThinking": "يكتب…",
+  "aiAssistantThinkingLabel": "طريقة التفكير",
+  "aiAssistantSuggestion1": "اكتب رسالة ترحيب لعملاء متجري",
+  "aiAssistantSuggestion2": "اقترح أفكارًا لعرض ترويجي لهذا الأسبوع",
+  "aiAssistantSuggestion3": "اكتب وصفًا جذابًا لمنتج جديد",
+  "aiAssistantErrorNotEntitled": "المساعد الذكي غير مفعّل لهذا المتجر.",
+  "aiAssistantErrorNetwork": "تعذّر الاتصال بالمساعد. تحقق من الشبكة وحاول مجددًا.",
+  "aiAssistantErrorGeneric": "حدث خطأ أثناء معالجة طلبك. حاول مرة أخرى.",
+  "aiAssistantErrorRateLimited": "لقد بلغت حدّ الاستخدام. حاول مرة أخرى لاحقًا.",
+  "aiAssistantErrorTooManyImages": "عدد الصور كبير جدًا. الحد الأقصى ٥ صور.",
+  "aiAssistantAttachTooltip": "إرفاق",
+  "aiAssistantAttachImage": "صورة من المعرض",
+  "aiAssistantAttachCamera": "التقاط صورة",
+  "aiAssistantAttachFile": "ملف",
+  "aiAssistantRemoveAttachment": "إزالة المرفق",
+  "aiAssistantAttachmentImage": "صورة",
+  "aiAssistantImageLimit": "يمكنك إرفاق {count} صور كحد أقصى",
+  "@aiAssistantImageLimit": {
+    "placeholders": { "count": { "type": "int" } }
+  },
+  "aiAssistantUsageTitle": "حدود الاستخدام",
+  "aiAssistantUsageFiveHour": "آخر ٥ ساعات",
+  "aiAssistantUsageWeekly": "هذا الأسبوع",
+  "aiAssistantUsageUnlimited": "غير محدود",
+  "aiAssistantUsageRemaining": "متبقٍ {count}",
+  "@aiAssistantUsageRemaining": {
+    "placeholders": { "count": { "type": "int" } }
+  },
+  "aiAssistantUsageUsedOfLimit": "{used} من {limit}",
+  "@aiAssistantUsageUsedOfLimit": {
+    "placeholders": { "used": { "type": "int" }, "limit": { "type": "int" } }
+  },
+  "aiAssistantUsageResets": "يتجدد {time}",
+  "@aiAssistantUsageResets": {
+    "placeholders": { "time": { "type": "String" } }
+  },
+  "aiAssistantActionEdit": "تعديل الرسالة",
+  "aiAssistantActionRetry": "إعادة المحاولة",
+  "aiAssistantActionCopy": "نسخ",
+  "aiAssistantCopied": "تم نسخ الرد",
+  "aiAssistantToolQuerying": "يستعلم عن {label}",
+  "@aiAssistantToolQuerying": {
+    "placeholders": { "label": { "type": "String" } }
+  },
+  "aiAssistantToolWorking": "يجمع البيانات"
 }

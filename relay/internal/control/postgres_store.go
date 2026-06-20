@@ -495,6 +495,28 @@ func (s *PostgresStore) ValidateAccessToken(
 	return s.validateToken(ctx, rawToken, TokenPurposeAccess)
 }
 
+func (s *PostgresStore) ValidateAIAccessToken(
+	ctx context.Context,
+	rawToken string,
+) (Installation, error) {
+	parsed, err := ParseToken(rawToken)
+	if err != nil {
+		return Installation{}, err
+	}
+	if parsed.Purpose != TokenPurposeAccess {
+		return Installation{}, ErrWrongPurpose
+	}
+
+	installation, err := s.GetInstallation(ctx, parsed.InstallationID)
+	if err != nil {
+		return Installation{}, err
+	}
+	if err := validateInstallationAccessTokenForAI(rawToken, installation, s.clock.Now()); err != nil {
+		return Installation{}, err
+	}
+	return installation, nil
+}
+
 func (s *PostgresStore) SetConnectorCertificate(
 	ctx context.Context,
 	id string,

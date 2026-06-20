@@ -18,6 +18,18 @@ roles, permissions, and audit.
 
 ## Commands
 
+For local development, copy the env template and fill in your values (at
+minimum an OpenRouter key to enable AI):
+
+```sh
+cp .env.example .env
+```
+
+`relay/.env` is loaded automatically by every `pointy-relay` command (and by
+`make relay-run`). Real environment variables and `make` values take
+precedence, so `.env` only fills variables that are otherwise empty. `relay/.env`
+is gitignored; `.env.example` is the tracked template.
+
 Apply PostgreSQL migrations:
 
 ```sh
@@ -207,6 +219,159 @@ rotated with the newly issued `ptt1...` relay ticket. The relay rechecks the
 installation's relay entitlement and subscription before every refresh. If a
 device's refresh token expires while LAN is unavailable, it cannot remotely
 pair again; it must return to LAN pairing.
+
+## Relay-Hosted AI
+
+The relay hosts AI chat so the OpenRouter key, the model catalog, and tier
+routing stay company-controlled and never reach customer devices or the on-prem
+backend. The flow is:
+
+```text
+Pointy app -> on-prem Django (POST /api/ai/chat/, session auth, SSE)
+  -> Pointy Relay (POST /v1/ai/chat, X-Pointy-Relay-Token: ptr1..., SSE)
+  -> OpenRouter (stream:true)
+```
+
+Django brokers and persists conversation history on-prem; the relay is stateless
+about chat content. `POST /v1/ai/chat` is a relay-owned endpoint (it does NOT
+tunnel to the connector). It is served on the public listener and authenticated
+with the installation's long-lived access token, exactly like ticket issuance.
+
+Request body (`attachments` optional):
+
+```json
+{
+  "messages": [
+    {"role": "system", "content": "..."},
+    {"role": "user", "content": "..."}
+  ],
+  "attachments": [
+    {"kind": "image", "data_uri": "data:image/jpeg;base64,...", "name": "x.jpg", "mime": "image/jpeg"},
+    {"kind": "file",  "data_uri": "data:application/pdf;base64,...",  "name": "x.pdf", "mime": "application/pdf"}
+  ]
+}
+```
+
+The response is `text/event-stream` with normalized events: `reasoning`
+(`{"text": "..."}`, the model's thinking, when it exposes any), `delta`
+(`{"text": "..."}`, the answer), then `done`
+(`{"model", "tier", "finish_reason", "usage", "usage_limits"}`), or `error`
+(`{"detail": "..."}`). `usage_limits` carries the post-charge 5h + weekly
+snapshot (see below) so the app can update its usage ring without a separate
+fetch.
+
+**Auto-routing.** The relay always picks the model — never the client or the
+backend. It runs a small classifier (the router model) over the latest user
+message to gauge difficulty, picks a tier (`fast` | `smart` | `frontier`),
+answers with that tier's model, and reports the chosen `tier` in the `done`
+event. Any `tier` in the request is ignored. A router failure falls back to the
+default tier, so it never blocks the reply.
+
+**Multimodal.** When a prompt carries `attachments`, the relay skips the
+difficulty router and answers with the vision model
+(`POINTY_RELAY_AI_VISION_MODEL`), attaching the images/files to the last user
+turn as OpenAI-style content parts. Non-image files (PDFs, docs) additionally go
+through OpenRouter's `file-parser` plugin so any model can read them. Images are
+capped per prompt (`POINTY_RELAY_AI_MAX_IMAGES`, default 5) — over the cap the
+relay returns `422` `{"error", "limit"}`. The cap is enforced here as well as in
+the app, so it is controllable remotely.
+
+### Usage limits
+
+Subscription usage is metered Claude Code / Codex style: a rolling **5-hour** cap
+and a **weekly** cap on AI messages per installation, both env-configurable and
+enforced on the relay. Each `POST /v1/ai/chat` charges one unit against both
+windows (fixed-window with TTL reset); when either is exhausted the relay rejects
+the turn **before** calling the model:
+
+```text
+429 Too Many Requests
+Retry-After: <seconds>
+{"error": "ai usage limit reached", "scope": "five_hour"|"weekly", "reset_at": "<RFC3339>"}
+```
+
+Limiter errors fail open (a Redis blip must never block a paying shop).
+`GET /v1/ai/usage` (same access-token auth) returns the current usage **without
+consuming any quota**, for rendering the ring on load:
+
+```json
+{
+  "five_hour": {"used": 12, "limit": 30, "remaining": 18, "reset_at": "<RFC3339>"},
+  "weekly":    {"used": 64, "limit": 200, "remaining": 136, "reset_at": "<RFC3339>"}
+}
+```
+
+A limit of `0` disables that window (reported as `limit: 0`).
+
+### Tool calling
+
+The request may include an OpenAI-style `tools` array; the relay forwards it
+verbatim and, when present, floors the routed tier at `smart` (small models
+fumble tool use). The model's tool calls stream as fragments — the relay
+assembles them by index and emits a single normalized event:
+
+```text
+event: tool_calls
+data: {"tool_calls": [{"id": "...", "type": "function", "function": {"name": "...", "arguments": "<json string>"}}]}
+```
+
+The relay is stateless about tools: **Django owns the agentic loop** and executes
+tools on-prem as the current user (so the database permission stack is reused,
+never bypassed). It then sends the assistant `tool_calls` message + `role:"tool"`
+result messages back for the next turn. Because one user message can span several
+relay turns, continuation turns pass `"count_usage": false` so only the
+user-initiated turn charges the usage windows above — one question never drains
+the quota by the number of tool rounds.
+
+### Entitlement
+
+AI is its own entitlement, separate from remote access. `POST /v1/ai/chat`
+requires an **active, unexpired subscription** and the **`ai_enabled`** flag, and
+deliberately does NOT require `relay_enabled` — a shop can buy AI without remote
+relay access. When not entitled the relay returns `402 Payment Required`. The
+`ai_enabled` flag is company-owned and set through the same admin subscription
+path as the other entitlements:
+
+```sh
+POINTY_RELAY_ADMIN_TOKEN=local-admin \
+go run ./cmd/pointy-relay subscription update \
+  --allow-insecure-control=true \
+  --installation-id '<installation-id>' \
+  --actor 'ops@example.com' \
+  --reason 'enabled AI add-on' \
+  --ai-enabled=true \
+  --subscription-active=true
+```
+
+The customer backend observes the new `ai_enabled` state through its normal
+relay sync path.
+
+### Configuration
+
+AI is disabled until an OpenRouter key is configured. All values are env/flags
+on the relay `server` command:
+
+- `POINTY_RELAY_OPENROUTER_API_KEY` — OpenRouter API key; empty disables AI.
+- `POINTY_RELAY_OPENROUTER_BASE_URL` — defaults to `https://openrouter.ai/api/v1`.
+- `POINTY_RELAY_AI_MODEL_FAST` / `_SMART` / `_FRONTIER` — model id per tier.
+- `POINTY_RELAY_AI_DEFAULT_TIER` — router fallback tier (`smart`).
+- `POINTY_RELAY_AI_ROUTER_MODEL` — model that classifies prompt difficulty to
+  auto-pick a tier; empty uses the fast-tier model.
+- `POINTY_RELAY_AI_REQUEST_TIMEOUT` — per-request stream timeout (`120s`).
+- `POINTY_RELAY_AI_RATE_LIMIT` — AI requests per installation per rate-limit
+  window (`120`; uses the shared `POINTY_RELAY_RATE_LIMIT_WINDOW`). This is the
+  short anti-burst guard; the subscription caps below are separate.
+- `POINTY_RELAY_AI_VISION_MODEL` — model for prompts with attachments.
+- `POINTY_RELAY_AI_LIMIT_5H` / `_5H_WINDOW` — 5-hour message cap (`30`) and its
+  window (`5h`); set the limit to `0` to disable.
+- `POINTY_RELAY_AI_LIMIT_WEEKLY` / `_WEEKLY_WINDOW` — weekly message cap (`200`)
+  and its window (`168h`); `0` disables.
+- `POINTY_RELAY_AI_MAX_IMAGES` — images per prompt (`5`); `0` disables the cap.
+- `POINTY_RELAY_AI_MAX_REQUEST_BYTES` — max chat body incl. base64 attachments
+  (`16777216` = 16 MiB).
+
+Default tier model ids are sensible placeholders; set them to the OpenRouter
+models you want for free/small, balanced, and frontier work.
 
 ## State
 

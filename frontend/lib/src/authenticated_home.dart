@@ -17,6 +17,8 @@ import 'data/models/sale_order.dart';
 import 'data/models/shop_settings.dart';
 import 'features/activity_log/views/activity_log_event_presenter.dart';
 import 'features/activity_log/views/activity_log_screen.dart';
+import 'features/ai/view_models/ai_chat_view_model.dart';
+import 'features/ai/views/ai_assistant_screen.dart';
 import 'features/catalog/view_models/catalog_view_model.dart';
 import 'features/catalog/view_models/category_management_view_model.dart';
 import 'features/catalog/views/category_management_screen.dart';
@@ -206,6 +208,7 @@ class _AuthenticatedRoutes implements AppNavigation {
   WidgetBuilder _destinationRouteBuilder(AppNavigationDestination destination) {
     return switch (destination) {
       AppNavigationDestination.userSettings => userSettingsRouteBuilder,
+      AppNavigationDestination.aiAssistant => aiAssistantRouteBuilder,
       AppNavigationDestination.operations => operationsRouteBuilder,
       AppNavigationDestination.invoices => invoicesRouteBuilder,
       AppNavigationDestination.purchasing => purchasingRouteBuilder,
@@ -428,6 +431,16 @@ class _AuthenticatedRoutes implements AppNavigation {
         attendanceViewModel: dependencies.attendanceViewModel,
         userRepository: dependencies.userRepository,
         capabilities: capabilities,
+        navigation: this,
+      ),
+    );
+  }
+
+  Widget aiAssistantRouteBuilder(BuildContext routeContext) {
+    return _screen(
+      'ai_assistant',
+      AiAssistantScreen(
+        viewModel: AiChatViewModel(dependencies.aiChatRepository),
         navigation: this,
       ),
     );

@@ -120,6 +120,33 @@ func (s *CachedInstallationStore) ValidateAccessToken(
 	return s.validateToken(ctx, rawToken, TokenPurposeAccess)
 }
 
+func (s *CachedInstallationStore) ValidateAIAccessToken(
+	ctx context.Context,
+	rawToken string,
+) (Installation, error) {
+	parsed, err := ParseToken(rawToken)
+	if err != nil {
+		return Installation{}, err
+	}
+	if parsed.Purpose != TokenPurposeAccess {
+		return Installation{}, ErrWrongPurpose
+	}
+
+	installation, ok, err := s.cache.GetInstallation(ctx, parsed.InstallationID)
+	if err != nil || !ok {
+		installation, err = s.store.GetInstallation(ctx, parsed.InstallationID)
+		if err != nil {
+			return Installation{}, err
+		}
+		_ = s.cacheInstallation(ctx, installation)
+	}
+
+	if err := validateInstallationAccessTokenForAI(rawToken, installation, s.clock.Now()); err != nil {
+		return Installation{}, err
+	}
+	return installation, nil
+}
+
 func (s *CachedInstallationStore) SetConnectorCertificate(
 	ctx context.Context,
 	id string,

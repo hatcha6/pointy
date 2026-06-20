@@ -50,6 +50,10 @@ func main() {
 }
 
 func run(args []string) error {
+	// Load relay/.env for local development before any flag/env defaults are
+	// resolved. Real env vars and Makefile-provided values take precedence.
+	loadDotEnv(dotEnvPath())
+
 	if len(args) == 0 {
 		return usageError("missing command")
 	}
@@ -278,6 +282,86 @@ func runServer(args []string) error {
 		"production",
 		envBool("POINTY_RELAY_PRODUCTION", false),
 		"enforce production relay security configuration",
+	)
+	openRouterAPIKey := flags.String(
+		"openrouter-api-key",
+		envString("POINTY_RELAY_OPENROUTER_API_KEY", ""),
+		"OpenRouter API key for relay-hosted AI chat; empty disables AI",
+	)
+	openRouterBaseURL := flags.String(
+		"openrouter-base-url",
+		envString("POINTY_RELAY_OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"),
+		"OpenRouter-compatible chat completions base URL",
+	)
+	aiModelFast := flags.String(
+		"ai-model-fast",
+		envString("POINTY_RELAY_AI_MODEL_FAST", "meta-llama/llama-3.1-8b-instruct"),
+		"OpenRouter model id for the fast/cheap AI tier",
+	)
+	aiModelSmart := flags.String(
+		"ai-model-smart",
+		envString("POINTY_RELAY_AI_MODEL_SMART", "openai/gpt-4o-mini"),
+		"OpenRouter model id for the smart/balanced AI tier",
+	)
+	aiModelFrontier := flags.String(
+		"ai-model-frontier",
+		envString("POINTY_RELAY_AI_MODEL_FRONTIER", "anthropic/claude-3.7-sonnet"),
+		"OpenRouter model id for the frontier AI tier",
+	)
+	aiDefaultTier := flags.String(
+		"ai-default-tier",
+		envString("POINTY_RELAY_AI_DEFAULT_TIER", "smart"),
+		"AI tier used as the router fallback (fast|smart|frontier)",
+	)
+	aiRouterModel := flags.String(
+		"ai-router-model",
+		envString("POINTY_RELAY_AI_ROUTER_MODEL", ""),
+		"model that classifies prompt difficulty to auto-pick a tier; empty uses the fast-tier model",
+	)
+	aiRequestTimeout := flags.Duration(
+		"ai-request-timeout",
+		envDuration("POINTY_RELAY_AI_REQUEST_TIMEOUT", 120*time.Second),
+		"total timeout for a relay-hosted AI streaming request",
+	)
+	aiChatRateLimit := flags.Int(
+		"ai-chat-rate-limit",
+		envInt("POINTY_RELAY_AI_RATE_LIMIT", 120),
+		"maximum AI chat requests per installation per rate-limit window; set 0 to disable",
+	)
+	aiVisionModel := flags.String(
+		"ai-vision-model",
+		envString("POINTY_RELAY_AI_VISION_MODEL", "google/gemma-4-31b-it:free"),
+		"OpenRouter model used when a prompt carries image/file attachments",
+	)
+	aiLimit5H := flags.Int(
+		"ai-limit-5h",
+		envInt("POINTY_RELAY_AI_LIMIT_5H", 30),
+		"max AI messages per installation per 5-hour window; set 0 to disable",
+	)
+	aiLimit5HWindow := flags.Duration(
+		"ai-limit-5h-window",
+		envDuration("POINTY_RELAY_AI_LIMIT_5H_WINDOW", 5*time.Hour),
+		"rolling window for the 5-hour AI message limit",
+	)
+	aiLimitWeekly := flags.Int(
+		"ai-limit-weekly",
+		envInt("POINTY_RELAY_AI_LIMIT_WEEKLY", 200),
+		"max AI messages per installation per weekly window; set 0 to disable",
+	)
+	aiLimitWeeklyWindow := flags.Duration(
+		"ai-limit-weekly-window",
+		envDuration("POINTY_RELAY_AI_LIMIT_WEEKLY_WINDOW", 168*time.Hour),
+		"rolling window for the weekly AI message limit",
+	)
+	aiMaxImages := flags.Int(
+		"ai-max-images",
+		envInt("POINTY_RELAY_AI_MAX_IMAGES", 5),
+		"maximum images per AI prompt; set 0 to disable",
+	)
+	aiMaxRequestBytes := flags.Int64(
+		"ai-max-request-bytes",
+		envInt64("POINTY_RELAY_AI_MAX_REQUEST_BYTES", 16<<20),
+		"maximum AI chat request body bytes (prompt + base64 attachments)",
 	)
 	if err := flags.Parse(args); err != nil {
 		return err
@@ -515,6 +599,22 @@ func runServer(args []string) error {
 		TicketRefreshTTL:              *ticketRefreshTTL,
 		ConnectorCertificateIssuer:    connectorCertificateIssuer,
 		ConnectorCertificateTTL:       *connectorClientCertTTL,
+		OpenRouterAPIKey:              strings.TrimSpace(*openRouterAPIKey),
+		OpenRouterBaseURL:             strings.TrimSpace(*openRouterBaseURL),
+		AIModelTiers: map[string]string{
+			"fast":     strings.TrimSpace(*aiModelFast),
+			"smart":    strings.TrimSpace(*aiModelSmart),
+			"frontier": strings.TrimSpace(*aiModelFrontier),
+		},
+		AIDefaultTier:        strings.TrimSpace(*aiDefaultTier),
+		AIRouterModel:        strings.TrimSpace(*aiRouterModel),
+		AIVisionModel:        strings.TrimSpace(*aiVisionModel),
+		AILimit5H:            ratelimit.Policy{Limit: *aiLimit5H, Window: *aiLimit5HWindow},
+		AILimitWeekly:        ratelimit.Policy{Limit: *aiLimitWeekly, Window: *aiLimitWeeklyWindow},
+		AIMaxImagesPerPrompt: *aiMaxImages,
+		AIMaxRequestBytes:    *aiMaxRequestBytes,
+		AIRequestTimeout:     *aiRequestTimeout,
+		AIChatRateLimit:      ratelimit.Policy{Limit: *aiChatRateLimit, Window: *rateLimitWindow},
 	}
 	publicHTTPHandler := baseHTTPHandler
 	publicHTTPHandler.RouteMode = relayserver.RouteAll

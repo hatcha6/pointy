@@ -18,7 +18,10 @@ from .models import RelayConnectorSetupToken, RelayInstallation, ShopSettings
 
 
 class RelayControlError(RuntimeError):
-    pass
+    def __init__(self, message, *, status_code=None, body=None):
+        super().__init__(message)
+        self.status_code = status_code
+        self.body = body
 
 
 @dataclass(frozen=True)
@@ -28,6 +31,7 @@ class RelayControlConfig:
     connector_address: str
     admin_token: str
     timeout_seconds: int
+    ai_timeout_seconds: int
     allow_insecure_control: bool
     ca_file: str
     client_cert_file: str
@@ -44,6 +48,10 @@ def relay_config():
             int(getattr(settings, "POINTY_RELAY_REQUEST_TIMEOUT_SECONDS", 5)),
             1,
         ),
+        ai_timeout_seconds=max(
+            int(getattr(settings, "POINTY_RELAY_AI_REQUEST_TIMEOUT_SECONDS", 120)),
+            1,
+        ),
         allow_insecure_control=bool(
             getattr(settings, "POINTY_RELAY_ALLOW_INSECURE_CONTROL", False)
         ),
@@ -51,9 +59,7 @@ def relay_config():
         client_cert_file=str(
             getattr(settings, "POINTY_RELAY_CONTROL_CLIENT_CERT_FILE", "")
         ).strip(),
-        client_key_file=str(
-            getattr(settings, "POINTY_RELAY_CONTROL_CLIENT_KEY_FILE", "")
-        ).strip(),
+        client_key_file=str(getattr(settings, "POINTY_RELAY_CONTROL_CLIENT_KEY_FILE", "")).strip(),
     )
 
 
@@ -85,9 +91,7 @@ class RelayControlClient:
             "POST",
             "/v1/installations",
             body={
-                "business_id": str(
-                    getattr(settings, "POINTY_RELAY_BUSINESS_ID", "")
-                ).strip(),
+                "business_id": str(getattr(settings, "POINTY_RELAY_BUSINESS_ID", "")).strip(),
                 "shop_name": shop_name,
                 "relay_enabled": False,
                 "subscription_active": False,
@@ -114,6 +118,79 @@ class RelayControlClient:
             body={"csr_pem": csr_pem},
             admin=True,
         )
+
+    def get_ai_usage(self, access_token):
+        """Read the installation's current 5h + weekly AI usage (no consume)."""
+        return self._request("GET", "/v1/ai/usage", relay_token=access_token)
+
+    def open_ai_stream(
+        self,
+        *,
+        access_token,
+        messages,
+        attachments=None,
+        tools=None,
+        count_usage=True,
+        max_tokens=0,
+        temperature=None,
+    ):
+        """Open the relay AI chat endpoint and return the raw streaming response.
+
+        The relay holds the OpenRouter key and gates on the installation's AI
+        entitlement; the caller iterates the SSE body (see
+        ``apps.ai.relay_stream.iter_relay_sse``). Authenticates exactly like
+        ``issue_ticket`` so the production public/admin-listener split is
+        inherited, not re-solved. Raises ``RelayControlError`` on transport or
+        non-2xx status before any bytes are streamed to the client.
+        """
+        body = {"messages": list(messages)}
+        if attachments:
+            body["attachments"] = list(attachments)
+        if tools:
+            body["tools"] = list(tools)
+        # Only the user-initiated turn charges usage; tool-continuation turns pass
+        # count_usage=False so one question doesn't drain the quota.
+        if not count_usage:
+            body["count_usage"] = False
+        if max_tokens:
+            body["max_tokens"] = max_tokens
+        if temperature is not None:
+            body["temperature"] = temperature
+        return self._open_stream(
+            "POST",
+            "/v1/ai/chat",
+            body=body,
+            relay_token=access_token,
+        )
+
+    def _open_stream(self, method, path, *, body=None, admin=False, relay_token=""):
+        data = None
+        headers = {"Accept": "text/event-stream"}
+        if body is not None:
+            data = json.dumps(body).encode("utf-8")
+            headers["Content-Type"] = "application/json"
+        if admin:
+            headers["Authorization"] = f"Bearer {self.config.admin_token}"
+        if relay_token:
+            headers["X-Pointy-Relay-Token"] = relay_token
+
+        url = urljoin(self.config.control_url.rstrip("/") + "/", path.lstrip("/"))
+        http_request = request.Request(url, data=data, headers=headers, method=method)
+        try:
+            return request.urlopen(
+                http_request,
+                timeout=self.config.ai_timeout_seconds,
+                context=self._ssl_context,
+            )
+        except error.HTTPError as exc:
+            detail = exc.read().decode("utf-8", errors="replace")
+            raise RelayControlError(
+                f"relay AI returned {exc.code}: {detail}",
+                status_code=exc.code,
+                body=detail,
+            ) from exc
+        except error.URLError as exc:
+            raise RelayControlError(f"relay AI request failed: {exc.reason}") from exc
 
     def _request(self, method, path, *, body=None, admin=False, relay_token=""):
         data = None
@@ -200,6 +277,27 @@ def relay_status_payload(installation):
     }
 
 
+def relay_ai_available(installation=None):
+    """Whether relay-hosted AI is currently usable for this shop.
+
+    Mirrors the relay's own gate: an active, unexpired subscription plus the AI
+    flag, independent of remote-access (relay_enabled). The frontend reads this
+    (via the ``me`` payload) to show or hide the AI assistant.
+    """
+    if installation is None:
+        installation = RelayInstallation.load()
+    if installation is None or not installation.ai_enabled:
+        return False
+    if not installation.subscription_active:
+        return False
+    if (
+        installation.subscription_ends_at is not None
+        and installation.subscription_ends_at <= timezone.now()
+    ):
+        return False
+    return True
+
+
 def parse_relay_datetime(value):
     if value in ("", None):
         return None
@@ -236,9 +334,7 @@ def ensure_relay_installation(*, client=None):
         relay_enabled=bool(relay_installation.get("relay_enabled", False)),
         subscription_active=bool(relay_installation.get("subscription_active", False)),
         ai_enabled=bool(relay_installation.get("ai_enabled", False)),
-        subscription_ends_at=parse_relay_datetime(
-            relay_installation.get("subscription_ends_at")
-        ),
+        subscription_ends_at=parse_relay_datetime(relay_installation.get("subscription_ends_at")),
         last_synced_at=timezone.now(),
     )
     return installation, True
@@ -251,9 +347,7 @@ def sync_relay_installation(installation, *, client=None):
     relay_installation = relay_client.get_installation(installation.installation_id)
     installation.shop_name = relay_installation.get("shop_name") or installation.shop_name
     installation.relay_enabled = bool(relay_installation.get("relay_enabled", False))
-    installation.subscription_active = bool(
-        relay_installation.get("subscription_active", False)
-    )
+    installation.subscription_active = bool(relay_installation.get("subscription_active", False))
     installation.ai_enabled = bool(relay_installation.get("ai_enabled", False))
     installation.subscription_ends_at = parse_relay_datetime(
         relay_installation.get("subscription_ends_at")
@@ -311,9 +405,7 @@ def connector_setup_token_hash(raw_token):
 
 def _locked_setup_token(token_hash, raw_token):
     record = (
-        RelayConnectorSetupToken.objects.select_for_update()
-        .filter(token_hash=token_hash)
-        .first()
+        RelayConnectorSetupToken.objects.select_for_update().filter(token_hash=token_hash).first()
     )
     if record is not None:
         return record

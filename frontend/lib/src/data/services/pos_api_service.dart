@@ -67,7 +67,9 @@ import '../models/variant_option_value_page.dart';
 import '../models/user_activity.dart';
 import '../models/workflow.dart';
 import '../models/attendance.dart';
+import '../models/ai_chat.dart';
 import 'api_session.dart';
+import 'ai_api_client.dart';
 import 'analytics_api_client.dart';
 import 'attendance_api_client.dart';
 import 'auth_api_client.dart';
@@ -135,6 +137,7 @@ class PosApiService {
     _printing = PrintingApiClient(_session);
     _priceChecker = PriceCheckerApiClient(_session);
     _stockCounts = StockCountApiClient(_session);
+    _ai = AiApiClient(_session);
   }
 
   String get baseUrl => _session.baseUrl;
@@ -168,6 +171,7 @@ class PosApiService {
   late final PrintingApiClient _printing;
   late final PriceCheckerApiClient _priceChecker;
   late final StockCountApiClient _stockCounts;
+  late final AiApiClient _ai;
 
   set performanceRecorder(ApiPerformanceRecorder? recorder) {
     _session.performanceRecorder = recorder;
@@ -1496,6 +1500,38 @@ class PosApiService {
     int page = 1,
   }) {
     return _priceChecker.fetchEvents(deviceId: deviceId, page: page);
+  }
+
+  Stream<AiChatEvent> streamAiChat({
+    int? conversationId,
+    required String message,
+    List<AiAttachment> attachments = const [],
+  }) {
+    return _ai.streamChat(
+      conversationId: conversationId,
+      message: message,
+      attachments: attachments,
+    );
+  }
+
+  Future<AiUsage> fetchAiUsage() {
+    return _ai.fetchUsage();
+  }
+
+  Future<List<AiConversationSummary>> fetchAiConversations({int page = 1}) {
+    return _ai.fetchConversations(page: page);
+  }
+
+  Future<AiConversation> fetchAiConversation(int id) {
+    return _ai.fetchConversation(id);
+  }
+
+  Future<void> deleteAiConversation(int id) {
+    return _ai.deleteConversation(id);
+  }
+
+  Future<void> truncateAiConversation(int conversationId, int messageId) {
+    return _ai.truncateConversation(conversationId, messageId);
   }
 }
 

@@ -10665,4 +10665,139 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get purchaseDraftRestoredMessage => 'تمت استعادة مسودة شراء محفوظة';
+
+  @override
+  String get aiAssistantDrawerLabel => 'المساعد الذكي';
+
+  @override
+  String get aiAssistantTitle => 'المساعد الذكي';
+
+  @override
+  String get aiAssistantInputHint => 'اكتب رسالتك هنا…';
+
+  @override
+  String get aiAssistantSendTooltip => 'إرسال';
+
+  @override
+  String get aiAssistantNewChat => 'محادثة جديدة';
+
+  @override
+  String get aiAssistantHistoryTitle => 'المحادثات السابقة';
+
+  @override
+  String get aiAssistantHistoryEmpty => 'لا توجد محادثات بعد';
+
+  @override
+  String get aiAssistantDeleteConversation => 'حذف المحادثة';
+
+  @override
+  String get aiAssistantEmptyTitle => 'كيف يمكنني مساعدتك؟';
+
+  @override
+  String get aiAssistantEmptySubtitle => 'اسأل المساعد عن أي شيء يخص متجرك.';
+
+  @override
+  String get aiAssistantThinking => 'يكتب…';
+
+  @override
+  String get aiAssistantThinkingLabel => 'طريقة التفكير';
+
+  @override
+  String get aiAssistantSuggestion1 => 'اكتب رسالة ترحيب لعملاء متجري';
+
+  @override
+  String get aiAssistantSuggestion2 => 'اقترح أفكارًا لعرض ترويجي لهذا الأسبوع';
+
+  @override
+  String get aiAssistantSuggestion3 => 'اكتب وصفًا جذابًا لمنتج جديد';
+
+  @override
+  String get aiAssistantErrorNotEntitled =>
+      'المساعد الذكي غير مفعّل لهذا المتجر.';
+
+  @override
+  String get aiAssistantErrorNetwork =>
+      'تعذّر الاتصال بالمساعد. تحقق من الشبكة وحاول مجددًا.';
+
+  @override
+  String get aiAssistantErrorGeneric =>
+      'حدث خطأ أثناء معالجة طلبك. حاول مرة أخرى.';
+
+  @override
+  String get aiAssistantErrorRateLimited =>
+      'لقد بلغت حدّ الاستخدام. حاول مرة أخرى لاحقًا.';
+
+  @override
+  String get aiAssistantErrorTooManyImages =>
+      'عدد الصور كبير جدًا. الحد الأقصى ٥ صور.';
+
+  @override
+  String get aiAssistantAttachTooltip => 'إرفاق';
+
+  @override
+  String get aiAssistantAttachImage => 'صورة من المعرض';
+
+  @override
+  String get aiAssistantAttachCamera => 'التقاط صورة';
+
+  @override
+  String get aiAssistantAttachFile => 'ملف';
+
+  @override
+  String get aiAssistantRemoveAttachment => 'إزالة المرفق';
+
+  @override
+  String get aiAssistantAttachmentImage => 'صورة';
+
+  @override
+  String aiAssistantImageLimit(int count) {
+    return 'يمكنك إرفاق $count صور كحد أقصى';
+  }
+
+  @override
+  String get aiAssistantUsageTitle => 'حدود الاستخدام';
+
+  @override
+  String get aiAssistantUsageFiveHour => 'آخر ٥ ساعات';
+
+  @override
+  String get aiAssistantUsageWeekly => 'هذا الأسبوع';
+
+  @override
+  String get aiAssistantUsageUnlimited => 'غير محدود';
+
+  @override
+  String aiAssistantUsageRemaining(int count) {
+    return 'متبقٍ $count';
+  }
+
+  @override
+  String aiAssistantUsageUsedOfLimit(int used, int limit) {
+    return '$used من $limit';
+  }
+
+  @override
+  String aiAssistantUsageResets(String time) {
+    return 'يتجدد $time';
+  }
+
+  @override
+  String get aiAssistantActionEdit => 'تعديل الرسالة';
+
+  @override
+  String get aiAssistantActionRetry => 'إعادة المحاولة';
+
+  @override
+  String get aiAssistantActionCopy => 'نسخ';
+
+  @override
+  String get aiAssistantCopied => 'تم نسخ الرد';
+
+  @override
+  String aiAssistantToolQuerying(String label) {
+    return 'يستعلم عن $label';
+  }
+
+  @override
+  String get aiAssistantToolWorking => 'يجمع البيانات';
 }

@@ -83,9 +83,8 @@ class SupplierViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["get"], url_path="purchase-history")
     def purchase_history(self, request, pk=None):
         supplier = self.get_object()
-        queryset = (
-            PurchaseOrderViewSet.queryset.filter(supplier=supplier)
-            .order_by("-created_at", "-id")
+        queryset = PurchaseOrderViewSet.queryset.filter(supplier=supplier).order_by(
+            "-created_at", "-id"
         )
         page = self.paginate_queryset(queryset)
         serializer = PurchaseOrderSerializer(
@@ -190,7 +189,11 @@ class PurchaseOrderViewSet(viewsets.ModelViewSet):
         "supplier_credits",
         "attachments",
     )
-    filterset_fields = ("status", "supplier")
+    filterset_fields = {
+        "status": ["exact"],
+        "supplier": ["exact"],
+        "created_at": ["exact", "gte", "lte", "date"],
+    }
     search_fields = (
         "order_number",
         "supplier__name",
@@ -388,9 +391,7 @@ class PurchaseOrderViewSet(viewsets.ModelViewSet):
                 PurchaseOrderAdjustment.AdjustmentType.RETURN,
                 PurchaseOrderAdjustment.AdjustmentType.REFUND,
             ):
-                raise serializers.ValidationError(
-                    {"adjustment_type": "Use return or refund."}
-                )
+                raise serializers.ValidationError({"adjustment_type": "Use return or refund."})
             queryset = queryset.filter(adjustment__adjustment_type=adjustment_type)
         supplier_id = request.query_params.get("supplier")
         if supplier_id:
@@ -618,12 +619,8 @@ def product_margin_impact_payload(*, product, variant, latest_line, previous_lin
     previous_margin_amount = margin_amount(variant, previous_line)
     latest_margin_percent = margin_percent(variant, latest_line)
     previous_margin_percent = margin_percent(variant, previous_line)
-    latest_effective_cost = (
-        None if latest_line is None else latest_line.effective_unit_cost
-    )
-    previous_effective_cost = (
-        None if previous_line is None else previous_line.effective_unit_cost
-    )
+    latest_effective_cost = None if latest_line is None else latest_line.effective_unit_cost
+    previous_effective_cost = None if previous_line is None else previous_line.effective_unit_cost
     latest_unit_cost = None if latest_line is None else latest_line.unit_cost
     previous_unit_cost = None if previous_line is None else previous_line.unit_cost
     return {
@@ -643,9 +640,7 @@ def product_margin_impact_payload(*, product, variant, latest_line, previous_lin
         "previous_effective_unit_cost": money_string(previous_effective_cost),
         "previous_margin_amount": money_string(previous_margin_amount),
         "previous_margin_percent": money_string(previous_margin_percent),
-        "unit_cost_delta": money_string(
-            decimal_delta(latest_unit_cost, previous_unit_cost)
-        ),
+        "unit_cost_delta": money_string(decimal_delta(latest_unit_cost, previous_unit_cost)),
         "effective_unit_cost_delta": money_string(
             decimal_delta(latest_effective_cost, previous_effective_cost)
         ),

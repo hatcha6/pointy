@@ -19,6 +19,7 @@ from apps.attachments.services import active_attachments_for, content_type_for_u
 
 from .models import ShopSettings
 from .permissions import HasPointyPermission
+from .relay import relay_ai_available
 from .roles import (
     create_initial_admin_user,
     ensure_role_groups,
@@ -105,7 +106,13 @@ def login_view(request):
         entity_id=user.pk,
         attributes={"username_present": bool(user.username), "is_staff": user.is_staff},
     )
-    return Response({"user": UserSerializer(user).data, "csrf_token": get_token(request)})
+    return Response(
+        {
+            "user": UserSerializer(user).data,
+            "csrf_token": get_token(request),
+            "ai_available": relay_ai_available(),
+        }
+    )
 
 
 @api_view(["POST"])
@@ -141,8 +148,20 @@ def me_view(request):
             entity_id=user.pk,
             attributes={"changed_fields": sorted(changed_fields)},
         )
-        return Response({"user": UserSerializer(user).data, "csrf_token": get_token(request)})
-    return Response({"user": UserSerializer(request.user).data, "csrf_token": get_token(request)})
+        return Response(
+            {
+                "user": UserSerializer(user).data,
+                "csrf_token": get_token(request),
+                "ai_available": relay_ai_available(),
+            }
+        )
+    return Response(
+        {
+            "user": UserSerializer(request.user).data,
+            "csrf_token": get_token(request),
+            "ai_available": relay_ai_available(),
+        }
+    )
 
 
 @api_view(["POST"])
