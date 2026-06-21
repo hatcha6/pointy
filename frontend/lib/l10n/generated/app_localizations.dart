@@ -19050,6 +19050,102 @@ abstract class AppLocalizations {
   /// **'اختر أنواع البيانات التي تريد نقلها.'**
   String get migrationEntitiesSectionSubtitle;
 
+  /// No description provided for @migrationWithoutQuantitiesLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'نقل المنتجات بدون كميات'**
+  String get migrationWithoutQuantitiesLabel;
+
+  /// No description provided for @migrationWithoutQuantitiesSubtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'استورد المنتجات فقط دون كميات المخزون، وابدأ الجرد من جديد في Pointy.'**
+  String get migrationWithoutQuantitiesSubtitle;
+
+  /// No description provided for @migrationEntityUnit.
+  ///
+  /// In ar, this message translates to:
+  /// **'وحدات القياس'**
+  String get migrationEntityUnit;
+
+  /// No description provided for @migrationEntityCategory.
+  ///
+  /// In ar, this message translates to:
+  /// **'الفئات'**
+  String get migrationEntityCategory;
+
+  /// No description provided for @migrationEntityProduct.
+  ///
+  /// In ar, this message translates to:
+  /// **'المنتجات'**
+  String get migrationEntityProduct;
+
+  /// No description provided for @migrationEntityVariant.
+  ///
+  /// In ar, this message translates to:
+  /// **'المتغيرات'**
+  String get migrationEntityVariant;
+
+  /// No description provided for @migrationEntityProductUnit.
+  ///
+  /// In ar, this message translates to:
+  /// **'وحدات المنتج'**
+  String get migrationEntityProductUnit;
+
+  /// No description provided for @migrationEntityStock.
+  ///
+  /// In ar, this message translates to:
+  /// **'المخزون'**
+  String get migrationEntityStock;
+
+  /// No description provided for @migrationEntityCustomer.
+  ///
+  /// In ar, this message translates to:
+  /// **'العملاء'**
+  String get migrationEntityCustomer;
+
+  /// No description provided for @migrationEntitySupplier.
+  ///
+  /// In ar, this message translates to:
+  /// **'المورّدون'**
+  String get migrationEntitySupplier;
+
+  /// No description provided for @migrationEntityPurchaseOrder.
+  ///
+  /// In ar, this message translates to:
+  /// **'فواتير الشراء'**
+  String get migrationEntityPurchaseOrder;
+
+  /// No description provided for @migrationEntitySale.
+  ///
+  /// In ar, this message translates to:
+  /// **'فواتير البيع'**
+  String get migrationEntitySale;
+
+  /// No description provided for @migrationEntityPayment.
+  ///
+  /// In ar, this message translates to:
+  /// **'المدفوعات'**
+  String get migrationEntityPayment;
+
+  /// No description provided for @migrationEntityEmployee.
+  ///
+  /// In ar, this message translates to:
+  /// **'الموظفون'**
+  String get migrationEntityEmployee;
+
+  /// No description provided for @migrationEntityExpenseCategory.
+  ///
+  /// In ar, this message translates to:
+  /// **'فئات المصروفات'**
+  String get migrationEntityExpenseCategory;
+
+  /// No description provided for @migrationEntityExpense.
+  ///
+  /// In ar, this message translates to:
+  /// **'المصروفات'**
+  String get migrationEntityExpense;
+
   /// No description provided for @migrationRunSectionTitle.
   ///
   /// In ar, this message translates to:

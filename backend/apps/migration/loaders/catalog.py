@@ -7,6 +7,7 @@ from decimal import Decimal
 from apps.catalog.models import (
     Product,
     ProductCategory,
+    ProductUnit,
     ProductVariant,
     UnitDimension,
     UnitOfMeasure,
@@ -14,7 +15,7 @@ from apps.catalog.models import (
     normalize_sku,
 )
 
-from ..entity_plan import CATEGORY, PRODUCT, UNIT, VARIANT
+from ..entity_plan import CATEGORY, PRODUCT, PRODUCT_UNIT, UNIT, VARIANT
 from .base import (
     CREATED,
     UPDATED,
@@ -25,6 +26,7 @@ from .base import (
     LoadOutcome,
     clean_str,
     to_bool,
+    to_decimal,
 )
 
 _VALID_DIMENSIONS = set(UnitDimension.values)
@@ -207,3 +209,45 @@ class VariantLoader(BaseLoader):
         instance.save()
         resolver.remember(self.entity_type, record.source_key, instance)
         return LoadOutcome(action, instance.pk, issues)
+
+
+class ProductUnitLoader(BaseLoader):
+    entity_type = PRODUCT_UNIT
+
+    def load(self, record, resolver, *, dry_run):
+        product = resolver.existing(Product, PRODUCT, record.product_source_key)
+        if product is None:
+            raise LoaderError(
+                f"Product unit references unknown product {record.product_source_key!r}.",
+                code="unresolved_product",
+            )
+        unit = resolver.existing(UnitOfMeasure, UNIT, record.unit_source_key)
+        if unit is None:
+            raise LoaderError(
+                f"Product unit references unknown unit {record.unit_source_key!r}.",
+                code="unresolved_unit",
+            )
+        factor = to_decimal(record.factor_to_base, Decimal("1"))
+        if factor <= 0:
+            raise LoaderError(
+                "Product unit conversion factor must be greater than zero.",
+                code="invalid_factor",
+            )
+
+        defaults = {
+            "factor_to_base": factor,
+            "is_sellable": to_bool(record.is_sellable),
+            "is_purchasable": to_bool(record.is_purchasable),
+        }
+        if record.price is not None:
+            defaults["price"] = to_decimal(record.price)
+
+        existing = ProductUnit.objects.filter(product=product, unit=unit).first()
+        action = UPDATED if existing is not None else CREATED
+        instance, _created = ProductUnit.objects.update_or_create(
+            product=product,
+            unit=unit,
+            defaults=defaults,
+        )
+        resolver.remember(self.entity_type, record.source_key, instance)
+        return LoadOutcome(action, instance.pk)

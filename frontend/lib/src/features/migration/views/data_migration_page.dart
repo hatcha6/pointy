@@ -395,11 +395,19 @@ class _DataMigrationPageState extends State<DataMigrationPage> {
             children: [
               for (final entity in entities)
                 FilterChip(
-                  label: Text(viewModel.entityLabel(entity)),
+                  label: Text(_entityLabel(l10n, viewModel, entity)),
                   selected: viewModel.selectedEntities.contains(entity),
                   onSelected: (value) => viewModel.toggleEntity(entity, value),
                 ),
             ],
+          ),
+          SizedBox(height: spacing.xs),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            title: Text(l10n.migrationWithoutQuantitiesLabel),
+            subtitle: Text(l10n.migrationWithoutQuantitiesSubtitle),
+            value: viewModel.productsWithoutQuantities,
+            onChanged: viewModel.setProductsWithoutQuantities,
           ),
         ],
       ),
@@ -488,7 +496,7 @@ class _DataMigrationPageState extends State<DataMigrationPage> {
           rows: [
             for (final summary in run.entitySummaries)
               PointySummaryRow(
-                label: viewModel.entityLabel(summary.entityType),
+                label: _entityLabel(l10n, viewModel, summary.entityType),
                 value:
                     '${summary.created} ${l10n.migrationSummaryCreated} · '
                     '${summary.updated} ${l10n.migrationSummaryUpdated} · '
@@ -518,7 +526,7 @@ class _DataMigrationPageState extends State<DataMigrationPage> {
                       : Icons.warning_amber_outlined,
                   color: issue.severity == 'error' ? colors.danger : colors.warning,
                 ),
-                title: '${viewModel.entityLabel(issue.entityType)} · ${issue.code}',
+                title: '${_entityLabel(l10n, viewModel, issue.entityType)} · ${issue.code}',
                 subtitle: issue.message,
               ),
           ],
@@ -614,6 +622,28 @@ class _DataMigrationPageState extends State<DataMigrationPage> {
       ),
     );
   }
+}
+
+/// Localised label for an entity type, falling back to the backend's English
+/// label (from the systems catalogue) for any type without an Arabic string.
+String _entityLabel(AppLocalizations l10n, MigrationViewModel viewModel, String type) {
+  return switch (type) {
+    'unit' => l10n.migrationEntityUnit,
+    'category' => l10n.migrationEntityCategory,
+    'product' => l10n.migrationEntityProduct,
+    'variant' => l10n.migrationEntityVariant,
+    'product_unit' => l10n.migrationEntityProductUnit,
+    'stock' => l10n.migrationEntityStock,
+    'customer' => l10n.migrationEntityCustomer,
+    'supplier' => l10n.migrationEntitySupplier,
+    'purchase_order' => l10n.migrationEntityPurchaseOrder,
+    'sale' => l10n.migrationEntitySale,
+    'payment' => l10n.migrationEntityPayment,
+    'employee' => l10n.migrationEntityEmployee,
+    'expense_category' => l10n.migrationEntityExpenseCategory,
+    'expense' => l10n.migrationEntityExpense,
+    _ => viewModel.entityLabel(type),
+  };
 }
 
 class _SectionCard extends StatelessWidget {

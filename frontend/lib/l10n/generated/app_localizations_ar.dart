@@ -10988,6 +10988,55 @@ class AppLocalizationsAr extends AppLocalizations {
       'اختر أنواع البيانات التي تريد نقلها.';
 
   @override
+  String get migrationWithoutQuantitiesLabel => 'نقل المنتجات بدون كميات';
+
+  @override
+  String get migrationWithoutQuantitiesSubtitle =>
+      'استورد المنتجات فقط دون كميات المخزون، وابدأ الجرد من جديد في Pointy.';
+
+  @override
+  String get migrationEntityUnit => 'وحدات القياس';
+
+  @override
+  String get migrationEntityCategory => 'الفئات';
+
+  @override
+  String get migrationEntityProduct => 'المنتجات';
+
+  @override
+  String get migrationEntityVariant => 'المتغيرات';
+
+  @override
+  String get migrationEntityProductUnit => 'وحدات المنتج';
+
+  @override
+  String get migrationEntityStock => 'المخزون';
+
+  @override
+  String get migrationEntityCustomer => 'العملاء';
+
+  @override
+  String get migrationEntitySupplier => 'المورّدون';
+
+  @override
+  String get migrationEntityPurchaseOrder => 'فواتير الشراء';
+
+  @override
+  String get migrationEntitySale => 'فواتير البيع';
+
+  @override
+  String get migrationEntityPayment => 'المدفوعات';
+
+  @override
+  String get migrationEntityEmployee => 'الموظفون';
+
+  @override
+  String get migrationEntityExpenseCategory => 'فئات المصروفات';
+
+  @override
+  String get migrationEntityExpense => 'المصروفات';
+
+  @override
   String get migrationRunSectionTitle => 'النقل';
 
   @override

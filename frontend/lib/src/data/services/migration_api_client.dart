@@ -66,6 +66,7 @@ class MigrationApiClient {
     required int sourceId,
     required String mode,
     required List<String> entities,
+    Map<String, Object?> options = const {},
   }) async {
     final response = await _session.post(
       'migration/runs/',
@@ -73,6 +74,7 @@ class MigrationApiClient {
         'source': sourceId,
         'mode': mode,
         'selected_entities': entities,
+        'options': options,
       },
     );
     _session.ensureSuccess(response, 'Start migration run failed with status');

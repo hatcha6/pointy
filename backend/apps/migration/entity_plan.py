@@ -31,6 +31,8 @@ SALE = "sale"
 PAYMENT = "payment"
 EMPLOYEE = "employee"
 EXPENSE = "expense"
+EXPENSE_CATEGORY = "expense_category"
+PRODUCT_UNIT = "product_unit"
 
 
 @dataclass(frozen=True)
@@ -49,6 +51,12 @@ ENTITY_PLAN: tuple[EntitySpec, ...] = (
     EntitySpec(CATEGORY, "Categories", canonical.CanonicalCategory),
     EntitySpec(PRODUCT, "Products", canonical.CanonicalProduct, (UNIT, CATEGORY)),
     EntitySpec(VARIANT, "Product variants", canonical.CanonicalVariant, (PRODUCT,)),
+    EntitySpec(
+        PRODUCT_UNIT,
+        "Product units",
+        canonical.CanonicalProductUnit,
+        (UNIT, PRODUCT),
+    ),
     EntitySpec(STOCK, "Stock levels", canonical.CanonicalStock, (VARIANT,)),
     EntitySpec(CUSTOMER, "Customers", canonical.CanonicalCustomer),
     EntitySpec(SUPPLIER, "Suppliers", canonical.CanonicalSupplier),
@@ -57,18 +65,21 @@ ENTITY_PLAN: tuple[EntitySpec, ...] = (
         "Purchase orders",
         canonical.CanonicalPurchaseOrder,
         (SUPPLIER, VARIANT),
-        implemented=False,
     ),
     EntitySpec(
         SALE,
         "Sales",
         canonical.CanonicalSale,
         (CUSTOMER, VARIANT),
-        implemented=False,
     ),
     EntitySpec(PAYMENT, "Payments", canonical.CanonicalPayment, (SALE,), implemented=False),
     EntitySpec(EMPLOYEE, "Employees", canonical.CanonicalEmployee, implemented=False),
-    EntitySpec(EXPENSE, "Expenses", canonical.CanonicalExpense, implemented=False),
+    EntitySpec(
+        EXPENSE_CATEGORY,
+        "Expense categories",
+        canonical.CanonicalExpenseCategory,
+    ),
+    EntitySpec(EXPENSE, "Expenses", canonical.CanonicalExpense, (EXPENSE_CATEGORY,)),
 )
 
 ENTITY_PLAN_BY_TYPE: dict[str, EntitySpec] = {spec.entity_type: spec for spec in ENTITY_PLAN}

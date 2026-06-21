@@ -124,6 +124,7 @@ class MigrationRunSerializer(serializers.ModelSerializer):
             "mode",
             "status",
             "selected_entities",
+            "options",
             "progress_percent",
             "progress_message",
             "current_entity",
@@ -152,6 +153,7 @@ class MigrationRunCreateSerializer(serializers.Serializer):
     selected_entities = serializers.ListField(
         child=serializers.CharField(), required=False, default=list
     )
+    options = serializers.DictField(required=False, default=dict)
 
 
 class MigrationIssueSerializer(serializers.ModelSerializer):

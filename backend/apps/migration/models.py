@@ -112,6 +112,10 @@ class MigrationRun(TimeStampedModel):
     )
     # Entity types the owner chose to transfer (subset of ENTITY_PLAN keys).
     selected_entities = models.JSONField(default=list, blank=True)
+    # Per-run toggles chosen in the UI, generic across connectors. Currently:
+    # {"products_without_quantities": bool} — when true the stock entity is
+    # skipped so products are imported with no stock on hand.
+    options = models.JSONField(default=dict, blank=True)
     progress_percent = models.PositiveSmallIntegerField(
         default=0,
         validators=[MaxValueValidator(100)],

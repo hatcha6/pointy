@@ -23,7 +23,7 @@ from django.db import transaction
 
 from .connectors import get_connector
 from .connectors.base import ExtractContext
-from .entity_plan import ordered_entities
+from .entity_plan import STOCK, ordered_entities
 from .exceptions import CompatibilityError, MigrationError
 from .identity import IdentityResolver
 from .loaders import get_loader
@@ -61,7 +61,11 @@ class MigrationEngine:
 
         transport = build_transport(self.source.transport_kind, self.source.connection_dict())
         specs = self._specs_to_run(connector)
-        context = ExtractContext(source=self.source, options=dict(self.source.extra_options or {}))
+        context = ExtractContext(
+            source=self.source,
+            options=dict(self.source.extra_options or {}),
+            run_options=dict(self.run.options or {}),
+        )
         resolver = IdentityResolver(self.source, self.run, dry_run=self.dry_run)
 
         with transport:
@@ -177,6 +181,10 @@ class MigrationEngine:
     def _specs_to_run(self, connector):
         supported = set(connector.supported_entities)
         selected = set(self.run.selected_entities or []) or supported
+        # Generic, connector-agnostic option: bring products with no stock on
+        # hand by simply not running the stock entity.
+        if (self.run.options or {}).get("products_without_quantities"):
+            selected.discard(STOCK)
         return [
             spec
             for spec in ordered_entities()

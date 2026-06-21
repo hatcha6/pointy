@@ -26,6 +26,11 @@ class ExtractContext:
 
     source: object = None
     options: dict = field(default_factory=dict)
+    # Per-run options chosen in the UI (e.g. products_without_quantities).
+    run_options: dict = field(default_factory=dict)
+    # Scratch space for a connector to memoise cross-entity lookups for one run
+    # (e.g. group the BARCODE table by item once and reuse it).
+    cache: dict = field(default_factory=dict)
 
 
 @dataclass(frozen=True)

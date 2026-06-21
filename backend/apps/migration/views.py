@@ -87,6 +87,7 @@ class MigrationRunViewSet(viewsets.ModelViewSet):
             serializer.validated_data["source"],
             mode=serializer.validated_data["mode"],
             entities=serializer.validated_data.get("selected_entities") or [],
+            options=serializer.validated_data.get("options") or {},
             user=request.user,
         )
         return Response(

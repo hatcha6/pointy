@@ -106,7 +106,9 @@ def _ensure_no_active_run() -> None:
         raise ValidationError({"detail": "A migration run is already in progress."})
 
 
-def queue_migration_run(source, *, mode, entities=None, user=None, dispatch=True) -> MigrationRun:
+def queue_migration_run(
+    source, *, mode, entities=None, options=None, user=None, dispatch=True
+) -> MigrationRun:
     if source.is_archived:
         raise ValidationError({"detail": "This source is archived."})
     connector = get_connector(source.system_key)
@@ -125,6 +127,7 @@ def queue_migration_run(source, *, mode, entities=None, user=None, dispatch=True
         source=source,
         mode=mode,
         selected_entities=selected,
+        options=dict(options or {}),
         progress_message="تمت جدولة العملية.",
         **_initiator_fields(user),
     )

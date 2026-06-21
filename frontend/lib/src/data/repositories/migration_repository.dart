@@ -39,12 +39,14 @@ class MigrationRepository {
     required int sourceId,
     required String mode,
     required List<String> entities,
+    Map<String, Object?> options = const {},
   }) {
     return Result.guard(
       () => _service.startMigrationRun(
         sourceId: sourceId,
         mode: mode,
         entities: entities,
+        options: options,
       ),
     );
   }

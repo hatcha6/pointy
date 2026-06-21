@@ -1,43 +1,506 @@
-"""AboGhris (SQL Server) connector — STUB.
+"""AboGhris (SQL Server) connector — version 30 / 2025 schema.
 
-Metadata + a placeholder ``VersionSpec`` are declared so the system appears in
-the picker and ``check_compatibility`` can run against a live database. Real
-table/column names and the ``extract`` mappings land once a database dump is
-provided; ``required_tables`` below are placeholders and will report as missing
-until then.
+Maps the AboGhris "Marketing" database onto Pointy's canonical IR:
 
-To implement: replace ``required_tables`` with the real schema (one VersionSpec
-per distinct schema; identical market versions share one), then implement
-``extract`` to map each supported entity's rows to the canonical IR — using
-``reference_sqlite.ReferenceSqliteConnector`` as the template.
+* ``UNITS``                  → units of measure (قطعة / علبة / …)
+* ``CATEGORY1`` + ``CATEGORY2`` → categories (two independent axes — a product is
+  filed under both; both become flat Pointy categories)
+* ``ITEMS``                  → products; the base-unit ``BARCODE`` row (smallest
+  ``UNIT_QTY``) seeds the default variant (barcode + price)
+* extra ``BARCODE`` rows     → product units (box/carton, with conversion factor
+  and own price)
+* ``ITEMS_SUB``              → stock on hand (``QTY`` summed across stores)
+* ``CUSTOMERS``              → customers (``CUST_VENDOR=0``) and suppliers
+  (``CUST_VENDOR=1``); the ``N/A`` placeholder row (id 0) is skipped
+
+Notes / deliberate choices:
+- Price = ``PRICE1`` when set, else ``PUBLIC_PRICE`` (the two patterns seen in the
+  export).
+- The base unit is the true smallest unit so imported stock (kept in base units
+  in ``ITEMS_SUB``) stays consistent; the variant's barcode is the base row's
+  barcode. A barcode that lives only on a larger unit is therefore not carried
+  onto the variant (Pointy stores one barcode per variant) — the larger unit is
+  still imported as a product unit with its price/factor.
+- All reads go through the transport, so the same logic is testable over a SQLite
+  fixture with the AboGhris table shapes.
 """
 
 from __future__ import annotations
 
-from ..entity_plan import CATEGORY, CUSTOMER, PRODUCT, STOCK, SUPPLIER
-from ..exceptions import MigrationError
+from collections.abc import Iterator
+from datetime import datetime
+from decimal import Decimal, InvalidOperation
+
+from .. import canonical
+from ..entity_plan import (
+    CATEGORY,
+    CUSTOMER,
+    EXPENSE_CATEGORY,
+    PRODUCT,
+    PRODUCT_UNIT,
+    PURCHASE_ORDER,
+    SALE,
+    STOCK,
+    SUPPLIER,
+    UNIT,
+)
 from .base import BaseConnector, ExtractContext, RequiredTable, VersionSpec
+
+_PLACEHOLDER_NAMES = {"", "N/A", "n/a"}
+
+
+def _lower(row: dict) -> dict:
+    return {str(key).lower(): value for key, value in row.items()}
+
+
+def _clean(value) -> str:
+    return "" if value is None else str(value).strip()
+
+
+def _to_int(value) -> int | None:
+    if value is None or value == "":
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        try:
+            return int(float(value))
+        except (TypeError, ValueError):
+            return None
+
+
+def _to_decimal(value) -> Decimal:
+    if value is None or value == "":
+        return Decimal("0")
+    try:
+        return Decimal(str(value))
+    except (InvalidOperation, ValueError):
+        return Decimal("0")
+
+
+def _to_bool(value) -> bool:
+    if value is None:
+        return False
+    if isinstance(value, str):
+        return value.strip().lower() in ("1", "true", "yes", "y", "t")
+    return bool(value)
+
+
+def _price(row: dict) -> Decimal:
+    price1 = _to_decimal(row.get("price1"))
+    if price1 > 0:
+        return price1
+    public = _to_decimal(row.get("public_price"))
+    return public if public > 0 else Decimal("0")
+
+
+def _parse_dt(value):
+    if value is None or value == "":
+        return None
+    if isinstance(value, datetime):
+        return value
+    text = str(value).strip()
+    try:
+        return datetime.fromisoformat(text)
+    except ValueError:
+        for fmt in ("%Y-%m-%d %H:%M:%S.%f", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d"):
+            try:
+                return datetime.strptime(text[:26], fmt)
+            except ValueError:
+                continue
+    return None
+
+
+def _base_row(rows: list[dict]) -> dict | None:
+    """The smallest-unit barcode row; prefer one that carries a barcode on ties."""
+    if not rows:
+        return None
+
+    def sort_key(row):
+        qty = _to_decimal(row.get("unit_qty"))
+        if qty <= 0:
+            qty = Decimal("1")
+        has_no_barcode = 0 if _clean(row.get("barcode")) else 1
+        return (qty, has_no_barcode, _to_int(row.get("bar_id")) or 0)
+
+    return min(rows, key=sort_key)
 
 
 class AboGhrisMssqlConnector(BaseConnector):
     system_key = "aboghris_mssql"
     display_name = "AboGhris (SQL Server)"
-    implemented = False
+    implemented = True
     required_transport = "mssql"
-    supported_entities = (CATEGORY, PRODUCT, STOCK, CUSTOMER, SUPPLIER)
+    supported_entities = (
+        UNIT,
+        CATEGORY,
+        PRODUCT,
+        PRODUCT_UNIT,
+        STOCK,
+        CUSTOMER,
+        SUPPLIER,
+        PURCHASE_ORDER,
+        SALE,
+        EXPENSE_CATEGORY,
+    )
     versions = (
-        # Placeholder — refine with the real schema from a client dump.
         VersionSpec(
-            version_key="aboghris-unknown",
+            version_key="aboghris-v30-2025",
             required_tables=(
-                RequiredTable("Items"),
-                RequiredTable("Groups"),
+                RequiredTable("ITEMS", ("ITEM_ID", "ITEM_NAME", "CAT1_ID", "CAT2_ID")),
+                RequiredTable("BARCODE", ("ITEM_ID", "UNIT_ID", "BARCODE", "UNIT_QTY")),
+                RequiredTable("UNITS", ("UNIT_ID", "UNIT_DISC")),
+                RequiredTable("CATEGORY1", ("CAT1_ID", "CAT1_NAME")),
+                RequiredTable("CATEGORY2", ("CAT2_ID", "CAT2_NAME")),
+                RequiredTable("CUSTOMERS", ("CUST_ID", "CUST_NAME", "CUST_VENDOR")),
+                RequiredTable("ITEMS_SUB", ("ITEM_ID", "QTY")),
             ),
         ),
     )
 
-    def extract(self, entity_type: str, transport, ctx: ExtractContext):
-        raise MigrationError(
-            "The AboGhris connector is not implemented yet. "
-            "Provide a database dump to enable importing."
+    def extract(self, entity_type: str, transport, ctx: ExtractContext) -> Iterator:
+        if entity_type == UNIT:
+            yield from self._units(transport)
+        elif entity_type == CATEGORY:
+            yield from self._categories(transport)
+        elif entity_type == PRODUCT:
+            yield from self._products(transport, ctx)
+        elif entity_type == PRODUCT_UNIT:
+            yield from self._product_units(transport, ctx)
+        elif entity_type == STOCK:
+            yield from self._stock(transport)
+        elif entity_type == CUSTOMER:
+            yield from self._people(transport, vendor=False)
+        elif entity_type == SUPPLIER:
+            yield from self._people(transport, vendor=True)
+        elif entity_type == SALE:
+            yield from self._sales(transport, ctx)
+        elif entity_type == PURCHASE_ORDER:
+            yield from self._purchase_orders(transport, ctx)
+        elif entity_type == EXPENSE_CATEGORY:
+            yield from self._expense_categories(transport)
+
+    # --- shared barcode grouping (cached per run) ------------------------
+    def _barcodes_by_item(self, transport, ctx: ExtractContext) -> dict[str, list[dict]]:
+        cached = ctx.cache.get("aboghris_barcodes")
+        if cached is not None:
+            return cached
+        grouped: dict[str, list[dict]] = {}
+        for row in transport.iter_records(
+            "BARCODE",
+            fields=[
+                "BAR_ID",
+                "UNIT_ID",
+                "ITEM_ID",
+                "BARCODE",
+                "PRICE1",
+                "PUBLIC_PRICE",
+                "UNIT_QTY",
+            ],
+        ):
+            record = _lower(row)
+            item_id = _to_int(record.get("item_id"))
+            if item_id is None:
+                continue
+            grouped.setdefault(str(item_id), []).append(record)
+        ctx.cache["aboghris_barcodes"] = grouped
+        return grouped
+
+    # --- per-entity mappers ---------------------------------------------
+    def _units(self, transport):
+        for row in transport.iter_records("UNITS"):
+            record = _lower(row)
+            unit_id = _to_int(record.get("unit_id"))
+            name = _clean(record.get("unit_disc"))
+            if not unit_id or name in _PLACEHOLDER_NAMES:
+                continue
+            yield canonical.CanonicalUnit(
+                source_key=str(unit_id),
+                code=f"u{unit_id}",
+                name=name,
+            )
+
+    def _categories(self, transport):
+        for table, id_col, name_col, invisible_col, prefix in (
+            ("CATEGORY1", "cat1_id", "cat1_name", "cat1_invisible", "c1"),
+            ("CATEGORY2", "cat2_id", "cat2_name", "cat2_invisible", "c2"),
+        ):
+            for row in transport.iter_records(table):
+                record = _lower(row)
+                cat_id = _to_int(record.get(id_col))
+                name = _clean(record.get(name_col))
+                if not cat_id or name in _PLACEHOLDER_NAMES:
+                    continue
+                yield canonical.CanonicalCategory(
+                    source_key=f"{prefix}-{cat_id}",
+                    name=name,
+                    is_active=not _to_bool(record.get(invisible_col)),
+                )
+
+    def _products(self, transport, ctx):
+        barcodes = self._barcodes_by_item(transport, ctx)
+        for row in transport.iter_records(
+            "ITEMS",
+            fields=["ITEM_ID", "ITEM_MODEL", "ITEM_NAME", "CAT1_ID", "CAT2_ID", "ITEM_INVISIBLE"],
+        ):
+            record = _lower(row)
+            item_id = _to_int(record.get("item_id"))
+            if item_id is None:
+                continue
+            key = str(item_id)
+            name = (
+                _clean(record.get("item_name"))
+                or _clean(record.get("item_model"))
+                or f"منتج {item_id}"
+            )
+            categories = []
+            cat1 = _to_int(record.get("cat1_id"))
+            if cat1:
+                categories.append(f"c1-{cat1}")
+            cat2 = _to_int(record.get("cat2_id"))
+            if cat2:
+                categories.append(f"c2-{cat2}")
+
+            base = _base_row(barcodes.get(key, []))
+            base_unit_id = _to_int(base.get("unit_id")) if base else None
+            yield canonical.CanonicalProduct(
+                source_key=key,
+                name=name,
+                unit=f"u{base_unit_id}" if base_unit_id else "piece",
+                is_active=not _to_bool(record.get("item_invisible")),
+                category_source_keys=categories,
+                sku=_clean(record.get("item_model")),
+                barcode=_clean(base.get("barcode")) if base else "",
+                unit_price=_price(base) if base else Decimal("0"),
+            )
+
+    def _product_units(self, transport, ctx):
+        barcodes = self._barcodes_by_item(transport, ctx)
+        for item_key, rows in barcodes.items():
+            base = _base_row(rows)
+            if base is None:
+                continue
+            base_qty = _to_decimal(base.get("unit_qty"))
+            if base_qty <= 0:
+                base_qty = Decimal("1")
+            base_unit_id = _to_int(base.get("unit_id"))
+            seen_units: set[int] = set()
+            for row in rows:
+                if row is base:
+                    continue
+                unit_id = _to_int(row.get("unit_id"))
+                if not unit_id or unit_id == base_unit_id or unit_id in seen_units:
+                    continue
+                qty = _to_decimal(row.get("unit_qty"))
+                if qty <= 0:
+                    qty = Decimal("1")
+                factor = qty / base_qty
+                if factor <= 0:
+                    continue
+                seen_units.add(unit_id)
+                price = _price(row)
+                yield canonical.CanonicalProductUnit(
+                    source_key=f"pu-{_to_int(row.get('bar_id'))}",
+                    product_source_key=item_key,
+                    unit_source_key=str(unit_id),
+                    factor_to_base=factor,
+                    price=price if price > 0 else None,
+                )
+
+    def _stock(self, transport):
+        totals: dict[str, Decimal] = {}
+        for row in transport.iter_records("ITEMS_SUB", fields=["ITEM_ID", "QTY"]):
+            record = _lower(row)
+            item_id = _to_int(record.get("item_id"))
+            if item_id is None:
+                continue
+            totals[str(item_id)] = totals.get(str(item_id), Decimal("0")) + _to_decimal(
+                record.get("qty")
+            )
+        for item_key, quantity in totals.items():
+            yield canonical.CanonicalStock(
+                source_key=f"stock-{item_key}",
+                variant_source_key=item_key,
+                quantity_on_hand=quantity,
+            )
+
+    def _people(self, transport, *, vendor: bool):
+        for row in transport.iter_records(
+            "CUSTOMERS",
+            fields=[
+                "CUST_ID",
+                "CUST_NAME",
+                "CUST_PHONE",
+                "CUST_MOBILE",
+                "CUST_E_MAIL",
+                "CUST_ADRESS",
+                "CUST_VENDOR",
+                "CUST_INVISIBLE",
+            ],
+        ):
+            record = _lower(row)
+            cust_id = _to_int(record.get("cust_id"))
+            name = _clean(record.get("cust_name"))
+            if not cust_id or name == "N/A":
+                continue
+            if _to_bool(record.get("cust_vendor")) != vendor:
+                continue
+            phone = _clean(record.get("cust_mobile")) or _clean(record.get("cust_phone"))
+            email = _clean(record.get("cust_e_mail"))
+            address = _clean(record.get("cust_adress"))
+            is_active = not _to_bool(record.get("cust_invisible"))
+            if vendor:
+                yield canonical.CanonicalSupplier(
+                    source_key=str(cust_id),
+                    name=name or f"مورّد {cust_id}",
+                    phone=phone,
+                    email=email,
+                    address=address,
+                    is_active=is_active,
+                )
+            else:
+                yield canonical.CanonicalCustomer(
+                    source_key=str(cust_id),
+                    full_name=name or f"عميل {cust_id}",
+                    phone=phone,
+                    email=email,
+                    notes=address,
+                    is_active=is_active,
+                )
+
+    # --- transactional ---------------------------------------------------
+    def _lines_by_parent(self, transport, ctx, table, key_col, fields):
+        cache_key = f"aboghris_lines_{table}"
+        cached = ctx.cache.get(cache_key)
+        if cached is not None:
+            return cached
+        grouped: dict[str, list[dict]] = {}
+        for row in transport.iter_records(table, fields=fields):
+            record = _lower(row)
+            parent = _to_int(record.get(key_col))
+            if parent is None:
+                continue
+            grouped.setdefault(str(parent), []).append(record)
+        ctx.cache[cache_key] = grouped
+        return grouped
+
+    def _sales(self, transport, ctx):
+        if not (transport.has_table("SALE_INVOICE") and transport.has_table("SALE_ITEMS")):
+            return
+        items = self._lines_by_parent(
+            transport,
+            ctx,
+            "SALE_ITEMS",
+            "s_id",
+            fields=[
+                "S_ID",
+                "ITEM_ID",
+                "QTY",
+                "PRICE",
+                "UNIT_PRICE",
+                "PUBLIC_PRICE",
+                "AVER_COST",
+                "LAST_COST",
+            ],
         )
+        for row in transport.iter_records(
+            "SALE_INVOICE", fields=["S_ID", "S_DATE", "CUST_ID", "S_DISCOUNT", "BANK_ID"]
+        ):
+            record = _lower(row)
+            sale_id = _to_int(record.get("s_id"))
+            if sale_id is None:
+                continue
+            lines = []
+            for item in items.get(str(sale_id), []):
+                item_id = _to_int(item.get("item_id"))
+                if item_id is None:
+                    continue
+                quantity = _to_decimal(item.get("qty"))
+                if quantity <= 0:
+                    continue
+                price = _to_decimal(item.get("price"))
+                if price <= 0:
+                    price = _to_decimal(item.get("unit_price"))
+                if price <= 0:
+                    price = _to_decimal(item.get("public_price"))
+                cost = _to_decimal(item.get("aver_cost"))
+                if cost <= 0:
+                    cost = _to_decimal(item.get("last_cost"))
+                lines.append(
+                    canonical.CanonicalSaleLine(
+                        variant_source_key=str(item_id),
+                        quantity=quantity,
+                        unit_price=price,
+                        unit_cost=cost,
+                    )
+                )
+            if not lines:
+                continue
+            cust_id = _to_int(record.get("cust_id"))
+            yield canonical.CanonicalSale(
+                source_key=str(sale_id),
+                customer_source_key=str(cust_id) if cust_id else None,
+                discount_total=_to_decimal(record.get("s_discount")),
+                payment_method="transfer" if _to_int(record.get("bank_id")) else "cash",
+                occurred_at=_parse_dt(record.get("s_date")),
+                lines=lines,
+            )
+
+    def _purchase_orders(self, transport, ctx):
+        if not (transport.has_table("BUY_INVOICE") and transport.has_table("BUY_ITEMS")):
+            return
+        items = self._lines_by_parent(
+            transport,
+            ctx,
+            "BUY_ITEMS",
+            "b_id",
+            fields=["B_ID", "ITEM_ID", "QTY", "PRICE"],
+        )
+        for row in transport.iter_records(
+            "BUY_INVOICE", fields=["B_ID", "B_DATE", "CUST_ID", "S_REF_NO", "B_DISCOUNT"]
+        ):
+            record = _lower(row)
+            buy_id = _to_int(record.get("b_id"))
+            if buy_id is None:
+                continue
+            lines = []
+            for item in items.get(str(buy_id), []):
+                item_id = _to_int(item.get("item_id"))
+                if item_id is None:
+                    continue
+                quantity = _to_decimal(item.get("qty"))
+                if quantity <= 0:
+                    continue
+                lines.append(
+                    canonical.CanonicalPurchaseLine(
+                        variant_source_key=str(item_id),
+                        quantity=int(quantity),
+                        unit_cost=_to_decimal(item.get("price")),
+                    )
+                )
+            if not lines:
+                continue
+            cust_id = _to_int(record.get("cust_id"))
+            yield canonical.CanonicalPurchaseOrder(
+                source_key=str(buy_id),
+                supplier_source_key=str(cust_id) if cust_id else "",
+                supplier_invoice_number=_clean(record.get("s_ref_no")),
+                discount_total=_to_decimal(record.get("b_discount")),
+                occurred_at=_parse_dt(record.get("b_date")),
+                lines=lines,
+            )
+
+    def _expense_categories(self, transport):
+        if not transport.has_table("EXPENCES"):
+            return
+        for row in transport.iter_records("EXPENCES"):
+            record = _lower(row)
+            expense_id = _to_int(record.get("expences_id"))
+            name = _clean(record.get("expense_disc"))
+            if not expense_id or name in _PLACEHOLDER_NAMES:
+                continue
+            yield canonical.CanonicalExpenseCategory(
+                source_key=str(expense_id),
+                name=name,
+                is_active=not _to_bool(record.get("expense_invisible")),
+            )

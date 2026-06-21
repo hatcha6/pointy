@@ -8,10 +8,16 @@ The registry is the engine's single lookup from ``entity_type`` to its loader.
 from __future__ import annotations
 
 from .base import BaseLoader, LoaderError, LoadOutcome
-from .catalog import CategoryLoader, ProductLoader, UnitLoader, VariantLoader
+from .catalog import (
+    CategoryLoader,
+    ProductLoader,
+    ProductUnitLoader,
+    UnitLoader,
+    VariantLoader,
+)
 from .customers import CustomerLoader
 from .employees import EmployeeLoader
-from .expenses import ExpenseLoader
+from .expenses import ExpenseCategoryLoader, ExpenseLoader
 from .inventory import StockLoader
 from .purchasing import PurchaseOrderLoader, SupplierLoader
 from .sales import PaymentLoader, SaleLoader
@@ -22,15 +28,18 @@ _LOADER_CLASSES = (
     CategoryLoader,
     ProductLoader,
     VariantLoader,
+    ProductUnitLoader,
     StockLoader,
     CustomerLoader,
     SupplierLoader,
-    # transactional (stubs)
+    ExpenseCategoryLoader,
+    # transactional (implemented)
     PurchaseOrderLoader,
     SaleLoader,
+    ExpenseLoader,
+    # still stubs
     PaymentLoader,
     EmployeeLoader,
-    ExpenseLoader,
 )
 
 LOADER_REGISTRY: dict[str, BaseLoader] = {

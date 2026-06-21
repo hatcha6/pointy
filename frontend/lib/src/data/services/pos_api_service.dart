@@ -378,8 +378,14 @@ class PosApiService {
     required int sourceId,
     required String mode,
     required List<String> entities,
+    Map<String, Object?> options = const {},
   }) {
-    return _migration.startRun(sourceId: sourceId, mode: mode, entities: entities);
+    return _migration.startRun(
+      sourceId: sourceId,
+      mode: mode,
+      entities: entities,
+      options: options,
+    );
   }
 
   Future<MigrationRun> fetchMigrationRun(int id) {

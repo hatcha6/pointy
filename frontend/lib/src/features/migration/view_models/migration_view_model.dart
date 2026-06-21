@@ -23,6 +23,7 @@ class MigrationViewModel extends ChangeNotifier {
   List<MigrationSource> _sources = const [];
   int? _selectedSourceId;
   final Set<String> _selectedEntities = <String>{};
+  bool _productsWithoutQuantities = false;
   CompatibilityReport? _compatReport;
   MigrationConnectionTest? _connectionTest;
   MigrationRun? _activeRun;
@@ -53,6 +54,7 @@ class MigrationViewModel extends ChangeNotifier {
   }
 
   Set<String> get selectedEntities => _selectedEntities;
+  bool get productsWithoutQuantities => _productsWithoutQuantities;
   CompatibilityReport? get compatibilityReport =>
       _compatReport ?? _checkedReportFromSource;
   MigrationConnectionTest? get connectionTest => _connectionTest;
@@ -168,6 +170,11 @@ class MigrationViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
+  void setProductsWithoutQuantities(bool value) {
+    _productsWithoutQuantities = value;
+    notifyListeners();
+  }
+
   // --- mutations -------------------------------------------------------
   Future<bool> saveSource({
     int? sourceId,
@@ -280,6 +287,7 @@ class MigrationViewModel extends ChangeNotifier {
       sourceId: source.id,
       mode: dryRun ? 'dry_run' : 'import',
       entities: _selectedEntities.toList(),
+      options: {'products_without_quantities': _productsWithoutQuantities},
     );
     MigrationRun? run;
     switch (result) {

@@ -84,6 +84,19 @@ class CanonicalStock(CanonicalRecord):
 
 
 @dataclass
+class CanonicalProductUnit(CanonicalRecord):
+    """An extra sellable/purchasable unit for a product (box, carton, …) with
+    its conversion to the base unit and an optional own price."""
+
+    product_source_key: str = ""
+    unit_source_key: str = ""
+    factor_to_base: Decimal = Decimal("1")
+    price: Decimal | None = None
+    is_sellable: bool = True
+    is_purchasable: bool = True
+
+
+@dataclass
 class CanonicalCustomer(CanonicalRecord):
     full_name: str = ""
     phone: str = ""
@@ -103,7 +116,7 @@ class CanonicalSupplier(CanonicalRecord):
     is_active: bool = True
 
 
-# --- transactional (IR defined now; loaders land when a real dump arrives) ---
+# --- transactional ----------------------------------------------------------
 
 
 @dataclass
@@ -111,6 +124,7 @@ class CanonicalSaleLine:
     variant_source_key: str
     quantity: Decimal = Decimal("1")
     unit_price: Decimal = Decimal("0")
+    unit_cost: Decimal = Decimal("0")
     discount_total: Decimal = Decimal("0")
     notes: str = ""
 
@@ -120,6 +134,8 @@ class CanonicalSale(CanonicalRecord):
     customer_source_key: str | None = None
     receipt_number: str = ""
     status: str = "paid"  # open | paid | void
+    discount_total: Decimal = Decimal("0")
+    payment_method: str = "cash"  # cash | card | transfer
     occurred_at: datetime | None = None
     lines: list[CanonicalSaleLine] = field(default_factory=list)
 
@@ -144,6 +160,7 @@ class CanonicalPurchaseOrder(CanonicalRecord):
     supplier_source_key: str = ""
     status: str = "received"
     supplier_invoice_number: str = ""
+    discount_total: Decimal = Decimal("0")
     occurred_at: datetime | None = None
     lines: list[CanonicalPurchaseLine] = field(default_factory=list)
 
@@ -157,6 +174,12 @@ class CanonicalEmployee(CanonicalRecord):
     department: str = ""
     employment_type: str = "full_time"
     status: str = "active"
+
+
+@dataclass
+class CanonicalExpenseCategory(CanonicalRecord):
+    name: str = ""
+    is_active: bool = True
 
 
 @dataclass
