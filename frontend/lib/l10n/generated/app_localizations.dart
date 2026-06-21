@@ -18720,6 +18720,42 @@ abstract class AppLocalizations {
   /// **'يجمع البيانات'**
   String get aiAssistantToolWorking;
 
+  /// No description provided for @aiAssistantToolDetailsTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'تفاصيل الأداة'**
+  String get aiAssistantToolDetailsTitle;
+
+  /// No description provided for @aiAssistantToolInputs.
+  ///
+  /// In ar, this message translates to:
+  /// **'المدخلات'**
+  String get aiAssistantToolInputs;
+
+  /// No description provided for @aiAssistantToolResult.
+  ///
+  /// In ar, this message translates to:
+  /// **'النتيجة'**
+  String get aiAssistantToolResult;
+
+  /// No description provided for @aiAssistantToolNoOutput.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد نتيجة'**
+  String get aiAssistantToolNoOutput;
+
+  /// No description provided for @aiAssistantToolStatusOk.
+  ///
+  /// In ar, this message translates to:
+  /// **'نجحت'**
+  String get aiAssistantToolStatusOk;
+
+  /// No description provided for @aiAssistantToolStatusFailed.
+  ///
+  /// In ar, this message translates to:
+  /// **'فشلت'**
+  String get aiAssistantToolStatusFailed;
+
   /// No description provided for @aiAssistantAskUserSubmit.
   ///
   /// In ar, this message translates to:
@@ -18779,6 +18815,12 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'ابحث واختر منتجًا'**
   String get aiAssistantProductPickerChoose;
+
+  /// No description provided for @aiAssistantProductPickerChooseOther.
+  ///
+  /// In ar, this message translates to:
+  /// **'ابحث عن منتج آخر…'**
+  String get aiAssistantProductPickerChooseOther;
 
   /// No description provided for @aiAssistantProductPickerCreateNew.
   ///
@@ -19115,6 +19157,12 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'فواتير الشراء'**
   String get migrationEntityPurchaseOrder;
+
+  /// No description provided for @migrationEntitySupplierPayment.
+  ///
+  /// In ar, this message translates to:
+  /// **'مدفوعات الموردين'**
+  String get migrationEntitySupplierPayment;
 
   /// No description provided for @migrationEntitySale.
   ///

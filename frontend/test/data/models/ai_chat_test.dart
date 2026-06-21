@@ -35,11 +35,22 @@ void main() {
       message.addListener(() => notifications++);
 
       message.startToolRun(AiToolRun(name: 'query_resource', resource: 'orders'));
-      message.finishToolRun(name: 'query_resource', resource: 'orders', ok: true);
+      message.finishToolRun(
+        name: 'query_resource',
+        resource: 'orders',
+        ok: true,
+        arguments: {'resource': 'orders'},
+        output: '{"ok": true}',
+      );
 
       expect(message.toolRuns.length, 1);
-      expect(message.toolRuns.single.done, isTrue);
-      expect(message.toolRuns.single.ok, isTrue);
+      final run = message.toolRuns.single;
+      expect(run.done, isTrue);
+      expect(run.ok, isTrue);
+      // Inputs + output preview are attached so the chip is tap-to-inspect.
+      expect(run.output, '{"ok": true}');
+      expect(run.arguments, {'resource': 'orders'});
+      expect(run.hasDetails, isTrue);
       expect(notifications, 2);
     });
 
@@ -175,6 +186,8 @@ void main() {
             'label': 'إنشاء: المصروفات',
             'ok': true,
             'mutates': true,
+            'arguments': {'amount': '10.00'},
+            'output': '{"ok": true, "data": {"id": 3}}',
           },
         ],
       });
@@ -186,6 +199,11 @@ void main() {
       expect(run.done, isTrue);
       expect(run.ok, isTrue);
       expect(run.label, 'إنشاء: المصروفات');
+      // The persisted inputs + result preview rehydrate, so a reloaded action
+      // chip stays inspectable.
+      expect(run.output, contains('"id": 3'));
+      expect(run.arguments, {'amount': '10.00'});
+      expect(run.hasDetails, isTrue);
     });
 
     test('a message with no tool events has no chips', () {

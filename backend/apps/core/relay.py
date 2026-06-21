@@ -133,6 +133,7 @@ class RelayControlClient:
         count_usage=True,
         max_tokens=0,
         temperature=None,
+        route_tier="",
     ):
         """Open the relay AI chat endpoint and return the raw streaming response.
 
@@ -152,6 +153,12 @@ class RelayControlClient:
         # count_usage=False so one question doesn't drain the quota.
         if not count_usage:
             body["count_usage"] = False
+        # Carry the difficulty tier the relay picked for this turn's first request,
+        # so a continuation reuses that one dynamic decision instead of re-routing
+        # (or collapsing to a fixed tier). Honoured by the relay only on
+        # continuations; ignored on user turns.
+        if route_tier:
+            body["route_tier"] = route_tier
         if max_tokens:
             body["max_tokens"] = max_tokens
         if temperature is not None:

@@ -99,6 +99,8 @@ class AiApiClient {
           phase: (data['phase'] as String?) ?? 'start',
           ok: data['ok'] as bool?,
           mutates: (data['mutates'] as bool?) ?? false,
+          arguments: data['arguments'],
+          output: data['output'] as String?,
         );
       case 'done':
         final limits = data['usage_limits'];

@@ -118,11 +118,11 @@ class ProductLoader(BaseLoader):
         instance.is_prepared = to_bool(record.is_prepared, default=False)
         instance.save()
 
-        # Categories (resolved through the identity map; unresolved ones warn).
+        # Categories (resolved by id through the identity map; unresolved warn).
         category_ids = []
         for category_key in record.category_source_keys or []:
-            category = resolver.existing(ProductCategory, CATEGORY, category_key)
-            if category is None:
+            category_pk = resolver.resolve(CATEGORY, category_key)
+            if category_pk is None:
                 issues.append(
                     Issue(
                         WARNING,
@@ -132,7 +132,7 @@ class ProductLoader(BaseLoader):
                     )
                 )
             else:
-                category_ids.append(category.pk)
+                category_ids.append(category_pk)
         instance.categories.set(category_ids)
 
         resolver.remember(self.entity_type, record.source_key, instance)
@@ -215,14 +215,14 @@ class ProductUnitLoader(BaseLoader):
     entity_type = PRODUCT_UNIT
 
     def load(self, record, resolver, *, dry_run):
-        product = resolver.existing(Product, PRODUCT, record.product_source_key)
-        if product is None:
+        product_pk = resolver.resolve(PRODUCT, record.product_source_key)
+        if product_pk is None:
             raise LoaderError(
                 f"Product unit references unknown product {record.product_source_key!r}.",
                 code="unresolved_product",
             )
-        unit = resolver.existing(UnitOfMeasure, UNIT, record.unit_source_key)
-        if unit is None:
+        unit_pk = resolver.resolve(UNIT, record.unit_source_key)
+        if unit_pk is None:
             raise LoaderError(
                 f"Product unit references unknown unit {record.unit_source_key!r}.",
                 code="unresolved_unit",
@@ -242,12 +242,10 @@ class ProductUnitLoader(BaseLoader):
         if record.price is not None:
             defaults["price"] = to_decimal(record.price)
 
-        existing = ProductUnit.objects.filter(product=product, unit=unit).first()
-        action = UPDATED if existing is not None else CREATED
-        instance, _created = ProductUnit.objects.update_or_create(
-            product=product,
-            unit=unit,
+        instance, created = ProductUnit.objects.update_or_create(
+            product_id=product_pk,
+            unit_id=unit_pk,
             defaults=defaults,
         )
         resolver.remember(self.entity_type, record.source_key, instance)
-        return LoadOutcome(action, instance.pk)
+        return LoadOutcome(CREATED if created else UPDATED, instance.pk)

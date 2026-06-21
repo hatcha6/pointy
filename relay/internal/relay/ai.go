@@ -53,6 +53,12 @@ type aiChatRequest struct {
 	// (the user-initiated message); false skips it (internal tool continuations
 	// must not drain the user's quota). See the agentic loop in apps/ai.
 	CountUsage *bool `json:"count_usage"`
+	// RouteTier carries the difficulty tier the relay picked for THIS logical turn
+	// on its first (user-initiated) request, so the agentic loop's continuations
+	// reuse that one dynamic decision instead of re-classifying every round. Only
+	// honoured on a continuation (CountUsage=false); ignored on a user turn (the
+	// relay always classifies those itself). Empty → fall back to the default tier.
+	RouteTier string `json:"route_tier"`
 }
 
 // handleAIChat serves relay-hosted AI chat. Unlike the default route it does NOT
@@ -181,29 +187,41 @@ func (s HTTPServer) handleAIChat(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Pick the model. Attachments → vision. The user-initiated turn is routed by
-	// difficulty (fast/smart/frontier). Internal continuation turns skip the
-	// router entirely — the question hasn't changed — and reuse the smart tier;
-	// that halves the OpenRouter calls the tool loop makes.
+	// Pick the model. The relay classifies the task's DIFFICULTY once, on the
+	// user-initiated turn, and that tier rides the done event so Django can carry
+	// it back on the continuations — the whole agentic flow runs on one dynamic
+	// decision (an "add expense" stays cheap, a "PO from this invoice" escalates)
+	// WITHOUT re-classifying every tool round. `routeTier` is that difficulty
+	// classification; `model`/`tier` is what actually runs this turn (an attachment
+	// turn must use the multimodal vision model regardless of difficulty).
 	hasAttachments := len(request.Attachments) > 0
 	hasTools := len(request.Tools) > 0
-	var tier, model string
+	var tier, model, routeTier string
 	switch {
+	case isContinuation:
+		// Reuse the difficulty tier picked for this logical turn (carried by
+		// Django). No router call — the task hasn't changed.
+		routeTier = s.continuationTier(request.RouteTier)
+		tier = routeTier
+		model = s.resolveAIModel(tier)
 	case hasAttachments:
+		// Multimodal turn must run on the vision model, but we STILL classify
+		// difficulty (factoring in the attachment + tools) so the continuations
+		// that follow inherit the right tier.
+		routeTier = s.routeAITier(r.Context(), request.Messages, routeSignals{attachments: true, tools: hasTools})
 		tier = "vision"
 		model = strings.TrimSpace(s.AIVisionModel)
-	case isContinuation:
-		tier = "smart"
-		model = s.resolveAIModel(tier)
 	case hasTools:
-		tier = s.routeAITier(r.Context(), request.Messages)
-		if tier == "fast" {
+		routeTier = s.routeAITier(r.Context(), request.Messages, routeSignals{tools: true})
+		if routeTier == "fast" {
 			// Tool-calling needs a capable model; fast/small models fumble it.
-			tier = "smart"
+			routeTier = "smart"
 		}
+		tier = routeTier
 		model = s.resolveAIModel(tier)
 	default:
-		tier = s.routeAITier(r.Context(), request.Messages)
+		routeTier = s.routeAITier(r.Context(), request.Messages, routeSignals{})
+		tier = routeTier
 		model = s.resolveAIModel(tier)
 	}
 	if model == "" {
@@ -269,6 +287,7 @@ func (s HTTPServer) handleAIChat(w http.ResponseWriter, r *http.Request) {
 			payload := map[string]any{
 				"model":         event.Model,
 				"tier":          tier,
+				"route_tier":    routeTier,
 				"finish_reason": event.FinishReason,
 			}
 			if usage != nil {
@@ -387,14 +406,42 @@ const aiRouterSystemPrompt = "You are a routing classifier for an AI assistant. 
 	"\"fast\" for greetings, simple facts, or short trivial requests; " +
 	"\"smart\" for everyday reasoning, writing, summaries, or moderate multi-step tasks; " +
 	"\"frontier\" for complex reasoning, deep analysis, tricky math or logic, long or " +
-	"intricate code, or expert-level problems. Output only one of: fast, smart, frontier."
+	"intricate code, or expert-level problems. " +
+	"A [Context] note may say the user attached a document/image to read or that " +
+	"answering needs a multi-step tool task — weigh it: reading a document then " +
+	"reconciling and creating records (e.g. a purchase order from an invoice) is " +
+	"\"frontier\"; a single straightforward create/lookup is \"smart\". " +
+	"Output only one of: fast, smart, frontier."
 
-// routeAITier asks a small, cheap model to classify the latest user message and
-// returns the chosen tier. Any failure falls back to the default tier so a
-// router hiccup never blocks the actual reply.
-func (s HTTPServer) routeAITier(ctx context.Context, messages []aiChatMessage) string {
+// routeSignals are non-text hints about a turn that inform difficulty: an attached
+// document/image to read, and whether answering will use a multi-step tool flow.
+type routeSignals struct {
+	attachments bool
+	tools       bool
+}
+
+func (rs routeSignals) describe() string {
+	var parts []string
+	if rs.attachments {
+		parts = append(parts, "the user attached a document or image to read and act on")
+	}
+	if rs.tools {
+		parts = append(parts, "answering may require a multi-step task using tools (querying or creating shop records)")
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	return "\n\n[Context: " + strings.Join(parts, "; ") + ".]"
+}
+
+// routeAITier asks a small, cheap model to classify the request — the latest user
+// message plus any non-text signals — and returns the chosen tier. Any failure
+// falls back to the default tier so a router hiccup never blocks the actual reply.
+func (s HTTPServer) routeAITier(ctx context.Context, messages []aiChatMessage, signals routeSignals) string {
 	fallback := s.aiDefaultTier()
-	prompt := latestUserMessage(messages)
+	// With attachments the user text may be empty; the signals alone still let the
+	// classifier judge difficulty, so build the input from both.
+	prompt := strings.TrimSpace(latestUserMessage(messages) + signals.describe())
 	routerModel := s.aiRouterModel()
 	if prompt == "" || routerModel == "" {
 		return fallback
@@ -455,6 +502,19 @@ func normalizeTier(raw string, fallback string, tiers map[string]string) string 
 func (s HTTPServer) aiDefaultTier() string {
 	if tier := strings.ToLower(strings.TrimSpace(s.AIDefaultTier)); tier != "" {
 		return tier
+	}
+	return "smart"
+}
+
+// continuationTier resolves the difficulty tier a tool-loop continuation should
+// ride: the tier Django carried from this turn's first request (the relay's own
+// earlier classification), validated against the configured tiers. An agentic
+// continuation never rides the fast tier (fast models fumble tool-calling); an
+// empty/unknown hint falls back to "smart" — the prior behaviour.
+func (s HTTPServer) continuationTier(hint string) string {
+	hint = strings.ToLower(strings.TrimSpace(hint))
+	if _, ok := s.AIModelTiers[hint]; ok && hint != "fast" {
+		return hint
 	}
 	return "smart"
 }

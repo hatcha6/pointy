@@ -45,6 +45,23 @@ MAX_TOOL_ITERS = 10
 MAX_MUTATING_WRITES_PER_TURN = 40
 
 
+# How much of a tool's JSON result to keep for the tappable "inspect" chip — large
+# enough to debug a match/create result, bounded so it never bloats the SSE or row.
+AI_TOOL_OUTPUT_PREVIEW_CHARS = 6000
+
+
+def _tool_output_preview(result):
+    """A bounded JSON string of a tool result, for the inspectable chip. Truncated
+    with a marker so a big payload (e.g. many invoice candidates) stays small."""
+    try:
+        text = json.dumps(result, ensure_ascii=False, indent=2, default=str)
+    except (TypeError, ValueError):
+        text = str(result)
+    if len(text) > AI_TOOL_OUTPUT_PREVIEW_CHARS:
+        return text[:AI_TOOL_OUTPUT_PREVIEW_CHARS] + "\n… (مقتطع)"
+    return text
+
+
 def _ai_idempotency_key(turn_id, name, args):
     """A turn-scoped idempotency key for a mutating tool call: identical calls
     *within the same turn* collapse to one committed write (guards an accidental
@@ -230,6 +247,11 @@ class AiChatView(APIView):
             if message.role == AiMessage.ROLE_TOOL:
                 continue  # emitted via its assistant turn below
             if message.role == AiMessage.ROLE_ASSISTANT and message.tool_calls:
+                # Replay any tool rounds the model ran earlier in this turn before it
+                # paused (already in wire format, each call paired with its result),
+                # so what it extracted — e.g. a whole invoice — survives the pause.
+                for prior in message.prior_tool_messages or []:
+                    messages.append(prior)
                 messages.append(
                     {
                         "role": "assistant",
@@ -288,6 +310,12 @@ class AiChatView(APIView):
         tool_events = []
         usage_limits = None
         done_data = {}
+        # The difficulty tier the relay classified for this turn's first request.
+        # Carried onto every continuation so the whole agentic flow rides that one
+        # dynamic decision (a hard PO-from-invoice escalates; a trivial flow stays
+        # cheap) instead of the relay re-routing — or collapsing to a fixed tier —
+        # each round.
+        routed_tier = ""
         saved = False
         # Set once the model calls ask_user: the turn is persisted as a paused
         # assistant message and the stream ends without a `done` (the client renders
@@ -299,6 +327,9 @@ class AiChatView(APIView):
         # and _ai_idempotency_key).
         turn_id = uuid4().hex
         mutating_writes = 0
+        # Where this turn's own messages begin (after system + history + user). Used
+        # to snapshot the tool rounds run before a pause so they survive resume.
+        base_len = len(messages)
         response = first_response
         try:
             for iteration in range(MAX_TOOL_ITERS + 1):
@@ -324,6 +355,8 @@ class AiChatView(APIView):
                         done_data = data
                         if usage_limits is None and data.get("usage_limits"):
                             usage_limits = data.get("usage_limits")
+                        if not routed_tier and data.get("route_tier"):
+                            routed_tier = data.get("route_tier")
                     elif event_type == "error":
                         yield sse_event("error", {"detail": data.get("detail", "AI error")})
                 response.close()
@@ -355,6 +388,11 @@ class AiChatView(APIView):
                 if ask_user is not None:
                     call, spec = ask_user
                     paused = True
+                    # Everything appended this turn except the just-added ask_user
+                    # assistant entry (persisted separately below): the earlier tool
+                    # rounds + their results, in wire order. This is what keeps an
+                    # extracted invoice alive across the pause.
+                    prior_tool_messages = messages[base_len:-1]
                     paused_message = self._save_paused_assistant(
                         conversation,
                         content="".join(turn_text),
@@ -364,6 +402,7 @@ class AiChatView(APIView):
                         question=spec,
                         data=done_data,
                         tool_events=tool_events,
+                        prior_tool_messages=prior_tool_messages,
                     )
                     yield sse_event(
                         "ask_user",
@@ -415,6 +454,10 @@ class AiChatView(APIView):
                     ok = bool(result.get("ok"))
                     if mutates and ok:
                         mutating_writes += 1
+                    # A truncated preview of the result so the user can tap the chip
+                    # to inspect what the tool returned (debugging) — streamed live
+                    # and persisted, bounded so a big result can't bloat the row.
+                    output_preview = _tool_output_preview(result)
                     tool_events.append(
                         {
                             "name": name,
@@ -424,6 +467,7 @@ class AiChatView(APIView):
                             "ok": ok,
                             "error": result.get("error"),
                             "mutates": mutates,
+                            "output": output_preview,
                         }
                     )
                     yield sse_event(
@@ -435,6 +479,8 @@ class AiChatView(APIView):
                             "phase": "done",
                             "ok": ok,
                             "mutates": mutates,
+                            "arguments": args,
+                            "output": output_preview,
                         },
                     )
                     messages.append(
@@ -455,6 +501,7 @@ class AiChatView(APIView):
                         messages=messages,
                         tools=None if force_answer else tools,
                         count_usage=False,
+                        route_tier=routed_tier,
                     )
                 except RelayControlError:
                     yield sse_event("error", {"detail": "ai stream failed"})
@@ -545,12 +592,14 @@ class AiChatView(APIView):
         question,
         data,
         tool_events=None,
+        prior_tool_messages=None,
     ):
         """Persist a paused ask_user turn: the assistant message carries its
         ``tool_calls`` (for replay) and ``pending_question`` (for the client to
         render), marked ``awaiting_answer`` until the resume endpoint answers it.
         Any data tools the model ran before pausing are kept in ``tool_events`` so
-        the turn's trace survives the pause."""
+        the turn's trace survives the pause, and their full results in
+        ``prior_tool_messages`` so the model can read them again on resume."""
         usage = data.get("usage") or {}
         message = AiMessage.objects.create(
             conversation=conversation,
@@ -562,6 +611,7 @@ class AiChatView(APIView):
             pending_question=question,
             status=AiMessage.STATUS_AWAITING_ANSWER,
             tool_events=tool_events or [],
+            prior_tool_messages=prior_tool_messages or [],
             model=data.get("model", ""),
             tier=data.get("tier", ""),
             prompt_tokens=int(usage.get("prompt_tokens") or 0),
@@ -661,6 +711,10 @@ class AiChatResumeView(AiChatView):
                 messages=messages,
                 tools=tools,
                 count_usage=False,
+                # Resume is a continuation of the original turn — carry its tier
+                # (persisted on the paused message) so a resumed PO/agentic flow
+                # keeps the difficulty it was routed to, not a default.
+                route_tier=paused.tier,
             )
         except RelayControlError as exc:
             return _relay_error_response(exc)

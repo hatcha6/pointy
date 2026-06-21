@@ -71,6 +71,14 @@ class AiMessage(models.Model):
     # assistant turn, so the client can (re-)render the question card — including
     # after a reload/reconnect. Cleared once answered.
     pending_question = models.JSONField(null=True, blank=True)
+    # On a paused ask_user turn: the wire-format transcript of every tool round the
+    # model already ran THIS turn before pausing (each assistant tool_calls entry
+    # immediately followed by its tool result), so the results survive the pause and
+    # are replayed on resume. Without this, anything the model extracted earlier in
+    # the turn — e.g. a whole invoice via match_invoice_products — is lost the moment
+    # it asks its first question (the image is gone too), and it hallucinates the
+    # rest. Backend-only (not surfaced to the client). See _build_messages.
+    prior_tool_messages = models.JSONField(default=list, blank=True)
     # "" (normal) / awaiting_answer / answered — marks an interactive turn.
     status = models.CharField(max_length=20, blank=True, default="")
     # The concrete OpenRouter model id and the abstract tier the relay used.

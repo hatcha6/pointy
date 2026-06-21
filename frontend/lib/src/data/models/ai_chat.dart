@@ -108,6 +108,8 @@ class AiToolRun {
     this.done = false,
     this.ok,
     this.mutates = false,
+    this.arguments,
+    this.output,
   });
 
   final String name;
@@ -118,6 +120,14 @@ class AiToolRun {
   // True for a create/edit action (vs a read query) — drives a distinct,
   // persistent "action" chip so the user can see what the assistant changed.
   final bool mutates;
+  // The call's inputs and a (truncated) preview of its result — surfaced when the
+  // user taps the chip, to inspect/debug what a tool actually did. Set on finish.
+  Object? arguments;
+  String? output;
+
+  /// True when there's anything to show in the tap-to-inspect sheet.
+  bool get hasDetails =>
+      done && (output != null || arguments != null);
 }
 
 /// A single chat turn. Extends [ChangeNotifier] so a streaming reply can notify
@@ -415,12 +425,21 @@ class AiMessage extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Mark the most recent matching tool run finished (success/failure).
-  void finishToolRun({required String name, String? resource, bool? ok}) {
+  /// Mark the most recent matching tool run finished (success/failure), attaching
+  /// its inputs + result preview for the tap-to-inspect chip.
+  void finishToolRun({
+    required String name,
+    String? resource,
+    bool? ok,
+    Object? arguments,
+    String? output,
+  }) {
     for (final run in toolRuns.reversed) {
       if (run.name == name && run.resource == resource && !run.done) {
         run.done = true;
         run.ok = ok;
+        run.arguments = arguments;
+        run.output = output;
         break;
       }
     }
@@ -487,6 +506,8 @@ class AiMessage extends ChangeNotifier {
                   done: true,
                   ok: e['ok'] as bool?,
                   mutates: true,
+                  arguments: e['arguments'],
+                  output: e['output'] as String?,
                 ),
               )
               .toList()
@@ -587,6 +608,8 @@ class AiChatToolActivity extends AiChatEvent {
     required this.phase,
     this.ok,
     this.mutates = false,
+    this.arguments,
+    this.output,
   });
 
   final String name;
@@ -596,6 +619,10 @@ class AiChatToolActivity extends AiChatEvent {
   final bool? ok;
   // The tool changed shop data (create/edit/sale), not just read it.
   final bool mutates;
+  // Inputs + a truncated result preview (present on the "done" phase) for the
+  // tap-to-inspect chip.
+  final Object? arguments;
+  final String? output;
 
   bool get isStart => phase == 'start';
 }

@@ -32,6 +32,8 @@ from .models import MigrationIssue, MigrationRun
 from .transports import build_transport
 
 MAX_ISSUES_PER_ENTITY = 1000
+# Emit a live progress count every this-many records within a single entity.
+_PROGRESS_EVERY = 500
 _ACTIONS = ("created", "updated", "skipped", "failed")
 
 
@@ -120,9 +122,19 @@ class MigrationEngine:
                 spec.entity_type, "", ERROR, "no_loader", "No loader is registered for this entity."
             )
             return
+        processed = 0
         try:
             for record in connector.extract(spec.entity_type, transport, context):
                 self._load_one(spec, loader, record, resolver, counts)
+                processed += 1
+                # Live count for big entities. Skipped during a dry run because
+                # those writes would be rolled back with the rest of the run.
+                if not self.dry_run and processed % _PROGRESS_EVERY == 0:
+                    self.run.update_progress(
+                        self.run.progress_percent,
+                        f"{spec.label}: {processed}",
+                        current_entity=spec.entity_type,
+                    )
         except Exception as exc:  # noqa: BLE001 - extract/transport failure for the whole entity
             self._add_issue(spec.entity_type, "", ERROR, "extract_failed", _friendly(exc))
 

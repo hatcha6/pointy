@@ -337,13 +337,21 @@ class AiChatViewModel extends ChangeNotifier {
           :final label,
           :final ok,
           :final mutates,
+          :final arguments,
+          :final output,
         ):
           if (event.isStart) {
             assistant.startToolRun(
               AiToolRun(name: name, resource: resource, label: label, mutates: mutates),
             );
           } else {
-            assistant.finishToolRun(name: name, resource: resource, ok: ok);
+            assistant.finishToolRun(
+              name: name,
+              resource: resource,
+              ok: ok,
+              arguments: arguments,
+              output: output,
+            );
           }
         case AiChatError(:final statusCode):
           _errorKind = _errorKindFor(statusCode);

@@ -33,6 +33,7 @@ EMPLOYEE = "employee"
 EXPENSE = "expense"
 EXPENSE_CATEGORY = "expense_category"
 PRODUCT_UNIT = "product_unit"
+SUPPLIER_PAYMENT = "supplier_payment"
 
 
 @dataclass(frozen=True)
@@ -65,6 +66,12 @@ ENTITY_PLAN: tuple[EntitySpec, ...] = (
         "Purchase orders",
         canonical.CanonicalPurchaseOrder,
         (SUPPLIER, VARIANT),
+    ),
+    EntitySpec(
+        SUPPLIER_PAYMENT,
+        "Supplier payments",
+        canonical.CanonicalSupplierPayment,
+        (SUPPLIER,),
     ),
     EntitySpec(
         SALE,

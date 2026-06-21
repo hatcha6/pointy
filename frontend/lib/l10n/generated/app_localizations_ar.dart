@@ -10802,6 +10802,24 @@ class AppLocalizationsAr extends AppLocalizations {
   String get aiAssistantToolWorking => 'يجمع البيانات';
 
   @override
+  String get aiAssistantToolDetailsTitle => 'تفاصيل الأداة';
+
+  @override
+  String get aiAssistantToolInputs => 'المدخلات';
+
+  @override
+  String get aiAssistantToolResult => 'النتيجة';
+
+  @override
+  String get aiAssistantToolNoOutput => 'لا توجد نتيجة';
+
+  @override
+  String get aiAssistantToolStatusOk => 'نجحت';
+
+  @override
+  String get aiAssistantToolStatusFailed => 'فشلت';
+
+  @override
   String get aiAssistantAskUserSubmit => 'إرسال الإجابة';
 
   @override
@@ -10830,6 +10848,9 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get aiAssistantProductPickerChoose => 'ابحث واختر منتجًا';
+
+  @override
+  String get aiAssistantProductPickerChooseOther => 'ابحث عن منتج آخر…';
 
   @override
   String get aiAssistantProductPickerCreateNew => 'إنشاء منتج جديد';
@@ -11020,6 +11041,9 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get migrationEntityPurchaseOrder => 'فواتير الشراء';
+
+  @override
+  String get migrationEntitySupplierPayment => 'مدفوعات الموردين';
 
   @override
   String get migrationEntitySale => 'فواتير البيع';

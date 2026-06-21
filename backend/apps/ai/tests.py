@@ -50,7 +50,7 @@ def fake_sse_lines(text_chunks, *, model="test/model", tier="smart", reasoning="
     return lines
 
 
-def fake_tool_call_sse(name="query_resource", arguments='{"resource":"orders"}'):
+def fake_tool_call_sse(name="query_resource", arguments='{"resource":"orders"}', route_tier="smart"):
     """A relay turn that asks for one tool call, then done(finish=tool_calls)."""
     tool_calls = [
         {
@@ -59,7 +59,7 @@ def fake_tool_call_sse(name="query_resource", arguments='{"resource":"orders"}')
             "function": {"name": name, "arguments": arguments},
         }
     ]
-    done = {"model": "m", "tier": "smart", "finish_reason": "tool_calls"}
+    done = {"model": "m", "tier": route_tier, "route_tier": route_tier, "finish_reason": "tool_calls"}
     return [
         b"event: tool_calls\n",
         ("data: " + json.dumps({"tool_calls": tool_calls}) + "\n").encode("utf-8"),
@@ -332,6 +332,11 @@ class AiChatViewTests(TestCase):
         self.assertIn('"phase": "start"', body)
         self.assertIn('"phase": "done"', body)
         self.assertIn("لديك", body)
+        # The done event carries the inputs + a result preview for the tap-to-inspect
+        # chip (so the user can debug what the tool returned).
+        self.assertIn('"output"', body)
+        self.assertIn('"arguments"', body)
+        self.assertIn('\\"count\\": 5', body)
 
         # The tool ran as the request's user — the permission boundary.
         self.assertTrue(mock_exec.called)
@@ -351,6 +356,30 @@ class AiChatViewTests(TestCase):
         self.assertEqual(len(assistant.tool_events), 1)
         self.assertEqual(assistant.tool_events[0]["name"], "query_resource")
         self.assertTrue(assistant.tool_events[0]["ok"])
+        # The result preview is persisted too, so a reloaded action chip stays
+        # inspectable.
+        self.assertIn("count", assistant.tool_events[0]["output"])
+
+    def test_routed_tier_is_carried_onto_continuations(self):
+        # The relay classifies difficulty once (here: frontier) and reports it as
+        # route_tier; the agentic loop must carry that onto the continuation so the
+        # whole flow rides one dynamic decision — not re-routed, not a fixed tier.
+        with patch("apps.ai.views.RelayControlClient") as mock_client:
+            mock_client.return_value.open_ai_stream.side_effect = [
+                FakeRelayResponse(fake_tool_call_sse(route_tier="frontier")),
+                FakeRelayResponse(fake_sse_lines(["تم"], reasoning="")),
+            ]
+            with patch("apps.ai.views.execute_tool", return_value={"ok": True, "data": {}}):
+                response = self.client.post(
+                    reverse("ai-chat"), {"message": "أنشئ أمر شراء معقّد"}, format="json"
+                )
+                b"".join(response.streaming_content)
+
+        calls = mock_client.return_value.open_ai_stream.call_args_list
+        # The user turn sends no tier (the relay classifies it); the continuation
+        # carries the routed frontier tier back.
+        self.assertEqual(calls[0].kwargs.get("route_tier", ""), "")
+        self.assertEqual(calls[1].kwargs["route_tier"], "frontier")
 
     def test_agentic_loop_caps_tool_rounds(self):
         turns = [FakeRelayResponse(fake_tool_call_sse()) for _ in range(MAX_TOOL_ITERS)]
@@ -429,6 +458,33 @@ class AskUserSpecTests(TestCase):
             {"questions": [{"type": "free_text", "prompt": f"q{i}"} for i in range(9)]}
         )
         self.assertEqual(len(spec["questions"]), 5)
+
+    def test_product_picker_candidate_options_are_normalised_and_config_kept(self):
+        # The model can pre-suggest a candidate match (variant id) for one-tap
+        # confirmation; a numeric value must reach the app as a string (the PO line
+        # key), and the rest of the config (labels) must survive untouched.
+        spec = validate_ask_user_spec(
+            {
+                "questions": [
+                    {
+                        "type": "product_picker",
+                        "prompt": "هل المطابق هو كابل USB-C؟",
+                        "config": {
+                            "options": [{"value": 23, "label": "كابل USB-C"}],
+                            "deny_label": "أنشئ منتجًا جديدًا",
+                            "name": "كابل يو اس بي سي",
+                        },
+                    }
+                ]
+            }
+        )
+        question = spec["questions"][0]
+        self.assertEqual(question["type"], "product_picker")
+        self.assertEqual(
+            question["config"]["options"], [{"value": "23", "label": "كابل USB-C"}]
+        )
+        self.assertEqual(question["config"]["deny_label"], "أنشئ منتجًا جديدًا")
+        self.assertEqual(question["config"]["name"], "كابل يو اس بي سي")
 
 
 class AskUserFlowTests(TestCase):
@@ -756,6 +812,80 @@ class AskUserFlowTests(TestCase):
         )
         self.assertEqual(len(paused.tool_events), 1)
         self.assertEqual(paused.tool_events[0]["name"], "query_resource")
+
+    def test_prior_tool_results_survive_the_pause_and_resume(self):
+        # Regression for the PO-from-invoice flow: the model extracts the whole
+        # invoice via a data tool, THEN asks a question. The extraction (the tool's
+        # result) must survive the pause and be replayed on resume — otherwise the
+        # model loses the invoice the moment it asks anything and hallucinates the PO.
+        turns = [
+            FakeRelayResponse(
+                fake_tool_call_sse(
+                    name="match_invoice_products",
+                    arguments='{"supplier_name":"الوفاق","lines":[{"name":"كابل","quantity":5}]}',
+                )
+            ),
+            FakeRelayResponse(fake_tool_call_sse(name="ask_user", arguments=ASK_USER_SPEC)),
+        ]
+        extracted = {
+            "ok": True,
+            "supplier": {"name": "الوفاق", "matched": False},
+            "lines": [{"name": "كابل", "quantity": 5, "unit_cost": "15.00"}],
+        }
+        with patch("apps.ai.views.RelayControlClient") as mock_client:
+            mock_client.return_value.open_ai_stream.side_effect = turns
+            with patch("apps.ai.views.execute_tool", return_value=extracted):
+                response = self.client.post(
+                    reverse("ai-chat"),
+                    {
+                        "message": "أنشئ أمر شراء من الفاتورة",
+                        "supports_ask_user": True,
+                        "supports_actions": True,
+                    },
+                    format="json",
+                )
+                b"".join(response.streaming_content)
+
+        conversation = AiConversation.objects.get(user=self.user)
+        paused = conversation.messages.get(status=AiMessage.STATUS_AWAITING_ANSWER)
+        # The extraction is stored on the paused turn as a paired call + result.
+        self.assertEqual([m["role"] for m in paused.prior_tool_messages], ["assistant", "tool"])
+        self.assertEqual(
+            paused.prior_tool_messages[0]["tool_calls"][0]["function"]["name"],
+            "match_invoice_products",
+        )
+        self.assertIn("الوفاق", paused.prior_tool_messages[1]["content"])
+
+        # On resume, the relay receives the replayed extraction (call + result)
+        # before the ask_user turn — the invoice is back in the model's context.
+        with patch("apps.ai.views.RelayControlClient") as mock_client:
+            mock_client.return_value.open_ai_stream.return_value = FakeRelayResponse(
+                fake_sse_lines(["تم"], reasoning="")
+            )
+            self.client.post(
+                reverse("ai-chat-resume"),
+                {
+                    "conversation_id": conversation.pk,
+                    "message_id": paused.pk,
+                    "tool_call_id": paused.tool_call_id,
+                    "answers": [
+                        {"question_id": "q1", "type": "single_select", "value": "main"},
+                        {"question_id": "q2", "type": "confirm", "value": True},
+                    ],
+                },
+                format="json",
+            )
+            messages = mock_client.return_value.open_ai_stream.call_args.kwargs["messages"]
+
+        replayed_names = [
+            (m.get("tool_calls") or [{}])[0].get("function", {}).get("name")
+            for m in messages
+            if m.get("tool_calls")
+        ]
+        self.assertIn("match_invoice_products", replayed_names)
+        self.assertTrue(
+            any(m.get("role") == "tool" and "الوفاق" in (m.get("content") or "") for m in messages)
+        )
 
     def test_resume_blocked_when_ai_disabled(self):
         conversation, paused, _ = self._seed_paused()

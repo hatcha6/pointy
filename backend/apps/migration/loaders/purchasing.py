@@ -12,10 +12,14 @@ from decimal import Decimal
 
 from django.utils import timezone
 
-from apps.catalog.models import ProductVariant
-from apps.purchasing.models import PurchaseLine, PurchaseOrder, Supplier
+from apps.purchasing.models import (
+    PurchaseLine,
+    PurchaseOrder,
+    Supplier,
+    SupplierPayment,
+)
 
-from ..entity_plan import PURCHASE_ORDER, SUPPLIER, VARIANT
+from ..entity_plan import PURCHASE_ORDER, SUPPLIER, SUPPLIER_PAYMENT, VARIANT
 from .base import (
     CREATED,
     UPDATED,
@@ -28,6 +32,8 @@ from .base import (
     to_bool,
     to_decimal,
 )
+
+_SUPPLIER_PAYMENT_METHODS = {choice for choice, _label in SupplierPayment.Method.choices}
 
 _MONEY = Decimal("0.01")
 _FALLBACK_SUPPLIER_NAME = "مورّد غير محدد"
@@ -69,8 +75,8 @@ class PurchaseOrderLoader(BaseLoader):
         issues: list[Issue] = []
         line_specs = []
         for line in record.lines:
-            variant = resolver.existing(ProductVariant, VARIANT, line.variant_source_key)
-            if variant is None:
+            variant_pk = resolver.resolve(VARIANT, line.variant_source_key)
+            if variant_pk is None:
                 issues.append(
                     Issue(
                         WARNING,
@@ -83,17 +89,14 @@ class PurchaseOrderLoader(BaseLoader):
             quantity = int(to_decimal(line.quantity))
             if quantity <= 0:
                 continue
-            line_specs.append((variant, quantity, to_decimal(line.unit_cost)))
+            line_specs.append((variant_pk, quantity, to_decimal(line.unit_cost)))
         if not line_specs:
             raise LoaderError("Purchase order has no resolvable line items.", code="no_lines")
 
-        supplier = (
-            resolver.existing(Supplier, SUPPLIER, record.supplier_source_key)
-            if record.supplier_source_key
-            else None
-        )
-        if supplier is None:
+        supplier_pk = resolver.resolve(SUPPLIER, record.supplier_source_key)
+        if supplier_pk is None:
             supplier, _created = Supplier.objects.get_or_create(name=_FALLBACK_SUPPLIER_NAME)
+            supplier_pk = supplier.pk
 
         order = resolver.existing(PurchaseOrder, self.entity_type, record.source_key)
         action = UPDATED if order is not None else CREATED
@@ -101,7 +104,7 @@ class PurchaseOrderLoader(BaseLoader):
             order.lines.all().delete()
         else:
             order = PurchaseOrder()
-        order.supplier = supplier
+        order.supplier_id = supplier_pk
         order.status = PurchaseOrder.Status.RECEIVED
         order.supplier_invoice_number = clean_str(record.supplier_invoice_number)[:120]
         if record.occurred_at is not None:
@@ -110,18 +113,22 @@ class PurchaseOrderLoader(BaseLoader):
         order.save()
 
         subtotal = Decimal("0")
-        for variant, quantity, cost in line_specs:
+        lines = []
+        for variant_pk, quantity, cost in line_specs:
             line_total = (cost * quantity).quantize(_MONEY)
-            PurchaseLine.objects.create(
-                purchase_order=order,
-                variant=variant,
-                quantity=quantity,
-                unit_cost=cost,
-                net_line_total=line_total,
-                net_unit_cost=cost,
-                effective_unit_cost=cost,
+            lines.append(
+                PurchaseLine(
+                    purchase_order=order,
+                    variant_id=variant_pk,
+                    quantity=quantity,
+                    unit_cost=cost,
+                    net_line_total=line_total,
+                    net_unit_cost=cost,
+                    effective_unit_cost=cost,
+                )
             )
             subtotal += line_total
+        PurchaseLine.objects.bulk_create(lines)
 
         discount = to_decimal(record.discount_total)
         order.subtotal = subtotal.quantize(_MONEY)
@@ -146,6 +153,40 @@ class PurchaseOrderLoader(BaseLoader):
 
         resolver.remember(self.entity_type, record.source_key, order)
         return LoadOutcome(action, order.pk, issues)
+
+
+class SupplierPaymentLoader(BaseLoader):
+    entity_type = SUPPLIER_PAYMENT
+
+    def load(self, record, resolver, *, dry_run):
+        amount = to_decimal(record.amount)
+        if amount <= 0:
+            raise LoaderError(
+                "Supplier payment amount must be greater than zero.",
+                code="invalid_amount",
+            )
+        supplier_pk = resolver.resolve(SUPPLIER, record.supplier_source_key)
+        if supplier_pk is None:
+            raise LoaderError(
+                f"Supplier payment references unknown supplier {record.supplier_source_key!r}.",
+                code="unresolved_supplier",
+            )
+
+        method = record.method if record.method in _SUPPLIER_PAYMENT_METHODS else "cash"
+        instance = resolver.existing(SupplierPayment, self.entity_type, record.source_key)
+        action = UPDATED if instance is not None else CREATED
+        if instance is None:
+            instance = SupplierPayment()
+        instance.supplier_id = supplier_pk
+        instance.amount = amount
+        instance.method = method
+        instance.reference = clean_str(record.reference)[:128]
+        instance.notes = clean_str(record.notes)
+        if record.occurred_at is not None:
+            instance.paid_at = _aware(record.occurred_at)
+        instance.save()
+        resolver.remember(self.entity_type, record.source_key, instance)
+        return LoadOutcome(action, instance.pk)
 
 
 def _aware(value):

@@ -326,6 +326,8 @@ class _FakeAiChatRepository extends AiChatRepository {
       label: 'منتجات الكتالوج',
       phase: 'done',
       ok: true,
+      arguments: {'resource': 'products', 'search': 'برغر'},
+      output: '{\n  "ok": true,\n  "data": { "count": 0, "results": [] }\n}',
     );
     // Then the create actions (accented, persistent styling).
     for (final action in const [
@@ -347,6 +349,8 @@ class _FakeAiChatRepository extends AiChatRepository {
         phase: 'done',
         ok: true,
         mutates: true,
+        arguments: {'resource': action.$2, 'data': {'name': 'برغر لحم'}},
+        output: '{\n  "ok": true,\n  "data": { "id": 42, "name": "برغر لحم" }\n}',
       );
     }
     const reply =
@@ -399,13 +403,18 @@ class _FakeAiChatRepository extends AiChatRepository {
         AiQuestion(
           id: 'line3',
           type: AiQuestionType.productPicker,
-          prompt: 'لم أجد «حليب المراعي ١ لتر» في منتجاتك — اختر المطابق أو أنشئ منتجًا جديدًا.',
+          prompt: 'راجع البند «حليب المراعي ١ لتر» — هل المطابق هو أحد المنتجات أدناه؟',
           help: 'الكمية 12 — التكلفة 2.50 د.ل — سعر بيع مقترح 3.25 د.ل',
           config: const {
             'name': 'حليب المراعي ١ لتر',
             'barcode': '6291000111',
             'unit_cost': '2.50',
             'suggested_price': '3.25',
+            'deny_label': 'أنشئ منتجًا جديدًا',
+            // A pre-suggested candidate the AI matched — one tap to confirm.
+            'options': [
+              {'value': '10', 'label': 'حليب المراعي ١ لتر (باركود: 6291000111، السعر الحالي: 3.00 د.ل)'},
+            ],
           },
         ),
       ],

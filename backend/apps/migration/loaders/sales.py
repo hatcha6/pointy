@@ -17,8 +17,6 @@ from decimal import Decimal
 
 from django.utils import timezone
 
-from apps.catalog.models import ProductVariant
-from apps.customers.models import Customer
 from apps.payments.models import Payment
 from apps.sales.models import Order, OrderLine
 
@@ -46,8 +44,8 @@ class SaleLoader(BaseLoader):
         issues: list[Issue] = []
         line_specs = []
         for line in record.lines:
-            variant = resolver.existing(ProductVariant, VARIANT, line.variant_source_key)
-            if variant is None:
+            variant_pk = resolver.resolve(VARIANT, line.variant_source_key)
+            if variant_pk is None:
                 issues.append(
                     Issue(
                         WARNING,
@@ -62,7 +60,7 @@ class SaleLoader(BaseLoader):
                 continue
             line_specs.append(
                 (
-                    variant,
+                    variant_pk,
                     quantity,
                     to_decimal(line.unit_price),
                     to_decimal(line.unit_cost),
@@ -72,11 +70,7 @@ class SaleLoader(BaseLoader):
         if not line_specs:
             raise LoaderError("Sale has no resolvable line items.", code="no_lines")
 
-        customer = (
-            resolver.existing(Customer, CUSTOMER, record.customer_source_key)
-            if record.customer_source_key
-            else None
-        )
+        customer_pk = resolver.resolve(CUSTOMER, record.customer_source_key)
 
         order = resolver.existing(Order, self.entity_type, record.source_key)
         action = UPDATED if order is not None else CREATED
@@ -85,19 +79,23 @@ class SaleLoader(BaseLoader):
             order.payments.all().delete()
         else:
             order = Order()
-        order.customer = customer
+        order.customer_id = customer_pk
         order.status = Order.Status.PAID
         order.save()
 
-        for variant, quantity, price, cost, discount in line_specs:
-            OrderLine.objects.create(
-                order=order,
-                variant=variant,
-                quantity=quantity,
-                unit_price=price,
-                unit_cost=cost,
-                discount_total=discount,
-            )
+        OrderLine.objects.bulk_create(
+            [
+                OrderLine(
+                    order=order,
+                    variant_id=variant_pk,
+                    quantity=quantity,
+                    unit_price=price,
+                    unit_cost=cost,
+                    discount_total=discount,
+                )
+                for variant_pk, quantity, price, cost, discount in line_specs
+            ]
+        )
 
         order.recalculate()
         invoice_discount = to_decimal(record.discount_total)

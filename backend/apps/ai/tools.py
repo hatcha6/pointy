@@ -12,7 +12,10 @@ model can reason about — it gets a clean denial, never the data.
 
 import json
 import logging
+import re
+import unicodedata
 from collections import Counter
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from itertools import combinations
 
 from django.conf import settings
@@ -862,6 +865,19 @@ def _positive_number(value):
         return False
 
 
+def _money_2dp(value):
+    """Normalize a parsed cost to a 2-decimal-place string. ``PurchaseLine.unit_cost``
+    is ``decimal_places=2``, but invoices in 3-decimal currencies (e.g. the Libyan
+    dinar prints ``75.000``) would otherwise have the model pass a >2dp cost the PO
+    serializer rejects outright. Returns None when the value isn't a usable number."""
+    if value in (None, ""):
+        return None
+    try:
+        return str(Decimal(str(value)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
+    except (InvalidOperation, TypeError, ValueError):
+        return None
+
+
 def _list_results(meta, *, user, params):
     """Run a resource's real list action as the user and return its result rows
     (permission-scoped), or None on any failure — never raises."""
@@ -883,9 +899,9 @@ def _match_supplier(meta, *, user, supplier_name):
     if not name:
         return {"name": None, "matched": False, "candidates": []}
     results = _list_results(meta, user=user, params={"search": name}) or []
-    lowered = name.casefold()
+    target = _normalize_term(name)
     exact = next(
-        (r for r in results if str(r.get("name", "")).strip().casefold() == lowered),
+        (r for r in results if _normalize_term(r.get("name", "")) == target),
         None,
     )
     if exact is not None:
@@ -894,9 +910,89 @@ def _match_supplier(meta, *, user, supplier_name):
     return {"name": name, "matched": False, "candidates": candidates}
 
 
-def _match_invoice_line(products_meta, variants_meta, *, user, name, barcode):
-    """Resolve one invoice line to an existing product variant. Barcode-exact
-    wins; else an exact (case-insensitive) name match; else up to 5 candidates."""
+# Arabic-aware normalization so the same product matches across spelling drift:
+# NFKD + dropping combining marks folds harakat (and Latin accents); we then strip
+# the tatweel, fold the alef/yaa/taa-marbuta/hamza-carrier variants, and casefold.
+# "بطاريّة مُتنقّلة" / "Bُattery" all collapse to a stable comparison key.
+_AR_FOLD = str.maketrans(
+    {"أ": "ا", "إ": "ا", "آ": "ا", "ٱ": "ا", "ى": "ي", "ئ": "ي", "ؤ": "و", "ة": "ه"}
+)
+
+
+def _search_normalize(text):
+    """Lighter normalization for the DB ``search`` query: drop harakat (combining
+    marks) and tatweel only — NOT the letter folding. ``icontains`` compares the
+    query against the RAW stored name, so folding ة→ه here would *break* the
+    substring match; stripping the invisible diacritics only broadens it."""
+    if not text:
+        return ""
+    s = unicodedata.normalize("NFKD", str(text))
+    s = "".join(c for c in s if not unicodedata.combining(c)).replace("ـ", "")
+    return re.sub(r"\s+", " ", s).strip()
+
+
+def _normalize_term(text):
+    """Full comparison key (applied in Python over returned rows): diacritics +
+    tatweel stripped AND the alef/yaa/taa-marbuta/hamza-carrier variants folded."""
+    if not text:
+        return ""
+    s = _search_normalize(text)
+    s = s.translate(_AR_FOLD).replace("ء", "")
+    return s.casefold()
+
+
+def _dedupe_terms(terms):
+    """Trimmed, de-duplicated (by normalized key), order-preserving search terms."""
+    out = []
+    seen = set()
+    for term in terms:
+        text = str(term or "").strip()
+        key = _normalize_term(text)
+        if text and key and key not in seen:
+            seen.add(key)
+            out.append(text)
+    return out
+
+
+def _search_queries(terms, *, limit=6):
+    """The bounded set of DB search passes for a line: each full term plus its
+    longest token (so 'بطارية متنقلة' also surfaces a plain 'بطارية' product, and
+    'Power Bank' surfaces by 'Power'). Capped so a wide invoice can't fan out."""
+    queries = []
+    for term in terms:
+        query = _search_normalize(term)
+        if query and query not in queries:
+            queries.append(query)
+        tokens = [tok for tok in re.split(r"\s+", query) if len(tok) >= 3]
+        if tokens:
+            longest = max(tokens, key=len)
+            if longest not in queries:
+                queries.append(longest)
+        if len(queries) >= limit:
+            break
+    return queries[:limit]
+
+
+def _term_overlap(candidate_key, norm_terms):
+    """Best token-overlap (Jaccard) between a candidate name and any search term —
+    ranks fuzzy candidates so the closest existing product is surfaced first."""
+    cand_tokens = set(candidate_key.split())
+    best = 0.0
+    for term_key in norm_terms:
+        term_tokens = set(term_key.split())
+        if cand_tokens and term_tokens:
+            inter = len(cand_tokens & term_tokens)
+            if inter:
+                best = max(best, inter / len(cand_tokens | term_tokens))
+    return best
+
+
+def _match_invoice_line(products_meta, variants_meta, *, user, terms, barcode):
+    """Resolve one invoice line to an existing product variant, searching across all
+    of the model's multilingual ``terms`` (Arabic/English/mixed). Auto-match stays
+    CONSERVATIVE — a barcode-exact hit, or a normalized-exact name hit against any
+    term — so a wrong product is never silently linked. Everything else comes back
+    as fuzzy-ranked candidates (so an existing product is surfaced, not duplicated)."""
     if barcode:
         rows = _list_results(variants_meta, user=user, params={"barcode": barcode}) or []
         if rows:
@@ -910,34 +1006,40 @@ def _match_invoice_line(products_meta, variants_meta, *, user, name, barcode):
                 "current_price": variant.get("unit_price"),
             }
 
-    candidates = []
-    if name:
-        rows = _list_results(products_meta, user=user, params={"search": name}) or []
-        lowered = name.casefold()
+    norm_terms = [_normalize_term(term) for term in terms]
+    norm_terms = [key for key in norm_terms if key]
+    candidates = {}  # variant_id -> candidate (deduped across queries)
+    for query in _search_queries(terms):
+        rows = _list_results(products_meta, user=user, params={"search": query}) or []
         for product in rows:
             default_variant = product.get("default_variant") or {}
-            if str(product.get("name", "")).strip().casefold() == lowered and default_variant.get("id"):
+            variant_id = default_variant.get("id")
+            if not variant_id:
+                continue
+            product_key = _normalize_term(product.get("name", ""))
+            # Normalized-exact name against ANY term → a safe auto-match.
+            if product_key and product_key in norm_terms:
                 return {
                     "matched": True,
                     "match_by": "name",
-                    "variant_id": default_variant.get("id"),
+                    "variant_id": variant_id,
                     "product_id": product.get("id"),
                     "product_name": product.get("name"),
                     "current_price": default_variant.get("unit_price"),
                 }
-        for product in rows[:5]:
-            default_variant = product.get("default_variant") or {}
-            if default_variant.get("id"):
-                candidates.append(
-                    {
-                        "product_id": product.get("id"),
-                        "variant_id": default_variant.get("id"),
-                        "name": product.get("name"),
-                        "barcode": default_variant.get("barcode"),
-                        "price": default_variant.get("unit_price"),
-                    }
-                )
-    return {"matched": False, "candidates": candidates}
+            if variant_id not in candidates:
+                candidates[variant_id] = {
+                    "product_id": product.get("id"),
+                    "variant_id": variant_id,
+                    "name": product.get("name"),
+                    "barcode": default_variant.get("barcode"),
+                    "price": default_variant.get("unit_price"),
+                    "_score": _term_overlap(product_key, norm_terms),
+                }
+    ranked = sorted(candidates.values(), key=lambda c: c["_score"], reverse=True)
+    for candidate in ranked:
+        candidate.pop("_score", None)
+    return {"matched": False, "candidates": ranked[:6]}
 
 
 def match_invoice_products(*, user, supplier_name=None, lines=None):
@@ -979,13 +1081,18 @@ def match_invoice_products(*, user, supplier_name=None, lines=None):
         name = str(raw.get("name") or "").strip()
         barcode = str(raw.get("barcode") or "").strip()
         unit_cost = raw.get("unit_cost")
-        match = _match_invoice_line(products_meta, variants_meta, user=user, name=name, barcode=barcode)
+        # The model passes the printed name plus its own multilingual guesses
+        # (Arabic/English/mixed/abbreviations) so the same product matches however
+        # this particular wholesaler spelled it.
+        extra_terms = raw.get("search_terms") if isinstance(raw.get("search_terms"), list) else []
+        terms = _dedupe_terms([name, *extra_terms])
+        match = _match_invoice_line(products_meta, variants_meta, user=user, terms=terms, barcode=barcode)
         line_out = {
             "index": index,
             "name": name,
             "barcode": barcode or None,
             "quantity": raw.get("quantity"),
-            "unit_cost": None if unit_cost in (None, "") else str(unit_cost),
+            "unit_cost": _money_2dp(unit_cost),
             "unit": str(raw.get("unit") or "").strip() or None,
             "matched": bool(match["matched"]),
         }
@@ -1128,7 +1235,11 @@ def validate_ask_user_spec(arguments):
             qid = str(item.get("id") or "").strip() or f"q{index + 1}"
             config = item.get("config")
             config = dict(config) if isinstance(config, dict) else {}
-            if qtype in ("single_select", "multi_select"):
+            # product_picker may carry pre-suggested candidate products (matched
+            # lines the user can confirm with one tap) in the same {value,label}
+            # shape as a select — normalise so a numeric variant id reaches the app
+            # as a string (the PO line key).
+            if qtype in ("single_select", "multi_select", "product_picker"):
                 config["options"] = _normalise_options(config.get("options"))
             help_text = str(item.get("help") or "").strip()
             questions.append(
@@ -1531,6 +1642,17 @@ def action_tool_definitions():
                                     "unit_cost": {"type": "string", "description": "تكلفة الوحدة من الفاتورة."},
                                     "barcode": {"type": "string", "description": "الباركود إن ظهر في الفاتورة."},
                                     "unit": {"type": "string", "description": "وحدة الشراء إن ذُكرت (مثل carton)."},
+                                    "search_terms": {
+                                        "type": "array",
+                                        "items": {"type": "string"},
+                                        "description": (
+                                            "بدائل اسم المنتج للبحث في قاعدة البيانات: ترجمته "
+                                            "للعربية والإنجليزية، الكلمات المفتاحية، والاختصارات "
+                                            "الشائعة (مثلًا 'Power Bank' و'بطارية متنقلة' و'بطارية' "
+                                            "و'باور بانك'). تُستخدم لإيجاد المنتج الموجود مهما "
+                                            "اختلفت تسميته في الفاتورة وتجنّب التكرار."
+                                        ),
+                                    },
                                 },
                                 "required": ["name", "quantity", "unit_cost"],
                             },

@@ -356,7 +356,11 @@ on the relay `server` command:
 - `POINTY_RELAY_AI_MODEL_FAST` / `_SMART` / `_FRONTIER` — model id per tier.
 - `POINTY_RELAY_AI_DEFAULT_TIER` — router fallback tier (`smart`).
 - `POINTY_RELAY_AI_ROUTER_MODEL` — model that classifies prompt difficulty to
-  auto-pick a tier; empty uses the fast-tier model.
+  auto-pick a tier; empty uses the fast-tier model. The relay classifies once per
+  task (factoring in attachments and whether a multi-step tool flow is needed),
+  and that tier is carried through the agentic tool-loop, so a hard flow (a
+  purchase order from an invoice) escalates while a trivial one stays cheap —
+  without re-classifying every round or hard-coding a tier per flow.
 - `POINTY_RELAY_AI_REQUEST_TIMEOUT` — per-request stream timeout (`120s`).
 - `POINTY_RELAY_AI_RATE_LIMIT` — AI requests per installation per rate-limit
   window (`120`; uses the shared `POINTY_RELAY_RATE_LIMIT_WINDOW`). This is the

@@ -179,7 +179,9 @@ class _AsyncMultiSelectPickerSheetState<T extends Object>
             hintText: strings.searchHint,
             clearTooltip: strings.clearSearchTooltip,
             fieldKey: widget.searchFieldKey,
-            enabled: !_isLoading,
+            // Stay enabled while results load: disabling a focused TextField mid-
+            // keystroke drops the keyboard/focus, so every search interrupted the
+            // user's typing. The list shows its own loading state instead.
             onChanged: (value) {
               _search = value;
               _load(reset: true);

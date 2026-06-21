@@ -28,7 +28,14 @@ class StockLoader(BaseLoader):
     entity_type = STOCK
 
     def load(self, record, resolver, *, dry_run):
-        variant = resolver.existing(ProductVariant, VARIANT, record.variant_source_key)
+        variant_pk = resolver.resolve(VARIANT, record.variant_source_key)
+        if variant_pk is None:
+            raise LoaderError(
+                f"Stock references unknown product/variant {record.variant_source_key!r}.",
+                code="unresolved_variant",
+            )
+        # One query fetches the variant + its product (for the service check).
+        variant = ProductVariant.objects.select_related("product").filter(pk=variant_pk).first()
         if variant is None:
             raise LoaderError(
                 f"Stock references unknown product/variant {record.variant_source_key!r}.",
@@ -36,8 +43,7 @@ class StockLoader(BaseLoader):
             )
 
         # Service and made-to-order products don't keep stock of their own.
-        product = variant.product
-        if product.is_service or product.is_prepared:
+        if variant.product.is_service or variant.product.is_prepared:
             return LoadOutcome(
                 SKIPPED,
                 None,
@@ -56,11 +62,9 @@ class StockLoader(BaseLoader):
         if record.reorder_level is not None:
             defaults["reorder_level"] = int(record.reorder_level)
 
-        existing = StockItem.objects.filter(variant=variant).first()
-        action = UPDATED if existing is not None else CREATED
-        stock_item, _created = StockItem.objects.update_or_create(
-            variant=variant,
+        stock_item, created = StockItem.objects.update_or_create(
+            variant_id=variant_pk,
             defaults=defaults,
         )
         resolver.remember(self.entity_type, record.source_key, stock_item)
-        return LoadOutcome(action, stock_item.pk)
+        return LoadOutcome(CREATED if created else UPDATED, stock_item.pk)

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -1231,45 +1232,35 @@ class _QuestionCardState extends State<_QuestionCard> {
 
   Widget _buildProductPicker(AiQuestion question) {
     final spacing = AdaptiveSpacing.of(context);
-    final colors = context.pointyColors;
-    final textTheme = Theme.of(context).textTheme;
     final l10n = AppLocalizations.of(context)!;
     final choice = _product[question.id];
     final canSearch = widget.productSearch != null;
+    // Candidate matches the AI pre-suggested (e.g. a near-name match it wasn't
+    // confident enough to auto-link) — render each as a one-tap confirm so the
+    // user rarely has to open the search.
+    final candidates = question.options;
+    final selectedVariant = (choice != null && !choice.createNew) ? choice.variantId : null;
+    final candidateIds =
+        candidates.map((o) => int.tryParse(o.value)).whereType<int>().toSet();
+    // The confirmation banner only shows when the answer isn't already a highlighted
+    // candidate tile — i.e. "create new", or a product chosen via the search sheet.
+    final showBanner =
+        choice != null && (choice.createNew || !candidateIds.contains(selectedVariant));
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (choice != null) ...[
-          Container(
-            padding: EdgeInsets.symmetric(horizontal: spacing.sm, vertical: spacing.xs),
-            decoration: BoxDecoration(
-              color: colors.primaryContainer,
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: colors.primary),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  choice.createNew ? Icons.add_circle_outline : Icons.check_circle,
-                  size: 16,
-                  color: colors.success,
-                ),
-                SizedBox(width: spacing.xs),
-                Flexible(
-                  child: Text(
-                    choice.createNew
-                        ? l10n.aiAssistantProductPickerCreateNewChosen
-                        : (choice.name ?? ''),
-                    style: textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
-                  ),
-                ),
-              ],
-            ),
-          ),
+        if (showBanner) ...[
+          _buildProductChoiceBanner(choice),
           SizedBox(height: spacing.sm),
         ],
+        for (final option in candidates)
+          _buildProductCandidate(
+            question,
+            option,
+            selected: selectedVariant != null && int.tryParse(option.value) == selectedVariant,
+          ),
+        if (candidates.isNotEmpty) SizedBox(height: spacing.xs),
         Wrap(
           spacing: spacing.xs,
           runSpacing: spacing.xs,
@@ -1279,10 +1270,14 @@ class _QuestionCardState extends State<_QuestionCard> {
                 key: ValueKey('ai_product_pick_${question.id}'),
                 onPressed: () => _openProductPicker(question),
                 icon: const Icon(Icons.search, size: 18),
-                label: Text(l10n.aiAssistantProductPickerChoose),
+                label: Text(
+                  candidates.isEmpty
+                      ? l10n.aiAssistantProductPickerChoose
+                      : l10n.aiAssistantProductPickerChooseOther,
+                ),
               ),
             // Always offer "create new" when search isn't available, so there's
-            // never a dead card with no way to answer.
+            // never a dead card with no way to answer. The model may relabel it.
             if (question.allowCreateNew || !canSearch)
               OutlinedButton.icon(
                 key: ValueKey('ai_product_create_${question.id}'),
@@ -1291,11 +1286,103 @@ class _QuestionCardState extends State<_QuestionCard> {
                   _errors.remove(question.id);
                 }),
                 icon: const Icon(Icons.add, size: 18),
-                label: Text(l10n.aiAssistantProductPickerCreateNew),
+                label: Text(question.denyLabel ?? l10n.aiAssistantProductPickerCreateNew),
               ),
           ],
         ),
       ],
+    );
+  }
+
+  /// The "your current answer" banner, shown for a create-new choice or a product
+  /// picked through search (a candidate pick is shown by its highlighted tile).
+  Widget _buildProductChoiceBanner(_ProductChoice choice) {
+    final spacing = AdaptiveSpacing.of(context);
+    final colors = context.pointyColors;
+    final textTheme = Theme.of(context).textTheme;
+    final l10n = AppLocalizations.of(context)!;
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: spacing.sm, vertical: spacing.xs),
+      decoration: BoxDecoration(
+        color: colors.primaryContainer,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: colors.primary),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            choice.createNew ? Icons.add_circle_outline : Icons.check_circle,
+            size: 16,
+            color: colors.success,
+          ),
+          SizedBox(width: spacing.xs),
+          Flexible(
+            child: Text(
+              choice.createNew
+                  ? l10n.aiAssistantProductPickerCreateNewChosen
+                  : (choice.name ?? ''),
+              style: textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// One AI-suggested candidate product, tappable to select it (its label already
+  /// carries the barcode/price the model put there).
+  Widget _buildProductCandidate(
+    AiQuestion question,
+    AiQuestionOption option, {
+    required bool selected,
+  }) {
+    final spacing = AdaptiveSpacing.of(context);
+    final colors = context.pointyColors;
+    final textTheme = Theme.of(context).textTheme;
+    final variantId = int.tryParse(option.value);
+    return Padding(
+      padding: EdgeInsets.only(bottom: spacing.xs),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(10),
+        child: InkWell(
+          key: ValueKey('ai_product_candidate_${question.id}_${option.value}'),
+          borderRadius: BorderRadius.circular(10),
+          onTap: variantId == null
+              ? null
+              : () => setState(() {
+                  _product[question.id] = _ProductChoice.existing(variantId, option.label);
+                  _errors.remove(question.id);
+                }),
+          child: Container(
+            padding: EdgeInsets.symmetric(horizontal: spacing.sm, vertical: spacing.sm),
+            decoration: BoxDecoration(
+              color: selected ? colors.primaryContainer : colors.surfaceSunken,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: selected ? colors.primary : colors.line),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  selected ? Icons.radio_button_checked : Icons.radio_button_unchecked,
+                  size: 18,
+                  color: selected ? colors.primary : colors.mutedInk,
+                ),
+                SizedBox(width: spacing.xs),
+                Expanded(
+                  child: Text(
+                    option.label,
+                    style: textTheme.bodyMedium?.copyWith(
+                      fontWeight: selected ? FontWeight.w600 : null,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -1529,8 +1616,9 @@ class _ToolRunChip extends StatelessWidget {
     // label is already self-describing ("إنشاء: المصروفات"), so it's shown as-is
     // rather than wrapped in the "querying…" phrasing.
     final text = mutating ? label : l10n.aiAssistantToolQuerying(label);
+    final canInspect = run.hasDetails;
 
-    return Container(
+    final chip = Container(
       padding: EdgeInsets.symmetric(horizontal: spacing.sm, vertical: spacing.xs),
       decoration: BoxDecoration(
         color: mutating ? colors.primaryContainer : colors.surfaceSunken,
@@ -1565,8 +1653,191 @@ class _ToolRunChip extends StatelessWidget {
               fontWeight: mutating ? FontWeight.w600 : null,
             ),
           ),
+          // Tap-to-inspect affordance once the run has a result to show.
+          if (canInspect) ...[
+            SizedBox(width: spacing.xs),
+            Icon(
+              Icons.info_outline,
+              size: 13,
+              color: mutating ? colors.primary : colors.mutedInk,
+            ),
+          ],
         ],
       ),
+    );
+
+    if (!canInspect) {
+      return chip;
+    }
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(20),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(20),
+        onTap: () => showModalBottomSheet<void>(
+          context: context,
+          isScrollControlled: true,
+          showDragHandle: true,
+          builder: (_) => _ToolRunDetailSheet(run: run),
+        ),
+        child: chip,
+      ),
+    );
+  }
+}
+
+/// Tap-to-inspect sheet for a tool run: its inputs and a (truncated) preview of
+/// what it returned. A debugging aid — the JSON is shown LTR and copyable so a
+/// failed create/match is easy to diagnose.
+class _ToolRunDetailSheet extends StatelessWidget {
+  const _ToolRunDetailSheet({required this.run});
+
+  final AiToolRun run;
+
+  String _pretty(Object? value) {
+    if (value == null) return '';
+    if (value is String) return value;
+    try {
+      return const JsonEncoder.withIndent('  ').convert(value);
+    } catch (_) {
+      return value.toString();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.pointyColors;
+    final spacing = AdaptiveSpacing.of(context);
+    final l10n = AppLocalizations.of(context)!;
+    final theme = Theme.of(context);
+    final failed = run.ok == false;
+    final title = (run.label != null && run.label!.isNotEmpty) ? run.label! : run.name;
+    final argsText = _pretty(run.arguments);
+    final outputText = (run.output != null && run.output!.isNotEmpty)
+        ? run.output!
+        : l10n.aiAssistantToolNoOutput;
+
+    return SafeArea(
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(spacing.md, 0, spacing.md, spacing.md),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(context).size.height * 0.72,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(
+                    failed ? Icons.error_outline : Icons.check_circle_outline,
+                    size: 18,
+                    color: failed ? colors.danger : colors.success,
+                  ),
+                  SizedBox(width: spacing.xs),
+                  Expanded(
+                    child: Text(
+                      title,
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  Text(
+                    failed ? l10n.aiAssistantToolStatusFailed : l10n.aiAssistantToolStatusOk,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: failed ? colors.danger : colors.success,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+              SizedBox(height: spacing.sm),
+              Flexible(
+                child: SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (argsText.isNotEmpty) ...[
+                        _ToolDetailSection(
+                          title: l10n.aiAssistantToolInputs,
+                          body: argsText,
+                        ),
+                        SizedBox(height: spacing.md),
+                      ],
+                      _ToolDetailSection(
+                        title: l10n.aiAssistantToolResult,
+                        body: outputText,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// A labelled, copyable, LTR code block inside the tool-run inspector.
+class _ToolDetailSection extends StatelessWidget {
+  const _ToolDetailSection({required this.title, required this.body});
+
+  final String title;
+  final String body;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.pointyColors;
+    final spacing = AdaptiveSpacing.of(context);
+    final theme = Theme.of(context);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Text(
+              title,
+              style: theme.textTheme.labelLarge?.copyWith(
+                color: colors.mutedInk,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const Spacer(),
+            IconButton(
+              visualDensity: VisualDensity.compact,
+              iconSize: 16,
+              tooltip: AppLocalizations.of(context)!.aiAssistantActionCopy,
+              icon: const Icon(Icons.copy_outlined),
+              onPressed: () => Clipboard.setData(ClipboardData(text: body)),
+            ),
+          ],
+        ),
+        Container(
+          width: double.infinity,
+          padding: EdgeInsets.all(spacing.sm),
+          decoration: BoxDecoration(
+            color: colors.surfaceSunken,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: colors.line),
+          ),
+          child: Directionality(
+            textDirection: TextDirection.ltr,
+            child: SelectableText(
+              body,
+              style: theme.textTheme.bodySmall?.copyWith(
+                fontFamily: 'monospace',
+                height: 1.4,
+                color: colors.ink,
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

@@ -12,6 +12,13 @@ Maps the AboGhris "Marketing" database onto Pointy's canonical IR:
 * ``ITEMS_SUB``              → stock on hand (``QTY`` summed across stores)
 * ``CUSTOMERS``              → customers (``CUST_VENDOR=0``) and suppliers
   (``CUST_VENDOR=1``); the ``N/A`` placeholder row (id 0) is skipped
+* ``SALE_INVOICE`` + ``SALE_ITEMS``  → sales (order + lines + a paid payment)
+* ``BUY_INVOICE`` + ``BUY_ITEMS``    → purchase orders (received)
+* ``EXPENCES``               → expense categories (the expense-type dictionary)
+* ``GIVE`` (disbursement vouchers) where ``EXPENCES_ID > 0`` → expense
+  transactions (``G_VALUE`` is the amount, ``EXPENCES_ID`` the category)
+* ``GIVE`` where ``EXPENCES_ID = 0`` and ``CUST_ID`` is a vendor → supplier
+  payments (``SupplierPayment``, ``G_VALUE`` paid to that supplier)
 
 Notes / deliberate choices:
 - Price = ``PRICE1`` when set, else ``PUBLIC_PRICE`` (the two patterns seen in the
@@ -35,6 +42,7 @@ from .. import canonical
 from ..entity_plan import (
     CATEGORY,
     CUSTOMER,
+    EXPENSE,
     EXPENSE_CATEGORY,
     PRODUCT,
     PRODUCT_UNIT,
@@ -42,6 +50,7 @@ from ..entity_plan import (
     SALE,
     STOCK,
     SUPPLIER,
+    SUPPLIER_PAYMENT,
     UNIT,
 )
 from .base import BaseConnector, ExtractContext, RequiredTable, VersionSpec
@@ -140,8 +149,10 @@ class AboGhrisMssqlConnector(BaseConnector):
         CUSTOMER,
         SUPPLIER,
         PURCHASE_ORDER,
+        SUPPLIER_PAYMENT,
         SALE,
         EXPENSE_CATEGORY,
+        EXPENSE,
     )
     versions = (
         VersionSpec(
@@ -177,8 +188,12 @@ class AboGhrisMssqlConnector(BaseConnector):
             yield from self._sales(transport, ctx)
         elif entity_type == PURCHASE_ORDER:
             yield from self._purchase_orders(transport, ctx)
+        elif entity_type == SUPPLIER_PAYMENT:
+            yield from self._supplier_payments(transport, ctx)
         elif entity_type == EXPENSE_CATEGORY:
             yield from self._expense_categories(transport)
+        elif entity_type == EXPENSE:
+            yield from self._expenses(transport, ctx)
 
     # --- shared barcode grouping (cached per run) ------------------------
     def _barcodes_by_item(self, transport, ctx: ExtractContext) -> dict[str, list[dict]]:
@@ -269,7 +284,10 @@ class AboGhrisMssqlConnector(BaseConnector):
                 unit=f"u{base_unit_id}" if base_unit_id else "piece",
                 is_active=not _to_bool(record.get("item_invisible")),
                 category_source_keys=categories,
-                sku=_clean(record.get("item_model")),
+                # A deterministic, always-present SKU (the shop's own model code
+                # when set, else the item id) keeps re-runs stable and skips the
+                # default-variant SKU-collision probe.
+                sku=_clean(record.get("item_model")) or f"ABG-{item_id}",
                 barcode=_clean(base.get("barcode")) if base else "",
                 unit_price=_price(base) if base else Decimal("0"),
             )
@@ -503,4 +521,91 @@ class AboGhrisMssqlConnector(BaseConnector):
                 source_key=str(expense_id),
                 name=name,
                 is_active=not _to_bool(record.get("expense_invisible")),
+            )
+
+    def _vendor_ids(self, transport, ctx):
+        cached = ctx.cache.get("aboghris_vendor_ids")
+        if cached is not None:
+            return cached
+        vendors: set[int] = set()
+        for row in transport.iter_records("CUSTOMERS", fields=["CUST_ID", "CUST_VENDOR"]):
+            record = _lower(row)
+            cust_id = _to_int(record.get("cust_id"))
+            if cust_id and _to_bool(record.get("cust_vendor")):
+                vendors.add(cust_id)
+        ctx.cache["aboghris_vendor_ids"] = vendors
+        return vendors
+
+    def _supplier_payments(self, transport, ctx):
+        # GIVE vouchers with EXPENCES_ID = 0 paid to a vendor are supplier
+        # payments; those with EXPENCES_ID > 0 are expenses (handled separately).
+        if not transport.has_table("GIVE"):
+            return
+        vendors = self._vendor_ids(transport, ctx)
+        for row in transport.iter_records(
+            "GIVE",
+            fields=["G_ID", "G_DATE", "G_VALUE", "G_NOTE", "G_NO", "EXPENCES_ID", "CUST_ID"],
+        ):
+            record = _lower(row)
+            if _to_int(record.get("expences_id")):
+                continue  # an expense, not a supplier payment
+            cust_id = _to_int(record.get("cust_id"))
+            if not cust_id or cust_id not in vendors:
+                continue
+            amount = _to_decimal(record.get("g_value"))
+            if amount <= 0:
+                continue
+            yield canonical.CanonicalSupplierPayment(
+                source_key=f"give-{_to_int(record.get('g_id'))}",
+                supplier_source_key=str(cust_id),
+                amount=amount,
+                method="cash",
+                reference=_clean(record.get("g_no")),
+                notes=_clean(record.get("g_note")),
+                occurred_at=_parse_dt(record.get("g_date")),
+            )
+
+    def _expense_names(self, transport, ctx):
+        cached = ctx.cache.get("aboghris_expense_names")
+        if cached is not None:
+            return cached
+        names: dict[int, str] = {}
+        if transport.has_table("EXPENCES"):
+            for row in transport.iter_records("EXPENCES"):
+                record = _lower(row)
+                expense_id = _to_int(record.get("expences_id"))
+                name = _clean(record.get("expense_disc"))
+                if expense_id and name not in _PLACEHOLDER_NAMES:
+                    names[expense_id] = name
+        ctx.cache["aboghris_expense_names"] = names
+        return names
+
+    def _expenses(self, transport, ctx):
+        # Expenses are GIVE (disbursement) vouchers whose EXPENCES_ID points at an
+        # expense type; GIVE rows with EXPENCES_ID = 0 are supplier payments, not
+        # expenses, and are skipped here.
+        if not transport.has_table("GIVE"):
+            return
+        names = self._expense_names(transport, ctx)
+        for row in transport.iter_records(
+            "GIVE",
+            fields=["G_ID", "G_DATE", "G_VALUE", "G_NOTE", "G_NO", "EXPENCES_ID", "BANK_ID"],
+        ):
+            record = _lower(row)
+            expense_type = _to_int(record.get("expences_id"))
+            if not expense_type:
+                continue
+            amount = _to_decimal(record.get("g_value"))
+            if amount <= 0:
+                continue
+            give_id = _to_int(record.get("g_id"))
+            category_name = names.get(expense_type, "")
+            yield canonical.CanonicalExpense(
+                source_key=f"give-{give_id}",
+                category_name=category_name,
+                description=_clean(record.get("g_note")) or category_name,
+                amount=amount,
+                payment_method="cash",
+                occurred_at=_parse_dt(record.get("g_date")),
+                reference=_clean(record.get("g_no")),
             )

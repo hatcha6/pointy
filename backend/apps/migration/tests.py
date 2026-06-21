@@ -283,6 +283,9 @@ def build_aboghris_sample(path):
                                     QTY REAL, PRICE REAL);
             CREATE TABLE EXPENCES (EXPENCES_ID INTEGER, EXPENSE_DISC TEXT,
                                    EXPENSE_INVISIBLE INTEGER);
+            CREATE TABLE GIVE (G_ID INTEGER, G_DATE TEXT, G_VALUE REAL, G_NOTE TEXT,
+                               G_NO TEXT, EXPENCES_ID INTEGER, BANK_ID INTEGER,
+                               CUST_ID INTEGER);
             """
         )
         connection.executemany(
@@ -366,9 +369,65 @@ def build_aboghris_sample(path):
                 (2, "مصاريف كهرباء", 0),
             ],
         )
+        connection.executemany(
+            "INSERT INTO GIVE VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            [
+                # expense: electricity (category 2), 250
+                (1, "2026-05-20 10:00:00", 250.0, "كهرباء مايو", "V1", 2, 1, 0),
+                # supplier payment (EXPENCES_ID 0) to vendor 2 (شركة النسيم)
+                (2, "2026-05-21 10:00:00", 6200.0, "دفعة مورد", "V2", 0, 1, 2),
+                # zero-amount expense voucher -> skipped
+                (3, "2026-05-22 10:00:00", 0.0, "صفر", "V3", 1, 1, 0),
+            ],
+        )
         connection.commit()
     finally:
         connection.close()
+
+
+class ResolverPerformanceTests(MigrationTestBase):
+    def test_resolve_is_in_memory_after_preload(self):
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+
+        from .identity import IdentityResolver
+
+        build_aboghris_sample(self.db_path)
+        source = self._make_aboghris_source()
+        self.run_sync(source, IMPORT)  # populate the identity map
+
+        run = MigrationRun.objects.create(source=source, mode=IMPORT)
+        # Construction preloads the whole map in a single query…
+        with CaptureQueriesContext(connection) as preload:
+            resolver = IdentityResolver(source, run, dry_run=False)
+        self.assertLessEqual(len(preload.captured_queries), 1)
+
+        # …after which resolving foreign keys issues no queries at all.
+        with CaptureQueriesContext(connection) as resolves:
+            for item_id in ("401", "402", "404", "500"):
+                resolver.resolve("product", item_id)
+                resolver.resolve_pk("variant", item_id)
+        self.assertEqual(len(resolves.captured_queries), 0)
+
+    def test_reimport_does_not_grow_identity_map(self):
+        from .models import MigrationIdentityMap
+
+        build_aboghris_sample(self.db_path)
+        source = self._make_aboghris_source()
+        self.run_sync(source, IMPORT)
+        first = MigrationIdentityMap.objects.filter(source=source).count()
+        self.run_sync(source, IMPORT)
+        second = MigrationIdentityMap.objects.filter(source=source).count()
+        self.assertEqual(first, second)
+        self.assertGreater(first, 0)
+
+    def _make_aboghris_source(self):
+        return self.make_source(
+            name="AboGhris",
+            system_key="aboghris_mssql",
+            transport_kind="sqlite",
+            database_name=str(self.db_path),
+        )
 
 
 class AboGhrisConnectorTests(MigrationTestBase):
@@ -422,9 +481,9 @@ class AboGhrisConnectorTests(MigrationTestBase):
         self.assertTrue(Supplier.objects.filter(name="مورّد 3").exists())
 
     def test_transactional_import(self):
-        from apps.expenses.models import ExpenseCategory
+        from apps.expenses.models import Expense, ExpenseCategory
         from apps.payments.models import Payment
-        from apps.purchasing.models import PurchaseOrder
+        from apps.purchasing.models import PurchaseOrder, SupplierPayment
         from apps.sales.models import Order
 
         build_aboghris_sample(self.db_path)
@@ -432,6 +491,8 @@ class AboGhrisConnectorTests(MigrationTestBase):
         orders_before = Order.objects.count()
         payments_before = Payment.objects.count()
         pos_before = PurchaseOrder.objects.count()
+        expenses_before = Expense.objects.count()
+        supplier_payments_before = SupplierPayment.objects.count()
 
         run = self.run_sync(source, IMPORT)
 
@@ -454,6 +515,18 @@ class AboGhrisConnectorTests(MigrationTestBase):
         # Expense categories imported (N/A skipped).
         self.assertTrue(ExpenseCategory.objects.filter(name="مصاريف رواتب").exists())
         self.assertTrue(ExpenseCategory.objects.filter(name="مصاريف كهرباء").exists())
+        # Expense transactions from GIVE (EXPENCES_ID>0); supplier payment and
+        # zero-amount voucher are skipped, so exactly one expense lands.
+        self.assertEqual(Expense.objects.count() - expenses_before, 1)
+        expense = Expense.objects.get(reference="V1")
+        self.assertEqual(expense.amount, Decimal("250.00"))
+        self.assertEqual(expense.category.name, "مصاريف كهرباء")
+        self.assertEqual(expense.spent_at.year, 2026)
+        # Supplier payment from the EXPENCES_ID=0 GIVE voucher paid to a vendor.
+        self.assertEqual(SupplierPayment.objects.count() - supplier_payments_before, 1)
+        payment = SupplierPayment.objects.get(reference="V2")
+        self.assertEqual(payment.amount, Decimal("6200.00"))
+        self.assertEqual(payment.supplier.name, "شركة النسيم")
 
     def test_products_without_quantities_option_skips_stock(self):
         build_aboghris_sample(self.db_path)

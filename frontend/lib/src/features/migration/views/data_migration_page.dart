@@ -637,6 +637,7 @@ String _entityLabel(AppLocalizations l10n, MigrationViewModel viewModel, String 
     'customer' => l10n.migrationEntityCustomer,
     'supplier' => l10n.migrationEntitySupplier,
     'purchase_order' => l10n.migrationEntityPurchaseOrder,
+    'supplier_payment' => l10n.migrationEntitySupplierPayment,
     'sale' => l10n.migrationEntitySale,
     'payment' => l10n.migrationEntityPayment,
     'employee' => l10n.migrationEntityEmployee,

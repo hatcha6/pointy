@@ -419,6 +419,61 @@ class MatchInvoiceProductsTests(_PurchasingFixtures):
             result["summary"], {"total": 1, "matched": 0, "unmatched": 1, "with_issues": 0}
         )
 
+    def test_arabic_spelling_drift_still_auto_matches(self):
+        # Diacritics + an alef-hamza variant must not block the exact match.
+        variant = self._sellable(name="بطارية متنقلة", sku="BAT-9", price="90.00")
+        result = match_invoice_products(
+            user=self.manager,
+            lines=[{"name": "بطاريّة مُتنقلة", "quantity": 2, "unit_cost": "75.00"}],
+        )
+        line = result["lines"][0]
+        self.assertTrue(line["matched"], line)
+        self.assertEqual(line["variant_id"], variant.id)
+        self.assertEqual(line["match_by"], "name")
+
+    def test_english_invoice_name_matches_arabic_product_via_search_terms(self):
+        # An English-named invoice line finds the Arabic product because the model
+        # supplied a cross-language search term.
+        variant = self._sellable(name="بطارية متنقلة", sku="BAT-10", price="90.00")
+        result = match_invoice_products(
+            user=self.manager,
+            lines=[
+                {
+                    "name": "Power Bank",
+                    "quantity": 2,
+                    "unit_cost": "75.00",
+                    "search_terms": ["بطارية متنقلة", "بطارية", "باور بانك"],
+                }
+            ],
+        )
+        line = result["lines"][0]
+        self.assertTrue(line["matched"], line)
+        self.assertEqual(line["variant_id"], variant.id)
+
+    def test_partial_name_is_surfaced_as_candidate_not_a_false_match(self):
+        # A near-but-not-exact name must NOT auto-match, but the existing product
+        # must surface as a candidate so the user can confirm instead of duplicating.
+        variant = self._sellable(name="بطارية متنقلة كبيرة", sku="BAT-11", price="90.00")
+        result = match_invoice_products(
+            user=self.manager,
+            lines=[{"name": "بطارية متنقلة", "quantity": 1, "unit_cost": "70.00"}],
+        )
+        line = result["lines"][0]
+        self.assertFalse(line["matched"])
+        self.assertEqual(
+            [c["variant_id"] for c in line["candidates"]][:1], [variant.id]
+        )
+
+    def test_three_decimal_cost_is_normalized_to_two_places(self):
+        # A 3-decimal-currency invoice (Libyan dinar prints 75.000) must come back
+        # as a 2dp cost — PurchaseLine.unit_cost is decimal_places=2 and would
+        # otherwise reject the PO line the model builds from this draft.
+        result = match_invoice_products(
+            user=self.manager,
+            lines=[{"name": "بطارية متنقلة", "quantity": 2, "unit_cost": "75.000"}],
+        )
+        self.assertEqual(result["lines"][0]["unit_cost"], "75.00")
+
     def test_matched_line_reports_current_cost(self):
         variant = self._sellable(name="سكر", sku="SUG-1", price="5.00")
         self._purchase_line(variant, "4.00")

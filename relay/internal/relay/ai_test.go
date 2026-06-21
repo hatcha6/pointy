@@ -316,6 +316,54 @@ func TestHandleAIChatRoutesAttachmentsToVisionModel(t *testing.T) {
 	}
 }
 
+func TestHandleAIChatContinuationInheritsCarriedTier(t *testing.T) {
+	now := time.Date(2026, 6, 2, 12, 0, 0, 0, time.UTC)
+	store, provisioned := provisionAIInstallation(t, now)
+	// The router would say "fast"; a continuation must NOT route — it rides the
+	// tier carried from the turn's first request (the relay's earlier decision).
+	openrouter := stubOpenRouterServer(t, "fast")
+	defer openrouter.Close()
+	server := newAITestServer(t, store, openrouter.URL)
+
+	body := strings.NewReader(`{"messages":[{"role":"user","content":"continue"}],"count_usage":false,"route_tier":"frontier"}`)
+	request := httptest.NewRequest(http.MethodPost, "http://relay.test/v1/ai/chat", body)
+	request.Header.Set(AccessTokenHeader, provisioned.AccessToken)
+	recorder := httptest.NewRecorder()
+	server.ServeHTTP(recorder, request)
+	response := recorder.Result()
+	defer response.Body.Close()
+
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", response.StatusCode)
+	}
+	payload := recorder.Body.String()
+	if !strings.Contains(payload, `"tier":"frontier"`) || !strings.Contains(payload, `"model":"test/frontier"`) {
+		t.Fatalf("expected continuation to inherit the carried frontier tier, got %q", payload)
+	}
+}
+
+func TestHandleAIChatContinuationFloorsAndDefaults(t *testing.T) {
+	now := time.Date(2026, 6, 2, 12, 0, 0, 0, time.UTC)
+	store, provisioned := provisionAIInstallation(t, now)
+	openrouter := stubOpenRouterServer(t, "frontier")
+	defer openrouter.Close()
+	server := newAITestServer(t, store, openrouter.URL)
+
+	// An unhinted continuation defaults to smart; a "fast" hint floors to smart
+	// (agentic continuations never ride the tool-fumbling fast tier).
+	for _, hint := range []string{`""`, `"fast"`, `"bogus"`} {
+		body := strings.NewReader(`{"messages":[{"role":"user","content":"x"}],"count_usage":false,"route_tier":` + hint + `}`)
+		request := httptest.NewRequest(http.MethodPost, "http://relay.test/v1/ai/chat", body)
+		request.Header.Set(AccessTokenHeader, provisioned.AccessToken)
+		recorder := httptest.NewRecorder()
+		server.ServeHTTP(recorder, request)
+		payload := recorder.Body.String()
+		if !strings.Contains(payload, `"tier":"smart"`) || !strings.Contains(payload, `"model":"test/smart"`) {
+			t.Fatalf("hint %s: expected smart, got %q", hint, payload)
+		}
+	}
+}
+
 func TestHandleAIChatRejectsTooManyImages(t *testing.T) {
 	now := time.Date(2026, 6, 2, 12, 0, 0, 0, time.UTC)
 	store, provisioned := provisionAIInstallation(t, now)

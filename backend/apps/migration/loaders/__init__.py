@@ -19,7 +19,7 @@ from .customers import CustomerLoader
 from .employees import EmployeeLoader
 from .expenses import ExpenseCategoryLoader, ExpenseLoader
 from .inventory import StockLoader
-from .purchasing import PurchaseOrderLoader, SupplierLoader
+from .purchasing import PurchaseOrderLoader, SupplierLoader, SupplierPaymentLoader
 from .sales import PaymentLoader, SaleLoader
 
 _LOADER_CLASSES = (
@@ -35,6 +35,7 @@ _LOADER_CLASSES = (
     ExpenseCategoryLoader,
     # transactional (implemented)
     PurchaseOrderLoader,
+    SupplierPaymentLoader,
     SaleLoader,
     ExpenseLoader,
     # still stubs

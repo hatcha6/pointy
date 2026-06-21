@@ -166,6 +166,16 @@ class CanonicalPurchaseOrder(CanonicalRecord):
 
 
 @dataclass
+class CanonicalSupplierPayment(CanonicalRecord):
+    supplier_source_key: str = ""
+    amount: Decimal = Decimal("0")
+    method: str = "cash"  # cash | card | transfer | bank_transfer | …
+    reference: str = ""
+    notes: str = ""
+    occurred_at: datetime | None = None
+
+
+@dataclass
 class CanonicalEmployee(CanonicalRecord):
     full_name: str = ""
     phone: str = ""

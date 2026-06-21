@@ -280,6 +280,40 @@ void main() {
     expect(find.text('سيُنشأ منتج جديد'), findsWidgets);
   });
 
+  testWidgets('product picker confirms a pre-suggested candidate with one tap', (tester) async {
+    final repo = _AskRepo([
+      AiQuestion(
+        id: 'line1',
+        type: AiQuestionType.productPicker,
+        prompt: 'راجع البند غير المطابق',
+        config: const {
+          'name': 'كابل يو اس بي سي',
+          'deny_label': 'أنشئ منتجًا جديدًا',
+          'options': [
+            {'value': '23', 'label': 'كابل USB-C — 8.00 د.ل'},
+          ],
+        },
+      ),
+    ]);
+    final viewModel = AiChatViewModel(repo);
+    addTearDown(viewModel.dispose);
+
+    await _pump(tester, viewModel, productSearch: _fakeProductSearch);
+    await viewModel.sendMessage('hi');
+    await tester.pumpAndSettle();
+
+    // The candidate renders as a one-tap option — no need to open the search.
+    expect(find.text('كابل USB-C — 8.00 د.ل'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('ai_product_candidate_line1_23')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('إرسال الإجابة'));
+    await tester.pumpAndSettle();
+
+    expect(repo.resumeCalled, isTrue);
+    expect(repo.resumeAnswers.single.value, 23);
+    expect(repo.resumeAnswers.single.isOther, isFalse);
+  });
+
   testWidgets('product picker resumes with the chosen variant id', (tester) async {
     final repo = _AskRepo([
       AiQuestion(
