@@ -1,4 +1,5 @@
 import json
+from decimal import Decimal
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
@@ -949,6 +950,79 @@ class AskUserFlowTests(TestCase):
         self.assertTrue(
             any(m.get("role") == "tool" and "الوفاق" in (m.get("content") or "") for m in messages)
         )
+
+    def _seed_product_picker(self, *, config_name="كابل يو اس بي سي"):
+        """A paused conversation whose pending question is a product_picker for an
+        unmatched invoice line — returns (conversation, paused)."""
+        conversation = AiConversation.objects.create(user=self.user)
+        AiMessage.objects.create(
+            conversation=conversation, role=AiMessage.ROLE_USER, content="أنشئ أمر شراء"
+        )
+        paused = AiMessage.objects.create(
+            conversation=conversation,
+            role=AiMessage.ROLE_ASSISTANT,
+            status=AiMessage.STATUS_AWAITING_ANSWER,
+            tool_call_id="call_pick",
+            tool_calls=[{"id": "call_pick", "function": {"name": "ask_user", "arguments": "{}"}}],
+            pending_question={
+                "questions": [
+                    {
+                        "id": "line1",
+                        "type": "product_picker",
+                        "prompt": "اختر المنتج",
+                        "config": {"name": config_name},
+                    }
+                ]
+            },
+        )
+        return conversation, paused
+
+    def _resume_picker(self, conversation, paused, answer):
+        with patch("apps.ai.views.RelayControlClient") as mock_client:
+            mock_client.return_value.open_ai_stream.return_value = FakeRelayResponse(
+                fake_sse_lines(["تم"], reasoning="")
+            )
+            response = self.client.post(
+                reverse("ai-chat-resume"),
+                {
+                    "conversation_id": conversation.pk,
+                    "message_id": paused.pk,
+                    "tool_call_id": "call_pick",
+                    "answers": [answer],
+                },
+                format="json",
+            )
+            b"".join(response.streaming_content)
+
+    def test_resume_learns_a_product_alias_from_a_pick(self):
+        # Confirming a product_picker teaches the matcher: the invoice's name becomes
+        # a learned alias of the chosen product.
+        from apps.catalog.models import Product, ProductAlias, ProductVariant
+
+        product = Product.objects.create(name="كابل USB-C")
+        variant = ProductVariant.objects.create(
+            product=product, sku="U1", unit_price=Decimal("8.00"), is_default=True
+        )
+        conversation, paused = self._seed_product_picker()
+        self._resume_picker(
+            conversation,
+            paused,
+            {"question_id": "line1", "type": "product_picker", "value": variant.id, "is_other": False},
+        )
+        self.assertTrue(
+            ProductAlias.objects.filter(product=product, alias="كابل يو اس بي سي").exists()
+        )
+
+    def test_resume_create_new_does_not_learn_an_alias(self):
+        from apps.catalog.models import ProductAlias
+
+        conversation, paused = self._seed_product_picker()
+        self._resume_picker(
+            conversation,
+            paused,
+            {"question_id": "line1", "type": "product_picker", "is_other": True},
+        )
+        self.assertFalse(ProductAlias.objects.exists())
 
     def test_resume_blocked_when_ai_disabled(self):
         conversation, paused, _ = self._seed_paused()

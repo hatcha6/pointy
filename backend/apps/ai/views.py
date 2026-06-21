@@ -1,5 +1,6 @@
 import hashlib
 import json
+import logging
 from uuid import uuid4
 
 from django.http import StreamingHttpResponse
@@ -27,6 +28,8 @@ from .tools import (
     tools_definitions,
     validate_ask_user_spec,
 )
+
+logger = logging.getLogger(__name__)
 
 # How many prior messages to include as context per turn.
 HISTORY_WINDOW = 20
@@ -72,6 +75,42 @@ def _fallback_title(user_text, attachments):
         name = (attachments[0].get("name") or "").strip()
         return (name or "مرفق")[:60]
     return ""
+
+
+def _learn_product_aliases(paused, answers):
+    """Remember the invoice name a user just confirmed for an existing product, so
+    the same wording auto-matches next time. For each ``product_picker`` answer that
+    PICKED an existing variant (not "create new"), records the question's invoice
+    name (``config.name``) as a learned alias of that variant's product. Idempotent
+    and best-effort — a failure here must never break resuming the turn."""
+    spec = paused.pending_question or {}
+    # invoice name keyed by question id, for the product_picker questions only.
+    invoice_names = {
+        question.get("id"): (question.get("config") or {}).get("name")
+        for question in (spec.get("questions") or [])
+        if question.get("type") == "product_picker"
+    }
+    if not invoice_names:
+        return
+    try:
+        from apps.catalog.models import ProductAlias, ProductVariant
+
+        for answer in answers:
+            if not isinstance(answer, dict) or answer.get("is_other"):
+                continue
+            name = (invoice_names.get(answer.get("question_id")) or "").strip()
+            variant_id = answer.get("value")
+            if not name or variant_id in (None, ""):
+                continue
+            variant = (
+                ProductVariant.objects.filter(pk=variant_id)
+                .select_related("product")
+                .first()
+            )
+            if variant is not None:
+                ProductAlias.remember(variant.product, name, source=ProductAlias.Source.INVOICE)
+    except Exception:
+        logger.exception("AI product-alias learning failed")
 
 
 def _ai_idempotency_key(turn_id, name, args):
@@ -718,7 +757,11 @@ class AiChatResumeView(AiChatView):
         if payload.get("declined"):
             result = {"declined": True}
         else:
-            result = {"answers": payload.get("answers") or []}
+            answers = payload.get("answers") or []
+            result = {"answers": answers}
+            # Learn from the confirmation: a product_picker pick teaches us which
+            # product the invoice's name meant, so it auto-matches next time.
+            _learn_product_aliases(paused, answers)
         AiMessage.objects.create(
             conversation=conversation,
             role=AiMessage.ROLE_TOOL,

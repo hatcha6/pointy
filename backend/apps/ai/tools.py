@@ -13,7 +13,6 @@ model can reason about — it gets a clean denial, never the data.
 import json
 import logging
 import re
-import unicodedata
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 
 from django.conf import settings
@@ -901,35 +900,12 @@ def _match_supplier(meta, *, user, supplier_name):
     return {"name": name, "matched": False, "candidates": candidates}
 
 
-# Arabic-aware normalization so the same product matches across spelling drift:
-# NFKD + dropping combining marks folds harakat (and Latin accents); we then strip
-# the tatweel, fold the alef/yaa/taa-marbuta/hamza-carrier variants, and casefold.
-# "بطاريّة مُتنقّلة" / "Bُattery" all collapse to a stable comparison key.
-_AR_FOLD = str.maketrans(
-    {"أ": "ا", "إ": "ا", "آ": "ا", "ٱ": "ا", "ى": "ي", "ئ": "ي", "ؤ": "و", "ة": "ه"}
-)
-
-
-def _search_normalize(text):
-    """Lighter normalization for the DB ``search`` query: drop harakat (combining
-    marks) and tatweel only — NOT the letter folding. ``icontains`` compares the
-    query against the RAW stored name, so folding ة→ه here would *break* the
-    substring match; stripping the invisible diacritics only broadens it."""
-    if not text:
-        return ""
-    s = unicodedata.normalize("NFKD", str(text))
-    s = "".join(c for c in s if not unicodedata.combining(c)).replace("ـ", "")
-    return re.sub(r"\s+", " ", s).strip()
-
-
-def _normalize_term(text):
-    """Full comparison key (applied in Python over returned rows): diacritics +
-    tatweel stripped AND the alef/yaa/taa-marbuta/hamza-carrier variants folded."""
-    if not text:
-        return ""
-    s = _search_normalize(text)
-    s = s.translate(_AR_FOLD).replace("ء", "")
-    return s.casefold()
+# Arabic-aware normalization (shared with the learned-alias model so they agree on
+# what "the same name" is): `_search_normalize` for DB `search` queries (diacritics/
+# tatweel only — folding letters would break icontains against the raw stored name);
+# `_normalize_term` for the Python-side comparison key (adds the letter folding).
+from apps.catalog.search_terms import normalize_term as _normalize_term  # noqa: E402
+from apps.catalog.search_terms import search_normalize as _search_normalize  # noqa: E402
 
 
 def _dedupe_terms(terms):
@@ -978,6 +954,39 @@ def _term_overlap(candidate_key, norm_terms):
     return best
 
 
+def _match_by_alias(norm_terms):
+    """A learned alias (a name a user confirmed for an existing product) that
+    exactly matches one of the search terms → an auto-match on that product's default
+    variant. Returns None if no alias matches. Direct query: aliases are shop-wide
+    product metadata, consistent with the matcher's other direct reads."""
+    if not norm_terms:
+        return None
+    from apps.catalog.models import ProductAlias, ProductVariant
+
+    alias = (
+        ProductAlias.objects.filter(normalized__in=norm_terms)
+        .select_related("product")
+        .first()
+    )
+    if alias is None:
+        return None
+    variant = (
+        ProductVariant.objects.filter(product_id=alias.product_id, is_default=True)
+        .order_by("id")
+        .first()
+    )
+    if variant is None:
+        return None
+    return {
+        "matched": True,
+        "match_by": "alias",
+        "variant_id": variant.id,
+        "product_id": alias.product_id,
+        "product_name": alias.product.name,
+        "current_price": str(variant.unit_price),
+    }
+
+
 def _match_invoice_line(products_meta, variants_meta, *, user, terms, barcode):
     """Resolve one invoice line to an existing product variant, searching across all
     of the model's multilingual ``terms`` (Arabic/English/mixed). Auto-match stays
@@ -999,6 +1008,15 @@ def _match_invoice_line(products_meta, variants_meta, *, user, terms, barcode):
 
     norm_terms = [_normalize_term(term) for term in terms]
     norm_terms = [key for key in norm_terms if key]
+
+    # A name a user previously CONFIRMED for an existing product (a learned alias)
+    # that exactly matches one of the terms → a safe auto-match, so the same
+    # supplier wording is never re-asked. This is the feedback loop that makes
+    # matching adapt to however each shop/wholesaler names products.
+    alias_match = _match_by_alias(norm_terms)
+    if alias_match is not None:
+        return alias_match
+
     candidates = {}  # variant_id -> candidate (deduped across queries)
     for query in _search_queries(terms):
         rows = _list_results(products_meta, user=user, params={"search": query}) or []

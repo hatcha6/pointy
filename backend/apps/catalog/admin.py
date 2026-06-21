@@ -2,6 +2,7 @@ from django.contrib import admin
 
 from .models import (
     Product,
+    ProductAlias,
     ProductCategory,
     ProductUnit,
     ProductVariant,
@@ -9,6 +10,14 @@ from .models import (
     VariantOption,
     VariantOptionValue,
 )
+
+
+@admin.register(ProductAlias)
+class ProductAliasAdmin(admin.ModelAdmin):
+    list_display = ("alias", "product", "source", "created_at")
+    list_filter = ("source",)
+    search_fields = ("alias", "normalized", "product__name")
+    autocomplete_fields = ("product",)
 
 
 class ProductVariantInline(admin.TabularInline):

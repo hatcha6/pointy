@@ -464,6 +464,51 @@ class MatchInvoiceProductsTests(_PurchasingFixtures):
             [c["variant_id"] for c in line["candidates"]][:1], [variant.id]
         )
 
+    def test_learned_alias_auto_matches_a_differently_named_line(self):
+        # The feedback loop: once a user confirms "Power Bank" means this product,
+        # the same wording auto-matches next time (no product_picker re-ask).
+        from apps.catalog.models import ProductAlias
+
+        variant = self._sellable(name="بطارية متنقلة", sku="BAT-A", price="90.00")
+        ProductAlias.remember(variant.product, "Power Bank")
+        result = match_invoice_products(
+            user=self.manager,
+            lines=[{"name": "Power Bank", "quantity": 1, "unit_cost": "70.00"}],
+        )
+        line = result["lines"][0]
+        self.assertTrue(line["matched"], line)
+        self.assertEqual(line["variant_id"], variant.id)
+        self.assertEqual(line["match_by"], "alias")
+
+    def test_alias_substring_surfaces_as_candidate_not_auto_match(self):
+        from apps.catalog.models import ProductAlias
+
+        variant = self._sellable(name="بطارية متنقلة", sku="BAT-B", price="90.00")
+        ProductAlias.remember(variant.product, "Portable Power Bank XL")
+        result = match_invoice_products(
+            user=self.manager,
+            lines=[{"name": "Power Bank", "quantity": 1, "unit_cost": "70.00"}],
+        )
+        line = result["lines"][0]
+        self.assertFalse(line["matched"])
+        self.assertIn(variant.id, [c["variant_id"] for c in line["candidates"]])
+
+    def test_remember_dedupes_and_skips_redundant_aliases(self):
+        from apps.catalog.models import ProductAlias
+
+        variant = self._sellable(name="بطارية متنقلة", sku="BAT-C", price="90.00")
+        product = variant.product
+        # Blank, and a name that normalizes to the product's own name → not stored.
+        self.assertIsNone(ProductAlias.remember(product, "   "))
+        self.assertIsNone(ProductAlias.remember(product, "بطاريّة مُتنقلة"))
+        # A genuine alias is stored once (idempotent), with a normalized key.
+        first = ProductAlias.remember(product, "Power Bank")
+        again = ProductAlias.remember(product, "power bank")  # same normalized
+        self.assertIsNotNone(first)
+        self.assertEqual(first.pk, again.pk)
+        self.assertEqual(ProductAlias.objects.filter(product=product).count(), 1)
+        self.assertTrue(first.normalized)
+
     def test_three_decimal_cost_is_normalized_to_two_places(self):
         # A 3-decimal-currency invoice (Libyan dinar prints 75.000) must come back
         # as a 2dp cost — PurchaseLine.unit_cost is decimal_places=2 and would

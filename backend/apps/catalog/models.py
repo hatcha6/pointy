@@ -256,6 +256,70 @@ class Product(TimeStampedModel):
         return self.name
 
 
+class ProductAlias(TimeStampedModel):
+    """A learned alternate name for a product. When a user confirms which product an
+    imported invoice line refers to (via the AI product picker), the invoice's name
+    is remembered here so the same supplier wording auto-matches next time — every
+    shop and wholesaler names products differently, and this makes matching adapt."""
+
+    class Source(models.TextChoices):
+        INVOICE = "invoice", "Invoice match"
+        MANUAL = "manual", "Manual"
+
+    product = models.ForeignKey(
+        Product,
+        on_delete=models.CASCADE,
+        related_name="aliases",
+    )
+    alias = models.CharField(max_length=255)
+    # The normalized comparison key (Arabic-folded, diacritic-stripped, casefolded),
+    # indexed so the matcher can look up an exact alias hit cheaply.
+    normalized = models.CharField(max_length=255, db_index=True)
+    source = models.CharField(
+        max_length=16,
+        choices=Source.choices,
+        default=Source.MANUAL,
+    )
+
+    class Meta:
+        ordering = ["alias"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["product", "normalized"],
+                name="unique_product_alias",
+            )
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.alias} → {self.product_id}"
+
+    def save(self, *args, **kwargs):
+        from .search_terms import normalize_term
+
+        self.alias = (self.alias or "").strip()[:255]
+        if not self.normalized:
+            self.normalized = normalize_term(self.alias)
+        super().save(*args, **kwargs)
+
+    @classmethod
+    def remember(cls, product, text, *, source=Source.INVOICE):
+        """Record ``text`` as an alias of ``product`` (idempotent). No-op when the
+        text is blank or already normalizes to the product's own name or an existing
+        alias — so we never store a redundant or empty synonym."""
+        from .search_terms import normalize_term
+
+        text = (text or "").strip()
+        normalized = normalize_term(text)
+        if not normalized or normalized == normalize_term(product.name):
+            return None
+        obj, _ = cls.objects.get_or_create(
+            product=product,
+            normalized=normalized,
+            defaults={"alias": text[:255], "source": source},
+        )
+        return obj
+
+
 class ProductUnitQuerySet(models.QuerySet):
     def active(self):
         return self.filter(unit__is_active=True)

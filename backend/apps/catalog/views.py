@@ -180,6 +180,9 @@ class ProductViewSet(viewsets.ModelViewSet):
         "variants__barcode",
         "variants__name",
         "name",
+        # Learned alternate names (e.g. a supplier's wording on an invoice), so a
+        # search by that wording finds the product it was confirmed to mean.
+        "aliases__alias",
     )
     ordering_fields = ("name", "created_at", "updated_at")
 
