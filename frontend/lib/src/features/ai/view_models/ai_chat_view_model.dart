@@ -337,6 +337,8 @@ class AiChatViewModel extends ChangeNotifier {
           :final userMessageId,
           :final usage,
           :final title,
+          :final sources,
+          :final webSearched,
         ):
           if (conversationId != 0) {
             _conversationId = conversationId;
@@ -349,6 +351,9 @@ class AiChatViewModel extends ChangeNotifier {
           }
           if (title.isNotEmpty) {
             _applyConversationTitle(_conversationId, title);
+          }
+          if (webSearched || sources.isNotEmpty) {
+            assistant.attachSources(sources, webSearched: webSearched);
           }
         case AiChatAskUser(
           :final conversationId,

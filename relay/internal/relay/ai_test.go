@@ -422,6 +422,123 @@ func TestCleanTitle(t *testing.T) {
 	}
 }
 
+// recordingOpenRouterServer captures the streaming request body so a test can
+// assert which plugins were attached; non-streaming (classifier) calls return
+// classifierReply.
+func recordingOpenRouterServer(t *testing.T, classifierReply string, captured *string) *httptest.Server {
+	t.Helper()
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.HasSuffix(r.URL.Path, "/chat/completions") {
+			http.NotFound(w, r)
+			return
+		}
+		raw, _ := io.ReadAll(r.Body)
+		var body struct {
+			Model  string `json:"model"`
+			Stream bool   `json:"stream"`
+		}
+		_ = json.Unmarshal(raw, &body)
+		if !body.Stream {
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"choices": []map[string]any{
+					{"message": map[string]any{"role": "assistant", "content": classifierReply}},
+				},
+			})
+			return
+		}
+		*captured = string(raw)
+		w.Header().Set("Content-Type", "text/event-stream")
+		flusher, _ := w.(http.Flusher)
+		for _, chunk := range []string{
+			fmt.Sprintf(`data: {"model":%q,"choices":[{"delta":{"content":"ok"},"finish_reason":"stop"}]}`, body.Model),
+			`data: [DONE]`,
+		} {
+			_, _ = io.WriteString(w, chunk+"\n\n")
+			if flusher != nil {
+				flusher.Flush()
+			}
+		}
+	}))
+}
+
+func webSearchStreamBody(t *testing.T, classifierReply string, configure func(*HTTPServer), reqBody string) string {
+	t.Helper()
+	now := time.Date(2026, 6, 2, 12, 0, 0, 0, time.UTC)
+	store, provisioned := provisionAIInstallation(t, now)
+	var captured string
+	openrouter := recordingOpenRouterServer(t, classifierReply, &captured)
+	defer openrouter.Close()
+	server := newAITestServer(t, store, openrouter.URL)
+	server.AIWebSearchEnabled = true
+	if configure != nil {
+		configure(&server)
+	}
+	request := httptest.NewRequest(http.MethodPost, "http://relay.test/v1/ai/chat", strings.NewReader(reqBody))
+	request.Header.Set(AccessTokenHeader, provisioned.AccessToken)
+	recorder := httptest.NewRecorder()
+	server.ServeHTTP(recorder, request)
+	return captured
+}
+
+func TestHandleAIChatAddsWebSearchPluginWhenNeeded(t *testing.T) {
+	body := webSearchStreamBody(
+		t, "yes", nil,
+		`{"messages":[{"role":"user","content":"كم سعر صرف الدولار اليوم؟"}]}`,
+	)
+	if !strings.Contains(body, `"id":"web"`) {
+		t.Fatalf("expected the web plugin to be attached, got %q", body)
+	}
+	// The search_prompt suppresses inline citations (the app shows favicons).
+	if !strings.Contains(body, `"search_prompt"`) {
+		t.Fatalf("expected a citation-suppressing search_prompt, got %q", body)
+	}
+}
+
+func TestHandleAIChatCarriesWebSearchOntoContinuation(t *testing.T) {
+	// A continuation doesn't classify — it rides the web decision carried from its
+	// user turn, so an agentic web+tools flow keeps searching on the answer round.
+	body := webSearchStreamBody(
+		t, "no", nil,
+		`{"messages":[{"role":"user","content":"x"}],"count_usage":false,"web_search":true}`,
+	)
+	if !strings.Contains(body, `"id":"web"`) {
+		t.Fatalf("expected the web plugin carried onto the continuation, got %q", body)
+	}
+}
+
+func TestHandleAIChatSkipsWebSearchWhenNotNeeded(t *testing.T) {
+	body := webSearchStreamBody(
+		t, "no", nil,
+		`{"messages":[{"role":"user","content":"كم مبيعات اليوم؟"}]}`,
+	)
+	if strings.Contains(body, `"id":"web"`) {
+		t.Fatalf("did not expect the web plugin, got %q", body)
+	}
+}
+
+func TestHandleAIChatSkipsWebSearchOnContinuation(t *testing.T) {
+	// A continuation never web-searches (and the classifier isn't even consulted).
+	body := webSearchStreamBody(
+		t, "yes", nil,
+		`{"messages":[{"role":"user","content":"x"}],"count_usage":false}`,
+	)
+	if strings.Contains(body, `"id":"web"`) {
+		t.Fatalf("a continuation must not web-search, got %q", body)
+	}
+}
+
+func TestHandleAIChatSkipsWebSearchWhenDisabled(t *testing.T) {
+	body := webSearchStreamBody(
+		t, "yes",
+		func(s *HTTPServer) { s.AIWebSearchEnabled = false },
+		`{"messages":[{"role":"user","content":"كم سعر الذهب؟"}]}`,
+	)
+	if strings.Contains(body, `"id":"web"`) {
+		t.Fatalf("web search disabled, got %q", body)
+	}
+}
+
 func TestHandleAIChatRejectsTooManyImages(t *testing.T) {
 	now := time.Date(2026, 6, 2, 12, 0, 0, 0, time.UTC)
 	store, provisioned := provisionAIInstallation(t, now)

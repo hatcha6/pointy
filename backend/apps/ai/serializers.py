@@ -19,6 +19,8 @@ class AiMessageSerializer(serializers.ModelSerializer):
             "tool_call_id",
             "pending_question",
             "status",
+            "sources",
+            "web_searched",
             "model",
             "tier",
             "prompt_tokens",

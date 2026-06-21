@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:gpt_markdown/gpt_markdown.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../data/models/ai_chat.dart';
@@ -203,18 +204,18 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
   }
 
   /// A tapped link inside an assistant reply. In-app `pointy://` links route via
-  /// the injected handler; anything else (a plain web URL) is left alone rather
-  /// than opening a browser.
+  /// the injected handler; a plain web URL (e.g. a web-search source citation)
+  /// opens in the external browser.
   void _handleAssistantLink(String url) {
-    final handler = widget.onOpenAiLink;
-    if (handler == null) {
-      return;
-    }
     final link = AiDeepLink.tryParse(url);
-    if (link == null) {
+    if (link != null) {
+      final handler = widget.onOpenAiLink;
+      if (handler != null) {
+        unawaited(_openAssistantLink(handler, link));
+      }
       return;
     }
-    unawaited(_openAssistantLink(handler, link));
+    unawaited(openSourceUrl(context, url));
   }
 
   Future<void> _openAssistantLink(AiLinkHandler handler, AiDeepLink link) async {
@@ -620,13 +621,21 @@ class _AssistantMessage extends StatelessWidget {
               ),
             ],
             if (showCopy)
-              _MessageActions(
-                actions: [
-                  _MessageAction(
-                    icon: Icons.copy_rounded,
-                    tooltip: l10n.aiAssistantActionCopy,
-                    onTap: onCopy,
+              Row(
+                children: [
+                  _MessageActions(
+                    actions: [
+                      _MessageAction(
+                        icon: Icons.copy_rounded,
+                        tooltip: l10n.aiAssistantActionCopy,
+                        onTap: onCopy,
+                      ),
+                    ],
                   ),
+                  if (message.webSearched || message.sources.isNotEmpty) ...[
+                    SizedBox(width: spacing.xs),
+                    _SourcesIndicator(message: message),
+                  ],
                 ],
               ),
           ],
@@ -1531,6 +1540,289 @@ class _AnswerSummary extends StatelessWidget {
       case AiQuestionType.unknown:
         return '${answer.value ?? ''}';
     }
+  }
+}
+
+/// Open a web URL (a source citation) in the external browser; fall back to
+/// copying it so a source is never a silent dead end.
+Future<void> openSourceUrl(BuildContext context, String url) async {
+  final uri = Uri.tryParse(url);
+  if (uri == null || (uri.scheme != 'http' && uri.scheme != 'https')) {
+    return;
+  }
+  var launched = false;
+  try {
+    launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
+  } catch (_) {
+    launched = false;
+  }
+  if (!launched && context.mounted) {
+    await Clipboard.setData(ClipboardData(text: url));
+    if (context.mounted) {
+      final l10n = AppLocalizations.of(context)!;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.aiAssistantLinkCopied)),
+      );
+    }
+  }
+}
+
+/// A small cluster of overlapping site favicons next to the copy action — the
+/// "we searched the web" signal. Tap to open a sheet of the sources. Falls back to
+/// a single globe when the search returned no per-site citations.
+class _SourcesIndicator extends StatelessWidget {
+  const _SourcesIndicator({required this.message});
+
+  final AiMessage message;
+
+  static const double _avatar = 22;
+  static const double _step = 14; // visible width of each overlapped avatar
+  static const int _maxShown = 3;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.pointyColors;
+    final l10n = AppLocalizations.of(context)!;
+    final sources = message.sources;
+    final hasSources = sources.isNotEmpty;
+
+    final tiles = <Widget>[];
+    if (hasSources) {
+      final shown = sources.take(_maxShown).toList();
+      final extra = sources.length - shown.length;
+      for (var i = 0; i < shown.length; i++) {
+        tiles.add(Positioned(
+          left: i * _step,
+          child: _FaviconAvatar(source: shown[i], size: _avatar, ringColor: colors.surface),
+        ));
+      }
+      if (extra > 0) {
+        tiles.add(Positioned(
+          left: shown.length * _step,
+          child: _SourceBadge(
+            label: '+$extra',
+            size: _avatar,
+            ringColor: colors.surface,
+          ),
+        ));
+      }
+    } else {
+      // Web searched but no citations came back → a generic globe.
+      tiles.add(_SourceBadge(
+        icon: Icons.public,
+        size: _avatar,
+        ringColor: colors.surface,
+      ));
+    }
+
+    final clusterCount = hasSources
+        ? (sources.length > _maxShown ? _maxShown + 1 : sources.length)
+        : 1;
+    final width = _avatar + (clusterCount - 1) * _step;
+
+    return Tooltip(
+      message: l10n.aiAssistantSearchedWeb,
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(_avatar),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(_avatar),
+          onTap: hasSources
+              ? () => showModalBottomSheet<void>(
+                    context: context,
+                    showDragHandle: true,
+                    builder: (_) => _SourcesSheet(sources: sources),
+                  )
+              : null,
+          child: Padding(
+            padding: const EdgeInsets.all(2),
+            // The favicon cluster reads left-to-right regardless of text direction.
+            child: Directionality(
+              textDirection: TextDirection.ltr,
+              child: SizedBox(
+                width: width,
+                height: _avatar,
+                child: Stack(children: tiles),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// A circular site favicon with a ring so overlapping avatars stay distinct;
+/// falls back to a globe glyph when the favicon can't load.
+class _FaviconAvatar extends StatelessWidget {
+  const _FaviconAvatar({
+    required this.source,
+    required this.size,
+    required this.ringColor,
+  });
+
+  final AiSource source;
+  final double size;
+  final Color ringColor;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.pointyColors;
+    final favicon = source.faviconUrl;
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: colors.surfaceSunken,
+        border: Border.all(color: ringColor, width: 1.5),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: favicon.isEmpty
+          ? Icon(Icons.public, size: size * 0.6, color: colors.mutedInk)
+          : Image.network(
+              favicon,
+              fit: BoxFit.cover,
+              errorBuilder: (_, _, _) =>
+                  Icon(Icons.public, size: size * 0.6, color: colors.mutedInk),
+            ),
+    );
+  }
+}
+
+/// A ringed circle showing either a "+N" overflow count or a fallback glyph.
+class _SourceBadge extends StatelessWidget {
+  const _SourceBadge({
+    this.label,
+    this.icon,
+    required this.size,
+    required this.ringColor,
+  });
+
+  final String? label;
+  final IconData? icon;
+  final double size;
+  final Color ringColor;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.pointyColors;
+    return Container(
+      width: size,
+      height: size,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: colors.surfaceSunken,
+        border: Border.all(color: ringColor, width: 1.5),
+      ),
+      child: icon != null
+          ? Icon(icon, size: size * 0.55, color: colors.mutedInk)
+          : Text(
+              label ?? '',
+              style: TextStyle(
+                fontSize: size * 0.4,
+                fontWeight: FontWeight.w700,
+                color: colors.mutedInk,
+              ),
+            ),
+    );
+  }
+}
+
+/// The tap-through sheet listing every web source the reply consulted.
+class _SourcesSheet extends StatelessWidget {
+  const _SourcesSheet({required this.sources});
+
+  final List<AiSource> sources;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.pointyColors;
+    final spacing = AdaptiveSpacing.of(context);
+    final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context)!;
+
+    return SafeArea(
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(spacing.md, 0, spacing.md, spacing.md),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.public, size: 18, color: colors.primary),
+                SizedBox(width: spacing.xs),
+                Text(
+                  l10n.aiAssistantSourcesTitle,
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+            SizedBox(height: spacing.sm),
+            Flexible(
+              child: ListView.separated(
+                shrinkWrap: true,
+                itemCount: sources.length,
+                separatorBuilder: (_, _) => SizedBox(height: spacing.xs),
+                itemBuilder: (context, index) {
+                  final source = sources[index];
+                  return Material(
+                    color: colors.surfaceSunken,
+                    borderRadius: BorderRadius.circular(12),
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(12),
+                      onTap: () => openSourceUrl(context, source.url),
+                      child: Padding(
+                        padding: EdgeInsets.all(spacing.sm),
+                        child: Row(
+                          children: [
+                            _FaviconAvatar(
+                              source: source,
+                              size: 28,
+                              ringColor: colors.line,
+                            ),
+                            SizedBox(width: spacing.sm),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    source.title,
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: theme.textTheme.bodyMedium?.copyWith(
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  if (source.host.isNotEmpty)
+                                    Text(
+                                      source.host,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: theme.textTheme.bodySmall?.copyWith(
+                                        color: colors.mutedInk,
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                            Icon(Icons.open_in_new, size: 16, color: colors.mutedInk),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 

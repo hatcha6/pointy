@@ -135,6 +135,7 @@ class RelayControlClient:
         temperature=None,
         route_tier="",
         want_title=False,
+        web_search=False,
     ):
         """Open the relay AI chat endpoint and return the raw streaming response.
 
@@ -163,6 +164,10 @@ class RelayControlClient:
         # First turn only: ask the relay to name the conversation (returned in done).
         if want_title:
             body["want_title"] = True
+        # Carry the user turn's web-search decision onto its continuations so an
+        # agentic web+tools flow keeps searching on the round that combines them.
+        if web_search:
+            body["web_search"] = True
         if max_tokens:
             body["max_tokens"] = max_tokens
         if temperature is not None:

@@ -290,6 +290,12 @@ type HTTPServer struct {
 	AIHTTPClient     *http.Client
 	// Vision/multimodal model used when a prompt carries attachments.
 	AIVisionModel string
+	// AIWebSearchEnabled turns on OpenRouter's web-search plugin for user turns
+	// whose query needs current/external info (decided by a cheap classifier, so it
+	// fires only when necessary — never on the shop's own-data questions).
+	// AIWebSearchMaxResults caps results per search (cost).
+	AIWebSearchEnabled    bool
+	AIWebSearchMaxResults int
 	// Per-shop usage limits (fixed window, TTL-reset) + the image cap. Surfaced
 	// to the app for the usage ring and enforced here.
 	AILimit5H            ratelimit.Policy

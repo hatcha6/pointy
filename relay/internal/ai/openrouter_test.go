@@ -113,6 +113,29 @@ func TestConsumeSSEEmitsTextThenToolCallsInOrder(t *testing.T) {
 	}
 }
 
+func TestConsumeSSECollectsWebSearchSources(t *testing.T) {
+	sse := `data: {"choices":[{"delta":{"content":"The price rose.","annotations":[{"type":"url_citation","url_citation":{"url":"https://example.com/a","title":"Site A"}}]}}]}` + "\n\n" +
+		`data: {"choices":[{"delta":{"annotations":[{"type":"url_citation","url_citation":{"url":"https://example.com/a","title":"Site A"}},{"type":"url_citation","url_citation":{"url":"https://news.test/b","title":"Site B"}}]}}]}` + "\n\n" +
+		`data: {"choices":[{"delta":{},"finish_reason":"stop"}]}` + "\n\n" +
+		"data: [DONE]\n\n"
+
+	events := collectEvents(t, sse)
+	done := events[len(events)-1]
+	if done.Type != EventDone {
+		t.Fatalf("expected a done event last, got %#v", done)
+	}
+	// Two distinct sources; the repeated URL is de-duplicated.
+	if len(done.Sources) != 2 {
+		t.Fatalf("expected 2 deduped sources, got %#v", done.Sources)
+	}
+	if done.Sources[0].URL != "https://example.com/a" || done.Sources[0].Title != "Site A" {
+		t.Fatalf("unexpected first source: %#v", done.Sources[0])
+	}
+	if done.Sources[1].URL != "https://news.test/b" {
+		t.Fatalf("unexpected second source: %#v", done.Sources[1])
+	}
+}
+
 func TestToWireMessagesCarriesToolFields(t *testing.T) {
 	msgs := []Message{
 		{

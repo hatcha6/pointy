@@ -54,6 +54,8 @@ dependencies:
   usb_serial: ^0.5.2
   image_picker: ^1.2.2
   gpt_markdown: ^1.1.7
+  # Open web-search source citations (http/https links in AI replies) externally.
+  url_launcher: ^6.3.1
 
 dev_dependencies:
   flutter_test:

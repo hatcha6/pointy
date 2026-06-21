@@ -30,7 +30,10 @@ class FakeRelayResponse:
         self.closed = True
 
 
-def fake_sse_lines(text_chunks, *, model="test/model", tier="smart", reasoning="thinking", title=None):
+def fake_sse_lines(
+    text_chunks, *, model="test/model", tier="smart", reasoning="thinking", title=None,
+    web_search=False, sources=None,
+):
     lines = []
     if reasoning:
         lines.append(b"event: reasoning\n")
@@ -47,13 +50,19 @@ def fake_sse_lines(text_chunks, *, model="test/model", tier="smart", reasoning="
     }
     if title is not None:
         done["title"] = title
+    if web_search:
+        done["web_search"] = True
+    if sources is not None:
+        done["sources"] = sources
     lines.append(b"event: done\n")
     lines.append(("data: " + json.dumps(done) + "\n").encode("utf-8"))
     lines.append(b"\n")
     return lines
 
 
-def fake_tool_call_sse(name="query_resource", arguments='{"resource":"orders"}', route_tier="smart"):
+def fake_tool_call_sse(
+    name="query_resource", arguments='{"resource":"orders"}', route_tier="smart", web_search=False
+):
     """A relay turn that asks for one tool call, then done(finish=tool_calls)."""
     tool_calls = [
         {
@@ -63,6 +72,8 @@ def fake_tool_call_sse(name="query_resource", arguments='{"resource":"orders"}',
         }
     ]
     done = {"model": "m", "tier": route_tier, "route_tier": route_tier, "finish_reason": "tool_calls"}
+    if web_search:
+        done["web_search"] = True
     return [
         b"event: tool_calls\n",
         ("data: " + json.dumps({"tool_calls": tool_calls}) + "\n").encode("utf-8"),
@@ -218,6 +229,47 @@ class AiChatViewTests(TestCase):
         # No AI title → the attachment name is the readable fallback.
         conversation = AiConversation.objects.get(user=self.user)
         self.assertEqual(conversation.title, "فاتورة.png")
+
+    def test_web_search_sources_are_persisted_and_streamed(self):
+        with patch("apps.ai.views.RelayControlClient") as mock_client:
+            mock_client.return_value.open_ai_stream.return_value = FakeRelayResponse(
+                fake_sse_lines(
+                    ["ارتفع سعر الذهب"],
+                    reasoning="",
+                    web_search=True,
+                    sources=[{"url": "https://ex.com/a", "title": "Site A"}],
+                )
+            )
+            response = self.client.post(
+                reverse("ai-chat"), {"message": "كم سعر الذهب اليوم؟"}, format="json"
+            )
+            body = b"".join(response.streaming_content).decode("utf-8")
+
+        self.assertIn('"web_search": true', body)
+        self.assertIn("https://ex.com/a", body)
+        message = AiConversation.objects.get(user=self.user).messages.get(
+            role=AiMessage.ROLE_ASSISTANT
+        )
+        self.assertTrue(message.web_searched)
+        self.assertEqual(message.sources, [{"url": "https://ex.com/a", "title": "Site A"}])
+
+    def test_web_search_decision_is_carried_onto_continuations(self):
+        with patch("apps.ai.views.RelayControlClient") as mock_client:
+            mock_client.return_value.open_ai_stream.side_effect = [
+                FakeRelayResponse(fake_tool_call_sse(web_search=True)),
+                FakeRelayResponse(fake_sse_lines(["تم"], reasoning="")),
+            ]
+            with patch("apps.ai.views.execute_tool", return_value={"ok": True, "data": {}}):
+                response = self.client.post(
+                    reverse("ai-chat"), {"message": "قارن سعر الذهب بمنتجاتي"}, format="json"
+                )
+                b"".join(response.streaming_content)
+
+        calls = mock_client.return_value.open_ai_stream.call_args_list
+        # The user turn is classified by the relay (Django sends no hint); the
+        # continuation rides the carried decision.
+        self.assertFalse(calls[0].kwargs.get("web_search", False))
+        self.assertTrue(calls[1].kwargs["web_search"])
 
     def test_blocks_when_ai_disabled(self):
         RelayInstallation.objects.update(ai_enabled=False)

@@ -94,6 +94,7 @@ class _PreviewHostState extends State<_PreviewHost> {
       actionsMode: widget.screen == 'actions',
       pickerMode: widget.screen == 'po',
       linksMode: widget.screen == 'links',
+      webMode: widget.screen == 'web',
     ),
     picker: _FakeAttachmentPicker(),
   );
@@ -138,6 +139,9 @@ class _PreviewHostState extends State<_PreviewHost> {
       case 'links':
         // A reply peppered with in-app deep links (tap to navigate).
         await _viewModel.sendMessage('أين أجد منتج القهوة وآخر فاتورة؟');
+      case 'web':
+        // A web-searched reply with source favicons next to the copy action.
+        await _viewModel.sendMessage('كم سعر الذهب اليوم؟');
       default:
         await _viewModel.sendMessage('كيف أضيف منتجًا جديدًا إلى المتجر؟');
     }
@@ -198,6 +202,7 @@ class _FakeAiChatRepository extends AiChatRepository {
     this.actionsMode = false,
     this.pickerMode = false,
     this.linksMode = false,
+    this.webMode = false,
   }) : super(PosApiService());
 
   /// When set, the scripted reply asks an interactive question (all 5 types)
@@ -215,6 +220,10 @@ class _FakeAiChatRepository extends AiChatRepository {
   /// When set, the scripted reply contains in-app deep links (pointy://…).
   final bool linksMode;
 
+  /// When set, the scripted reply used web search — done carries sources, so the
+  /// favicon indicator + sources sheet can be screenshotted.
+  final bool webMode;
+
   @override
   Stream<AiChatEvent> streamChat({
     int? conversationId,
@@ -231,6 +240,30 @@ class _FakeAiChatRepository extends AiChatRepository {
     }
     if (pickerMode) {
       yield* _pickerScript();
+      return;
+    }
+    if (webMode) {
+      const reply =
+          'حسب آخر البيانات، ارتفع سعر الذهب عالميًا اليوم بنحو 1.2% ليصل إلى '
+          'حوالي 2,380 دولارًا للأونصة، مدفوعًا بتراجع الدولار وترقّب قرارات الفائدة.';
+      for (final word in reply.split(' ')) {
+        await Future<void>.delayed(const Duration(milliseconds: 35));
+        yield AiChatDelta('$word ');
+      }
+      yield AiChatDone(
+        conversationId: 1,
+        messageId: 2,
+        userMessageId: 1,
+        model: 'preview/model',
+        usage: _fakeUsage(fiveUsed: 24, weekUsed: 97),
+        webSearched: true,
+        sources: const [
+          AiSource(url: 'https://www.reuters.com/markets/gold', title: 'Reuters — Gold rises as dollar slips'),
+          AiSource(url: 'https://www.bloomberg.com/gold', title: 'Bloomberg — Precious metals'),
+          AiSource(url: 'https://goldprice.org/', title: 'GoldPrice.org — Live spot price'),
+          AiSource(url: 'https://www.kitco.com/', title: 'Kitco — Gold market news'),
+        ],
+      );
       return;
     }
     if (linksMode) {

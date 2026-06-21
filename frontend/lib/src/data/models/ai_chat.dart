@@ -353,6 +353,45 @@ class AiAnswer {
   };
 }
 
+/// One web-search source the assistant consulted for a reply — shown as a favicon
+/// avatar that opens the page when tapped.
+class AiSource {
+  const AiSource({required this.url, required this.title});
+
+  final String url;
+  final String title;
+
+  /// The site host, used for the displayed name and the favicon lookup.
+  String get host {
+    final h = Uri.tryParse(url)?.host ?? '';
+    return h.startsWith('www.') ? h.substring(4) : h;
+  }
+
+  /// A favicon for the source's host via Google's public service (with a generic
+  /// fallback rendered by the UI when it fails to load).
+  String get faviconUrl {
+    final h = Uri.tryParse(url)?.host ?? '';
+    return h.isEmpty
+        ? ''
+        : 'https://www.google.com/s2/favicons?domain=$h&sz=64';
+  }
+
+  factory AiSource.fromJson(Map<String, Object?> json) => AiSource(
+    url: (json['url'] as String?) ?? '',
+    title: (json['title'] as String?)?.trim().isNotEmpty == true
+        ? json['title'] as String
+        : ((json['url'] as String?) ?? ''),
+  );
+
+  static List<AiSource> listFrom(Object? raw) => raw is List
+      ? raw
+            .whereType<Map<String, Object?>>()
+            .map(AiSource.fromJson)
+            .where((s) => s.url.isNotEmpty)
+            .toList(growable: false)
+      : const [];
+}
+
 class AiMessage extends ChangeNotifier {
   AiMessage({
     required this.role,
@@ -364,7 +403,10 @@ class AiMessage extends ChangeNotifier {
     this.attachments = const [],
     this.pendingQuestion,
     List<AiToolRun>? toolRuns,
-  }) : toolRuns = toolRuns ?? <AiToolRun>[];
+    List<AiSource>? sources,
+    this.webSearched = false,
+  }) : toolRuns = toolRuns ?? <AiToolRun>[],
+       sources = sources ?? <AiSource>[];
 
   /// Mutable: assigned from the `done` event for a freshly-sent turn so the
   /// view model can later target it for edit/retry rewinds.
@@ -386,6 +428,14 @@ class AiMessage extends ChangeNotifier {
 
   /// Tools the assistant ran while producing this turn (transient status chips).
   final List<AiToolRun> toolRuns;
+
+  /// Web-search sources the assistant consulted (favicon avatars). Mutable so the
+  /// `done` event can attach them after the reply streamed.
+  List<AiSource> sources;
+
+  /// Whether this reply used a live web search — drives the indicator even when no
+  /// per-site sources came back.
+  bool webSearched;
 
   /// An interactive question the assistant is asking on this turn (ask_user). The
   /// turn pauses until the user answers; answering resumes the agentic loop.
@@ -453,6 +503,20 @@ class AiMessage extends ChangeNotifier {
     }
     isStreaming = false;
     notifyListeners();
+  }
+
+  /// Attach the web-search sources (from the `done` event) and notify, so the
+  /// favicon indicator appears on the settled reply.
+  void attachSources(List<AiSource> newSources, {bool webSearched = false}) {
+    if (webSearched) {
+      this.webSearched = true;
+    }
+    if (newSources.isNotEmpty) {
+      sources = newSources;
+    }
+    if (webSearched || newSources.isNotEmpty) {
+      notifyListeners();
+    }
   }
 
   /// The assistant asked the user something — attach the question and stop
@@ -523,6 +587,8 @@ class AiMessage extends ChangeNotifier {
       attachments: attachments,
       pendingQuestion: pending,
       toolRuns: toolRuns,
+      sources: AiSource.listFrom(json['sources']),
+      webSearched: json['web_searched'] == true,
     );
   }
 }
@@ -652,6 +718,8 @@ class AiChatDone extends AiChatEvent {
     this.model = '',
     this.usage,
     this.title = '',
+    this.sources = const [],
+    this.webSearched = false,
   });
 
   final int conversationId;
@@ -665,6 +733,11 @@ class AiChatDone extends AiChatEvent {
   /// The conversation's name (AI-generated on the first turn, else a fallback), so
   /// the history list reflects it without a refetch. Empty when unchanged.
   final String title;
+
+  /// Web-search sources consulted for this reply (favicon avatars), and whether
+  /// the web was searched at all (for the indicator when no sources came back).
+  final List<AiSource> sources;
+  final bool webSearched;
 }
 
 class AiChatError extends AiChatEvent {

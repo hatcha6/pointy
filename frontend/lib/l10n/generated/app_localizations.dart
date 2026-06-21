@@ -19002,6 +19002,24 @@ abstract class AppLocalizations {
   /// **'تعذّر فتح الصفحة المطلوبة.'**
   String get aiAssistantLinkUnavailable;
 
+  /// No description provided for @aiAssistantLinkCopied.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم نسخ الرابط'**
+  String get aiAssistantLinkCopied;
+
+  /// No description provided for @aiAssistantSearchedWeb.
+  ///
+  /// In ar, this message translates to:
+  /// **'بحث في الويب'**
+  String get aiAssistantSearchedWeb;
+
+  /// No description provided for @aiAssistantSourcesTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'المصادر'**
+  String get aiAssistantSourcesTitle;
+
   /// No description provided for @aiAssistantAskUserRequired.
   ///
   /// In ar, this message translates to:

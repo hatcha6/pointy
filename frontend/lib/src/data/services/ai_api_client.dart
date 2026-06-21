@@ -113,6 +113,8 @@ class AiApiClient {
               ? AiUsage.fromJson(limits)
               : null,
           title: (data['title'] as String?) ?? '',
+          sources: AiSource.listFrom(data['sources']),
+          webSearched: data['web_search'] == true,
         );
       case 'ask_user':
         final rawQuestions = data['questions'];

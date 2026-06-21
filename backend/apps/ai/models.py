@@ -81,6 +81,12 @@ class AiMessage(models.Model):
     prior_tool_messages = models.JSONField(default=list, blank=True)
     # "" (normal) / awaiting_answer / answered — marks an interactive turn.
     status = models.CharField(max_length=20, blank=True, default="")
+    # Web-search source citations [{url, title}] the assistant consulted for this
+    # reply, surfaced as favicon avatars; empty for a non-web answer.
+    sources = models.JSONField(default=list, blank=True)
+    # True when this reply used a live web search — drives the "searched the web"
+    # indicator even when no per-site citations came back.
+    web_searched = models.BooleanField(default=False)
     # The concrete OpenRouter model id and the abstract tier the relay used.
     model = models.CharField(max_length=120, blank=True)
     tier = models.CharField(max_length=20, blank=True)

@@ -10951,6 +10951,15 @@ class AppLocalizationsAr extends AppLocalizations {
   String get aiAssistantLinkUnavailable => 'تعذّر فتح الصفحة المطلوبة.';
 
   @override
+  String get aiAssistantLinkCopied => 'تم نسخ الرابط';
+
+  @override
+  String get aiAssistantSearchedWeb => 'بحث في الويب';
+
+  @override
+  String get aiAssistantSourcesTitle => 'المصادر';
+
+  @override
   String get aiAssistantAskUserRequired => 'هذا السؤال مطلوب';
 
   @override

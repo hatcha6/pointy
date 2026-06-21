@@ -366,6 +366,12 @@ on the relay `server` command:
   window (`120`; uses the shared `POINTY_RELAY_RATE_LIMIT_WINDOW`). This is the
   short anti-burst guard; the subscription caps below are separate.
 - `POINTY_RELAY_AI_VISION_MODEL` — model for prompts with attachments.
+- `POINTY_RELAY_AI_WEB_SEARCH_ENABLED` / `_MAX_RESULTS` — when `true` (default),
+  a cheap classifier decides per user turn whether the question needs current or
+  external information; if so the relay attaches OpenRouter's web-search plugin so
+  the model answers from up-to-date, cited sources. Only fires when needed (never
+  on the shop's own-data questions or invoice uploads); `_MAX_RESULTS` (`3`) caps
+  results per search for cost.
 - `POINTY_RELAY_AI_LIMIT_5H` / `_5H_WINDOW` — 5-hour message cap (`30`) and its
   window (`5h`); set the limit to `0` to disable.
 - `POINTY_RELAY_AI_LIMIT_WEEKLY` / `_WEEKLY_WINDOW` — weekly message cap (`200`)

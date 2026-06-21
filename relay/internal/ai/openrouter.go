@@ -92,6 +92,13 @@ const (
 	EventError     EventType = "error"
 )
 
+// Source is one web-search citation (a site the model consulted), assembled from
+// the provider's url_citation annotations.
+type Source struct {
+	URL   string `json:"url"`
+	Title string `json:"title"`
+}
+
 // Event is a single normalized streaming event. Callers translate these into
 // whatever wire format they expose downstream (the relay emits SSE).
 type Event struct {
@@ -101,6 +108,7 @@ type Event struct {
 	FinishReason string     // EventDone
 	Usage        *Usage     // EventDone (nil when the provider omits usage)
 	ToolCalls    []ToolCall // EventToolCalls (assembled from streamed fragments)
+	Sources      []Source   // EventDone (web-search citations, when present)
 	Err          string     // EventError
 }
 
@@ -201,6 +209,14 @@ type streamChunk struct {
 					Arguments string `json:"arguments"`
 				} `json:"function"`
 			} `json:"tool_calls"`
+			// Web-search citations (the sites consulted), streamed alongside text.
+			Annotations []struct {
+				Type        string `json:"type"`
+				URLCitation struct {
+					URL   string `json:"url"`
+					Title string `json:"title"`
+				} `json:"url_citation"`
+			} `json:"annotations"`
 		} `json:"delta"`
 		FinishReason *string `json:"finish_reason"`
 	} `json:"choices"`
@@ -409,6 +425,9 @@ func consumeSSE(body io.Reader, emit func(Event) error) error {
 	// arguments string fragments after); assemble them and emit once at the end.
 	toolCalls := map[int]*ToolCall{}
 	toolOrder := []int{}
+	// Web-search citations, collected + de-duplicated across chunks.
+	var sources []Source
+	seenSource := map[string]bool{}
 
 	finishTurn := func() error {
 		if len(toolOrder) > 0 {
@@ -420,7 +439,7 @@ func consumeSSE(body io.Reader, emit func(Event) error) error {
 				return emitErr
 			}
 		}
-		return emit(Event{Type: EventDone, Model: model, FinishReason: finish, Usage: usage})
+		return emit(Event{Type: EventDone, Model: model, FinishReason: finish, Usage: usage, Sources: sources})
 	}
 
 	for {
@@ -472,6 +491,13 @@ func consumeSSE(body io.Reader, emit func(Event) error) error {
 								call.Function.Name = tc.Function.Name
 							}
 							call.Function.Arguments += tc.Function.Arguments
+						}
+						for _, a := range choice.Delta.Annotations {
+							url := strings.TrimSpace(a.URLCitation.URL)
+							if a.Type == "url_citation" && url != "" && !seenSource[url] {
+								seenSource[url] = true
+								sources = append(sources, Source{URL: url, Title: strings.TrimSpace(a.URLCitation.Title)})
+							}
 						}
 						if choice.FinishReason != nil && *choice.FinishReason != "" {
 							finish = *choice.FinishReason

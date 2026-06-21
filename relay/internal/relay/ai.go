@@ -63,6 +63,11 @@ type aiChatRequest struct {
 	// user's first message (a cheap side call) and return it in the done event.
 	// Django sets it only on a conversation's first turn.
 	WantTitle bool `json:"want_title"`
+	// WebSearch carries the user turn's web-search decision onto its continuations
+	// (mirrors RouteTier), so an agentic flow that needs the web keeps it on the
+	// rounds that combine web info with the model's tools. Only honoured on a
+	// continuation; a user turn is classified fresh.
+	WebSearch bool `json:"web_search"`
 }
 
 // handleAIChat serves relay-hosted AI chat. Unlike the default route it does NOT
@@ -200,6 +205,17 @@ func (s HTTPServer) handleAIChat(w http.ResponseWriter, r *http.Request) {
 	// turn must use the multimodal vision model regardless of difficulty).
 	hasAttachments := len(request.Attachments) > 0
 	hasTools := len(request.Tools) > 0
+
+	// Decide whether this turn needs a live web search (current/external info the
+	// shop's own data can't answer). Classified by a cheap model, launched here so
+	// it overlaps the difficulty router below — near-zero added latency. Only on a
+	// user-initiated, non-attachment turn (an invoice upload never needs the web).
+	var webSearchCh chan bool
+	if s.AIWebSearchEnabled && !isContinuation && !hasAttachments {
+		webSearchCh = make(chan bool, 1)
+		go func() { webSearchCh <- s.needsWebSearch(r.Context(), request.Messages) }()
+	}
+
 	var tier, model, routeTier string
 	switch {
 	case isContinuation:
@@ -260,6 +276,25 @@ func (s HTTPServer) handleAIChat(w http.ResponseWriter, r *http.Request) {
 			{"id": "file-parser", "pdf": map[string]any{"engine": "pdf-text"}},
 		}
 	}
+	// Attach OpenRouter's web-search plugin when this turn needs current/external
+	// info: a user turn whose classifier said yes, or a continuation that carried
+	// the decision from its user turn (so an agentic web+tools flow keeps it). The
+	// search_prompt suppresses inline citations — the app shows the sources as
+	// favicon avatars instead — and the cited sites come back as annotations.
+	webSearched := false
+	switch {
+	case webSearchCh != nil:
+		webSearched = <-webSearchCh
+	case isContinuation && s.AIWebSearchEnabled && request.WebSearch:
+		webSearched = true
+	}
+	if webSearched {
+		plugins = append(plugins, map[string]any{
+			"id":            "web",
+			"max_results":   s.aiWebSearchMaxResults(),
+			"search_prompt": aiWebSearchResultsPrompt,
+		})
+	}
 
 	client := ai.Client{
 		APIKey:     s.OpenRouterAPIKey,
@@ -302,7 +337,15 @@ func (s HTTPServer) handleAIChat(w http.ResponseWriter, r *http.Request) {
 				"model":         event.Model,
 				"tier":          tier,
 				"route_tier":    routeTier,
+				"web_search":    webSearched,
 				"finish_reason": event.FinishReason,
+			}
+			if len(event.Sources) > 0 {
+				srcs := make([]map[string]string, 0, len(event.Sources))
+				for _, src := range event.Sources {
+					srcs = append(srcs, map[string]string{"url": src.URL, "title": src.Title})
+				}
+				payload["sources"] = srcs
 			}
 			if titleCh != nil {
 				// The title call usually finishes while the reply streams; a short
@@ -561,6 +604,66 @@ func cleanTitle(raw string) string {
 		title = strings.TrimSpace(string(runes[:maxRunes]))
 	}
 	return title
+}
+
+// aiWebSearchSystemPrompt instructs a small model to decide if a query needs the web.
+const aiWebSearchSystemPrompt = "You decide whether answering a user's message needs a live web search for " +
+	"current, external information. The assistant is a point-of-sale shop assistant whose own tools already cover " +
+	"the shop's data (sales, products, inventory, customers, expenses, suppliers, employees). Reply with EXACTLY " +
+	"ONE WORD, lowercase: \"yes\" if the answer needs up-to-date or general knowledge from the web that the shop's " +
+	"database cannot provide — current events, news, prices or exchange rates, weather, public facts, anything " +
+	"time-sensitive or about the outside world; \"no\" for greetings, small talk, or anything about the shop's own " +
+	"data. Output only yes or no."
+
+// aiWebSearchResultsPrompt is inserted before the injected web results. It tells
+// the model to answer cleanly WITHOUT inline citations — the app surfaces the
+// cited sites (from the response annotations) as favicon avatars instead.
+const aiWebSearchResultsPrompt = "A web search was run for the user's question; relevant results follow. " +
+	"Use them to answer accurately and concisely in the user's language. Write a clean, natural answer with NO " +
+	"inline citations, footnote markers, bracketed numbers, source lists, or raw URLs — the sources are shown to " +
+	"the user separately."
+
+// needsWebSearch asks the cheap router model whether the latest user message needs
+// a live web search. Fails CLOSED (no search) on any error, so a classifier hiccup
+// never adds an unwanted search or blocks the reply.
+func (s HTTPServer) needsWebSearch(ctx context.Context, messages []aiChatMessage) bool {
+	prompt := latestUserMessage(messages)
+	model := s.aiRouterModel()
+	if prompt == "" || model == "" {
+		return false
+	}
+	searchCtx, cancel := context.WithTimeout(ctx, s.aiRouterTimeout())
+	defer cancel()
+
+	client := ai.Client{
+		APIKey:     s.OpenRouterAPIKey,
+		BaseURL:    s.OpenRouterBaseURL,
+		HTTPClient: s.aiHTTPClient(),
+		Referer:    "https://pointy.app",
+		Title:      "Pointy",
+	}
+	temperature := 0.0
+	out, err := client.Complete(searchCtx, ai.ChatRequest{
+		Model:       model,
+		MaxTokens:   16,
+		Temperature: &temperature,
+		Messages: []ai.Message{
+			{Role: "system", Content: aiWebSearchSystemPrompt},
+			{Role: "user", Content: prompt},
+		},
+	})
+	if err != nil {
+		s.logger().Warn("relay AI web-search classifier failed; skipping search", "error", err)
+		return false
+	}
+	return strings.Contains(strings.ToLower(out), "yes")
+}
+
+func (s HTTPServer) aiWebSearchMaxResults() int {
+	if s.AIWebSearchMaxResults > 0 {
+		return s.AIWebSearchMaxResults
+	}
+	return 3
 }
 
 func latestUserMessage(messages []aiChatMessage) string {

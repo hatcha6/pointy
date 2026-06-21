@@ -333,6 +333,16 @@ func runServer(args []string) error {
 		envString("POINTY_RELAY_AI_VISION_MODEL", "google/gemma-4-31b-it:free"),
 		"OpenRouter model used when a prompt carries image/file attachments",
 	)
+	aiWebSearchEnabled := flags.Bool(
+		"ai-web-search-enabled",
+		envBool("POINTY_RELAY_AI_WEB_SEARCH_ENABLED", true),
+		"let the assistant web-search for current info when a query needs it (gated by a cheap classifier)",
+	)
+	aiWebSearchMaxResults := flags.Int(
+		"ai-web-search-max-results",
+		envInt("POINTY_RELAY_AI_WEB_SEARCH_MAX_RESULTS", 3),
+		"max web-search results per query (cost control)",
+	)
 	aiLimit5H := flags.Int(
 		"ai-limit-5h",
 		envInt("POINTY_RELAY_AI_LIMIT_5H", 30),
@@ -608,7 +618,9 @@ func runServer(args []string) error {
 		},
 		AIDefaultTier:        strings.TrimSpace(*aiDefaultTier),
 		AIRouterModel:        strings.TrimSpace(*aiRouterModel),
-		AIVisionModel:        strings.TrimSpace(*aiVisionModel),
+		AIVisionModel:         strings.TrimSpace(*aiVisionModel),
+		AIWebSearchEnabled:    *aiWebSearchEnabled,
+		AIWebSearchMaxResults: *aiWebSearchMaxResults,
 		AILimit5H:            ratelimit.Policy{Limit: *aiLimit5H, Window: *aiLimit5HWindow},
 		AILimitWeekly:        ratelimit.Policy{Limit: *aiLimitWeekly, Window: *aiLimitWeeklyWindow},
 		AIMaxImagesPerPrompt: *aiMaxImages,

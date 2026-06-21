@@ -377,6 +377,12 @@ class AiChatView(APIView):
         # The AI conversation title the relay generated on the first turn (set once),
         # persisted as soon as it arrives so even a paused turn gets a good name.
         generated_title = ""
+        # Whether this turn used a live web search (carried onto continuations so an
+        # agentic web+tools flow keeps it), and the de-duplicated source citations
+        # accumulated across the turn's rounds.
+        web_searched = False
+        collected_sources = []
+        seen_source_urls = set()
         saved = False
         # Set once the model calls ask_user: the turn is persisted as a paused
         # assistant message and the stream ends without a `done` (the client renders
@@ -418,6 +424,17 @@ class AiChatView(APIView):
                             usage_limits = data.get("usage_limits")
                         if not routed_tier and data.get("route_tier"):
                             routed_tier = data.get("route_tier")
+                        if data.get("web_search"):
+                            web_searched = True
+                        for src in data.get("sources") or []:
+                            if not isinstance(src, dict):
+                                continue
+                            url = (src.get("url") or "").strip()
+                            if url and url not in seen_source_urls:
+                                seen_source_urls.add(url)
+                                collected_sources.append(
+                                    {"url": url, "title": (src.get("title") or "").strip()}
+                                )
                         if apply_title and not generated_title and data.get("title"):
                             generated_title = data.get("title")
                             self._apply_conversation_title(conversation, generated_title)
@@ -566,6 +583,7 @@ class AiChatView(APIView):
                         tools=None if force_answer else tools,
                         count_usage=False,
                         route_tier=routed_tier,
+                        web_search=web_searched,
                     )
                 except RelayControlError:
                     yield sse_event("error", {"detail": "ai stream failed"})
@@ -577,6 +595,8 @@ class AiChatView(APIView):
                 "".join(reasoning),
                 done_data,
                 tool_events,
+                sources=collected_sources,
+                web_searched=web_searched,
             )
             saved = True
             yield sse_event(
@@ -593,6 +613,9 @@ class AiChatView(APIView):
                     # The conversation's name (AI-generated on the first turn, else
                     # the fallback) so the client can show it without a refetch.
                     "title": conversation.title,
+                    # Web-search sources (favicon avatars) + whether the web was used.
+                    "sources": collected_sources,
+                    "web_search": web_searched,
                 },
             )
         finally:
@@ -603,6 +626,8 @@ class AiChatView(APIView):
                     "".join(reasoning),
                     done_data,
                     tool_events,
+                    sources=collected_sources,
+                    web_searched=web_searched,
                 )
             try:
                 response.close()
@@ -618,7 +643,9 @@ class AiChatView(APIView):
         conversation.title = title
         AiConversation.objects.filter(pk=conversation.pk).update(title=title)
 
-    def _save_assistant(self, conversation, content, reasoning, data, tool_events=None):
+    def _save_assistant(
+        self, conversation, content, reasoning, data, tool_events=None, sources=None, web_searched=False
+    ):
         usage = data.get("usage") or {}
         message = AiMessage.objects.create(
             conversation=conversation,
@@ -630,6 +657,8 @@ class AiChatView(APIView):
             prompt_tokens=int(usage.get("prompt_tokens") or 0),
             completion_tokens=int(usage.get("completion_tokens") or 0),
             tool_events=tool_events or [],
+            sources=sources or [],
+            web_searched=bool(web_searched),
         )
         AiConversation.objects.filter(pk=conversation.pk).update(updated_at=timezone.now())
         return message
