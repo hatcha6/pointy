@@ -217,9 +217,10 @@ def _collect_adjustments(metrics_by_user, window_start, window_end):
             metrics.return_amount += amount
             evidence_key = "return_peer_outlier"
 
-        if adjustment.refund_method == Payment.Method.CASH:
+        cash_amount = money(adjustment.cash_amount)
+        if cash_amount > 0:
             metrics.cash_refund_count += 1
-            metrics.cash_refund_amount += amount
+            metrics.cash_refund_amount += cash_amount
             _append_evidence(
                 metrics,
                 "cash_refund_concentration",

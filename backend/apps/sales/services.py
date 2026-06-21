@@ -1,8 +1,9 @@
 import logging
 from datetime import timedelta
-from decimal import Decimal
+from decimal import Decimal, ROUND_DOWN
 
 from django.db import transaction
+from django.db.models import Sum
 from django.utils import timezone
 from rest_framework import serializers
 
@@ -355,6 +356,36 @@ def sale_loss_blocked_payload(loss_lines):
     }
 
 
+def validate_sale_variants_sellable(lines_data):
+    """Reject a checkout that references an archived or deactivated product.
+
+    The API serializer only resolves active variants, but the checkout service
+    is also reachable directly (scripts, internal callers, future endpoints).
+    Guarding here keeps a discontinued or archived product from ever being sold
+    through any path, not just the one the POS happens to use today.
+    """
+    blocked = []
+    for line_data in lines_data:
+        variant = line_data["variant"]
+        product = variant.product
+        if not variant.is_active or not product.is_active or product.archived_at is not None:
+            blocked.append(
+                {
+                    "product_id": product.pk,
+                    "variant_id": variant.pk,
+                    "product_name": product.name,
+                    "variant_name": variant.full_name,
+                }
+            )
+    if blocked:
+        raise serializers.ValidationError(
+            {
+                "detail": "Cannot sell an archived or inactive product.",
+                "variants": blocked,
+            }
+        )
+
+
 @transaction.atomic
 def checkout_order(
     *,
@@ -369,6 +400,7 @@ def checkout_order(
     from apps.payments.serializers import PaymentSerializer
 
     settings = ShopSettings.load()
+    validate_sale_variants_sellable(lines_data)
     validate_checkout_loss_sales_allowed(
         settings=settings,
         lines_data=lines_data,
@@ -655,6 +687,53 @@ def line_refund_amount(line, quantity):
     return money(gross_amount - line_refund_discount(line, quantity))
 
 
+def refund_tender_allocations(order, amount):
+    """Split a refund across the order's original tenders, proportional to how
+    much each tender actually paid (net of any earlier refunds).
+
+    A split cash+card sale therefore refunds the cash share from cash and the
+    card share from card, so the drawer is only ever reduced by the cash part.
+    Returns a list of ``(method, amount)`` whose amounts sum *exactly* to
+    ``amount``. Falls back to the order's primary tender when there is no
+    positive payment to attribute the refund to.
+    """
+    from apps.payments.models import Payment
+
+    amount = money(amount)
+    net_by_method = {}
+    rows = Payment.objects.filter(order=order).values("method").annotate(
+        total=Sum("amount")
+    )
+    for row in rows:
+        net = money(row["total"] or Decimal("0.00"))
+        if net > 0:
+            net_by_method[row["method"]] = net
+
+    if not net_by_method:
+        return [(refund_method_for_order(order), amount)]
+
+    methods = sorted(net_by_method)
+    total_net = sum(net_by_method.values(), Decimal("0.00"))
+    floored = {}
+    remainder = {}
+    for method in methods:
+        share = (amount * net_by_method[method]) / total_net
+        floor_share = share.quantize(MONEY_PLACES, rounding=ROUND_DOWN)
+        floored[method] = floor_share
+        remainder[method] = share - floor_share
+
+    allocated = sum(floored.values(), Decimal("0.00"))
+    leftover_cents = int(((amount - allocated) / MONEY_PLACES).to_integral_value())
+    # Largest-remainder rounding: hand the leftover cents to the tenders with the
+    # biggest fractional part first, tie-broken deterministically by method name,
+    # so the per-tender amounts always sum back to exactly ``amount``.
+    ranked = sorted(methods, key=lambda method: (remainder[method], method), reverse=True)
+    for index in range(leftover_cents):
+        floored[ranked[index % len(ranked)]] += MONEY_PLACES
+
+    return [(method, floored[method]) for method in methods if floored[method] > 0]
+
+
 def create_order_adjustment(
     *,
     order,
@@ -668,19 +747,23 @@ def create_order_adjustment(
     from apps.payments.serializers import payment_commission_values
 
     created_by = adjustment_created_by(request)
-    refund_method = refund_method_for_order(order)
     amount = adjustment_amount(lines)
-    commission_percent, commission_amount = payment_commission_values(
-        refund_method,
-        -amount,
+    allocations = refund_tender_allocations(order, amount)
+    cash_amount = sum(
+        (alloc for method, alloc in allocations if method == Payment.Method.CASH),
+        Decimal("0.00"),
     )
+    # The displayed refund method is the tender that absorbed the largest share;
+    # for a single-tender sale that is simply the one method that was used.
+    primary_method = max(allocations, key=lambda item: item[1])[0]
 
     adjustment = OrderAdjustment.objects.create(
         order=order,
         register_session=adjustment_register_session(order, register_session),
         adjustment_type=adjustment_type,
         amount=amount,
-        refund_method=refund_method,
+        refund_method=primary_method,
+        cash_amount=cash_amount,
         reason=reason,
         created_by=created_by,
     )
@@ -703,14 +786,18 @@ def create_order_adjustment(
             created_by=created_by,
         )
 
-    Payment.objects.create(
-        order=order,
-        method=refund_method,
-        amount=-amount,
-        commission_percent=commission_percent,
-        commission_amount=commission_amount,
-        external_reference=f"{adjustment.adjustment_type}:{adjustment.pk}",
-    )
+    # One negative payment per original tender so each method's ledger and the
+    # cash drawer are reduced by exactly their share of the refund.
+    for method, alloc in allocations:
+        commission_percent, commission_amount = payment_commission_values(method, -alloc)
+        Payment.objects.create(
+            order=order,
+            method=method,
+            amount=-alloc,
+            commission_percent=commission_percent,
+            commission_amount=commission_amount,
+            external_reference=f"{adjustment.adjustment_type}:{adjustment.pk}",
+        )
     return adjustment
 
 

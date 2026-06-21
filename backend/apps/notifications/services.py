@@ -486,7 +486,15 @@ def _discount_notifications(now):
         ends_at__lte=now + timedelta(days=7),
     )
     for rule in rules:
-        days = max(0, (rule.ends_at - now).days) if rule.ends_at else 0
+        # Round the remaining time UP to whole days so an alert never reports
+        # "0 days" for a rule that is still active, and the severity band lines
+        # up with how a human reads it ("~36h left" is 2 days, not 1). Plain
+        # ``timedelta.days`` truncates toward zero and produced an off-by-one.
+        if rule.ends_at:
+            remaining_seconds = int((rule.ends_at - now).total_seconds())
+            days = max(0, -(-remaining_seconds // 86400))
+        else:
+            days = 0
         specs.append(
             _spec(
                 code="discounts.expiring_rule",
@@ -565,11 +573,16 @@ def _upsert_notification(spec, now):
     # payload column is JSON, so coerce them at the boundary.
     if "payload" in spec:
         spec = {**spec, "payload": _json_safe_payload(spec["payload"])}
-    notification = BusinessNotification.objects.filter(
-        fingerprint=spec["fingerprint"]
-    ).first()
-    if notification is None:
-        BusinessNotification.objects.create(**spec, first_seen_at=now, last_seen_at=now)
+    # get_or_create keys on the unique fingerprint and absorbs the IntegrityError
+    # from a concurrent insert (sync runs on a 15-min beat AND synchronously on
+    # every notifications GET, so two syncs racing on the same fingerprint is
+    # routine). A plain filter-then-create would raise under that race.
+    defaults = {key: value for key, value in spec.items() if key != "fingerprint"}
+    notification, created = BusinessNotification.objects.get_or_create(
+        fingerprint=spec["fingerprint"],
+        defaults={**defaults, "first_seen_at": now, "last_seen_at": now},
+    )
+    if created:
         return
 
     was_resolved = notification.status == BusinessNotification.Status.RESOLVED

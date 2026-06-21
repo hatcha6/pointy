@@ -510,14 +510,16 @@ def _register_session_cash_totals(sessions):
         )
 
     cash_refunds = (
+        # ``cash_amount`` is the cash-drawer share of each refund, so summing it
+        # reconciles the drawer correctly for cash, card and split-tender refunds
+        # alike (a card refund contributes 0).
         OrderAdjustment.objects.filter(
             register_session_id__in=session_ids,
-            refund_method=Payment.Method.CASH,
         )
         .values("register_session_id")
         .annotate(
             total=Coalesce(
-                Sum("amount"),
+                Sum("cash_amount"),
                 Value(Decimal("0.00")),
                 output_field=MONEY_FIELD,
             )

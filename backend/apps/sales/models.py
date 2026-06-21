@@ -79,11 +79,9 @@ class RegisterSession(TimeStampedModel):
 
     @property
     def cash_refund_total(self) -> Decimal:
-        from apps.payments.models import Payment
-
-        total = self.order_adjustments.filter(
-            refund_method=Payment.Method.CASH,
-        ).aggregate(total=Sum("amount"))["total"]
+        total = self.order_adjustments.aggregate(
+            total=Sum("cash_amount"),
+        )["total"]
         return (total or Decimal("0.00")).quantize(Decimal("0.01"))
 
     @property
@@ -394,6 +392,13 @@ class OrderAdjustment(TimeStampedModel):
     adjustment_type = models.CharField(max_length=16, choices=AdjustmentType.choices)
     amount = models.DecimalField(max_digits=10, decimal_places=2)
     refund_method = models.CharField(max_length=16, default="cash")
+    # Portion of ``amount`` that actually left the cash drawer. For a
+    # single-tender cash refund this equals ``amount``; for a card/transfer
+    # refund it is 0; for a split-tender sale it is just the cash share.
+    # Register reconciliation, dashboards, reports and fraud metrics read THIS
+    # field (not ``refund_method``) so a card refund never wrongly reduces
+    # expected cash and a split refund is attributed to the right drawer.
+    cash_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     reason = models.TextField(blank=True)
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,

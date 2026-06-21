@@ -401,14 +401,17 @@ def _register_variance_summary(closed_sessions):
         key="order__register_session_id",
     )
     cash_refunds_by_session = _totals_by_key(
+        # ``cash_amount`` is the cash-drawer share of each refund (full amount for
+        # a cash refund, 0 for card/transfer, the cash part for a split sale), so
+        # summing it attributes refunds to the drawer correctly without filtering
+        # on ``refund_method``.
         OrderAdjustment.objects.filter(
             register_session_id__in=session_ids,
-            refund_method=Payment.Method.CASH,
         )
         .values("register_session_id")
         .annotate(
             total=Coalesce(
-                Sum("amount"),
+                Sum("cash_amount"),
                 Value(Decimal("0.00")),
                 output_field=MONEY_FIELD,
             )

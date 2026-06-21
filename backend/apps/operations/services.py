@@ -604,6 +604,12 @@ def create_kitchen_job_for_order(*, order, request=None):
     settings = ShopSettings.load()
     if not settings.enable_kitchen_operations:
         return None
+    # Idempotency guard: a kitchen job is born linked to its order, so if one
+    # already exists this order has been processed. Without this, a retried or
+    # replayed checkout would open a second job and consume the recipe
+    # ingredients twice, silently double-decrementing stock.
+    if Job.objects.filter(order=order).exists():
+        return None
     prepared_lines = [
         line
         for line in order.lines.select_related("variant", "variant__product")

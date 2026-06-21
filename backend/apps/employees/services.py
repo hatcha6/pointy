@@ -335,7 +335,10 @@ def _commissionable_sales_total(employee, period_start, period_end):
 
 
 def _commissionable_jobs_total(employee, period_start, period_end, base):
-    """Total value of the repairs the employee completed in the period.
+    """Total value of the commissionable jobs the employee completed in the period.
+
+    Only customer-priced service jobs (repairs and work orders) are
+    commissionable; internal kitchen/production jobs are excluded below.
 
     The valuation depends on the plan's ``operations_commission_base``:
 
@@ -344,13 +347,22 @@ def _commissionable_jobs_total(employee, period_start, period_end, base):
       the labor portion, available even before the job is invoiced;
     - ``order_total`` — the total of the job's invoice (invoiced jobs only).
     """
-    from apps.operations.models import Job
+    from apps.operations.models import Job, WorkflowTemplate
 
     jobs = Job.objects.filter(
         assigned_employee=employee,
         status=Job.Status.COMPLETED,
         completed_at__date__gte=period_start,
         completed_at__date__lte=period_end,
+    ).exclude(
+        # Operations commission is for customer-priced service work (repairs and
+        # work orders). Kitchen and production jobs are internal, auto-created,
+        # and never carry a customer-approved price — they must never earn a
+        # technician commission even if one is somehow assigned and priced.
+        job_type__in=[
+            WorkflowTemplate.JobType.KITCHEN,
+            WorkflowTemplate.JobType.PRODUCTION,
+        ]
     )
 
     if base == CompensationPlan.OperationsCommissionBase.ORDER_TOTAL:
