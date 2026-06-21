@@ -364,6 +364,64 @@ func TestHandleAIChatContinuationFloorsAndDefaults(t *testing.T) {
 	}
 }
 
+func TestHandleAIChatGeneratesTitleOnFirstTurn(t *testing.T) {
+	now := time.Date(2026, 6, 2, 12, 0, 0, 0, time.UTC)
+	store, provisioned := provisionAIInstallation(t, now)
+	// The stub returns this for any non-streaming Complete call (router + title).
+	openrouter := stubOpenRouterServer(t, "topic")
+	defer openrouter.Close()
+	server := newAITestServer(t, store, openrouter.URL)
+
+	body := strings.NewReader(`{"messages":[{"role":"user","content":"أكثر المنتجات مبيعًا"}],"want_title":true}`)
+	request := httptest.NewRequest(http.MethodPost, "http://relay.test/v1/ai/chat", body)
+	request.Header.Set(AccessTokenHeader, provisioned.AccessToken)
+	recorder := httptest.NewRecorder()
+	server.ServeHTTP(recorder, request)
+
+	payload := recorder.Body.String()
+	if !strings.Contains(payload, `"title":"topic"`) {
+		t.Fatalf("expected a generated title in the done event, got %q", payload)
+	}
+}
+
+func TestHandleAIChatSkipsTitleWhenNotRequested(t *testing.T) {
+	now := time.Date(2026, 6, 2, 12, 0, 0, 0, time.UTC)
+	store, provisioned := provisionAIInstallation(t, now)
+	openrouter := stubOpenRouterServer(t, "smart")
+	defer openrouter.Close()
+	server := newAITestServer(t, store, openrouter.URL)
+
+	// want_title omitted → no title side call, no title in the done event.
+	body := strings.NewReader(`{"messages":[{"role":"user","content":"hi"}]}`)
+	request := httptest.NewRequest(http.MethodPost, "http://relay.test/v1/ai/chat", body)
+	request.Header.Set(AccessTokenHeader, provisioned.AccessToken)
+	recorder := httptest.NewRecorder()
+	server.ServeHTTP(recorder, request)
+
+	if payload := recorder.Body.String(); strings.Contains(payload, `"title"`) {
+		t.Fatalf("did not expect a title, got %q", payload)
+	}
+}
+
+func TestCleanTitle(t *testing.T) {
+	cases := map[string]string{
+		`"أكثر المنتجات مبيعًا"`:    "أكثر المنتجات مبيعًا",
+		"Title: Sales report":      "Sales report",
+		"  spaced   out  title  ":  "spaced out title",
+		"line one\nline two":       "line one",
+		"trailing punctuation.":    "trailing punctuation",
+	}
+	for in, want := range cases {
+		if got := cleanTitle(in); got != want {
+			t.Errorf("cleanTitle(%q) = %q, want %q", in, got, want)
+		}
+	}
+	long := strings.Repeat("ا", 100)
+	if got := cleanTitle(long); len([]rune(got)) != 60 {
+		t.Errorf("expected a 60-rune cap, got %d runes", len([]rune(got)))
+	}
+}
+
 func TestHandleAIChatRejectsTooManyImages(t *testing.T) {
 	now := time.Date(2026, 6, 2, 12, 0, 0, 0, time.UTC)
 	store, provisioned := provisionAIInstallation(t, now)

@@ -62,6 +62,18 @@ def _tool_output_preview(result):
     return text
 
 
+def _fallback_title(user_text, attachments):
+    """A conversation title used until/unless the relay returns an AI-generated one:
+    the trimmed first message, or a hint from an attachment-only turn."""
+    text = (user_text or "").strip()
+    if text:
+        return text[:60]
+    if attachments:
+        name = (attachments[0].get("name") or "").strip()
+        return (name or "مرفق")[:60]
+    return ""
+
+
 def _ai_idempotency_key(turn_id, name, args):
     """A turn-scoped idempotency key for a mutating tool call: identical calls
     *within the same turn* collapse to one committed write (guards an accidental
@@ -147,8 +159,12 @@ class AiChatView(APIView):
                 for a in attachments
             ],
         )
-        if not conversation.title and user_text:
-            conversation.title = user_text[:60]
+        # Name the conversation on its first turn: ask the relay for a good AI title
+        # (returned in the done event), with a truncated fallback set now so there's
+        # always *something* even if the title call fails or the turn pauses.
+        wants_title = not conversation.title
+        if wants_title:
+            conversation.title = _fallback_title(user_text, attachments)
         conversation.save(update_fields=["title", "updated_at"])
 
         # Tools let the model query/write real shop data (as the current user).
@@ -171,6 +187,7 @@ class AiChatView(APIView):
                 attachments=attachments,
                 tools=tools,
                 count_usage=True,
+                want_title=wants_title,
             )
         except RelayControlError as exc:
             return _relay_error_response(exc)
@@ -185,6 +202,7 @@ class AiChatView(APIView):
                 tools=tools,
                 user=request.user,
                 first_response=first_response,
+                apply_title=wants_title,
             ),
             content_type="text/event-stream",
         )
@@ -300,6 +318,7 @@ class AiChatView(APIView):
         tools,
         user,
         first_response,
+        apply_title=False,
     ):
         """Drive the bounded tool loop: consume a relay turn; if the model asked
         for tools, run them as ``user``, feed the results back, and loop; on a
@@ -316,6 +335,9 @@ class AiChatView(APIView):
         # cheap) instead of the relay re-routing — or collapsing to a fixed tier —
         # each round.
         routed_tier = ""
+        # The AI conversation title the relay generated on the first turn (set once),
+        # persisted as soon as it arrives so even a paused turn gets a good name.
+        generated_title = ""
         saved = False
         # Set once the model calls ask_user: the turn is persisted as a paused
         # assistant message and the stream ends without a `done` (the client renders
@@ -357,6 +379,9 @@ class AiChatView(APIView):
                             usage_limits = data.get("usage_limits")
                         if not routed_tier and data.get("route_tier"):
                             routed_tier = data.get("route_tier")
+                        if apply_title and not generated_title and data.get("title"):
+                            generated_title = data.get("title")
+                            self._apply_conversation_title(conversation, generated_title)
                     elif event_type == "error":
                         yield sse_event("error", {"detail": data.get("detail", "AI error")})
                 response.close()
@@ -526,6 +551,9 @@ class AiChatView(APIView):
                     "tier": done_data.get("tier", ""),
                     "usage": done_data.get("usage"),
                     "usage_limits": usage_limits,
+                    # The conversation's name (AI-generated on the first turn, else
+                    # the fallback) so the client can show it without a refetch.
+                    "title": conversation.title,
                 },
             )
         finally:
@@ -541,6 +569,15 @@ class AiChatView(APIView):
                 response.close()
             except Exception:
                 pass
+
+    def _apply_conversation_title(self, conversation, title):
+        """Persist the AI-generated conversation title (overriding the truncated
+        fallback set on the first turn). No-op for a blank title."""
+        title = (title or "").strip()[:200]
+        if not title:
+            return
+        conversation.title = title
+        AiConversation.objects.filter(pk=conversation.pk).update(title=title)
 
     def _save_assistant(self, conversation, content, reasoning, data, tool_events=None):
         usage = data.get("usage") or {}

@@ -264,6 +264,22 @@ void main() {
     expect(viewModel.usage?.fiveHour.remaining, 24);
   });
 
+  test('an AI title in the done event names the conversation in history', () async {
+    final repo = _FakeAiChatRepository([
+      const AiChatDelta('...'),
+      const AiChatDone(conversationId: 5, title: 'أكثر المنتجات مبيعًا'),
+    ]);
+    final viewModel = AiChatViewModel(repo);
+    addTearDown(viewModel.dispose);
+
+    await viewModel.sendMessage('ما هي أكثر المنتجات مبيعًا؟');
+
+    // The just-named conversation appears in the local history with its AI title.
+    final named = viewModel.conversations.where((c) => c.id == 5).toList();
+    expect(named, hasLength(1));
+    expect(named.single.title, 'أكثر المنتجات مبيعًا');
+  });
+
   test('maps a 429 to rateLimited', () async {
     final repo = _FakeAiChatRepository([
       const AiChatError('limit reached', statusCode: 429),

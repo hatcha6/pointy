@@ -112,6 +112,7 @@ class AiApiClient {
           usage: limits is Map<String, Object?>
               ? AiUsage.fromJson(limits)
               : null,
+          title: (data['title'] as String?) ?? '',
         );
       case 'ask_user':
         final rawQuestions = data['questions'];

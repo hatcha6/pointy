@@ -651,6 +651,7 @@ class AiChatDone extends AiChatEvent {
     this.userMessageId,
     this.model = '',
     this.usage,
+    this.title = '',
   });
 
   final int conversationId;
@@ -660,6 +661,10 @@ class AiChatDone extends AiChatEvent {
   final int? userMessageId;
   final String model;
   final AiUsage? usage;
+
+  /// The conversation's name (AI-generated on the first turn, else a fallback), so
+  /// the history list reflects it without a refetch. Empty when unchanged.
+  final String title;
 }
 
 class AiChatError extends AiChatEvent {

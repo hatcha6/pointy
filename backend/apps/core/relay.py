@@ -134,6 +134,7 @@ class RelayControlClient:
         max_tokens=0,
         temperature=None,
         route_tier="",
+        want_title=False,
     ):
         """Open the relay AI chat endpoint and return the raw streaming response.
 
@@ -159,6 +160,9 @@ class RelayControlClient:
         # continuations; ignored on user turns.
         if route_tier:
             body["route_tier"] = route_tier
+        # First turn only: ask the relay to name the conversation (returned in done).
+        if want_title:
+            body["want_title"] = True
         if max_tokens:
             body["max_tokens"] = max_tokens
         if temperature is not None:

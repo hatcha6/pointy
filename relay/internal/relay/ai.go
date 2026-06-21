@@ -59,6 +59,10 @@ type aiChatRequest struct {
 	// honoured on a continuation (CountUsage=false); ignored on a user turn (the
 	// relay always classifies those itself). Empty → fall back to the default tier.
 	RouteTier string `json:"route_tier"`
+	// WantTitle asks the relay to generate a short conversation title from the
+	// user's first message (a cheap side call) and return it in the done event.
+	// Django sets it only on a conversation's first turn.
+	WantTitle bool `json:"want_title"`
 }
 
 // handleAIChat serves relay-hosted AI chat. Unlike the default route it does NOT
@@ -268,6 +272,16 @@ func (s HTTPServer) handleAIChat(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), s.aiRequestTimeout())
 	defer cancel()
 
+	// On a conversation's first turn, generate a short title from the user's
+	// message in parallel with the reply (a cheap fast-model call), so it's ready
+	// by the done event with no added latency. Buffered so the goroutine never
+	// leaks if the done handler stops waiting.
+	var titleCh chan string
+	if request.WantTitle && !isContinuation {
+		titleCh = make(chan string, 1)
+		go func() { titleCh <- s.generateTitle(ctx, request.Messages) }()
+	}
+
 	streamErr := client.StreamChat(ctx, ai.ChatRequest{
 		Model:       model,
 		Messages:    messages,
@@ -289,6 +303,17 @@ func (s HTTPServer) handleAIChat(w http.ResponseWriter, r *http.Request) {
 				"tier":          tier,
 				"route_tier":    routeTier,
 				"finish_reason": event.FinishReason,
+			}
+			if titleCh != nil {
+				// The title call usually finishes while the reply streams; a short
+				// backstop keeps a slow one from holding up the done event.
+				select {
+				case title := <-titleCh:
+					if title != "" {
+						payload["title"] = title
+					}
+				case <-time.After(3 * time.Second):
+				}
 			}
 			if usage != nil {
 				payload["usage_limits"] = usage
@@ -474,6 +499,68 @@ func (s HTTPServer) routeAITier(ctx context.Context, messages []aiChatMessage, s
 		return fallback
 	}
 	return normalizeTier(out, fallback, s.AIModelTiers)
+}
+
+// aiTitleSystemPrompt instructs a small model to name a conversation.
+const aiTitleSystemPrompt = "Generate a very short title for a chat conversation " +
+	"from the user's first message. Reply with ONLY the title text: 2 to 5 words, " +
+	"no surrounding quotes, no trailing punctuation, in the SAME language as the " +
+	"user's message. Summarize the topic concisely; do not answer the message."
+
+// generateTitle asks the cheap fast model for a short conversation title from the
+// user's first message. Returns "" on any failure so the caller can fall back to a
+// truncated title — a missing title must never block or break a reply.
+func (s HTTPServer) generateTitle(ctx context.Context, messages []aiChatMessage) string {
+	prompt := latestUserMessage(messages)
+	model := s.aiRouterModel()
+	if prompt == "" || model == "" {
+		return ""
+	}
+	titleCtx, cancel := context.WithTimeout(ctx, s.aiRouterTimeout())
+	defer cancel()
+
+	client := ai.Client{
+		APIKey:     s.OpenRouterAPIKey,
+		BaseURL:    s.OpenRouterBaseURL,
+		HTTPClient: s.aiHTTPClient(),
+		Referer:    "https://pointy.app",
+		Title:      "Pointy",
+	}
+	temperature := 0.3
+	out, err := client.Complete(titleCtx, ai.ChatRequest{
+		Model:       model,
+		MaxTokens:   24,
+		Temperature: &temperature,
+		Messages: []ai.Message{
+			{Role: "system", Content: aiTitleSystemPrompt},
+			{Role: "user", Content: prompt},
+		},
+	})
+	if err != nil {
+		s.logger().Warn("relay AI title generation failed", "error", err)
+		return ""
+	}
+	return cleanTitle(out)
+}
+
+// cleanTitle normalizes a model's title reply: first line, no wrapping quotes or
+// label prefix, collapsed whitespace, capped length.
+func cleanTitle(raw string) string {
+	title := strings.TrimSpace(raw)
+	if idx := strings.IndexAny(title, "\r\n"); idx >= 0 {
+		title = strings.TrimSpace(title[:idx])
+	}
+	// Drop a leading "Title:" / "العنوان:" style label.
+	if idx := strings.Index(title, ":"); idx >= 0 && idx <= 12 {
+		title = strings.TrimSpace(title[idx+1:])
+	}
+	title = strings.Trim(title, " \t\"'`«»“”.،,")
+	title = strings.Join(strings.Fields(title), " ")
+	const maxRunes = 60
+	if runes := []rune(title); len(runes) > maxRunes {
+		title = strings.TrimSpace(string(runes[:maxRunes]))
+	}
+	return title
 }
 
 func latestUserMessage(messages []aiChatMessage) string {

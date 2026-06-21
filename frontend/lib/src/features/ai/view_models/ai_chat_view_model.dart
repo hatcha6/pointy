@@ -142,6 +142,39 @@ class AiChatViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Reflect a (re)named conversation in the local history immediately — update
+  /// the matching summary, or prepend a fresh one for a just-created conversation
+  /// so its AI title shows without waiting for a history refetch. The enclosing
+  /// stream loop notifies listeners once it finishes.
+  void _applyConversationTitle(int? conversationId, String title) {
+    if (conversationId == null || conversationId == 0 || title.isEmpty) {
+      return;
+    }
+    final index = _conversations.indexWhere((c) => c.id == conversationId);
+    if (index >= 0) {
+      final existing = _conversations[index];
+      if (existing.title == title) {
+        return;
+      }
+      _conversations = [..._conversations]..[index] = AiConversationSummary(
+        id: existing.id,
+        title: title,
+        messageCount: existing.messageCount,
+        updatedAt: existing.updatedAt,
+      );
+    } else {
+      _conversations = [
+        AiConversationSummary(
+          id: conversationId,
+          title: title,
+          messageCount: _messages.length,
+          updatedAt: DateTime.now(),
+        ),
+        ..._conversations,
+      ];
+    }
+  }
+
   Future<void> deleteConversation(int id) async {
     final result = await _repository.deleteConversation(id);
     if (result is Ok<bool>) {
@@ -303,6 +336,7 @@ class AiChatViewModel extends ChangeNotifier {
           :final conversationId,
           :final userMessageId,
           :final usage,
+          :final title,
         ):
           if (conversationId != 0) {
             _conversationId = conversationId;
@@ -312,6 +346,9 @@ class AiChatViewModel extends ChangeNotifier {
           }
           if (usage != null) {
             _usage = usage;
+          }
+          if (title.isNotEmpty) {
+            _applyConversationTitle(_conversationId, title);
           }
         case AiChatAskUser(
           :final conversationId,

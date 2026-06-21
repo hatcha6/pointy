@@ -29,7 +29,7 @@ class FakeRelayResponse:
         self.closed = True
 
 
-def fake_sse_lines(text_chunks, *, model="test/model", tier="smart", reasoning="thinking"):
+def fake_sse_lines(text_chunks, *, model="test/model", tier="smart", reasoning="thinking", title=None):
     lines = []
     if reasoning:
         lines.append(b"event: reasoning\n")
@@ -44,6 +44,8 @@ def fake_sse_lines(text_chunks, *, model="test/model", tier="smart", reasoning="
         "tier": tier,
         "usage": {"prompt_tokens": 3, "completion_tokens": 2, "total_tokens": 5},
     }
+    if title is not None:
+        done["title"] = title
     lines.append(b"event: done\n")
     lines.append(("data: " + json.dumps(done) + "\n").encode("utf-8"))
     lines.append(b"\n")
@@ -154,6 +156,67 @@ class AiChatViewTests(TestCase):
         self.assertEqual(assistant.tier, "smart")
         self.assertEqual(assistant.reasoning, "thinking")
         self.assertEqual(assistant.completion_tokens, 2)
+
+    def test_first_turn_requests_and_persists_an_ai_title(self):
+        with patch("apps.ai.views.RelayControlClient") as mock_client:
+            mock_client.return_value.open_ai_stream.return_value = FakeRelayResponse(
+                fake_sse_lines(["مرحبا"], reasoning="", title="أكثر المنتجات مبيعًا")
+            )
+            response = self.client.post(
+                reverse("ai-chat"),
+                {"message": "ما هي أكثر المنتجات مبيعًا هذا الشهر؟"},
+                format="json",
+            )
+            body = b"".join(response.streaming_content).decode("utf-8")
+
+        # The first turn asks the relay to name the conversation.
+        self.assertTrue(mock_client.return_value.open_ai_stream.call_args.kwargs["want_title"])
+        # The AI title rides the done event and replaces the truncated fallback.
+        self.assertIn('"title": "أكثر المنتجات مبيعًا"', body)
+        conversation = AiConversation.objects.get(user=self.user)
+        self.assertEqual(conversation.title, "أكثر المنتجات مبيعًا")
+
+    def test_followup_turn_does_not_request_or_change_the_title(self):
+        conversation = AiConversation.objects.create(user=self.user, title="عنوان موجود")
+        with patch("apps.ai.views.RelayControlClient") as mock_client:
+            mock_client.return_value.open_ai_stream.return_value = FakeRelayResponse(
+                fake_sse_lines(["تمام"], reasoning="", title="عنوان جديد مختلف")
+            )
+            response = self.client.post(
+                reverse("ai-chat"),
+                {"message": "متابعة", "conversation_id": conversation.pk},
+                format="json",
+            )
+            b"".join(response.streaming_content)
+        # An already-named conversation never re-requests a title, so the existing
+        # name is preserved.
+        self.assertFalse(mock_client.return_value.open_ai_stream.call_args.kwargs["want_title"])
+        conversation.refresh_from_db()
+        self.assertEqual(conversation.title, "عنوان موجود")
+
+    def test_attachment_only_first_turn_gets_a_fallback_title(self):
+        with patch("apps.ai.views.RelayControlClient") as mock_client:
+            mock_client.return_value.open_ai_stream.return_value = FakeRelayResponse(
+                fake_sse_lines(["تم"], reasoning="")  # relay returns no title
+            )
+            response = self.client.post(
+                reverse("ai-chat"),
+                {
+                    "message": "",
+                    "attachments": [
+                        {
+                            "kind": "image",
+                            "data_uri": "data:image/png;base64,AAAA",
+                            "name": "فاتورة.png",
+                        }
+                    ],
+                },
+                format="json",
+            )
+            b"".join(response.streaming_content)
+        # No AI title → the attachment name is the readable fallback.
+        conversation = AiConversation.objects.get(user=self.user)
+        self.assertEqual(conversation.title, "فاتورة.png")
 
     def test_blocks_when_ai_disabled(self):
         RelayInstallation.objects.update(ai_enabled=False)
