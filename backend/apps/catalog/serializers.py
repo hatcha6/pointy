@@ -1070,3 +1070,39 @@ class ProductBulkFlagsSerializer(ProductBulkActionSerializer):
                 "Provide at least one flag to change."
             )
         return attrs
+
+
+class BoughtTogetherProductSerializer(serializers.Serializer):
+    """Compact product card for the "frequently bought together" panel.
+
+    Reads each entry as ``{"product": Product, "orders_together": int}``. Only
+    the fields the panel renders are exposed — name, primary image, price, and
+    how many orders pair it with the product being viewed.
+    """
+
+    id = serializers.IntegerField(source="product.id", read_only=True)
+    name = serializers.CharField(source="product.name", read_only=True)
+    orders_together = serializers.IntegerField(read_only=True)
+    unit_price = serializers.SerializerMethodField()
+    primary_image = serializers.SerializerMethodField()
+
+    def get_unit_price(self, entry):
+        variant = self._default_variant(entry["product"])
+        return str(variant.unit_price) if variant is not None else None
+
+    def get_primary_image(self, entry):
+        return primary_attachment_summary(
+            entry["product"],
+            role=Attachment.Role.PRODUCT_IMAGE,
+            context=self.context,
+        )
+
+    @staticmethod
+    def _default_variant(product):
+        # Read from the prefetched ``variants`` so the panel stays at one query
+        # for the whole list rather than one per card.
+        variants = list(product.variants.all())
+        for variant in variants:
+            if variant.is_default:
+                return variant
+        return variants[0] if variants else None

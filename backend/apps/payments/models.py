@@ -23,6 +23,16 @@ class Payment(TimeStampedModel):
     commission_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     external_reference = models.CharField(max_length=128, blank=True)
     card_receipt_data = models.JSONField(default=dict, blank=True)
+    # Set when a card payment's receipt is captured: links the payment to the
+    # deduped PaymentCard (and, through it, a customer). Nullable so cash/transfer
+    # and the refund/migration paths leave it empty.
+    card = models.ForeignKey(
+        "customers.PaymentCard",
+        on_delete=models.SET_NULL,
+        related_name="payments",
+        blank=True,
+        null=True,
+    )
 
     class Meta:
         ordering = ["-created_at"]

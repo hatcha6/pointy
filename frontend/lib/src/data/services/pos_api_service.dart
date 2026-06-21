@@ -7,6 +7,7 @@ import '../models/pos_user.dart';
 import '../models/analytics_export.dart';
 import '../models/analytics_event.dart';
 import '../models/bill_of_materials.dart';
+import '../models/bought_together_product.dart';
 import '../models/business_alert.dart';
 import '../models/onboarding.dart';
 import '../models/price_check_event.dart';
@@ -29,6 +30,7 @@ import '../models/contact.dart';
 import '../models/customer_activity.dart';
 import '../models/customer_asset.dart';
 import '../models/operations_job.dart';
+import '../models/payment_card.dart';
 import '../models/dashboard.dart';
 import '../models/discount_rule.dart';
 import '../models/employee.dart';
@@ -607,6 +609,13 @@ class PosApiService {
     return _catalog.fetchProduct(id);
   }
 
+  Future<List<BoughtTogetherProduct>> fetchBoughtTogether(
+    int productId, {
+    int limit = 8,
+  }) {
+    return _catalog.fetchBoughtTogether(productId, limit: limit);
+  }
+
   Future<Product> archiveProduct(int id) {
     return _catalog.archiveProduct(id);
   }
@@ -803,6 +812,31 @@ class PosApiService {
       customerId: customerId,
       page: page,
     );
+  }
+
+  Future<Customer> patchCustomer(int customerId, Map<String, Object?> body) {
+    return _customers.patchCustomer(customerId, body);
+  }
+
+  Future<Customer> mergeCustomer({
+    required int customerId,
+    required int sourceId,
+  }) {
+    return _customers.mergeCustomer(customerId: customerId, sourceId: sourceId);
+  }
+
+  Future<PaymentCardPage> fetchCustomerCards({
+    required int customerId,
+    int page = 1,
+  }) {
+    return _customers.fetchCustomerCards(customerId: customerId, page: page);
+  }
+
+  Future<PaymentCard> reassignCard({
+    required int cardId,
+    required int customerId,
+  }) {
+    return _customers.reassignCard(cardId: cardId, customerId: customerId);
   }
 
   Future<ReportRun> createReportRun(ReportRunDraft draft) {

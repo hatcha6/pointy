@@ -9357,6 +9357,24 @@ abstract class AppLocalizations {
   /// **'لم يظهر هذا المنتج في أي فاتورة شراء بعد.'**
   String get productRecentPurchaseBillsEmpty;
 
+  /// Title of the product-detail section listing products frequently bought in the same order as the one being viewed.
+  ///
+  /// In ar, this message translates to:
+  /// **'يُشترى عادةً مع'**
+  String get productBoughtTogetherTitle;
+
+  /// Caption under the 'frequently bought together' section title.
+  ///
+  /// In ar, this message translates to:
+  /// **'منتجات يضيفها العملاء عادةً إلى الطلب نفسه.'**
+  String get productBoughtTogetherSubtitle;
+
+  /// Caption on a bought-together product card showing how many paid orders pair it with the current product.
+  ///
+  /// In ar, this message translates to:
+  /// **'في {count} طلبًا'**
+  String productBoughtTogetherOrders(String count);
+
   /// No description provided for @productLatestCostLabel.
   ///
   /// In ar, this message translates to:
@@ -11641,6 +11659,132 @@ abstract class AppLocalizations {
   /// **'بيانات العميل'**
   String get customerProfileTitle;
 
+  /// No description provided for @paymentCardsTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'بطاقات الدفع'**
+  String get paymentCardsTitle;
+
+  /// No description provided for @paymentCardsLoadError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر تحميل بطاقات الدفع.'**
+  String get paymentCardsLoadError;
+
+  /// No description provided for @paymentCardsEmpty.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد بطاقات مرتبطة بهذا العميل.'**
+  String get paymentCardsEmpty;
+
+  /// Subtitle showing when a payment card was last used.
+  ///
+  /// In ar, this message translates to:
+  /// **'آخر استخدام: {date}'**
+  String paymentCardLastSeenValue(String date);
+
+  /// Number of payment cards attached to a customer.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count} بطاقة'**
+  String paymentCardCountValue(int count);
+
+  /// No description provided for @reassignCardTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'نقل البطاقة إلى عميل آخر'**
+  String get reassignCardTooltip;
+
+  /// No description provided for @reassignCardTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'نقل البطاقة'**
+  String get reassignCardTitle;
+
+  /// No description provided for @cardReassignedMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم نقل البطاقة.'**
+  String get cardReassignedMessage;
+
+  /// No description provided for @cardReassignFailedMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر نقل البطاقة.'**
+  String get cardReassignFailedMessage;
+
+  /// No description provided for @unclaimedCardCustomerCalloutTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'عميل بطاقة غير مُسمّى'**
+  String get unclaimedCardCustomerCalloutTitle;
+
+  /// No description provided for @unclaimedCardCustomerCalloutBody.
+  ///
+  /// In ar, this message translates to:
+  /// **'أُنشئ هذا العميل تلقائيًا من بطاقة دفع. ادمجه مع عميل موجود أو أعطه اسمًا ليصبح عميلًا مستقلًا.'**
+  String get unclaimedCardCustomerCalloutBody;
+
+  /// No description provided for @mergeIntoCustomerButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'دمج مع عميل'**
+  String get mergeIntoCustomerButton;
+
+  /// No description provided for @mergeCustomerSuccessMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم دمج العميل.'**
+  String get mergeCustomerSuccessMessage;
+
+  /// No description provided for @mergeCustomerFailedMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر دمج العميل.'**
+  String get mergeCustomerFailedMessage;
+
+  /// No description provided for @nameCustomerButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'تسمية العميل'**
+  String get nameCustomerButton;
+
+  /// No description provided for @nameCustomerTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'تسمية العميل'**
+  String get nameCustomerTitle;
+
+  /// No description provided for @customerClaimedMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم حفظ العميل.'**
+  String get customerClaimedMessage;
+
+  /// No description provided for @customerClaimFailedMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر حفظ العميل.'**
+  String get customerClaimFailedMessage;
+
+  /// No description provided for @unclaimedCardsFilterLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'بطاقات غير مُسمّاة'**
+  String get unclaimedCardsFilterLabel;
+
+  /// No description provided for @allCustomersFilterLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'كل العملاء'**
+  String get allCustomersFilterLabel;
+
+  /// No description provided for @customerAutoCreatedBadge.
+  ///
+  /// In ar, this message translates to:
+  /// **'بطاقة غير مُسمّاة'**
+  String get customerAutoCreatedBadge;
+
   /// No description provided for @customerSalesSummaryTitle.
   ///
   /// In ar, this message translates to:
@@ -12816,12 +12960,6 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'لا توجد مبيعات مسجلة في هذه الجلسة.'**
   String get emptySessionSales;
-
-  /// No description provided for @allCustomersFilterLabel.
-  ///
-  /// In ar, this message translates to:
-  /// **'كل العملاء'**
-  String get allCustomersFilterLabel;
 
   /// No description provided for @clearCustomerFilterTooltip.
   ///

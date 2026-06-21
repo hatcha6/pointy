@@ -1,5 +1,6 @@
 import '../models/customer_activity.dart';
 import '../models/contact.dart';
+import '../models/payment_card.dart';
 import '../models/sale_order_page.dart';
 import 'api_session.dart';
 
@@ -78,6 +79,58 @@ class CustomerApiClient {
     );
     return CustomerAdjustmentHistoryPage.fromAny(
       _session.decodedBody(response),
+    );
+  }
+
+  Future<Customer> patchCustomer(int customerId, Map<String, Object?> body) async {
+    final response = await _session.patch('customers/$customerId/', body: body);
+    _session.throwApiException(response, 'Customer update failed with status');
+    return Customer.fromJson(
+      _session.decodedBody(response) as Map<String, Object?>,
+    );
+  }
+
+  /// Folds [sourceId] into [customerId]: the source's cards, orders and other
+  /// records re-point to the target and the source is deleted server-side.
+  Future<Customer> mergeCustomer({
+    required int customerId,
+    required int sourceId,
+  }) async {
+    final response = await _session.post(
+      'customers/$customerId/merge/',
+      body: {'source_id': sourceId},
+    );
+    _session.throwApiException(response, 'Customer merge failed with status');
+    return Customer.fromJson(
+      _session.decodedBody(response) as Map<String, Object?>,
+    );
+  }
+
+  Future<PaymentCardPage> fetchCustomerCards({
+    required int customerId,
+    int page = 1,
+  }) async {
+    final response = await _session.get(
+      'payment-cards/',
+      query: {'customer': '$customerId', 'page': '$page'},
+    );
+    _session.throwApiException(response, 'Payment card list failed with status');
+    return PaymentCardPage.fromJson(
+      _session.decodedBody(response) as Map<String, Object?>,
+    );
+  }
+
+  Future<PaymentCard> reassignCard({
+    required int cardId,
+    required int customerId,
+  }) async {
+    final response = await _session.post(
+      'payment-cards/$cardId/reassign/',
+      body: {'customer_id': customerId},
+    );
+    _session.throwApiException(response, 'Card reassign failed with status');
+    return PaymentCard.fromJson(
+      _session.decodedBody(response) as Map<String, Object?>,
     );
   }
 }

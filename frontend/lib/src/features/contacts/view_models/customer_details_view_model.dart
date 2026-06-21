@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import '../../../core/result.dart';
 import '../../../data/models/contact.dart';
 import '../../../data/models/customer_activity.dart';
+import '../../../data/models/payment_card.dart';
 import '../../../data/models/sale_order.dart';
 import '../../../data/models/sale_order_page.dart';
 import '../../../data/repositories/contact_repository.dart';
@@ -19,14 +20,20 @@ class CustomerDetailsViewModel extends ChangeNotifier {
 
   final ContactRepository _contactRepository;
 
+  ContactRepository get repository => _contactRepository;
+
   Customer _customer;
   CustomerSalesSummary _summary;
   List<SaleOrder> _orderHistory = [];
   List<CustomerAdjustmentHistoryEntry> _adjustmentHistory = [];
+  List<PaymentCard> _cards = [];
   bool _isLoadingCustomer = false;
   bool _isLoadingSummary = false;
   bool _isLoadingOrders = false;
   bool _isLoadingAdjustments = false;
+  bool _isLoadingCards = false;
+  bool _hasCardsError = false;
+  bool _isSaving = false;
   bool _isLoadingMoreOrders = false;
   bool _isLoadingMoreAdjustments = false;
   bool _hasMoreOrders = true;
@@ -43,6 +50,10 @@ class CustomerDetailsViewModel extends ChangeNotifier {
   List<SaleOrder> get orderHistory => List.unmodifiable(_orderHistory);
   List<CustomerAdjustmentHistoryEntry> get adjustmentHistory =>
       List.unmodifiable(_adjustmentHistory);
+  List<PaymentCard> get cards => List.unmodifiable(_cards);
+  bool get isLoadingCards => _isLoadingCards;
+  bool get hasCardsError => _hasCardsError;
+  bool get isSaving => _isSaving;
   bool get isLoadingCustomer => _isLoadingCustomer;
   bool get isLoadingSummary => _isLoadingSummary;
   bool get isLoadingOrders => _isLoadingOrders;
@@ -62,7 +73,90 @@ class CustomerDetailsViewModel extends ChangeNotifier {
       loadSummary(),
       loadOrderHistory(),
       loadAdjustmentHistory(),
+      loadCards(),
     ]);
+  }
+
+  Future<void> loadCards() async {
+    _isLoadingCards = true;
+    _hasCardsError = false;
+    notifyListeners();
+
+    final result = await _contactRepository.loadCustomerCards(
+      customerId: _customer.id,
+    );
+    switch (result) {
+      case Ok<PaymentCardPage>():
+        _cards = result.value.cards;
+      case Error<PaymentCardPage>():
+        _cards = [];
+        _hasCardsError = true;
+    }
+
+    _isLoadingCards = false;
+    notifyListeners();
+  }
+
+  /// Names a placeholder card-customer, claiming it as a real customer.
+  Future<bool> claim(String fullName) async {
+    if (_isSaving) {
+      return false;
+    }
+    _isSaving = true;
+    notifyListeners();
+
+    final result = await _contactRepository.patchCustomer(_customer.id, {
+      'full_name': fullName,
+      'is_auto_created': false,
+    });
+    final ok = result is Ok<Customer>;
+    if (ok) {
+      _customer = result.value;
+    }
+
+    _isSaving = false;
+    notifyListeners();
+    return ok;
+  }
+
+  /// Folds this customer into [targetId]; on success this customer no longer
+  /// exists, so callers should leave the detail view.
+  Future<bool> mergeInto(int targetId) async {
+    if (_isSaving) {
+      return false;
+    }
+    _isSaving = true;
+    notifyListeners();
+
+    final result = await _contactRepository.mergeCustomer(
+      customerId: targetId,
+      sourceId: _customer.id,
+    );
+
+    _isSaving = false;
+    notifyListeners();
+    return result is Ok<Customer>;
+  }
+
+  Future<bool> reassignCard(int cardId, int targetCustomerId) async {
+    if (_isSaving) {
+      return false;
+    }
+    _isSaving = true;
+    notifyListeners();
+
+    final result = await _contactRepository.reassignCard(
+      cardId: cardId,
+      customerId: targetCustomerId,
+    );
+    final ok = result is Ok<PaymentCard>;
+
+    _isSaving = false;
+    notifyListeners();
+    if (ok) {
+      await loadCards();
+    }
+    return ok;
   }
 
   Future<void> loadCustomer() async {

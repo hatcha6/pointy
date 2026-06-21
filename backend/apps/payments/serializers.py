@@ -151,6 +151,12 @@ class PaymentSerializer(serializers.ModelSerializer):
         validated_data["commission_percent"] = percent
         validated_data["commission_amount"] = commission
         payment = super().create(validated_data)
+        if payment.method == Payment.Method.CARD and payment.card_receipt_data:
+            # Promote the scanned receipt into a deduped PaymentCard and link it
+            # to a customer (minting a placeholder if the order has none yet).
+            from apps.customers.services import link_card_payment
+
+            link_card_payment(payment)
         if amount > 0 and order.status != Order.Status.PAID:
             paid_total = (paid_total + amount).quantize(Decimal("0.01"))
             if paid_total >= order.total:

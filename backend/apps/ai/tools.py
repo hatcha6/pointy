@@ -14,9 +14,7 @@ import json
 import logging
 import re
 import unicodedata
-from collections import Counter
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
-from itertools import combinations
 
 from django.conf import settings
 from django.core.serializers.json import DjangoJSONEncoder
@@ -26,6 +24,8 @@ from rest_framework.exceptions import NotAuthenticated, PermissionDenied
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.relations import ManyRelatedField, PrimaryKeyRelatedField, SlugRelatedField
 from rest_framework.test import APIRequestFactory, force_authenticate
+
+from apps.sales.cooccurrence import BASKET_MAX_ROWS, count_cooccurring_pairs
 
 from .tool_registry import WRITE_DENY_RESOURCES, get_registry, resource_for_model
 
@@ -416,11 +416,6 @@ def aggregate(*, user, resource, metric, group_by=None, filters=None, limit=10):
     return {"ok": True, "data": _json_safe(data)}
 
 
-# Cap line-rows scanned so an unbounded period can't blow up memory; well above
-# any realistic recent window, and the model is told to pass a date range.
-_BASKET_MAX_ROWS = 50_000
-
-
 def frequently_bought_together(*, user, filters=None, limit=10, min_count=2):
     """Market-basket analysis: products that appear together in the same order,
     ranked by how many orders contain both. Pairwise co-occurrence isn't a simple
@@ -461,20 +456,16 @@ def frequently_bought_together(*, user, filters=None, limit=10, min_count=2):
         min_count = 2
 
     products_by_order = {}
-    rows = queryset.values_list("id", "lines__variant__product__name")[:_BASKET_MAX_ROWS]
+    rows = queryset.values_list("id", "lines__variant__product__name")[:BASKET_MAX_ROWS]
     for order_id, product_name in rows:
         if product_name:
             products_by_order.setdefault(order_id, set()).add(product_name)
 
-    pair_counts = Counter()
-    for products in products_by_order.values():
-        for first, second in combinations(sorted(products), 2):
-            pair_counts[(first, second)] += 1
-
     pairs = [
         {"products": [first, second], "orders_together": count}
-        for (first, second), count in pair_counts.most_common(limit)
-        if count >= min_count
+        for first, second, count in count_cooccurring_pairs(
+            products_by_order, limit=limit, min_count=min_count
+        )
     ]
     return {
         "ok": True,

@@ -4,6 +4,7 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 import '../../../core/analytics_engine.dart';
 import '../../../core/authorization.dart';
 import '../../../data/models/barcode_label.dart';
+import '../../../data/models/bought_together_product.dart';
 import '../../../data/models/product.dart';
 import '../../../data/models/product_variant.dart';
 import '../../../data/repositories/inventory_repository.dart';
@@ -155,6 +156,14 @@ class ProductDetailsView extends StatelessWidget {
               onOpenVariant: (variant) =>
                   _openVariantDetails(context, product, variant),
             ),
+            if (viewModel.boughtTogether.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              _BoughtTogetherSection(
+                items: viewModel.boughtTogether,
+                onOpenProduct: (item) =>
+                    _openBoughtTogetherProduct(context, item),
+              ),
+            ],
             if (capabilities.canViewRegisterSessionOrders ||
                 capabilities.canAccessPurchasing) ...[
               const SizedBox(height: 12),
@@ -295,6 +304,42 @@ class ProductDetailsView extends StatelessWidget {
             analyticsEngine: analyticsEngine,
           ),
           printingRepository: printingRepository,
+          capabilities: capabilities,
+          analyticsEngine: analyticsEngine,
+        ),
+      ),
+    );
+  }
+
+  /// Opens the full product detail for a "bought together" suggestion. Only the
+  /// id/name are known here, so the new view model is seeded with a stub and
+  /// immediately refetches the product in full (see [ProductDetailsViewModel]).
+  Future<void> _openBoughtTogetherProduct(
+    BuildContext context,
+    BoughtTogetherProduct item,
+  ) {
+    final seed = Product(
+      id: item.productId,
+      name: item.name,
+      quantityOnHand: 0,
+      primaryImage: item.primaryImage,
+    );
+    return Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => ProductDetailsScreen(
+          viewModel: ProductDetailsViewModel(
+            viewModel.catalogRepository,
+            purchaseRepository,
+            viewModel.saleRepository,
+            seed,
+            analyticsEngine: analyticsEngine,
+            shouldLoadSaleHistory: capabilities.canViewRegisterSessionOrders,
+            shouldLoadPurchaseHistory: capabilities.canAccessPurchasing,
+          ),
+          inventoryRepository: inventoryRepository,
+          printingRepository: printingRepository,
+          purchaseRepository: purchaseRepository,
+          shopSettingsRepository: shopSettingsRepository,
           capabilities: capabilities,
           analyticsEngine: analyticsEngine,
         ),
@@ -868,6 +913,120 @@ class _VariantNameLabel extends StatelessWidget {
             label: Text(l10n.defaultVariantBadge),
           ),
       ],
+    );
+  }
+}
+
+/// "Frequently bought together" — products that recur in the same paid orders
+/// as the one being viewed, ranked by how often they co-occur. Rendered as a
+/// horizontally scrolling strip of tappable cards.
+class _BoughtTogetherSection extends StatelessWidget {
+  const _BoughtTogetherSection({
+    required this.items,
+    required this.onOpenProduct,
+  });
+
+  final List<BoughtTogetherProduct> items;
+  final ValueChanged<BoughtTogetherProduct> onOpenProduct;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+
+    return PointyDetailSection(
+      title: l10n.productBoughtTogetherTitle,
+      icon: Icons.add_shopping_cart_outlined,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            l10n.productBoughtTogetherSubtitle,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: context.pointyColors.mutedInk,
+            ),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            height: 168,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: items.length,
+              separatorBuilder: (_, _) => const SizedBox(width: 12),
+              itemBuilder: (context, index) {
+                final item = items[index];
+                return _BoughtTogetherCard(
+                  item: item,
+                  onTap: () => onOpenProduct(item),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _BoughtTogetherCard extends StatelessWidget {
+  const _BoughtTogetherCard({required this.item, required this.onTap});
+
+  final BoughtTogetherProduct item;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final colors = context.pointyColors;
+    final textTheme = Theme.of(context).textTheme;
+
+    return SizedBox(
+      width: 136,
+      child: Material(
+        color: colors.surface,
+        borderRadius: BorderRadius.circular(8),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.all(10),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: ProductImageThumbnail(
+                    imageUrl: item.primaryImage?.contentUrl,
+                    fallbackText: item.name,
+                    size: 64,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  item.name,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: textTheme.bodyMedium,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  formatMoney(item.unitPrice),
+                  style: textTheme.titleSmall?.copyWith(
+                    color: colors.primaryStrong,
+                  ),
+                ),
+                const Spacer(),
+                Text(
+                  l10n.productBoughtTogetherOrders('${item.ordersTogether}'),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: textTheme.labelSmall?.copyWith(
+                    color: colors.mutedInk,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

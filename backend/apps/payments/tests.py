@@ -14,6 +14,7 @@ from rest_framework.test import APIClient
 from apps.catalog.testing import create_product_with_default_variant
 from apps.core.models import ShopSettings
 from apps.core.roles import CASHIER_GROUP, MANAGER_GROUP, ensure_role_groups
+from apps.customers.models import Customer, PaymentCard
 from apps.inventory.models import StockItem, StockMovement
 from apps.sales.models import Order, RegisterSession
 from apps.sales.services import create_order_with_lines
@@ -312,6 +313,64 @@ class MoamalatCardReceiptTests(TestCase):
         )
 
         self.assertTrue(serializer.is_valid(), serializer.errors)
+
+    def _pay_card(self, order, amount):
+        serializer = PaymentSerializer(
+            data={
+                "order": order.pk,
+                "method": Payment.Method.CARD,
+                "amount": amount,
+                "card_receipt_url": _moamalat_receipt_url(f"{amount}0"),
+            }
+        )
+        serializer.is_valid(raise_exception=True)
+        return serializer.save()
+
+    def _new_order(self, customer=None):
+        return Order.objects.create(
+            register_session=self.session,
+            subtotal=Decimal("10.00"),
+            total=Decimal("10.00"),
+            customer=customer,
+        )
+
+    def test_card_payment_mints_card_and_placeholder_customer(self):
+        payment = self._pay_card(self.order, "6.00")
+
+        card = PaymentCard.objects.get()
+        self.assertEqual(payment.card, card)
+        self.assertEqual(card.masked_pan, "639974*********8809")
+        self.assertEqual(card.card_scheme, "NUMO BANK1")
+        self.assertEqual(card.last_receipt_data["rrn"], "615316000050")
+
+        placeholder = card.customer
+        self.assertTrue(placeholder.is_auto_created)
+        self.assertEqual(placeholder.full_name, "Card •••• 8809")
+        self.order.refresh_from_db()
+        self.assertEqual(self.order.customer_id, placeholder.pk)
+
+    def test_same_card_dedupes_across_orders_without_new_placeholder(self):
+        first = self._pay_card(self.order, "6.00")
+        second_order = self._new_order()
+        second = self._pay_card(second_order, "6.00")
+
+        self.assertEqual(first.card_id, second.card_id)
+        self.assertEqual(PaymentCard.objects.count(), 1)
+        # Only one placeholder customer for the shared card.
+        self.assertEqual(Customer.objects.filter(is_auto_created=True).count(), 1)
+        second_order.refresh_from_db()
+        self.assertEqual(second_order.customer_id, first.card.customer_id)
+
+    def test_card_on_order_with_customer_skips_placeholder(self):
+        real = Customer.objects.create(full_name="Real Customer")
+        order = self._new_order(customer=real)
+
+        payment = self._pay_card(order, "6.00")
+
+        self.assertEqual(payment.card.customer_id, real.pk)
+        self.assertFalse(Customer.objects.filter(is_auto_created=True).exists())
+        order.refresh_from_db()
+        self.assertEqual(order.customer_id, real.pk)
 
 
 def _moamalat_receipt_url(amount):

@@ -4,6 +4,7 @@ import '../../../core/analytics_audit.dart';
 import '../../../core/analytics_engine.dart';
 import '../../../core/result.dart';
 import '../../../data/models/attachment_summary.dart';
+import '../../../data/models/bought_together_product.dart';
 import '../../../data/models/product.dart';
 import '../../../data/models/product_image_upload.dart';
 import '../../../data/models/product_update_draft.dart';
@@ -36,6 +37,7 @@ class ProductDetailsViewModel extends ChangeNotifier {
     if (_shouldLoadPurchaseHistory) {
       loadPurchaseHistory();
     }
+    loadBoughtTogether();
   }
 
   final CatalogRepository _catalogRepository;
@@ -61,9 +63,13 @@ class ProductDetailsViewModel extends ChangeNotifier {
   int _purchaseHistoryPage = 1;
   List<SaleOrder> _recentSaleOrders = [];
   List<PurchaseOrder> _recentPurchaseOrders = [];
+  bool _isLoadingBoughtTogether = false;
+  bool _hasBoughtTogetherError = false;
+  List<BoughtTogetherProduct> _boughtTogether = [];
   String? _errorMessage;
 
   CatalogRepository get catalogRepository => _catalogRepository;
+  SaleRepository get saleRepository => _saleRepository;
   Product get product => _product;
   List<ProductVariant> get variants {
     final variants =
@@ -94,6 +100,10 @@ class ProductDetailsViewModel extends ChangeNotifier {
   List<SaleOrder> get recentSaleOrders => List.unmodifiable(_recentSaleOrders);
   List<PurchaseOrder> get recentPurchaseOrders =>
       List.unmodifiable(_recentPurchaseOrders);
+  bool get isLoadingBoughtTogether => _isLoadingBoughtTogether;
+  bool get hasBoughtTogetherError => _hasBoughtTogetherError;
+  List<BoughtTogetherProduct> get boughtTogether =>
+      List.unmodifiable(_boughtTogether);
   String? get errorMessage => _errorMessage;
 
   Future<void> loadProduct() async {
@@ -110,6 +120,24 @@ class ProductDetailsViewModel extends ChangeNotifier {
     }
 
     _isLoading = false;
+    notifyListeners();
+  }
+
+  Future<void> loadBoughtTogether() async {
+    _isLoadingBoughtTogether = true;
+    _hasBoughtTogetherError = false;
+    notifyListeners();
+
+    final result = await _catalogRepository.loadBoughtTogether(_product.id);
+    switch (result) {
+      case Ok<List<BoughtTogetherProduct>>():
+        _boughtTogether = result.value;
+      case Error<List<BoughtTogetherProduct>>():
+        _boughtTogether = [];
+        _hasBoughtTogetherError = true;
+    }
+
+    _isLoadingBoughtTogether = false;
     notifyListeners();
   }
 

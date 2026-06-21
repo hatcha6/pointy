@@ -27,6 +27,10 @@ class Customer(TimeStampedModel):
     marketing_consent = models.BooleanField(default=False)
     notes = models.TextField(blank=True)
     is_active = models.BooleanField(default=True)
+    # Placeholder customers minted automatically the first time a payment card is
+    # seen. They stay hidden from the contacts list until a human names one
+    # (claiming it) or merges it into a real customer.
+    is_auto_created = models.BooleanField(default=False)
 
     class Meta:
         ordering = ["full_name", "customer_number"]
@@ -92,3 +96,42 @@ class Asset(TimeStampedModel):
     def display_name(self) -> str:
         label = " ".join(part for part in (self.brand, self.model_name) if part)
         return label or self.get_asset_type_display()
+
+
+class PaymentCard(TimeStampedModel):
+    """A redacted payment card seen at checkout, deduped across sales.
+
+    Built from the (already redacted) terminal receipt — we only ever see a
+    truncated PAN (BIN + last four), never the full number or CVV, so storing it
+    is PCI-safe. ``fingerprint`` is a best-effort identity hashed from the masked
+    PAN, scheme and AID; two physical cards that share a BIN and last-four can
+    collide, so treat it as a strong hint, not a guarantee. A card always belongs
+    to exactly one customer at a time (re-pointed on merge / reassign).
+    """
+
+    customer = models.ForeignKey(
+        Customer,
+        on_delete=models.PROTECT,
+        related_name="cards",
+    )
+    fingerprint = models.CharField(max_length=64, unique=True)
+    masked_pan = models.CharField(max_length=64, blank=True)
+    card_scheme = models.CharField(max_length=64, blank=True)
+    aid = models.CharField(max_length=64, blank=True)
+    label = models.CharField(max_length=120, blank=True)
+    first_seen_at = models.DateTimeField(default=timezone.now)
+    last_seen_at = models.DateTimeField(default=timezone.now)
+    is_active = models.BooleanField(default=True)
+    # Snapshot of the most recent payment's card_receipt_data, kept for reference
+    # (full per-payment evidence still lives on each Payment).
+    last_receipt_data = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ["-last_seen_at", "-id"]
+
+    def __str__(self) -> str:
+        return self.display_name
+
+    @property
+    def display_name(self) -> str:
+        return self.label or self.masked_pan or f"Card {self.pk}"

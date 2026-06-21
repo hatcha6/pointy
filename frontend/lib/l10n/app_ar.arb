@@ -2964,6 +2964,23 @@
   "productRecentPurchaseBillsLoadError": "تعذر تحميل فواتير الشراء لهذا المنتج.",
   "productRecentInvoicesEmpty": "لم يظهر هذا المنتج في أي فاتورة بيع بعد.",
   "productRecentPurchaseBillsEmpty": "لم يظهر هذا المنتج في أي فاتورة شراء بعد.",
+  "productBoughtTogetherTitle": "يُشترى عادةً مع",
+  "@productBoughtTogetherTitle": {
+    "description": "Title of the product-detail section listing products frequently bought in the same order as the one being viewed."
+  },
+  "productBoughtTogetherSubtitle": "منتجات يضيفها العملاء عادةً إلى الطلب نفسه.",
+  "@productBoughtTogetherSubtitle": {
+    "description": "Caption under the 'frequently bought together' section title."
+  },
+  "productBoughtTogetherOrders": "في {count} طلبًا",
+  "@productBoughtTogetherOrders": {
+    "description": "Caption on a bought-together product card showing how many paid orders pair it with the current product.",
+    "placeholders": {
+      "count": {
+        "type": "String"
+      }
+    }
+  },
   "productLatestCostLabel": "آخر تكلفة",
   "productGrossProfitLabel": "ربح القطعة",
   "productMarginPercentLabel": "هامش الربح",
@@ -3884,6 +3901,43 @@
   "refreshCustomerDetailsTooltip": "تحديث تفاصيل العميل",
   "customerDetailsLoadError": "تعذر تحميل بيانات العميل.",
   "customerProfileTitle": "بيانات العميل",
+  "paymentCardsTitle": "بطاقات الدفع",
+  "paymentCardsLoadError": "تعذّر تحميل بطاقات الدفع.",
+  "paymentCardsEmpty": "لا توجد بطاقات مرتبطة بهذا العميل.",
+  "paymentCardLastSeenValue": "آخر استخدام: {date}",
+  "@paymentCardLastSeenValue": {
+    "description": "Subtitle showing when a payment card was last used.",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "paymentCardCountValue": "{count} بطاقة",
+  "@paymentCardCountValue": {
+    "description": "Number of payment cards attached to a customer.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "reassignCardTooltip": "نقل البطاقة إلى عميل آخر",
+  "reassignCardTitle": "نقل البطاقة",
+  "cardReassignedMessage": "تم نقل البطاقة.",
+  "cardReassignFailedMessage": "تعذّر نقل البطاقة.",
+  "unclaimedCardCustomerCalloutTitle": "عميل بطاقة غير مُسمّى",
+  "unclaimedCardCustomerCalloutBody": "أُنشئ هذا العميل تلقائيًا من بطاقة دفع. ادمجه مع عميل موجود أو أعطه اسمًا ليصبح عميلًا مستقلًا.",
+  "mergeIntoCustomerButton": "دمج مع عميل",
+  "mergeCustomerSuccessMessage": "تم دمج العميل.",
+  "mergeCustomerFailedMessage": "تعذّر دمج العميل.",
+  "nameCustomerButton": "تسمية العميل",
+  "nameCustomerTitle": "تسمية العميل",
+  "customerClaimedMessage": "تم حفظ العميل.",
+  "customerClaimFailedMessage": "تعذّر حفظ العميل.",
+  "unclaimedCardsFilterLabel": "بطاقات غير مُسمّاة",
+  "allCustomersFilterLabel": "كل العملاء",
+  "customerAutoCreatedBadge": "بطاقة غير مُسمّاة",
   "customerSalesSummaryTitle": "ملخص تعاملات العميل",
   "customerSalesSummaryLoadError": "تعذر تحميل ملخص تعاملات العميل.",
   "customerInvoiceHistoryTitle": "الفواتير",

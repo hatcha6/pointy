@@ -1,6 +1,7 @@
 import '../../core/result.dart';
 import '../../shared/barcode/scale_barcode.dart';
 import '../models/attachment_summary.dart';
+import '../models/bought_together_product.dart';
 import '../models/modifier_group.dart';
 import '../models/product.dart';
 import '../models/product_bulk_action.dart';
@@ -51,6 +52,15 @@ class CatalogRepository {
 
   Future<Result<Product>> loadProduct(int id) async {
     return Result.guard(() => _service.fetchProduct(id));
+  }
+
+  Future<Result<List<BoughtTogetherProduct>>> loadBoughtTogether(
+    int productId, {
+    int limit = 8,
+  }) async {
+    return Result.guard(
+      () => _service.fetchBoughtTogether(productId, limit: limit),
+    );
   }
 
   Future<Result<Product>> archiveProduct(int id) async {

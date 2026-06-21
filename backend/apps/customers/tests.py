@@ -10,8 +10,9 @@ from rest_framework.test import APITestCase
 from apps.analytics.models import AnalyticsEvent
 from apps.catalog.testing import create_product_with_default_variant
 from apps.core.roles import ensure_role_groups
-from apps.customers.models import Customer
+from apps.customers.models import Customer, PaymentCard
 from apps.inventory.models import StockItem
+from apps.sales.models import Order, RegisterSession
 
 
 class CustomerApiTests(APITestCase):
@@ -229,3 +230,125 @@ class CustomerApiTests(APITestCase):
         variant = product.default_variant
         StockItem.objects.create(variant=variant, quantity_on_hand=10)
         return variant
+
+
+class PaymentCardCustomerTests(APITestCase):
+    def setUp(self):
+        groups = ensure_role_groups()
+        self.user = get_user_model().objects.create_user(
+            username="manager",
+            password="password",
+        )
+        self.user.groups.add(groups["manager"])
+        self.client.force_authenticate(self.user)
+
+    def _card_for(self, customer, fingerprint="fp", masked_pan="639974*********8809"):
+        return PaymentCard.objects.create(
+            customer=customer,
+            fingerprint=fingerprint,
+            masked_pan=masked_pan,
+            card_scheme="NUMO BANK1",
+        )
+
+    def test_placeholders_hidden_from_default_list_but_filterable(self):
+        real = Customer.objects.create(full_name="Real Customer")
+        placeholder = Customer.objects.create(
+            full_name="Card •••• 8809",
+            is_auto_created=True,
+        )
+
+        default = self.client.get(reverse("customer-list"))
+        unclaimed = self.client.get(
+            reverse("customer-list"), {"is_auto_created": "true"}
+        )
+
+        default_ids = {row["id"] for row in default.data["results"]}
+        unclaimed_ids = {row["id"] for row in unclaimed.data["results"]}
+        self.assertEqual(default_ids, {real.pk})
+        self.assertEqual(unclaimed_ids, {placeholder.pk})
+
+    def test_naming_a_placeholder_claims_it(self):
+        placeholder = Customer.objects.create(
+            full_name="Card •••• 8809",
+            is_auto_created=True,
+        )
+
+        response = self.client.patch(
+            reverse("customer-detail", args=[placeholder.pk]),
+            {"full_name": "Layla Ahmed", "is_auto_created": False},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        placeholder.refresh_from_db()
+        self.assertFalse(placeholder.is_auto_created)
+        default_ids = {
+            row["id"] for row in self.client.get(reverse("customer-list")).data["results"]
+        }
+        self.assertIn(placeholder.pk, default_ids)
+
+    def test_card_count_is_exposed(self):
+        customer = Customer.objects.create(full_name="With cards")
+        self._card_for(customer, fingerprint="a")
+        self._card_for(customer, fingerprint="b", masked_pan="400000*********1234")
+
+        response = self.client.get(reverse("customer-detail", args=[customer.pk]))
+
+        self.assertEqual(response.data["card_count"], 2)
+
+    def test_merge_folds_source_relations_into_target_and_deletes_source(self):
+        session = RegisterSession.objects.create(owner_key="user:merge")
+        source = Customer.objects.create(
+            full_name="Card •••• 8809",
+            is_auto_created=True,
+        )
+        target = Customer.objects.create(full_name="Layla Ahmed")
+        card = self._card_for(source)
+        order = Order.objects.create(
+            register_session=session,
+            subtotal=Decimal("5.00"),
+            total=Decimal("5.00"),
+            customer=source,
+        )
+
+        response = self.client.post(
+            reverse("customer-merge", args=[target.pk]),
+            {"source_id": source.pk},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["id"], target.pk)
+        self.assertEqual(response.data["card_count"], 1)
+        card.refresh_from_db()
+        order.refresh_from_db()
+        self.assertEqual(card.customer_id, target.pk)
+        self.assertEqual(order.customer_id, target.pk)
+        self.assertFalse(Customer.objects.filter(pk=source.pk).exists())
+
+    def test_merge_rejects_merging_into_self(self):
+        customer = Customer.objects.create(full_name="Solo")
+
+        response = self.client.post(
+            reverse("customer-merge", args=[customer.pk]),
+            {"source_id": customer.pk},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertTrue(Customer.objects.filter(pk=customer.pk).exists())
+
+    def test_reassign_card_to_another_customer(self):
+        first = Customer.objects.create(full_name="First")
+        second = Customer.objects.create(full_name="Second")
+        card = self._card_for(first)
+
+        response = self.client.post(
+            reverse("payment-card-reassign", args=[card.pk]),
+            {"customer_id": second.pk},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        card.refresh_from_db()
+        self.assertEqual(card.customer_id, second.pk)

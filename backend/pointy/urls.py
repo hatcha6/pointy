@@ -29,7 +29,7 @@ from apps.catalog.views import (
     VariantOptionViewSet,
 )
 from apps.channels.views import SalesChannelViewSet
-from apps.customers.views import CustomerViewSet
+from apps.customers.views import CustomerViewSet, PaymentCardViewSet
 from apps.operations.views import (
     AssetViewSet,
     BillOfMaterialsViewSet,
@@ -139,6 +139,7 @@ router.register("stock-counts", StockCountViewSet, basename="stock-count")
 router.register("orders", OrderViewSet)
 router.register("fraud-findings", FraudFindingViewSet, basename="fraud-finding")
 router.register("customers", CustomerViewSet)
+router.register("payment-cards", PaymentCardViewSet, basename="payment-card")
 router.register("discount-rules", DiscountRuleViewSet)
 router.register("expense-categories", ExpenseCategoryViewSet)
 router.register("expenses", ExpenseViewSet)

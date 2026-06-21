@@ -1,6 +1,7 @@
 import '../../core/result.dart';
 import '../models/contact.dart';
 import '../models/customer_activity.dart';
+import '../models/payment_card.dart';
 import '../models/sale_order_page.dart';
 import '../services/pos_api_service.dart';
 
@@ -62,6 +63,40 @@ class ContactRepository {
 
   Future<Result<Customer>> createCustomer(CustomerDraft draft) async {
     return Result.guard(() => _service.createCustomer(draft));
+  }
+
+  Future<Result<Customer>> patchCustomer(
+    int customerId,
+    Map<String, Object?> body,
+  ) async {
+    return Result.guard(() => _service.patchCustomer(customerId, body));
+  }
+
+  Future<Result<Customer>> mergeCustomer({
+    required int customerId,
+    required int sourceId,
+  }) async {
+    return Result.guard(
+      () => _service.mergeCustomer(customerId: customerId, sourceId: sourceId),
+    );
+  }
+
+  Future<Result<PaymentCardPage>> loadCustomerCards({
+    required int customerId,
+    int page = 1,
+  }) async {
+    return Result.guard(
+      () => _service.fetchCustomerCards(customerId: customerId, page: page),
+    );
+  }
+
+  Future<Result<PaymentCard>> reassignCard({
+    required int cardId,
+    required int customerId,
+  }) async {
+    return Result.guard(
+      () => _service.reassignCard(cardId: cardId, customerId: customerId),
+    );
   }
 
   Future<Result<SupplierContact>> createSupplier(SupplierDraft draft) async {

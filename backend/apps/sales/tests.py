@@ -21,10 +21,11 @@ from apps.catalog.models import (
 from apps.catalog.testing import create_product_with_default_variant
 from apps.core.models import IdempotencyRecord, RelayInstallation, ShopSettings
 from apps.core.roles import CASHIER_GROUP, MANAGER_GROUP, ensure_role_groups
-from apps.customers.models import Customer
+from apps.customers.models import Customer, PaymentCard
 from apps.discounts.models import AppliedDiscount, DiscountRedemption, DiscountRule
 from apps.inventory.models import StockItem, StockMovement
 from apps.payments.models import Payment
+from apps.payments.tests import _moamalat_receipt_url
 from apps.purchasing.models import PurchaseOrder, Supplier
 from .load_testing import build_ramp_stages, capacity_summary, collapse_reasons
 from .models import (
@@ -661,6 +662,59 @@ class OrderCheckoutApiTests(TestCase):
             {"opening_cash": "0.00"},
             format="json",
         ).data
+
+    def test_card_checkout_captures_card_and_mints_placeholder_customer(self):
+        self.start_session()
+
+        response = self.client.post(
+            reverse("order-checkout"),
+            self.checkout_payload(
+                payments=[
+                    {
+                        "method": "card",
+                        "amount": "7.00",
+                        "card_receipt_url": _moamalat_receipt_url("7.000"),
+                    }
+                ],
+            ),
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        order = Order.objects.get(pk=response.data["id"])
+        self.assertEqual(order.status, Order.Status.PAID)
+        card = PaymentCard.objects.get()
+        self.assertEqual(card.masked_pan, "639974*********8809")
+        self.assertEqual(order.payments.get().card_id, card.pk)
+        # A walk-in card sale adopts a hidden placeholder customer.
+        self.assertEqual(order.customer_id, card.customer_id)
+        self.assertTrue(order.customer.is_auto_created)
+
+    def test_card_checkout_with_chosen_customer_skips_placeholder(self):
+        self.start_session()
+        customer = Customer.objects.create(full_name="Layla Ahmed")
+
+        response = self.client.post(
+            reverse("order-checkout"),
+            self.checkout_payload(
+                customer=customer.pk,
+                payments=[
+                    {
+                        "method": "card",
+                        "amount": "7.00",
+                        "card_receipt_url": _moamalat_receipt_url("7.000"),
+                    }
+                ],
+            ),
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        order = Order.objects.get(pk=response.data["id"])
+        card = PaymentCard.objects.get()
+        self.assertEqual(card.customer_id, customer.pk)
+        self.assertEqual(order.customer_id, customer.pk)
+        self.assertFalse(Customer.objects.filter(is_auto_created=True).exists())
 
     def test_orders_cannot_be_deleted_or_edited_via_api_even_by_manager(self):
         # Create a paid order through checkout.

@@ -5269,6 +5269,18 @@ class AppLocalizationsAr extends AppLocalizations {
       'لم يظهر هذا المنتج في أي فاتورة شراء بعد.';
 
   @override
+  String get productBoughtTogetherTitle => 'يُشترى عادةً مع';
+
+  @override
+  String get productBoughtTogetherSubtitle =>
+      'منتجات يضيفها العملاء عادةً إلى الطلب نفسه.';
+
+  @override
+  String productBoughtTogetherOrders(String count) {
+    return 'في $count طلبًا';
+  }
+
+  @override
   String get productLatestCostLabel => 'آخر تكلفة';
 
   @override
@@ -6622,6 +6634,74 @@ class AppLocalizationsAr extends AppLocalizations {
   String get customerProfileTitle => 'بيانات العميل';
 
   @override
+  String get paymentCardsTitle => 'بطاقات الدفع';
+
+  @override
+  String get paymentCardsLoadError => 'تعذّر تحميل بطاقات الدفع.';
+
+  @override
+  String get paymentCardsEmpty => 'لا توجد بطاقات مرتبطة بهذا العميل.';
+
+  @override
+  String paymentCardLastSeenValue(String date) {
+    return 'آخر استخدام: $date';
+  }
+
+  @override
+  String paymentCardCountValue(int count) {
+    return '$count بطاقة';
+  }
+
+  @override
+  String get reassignCardTooltip => 'نقل البطاقة إلى عميل آخر';
+
+  @override
+  String get reassignCardTitle => 'نقل البطاقة';
+
+  @override
+  String get cardReassignedMessage => 'تم نقل البطاقة.';
+
+  @override
+  String get cardReassignFailedMessage => 'تعذّر نقل البطاقة.';
+
+  @override
+  String get unclaimedCardCustomerCalloutTitle => 'عميل بطاقة غير مُسمّى';
+
+  @override
+  String get unclaimedCardCustomerCalloutBody =>
+      'أُنشئ هذا العميل تلقائيًا من بطاقة دفع. ادمجه مع عميل موجود أو أعطه اسمًا ليصبح عميلًا مستقلًا.';
+
+  @override
+  String get mergeIntoCustomerButton => 'دمج مع عميل';
+
+  @override
+  String get mergeCustomerSuccessMessage => 'تم دمج العميل.';
+
+  @override
+  String get mergeCustomerFailedMessage => 'تعذّر دمج العميل.';
+
+  @override
+  String get nameCustomerButton => 'تسمية العميل';
+
+  @override
+  String get nameCustomerTitle => 'تسمية العميل';
+
+  @override
+  String get customerClaimedMessage => 'تم حفظ العميل.';
+
+  @override
+  String get customerClaimFailedMessage => 'تعذّر حفظ العميل.';
+
+  @override
+  String get unclaimedCardsFilterLabel => 'بطاقات غير مُسمّاة';
+
+  @override
+  String get allCustomersFilterLabel => 'كل العملاء';
+
+  @override
+  String get customerAutoCreatedBadge => 'بطاقة غير مُسمّاة';
+
+  @override
   String get customerSalesSummaryTitle => 'ملخص تعاملات العميل';
 
   @override
@@ -7336,9 +7416,6 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get emptySessionSales => 'لا توجد مبيعات مسجلة في هذه الجلسة.';
-
-  @override
-  String get allCustomersFilterLabel => 'كل العملاء';
 
   @override
   String get clearCustomerFilterTooltip => 'مسح فلتر العميل';

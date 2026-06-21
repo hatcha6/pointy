@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.test import TestCase, override_settings
@@ -9,11 +11,13 @@ from .tools import (
     _json_safe,
     _safe_host,
     aggregate,
+    create_resource,
     execute_tool,
     frequently_bought_together,
     get_dashboard,
     get_resource,
     query_resource,
+    update_resource,
 )
 
 User = get_user_model()
@@ -45,6 +49,79 @@ class AiToolDispatchTests(TestCase):
         result = query_resource(user=self.cashier, resource="orders")
         self.assertTrue(result["ok"], result)
         self.assertEqual(result["data"]["results"], [])
+
+    def test_register_session_reconciliation_hidden_from_cashier(self):
+        # The blind cash count is an anti-theft control: a cashier must NOT learn
+        # the expected drawer cash (or the figures to compute it) through the
+        # assistant, or they could enter a false closing count that balances to zero
+        # and hide a shortage. The register serializer strips those fields for
+        # non-managers, and the AI inherits it because it dispatches through the
+        # real viewset as the user.
+        from apps.sales.models import RegisterSession
+
+        RegisterSession.objects.create(
+            owner_key=f"user:{self.cashier.pk}",
+            status=RegisterSession.Status.OPEN,
+            opening_cash=Decimal("100.00"),
+        )
+        result = query_resource(user=self.cashier, resource="register-sessions")
+        self.assertTrue(result["ok"], result)
+        rows = result["data"]["results"]
+        self.assertEqual(len(rows), 1)
+        row = rows[0]
+        for hidden in (
+            "expected_cash",
+            "cash_variance",
+            "has_cash_variance",
+            "cash_sales_total",
+            "pay_in_total",
+            "pay_out_total",
+            "cash_refund_total",
+            "denomination_total",
+        ):
+            self.assertNotIn(hidden, row, f"cashier must not see {hidden}")
+        # Their own opening float (which they entered) is fine to echo back.
+        self.assertEqual(row["opening_cash"], "100.00")
+
+    def test_register_session_reconciliation_visible_to_manager(self):
+        from apps.sales.models import RegisterSession
+
+        RegisterSession.objects.create(
+            owner_key=f"user:{self.manager.pk}",
+            status=RegisterSession.Status.OPEN,
+            opening_cash=Decimal("100.00"),
+        )
+        result = query_resource(user=self.manager, resource="register-sessions")
+        self.assertTrue(result["ok"], result)
+        row = result["data"]["results"][0]
+        # A manager legitimately reconciles, so the fields must remain available.
+        self.assertIn("expected_cash", row)
+        self.assertIn("cash_variance", row)
+
+    def test_register_session_writes_denied_for_all_roles(self):
+        # Opening/closing/altering the drawer must never happen via a generic AI
+        # write (register-sessions is on WRITE_DENY_RESOURCES) — for any role, so a
+        # cashier can't bypass the proper open/close flow or fudge a session.
+        for user in (self.cashier, self.manager):
+            created = create_resource(
+                user=user, resource="register-sessions", data={"opening_cash": "0.00"}
+            )
+            self.assertFalse(created["ok"], created)
+            updated = update_resource(
+                user=user,
+                resource="register-sessions",
+                id=1,
+                data={"closing_cash": "0.00"},
+            )
+            self.assertFalse(updated["ok"], updated)
+
+    def test_system_prompt_protects_the_blind_cash_count(self):
+        # Server-side gating hides the expected figure; the prompt stops the model
+        # from *computing* it from sales/payments or coaching a matching close.
+        from .relay_stream import build_system_prompt
+
+        prompt = build_system_prompt()
+        self.assertIn("حماية عدّ الصندوق", prompt)
 
     def test_query_resource_returns_capped_paginated_envelope(self):
         result = query_resource(user=self.manager, resource="orders", page=1)

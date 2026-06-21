@@ -168,6 +168,14 @@ class _ContactManagementScreenState extends State<ContactManagementScreen>
     return CustomerDetailsView(
       key: ValueKey('contact_detail_customer_${customer.id}'),
       viewModel: customerViewModel,
+      onMerged: () {
+        setState(() {
+          _selectedCustomer = null;
+          _selectedCustomerViewModel = null;
+        });
+        viewModel.loadContacts();
+      },
+      onClaimed: viewModel.loadContacts,
     );
   }
 
@@ -236,6 +244,7 @@ class _ContactManagementBody extends StatelessWidget {
             tabController: tabController,
           ),
         ),
+        _CustomerStatusFilter(viewModel: viewModel, tabController: tabController),
         if (viewModel.hasError)
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
@@ -286,6 +295,65 @@ class _ContactManagementBody extends StatelessWidget {
                 ),
         ),
       ],
+    );
+  }
+}
+
+/// Customers-tab filter chips: switch between all real customers and the
+/// hidden "unclaimed cards" placeholders awaiting a name or merge.
+class _CustomerStatusFilter extends StatelessWidget {
+  const _CustomerStatusFilter({
+    required this.viewModel,
+    required this.tabController,
+  });
+
+  final ContactManagementViewModel viewModel;
+  final TabController tabController;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final spacing = AdaptiveSpacing.of(context);
+
+    return AnimatedBuilder(
+      animation: tabController,
+      builder: (context, _) {
+        if (tabController.index != 0) {
+          return const SizedBox.shrink();
+        }
+        final status = viewModel.query.status;
+        final isUnclaimed = status == ContactStatusFilter.unclaimedCards;
+        return Padding(
+          padding: EdgeInsets.fromLTRB(
+            spacing.lg,
+            0,
+            spacing.lg,
+            spacing.sm,
+          ),
+          child: Align(
+            alignment: AlignmentDirectional.centerStart,
+            child: Wrap(
+              spacing: spacing.sm,
+              children: [
+                ChoiceChip(
+                  label: Text(l10n.allCustomersFilterLabel),
+                  selected: !isUnclaimed,
+                  onSelected: (_) =>
+                      viewModel.updateStatus(ContactStatusFilter.all),
+                ),
+                ChoiceChip(
+                  avatar: const Icon(Icons.credit_card_outlined, size: 18),
+                  label: Text(l10n.unclaimedCardsFilterLabel),
+                  selected: isUnclaimed,
+                  onSelected: (_) => viewModel.updateStatus(
+                    ContactStatusFilter.unclaimedCards,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }
@@ -415,19 +483,24 @@ class _CustomerList extends StatelessWidget {
       itemBuilder: (context, customer) {
         return PointyDataRow(
           leading: Icon(
-            customer.marketingConsent
+            customer.isAutoCreated
+                ? Icons.credit_card_outlined
+                : customer.marketingConsent
                 ? Icons.campaign_outlined
                 : Icons.person_outline,
           ),
           title: customer.fullName,
           subtitle: [
+            if (customer.isAutoCreated) l10n.customerAutoCreatedBadge,
             if (customer.customerNumber.isNotEmpty)
               '${l10n.customerNumberLabel}: ${customer.customerNumber}',
             if (customer.phone.isNotEmpty) customer.phone,
             if (customer.email.isNotEmpty) customer.email,
-            genderLabel(l10n, customer.gender),
+            if (!customer.isAutoCreated) genderLabel(l10n, customer.gender),
             if (customer.birthday != null)
               '${l10n.customerBirthdayLabel}: ${_formatDate(customer.birthday!)}',
+            if (customer.cardCount > 0)
+              l10n.paymentCardCountValue(customer.cardCount),
             if (customer.marketingConsent) l10n.marketingAllowedLabel,
             if (!customer.isActive) l10n.inactiveContactLabel,
           ].join(' • '),

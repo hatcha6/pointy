@@ -2,10 +2,12 @@ from django.utils import timezone
 from rest_framework import serializers
 
 from apps.sales.models import OrderAdjustment, OrderAdjustmentLine
-from .models import Customer
+from .models import Customer, PaymentCard
 
 
 class CustomerSerializer(serializers.ModelSerializer):
+    card_count = serializers.SerializerMethodField()
+
     class Meta:
         model = Customer
         fields = [
@@ -19,15 +21,63 @@ class CustomerSerializer(serializers.ModelSerializer):
             "marketing_consent",
             "notes",
             "is_active",
+            "is_auto_created",
+            "card_count",
             "created_at",
             "updated_at",
         ]
         read_only_fields = ("id", "customer_number", "created_at", "updated_at")
 
+    def get_card_count(self, obj):
+        # Uses the list queryset's annotation when present, falling back to a
+        # query for single-object responses (create/update/retrieve).
+        count = getattr(obj, "card_count", None)
+        return count if count is not None else obj.cards.count()
+
     def validate_birthday(self, value):
         if value and value > timezone.localdate():
             raise serializers.ValidationError("Birthday cannot be in the future.")
         return value
+
+
+class PaymentCardSerializer(serializers.ModelSerializer):
+    display_name = serializers.CharField(read_only=True)
+    customer_name = serializers.CharField(source="customer.full_name", read_only=True)
+
+    class Meta:
+        model = PaymentCard
+        fields = [
+            "id",
+            "customer",
+            "customer_name",
+            "fingerprint",
+            "masked_pan",
+            "card_scheme",
+            "aid",
+            "label",
+            "display_name",
+            "is_active",
+            "first_seen_at",
+            "last_seen_at",
+            "last_receipt_data",
+            "created_at",
+            "updated_at",
+        ]
+        # Identity fields come from the terminal receipt and are immutable; the
+        # owning customer is changed only through the explicit reassign action.
+        read_only_fields = (
+            "id",
+            "customer",
+            "fingerprint",
+            "masked_pan",
+            "card_scheme",
+            "aid",
+            "first_seen_at",
+            "last_seen_at",
+            "last_receipt_data",
+            "created_at",
+            "updated_at",
+        )
 
 
 class CustomerOrderAdjustmentLineSerializer(serializers.ModelSerializer):

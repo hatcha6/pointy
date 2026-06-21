@@ -3,7 +3,10 @@ import 'query.dart';
 enum ContactStatusFilter implements QueryFilterSet {
   all(null),
   active(QueryFilter(parameter: 'is_active', value: 'true')),
-  inactive(QueryFilter(parameter: 'is_active', value: 'false'));
+  inactive(QueryFilter(parameter: 'is_active', value: 'false')),
+  // Placeholder customers minted from captured cards. The list hides them by
+  // default; this opts back in via ?is_auto_created=true.
+  unclaimedCards(QueryFilter(parameter: 'is_auto_created', value: 'true'));
 
   const ContactStatusFilter(this._filter);
 
@@ -117,6 +120,8 @@ class Customer {
     required this.notes,
     required this.isActive,
     this.birthday,
+    this.isAutoCreated = false,
+    this.cardCount = 0,
   });
 
   final int id;
@@ -130,6 +135,13 @@ class Customer {
   final String notes;
   final bool isActive;
 
+  /// True for placeholder customers minted from a captured card. They stay
+  /// hidden from the contacts list until named (claimed) or merged.
+  final bool isAutoCreated;
+
+  /// Number of payment cards attached to this customer (server-annotated).
+  final int cardCount;
+
   factory Customer.fromJson(Map<String, Object?> json) {
     return Customer(
       id: _intFromJson(json['id']),
@@ -142,6 +154,8 @@ class Customer {
       marketingConsent: json['marketing_consent'] == true,
       notes: json['notes']?.toString() ?? '',
       isActive: json['is_active'] != false,
+      isAutoCreated: json['is_auto_created'] == true,
+      cardCount: _intFromJson(json['card_count']),
     );
   }
 
@@ -159,6 +173,7 @@ class Customer {
       'marketing_consent': marketingConsent,
       'notes': notes,
       'is_active': isActive,
+      'is_auto_created': isAutoCreated,
     };
   }
 }

@@ -1406,3 +1406,135 @@ class ProductBulkActionTests(TestCase):
             format="json",
         )
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+
+class ProductBoughtTogetherApiTests(TestCase):
+    """The product-detail "frequently bought together" endpoint."""
+
+    def setUp(self):
+        ensure_role_groups()
+        self.client = APIClient()
+        self.user = get_user_model().objects.create_user(
+            username="bought-together-manager",
+            password="pass",
+        )
+        self.user.groups.add(Group.objects.get(name=MANAGER_GROUP))
+        self.client.force_authenticate(user=self.user)
+
+    def _variant(self, name, sku):
+        product = create_product_with_default_variant(
+            name=name,
+            sku=sku,
+            unit_price=Decimal("5.00"),
+        )
+        variant = product.default_variant
+        StockItem.objects.create(variant=variant, quantity_on_hand=Decimal("100"))
+        return product, variant
+
+    def _basket_orders(self):
+        """Three paid orders — (A,B), (A,B), (A,C) — so against A, B co-occurs
+        twice and C once. D never sells and shouldn't appear."""
+        from apps.payments.models import Payment
+        from apps.sales.models import RegisterSession
+        from apps.sales.services import checkout_order
+
+        self.product_a, a = self._variant("ألف", "BKT-A")
+        self.product_b, b = self._variant("باء", "BKT-B")
+        self.product_c, c = self._variant("جيم", "BKT-C")
+        self.product_d, _ = self._variant("دال", "BKT-D")
+        session = RegisterSession.objects.create(
+            owner_key="seed:catalog-basket",
+            status=RegisterSession.Status.OPEN,
+        )
+
+        def order(*variants):
+            checkout_order(
+                register_session=session,
+                lines_data=[
+                    {"variant": variant, "quantity": Decimal("1")}
+                    for variant in variants
+                ],
+                payments_data=[
+                    {"method": Payment.Method.CASH, "amount": Decimal(5 * len(variants))}
+                ],
+            )
+
+        order(a, b)
+        order(a, b)
+        order(a, c)
+
+    def test_ranks_neighbours_by_orders_together(self):
+        self._basket_orders()
+
+        response = self.client.get(
+            reverse("product-bought-together", args=[self.product_a.pk])
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["product"], self.product_a.pk)
+        results = response.data["results"]
+        self.assertEqual(
+            [(row["id"], row["orders_together"]) for row in results],
+            [(self.product_b.pk, 2), (self.product_c.pk, 1)],
+        )
+        # The product being viewed and never-paired products are excluded.
+        ids = {row["id"] for row in results}
+        self.assertNotIn(self.product_a.pk, ids)
+        self.assertNotIn(self.product_d.pk, ids)
+        # Cards carry the price the panel renders.
+        self.assertEqual(results[0]["unit_price"], "5.00")
+
+    def test_excludes_archived_neighbours(self):
+        self._basket_orders()
+        self.product_b.archive(by=self.user)
+
+        response = self.client.get(
+            reverse("product-bought-together", args=[self.product_a.pk])
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        ids = [row["id"] for row in response.data["results"]]
+        self.assertEqual(ids, [self.product_c.pk])
+
+    def test_limit_is_capped(self):
+        self._basket_orders()
+
+        response = self.client.get(
+            reverse("product-bought-together", args=[self.product_a.pk]),
+            {"limit": "1"},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data["results"]), 1)
+        self.assertEqual(response.data["results"][0]["id"], self.product_b.pk)
+
+    def test_empty_when_product_never_sold(self):
+        lonely = create_product_with_default_variant(
+            name="وحيد",
+            sku="LONELY",
+            unit_price=Decimal("3.00"),
+        )
+
+        response = self.client.get(
+            reverse("product-bought-together", args=[lonely.pk])
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["results"], [])
+
+    def test_requires_authentication(self):
+        product = create_product_with_default_variant(
+            name="مغلق",
+            sku="ANON",
+            unit_price=Decimal("3.00"),
+        )
+        client = APIClient()
+
+        response = client.get(
+            reverse("product-bought-together", args=[product.pk])
+        )
+
+        self.assertIn(
+            response.status_code,
+            (status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN),
+        )

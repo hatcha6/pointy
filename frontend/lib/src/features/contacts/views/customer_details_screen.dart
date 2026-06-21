@@ -3,6 +3,7 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../data/models/contact.dart';
 import '../../../data/models/customer_activity.dart';
+import '../../../data/models/payment_card.dart';
 import '../../../data/models/sale_order.dart';
 import '../../../data/repositories/contact_repository.dart';
 import '../../../shared/components/components.dart';
@@ -60,7 +61,12 @@ class _CustomerDetailsScreenState extends State<CustomerDetailsScreen> {
               ),
             ],
           ),
-          body: SafeArea(child: CustomerDetailsView(viewModel: _viewModel)),
+          body: SafeArea(
+            child: CustomerDetailsView(
+              viewModel: _viewModel,
+              onMerged: () => Navigator.of(context).maybePop(),
+            ),
+          ),
         );
       },
     );
@@ -71,9 +77,20 @@ class _CustomerDetailsScreenState extends State<CustomerDetailsScreen> {
 /// pushed route on compact widths, and by the contacts master-detail pane on
 /// desktop.
 class CustomerDetailsView extends StatelessWidget {
-  const CustomerDetailsView({super.key, required this.viewModel});
+  const CustomerDetailsView({
+    super.key,
+    required this.viewModel,
+    this.onMerged,
+    this.onClaimed,
+  });
 
   final CustomerDetailsViewModel viewModel;
+
+  /// Invoked after this customer is folded into another (it no longer exists).
+  final VoidCallback? onMerged;
+
+  /// Invoked after a placeholder card-customer is named (claimed).
+  final VoidCallback? onClaimed;
 
   @override
   Widget build(BuildContext context) {
@@ -91,10 +108,24 @@ class CustomerDetailsView extends StatelessWidget {
             children: [
               _CustomerHero(customer: customer),
               SizedBox(height: spacing.md),
+              if (customer.isAutoCreated) ...[
+                _UnclaimedCardCallout(
+                  viewModel: viewModel,
+                  onMerged: onMerged,
+                  onClaimed: onClaimed,
+                ),
+                SizedBox(height: spacing.md),
+              ],
               PointyDetailSection(
                 title: l10n.customerProfileTitle,
                 icon: Icons.badge_outlined,
                 child: _CustomerProfile(viewModel: viewModel),
+              ),
+              SizedBox(height: spacing.md),
+              PointyDetailSection(
+                title: l10n.paymentCardsTitle,
+                icon: Icons.credit_card_outlined,
+                child: _CustomerPaymentCards(viewModel: viewModel),
               ),
               SizedBox(height: spacing.md),
               PointyDetailSection(
@@ -160,6 +191,200 @@ class _CustomerHero extends StatelessWidget {
       ],
     );
   }
+}
+
+class _UnclaimedCardCallout extends StatelessWidget {
+  const _UnclaimedCardCallout({
+    required this.viewModel,
+    this.onMerged,
+    this.onClaimed,
+  });
+
+  final CustomerDetailsViewModel viewModel;
+  final VoidCallback? onMerged;
+  final VoidCallback? onClaimed;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final spacing = AdaptiveSpacing.of(context);
+    final busy = viewModel.isSaving;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        PointyDetailCallout(
+          icon: Icons.credit_card_outlined,
+          tone: PointyCalloutTone.warning,
+          title: l10n.unclaimedCardCustomerCalloutTitle,
+          message: l10n.unclaimedCardCustomerCalloutBody,
+        ),
+        SizedBox(height: spacing.sm),
+        Wrap(
+          spacing: spacing.sm,
+          runSpacing: spacing.sm,
+          children: [
+            FilledButton.icon(
+              onPressed: busy ? null : () => _name(context),
+              icon: const Icon(Icons.drive_file_rename_outline),
+              label: Text(l10n.nameCustomerButton),
+            ),
+            OutlinedButton.icon(
+              onPressed: busy ? null : () => _merge(context),
+              icon: const Icon(Icons.merge_outlined),
+              label: Text(l10n.mergeIntoCustomerButton),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Future<void> _name(BuildContext context) async {
+    final l10n = AppLocalizations.of(context)!;
+    final name = await _promptCustomerName(context);
+    if (name == null || name.trim().isEmpty) {
+      return;
+    }
+    final ok = await viewModel.claim(name.trim());
+    if (!context.mounted) {
+      return;
+    }
+    _showSnack(
+      context,
+      ok ? l10n.customerClaimedMessage : l10n.customerClaimFailedMessage,
+    );
+    if (ok) {
+      onClaimed?.call();
+    }
+  }
+
+  Future<void> _merge(BuildContext context) async {
+    final l10n = AppLocalizations.of(context)!;
+    final target = await showCustomerPickerSheet(
+      context: context,
+      repository: viewModel.repository,
+    );
+    if (target == null || !context.mounted || target.id == viewModel.customer.id) {
+      return;
+    }
+    final ok = await viewModel.mergeInto(target.id);
+    if (!context.mounted) {
+      return;
+    }
+    _showSnack(
+      context,
+      ok ? l10n.mergeCustomerSuccessMessage : l10n.mergeCustomerFailedMessage,
+    );
+    if (ok) {
+      onMerged?.call();
+    }
+  }
+}
+
+class _CustomerPaymentCards extends StatelessWidget {
+  const _CustomerPaymentCards({required this.viewModel});
+
+  final CustomerDetailsViewModel viewModel;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final spacing = AdaptiveSpacing.of(context);
+
+    if (viewModel.isLoadingCards && viewModel.cards.isEmpty) {
+      return const PointyLoadingArea();
+    }
+    if (viewModel.hasCardsError && viewModel.cards.isEmpty) {
+      return PointyInlineMessage.error(message: l10n.paymentCardsLoadError);
+    }
+    if (viewModel.cards.isEmpty) {
+      return PointyEmptyState(
+        icon: Icons.credit_card_off_outlined,
+        title: l10n.paymentCardsEmpty,
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (final card in viewModel.cards) ...[
+          PointyDataRow(
+            leading: const Icon(Icons.credit_card_outlined),
+            title: card.displayName,
+            subtitle: [
+              if (card.cardScheme.isNotEmpty) card.cardScheme,
+              if (card.lastSeenAt != null)
+                l10n.paymentCardLastSeenValue(formatDate(card.lastSeenAt!)),
+            ].join(' • '),
+            trailing: IconButton(
+              tooltip: l10n.reassignCardTooltip,
+              icon: const Icon(Icons.swap_horiz_outlined),
+              onPressed: viewModel.isSaving
+                  ? null
+                  : () => _reassign(context, card),
+            ),
+          ),
+          SizedBox(height: spacing.xs),
+        ],
+      ],
+    );
+  }
+
+  Future<void> _reassign(BuildContext context, PaymentCard card) async {
+    final l10n = AppLocalizations.of(context)!;
+    final target = await showCustomerPickerSheet(
+      context: context,
+      repository: viewModel.repository,
+    );
+    if (target == null || !context.mounted || target.id == card.customer) {
+      return;
+    }
+    final ok = await viewModel.reassignCard(card.id, target.id);
+    if (!context.mounted) {
+      return;
+    }
+    _showSnack(
+      context,
+      ok ? l10n.cardReassignedMessage : l10n.cardReassignFailedMessage,
+    );
+  }
+}
+
+Future<String?> _promptCustomerName(BuildContext context) {
+  final l10n = AppLocalizations.of(context)!;
+  final controller = TextEditingController();
+  return showDialog<String>(
+    context: context,
+    builder: (context) {
+      return AlertDialog(
+        title: Text(l10n.nameCustomerTitle),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          textInputAction: TextInputAction.done,
+          decoration: InputDecoration(labelText: l10n.customerFullNameLabel),
+          onSubmitted: (value) => Navigator.of(context).pop(value),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text(l10n.cancelButton),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(controller.text),
+            child: Text(l10n.saveButton),
+          ),
+        ],
+      );
+    },
+  );
+}
+
+void _showSnack(BuildContext context, String message) {
+  ScaffoldMessenger.of(context)
+    ..clearSnackBars()
+    ..showSnackBar(SnackBar(content: Text(message)));
 }
 
 class _CustomerProfile extends StatelessWidget {

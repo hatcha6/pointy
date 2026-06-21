@@ -39,6 +39,7 @@ from .models import (
     VariantOptionValue,
 )
 from .serializers import (
+    BoughtTogetherProductSerializer,
     ModifierGroupSerializer,
     ProductBulkArchiveSerializer,
     ProductBulkCategorizeSerializer,
@@ -160,6 +161,7 @@ class ProductViewSet(viewsets.ModelViewSet):
         "bulk_set_flags": ("catalog.change_product",),
         "image_search": ("catalog.view_product",),
         "image_import": ("catalog.change_product", "attachments.add_attachment"),
+        "bought_together": ("catalog.view_product",),
     }
     queryset = Product.objects.prefetch_related(
         "attachments",
@@ -404,6 +406,46 @@ class ProductViewSet(viewsets.ModelViewSet):
             ).data,
             status=status.HTTP_201_CREATED,
         )
+
+    @action(detail=True, methods=["get"], url_path="bought-together")
+    def bought_together(self, request, pk=None):
+        """Products most often sold in the same paid order as this one.
+
+        A shop-wide "frequently bought together" insight (same co-occurrence
+        ranking the AI assistant uses) surfaced on the product detail page.
+        """
+        from apps.sales.cooccurrence import products_bought_together
+        from apps.sales.models import Order
+
+        product = self.get_object()
+        try:
+            limit = int(request.query_params.get("limit", 8))
+        except (TypeError, ValueError):
+            limit = 8
+        limit = max(1, min(limit, 20))
+
+        ranked = products_bought_together(
+            orders=Order.objects.filter(status=Order.Status.PAID),
+            product=product,
+            limit=limit,
+        )
+        products_by_id = {
+            product.id: product
+            for product in Product.objects.filter(
+                id__in=[product_id for product_id, _ in ranked]
+            ).prefetch_related("attachments", "variants")
+        }
+        entries = [
+            {"product": products_by_id[product_id], "orders_together": orders_together}
+            for product_id, orders_together in ranked
+            if product_id in products_by_id
+        ]
+        serializer = BoughtTogetherProductSerializer(
+            entries,
+            many=True,
+            context=self.get_serializer_context(),
+        )
+        return Response({"product": product.id, "results": serializer.data})
 
     def _create_attachment_for_product(self, request, product):
         data = request.data.copy()

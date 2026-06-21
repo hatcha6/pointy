@@ -1,4 +1,5 @@
 import '../models/attachment_summary.dart';
+import '../models/bought_together_product.dart';
 import '../models/product.dart';
 import '../models/product_category.dart';
 import '../models/product_draft.dart';
@@ -47,6 +48,29 @@ class CatalogApiClient {
     return Product.fromJson(
       _session.decodedBody(response) as Map<String, Object?>,
     );
+  }
+
+  Future<List<BoughtTogetherProduct>> fetchBoughtTogether(
+    int productId, {
+    int limit = 8,
+  }) async {
+    final response = await _session.get(
+      'products/$productId/bought-together/',
+      query: {'limit': '$limit'},
+    );
+    _session.ensureSuccess(
+      response,
+      'Bought-together request failed with status',
+    );
+    final decoded = _session.decodedBody(response);
+    final results = decoded is Map<String, Object?> ? decoded['results'] : null;
+    if (results is! List<Object?>) {
+      return const [];
+    }
+    return results
+        .whereType<Map<String, Object?>>()
+        .map(BoughtTogetherProduct.fromJson)
+        .toList(growable: false);
   }
 
   Future<Product> createProduct(ProductDraft draft) async {

@@ -139,6 +139,14 @@ class ContactManagementViewModel extends ChangeNotifier {
     await loadContacts();
   }
 
+  Future<void> updateStatus(ContactStatusFilter status) async {
+    if (status == _query.status) {
+      return;
+    }
+    _query = _query.copyWith(status: status);
+    await loadContacts();
+  }
+
   Future<bool> createCustomer(CustomerDraft draft) async {
     if (_isSaving) {
       return false;
