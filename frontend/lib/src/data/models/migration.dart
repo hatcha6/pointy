@@ -8,6 +8,7 @@ class MigrationSystem {
     required this.supportedEntities,
     required this.versions,
     required this.implemented,
+    this.recommendedOptions = const {},
   });
 
   final String systemKey;
@@ -17,6 +18,10 @@ class MigrationSystem {
   final List<String> versions;
   final bool implemented;
 
+  /// Suggested transport options (e.g. a legacy ODBC driver + TDS version for an
+  /// old SQL Server) used to pre-fill the source's advanced options.
+  final Map<String, Object?> recommendedOptions;
+
   factory MigrationSystem.fromJson(Map<String, Object?> json) {
     return MigrationSystem(
       systemKey: _str(json['system_key']),
@@ -25,6 +30,7 @@ class MigrationSystem {
       supportedEntities: _stringList(json['supported_entities']),
       versions: _stringList(json['versions']),
       implemented: json['implemented'] as bool? ?? true,
+      recommendedOptions: _map(json['recommended_options']),
     );
   }
 }
@@ -122,7 +128,9 @@ class MigrationSource {
       extraOptions: _map(json['extra_options']),
       detectedVersion: _str(json['detected_version']),
       lastCompatStatus: _str(json['last_compat_status'], fallback: 'unknown'),
-      lastCompatReport: CompatibilityReport.fromJson(_map(json['last_compat_report'])),
+      lastCompatReport: CompatibilityReport.fromJson(
+        _map(json['last_compat_report']),
+      ),
       lastRunAt: _dateOrNull(json['last_run_at']),
       credentialsCleared: json['credentials_cleared'] as bool? ?? false,
       isArchived: json['is_archived'] as bool? ?? false,
@@ -215,7 +223,11 @@ class CompatibilityReport {
 }
 
 class MigrationConnectionTest {
-  const MigrationConnectionTest({required this.ok, required this.tableCount, required this.tables});
+  const MigrationConnectionTest({
+    required this.ok,
+    required this.tableCount,
+    required this.tables,
+  });
 
   final bool ok;
   final int tableCount;

@@ -115,6 +115,72 @@ class RelayAiAvailableTests(TestCase):
         self.assertFalse(relay_ai_available(installation))
 
 
+class _FakeHttpResponse:
+    """Stand-in for urllib's response (context manager + read + headers)."""
+
+    def __init__(self, content, content_type):
+        self._content = content
+        self.headers = {"Content-Type": content_type}
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        return False
+
+    def read(self, _n=-1):
+        return self._content
+
+
+class AiFaviconViewTests(TestCase):
+    """The same-origin favicon proxy for web-search source avatars."""
+
+    def setUp(self):
+        self.client = APIClient()  # unauthenticated on purpose (AllowAny)
+
+    def test_rejects_a_non_hostname_domain(self):
+        response = self.client.get(reverse("ai-favicon"), {"domain": "bad host/../x"})
+        self.assertEqual(response.status_code, 400)
+
+    def test_proxies_a_favicon_image(self):
+        png = b"\x89PNG\r\n\x1a\nfake-bytes"
+        with patch("apps.ai.views.urllib.request.urlopen") as mock_open:
+            mock_open.return_value = _FakeHttpResponse(png, "image/png")
+            response = self.client.get(reverse("ai-favicon"), {"domain": "reuters.com"})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"], "image/png")
+        self.assertIn("max-age", response["Cache-Control"])
+        self.assertEqual(response.content, png)
+        # SSRF guard: we fetch Google's favicon endpoint, never the host directly.
+        self.assertIn("gstatic.com/faviconV2", mock_open.call_args.args[0].full_url)
+
+    def test_returns_404_when_the_fetch_fails(self):
+        with patch("apps.ai.views.urllib.request.urlopen", side_effect=OSError("boom")):
+            response = self.client.get(reverse("ai-favicon"), {"domain": "reuters.com"})
+        self.assertEqual(response.status_code, 404)
+
+    def test_persisted_sources_serialize_with_a_proxy_favicon_url(self):
+        from rest_framework.test import APIRequestFactory
+
+        from .serializers import AiMessageSerializer
+
+        user = get_user_model().objects.create_user(username="src", password="pw-12345!")
+        conversation = AiConversation.objects.create(user=user)
+        message = AiMessage.objects.create(
+            conversation=conversation,
+            role=AiMessage.ROLE_ASSISTANT,
+            content="السعر ارتفع",
+            sources=[{"url": "https://reuters.com/a", "title": "Reuters"}],
+            web_searched=True,
+        )
+        request = APIRequestFactory().get("/")
+        data = AiMessageSerializer(message, context={"request": request}).data
+        self.assertTrue(data["web_searched"])
+        self.assertEqual(len(data["sources"]), 1)
+        self.assertIn("ai/favicon/", data["sources"][0]["favicon"])
+        self.assertIn("domain=reuters.com", data["sources"][0]["favicon"])
+
+
 class AiChatViewTests(TestCase):
     def setUp(self):
         user_model = get_user_model()

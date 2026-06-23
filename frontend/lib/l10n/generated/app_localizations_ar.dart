@@ -5775,6 +5775,24 @@ class AppLocalizationsAr extends AppLocalizations {
   String get outstandingPurchasesTitle => 'مستلم وغير مدفوع';
 
   @override
+  String get purchasePayablesTitle => 'مستحقات الموردين';
+
+  @override
+  String purchasePayablesCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count فواتير بانتظار السداد',
+      two: 'فاتورتان بانتظار السداد',
+      one: 'فاتورة واحدة بانتظار السداد',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get purchasePayablesMore => 'والمزيد';
+
+  @override
   String get outstandingPurchasesLoadError =>
       'تعذر تحميل المشتريات المستلمة غير المدفوعة.';
 
@@ -5908,6 +5926,86 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get purchaseOrderActionsTitle => 'إجراءات الحالة';
+
+  @override
+  String get purchaseOrderActionsSheetTitle => 'إجراءات أمر الشراء';
+
+  @override
+  String get purchaseOrderMoreActionsLabel => 'إجراءات أخرى';
+
+  @override
+  String get purchaseOrderDocumentMenuTooltip => 'طباعة ومشاركة';
+
+  @override
+  String get purchaseOrderSubmitDescription =>
+      'إرسال الأمر إلى المورد لبدء التوريد.';
+
+  @override
+  String get purchaseOrderReceiveDescription =>
+      'تسجيل الكميات الواردة وإضافتها إلى المخزون.';
+
+  @override
+  String get purchaseOrderRecordPaymentDescription =>
+      'تسجيل دفعة للمورد مقابل هذا الأمر.';
+
+  @override
+  String get purchaseOrderReturnDescription => 'إرجاع أصناف مستلمة إلى المورد.';
+
+  @override
+  String get purchaseOrderRefundDescription => 'استرداد قيمة أصناف من المورد.';
+
+  @override
+  String get purchaseOrderExchangeDescription => 'استبدال أصناف مستلمة بأخرى.';
+
+  @override
+  String get purchaseOrderCancelActionDescription =>
+      'إلغاء أمر الشراء نهائيًا.';
+
+  @override
+  String get purchaseOrderCalloutDraftTitle => 'جاهز للإرسال';
+
+  @override
+  String get purchaseOrderCalloutDraftMessage =>
+      'أرسل الأمر إلى المورد عندما تكون جاهزًا.';
+
+  @override
+  String get purchaseOrderCalloutAwaitingTitle => 'بانتظار الاستلام';
+
+  @override
+  String get purchaseOrderCalloutAwaitingMessage =>
+      'سجّل الكميات عند وصول البضاعة من المورد.';
+
+  @override
+  String get purchaseOrderCalloutPartialTitle => 'مستلم جزئيًا';
+
+  @override
+  String get purchaseOrderCalloutPartialMessage =>
+      'ما زالت بعض الأصناف بانتظار الاستلام.';
+
+  @override
+  String get purchaseOrderCalloutReceivedDueTitle => 'تم الاستلام بالكامل';
+
+  @override
+  String get purchaseOrderCalloutCompleteTitle => 'مكتمل';
+
+  @override
+  String get purchaseOrderCalloutCompleteMessage =>
+      'تم الاستلام والسداد بالكامل.';
+
+  @override
+  String get purchaseOrderCalloutCancelledTitle => 'أمر ملغى';
+
+  @override
+  String get purchaseOrderCalloutCancelledMessage =>
+      'تم إلغاء هذا الأمر ولا يمكن تعديله.';
+
+  @override
+  String get purchaseOrderReceivedProgressLabel => 'المستلم';
+
+  @override
+  String purchaseOrderReceivedProgressValue(int received, int ordered) {
+    return '$received من $ordered';
+  }
 
   @override
   String get purchaseOrderPrintAction => 'طباعة';
@@ -11041,6 +11139,32 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get migrationPasswordKeepHint =>
       'اتركها فارغة للإبقاء على كلمة المرور المحفوظة';
+
+  @override
+  String get migrationAdvancedSectionTitle => 'خيارات متقدمة (اختياري)';
+
+  @override
+  String get migrationAdvancedSectionSubtitle =>
+      'لازمة للأنظمة القديمة جدًا (مثل SQL Server 2000 الذي يحتاج مُشغّل FreeTDS).';
+
+  @override
+  String get migrationOdbcDriverLabel => 'مُشغّل ODBC';
+
+  @override
+  String get migrationOdbcDriverHint =>
+      'مثال: FreeTDS أو ODBC Driver 18 for SQL Server';
+
+  @override
+  String get migrationTdsVersionLabel => 'إصدار TDS';
+
+  @override
+  String get migrationTdsVersionHint => 'مثال: 7.0 لـ SQL Server 2000';
+
+  @override
+  String get migrationEncodingLabel => 'ترميز النص';
+
+  @override
+  String get migrationEncodingHint => 'مثال: cp1256 للنصوص العربية القديمة';
 
   @override
   String get migrationSaveSourceButton => 'حفظ المصدر';

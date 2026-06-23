@@ -1,9 +1,13 @@
 import hashlib
 import json
 import logging
+import re
+import urllib.parse
+import urllib.request
 from uuid import uuid4
 
-from django.http import StreamingHttpResponse
+from django.http import HttpResponse, StreamingHttpResponse
+from django.urls import reverse
 from django.utils import timezone
 from rest_framework import permissions, status, viewsets
 from rest_framework.response import Response
@@ -13,7 +17,7 @@ from apps.core.models import RelayInstallation
 from apps.core.relay import RelayControlClient, RelayControlError, relay_ai_available
 
 from .models import AiConversation, AiMessage
-from .relay_stream import build_system_prompt, iter_relay_sse, sse_event
+from .relay_stream import build_system_prompt, favicon_url_for, iter_relay_sse, sse_event
 from .serializers import (
     AiChatRequestSerializer,
     AiChatResumeRequestSerializer,
@@ -242,6 +246,7 @@ class AiChatView(APIView):
                 user=request.user,
                 first_response=first_response,
                 apply_title=wants_title,
+                favicon_base=request.build_absolute_uri(reverse("ai-favicon")),
             ),
             content_type="text/event-stream",
         )
@@ -358,6 +363,7 @@ class AiChatView(APIView):
         user,
         first_response,
         apply_title=False,
+        favicon_base="",
     ):
         """Drive the bounded tool loop: consume a relay turn; if the model asked
         for tools, run them as ``user``, feed the results back, and loop; on a
@@ -614,7 +620,11 @@ class AiChatView(APIView):
                     # the fallback) so the client can show it without a refetch.
                     "title": conversation.title,
                     # Web-search sources (favicon avatars) + whether the web was used.
-                    "sources": collected_sources,
+                    # Each source carries a same-origin favicon-proxy URL for the app.
+                    "sources": [
+                        {**src, "favicon": favicon_url_for(favicon_base, src["url"])}
+                        for src in collected_sources
+                    ],
                     "web_search": web_searched,
                 },
             )
@@ -838,12 +848,63 @@ class AiChatResumeView(AiChatView):
                 tools=tools,
                 user=request.user,
                 first_response=first_response,
+                favicon_base=request.build_absolute_uri(reverse("ai-favicon")),
             ),
             content_type="text/event-stream",
         )
         streaming["Cache-Control"] = "no-cache"
         streaming["X-Accel-Buffering"] = "no"
         return streaming
+
+
+# Favicons are tiny; cap the proxied bytes and validate the host to a plain name.
+_FAVICON_MAX_BYTES = 256 * 1024
+_FAVICON_HOST_RE = re.compile(r"^[a-z0-9.-]{1,253}$")
+_FAVICON_ENDPOINT = "https://t2.gstatic.com/faviconV2"
+
+
+class AiFaviconView(APIView):
+    """Same-origin favicon proxy for AI web-search source avatars.
+
+    Flutter web (CanvasKit) can't decode the public favicon services cross-origin,
+    so the app loads each source's favicon from here — like it does product images
+    — and we fetch it server-side from Google's favicon endpoint. Unauthenticated:
+    it returns only a public site icon (no shop data), and image loads don't carry
+    the app's auth. SSRF-safe: the requested host is only a query param to the fixed
+    Google endpoint; we never fetch the host directly.
+    """
+
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        domain = (request.GET.get("domain") or "").strip().lower()
+        if not domain or not _FAVICON_HOST_RE.match(domain):
+            return Response(status=status.HTTP_400_BAD_REQUEST)
+        params = urllib.parse.urlencode(
+            {
+                "client": "SOCIAL",
+                "type": "FAVICON",
+                "fallback_opts": "TYPE,SIZE,URL",
+                "url": f"https://{domain}",
+                "size": "64",
+            }
+        )
+        try:
+            req = urllib.request.Request(
+                f"{_FAVICON_ENDPOINT}?{params}",
+                headers={"User-Agent": "Pointy"},
+            )
+            with urllib.request.urlopen(req, timeout=6) as resp:
+                content_type = resp.headers.get("Content-Type", "")
+                content = resp.read(_FAVICON_MAX_BYTES + 1)
+        except Exception:
+            # Any failure → 404 so the client falls back to its globe glyph.
+            return Response(status=status.HTTP_404_NOT_FOUND)
+        if not content or len(content) > _FAVICON_MAX_BYTES or not content_type.startswith("image/"):
+            return Response(status=status.HTTP_404_NOT_FOUND)
+        response = HttpResponse(content, content_type=content_type)
+        response["Cache-Control"] = "public, max-age=604800"
+        return response
 
 
 class AiUsageView(APIView):

@@ -10263,6 +10263,24 @@ abstract class AppLocalizations {
   /// **'مستلم وغير مدفوع'**
   String get outstandingPurchasesTitle;
 
+  /// No description provided for @purchasePayablesTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'مستحقات الموردين'**
+  String get purchasePayablesTitle;
+
+  /// Count of received-but-unpaid purchase orders shown under the supplier-dues card.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, =1{فاتورة واحدة بانتظار السداد} =2{فاتورتان بانتظار السداد} other{{count} فواتير بانتظار السداد}}'**
+  String purchasePayablesCount(int count);
+
+  /// No description provided for @purchasePayablesMore.
+  ///
+  /// In ar, this message translates to:
+  /// **'والمزيد'**
+  String get purchasePayablesMore;
+
   /// No description provided for @outstandingPurchasesLoadError.
   ///
   /// In ar, this message translates to:
@@ -10466,6 +10484,144 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'إجراءات الحالة'**
   String get purchaseOrderActionsTitle;
+
+  /// No description provided for @purchaseOrderActionsSheetTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'إجراءات أمر الشراء'**
+  String get purchaseOrderActionsSheetTitle;
+
+  /// No description provided for @purchaseOrderMoreActionsLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'إجراءات أخرى'**
+  String get purchaseOrderMoreActionsLabel;
+
+  /// No description provided for @purchaseOrderDocumentMenuTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'طباعة ومشاركة'**
+  String get purchaseOrderDocumentMenuTooltip;
+
+  /// No description provided for @purchaseOrderSubmitDescription.
+  ///
+  /// In ar, this message translates to:
+  /// **'إرسال الأمر إلى المورد لبدء التوريد.'**
+  String get purchaseOrderSubmitDescription;
+
+  /// No description provided for @purchaseOrderReceiveDescription.
+  ///
+  /// In ar, this message translates to:
+  /// **'تسجيل الكميات الواردة وإضافتها إلى المخزون.'**
+  String get purchaseOrderReceiveDescription;
+
+  /// No description provided for @purchaseOrderRecordPaymentDescription.
+  ///
+  /// In ar, this message translates to:
+  /// **'تسجيل دفعة للمورد مقابل هذا الأمر.'**
+  String get purchaseOrderRecordPaymentDescription;
+
+  /// No description provided for @purchaseOrderReturnDescription.
+  ///
+  /// In ar, this message translates to:
+  /// **'إرجاع أصناف مستلمة إلى المورد.'**
+  String get purchaseOrderReturnDescription;
+
+  /// No description provided for @purchaseOrderRefundDescription.
+  ///
+  /// In ar, this message translates to:
+  /// **'استرداد قيمة أصناف من المورد.'**
+  String get purchaseOrderRefundDescription;
+
+  /// No description provided for @purchaseOrderExchangeDescription.
+  ///
+  /// In ar, this message translates to:
+  /// **'استبدال أصناف مستلمة بأخرى.'**
+  String get purchaseOrderExchangeDescription;
+
+  /// No description provided for @purchaseOrderCancelActionDescription.
+  ///
+  /// In ar, this message translates to:
+  /// **'إلغاء أمر الشراء نهائيًا.'**
+  String get purchaseOrderCancelActionDescription;
+
+  /// No description provided for @purchaseOrderCalloutDraftTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'جاهز للإرسال'**
+  String get purchaseOrderCalloutDraftTitle;
+
+  /// No description provided for @purchaseOrderCalloutDraftMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'أرسل الأمر إلى المورد عندما تكون جاهزًا.'**
+  String get purchaseOrderCalloutDraftMessage;
+
+  /// No description provided for @purchaseOrderCalloutAwaitingTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'بانتظار الاستلام'**
+  String get purchaseOrderCalloutAwaitingTitle;
+
+  /// No description provided for @purchaseOrderCalloutAwaitingMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'سجّل الكميات عند وصول البضاعة من المورد.'**
+  String get purchaseOrderCalloutAwaitingMessage;
+
+  /// No description provided for @purchaseOrderCalloutPartialTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'مستلم جزئيًا'**
+  String get purchaseOrderCalloutPartialTitle;
+
+  /// No description provided for @purchaseOrderCalloutPartialMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'ما زالت بعض الأصناف بانتظار الاستلام.'**
+  String get purchaseOrderCalloutPartialMessage;
+
+  /// No description provided for @purchaseOrderCalloutReceivedDueTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم الاستلام بالكامل'**
+  String get purchaseOrderCalloutReceivedDueTitle;
+
+  /// No description provided for @purchaseOrderCalloutCompleteTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'مكتمل'**
+  String get purchaseOrderCalloutCompleteTitle;
+
+  /// No description provided for @purchaseOrderCalloutCompleteMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم الاستلام والسداد بالكامل.'**
+  String get purchaseOrderCalloutCompleteMessage;
+
+  /// No description provided for @purchaseOrderCalloutCancelledTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'أمر ملغى'**
+  String get purchaseOrderCalloutCancelledTitle;
+
+  /// No description provided for @purchaseOrderCalloutCancelledMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم إلغاء هذا الأمر ولا يمكن تعديله.'**
+  String get purchaseOrderCalloutCancelledMessage;
+
+  /// No description provided for @purchaseOrderReceivedProgressLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'المستلم'**
+  String get purchaseOrderReceivedProgressLabel;
+
+  /// Received-vs-ordered quantity progress on a purchase order, e.g. 7 of 10.
+  ///
+  /// In ar, this message translates to:
+  /// **'{received} من {ordered}'**
+  String purchaseOrderReceivedProgressValue(int received, int ordered);
 
   /// No description provided for @purchaseOrderPrintAction.
   ///
@@ -19157,6 +19313,54 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'اتركها فارغة للإبقاء على كلمة المرور المحفوظة'**
   String get migrationPasswordKeepHint;
+
+  /// No description provided for @migrationAdvancedSectionTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'خيارات متقدمة (اختياري)'**
+  String get migrationAdvancedSectionTitle;
+
+  /// No description provided for @migrationAdvancedSectionSubtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'لازمة للأنظمة القديمة جدًا (مثل SQL Server 2000 الذي يحتاج مُشغّل FreeTDS).'**
+  String get migrationAdvancedSectionSubtitle;
+
+  /// No description provided for @migrationOdbcDriverLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'مُشغّل ODBC'**
+  String get migrationOdbcDriverLabel;
+
+  /// No description provided for @migrationOdbcDriverHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'مثال: FreeTDS أو ODBC Driver 18 for SQL Server'**
+  String get migrationOdbcDriverHint;
+
+  /// No description provided for @migrationTdsVersionLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'إصدار TDS'**
+  String get migrationTdsVersionLabel;
+
+  /// No description provided for @migrationTdsVersionHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'مثال: 7.0 لـ SQL Server 2000'**
+  String get migrationTdsVersionHint;
+
+  /// No description provided for @migrationEncodingLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'ترميز النص'**
+  String get migrationEncodingLabel;
+
+  /// No description provided for @migrationEncodingHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'مثال: cp1256 للنصوص العربية القديمة'**
+  String get migrationEncodingHint;
 
   /// No description provided for @migrationSaveSourceButton.
   ///

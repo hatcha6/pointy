@@ -1,9 +1,34 @@
+from django.urls import reverse
 from rest_framework import serializers
 
 from .models import AiConversation, AiMessage
+from .relay_stream import favicon_url_for
 
 
 class AiMessageSerializer(serializers.ModelSerializer):
+    # Stored sources are {url,title}; add the same-origin favicon-proxy URL on read
+    # (built from the request) so a reloaded reply shows the same favicon avatars.
+    sources = serializers.SerializerMethodField()
+
+    def get_sources(self, obj):
+        request = self.context.get("request")
+        favicon_base = (
+            request.build_absolute_uri(reverse("ai-favicon")) if request is not None else ""
+        )
+        result = []
+        for src in obj.sources or []:
+            if not isinstance(src, dict):
+                continue
+            url = src.get("url") or ""
+            result.append(
+                {
+                    "url": url,
+                    "title": src.get("title") or "",
+                    "favicon": favicon_url_for(favicon_base, url),
+                }
+            )
+        return result
+
     class Meta:
         model = AiMessage
         fields = [

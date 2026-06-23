@@ -78,6 +78,10 @@ class BaseConnector(abc.ABC):
     supported_entities: tuple[str, ...] = ()
     #: Declared schema variants this connector recognises.
     versions: tuple[VersionSpec, ...] = ()
+    #: Suggested transport ``options`` for this vendor (e.g. a legacy ODBC driver
+    #: + TDS version + text encoding for an old SQL Server). Surfaced in the
+    #: systems catalogue so the UI can pre-fill the source's advanced options.
+    recommended_options: dict = {}
 
     def check_compatibility(self, transport) -> CompatibilityReport:
         """Default: match each declared version against the live schema and pick

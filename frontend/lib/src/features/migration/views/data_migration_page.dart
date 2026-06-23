@@ -26,6 +26,10 @@ class _DataMigrationPageState extends State<DataMigrationPage> {
   final _databaseController = TextEditingController();
   final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
+  // Advanced (extra_options) — needed for legacy servers like SQL Server 2000.
+  final _odbcDriverController = TextEditingController();
+  final _tdsVersionController = TextEditingController();
+  final _encodingController = TextEditingController();
 
   String? _systemKey;
   int? _seededSourceId;
@@ -49,7 +53,30 @@ class _DataMigrationPageState extends State<DataMigrationPage> {
     _databaseController.dispose();
     _usernameController.dispose();
     _passwordController.dispose();
+    _odbcDriverController.dispose();
+    _tdsVersionController.dispose();
+    _encodingController.dispose();
     super.dispose();
+  }
+
+  void _applyAdvancedOptions(Map<String, Object?> options) {
+    _odbcDriverController.text = (options['odbc_driver'] ?? '').toString();
+    _tdsVersionController.text = (options['tds_version'] ?? '').toString();
+    _encodingController.text = (options['encoding'] ?? '').toString();
+  }
+
+  /// The advanced fields as a transport-options map (empty fields omitted).
+  Map<String, Object?> _collectExtraOptions() {
+    final options = <String, Object?>{};
+    void put(String key, String value) {
+      final trimmed = value.trim();
+      if (trimmed.isNotEmpty) options[key] = trimmed;
+    }
+
+    put('odbc_driver', _odbcDriverController.text);
+    put('tds_version', _tdsVersionController.text);
+    put('encoding', _encodingController.text);
+    return options;
   }
 
   /// Seed the form once per source (or once for the empty "create" state).
@@ -67,6 +94,7 @@ class _DataMigrationPageState extends State<DataMigrationPage> {
       _usernameController.text = source.username;
       _passwordController.clear();
       _systemKey = source.systemKey;
+      _applyAdvancedOptions(source.extraOptions);
     } else {
       if (_seededEmpty) return;
       _seededEmpty = true;
@@ -74,6 +102,9 @@ class _DataMigrationPageState extends State<DataMigrationPage> {
       _systemKey ??= viewModel.systems.isNotEmpty
           ? viewModel.systems.first.systemKey
           : null;
+      // Pre-fill advanced options with the chosen connector's recommendation
+      // (e.g. FreeTDS / TDS 7.0 for the Fahd SQL Server 2000 connector).
+      _applyAdvancedOptions(_currentSystem?.recommendedOptions ?? const {});
     }
   }
 
@@ -193,14 +224,27 @@ class _DataMigrationPageState extends State<DataMigrationPage> {
               for (final system in viewModel.systems)
                 DropdownMenuItem(
                   value: system.systemKey,
-                  child: Text(system.displayName, overflow: TextOverflow.ellipsis),
+                  child: Text(
+                    system.displayName,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
             ],
-            onChanged: (value) => setState(() => _systemKey = value),
+            onChanged: (value) => setState(() {
+              _systemKey = value;
+              // On a new source, follow the connector's recommended options.
+              if (viewModel.selectedSource == null) {
+                _applyAdvancedOptions(
+                  _currentSystem?.recommendedOptions ?? const {},
+                );
+              }
+            }),
           ),
           if (_currentSystem?.implemented == false) ...[
             SizedBox(height: spacing.sm),
-            PointyInlineMessage.warning(message: l10n.migrationStubSystemNotice),
+            PointyInlineMessage.warning(
+              message: l10n.migrationStubSystemNotice,
+            ),
           ],
           SizedBox(height: spacing.sm),
           if (isSqlite)
@@ -232,7 +276,9 @@ class _DataMigrationPageState extends State<DataMigrationPage> {
                     controller: _portController,
                     keyboardType: TextInputType.number,
                     textDirection: TextDirection.ltr,
-                    decoration: InputDecoration(labelText: l10n.migrationPortLabel),
+                    decoration: InputDecoration(
+                      labelText: l10n.migrationPortLabel,
+                    ),
                   ),
                 ),
               ],
@@ -269,6 +315,7 @@ class _DataMigrationPageState extends State<DataMigrationPage> {
               ),
             ),
           ],
+          if (transport == 'mssql') _buildAdvancedOptions(context, l10n),
           SizedBox(height: spacing.sm),
           Wrap(
             spacing: spacing.sm,
@@ -288,7 +335,9 @@ class _DataMigrationPageState extends State<DataMigrationPage> {
                   label: Text(l10n.migrationTestButton),
                 ),
                 OutlinedButton.icon(
-                  onPressed: viewModel.isChecking ? null : () => _check(context),
+                  onPressed: viewModel.isChecking
+                      ? null
+                      : () => _check(context),
                   icon: viewModel.isChecking
                       ? const _Spinner()
                       : const Icon(Icons.fact_check_outlined),
@@ -302,9 +351,68 @@ class _DataMigrationPageState extends State<DataMigrationPage> {
             PointyInlineMessage(
               tone: PointyInlineMessageTone.success,
               icon: Icons.check_circle_outline,
-              message: l10n.migrationTestSuccess(viewModel.connectionTest!.tableCount),
+              message: l10n.migrationTestSuccess(
+                viewModel.connectionTest!.tableCount,
+              ),
             ),
           ],
+        ],
+      ),
+    );
+  }
+
+  /// Optional transport options (ODBC driver / TDS version / text encoding),
+  /// collapsed by default. These are essential for very old SQL Server backends
+  /// (e.g. Fahd on SQL Server 2000, which needs the FreeTDS driver + TDS 7.0).
+  Widget _buildAdvancedOptions(BuildContext context, AppLocalizations l10n) {
+    final spacing = AdaptiveSpacing.of(context);
+    return Padding(
+      padding: EdgeInsets.only(top: spacing.xs),
+      child: ExpansionTile(
+        tilePadding: EdgeInsets.zero,
+        childrenPadding: EdgeInsets.only(bottom: spacing.sm),
+        leading: const Icon(Icons.tune_outlined),
+        title: Text(l10n.migrationAdvancedSectionTitle),
+        subtitle: Text(
+          l10n.migrationAdvancedSectionSubtitle,
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+        children: [
+          TextField(
+            controller: _odbcDriverController,
+            textDirection: TextDirection.ltr,
+            decoration: InputDecoration(
+              labelText: l10n.migrationOdbcDriverLabel,
+              hintText: l10n.migrationOdbcDriverHint,
+              prefixIcon: const Icon(Icons.cable_outlined),
+            ),
+          ),
+          SizedBox(height: spacing.sm),
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _tdsVersionController,
+                  textDirection: TextDirection.ltr,
+                  decoration: InputDecoration(
+                    labelText: l10n.migrationTdsVersionLabel,
+                    hintText: l10n.migrationTdsVersionHint,
+                  ),
+                ),
+              ),
+              SizedBox(width: spacing.sm),
+              Expanded(
+                child: TextField(
+                  controller: _encodingController,
+                  textDirection: TextDirection.ltr,
+                  decoration: InputDecoration(
+                    labelText: l10n.migrationEncodingLabel,
+                    hintText: l10n.migrationEncodingHint,
+                  ),
+                ),
+              ),
+            ],
+          ),
         ],
       ),
     );
@@ -333,7 +441,9 @@ class _DataMigrationPageState extends State<DataMigrationPage> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           PointyDetailCallout(
-            icon: report.compatible ? Icons.verified_outlined : Icons.error_outline,
+            icon: report.compatible
+                ? Icons.verified_outlined
+                : Icons.error_outline,
             tone: report.compatible
                 ? PointyCalloutTone.success
                 : PointyCalloutTone.danger,
@@ -344,7 +454,9 @@ class _DataMigrationPageState extends State<DataMigrationPage> {
                 ? l10n.migrationDetectedVersion(report.detectedVersion!)
                 : null,
             trailing: PointyStatusPill(
-              label: report.compatible ? l10n.migrationCompatible : l10n.migrationIncompatible,
+              label: report.compatible
+                  ? l10n.migrationCompatible
+                  : l10n.migrationIncompatible,
               color: report.compatible ? colors.success : colors.danger,
             ),
           ),
@@ -444,7 +556,11 @@ class _DataMigrationPageState extends State<DataMigrationPage> {
     );
   }
 
-  Widget _progress(BuildContext context, AppLocalizations l10n, MigrationRun run) {
+  Widget _progress(
+    BuildContext context,
+    AppLocalizations l10n,
+    MigrationRun run,
+  ) {
     final spacing = AdaptiveSpacing.of(context);
     final percent = run.progressPercent.clamp(0, 100) / 100.0;
     return Column(
@@ -454,7 +570,9 @@ class _DataMigrationPageState extends State<DataMigrationPage> {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(
-              run.progressMessage.isEmpty ? l10n.migrationRunningLabel : run.progressMessage,
+              run.progressMessage.isEmpty
+                  ? l10n.migrationRunningLabel
+                  : run.progressMessage,
               style: Theme.of(context).textTheme.bodyMedium,
             ),
             Text('${run.progressPercent}%'),
@@ -469,7 +587,11 @@ class _DataMigrationPageState extends State<DataMigrationPage> {
     );
   }
 
-  Widget _report(BuildContext context, AppLocalizations l10n, MigrationRun run) {
+  Widget _report(
+    BuildContext context,
+    AppLocalizations l10n,
+    MigrationRun run,
+  ) {
     final viewModel = widget.viewModel;
     final spacing = AdaptiveSpacing.of(context);
     final colors = context.pointyColors;
@@ -514,7 +636,9 @@ class _DataMigrationPageState extends State<DataMigrationPage> {
             icon: viewModel.isLoadingIssues
                 ? const _Spinner()
                 : const Icon(Icons.report_problem_outlined),
-            label: Text('${l10n.migrationViewIssuesButton} (${run.issueCount})'),
+            label: Text(
+              '${l10n.migrationViewIssuesButton} (${run.issueCount})',
+            ),
           ),
           if (viewModel.issues.isNotEmpty) ...[
             SizedBox(height: spacing.sm),
@@ -524,9 +648,12 @@ class _DataMigrationPageState extends State<DataMigrationPage> {
                   issue.severity == 'error'
                       ? Icons.error_outline
                       : Icons.warning_amber_outlined,
-                  color: issue.severity == 'error' ? colors.danger : colors.warning,
+                  color: issue.severity == 'error'
+                      ? colors.danger
+                      : colors.warning,
                 ),
-                title: '${_entityLabel(l10n, viewModel, issue.entityType)} · ${issue.code}',
+                title:
+                    '${_entityLabel(l10n, viewModel, issue.entityType)} · ${issue.code}',
                 subtitle: issue.message,
               ),
           ],
@@ -547,7 +674,9 @@ class _DataMigrationPageState extends State<DataMigrationPage> {
 
     return PointyStickyActionFooter(
       summary: Text(
-        viewModel.canImport ? l10n.migrationDryRunHint : l10n.migrationImportGatedHint,
+        viewModel.canImport
+            ? l10n.migrationDryRunHint
+            : l10n.migrationImportGatedHint,
         style: Theme.of(context).textTheme.bodySmall,
       ),
       primaryAction: FilledButton.icon(
@@ -583,12 +712,15 @@ class _DataMigrationPageState extends State<DataMigrationPage> {
       databaseName: _databaseController.text.trim(),
       username: _usernameController.text.trim(),
       password: _passwordController.text,
+      extraOptions: _collectExtraOptions(),
     );
     if (!mounted) return;
     _passwordController.clear();
     messenger.showSnackBar(
       SnackBar(
-        content: Text(saved ? l10n.migrationSourceSaved : l10n.migrationSourceSaveError),
+        content: Text(
+          saved ? l10n.migrationSourceSaved : l10n.migrationSourceSaveError,
+        ),
       ),
     );
   }
@@ -617,7 +749,9 @@ class _DataMigrationPageState extends State<DataMigrationPage> {
         content: Text(
           run == null
               ? l10n.migrationRunStartError
-              : (dryRun ? l10n.migrationDryRunStarted : l10n.migrationImportStarted),
+              : (dryRun
+                    ? l10n.migrationDryRunStarted
+                    : l10n.migrationImportStarted),
         ),
       ),
     );
@@ -626,7 +760,11 @@ class _DataMigrationPageState extends State<DataMigrationPage> {
 
 /// Localised label for an entity type, falling back to the backend's English
 /// label (from the systems catalogue) for any type without an Arabic string.
-String _entityLabel(AppLocalizations l10n, MigrationViewModel viewModel, String type) {
+String _entityLabel(
+  AppLocalizations l10n,
+  MigrationViewModel viewModel,
+  String type,
+) {
   return switch (type) {
     'unit' => l10n.migrationEntityUnit,
     'category' => l10n.migrationEntityCategory,

@@ -59,6 +59,7 @@ from apps.ai.views import (
     AiChatView,
     AiConversationTruncateView,
     AiConversationViewSet,
+    AiFaviconView,
     AiUsageView,
 )
 from apps.fraud.views import FraudFindingViewSet
@@ -247,6 +248,7 @@ urlpatterns = [
     path("api/ai/chat/", AiChatView.as_view(), name="ai-chat"),
     path("api/ai/chat/resume/", AiChatResumeView.as_view(), name="ai-chat-resume"),
     path("api/ai/usage/", AiUsageView.as_view(), name="ai-usage"),
+    path("api/ai/favicon/", AiFaviconView.as_view(), name="ai-favicon"),
     path(
         "api/ai/conversations/<int:pk>/truncate/",
         AiConversationTruncateView.as_view(),

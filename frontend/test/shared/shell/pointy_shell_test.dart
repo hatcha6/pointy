@@ -66,6 +66,7 @@ void main() {
     await _pumpShell(
       tester,
       width: 1200,
+      height: 1600,
       child: PointyScaffold(
         drawer: _navigationDrawer(
           onOpenPurchasing: () => opened = 'purchasing',
@@ -80,8 +81,8 @@ void main() {
     expect(find.text('لوحة التحكم'), findsOneWidget);
     expect(find.text('المحتوى'), findsOneWidget);
 
-    await tester.tap(find.text('المخزون والمشتريات'));
-    await tester.pumpAndSettle();
+    // Destinations are always visible under their section header, so reaching
+    // one is a single tap — no expand step.
     await tester.tap(find.text('المشتريات'));
     expect(opened, 'purchasing');
   });
@@ -209,12 +210,12 @@ void main() {
     );
   });
 
-  testWidgets('AppNavigationDrawer keeps primary destinations ordered', (
+  testWidgets('AppNavigationDrawer keeps sections and destinations ordered', (
     tester,
   ) async {
     await _pumpShell(
       tester,
-      height: 900,
+      height: 1600,
       child: PointyScaffold(
         drawer: _navigationDrawer(),
         appBar: AppBar(
@@ -228,17 +229,15 @@ void main() {
     await tester.tap(find.byTooltip('فتح القائمة'));
     await tester.pumpAndSettle();
 
+    // Section headers stay ordered top-to-bottom...
     expect(_top(tester, 'الرئيسية'), lessThan(_top(tester, 'المبيعات')));
     expect(
       _top(tester, 'المبيعات'),
       lessThan(_top(tester, 'المخزون والمشتريات')),
     );
 
-    await tester.tap(find.text('المبيعات'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('المخزون والمشتريات'));
-    await tester.pumpAndSettle();
-
+    // ...and every destination is rendered (no expand needed), in order
+    // beneath its header.
     expect(_top(tester, 'لوحة التحكم'), lessThan(_top(tester, 'شاشة البيع')));
     expect(_top(tester, 'جلسات الدرج'), lessThan(_top(tester, 'الخصومات')));
     expect(_top(tester, 'المنتجات'), lessThan(_top(tester, 'التصنيفات')));

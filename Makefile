@@ -248,6 +248,9 @@ frontend-categories-preview: frontend-install ## Run the categories UI preview h
 frontend-discounts-preview: frontend-install ## Run the discounts UI preview harness as a local web server.
 	cd "$(FRONTEND_DIR)" && $(FLUTTER) run -d web-server --web-hostname $(WEB_HOST) --web-port $(WEB_PORT) -t lib/dev/discounts_preview.dart
 
+frontend-purchasing-preview: frontend-install ## Run the purchase-order details + navigation UI preview harness as a local web server.
+	cd "$(FRONTEND_DIR)" && $(FLUTTER) run -d web-server --web-hostname $(WEB_HOST) --web-port $(WEB_PORT) -t lib/dev/purchasing_preview.dart
+
 frontend-pos-preview: frontend-install ## Run the POS/purchasing catalog UI preview harness as a local web server.
 	cd "$(FRONTEND_DIR)" && $(FLUTTER) run -d web-server --web-hostname $(WEB_HOST) --web-port $(WEB_PORT) -t lib/dev/pos_preview.dart
 

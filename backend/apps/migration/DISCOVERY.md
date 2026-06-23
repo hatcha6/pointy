@@ -120,6 +120,32 @@ sqlcmd -S <host>[,<port>] -d <database> -U <user> -P <password> \
        -i discovery_mssql.sql -o mssql_discovery.txt -W -s "|" -w 65535
 ```
 
+### Very old SQL Server (2000 / 7.0 — e.g. Fahd)
+
+The modern `ODBC Driver 18 for SQL Server` only talks to SQL Server 2008+. For a
+genuinely old server (Fahd runs on **SQL Server 2000**, `8.00.x`) the source's
+`extra_options` must point at a legacy driver — **FreeTDS** is the portable
+choice and is what the Fahd connector recommends by default:
+
+```json
+{ "odbc_driver": "FreeTDS", "tds_version": "7.0", "encoding": "cp1256" }
+```
+
+- `tds_version` **7.0** is the protocol SQL Server 2000 speaks (use `7.1` for
+  2005, `7.2` for 2008). The transport passes the port separately and omits the
+  `Encrypt`/`TrustServerCertificate` keywords that FreeTDS rejects.
+- `encoding` is the fallback codepage for any non-Unicode (`char`/`varchar`)
+  Arabic columns; `nvarchar` already returns Unicode. The Windows built-in
+  `SQL Server` driver also works in place of FreeTDS.
+- The **backend Docker image already bundles both** the Microsoft `ODBC Driver
+  18 for SQL Server` (the default) and `FreeTDS`, so nothing extra is needed in
+  production. For local dev install FreeTDS yourself: `brew install freetds`
+  (macOS) / `apt-get install tdsodbc` (Debian/Ubuntu), then register it in
+  `odbcinst.ini`.
+
+These are set in the source's **Advanced (optional)** section in the UI; the
+Fahd connector pre-fills them.
+
 ---
 
 ## PostgreSQL

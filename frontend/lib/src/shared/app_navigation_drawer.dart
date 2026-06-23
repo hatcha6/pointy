@@ -34,10 +34,14 @@ class AppNavigationDrawer extends StatelessWidget {
       roleLabel: _roleLabel(l10n, navigation.currentUser.role),
       navigationChildren: [
         const _CommandPaletteTile(closeDrawer: true),
+        const SizedBox(height: 4),
         for (final group in groups)
-          _DrawerNavigationGroupTile(
+          // Every destination is rendered directly under a static section
+          // header — no expand step — so a destination is always one tap away.
+          _NavigationSection(
             group: group,
             selectedDestination: selectedDestination,
+            dense: false,
             onSelect: (destination) {
               _selectDestination(
                 context,
@@ -47,7 +51,7 @@ class AppNavigationDrawer extends StatelessWidget {
               );
             },
           ),
-        const Divider(height: 12),
+        const Divider(height: 24),
         const ThemeModeDrawerTile(),
       ],
       logoutTile: ListTile(
@@ -83,9 +87,10 @@ class AppNavigationDrawer extends StatelessWidget {
           const _CollapsedCommandPaletteButton(),
         if (extended)
           for (final group in groups)
-            _RailNavigationGroupTile(
+            _NavigationSection(
               group: group,
               selectedDestination: selectedDestination,
+              dense: true,
               onSelect: (destination) {
                 _selectDestination(
                   context,
@@ -140,8 +145,8 @@ class AppNavigationDrawer extends StatelessWidget {
               if (navigation.isDestinationAvailable(entry.destination))
                 _DrawerDestination(
                   destination: entry.destination,
-                  icon: Icon(entry.icon),
-                  selectedIcon: Icon(entry.selectedIcon),
+                  icon: entry.icon,
+                  selectedIcon: entry.selectedIcon,
                   label: entry.label,
                 ),
           ],
@@ -214,31 +219,33 @@ class _NavigationGroup {
   final List<_DrawerDestination> destinations;
 }
 
-class _DrawerNavigationGroupTile extends StatelessWidget {
-  const _DrawerNavigationGroupTile({
+/// A static, always-expanded navigation section: a muted section header with
+/// every destination rendered directly beneath it. Replaces the old
+/// expand-then-select [ExpansionTile] so reaching any screen is a single tap.
+class _NavigationSection extends StatelessWidget {
+  const _NavigationSection({
     required this.group,
     required this.selectedDestination,
     required this.onSelect,
+    required this.dense,
   });
 
   final _NavigationGroup group;
   final AppNavigationDestination selectedDestination;
   final ValueChanged<_DrawerDestination> onSelect;
+  final bool dense;
 
   @override
   Widget build(BuildContext context) {
-    final hasSelectedChild = group.destinations.any(
-      (destination) => destination.destination == selectedDestination,
-    );
-    return ExpansionTile(
-      initiallyExpanded: hasSelectedChild,
-      leading: Icon(group.icon),
-      title: Text(group.label, maxLines: 1, overflow: TextOverflow.ellipsis),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        _NavSectionHeader(label: group.label, icon: group.icon, dense: dense),
         for (final destination in group.destinations)
-          _DrawerDestinationTile(
+          _NavDestinationTile(
             destination: destination,
             selected: destination.destination == selectedDestination,
+            dense: dense,
             onTap: () => onSelect(destination),
           ),
       ],
@@ -246,91 +253,111 @@ class _DrawerNavigationGroupTile extends StatelessWidget {
   }
 }
 
-class _DrawerDestinationTile extends StatelessWidget {
-  const _DrawerDestinationTile({
-    required this.destination,
-    required this.selected,
-    required this.onTap,
+class _NavSectionHeader extends StatelessWidget {
+  const _NavSectionHeader({
+    required this.label,
+    required this.icon,
+    required this.dense,
   });
 
-  final _DrawerDestination destination;
-  final bool selected;
-  final VoidCallback onTap;
+  final String label;
+  final IconData icon;
+  final bool dense;
 
   @override
   Widget build(BuildContext context) {
-    return ListTile(
-      selected: selected,
-      leading: selected ? destination.selectedIcon : destination.icon,
-      title: Text(
-        destination.label,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
+    final colors = context.pointyColors;
+    return Padding(
+      padding: EdgeInsetsDirectional.fromSTEB(
+        dense ? 12 : 20,
+        dense ? 14 : 18,
+        12,
+        6,
       ),
-      contentPadding: const EdgeInsetsDirectional.only(start: 40, end: 24),
-      onTap: onTap,
-    );
-  }
-}
-
-class _RailNavigationGroupTile extends StatelessWidget {
-  const _RailNavigationGroupTile({
-    required this.group,
-    required this.selectedDestination,
-    required this.onSelect,
-  });
-
-  final _NavigationGroup group;
-  final AppNavigationDestination selectedDestination;
-  final ValueChanged<_DrawerDestination> onSelect;
-
-  @override
-  Widget build(BuildContext context) {
-    final hasSelectedChild = group.destinations.any(
-      (destination) => destination.destination == selectedDestination,
-    );
-    return ExpansionTile(
-      initiallyExpanded: hasSelectedChild,
-      tilePadding: const EdgeInsetsDirectional.symmetric(horizontal: 8),
-      childrenPadding: EdgeInsets.zero,
-      leading: Icon(group.icon),
-      title: Text(group.label, maxLines: 1, overflow: TextOverflow.ellipsis),
-      children: [
-        for (final destination in group.destinations)
-          _RailDestinationTile(
-            destination: destination,
-            selected: destination.destination == selectedDestination,
-            onTap: () => onSelect(destination),
+      child: Row(
+        children: [
+          Icon(icon, size: 16, color: colors.mutedInk),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: colors.mutedInk,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 0.3,
+              ),
+            ),
           ),
-      ],
+        ],
+      ),
     );
   }
 }
 
-class _RailDestinationTile extends StatelessWidget {
-  const _RailDestinationTile({
+class _NavDestinationTile extends StatelessWidget {
+  const _NavDestinationTile({
     required this.destination,
     required this.selected,
+    required this.dense,
     required this.onTap,
   });
 
   final _DrawerDestination destination;
   final bool selected;
+  final bool dense;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return ListTile(
-      dense: true,
-      selected: selected,
-      leading: selected ? destination.selectedIcon : destination.icon,
-      title: Text(
-        destination.label,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
+    final colors = context.pointyColors;
+    final foreground = selected ? colors.primaryDark : colors.ink;
+
+    return Padding(
+      padding: EdgeInsetsDirectional.symmetric(
+        horizontal: dense ? 6 : 10,
+        vertical: 2,
       ),
-      contentPadding: const EdgeInsetsDirectional.only(start: 24, end: 8),
-      onTap: onTap,
+      child: Material(
+        color: selected ? colors.primaryContainer : Colors.transparent,
+        borderRadius: BorderRadius.circular(PointyRadii.chip),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: Padding(
+            padding: EdgeInsetsDirectional.fromSTEB(
+              dense ? 12 : 16,
+              dense ? 9 : 11,
+              12,
+              dense ? 9 : 11,
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  selected ? destination.selectedIcon : destination.icon,
+                  size: 20,
+                  color: selected ? colors.primaryDark : colors.mutedInk,
+                ),
+                SizedBox(width: dense ? 12 : 14),
+                Expanded(
+                  child: Text(
+                    destination.label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: foreground,
+                      fontWeight: selected
+                          ? FontWeight.w800
+                          : FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -356,11 +383,13 @@ class _CollapsedRailDestinationTile extends StatelessWidget {
         child: IconButton(
           isSelected: selected,
           style: IconButton.styleFrom(
-            backgroundColor: selected ? PointyColors.primaryContainer : null,
+            backgroundColor: selected ? colors.primaryContainer : null,
             foregroundColor: selected ? colors.primaryDark : colors.mutedInk,
           ),
           onPressed: onTap,
-          icon: selected ? destination.selectedIcon : destination.icon,
+          icon: Icon(
+            selected ? destination.selectedIcon : destination.icon,
+          ),
         ),
       ),
     );
@@ -376,8 +405,8 @@ class _DrawerDestination {
   });
 
   final AppNavigationDestination destination;
-  final Widget icon;
-  final Widget selectedIcon;
+  final IconData icon;
+  final IconData selectedIcon;
   final String label;
 }
 

@@ -1,8 +1,21 @@
 import json
+from urllib.parse import urlencode, urlparse
 
 from django.utils import timezone
 
 from apps.core.models import ShopSettings
+
+
+def favicon_url_for(favicon_base, source_url):
+    """The same-origin favicon-proxy URL for a web-search source (so the app loads
+    the icon from our own backend, sidestepping the favicon services' cross-origin
+    limits on Flutter web). Returns '' when unavailable."""
+    if not favicon_base:
+        return ""
+    host = (urlparse(source_url or "").hostname or "").strip()
+    if not host:
+        return ""
+    return f"{favicon_base}?{urlencode({'domain': host})}"
 
 # Arabic label for each shop vertical, so the model tailors behaviour (a
 # restaurant's products need recipes; a pharmacy's don't).

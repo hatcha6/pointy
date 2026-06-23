@@ -14,6 +14,7 @@ class MigrationSystemSerializer(serializers.Serializer):
     supported_entities = serializers.ListField(child=serializers.CharField())
     versions = serializers.ListField(child=serializers.CharField())
     implemented = serializers.BooleanField()
+    recommended_options = serializers.DictField()
 
     @classmethod
     def catalogue(cls) -> list[dict]:
@@ -25,6 +26,7 @@ class MigrationSystemSerializer(serializers.Serializer):
                 "supported_entities": list(connector.supported_entities),
                 "versions": [version.version_key for version in connector.versions],
                 "implemented": connector.implemented,
+                "recommended_options": dict(connector.recommended_options or {}),
             }
             for connector in list_connectors()
         ]

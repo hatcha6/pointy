@@ -3264,6 +3264,17 @@
   "purchaseOrdersLoadError": "تعذر تحميل فواتير المشتريات.",
   "purchaseOrderDetailsLoadError": "تعذر تحميل تفاصيل أمر الشراء.",
   "outstandingPurchasesTitle": "مستلم وغير مدفوع",
+  "purchasePayablesTitle": "مستحقات الموردين",
+  "purchasePayablesCount": "{count, plural, =1{فاتورة واحدة بانتظار السداد} =2{فاتورتان بانتظار السداد} other{{count} فواتير بانتظار السداد}}",
+  "@purchasePayablesCount": {
+    "description": "Count of received-but-unpaid purchase orders shown under the supplier-dues card.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "purchasePayablesMore": "والمزيد",
   "outstandingPurchasesLoadError": "تعذر تحميل المشتريات المستلمة غير المدفوعة.",
   "outstandingPurchasesSummary": "{count, plural, =0{لا توجد فواتير} =1{فاتورة واحدة • {amount}} =2{فاتورتان • {amount}} other{{count} فواتير • {amount}}}",
   "@outstandingPurchasesSummary": {
@@ -3368,6 +3379,40 @@
   "purchaseOrderAdjustmentCreditLabel": "رصيد من المرتجعات",
   "purchaseOrderBalanceDueLabel": "المتبقي للمورد",
   "purchaseOrderActionsTitle": "إجراءات الحالة",
+  "purchaseOrderActionsSheetTitle": "إجراءات أمر الشراء",
+  "purchaseOrderMoreActionsLabel": "إجراءات أخرى",
+  "purchaseOrderDocumentMenuTooltip": "طباعة ومشاركة",
+  "purchaseOrderSubmitDescription": "إرسال الأمر إلى المورد لبدء التوريد.",
+  "purchaseOrderReceiveDescription": "تسجيل الكميات الواردة وإضافتها إلى المخزون.",
+  "purchaseOrderRecordPaymentDescription": "تسجيل دفعة للمورد مقابل هذا الأمر.",
+  "purchaseOrderReturnDescription": "إرجاع أصناف مستلمة إلى المورد.",
+  "purchaseOrderRefundDescription": "استرداد قيمة أصناف من المورد.",
+  "purchaseOrderExchangeDescription": "استبدال أصناف مستلمة بأخرى.",
+  "purchaseOrderCancelActionDescription": "إلغاء أمر الشراء نهائيًا.",
+  "purchaseOrderCalloutDraftTitle": "جاهز للإرسال",
+  "purchaseOrderCalloutDraftMessage": "أرسل الأمر إلى المورد عندما تكون جاهزًا.",
+  "purchaseOrderCalloutAwaitingTitle": "بانتظار الاستلام",
+  "purchaseOrderCalloutAwaitingMessage": "سجّل الكميات عند وصول البضاعة من المورد.",
+  "purchaseOrderCalloutPartialTitle": "مستلم جزئيًا",
+  "purchaseOrderCalloutPartialMessage": "ما زالت بعض الأصناف بانتظار الاستلام.",
+  "purchaseOrderCalloutReceivedDueTitle": "تم الاستلام بالكامل",
+  "purchaseOrderCalloutCompleteTitle": "مكتمل",
+  "purchaseOrderCalloutCompleteMessage": "تم الاستلام والسداد بالكامل.",
+  "purchaseOrderCalloutCancelledTitle": "أمر ملغى",
+  "purchaseOrderCalloutCancelledMessage": "تم إلغاء هذا الأمر ولا يمكن تعديله.",
+  "purchaseOrderReceivedProgressLabel": "المستلم",
+  "purchaseOrderReceivedProgressValue": "{received} من {ordered}",
+  "@purchaseOrderReceivedProgressValue": {
+    "description": "Received-vs-ordered quantity progress on a purchase order, e.g. 7 of 10.",
+    "placeholders": {
+      "received": {
+        "type": "int"
+      },
+      "ordered": {
+        "type": "int"
+      }
+    }
+  },
   "purchaseOrderPrintAction": "طباعة",
   "purchaseOrderPrintInProgressAction": "جار الطباعة...",
   "purchaseOrderShareAction": "مشاركة PDF",
@@ -6495,6 +6540,14 @@
   "migrationUsernameLabel": "اسم المستخدم",
   "migrationPasswordLabel": "كلمة المرور",
   "migrationPasswordKeepHint": "اتركها فارغة للإبقاء على كلمة المرور المحفوظة",
+  "migrationAdvancedSectionTitle": "خيارات متقدمة (اختياري)",
+  "migrationAdvancedSectionSubtitle": "لازمة للأنظمة القديمة جدًا (مثل SQL Server 2000 الذي يحتاج مُشغّل FreeTDS).",
+  "migrationOdbcDriverLabel": "مُشغّل ODBC",
+  "migrationOdbcDriverHint": "مثال: FreeTDS أو ODBC Driver 18 for SQL Server",
+  "migrationTdsVersionLabel": "إصدار TDS",
+  "migrationTdsVersionHint": "مثال: 7.0 لـ SQL Server 2000",
+  "migrationEncodingLabel": "ترميز النص",
+  "migrationEncodingHint": "مثال: cp1256 للنصوص العربية القديمة",
   "migrationSaveSourceButton": "حفظ المصدر",
   "migrationTestButton": "اختبار الاتصال",
   "migrationCheckButton": "فحص التوافق",

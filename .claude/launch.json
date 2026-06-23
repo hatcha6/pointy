@@ -38,6 +38,12 @@
       "port": 8080
     },
     {
+      "name": "purchasing-preview",
+      "runtimeExecutable": "make",
+      "runtimeArgs": ["frontend-purchasing-preview"],
+      "port": 8080
+    },
+    {
       "name": "pos-preview",
       "runtimeExecutable": "make",
       "runtimeArgs": ["frontend-pos-preview"],

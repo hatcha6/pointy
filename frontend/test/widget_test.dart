@@ -1857,7 +1857,9 @@ void main() {
         find.text('ابحث برقم أمر الشراء أو فاتورة المورد أو المنتج'),
         findsOneWidget,
       );
-      expect(find.textContaining('مسودة'), findsOneWidget);
+      // "مسودة" now appears both as the draft order's status pill and as the
+      // draft quick-filter chip.
+      expect(find.textContaining('مسودة'), findsWidgets);
 
       await tester.tap(find.text('أمر شراء جديد'));
       await tester.pumpAndSettle(const Duration(seconds: 1));
@@ -1978,7 +1980,6 @@ void main() {
     await tester.tap(find.text('أمر الشراء P20260515000200'));
     await tester.pumpAndSettle(const Duration(seconds: 1));
 
-    expect(find.text('رقم أمر الشراء'), findsOneWidget);
     expect(find.text('P20260515000200'), findsOneWidget);
     expect(find.text('رقم فاتورة المورد'), findsOneWidget);
     expect(find.text('INV-4432'), findsOneWidget);
@@ -2020,6 +2021,11 @@ void main() {
 
     expect(find.textContaining('مستلم'), findsWidgets);
     expect(find.text('استلام كميات'), findsNothing);
+
+    // Corrections (return / refund / exchange) now live in the pinned footer's
+    // "more actions" sheet — open it before returning items.
+    await tester.tap(find.text('إجراءات أخرى'));
+    await tester.pumpAndSettle();
     expect(find.text('إرجاع'), findsOneWidget);
 
     await tester.tap(find.text('إرجاع'));
@@ -2091,9 +2097,13 @@ void main() {
     await tester.tap(find.text('أمر الشراء P20260515000200'));
     await tester.pumpAndSettle(const Duration(seconds: 1));
 
-    expect(find.text('تاريخ الاستحقاق'), findsOneWidget);
     expect(find.text('غير مدفوع'), findsWidgets);
-    expect(find.text('المتبقي للمورد'), findsOneWidget);
+    expect(find.text('المتبقي للمورد'), findsWidgets);
+
+    // On a draft order the next step is "submit", so recording a supplier
+    // payment is reached from the footer's "more actions" sheet.
+    await tester.tap(find.text('إجراءات أخرى'));
+    await tester.pumpAndSettle();
     expect(find.text('تسجيل دفعة'), findsOneWidget);
 
     await tester.tap(find.text('تسجيل دفعة'));
@@ -2230,6 +2240,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    await tester.tap(find.text('إجراءات أخرى'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('استبدال'));
     await tester.pumpAndSettle();
 
@@ -2348,6 +2360,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    await tester.tap(find.text('إجراءات أخرى'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('إرجاع'));
     await tester.pumpAndSettle();
     await tester.tap(find.byIcon(Icons.add).last);

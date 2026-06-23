@@ -28,6 +28,33 @@ ENV PATH="/opt/pointy-venv/bin:${PATH}" \
 
 WORKDIR /app
 
+# SQL Server source migrations go through pyodbc, which needs the unixODBC
+# runtime (libodbc.so.2) — absent from the slim base. Install two ODBC drivers:
+# Microsoft's "ODBC Driver 18 for SQL Server" (the transport default, SQL Server
+# 2012+) from Microsoft's apt repo, and FreeTDS for very old servers (SQL Server
+# 2000, used by the Fahd connector) that Driver 18 no longer talks to. Both are
+# registered under the exact names the transport asks for. The Microsoft repo
+# config .deb carries the right signing key for the base Debian release (trixie's
+# key isn't in the legacy microsoft.asc). Must run before the hardening step
+# below removes apt/dpkg.
+RUN set -eux; \
+    export DEBIAN_FRONTEND=noninteractive; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends curl ca-certificates; \
+    . /etc/os-release; \
+    curl -fsSL -o /tmp/ms-prod.deb \
+        "https://packages.microsoft.com/config/debian/${VERSION_ID}/packages-microsoft-prod.deb"; \
+    apt-get install -y --no-install-recommends /tmp/ms-prod.deb; \
+    apt-get update; \
+    ACCEPT_EULA=Y apt-get install -y --no-install-recommends unixodbc tdsodbc msodbcsql18; \
+    printf '[ODBC Driver 18 for SQL Server]\nDescription = Microsoft ODBC Driver 18 for SQL Server\nDriver = %s\n\n[FreeTDS]\nDescription = FreeTDS (SQL Server 6.5 - 2019)\nDriver = %s\n' \
+        "$(dpkg -L msodbcsql18 | grep -m1 'libmsodbcsql-18.*\.so')" \
+        "$(dpkg -L tdsodbc | grep -m1 'libtdsodbc\.so')" \
+        > /etc/odbcinst.ini; \
+    apt-get purge -y curl; \
+    apt-get autoremove -y; \
+    rm -rf /tmp/ms-prod.deb /etc/apt/sources.list.d/*microsoft* /var/lib/apt/lists/*
+
 RUN groupadd --system pointy \
     && useradd --system --gid pointy --home-dir /var/lib/pointy pointy \
     && mkdir -p \

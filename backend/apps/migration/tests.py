@@ -385,6 +385,140 @@ def build_aboghris_sample(path):
         connection.close()
 
 
+def build_fahd_sample(path):
+    """A tiny SQLite database shaped like the Fahd (SQL Server 2000) schema, so
+    the Fahd connector's mapping is testable without FreeTDS/MSSQL.
+
+    Exercises the interesting cases: the ``CAR_PART`` system placeholder row, a
+    catalogue split between ``CAR_PART`` and the Excel ``asnaf$`` table with one
+    overlapping code (dedup), system/opening-balance party rows, and movement
+    lines that reference the system item (``SER='0'``) which must be skipped.
+    """
+    import sqlite3
+
+    connection = sqlite3.connect(path)
+    try:
+        connection.executescript(
+            """
+            CREATE TABLE TASNEEF (NO INTEGER, TASNEEF TEXT);
+            CREATE TABLE CAR_PART (
+                ser TEXT, id INTEGER, CAR_PART TEXT, COUNT_ORG REAL, BUY_PRICE REAL,
+                SER_GOMLA REAL, SER_KETAEE REAL, TASNEEF TEXT, hideornot INTEGER
+            );
+            CREATE TABLE "asnaf$" (
+                buy_price TEXT, ser_gomla TEXT, ser_ketaee TEXT, place TEXT,
+                car_part TEXT, ser TEXT
+            );
+            CREATE TABLE COUSTMER (
+                NO_SADER INTEGER, S_NAME TEXT, S_ADDRESS TEXT, S_PHONE TEXT, Hideornot INTEGER
+            );
+            CREATE TABLE DEON_SADER (
+                NO_SADER INTEGER, S_NAME TEXT, S_ADDRESS TEXT, S_PHONE TEXT, Hideornot INTEGER
+            );
+            CREATE TABLE WARED (
+                NO_SADER INTEGER, S_NAME TEXT, S_ADDRESS TEXT, S_PHONE TEXT, Hideornot INTEGER
+            );
+            CREATE TABLE WARED1 (
+                NO_SADER INTEGER, ID INTEGER, NO_FATORA INTEGER, NEW_F REAL, S_DAIN REAL,
+                S_DATE TEXT, SER TEXT, SER_KETAEE REAL, SER_GOMLA REAL, BUY_PRICE REAL, KASM REAL
+            );
+            CREATE TABLE SADER1 (
+                NO_SADER INTEGER, ID INTEGER, NO_FATORA INTEGER, NEW_F REAL, S_DAIN REAL,
+                S_DATE TEXT, SER TEXT, SER_KETAEE REAL, SER_GOMLA REAL, BUY_PRICE REAL, KASM REAL
+            );
+            CREATE TABLE COUSTMER1 (
+                NO_SADER INTEGER, ID INTEGER, NO_FATORA INTEGER, NEW_F REAL, S_DAIN REAL,
+                S_DATE TEXT, SER TEXT, SER_KETAEE REAL, SER_GOMLA REAL, BUY_PRICE REAL, KASM REAL
+            );
+            CREATE TABLE ESAL_WARED1 (
+                NO_SADER INTEGER, ID INTEGER, V_ESAL REAL, DATE_ESAL TEXT, ESAL_NO TEXT
+            );
+            CREATE TABLE MASAREEF_S (
+                ID INTEGER, DATE_M TEXT, V_M REAL, MEMO TEXT, S_NAME TEXT, NO_FATORA INTEGER
+            );
+            """
+        )
+        connection.executemany(
+            "INSERT INTO TASNEEF VALUES (?, ?)",
+            [(59, "عام"), (60, "عدة يدوية")],
+        )
+        connection.executemany(
+            "INSERT INTO CAR_PART VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            [
+                # System placeholder (ser '0' / "دين سابق") -> skipped.
+                ("0", 1989, "دين سابق", 0, 4, 0, 0, "عام", 1),
+                # A real native item.
+                ("5000", 2000, "مفتاح ربط", 12, 20, 28, 35, "عدة يدوية", 0),
+                # Same code as an asnaf$ row -> CAR_PART wins on dedup.
+                ("2661-15", 2001, "رول مبطن (محدّث)", 5, 70, 95, 120, "عام", 0),
+            ],
+        )
+        connection.executemany(
+            'INSERT INTO "asnaf$" VALUES (?, ?, ?, ?, ?, ?)',
+            [
+                ("71.5", "95", "110", "1", "رول مبطن", "2661-15"),  # deduped (in CAR_PART)
+                ("8.8", "13.5", "16", "72", "طاجين شواء", "2229-10"),
+                ("35", "40", "45", "32", "بكرج اكسبرس", "0161"),
+            ],
+        )
+        connection.executemany(
+            "INSERT INTO COUSTMER VALUES (?, ?, ?, ?, ?)",
+            [
+                (8435, "المعدوم", "0", "0", 1),  # system account -> skipped
+                (8436, "1/مدير النظام29/04/2024", "0", "0", 1),  # admin -> skipped
+                (9001, "أحمد علي", "طرابلس", "0911111111", 0),
+            ],
+        )
+        connection.executemany(
+            "INSERT INTO DEON_SADER VALUES (?, ?, ?, ?, ?)",
+            [
+                (7, "رصيد اول المدة 2024", "0", "0", 1),  # opening balance -> skipped
+                (6, "كمال", "0", "0922222222", 0),
+            ],
+        )
+        connection.executemany(
+            "INSERT INTO WARED VALUES (?, ?, ?, ?, ?)",
+            [
+                (1221, "رصيد اول المدة 2024", "0", "0", 1),  # opening balance -> skipped
+                (1300, "شركة قطع الغيار", "بنغازي", "0913333333", 0),
+            ],
+        )
+        connection.executemany(
+            "INSERT INTO WARED1 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            [
+                # Purchase invoice 10 from supplier 1300: 10×20 + 5×80 = 600.
+                (1300, 1, 10, 10, 200, "2024-07-18", "5000", 35, 28, 20, 0),
+                (1300, 2, 10, 5, 400, "2024-07-18", "2661-15", 120, 95, 80, 0),
+                # Opening-balance line referencing the system item -> skipped, no PO.
+                (1221, 3, 2, 1, 4, "2024-01-01", "0", 0, 0, 4, 0),
+            ],
+        )
+        connection.executemany(
+            "INSERT INTO SADER1 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            [
+                # Sale invoice 101 to customer 9001: 2×35 + 1×120 = 190.
+                (9001, 1, 101, 2, 70, "2024-08-01", "5000", 35, 28, 20, 0),
+                (9001, 2, 101, 1, 120, "2024-08-01", "2661-15", 120, 95, 80, 0),
+                # Invoice referencing the system item only -> no sale emitted.
+                (9001, 3, 999, 1, 5, "2024-08-02", "0", 0, 0, 0, 0),
+            ],
+        )
+        connection.executemany(
+            "INSERT INTO ESAL_WARED1 VALUES (?, ?, ?, ?, ?)",
+            [(1300, 1, 600, "2024-07-20", "R-1")],
+        )
+        connection.executemany(
+            "INSERT INTO MASAREEF_S VALUES (?, ?, ?, ?, ?, ?)",
+            [
+                (1, "2024-06-01", 250.0, "فاتورة كهرباء", "كهرباء", 5),
+                (2, "2024-06-02", 0.0, "صفر", "", 0),  # zero amount -> skipped
+            ],
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+
 class ResolverPerformanceTests(MigrationTestBase):
     def test_resolve_is_in_memory_after_preload(self):
         from django.db import connection
@@ -540,3 +674,147 @@ class AboGhrisConnectorTests(MigrationTestBase):
         self.assertCreated(Product, 4)
         self.assertEqual(StockItem.objects.count(), stock_before)
         self.assertNotIn("stock", run.summary)
+
+
+class FahdConnectorTests(MigrationTestBase):
+    def _fahd_source(self, **overrides):
+        return self.make_source(
+            name="Fahd",
+            system_key="fahd_mssql",
+            transport_kind="sqlite",
+            database_name=str(self.db_path),
+            **overrides,
+        )
+
+    def test_compatible_schema(self):
+        build_fahd_sample(self.db_path)
+        connector = get_connector("fahd_mssql")
+        with build_transport("sqlite", {"database": str(self.db_path)}) as transport:
+            report = connector.check_compatibility(transport)
+        self.assertTrue(report.compatible)
+        self.assertEqual(report.detected_version, "fahd-v22-2023")
+
+    def test_master_data_import(self):
+        build_fahd_sample(self.db_path)
+        source = self._fahd_source()
+
+        run = self.run_sync(source, IMPORT)
+
+        self.assertIn(run.status, (MigrationRun.Status.SUCCEEDED, MigrationRun.Status.PARTIAL))
+        # Categories from TASNEEF.
+        self.assertCreated(ProductCategory, 2)
+        # Products: 2 from CAR_PART (system row skipped) + 2 from asnaf$ (the
+        # overlapping "2661-15" is deduped to the CAR_PART row) = 4.
+        self.assertCreated(Product, 4)
+        self.assertCreated(ProductVariant, 4)
+        # The CAR_PART row wins the dedup (its name + price, not the asnaf$ one).
+        v_dedup = ProductVariant.objects.get(barcode="2661-15")
+        self.assertEqual(v_dedup.unit_price, Decimal("120.00"))
+        self.assertEqual(v_dedup.product.name, "رول مبطن (محدّث)")
+        # Native CAR_PART item carries its category + retail price.
+        native = Product.objects.get(name="مفتاح ربط")
+        self.assertEqual(native.categories.first().name, "عدة يدوية")
+        self.assertEqual(ProductVariant.objects.get(sku="5000").unit_price, Decimal("35.00"))
+        # asnaf$-only product imported at its retail (ser_ketaee) price.
+        asnaf = ProductVariant.objects.get(barcode="2229-10")
+        self.assertEqual(asnaf.unit_price, Decimal("16.00"))
+        # Stock only from CAR_PART real rows (asnaf$ has none, system row skipped).
+        self.assertCreated(StockItem, 2)
+        self.assertEqual(
+            StockItem.objects.get(variant=ProductVariant.objects.get(sku="5000")).quantity_on_hand,
+            Decimal("12.000"),
+        )
+        # Customers from COUSTMER + DEON_SADER; system/opening rows skipped.
+        self.assertCreated(Customer, 2)
+        self.assertTrue(Customer.objects.filter(full_name="أحمد علي").exists())
+        self.assertTrue(Customer.objects.filter(full_name="كمال").exists())
+        # Suppliers from WARED; opening-balance row skipped.
+        self.assertCreated(Supplier, 1)
+        self.assertTrue(Supplier.objects.filter(name="شركة قطع الغيار").exists())
+
+    def test_transactional_import(self):
+        from apps.expenses.models import Expense
+        from apps.payments.models import Payment
+        from apps.purchasing.models import PurchaseOrder, SupplierPayment
+        from apps.sales.models import Order
+
+        build_fahd_sample(self.db_path)
+        source = self._fahd_source()
+        orders_before = Order.objects.count()
+        payments_before = Payment.objects.count()
+        pos_before = PurchaseOrder.objects.count()
+        expenses_before = Expense.objects.count()
+        supplier_payments_before = SupplierPayment.objects.count()
+
+        run = self.run_sync(source, IMPORT)
+
+        self.assertIn(run.status, (MigrationRun.Status.SUCCEEDED, MigrationRun.Status.PARTIAL))
+        # Sales: one resolvable invoice (the system-item invoice yields no lines).
+        self.assertEqual(Order.objects.count() - orders_before, 1)
+        self.assertEqual(Payment.objects.count() - payments_before, 1)
+        sale = Order.objects.get(total=Decimal("190.00"))  # 2×35 + 1×120
+        self.assertEqual(sale.status, "paid")
+        self.assertEqual(sale.payments.first().amount, Decimal("190.00"))
+        self.assertEqual(sale.created_at.year, 2024)  # historical date preserved
+        self.assertEqual(sale.customer.full_name, "أحمد علي")
+        # Purchase order: one invoice, two lines, 10×20 + 5×80 = 600.
+        self.assertEqual(PurchaseOrder.objects.count() - pos_before, 1)
+        po = PurchaseOrder.objects.get(total=Decimal("600.00"))
+        self.assertEqual(po.lines.count(), 2)
+        self.assertEqual(po.supplier.name, "شركة قطع الغيار")
+        self.assertEqual(po.status, "received")
+        # Supplier payment from ESAL_WARED1.
+        self.assertEqual(SupplierPayment.objects.count() - supplier_payments_before, 1)
+        payment = SupplierPayment.objects.get(reference="R-1")
+        self.assertEqual(payment.amount, Decimal("600.00"))
+        self.assertEqual(payment.supplier.name, "شركة قطع الغيار")
+        # Expense from MASAREEF_S (zero-amount row skipped); category from S_NAME.
+        self.assertEqual(Expense.objects.count() - expenses_before, 1)
+        expense = Expense.objects.get(amount=Decimal("250.00"))
+        self.assertEqual(expense.category.name, "كهرباء")
+        self.assertEqual(expense.spent_at.year, 2024)
+
+    def test_products_without_quantities_option_skips_stock(self):
+        build_fahd_sample(self.db_path)
+        source = self._fahd_source()
+        stock_before = StockItem.objects.count()
+
+        run = self.run_sync(source, IMPORT, options={"products_without_quantities": True})
+
+        self.assertIn(run.status, (MigrationRun.Status.SUCCEEDED, MigrationRun.Status.PARTIAL))
+        self.assertCreated(Product, 4)
+        self.assertEqual(StockItem.objects.count(), stock_before)
+        self.assertNotIn("stock", run.summary)
+
+
+class MssqlConnectionStringTests(TestCase):
+    def _conn_string(self, options):
+        transport = build_transport(
+            "mssql",
+            {
+                "host": "10.0.0.5",
+                "port": 1433,
+                "database": "FAHD2023",
+                "username": "sa",
+                "password": "secret",
+                "options": options,
+            },
+        )
+        return transport._build_connection_string()
+
+    def test_freetds_for_sql_server_2000(self):
+        # FreeTDS needs a separate PORT + TDS version and rejects the TLS keywords.
+        conn = self._conn_string({"odbc_driver": "FreeTDS", "tds_version": "7.0"})
+        self.assertIn("DRIVER={FreeTDS}", conn)
+        self.assertIn("SERVER=10.0.0.5", conn)
+        self.assertIn("PORT=1433", conn)
+        self.assertIn("TDS_Version=7.0", conn)
+        self.assertNotIn("Encrypt", conn)
+        self.assertNotIn("10.0.0.5,1433", conn)
+
+    def test_modern_driver_keeps_tls_keywords(self):
+        conn = self._conn_string({})
+        self.assertIn("ODBC Driver 18 for SQL Server", conn)
+        self.assertIn("SERVER=10.0.0.5,1433", conn)
+        self.assertIn("Encrypt=yes", conn)
+        self.assertIn("TrustServerCertificate=yes", conn)

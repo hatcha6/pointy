@@ -356,31 +356,30 @@ class AiAnswer {
 /// One web-search source the assistant consulted for a reply — shown as a favicon
 /// avatar that opens the page when tapped.
 class AiSource {
-  const AiSource({required this.url, required this.title});
+  const AiSource({required this.url, required this.title, this.favicon = ''});
 
   final String url;
   final String title;
 
-  /// The site host, used for the displayed name and the favicon lookup.
+  /// A same-origin favicon-proxy URL supplied by the backend (loads like any other
+  /// backend image, unlike the cross-origin favicon services which Flutter web
+  /// can't decode). Empty → the UI shows a globe glyph.
+  final String favicon;
+
+  /// The site host, used for the displayed name.
   String get host {
     final h = Uri.tryParse(url)?.host ?? '';
     return h.startsWith('www.') ? h.substring(4) : h;
   }
 
-  /// A favicon for the source's host via Google's public service (with a generic
-  /// fallback rendered by the UI when it fails to load).
-  String get faviconUrl {
-    final h = Uri.tryParse(url)?.host ?? '';
-    return h.isEmpty
-        ? ''
-        : 'https://www.google.com/s2/favicons?domain=$h&sz=64';
-  }
+  String get faviconUrl => favicon;
 
   factory AiSource.fromJson(Map<String, Object?> json) => AiSource(
     url: (json['url'] as String?) ?? '',
     title: (json['title'] as String?)?.trim().isNotEmpty == true
         ? json['title'] as String
         : ((json['url'] as String?) ?? ''),
+    favicon: (json['favicon'] as String?) ?? '',
   );
 
   static List<AiSource> listFrom(Object? raw) => raw is List
