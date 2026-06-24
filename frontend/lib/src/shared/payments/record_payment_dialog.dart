@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../core/parsing.dart';
+import '../../data/models/purchase_submission.dart' show SupplierPaymentMethod;
 import '../../data/models/sale_order.dart' show PaymentMethod;
 import '../../features/pos/views/payment/card_receipt_validation_dialog.dart';
 import '../payment_labels.dart';
@@ -284,6 +285,27 @@ List<RecordPaymentMethodOption> customerPaymentMethodOptions(
         label: paymentMethodLabel(l10n, method),
         icon: paymentMethodIcon(method),
         allowsCardReceipt: method == PaymentMethod.card,
+      ),
+  ];
+}
+
+/// The supplier payment methods — cash, transfer, card, supplier credit. Card
+/// pay-outs are money OUT (the shop pays the supplier), so there's no
+/// shop-terminal receipt to scan and [allowsCardReceipt] stays false for all.
+List<RecordPaymentMethodOption> supplierPaymentMethodOptions(
+  AppLocalizations l10n,
+) {
+  return [
+    for (final method in const [
+      SupplierPaymentMethod.cash,
+      SupplierPaymentMethod.transfer,
+      SupplierPaymentMethod.card,
+      SupplierPaymentMethod.supplierCredit,
+    ])
+      RecordPaymentMethodOption(
+        apiValue: method.apiValue,
+        label: supplierPaymentMethodLabel(l10n, method),
+        icon: supplierPaymentMethodIcon(method),
       ),
   ];
 }

@@ -11,6 +11,7 @@ import '../../../data/repositories/printing_repository.dart';
 import '../../../data/repositories/sale_repository.dart';
 import '../../../data/repositories/shop_settings_repository.dart';
 import '../../../data/services/order_document_service.dart';
+import '../../../data/services/payment_proof_printer.dart';
 
 class InvoiceDetailsViewModel extends ChangeNotifier {
   InvoiceDetailsViewModel(
@@ -28,6 +29,10 @@ class InvoiceDetailsViewModel extends ChangeNotifier {
   final PrintingRepository _printingRepository;
   final ShopSettingsRepository _shopSettingsRepository;
   final AnalyticsEngine? _analyticsEngine;
+  late final PaymentProofPrinter _paymentProofPrinter = PaymentProofPrinter(
+    printingRepository: _printingRepository,
+    shopSettingsRepository: _shopSettingsRepository,
+  );
 
   SaleOrder _order;
   bool _isLoading = false;
@@ -135,13 +140,10 @@ class InvoiceDetailsViewModel extends ChangeNotifier {
       createdAt: payment?.createdAt ?? DateTime.now(),
     );
 
-    final shopSettings = await _loadShopSettings();
-    await _printingRepository.printProofOfPayment(
+    await _paymentProofPrinter.printProof(
       proof: proof,
       paymentId: payment?.id ?? _order.id,
       paymentKind: PrintAuditPaymentKind.customer,
-      shopSettings: shopSettings,
-      shopLogoBytes: await _loadShopLogoBytes(shopSettings),
     );
   }
 

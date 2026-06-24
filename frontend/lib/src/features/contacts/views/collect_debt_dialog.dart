@@ -5,7 +5,11 @@ import '../../../core/result.dart';
 import '../../../data/models/analytics_event.dart';
 import '../../../data/models/contact.dart';
 import '../../../data/models/customer_activity.dart';
+import '../../../data/models/sale_order.dart';
 import '../../../data/repositories/contact_repository.dart';
+import '../../../data/repositories/printing_repository.dart';
+import '../../../data/repositories/shop_settings_repository.dart';
+import '../../../data/services/payment_proof_printer.dart';
 import '../../../shared/contact_picker_sheet.dart';
 import '../../../shared/formatters.dart';
 import '../../../shared/payments/record_payment_dialog.dart';
@@ -14,22 +18,35 @@ import '../../../shared/payments/record_payment_dialog.dart';
 Future<void> showCollectDebtDialog(
   BuildContext context, {
   required ContactRepository contactRepository,
+  required PrintingRepository printingRepository,
+  required ShopSettingsRepository shopSettingsRepository,
 }) {
   return showDialog<void>(
     context: context,
-    builder: (_) => CollectDebtDialog(contactRepository: contactRepository),
+    builder: (_) => CollectDebtDialog(
+      contactRepository: contactRepository,
+      printingRepository: printingRepository,
+      shopSettingsRepository: shopSettingsRepository,
+    ),
   );
 }
 
 /// Focused, cashier-facing debt-collection dialog: pick a customer, see only
-/// their outstanding total, and collect a cash/transfer payment (the backend
-/// allocates it oldest-first across the customer's open debt — including
-/// invoices another cashier issued). Shows NO invoice history or customer
-/// editing, so cashiers keep seeing only their own business.
+/// their outstanding total, and collect a cash/card/transfer payment (the
+/// backend allocates it oldest-first across the customer's open debt —
+/// including invoices another cashier issued). Shows NO invoice history or
+/// customer editing, so cashiers keep seeing only their own business.
 class CollectDebtDialog extends StatefulWidget {
-  const CollectDebtDialog({super.key, required this.contactRepository});
+  const CollectDebtDialog({
+    super.key,
+    required this.contactRepository,
+    required this.printingRepository,
+    required this.shopSettingsRepository,
+  });
 
   final ContactRepository contactRepository;
+  final PrintingRepository printingRepository;
+  final ShopSettingsRepository shopSettingsRepository;
 
   @override
   State<CollectDebtDialog> createState() => _CollectDebtDialogState();
@@ -44,6 +61,10 @@ class _CollectDebtDialogState extends State<CollectDebtDialog> {
   bool _justCollected = false;
   bool _hasPaymentError = false;
   final Map<String, String> _idempotencyKeys = {};
+  late final PaymentProofPrinter _paymentProofPrinter = PaymentProofPrinter(
+    printingRepository: widget.printingRepository,
+    shopSettingsRepository: widget.shopSettingsRepository,
+  );
 
   Future<void> _pickCustomer() async {
     final customer = await showCustomerPickerSheet(
@@ -99,6 +120,11 @@ class _CollectDebtDialogState extends State<CollectDebtDialog> {
       return;
     }
     final l10n = AppLocalizations.of(context)!;
+    final trustedTerminalIds =
+        await widget.shopSettingsRepository.loadTrustedCardTerminalIds();
+    if (!mounted) {
+      return;
+    }
     final result = await showRecordPaymentDialog(
       context,
       title: l10n.customerAccountPaymentTitle,
@@ -107,6 +133,8 @@ class _CollectDebtDialogState extends State<CollectDebtDialog> {
         formatMoney(outstanding),
       ),
       methods: customerPaymentMethodOptions(l10n),
+      proofToggleLabel: l10n.invoicePaymentPrintProofLabel,
+      trustedCardTerminalIds: trustedTerminalIds,
     );
     if (result == null || !mounted) {
       return;
@@ -136,17 +164,49 @@ class _CollectDebtDialogState extends State<CollectDebtDialog> {
     if (!mounted) {
       return;
     }
+    final updatedSummary = switch (recordResult) {
+      Ok<CustomerSalesSummary>(value: final value) => value,
+      Error<CustomerSalesSummary>() => null,
+    };
     setState(() {
       _isRecording = false;
-      switch (recordResult) {
-        case Ok<CustomerSalesSummary>():
-          _idempotencyKeys.remove(signature);
-          _summary = recordResult.value;
-          _justCollected = true;
-        case Error<CustomerSalesSummary>():
-          _hasPaymentError = true;
+      if (updatedSummary != null) {
+        _idempotencyKeys.remove(signature);
+        _summary = updatedSummary;
+        _justCollected = true;
+      } else {
+        _hasPaymentError = true;
       }
     });
+    if (updatedSummary != null && result.printProof) {
+      // Best-effort: the payment is recorded; a print failure must not surface
+      // as a collection failure.
+      await _printProof(
+        customer: customer,
+        summary: updatedSummary,
+        result: result,
+      );
+    }
+  }
+
+  Future<void> _printProof({
+    required Customer customer,
+    required CustomerSalesSummary summary,
+    required RecordPaymentResult result,
+  }) async {
+    final paymentId = summary.representativePaymentId;
+    if (paymentId == null) {
+      return;
+    }
+    final phone = customer.phone.trim();
+    await _paymentProofPrinter.printCustomerAccountReceipt(
+      paymentId: paymentId,
+      partyName: customer.fullName,
+      partyContact: phone.isNotEmpty ? phone : customer.customerNumber,
+      amount: result.amount,
+      method: PaymentMethod.fromApiValue(result.methodApiValue),
+      balanceAfter: summary.outstandingBalance,
+    );
   }
 
   @override

@@ -569,16 +569,21 @@ Future<void> _showSupplierPaymentDialog(
 ) async {
   final l10n = AppLocalizations.of(context)!;
   final messenger = ScaffoldMessenger.of(context);
-  final result = await showDialog<_SupplierPaymentDialogResult>(
-    context: context,
-    builder: (context) => _SupplierPaymentDialog(order: viewModel.order),
+  final result = await showRecordPaymentDialog(
+    context,
+    title: l10n.supplierPaymentTitle,
+    maxAmount: viewModel.order.balanceDue,
+    methods: supplierPaymentMethodOptions(l10n),
+    showReference: true,
+    showNotes: true,
+    proofToggleLabel: l10n.supplierPaymentPrintProofLabel,
   );
   if (result == null) {
     return;
   }
 
   final didRecord = await viewModel.recordPayment(
-    method: result.method,
+    method: SupplierPaymentMethod.fromApiValue(result.methodApiValue),
     amount: result.amount,
     reference: result.reference,
     notes: result.notes,

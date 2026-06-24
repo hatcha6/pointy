@@ -14,6 +14,8 @@ import '../../../shared/date_formatters.dart';
 import '../../../shared/design/design.dart';
 import '../../../shared/formatters.dart';
 import '../../../shared/order_totals.dart';
+import '../../../shared/payment_labels.dart';
+import '../../../shared/payments/record_payment_dialog.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../../printing/views/print_audit_sheet.dart';
 import '../view_models/purchase_order_details_view_model.dart';
@@ -22,7 +24,6 @@ import 'purchase_order_filter_sheet.dart';
 part 'purchase_order_actions_panel.dart';
 part 'purchase_order_adjustment_dialogs.dart';
 part 'purchase_order_receive_dialog.dart';
-part 'purchase_order_supplier_payment_dialog.dart';
 
 class PurchaseOrderDetailsScreen extends StatefulWidget {
   const PurchaseOrderDetailsScreen({
@@ -694,7 +695,7 @@ String? _adjustmentMethodLabel(
   if (method == null || method.isEmpty) {
     return null;
   }
-  return _supplierPaymentMethodLabel(
+  return supplierPaymentMethodLabel(
     l10n,
     SupplierPaymentMethod.fromApiValue(method),
   );
@@ -791,29 +792,6 @@ String _paymentStatusLabel(AppLocalizations l10n, String status) {
     'paid' => l10n.purchasePaymentStatusPaid,
     'credit' => l10n.purchasePaymentStatusCredit,
     _ => l10n.purchasePaymentStatusUnpaid,
-  };
-}
-
-String _supplierPaymentMethodLabel(
-  AppLocalizations l10n,
-  SupplierPaymentMethod method,
-) {
-  return switch (method) {
-    SupplierPaymentMethod.cash => l10n.paymentMethodCash,
-    SupplierPaymentMethod.card => l10n.paymentMethodCard,
-    SupplierPaymentMethod.transfer => l10n.paymentMethodTransfer,
-    SupplierPaymentMethod.supplierCredit => l10n.supplierPaymentMethodCredit,
-    SupplierPaymentMethod.refund => l10n.purchaseAdjustmentTypeRefund,
-  };
-}
-
-IconData _supplierPaymentMethodIcon(SupplierPaymentMethod method) {
-  return switch (method) {
-    SupplierPaymentMethod.cash => Icons.payments_outlined,
-    SupplierPaymentMethod.card => Icons.credit_card_outlined,
-    SupplierPaymentMethod.transfer => Icons.account_balance_outlined,
-    SupplierPaymentMethod.supplierCredit => Icons.savings_outlined,
-    SupplierPaymentMethod.refund => Icons.keyboard_return_outlined,
   };
 }
 

@@ -19,6 +19,17 @@ class ShopSettingsRepository {
     return Result.guard(() => _service.fetchShopLogoBytes(settings));
   }
 
+  /// The trusted card-terminal IDs alone (empty on any failure). Used by the
+  /// card-receipt scan dialogs to mark which Moamalat terminals are trusted, so
+  /// every customer card-payment flow resolves them the same way.
+  Future<List<String>> loadTrustedCardTerminalIds() async {
+    final result = await loadSettings();
+    return switch (result) {
+      Ok<ShopSettings>(value: final settings) => settings.trustedCardTerminalIds,
+      Error<ShopSettings>() => const <String>[],
+    };
+  }
+
   Future<Result<ShopSettings>> updateSettings(ShopSettingsDraft draft) async {
     return Result.guard(() => _service.updateShopSettings(draft));
   }

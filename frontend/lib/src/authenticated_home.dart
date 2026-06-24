@@ -247,6 +247,8 @@ class _AuthenticatedRoutes implements AppNavigation {
       PosScreen(
         viewModel: dependencies.posViewModel,
         contactRepository: dependencies.contactRepository,
+        printingRepository: dependencies.printingRepository,
+        shopSettingsRepository: dependencies.shopSettingsRepository,
         capabilities: capabilities,
         navigation: this,
       ),
@@ -1590,6 +1592,8 @@ class _AuthenticatedRoutes implements AppNavigation {
       (_) => CustomerDetailsScreen(
         customer: customer,
         contactRepository: dependencies.contactRepository,
+        printingRepository: dependencies.printingRepository,
+        shopSettingsRepository: dependencies.shopSettingsRepository,
       ),
     );
   }

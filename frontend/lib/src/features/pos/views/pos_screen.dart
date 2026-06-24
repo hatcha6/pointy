@@ -5,6 +5,8 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 import '../../../core/authorization.dart';
 import '../../../data/models/register_cash_movement.dart';
 import '../../../data/repositories/contact_repository.dart';
+import '../../../data/repositories/printing_repository.dart';
+import '../../../data/repositories/shop_settings_repository.dart';
 import '../../../shared/app_navigation_drawer.dart';
 import '../../../shared/authorization_guards.dart';
 import '../../../shared/barcode/barcode_scan_listener.dart';
@@ -26,12 +28,16 @@ class PosScreen extends StatelessWidget {
     super.key,
     required this.viewModel,
     required this.contactRepository,
+    required this.printingRepository,
+    required this.shopSettingsRepository,
     required this.capabilities,
     required this.navigation,
   });
 
   final PosViewModel viewModel;
   final ContactRepository contactRepository;
+  final PrintingRepository printingRepository;
+  final ShopSettingsRepository shopSettingsRepository;
   final AuthorizationCapabilities capabilities;
   final AppNavigation navigation;
 
@@ -125,6 +131,8 @@ class PosScreen extends StatelessWidget {
                   onPressed: () => showCollectDebtDialog(
                     context,
                     contactRepository: contactRepository,
+                    printingRepository: printingRepository,
+                    shopSettingsRepository: shopSettingsRepository,
                   ),
                   icon: const Icon(Icons.request_quote_outlined),
                 ),

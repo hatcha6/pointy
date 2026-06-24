@@ -8,18 +8,30 @@ import '../../../data/models/payment_card.dart';
 import '../../../data/models/sale_order.dart';
 import '../../../data/models/sale_order_page.dart';
 import '../../../data/repositories/contact_repository.dart';
+import '../../../data/repositories/printing_repository.dart';
+import '../../../data/repositories/shop_settings_repository.dart';
+import '../../../data/services/payment_proof_printer.dart';
 
 class CustomerDetailsViewModel extends ChangeNotifier {
   CustomerDetailsViewModel({
     required ContactRepository contactRepository,
     required Customer initialCustomer,
+    required ShopSettingsRepository shopSettingsRepository,
+    required PrintingRepository printingRepository,
   }) : _contactRepository = contactRepository,
+       _shopSettingsRepository = shopSettingsRepository,
        _customer = initialCustomer,
-       _summary = CustomerSalesSummary.empty(initialCustomer.id) {
+       _summary = CustomerSalesSummary.empty(initialCustomer.id),
+       _paymentProofPrinter = PaymentProofPrinter(
+         printingRepository: printingRepository,
+         shopSettingsRepository: shopSettingsRepository,
+       ) {
     load();
   }
 
   final ContactRepository _contactRepository;
+  final ShopSettingsRepository _shopSettingsRepository;
+  final PaymentProofPrinter _paymentProofPrinter;
 
   ContactRepository get repository => _contactRepository;
 
@@ -205,14 +217,24 @@ class CustomerDetailsViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Records a cash/transfer payment against the customer's account (the
+  /// Trusted card terminals for the receipt-scan dialog (empty on failure), so
+  /// the account collection validates card receipts the same way the POS and
+  /// per-invoice flows do.
+  Future<List<String>> loadTrustedCardTerminalIds() {
+    return _shopSettingsRepository.loadTrustedCardTerminalIds();
+  }
+
+  /// Records a cash/card/transfer payment against the customer's account (the
   /// backend allocates it oldest-first across open debt invoices), then
-  /// refreshes the summary and invoice history. Uses a signature-based
-  /// idempotency key so an accidental double-tap is a no-op on the server.
+  /// refreshes the summary and invoice history. Pass [cardReceiptUrl] for the
+  /// card method. When [printProof] is set, prints a "سند قبض" proof for the
+  /// just-recorded payment. Uses a signature-based idempotency key so an
+  /// accidental double-tap is a no-op on the server.
   Future<bool> recordAccountPayment({
     required PaymentMethod method,
     required double amount,
     String cardReceiptUrl = '',
+    bool printProof = false,
   }) async {
     if (_isRecordingPayment) {
       return false;
@@ -235,9 +257,14 @@ class CustomerDetailsViewModel extends ChangeNotifier {
       idempotencyKey: _idempotencyKeyFor(signature),
     );
     final didRecord = result is Ok<CustomerSalesSummary>;
+    // The record response carries the post-payment summary (the representative
+    // payment id + balance after); capture it before the reload below replaces
+    // `_summary` with a plain fetch that doesn't include the payment id.
+    CustomerSalesSummary? recordedSummary;
     if (didRecord) {
       _clearIdempotencyKey(signature);
       _summary = result.value;
+      recordedSummary = result.value;
     } else {
       _hasPaymentError = true;
     }
@@ -249,8 +276,40 @@ class CustomerDetailsViewModel extends ChangeNotifier {
       // Reload the summary + invoice history so allocated balances and
       // payment statuses reflect the new payment.
       await Future.wait([loadSummary(), loadOrderHistory()]);
+      if (printProof && recordedSummary != null) {
+        await _printAccountProof(
+          summary: recordedSummary,
+          method: method,
+          amount: amount,
+        );
+      }
     }
     return didRecord;
+  }
+
+  /// Best-effort "سند قبض" for the just-recorded account payment. The payment
+  /// spans the customer's open invoices, so the proof carries the
+  /// representative payment id + the balance remaining afterwards (there's no
+  /// single invoice number). A print failure must not flip the recorded
+  /// payment to a failure, so this is awaited only after the record succeeds.
+  Future<void> _printAccountProof({
+    required CustomerSalesSummary summary,
+    required PaymentMethod method,
+    required double amount,
+  }) async {
+    final paymentId = summary.representativePaymentId;
+    if (paymentId == null) {
+      return;
+    }
+    final phone = _customer.phone.trim();
+    await _paymentProofPrinter.printCustomerAccountReceipt(
+      paymentId: paymentId,
+      partyName: _customer.fullName,
+      partyContact: phone.isNotEmpty ? phone : _customer.customerNumber,
+      amount: amount,
+      method: method,
+      balanceAfter: summary.outstandingBalance,
+    );
   }
 
   String _accountPaymentSignature({

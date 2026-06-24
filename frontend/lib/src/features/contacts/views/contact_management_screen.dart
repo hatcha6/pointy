@@ -86,6 +86,8 @@ class _ContactManagementScreenState extends State<ContactManagementScreen>
       _selectedCustomerViewModel = CustomerDetailsViewModel(
         contactRepository: viewModel.repository,
         initialCustomer: customer,
+        shopSettingsRepository: widget.shopSettingsRepository,
+        printingRepository: widget.printingRepository,
       );
     });
   }
@@ -263,6 +265,8 @@ class _ContactManagementBody extends StatelessWidget {
                       listPaneBuilder: (paneContext, isDualPane) =>
                           _CustomerList(
                             viewModel: viewModel,
+                            printingRepository: printingRepository,
+                            shopSettingsRepository: shopSettingsRepository,
                             onSelectCustomer: isDualPane
                                 ? onSelectCustomer
                                 : null,
@@ -441,11 +445,15 @@ class _ContactActionBar extends StatelessWidget {
 class _CustomerList extends StatelessWidget {
   const _CustomerList({
     required this.viewModel,
+    required this.printingRepository,
+    required this.shopSettingsRepository,
     this.onSelectCustomer,
     this.selectedCustomerId,
   });
 
   final ContactManagementViewModel viewModel;
+  final PrintingRepository printingRepository;
+  final ShopSettingsRepository shopSettingsRepository;
   final ValueChanged<Customer>? onSelectCustomer;
   final int? selectedCustomerId;
 
@@ -523,6 +531,8 @@ class _CustomerList extends StatelessWidget {
         builder: (_) => CustomerDetailsScreen(
           customer: customer,
           contactRepository: viewModel.repository,
+          printingRepository: printingRepository,
+          shopSettingsRepository: shopSettingsRepository,
         ),
       ),
     );

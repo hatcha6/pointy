@@ -74,6 +74,50 @@ void main() {
     expect(find.text('بطاقة'), findsWidgets);
     expect(find.text('تحويل'), findsWidgets);
   });
+
+  testWidgets(
+    'supplier options offer cash/transfer/card/credit and a card pay-out '
+    'resolves without scanning a terminal receipt',
+    (tester) async {
+      RecordPaymentResult? result;
+      await _pumpSupplierHost(tester, onResult: (value) => result = value);
+      await tester.tap(find.byKey(const ValueKey('open')));
+      await tester.pumpAndSettle();
+
+      // Reference + notes + the disbursement proof toggle are all present.
+      expect(find.text('مرجع اختياري'), findsOneWidget);
+      expect(find.text('ملاحظات اختيارية'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('record_payment_print_proof_toggle')),
+        findsOneWidget,
+      );
+
+      // The four supplier methods are offered in the dropdown menu.
+      await tester.tap(
+        find.byKey(const ValueKey('record_payment_method_field')),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('نقد'), findsWidgets);
+      expect(find.text('تحويل'), findsWidgets);
+      expect(find.text('بطاقة'), findsWidgets);
+      expect(find.text('رصيد المورد'), findsWidgets);
+
+      // Pick card, then submit: a supplier card pay-out is money OUT, so there
+      // is no shop-terminal receipt to scan — it must resolve directly.
+      await tester.tap(find.text('بطاقة').last);
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const ValueKey('record_payment_amount_field')),
+        '30.00',
+      );
+      await tester.tap(find.byType(FilledButton));
+      await tester.pumpAndSettle();
+
+      expect(result, isNotNull);
+      expect(result!.methodApiValue, 'card');
+      expect(result!.cardReceiptUrl, isEmpty);
+    },
+  );
 }
 
 Future<void> _pumpHost(
@@ -102,6 +146,45 @@ Future<void> _pumpHost(
                 methods: customerPaymentMethodOptions(
                   AppLocalizations.of(context)!,
                 ),
+              );
+              onResult(result);
+            },
+            child: const Text('open'),
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+Future<void> _pumpSupplierHost(
+  WidgetTester tester, {
+  required ValueChanged<RecordPaymentResult?> onResult,
+}) async {
+  await tester.pumpWidget(
+    MaterialApp(
+      locale: const Locale('ar'),
+      supportedLocales: AppLocalizations.supportedLocales,
+      localizationsDelegates: const [
+        AppLocalizations.delegate,
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      home: Scaffold(
+        body: Builder(
+          builder: (context) => ElevatedButton(
+            key: const ValueKey('open'),
+            onPressed: () async {
+              final l10n = AppLocalizations.of(context)!;
+              final result = await showRecordPaymentDialog(
+                context,
+                title: 'دفعة مورد',
+                maxAmount: 100,
+                methods: supplierPaymentMethodOptions(l10n),
+                showReference: true,
+                showNotes: true,
+                proofToggleLabel: l10n.supplierPaymentPrintProofLabel,
               );
               onResult(result);
             },

@@ -11,6 +11,7 @@ import '../../../data/repositories/purchase_repository.dart';
 import '../../../data/repositories/shop_settings_repository.dart';
 import '../../../data/services/api_session.dart';
 import '../../../data/services/order_document_service.dart';
+import '../../../data/services/payment_proof_printer.dart';
 
 enum PurchaseOrderActionError {
   generic,
@@ -37,6 +38,10 @@ class PurchaseOrderDetailsViewModel extends ChangeNotifier {
   final PrintingRepository _printingRepository;
   final ShopSettingsRepository _shopSettingsRepository;
   final AuthorizationCapabilities _capabilities;
+  late final PaymentProofPrinter _paymentProofPrinter = PaymentProofPrinter(
+    printingRepository: _printingRepository,
+    shopSettingsRepository: _shopSettingsRepository,
+  );
 
   PurchaseOrder _order;
   bool _isLoading = false;
@@ -291,13 +296,10 @@ class PurchaseOrderDetailsViewModel extends ChangeNotifier {
       createdAt: payment.createdAt ?? DateTime.now(),
     );
 
-    final shopSettings = await _loadShopSettings();
-    await _printingRepository.printProofOfPayment(
+    await _paymentProofPrinter.printProof(
       proof: proof,
       paymentId: payment.id,
       paymentKind: PrintAuditPaymentKind.supplier,
-      shopSettings: shopSettings,
-      shopLogoBytes: await _loadShopLogoBytes(shopSettings),
     );
   }
 

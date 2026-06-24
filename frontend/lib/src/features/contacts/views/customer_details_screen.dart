@@ -6,6 +6,8 @@ import '../../../data/models/customer_activity.dart';
 import '../../../data/models/payment_card.dart';
 import '../../../data/models/sale_order.dart';
 import '../../../data/repositories/contact_repository.dart';
+import '../../../data/repositories/printing_repository.dart';
+import '../../../data/repositories/shop_settings_repository.dart';
 import '../../../shared/components/components.dart';
 import '../../../shared/contact_picker_sheet.dart';
 import '../../../shared/date_formatters.dart';
@@ -22,10 +24,14 @@ class CustomerDetailsScreen extends StatefulWidget {
     super.key,
     required this.customer,
     required this.contactRepository,
+    required this.printingRepository,
+    required this.shopSettingsRepository,
   });
 
   final Customer customer;
   final ContactRepository contactRepository;
+  final PrintingRepository printingRepository;
+  final ShopSettingsRepository shopSettingsRepository;
 
   @override
   State<CustomerDetailsScreen> createState() => _CustomerDetailsScreenState();
@@ -35,6 +41,8 @@ class _CustomerDetailsScreenState extends State<CustomerDetailsScreen> {
   late final CustomerDetailsViewModel _viewModel = CustomerDetailsViewModel(
     contactRepository: widget.contactRepository,
     initialCustomer: widget.customer,
+    shopSettingsRepository: widget.shopSettingsRepository,
+    printingRepository: widget.printingRepository,
   );
 
   @override
@@ -336,6 +344,10 @@ class _OutstandingBalanceCallout extends StatelessWidget {
   Future<void> _recordPayment(BuildContext context) async {
     final l10n = AppLocalizations.of(context)!;
     final messenger = ScaffoldMessenger.of(context);
+    final trustedTerminalIds = await viewModel.loadTrustedCardTerminalIds();
+    if (!context.mounted) {
+      return;
+    }
     final result = await showRecordPaymentDialog(
       context,
       title: l10n.customerAccountPaymentTitle,
@@ -344,6 +356,8 @@ class _OutstandingBalanceCallout extends StatelessWidget {
         formatMoney(viewModel.outstandingBalance),
       ),
       methods: customerPaymentMethodOptions(l10n),
+      proofToggleLabel: l10n.invoicePaymentPrintProofLabel,
+      trustedCardTerminalIds: trustedTerminalIds,
     );
     if (result == null) {
       return;
@@ -353,6 +367,7 @@ class _OutstandingBalanceCallout extends StatelessWidget {
       method: PaymentMethod.fromApiValue(result.methodApiValue),
       amount: result.amount,
       cardReceiptUrl: result.cardReceiptUrl,
+      printProof: result.printProof,
     );
     if (!context.mounted || !didRecord) {
       return;

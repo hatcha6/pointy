@@ -3,10 +3,8 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../core/analytics_engine.dart';
 import '../../../core/authorization.dart';
-import '../../../core/result.dart';
 import '../../../data/models/print_audit_event.dart';
 import '../../../data/models/sale_order.dart';
-import '../../../data/models/shop_settings.dart';
 import '../../../data/repositories/printing_repository.dart';
 import '../../../data/repositories/sale_repository.dart';
 import '../../../data/repositories/shop_settings_repository.dart';
@@ -244,7 +242,8 @@ class _InvoiceDetailsViewState extends State<InvoiceDetailsView> {
   /// Opens the per-invoice payment dialog (cards allowed) and records the
   /// payment. Returns true on success so the shared surface can confirm.
   Future<bool> _recordPayment(SaleOrder order) async {
-    final trustedTerminalIds = await _loadTrustedCardTerminalIds();
+    final trustedTerminalIds =
+        await widget.shopSettingsRepository.loadTrustedCardTerminalIds();
     if (!mounted) {
       return false;
     }
@@ -323,15 +322,6 @@ class _InvoiceDetailsViewState extends State<InvoiceDetailsView> {
       ),
     );
     return true;
-  }
-
-  Future<List<String>> _loadTrustedCardTerminalIds() async {
-    final result = await widget.shopSettingsRepository.loadSettings();
-    return switch (result) {
-      Ok<ShopSettings>(value: final settings) =>
-        settings.trustedCardTerminalIds,
-      Error<ShopSettings>() => const <String>[],
-    };
   }
 }
 
