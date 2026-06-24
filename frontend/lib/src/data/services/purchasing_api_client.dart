@@ -199,14 +199,21 @@ class PurchasingApiClient {
   Future<SupplierPaymentPage> fetchSupplierPayments({
     int? supplierId,
     int? purchaseOrderId,
+    String? method,
+    DateTime? paidAtGte,
+    DateTime? paidAtLte,
     int page = 1,
   }) async {
     final response = await _session.get(
       'supplier-payments/',
       query: {
         'page': '$page',
+        'ordering': '-paid_at',
         if (supplierId != null) 'supplier': '$supplierId',
         if (purchaseOrderId != null) 'purchase_order': '$purchaseOrderId',
+        if (method != null && method.isNotEmpty) 'method': method,
+        if (paidAtGte != null) 'paid_at__gte': paidAtGte.toIso8601String(),
+        if (paidAtLte != null) 'paid_at__lte': paidAtLte.toIso8601String(),
       },
     );
     _session.throwApiException(

@@ -489,13 +489,15 @@ def _register_session_cash_totals(sessions):
     totals = {}
 
     cash_sales = (
+        # Attribute cash to the session that collected the payment (its own
+        # register_session), independent of order status — see
+        # RegisterSession.cash_sales_total.
         Payment.objects.filter(
-            order__register_session_id__in=session_ids,
-            order__status__in=(Order.Status.PAID, Order.Status.VOID),
+            register_session_id__in=session_ids,
             method=Payment.Method.CASH,
             amount__gt=0,
         )
-        .values("order__register_session_id")
+        .values("register_session_id")
         .annotate(
             total=Coalesce(
                 Sum("amount"),
@@ -505,7 +507,7 @@ def _register_session_cash_totals(sessions):
         )
     )
     for row in cash_sales:
-        totals.setdefault(row["order__register_session_id"], {})["cash_sales_total"] = (
+        totals.setdefault(row["register_session_id"], {})["cash_sales_total"] = (
             row["total"]
         )
 
@@ -1264,7 +1266,7 @@ def _product_sales_rows(orders):
 
 
 def _settled_orders(user):
-    queryset = Order.objects.filter(status__in=(Order.Status.PAID, Order.Status.VOID))
+    queryset = Order.objects.transactional()
     if user_is_manager(user):
         return queryset
     return queryset.filter(register_session__owner_key=_owner_key(user))

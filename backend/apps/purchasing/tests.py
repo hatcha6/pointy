@@ -2969,6 +2969,37 @@ class SupplierPaymentApiTests(TestCase):
         self.assertEqual(detail.data["balance_due"], "4.50")
         self.assertEqual(detail.data["payment_status"], "partial")
 
+    def test_supplier_payment_list_filters_by_paid_at_range(self):
+        from django.utils import timezone
+
+        order = self.create_order()
+        now = timezone.now()
+        old = SupplierPayment.objects.create(
+            supplier=self.supplier,
+            purchase_order=order,
+            amount=Decimal("2.00"),
+            method=SupplierPayment.Method.CASH,
+            paid_at=now - timezone.timedelta(days=10),
+        )
+        recent = SupplierPayment.objects.create(
+            supplier=self.supplier,
+            purchase_order=order,
+            amount=Decimal("3.00"),
+            method=SupplierPayment.Method.CASH,
+            paid_at=now,
+        )
+        cutoff = (now - timezone.timedelta(days=1)).isoformat()
+
+        response = self.client.get(
+            reverse("supplierpayment-list"),
+            {"paid_at__gte": cutoff},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        ids = [row["id"] for row in response.data["results"]]
+        self.assertIn(recent.pk, ids)
+        self.assertNotIn(old.pk, ids)
+
     def test_supplier_payment_replay_with_idempotency_key_returns_same_payment(self):
         order = self.create_order()
         payload = {

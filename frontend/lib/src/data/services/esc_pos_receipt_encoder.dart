@@ -129,6 +129,14 @@ class EscPosReceiptEncoder {
         codeTable: codeTable,
       );
     }
+    if (_string(payload['kind']) == 'payment_receipt') {
+      return _encodePaymentReceipt(
+        payload: payload,
+        endpoint: endpoint,
+        generator: generator,
+        codeTable: codeTable,
+      );
+    }
     final order = _map(payload['order']);
     final shop = _map(payload['shop']);
     _receiptCurrencySymbol = _string(shop['currency_symbol'], fallback: 'د.ل');
@@ -140,34 +148,14 @@ class EscPosReceiptEncoder {
     final publicInvoiceUrl = _string(order['public_invoice_url']);
 
     final bytes = <int>[];
-    bytes.addAll(generator.reset());
-    bytes.addAll(_logoRaster(generator, shop['logo_bytes']));
     bytes.addAll(
-      _text(
+      _shopMasthead(
         generator,
-        _string(shop['name'], fallback: 'نقطة البيع'),
-        styles: PosStyles(
-          align: PosAlign.center,
-          bold: true,
-          height: PosTextSize.size2,
-          width: PosTextSize.size2,
-          codeTable: codeTable,
-        ),
+        shop,
+        codeTable,
+        _charsPerLine(endpoint.paperWidthMm),
       ),
     );
-
-    final header = _string(shop['receipt_header']);
-    if (header.isNotEmpty) {
-      for (final line in _wrap(header, _charsPerLine(endpoint.paperWidthMm))) {
-        bytes.addAll(
-          _text(
-            generator,
-            line,
-            styles: PosStyles(align: PosAlign.center, codeTable: codeTable),
-          ),
-        );
-      }
-    }
 
     bytes.addAll(generator.hr());
     bytes.addAll(
@@ -242,19 +230,61 @@ class EscPosReceiptEncoder {
       ),
     );
 
-    final footer = _string(shop['receipt_footer']);
-    if (footer.isNotEmpty) {
-      bytes.addAll(generator.feed(1));
-      for (final line in _wrap(footer, _charsPerLine(endpoint.paperWidthMm))) {
+    // Money status block: what this slip means. A quotation owes nothing, so it
+    // reads "عرض سعر" + its validity date; a sale shows paid/partial/unpaid and
+    // any remaining balance.
+    final saleType = _string(order['sale_type']);
+    final isQuotation = saleType == 'quotation';
+    final statusText = _saleStatusText(_string(order['payment_status']));
+    if (statusText.isNotEmpty) {
+      bytes.addAll(
+        _text(
+          generator,
+          'الحالة: $statusText',
+          styles: PosStyles(
+            align: PosAlign.right,
+            bold: true,
+            codeTable: codeTable,
+          ),
+        ),
+      );
+    }
+    if (isQuotation) {
+      final validUntil = _formatDateOnly(order['valid_until']);
+      if (validUntil.isNotEmpty) {
         bytes.addAll(
           _text(
             generator,
-            line,
-            styles: PosStyles(align: PosAlign.center, codeTable: codeTable),
+            'صالح حتى: $validUntil',
+            styles: PosStyles(align: PosAlign.right, codeTable: codeTable),
+          ),
+        );
+      }
+    } else {
+      final balanceDue = num.tryParse(_string(order['balance_due'])) ?? 0;
+      if (balanceDue > 0) {
+        bytes.addAll(
+          _text(
+            generator,
+            'المتبقّي: ${_money(order['balance_due'])}',
+            styles: PosStyles(
+              align: PosAlign.right,
+              bold: true,
+              codeTable: codeTable,
+            ),
           ),
         );
       }
     }
+
+    bytes.addAll(
+      _shopFooter(
+        generator,
+        shop,
+        codeTable,
+        _charsPerLine(endpoint.paperWidthMm),
+      ),
+    );
 
     if (publicInvoiceUrl.isNotEmpty) {
       bytes.addAll(generator.feed(1));
@@ -289,25 +319,9 @@ class EscPosReceiptEncoder {
       }
     }
 
-    bytes.addAll(generator.feed(1));
-    bytes.addAll(
-      _text(
-        generator,
-        pointyPrintCreditLine,
-        styles: PosStyles(align: PosAlign.center, codeTable: codeTable),
-      ),
-    );
+    bytes.addAll(_creditLine(generator, codeTable));
 
-    bytes.addAll(generator.feed(endpoint.feedLines.clamp(0, 12)));
-    switch (endpoint.cutMode) {
-      case ReceiptCutMode.partial:
-        bytes.addAll(generator.cut(mode: PosCutMode.partial));
-      case ReceiptCutMode.full:
-        bytes.addAll(generator.cut(mode: PosCutMode.full));
-      case ReceiptCutMode.none:
-        // Printer has no cutter: feed enough paper to tear by hand.
-        bytes.addAll(generator.feed(2));
-    }
+    bytes.addAll(_finishTicket(generator, endpoint));
     return bytes;
   }
 
@@ -463,6 +477,247 @@ class EscPosReceiptEncoder {
       bytes.addAll(generator.hr());
     }
 
+    bytes.addAll(_finishTicket(generator, endpoint));
+    return bytes;
+  }
+
+  /// Renders a proof-of-payment slip (سند قبض / سند صرف) for a single payment:
+  /// shop masthead, the document title, the party, the related invoice/PO, and
+  /// the payment particulars (amount/method/commission/reference/handler and
+  /// the running balance). No line items, totals math, or QR. Structurally
+  /// modeled on [_encodeKitchenTicket]; reuses the same Arabic/CP864 text path.
+  List<int> _encodePaymentReceipt({
+    required Map<String, Object?> payload,
+    required PrinterEndpoint endpoint,
+    required Generator generator,
+    required String codeTable,
+  }) {
+    final shop = _map(payload['shop']);
+    final proof = _map(payload['proof']);
+    _receiptCurrencySymbol = _string(shop['currency_symbol'], fallback: 'د.ل');
+    final width = _charsPerLine(endpoint.paperWidthMm);
+    final title = _string(proof['title'], fallback: 'سند قبض');
+    final reference = _string(proof['reference_number']);
+    final createdAt = _formatDateTime(proof['created_at']);
+
+    final bytes = <int>[];
+    bytes.addAll(_shopMasthead(generator, shop, codeTable, width));
+
+    bytes.addAll(generator.hr());
+    // Document title, big and bold: this slip is a receipt/disbursement.
+    bytes.addAll(
+      _text(
+        generator,
+        title,
+        styles: PosStyles(
+          align: PosAlign.center,
+          bold: true,
+          height: PosTextSize.size2,
+          codeTable: codeTable,
+        ),
+      ),
+    );
+    if (reference.isNotEmpty) {
+      bytes.addAll(
+        _text(
+          generator,
+          reference,
+          styles: PosStyles(align: PosAlign.center, codeTable: codeTable),
+        ),
+      );
+    }
+    if (createdAt.isNotEmpty) {
+      bytes.addAll(
+        _text(
+          generator,
+          createdAt,
+          styles: PosStyles(align: PosAlign.center, codeTable: codeTable),
+        ),
+      );
+    }
+    bytes.addAll(generator.hr());
+
+    // Party (received-from / paid-to) and the related document, each a labeled
+    // line wrapped to the paper width.
+    _addPaymentReceiptRow(
+      bytes,
+      generator,
+      codeTable,
+      width,
+      _string(proof['party_label']),
+      _string(proof['party_name']),
+    );
+    _addPaymentReceiptRow(
+      bytes,
+      generator,
+      codeTable,
+      width,
+      _string(proof['related_label']),
+      _string(proof['related_number']),
+    );
+
+    bytes.addAll(generator.hr());
+
+    // The amount stands out — bold and double height.
+    final amountLabel = _string(proof['amount_label'], fallback: 'المبلغ');
+    bytes.addAll(
+      _text(
+        generator,
+        '$amountLabel: ${_money(proof['amount'])}',
+        styles: PosStyles(
+          align: PosAlign.right,
+          bold: true,
+          height: PosTextSize.size2,
+          codeTable: codeTable,
+        ),
+      ),
+    );
+    _addPaymentReceiptRow(
+      bytes,
+      generator,
+      codeTable,
+      width,
+      _string(proof['method_label']),
+      _string(proof['method']),
+    );
+    final commission = num.tryParse(_string(proof['commission'])) ?? 0;
+    if (commission > 0) {
+      _addPaymentReceiptRow(
+        bytes,
+        generator,
+        codeTable,
+        width,
+        _string(proof['commission_label']),
+        _money(proof['commission']),
+      );
+    }
+    _addPaymentReceiptRow(
+      bytes,
+      generator,
+      codeTable,
+      width,
+      _string(proof['reference_label']),
+      _string(proof['reference']),
+    );
+    _addPaymentReceiptRow(
+      bytes,
+      generator,
+      codeTable,
+      width,
+      _string(proof['handled_label']),
+      _string(proof['handled_by']),
+    );
+
+    final balanceAfter = _string(proof['balance_after']);
+    if (balanceAfter.isNotEmpty) {
+      bytes.addAll(generator.hr());
+      bytes.addAll(
+        _text(
+          generator,
+          '${_string(proof['balance_label'], fallback: 'الرصيد بعد الدفع')}: '
+          '${_money(proof['balance_after'])}',
+          styles: PosStyles(
+            align: PosAlign.right,
+            bold: true,
+            codeTable: codeTable,
+          ),
+        ),
+      );
+    }
+
+    bytes.addAll(_shopFooter(generator, shop, codeTable, width));
+
+    bytes.addAll(_creditLine(generator, codeTable));
+
+    bytes.addAll(_finishTicket(generator, endpoint));
+    return bytes;
+  }
+
+  /// Reset + logo + bold shop name, and (by default) the wrapped `receipt_header`
+  /// lines. Shared by the sale receipt and the payment-proof slip so the masthead
+  /// is identical and maintained once.
+  List<int> _shopMasthead(
+    Generator generator,
+    Map<String, Object?> shop,
+    String codeTable,
+    int width, {
+    bool includeHeaderLines = true,
+  }) {
+    final bytes = <int>[];
+    bytes.addAll(generator.reset());
+    bytes.addAll(_logoRaster(generator, shop['logo_bytes']));
+    bytes.addAll(
+      _text(
+        generator,
+        _string(shop['name'], fallback: 'نقطة البيع'),
+        styles: PosStyles(
+          align: PosAlign.center,
+          bold: true,
+          height: PosTextSize.size2,
+          width: PosTextSize.size2,
+          codeTable: codeTable,
+        ),
+      ),
+    );
+    if (includeHeaderLines) {
+      final header = _string(shop['receipt_header']);
+      if (header.isNotEmpty) {
+        for (final line in _wrap(header, width)) {
+          bytes.addAll(
+            _text(
+              generator,
+              line,
+              styles: PosStyles(align: PosAlign.center, codeTable: codeTable),
+            ),
+          );
+        }
+      }
+    }
+    return bytes;
+  }
+
+  /// The optional centered `receipt_footer` block. Shared by the sale receipt and
+  /// the payment-proof slip.
+  List<int> _shopFooter(
+    Generator generator,
+    Map<String, Object?> shop,
+    String codeTable,
+    int width,
+  ) {
+    final footer = _string(shop['receipt_footer']);
+    if (footer.isEmpty) {
+      return const [];
+    }
+    final bytes = <int>[];
+    bytes.addAll(generator.feed(1));
+    for (final line in _wrap(footer, width)) {
+      bytes.addAll(
+        _text(
+          generator,
+          line,
+          styles: PosStyles(align: PosAlign.center, codeTable: codeTable),
+        ),
+      );
+    }
+    return bytes;
+  }
+
+  /// The centered "powered by Pointy" credit line. Shared across slips.
+  List<int> _creditLine(Generator generator, String codeTable) {
+    return [
+      ...generator.feed(1),
+      ..._text(
+        generator,
+        pointyPrintCreditLine,
+        styles: PosStyles(align: PosAlign.center, codeTable: codeTable),
+      ),
+    ];
+  }
+
+  /// Trailing feed + cut sequence, honoring the endpoint's feed lines and cut
+  /// mode. Shared by the sale receipt, kitchen ticket, and payment-proof slip.
+  List<int> _finishTicket(Generator generator, PrinterEndpoint endpoint) {
+    final bytes = <int>[];
     bytes.addAll(generator.feed(endpoint.feedLines.clamp(0, 12)));
     switch (endpoint.cutMode) {
       case ReceiptCutMode.partial:
@@ -470,9 +725,36 @@ class EscPosReceiptEncoder {
       case ReceiptCutMode.full:
         bytes.addAll(generator.cut(mode: PosCutMode.full));
       case ReceiptCutMode.none:
+        // Printer has no cutter: feed enough paper to tear by hand.
         bytes.addAll(generator.feed(2));
     }
     return bytes;
+  }
+
+  /// Appends a "label: value" line (wrapped to [width]) to a payment slip, only
+  /// when both the label and value are non-empty.
+  void _addPaymentReceiptRow(
+    List<int> bytes,
+    Generator generator,
+    String codeTable,
+    int width,
+    String label,
+    String value,
+  ) {
+    final trimmedLabel = label.trim();
+    final trimmedValue = value.trim();
+    if (trimmedLabel.isEmpty || trimmedValue.isEmpty) {
+      return;
+    }
+    for (final wrapped in _wrap('$trimmedLabel: $trimmedValue', width)) {
+      bytes.addAll(
+        _text(
+          generator,
+          wrapped,
+          styles: PosStyles(align: PosAlign.right, codeTable: codeTable),
+        ),
+      );
+    }
   }
 
   Future<CapabilityProfile> _loadProfile(PrinterEndpoint endpoint) async {
@@ -638,6 +920,32 @@ String _formatDateTime(Object? value) {
   final local = parsed.toLocal();
   return '${local.year}/${_two(local.month)}/${_two(local.day)} '
       '${_two(local.hour)}:${_two(local.minute)}';
+}
+
+/// Date-only formatter for the quotation expiry (`valid_until` is an ISO date,
+/// not a timestamp, so we never append a time component).
+String _formatDateOnly(Object? value) {
+  final raw = value?.toString().trim() ?? '';
+  if (raw.isEmpty) {
+    return '';
+  }
+  final parsed = DateTime.tryParse(raw);
+  if (parsed == null) {
+    return raw;
+  }
+  return '${parsed.year}/${_two(parsed.month)}/${_two(parsed.day)}';
+}
+
+/// Arabic money-status text for a thermal slip, keyed on the server's
+/// `payment_status` (`paid` | `partial` | `unpaid` | `quotation`).
+String _saleStatusText(String paymentStatus) {
+  return switch (paymentStatus) {
+    'paid' => 'مدفوعة بالكامل',
+    'partial' => 'مدفوعة جزئيًا',
+    'unpaid' => 'آجل — غير مدفوعة',
+    'quotation' => 'عرض سعر',
+    _ => '',
+  };
 }
 
 String _two(int value) => value.toString().padLeft(2, '0');

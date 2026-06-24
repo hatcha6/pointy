@@ -12,6 +12,7 @@ import '../../../shared/date_formatters.dart';
 import '../../../shared/design/design.dart';
 import '../../../shared/formatters.dart';
 import '../../../shared/payment_labels.dart';
+import '../../../shared/payments/record_payment_dialog.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../../register_sessions/views/sale_order_details_sheet.dart';
 import '../view_models/customer_details_view_model.dart';
@@ -108,6 +109,10 @@ class CustomerDetailsView extends StatelessWidget {
             children: [
               _CustomerHero(customer: customer),
               SizedBox(height: spacing.md),
+              if (viewModel.outstandingBalance > 0.005) ...[
+                _OutstandingBalanceCallout(viewModel: viewModel),
+                SizedBox(height: spacing.md),
+              ],
               if (customer.isAutoCreated) ...[
                 _UnclaimedCardCallout(
                   viewModel: viewModel,
@@ -265,7 +270,9 @@ class _UnclaimedCardCallout extends StatelessWidget {
       context: context,
       repository: viewModel.repository,
     );
-    if (target == null || !context.mounted || target.id == viewModel.customer.id) {
+    if (target == null ||
+        !context.mounted ||
+        target.id == viewModel.customer.id) {
       return;
     }
     final ok = await viewModel.mergeInto(target.id);
@@ -279,6 +286,82 @@ class _UnclaimedCardCallout extends StatelessWidget {
     if (ok) {
       onMerged?.call();
     }
+  }
+}
+
+/// Prominent "you owe X" callout + a primary [recordPayment] action, shown only
+/// while the customer carries an outstanding balance on their account.
+class _OutstandingBalanceCallout extends StatelessWidget {
+  const _OutstandingBalanceCallout({required this.viewModel});
+
+  final CustomerDetailsViewModel viewModel;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final spacing = AdaptiveSpacing.of(context);
+    final busy = viewModel.isRecordingPayment;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        PointyDetailCallout(
+          icon: Icons.account_balance_wallet_outlined,
+          tone: PointyCalloutTone.warning,
+          title: l10n.customerOutstandingBalanceCalloutTitle(
+            formatMoney(viewModel.outstandingBalance),
+          ),
+          message: l10n.customerOutstandingBalanceCalloutBody,
+        ),
+        if (viewModel.hasPaymentError) ...[
+          SizedBox(height: spacing.sm),
+          PointyInlineMessage.error(message: l10n.customerAccountPaymentError),
+        ],
+        SizedBox(height: spacing.sm),
+        FilledButton.icon(
+          key: const ValueKey('record_customer_payment_button'),
+          onPressed: busy ? null : () => _recordPayment(context),
+          icon: busy
+              ? const SizedBox.square(
+                  dimension: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.add_card_outlined),
+          label: Text(l10n.recordCustomerPaymentButton),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _recordPayment(BuildContext context) async {
+    final l10n = AppLocalizations.of(context)!;
+    final messenger = ScaffoldMessenger.of(context);
+    final result = await showRecordPaymentDialog(
+      context,
+      title: l10n.customerAccountPaymentTitle,
+      maxAmount: viewModel.outstandingBalance,
+      balanceLabel: l10n.customerAccountPaymentOutstandingValue(
+        formatMoney(viewModel.outstandingBalance),
+      ),
+      methods: customerPaymentMethodOptions(l10n),
+    );
+    if (result == null) {
+      return;
+    }
+
+    final didRecord = await viewModel.recordAccountPayment(
+      method: PaymentMethod.fromApiValue(result.methodApiValue),
+      amount: result.amount,
+      cardReceiptUrl: result.cardReceiptUrl,
+    );
+    if (!context.mounted || !didRecord) {
+      return;
+    }
+    messenger
+      ..clearSnackBars()
+      ..showSnackBar(
+        SnackBar(content: Text(l10n.customerAccountPaymentSuccess)),
+      );
   }
 }
 
@@ -484,6 +567,14 @@ class _CustomerSalesSummary extends StatelessWidget {
               value: formatMoney(summary.netSales),
               icon: Icons.payments_outlined,
               accentColor: colors.success,
+            ),
+            PointyMetricGridItem(
+              label: l10n.customerOutstandingBalanceLabel,
+              value: formatMoney(summary.outstandingBalance),
+              icon: Icons.account_balance_wallet_outlined,
+              accentColor: summary.outstandingBalance > 0.005
+                  ? colors.danger
+                  : null,
             ),
             PointyMetricGridItem(
               label: l10n.customerInvoiceCountLabel,

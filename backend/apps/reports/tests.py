@@ -250,6 +250,7 @@ class ReportRunApiTests(TestCase):
         )
         Payment.objects.create(
             order=order,
+            register_session=session,
             method=Payment.Method.CASH,
             amount=Decimal("7.00"),
         )

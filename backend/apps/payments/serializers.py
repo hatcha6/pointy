@@ -12,6 +12,8 @@ from .moamalat import (
 )
 from .models import Payment
 
+_MISSING = object()
+
 
 def payment_commission_values(method, amount):
     settings = ShopSettings.load()
@@ -60,6 +62,11 @@ class PaymentSerializer(serializers.ModelSerializer):
 
     def validate_order(self, order):
         request = self.context.get("request")
+        # Account-level AR collection is intentionally cross-owner — a cashier may
+        # settle a debt another user issued — so it opts out of the per-session
+        # owner gate (the action's permission already authorized the collection).
+        if self.context.get("allow_cross_owner"):
+            return order
         if request is None or user_is_manager(request.user):
             return order
 
@@ -88,7 +95,13 @@ class PaymentSerializer(serializers.ModelSerializer):
                     raise serializers.ValidationError(
                         {"card_receipt_url": str(exc)}
                     ) from exc
-                if not payment_amount_matches_receipt(amount, receipt):
+                # An account collection validates ONE receipt against the TOTAL,
+                # then splits it across invoices — so a sub-payment's amount won't
+                # match the receipt. That path sets ``card_receipt_amount_validated``
+                # after checking the total once.
+                if not self.context.get(
+                    "card_receipt_amount_validated"
+                ) and not payment_amount_matches_receipt(amount, receipt):
                     raise serializers.ValidationError(
                         {
                             "card_receipt_url": (
@@ -150,6 +163,24 @@ class PaymentSerializer(serializers.ModelSerializer):
         )
         validated_data["commission_percent"] = percent
         validated_data["commission_amount"] = commission
+        # Attribute the payment to the COLLECTING session for drawer
+        # reconciliation. Defaults to the order's session (checkout), but a later
+        # payment against a debt invoice passes the current session via context.
+        register_session = self.context.get("register_session", _MISSING)
+        validated_data["register_session"] = (
+            order.register_session if register_session is _MISSING else register_session
+        )
+        created_by = self.context.get("created_by", _MISSING)
+        if created_by is not _MISSING:
+            validated_data["created_by"] = created_by
+        else:
+            request = self.context.get("request")
+            user = getattr(request, "user", None)
+            if user is not None and getattr(user, "is_authenticated", False):
+                validated_data["created_by"] = user
+        paid_at = self.context.get("paid_at", _MISSING)
+        if paid_at is not _MISSING:
+            validated_data["paid_at"] = paid_at
         payment = super().create(validated_data)
         if payment.method == Payment.Method.CARD and payment.card_receipt_data:
             # Promote the scanned receipt into a deduped PaymentCard and link it
@@ -171,3 +202,50 @@ class PaymentSerializer(serializers.ModelSerializer):
                     ),
                 )
         return payment
+
+
+class PaymentLedgerSerializer(serializers.ModelSerializer):
+    """Read-only projection of a customer payment for the Payments hub.
+
+    Kept separate from ``PaymentSerializer`` so the checkout write contract is
+    untouched. Exposes the linked order's receipt number and customer so the
+    money-in ledger can render a row without an extra round-trip.
+    """
+
+    created_by_username = serializers.CharField(
+        source="created_by.username",
+        read_only=True,
+    )
+    order_receipt_number = serializers.CharField(
+        source="order.receipt_number",
+        read_only=True,
+    )
+    customer = serializers.PrimaryKeyRelatedField(
+        source="order.customer",
+        read_only=True,
+    )
+    customer_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Payment
+        fields = [
+            "id",
+            "method",
+            "amount",
+            "commission_amount",
+            "commission_percent",
+            "external_reference",
+            "paid_at",
+            "created_at",
+            "created_by",
+            "created_by_username",
+            "order",
+            "order_receipt_number",
+            "customer",
+            "customer_name",
+        ]
+        read_only_fields = fields
+
+    def get_customer_name(self, payment):
+        customer = payment.order.customer if payment.order_id else None
+        return customer.full_name if customer is not None else None

@@ -16,7 +16,12 @@ def public_invoice_url_for_order(
     settings = shop_settings or ShopSettings.load()
     if not settings.enable_online_invoices:
         return ""
-    if order.status == Order.Status.OPEN:
+    # Standard carts only get a public URL once settled; credit (debt) invoices
+    # and quotations are shareable documents even while OPEN.
+    if (
+        order.status == Order.Status.OPEN
+        and order.sale_type == Order.SaleType.STANDARD
+    ):
         return ""
     if not order.public_token:
         return ""

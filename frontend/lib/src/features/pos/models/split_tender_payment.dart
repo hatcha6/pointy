@@ -72,15 +72,33 @@ class SplitTenderPaymentCalculator {
     return (total - totalWithoutBalance).clamp(0, double.infinity).toDouble();
   }
 
+  /// Builds the payment drafts to send to the backend.
+  ///
+  /// For standard sales the tendered total must cover [total] (today's
+  /// behaviour). For a credit (آجل) sale, pass [allowPartial] = true: the
+  /// tender is a down-payment, so 0..total is accepted and an empty tender
+  /// returns an empty list (fully on credit) rather than null.
   List<SaleCheckoutPaymentDraft>? appliedPayments({
     required double total,
     required Iterable<SplitTenderInput> tenders,
+    bool allowPartial = false,
   }) {
     final parsed = tenders
         .where((tender) => tender.amount > 0)
         .toList(growable: false);
     final paid = paidTotal(parsed);
-    if (parsed.isEmpty || paid < total) {
+    if (allowPartial) {
+      // A down-payment may not exceed the sale total, and any change can only
+      // come from cash (mirrors the full-payment overage rule below).
+      if (paid > total) {
+        final cashTotal = parsed
+            .where((tender) => tender.method == PaymentMethod.cash)
+            .fold<double>(0, (sum, tender) => sum + tender.amount);
+        if (cashTotal < paid - total) {
+          return null;
+        }
+      }
+    } else if (parsed.isEmpty || paid < total) {
       return null;
     }
 

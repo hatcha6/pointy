@@ -365,12 +365,16 @@ class _PaymentSettingsFields extends StatelessWidget {
     required this.enableCardPayments,
     required this.enableTransferPayments,
     required this.requireCardPaymentReceipt,
+    required this.requireCustomerForCredit,
+    required this.allowCashierCustomerAccess,
     required this.paymentMethodsError,
     required this.cardCommissionError,
     required this.transferCommissionError,
     required this.onEnableCashChanged,
     required this.onEnableCardChanged,
     required this.onRequireCardReceiptChanged,
+    required this.onRequireCustomerForCreditChanged,
+    required this.onAllowCashierCustomerAccessChanged,
     required this.onEnableTransferChanged,
     required this.onCommissionChanged,
     required this.onManageTrustedTerminalIds,
@@ -384,12 +388,16 @@ class _PaymentSettingsFields extends StatelessWidget {
   final bool enableCardPayments;
   final bool enableTransferPayments;
   final bool requireCardPaymentReceipt;
+  final bool requireCustomerForCredit;
+  final bool allowCashierCustomerAccess;
   final String? paymentMethodsError;
   final String? cardCommissionError;
   final String? transferCommissionError;
   final ValueChanged<bool> onEnableCashChanged;
   final ValueChanged<bool> onEnableCardChanged;
   final ValueChanged<bool> onRequireCardReceiptChanged;
+  final ValueChanged<bool> onRequireCustomerForCreditChanged;
+  final ValueChanged<bool> onAllowCashierCustomerAccessChanged;
   final ValueChanged<bool> onEnableTransferChanged;
   final VoidCallback onCommissionChanged;
   final VoidCallback onManageTrustedTerminalIds;
@@ -459,6 +467,23 @@ class _PaymentSettingsFields extends StatelessWidget {
             errorText: transferCommissionError,
             prefixIcon: const Icon(Icons.percent),
           ),
+        ),
+        const SizedBox(height: 4),
+        SwitchListTile(
+          key: const ValueKey('require_customer_for_credit_switch'),
+          contentPadding: EdgeInsets.zero,
+          value: requireCustomerForCredit,
+          title: Text(l10n.requireCustomerForCreditLabel),
+          subtitle: Text(l10n.requireCustomerForCreditSubtitle),
+          onChanged: enabled ? onRequireCustomerForCreditChanged : null,
+        ),
+        SwitchListTile(
+          key: const ValueKey('allow_cashier_customer_access_switch'),
+          contentPadding: EdgeInsets.zero,
+          value: allowCashierCustomerAccess,
+          title: Text(l10n.allowCashierCustomerAccessLabel),
+          subtitle: Text(l10n.allowCashierCustomerAccessSubtitle),
+          onChanged: enabled ? onAllowCashierCustomerAccessChanged : null,
         ),
         if (paymentMethodsError != null) ...[
           const SizedBox(height: 12),

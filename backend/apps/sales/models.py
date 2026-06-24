@@ -69,9 +69,13 @@ class RegisterSession(TimeStampedModel):
     def cash_sales_total(self) -> Decimal:
         from apps.payments.models import Payment
 
+        # Attribute cash to the session that COLLECTED it (the payment's own
+        # register_session), not the session that issued the order. Under accrual
+        # a credit (debt) order stays OPEN while still collecting a cash
+        # down-payment, and a debt may be settled in a later shift — so we no
+        # longer gate on order status.
         total = Payment.objects.filter(
-            order__register_session=self,
-            order__status__in=(Order.Status.PAID, Order.Status.VOID),
+            register_session=self,
             method=Payment.Method.CASH,
             amount__gt=0,
         ).aggregate(total=Sum("amount"))["total"]
@@ -158,11 +162,60 @@ class RegisterCashMovement(TimeStampedModel):
         return f"{self.get_movement_type_display()} {self.amount} for {self.register_session}"
 
 
+class OrderQuerySet(models.QuerySet):
+    """Sale-type/status aware filters for sales orders.
+
+    Quotations never count as sales; credit (debt) invoices count from the
+    moment they are issued (accrual); standard orders count once paid.
+    """
+
+    def committed_sales(self):
+        """Orders whose revenue is recognized: standard orders once paid and
+        credit invoices from issue. Excludes quotations and voids."""
+        return self.filter(
+            Q(sale_type=Order.SaleType.STANDARD, status=Order.Status.PAID)
+            | Q(
+                sale_type=Order.SaleType.CREDIT,
+                status__in=(Order.Status.OPEN, Order.Status.PAID),
+            )
+        )
+
+    def transactional(self):
+        """Recognized sales plus their voids — the basis for sales/profit
+        aggregates that net refunds out of a paid+void gross. Always excludes
+        quotations (a voided/converted quotation is not a transaction)."""
+        return self.exclude(sale_type=Order.SaleType.QUOTATION).filter(
+            Q(status__in=(Order.Status.PAID, Order.Status.VOID))
+            | Q(sale_type=Order.SaleType.CREDIT, status=Order.Status.OPEN)
+        )
+
+    def open_credit(self):
+        """Credit (debt) invoices that still carry a balance."""
+        return self.filter(
+            sale_type=Order.SaleType.CREDIT, status=Order.Status.OPEN
+        )
+
+    def quotations(self):
+        return self.filter(sale_type=Order.SaleType.QUOTATION)
+
+
 class Order(TimeStampedModel):
     class Status(models.TextChoices):
         OPEN = "open", "Open"
         PAID = "paid", "Paid"
         VOID = "void", "Void"
+
+    class SaleType(models.TextChoices):
+        # A normal cash-and-carry sale, paid in full at checkout (default).
+        STANDARD = "standard", "Standard"
+        # A price offer (فاتورة عرض): not a sale, optionally reserves stock,
+        # convertible in place into a real invoice.
+        QUOTATION = "quotation", "Quotation"
+        # A debt/credit invoice (آجل): a real sale issued unpaid or partly paid;
+        # stock leaves and revenue is recognized at issue.
+        CREDIT = "credit", "Credit"
+
+    objects = OrderQuerySet.as_manager()
 
     register_session = models.ForeignKey(
         RegisterSession,
@@ -195,6 +248,28 @@ class Order(TimeStampedModel):
         null=True,
     )
     status = models.CharField(max_length=16, choices=Status.choices, default=Status.OPEN)
+    # No per-field index: the (sale_type, status, -created_at) composite below
+    # already serves sale_type-leading lookups (quotations / outstanding credit).
+    sale_type = models.CharField(
+        max_length=16,
+        choices=SaleType.choices,
+        default=SaleType.STANDARD,
+    )
+    # For a quotation this is how long the offer (and any stock reservation) is
+    # valid; for a credit invoice it can carry an optional due date. Null = none.
+    valid_until = models.DateField(blank=True, null=True)
+    # Quotation-only: whether the quoted quantities are actively held
+    # (StockReservation rows + StockItem.quantity_committed) until ``valid_until``.
+    reserves_stock = models.BooleanField(default=False)
+    # When a quotation is accepted it is converted in place into a real sale;
+    # this links the (now VOID) quotation to the order that superseded it.
+    converted_to = models.ForeignKey(
+        "self",
+        on_delete=models.SET_NULL,
+        related_name="converted_from",
+        blank=True,
+        null=True,
+    )
     subtotal = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     discount_total = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     total = models.DecimalField(max_digits=10, decimal_places=2, default=0)
@@ -211,10 +286,16 @@ class Order(TimeStampedModel):
         ordering = ["-created_at"]
         # Almost every aggregate filters status IN (paid, void) over a date
         # range; this composite serves those plus the default -created_at listing.
+        # The second composite serves the sale-type splits (quotations list,
+        # outstanding credit invoices).
         indexes = [
             models.Index(
                 fields=["status", "-created_at"],
                 name="sales_order_status_created_idx",
+            ),
+            models.Index(
+                fields=["sale_type", "status", "-created_at"],
+                name="sales_order_type_status_idx",
             ),
         ]
 
@@ -241,6 +322,35 @@ class Order(TimeStampedModel):
         total = sum((line.line_profit for line in self.lines.all()), Decimal("0.00"))
         return total.quantize(Decimal("0.01"))
 
+    @property
+    def amount_paid(self):
+        # Sum in Python so a prefetched ``payments`` is reused instead of a
+        # per-order aggregate when serialising lists of orders. Includes any
+        # negative (refund) payments so the balance reflects net cash received.
+        total = sum(
+            (payment.amount for payment in self.payments.all()),
+            Decimal("0.00"),
+        )
+        return total.quantize(Decimal("0.01"))
+
+    @property
+    def raw_balance_due(self):
+        return (self.total - self.amount_paid).quantize(Decimal("0.01"))
+
+    @property
+    def balance_due(self):
+        return max(self.raw_balance_due, Decimal("0.00")).quantize(Decimal("0.01"))
+
+    @property
+    def payment_status(self):
+        if self.sale_type == self.SaleType.QUOTATION:
+            return "quotation"
+        if self.balance_due == Decimal("0.00"):
+            return "paid"
+        if self.amount_paid > 0:
+            return "partial"
+        return "unpaid"
+
     def save(self, *args, **kwargs):
         update_fields = kwargs.get("update_fields")
         if not self.public_token:
@@ -263,6 +373,33 @@ class Order(TimeStampedModel):
             token = secrets.token_urlsafe(24)
             if not cls.objects.filter(public_token=token).exists():
                 return token
+
+
+def recognized_sale_q(prefix: str = "") -> Q:
+    """``Q`` matching orders whose revenue is recognized (see
+    ``OrderQuerySet.committed_sales``). ``prefix`` targets a related accessor,
+    e.g. ``recognized_sale_q("orders")`` -> ``orders__status=...`` for use in
+    cross-relation filters and ``Count(filter=...)`` annotations."""
+    p = f"{prefix}__" if prefix else ""
+    return Q(
+        **{f"{p}sale_type": Order.SaleType.STANDARD, f"{p}status": Order.Status.PAID}
+    ) | Q(
+        **{
+            f"{p}sale_type": Order.SaleType.CREDIT,
+            f"{p}status__in": (Order.Status.OPEN, Order.Status.PAID),
+        }
+    )
+
+
+def transactional_sale_q(prefix: str = "") -> Q:
+    """``Q`` matching recognized sales plus their voids, always excluding
+    quotations. Mirror of ``OrderQuerySet.transactional`` for use across a
+    related accessor or inside ``Count(filter=...)`` annotations."""
+    p = f"{prefix}__" if prefix else ""
+    return ~Q(**{f"{p}sale_type": Order.SaleType.QUOTATION}) & (
+        Q(**{f"{p}status__in": (Order.Status.PAID, Order.Status.VOID)})
+        | Q(**{f"{p}sale_type": Order.SaleType.CREDIT, f"{p}status": Order.Status.OPEN})
+    )
 
 
 class OrderLine(TimeStampedModel):
@@ -446,3 +583,64 @@ class OrderAdjustmentLine(TimeStampedModel):
     def line_total(self):
         gross_total = self.unit_price * self.quantity
         return (gross_total - self.discount_total).quantize(Decimal("0.01"))
+
+
+class StockReservation(TimeStampedModel):
+    """A hold placed on stock by a quotation (فاتورة عرض).
+
+    The sum of a variant's ACTIVE reservations equals its
+    ``StockItem.quantity_committed``; this row is the per-quote audit ledger
+    (which quote, how much, until when). Availability for selling is
+    ``quantity_on_hand - quantity_committed``, so a reservation never moves
+    on-hand — it only blocks others from dipping into the held units.
+
+    Lives in ``sales`` (FK to ``inventory.StockItem`` by string) so the app
+    dependency arrow stays sales → inventory, never the reverse.
+    """
+
+    class Status(models.TextChoices):
+        ACTIVE = "active", "Active"
+        RELEASED = "released", "Released"
+        CONSUMED = "consumed", "Consumed"
+
+    order = models.ForeignKey(
+        Order,
+        on_delete=models.CASCADE,
+        related_name="stock_reservations",
+    )
+    variant = models.ForeignKey(
+        ProductVariant,
+        on_delete=models.PROTECT,
+        related_name="stock_reservations",
+    )
+    stock_item = models.ForeignKey(
+        "inventory.StockItem",
+        on_delete=models.PROTECT,
+        related_name="reservations",
+    )
+    base_quantity = models.DecimalField(
+        max_digits=12,
+        decimal_places=3,
+        validators=[MinValueValidator(Decimal("0.001"))],
+    )
+    status = models.CharField(
+        max_length=16,
+        choices=Status.choices,
+        default=Status.ACTIVE,
+    )
+    expires_at = models.DateField(blank=True, null=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+        indexes = [
+            models.Index(
+                fields=["status", "expires_at"],
+                name="sales_reservation_status_idx",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return (
+            f"reservation {self.base_quantity} of variant {self.variant_id} "
+            f"({self.status})"
+        )

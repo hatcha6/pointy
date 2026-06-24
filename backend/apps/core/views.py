@@ -111,6 +111,9 @@ def login_view(request):
             "user": UserSerializer(user).data,
             "csrf_token": get_token(request),
             "ai_available": relay_ai_available(),
+            "allow_cashier_customer_access": (
+                ShopSettings.load().allow_cashier_customer_access
+            ),
         }
     )
 
@@ -160,6 +163,9 @@ def me_view(request):
             "user": UserSerializer(request.user).data,
             "csrf_token": get_token(request),
             "ai_available": relay_ai_available(),
+            "allow_cashier_customer_access": (
+                ShopSettings.load().allow_cashier_customer_access
+            ),
         }
     )
 

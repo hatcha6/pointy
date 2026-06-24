@@ -42,6 +42,8 @@ import 'features/operations/view_models/recipes_view_model.dart';
 import 'features/operations/view_models/workflows_view_model.dart';
 import 'features/operations/views/job_details_screen.dart';
 import 'features/operations/views/jobs_screen.dart';
+import 'features/payments/view_models/payments_hub_view_model.dart';
+import 'features/payments/views/payments_hub_screen.dart';
 import 'features/pos/view_models/pos_view_model.dart';
 import 'features/pos/views/pos_screen.dart';
 import 'features/purchasing/views/purchase_order_details_screen.dart';
@@ -221,6 +223,7 @@ class _AuthenticatedRoutes implements AppNavigation {
       AppNavigationDestination.registerSessions => registerSessionsRouteBuilder,
       AppNavigationDestination.employees => employeePayrollRouteBuilder,
       AppNavigationDestination.expenses => expensesRouteBuilder,
+      AppNavigationDestination.payments => paymentsRouteBuilder,
       AppNavigationDestination.discounts => discountsRouteBuilder,
       AppNavigationDestination.reports => reportsRouteBuilder,
       AppNavigationDestination.activityLog => activityLogRouteBuilder,
@@ -453,9 +456,15 @@ class _AuthenticatedRoutes implements AppNavigation {
   /// Loads products for the AI's product_picker question — keyed by each
   /// product's default VARIANT id (what a purchase-order line references), so the
   /// answer the AI receives is directly usable.
-  Future<AsyncSelectionPage<int>> _aiProductSearch(String search, int page) async {
+  Future<AsyncSelectionPage<int>> _aiProductSearch(
+    String search,
+    int page,
+  ) async {
     final result = await dependencies.catalogRepository.loadProducts(
-      query: ProductQuery(search: search, availability: ProductAvailabilityFilter.active),
+      query: ProductQuery(
+        search: search,
+        availability: ProductAvailabilityFilter.active,
+      ),
       page: page,
     );
     return switch (result) {
@@ -468,7 +477,8 @@ class _AuthenticatedRoutes implements AppNavigation {
                 label: product.name,
                 subtitle: [
                   if (product.effectiveSku.isNotEmpty) product.effectiveSku,
-                  if (product.effectiveBarcode.isNotEmpty) product.effectiveBarcode,
+                  if (product.effectiveBarcode.isNotEmpty)
+                    product.effectiveBarcode,
                 ].join(' • '),
               ),
         ],
@@ -490,6 +500,22 @@ class _AuthenticatedRoutes implements AppNavigation {
           dependencies.expenseRepository,
           analyticsEngine: dependencies.analyticsEngine,
         ),
+        capabilities: capabilities,
+        navigation: this,
+      ),
+    );
+  }
+
+  Widget paymentsRouteBuilder(BuildContext routeContext) {
+    return _screen(
+      'payments_hub',
+      PaymentsHubScreen(
+        viewModel: PaymentsHubViewModel(
+          dependencies.paymentsRepository,
+          analyticsEngine: dependencies.analyticsEngine,
+        ),
+        printingRepository: dependencies.printingRepository,
+        shopSettingsRepository: dependencies.shopSettingsRepository,
         capabilities: capabilities,
         navigation: this,
       ),
@@ -1641,7 +1667,11 @@ class _AuthenticatedRoutes implements AppNavigation {
         if (destination == null || !isDestinationAvailable(destination)) {
           return false;
         }
-        navigateTo(context, destination, from: AppNavigationDestination.aiAssistant);
+        navigateTo(
+          context,
+          destination,
+          from: AppNavigationDestination.aiAssistant,
+        );
         return true;
       case AiEntityLink(:final type, :final id):
         return _openEntityDeepLink(context, type, id);

@@ -1107,6 +1107,9 @@ def create_supplier_payment(*, created_by=None, **payment_fields):
 
     payment_fields["amount"] = amount
     payment_fields["created_by"] = created_by
+    # No commission on supplier pay-outs: a processing fee is the terminal
+    # operator's cost, and here the shop is paying out, not collecting. Commission
+    # is captured only on customer payments (where the shop runs the terminal).
     payment = SupplierPayment.objects.create(**payment_fields)
     if method == SupplierPayment.Method.SUPPLIER_CREDIT:
         consume_supplier_credit(supplier=supplier, amount=amount)

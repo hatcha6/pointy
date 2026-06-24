@@ -40,6 +40,7 @@ from apps.purchasing.models import (
 )
 from apps.sales.models import (
     Order,
+    recognized_sale_q,
     OrderAdjustment,
     OrderLine,
     RegisterCashMovement,
@@ -77,7 +78,7 @@ def _sales_summary(orders, adjustments):
             output_field=MONEY_FIELD,
         ),
         order_total=Coalesce(Sum("total"), Value(Decimal("0.00")), output_field=MONEY_FIELD),
-        order_count=Count("id", filter=Q(status=Order.Status.PAID)),
+        order_count=Count("id", filter=recognized_sale_q()),
     )
     adjustment_values = adjustments.aggregate(
         refund_total=Coalesce(Sum("amount"), Value(Decimal("0.00")), output_field=MONEY_FIELD),
@@ -124,7 +125,7 @@ def _sales_trend(orders, adjustments, period):
         .values("day")
         .annotate(
             total=Coalesce(Sum("total"), Value(Decimal("0.00")), output_field=MONEY_FIELD),
-            count=Count("id", filter=Q(status=Order.Status.PAID)),
+            count=Count("id", filter=recognized_sale_q()),
         )
     ):
         sales_by_day[row["day"]]["sales"] += row["total"]
@@ -384,13 +385,15 @@ def _register_variance_summary(closed_sessions):
 
     session_ids = [row["id"] for row in session_rows]
     cash_sales_by_session = _totals_by_key(
+        # Attribute cash to the session that collected the payment (its own
+        # register_session), independent of order status — see
+        # RegisterSession.cash_sales_total.
         Payment.objects.filter(
-            order__register_session_id__in=session_ids,
-            order__status__in=(Order.Status.PAID, Order.Status.VOID),
+            register_session_id__in=session_ids,
             method=Payment.Method.CASH,
             amount__gt=0,
         )
-        .values("order__register_session_id")
+        .values("register_session_id")
         .annotate(
             total=Coalesce(
                 Sum("amount"),
@@ -398,7 +401,7 @@ def _register_variance_summary(closed_sessions):
                 output_field=MONEY_FIELD,
             )
         ),
-        key="order__register_session_id",
+        key="register_session_id",
     )
     cash_refunds_by_session = _totals_by_key(
         # ``cash_amount`` is the cash-drawer share of each refund (full amount for
@@ -596,7 +599,7 @@ def _stock_item_row(item):
 
 
 def _settled_orders(request):
-    queryset = Order.objects.filter(status__in=(Order.Status.PAID, Order.Status.VOID))
+    queryset = Order.objects.transactional()
     if _views_shop_wide(request):
         return queryset
     return queryset.filter(register_session__owner_key=_owner_key(request))

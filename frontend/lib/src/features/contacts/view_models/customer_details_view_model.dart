@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../../../core/result.dart';
+import '../../../data/models/analytics_event.dart';
 import '../../../data/models/contact.dart';
 import '../../../data/models/customer_activity.dart';
 import '../../../data/models/payment_card.dart';
@@ -44,9 +45,17 @@ class CustomerDetailsViewModel extends ChangeNotifier {
   bool _hasSummaryError = false;
   bool _hasOrderError = false;
   bool _hasAdjustmentError = false;
+  bool _isRecordingPayment = false;
+  bool _hasPaymentError = false;
+  final Map<String, String> _idempotencyKeysBySignature = {};
 
   Customer get customer => _customer;
   CustomerSalesSummary get summary => _summary;
+
+  /// Total the customer still owes across their open debt invoices.
+  double get outstandingBalance => _summary.outstandingBalance;
+  bool get isRecordingPayment => _isRecordingPayment;
+  bool get hasPaymentError => _hasPaymentError;
   List<SaleOrder> get orderHistory => List.unmodifiable(_orderHistory);
   List<CustomerAdjustmentHistoryEntry> get adjustmentHistory =>
       List.unmodifiable(_adjustmentHistory);
@@ -194,6 +203,79 @@ class CustomerDetailsViewModel extends ChangeNotifier {
 
     _isLoadingSummary = false;
     notifyListeners();
+  }
+
+  /// Records a cash/transfer payment against the customer's account (the
+  /// backend allocates it oldest-first across open debt invoices), then
+  /// refreshes the summary and invoice history. Uses a signature-based
+  /// idempotency key so an accidental double-tap is a no-op on the server.
+  Future<bool> recordAccountPayment({
+    required PaymentMethod method,
+    required double amount,
+    String cardReceiptUrl = '',
+  }) async {
+    if (_isRecordingPayment) {
+      return false;
+    }
+
+    _isRecordingPayment = true;
+    _hasPaymentError = false;
+    notifyListeners();
+
+    final signature = _accountPaymentSignature(
+      method: method,
+      amount: amount,
+      cardReceiptUrl: cardReceiptUrl,
+    );
+    final result = await _contactRepository.recordCustomerAccountPayment(
+      _customer.id,
+      method: method.apiValue,
+      amount: amount,
+      cardReceiptUrl: cardReceiptUrl,
+      idempotencyKey: _idempotencyKeyFor(signature),
+    );
+    final didRecord = result is Ok<CustomerSalesSummary>;
+    if (didRecord) {
+      _clearIdempotencyKey(signature);
+      _summary = result.value;
+    } else {
+      _hasPaymentError = true;
+    }
+
+    _isRecordingPayment = false;
+    notifyListeners();
+
+    if (didRecord) {
+      // Reload the summary + invoice history so allocated balances and
+      // payment statuses reflect the new payment.
+      await Future.wait([loadSummary(), loadOrderHistory()]);
+    }
+    return didRecord;
+  }
+
+  String _accountPaymentSignature({
+    required PaymentMethod method,
+    required double amount,
+    String cardReceiptUrl = '',
+  }) {
+    return [
+      'customer-account-payment',
+      _customer.id,
+      method.apiValue,
+      amount.toStringAsFixed(2),
+      cardReceiptUrl,
+    ].join(':');
+  }
+
+  String _idempotencyKeyFor(String signature) {
+    return _idempotencyKeysBySignature.putIfAbsent(
+      signature,
+      () => 'customer-account-payment:${generateAnalyticsEventId()}',
+    );
+  }
+
+  void _clearIdempotencyKey(String signature) {
+    _idempotencyKeysBySignature.remove(signature);
   }
 
   Future<void> loadOrderHistory() async {

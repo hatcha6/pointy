@@ -68,6 +68,10 @@ extension PosCheckoutActions on PosViewModel {
 
   Future<SaleCheckoutOutcome> checkoutCurrentSale({
     required List<SaleCheckoutPaymentDraft> payments,
+    SaleType saleType = SaleType.standard,
+    DateTime? validUntil,
+    bool reserveStock = false,
+    bool printProof = false,
   }) async {
     if (_isCheckingOut) {
       return const SaleCheckoutOutcome.failure();
@@ -132,6 +136,9 @@ extension PosCheckoutActions on PosViewModel {
       invoicePrinterConfig: backendInvoicePrinterConfig,
       customerId: _selectedCustomer?.id,
       couponCode: _couponCode,
+      saleType: saleType,
+      validUntil: validUntil,
+      reserveStock: reserveStock,
     );
     final checkoutIdempotencyKey = _activeSaleSession.checkoutIdempotencyKeyFor(
       checkoutDraft,
@@ -150,7 +157,17 @@ extension PosCheckoutActions on PosViewModel {
         if (_checkoutSettings?.autoPrintKitchenTickets == true) {
           await _printPaidKitchenTickets(result.value);
         }
-        _applySoldQuantities(cartSnapshot);
+        if (printProof) {
+          // Hand the customer a سند قبض for the credit down-payment(s) just
+          // taken. Best-effort — the sale is already committed.
+          await _printDownPaymentProofs(result.value);
+        }
+        // A quotation moves no stock on the backend, so don't optimistically
+        // decrement the local catalog either (a held quotation reserves, not
+        // sells; the next catalog refresh reflects any hold).
+        if (saleType != SaleType.quotation) {
+          _applySoldQuantities(cartSnapshot);
+        }
         _completeActiveSaleSessionCheckout();
         _isCheckingOut = false;
         _notifyChanged();
@@ -416,6 +433,43 @@ extension PosCheckoutActions on PosViewModel {
     return result.isSuccess
         ? InvoicePrintStatus.printed
         : InvoicePrintStatus.failed;
+  }
+
+  /// Prints a "سند قبض" proof for each down-payment recorded at credit
+  /// checkout — one slip per tender, so a split down-payment yields one
+  /// receipt per method. The repository records a payment_receipt audit event
+  /// per slip (keyed on the payment id). Mirrors the invoice-details proof.
+  Future<void> _printDownPaymentProofs(SaleOrder order) async {
+    if (order.payments.isEmpty) {
+      return;
+    }
+    const labels = OrderDocumentLabels.arabic();
+    for (final payment in order.payments) {
+      final proof = PaymentProof(
+        kind: PaymentProofKind.receipt,
+        reference: '${payment.id}',
+        partyName: (order.customerName?.trim().isNotEmpty ?? false)
+            ? order.customerName!.trim()
+            : labels.walkInCustomer,
+        partyContact: order.customerPhone?.trim().isNotEmpty == true
+            ? order.customerPhone!.trim()
+            : order.customerNumber,
+        relatedDocumentNumber: order.receiptNumber,
+        amount: payment.amount,
+        method: labels.paymentMethodLabel(payment.method),
+        commissionAmount: payment.commissionAmount,
+        externalReference: payment.externalReference,
+        balanceAfter: order.balanceDue,
+        createdAt: payment.createdAt ?? DateTime.now(),
+      );
+      await _printingRepository.printProofOfPayment(
+        proof: proof,
+        paymentId: payment.id,
+        paymentKind: PrintAuditPaymentKind.customer,
+        shopSettings: _checkoutSettings,
+        shopLogoBytes: _checkoutShopLogoBytes,
+      );
+    }
   }
 
   void _applySoldQuantities(List<CartLine> soldLines) {

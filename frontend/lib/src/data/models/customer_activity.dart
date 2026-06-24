@@ -16,7 +16,10 @@ class CustomerSalesSummary {
     required this.refundTotal,
     required this.exchangeTotal,
     required this.netSales,
+    this.outstandingBalance = 0,
+    this.quotationCount = 0,
     this.lastInvoiceAt,
+    this.representativePaymentId,
   });
 
   final int customerId;
@@ -33,7 +36,18 @@ class CustomerSalesSummary {
   final double refundTotal;
   final double exchangeTotal;
   final double netSales;
+
+  /// Total still owed across the customer's open (credit) debt invoices.
+  final double outstandingBalance;
+
+  /// Number of outstanding price quotations issued to this customer.
+  final int quotationCount;
   final DateTime? lastInvoiceAt;
+
+  /// On a record-payment response, the oldest allocated payment's id — used to
+  /// print/audit a proof-of-payment slip for the whole collection. Null on a
+  /// plain sales-summary fetch.
+  final int? representativePaymentId;
 
   factory CustomerSalesSummary.empty(int customerId) {
     return CustomerSalesSummary(
@@ -70,7 +84,12 @@ class CustomerSalesSummary {
       refundTotal: _moneyFromJson(json['refund_total']),
       exchangeTotal: _moneyFromJson(json['exchange_total']),
       netSales: _moneyFromJson(json['net_sales']),
+      outstandingBalance: _moneyFromJson(json['outstanding_balance']),
+      quotationCount: _intFromJson(json['quotation_count']),
       lastInvoiceAt: _dateTimeFromJson(json['last_invoice_at']),
+      representativePaymentId: json['payment'] is Map<String, Object?>
+          ? _intFromJson((json['payment'] as Map<String, Object?>)['id'])
+          : null,
     );
   }
 }

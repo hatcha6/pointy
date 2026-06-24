@@ -81,6 +81,44 @@ class SaleRepository {
     return Result.guard(() => _service.fetchOrder(saleOrderId));
   }
 
+  /// Records a payment against a single (credit) invoice. Cards are allowed —
+  /// pass [cardReceiptUrl] for the card method.
+  Future<Result<SaleOrder>> recordInvoicePayment({
+    required int saleOrderId,
+    required String method,
+    required double amount,
+    String cardReceiptUrl = '',
+    String? idempotencyKey,
+  }) async {
+    return Result.guard(
+      () => _service.recordInvoicePayment(
+        saleOrderId,
+        method: method,
+        amount: amount,
+        cardReceiptUrl: cardReceiptUrl,
+        idempotencyKey: idempotencyKey,
+      ),
+    );
+  }
+
+  /// Converts an OPEN quotation into a standard or credit sale, optionally
+  /// taking a down-payment ([amountReceived]). Returns the NEW order.
+  Future<Result<SaleOrder>> convertQuotation(
+    int orderId, {
+    required SaleType saleType,
+    double? amountReceived,
+    String? idempotencyKey,
+  }) async {
+    return Result.guard(
+      () => _service.convertQuotation(
+        orderId,
+        saleType: saleType,
+        amountReceived: amountReceived,
+        idempotencyKey: idempotencyKey,
+      ),
+    );
+  }
+
   Future<Result<SaleOrderPage>> loadOrdersForSession(
     int sessionId, {
     SaleOrderQuery query = const SaleOrderQuery(),
@@ -176,7 +214,6 @@ class SaleRepository {
         .map(SaleLossLine.fromJson)
         .toList(growable: false);
   }
-
 }
 
 double _shortageQtyFromJson(Object? value) {

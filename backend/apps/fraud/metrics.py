@@ -111,10 +111,10 @@ def money_string(value):
 
 def _collect_orders(metrics_by_user, window_start, window_end):
     orders = (
-        Order.objects.select_related("register_session", "register_session__owner")
+        Order.objects.committed_sales()
+        .select_related("register_session", "register_session__owner")
         .prefetch_related("payments")
         .filter(
-            status=Order.Status.PAID,
             created_at__gte=window_start,
             created_at__lt=window_end,
             register_session__owner__isnull=False,

@@ -287,6 +287,8 @@ class ShopSettingsSerializer(serializers.ModelSerializer):
             "trusted_card_terminal_ids",
             "card_commission_percent",
             "transfer_commission_percent",
+            "require_customer_for_credit",
+            "allow_cashier_customer_access",
             "logo_attachment",
             "updated_at",
         ]

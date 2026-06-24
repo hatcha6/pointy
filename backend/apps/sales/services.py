@@ -37,6 +37,7 @@ from .models import (
     OrderAdjustmentLine,
     OrderLine,
     OrderLineModifier,
+    StockReservation,
 )
 
 
@@ -395,18 +396,29 @@ def checkout_order(
     customer=None,
     coupon_codes=(),
     discount_result=None,
+    sale_type=Order.SaleType.STANDARD,
+    valid_until=None,
+    reserve_stock=False,
     request=None,
 ):
     from apps.payments.serializers import PaymentSerializer
 
     settings = ShopSettings.load()
+    is_quotation = sale_type == Order.SaleType.QUOTATION
     validate_sale_variants_sellable(lines_data)
     validate_checkout_loss_sales_allowed(
         settings=settings,
         lines_data=lines_data,
         discount_result=discount_result,
     )
-    stock_adjustments = prepare_sale_stock_adjustments(lines_data, settings=settings)
+    # Quotations (عرض سعر) never move stock; standard and credit (آجل) sales
+    # deduct on-hand at issue. A quotation may instead hold stock via a
+    # reservation (reserve_stock_for_quote, below).
+    stock_adjustments = (
+        []
+        if is_quotation
+        else prepare_sale_stock_adjustments(lines_data, settings=settings)
+    )
     # The channel comes from the request's credentials only; direct service
     # calls without a request (scripts, tests) leave it unset.
     sales_channel = require_active_sales_channel(request) if request is not None else None
@@ -414,30 +426,42 @@ def checkout_order(
         register_session=register_session,
         sales_channel=sales_channel,
         customer=customer,
+        sale_type=sale_type,
+        valid_until=valid_until,
+        reserves_stock=bool(reserve_stock) and is_quotation,
         lines_data=lines_data,
         coupon_codes=coupon_codes,
         discount_result=discount_result,
     )
-    record_sale_stock_movements(order, stock_adjustments, request=request)
-
-    for payment_data in payments_data:
-        serializer_data = {
-            "order": order.pk,
-            "method": payment_data["method"],
-            "amount": payment_data["amount"],
-        }
-        receipt_url = payment_data.get("card_receipt_url", "")
-        if receipt_url:
-            serializer_data["card_receipt_url"] = receipt_url
-        payment_serializer = PaymentSerializer(
-            data=serializer_data,
-            context={
-                "request": request,
-                "stock_already_recorded": True,
-            },
-        )
-        payment_serializer.is_valid(raise_exception=True)
-        payment_serializer.save()
+    if is_quotation:
+        # A quote is a price offer, not a sale: no stock movement, no payment.
+        # Optionally hold the quoted quantities until valid_until.
+        if reserve_stock:
+            reserve_stock_for_quote(order, settings=settings)
+    else:
+        # Standard and credit sales deduct stock at issue. A credit invoice may
+        # carry a partial (or zero) down-payment; PaymentSerializer only flips
+        # the order to PAID once cumulative payments reach the total, so a
+        # partial leaves it OPEN with a balance owed.
+        record_sale_stock_movements(order, stock_adjustments, request=request)
+        for payment_data in payments_data:
+            serializer_data = {
+                "order": order.pk,
+                "method": payment_data["method"],
+                "amount": payment_data["amount"],
+            }
+            receipt_url = payment_data.get("card_receipt_url", "")
+            if receipt_url:
+                serializer_data["card_receipt_url"] = receipt_url
+            payment_serializer = PaymentSerializer(
+                data=serializer_data,
+                context={
+                    "request": request,
+                    "stock_already_recorded": True,
+                },
+            )
+            payment_serializer.is_valid(raise_exception=True)
+            payment_serializer.save()
     order.refresh_from_db()
     record_domain_event(
         name="sales.checkout.completed",
@@ -450,12 +474,13 @@ def checkout_order(
             "register_session_id": order.register_session_id,
             "sales_channel": sales_channel.slug if sales_channel is not None else None,
             "customer_present": customer is not None,
+            "sale_type": order.sale_type,
             "coupon_count": len(coupon_codes),
             "line_count": len(lines_data),
             "payment_methods": sorted(
                 {str(payment_data["method"]) for payment_data in payments_data}
             ),
-            "stock_already_recorded": True,
+            "stock_already_recorded": not is_quotation,
         },
         metrics={
             "total": float(order.total),
@@ -466,11 +491,13 @@ def checkout_order(
             ),
         },
     )
-    # Restaurant flow: a paid order containing made-to-order dishes lands on
-    # the kitchen board immediately, with its recipe ingredients pending.
-    from apps.operations.services import create_kitchen_job_for_order
+    # Restaurant flow: an order containing made-to-order dishes lands on the
+    # kitchen board immediately, with its recipe ingredients pending. Quotations
+    # are not real orders, so they never spawn kitchen jobs.
+    if not is_quotation:
+        from apps.operations.services import create_kitchen_job_for_order
 
-    create_kitchen_job_for_order(order=order, request=request)
+        create_kitchen_job_for_order(order=order, request=request)
     return order
 
 
@@ -500,7 +527,11 @@ def prepare_sale_stock_adjustments(lines_data, *, settings=None):
         variant = variants_by_id[variant_id]
         quantity = quantities_by_variant[variant_id]
         stock_item = lock_stock_item(variant=variant)
-        if not settings.allow_overselling and stock_item.quantity_on_hand < quantity:
+        # Sellable = on-hand minus stock held by quotation reservations
+        # (quantity_committed). A reservation blocks others from dipping into the
+        # held units even though those units are still physically on hand.
+        available = stock_item.quantity_on_hand - stock_item.quantity_committed
+        if not settings.allow_overselling and available < quantity:
             shortages.append(
                 {
                     "product": variant.product_id,
@@ -510,7 +541,7 @@ def prepare_sale_stock_adjustments(lines_data, *, settings=None):
                     "product_name": variant.product.name,
                     "variant_name": variant.full_name,
                     "requested": float(quantity),
-                    "available": float(stock_item.quantity_on_hand),
+                    "available": float(available),
                 }
             )
         stock_adjustments.append((variant, stock_item, quantity))
@@ -560,6 +591,340 @@ def record_sale_stock_movements(order, stock_adjustments, *, request=None):
             created_by=created_by,
             before=before,
         )
+
+
+def reserve_stock_for_quote(order, *, settings=None):
+    """Place an ACTIVE hold on each stockable line of a quotation: bump the
+    variant's ``quantity_committed`` and create a ``StockReservation``. Validates
+    availability (on-hand minus existing commitments) unless overselling is on.
+    Service/prepared products carry no stock and are skipped."""
+    settings = settings or ShopSettings.load()
+    lines = lock_order_lines_for_update(order)
+    adjustments = prepare_sale_stock_adjustments(
+        [
+            {
+                "variant": line.variant,
+                "quantity": line.quantity,
+                "unit_factor": line.unit_factor,
+            }
+            for line in lines
+        ],
+        settings=settings,
+    )
+    for variant, stock_item, quantity in adjustments:
+        stock_item.quantity_committed += quantity
+        save_stock_item_quantities(stock_item)
+        StockReservation.objects.create(
+            order=order,
+            variant=variant,
+            stock_item=stock_item,
+            base_quantity=quantity,
+            expires_at=order.valid_until,
+        )
+
+
+def _settle_reservation(reservation, status):
+    """Free a reservation's hold (decrement quantity_committed) and stamp its
+    terminal status. ACTIVE-only; a no-op for already-settled rows."""
+    if reservation.status != StockReservation.Status.ACTIVE:
+        return
+    stock_item = lock_stock_item(variant=reservation.variant)
+    stock_item.quantity_committed = max(
+        stock_item.quantity_committed - reservation.base_quantity,
+        Decimal("0.000"),
+    )
+    save_stock_item_quantities(stock_item)
+    reservation.status = status
+    reservation.save(update_fields=["status", "updated_at"])
+
+
+def release_quote_reservations(order):
+    """Free all active holds on a quotation (expired/cancelled): on-hand is
+    untouched, the held units become sellable again."""
+    # Lock the active rows: the expiry cron and a concurrent convert can both
+    # try to settle the same holds. Without the row lock each could decrement
+    # quantity_committed off its own stale in-memory copy (double-decrement);
+    # FOR UPDATE makes the loser re-read status and skip already-settled rows.
+    for reservation in order.stock_reservations.select_for_update().filter(
+        status=StockReservation.Status.ACTIVE
+    ):
+        _settle_reservation(reservation, StockReservation.Status.RELEASED)
+
+
+def consume_quote_reservations(order):
+    """Mark a quotation's holds CONSUMED when it converts to a real sale. This
+    only frees the commitment; the converted order's own stock movements move the
+    on-hand units, so there is no double-decrement."""
+    # FOR UPDATE so a concurrent expiry-cron release can't settle the same hold
+    # in parallel (see release_quote_reservations).
+    for reservation in order.stock_reservations.select_for_update().filter(
+        status=StockReservation.Status.ACTIVE
+    ):
+        _settle_reservation(reservation, StockReservation.Status.CONSUMED)
+
+
+@transaction.atomic
+def record_customer_payment(
+    order,
+    *,
+    method,
+    amount,
+    register_session,
+    card_receipt_url="",
+    request=None,
+    allow_cross_owner=False,
+    card_receipt_amount_validated=False,
+):
+    """Record a payment against an existing invoice's balance.
+
+    Reuses ``PaymentSerializer`` so commission, card linking, the
+    receipt-match check and the flip-to-PAID transition all behave exactly as at
+    checkout. Rejects quotations (no balance), voids, and over-payment.
+    """
+    from apps.payments.serializers import PaymentSerializer
+
+    locked = Order.objects.select_for_update().get(pk=order.pk)
+    if locked.sale_type == Order.SaleType.QUOTATION:
+        raise serializers.ValidationError(
+            {"order": "A quotation carries no balance; convert it to an invoice first."}
+        )
+    if locked.status == Order.Status.VOID:
+        raise serializers.ValidationError({"order": "Order is void."})
+    amount = money(Decimal(amount))
+    if amount <= 0:
+        raise serializers.ValidationError({"amount": "Amount must be positive."})
+    if amount > locked.balance_due:
+        raise serializers.ValidationError(
+            {"amount": "Payment cannot exceed the balance due."}
+        )
+
+    serializer_data = {"order": locked.pk, "method": method, "amount": amount}
+    if card_receipt_url:
+        serializer_data["card_receipt_url"] = card_receipt_url
+    payment_serializer = PaymentSerializer(
+        data=serializer_data,
+        context={
+            "request": request,
+            "register_session": register_session,
+            # The goods left when the invoice was issued; later payments must
+            # never re-touch stock when they settle the balance.
+            "stock_already_recorded": True,
+            # Account-level collection settles any of the customer's open debt,
+            # including invoices another cashier issued.
+            "allow_cross_owner": allow_cross_owner,
+            # An account card collection validates its receipt once against the
+            # total; the per-invoice splits skip the per-row amount match.
+            "card_receipt_amount_validated": card_receipt_amount_validated,
+        },
+    )
+    payment_serializer.is_valid(raise_exception=True)
+    payment = payment_serializer.save()
+    record_domain_event(
+        name="sales.payment.recorded",
+        event_type=AnalyticsEvent.EventType.AUDIT,
+        user=getattr(request, "user", None),
+        entity_type="sale_order",
+        entity_id=locked.pk,
+        attributes={
+            "receipt_number": locked.receipt_number,
+            "method": method,
+            "register_session_id": getattr(register_session, "pk", None),
+        },
+        metrics={"amount": float(amount)},
+    )
+    return payment
+
+
+@transaction.atomic
+def record_customer_account_payment(
+    customer,
+    *,
+    method,
+    amount,
+    register_session,
+    card_receipt_url="",
+    request=None,
+):
+    """Apply a payment to a customer's outstanding debt invoices, oldest first.
+
+    Cash, transfer, or card. A card swipe is one receipt for the whole
+    collection: it's validated once against the TOTAL here, then split across
+    invoices (each split skips the per-row receipt amount-match via
+    ``card_receipt_amount_validated`` but still parses + trust-checks + links the
+    same card). Rejects over-payment beyond the total outstanding. Returns the
+    per-invoice allocation (for the proof-of-payment).
+    """
+    from apps.payments.models import Payment
+
+    if method not in (
+        Payment.Method.CASH,
+        Payment.Method.TRANSFER,
+        Payment.Method.CARD,
+    ):
+        raise serializers.ValidationError({"method": "Unsupported payment method."})
+    amount = money(Decimal(amount))
+    if amount <= 0:
+        raise serializers.ValidationError({"amount": "Amount must be positive."})
+
+    invoices = list(
+        Order.objects.open_credit()
+        .filter(customer=customer)
+        .select_for_update()
+        .order_by("created_at", "id")
+    )
+    outstanding = sum((invoice.balance_due for invoice in invoices), Decimal("0.00"))
+    if amount > outstanding:
+        raise serializers.ValidationError(
+            {"amount": "Payment exceeds the customer's outstanding balance."}
+        )
+
+    # A card collection is one terminal swipe for the whole amount: validate the
+    # receipt ONCE against the total here. The per-invoice splits below then skip
+    # the (necessarily failing) per-row amount match but still parse, trust-check
+    # and link the same card.
+    card_receipt_amount_validated = False
+    if method == Payment.Method.CARD and card_receipt_url:
+        from apps.payments.moamalat import (
+            MoamalatReceiptError,
+            parse_moamalat_receipt_url,
+            payment_amount_matches_receipt,
+        )
+
+        try:
+            receipt = parse_moamalat_receipt_url(card_receipt_url)
+        except MoamalatReceiptError as exc:
+            raise serializers.ValidationError(
+                {"card_receipt_url": str(exc)}
+            ) from exc
+        if not payment_amount_matches_receipt(amount, receipt):
+            raise serializers.ValidationError(
+                {
+                    "card_receipt_url": (
+                        "Card receipt amount does not match the payment amount."
+                    )
+                }
+            )
+        card_receipt_amount_validated = True
+
+    remaining = amount
+    allocations = []
+    for invoice in invoices:
+        if remaining <= 0:
+            break
+        portion = min(remaining, invoice.balance_due)
+        if portion <= 0:
+            continue
+        payment = record_customer_payment(
+            invoice,
+            method=method,
+            amount=portion,
+            register_session=register_session,
+            request=request,
+            card_receipt_url=card_receipt_url,
+            card_receipt_amount_validated=card_receipt_amount_validated,
+            # Cross-cashier: settle whoever's debt this customer owes.
+            allow_cross_owner=True,
+        )
+        allocations.append(
+            {"order": invoice, "payment": payment, "amount": portion}
+        )
+        remaining -= portion
+    return allocations
+
+
+def _quote_lines_to_checkout_data(lines):
+    """Rebuild ``lines_data`` from a quotation's persisted lines so the
+    conversion re-runs the normal checkout path (re-snapshotting cost at current
+    values and re-evaluating discounts). Modifier options that were since deleted
+    are dropped from the re-priced breakdown."""
+    lines_data = []
+    for line in lines:
+        modifiers = [
+            {"option": modifier.modifier_option, "quantity": modifier.quantity}
+            for modifier in line.modifiers.all()
+            if modifier.modifier_option_id is not None
+        ]
+        lines_data.append(
+            {
+                "variant": line.variant,
+                "quantity": line.quantity,
+                "unit": line.unit,
+                "unit_factor": line.unit_factor,
+                # The stored unit_price already folds in the modifier deltas.
+                "effective_unit_price": line.unit_price,
+                "modifiers": modifiers,
+                "notes": line.notes,
+            }
+        )
+    return lines_data
+
+
+@transaction.atomic
+def convert_quotation_to_sale(
+    quotation,
+    *,
+    sale_type,
+    register_session,
+    payments_data=(),
+    request=None,
+):
+    """Convert a quotation in place into a real sale (standard or credit).
+
+    Builds a NEW order from the quote's lines through the normal checkout path
+    (fresh cost snapshot, re-evaluated discounts, stock movement, payments), then
+    consumes any reservation and links + voids the quote for audit. A standard
+    conversion must be paid in full; a credit conversion may be partial.
+    """
+    if sale_type not in (Order.SaleType.STANDARD, Order.SaleType.CREDIT):
+        raise serializers.ValidationError(
+            {"sale_type": "Convert target must be a standard or credit sale."}
+        )
+    locked = Order.objects.select_for_update().get(pk=quotation.pk)
+    if locked.sale_type != Order.SaleType.QUOTATION:
+        raise serializers.ValidationError({"order": "Order is not a quotation."})
+    if locked.status != Order.Status.OPEN or locked.converted_to_id is not None:
+        raise serializers.ValidationError(
+            {"order": "Quotation has already been converted or closed."}
+        )
+    lines = lock_order_lines_for_update(locked)
+    if not lines:
+        raise serializers.ValidationError({"lines": "Quotation has no lines."})
+    lines_data = _quote_lines_to_checkout_data(lines)
+
+    # Free the held stock first so the converted sale moves on-hand exactly once.
+    consume_quote_reservations(locked)
+    new_order = checkout_order(
+        register_session=register_session,
+        lines_data=lines_data,
+        payments_data=list(payments_data),
+        customer=locked.customer,
+        sale_type=sale_type,
+        request=request,
+    )
+    if sale_type == Order.SaleType.STANDARD and new_order.balance_due > 0:
+        # Validated against the freshly computed total (discounts may have moved
+        # since the quote); the atomic block rolls the whole conversion back.
+        raise serializers.ValidationError(
+            {"payments": "A standard sale must be paid in full."}
+        )
+
+    locked.converted_to = new_order
+    locked.status = Order.Status.VOID
+    locked.save(update_fields=["converted_to", "status", "updated_at"])
+    record_domain_event(
+        name="sales.quotation.converted",
+        event_type=AnalyticsEvent.EventType.AUDIT,
+        user=getattr(request, "user", None),
+        entity_type="sale_order",
+        entity_id=new_order.pk,
+        attributes={
+            "quotation_receipt_number": locked.receipt_number,
+            "receipt_number": new_order.receipt_number,
+            "sale_type": new_order.sale_type,
+        },
+        metrics={"total": float(new_order.total)},
+    )
+    return new_order
 
 
 def create_receipt_print_job(order_id):

@@ -45,6 +45,7 @@ import '../models/migration.dart';
 import '../models/register_cash_movement_page.dart';
 import '../models/register_session.dart';
 import '../models/register_session_page.dart';
+import '../../features/payments/models/payment_record.dart';
 import '../models/relay_pairing.dart';
 import '../models/report_run.dart';
 import '../models/sale_order.dart';
@@ -360,7 +361,10 @@ class PosApiService {
     return _migration.createSource(draft);
   }
 
-  Future<MigrationSource> updateMigrationSource(int id, MigrationSourceDraft draft) {
+  Future<MigrationSource> updateMigrationSource(
+    int id,
+    MigrationSourceDraft draft,
+  ) {
     return _migration.updateSource(id, draft);
   }
 
@@ -797,6 +801,22 @@ class PosApiService {
     return _customers.fetchCustomerSalesSummary(customerId);
   }
 
+  Future<CustomerSalesSummary> recordCustomerAccountPayment(
+    int customerId, {
+    required String method,
+    required double amount,
+    String cardReceiptUrl = '',
+    String? idempotencyKey,
+  }) {
+    return _customers.recordCustomerAccountPayment(
+      customerId,
+      method: method,
+      amount: amount,
+      cardReceiptUrl: cardReceiptUrl,
+      idempotencyKey: idempotencyKey,
+    );
+  }
+
   Future<SaleOrderPage> fetchCustomerOrders({
     required int customerId,
     int page = 1,
@@ -1187,6 +1207,52 @@ class PosApiService {
     return _sales.fetchOrder(saleOrderId);
   }
 
+  Future<CustomerPaymentPage> fetchCustomerPayments({
+    String? method,
+    int? customerId,
+    DateTime? paidAtGte,
+    DateTime? paidAtLte,
+    int page = 1,
+  }) {
+    return _sales.fetchCustomerPayments(
+      method: method,
+      customerId: customerId,
+      paidAtGte: paidAtGte,
+      paidAtLte: paidAtLte,
+      page: page,
+    );
+  }
+
+  Future<SaleOrder> convertQuotation(
+    int quotationId, {
+    required SaleType saleType,
+    double? amountReceived,
+    String? idempotencyKey,
+  }) {
+    return _sales.convertQuotation(
+      quotationId,
+      saleType: saleType,
+      amountReceived: amountReceived,
+      idempotencyKey: idempotencyKey,
+    );
+  }
+
+  Future<SaleOrder> recordInvoicePayment(
+    int saleOrderId, {
+    required String method,
+    required double amount,
+    String cardReceiptUrl = '',
+    String? idempotencyKey,
+  }) {
+    return _sales.recordInvoicePayment(
+      saleOrderId,
+      method: method,
+      amount: amount,
+      cardReceiptUrl: cardReceiptUrl,
+      idempotencyKey: idempotencyKey,
+    );
+  }
+
   Future<SaleDiscountPreview> previewSaleDiscounts(
     SaleDiscountPreviewDraft draft,
   ) {
@@ -1360,11 +1426,17 @@ class PosApiService {
   Future<SupplierPaymentPage> fetchSupplierPayments({
     int? supplierId,
     int? purchaseOrderId,
+    String? method,
+    DateTime? paidAtGte,
+    DateTime? paidAtLte,
     int page = 1,
   }) {
     return _purchasing.fetchSupplierPayments(
       supplierId: supplierId,
       purchaseOrderId: purchaseOrderId,
+      method: method,
+      paidAtGte: paidAtGte,
+      paidAtLte: paidAtLte,
       page: page,
     );
   }
@@ -1563,11 +1635,13 @@ class PosApiService {
   Future<List<PrintAuditEvent>> fetchPrintAuditEvents({
     required PrintAuditDocumentType documentType,
     required int documentId,
+    PrintAuditPaymentKind? paymentKind,
     int page = 1,
   }) {
     return _printing.fetchPrintAuditEvents(
       documentType: documentType,
       documentId: documentId,
+      paymentKind: paymentKind,
       page: page,
     );
   }

@@ -2,17 +2,22 @@ from decimal import Decimal
 
 from django.db.models import Count, Sum
 from django.shortcuts import get_object_or_404
-from rest_framework import mixins, serializers, viewsets
+from rest_framework import mixins, serializers, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from apps.analytics.models import AnalyticsEvent
 from apps.analytics.services import record_domain_event
+from apps.core.idempotency import run_idempotent_request
+from apps.core.models import ShopSettings
 from apps.core.permissions import HasPointyPermission
 from apps.core.roles import user_is_manager
-from apps.sales.models import Order, OrderAdjustment
-from apps.sales.serializers import OrderSerializer
+from apps.sales.models import Order, OrderAdjustment, RegisterSession
+from apps.sales.serializers import (
+    CustomerAccountPaymentSerializer,
+    OrderSerializer,
+)
 from .models import Customer, PaymentCard
 from .serializers import (
     CustomerOrderAdjustmentSerializer,
@@ -22,9 +27,36 @@ from .serializers import (
 from .services import merge_customers
 
 
+class CustomerEndpointPermission(HasPointyPermission):
+    """Per-action permission map, plus setting-gated cashier access.
+
+    When ``allow_cashier_customer_access`` is on, a cashier (anyone with
+    ``sales.add_order``) may look up customers and collect a customer's debt,
+    but NOT browse a customer's invoices (orders/adjustments) or create/edit
+    customer records. Managers/accountants are unaffected — they pass through
+    the permission map exactly as before.
+    """
+
+    CASHIER_ACTIONS = frozenset(
+        {"list", "retrieve", "sales_summary", "record_payment"}
+    )
+
+    def has_permission(self, request, view):
+        if super().has_permission(request, view):
+            return True
+        user = request.user
+        return bool(
+            getattr(view, "action", None) in self.CASHIER_ACTIONS
+            and user
+            and user.is_authenticated
+            and user.has_perm("sales.add_order")
+            and ShopSettings.load().allow_cashier_customer_access
+        )
+
+
 class CustomerViewSet(viewsets.ModelViewSet):
     serializer_class = CustomerSerializer
-    permission_classes = [IsAuthenticated, HasPointyPermission]
+    permission_classes = [IsAuthenticated, CustomerEndpointPermission]
     permission_map = {
         "list": ("customers.view_customer",),
         "retrieve": ("customers.view_customer",),
@@ -36,6 +68,14 @@ class CustomerViewSet(viewsets.ModelViewSet):
         "partial_update": ("customers.change_customer",),
         "destroy": ("customers.delete_customer",),
         "merge": ("customers.change_customer", "customers.delete_customer"),
+        # Map entry = managers/accountants. Cashiers reach record_payment via
+        # CustomerEndpointPermission when ``allow_cashier_customer_access`` is on
+        # (they have ``sales.add_order`` + their own open session, and the
+        # collecting session gets the cash). Allocation spans ALL of the
+        # customer's open debt, so a cashier can settle a debt another cashier
+        # issued. Accountants have no till/session, so AR collection by them
+        # needs a separate back-office flow — this path doesn't serve them.
+        "record_payment": ("customers.view_customer", "sales.add_order"),
     }
     queryset = Customer.objects.all()
     filterset_fields = ("is_active", "gender", "marketing_consent", "is_auto_created")
@@ -146,6 +186,47 @@ class CustomerViewSet(viewsets.ModelViewSet):
             },
         )
 
+    @action(detail=True, methods=["post"], url_path="record-payment")
+    def record_payment(self, request, pk=None):
+        customer = self.get_object()
+        session = RegisterSession.objects.filter(
+            owner_key=f"user:{request.user.pk}",
+            status=RegisterSession.Status.OPEN,
+        ).first()
+        if session is None:
+            return Response(
+                {"detail": "No open register session for this request owner."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return run_idempotent_request(
+            request,
+            lambda: self._record_payment(request, customer, session),
+        )
+
+    def _record_payment(self, request, customer, session):
+        serializer = CustomerAccountPaymentSerializer(
+            data=request.data,
+            context={
+                "customer": customer,
+                "register_session": session,
+                "request": request,
+            },
+        )
+        serializer.is_valid(raise_exception=True)
+        allocations = serializer.save()
+        # Return the refreshed summary so the caller sees the new balance, plus a
+        # representative payment so the client can print a proof-of-payment slip
+        # (the collection splits across invoices; the proof is for the whole
+        # amount, keyed on the oldest allocated payment).
+        response = self.sales_summary(request, pk=customer.pk)
+        if allocations:
+            response.data["payment"] = {
+                "id": allocations[0]["payment"].pk,
+                "amount": str(serializer.validated_data["amount"]),
+                "method": serializer.validated_data["method"],
+            }
+        return response
+
     @action(detail=True, methods=["get"], url_path="sales-summary")
     def sales_summary(self, request, pk=None):
         customer = self.get_object()
@@ -170,6 +251,18 @@ class CustomerViewSet(viewsets.ModelViewSet):
             .values_list("created_at", flat=True)
             .first()
         )
+        # Outstanding receivable: the balance still owed across the customer's
+        # open debt (آجل) invoices.
+        # The customer's FULL open debt across all sessions — a cashier
+        # collecting must see the real balance, not just invoices they personally
+        # issued. (The invoice list above stays owner-scoped for cashiers.)
+        outstanding_orders = customer.orders.open_credit().prefetch_related(
+            "payments"
+        )
+        outstanding_balance = sum(
+            (order.balance_due for order in outstanding_orders),
+            Decimal("0.00"),
+        )
 
         return Response(
             {
@@ -177,6 +270,7 @@ class CustomerViewSet(viewsets.ModelViewSet):
                 "invoice_count": orders.count(),
                 "paid_invoice_count": orders.filter(status=Order.Status.PAID).count(),
                 "void_invoice_count": orders.filter(status=Order.Status.VOID).count(),
+                "quotation_count": self._customer_quotations(customer).count(),
                 "return_count": return_adjustments.count(),
                 "void_count": void_adjustments.count(),
                 "refund_count": adjustments.count(),
@@ -187,6 +281,7 @@ class CustomerViewSet(viewsets.ModelViewSet):
                 "refund_total": _money_string(refund_total),
                 "exchange_total": _money_string(Decimal("0.00")),
                 "net_sales": _money_string(total_invoiced - refund_total),
+                "outstanding_balance": _money_string(outstanding_balance),
                 "last_invoice_at": last_invoice_at,
             }
         )
@@ -230,7 +325,15 @@ class CustomerViewSet(viewsets.ModelViewSet):
         return Response(serializer.data)
 
     def _customer_orders(self, customer):
-        queryset = customer.orders.exclude(status=Order.Status.OPEN)
+        queryset = customer.orders.transactional()
+        if user_is_manager(self.request.user):
+            return queryset
+        return queryset.filter(
+            register_session__owner_key=f"user:{self.request.user.pk}",
+        )
+
+    def _customer_quotations(self, customer):
+        queryset = customer.orders.quotations()
         if user_is_manager(self.request.user):
             return queryset
         return queryset.filter(

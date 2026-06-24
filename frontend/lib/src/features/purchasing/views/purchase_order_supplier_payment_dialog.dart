@@ -17,6 +17,7 @@ class _SupplierPaymentDialogState extends State<_SupplierPaymentDialog> {
   final TextEditingController _referenceController = TextEditingController();
   final TextEditingController _notesController = TextEditingController();
   bool _showAmountError = false;
+  bool _printProof = false;
 
   @override
   void dispose() {
@@ -97,6 +98,15 @@ class _SupplierPaymentDialogState extends State<_SupplierPaymentDialog> {
                 ),
                 maxLines: 2,
               ),
+              const SizedBox(height: 4),
+              SwitchListTile(
+                key: const ValueKey('supplier_payment_print_proof_toggle'),
+                contentPadding: EdgeInsets.zero,
+                value: _printProof,
+                onChanged: (value) => setState(() => _printProof = value),
+                title: Text(l10n.supplierPaymentPrintProofLabel),
+                secondary: const Icon(Icons.receipt_outlined),
+              ),
             ],
           ),
         ),
@@ -125,6 +135,7 @@ class _SupplierPaymentDialogState extends State<_SupplierPaymentDialog> {
         amount: amount,
         reference: _referenceController.text.trim(),
         notes: _notesController.text.trim(),
+        printProof: _printProof,
       ),
     );
   }
@@ -136,10 +147,14 @@ class _SupplierPaymentDialogResult {
     required this.amount,
     required this.reference,
     required this.notes,
+    required this.printProof,
   });
 
   final SupplierPaymentMethod method;
   final double amount;
   final String reference;
   final String notes;
+
+  /// Whether the user asked to print a "سند صرف" disbursement proof.
+  final bool printProof;
 }

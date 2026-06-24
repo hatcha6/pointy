@@ -21,6 +21,7 @@ import 'data/repositories/fraud_repository.dart';
 import 'data/repositories/inventory_repository.dart';
 import 'data/repositories/operations_repository.dart';
 import 'data/repositories/modifier_group_repository.dart';
+import 'data/repositories/payments_repository.dart';
 import 'data/repositories/price_checker_repository.dart';
 import 'data/repositories/printing_repository.dart';
 import 'data/repositories/purchase_repository.dart';
@@ -92,6 +93,7 @@ class PointyAppDependencies {
     priceCheckerRepository = PriceCheckerRepository(service);
     aiChatRepository = AiChatRepository(service);
     purchaseRepository = PurchaseRepository(service);
+    paymentsRepository = PaymentsRepository(service);
     stockCountRepository = StockCountRepository(service);
     userRepository = UserRepository(service);
     connectionCoordinator = ConnectionCoordinator(
@@ -147,6 +149,7 @@ class PointyAppDependencies {
   late final PriceCheckerRepository priceCheckerRepository;
   late final AiChatRepository aiChatRepository;
   late final PurchaseRepository purchaseRepository;
+  late final PaymentsRepository paymentsRepository;
   late final StockCountRepository stockCountRepository;
   late final UserRepository userRepository;
   late final ConnectionCoordinator connectionCoordinator;
@@ -222,11 +225,8 @@ class PointyAppDependencies {
         analyticsEngine: analyticsEngine,
       );
 
-  MigrationViewModel get migrationViewModel =>
-      _migrationViewModel ??= MigrationViewModel(
-        migrationRepository,
-        analyticsEngine: analyticsEngine,
-      );
+  MigrationViewModel get migrationViewModel => _migrationViewModel ??=
+      MigrationViewModel(migrationRepository, analyticsEngine: analyticsEngine);
 
   DashboardViewModel get dashboardViewModel =>
       _dashboardViewModel ??= DashboardViewModel(dashboardRepository);

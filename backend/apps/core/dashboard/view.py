@@ -40,6 +40,7 @@ from apps.purchasing.models import (
 )
 from apps.sales.models import (
     Order,
+    transactional_sale_q,
     OrderAdjustment,
     OrderLine,
     RegisterCashMovement,
@@ -319,7 +320,7 @@ def _inventory_section(period):
     )
 
     sold_variant_ids = OrderLine.objects.filter(
-        order__status__in=(Order.Status.PAID, Order.Status.VOID),
+        transactional_sale_q("order"),
         order__created_at__gte=period["start"],
         order__created_at__lt=period["end"],
     ).values("variant_id")
@@ -634,13 +635,13 @@ def _profitability_section(request, period):
 
 def _customers_section(period):
     active = Customer.objects.filter(is_active=True)
-    order_filter = Q(orders__status__in=(Order.Status.PAID, Order.Status.VOID))
+    order_filter = transactional_sale_q("orders")
     repeat_customers = active.annotate(order_count=Count("orders", filter=order_filter)).filter(
         order_count__gte=2
     )
     top_customers = (
         Customer.objects.filter(
-            orders__status__in=(Order.Status.PAID, Order.Status.VOID),
+            transactional_sale_q("orders"),
             orders__created_at__gte=period["start"],
             orders__created_at__lt=period["end"],
         )
@@ -712,10 +713,9 @@ def _discounts_section(period):
             "coupon_rule_count": DiscountRule.objects.filter(coupon_code__gt="").count(),
             "redemption_count": redemptions.count(),
             "sales_discount_total": _money(
-                Order.objects.filter(
+                Order.objects.transactional().filter(
                     created_at__gte=period["start"],
                     created_at__lt=period["end"],
-                    status__in=(Order.Status.PAID, Order.Status.VOID),
                 ).aggregate(
                     total=Coalesce(
                         Sum("discount_total"),

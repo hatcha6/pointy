@@ -23,6 +23,12 @@ typedef SaleOrderReturnAction =
       String reason,
     );
 
+/// Records a payment against a debt (credit) invoice. Returns true on success.
+typedef SaleOrderRecordPaymentAction = Future<bool> Function(SaleOrder order);
+
+/// Converts an OPEN quotation into a sale. Returns true on success.
+typedef SaleOrderConvertAction = Future<bool> Function(SaleOrder order);
+
 class SaleOrderDetailsContent extends StatefulWidget {
   const SaleOrderDetailsContent({
     super.key,
@@ -32,6 +38,10 @@ class SaleOrderDetailsContent extends StatefulWidget {
     this.onPrintAudit,
     this.onVoid,
     this.onReturn,
+    this.onRecordPayment,
+    this.onConvert,
+    this.isRecordingPayment = false,
+    this.isConverting = false,
     this.showTitle = true,
     this.useInvoiceLabels = true,
     this.popOnSuccessfulAdjustment = true,
@@ -44,6 +54,16 @@ class SaleOrderDetailsContent extends StatefulWidget {
   final VoidCallback? onPrintAudit;
   final SaleOrderVoidAction? onVoid;
   final SaleOrderReturnAction? onReturn;
+
+  /// When provided and the order is an unpaid credit invoice, surfaces a
+  /// prominent "آجل — المتبقّي X" callout with a "تسجيل دفعة" action.
+  final SaleOrderRecordPaymentAction? onRecordPayment;
+
+  /// When provided and the order is an OPEN quotation, surfaces a
+  /// "تحويل إلى بيع" action. The callback opens the conversion dialog.
+  final SaleOrderConvertAction? onConvert;
+  final bool isRecordingPayment;
+  final bool isConverting;
   final bool showTitle;
   final bool useInvoiceLabels;
   final bool popOnSuccessfulAdjustment;
@@ -78,19 +98,32 @@ class _SaleOrderDetailsContentState extends State<SaleOrderDetailsContent> {
             ),
             const SizedBox(height: 12),
           ],
+          if (_isCreditWithBalance) ...[
+            _CreditBalanceCallout(
+              order: order,
+              isRecordingPayment: widget.isRecordingPayment || _isAdjusting,
+              onRecordPayment: widget.onRecordPayment == null
+                  ? null
+                  : _recordPayment,
+            ),
+            const SizedBox(height: 12),
+          ],
           if (_hasVisibleActions) ...[
             _ActionsSection(
               isBusy: _isBusy,
               isReprinting: _isReprinting,
               isSharing: _isSharing,
               isAdjusting: _isAdjusting,
+              isConverting: widget.isConverting,
               canReturn: _canReturn,
               canVoid: _canVoid,
+              canConvert: _canConvert,
               onReprint: widget.onReprint == null ? null : _requestReprint,
               onShare: widget.onShare == null ? null : _shareInvoice,
               onPrintAudit: widget.onPrintAudit,
               onReturn: _canReturn ? _showReturnDialog : null,
               onVoid: _canVoid ? _showVoidDialog : null,
+              onConvert: _canConvert ? _convertQuotation : null,
               useInvoiceLabels: widget.useInvoiceLabels,
             ),
             const SizedBox(height: 12),
@@ -130,7 +163,39 @@ class _SaleOrderDetailsContentState extends State<SaleOrderDetailsContent> {
         widget.onShare != null ||
         widget.onPrintAudit != null ||
         _canReturn ||
-        _canVoid;
+        _canVoid ||
+        _canConvert;
+  }
+
+  bool get _isCreditWithBalance {
+    return widget.order.saleType == SaleType.credit &&
+        widget.order.balanceDue > 0.005;
+  }
+
+  /// A quotation can be converted into a sale only while it is still OPEN.
+  bool get _canConvert {
+    return widget.onConvert != null &&
+        widget.order.saleType == SaleType.quotation &&
+        widget.order.status == 'open';
+  }
+
+  Future<void> _convertQuotation() async {
+    await widget.onConvert!(widget.order);
+  }
+
+  Future<void> _recordPayment() async {
+    final l10n = AppLocalizations.of(context)!;
+
+    setState(() => _isAdjusting = true);
+    final didRecord = await widget.onRecordPayment!(widget.order);
+    if (!mounted) {
+      return;
+    }
+
+    setState(() => _isAdjusting = false);
+    if (didRecord) {
+      _showMessage(l10n.invoicePaymentSuccess);
+    }
   }
 
   Future<void> _requestReprint() async {
@@ -286,13 +351,16 @@ class _ActionsSection extends StatelessWidget {
     required this.isReprinting,
     required this.isSharing,
     required this.isAdjusting,
+    required this.isConverting,
     required this.canReturn,
     required this.canVoid,
+    required this.canConvert,
     this.onReprint,
     this.onShare,
     this.onPrintAudit,
     this.onReturn,
     this.onVoid,
+    this.onConvert,
     required this.useInvoiceLabels,
   });
 
@@ -300,13 +368,16 @@ class _ActionsSection extends StatelessWidget {
   final bool isReprinting;
   final bool isSharing;
   final bool isAdjusting;
+  final bool isConverting;
   final bool canReturn;
   final bool canVoid;
+  final bool canConvert;
   final VoidCallback? onReprint;
   final VoidCallback? onShare;
   final VoidCallback? onPrintAudit;
   final VoidCallback? onReturn;
   final VoidCallback? onVoid;
+  final VoidCallback? onConvert;
   final bool useInvoiceLabels;
 
   @override
@@ -322,6 +393,17 @@ class _ActionsSection extends StatelessWidget {
         spacing: 8,
         runSpacing: 8,
         actions: [
+          if (canConvert)
+            FilledButton.icon(
+              onPressed: isBusy || isConverting ? null : onConvert,
+              icon: isConverting
+                  ? const SizedBox.square(
+                      dimension: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.swap_horiz_outlined),
+              label: Text(l10n.convertQuotationButton),
+            ),
           if (onReprint != null)
             OutlinedButton.icon(
               onPressed: isBusy ? null : onReprint,
@@ -805,6 +887,49 @@ class _ReturnDialogResult {
 
   final List<SaleReturnLineDraft> lines;
   final String reason;
+}
+
+/// "آجل — المتبقّي X" callout shown on a debt invoice that still carries a
+/// balance, with a primary "تسجيل دفعة" action when [onRecordPayment] is set.
+class _CreditBalanceCallout extends StatelessWidget {
+  const _CreditBalanceCallout({
+    required this.order,
+    required this.isRecordingPayment,
+    this.onRecordPayment,
+  });
+
+  final SaleOrder order;
+  final bool isRecordingPayment;
+  final VoidCallback? onRecordPayment;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+
+    return PointyDetailCallout(
+      icon: Icons.account_balance_wallet_outlined,
+      tone: PointyCalloutTone.warning,
+      title: l10n.invoiceCreditBalanceCalloutTitle(
+        formatMoney(order.balanceDue),
+      ),
+      message: order.amountPaid > 0.005
+          ? l10n.invoiceCreditBalancePaidValue(formatMoney(order.amountPaid))
+          : l10n.invoiceCreditBalanceCalloutBody,
+      trailing: onRecordPayment == null
+          ? null
+          : FilledButton.icon(
+              key: const ValueKey('record_invoice_payment_button'),
+              onPressed: isRecordingPayment ? null : onRecordPayment,
+              icon: isRecordingPayment
+                  ? const SizedBox.square(
+                      dimension: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.add_card_outlined),
+              label: Text(l10n.recordInvoicePaymentButton),
+            ),
+    );
+  }
 }
 
 String saleLineDisplayName(SaleOrderLine line, AppLocalizations l10n) {

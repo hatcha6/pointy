@@ -7245,6 +7245,84 @@ abstract class AppLocalizations {
   /// **'يجب مسح رابط QR من إيصال معاملات ومطابقة المبلغ لكل دفعة بطاقة.'**
   String get requireCardReceiptSettingSubtitle;
 
+  /// No description provided for @requireCustomerForCreditLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'طلب عميل للبيع الآجل وعروض الأسعار'**
+  String get requireCustomerForCreditLabel;
+
+  /// No description provided for @requireCustomerForCreditSubtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'عند تفعيله يجب اختيار عميل قبل إتمام بيع آجل أو عرض سعر.'**
+  String get requireCustomerForCreditSubtitle;
+
+  /// No description provided for @allowCashierCustomerAccessLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'السماح للكاشير بالعملاء والتحصيل'**
+  String get allowCashierCustomerAccessLabel;
+
+  /// No description provided for @allowCashierCustomerAccessSubtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'يتيح للكاشير اختيار عميل للبيع الآجل/عرض السعر وتحصيل ديون العملاء — دون رؤية فواتير الكاشيرين الآخرين أو تعديل بيانات العملاء.'**
+  String get allowCashierCustomerAccessSubtitle;
+
+  /// No description provided for @collectDebtTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحصيل دين'**
+  String get collectDebtTitle;
+
+  /// No description provided for @collectDebtPickCustomer.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر عميلاً للتحصيل'**
+  String get collectDebtPickCustomer;
+
+  /// No description provided for @collectDebtChangeCustomer.
+  ///
+  /// In ar, this message translates to:
+  /// **'تغيير العميل'**
+  String get collectDebtChangeCustomer;
+
+  /// No description provided for @collectDebtLoadError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر تحميل رصيد العميل. حاول مرة أخرى.'**
+  String get collectDebtLoadError;
+
+  /// Customer outstanding debt total shown in the collect-debt flow.
+  ///
+  /// In ar, this message translates to:
+  /// **'المتبقّي على العميل: {amount}'**
+  String collectDebtOutstanding(String amount);
+
+  /// No description provided for @collectDebtNoDebt.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا يوجد دين على هذا العميل.'**
+  String get collectDebtNoDebt;
+
+  /// No description provided for @collectDebtRecordPayment.
+  ///
+  /// In ar, this message translates to:
+  /// **'تسجيل دفعة'**
+  String get collectDebtRecordPayment;
+
+  /// No description provided for @collectDebtRecordedMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم تسجيل الدفعة وتحصيل الدين.'**
+  String get collectDebtRecordedMessage;
+
+  /// No description provided for @collectDebtFailedMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر تسجيل الدفعة. حاول مرة أخرى.'**
+  String get collectDebtFailedMessage;
+
   /// No description provided for @trustedCardTerminalIdsLabel.
   ///
   /// In ar, this message translates to:
@@ -10785,6 +10863,12 @@ abstract class AppLocalizations {
   /// **'ملاحظات اختيارية'**
   String get supplierPaymentNotesLabel;
 
+  /// No description provided for @supplierPaymentPrintProofLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'طباعة سند صرف'**
+  String get supplierPaymentPrintProofLabel;
+
   /// No description provided for @supplierPaymentPositiveAmountError.
   ///
   /// In ar, this message translates to:
@@ -12025,6 +12109,66 @@ abstract class AppLocalizations {
   /// **'صافي المبيعات'**
   String get customerNetSalesLabel;
 
+  /// No description provided for @customerOutstandingBalanceLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الرصيد المستحق'**
+  String get customerOutstandingBalanceLabel;
+
+  /// No description provided for @recordCustomerPaymentButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'تسجيل دفعة'**
+  String get recordCustomerPaymentButton;
+
+  /// Title of the outstanding-balance callout on the customer details screen.
+  ///
+  /// In ar, this message translates to:
+  /// **'على هذا العميل رصيد مستحق قدره {amount}.'**
+  String customerOutstandingBalanceCalloutTitle(String amount);
+
+  /// No description provided for @customerOutstandingBalanceCalloutBody.
+  ///
+  /// In ar, this message translates to:
+  /// **'تُوزَّع الدفعة تلقائيًا على أقدم الفواتير الآجلة أولًا.'**
+  String get customerOutstandingBalanceCalloutBody;
+
+  /// No description provided for @customerAccountPaymentTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'تسجيل دفعة على الحساب'**
+  String get customerAccountPaymentTitle;
+
+  /// No description provided for @customerAccountPaymentAmountLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'المبلغ'**
+  String get customerAccountPaymentAmountLabel;
+
+  /// Shows the customer's outstanding balance inside the account-payment dialog.
+  ///
+  /// In ar, this message translates to:
+  /// **'الرصيد المستحق: {amount}'**
+  String customerAccountPaymentOutstandingValue(String amount);
+
+  /// No description provided for @customerAccountPaymentAmountError.
+  ///
+  /// In ar, this message translates to:
+  /// **'أدخل مبلغًا أكبر من صفر ولا يتجاوز الرصيد المستحق.'**
+  String get customerAccountPaymentAmountError;
+
+  /// No description provided for @customerAccountPaymentSuccess.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم تسجيل الدفعة على حساب العميل.'**
+  String get customerAccountPaymentSuccess;
+
+  /// No description provided for @customerAccountPaymentError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر تسجيل الدفعة. حاول مرة أخرى.'**
+  String get customerAccountPaymentError;
+
   /// No description provided for @customerInvoiceCountLabel.
   ///
   /// In ar, this message translates to:
@@ -12522,6 +12666,120 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'تأكيد الدفع'**
   String get confirmPaymentButton;
+
+  /// No description provided for @saleTypeLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'نوع البيع'**
+  String get saleTypeLabel;
+
+  /// No description provided for @saleTypeStandardLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'عادي'**
+  String get saleTypeStandardLabel;
+
+  /// No description provided for @saleTypeCreditLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'آجل'**
+  String get saleTypeCreditLabel;
+
+  /// No description provided for @saleTypeQuotationLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'عرض سعر'**
+  String get saleTypeQuotationLabel;
+
+  /// No description provided for @saleCustomerRequiredBanner.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر عميلًا قبل إتمام بيع آجل أو عرض سعر.'**
+  String get saleCustomerRequiredBanner;
+
+  /// No description provided for @creditBalanceDueLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'المتبقّي على العميل'**
+  String get creditBalanceDueLabel;
+
+  /// No description provided for @creditDownPaymentTooHighError.
+  ///
+  /// In ar, this message translates to:
+  /// **'المبلغ المدفوع أكبر من الإجمالي.'**
+  String get creditDownPaymentTooHighError;
+
+  /// No description provided for @creditFullyOnAccountHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'كامل المبلغ سيُسجَّل دَينًا على العميل. أضِف دفعة مقدّمة إن وُجدت.'**
+  String get creditFullyOnAccountHint;
+
+  /// No description provided for @creditDownPaymentHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'المبلغ المُدخَل دفعة مقدّمة؛ والباقي يُسجَّل دَينًا على العميل.'**
+  String get creditDownPaymentHint;
+
+  /// No description provided for @creditDownPaymentTenderTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'دفعة مقدّمة'**
+  String get creditDownPaymentTenderTitle;
+
+  /// No description provided for @addDownPaymentButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'إضافة دفعة مقدّمة'**
+  String get addDownPaymentButton;
+
+  /// No description provided for @printDownPaymentProofLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'طباعة سند قبض'**
+  String get printDownPaymentProofLabel;
+
+  /// No description provided for @printDownPaymentProofSubtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'طباعة إيصال بالدفعة المقدّمة على البيع الآجل.'**
+  String get printDownPaymentProofSubtitle;
+
+  /// No description provided for @quotationTotalLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'إجمالي العرض'**
+  String get quotationTotalLabel;
+
+  /// No description provided for @quotationReserveStockLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'حجز الكمية'**
+  String get quotationReserveStockLabel;
+
+  /// No description provided for @quotationReserveStockSubtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'حجز الكميات المعروضة دون خصمها من المخزون حتى انتهاء صلاحية العرض.'**
+  String get quotationReserveStockSubtitle;
+
+  /// No description provided for @quotationValidUntilLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'صالح حتى'**
+  String get quotationValidUntilLabel;
+
+  /// No description provided for @quotationValidUntilUnset.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر تاريخًا'**
+  String get quotationValidUntilUnset;
+
+  /// No description provided for @quotationNoPaymentHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'عرض السعر لا يتضمّن أي دفع ولا يخصم من المخزون.'**
+  String get quotationNoPaymentHint;
 
   /// No description provided for @noEnabledPaymentMethods.
   ///
@@ -13314,6 +13572,72 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'لا توجد مدفوعات مسجلة لهذه الفاتورة.'**
   String get invoicePaymentsEmpty;
+
+  /// No description provided for @recordInvoicePaymentButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'تسجيل دفعة'**
+  String get recordInvoicePaymentButton;
+
+  /// Callout title on a credit invoice that still carries a balance.
+  ///
+  /// In ar, this message translates to:
+  /// **'آجل — المتبقّي {amount}.'**
+  String invoiceCreditBalanceCalloutTitle(String amount);
+
+  /// No description provided for @invoiceCreditBalanceCalloutBody.
+  ///
+  /// In ar, this message translates to:
+  /// **'فاتورة آجلة لم يُسدَّد منها شيء بعد.'**
+  String get invoiceCreditBalanceCalloutBody;
+
+  /// Shows how much has already been paid on a partly-paid credit invoice.
+  ///
+  /// In ar, this message translates to:
+  /// **'المدفوع حتى الآن: {amount}'**
+  String invoiceCreditBalancePaidValue(String amount);
+
+  /// No description provided for @invoicePaymentTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'تسجيل دفعة على الفاتورة'**
+  String get invoicePaymentTitle;
+
+  /// No description provided for @invoicePaymentAmountLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'المبلغ'**
+  String get invoicePaymentAmountLabel;
+
+  /// No description provided for @invoicePaymentReferenceLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'مرجع اختياري'**
+  String get invoicePaymentReferenceLabel;
+
+  /// No description provided for @invoicePaymentPrintProofLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'طباعة سند قبض'**
+  String get invoicePaymentPrintProofLabel;
+
+  /// Shows the invoice's remaining balance inside the payment dialog.
+  ///
+  /// In ar, this message translates to:
+  /// **'المتبقّي على الفاتورة: {amount}'**
+  String invoicePaymentBalanceValue(String amount);
+
+  /// No description provided for @invoicePaymentAmountError.
+  ///
+  /// In ar, this message translates to:
+  /// **'أدخل مبلغًا أكبر من صفر ولا يتجاوز المتبقّي.'**
+  String get invoicePaymentAmountError;
+
+  /// No description provided for @invoicePaymentSuccess.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم تسجيل الدفعة على الفاتورة.'**
+  String get invoicePaymentSuccess;
 
   /// No description provided for @invoiceTotalsTitle.
   ///
@@ -19661,6 +19985,222 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'بدأ النقل'**
   String get migrationImportStarted;
+
+  /// No description provided for @paymentsHubDrawerLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الخزينة'**
+  String get paymentsHubDrawerLabel;
+
+  /// No description provided for @paymentsHubTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'الخزينة'**
+  String get paymentsHubTitle;
+
+  /// No description provided for @paymentsHubRefreshTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحديث المدفوعات'**
+  String get paymentsHubRefreshTooltip;
+
+  /// No description provided for @paymentsHubSegmentCustomer.
+  ///
+  /// In ar, this message translates to:
+  /// **'مدفوعات العملاء (وارد)'**
+  String get paymentsHubSegmentCustomer;
+
+  /// No description provided for @paymentsHubSegmentSupplier.
+  ///
+  /// In ar, this message translates to:
+  /// **'مدفوعات الموردين (صادر)'**
+  String get paymentsHubSegmentSupplier;
+
+  /// No description provided for @paymentsHubFilterAllMethods.
+  ///
+  /// In ar, this message translates to:
+  /// **'كل الطرق'**
+  String get paymentsHubFilterAllMethods;
+
+  /// No description provided for @paymentsHubFilterDateRange.
+  ///
+  /// In ar, this message translates to:
+  /// **'نطاق التاريخ'**
+  String get paymentsHubFilterDateRange;
+
+  /// Selected payments date-range chip label.
+  ///
+  /// In ar, this message translates to:
+  /// **'{start} - {end}'**
+  String paymentsHubFilterDateRangeValue(String start, String end);
+
+  /// No description provided for @paymentsHubClearFilters.
+  ///
+  /// In ar, this message translates to:
+  /// **'مسح عوامل التصفية'**
+  String get paymentsHubClearFilters;
+
+  /// No description provided for @paymentsHubCustomerEmptyTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد مدفوعات عملاء'**
+  String get paymentsHubCustomerEmptyTitle;
+
+  /// No description provided for @paymentsHubCustomerEmptyMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'ستظهر هنا المبالغ المحصّلة من العملاء.'**
+  String get paymentsHubCustomerEmptyMessage;
+
+  /// No description provided for @paymentsHubSupplierEmptyTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد مدفوعات موردين'**
+  String get paymentsHubSupplierEmptyTitle;
+
+  /// No description provided for @paymentsHubSupplierEmptyMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'ستظهر هنا المبالغ المدفوعة للموردين.'**
+  String get paymentsHubSupplierEmptyMessage;
+
+  /// No description provided for @paymentsHubLoadError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر تحميل المدفوعات'**
+  String get paymentsHubLoadError;
+
+  /// No description provided for @paymentsHubWalkInCustomer.
+  ///
+  /// In ar, this message translates to:
+  /// **'عميل نقدي'**
+  String get paymentsHubWalkInCustomer;
+
+  /// No description provided for @paymentsHubUnknownSupplier.
+  ///
+  /// In ar, this message translates to:
+  /// **'مورد غير محدد'**
+  String get paymentsHubUnknownSupplier;
+
+  /// Linked customer invoice number on a payment row.
+  ///
+  /// In ar, this message translates to:
+  /// **'فاتورة {number}'**
+  String paymentsHubInvoiceValue(String number);
+
+  /// Linked purchase order number on a supplier payment row.
+  ///
+  /// In ar, this message translates to:
+  /// **'أمر شراء {number}'**
+  String paymentsHubPurchaseOrderValue(String number);
+
+  /// Commission charged on a payment.
+  ///
+  /// In ar, this message translates to:
+  /// **'عمولة {amount}'**
+  String paymentsHubCommissionValue(String amount);
+
+  /// External reference on a payment row.
+  ///
+  /// In ar, this message translates to:
+  /// **'مرجع: {reference}'**
+  String paymentsHubReferenceValue(String reference);
+
+  /// Who recorded the payment.
+  ///
+  /// In ar, this message translates to:
+  /// **'سجّلها {username}'**
+  String paymentsHubRecordedByValue(String username);
+
+  /// No description provided for @paymentsHubReprintProofAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'إعادة طباعة سند'**
+  String get paymentsHubReprintProofAction;
+
+  /// No description provided for @paymentsHubPrintLogAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'سجل الطباعة'**
+  String get paymentsHubPrintLogAction;
+
+  /// No description provided for @paymentsHubReprintSuccess.
+  ///
+  /// In ar, this message translates to:
+  /// **'تمت إعادة طباعة السند'**
+  String get paymentsHubReprintSuccess;
+
+  /// No description provided for @paymentsHubReprintError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّرت إعادة طباعة السند'**
+  String get paymentsHubReprintError;
+
+  /// No description provided for @convertQuotationButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحويل إلى بيع'**
+  String get convertQuotationButton;
+
+  /// No description provided for @convertQuotationDialogTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحويل عرض السعر إلى بيع'**
+  String get convertQuotationDialogTitle;
+
+  /// No description provided for @convertQuotationSaleTypeLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'نوع البيع'**
+  String get convertQuotationSaleTypeLabel;
+
+  /// No description provided for @convertQuotationSaleTypeStandard.
+  ///
+  /// In ar, this message translates to:
+  /// **'عادي'**
+  String get convertQuotationSaleTypeStandard;
+
+  /// No description provided for @convertQuotationSaleTypeCredit.
+  ///
+  /// In ar, this message translates to:
+  /// **'آجل'**
+  String get convertQuotationSaleTypeCredit;
+
+  /// No description provided for @convertQuotationDownPaymentLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الدفعة المقدمة'**
+  String get convertQuotationDownPaymentLabel;
+
+  /// No description provided for @convertQuotationDownPaymentHelper.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختياري — المبلغ المحصّل عند التحويل.'**
+  String get convertQuotationDownPaymentHelper;
+
+  /// Hint shown when converting to a standard (paid-in-full) sale.
+  ///
+  /// In ar, this message translates to:
+  /// **'يتطلب البيع العادي سداد كامل المبلغ ({total}).'**
+  String convertQuotationStandardHint(String total);
+
+  /// No description provided for @convertQuotationConfirm.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحويل'**
+  String get convertQuotationConfirm;
+
+  /// No description provided for @convertQuotationSuccess.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم تحويل عرض السعر إلى بيع'**
+  String get convertQuotationSuccess;
+
+  /// No description provided for @convertQuotationError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر تحويل عرض السعر'**
+  String get convertQuotationError;
 }
 
 class _AppLocalizationsDelegate

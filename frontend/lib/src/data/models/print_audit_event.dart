@@ -1,4 +1,8 @@
-enum PrintAuditDocumentType { saleOrder, purchaseOrder }
+enum PrintAuditDocumentType { saleOrder, purchaseOrder, paymentReceipt }
+
+/// Which money table a `payment_receipt` audit points at: a customer money-in
+/// [Payment] or a supplier money-out SupplierPayment.
+enum PrintAuditPaymentKind { customer, supplier }
 
 enum PrintAuditAction { print, share }
 
@@ -85,6 +89,7 @@ class PrintAuditEventDraft {
     required this.documentId,
     required this.action,
     this.status = PrintAuditStatus.requested,
+    this.paymentKind,
     this.agentId,
     this.printerEndpoint = const {},
     this.deviceName = '',
@@ -98,6 +103,10 @@ class PrintAuditEventDraft {
   final int documentId;
   final PrintAuditAction action;
   final PrintAuditStatus status;
+
+  /// Required for [PrintAuditDocumentType.paymentReceipt]: tells the backend
+  /// whether [documentId] is a customer or supplier payment.
+  final PrintAuditPaymentKind? paymentKind;
   final String? agentId;
   final Map<String, Object?> printerEndpoint;
   final String deviceName;
@@ -112,6 +121,8 @@ class PrintAuditEventDraft {
       'document_id': documentId,
       'action': printAuditActionToJson(action),
       'status': printAuditStatusToJson(status),
+      if (paymentKind != null)
+        'payment_kind': printAuditPaymentKindToJson(paymentKind!),
       if (agentId != null && agentId!.isNotEmpty) 'agent_id': agentId,
       if (printerEndpoint.isNotEmpty) 'printer_endpoint': printerEndpoint,
       if (deviceName.isNotEmpty) 'device_name': deviceName,
@@ -160,6 +171,14 @@ String printAuditDocumentTypeToJson(PrintAuditDocumentType type) {
   return switch (type) {
     PrintAuditDocumentType.saleOrder => 'sale_order',
     PrintAuditDocumentType.purchaseOrder => 'purchase_order',
+    PrintAuditDocumentType.paymentReceipt => 'payment_receipt',
+  };
+}
+
+String printAuditPaymentKindToJson(PrintAuditPaymentKind kind) {
+  return switch (kind) {
+    PrintAuditPaymentKind.customer => 'customer',
+    PrintAuditPaymentKind.supplier => 'supplier',
   };
 }
 
@@ -182,6 +201,8 @@ String printAuditStatusToJson(PrintAuditStatus status) {
 PrintAuditDocumentType _documentTypeFromJson(Object? value) {
   return switch (value?.toString()) {
     'purchase_order' || 'purchaseOrder' => PrintAuditDocumentType.purchaseOrder,
+    'payment_receipt' ||
+    'paymentReceipt' => PrintAuditDocumentType.paymentReceipt,
     _ => PrintAuditDocumentType.saleOrder,
   };
 }

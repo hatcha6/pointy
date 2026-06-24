@@ -12,6 +12,7 @@ import '../../../shared/barcode/scale_barcode.dart';
 import '../../../shared/formatters.dart';
 import '../../../data/models/analytics_event.dart';
 import '../../../data/models/contact.dart';
+import '../../../data/models/print_audit_event.dart';
 import '../../../data/models/print_job.dart';
 import '../../../data/models/printer_config.dart';
 import '../../../data/models/product.dart';
@@ -323,6 +324,10 @@ class PosViewModel extends ChangeNotifier {
       _checkoutSettings?.enableTransferPayments ?? true;
   bool get requireCardPaymentReceipt =>
       _checkoutSettings?.requireCardPaymentReceipt ?? false;
+
+  /// Whether a credit (آجل) or quotation (عرض سعر) sale must name a customer.
+  bool get requireCustomerForCredit =>
+      _checkoutSettings?.requireCustomerForCredit ?? true;
   List<String> get trustedCardTerminalIds =>
       _checkoutSettings?.trustedCardTerminalIds ?? const [];
 

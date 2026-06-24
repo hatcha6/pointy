@@ -486,7 +486,16 @@ def frequently_bought_together(*, user, filters=None, limit=10, min_count=2):
 
 # The tools that change state — surfaced distinctly in the UI as completed
 # actions (not transient "querying…" chips).
-WRITE_TOOL_NAMES = frozenset({"create_resource", "update_resource", "create_sale"})
+WRITE_TOOL_NAMES = frozenset(
+    {
+        "create_resource",
+        "update_resource",
+        "create_sale",
+        "record_customer_payment",
+        "convert_quotation",
+        "record_supplier_payment",
+    }
+)
 
 
 def is_mutating_tool(name):
@@ -759,6 +768,9 @@ def create_sale(
     coupon_codes=None,
     payment_method=None,
     amount_received=None,
+    sale_type=None,
+    valid_until=None,
+    reserve_stock=None,
     confirm=False,
     idempotency_key=None,
 ):
@@ -814,6 +826,12 @@ def create_sale(
         commit["payment_method"] = payment_method
     if amount_received not in (None, ""):
         commit["amount_received"] = amount_received
+    if sale_type:
+        commit["sale_type"] = sale_type
+    if valid_until:
+        commit["valid_until"] = valid_until
+    if reserve_stock is not None:
+        commit["reserve_stock"] = bool(reserve_stock)
     try:
         response = _run_write_viewset(
             OrderViewSet,
@@ -827,6 +845,171 @@ def create_sale(
         logger.exception("AI create_sale checkout crashed")
         return {"ok": False, "error": "internal_error"}
     return _write_result(response, action="create_sale", resource="orders")
+
+
+def record_customer_payment(
+    *, user, order_id, method, amount, confirm=False, idempotency_key=None
+):
+    """Record a payment against a customer invoice's balance (debt/آجل).
+
+    Two-step: ``confirm`` false previews the invoice's current balance; ``confirm``
+    true commits the payment. Over-payment beyond the balance is rejected
+    server-side, and the invoice flips to PAID automatically once settled."""
+    from apps.sales.views import OrderViewSet
+
+    if order_id in (None, "") or method in (None, "") or amount in (None, ""):
+        return {
+            "ok": False,
+            "error": "invalid_arguments",
+            "message": "order_id و method و amount مطلوبة.",
+        }
+    if not confirm:
+        info = get_resource(user=user, resource="orders", id=order_id)
+        if not info.get("ok"):
+            return info
+        data = info.get("data", {})
+        return {
+            "ok": True,
+            "needs_confirmation": True,
+            "invoice": {
+                "id": order_id,
+                "total": data.get("total"),
+                "balance_due": data.get("balance_due"),
+                "payment_status": data.get("payment_status"),
+            },
+            "message": (
+                "هذه معاينة فقط. اعرض الرصيد المستحق وأكّد المبلغ مع المستخدم عبر "
+                "ask_user، ثم أعد الاستدعاء مع confirm=true لتسجيل الدفعة."
+            ),
+        }
+    try:
+        response = _run_write_viewset(
+            OrderViewSet,
+            action="record_payment",
+            method="post",
+            user=user,
+            data={"method": method, "amount": amount},
+            kwargs={"pk": order_id},
+            idempotency_key=idempotency_key,
+        )
+    except Exception:
+        logger.exception("AI record_customer_payment crashed")
+        return {"ok": False, "error": "internal_error"}
+    return _write_result(response, action="record_payment", resource="orders")
+
+
+def convert_quotation(
+    *,
+    user,
+    quotation_id,
+    sale_type,
+    amount_received=None,
+    confirm=False,
+    idempotency_key=None,
+):
+    """Convert a quotation (عرض سعر) into a real sale: ``standard`` (paid in full)
+    or ``credit`` (آجل, optional down-payment).
+
+    Two-step: ``confirm`` false previews the quote; ``confirm`` true commits,
+    deducting stock (consuming any reservation) and recording payment. A standard
+    conversion must be paid in full."""
+    from apps.sales.views import OrderViewSet
+
+    if quotation_id in (None, "") or sale_type in (None, ""):
+        return {
+            "ok": False,
+            "error": "invalid_arguments",
+            "message": "quotation_id و sale_type (standard أو credit) مطلوبة.",
+        }
+    if not confirm:
+        info = get_resource(user=user, resource="orders", id=quotation_id)
+        if not info.get("ok"):
+            return info
+        data = info.get("data", {})
+        return {
+            "ok": True,
+            "needs_confirmation": True,
+            "quotation": {
+                "id": quotation_id,
+                "total": data.get("total"),
+                "sale_type": data.get("sale_type"),
+            },
+            "message": (
+                "هذه معاينة فقط. أكّد التحويل إلى بيع مع المستخدم عبر ask_user ثم أعد "
+                "الاستدعاء مع confirm=true. التحويل إلى بيع عادي (standard) يتطلّب سداد "
+                "الإجمالي كاملًا عبر amount_received."
+            ),
+        }
+    data = {"sale_type": sale_type}
+    if amount_received not in (None, ""):
+        data["amount_received"] = amount_received
+    try:
+        response = _run_write_viewset(
+            OrderViewSet,
+            action="convert",
+            method="post",
+            user=user,
+            data=data,
+            kwargs={"pk": quotation_id},
+            idempotency_key=idempotency_key,
+        )
+    except Exception:
+        logger.exception("AI convert_quotation crashed")
+        return {"ok": False, "error": "internal_error"}
+    return _write_result(response, action="convert", resource="orders")
+
+
+def record_supplier_payment(
+    *,
+    user,
+    supplier_id,
+    method,
+    amount,
+    purchase_order_id=None,
+    reference=None,
+    confirm=False,
+    idempotency_key=None,
+):
+    """Record a payment made to a supplier (money out), optionally tied to a
+    purchase order. Two-step: ``confirm`` false echoes the intended payment;
+    ``confirm`` true commits. Over-payment beyond the PO/payable balance is
+    rejected server-side. No commission is recorded on supplier pay-outs."""
+    from apps.purchasing.views import SupplierPaymentViewSet
+
+    if supplier_id in (None, "") or method in (None, "") or amount in (None, ""):
+        return {
+            "ok": False,
+            "error": "invalid_arguments",
+            "message": "supplier_id و method و amount مطلوبة.",
+        }
+    body = {"supplier": supplier_id, "method": method, "amount": amount}
+    if purchase_order_id not in (None, ""):
+        body["purchase_order"] = purchase_order_id
+    if reference:
+        body["reference"] = reference
+    if not confirm:
+        return {
+            "ok": True,
+            "needs_confirmation": True,
+            "payment": body,
+            "message": (
+                "هذه معاينة فقط. أكّد دفع المورّد مع المستخدم عبر ask_user ثم أعد "
+                "الاستدعاء مع confirm=true."
+            ),
+        }
+    try:
+        response = _run_write_viewset(
+            SupplierPaymentViewSet,
+            action="create",
+            method="post",
+            user=user,
+            data=body,
+            idempotency_key=idempotency_key,
+        )
+    except Exception:
+        logger.exception("AI record_supplier_payment crashed")
+        return {"ok": False, "error": "internal_error"}
+    return _write_result(response, action="create", resource="supplier-payments")
 
 
 # ── Invoice → purchase-order helpers (dedup matching + auto pricing) ──────────
@@ -1207,6 +1390,9 @@ _TOOL_LABELS = {
     "frequently_bought_together": "المنتجات التي تُشترى معًا",
     "describe_resource": "فحص الحقول",
     "create_sale": "تسجيل بيع",
+    "record_customer_payment": "تسجيل دفعة عميل",
+    "convert_quotation": "تحويل عرض سعر إلى بيع",
+    "record_supplier_payment": "تسجيل دفعة مورّد",
     "match_invoice_products": "مطابقة منتجات الفاتورة",
     "suggest_sale_price": "اقتراح سعر",
     ASK_USER_TOOL_NAME: "بانتظار ردك",
@@ -1468,6 +1654,35 @@ _TOOLS = {
         coupon_codes=args.get("coupon_codes"),
         payment_method=args.get("payment_method"),
         amount_received=args.get("amount_received"),
+        sale_type=args.get("sale_type"),
+        valid_until=args.get("valid_until"),
+        reserve_stock=args.get("reserve_stock"),
+        confirm=bool(args.get("confirm")),
+        idempotency_key=key,
+    ),
+    "record_customer_payment": lambda user, args, key=None: record_customer_payment(
+        user=user,
+        order_id=args.get("order_id"),
+        method=args.get("method"),
+        amount=args.get("amount"),
+        confirm=bool(args.get("confirm")),
+        idempotency_key=key,
+    ),
+    "convert_quotation": lambda user, args, key=None: convert_quotation(
+        user=user,
+        quotation_id=args.get("quotation_id"),
+        sale_type=args.get("sale_type"),
+        amount_received=args.get("amount_received"),
+        confirm=bool(args.get("confirm")),
+        idempotency_key=key,
+    ),
+    "record_supplier_payment": lambda user, args, key=None: record_supplier_payment(
+        user=user,
+        supplier_id=args.get("supplier_id"),
+        method=args.get("method"),
+        amount=args.get("amount"),
+        purchase_order_id=args.get("purchase_order_id"),
+        reference=args.get("reference"),
         confirm=bool(args.get("confirm")),
         idempotency_key=key,
     ),
@@ -1607,7 +1822,31 @@ def action_tool_definitions():
                         },
                         "amount_received": {
                             "type": "string",
-                            "description": "المبلغ المستلَم (افتراضيًا يساوي الإجمالي).",
+                            "description": (
+                                "المبلغ المستلَم. للبيع العادي افتراضيًا يساوي الإجمالي؛ "
+                                "للبيع الآجل (credit) هو الدفعة المقدّمة (أو لا شيء)."
+                            ),
+                        },
+                        "sale_type": {
+                            "type": "string",
+                            "enum": ["standard", "credit", "quotation"],
+                            "description": (
+                                "نوع البيع: standard عادي مدفوع بالكامل (الافتراضي)، "
+                                "credit آجل (دين) بدفعة مقدّمة جزئية أو بدونها، "
+                                "quotation عرض سعر لا يخصم مخزونًا ولا يقبل دفعًا. "
+                                "credit وquotation قد يتطلّبان عميلًا (customer)."
+                            ),
+                        },
+                        "valid_until": {
+                            "type": "string",
+                            "description": "تاريخ صلاحية العرض/الحجز YYYY-MM-DD (اختياري).",
+                        },
+                        "reserve_stock": {
+                            "type": "boolean",
+                            "description": (
+                                "لعرض السعر فقط: احجز الكميات حتى valid_until "
+                                "(افتراضيًا false)."
+                            ),
                         },
                         "confirm": {
                             "type": "boolean",
@@ -1615,6 +1854,109 @@ def action_tool_definitions():
                         },
                     },
                     "required": ["lines"],
+                    "additionalProperties": False,
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "record_customer_payment",
+                "description": (
+                    "سجّل دفعة على رصيد فاتورة آجلة (دين) لعميل. على خطوتين: confirm=false "
+                    "يُرجع الرصيد المستحق للمعاينة، ثم بعد التأكيد عبر ask_user استدعِها بـ "
+                    "confirm=true. لا يمكن تجاوز الرصيد، وتُسوّى الفاتورة تلقائيًا عند اكتمال السداد."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "order_id": {
+                            "type": ["integer", "string"],
+                            "description": "معرّف الفاتورة الآجلة.",
+                        },
+                        "method": {
+                            "type": "string",
+                            "description": "طريقة الدفع cash/card/transfer.",
+                        },
+                        "amount": {"type": "string", "description": "مبلغ الدفعة."},
+                        "confirm": {
+                            "type": "boolean",
+                            "description": "false=معاينة (الافتراضي)، true=تسجيل الدفعة.",
+                        },
+                    },
+                    "required": ["order_id", "method", "amount"],
+                    "additionalProperties": False,
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "convert_quotation",
+                "description": (
+                    "حوّل عرض سعر (quotation) إلى بيع حقيقي: standard مدفوع بالكامل أو "
+                    "credit آجل بدفعة مقدّمة اختيارية. على خطوتين: confirm=false للمعاينة ثم "
+                    "confirm=true للإتمام (يخصم المخزون ويستهلك أي حجز). التحويل إلى standard "
+                    "يتطلّب سداد الإجمالي عبر amount_received."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "quotation_id": {
+                            "type": ["integer", "string"],
+                            "description": "معرّف عرض السعر.",
+                        },
+                        "sale_type": {
+                            "type": "string",
+                            "enum": ["standard", "credit"],
+                            "description": "نوع البيع الناتج.",
+                        },
+                        "amount_received": {
+                            "type": "string",
+                            "description": "الدفعة (كامل الإجمالي لـ standard، أو دفعة مقدّمة لـ credit).",
+                        },
+                        "confirm": {
+                            "type": "boolean",
+                            "description": "false=معاينة (الافتراضي)، true=إتمام التحويل.",
+                        },
+                    },
+                    "required": ["quotation_id", "sale_type"],
+                    "additionalProperties": False,
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "record_supplier_payment",
+                "description": (
+                    "سجّل دفعة مدفوعة لمورّد (صرف نقدي صادر)، وربطها بأمر شراء اختياريًا. "
+                    "على خطوتين: confirm=false للمعاينة ثم confirm=true للإتمام. لا يمكن تجاوز "
+                    "رصيد أمر الشراء/المورّد، وتُحتسب عمولة البطاقة/التحويل تلقائيًا."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "supplier_id": {
+                            "type": ["integer", "string"],
+                            "description": "معرّف المورّد.",
+                        },
+                        "purchase_order_id": {
+                            "type": ["integer", "string"],
+                            "description": "معرّف أمر الشراء (اختياري؛ بدونه تُخصم من رصيد المورّد).",
+                        },
+                        "method": {
+                            "type": "string",
+                            "description": "طريقة الدفع cash/card/transfer/bank_transfer.",
+                        },
+                        "amount": {"type": "string", "description": "مبلغ الدفعة."},
+                        "reference": {"type": "string", "description": "مرجع/رقم سند (اختياري)."},
+                        "confirm": {
+                            "type": "boolean",
+                            "description": "false=معاينة (الافتراضي)، true=تسجيل الدفعة.",
+                        },
+                    },
+                    "required": ["supplier_id", "method", "amount"],
                     "additionalProperties": False,
                 },
             },

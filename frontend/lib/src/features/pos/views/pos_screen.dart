@@ -13,6 +13,7 @@ import '../../../shared/formatters.dart';
 import '../../../shared/order/order.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../../../shared/shell/shell.dart';
+import '../../contacts/views/collect_debt_dialog.dart';
 import '../view_models/pos_view_model.dart';
 import 'pos_cart_pane.dart';
 import 'pos_catalog_pane.dart';
@@ -116,6 +117,16 @@ class PosScreen extends StatelessWidget {
                         : () => _showCloseRegisterSessionSheet(context),
                     icon: const Icon(Icons.lock_outline),
                   ),
+                ),
+              if (capabilities.canCollectCustomerDebt &&
+                  viewModel.activeRegisterSession != null)
+                IconButton(
+                  tooltip: l10n.collectDebtTitle,
+                  onPressed: () => showCollectDebtDialog(
+                    context,
+                    contactRepository: contactRepository,
+                  ),
+                  icon: const Icon(Icons.request_quote_outlined),
                 ),
               PosAccessGuard(
                 capabilities: capabilities,

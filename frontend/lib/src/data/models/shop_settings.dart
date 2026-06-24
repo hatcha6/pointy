@@ -21,6 +21,8 @@ class ShopSettings {
     required this.trustedCardTerminalIds,
     required this.cardCommissionPercent,
     required this.transferCommissionPercent,
+    this.requireCustomerForCredit = true,
+    this.allowCashierCustomerAccess = true,
     this.autoPrintKitchenTickets = false,
     this.enableRepairOperations = false,
     this.enableProductionOperations = false,
@@ -49,6 +51,10 @@ class ShopSettings {
   final List<String> trustedCardTerminalIds;
   final double cardCommissionPercent;
   final double transferCommissionPercent;
+
+  /// When true a credit (آجل) or quotation (عرض سعر) sale must name a customer.
+  final bool requireCustomerForCredit;
+  final bool allowCashierCustomerAccess;
   final bool enableRepairOperations;
   final bool enableProductionOperations;
   final bool enableKitchenOperations;
@@ -105,6 +111,14 @@ class ShopSettings {
         json['transfer_commission_percent'],
         0,
       ),
+      requireCustomerForCredit: _boolFromJson(
+        json['require_customer_for_credit'],
+        true,
+      ),
+      allowCashierCustomerAccess: _boolFromJson(
+        json['allow_cashier_customer_access'],
+        true,
+      ),
       enableRepairOperations: _boolFromJson(
         json['enable_repair_operations'],
         false,
@@ -158,6 +172,8 @@ class ShopSettingsDraft {
     required this.trustedCardTerminalIds,
     required this.cardCommissionPercent,
     required this.transferCommissionPercent,
+    this.requireCustomerForCredit = true,
+    this.allowCashierCustomerAccess = true,
     this.autoPrintKitchenTickets = false,
     this.enableRepairOperations = false,
     this.enableProductionOperations = false,
@@ -183,6 +199,8 @@ class ShopSettingsDraft {
   final List<String> trustedCardTerminalIds;
   final double cardCommissionPercent;
   final double transferCommissionPercent;
+  final bool requireCustomerForCredit;
+  final bool allowCashierCustomerAccess;
   final bool enableRepairOperations;
   final bool enableProductionOperations;
   final bool enableKitchenOperations;
@@ -210,6 +228,8 @@ class ShopSettingsDraft {
       'transfer_commission_percent': transferCommissionPercent.toStringAsFixed(
         2,
       ),
+      'require_customer_for_credit': requireCustomerForCredit,
+      'allow_cashier_customer_access': allowCashierCustomerAccess,
       'enable_repair_operations': enableRepairOperations,
       'enable_production_operations': enableProductionOperations,
       'enable_kitchen_operations': enableKitchenOperations,

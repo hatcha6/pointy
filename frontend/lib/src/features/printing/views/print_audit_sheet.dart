@@ -15,6 +15,7 @@ Future<void> showPrintAuditSheet({
   required PrintAuditDocumentType documentType,
   required int documentId,
   required String documentNumber,
+  PrintAuditPaymentKind? paymentKind,
 }) {
   return showAdaptiveModalBottomSheet<void>(
     context: context,
@@ -25,6 +26,7 @@ Future<void> showPrintAuditSheet({
       documentType: documentType,
       documentId: documentId,
       documentNumber: documentNumber,
+      paymentKind: paymentKind,
     ),
   );
 }
@@ -36,12 +38,17 @@ class PrintAuditSheet extends StatefulWidget {
     required this.documentType,
     required this.documentId,
     required this.documentNumber,
+    this.paymentKind,
   });
 
   final PrintingRepository printingRepository;
   final PrintAuditDocumentType documentType;
   final int documentId;
   final String documentNumber;
+
+  /// For `payment_receipt` documents, which money table the proof points at so
+  /// the audit list filters by `payment=`/`supplier_payment=`.
+  final PrintAuditPaymentKind? paymentKind;
 
   @override
   State<PrintAuditSheet> createState() => _PrintAuditSheetState();
@@ -66,6 +73,7 @@ class _PrintAuditSheetState extends State<PrintAuditSheet> {
     final result = await widget.printingRepository.loadPrintAuditEvents(
       documentType: widget.documentType,
       documentId: widget.documentId,
+      paymentKind: widget.paymentKind,
     );
     if (!mounted) {
       return;

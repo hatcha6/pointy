@@ -115,7 +115,14 @@ class SupplierPaymentViewSet(
         "purchase_order",
         "created_by",
     )
-    filterset_fields = ("supplier", "purchase_order", "method")
+    # Dict form so ``paid_at`` exposes range/day lookups for the Payments hub
+    # (money-OUT date window), mirroring PaymentViewSet/OrderViewSet.
+    filterset_fields = {
+        "supplier": ["exact"],
+        "purchase_order": ["exact"],
+        "method": ["exact"],
+        "paid_at": ["exact", "gte", "lte", "date"],
+    }
     search_fields = (
         "supplier__name",
         "purchase_order__order_number",

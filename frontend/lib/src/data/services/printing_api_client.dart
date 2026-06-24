@@ -81,11 +81,19 @@ class PrintingApiClient {
   Future<List<PrintAuditEvent>> fetchPrintAuditEvents({
     required PrintAuditDocumentType documentType,
     required int documentId,
+    PrintAuditPaymentKind? paymentKind,
     int page = 1,
   }) async {
     final documentField = switch (documentType) {
       PrintAuditDocumentType.saleOrder => 'sale_order',
       PrintAuditDocumentType.purchaseOrder => 'purchase_order',
+      // Payment receipts are filtered by the money table the proof points at:
+      // a customer money-IN [Payment] (`payment`) or a supplier money-OUT
+      // SupplierPayment (`supplier_payment`). Defaults to the customer FK.
+      PrintAuditDocumentType.paymentReceipt =>
+        paymentKind == PrintAuditPaymentKind.supplier
+            ? 'supplier_payment'
+            : 'payment',
     };
     final response = await _session.get(
       'print-audit-events/',

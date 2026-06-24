@@ -4,7 +4,8 @@ from rest_framework.exceptions import PermissionDenied
 
 from apps.catalog.models import ProductCategory
 from apps.core.roles import user_is_manager
-from apps.purchasing.models import PurchaseOrder
+from apps.payments.models import Payment
+from apps.purchasing.models import PurchaseOrder, SupplierPayment
 from apps.sales.models import Order
 from .models import (
     PrepStation,
@@ -340,6 +341,8 @@ class PrintAuditEventSerializer(serializers.ModelSerializer):
             "status",
             "sale_order",
             "purchase_order",
+            "payment",
+            "supplier_payment",
             "document_number",
             "print_job",
             "user",
@@ -360,6 +363,12 @@ class PrintAuditEventSerializer(serializers.ModelSerializer):
 class PrintAuditEventRecordSerializer(serializers.Serializer):
     document_type = serializers.ChoiceField(choices=PrintAuditEvent.DocumentType.choices)
     document_id = serializers.IntegerField(min_value=1)
+    # Required for payment receipts to know which money table document_id points
+    # at: customer (money-in Payment) or supplier (money-out SupplierPayment).
+    payment_kind = serializers.ChoiceField(
+        choices=[("customer", "customer"), ("supplier", "supplier")],
+        required=False,
+    )
     action = serializers.ChoiceField(choices=PrintAuditEvent.Action.choices)
     status = serializers.ChoiceField(
         choices=PrintAuditEvent.Status.choices,
@@ -390,10 +399,29 @@ class PrintAuditEventRecordSerializer(serializers.Serializer):
             if user is None or not user.has_perm("sales.view_order"):
                 raise PermissionDenied("Missing sale order permission.")
             attrs["sale_order"] = self._sale_order(attrs["document_id"], request)
-        else:
+        elif document_type == PrintAuditEvent.DocumentType.PURCHASE_ORDER:
             if user is None or not user.has_perm("purchasing.view_purchaseorder"):
                 raise PermissionDenied("Missing purchase order permission.")
             attrs["purchase_order"] = self._purchase_order(attrs["document_id"])
+        else:  # PAYMENT_RECEIPT
+            kind = attrs.get("payment_kind")
+            if kind == "customer":
+                if user is None or not user.has_perm("payments.view_payment"):
+                    raise PermissionDenied("Missing payment permission.")
+                attrs["payment"] = self._payment(attrs["document_id"])
+            elif kind == "supplier":
+                if user is None or not user.has_perm("purchasing.view_supplierpayment"):
+                    raise PermissionDenied("Missing supplier payment permission.")
+                attrs["supplier_payment"] = self._supplier_payment(attrs["document_id"])
+            else:
+                raise serializers.ValidationError(
+                    {
+                        "payment_kind": (
+                            "Payment receipts require payment_kind "
+                            "(customer or supplier)."
+                        )
+                    }
+                )
 
         agent = attrs.get("agent")
         agent_id = attrs.get("agent_id")
@@ -412,6 +440,8 @@ class PrintAuditEventRecordSerializer(serializers.Serializer):
             status=validated_data.get("status", PrintAuditEvent.Status.REQUESTED),
             sale_order=validated_data.get("sale_order"),
             purchase_order=validated_data.get("purchase_order"),
+            payment=validated_data.get("payment"),
+            supplier_payment=validated_data.get("supplier_payment"),
             user=request.user if request is not None else None,
             agent=validated_data.get("agent"),
             agent_identifier=validated_data.get("agent_id", ""),
@@ -442,6 +472,22 @@ class PrintAuditEventRecordSerializer(serializers.Serializer):
         except PurchaseOrder.DoesNotExist as exc:
             raise serializers.ValidationError(
                 {"document_id": "Purchase order was not found."}
+            ) from exc
+
+    def _payment(self, payment_id):
+        try:
+            return Payment.objects.get(pk=payment_id)
+        except Payment.DoesNotExist as exc:
+            raise serializers.ValidationError(
+                {"document_id": "Payment was not found."}
+            ) from exc
+
+    def _supplier_payment(self, payment_id):
+        try:
+            return SupplierPayment.objects.get(pk=payment_id)
+        except SupplierPayment.DoesNotExist as exc:
+            raise serializers.ValidationError(
+                {"document_id": "Supplier payment was not found."}
             ) from exc
 
     def _register_session_owner_key(self, request):

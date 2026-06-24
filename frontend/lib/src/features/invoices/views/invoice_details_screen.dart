@@ -3,15 +3,20 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../core/analytics_engine.dart';
 import '../../../core/authorization.dart';
+import '../../../core/result.dart';
 import '../../../data/models/print_audit_event.dart';
 import '../../../data/models/sale_order.dart';
+import '../../../data/models/shop_settings.dart';
 import '../../../data/repositories/printing_repository.dart';
 import '../../../data/repositories/sale_repository.dart';
 import '../../../data/repositories/shop_settings_repository.dart';
+import '../../../shared/formatters.dart';
 import '../../../shared/order/sale_order_details_content.dart';
+import '../../../shared/payments/record_payment_dialog.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../../printing/views/print_audit_sheet.dart';
 import '../view_models/invoice_details_view_model.dart';
+import 'convert_quotation_dialog.dart';
 
 class InvoiceDetailsScreen extends StatefulWidget {
   const InvoiceDetailsScreen({
@@ -164,6 +169,12 @@ class _InvoiceDetailsViewState extends State<InvoiceDetailsView> {
                   onPrintAudit: () => _showPrintAudit(order),
                   onVoid: _canVoid(order) ? _viewModel.voidInvoice : null,
                   onReturn: _canReturn(order) ? _viewModel.returnItems : null,
+                  isRecordingPayment: _viewModel.isRecordingPayment,
+                  onRecordPayment: _recordPayment,
+                  isConverting: _viewModel.isConverting,
+                  onConvert: widget.capabilities.canCheckoutSale
+                      ? _convertQuotation
+                      : null,
                 ),
               );
 
@@ -228,6 +239,99 @@ class _InvoiceDetailsViewState extends State<InvoiceDetailsView> {
       documentId: order.id,
       documentNumber: _receiptNumber(l10n, order),
     );
+  }
+
+  /// Opens the per-invoice payment dialog (cards allowed) and records the
+  /// payment. Returns true on success so the shared surface can confirm.
+  Future<bool> _recordPayment(SaleOrder order) async {
+    final trustedTerminalIds = await _loadTrustedCardTerminalIds();
+    if (!mounted) {
+      return false;
+    }
+    final l10n = AppLocalizations.of(context)!;
+    final result = await showRecordPaymentDialog(
+      context,
+      title: l10n.invoicePaymentTitle,
+      maxAmount: order.balanceDue,
+      balanceLabel: l10n.invoicePaymentBalanceValue(
+        formatMoney(order.balanceDue),
+      ),
+      methods: customerPaymentMethodOptions(l10n),
+      proofToggleLabel: l10n.invoicePaymentPrintProofLabel,
+      trustedCardTerminalIds: trustedTerminalIds,
+    );
+    if (result == null) {
+      return false;
+    }
+
+    return _viewModel.recordPayment(
+      method: PaymentMethod.fromApiValue(result.methodApiValue),
+      amount: result.amount,
+      cardReceiptUrl: result.cardReceiptUrl,
+      printProof: result.printProof,
+    );
+  }
+
+  /// Opens the convert dialog for an OPEN quotation, performs the conversion,
+  /// and on success replaces this screen with the NEW sale's details.
+  Future<bool> _convertQuotation(SaleOrder order) async {
+    final l10n = AppLocalizations.of(context)!;
+    final navigator = Navigator.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+    final result = await showDialog<ConvertQuotationResult>(
+      context: context,
+      builder: (_) => ConvertQuotationDialog(order: order),
+    );
+    if (result == null) {
+      return false;
+    }
+
+    final newOrder = await _viewModel.convertQuotation(
+      saleType: result.saleType,
+      amountReceived: result.amountReceived,
+    );
+    if (!mounted) {
+      return newOrder != null;
+    }
+
+    messenger
+      ..clearSnackBars()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(
+            newOrder != null
+                ? l10n.convertQuotationSuccess
+                : l10n.convertQuotationError,
+          ),
+        ),
+      );
+    if (newOrder == null) {
+      return false;
+    }
+
+    // Open the freshly-created sale, replacing the (now-converted) quotation.
+    navigator.pushReplacement(
+      MaterialPageRoute<void>(
+        builder: (_) => InvoiceDetailsScreen(
+          saleRepository: widget.saleRepository,
+          printingRepository: widget.printingRepository,
+          shopSettingsRepository: widget.shopSettingsRepository,
+          initialOrder: newOrder,
+          capabilities: widget.capabilities,
+          analyticsEngine: widget.analyticsEngine,
+        ),
+      ),
+    );
+    return true;
+  }
+
+  Future<List<String>> _loadTrustedCardTerminalIds() async {
+    final result = await widget.shopSettingsRepository.loadSettings();
+    return switch (result) {
+      Ok<ShopSettings>(value: final settings) =>
+        settings.trustedCardTerminalIds,
+      Error<ShopSettings>() => const <String>[],
+    };
   }
 }
 

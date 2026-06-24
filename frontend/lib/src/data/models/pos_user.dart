@@ -41,6 +41,7 @@ class PosUser {
     this.permissions = const {},
     this.hasPermissionSnapshot = false,
     this.aiAvailable = false,
+    this.allowCashierCustomerAccess = false,
   });
 
   final int id;
@@ -57,6 +58,11 @@ class PosUser {
   /// Whether the shop's AI entitlement is active for this session. Sourced from
   /// the auth response's top-level `ai_available` flag, not a user attribute.
   final bool aiAvailable;
+
+  /// Whether cashiers may look up customers and collect customer debt (a
+  /// manager-controlled shop setting). Top-level auth-response flag, like
+  /// [aiAvailable].
+  final bool allowCashierCustomerAccess;
 
   String get label => displayName.trim().isEmpty ? username : displayName;
 
@@ -83,6 +89,7 @@ class PosUser {
       permissions: _permissionsFromJson(_permissionPayload(json)),
       hasPermissionSnapshot: _permissionPayload(json) != null,
       aiAvailable: json['ai_available'] == true,
+      allowCashierCustomerAccess: json['allow_cashier_customer_access'] == true,
     );
   }
 

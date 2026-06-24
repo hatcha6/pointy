@@ -158,6 +158,8 @@ class PrintAuditEventViewSet(
     queryset = PrintAuditEvent.objects.select_related(
         "sale_order",
         "purchase_order",
+        "payment",
+        "supplier_payment",
         "print_job",
         "user",
         "agent",
@@ -168,6 +170,8 @@ class PrintAuditEventViewSet(
         "status",
         "sale_order",
         "purchase_order",
+        "payment",
+        "supplier_payment",
         "print_job",
         "agent",
         "user",

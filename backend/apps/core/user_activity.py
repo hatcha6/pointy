@@ -12,6 +12,7 @@ from apps.purchasing.models import (
 )
 from apps.sales.models import (
     Order,
+    recognized_sale_q,
     OrderAdjustment,
     RegisterCashMovement,
     RegisterSession,
@@ -24,9 +25,9 @@ RECENT_LIMIT = 5
 def build_user_activity(user):
     owner_key = f"user:{user.pk}"
     register_sessions = RegisterSession.objects.filter(owner_key=owner_key)
-    sales_orders = Order.objects.filter(
+    sales_orders = Order.objects.transactional().filter(
         register_session__owner_key=owner_key,
-    ).exclude(status=Order.Status.OPEN)
+    )
     sales_adjustments = OrderAdjustment.objects.filter(created_by=user)
     cash_movements = RegisterCashMovement.objects.filter(created_by=user)
 
@@ -95,7 +96,7 @@ def _sales_summary(orders, adjustments):
             filter=Q(customer__isnull=False),
             distinct=True,
         ),
-        paid_total=Sum("total", filter=Q(status=Order.Status.PAID)),
+        paid_total=Sum("total", filter=recognized_sale_q()),
         void_total=Sum("total", filter=Q(status=Order.Status.VOID)),
     )
     adjustment_totals = adjustments.aggregate(

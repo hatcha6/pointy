@@ -2412,6 +2412,25 @@
   "paymentMethodTransfer": "تحويل",
   "requireCardReceiptSettingLabel": "إلزام مسح ومطابقة إيصال البطاقة",
   "requireCardReceiptSettingSubtitle": "يجب مسح رابط QR من إيصال معاملات ومطابقة المبلغ لكل دفعة بطاقة.",
+  "requireCustomerForCreditLabel": "طلب عميل للبيع الآجل وعروض الأسعار",
+  "requireCustomerForCreditSubtitle": "عند تفعيله يجب اختيار عميل قبل إتمام بيع آجل أو عرض سعر.",
+  "allowCashierCustomerAccessLabel": "السماح للكاشير بالعملاء والتحصيل",
+  "allowCashierCustomerAccessSubtitle": "يتيح للكاشير اختيار عميل للبيع الآجل/عرض السعر وتحصيل ديون العملاء — دون رؤية فواتير الكاشيرين الآخرين أو تعديل بيانات العملاء.",
+  "collectDebtTitle": "تحصيل دين",
+  "collectDebtPickCustomer": "اختر عميلاً للتحصيل",
+  "collectDebtChangeCustomer": "تغيير العميل",
+  "collectDebtLoadError": "تعذّر تحميل رصيد العميل. حاول مرة أخرى.",
+  "collectDebtOutstanding": "المتبقّي على العميل: {amount}",
+  "@collectDebtOutstanding": {
+    "description": "Customer outstanding debt total shown in the collect-debt flow.",
+    "placeholders": {
+      "amount": {"type": "String"}
+    }
+  },
+  "collectDebtNoDebt": "لا يوجد دين على هذا العميل.",
+  "collectDebtRecordPayment": "تسجيل دفعة",
+  "collectDebtRecordedMessage": "تم تسجيل الدفعة وتحصيل الدين.",
+  "collectDebtFailedMessage": "تعذّر تسجيل الدفعة. حاول مرة أخرى.",
   "trustedCardTerminalIdsLabel": "أجهزة البطاقة الموثوقة",
   "trustedCardTerminalIdsHelper": "حدد أجهزة البطاقة التي تقبل إيصالاتها عند مطابقة الدفع. اترك القائمة فارغة لقبول أي جهاز.",
   "manageTrustedCardTerminalsButton": "إدارة الأجهزة",
@@ -3456,6 +3475,7 @@
   "supplierPaymentAmountLabel": "المبلغ",
   "supplierPaymentReferenceLabel": "مرجع اختياري",
   "supplierPaymentNotesLabel": "ملاحظات اختيارية",
+  "supplierPaymentPrintProofLabel": "طباعة سند صرف",
   "supplierPaymentPositiveAmountError": "أدخل مبلغًا أكبر من صفر ولا يتجاوز المتبقي.",
   "supplierPaymentSuccess": "تم تسجيل دفعة المورد لأمر الشراء رقم {orderNumber}.",
   "@supplierPaymentSuccess": {
@@ -3997,6 +4017,32 @@
   "customerNotesLabel": "الملاحظات",
   "customerTotalInvoicedLabel": "إجمالي الفواتير",
   "customerNetSalesLabel": "صافي المبيعات",
+  "customerOutstandingBalanceLabel": "الرصيد المستحق",
+  "recordCustomerPaymentButton": "تسجيل دفعة",
+  "customerOutstandingBalanceCalloutTitle": "على هذا العميل رصيد مستحق قدره {amount}.",
+  "@customerOutstandingBalanceCalloutTitle": {
+    "description": "Title of the outstanding-balance callout on the customer details screen.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "customerOutstandingBalanceCalloutBody": "تُوزَّع الدفعة تلقائيًا على أقدم الفواتير الآجلة أولًا.",
+  "customerAccountPaymentTitle": "تسجيل دفعة على الحساب",
+  "customerAccountPaymentAmountLabel": "المبلغ",
+  "customerAccountPaymentOutstandingValue": "الرصيد المستحق: {amount}",
+  "@customerAccountPaymentOutstandingValue": {
+    "description": "Shows the customer's outstanding balance inside the account-payment dialog.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "customerAccountPaymentAmountError": "أدخل مبلغًا أكبر من صفر ولا يتجاوز الرصيد المستحق.",
+  "customerAccountPaymentSuccess": "تم تسجيل الدفعة على حساب العميل.",
+  "customerAccountPaymentError": "تعذّر تسجيل الدفعة. حاول مرة أخرى.",
   "customerInvoiceCountLabel": "عدد الفواتير",
   "customerInvoiceCountValue": "{count, plural, =0{لا توجد فواتير} =1{فاتورة واحدة} =2{فاتورتان} other{{count} فواتير}}",
   "@customerInvoiceCountValue": {
@@ -4198,6 +4244,25 @@
   "changeDueLabel": "الباقي للعميل",
   "paymentTotalTooLowError": "يجب أن يغطي مجموع الدفعات إجمالي البيع.",
   "confirmPaymentButton": "تأكيد الدفع",
+  "saleTypeLabel": "نوع البيع",
+  "saleTypeStandardLabel": "عادي",
+  "saleTypeCreditLabel": "آجل",
+  "saleTypeQuotationLabel": "عرض سعر",
+  "saleCustomerRequiredBanner": "اختر عميلًا قبل إتمام بيع آجل أو عرض سعر.",
+  "creditBalanceDueLabel": "المتبقّي على العميل",
+  "creditDownPaymentTooHighError": "المبلغ المدفوع أكبر من الإجمالي.",
+  "creditFullyOnAccountHint": "كامل المبلغ سيُسجَّل دَينًا على العميل. أضِف دفعة مقدّمة إن وُجدت.",
+  "creditDownPaymentHint": "المبلغ المُدخَل دفعة مقدّمة؛ والباقي يُسجَّل دَينًا على العميل.",
+  "creditDownPaymentTenderTitle": "دفعة مقدّمة",
+  "addDownPaymentButton": "إضافة دفعة مقدّمة",
+  "printDownPaymentProofLabel": "طباعة سند قبض",
+  "printDownPaymentProofSubtitle": "طباعة إيصال بالدفعة المقدّمة على البيع الآجل.",
+  "quotationTotalLabel": "إجمالي العرض",
+  "quotationReserveStockLabel": "حجز الكمية",
+  "quotationReserveStockSubtitle": "حجز الكميات المعروضة دون خصمها من المخزون حتى انتهاء صلاحية العرض.",
+  "quotationValidUntilLabel": "صالح حتى",
+  "quotationValidUntilUnset": "اختر تاريخًا",
+  "quotationNoPaymentHint": "عرض السعر لا يتضمّن أي دفع ولا يخصم من المخزون.",
   "noEnabledPaymentMethods": "لا توجد طريقة دفع مفعلة. راجع إعدادات المتجر.",
   "printInvoiceAfterPaymentLabel": "طباعة الفاتورة بعد الدفع",
   "saleCheckoutSuccess": "تم تسجيل البيع.",
@@ -4468,6 +4533,41 @@
   "invoiceLinesTitle": "المنتجات",
   "invoiceLinesEmpty": "لا توجد منتجات في هذه الفاتورة.",
   "invoicePaymentsEmpty": "لا توجد مدفوعات مسجلة لهذه الفاتورة.",
+  "recordInvoicePaymentButton": "تسجيل دفعة",
+  "invoiceCreditBalanceCalloutTitle": "آجل — المتبقّي {amount}.",
+  "@invoiceCreditBalanceCalloutTitle": {
+    "description": "Callout title on a credit invoice that still carries a balance.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "invoiceCreditBalanceCalloutBody": "فاتورة آجلة لم يُسدَّد منها شيء بعد.",
+  "invoiceCreditBalancePaidValue": "المدفوع حتى الآن: {amount}",
+  "@invoiceCreditBalancePaidValue": {
+    "description": "Shows how much has already been paid on a partly-paid credit invoice.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "invoicePaymentTitle": "تسجيل دفعة على الفاتورة",
+  "invoicePaymentAmountLabel": "المبلغ",
+  "invoicePaymentReferenceLabel": "مرجع اختياري",
+  "invoicePaymentPrintProofLabel": "طباعة سند قبض",
+  "invoicePaymentBalanceValue": "المتبقّي على الفاتورة: {amount}",
+  "@invoicePaymentBalanceValue": {
+    "description": "Shows the invoice's remaining balance inside the payment dialog.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "invoicePaymentAmountError": "أدخل مبلغًا أكبر من صفر ولا يتجاوز المتبقّي.",
+  "invoicePaymentSuccess": "تم تسجيل الدفعة على الفاتورة.",
   "invoiceTotalsTitle": "الإجماليات",
   "invoiceOrderingNewest": "الأحدث أولًا",
   "invoiceOrderingUpdated": "آخر تحديث أولًا",
@@ -6603,5 +6703,84 @@
   "migrationSourceSaveError": "تعذّر حفظ المصدر",
   "migrationRunStartError": "تعذّر بدء العملية",
   "migrationDryRunStarted": "بدأ التشغيل التجريبي",
-  "migrationImportStarted": "بدأ النقل"
+  "migrationImportStarted": "بدأ النقل",
+  "paymentsHubDrawerLabel": "الخزينة",
+  "paymentsHubTitle": "الخزينة",
+  "paymentsHubRefreshTooltip": "تحديث المدفوعات",
+  "paymentsHubSegmentCustomer": "مدفوعات العملاء (وارد)",
+  "paymentsHubSegmentSupplier": "مدفوعات الموردين (صادر)",
+  "paymentsHubFilterAllMethods": "كل الطرق",
+  "paymentsHubFilterDateRange": "نطاق التاريخ",
+  "paymentsHubFilterDateRangeValue": "{start} - {end}",
+  "@paymentsHubFilterDateRangeValue": {
+    "description": "Selected payments date-range chip label.",
+    "placeholders": {
+      "start": {"type": "String"},
+      "end": {"type": "String"}
+    }
+  },
+  "paymentsHubClearFilters": "مسح عوامل التصفية",
+  "paymentsHubCustomerEmptyTitle": "لا توجد مدفوعات عملاء",
+  "paymentsHubCustomerEmptyMessage": "ستظهر هنا المبالغ المحصّلة من العملاء.",
+  "paymentsHubSupplierEmptyTitle": "لا توجد مدفوعات موردين",
+  "paymentsHubSupplierEmptyMessage": "ستظهر هنا المبالغ المدفوعة للموردين.",
+  "paymentsHubLoadError": "تعذّر تحميل المدفوعات",
+  "paymentsHubWalkInCustomer": "عميل نقدي",
+  "paymentsHubUnknownSupplier": "مورد غير محدد",
+  "paymentsHubInvoiceValue": "فاتورة {number}",
+  "@paymentsHubInvoiceValue": {
+    "description": "Linked customer invoice number on a payment row.",
+    "placeholders": {
+      "number": {"type": "String"}
+    }
+  },
+  "paymentsHubPurchaseOrderValue": "أمر شراء {number}",
+  "@paymentsHubPurchaseOrderValue": {
+    "description": "Linked purchase order number on a supplier payment row.",
+    "placeholders": {
+      "number": {"type": "String"}
+    }
+  },
+  "paymentsHubCommissionValue": "عمولة {amount}",
+  "@paymentsHubCommissionValue": {
+    "description": "Commission charged on a payment.",
+    "placeholders": {
+      "amount": {"type": "String"}
+    }
+  },
+  "paymentsHubReferenceValue": "مرجع: {reference}",
+  "@paymentsHubReferenceValue": {
+    "description": "External reference on a payment row.",
+    "placeholders": {
+      "reference": {"type": "String"}
+    }
+  },
+  "paymentsHubRecordedByValue": "سجّلها {username}",
+  "@paymentsHubRecordedByValue": {
+    "description": "Who recorded the payment.",
+    "placeholders": {
+      "username": {"type": "String"}
+    }
+  },
+  "paymentsHubReprintProofAction": "إعادة طباعة سند",
+  "paymentsHubPrintLogAction": "سجل الطباعة",
+  "paymentsHubReprintSuccess": "تمت إعادة طباعة السند",
+  "paymentsHubReprintError": "تعذّرت إعادة طباعة السند",
+  "convertQuotationButton": "تحويل إلى بيع",
+  "convertQuotationDialogTitle": "تحويل عرض السعر إلى بيع",
+  "convertQuotationSaleTypeLabel": "نوع البيع",
+  "convertQuotationSaleTypeStandard": "عادي",
+  "convertQuotationSaleTypeCredit": "آجل",
+  "convertQuotationDownPaymentLabel": "الدفعة المقدمة",
+  "convertQuotationDownPaymentHelper": "اختياري — المبلغ المحصّل عند التحويل.",
+  "convertQuotationStandardHint": "يتطلب البيع العادي سداد كامل المبلغ ({total}).",
+  "@convertQuotationStandardHint": {
+    "description": "Hint shown when converting to a standard (paid-in-full) sale.",
+    "placeholders": {
+      "total": {"type": "String"}
+    }
+  },
+  "convertQuotationConfirm": "تحويل",
+  "convertQuotationSuccess": "تم تحويل عرض السعر إلى بيع",
+  "convertQuotationError": "تعذّر تحويل عرض السعر"
 }

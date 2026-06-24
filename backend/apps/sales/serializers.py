@@ -27,7 +27,10 @@ from .services import (
     checkout_line_key,
     checkout_loss_lines,
     checkout_order,
+    convert_quotation_to_sale,
     create_order_with_lines,
+    record_customer_account_payment,
+    record_customer_payment,
     return_order_items,
     unapplied_coupon_codes,
     validate_order_adjustment_allowed,
@@ -342,6 +345,17 @@ class OrderSerializer(serializers.ModelSerializer):
         decimal_places=2,
         read_only=True,
     )
+    amount_paid = serializers.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        read_only=True,
+    )
+    balance_due = serializers.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        read_only=True,
+    )
+    payment_status = serializers.CharField(read_only=True)
 
     class Meta:
         model = Order
@@ -349,6 +363,11 @@ class OrderSerializer(serializers.ModelSerializer):
             "id",
             "receipt_number",
             "status",
+            "sale_type",
+            "valid_until",
+            "amount_paid",
+            "balance_due",
+            "payment_status",
             "register_session",
             "register_session_number",
             "sales_channel",
@@ -376,6 +395,11 @@ class OrderSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = (
             "receipt_number",
+            "sale_type",
+            "valid_until",
+            "amount_paid",
+            "balance_due",
+            "payment_status",
             "register_session",
             "register_session_number",
             "sales_channel",
@@ -715,7 +739,10 @@ class CheckoutSerializer(serializers.Serializer):
     )
     payments = CheckoutPaymentSerializer(
         many=True,
-        allow_empty=False,
+        # Empty is allowed: a fully-on-credit (آجل) or quotation sale takes no
+        # payment, and the POS sends `payments: []` for it. validate() still
+        # enforces the per-sale-type rules (a standard sale must cover the total).
+        allow_empty=True,
         required=False,
     )
     payment_method = serializers.ChoiceField(required=False, choices=[])
@@ -737,6 +764,15 @@ class CheckoutSerializer(serializers.Serializer):
         allow_empty=True,
         write_only=True,
     )
+    sale_type = serializers.ChoiceField(
+        choices=Order.SaleType.choices,
+        required=False,
+        default=Order.SaleType.STANDARD,
+    )
+    # Quotation/credit expiry; for a quotation it also bounds any stock hold.
+    valid_until = serializers.DateField(required=False, allow_null=True)
+    # Quotation-only: hold the quoted quantities until valid_until.
+    reserve_stock = serializers.BooleanField(required=False, default=False)
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -760,21 +796,40 @@ class CheckoutSerializer(serializers.Serializer):
             )
         total = discount_result.total
 
+        from apps.payments.models import Payment
+
+        sale_type = attrs.get("sale_type", Order.SaleType.STANDARD)
+        # A quotation (عرض سعر) or credit/debt invoice (آجل) can be required to
+        # name a customer so the receivable stays collectable.
+        if (
+            sale_type in (Order.SaleType.QUOTATION, Order.SaleType.CREDIT)
+            and settings.require_customer_for_credit
+            and attrs.get("customer") is None
+        ):
+            raise serializers.ValidationError(
+                {"customer": "A customer is required for a quotation or debt invoice."}
+            )
+
         payments = attrs.get("payments")
         if payments is None:
-            from apps.payments.models import Payment
-
             payment_method = attrs.get("payment_method", Payment.Method.CASH)
-            if not settings.payment_method_enabled(payment_method):
-                raise serializers.ValidationError(
-                    {"payment_method": "Payment method is disabled."}
-                )
-            payments = [
-                {
-                    "method": payment_method,
-                    "amount": attrs.get("amount_received", total),
-                }
-            ]
+            # Default tender by sale type: a standard sale is paid in full; a
+            # credit sale takes only the optional down-payment (default none); a
+            # quotation takes nothing.
+            if sale_type == Order.SaleType.QUOTATION:
+                default_amount = Decimal("0.00")
+            elif sale_type == Order.SaleType.CREDIT:
+                default_amount = attrs.get("amount_received") or Decimal("0.00")
+            else:
+                default_amount = attrs.get("amount_received", total)
+            if default_amount > 0:
+                if not settings.payment_method_enabled(payment_method):
+                    raise serializers.ValidationError(
+                        {"payment_method": "Payment method is disabled."}
+                    )
+                payments = [{"method": payment_method, "amount": default_amount}]
+            else:
+                payments = []
 
         disabled_methods = [
             payment["method"]
@@ -790,14 +845,28 @@ class CheckoutSerializer(serializers.Serializer):
             (payment["amount"] for payment in payments),
             Decimal("0.00"),
         ).quantize(Decimal("0.01"))
-        if paid_total < total:
-            raise serializers.ValidationError(
-                {"payments": "Payment total must cover the order total."}
-            )
-        if paid_total > total:
-            raise serializers.ValidationError(
-                {"payments": "Payment total cannot exceed the order total."}
-            )
+        # Payment rules by sale type: a quotation takes no money; a credit sale
+        # allows a partial (or zero) down-payment but never an overpayment; a
+        # standard sale must be paid exactly in full.
+        if sale_type == Order.SaleType.QUOTATION:
+            if paid_total > 0:
+                raise serializers.ValidationError(
+                    {"payments": "A quotation cannot take a payment."}
+                )
+        elif sale_type == Order.SaleType.CREDIT:
+            if paid_total > total:
+                raise serializers.ValidationError(
+                    {"payments": "Payment total cannot exceed the order total."}
+                )
+        else:
+            if paid_total < total:
+                raise serializers.ValidationError(
+                    {"payments": "Payment total must cover the order total."}
+                )
+            if paid_total > total:
+                raise serializers.ValidationError(
+                    {"payments": "Payment total cannot exceed the order total."}
+                )
 
         attrs["computed_total"] = total
         attrs["discount_result"] = discount_result
@@ -813,6 +882,9 @@ class CheckoutSerializer(serializers.Serializer):
             customer=validated_data.get("customer"),
             coupon_codes=validated_data.get("coupon_codes", ()),
             discount_result=validated_data.get("discount_result"),
+            sale_type=validated_data.get("sale_type", Order.SaleType.STANDARD),
+            valid_until=validated_data.get("valid_until"),
+            reserve_stock=validated_data.get("reserve_stock", False),
             request=self.context.get("request"),
         )
 
@@ -823,6 +895,127 @@ def normalized_checkout_coupon_codes(attrs):
     if single_code:
         coupon_codes.append(single_code)
     return tuple(coupon_codes)
+
+
+class CustomerInvoicePaymentSerializer(serializers.Serializer):
+    """Record a single payment against one invoice's balance. Mirrors the PO
+    supplier-payment dialog. Context: ``order``, ``register_session``, ``request``."""
+
+    method = serializers.ChoiceField(choices=[])
+    amount = serializers.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        min_value=Decimal("0.01"),
+    )
+    card_receipt_url = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        trim_whitespace=True,
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        from apps.payments.models import Payment
+
+        self.fields["method"].choices = Payment.Method.choices
+
+    def save(self, **kwargs):
+        return record_customer_payment(
+            self.context["order"],
+            method=self.validated_data["method"],
+            amount=self.validated_data["amount"],
+            card_receipt_url=self.validated_data.get("card_receipt_url", ""),
+            register_session=self.context["register_session"],
+            request=self.context.get("request"),
+        )
+
+
+class CustomerAccountPaymentSerializer(serializers.Serializer):
+    """Record a payment against a customer's account, allocated oldest-first
+    across their open debt invoices. Cash, transfer, or card — a card swipe is one
+    receipt for the whole collection, validated once against the total then split.
+    Context: ``customer``, ``register_session``, ``request``."""
+
+    method = serializers.ChoiceField(choices=[])
+    amount = serializers.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        min_value=Decimal("0.01"),
+    )
+    card_receipt_url = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        trim_whitespace=True,
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        from apps.payments.models import Payment
+
+        self.fields["method"].choices = [
+            (Payment.Method.CASH, "Cash"),
+            (Payment.Method.TRANSFER, "Transfer"),
+            (Payment.Method.CARD, "Card"),
+        ]
+
+    def save(self, **kwargs):
+        return record_customer_account_payment(
+            self.context["customer"],
+            method=self.validated_data["method"],
+            amount=self.validated_data["amount"],
+            card_receipt_url=self.validated_data.get("card_receipt_url", ""),
+            register_session=self.context["register_session"],
+            request=self.context.get("request"),
+        )
+
+
+class ConvertQuotationSerializer(serializers.Serializer):
+    """Convert a quotation into a standard or credit sale, optionally taking a
+    down-payment. Context: ``quotation``, ``register_session``, ``request``."""
+
+    sale_type = serializers.ChoiceField(
+        choices=[
+            (Order.SaleType.STANDARD, "Standard"),
+            (Order.SaleType.CREDIT, "Credit"),
+        ],
+    )
+    payments = CheckoutPaymentSerializer(many=True, required=False, allow_empty=True)
+    payment_method = serializers.ChoiceField(required=False, choices=[])
+    amount_received = serializers.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        min_value=Decimal("0.00"),
+        required=False,
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        from apps.payments.models import Payment
+
+        self.fields["payment_method"].choices = Payment.Method.choices
+
+    def validate(self, attrs):
+        payments = attrs.get("payments")
+        if payments is None:
+            amount = attrs.get("amount_received") or Decimal("0.00")
+            if amount > 0:
+                from apps.payments.models import Payment
+
+                method = attrs.get("payment_method", Payment.Method.CASH)
+                payments = [{"method": method, "amount": amount}]
+            else:
+                payments = []
+        attrs["payments_data"] = payments
+        return attrs
+
+    def save(self, **kwargs):
+        return convert_quotation_to_sale(
+            self.context["quotation"],
+            sale_type=self.validated_data["sale_type"],
+            payments_data=self.validated_data["payments_data"],
+            register_session=self.context["register_session"],
+            request=self.context.get("request"),
+        )
 
 
 class DiscountPreviewSerializer(serializers.Serializer):

@@ -35,8 +35,14 @@ from .models import (
     OrderLineModifier,
     RegisterCashMovement,
     RegisterSession,
+    StockReservation,
 )
-from .services import return_order_items
+from .services import (
+    prepare_sale_stock_adjustments,
+    release_quote_reservations,
+    reserve_stock_for_quote,
+    return_order_items,
+)
 
 
 class CheckoutLoadRampTests(SimpleTestCase):
@@ -2361,3 +2367,495 @@ class OrderListQueryCountTests(TestCase):
         # settings, or the manager check would make the five-order page issue
         # strictly more queries than the two-order page.
         self.assertEqual(len(few_orders), len(more_orders))
+
+
+class StockReservationTests(TestCase):
+    """A quotation hold blocks others from the reserved units (availability =
+    on-hand − committed) without moving on-hand, and releasing restores it."""
+
+    def setUp(self):
+        ShopSettings.objects.update_or_create(
+            pk=1, defaults={"allow_overselling": False}
+        )
+        self.product = create_product_with_default_variant(
+            sku="RESV", name="سلعة محجوزة", unit_price=Decimal("5.00")
+        )
+        self.variant = self.product.default_variant
+        self.stock, _ = StockItem.objects.update_or_create(
+            variant=self.variant,
+            defaults={"quantity_on_hand": Decimal("10.000")},
+        )
+
+    def _quote(self, qty):
+        order = Order.objects.create(
+            sale_type=Order.SaleType.QUOTATION,
+            subtotal=Decimal("5.00") * qty,
+            total=Decimal("5.00") * qty,
+        )
+        OrderLine.objects.create(
+            order=order,
+            variant=self.variant,
+            quantity=Decimal(qty),
+            unit_price=Decimal("5.00"),
+        )
+        return order
+
+    def test_reserve_holds_committed_without_moving_on_hand(self):
+        order = self._quote(3)
+        reserve_stock_for_quote(order)
+        self.stock.refresh_from_db()
+        self.assertEqual(self.stock.quantity_on_hand, Decimal("10.000"))
+        self.assertEqual(self.stock.quantity_committed, Decimal("3.000"))
+        self.assertEqual(
+            order.stock_reservations.filter(
+                status=StockReservation.Status.ACTIVE
+            ).count(),
+            1,
+        )
+
+    def test_reservation_blocks_others_from_held_units(self):
+        reserve_stock_for_quote(self._quote(8))
+        # Only 2 of 10 remain sellable once 8 are committed.
+        with self.assertRaises(serializers.ValidationError):
+            prepare_sale_stock_adjustments(
+                [{"variant": self.variant, "quantity": Decimal("3")}]
+            )
+        adjustments = prepare_sale_stock_adjustments(
+            [{"variant": self.variant, "quantity": Decimal("2")}]
+        )
+        self.assertEqual(len(adjustments), 1)
+
+    def test_release_restores_availability(self):
+        order = self._quote(4)
+        reserve_stock_for_quote(order)
+        release_quote_reservations(order)
+        self.stock.refresh_from_db()
+        self.assertEqual(self.stock.quantity_committed, Decimal("0.000"))
+        self.assertEqual(
+            order.stock_reservations.filter(
+                status=StockReservation.Status.RELEASED
+            ).count(),
+            1,
+        )
+
+
+class CreditAndQuotationCheckoutTests(TestCase):
+    """End-to-end checkout for debt (آجل) and quotation (عرض سعر) sale types:
+    accrual recognition, partial down-payments, stock isolation, the
+    customer-required gate, and per-type payment rules."""
+
+    def setUp(self):
+        ensure_role_groups()
+        self.client = APIClient()
+        self.user = get_user_model().objects.create_user(
+            username="credit-cashier", password="pass"
+        )
+        self.user.groups.add(Group.objects.get(name=CASHIER_GROUP))
+        self.client.force_authenticate(user=self.user)
+        self.product = create_product_with_default_variant(
+            sku="WIDGET", barcode="", name="Widget", unit_price=Decimal("3.50")
+        )
+        self.variant = self.product.default_variant
+        self.stock_item = StockItem.objects.create(
+            variant=self.variant, quantity_on_hand=10
+        )
+        self.customer = Customer.objects.create(full_name="Debt Customer")
+        session_id = self.client.post(
+            reverse("register-session-start"),
+            {"opening_cash": "0.00"},
+            format="json",
+        ).data["id"]
+        self.session = RegisterSession.objects.get(pk=session_id)
+
+    def _checkout(self, **overrides):
+        payload = {"lines": [{"variant": self.variant.pk, "quantity": 2}]}
+        payload.update(overrides)
+        return self.client.post(reverse("order-checkout"), payload, format="json")
+
+    def test_credit_invoice_fully_on_credit_accepts_empty_payments(self):
+        # The POS sends `payments: []` for a fully-on-credit sale (no
+        # down-payment). The field must accept the empty list (regression: it was
+        # rejected field-level with "This list may not be empty." before
+        # validate() — which allows zero payment for credit — ever ran).
+        response = self._checkout(
+            sale_type="credit",
+            customer=self.customer.pk,
+            payments=[],
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        order = Order.objects.get(pk=response.data["id"])
+        self.assertEqual(order.status, Order.Status.OPEN)
+        self.assertEqual(order.balance_due, Decimal("7.00"))
+        self.assertEqual(order.amount_paid, Decimal("0.00"))
+        self.assertEqual(response.data["payment_status"], "unpaid")
+
+    def test_standard_sale_still_rejects_empty_payments(self):
+        # allow_empty=True must not let a STANDARD sale skip payment.
+        response = self._checkout(payments=[])
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_credit_invoice_with_down_payment_is_open_with_balance(self):
+        response = self._checkout(
+            sale_type="credit",
+            customer=self.customer.pk,
+            payment_method="cash",
+            amount_received="3.00",
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        order = Order.objects.get(pk=response.data["id"])
+        self.assertEqual(order.sale_type, Order.SaleType.CREDIT)
+        self.assertEqual(order.status, Order.Status.OPEN)
+        self.assertEqual(order.balance_due, Decimal("4.00"))
+        self.assertEqual(order.amount_paid, Decimal("3.00"))
+        self.assertEqual(response.data["payment_status"], "partial")
+        # Accrual: stock leaves at issue and the sale is recognized immediately.
+        self.stock_item.refresh_from_db()
+        self.assertEqual(self.stock_item.quantity_on_hand, 8)
+        self.assertIn(order, Order.objects.committed_sales())
+        # The drawer reflects only the cash down-payment, not the full total.
+        self.assertEqual(self.session.cash_sales_total, Decimal("3.00"))
+
+    def test_credit_invoice_paid_in_full_marks_paid(self):
+        response = self._checkout(
+            sale_type="credit",
+            customer=self.customer.pk,
+            payment_method="cash",
+            amount_received="7.00",
+        )
+        order = Order.objects.get(pk=response.data["id"])
+        self.assertEqual(order.status, Order.Status.PAID)
+        self.assertEqual(order.balance_due, Decimal("0.00"))
+
+    def test_credit_invoice_rejects_overpayment(self):
+        response = self._checkout(
+            sale_type="credit",
+            customer=self.customer.pk,
+            payments=[{"method": "cash", "amount": "8.00"}],
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_credit_requires_customer_when_setting_enabled(self):
+        # require_customer_for_credit defaults True.
+        response = self._checkout(
+            sale_type="credit", payment_method="cash", amount_received="0.00"
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("customer", response.data)
+
+    def test_quotation_makes_no_sale_and_no_stock_movement(self):
+        response = self._checkout(sale_type="quotation", customer=self.customer.pk)
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        order = Order.objects.get(pk=response.data["id"])
+        self.assertEqual(order.sale_type, Order.SaleType.QUOTATION)
+        self.assertEqual(order.payments.count(), 0)
+        self.assertEqual(response.data["payment_status"], "quotation")
+        self.stock_item.refresh_from_db()
+        self.assertEqual(self.stock_item.quantity_on_hand, 10)
+        self.assertEqual(self.stock_item.quantity_committed, 0)
+        self.assertNotIn(order, Order.objects.committed_sales())
+        self.assertEqual(self.session.cash_sales_total, Decimal("0.00"))
+
+    def test_quotation_cannot_take_payment(self):
+        response = self._checkout(
+            sale_type="quotation",
+            customer=self.customer.pk,
+            payments=[{"method": "cash", "amount": "1.00"}],
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_quotation_with_reservation_holds_stock(self):
+        response = self._checkout(
+            sale_type="quotation",
+            customer=self.customer.pk,
+            reserve_stock=True,
+            valid_until="2099-12-31",
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        order = Order.objects.get(pk=response.data["id"])
+        self.stock_item.refresh_from_db()
+        self.assertEqual(self.stock_item.quantity_on_hand, 10)
+        self.assertEqual(self.stock_item.quantity_committed, 2)
+        self.assertEqual(order.stock_reservations.count(), 1)
+
+
+class CustomerPaymentAndConversionTests(TestCase):
+    """Recording payments against an invoice and against a customer's account,
+    plus converting a quotation in place (consuming any reservation exactly
+    once)."""
+
+    def setUp(self):
+        ensure_role_groups()
+        self.client = APIClient()
+        # Account-level collection is a manager/accountant action (it needs
+        # customers.view_customer); per-invoice payment is cashier-accessible.
+        self.user = get_user_model().objects.create_user(
+            username="collect-manager", password="pass"
+        )
+        self.user.groups.add(Group.objects.get(name=MANAGER_GROUP))
+        self.client.force_authenticate(user=self.user)
+        self.product = create_product_with_default_variant(
+            sku="GADGET", barcode="", name="Gadget", unit_price=Decimal("3.50")
+        )
+        self.variant = self.product.default_variant
+        self.stock_item = StockItem.objects.create(
+            variant=self.variant, quantity_on_hand=10
+        )
+        self.customer = Customer.objects.create(full_name="Collections Customer")
+        session_id = self.client.post(
+            reverse("register-session-start"),
+            {"opening_cash": "0.00"},
+            format="json",
+        ).data["id"]
+        self.session = RegisterSession.objects.get(pk=session_id)
+
+    def _checkout(self, **overrides):
+        payload = {
+            "lines": [{"variant": self.variant.pk, "quantity": 2}],
+            "customer": self.customer.pk,
+        }
+        payload.update(overrides)
+        return self.client.post(reverse("order-checkout"), payload, format="json")
+
+    def _credit_invoice(self):
+        # No down-payment -> fully on credit, balance 7.00.
+        return Order.objects.get(pk=self._checkout(sale_type="credit").data["id"])
+
+    def test_record_payment_settles_invoice(self):
+        invoice = self._credit_invoice()
+        response = self.client.post(
+            reverse("order-record-payment", args=[invoice.pk]),
+            {"method": "cash", "amount": "7.00"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        invoice.refresh_from_db()
+        self.assertEqual(invoice.status, Order.Status.PAID)
+        self.assertEqual(invoice.balance_due, Decimal("0.00"))
+        self.assertEqual(self.session.cash_sales_total, Decimal("7.00"))
+
+    def test_record_payment_rejects_overpayment(self):
+        invoice = self._credit_invoice()
+        response = self.client.post(
+            reverse("order-record-payment", args=[invoice.pk]),
+            {"method": "cash", "amount": "8.00"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_account_payment_allocates_oldest_first(self):
+        first = self._credit_invoice()
+        second = self._credit_invoice()
+        response = self.client.post(
+            reverse("customer-record-payment", args=[self.customer.pk]),
+            {"method": "cash", "amount": "10.00"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        first.refresh_from_db()
+        second.refresh_from_db()
+        self.assertEqual(first.status, Order.Status.PAID)
+        self.assertEqual(first.balance_due, Decimal("0.00"))
+        self.assertEqual(second.balance_due, Decimal("4.00"))
+        self.assertEqual(response.data["outstanding_balance"], "4.00")
+
+    def test_account_payment_card_splits_one_receipt_across_invoices(self):
+        # One terminal swipe for the whole outstanding (7 + 7 = 14): the receipt
+        # is validated once against the total, then split — both rows link to the
+        # SAME card.
+        first = self._credit_invoice()
+        second = self._credit_invoice()
+        response = self.client.post(
+            reverse("customer-record-payment", args=[self.customer.pk]),
+            {
+                "method": "card",
+                "amount": "14.00",
+                "card_receipt_url": _moamalat_receipt_url("14.000"),
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        first.refresh_from_db()
+        second.refresh_from_db()
+        self.assertEqual(first.status, Order.Status.PAID)
+        self.assertEqual(second.status, Order.Status.PAID)
+        card_payments = Payment.objects.filter(
+            order__customer=self.customer, method=Payment.Method.CARD
+        )
+        self.assertEqual(card_payments.count(), 2)
+        card_ids = {payment.card_id for payment in card_payments}
+        self.assertEqual(len(card_ids), 1)
+        self.assertIsNotNone(card_payments.first().card_id)
+
+    def test_account_payment_card_rejects_receipt_amount_mismatch(self):
+        self._credit_invoice()
+        response = self.client.post(
+            reverse("customer-record-payment", args=[self.customer.pk]),
+            {
+                "method": "card",
+                "amount": "7.00",
+                "card_receipt_url": _moamalat_receipt_url("5.000"),
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_account_payment_rejects_overpayment(self):
+        self._credit_invoice()
+        response = self.client.post(
+            reverse("customer-record-payment", args=[self.customer.pk]),
+            {"method": "cash", "amount": "20.00"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_convert_reserved_quotation_to_credit_moves_stock_once(self):
+        quote = Order.objects.get(
+            pk=self._checkout(
+                sale_type="quotation", reserve_stock=True, valid_until="2099-12-31"
+            ).data["id"]
+        )
+        self.stock_item.refresh_from_db()
+        self.assertEqual(self.stock_item.quantity_committed, 2)
+        response = self.client.post(
+            reverse("order-convert", args=[quote.pk]),
+            {"sale_type": "credit", "amount_received": "3.00"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        new_order = Order.objects.get(pk=response.data["id"])
+        self.assertEqual(new_order.sale_type, Order.SaleType.CREDIT)
+        self.assertEqual(new_order.status, Order.Status.OPEN)
+        self.assertEqual(new_order.balance_due, Decimal("4.00"))
+        quote.refresh_from_db()
+        self.assertEqual(quote.status, Order.Status.VOID)
+        self.assertEqual(quote.converted_to_id, new_order.pk)
+        # Reservation consumed and on-hand decremented exactly once.
+        self.stock_item.refresh_from_db()
+        self.assertEqual(self.stock_item.quantity_committed, 0)
+        self.assertEqual(self.stock_item.quantity_on_hand, 8)
+
+    def test_convert_to_standard_requires_full_payment_and_rolls_back(self):
+        quote = Order.objects.get(
+            pk=self._checkout(sale_type="quotation").data["id"]
+        )
+        response = self.client.post(
+            reverse("order-convert", args=[quote.pk]),
+            {"sale_type": "standard", "amount_received": "3.00"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        quote.refresh_from_db()
+        self.assertEqual(quote.sale_type, Order.SaleType.QUOTATION)
+        self.assertEqual(quote.status, Order.Status.OPEN)
+        self.stock_item.refresh_from_db()
+        self.assertEqual(self.stock_item.quantity_on_hand, 10)
+
+
+class CashierCustomerAccessTests(TestCase):
+    """``allow_cashier_customer_access`` lets a cashier look up customers and
+    collect a customer's debt — even one another user issued — without exposing
+    invoice lists or customer editing."""
+
+    def setUp(self):
+        ensure_role_groups()
+        self.customer = Customer.objects.create(full_name="Debtor")
+        product = create_product_with_default_variant(
+            sku="WIDGET", barcode="", name="Widget", unit_price=Decimal("5.00")
+        )
+        self.variant = product.default_variant
+        StockItem.objects.create(variant=self.variant, quantity_on_hand=20)
+
+        # A manager issues the credit invoice the cashier will later collect.
+        manager = get_user_model().objects.create_user(
+            username="access-manager", password="pass"
+        )
+        manager.groups.add(Group.objects.get(name=MANAGER_GROUP))
+        manager_client = APIClient()
+        manager_client.force_authenticate(user=manager)
+        manager_client.post(
+            reverse("register-session-start"),
+            {"opening_cash": "0.00"},
+            format="json",
+        )
+        self.invoice = Order.objects.get(
+            pk=manager_client.post(
+                reverse("order-checkout"),
+                {
+                    "lines": [{"variant": self.variant.pk, "quantity": 2}],
+                    "customer": self.customer.pk,
+                    "sale_type": "credit",
+                },
+                format="json",
+            ).data["id"]
+        )
+
+        # The collecting cashier, with their OWN open register session.
+        cashier = get_user_model().objects.create_user(
+            username="access-cashier", password="pass"
+        )
+        cashier.groups.add(Group.objects.get(name=CASHIER_GROUP))
+        self.client = APIClient()
+        self.client.force_authenticate(user=cashier)
+        self.client.post(
+            reverse("register-session-start"),
+            {"opening_cash": "0.00"},
+            format="json",
+        )
+
+    def _set_access(self, *, enabled):
+        ShopSettings.objects.filter(pk=1).update(
+            allow_cashier_customer_access=enabled
+        )
+
+    def test_cashier_collects_another_users_debt_when_enabled(self):
+        self._set_access(enabled=True)
+        response = self.client.post(
+            reverse("customer-record-payment", args=[self.customer.pk]),
+            {"method": "cash", "amount": "10.00"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.invoice.refresh_from_db()
+        self.assertEqual(self.invoice.status, Order.Status.PAID)
+        self.assertEqual(self.invoice.balance_due, Decimal("0.00"))
+
+    def test_cashier_collection_blocked_when_disabled(self):
+        self._set_access(enabled=False)
+        response = self.client.post(
+            reverse("customer-record-payment", args=[self.customer.pk]),
+            {"method": "cash", "amount": "10.00"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_cashier_sees_lookup_and_outstanding_when_enabled(self):
+        self._set_access(enabled=True)
+        self.assertEqual(
+            self.client.get(reverse("customer-list")).status_code,
+            status.HTTP_200_OK,
+        )
+        summary = self.client.get(
+            reverse("customer-sales-summary", args=[self.customer.pk])
+        )
+        self.assertEqual(summary.status_code, status.HTTP_200_OK)
+        self.assertEqual(summary.data["outstanding_balance"], "10.00")
+
+    def test_cashier_cannot_browse_invoices_or_edit_even_when_enabled(self):
+        self._set_access(enabled=True)
+        # Invoice lists stay manager/accountant only — cashiers never browse
+        # another cashier's sales.
+        self.assertEqual(
+            self.client.get(
+                reverse("customer-orders", args=[self.customer.pk])
+            ).status_code,
+            status.HTTP_403_FORBIDDEN,
+        )
+        # Editing customer records stays restricted too.
+        self.assertEqual(
+            self.client.patch(
+                reverse("customer-detail", args=[self.customer.pk]),
+                {"notes": "x"},
+                format="json",
+            ).status_code,
+            status.HTTP_403_FORBIDDEN,
+        )

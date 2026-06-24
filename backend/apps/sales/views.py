@@ -21,6 +21,8 @@ from apps.fraud.services import schedule_targeted_sweep
 from .models import Order, RegisterCashMovement, RegisterSession
 from .serializers import (
     CheckoutSerializer,
+    ConvertQuotationSerializer,
+    CustomerInvoicePaymentSerializer,
     DiscountPreviewSerializer,
     OrderSerializer,
     PublicInvoiceSerializer,
@@ -57,6 +59,9 @@ class OrderViewSet(
         "discount_preview": ("sales.add_order",),
         "return_items": ("sales.add_order",),
         "void": ("sales.add_order",),
+        "record_payment": ("sales.add_order",),
+        "outstanding": ("sales.view_order",),
+        "convert": ("sales.add_order",),
         "reprint": ("sales.view_order", "printing.add_printjob"),
     }
     queryset = Order.objects.select_related(
@@ -78,6 +83,7 @@ class OrderViewSet(
     # filters are unchanged. Lets the assistant ask for "today's sales" etc.
     filterset_fields = {
         "status": ["exact"],
+        "sale_type": ["exact"],
         "customer": ["exact"],
         "register_session": ["exact"],
         "register_session__status": ["exact"],
@@ -183,6 +189,86 @@ class OrderViewSet(
         serializer = DiscountPreviewSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         return Response(serializer.preview_data)
+
+    @action(detail=False, methods=["get"])
+    def outstanding(self, request):
+        # Debt invoices (آجل) that still carry a balance, oldest first — the
+        # receivables list for collection. Owner-scoped for cashiers.
+        queryset = (
+            self.filter_queryset(self.get_queryset())
+            .open_credit()
+            .order_by("created_at", "id")
+        )
+        page = self.paginate_queryset(queryset)
+        serializer = OrderSerializer(
+            page if page is not None else queryset,
+            many=True,
+            context=self.get_serializer_context(),
+        )
+        if page is not None:
+            return self.get_paginated_response(serializer.data)
+        return Response(serializer.data)
+
+    @action(detail=True, methods=["post"], url_path="record-payment")
+    def record_payment(self, request, pk=None):
+        session = self._open_register_session(request)
+        if session is None:
+            return Response(
+                {"detail": "No open register session for this request owner."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return run_idempotent_request(
+            request,
+            lambda: self._record_payment(request, session),
+        )
+
+    def _record_payment(self, request, session):
+        order = self.get_object()
+        serializer = CustomerInvoicePaymentSerializer(
+            data=request.data,
+            context={
+                "order": order,
+                "register_session": session,
+                "request": request,
+            },
+        )
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        order.refresh_from_db()
+        return Response(
+            OrderSerializer(order, context={"request": request}).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+    @action(detail=True, methods=["post"])
+    def convert(self, request, pk=None):
+        session = self._open_register_session(request)
+        if session is None:
+            return Response(
+                {"detail": "No open register session for this request owner."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return run_idempotent_request(
+            request,
+            lambda: self._convert(request, session),
+        )
+
+    def _convert(self, request, session):
+        quotation = self.get_object()
+        serializer = ConvertQuotationSerializer(
+            data=request.data,
+            context={
+                "quotation": quotation,
+                "register_session": session,
+                "request": request,
+            },
+        )
+        serializer.is_valid(raise_exception=True)
+        new_order = serializer.save()
+        return Response(
+            OrderSerializer(new_order, context={"request": request}).data,
+            status=status.HTTP_201_CREATED,
+        )
 
     @action(detail=True, methods=["post"])
     def reprint(self, request, pk=None):
@@ -335,7 +421,12 @@ class PublicInvoiceView(mixins.RetrieveModelMixin, viewsets.GenericViewSet):
             return Order.objects.none()
         if not ShopSettings.load().enable_online_invoices:
             return Order.objects.none()
-        return super().get_queryset().exclude(status=Order.Status.OPEN)
+        # Hide only transient standard carts; credit (debt) invoices and
+        # quotations are shareable documents even while OPEN.
+        return super().get_queryset().exclude(
+            status=Order.Status.OPEN,
+            sale_type=Order.SaleType.STANDARD,
+        )
 
 
 def register_session_owner_key(request):

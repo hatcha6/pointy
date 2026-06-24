@@ -1,0 +1,248 @@
+import 'package:flutter/material.dart';
+import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
+
+import '../../../core/result.dart';
+import '../../../data/models/analytics_event.dart';
+import '../../../data/models/contact.dart';
+import '../../../data/models/customer_activity.dart';
+import '../../../data/repositories/contact_repository.dart';
+import '../../../shared/contact_picker_sheet.dart';
+import '../../../shared/formatters.dart';
+import '../../../shared/payments/record_payment_dialog.dart';
+
+/// Opens the focused collect-debt flow as a dialog (used from the POS).
+Future<void> showCollectDebtDialog(
+  BuildContext context, {
+  required ContactRepository contactRepository,
+}) {
+  return showDialog<void>(
+    context: context,
+    builder: (_) => CollectDebtDialog(contactRepository: contactRepository),
+  );
+}
+
+/// Focused, cashier-facing debt-collection dialog: pick a customer, see only
+/// their outstanding total, and collect a cash/transfer payment (the backend
+/// allocates it oldest-first across the customer's open debt — including
+/// invoices another cashier issued). Shows NO invoice history or customer
+/// editing, so cashiers keep seeing only their own business.
+class CollectDebtDialog extends StatefulWidget {
+  const CollectDebtDialog({super.key, required this.contactRepository});
+
+  final ContactRepository contactRepository;
+
+  @override
+  State<CollectDebtDialog> createState() => _CollectDebtDialogState();
+}
+
+class _CollectDebtDialogState extends State<CollectDebtDialog> {
+  Customer? _customer;
+  CustomerSalesSummary? _summary;
+  bool _isLoadingSummary = false;
+  bool _hasSummaryError = false;
+  bool _isRecording = false;
+  bool _justCollected = false;
+  bool _hasPaymentError = false;
+  final Map<String, String> _idempotencyKeys = {};
+
+  Future<void> _pickCustomer() async {
+    final customer = await showCustomerPickerSheet(
+      context: context,
+      repository: widget.contactRepository,
+    );
+    if (customer == null || !mounted) {
+      return;
+    }
+    setState(() {
+      _customer = customer;
+      _summary = null;
+      _hasSummaryError = false;
+      _justCollected = false;
+      _hasPaymentError = false;
+    });
+    await _loadSummary();
+  }
+
+  Future<void> _loadSummary() async {
+    final customer = _customer;
+    if (customer == null) {
+      return;
+    }
+    setState(() => _isLoadingSummary = true);
+    final result = await widget.contactRepository.loadCustomerSalesSummary(
+      customer.id,
+    );
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      switch (result) {
+        case Ok<CustomerSalesSummary>():
+          _summary = result.value;
+          _hasSummaryError = false;
+        case Error<CustomerSalesSummary>():
+          _summary = null;
+          _hasSummaryError = true;
+      }
+      _isLoadingSummary = false;
+    });
+  }
+
+  Future<void> _collect() async {
+    final customer = _customer;
+    final summary = _summary;
+    if (customer == null || summary == null || _isRecording) {
+      return;
+    }
+    final outstanding = summary.outstandingBalance;
+    if (outstanding <= 0.005) {
+      return;
+    }
+    final l10n = AppLocalizations.of(context)!;
+    final result = await showRecordPaymentDialog(
+      context,
+      title: l10n.customerAccountPaymentTitle,
+      maxAmount: outstanding,
+      balanceLabel: l10n.customerAccountPaymentOutstandingValue(
+        formatMoney(outstanding),
+      ),
+      methods: customerPaymentMethodOptions(l10n),
+    );
+    if (result == null || !mounted) {
+      return;
+    }
+    setState(() {
+      _isRecording = true;
+      _justCollected = false;
+      _hasPaymentError = false;
+    });
+    // Signature-based idempotency: an accidental double-submit is a server no-op
+    // (the card receipt URL is part of the key so distinct swipes aren't deduped).
+    final signature =
+        'collect:${customer.id}:${result.methodApiValue}:'
+        '${result.amount.toStringAsFixed(2)}:${result.cardReceiptUrl}';
+    final key = _idempotencyKeys.putIfAbsent(
+      signature,
+      () => 'collect-debt:${generateAnalyticsEventId()}',
+    );
+    final recordResult = await widget.contactRepository
+        .recordCustomerAccountPayment(
+          customer.id,
+          method: result.methodApiValue,
+          amount: result.amount,
+          cardReceiptUrl: result.cardReceiptUrl,
+          idempotencyKey: key,
+        );
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _isRecording = false;
+      switch (recordResult) {
+        case Ok<CustomerSalesSummary>():
+          _idempotencyKeys.remove(signature);
+          _summary = recordResult.value;
+          _justCollected = true;
+        case Error<CustomerSalesSummary>():
+          _hasPaymentError = true;
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    return AlertDialog(
+      title: Text(l10n.collectDebtTitle),
+      content: SizedBox(
+        width: 400,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            FilledButton.icon(
+              key: const ValueKey('collect_debt_pick_customer'),
+              onPressed: _isRecording ? null : _pickCustomer,
+              icon: const Icon(Icons.person_search_outlined),
+              label: Text(
+                _customer == null
+                    ? l10n.collectDebtPickCustomer
+                    : l10n.collectDebtChangeCustomer,
+              ),
+            ),
+            if (_customer != null) ...[
+              const SizedBox(height: 16),
+              _buildCustomerSection(l10n),
+            ],
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(l10n.closeButton),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCustomerSection(AppLocalizations l10n) {
+    final customer = _customer!;
+    final theme = Theme.of(context);
+    if (_isLoadingSummary) {
+      return const Padding(
+        padding: EdgeInsets.all(16),
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+    if (_hasSummaryError) {
+      return Text(
+        l10n.collectDebtLoadError,
+        style: TextStyle(color: theme.colorScheme.error),
+      );
+    }
+    final outstanding = _summary?.outstandingBalance ?? 0;
+    final hasDebt = outstanding > 0.005;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(customer.fullName, style: theme.textTheme.titleMedium),
+        const SizedBox(height: 8),
+        Text(
+          hasDebt
+              ? l10n.collectDebtOutstanding(formatMoney(outstanding))
+              : l10n.collectDebtNoDebt,
+          style: theme.textTheme.bodyLarge,
+        ),
+        if (_justCollected) ...[
+          const SizedBox(height: 8),
+          Text(
+            l10n.collectDebtRecordedMessage,
+            style: TextStyle(color: theme.colorScheme.primary),
+          ),
+        ],
+        if (_hasPaymentError) ...[
+          const SizedBox(height: 8),
+          Text(
+            l10n.collectDebtFailedMessage,
+            style: TextStyle(color: theme.colorScheme.error),
+          ),
+        ],
+        if (hasDebt) ...[
+          const SizedBox(height: 16),
+          FilledButton.icon(
+            key: const ValueKey('collect_debt_record_payment'),
+            onPressed: _isRecording ? null : _collect,
+            icon: _isRecording
+                ? const SizedBox.square(
+                    dimension: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.payments_outlined),
+            label: Text(l10n.collectDebtRecordPayment),
+          ),
+        ],
+      ],
+    );
+  }
+}

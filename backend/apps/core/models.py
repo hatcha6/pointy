@@ -118,6 +118,15 @@ class ShopSettings(TimeStampedModel):
         default=0,
         validators=[MinValueValidator(0)],
     )
+    # When on, a quotation (عرض سعر) or debt/credit invoice (آجل) must be tied to
+    # a customer account so the receivable is collectable. Owners can disable it
+    # for walk-in flexibility. Standard cash-and-carry sales are never gated.
+    require_customer_for_credit = models.BooleanField(default=True)
+    # Lets cashiers look up customers — to attach one to an آجل/quote sale and to
+    # collect a customer's debt via the focused collect-debt flow. They still
+    # can't browse other cashiers' invoices or edit customer records. Off =
+    # customer lookup + debt collection stay manager/accountant only.
+    allow_cashier_customer_access = models.BooleanField(default=True)
 
     class Meta:
         verbose_name = "shop settings"

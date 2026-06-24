@@ -42,6 +42,27 @@ class ContactRepository {
     return Result.guard(() => _service.fetchCustomerSalesSummary(customerId));
   }
 
+  /// Records a cash/transfer payment against the customer's account; the
+  /// backend allocates it oldest-first across open debt invoices and returns
+  /// the refreshed sales-summary.
+  Future<Result<CustomerSalesSummary>> recordCustomerAccountPayment(
+    int customerId, {
+    required String method,
+    required double amount,
+    String cardReceiptUrl = '',
+    String? idempotencyKey,
+  }) async {
+    return Result.guard(
+      () => _service.recordCustomerAccountPayment(
+        customerId,
+        method: method,
+        amount: amount,
+        cardReceiptUrl: cardReceiptUrl,
+        idempotencyKey: idempotencyKey,
+      ),
+    );
+  }
+
   Future<Result<SaleOrderPage>> loadCustomerOrderHistory({
     required int customerId,
     int page = 1,

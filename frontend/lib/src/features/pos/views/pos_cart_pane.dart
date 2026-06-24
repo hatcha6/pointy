@@ -174,6 +174,10 @@ class PosCartPane extends StatelessWidget {
 
     final outcome = await viewModel.checkoutCurrentSale(
       payments: payment.payments,
+      saleType: payment.saleType,
+      validUntil: payment.validUntil,
+      reserveStock: payment.reserveStock,
+      printProof: payment.printProof,
     );
 
     if (!context.mounted) {
@@ -402,6 +406,8 @@ class PosCartPane extends StatelessWidget {
       showShareInvoiceToggle: viewModel.shouldShowShareInvoiceCheckbox,
       shareInvoiceAfterPayment: viewModel.shareInvoiceAfterPayment,
       onShareInvoiceChanged: viewModel.updateShareInvoiceAfterPayment,
+      hasCustomer: viewModel.selectedCustomer != null,
+      requireCustomerForCredit: viewModel.requireCustomerForCredit,
     );
   }
 }

@@ -4090,6 +4090,51 @@ class AppLocalizationsAr extends AppLocalizations {
       'يجب مسح رابط QR من إيصال معاملات ومطابقة المبلغ لكل دفعة بطاقة.';
 
   @override
+  String get requireCustomerForCreditLabel =>
+      'طلب عميل للبيع الآجل وعروض الأسعار';
+
+  @override
+  String get requireCustomerForCreditSubtitle =>
+      'عند تفعيله يجب اختيار عميل قبل إتمام بيع آجل أو عرض سعر.';
+
+  @override
+  String get allowCashierCustomerAccessLabel =>
+      'السماح للكاشير بالعملاء والتحصيل';
+
+  @override
+  String get allowCashierCustomerAccessSubtitle =>
+      'يتيح للكاشير اختيار عميل للبيع الآجل/عرض السعر وتحصيل ديون العملاء — دون رؤية فواتير الكاشيرين الآخرين أو تعديل بيانات العملاء.';
+
+  @override
+  String get collectDebtTitle => 'تحصيل دين';
+
+  @override
+  String get collectDebtPickCustomer => 'اختر عميلاً للتحصيل';
+
+  @override
+  String get collectDebtChangeCustomer => 'تغيير العميل';
+
+  @override
+  String get collectDebtLoadError => 'تعذّر تحميل رصيد العميل. حاول مرة أخرى.';
+
+  @override
+  String collectDebtOutstanding(String amount) {
+    return 'المتبقّي على العميل: $amount';
+  }
+
+  @override
+  String get collectDebtNoDebt => 'لا يوجد دين على هذا العميل.';
+
+  @override
+  String get collectDebtRecordPayment => 'تسجيل دفعة';
+
+  @override
+  String get collectDebtRecordedMessage => 'تم تسجيل الدفعة وتحصيل الدين.';
+
+  @override
+  String get collectDebtFailedMessage => 'تعذّر تسجيل الدفعة. حاول مرة أخرى.';
+
+  @override
   String get trustedCardTerminalIdsLabel => 'أجهزة البطاقة الموثوقة';
 
   @override
@@ -6100,6 +6145,9 @@ class AppLocalizationsAr extends AppLocalizations {
   String get supplierPaymentNotesLabel => 'ملاحظات اختيارية';
 
   @override
+  String get supplierPaymentPrintProofLabel => 'طباعة سند صرف';
+
+  @override
   String get supplierPaymentPositiveAmountError =>
       'أدخل مبلغًا أكبر من صفر ولا يتجاوز المتبقي.';
 
@@ -6844,6 +6892,44 @@ class AppLocalizationsAr extends AppLocalizations {
   String get customerNetSalesLabel => 'صافي المبيعات';
 
   @override
+  String get customerOutstandingBalanceLabel => 'الرصيد المستحق';
+
+  @override
+  String get recordCustomerPaymentButton => 'تسجيل دفعة';
+
+  @override
+  String customerOutstandingBalanceCalloutTitle(String amount) {
+    return 'على هذا العميل رصيد مستحق قدره $amount.';
+  }
+
+  @override
+  String get customerOutstandingBalanceCalloutBody =>
+      'تُوزَّع الدفعة تلقائيًا على أقدم الفواتير الآجلة أولًا.';
+
+  @override
+  String get customerAccountPaymentTitle => 'تسجيل دفعة على الحساب';
+
+  @override
+  String get customerAccountPaymentAmountLabel => 'المبلغ';
+
+  @override
+  String customerAccountPaymentOutstandingValue(String amount) {
+    return 'الرصيد المستحق: $amount';
+  }
+
+  @override
+  String get customerAccountPaymentAmountError =>
+      'أدخل مبلغًا أكبر من صفر ولا يتجاوز الرصيد المستحق.';
+
+  @override
+  String get customerAccountPaymentSuccess =>
+      'تم تسجيل الدفعة على حساب العميل.';
+
+  @override
+  String get customerAccountPaymentError =>
+      'تعذّر تسجيل الدفعة. حاول مرة أخرى.';
+
+  @override
   String get customerInvoiceCountLabel => 'عدد الفواتير';
 
   @override
@@ -7178,6 +7264,70 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get confirmPaymentButton => 'تأكيد الدفع';
+
+  @override
+  String get saleTypeLabel => 'نوع البيع';
+
+  @override
+  String get saleTypeStandardLabel => 'عادي';
+
+  @override
+  String get saleTypeCreditLabel => 'آجل';
+
+  @override
+  String get saleTypeQuotationLabel => 'عرض سعر';
+
+  @override
+  String get saleCustomerRequiredBanner =>
+      'اختر عميلًا قبل إتمام بيع آجل أو عرض سعر.';
+
+  @override
+  String get creditBalanceDueLabel => 'المتبقّي على العميل';
+
+  @override
+  String get creditDownPaymentTooHighError =>
+      'المبلغ المدفوع أكبر من الإجمالي.';
+
+  @override
+  String get creditFullyOnAccountHint =>
+      'كامل المبلغ سيُسجَّل دَينًا على العميل. أضِف دفعة مقدّمة إن وُجدت.';
+
+  @override
+  String get creditDownPaymentHint =>
+      'المبلغ المُدخَل دفعة مقدّمة؛ والباقي يُسجَّل دَينًا على العميل.';
+
+  @override
+  String get creditDownPaymentTenderTitle => 'دفعة مقدّمة';
+
+  @override
+  String get addDownPaymentButton => 'إضافة دفعة مقدّمة';
+
+  @override
+  String get printDownPaymentProofLabel => 'طباعة سند قبض';
+
+  @override
+  String get printDownPaymentProofSubtitle =>
+      'طباعة إيصال بالدفعة المقدّمة على البيع الآجل.';
+
+  @override
+  String get quotationTotalLabel => 'إجمالي العرض';
+
+  @override
+  String get quotationReserveStockLabel => 'حجز الكمية';
+
+  @override
+  String get quotationReserveStockSubtitle =>
+      'حجز الكميات المعروضة دون خصمها من المخزون حتى انتهاء صلاحية العرض.';
+
+  @override
+  String get quotationValidUntilLabel => 'صالح حتى';
+
+  @override
+  String get quotationValidUntilUnset => 'اختر تاريخًا';
+
+  @override
+  String get quotationNoPaymentHint =>
+      'عرض السعر لا يتضمّن أي دفع ولا يخصم من المخزون.';
 
   @override
   String get noEnabledPaymentMethods =>
@@ -7622,6 +7772,47 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get invoicePaymentsEmpty => 'لا توجد مدفوعات مسجلة لهذه الفاتورة.';
+
+  @override
+  String get recordInvoicePaymentButton => 'تسجيل دفعة';
+
+  @override
+  String invoiceCreditBalanceCalloutTitle(String amount) {
+    return 'آجل — المتبقّي $amount.';
+  }
+
+  @override
+  String get invoiceCreditBalanceCalloutBody =>
+      'فاتورة آجلة لم يُسدَّد منها شيء بعد.';
+
+  @override
+  String invoiceCreditBalancePaidValue(String amount) {
+    return 'المدفوع حتى الآن: $amount';
+  }
+
+  @override
+  String get invoicePaymentTitle => 'تسجيل دفعة على الفاتورة';
+
+  @override
+  String get invoicePaymentAmountLabel => 'المبلغ';
+
+  @override
+  String get invoicePaymentReferenceLabel => 'مرجع اختياري';
+
+  @override
+  String get invoicePaymentPrintProofLabel => 'طباعة سند قبض';
+
+  @override
+  String invoicePaymentBalanceValue(String amount) {
+    return 'المتبقّي على الفاتورة: $amount';
+  }
+
+  @override
+  String get invoicePaymentAmountError =>
+      'أدخل مبلغًا أكبر من صفر ولا يتجاوز المتبقّي.';
+
+  @override
+  String get invoicePaymentSuccess => 'تم تسجيل الدفعة على الفاتورة.';
 
   @override
   String get invoiceTotalsTitle => 'الإجماليات';
@@ -11325,4 +11516,129 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get migrationImportStarted => 'بدأ النقل';
+
+  @override
+  String get paymentsHubDrawerLabel => 'الخزينة';
+
+  @override
+  String get paymentsHubTitle => 'الخزينة';
+
+  @override
+  String get paymentsHubRefreshTooltip => 'تحديث المدفوعات';
+
+  @override
+  String get paymentsHubSegmentCustomer => 'مدفوعات العملاء (وارد)';
+
+  @override
+  String get paymentsHubSegmentSupplier => 'مدفوعات الموردين (صادر)';
+
+  @override
+  String get paymentsHubFilterAllMethods => 'كل الطرق';
+
+  @override
+  String get paymentsHubFilterDateRange => 'نطاق التاريخ';
+
+  @override
+  String paymentsHubFilterDateRangeValue(String start, String end) {
+    return '$start - $end';
+  }
+
+  @override
+  String get paymentsHubClearFilters => 'مسح عوامل التصفية';
+
+  @override
+  String get paymentsHubCustomerEmptyTitle => 'لا توجد مدفوعات عملاء';
+
+  @override
+  String get paymentsHubCustomerEmptyMessage =>
+      'ستظهر هنا المبالغ المحصّلة من العملاء.';
+
+  @override
+  String get paymentsHubSupplierEmptyTitle => 'لا توجد مدفوعات موردين';
+
+  @override
+  String get paymentsHubSupplierEmptyMessage =>
+      'ستظهر هنا المبالغ المدفوعة للموردين.';
+
+  @override
+  String get paymentsHubLoadError => 'تعذّر تحميل المدفوعات';
+
+  @override
+  String get paymentsHubWalkInCustomer => 'عميل نقدي';
+
+  @override
+  String get paymentsHubUnknownSupplier => 'مورد غير محدد';
+
+  @override
+  String paymentsHubInvoiceValue(String number) {
+    return 'فاتورة $number';
+  }
+
+  @override
+  String paymentsHubPurchaseOrderValue(String number) {
+    return 'أمر شراء $number';
+  }
+
+  @override
+  String paymentsHubCommissionValue(String amount) {
+    return 'عمولة $amount';
+  }
+
+  @override
+  String paymentsHubReferenceValue(String reference) {
+    return 'مرجع: $reference';
+  }
+
+  @override
+  String paymentsHubRecordedByValue(String username) {
+    return 'سجّلها $username';
+  }
+
+  @override
+  String get paymentsHubReprintProofAction => 'إعادة طباعة سند';
+
+  @override
+  String get paymentsHubPrintLogAction => 'سجل الطباعة';
+
+  @override
+  String get paymentsHubReprintSuccess => 'تمت إعادة طباعة السند';
+
+  @override
+  String get paymentsHubReprintError => 'تعذّرت إعادة طباعة السند';
+
+  @override
+  String get convertQuotationButton => 'تحويل إلى بيع';
+
+  @override
+  String get convertQuotationDialogTitle => 'تحويل عرض السعر إلى بيع';
+
+  @override
+  String get convertQuotationSaleTypeLabel => 'نوع البيع';
+
+  @override
+  String get convertQuotationSaleTypeStandard => 'عادي';
+
+  @override
+  String get convertQuotationSaleTypeCredit => 'آجل';
+
+  @override
+  String get convertQuotationDownPaymentLabel => 'الدفعة المقدمة';
+
+  @override
+  String get convertQuotationDownPaymentHelper =>
+      'اختياري — المبلغ المحصّل عند التحويل.';
+
+  @override
+  String convertQuotationStandardHint(String total) {
+    return 'يتطلب البيع العادي سداد كامل المبلغ ($total).';
+  }
+
+  @override
+  String get convertQuotationConfirm => 'تحويل';
+
+  @override
+  String get convertQuotationSuccess => 'تم تحويل عرض السعر إلى بيع';
+
+  @override
+  String get convertQuotationError => 'تعذّر تحويل عرض السعر';
 }

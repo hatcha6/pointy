@@ -50,6 +50,34 @@ class CustomerApiClient {
     );
   }
 
+  /// Records a payment against the customer's account (cash/transfer only —
+  /// the backend allocates it oldest-first across open debt invoices) and
+  /// returns the refreshed sales-summary.
+  Future<CustomerSalesSummary> recordCustomerAccountPayment(
+    int customerId, {
+    required String method,
+    required double amount,
+    String cardReceiptUrl = '',
+    String? idempotencyKey,
+  }) async {
+    final response = await _session.post(
+      'customers/$customerId/record-payment/',
+      body: {
+        'method': method,
+        'amount': amount.toStringAsFixed(2),
+        if (cardReceiptUrl.isNotEmpty) 'card_receipt_url': cardReceiptUrl,
+      },
+      idempotencyKey: idempotencyKey,
+    );
+    _session.throwApiException(
+      response,
+      'Customer account payment failed with status',
+    );
+    return CustomerSalesSummary.fromJson(
+      _session.decodedBody(response) as Map<String, Object?>,
+    );
+  }
+
   Future<SaleOrderPage> fetchCustomerOrders({
     required int customerId,
     int page = 1,
@@ -82,7 +110,10 @@ class CustomerApiClient {
     );
   }
 
-  Future<Customer> patchCustomer(int customerId, Map<String, Object?> body) async {
+  Future<Customer> patchCustomer(
+    int customerId,
+    Map<String, Object?> body,
+  ) async {
     final response = await _session.patch('customers/$customerId/', body: body);
     _session.throwApiException(response, 'Customer update failed with status');
     return Customer.fromJson(
@@ -114,7 +145,10 @@ class CustomerApiClient {
       'payment-cards/',
       query: {'customer': '$customerId', 'page': '$page'},
     );
-    _session.throwApiException(response, 'Payment card list failed with status');
+    _session.throwApiException(
+      response,
+      'Payment card list failed with status',
+    );
     return PaymentCardPage.fromJson(
       _session.decodedBody(response) as Map<String, Object?>,
     );

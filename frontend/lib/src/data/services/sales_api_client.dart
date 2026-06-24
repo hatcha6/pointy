@@ -1,3 +1,4 @@
+import '../../features/payments/models/payment_record.dart';
 import '../models/print_job.dart';
 import '../models/sale_order.dart';
 import '../models/sale_order_page.dart';
@@ -38,6 +39,91 @@ class SalesApiClient {
   Future<SaleOrder> fetchOrder(int saleOrderId) async {
     final response = await _session.get('orders/$saleOrderId/');
     _session.throwApiException(response, 'Order detail failed with status');
+    return SaleOrder.fromJson(
+      _session.decodedBody(response) as Map<String, Object?>,
+    );
+  }
+
+  /// Customer money-IN payments for the Payments hub, read through the backend
+  /// ledger projection. Optional [method], [customerId] and a [paidAtGte] /
+  /// [paidAtLte] window narrow the list; newest-paid first.
+  Future<CustomerPaymentPage> fetchCustomerPayments({
+    String? method,
+    int? customerId,
+    DateTime? paidAtGte,
+    DateTime? paidAtLte,
+    int page = 1,
+  }) async {
+    final response = await _session.get(
+      'payments/',
+      query: {
+        'page': '$page',
+        'ordering': '-paid_at',
+        if (method != null && method.isNotEmpty) 'method': method,
+        if (customerId != null) 'order__customer': '$customerId',
+        if (paidAtGte != null) 'paid_at__gte': paidAtGte.toIso8601String(),
+        if (paidAtLte != null) 'paid_at__lte': paidAtLte.toIso8601String(),
+      },
+    );
+    _session.throwApiException(
+      response,
+      'Customer payment list failed with status',
+    );
+    final decoded = _session.decodedBody(response);
+    if (decoded is Map<String, Object?>) {
+      return CustomerPaymentPage.fromJson(decoded);
+    }
+    return const CustomerPaymentPage(payments: [], hasMore: false);
+  }
+
+  /// Converts an OPEN quotation into a standard or credit sale, optionally
+  /// taking a down-payment ([amountReceived]). Returns the NEW order.
+  Future<SaleOrder> convertQuotation(
+    int quotationId, {
+    required SaleType saleType,
+    double? amountReceived,
+    String? idempotencyKey,
+  }) async {
+    final response = await _session.post(
+      'orders/$quotationId/convert/',
+      body: {
+        'sale_type': saleType.apiValue,
+        if (amountReceived != null)
+          'amount_received': amountReceived.toStringAsFixed(2),
+      },
+      idempotencyKey: idempotencyKey,
+    );
+    _session.throwApiException(
+      response,
+      'Quotation conversion failed with status',
+    );
+    return SaleOrder.fromJson(
+      _session.decodedBody(response) as Map<String, Object?>,
+    );
+  }
+
+  /// Records a payment against a single (credit) invoice. Cards are allowed
+  /// here — pass [cardReceiptUrl] for the card method. Returns the updated
+  /// order.
+  Future<SaleOrder> recordInvoicePayment(
+    int saleOrderId, {
+    required String method,
+    required double amount,
+    String cardReceiptUrl = '',
+    String? idempotencyKey,
+  }) async {
+    final normalizedReceiptUrl = cardReceiptUrl.trim();
+    final response = await _session.post(
+      'orders/$saleOrderId/record-payment/',
+      body: {
+        'method': method,
+        'amount': amount.toStringAsFixed(2),
+        if (normalizedReceiptUrl.isNotEmpty)
+          'card_receipt_url': normalizedReceiptUrl,
+      },
+      idempotencyKey: idempotencyKey,
+    );
+    _session.throwApiException(response, 'Invoice payment failed with status');
     return SaleOrder.fromJson(
       _session.decodedBody(response) as Map<String, Object?>,
     );

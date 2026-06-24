@@ -3,7 +3,7 @@ from django.core.cache import cache
 from decimal import Decimal, ROUND_HALF_UP
 
 from django.db import transaction
-from django.db.models import DecimalField, Count, ProtectedError, Q, Sum, Value
+from django.db.models import DecimalField, Count, F, ProtectedError, Q, Sum, Value
 from django.db.models.functions import Coalesce
 from django.utils import timezone
 from rest_framework import parsers, status, viewsets
@@ -253,10 +253,11 @@ class ProductViewSet(viewsets.ModelViewSet):
         # always remain visible regardless of their rolled-up quantity.
         if self.request.query_params.get("in_stock") != "true":
             return queryset
+        # Sellable = on-hand minus quotation-reserved (committed) units.
         return queryset.filter(
             Q(is_service=True)
             | Q(is_prepared=True)
-            | Q(stock_quantity_on_hand__gt=0)
+            | Q(stock_quantity_on_hand__gt=F("stock_quantity_committed"))
         )
 
     def _filter_by_category(self, queryset):
@@ -282,6 +283,11 @@ class ProductViewSet(viewsets.ModelViewSet):
         return queryset.annotate(
             stock_quantity_on_hand=Coalesce(
                 Sum("variants__stock__quantity_on_hand"),
+                Value(Decimal("0")),
+                output_field=DecimalField(max_digits=12, decimal_places=3),
+            ),
+            stock_quantity_committed=Coalesce(
+                Sum("variants__stock__quantity_committed"),
                 Value(Decimal("0")),
                 output_field=DecimalField(max_digits=12, decimal_places=3),
             ),

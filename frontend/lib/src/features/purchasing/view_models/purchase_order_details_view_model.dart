@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import '../../../core/authorization.dart';
 import '../../../core/result.dart';
 import '../../../data/models/analytics_event.dart';
+import '../../../data/models/print_audit_event.dart';
 import '../../../data/models/purchase_submission.dart';
 import '../../../data/models/shop_settings.dart';
 import '../../../data/repositories/printing_repository.dart';
@@ -211,6 +212,7 @@ class PurchaseOrderDetailsViewModel extends ChangeNotifier {
     required double amount,
     String reference = '',
     String notes = '',
+    bool printProof = false,
   }) async {
     if (_isRecordingPayment) {
       return false;
@@ -237,10 +239,11 @@ class PurchaseOrderDetailsViewModel extends ChangeNotifier {
       ),
       idempotencyKey: _idempotencyKeyFor(paymentSignature),
     );
-    final didRecord = switch (result) {
-      Ok<SupplierPayment>() => true,
-      Error<SupplierPayment>() => false,
+    final payment = switch (result) {
+      Ok<SupplierPayment>(value: final value) => value,
+      Error<SupplierPayment>() => null,
     };
+    final didRecord = payment != null;
     if (didRecord) {
       _clearIdempotencyKey(paymentSignature);
       final reloadResult = await _purchaseRepository.loadPurchaseOrder(
@@ -258,7 +261,57 @@ class PurchaseOrderDetailsViewModel extends ChangeNotifier {
 
     _isRecordingPayment = false;
     notifyListeners();
+
+    if (didRecord && printProof) {
+      // Best-effort: the payment is recorded; a print failure must not flip
+      // the result to failure.
+      await _printPaymentProof(payment);
+    }
     return didRecord;
+  }
+
+  /// Builds and prints a "سند صرف" disbursement proof for a recorded supplier
+  /// [payment]. The reloaded order's `balanceDue` is the PO balance afterwards.
+  Future<void> _printPaymentProof(SupplierPayment payment) async {
+    final proof = PaymentProof(
+      kind: PaymentProofKind.disbursement,
+      reference: '${payment.id}',
+      partyName: payment.supplierName.trim().isNotEmpty
+          ? payment.supplierName.trim()
+          : _order.supplierName?.trim() ?? '',
+      relatedDocumentNumber:
+          payment.purchaseOrderNumber?.trim().isNotEmpty == true
+          ? payment.purchaseOrderNumber!.trim()
+          : _order.orderNumber,
+      amount: payment.amount,
+      method: _supplierPaymentMethodText(payment.method),
+      externalReference: payment.reference,
+      handledBy: payment.createdByUsername,
+      balanceAfter: _order.balanceDue,
+      createdAt: payment.createdAt ?? DateTime.now(),
+    );
+
+    final shopSettings = await _loadShopSettings();
+    await _printingRepository.printProofOfPayment(
+      proof: proof,
+      paymentId: payment.id,
+      paymentKind: PrintAuditPaymentKind.supplier,
+      shopSettings: shopSettings,
+      shopLogoBytes: await _loadShopLogoBytes(shopSettings),
+    );
+  }
+
+  /// Arabic label for a supplier payment method on the printed proof. (The
+  /// document renders in an isolate without an l10n context, so the strings
+  /// live here, matching the dialog's l10n-backed labels.)
+  String _supplierPaymentMethodText(SupplierPaymentMethod method) {
+    return switch (method) {
+      SupplierPaymentMethod.cash => 'نقدًا',
+      SupplierPaymentMethod.card => 'بطاقة',
+      SupplierPaymentMethod.transfer => 'تحويل',
+      SupplierPaymentMethod.supplierCredit => 'رصيد المورد',
+      SupplierPaymentMethod.refund => 'استرداد',
+    };
   }
 
   String _supplierPaymentSignature({

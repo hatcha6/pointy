@@ -25,12 +25,16 @@ from apps.inventory.models import StockItem
 from apps.sales.models import Order, RegisterSession
 
 from .tools import (
+    WRITE_TOOL_NAMES,
+    convert_quotation,
     create_resource,
     create_sale,
     describe_resource,
     execute_tool,
     is_mutating_tool,
     match_invoice_products,
+    record_customer_payment,
+    record_supplier_payment,
     suggest_sale_price,
     tools_definitions,
     update_resource,
@@ -599,3 +603,107 @@ class PricingHelperTests(_PurchasingFixtures):
         self.assertEqual(shop_typical_markup_percent(), Decimal("100"))
         # A new product costing 7 is then suggested at 14 (100% markup), not 9.10.
         self.assertEqual(price_for(Decimal("7.00")), Decimal("14.00"))
+
+
+class CreditQuoteAndPaymentToolTests(_Fixtures):
+    """The new composite tools: credit/quotation sales, recording a customer
+    payment, and converting a quotation — all through the real endpoints."""
+
+    def _customer(self, name="عميل آجل"):
+        from apps.customers.models import Customer
+
+        return Customer.objects.create(full_name=name)
+
+    def test_new_payment_tools_are_registered_writes(self):
+        for name in (
+            "record_customer_payment",
+            "convert_quotation",
+            "record_supplier_payment",
+        ):
+            self.assertIn(name, WRITE_TOOL_NAMES)
+            self.assertTrue(is_mutating_tool(name))
+
+    def test_create_sale_credit_with_down_payment(self):
+        variant = self._sellable()
+        self._open_register(self.manager)
+        result = create_sale(
+            user=self.manager,
+            lines=[{"variant": variant.id, "quantity": 2}],
+            customer=self._customer().id,
+            sale_type="credit",
+            payment_method="cash",
+            amount_received="3.00",
+            confirm=True,
+        )
+        self.assertTrue(result["ok"], result)
+        order = Order.objects.get(pk=result["data"]["id"])
+        self.assertEqual(order.sale_type, Order.SaleType.CREDIT)
+        self.assertEqual(order.balance_due, Decimal("7.00"))
+
+    def test_record_customer_payment_preview_then_commit(self):
+        variant = self._sellable()
+        self._open_register(self.manager)
+        sale = create_sale(
+            user=self.manager,
+            lines=[{"variant": variant.id, "quantity": 2}],
+            customer=self._customer().id,
+            sale_type="credit",
+            confirm=True,
+        )
+        order_id = sale["data"]["id"]
+        preview = record_customer_payment(
+            user=self.manager, order_id=order_id, method="cash", amount="10.00"
+        )
+        self.assertTrue(preview.get("needs_confirmation"))
+        self.assertEqual(preview["invoice"]["balance_due"], "10.00")
+        committed = record_customer_payment(
+            user=self.manager,
+            order_id=order_id,
+            method="cash",
+            amount="10.00",
+            confirm=True,
+        )
+        self.assertTrue(committed["ok"], committed)
+        self.assertEqual(Order.objects.get(pk=order_id).status, Order.Status.PAID)
+
+    def test_record_customer_payment_rejects_overpayment(self):
+        variant = self._sellable()
+        self._open_register(self.manager)
+        sale = create_sale(
+            user=self.manager,
+            lines=[{"variant": variant.id, "quantity": 2}],
+            customer=self._customer().id,
+            sale_type="credit",
+            confirm=True,
+        )
+        result = record_customer_payment(
+            user=self.manager,
+            order_id=sale["data"]["id"],
+            method="cash",
+            amount="50.00",
+            confirm=True,
+        )
+        self.assertFalse(result["ok"])
+
+    def test_convert_quotation_tool(self):
+        variant = self._sellable()
+        self._open_register(self.manager)
+        quote = create_sale(
+            user=self.manager,
+            lines=[{"variant": variant.id, "quantity": 2}],
+            customer=self._customer().id,
+            sale_type="quotation",
+            confirm=True,
+        )
+        quote_id = quote["data"]["id"]
+        result = convert_quotation(
+            user=self.manager,
+            quotation_id=quote_id,
+            sale_type="credit",
+            amount_received="4.00",
+            confirm=True,
+        )
+        self.assertTrue(result["ok"], result)
+        new_order = Order.objects.get(pk=result["data"]["id"])
+        self.assertEqual(new_order.sale_type, Order.SaleType.CREDIT)
+        self.assertEqual(Order.objects.get(pk=quote_id).status, Order.Status.VOID)

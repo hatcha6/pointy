@@ -62,11 +62,21 @@ void main() {
       ]);
       expect(template.details.map((field) => field.label), [
         'تاريخ الإصدار',
+        'حالة الدفع',
         'المتبقي',
       ]);
+      // No server payment_status on this fixture, so the status is derived from
+      // the paid/balance figures: 12.50 paid against a 50.00 total is partial.
+      expect(
+        template.details
+            .firstWhere((field) => field.label == 'حالة الدفع')
+            .value,
+        'مدفوعة جزئيًا',
+      );
+      expect(template.details.last.label, 'المتبقي');
       expect(template.details.last.value, '37.50 د.ل');
       expect(template.details.last.highlight, isTrue);
-      expect(template.itemsTable.columns, [
+      expect(template.itemsTable!.columns, [
         'الصنف',
         'الكمية',
         'السعر',
@@ -76,8 +86,48 @@ void main() {
         'المجموع الفرعي',
         'الإجمالي',
         'المدفوع',
+        'المتبقي',
       ]);
       expect(template.notes, 'ملاحظات الفاتورة');
+    },
+  );
+
+  test(
+    'quotation template uses the quote title and suppresses paid framing',
+    () {
+      const service = OrderDocumentService();
+      final template = service.saleInvoiceTemplate(
+        order: _saleOrder(
+          receiptNumber: 'Q-1',
+          subtotal: 80,
+          total: 80,
+          createdAt: DateTime(2026, 5, 20, 9),
+          saleType: SaleType.quotation,
+          paymentStatus: 'quotation',
+          validUntil: DateTime(2026, 6, 20),
+        ),
+        shopSettings: _settings,
+      );
+
+      expect(template.title, 'فاتورة عرض');
+      expect(template.details.map((field) => field.label), [
+        'تاريخ الإصدار',
+        'صالح حتى',
+        'حالة الدفع',
+      ]);
+      expect(template.details.last.value, 'عرض سعر');
+      // A quote owes nothing: no paid / balance-due rows in the totals.
+      expect(
+        template.totals.map((field) => field.label),
+        isNot(anyOf(contains('المدفوع'), contains('المتبقي'))),
+      );
+      expect(template.totals.map((field) => field.label), [
+        'المجموع الفرعي',
+        'الإجمالي',
+      ]);
+      // The quote carries a "this is not a sale/tax invoice" notice.
+      expect(template.terms, isNotNull);
+      expect(template.terms, contains('عرض سعر'));
     },
   );
 
@@ -108,7 +158,7 @@ void main() {
         '+218911111111',
         'طريق المطار',
       ]);
-      expect(template.itemsTable.columns, [
+      expect(template.itemsTable!.columns, [
         'الصنف',
         'الكمية',
         'السعر',
@@ -129,6 +179,89 @@ void main() {
       expect(template.totals.last.label, 'المدفوع');
     },
   );
+
+  test('receipt proof (سند قبض) carries the amount, party and balance', () {
+    const service = OrderDocumentService();
+    final template = service.proofOfPaymentTemplate(
+      proof: PaymentProof(
+        kind: PaymentProofKind.receipt,
+        reference: '42',
+        partyName: 'سارة أحمد',
+        partyContact: 'C-100',
+        relatedDocumentNumber: 'R-1',
+        amount: 30,
+        method: 'نقدًا',
+        externalReference: 'REF-9',
+        handledBy: 'الكاشير',
+        balanceAfter: 20,
+        createdAt: DateTime(2026, 5, 20, 9),
+      ),
+      shopSettings: _settings,
+    );
+
+    expect(template.title, 'سند قبض');
+    expect(template.recipientTitle, 'استلمنا من');
+    expect(template.recipientLines, ['سارة أحمد', 'C-100']);
+    // Payment particulars render through the shared styled table (like invoice
+    // line-items); only the amount + balance stay in the emphasized totals.
+    expect(template.itemsTable!.columns, ['البيان', 'التفاصيل']);
+    expect(template.itemsTable!.rows, [
+      ['طريقة الدفع', 'نقدًا'],
+      ['المرجع', 'REF-9'],
+      ['حصّلها', 'الكاشير'],
+    ]);
+    expect(template.details.map((field) => field.label), [
+      'تاريخ الإصدار',
+      'بخصوص الفاتورة',
+    ]);
+    expect(template.totals.map((field) => field.label), [
+      'المبلغ',
+      'الرصيد بعد الدفع',
+    ]);
+    expect(template.totals.first.value, '30.00 د.ل');
+    expect(template.totals.first.highlight, isTrue);
+    expect(template.totals.last.value, '20.00 د.ل');
+  });
+
+  test('disbursement proof (سند صرف) uses the supplier framing', () {
+    const service = OrderDocumentService();
+    final template = service.proofOfPaymentTemplate(
+      proof: const PaymentProof(
+        kind: PaymentProofKind.disbursement,
+        reference: '7',
+        partyName: 'مورد طرابلس',
+        relatedDocumentNumber: 'PO-7',
+        amount: 95,
+        method: 'تحويل',
+      ),
+      shopSettings: _settings,
+    );
+
+    expect(template.title, 'سند صرف');
+    expect(template.recipientTitle, 'صرفنا إلى');
+    expect(template.details.map((field) => field.label), [
+      'تاريخ الإصدار',
+      'بخصوص أمر الشراء',
+    ]);
+    // No commission / reference / handler supplied → the table is just the
+    // method; with no balance the totals are just the amount.
+    expect(template.itemsTable!.rows, [
+      ['طريقة الدفع', 'تحويل'],
+    ]);
+    expect(template.totals.map((field) => field.label), ['المبلغ']);
+    expect(
+      service.proofOfPaymentFileName(
+        const PaymentProof(
+          kind: PaymentProofKind.disbursement,
+          reference: '7',
+          partyName: 'مورد طرابلس',
+          amount: 95,
+          method: 'تحويل',
+        ),
+      ),
+      'سند-صرف-7.pdf',
+    );
+  });
 
   testWidgets('font loader reads the bundled PDF font bytes via rootBundle', (
     tester,
@@ -170,6 +303,9 @@ SaleOrder _saleOrder({
   double total = 0,
   DateTime? createdAt,
   String publicInvoiceUrl = '',
+  SaleType saleType = SaleType.standard,
+  String paymentStatus = '',
+  DateTime? validUntil,
 }) {
   return SaleOrder(
     id: 1,
@@ -185,6 +321,9 @@ SaleOrder _saleOrder({
     customerEmail: customerEmail,
     publicInvoiceUrl: publicInvoiceUrl,
     createdAt: createdAt,
+    saleType: saleType,
+    paymentStatus: paymentStatus,
+    validUntil: validUntil,
   );
 }
 

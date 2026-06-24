@@ -242,6 +242,8 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
   late bool _enableCardPayments;
   late bool _enableTransferPayments;
   late bool _requireCardPaymentReceipt;
+  late bool _requireCustomerForCredit;
+  late bool _allowCashierCustomerAccess;
   late List<String> _trustedCardTerminalIds;
   AttachmentSummary? _logoAttachment;
   ShopLogoUpload? _selectedLogoUpload;
@@ -295,6 +297,8 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
       _enableCardPayments = widget.settings.enableCardPayments;
       _enableTransferPayments = widget.settings.enableTransferPayments;
       _requireCardPaymentReceipt = widget.settings.requireCardPaymentReceipt;
+      _requireCustomerForCredit = widget.settings.requireCustomerForCredit;
+      _allowCashierCustomerAccess = widget.settings.allowCashierCustomerAccess;
       _trustedCardTerminalIds = _normalizeTrustedTerminalIds(
         widget.settings.trustedCardTerminalIds,
       );
@@ -350,6 +354,8 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
     _enableCardPayments = settings.enableCardPayments;
     _enableTransferPayments = settings.enableTransferPayments;
     _requireCardPaymentReceipt = settings.requireCardPaymentReceipt;
+    _requireCustomerForCredit = settings.requireCustomerForCredit;
+    _allowCashierCustomerAccess = settings.allowCashierCustomerAccess;
     _trustedCardTerminalIds = _normalizeTrustedTerminalIds(
       settings.trustedCardTerminalIds,
     );
@@ -784,6 +790,8 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
         enableCardPayments: _enableCardPayments,
         enableTransferPayments: _enableTransferPayments,
         requireCardPaymentReceipt: _requireCardPaymentReceipt,
+        requireCustomerForCredit: _requireCustomerForCredit,
+        allowCashierCustomerAccess: _allowCashierCustomerAccess,
         paymentMethodsError: _paymentMethodsError(l10n),
         cardCommissionError: _commissionError(l10n, _cardCommissionController),
         transferCommissionError: _commissionError(
@@ -800,6 +808,14 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
         },
         onRequireCardReceiptChanged: (value) {
           setState(() => _requireCardPaymentReceipt = value);
+          refresh();
+        },
+        onRequireCustomerForCreditChanged: (value) {
+          setState(() => _requireCustomerForCredit = value);
+          refresh();
+        },
+        onAllowCashierCustomerAccessChanged: (value) {
+          setState(() => _allowCashierCustomerAccess = value);
           refresh();
         },
         onEnableTransferChanged: (value) {
@@ -1329,6 +1345,8 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
         transferCommissionPercent: _parsePercent(
           _transferCommissionController.text,
         ),
+        requireCustomerForCredit: _requireCustomerForCredit,
+        allowCashierCustomerAccess: _allowCashierCustomerAccess,
         enableRepairOperations: currentSettings.enableRepairOperations,
         enableProductionOperations: currentSettings.enableProductionOperations,
         enableKitchenOperations: currentSettings.enableKitchenOperations,

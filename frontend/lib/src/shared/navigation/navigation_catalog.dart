@@ -194,6 +194,21 @@ List<NavCatalogGroup> appNavigationCatalog(AppLocalizations l10n) {
           keywords: const ['expenses', 'مصروفات'],
         ),
         NavCatalogEntry(
+          destination: AppNavigationDestination.payments,
+          icon: Icons.account_balance_wallet_outlined,
+          selectedIcon: Icons.account_balance_wallet,
+          label: l10n.paymentsHubDrawerLabel,
+          keywords: const [
+            'payments',
+            'treasury',
+            'cash',
+            'مدفوعات',
+            'تحصيل',
+            'سداد',
+            'خزينة',
+          ],
+        ),
+        NavCatalogEntry(
           destination: AppNavigationDestination.reports,
           icon: Icons.summarize_outlined,
           selectedIcon: Icons.summarize,

@@ -260,8 +260,10 @@ def _sales_baseline_totals(rule: DiscountRule, start, end) -> _BaselineTotals:
     if rule.channel == DiscountRule.Channel.PURCHASING or rule.suppliers.exists():
         return _BaselineTotals()
 
-    queryset = Order.objects.filter(
-        status=Order.Status.PAID,
+    # Recognized sales (standard-paid + credit open/paid; excludes quotations &
+    # void) so the baseline counts آجل sales the same way the campaign actuals do
+    # — otherwise a discount that drove credit sales looks falsely incremental.
+    queryset = Order.objects.committed_sales().filter(
         created_at__gte=start,
         created_at__lt=end,
         subtotal__gte=rule.min_order_subtotal,

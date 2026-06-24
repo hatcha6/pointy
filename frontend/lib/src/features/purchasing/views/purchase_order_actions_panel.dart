@@ -26,7 +26,11 @@ class _PurchaseOrderDocumentMenu extends StatelessWidget {
           case _DocumentAction.share:
             _sharePurchaseOrder(context, viewModel);
           case _DocumentAction.audit:
-            _showPurchaseOrderPrintAudit(context, viewModel, printingRepository);
+            _showPurchaseOrderPrintAudit(
+              context,
+              viewModel,
+              printingRepository,
+            );
         }
       },
       itemBuilder: (context) => [
@@ -163,7 +167,9 @@ class _PurchaseOrderActionFooter extends StatelessWidget {
             label: l10n.submitPurchaseOrderAction,
             description: l10n.purchaseOrderSubmitDescription,
             busy: statusBusy,
-            onTap: statusBusy ? null : () => _submitPurchaseOrder(context, viewModel),
+            onTap: statusBusy
+                ? null
+                : () => _submitPurchaseOrder(context, viewModel),
           )
         : null;
     final receive = viewModel.canReceive
@@ -172,7 +178,9 @@ class _PurchaseOrderActionFooter extends StatelessWidget {
             label: l10n.receivePurchaseLinesAction,
             description: l10n.purchaseOrderReceiveDescription,
             busy: statusBusy,
-            onTap: statusBusy ? null : () => _showReceivingDialog(context, viewModel),
+            onTap: statusBusy
+                ? null
+                : () => _showReceivingDialog(context, viewModel),
           )
         : null;
     final pay = viewModel.canRecordPayment
@@ -192,7 +200,9 @@ class _PurchaseOrderActionFooter extends StatelessWidget {
             label: l10n.returnPurchaseItemsAction,
             description: l10n.purchaseOrderReturnDescription,
             busy: adjustBusy,
-            onTap: adjustBusy ? null : () => _returnPurchaseItems(context, viewModel),
+            onTap: adjustBusy
+                ? null
+                : () => _returnPurchaseItems(context, viewModel),
           )
         : null;
     final refund = viewModel.canRefund
@@ -201,7 +211,9 @@ class _PurchaseOrderActionFooter extends StatelessWidget {
             label: l10n.refundPurchaseItemsAction,
             description: l10n.purchaseOrderRefundDescription,
             busy: adjustBusy,
-            onTap: adjustBusy ? null : () => _refundPurchaseItems(context, viewModel),
+            onTap: adjustBusy
+                ? null
+                : () => _refundPurchaseItems(context, viewModel),
           )
         : null;
     final exchange = viewModel.canExchange
@@ -210,7 +222,9 @@ class _PurchaseOrderActionFooter extends StatelessWidget {
             label: l10n.exchangePurchaseItemsAction,
             description: l10n.purchaseOrderExchangeDescription,
             busy: adjustBusy,
-            onTap: adjustBusy ? null : () => _showExchangeDialog(context, viewModel),
+            onTap: adjustBusy
+                ? null
+                : () => _showExchangeDialog(context, viewModel),
           )
         : null;
     final cancel = viewModel.canCancel
@@ -220,7 +234,9 @@ class _PurchaseOrderActionFooter extends StatelessWidget {
             description: l10n.purchaseOrderCancelActionDescription,
             style: _PoActionStyle.danger,
             busy: statusBusy,
-            onTap: statusBusy ? null : () => _cancelPurchaseOrder(context, viewModel),
+            onTap: statusBusy
+                ? null
+                : () => _cancelPurchaseOrder(context, viewModel),
           )
         : null;
 
@@ -248,16 +264,18 @@ class _PurchaseOrderActionFooter extends StatelessWidget {
         title: l10n.purchaseOrderActionsSheetTitle,
       );
       return filled
-          ? FilledButton.tonalIcon(onPressed: onPressed, icon: icon, label: label)
+          ? FilledButton.tonalIcon(
+              onPressed: onPressed,
+              icon: icon,
+              label: label,
+            )
           : OutlinedButton.icon(onPressed: onPressed, icon: icon, label: label);
     }
 
     if (primary != null) {
       return PointyStickyActionFooter(
         summary: summary,
-        secondaryActions: [
-          if (extras.isNotEmpty) moreButton(filled: false),
-        ],
+        secondaryActions: [if (extras.isNotEmpty) moreButton(filled: false)],
         primaryAction: _primaryActionButton(context, primary),
       );
     }
@@ -320,7 +338,9 @@ Widget? _footerSummary(BuildContext context, PurchaseOrder order) {
           formatMoney(order.balanceDue),
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: valueStyle == null ? null : PointyTypography.numeric(valueStyle),
+          style: valueStyle == null
+              ? null
+              : PointyTypography.numeric(valueStyle),
         ),
       ],
     );
@@ -401,7 +421,10 @@ Future<void> _showPurchaseOrderActionSheet(
 }
 
 class _PurchaseOrderActionTile extends StatelessWidget {
-  const _PurchaseOrderActionTile({required this.action, required this.onInvoke});
+  const _PurchaseOrderActionTile({
+    required this.action,
+    required this.onInvoke,
+  });
 
   final _PoAction action;
   final VoidCallback onInvoke;
@@ -424,7 +447,9 @@ class _PurchaseOrderActionTile extends StatelessWidget {
       title: Text(
         action.label,
         style: Theme.of(context).textTheme.titleSmall?.copyWith(
-          color: action.style == _PoActionStyle.danger ? colors.danger : colors.ink,
+          color: action.style == _PoActionStyle.danger
+              ? colors.danger
+              : colors.ink,
           fontWeight: FontWeight.w700,
         ),
       ),
@@ -503,7 +528,9 @@ Future<void> _runPurchaseStatusAction(
   }
   messenger
     ..clearSnackBars()
-    ..showSnackBar(SnackBar(content: Text(message(viewModel.order.orderNumber))));
+    ..showSnackBar(
+      SnackBar(content: Text(message(viewModel.order.orderNumber))),
+    );
 }
 
 Future<void> _returnPurchaseItems(
@@ -555,6 +582,7 @@ Future<void> _showSupplierPaymentDialog(
     amount: result.amount,
     reference: result.reference,
     notes: result.notes,
+    printProof: result.printProof,
   );
   if (!context.mounted || !didRecord) {
     return;
@@ -754,7 +782,9 @@ Future<void> _showExchangeDialog(
     ..clearSnackBars()
     ..showSnackBar(
       SnackBar(
-        content: Text(l10n.purchaseExchangeSuccess(viewModel.order.orderNumber)),
+        content: Text(
+          l10n.purchaseExchangeSuccess(viewModel.order.orderNumber),
+        ),
       ),
     );
 }

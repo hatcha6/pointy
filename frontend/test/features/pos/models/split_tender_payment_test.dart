@@ -48,6 +48,48 @@ void main() {
       expect(payments?[1].amount, 1);
     });
 
+    test('credit down-payment accepts a partial tender', () {
+      final tenders = const [
+        SplitTenderInput(method: PaymentMethod.cash, amount: 4),
+      ];
+
+      final payments = calculator.appliedPayments(
+        total: 10,
+        tenders: tenders,
+        allowPartial: true,
+      );
+
+      expect(payments, hasLength(1));
+      expect(payments?.single.method, PaymentMethod.cash);
+      expect(payments?.single.amount, 4);
+    });
+
+    test('credit down-payment accepts an empty tender (fully on credit)', () {
+      final payments = calculator.appliedPayments(
+        total: 10,
+        tenders: const [],
+        allowPartial: true,
+      );
+
+      expect(payments, isNotNull);
+      expect(payments, isEmpty);
+    });
+
+    test('credit down-payment rejects a tender above the total', () {
+      final tenders = const [
+        SplitTenderInput(method: PaymentMethod.card, amount: 12),
+      ];
+
+      final payments = calculator.appliedPayments(
+        total: 10,
+        tenders: tenders,
+        allowPartial: true,
+      );
+
+      // A card over-tender can't make change, so it is rejected.
+      expect(payments, isNull);
+    });
+
     test('calculates the adjacent split tender balance', () {
       final tenders = const [
         SplitTenderInput(method: PaymentMethod.cash, amount: 5),

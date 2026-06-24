@@ -173,6 +173,88 @@ class PaymentAuthorizationTests(TestCase):
         self.assertEqual(len(response.data["results"]), 2)
 
 
+class PaymentLedgerListTests(TestCase):
+    """The Payments hub lists customer payments through the read projection:
+    commission + customer name are exposed and ``paid_at`` is filterable."""
+
+    def setUp(self):
+        from django.utils import timezone
+
+        ensure_role_groups()
+        User = get_user_model()
+        self.manager = User.objects.create_user(username="ledger-mgr", password="pass")
+        self.manager.groups.add(Group.objects.get(name=MANAGER_GROUP))
+
+        self.customer = Customer.objects.create(full_name="Ledger Customer")
+        self.session = RegisterSession.objects.create(owner_key="user:ledger")
+        self.order = Order.objects.create(
+            register_session=self.session,
+            customer=self.customer,
+            subtotal=Decimal("20.00"),
+            total=Decimal("20.00"),
+        )
+        self.now = timezone.now()
+        self.old_payment = Payment.objects.create(
+            order=self.order,
+            method=Payment.Method.CARD,
+            amount=Decimal("5.00"),
+            commission_percent=Decimal("2.00"),
+            commission_amount=Decimal("0.10"),
+            external_reference="OLD-REF",
+            created_by=self.manager,
+            paid_at=self.now - timezone.timedelta(days=10),
+        )
+        self.recent_payment = Payment.objects.create(
+            order=self.order,
+            method=Payment.Method.CASH,
+            amount=Decimal("7.00"),
+            created_by=self.manager,
+            paid_at=self.now,
+        )
+
+    def test_ledger_exposes_commission_and_customer_name(self):
+        client = APIClient()
+        client.force_authenticate(user=self.manager)
+
+        response = client.get(reverse("payment-list"), {"ordering": "paid_at"})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        rows = {row["id"]: row for row in response.data["results"]}
+        row = rows[self.old_payment.pk]
+        self.assertEqual(row["customer"], self.customer.pk)
+        self.assertEqual(row["customer_name"], "Ledger Customer")
+        self.assertEqual(row["order"], self.order.pk)
+        self.assertEqual(row["order_receipt_number"], self.order.receipt_number)
+        self.assertEqual(Decimal(row["commission_amount"]), Decimal("0.10"))
+        self.assertEqual(Decimal(row["commission_percent"]), Decimal("2.00"))
+        self.assertEqual(row["external_reference"], "OLD-REF")
+        self.assertEqual(row["created_by_username"], "ledger-mgr")
+        self.assertIn("paid_at", row)
+
+    def test_paid_at_range_filter_narrows_results(self):
+        from django.utils import timezone
+
+        client = APIClient()
+        client.force_authenticate(user=self.manager)
+        cutoff = (self.now - timezone.timedelta(days=1)).isoformat()
+
+        response = client.get(reverse("payment-list"), {"paid_at__gte": cutoff})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        ids = [row["id"] for row in response.data["results"]]
+        self.assertEqual(ids, [self.recent_payment.pk])
+
+    def test_method_filter_narrows_results(self):
+        client = APIClient()
+        client.force_authenticate(user=self.manager)
+
+        response = client.get(reverse("payment-list"), {"method": Payment.Method.CARD})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        ids = [row["id"] for row in response.data["results"]]
+        self.assertEqual(ids, [self.old_payment.pk])
+
+
 class PaymentStockMovementTests(TestCase):
     def test_fully_paid_open_order_decrements_persisted_line_stock(self):
         product = create_product_with_default_variant(
@@ -398,3 +480,58 @@ def _moamalat_receipt_url(amount):
         "https://receipt.moamalat.net:9443/frontTicketDigital/"
         f"#/digital/ticket?query={quote(query)}"
     )
+
+
+class PaymentDrawerAttributionTests(TestCase):
+    """Cash is attributed to the session that COLLECTED a payment, not the
+    session that issued the order — so a debt invoice issued in one shift can be
+    settled (and counted) in a later shift."""
+
+    def setUp(self):
+        User = get_user_model()
+        self.cashier = User.objects.create_user(
+            username="drawer-cashier", password="pass"
+        )
+
+    def test_cash_attributed_to_collecting_session(self):
+        issuing = RegisterSession.objects.create(
+            owner=self.cashier, owner_key=f"user:{self.cashier.pk}"
+        )
+        order = Order.objects.create(
+            register_session=issuing,
+            subtotal=Decimal("10.00"),
+            total=Decimal("10.00"),
+        )
+        collecting = RegisterSession.objects.create(
+            owner=self.cashier, owner_key="user:other-shift"
+        )
+        Payment.objects.create(
+            order=order,
+            register_session=collecting,
+            method=Payment.Method.CASH,
+            amount=Decimal("10.00"),
+        )
+        self.assertEqual(collecting.cash_sales_total, Decimal("10.00"))
+        self.assertEqual(issuing.cash_sales_total, Decimal("0.00"))
+
+    def test_serializer_defaults_session_to_order_session(self):
+        session = RegisterSession.objects.create(
+            owner=self.cashier, owner_key=f"user:{self.cashier.pk}"
+        )
+        order = Order.objects.create(
+            register_session=session,
+            subtotal=Decimal("5.00"),
+            total=Decimal("5.00"),
+        )
+        serializer = PaymentSerializer(
+            data={
+                "order": order.pk,
+                "method": Payment.Method.CASH,
+                "amount": "2.00",
+            },
+            context={},
+        )
+        serializer.is_valid(raise_exception=True)
+        payment = serializer.save()
+        self.assertEqual(payment.register_session_id, session.pk)
+        self.assertEqual(session.cash_sales_total, Decimal("2.00"))

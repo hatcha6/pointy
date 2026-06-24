@@ -150,6 +150,23 @@ class OrderDocumentService {
     );
   }
 
+  Future<bool> printProofOfPayment({
+    required PaymentProof proof,
+    ShopSettings? shopSettings,
+    Uint8List? shopLogoBytes,
+    PrinterEndpoint? endpoint,
+  }) {
+    return _printPdf(
+      bytesBuilder: () => buildProofOfPaymentBytes(
+        proof: proof,
+        shopSettings: shopSettings,
+        shopLogoBytes: shopLogoBytes,
+      ),
+      jobName: proofOfPaymentFileName(proof),
+      endpoint: endpoint,
+    );
+  }
+
   Future<OrderDocumentActionStatus> shareSaleInvoice({
     required SaleOrder order,
     ShopSettings? shopSettings,
@@ -222,6 +239,19 @@ class OrderDocumentService {
     return _renderDocument(template, shopLogoBytes, fontData);
   }
 
+  Future<Uint8List> buildProofOfPaymentBytes({
+    required PaymentProof proof,
+    ShopSettings? shopSettings,
+    Uint8List? shopLogoBytes,
+  }) async {
+    final fontData = await fontLoader.loadData();
+    final template = proofOfPaymentTemplate(
+      proof: proof,
+      shopSettings: shopSettings,
+    );
+    return _renderDocument(template, shopLogoBytes, fontData);
+  }
+
   /// Renders [template] to PDF bytes. On native platforms the heavy synchronous
   /// `pw.Document.save()` runs in a background isolate so a checkout (or a
   /// share/print) never blocks the UI thread; the web target has no isolates,
@@ -247,13 +277,15 @@ class OrderDocumentService {
     required SaleOrder order,
     ShopSettings? shopSettings,
   }) {
+    final isQuotation = order.saleType == SaleType.quotation;
     final paidTotal = order.payments.fold<double>(
       0,
       (sum, payment) => sum + payment.amount,
     );
     final balanceDue = _balanceDue(total: order.total, paid: paidTotal);
+    final statusText = _saleStatusText(order, paidTotal, balanceDue);
     return OrderDocumentTemplate(
-      title: labels.saleInvoiceTitle,
+      title: isQuotation ? labels.quotationTitle : labels.saleInvoiceTitle,
       reference: _saleReference(order),
       publicInvoiceUrl: _publicInvoiceUrl(order),
       shopName: _shopName(shopSettings),
@@ -268,13 +300,39 @@ class OrderDocumentService {
       details: [
         if (order.createdAt != null)
           OrderDocumentField(labels.issueDate, formatPdfDate(order.createdAt!)),
-        if (balanceDue > 0)
+        // A quotation is valid until its expiry, not a money status; a sale
+        // shows its paid/partial/unpaid status. Either way the line is the
+        // highlighted "what is this document" cue at the top of the details.
+        if (isQuotation) ...[
+          if (order.validUntil != null)
+            OrderDocumentField(
+              labels.quotationValidUntil,
+              formatPdfDate(order.validUntil!),
+              strong: true,
+              highlight: true,
+            ),
           OrderDocumentField(
-            labels.balanceDue,
-            _formatMoney(balanceDue),
+            labels.paymentStatusLabel,
+            labels.paymentStatusQuotation,
             strong: true,
             highlight: true,
           ),
+        ] else ...[
+          OrderDocumentField(
+            labels.paymentStatusLabel,
+            statusText,
+            strong: true,
+            highlight: true,
+          ),
+          // Keep the explicit balance-due row for credit/partial sales.
+          if (balanceDue > 0)
+            OrderDocumentField(
+              labels.balanceDue,
+              _formatMoney(balanceDue),
+              strong: true,
+              highlight: true,
+            ),
+        ],
       ],
       itemsTable: OrderDocumentTable(
         columns: [
@@ -306,11 +364,33 @@ class OrderDocumentService {
           _formatMoney(order.total),
           strong: true,
         ),
-        if (paidTotal > 0)
+        // A quote owes nothing, so it carries no paid/balance money framing.
+        if (!isQuotation && paidTotal > 0)
           OrderDocumentField(labels.paid, _formatMoney(paidTotal)),
+        if (!isQuotation && balanceDue > 0)
+          OrderDocumentField(labels.balanceDue, _formatMoney(balanceDue)),
       ],
+      // A quotation reminds the reader it is not a tax/sale invoice.
+      terms: isQuotation ? labels.quotationNotice : null,
       notes: _shopFooterNote(shopSettings),
     );
+  }
+
+  /// Resolves the printed status text for a sale. Prefers the server's
+  /// `payment_status`; falls back to deriving it from the paid/balance figures
+  /// for older payloads that omit it.
+  String _saleStatusText(SaleOrder order, double paidTotal, double balanceDue) {
+    final serverStatus = order.paymentStatus.trim();
+    if (serverStatus.isNotEmpty) {
+      return labels.paymentStatusText(serverStatus);
+    }
+    if (balanceDue <= 0 && order.total > 0) {
+      return labels.paymentStatusPaid;
+    }
+    if (paidTotal > 0) {
+      return labels.paymentStatusPartial;
+    }
+    return labels.paymentStatusUnpaid;
   }
 
   OrderDocumentTemplate purchaseOrderTemplate({
@@ -397,12 +477,89 @@ class OrderDocumentService {
     );
   }
 
+  /// A standalone proof-of-payment slip for a single payment: a "سند قبض"
+  /// (money in, from a customer) or "سند صرف" (money out, to a supplier).
+  /// Reuses the invoice document frame but carries no line-items table — the
+  /// payment particulars render as field rows in the totals block.
+  OrderDocumentTemplate proofOfPaymentTemplate({
+    required PaymentProof proof,
+    ShopSettings? shopSettings,
+  }) {
+    final isReceipt = proof.kind == PaymentProofKind.receipt;
+    return OrderDocumentTemplate(
+      title: isReceipt
+          ? labels.proofOfReceiptTitle
+          : labels.proofOfPaymentTitle,
+      reference: proof.reference.trim().isEmpty
+          ? labels.emptyValue
+          : proof.reference.trim(),
+      shopName: _shopName(shopSettings),
+      shopHeaderLines: _shopHeaderLines(shopSettings),
+      recipientTitle: isReceipt ? labels.proofReceivedFrom : labels.proofPaidTo,
+      recipientLines: _nonBlankStrings([proof.partyName, proof.partyContact]),
+      details: [
+        OrderDocumentField(
+          labels.issueDate,
+          formatPdfDate(proof.createdAt ?? DateTime.now()),
+        ),
+        if ((proof.relatedDocumentNumber?.trim().isNotEmpty ?? false))
+          OrderDocumentField(
+            isReceipt
+                ? labels.proofRelatedInvoice
+                : labels.proofRelatedPurchaseOrder,
+            proof.relatedDocumentNumber!.trim(),
+          ),
+      ],
+      // Payment particulars render through the shared styled table (the same
+      // PointyPdfTable the invoice line-items use), so the proof matches the
+      // rest of our documents rather than a bespoke layout.
+      itemsTable: OrderDocumentTable(
+        columns: [labels.proofParticular, labels.proofParticularValue],
+        rows: [
+          [labels.paymentMethod, proof.method],
+          if (proof.commissionAmount != null && proof.commissionAmount! > 0)
+            [labels.proofCommission, _formatMoney(proof.commissionAmount!)],
+          if (proof.externalReference?.trim().isNotEmpty ?? false)
+            [labels.proofReference, proof.externalReference!.trim()],
+          if (proof.handledBy?.trim().isNotEmpty ?? false)
+            [
+              isReceipt ? labels.proofCollectedBy : labels.proofPaidBy,
+              proof.handledBy!.trim(),
+            ],
+        ],
+        columnFlex: const [1.4, 2.0],
+      ),
+      totals: [
+        OrderDocumentField(
+          labels.proofAmount,
+          _formatMoney(proof.amount),
+          strong: true,
+          highlight: true,
+        ),
+        if (proof.balanceAfter != null)
+          OrderDocumentField(
+            labels.proofBalanceAfter,
+            _formatMoney(proof.balanceAfter!),
+            strong: true,
+          ),
+      ],
+      notes: _shopFooterNote(shopSettings),
+    );
+  }
+
   String saleInvoiceFileName(SaleOrder order) {
     return 'فاتورة-بيع-${_safeReference(_saleReference(order))}.pdf';
   }
 
   String purchaseOrderFileName(PurchaseOrder order) {
     return 'فاتورة-مشتريات-${_safeReference(_purchaseReference(order))}.pdf';
+  }
+
+  String proofOfPaymentFileName(PaymentProof proof) {
+    final prefix = proof.kind == PaymentProofKind.receipt
+        ? 'سند-قبض'
+        : 'سند-صرف';
+    return '$prefix-${_safeReference(proof.reference)}.pdf';
   }
 
   Future<bool> _printPdf({
@@ -605,6 +762,28 @@ class OrderDocumentLabels {
     required this.ofPages,
     required this.onlineInvoice,
     required this.scanOnlineInvoice,
+    required this.paymentStatusLabel,
+    required this.paymentStatusPaid,
+    required this.paymentStatusPartial,
+    required this.paymentStatusUnpaid,
+    required this.paymentStatusQuotation,
+    required this.quotationTitle,
+    required this.quotationValidUntil,
+    required this.quotationNotice,
+    required this.proofOfReceiptTitle,
+    required this.proofOfPaymentTitle,
+    required this.proofReceivedFrom,
+    required this.proofPaidTo,
+    required this.proofRelatedInvoice,
+    required this.proofRelatedPurchaseOrder,
+    required this.proofAmount,
+    required this.proofCommission,
+    required this.proofReference,
+    required this.proofParticular,
+    required this.proofParticularValue,
+    required this.proofCollectedBy,
+    required this.proofPaidBy,
+    required this.proofBalanceAfter,
   });
 
   const OrderDocumentLabels.arabic()
@@ -654,7 +833,30 @@ class OrderDocumentLabels {
       page = 'صفحة',
       ofPages = 'من',
       onlineInvoice = 'الفاتورة عبر الإنترنت',
-      scanOnlineInvoice = 'امسح الرمز لعرض الفاتورة';
+      scanOnlineInvoice = 'امسح الرمز لعرض الفاتورة',
+      paymentStatusLabel = 'حالة الدفع',
+      paymentStatusPaid = 'مدفوعة بالكامل',
+      paymentStatusPartial = 'مدفوعة جزئيًا',
+      paymentStatusUnpaid = 'آجل — غير مدفوعة',
+      paymentStatusQuotation = 'عرض سعر',
+      quotationTitle = 'فاتورة عرض',
+      quotationValidUntil = 'صالح حتى',
+      quotationNotice =
+          'هذا عرض سعر وليس فاتورة بيع أو فاتورة ضريبية، ولا يُلزم بأي دفع.',
+      proofOfReceiptTitle = 'سند قبض',
+      proofOfPaymentTitle = 'سند صرف',
+      proofReceivedFrom = 'استلمنا من',
+      proofPaidTo = 'صرفنا إلى',
+      proofRelatedInvoice = 'بخصوص الفاتورة',
+      proofRelatedPurchaseOrder = 'بخصوص أمر الشراء',
+      proofAmount = 'المبلغ',
+      proofCommission = 'العمولة',
+      proofReference = 'المرجع',
+      proofParticular = 'البيان',
+      proofParticularValue = 'التفاصيل',
+      proofCollectedBy = 'حصّلها',
+      proofPaidBy = 'صرفها',
+      proofBalanceAfter = 'الرصيد بعد الدفع';
 
   final String saleInvoiceTitle;
   final String purchaseOrderTitle;
@@ -703,6 +905,40 @@ class OrderDocumentLabels {
   final String ofPages;
   final String onlineInvoice;
   final String scanOnlineInvoice;
+  final String paymentStatusLabel;
+  final String paymentStatusPaid;
+  final String paymentStatusPartial;
+  final String paymentStatusUnpaid;
+  final String paymentStatusQuotation;
+  final String quotationTitle;
+  final String quotationValidUntil;
+  final String quotationNotice;
+  final String proofOfReceiptTitle;
+  final String proofOfPaymentTitle;
+  final String proofReceivedFrom;
+  final String proofPaidTo;
+  final String proofRelatedInvoice;
+  final String proofRelatedPurchaseOrder;
+  final String proofAmount;
+  final String proofCommission;
+  final String proofReference;
+  final String proofParticular;
+  final String proofParticularValue;
+  final String proofCollectedBy;
+  final String proofPaidBy;
+  final String proofBalanceAfter;
+
+  /// Localized money-status line for a printed sale, keyed on the server's
+  /// `payment_status` (`paid` | `partial` | `unpaid` | `quotation`).
+  String paymentStatusText(String paymentStatus) {
+    return switch (paymentStatus) {
+      'paid' => paymentStatusPaid,
+      'partial' => paymentStatusPartial,
+      'unpaid' => paymentStatusUnpaid,
+      'quotation' => paymentStatusQuotation,
+      _ => emptyValue,
+    };
+  }
 
   String paymentMethodLabel(PaymentMethod method) {
     return switch (method) {
@@ -743,8 +979,8 @@ class OrderDocumentTemplate {
     required this.recipientTitle,
     required this.recipientLines,
     required this.details,
-    required this.itemsTable,
     required this.totals,
+    this.itemsTable,
     this.notes,
     this.terms,
     this.publicInvoiceUrl,
@@ -757,7 +993,10 @@ class OrderDocumentTemplate {
   final String recipientTitle;
   final List<String> recipientLines;
   final List<OrderDocumentField> details;
-  final OrderDocumentTable itemsTable;
+
+  /// Line-items table. Null for documents with no line items (e.g. a
+  /// proof-of-payment slip), in which case the frame omits the table entirely.
+  final OrderDocumentTable? itemsTable;
   final List<OrderDocumentField> totals;
   final String? notes;
   final String? terms;
@@ -794,8 +1033,10 @@ class _DocumentFrame {
           pw.SizedBox(height: 32),
           _documentParties(),
           pw.SizedBox(height: 24),
-          template.itemsTable.build(labels),
-          pw.SizedBox(height: 24),
+          if (template.itemsTable != null) ...[
+            template.itemsTable!.build(labels),
+            pw.SizedBox(height: 24),
+          ],
           _bottomSection(),
         ],
       ),
@@ -1027,6 +1268,7 @@ class _DocumentFrame {
                       label: row.label,
                       value: row.value,
                       strong: row.strong,
+                      highlighted: row.highlight,
                     ),
                   ),
               ],
@@ -1106,6 +1348,67 @@ class OrderDocumentField {
   final String value;
   final bool strong;
   final bool highlight;
+}
+
+/// Whether a payment proof records money coming in (a customer paying us — a
+/// "سند قبض" receipt) or money going out (us paying a supplier — a "سند صرف"
+/// disbursement). Drives the title, the party label, and the audit kind.
+enum PaymentProofKind { receipt, disbursement }
+
+/// Plain, isolate-sendable description of a single payment for the standalone
+/// proof-of-payment slip (سند قبض / سند صرف). Every field is a primitive so the
+/// document can render in a background isolate like the invoice/PO templates.
+@immutable
+class PaymentProof {
+  const PaymentProof({
+    required this.kind,
+    required this.reference,
+    required this.partyName,
+    required this.amount,
+    required this.method,
+    this.partyContact,
+    this.relatedDocumentNumber,
+    this.commissionAmount,
+    this.externalReference,
+    this.handledBy,
+    this.balanceAfter,
+    this.createdAt,
+  });
+
+  final PaymentProofKind kind;
+
+  /// Human-facing slip number/reference shown next to the title (e.g. the
+  /// payment id or invoice/PO number).
+  final String reference;
+
+  /// Customer (receipt) or supplier (disbursement) name.
+  final String partyName;
+
+  /// Optional party contact line (number/phone) under the name.
+  final String? partyContact;
+
+  /// Invoice or purchase-order number this payment settles, if any.
+  final String? relatedDocumentNumber;
+
+  final double amount;
+
+  /// Localized payment-method label (resolved by the caller, which has the
+  /// l10n context the isolate does not).
+  final String method;
+
+  /// Card/transfer commission, when charged.
+  final double? commissionAmount;
+
+  /// Free-text reference captured at payment time (RRN, transfer note, …).
+  final String? externalReference;
+
+  /// Who collected (receipt) or disbursed (disbursement) the money.
+  final String? handledBy;
+
+  /// The party's running balance after this payment.
+  final double? balanceAfter;
+
+  final DateTime? createdAt;
 }
 
 String _saleReference(SaleOrder order) {

@@ -274,6 +274,7 @@ class PrintAuditEvent(TimeStampedModel):
     class DocumentType(models.TextChoices):
         SALE_ORDER = "sale_order", "Sale order"
         PURCHASE_ORDER = "purchase_order", "Purchase order"
+        PAYMENT_RECEIPT = "payment_receipt", "Payment receipt"
 
     class Action(models.TextChoices):
         PRINT = "print", "Print"
@@ -302,6 +303,23 @@ class PrintAuditEvent(TimeStampedModel):
     )
     purchase_order = models.ForeignKey(
         PurchaseOrder,
+        on_delete=models.SET_NULL,
+        related_name="print_audit_events",
+        blank=True,
+        null=True,
+    )
+    # Proof-of-payment receipts link to the money record they document. Money-in
+    # (customer) payments and money-out (supplier) payments live in separate
+    # tables, so a receipt points at exactly one of them.
+    payment = models.ForeignKey(
+        "payments.Payment",
+        on_delete=models.SET_NULL,
+        related_name="print_audit_events",
+        blank=True,
+        null=True,
+    )
+    supplier_payment = models.ForeignKey(
+        "purchasing.SupplierPayment",
         on_delete=models.SET_NULL,
         related_name="print_audit_events",
         blank=True,
@@ -346,6 +364,14 @@ class PrintAuditEvent(TimeStampedModel):
             models.Index(
                 fields=["document_type", "purchase_order", "-created_at"],
                 name="print_audit_purchase_idx",
+            ),
+            models.Index(
+                fields=["document_type", "payment", "-created_at"],
+                name="print_audit_payment_idx",
+            ),
+            models.Index(
+                fields=["document_type", "supplier_payment", "-created_at"],
+                name="print_audit_supplier_pay_idx",
             ),
         ]
 

@@ -33,6 +33,7 @@ enum AppCapability {
   cancelPurchaseOrder,
   deletePurchaseOrder,
   manageContacts,
+  collectCustomerDebt,
   checkoutSale,
   startRegisterSession,
   resumeRegisterSession,
@@ -53,6 +54,7 @@ enum AppCapability {
   managePriceCheckers,
   viewExpenses,
   manageExpenses,
+  viewPayments,
   viewAttendance,
   manageAttendance,
   viewOperations,
@@ -100,6 +102,13 @@ class AuthorizationCapabilities {
       AppCapability.createRegisterCashMovement,
       AppCapability.manageDeviceSettings,
     };
+
+    // Manager-controlled: lets cashiers look up customers (to attach one to a
+    // credit/quote sale) and collect customer debt via the focused collect-debt
+    // flow. The backend enforces the same flag on the customer endpoints.
+    if (user.allowCashierCustomerAccess) {
+      capabilities.add(AppCapability.collectCustomerDebt);
+    }
 
     if (user.permissions.isNotEmpty) {
       if (_hasAny(user, const ['add_product', 'catalog.add_product'])) {
@@ -518,6 +527,12 @@ class AuthorizationCapabilities {
       if (_hasAny(user, const ['view_expense', 'expenses.view_expense'])) {
         capabilities.add(AppCapability.viewExpenses);
       }
+      // The Payments hub (الخزينة) needs to see both money-IN (customer
+      // payments) and money-OUT (supplier payments); gate it on the customer
+      // payment view perm, the primary money ledger.
+      if (_hasAny(user, const ['view_payment', 'payments.view_payment'])) {
+        capabilities.add(AppCapability.viewPayments);
+      }
       if (_hasAny(user, const [
         'add_expense',
         'change_expense',
@@ -574,6 +589,8 @@ class AuthorizationCapabilities {
   final Set<AppCapability> _capabilities;
 
   bool allows(AppCapability capability) => _capabilities.contains(capability);
+
+  bool get canCollectCustomerDebt => allows(AppCapability.collectCustomerDebt);
 
   bool get canViewDashboard => allows(AppCapability.viewDashboard);
   bool get canViewSalesDashboard => allows(AppCapability.viewSalesDashboard);
@@ -644,6 +661,7 @@ class AuthorizationCapabilities {
   bool get canManagePriceCheckers => allows(AppCapability.managePriceCheckers);
   bool get canViewExpenses => allows(AppCapability.viewExpenses);
   bool get canManageExpenses => allows(AppCapability.manageExpenses);
+  bool get canViewPayments => allows(AppCapability.viewPayments);
   bool get canViewOperations => allows(AppCapability.viewOperations);
   bool get canCreateJobs => allows(AppCapability.createJobs);
   bool get canAssignJobs => allows(AppCapability.assignJobs);

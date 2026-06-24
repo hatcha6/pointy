@@ -48,6 +48,8 @@ def _shop_context_sentence(shop):
         parts.append("يُسمح بالبيع تحت رصيد المخزون")
     if getattr(shop, "prevent_selling_at_loss", True):
         parts.append("يُمنع البيع بأقل من التكلفة")
+    if getattr(shop, "require_customer_for_credit", True):
+        parts.append("الفواتير الآجلة وعروض الأسعار تتطلّب اختيار عميل")
     if not parts:
         return ""
     return "سياق المتجر — " + "؛ ".join(parts) + ". "
@@ -83,6 +85,14 @@ def _action_guidance(shop):
         "لإتمام عملية بيع استخدم create_sale على خطوتين: نفّذها أولًا بـ confirm=false "
         "لتحصل على معاينة بالإجمالي والخصومات، اعرضها للمستخدم وأكّد عبر ask_user، ثم "
         "أعِدها بـ confirm=true. "
+        "أنواع البيع: لبيع آجل (دين) مرّر sale_type=credit في create_sale — يجوز دفعة "
+        "مقدّمة في amount_received أو تركها صفرًا ويبقى الباقي دَينًا على العميل. لعرض سعر "
+        "(فاتورة عرض) مرّر sale_type=quotation (لا يخصم مخزونًا ولا يقبل دفعًا، ويمكن حجز "
+        "الكميات بـ reserve_stock=true حتى valid_until). النوعان قد يتطلّبان عميلًا "
+        "(customer) حسب إعداد المتجر — اختر العميل أولًا. لتحصيل دَين لاحقًا استخدم "
+        "record_customer_payment على الفاتورة (دون تجاوز الرصيد المستحق). لتحويل عرض سعر "
+        "إلى بيع استخدم convert_quotation. لتسجيل دفعة مدفوعة لمورّد استخدم "
+        "record_supplier_payment. كل هذه الأدوات على خطوتين (معاينة ثم تأكيد عبر ask_user). "
         "لإنشاء أمر شراء من صورة/ملف فاتورة مورّد، اتبع هذا المسار بدقّة ولا تنشئ أي شيء "
         "قبل الخطوة 1: "
         "(1) في دورك الأول فقط (وأنت ترى الصورة) استخرج اسم المورّد وكل البنود (اسم المنتج، "

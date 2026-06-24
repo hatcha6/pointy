@@ -436,8 +436,7 @@ def _sales_notifications(now):
         )
 
     period_start = now - timedelta(days=30)
-    orders = Order.objects.filter(
-        status__in=(Order.Status.PAID, Order.Status.VOID),
+    orders = Order.objects.transactional().filter(
         created_at__gte=period_start,
         created_at__lt=now,
     )

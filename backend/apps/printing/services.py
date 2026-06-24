@@ -183,6 +183,11 @@ def build_receipt_payload(order):
                 shop_settings=shop_settings,
             ),
             "status": order.status,
+            "sale_type": order.sale_type,
+            "payment_status": order.payment_status,
+            "amount_paid": money(order.amount_paid),
+            "balance_due": money(order.balance_due),
+            "valid_until": order.valid_until.isoformat() if order.valid_until else None,
             "subtotal": money(order.subtotal),
             "discount_total": money(order.discount_total),
             "total": money(order.total),
@@ -342,6 +347,8 @@ def create_print_audit_event(
     status=PrintAuditEvent.Status.REQUESTED,
     sale_order=None,
     purchase_order=None,
+    payment=None,
+    supplier_payment=None,
     user=None,
     agent=None,
     agent_identifier="",
@@ -361,10 +368,14 @@ def create_print_audit_event(
         status=status,
         sale_order=sale_order,
         purchase_order=purchase_order,
+        payment=payment,
+        supplier_payment=supplier_payment,
         document_number=print_audit_document_number(
             document_type,
             sale_order=sale_order,
             purchase_order=purchase_order,
+            payment=payment,
+            supplier_payment=supplier_payment,
         ),
         print_job=print_job,
         user=user if user and user.is_authenticated else None,
@@ -391,7 +402,14 @@ def report_print_audit_event(audit_event, *, status, message="", metadata=None):
     return audit_event
 
 
-def print_audit_document_number(document_type, *, sale_order=None, purchase_order=None):
+def print_audit_document_number(
+    document_type,
+    *,
+    sale_order=None,
+    purchase_order=None,
+    payment=None,
+    supplier_payment=None,
+):
     if document_type == PrintAuditEvent.DocumentType.SALE_ORDER and sale_order is not None:
         return sale_order.receipt_number or str(sale_order.pk)
     if (
@@ -399,6 +417,13 @@ def print_audit_document_number(document_type, *, sale_order=None, purchase_orde
         and purchase_order is not None
     ):
         return purchase_order.order_number or str(purchase_order.pk)
+    if document_type == PrintAuditEvent.DocumentType.PAYMENT_RECEIPT:
+        # RC = receipt voucher (سند قبض, money in); PV = payment voucher
+        # (سند صرف, money out).
+        if payment is not None:
+            return f"RC-{payment.pk}"
+        if supplier_payment is not None:
+            return f"PV-{supplier_payment.pk}"
     return ""
 
 
@@ -581,7 +606,12 @@ def _claim_locked_print_job(job, agent, *, user=None, printer_endpoint=None, now
 
 def enqueue_receipt_print_job(order_id):
     order = Order.objects.get(pk=order_id)
-    if order.status != Order.Status.PAID:
+    # A transient standard cart isn't a document until it's paid; credit (debt)
+    # invoices and quotations are real documents printed the moment they're
+    # issued. Voids never auto-print.
+    if order.status == Order.Status.VOID:
+        return None
+    if order.sale_type == Order.SaleType.STANDARD and order.status != Order.Status.PAID:
         return None
 
     shop_settings = ShopSettings.load()

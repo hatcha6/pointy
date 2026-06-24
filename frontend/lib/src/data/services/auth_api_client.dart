@@ -83,6 +83,11 @@ class AuthApiClient {
     if (decoded.containsKey('ai_available')) {
       userJson['ai_available'] = decoded['ai_available'];
     }
+    // Same shape: the cashier customer-access shop flag rides alongside `user`.
+    if (decoded.containsKey('allow_cashier_customer_access')) {
+      userJson['allow_cashier_customer_access'] =
+          decoded['allow_cashier_customer_access'];
+    }
     return PosUser.fromJson(userJson);
   }
 }

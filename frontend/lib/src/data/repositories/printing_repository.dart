@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import '../../core/result.dart';
+import '../../shared/formatters.dart';
 import '../models/barcode_label.dart';
 import '../models/print_audit_event.dart';
 import '../models/print_job.dart';
@@ -69,12 +70,14 @@ class PrintingRepository {
   Future<Result<List<PrintAuditEvent>>> loadPrintAuditEvents({
     required PrintAuditDocumentType documentType,
     required int documentId,
+    PrintAuditPaymentKind? paymentKind,
     int page = 1,
   }) async {
     return Result.guard(
       () => _service.fetchPrintAuditEvents(
         documentType: documentType,
         documentId: documentId,
+        paymentKind: paymentKind,
         page: page,
       ),
     );
@@ -474,6 +477,60 @@ class PrintingRepository {
     return result;
   }
 
+  /// Prints a standalone proof-of-payment slip (سند قبض / سند صرف) for a single
+  /// payment and records a `payment_receipt` print-audit event keyed on the
+  /// payment id. Uses the document (A4) path on system/PDF printers and the
+  /// thermal path otherwise, mirroring [printSaleInvoice].
+  Future<PrintTransportResult> printProofOfPayment({
+    required PaymentProof proof,
+    required int paymentId,
+    required PrintAuditPaymentKind paymentKind,
+    ShopSettings? shopSettings,
+    Uint8List? shopLogoBytes,
+  }) async {
+    final configResult = await loadDefaultPrinterConfig();
+    final config = switch (configResult) {
+      Ok<PrinterConfig>() => configResult.value,
+      Error<PrinterConfig>() => null,
+    };
+    if (config == null) {
+      return const PrintTransportResult.failure('printer config unavailable');
+    }
+
+    final auditEvent = await _beginPaymentProofAudit(
+      paymentId: paymentId,
+      paymentKind: paymentKind,
+      config: config,
+    );
+
+    final result = config.endpoint.usesDocumentInvoice
+        ? await _printDocument(() {
+            return _documentService.printProofOfPayment(
+              proof: proof,
+              shopSettings: shopSettings,
+              shopLogoBytes: shopLogoBytes,
+              endpoint: config.endpoint,
+            );
+          })
+        : await _printThermalPayload(
+            _proofOfPaymentPayload(
+              proof: proof,
+              shopSettings: shopSettings,
+              shopLogoBytes: shopLogoBytes,
+            ),
+            config,
+          );
+
+    if (auditEvent != null) {
+      await _reportPrintAudit(
+        auditEvent,
+        _auditStatusForPrintResult(result),
+        message: result.message,
+      );
+    }
+    return result;
+  }
+
   Future<OrderDocumentActionStatus> shareSaleInvoice({
     required SaleOrder order,
     ShopSettings? shopSettings,
@@ -561,6 +618,29 @@ class PrintingRepository {
         metadata: {
           'delivery_channel': deliveryChannel,
           'default_printer_endpoint': config.endpoint.toJson(),
+        },
+      ),
+    );
+  }
+
+  Future<PrintAuditEvent?> _beginPaymentProofAudit({
+    required int paymentId,
+    required PrintAuditPaymentKind paymentKind,
+    required PrinterConfig config,
+  }) {
+    return _recordPrintAuditEvent(
+      PrintAuditEventDraft(
+        documentType: PrintAuditDocumentType.paymentReceipt,
+        documentId: paymentId,
+        paymentKind: paymentKind,
+        action: PrintAuditAction.print,
+        agentId: config.agentId,
+        printerEndpoint: config.endpoint.toJson(),
+        deviceName: config.agentId,
+        printerName: _endpointDisplayName(config.endpoint),
+        metadata: {
+          'output_mode': config.endpoint.outputMode.name,
+          'transport_kind': config.endpoint.kind.name,
         },
       ),
     );
@@ -742,6 +822,64 @@ class PrintingRepository {
                   .toStringAsFixed(2),
             },
         ],
+      },
+    };
+  }
+
+  /// Thermal payload for a proof-of-payment slip. Mirrors the A4
+  /// [OrderDocumentService.proofOfPaymentTemplate] field-for-field, drawing the
+  /// same Arabic labels from [OrderDocumentLabels] so the two stay in sync.
+  Map<String, Object?> _proofOfPaymentPayload({
+    required PaymentProof proof,
+    ShopSettings? shopSettings,
+    Uint8List? shopLogoBytes,
+  }) {
+    const labels = OrderDocumentLabels.arabic();
+    final isReceipt = proof.kind == PaymentProofKind.receipt;
+    return {
+      'kind': 'payment_receipt',
+      'shop': {
+        ..._shopPayload(shopSettings, logoBytes: shopLogoBytes),
+        'currency_symbol': currencySymbol,
+      },
+      'proof': {
+        'title': isReceipt
+            ? labels.proofOfReceiptTitle
+            : labels.proofOfPaymentTitle,
+        'reference_number': proof.reference.trim(),
+        if (proof.createdAt != null) 'created_at': proof.createdAt!.toString(),
+        'party_label': isReceipt
+            ? labels.proofReceivedFrom
+            : labels.proofPaidTo,
+        'party_name': proof.partyName.trim(),
+        if (proof.relatedDocumentNumber?.trim().isNotEmpty ?? false) ...{
+          'related_label': isReceipt
+              ? labels.proofRelatedInvoice
+              : labels.proofRelatedPurchaseOrder,
+          'related_number': proof.relatedDocumentNumber!.trim(),
+        },
+        'amount_label': labels.proofAmount,
+        'amount': proof.amount.toStringAsFixed(2),
+        'method_label': labels.paymentMethod,
+        'method': proof.method,
+        if (proof.commissionAmount != null && proof.commissionAmount! > 0) ...{
+          'commission_label': labels.proofCommission,
+          'commission': proof.commissionAmount!.toStringAsFixed(2),
+        },
+        if (proof.externalReference?.trim().isNotEmpty ?? false) ...{
+          'reference_label': labels.proofReference,
+          'reference': proof.externalReference!.trim(),
+        },
+        if (proof.handledBy?.trim().isNotEmpty ?? false) ...{
+          'handled_label': isReceipt
+              ? labels.proofCollectedBy
+              : labels.proofPaidBy,
+          'handled_by': proof.handledBy!.trim(),
+        },
+        if (proof.balanceAfter != null) ...{
+          'balance_label': labels.proofBalanceAfter,
+          'balance_after': proof.balanceAfter!.toStringAsFixed(2),
+        },
       },
     };
   }

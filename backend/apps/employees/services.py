@@ -325,8 +325,7 @@ def _plan_for_period(employee, period_end):
 def _commissionable_sales_total(employee, period_start, period_end):
     if employee.user_id is None:
         return Decimal("0.00")
-    total = Order.objects.filter(
-        status=Order.Status.PAID,
+    total = Order.objects.committed_sales().filter(
         register_session__owner_id=employee.user_id,
         created_at__date__gte=period_start,
         created_at__date__lte=period_end,

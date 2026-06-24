@@ -4,6 +4,25 @@ import 'print_job.dart';
 import 'printer_config.dart';
 import 'query.dart';
 
+/// How a sale is recorded at checkout. `standard` is the normal paid-in-full
+/// flow; `credit` (آجل) is a debt invoice issued unpaid or partly paid;
+/// `quotation` (عرض سعر) is a non-binding price offer that moves no stock.
+enum SaleType {
+  standard('standard'),
+  credit('credit'),
+  quotation('quotation');
+
+  const SaleType(this.apiValue);
+
+  final String apiValue;
+
+  static SaleType fromApiValue(Object? value) => switch (value?.toString()) {
+    'credit' => SaleType.credit,
+    'quotation' => SaleType.quotation,
+    _ => SaleType.standard,
+  };
+}
+
 class SaleCheckoutDraft {
   const SaleCheckoutDraft({
     required this.lines,
@@ -11,6 +30,9 @@ class SaleCheckoutDraft {
     this.invoicePrinterConfig,
     this.customerId,
     this.couponCode = '',
+    this.saleType = SaleType.standard,
+    this.validUntil,
+    this.reserveStock = false,
   });
 
   final List<SaleCheckoutLineDraft> lines;
@@ -18,6 +40,13 @@ class SaleCheckoutDraft {
   final PrinterConfig? invoicePrinterConfig;
   final int? customerId;
   final String couponCode;
+  final SaleType saleType;
+
+  /// Quotation/credit expiry (also bounds a quotation's stock hold).
+  final DateTime? validUntil;
+
+  /// Quotation-only: hold the quoted quantities until [validUntil].
+  final bool reserveStock;
 
   factory SaleCheckoutDraft.fromCart({
     required List<CartLine> cart,
@@ -25,6 +54,9 @@ class SaleCheckoutDraft {
     PrinterConfig? invoicePrinterConfig,
     int? customerId,
     String couponCode = '',
+    SaleType saleType = SaleType.standard,
+    DateTime? validUntil,
+    bool reserveStock = false,
   }) {
     return SaleCheckoutDraft(
       lines: cart
@@ -42,6 +74,9 @@ class SaleCheckoutDraft {
       invoicePrinterConfig: invoicePrinterConfig,
       customerId: customerId,
       couponCode: couponCode,
+      saleType: saleType,
+      validUntil: validUntil,
+      reserveStock: reserveStock,
     );
   }
 
@@ -52,6 +87,13 @@ class SaleCheckoutDraft {
       if (customerId != null) 'customer': customerId,
       if (normalizedCouponCode.isNotEmpty) 'coupon_code': normalizedCouponCode,
       'payments': payments.map((payment) => payment.toJson()).toList(),
+      if (saleType != SaleType.standard) 'sale_type': saleType.apiValue,
+      if (validUntil != null)
+        'valid_until':
+            '${validUntil!.year.toString().padLeft(4, '0')}-'
+            '${validUntil!.month.toString().padLeft(2, '0')}-'
+            '${validUntil!.day.toString().padLeft(2, '0')}',
+      if (reserveStock) 'reserve_stock': true,
       if (invoicePrinterConfig != null)
         'print_invoice': {
           'agent_id': invoicePrinterConfig!.agentId,
@@ -310,6 +352,11 @@ class SaleOrder {
     this.requiresManagerAdjustment = false,
     this.discountTotal = 0,
     this.appliedDiscounts = const [],
+    this.saleType = SaleType.standard,
+    this.amountPaid = 0,
+    this.balanceDue = 0,
+    this.paymentStatus = '',
+    this.validUntil,
     this.createdAt,
     this.updatedAt,
   });
@@ -340,6 +387,13 @@ class SaleOrder {
   final double subtotal;
   final double discountTotal;
   final double total;
+  final SaleType saleType;
+  final double amountPaid;
+  final double balanceDue;
+
+  /// Server-computed: `paid` | `partial` | `unpaid` | `quotation`.
+  final String paymentStatus;
+  final DateTime? validUntil;
   final List<AppliedDiscountInfo> appliedDiscounts;
   final DateTime? createdAt;
   final DateTime? updatedAt;
@@ -391,6 +445,11 @@ class SaleOrder {
       subtotal: _moneyFromJson(json['subtotal']),
       discountTotal: _moneyFromJson(json['discount_total']),
       total: _moneyFromJson(json['total']),
+      saleType: SaleType.fromApiValue(json['sale_type']),
+      amountPaid: _moneyFromJson(json['amount_paid']),
+      balanceDue: _moneyFromJson(json['balance_due']),
+      paymentStatus: json['payment_status']?.toString() ?? '',
+      validUntil: _dateTimeFromJson(json['valid_until']),
       appliedDiscounts: _listFromJson(json['applied_discounts'])
           .whereType<Map<String, Object?>>()
           .map(AppliedDiscountInfo.fromJson)

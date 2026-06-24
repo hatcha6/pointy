@@ -4,6 +4,7 @@ import '../../../core/analytics_audit.dart';
 import '../../../core/analytics_engine.dart';
 import '../../../core/result.dart';
 import '../../../data/models/analytics_event.dart';
+import '../../../data/models/print_audit_event.dart';
 import '../../../data/models/sale_order.dart';
 import '../../../data/models/shop_settings.dart';
 import '../../../data/repositories/printing_repository.dart';
@@ -31,10 +32,15 @@ class InvoiceDetailsViewModel extends ChangeNotifier {
   SaleOrder _order;
   bool _isLoading = false;
   bool _hasLoadError = false;
+  bool _isRecordingPayment = false;
+  bool _isConverting = false;
+  final Map<String, String> _idempotencyKeysBySignature = {};
 
   SaleOrder get order => _order;
   bool get isLoading => _isLoading;
   bool get hasLoadError => _hasLoadError;
+  bool get isRecordingPayment => _isRecordingPayment;
+  bool get isConverting => _isConverting;
 
   Future<void> loadInvoice() async {
     _isLoading = true;
@@ -51,6 +57,177 @@ class InvoiceDetailsViewModel extends ChangeNotifier {
 
     _isLoading = false;
     notifyListeners();
+  }
+
+  /// Records a payment against this (credit) invoice and reloads the order on
+  /// success. Cards are allowed — pass [cardReceiptUrl] for the card method.
+  /// Uses a signature-based idempotency key so a double-tap is a server no-op.
+  /// When [printProof] is set, prints a "سند قبض" proof for the just-recorded
+  /// payment after the record succeeds.
+  Future<bool> recordPayment({
+    required PaymentMethod method,
+    required double amount,
+    String cardReceiptUrl = '',
+    bool printProof = false,
+  }) async {
+    if (_isRecordingPayment) {
+      return false;
+    }
+
+    _isRecordingPayment = true;
+    notifyListeners();
+
+    final signature = _paymentSignature(
+      method: method,
+      amount: amount,
+      cardReceiptUrl: cardReceiptUrl,
+    );
+    final result = await _saleRepository.recordInvoicePayment(
+      saleOrderId: _order.id,
+      method: method.apiValue,
+      amount: amount,
+      cardReceiptUrl: cardReceiptUrl,
+      idempotencyKey: _idempotencyKeyFor(signature),
+    );
+    final didRecord = result is Ok<SaleOrder>;
+    if (didRecord) {
+      _clearIdempotencyKey(signature);
+      _order = result.value;
+    }
+
+    _isRecordingPayment = false;
+    notifyListeners();
+
+    if (didRecord && printProof) {
+      // Best-effort: the payment is already recorded, so a failed/declined
+      // print must not flip the result to failure.
+      await _printPaymentProof(method: method, amount: amount);
+    }
+    return didRecord;
+  }
+
+  /// Builds and prints a "سند قبض" proof for the most-recent payment on the
+  /// (reloaded) order. The newest payment is the one with the highest id; the
+  /// order's `balanceDue` is the customer's balance after this payment.
+  Future<void> _printPaymentProof({
+    required PaymentMethod method,
+    required double amount,
+  }) async {
+    const labels = OrderDocumentLabels.arabic();
+    final payment = _order.payments.isEmpty
+        ? null
+        : _order.payments.reduce((a, b) => a.id >= b.id ? a : b);
+    final proof = PaymentProof(
+      kind: PaymentProofKind.receipt,
+      reference: payment != null ? '${payment.id}' : '${_order.id}',
+      partyName: (_order.customerName?.trim().isNotEmpty ?? false)
+          ? _order.customerName!.trim()
+          : labels.walkInCustomer,
+      partyContact: _order.customerPhone?.trim().isNotEmpty == true
+          ? _order.customerPhone!.trim()
+          : _order.customerNumber,
+      relatedDocumentNumber: _order.receiptNumber,
+      amount: payment?.amount ?? amount,
+      method: labels.paymentMethodLabel(method),
+      commissionAmount: payment?.commissionAmount,
+      externalReference: payment?.externalReference,
+      balanceAfter: _order.balanceDue,
+      createdAt: payment?.createdAt ?? DateTime.now(),
+    );
+
+    final shopSettings = await _loadShopSettings();
+    await _printingRepository.printProofOfPayment(
+      proof: proof,
+      paymentId: payment?.id ?? _order.id,
+      paymentKind: PrintAuditPaymentKind.customer,
+      shopSettings: shopSettings,
+      shopLogoBytes: await _loadShopLogoBytes(shopSettings),
+    );
+  }
+
+  /// Converts this OPEN quotation into a standard or credit sale, optionally
+  /// taking a down-payment ([amountReceived]). Returns the NEW order on success
+  /// so the caller can navigate to it, or null on failure.
+  Future<SaleOrder?> convertQuotation({
+    required SaleType saleType,
+    double? amountReceived,
+  }) async {
+    if (_isConverting) {
+      return null;
+    }
+
+    _isConverting = true;
+    notifyListeners();
+
+    final signature = [
+      'convert-quotation',
+      _order.id,
+      saleType.apiValue,
+      amountReceived?.toStringAsFixed(2) ?? '',
+    ].join(':');
+    final result = await _saleRepository.convertQuotation(
+      _order.id,
+      saleType: saleType,
+      amountReceived: amountReceived,
+      idempotencyKey: _idempotencyKeyFor(signature),
+    );
+
+    _isConverting = false;
+    switch (result) {
+      case Ok<SaleOrder>(value: final newOrder):
+        _clearIdempotencyKey(signature);
+        _trackQuotationConverted(newOrder, saleType: saleType);
+        notifyListeners();
+        return newOrder;
+      case Error<SaleOrder>():
+        notifyListeners();
+        return null;
+    }
+  }
+
+  void _trackQuotationConverted(
+    SaleOrder newOrder, {
+    required SaleType saleType,
+  }) {
+    trackAuditEvent(
+      _analyticsEngine,
+      name: 'sales.quotation.converted',
+      sessionId: _orderSessionId(_order),
+      entityType: 'sale_order',
+      entityId: _order.id,
+      attributes: {
+        ..._orderAttributes(_order),
+        'new_order_id': newOrder.id,
+        'new_sale_type': saleType.apiValue,
+        'source': 'invoice_details_screen',
+      },
+      metrics: {'total': _order.total, 'line_count': _order.lines.length},
+    );
+  }
+
+  String _paymentSignature({
+    required PaymentMethod method,
+    required double amount,
+    required String cardReceiptUrl,
+  }) {
+    return [
+      'invoice-payment',
+      _order.id,
+      method.apiValue,
+      amount.toStringAsFixed(2),
+      cardReceiptUrl.trim(),
+    ].join(':');
+  }
+
+  String _idempotencyKeyFor(String signature) {
+    return _idempotencyKeysBySignature.putIfAbsent(
+      signature,
+      () => 'invoice-payment:${generateAnalyticsEventId()}',
+    );
+  }
+
+  void _clearIdempotencyKey(String signature) {
+    _idempotencyKeysBySignature.remove(signature);
   }
 
   Future<bool> requestReprint(SaleOrder order) async {
