@@ -137,6 +137,14 @@ class EscPosReceiptEncoder {
         codeTable: codeTable,
       );
     }
+    if (_string(payload['kind']) == 'z_report') {
+      return _encodeZReport(
+        payload: payload,
+        endpoint: endpoint,
+        generator: generator,
+        codeTable: codeTable,
+      );
+    }
     final order = _map(payload['order']);
     final shop = _map(payload['shop']);
     _receiptCurrencySymbol = _string(shop['currency_symbol'], fallback: 'د.ل');
@@ -631,6 +639,146 @@ class EscPosReceiptEncoder {
 
     bytes.addAll(_finishTicket(generator, endpoint));
     return bytes;
+  }
+
+  /// Renders an end-of-shift Z-Report: shop masthead, the report title and
+  /// session meta, then a series of labeled sections (sales totals, payment
+  /// methods, sales by category, cash reconciliation). The values arrive
+  /// fully formatted from [PrintingRepository._zReportPayload] (currency symbol
+  /// already attached), so this only lays them out — no money math here. Reuses
+  /// the same Arabic/CP864 text path as the sale receipt.
+  List<int> _encodeZReport({
+    required Map<String, Object?> payload,
+    required PrinterEndpoint endpoint,
+    required Generator generator,
+    required String codeTable,
+  }) {
+    final shop = _map(payload['shop']);
+    final report = _map(payload['report']);
+    _receiptCurrencySymbol = _string(shop['currency_symbol'], fallback: 'د.ل');
+    final width = _charsPerLine(endpoint.paperWidthMm);
+
+    final bytes = <int>[];
+    bytes.addAll(_shopMasthead(generator, shop, codeTable, width));
+
+    bytes.addAll(generator.hr());
+    bytes.addAll(
+      _text(
+        generator,
+        _string(report['title'], fallback: 'تقرير إغلاق الوردية'),
+        styles: PosStyles(
+          align: PosAlign.center,
+          bold: true,
+          height: PosTextSize.size2,
+          codeTable: codeTable,
+        ),
+      ),
+    );
+    for (final rawMeta in _list(report['meta'])) {
+      final meta = _string(rawMeta);
+      if (meta.isEmpty) {
+        continue;
+      }
+      for (final wrapped in _wrap(meta, width)) {
+        bytes.addAll(
+          _text(
+            generator,
+            wrapped,
+            styles: PosStyles(align: PosAlign.center, codeTable: codeTable),
+          ),
+        );
+      }
+    }
+
+    for (final rawSection in _list(report['sections'])) {
+      final section = _map(rawSection);
+      final rows = _list(section['rows']);
+      final total = _map(section['total']);
+      final hasTotal = _string(total['label']).isNotEmpty;
+      if (rows.isEmpty && !hasTotal) {
+        continue;
+      }
+      bytes.addAll(generator.hr());
+      final sectionTitle = _string(section['title']);
+      if (sectionTitle.isNotEmpty) {
+        bytes.addAll(
+          _text(
+            generator,
+            sectionTitle,
+            styles: PosStyles(
+              align: PosAlign.right,
+              bold: true,
+              codeTable: codeTable,
+            ),
+          ),
+        );
+      }
+      for (final rawRow in rows) {
+        final row = _map(rawRow);
+        _addReportRow(
+          bytes,
+          generator,
+          codeTable,
+          width,
+          _string(row['label']),
+          _string(row['value']),
+          emphasize: row['emphasize'] == true,
+        );
+      }
+      if (hasTotal) {
+        _addReportRow(
+          bytes,
+          generator,
+          codeTable,
+          width,
+          _string(total['label']),
+          _string(total['value']),
+          emphasize: true,
+        );
+      }
+    }
+
+    bytes.addAll(_shopFooter(generator, shop, codeTable, width));
+    bytes.addAll(_creditLine(generator, codeTable));
+    bytes.addAll(_finishTicket(generator, endpoint));
+    return bytes;
+  }
+
+  /// Appends a right-aligned "label: value" line (wrapped to [width]) to a
+  /// Z-Report. Either side may be empty (a heading-only or value-only row);
+  /// [emphasize] bolds it for totals and the variance.
+  void _addReportRow(
+    List<int> bytes,
+    Generator generator,
+    String codeTable,
+    int width,
+    String label,
+    String value, {
+    bool emphasize = false,
+  }) {
+    final trimmedLabel = label.trim();
+    final trimmedValue = value.trim();
+    if (trimmedLabel.isEmpty && trimmedValue.isEmpty) {
+      return;
+    }
+    final text = trimmedValue.isEmpty
+        ? trimmedLabel
+        : trimmedLabel.isEmpty
+        ? trimmedValue
+        : '$trimmedLabel: $trimmedValue';
+    for (final wrapped in _wrap(text, width)) {
+      bytes.addAll(
+        _text(
+          generator,
+          wrapped,
+          styles: PosStyles(
+            align: PosAlign.right,
+            bold: emphasize,
+            codeTable: codeTable,
+          ),
+        ),
+      );
+    }
   }
 
   /// Reset + logo + bold shop name, and (by default) the wrapped `receipt_header`

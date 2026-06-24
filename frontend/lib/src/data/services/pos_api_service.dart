@@ -45,6 +45,7 @@ import '../models/migration.dart';
 import '../models/register_cash_movement_page.dart';
 import '../models/register_session.dart';
 import '../models/register_session_page.dart';
+import '../models/register_session_summary.dart';
 import '../../features/payments/models/payment_record.dart';
 import '../models/relay_pairing.dart';
 import '../models/report_run.dart';
@@ -1142,6 +1143,10 @@ class PosApiService {
       query: query,
       page: page,
     );
+  }
+
+  Future<RegisterSessionSummary> fetchRegisterSessionSummary(int sessionId) {
+    return _registerSessions.fetchRegisterSessionSummary(sessionId);
   }
 
   Future<RegisterCashMovementPage> fetchRegisterSessionCashMovements(

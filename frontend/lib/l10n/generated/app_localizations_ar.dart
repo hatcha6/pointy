@@ -7660,6 +7660,107 @@ class AppLocalizationsAr extends AppLocalizations {
   String get sessionNoVariance => 'لا يوجد فرق مسجل';
 
   @override
+  String get sessionSummaryLoadError => 'تعذّر تحميل ملخص الوردية.';
+
+  @override
+  String get sessionSalesSummaryTitle => 'ملخص المبيعات';
+
+  @override
+  String get sessionGrossSalesMetric => 'إجمالي المبيعات';
+
+  @override
+  String get sessionDiscountsMetric => 'الخصومات';
+
+  @override
+  String get sessionRefundsMetric => 'المرتجعات';
+
+  @override
+  String get sessionNetSalesMetric => 'صافي المبيعات';
+
+  @override
+  String get sessionOrderCountMetric => 'عدد الفواتير';
+
+  @override
+  String get sessionItemsSoldMetric => 'القطع المباعة';
+
+  @override
+  String get sessionVoidCountMetric => 'فواتير ملغاة';
+
+  @override
+  String get sessionExpensesMetric => 'مصروفات الوردية';
+
+  @override
+  String get sessionPaymentMethodsTitle => 'حسب طريقة الدفع';
+
+  @override
+  String get sessionPaymentCollectedLabel => 'المقبوض';
+
+  @override
+  String get sessionPaymentCommissionLabel => 'العمولة';
+
+  @override
+  String get sessionPaymentRefundLabel => 'المرتجع';
+
+  @override
+  String get sessionPaymentNetLabel => 'الصافي';
+
+  @override
+  String get sessionPaymentsTotalLabel => 'إجمالي المقبوضات';
+
+  @override
+  String sessionPaymentOperationsCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count عملية',
+      two: 'عمليتان',
+      one: 'عملية واحدة',
+      zero: 'لا عمليات',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get sessionCategoriesTitle => 'المبيعات حسب الفئة';
+
+  @override
+  String get sessionUncategorizedLabel => 'غير مصنف';
+
+  @override
+  String get sessionNoCategorySales =>
+      'لا توجد مبيعات حسب الفئة في هذه الجلسة.';
+
+  @override
+  String sessionCategoryLineLabel(String category, String quantity) {
+    return '$category ×$quantity';
+  }
+
+  @override
+  String get sessionZReportTitle => 'تقرير إغلاق الوردية (Z)';
+
+  @override
+  String get sessionPrintZReportThermal => 'طباعة (إيصال)';
+
+  @override
+  String get sessionPrintZReportPdf => 'طباعة PDF';
+
+  @override
+  String get sessionShareZReportPdf => 'مشاركة / حفظ PDF';
+
+  @override
+  String get sessionZReportPrintedMessage => 'تمت طباعة تقرير الوردية.';
+
+  @override
+  String get sessionZReportSharedMessage => 'تم تجهيز تقرير الوردية.';
+
+  @override
+  String get sessionZReportFailedMessage => 'تعذّرت طباعة تقرير الوردية.';
+
+  @override
+  String get sessionClosedPrintZReportPrompt =>
+      'تم إغلاق الوردية. هل تريد طباعة تقرير الإغلاق (Z)؟';
+
+  @override
   String get sessionSalesLoadError => 'تعذر تحميل مبيعات هذه الجلسة.';
 
   @override

@@ -2997,6 +2997,22 @@ void main() {
     expect(find.text('حركات النقد'), findsOneWidget);
     await tester.tap(_tabText('الملخص'));
     await tester.pumpAndSettle(const Duration(seconds: 1));
+    // The manager summary spans all payment methods plus a category breakdown
+    // and cash reconciliation. The top sections render immediately; the cash
+    // block sits lower in the (lazy) list, so scroll it into view.
+    expect(find.text('ملخص المبيعات'), findsOneWidget);
+    expect(find.text('حسب طريقة الدفع'), findsOneWidget);
+    final summaryScrollable = find
+        .ancestor(
+          of: find.text('ملخص المبيعات'),
+          matching: find.byType(Scrollable),
+        )
+        .first;
+    await tester.scrollUntilVisible(
+      find.text('ملخص النقد'),
+      240,
+      scrollable: summaryScrollable,
+    );
     expect(find.text('ملخص النقد'), findsOneWidget);
     expect(find.text('فرق -0.25 د.ل'), findsWidgets);
 
@@ -4898,6 +4914,10 @@ PosApiService _mockApiService({
         });
       }
 
+      if (path.endsWith('/register-sessions/1/summary/')) {
+        return _jsonResponse(_sessionSummaryJson());
+      }
+
       if (path.endsWith('/register-sessions/1/orders/')) {
         final page =
             int.tryParse(request.url.queryParameters['page'] ?? '1') ?? 1;
@@ -6759,6 +6779,87 @@ Map<String, Object?> _cashMovementJson({
     'created_by_username': 'manager',
     'created_at': '2026-05-15T09:20:00Z',
     'updated_at': '2026-05-15T09:20:00Z',
+  };
+}
+
+Map<String, Object?> _sessionSummaryJson() {
+  return {
+    'session': {
+      'id': 1,
+      'session_number': 'RS-1',
+      'status': 'closed',
+      'owner_name': 'كاشير',
+      'opened_at': '2026-05-15T08:00:00Z',
+      'closed_at': '2026-05-15T20:00:00Z',
+    },
+    'sales': {
+      'gross_sales': '7.00',
+      'discount_total': '0.00',
+      'net_sales': '7.00',
+      'order_count': 1,
+      'void_count': 0,
+      'items_sold': '2',
+    },
+    'refunds': {
+      'refund_total': '0.00',
+      'return_count': 0,
+      'cash_refund_total': '0.00',
+    },
+    'payment_methods': [
+      {
+        'method': 'cash',
+        'gross': '6.00',
+        'commission': '0.00',
+        'refund': '0.00',
+        'net': '6.00',
+        'count': 1,
+      },
+      {
+        'method': 'card',
+        'gross': '1.00',
+        'commission': '0.00',
+        'refund': '0.00',
+        'net': '1.00',
+        'count': 1,
+      },
+      {
+        'method': 'transfer',
+        'gross': '0.00',
+        'commission': '0.00',
+        'refund': '0.00',
+        'net': '0.00',
+        'count': 0,
+      },
+    ],
+    'payment_totals': {
+      'gross': '7.00',
+      'commission': '0.00',
+      'refund': '0.00',
+      'net': '7.00',
+      'count': 2,
+    },
+    'categories': [
+      {'category': 'مشروبات', 'quantity': '2', 'net': '7.00'},
+    ],
+    'cash': {
+      'opening_cash': '12.00',
+      'cash_sales_total': '6.00',
+      'pay_in_total': '5.00',
+      'pay_out_total': '0.00',
+      'cash_refund_total': '0.00',
+      'expected_cash': '23.00',
+      'closing_cash': '18.75',
+      'cash_variance': '-0.25',
+      'has_cash_variance': true,
+      'denomination_total': '0.00',
+      'denominations': [
+        {'value': '0.25', 'count': 0},
+        {'value': '0.50', 'count': 0},
+        {'value': '0.75', 'count': 0},
+        {'value': '1.00', 'count': 0},
+      ],
+    },
+    'expenses': {'total': '0.00', 'count': 0},
   };
 }
 

@@ -170,7 +170,9 @@ class PosScreen extends StatelessWidget {
   }
 
   Future<void> _showCloseRegisterSessionSheet(BuildContext context) async {
-    await showAdaptiveModalBottomSheet<bool>(
+    final messenger = ScaffoldMessenger.of(context);
+    final l10n = AppLocalizations.of(context)!;
+    final didClose = await showAdaptiveModalBottomSheet<bool>(
       context: context,
       size: AdaptiveModalSize.standard,
       builder: (context) {
@@ -186,6 +188,42 @@ class PosScreen extends StatelessWidget {
           },
         );
       },
+    );
+
+    if (didClose != true) {
+      return;
+    }
+    final sessionId = viewModel.lastClosedRegisterSessionId;
+    if (sessionId == null) {
+      return;
+    }
+    // Offer the cashier the thermal Z-Report drawer copy right after close.
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(l10n.sessionClosedPrintZReportPrompt),
+        duration: const Duration(seconds: 8),
+        action: SnackBarAction(
+          label: l10n.sessionPrintZReportThermal,
+          onPressed: () => _printClosedSessionZReport(messenger, l10n, sessionId),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _printClosedSessionZReport(
+    ScaffoldMessengerState messenger,
+    AppLocalizations l10n,
+    int sessionId,
+  ) async {
+    final printed = await viewModel.printClosedRegisterSessionZReport(sessionId);
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          printed
+              ? l10n.sessionZReportPrintedMessage
+              : l10n.sessionZReportFailedMessage,
+        ),
+      ),
     );
   }
 

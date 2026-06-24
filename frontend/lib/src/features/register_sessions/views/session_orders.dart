@@ -3,7 +3,7 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../core/authorization.dart';
 import '../../../data/models/register_cash_movement.dart';
-import '../../../data/models/register_session.dart';
+import '../../../data/models/register_session_summary.dart';
 import '../../../data/models/sale_order.dart';
 import '../../../data/repositories/contact_repository.dart';
 import '../../../shared/authorization_guards.dart';
@@ -70,7 +70,7 @@ class SessionOrders extends StatelessWidget {
                             child: TabBarView(
                               children: [
                                 if (showReconciliation)
-                                  _SessionSummaryPanel(session: session),
+                                  _SessionSummaryPanel(viewModel: viewModel),
                                 _SessionSalesList(
                                   viewModel: viewModel,
                                   contactRepository: contactRepository,
@@ -92,85 +92,437 @@ class SessionOrders extends StatelessWidget {
 }
 
 class _SessionSummaryPanel extends StatelessWidget {
-  const _SessionSummaryPanel({required this.session});
+  const _SessionSummaryPanel({required this.viewModel});
 
-  final RegisterSession session;
+  final RegisterSessionHistoryViewModel viewModel;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final summary = viewModel.selectedSummary;
+
+    if (summary == null && viewModel.isLoadingSummary) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (summary == null && viewModel.hasSummaryLoadError) {
+      return PointyErrorState(
+        title: l10n.sessionSummaryLoadError,
+        icon: Icons.summarize_outlined,
+        action: OutlinedButton.icon(
+          onPressed: viewModel.refreshSelectedSummary,
+          icon: const Icon(Icons.refresh),
+          label: Text(l10n.retryButton),
+        ),
+      );
+    }
+    if (summary == null) {
+      return PointyEmptyState(
+        icon: Icons.summarize_outlined,
+        title: l10n.selectRegisterSessionPrompt,
+      );
+    }
+
+    return ListView(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      children: [
+        _ZReportActions(viewModel: viewModel),
+        const SizedBox(height: 12),
+        _SalesSummarySection(summary: summary),
+        const SizedBox(height: 12),
+        _PaymentMethodsSection(summary: summary),
+        const SizedBox(height: 12),
+        _CategoriesSection(summary: summary),
+        const SizedBox(height: 12),
+        _CashReconciliationSection(summary: summary),
+      ],
+    );
+  }
+}
+
+/// Print/share actions for the end-of-shift Z-Report: thermal drawer copy plus
+/// the A4 PDF for archiving/sharing.
+class _ZReportActions extends StatelessWidget {
+  const _ZReportActions({required this.viewModel});
+
+  final RegisterSessionHistoryViewModel viewModel;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final busy = viewModel.isPrintingZReport;
+    return PointyDetailSection(
+      title: l10n.sessionZReportTitle,
+      icon: Icons.receipt_long_outlined,
+      trailing: busy
+          ? const SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : null,
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: [
+          FilledButton.icon(
+            onPressed: busy
+                ? null
+                : () => _run(
+                    context,
+                    viewModel.printZReportThermal,
+                    l10n.sessionZReportPrintedMessage,
+                  ),
+            icon: const Icon(Icons.print_outlined),
+            label: Text(l10n.sessionPrintZReportThermal),
+          ),
+          OutlinedButton.icon(
+            onPressed: busy
+                ? null
+                : () => _run(
+                    context,
+                    viewModel.printZReportPdf,
+                    l10n.sessionZReportPrintedMessage,
+                    silentOnFalse: true,
+                  ),
+            icon: const Icon(Icons.picture_as_pdf_outlined),
+            label: Text(l10n.sessionPrintZReportPdf),
+          ),
+          OutlinedButton.icon(
+            onPressed: busy
+                ? null
+                : () => _run(
+                    context,
+                    viewModel.shareZReportPdf,
+                    l10n.sessionZReportSharedMessage,
+                    silentOnFalse: true,
+                  ),
+            icon: const Icon(Icons.share_outlined),
+            label: Text(l10n.sessionShareZReportPdf),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _run(
+    BuildContext context,
+    Future<bool> Function() action,
+    String successMessage, {
+    bool silentOnFalse = false,
+  }) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final l10n = AppLocalizations.of(context)!;
+    final delivered = await action();
+    if (delivered) {
+      messenger.showSnackBar(SnackBar(content: Text(successMessage)));
+    } else if (!silentOnFalse) {
+      messenger.showSnackBar(
+        SnackBar(content: Text(l10n.sessionZReportFailedMessage)),
+      );
+    }
+  }
+}
+
+class _SalesSummarySection extends StatelessWidget {
+  const _SalesSummarySection({required this.summary});
+
+  final RegisterSessionSummary summary;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final colors = context.pointyColors;
-    final variance = session.cashVariance;
+    final sales = summary.sales;
+    final refunds = summary.refunds;
 
-    return ListView(
-      padding: const EdgeInsets.symmetric(vertical: 12),
-      children: [
-        PointySectionHeader(title: l10n.sessionCashSummaryTitle),
-        const SizedBox(height: 8),
-        PointyMetricTile(
-          icon: Icons.lock_open_outlined,
-          label: l10n.sessionOpeningCashMetric,
-          value: formatMoney(session.openingCash),
-        ),
-        PointyMetricTile(
-          icon: Icons.payments_outlined,
-          label: l10n.sessionCashSalesMetric,
-          value: formatMoney(session.cashSalesTotal),
-        ),
-        PointyMetricTile(
-          icon: Icons.input,
-          label: l10n.sessionPayInMetric,
-          value: formatMoney(session.payInTotal),
-        ),
-        PointyMetricTile(
-          icon: Icons.output,
-          label: l10n.sessionPayOutMetric,
-          value: formatMoney(session.payOutTotal),
-        ),
-        PointyMetricTile(
-          icon: Icons.keyboard_return_outlined,
-          label: l10n.sessionCashRefundMetric,
-          value: formatMoney(session.cashRefundTotal),
-        ),
-        const Divider(height: 24),
-        PointyMetricTile(
-          icon: Icons.calculate_outlined,
-          label: l10n.sessionExpectedCashMetric,
-          value: formatMoney(session.expectedCash),
-        ),
-        PointyMetricTile(
-          icon: Icons.fact_check_outlined,
-          label: l10n.sessionClosingCashMetric,
-          value: session.closingCash == null
-              ? l10n.shopSettingsEmptyValue
-              : formatMoney(session.closingCash!),
-        ),
-        PointyMetricTile(
-          icon: Icons.difference_outlined,
-          label: l10n.sessionCashVarianceMetric,
-          value: variance == null
-              ? l10n.shopSettingsEmptyValue
-              : formatMoney(variance),
-          accentColor: session.hasCashVariance
-              ? colors.danger
-              : colors.primaryStrong,
-        ),
-        const SizedBox(height: 16),
-        PointySectionHeader(title: l10n.sessionDenominationsTitle),
-        const SizedBox(height: 8),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            _DenominationChip(label: '0.25', count: session.count025),
-            _DenominationChip(label: '0.50', count: session.count050),
-            _DenominationChip(label: '0.75', count: session.count075),
-            _DenominationChip(label: '1.00', count: session.count100),
-          ],
-        ),
-      ],
+    return PointyDetailSection(
+      title: l10n.sessionSalesSummaryTitle,
+      icon: Icons.summarize_outlined,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          PointySummaryList(
+            rows: [
+              PointySummaryRow(
+                label: l10n.sessionGrossSalesMetric,
+                value: formatMoney(sales.grossSales),
+              ),
+              if (sales.discountTotal > 0)
+                PointySummaryRow(
+                  label: l10n.sessionDiscountsMetric,
+                  value: '- ${formatMoney(sales.discountTotal)}',
+                  valueColor: colors.danger,
+                ),
+              if (refunds.refundTotal > 0)
+                PointySummaryRow(
+                  label: l10n.sessionRefundsMetric,
+                  value: '- ${formatMoney(refunds.refundTotal)}',
+                  valueColor: colors.danger,
+                ),
+              PointySummaryRow(
+                label: l10n.sessionNetSalesMetric,
+                value: formatMoney(sales.netSales),
+                emphasized: true,
+                dividerAbove: true,
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          PointyMetricGrid(
+            minTileWidth: 150,
+            maxColumns: 4,
+            metrics: [
+              PointyMetricGridItem(
+                icon: Icons.receipt_long_outlined,
+                label: l10n.sessionOrderCountMetric,
+                value: '${sales.orderCount}',
+              ),
+              PointyMetricGridItem(
+                icon: Icons.inventory_2_outlined,
+                label: l10n.sessionItemsSoldMetric,
+                value: sales.itemsSold,
+              ),
+              if (sales.voidCount > 0)
+                PointyMetricGridItem(
+                  icon: Icons.block_outlined,
+                  label: l10n.sessionVoidCountMetric,
+                  value: '${sales.voidCount}',
+                  accentColor: colors.danger,
+                ),
+              if (summary.expenses.count > 0)
+                PointyMetricGridItem(
+                  icon: Icons.receipt_outlined,
+                  label: l10n.sessionExpensesMetric,
+                  value: formatMoney(summary.expenses.total),
+                ),
+            ],
+          ),
+        ],
+      ),
     );
   }
+}
+
+class _PaymentMethodsSection extends StatelessWidget {
+  const _PaymentMethodsSection({required this.summary});
+
+  final RegisterSessionSummary summary;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    return PointyDetailSection(
+      title: l10n.sessionPaymentMethodsTitle,
+      icon: Icons.account_balance_wallet_outlined,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (final method in summary.paymentMethods)
+            _PaymentMethodRow(method: method),
+          const Divider(height: 24),
+          PointySummaryList(
+            rows: [
+              PointySummaryRow(
+                label: l10n.sessionPaymentsTotalLabel,
+                value: formatMoney(summary.paymentTotals.net),
+                emphasized: true,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PaymentMethodRow extends StatelessWidget {
+  const _PaymentMethodRow({required this.method});
+
+  final PaymentMethodBreakdown method;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final theme = Theme.of(context);
+    final muted = theme.colorScheme.onSurfaceVariant;
+    final details = <String>[
+      '${l10n.sessionPaymentCollectedLabel} ${formatMoney(method.gross)}',
+      if (method.commission > 0)
+        '${l10n.sessionPaymentCommissionLabel} ${formatMoney(method.commission)}',
+      if (method.refund > 0)
+        '${l10n.sessionPaymentRefundLabel} ${formatMoney(method.refund)}',
+    ].join(' • ');
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        _paymentMethodLabel(l10n, method.method),
+                        style: theme.textTheme.titleSmall,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Flexible(
+                      child: Text(
+                        l10n.sessionPaymentOperationsCount(method.count),
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: muted,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  details,
+                  style: theme.textTheme.bodySmall?.copyWith(color: muted),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          Text(formatMoney(method.net), style: theme.textTheme.titleMedium),
+        ],
+      ),
+    );
+  }
+}
+
+class _CategoriesSection extends StatelessWidget {
+  const _CategoriesSection({required this.summary});
+
+  final RegisterSessionSummary summary;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final categories = summary.categories;
+    return PointyDetailSection(
+      title: l10n.sessionCategoriesTitle,
+      icon: Icons.category_outlined,
+      child: categories.isEmpty
+          ? Text(l10n.sessionNoCategorySales)
+          : PointySummaryList(
+              rows: [
+                for (final category in categories)
+                  PointySummaryRow(
+                    label: l10n.sessionCategoryLineLabel(
+                      category.category ?? l10n.sessionUncategorizedLabel,
+                      category.quantity,
+                    ),
+                    value: formatMoney(category.net),
+                  ),
+              ],
+            ),
+    );
+  }
+}
+
+class _CashReconciliationSection extends StatelessWidget {
+  const _CashReconciliationSection({required this.summary});
+
+  final RegisterSessionSummary summary;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final colors = context.pointyColors;
+    final cash = summary.cash;
+    final variance = cash.cashVariance;
+
+    return PointyDetailSection(
+      title: l10n.sessionCashSummaryTitle,
+      icon: Icons.point_of_sale_outlined,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          PointySummaryList(
+            rows: [
+              PointySummaryRow(
+                label: l10n.sessionOpeningCashMetric,
+                value: formatMoney(cash.openingCash),
+              ),
+              PointySummaryRow(
+                label: l10n.sessionCashSalesMetric,
+                value: formatMoney(cash.cashSalesTotal),
+              ),
+              if (cash.payInTotal > 0)
+                PointySummaryRow(
+                  label: l10n.sessionPayInMetric,
+                  value: formatMoney(cash.payInTotal),
+                ),
+              if (cash.payOutTotal > 0)
+                PointySummaryRow(
+                  label: l10n.sessionPayOutMetric,
+                  value: '- ${formatMoney(cash.payOutTotal)}',
+                  valueColor: colors.danger,
+                ),
+              if (cash.cashRefundTotal > 0)
+                PointySummaryRow(
+                  label: l10n.sessionCashRefundMetric,
+                  value: '- ${formatMoney(cash.cashRefundTotal)}',
+                  valueColor: colors.danger,
+                ),
+              PointySummaryRow(
+                label: l10n.sessionExpectedCashMetric,
+                value: formatMoney(cash.expectedCash),
+                emphasized: true,
+                dividerAbove: true,
+              ),
+              if (cash.closingCash != null)
+                PointySummaryRow(
+                  label: l10n.sessionClosingCashMetric,
+                  value: formatMoney(cash.closingCash!),
+                ),
+              if (variance != null)
+                PointySummaryRow(
+                  label: l10n.sessionCashVarianceMetric,
+                  value: formatMoney(variance),
+                  emphasized: true,
+                  valueColor: cash.hasCashVariance
+                      ? colors.danger
+                      : colors.primaryStrong,
+                ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          PointySectionHeader(title: l10n.sessionDenominationsTitle),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final denomination in cash.denominations)
+                _DenominationChip(
+                  label: denomination.value,
+                  count: denomination.count,
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+String _paymentMethodLabel(AppLocalizations l10n, String method) {
+  return switch (method) {
+    'cash' => l10n.paymentMethodCash,
+    'card' => l10n.paymentMethodCard,
+    'transfer' => l10n.paymentMethodTransfer,
+    _ => method,
+  };
 }
 
 class _DenominationChip extends StatelessWidget {

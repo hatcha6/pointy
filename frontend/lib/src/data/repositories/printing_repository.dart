@@ -2,12 +2,14 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import '../../core/result.dart';
+import '../../shared/date_formatters.dart';
 import '../../shared/formatters.dart';
 import '../models/barcode_label.dart';
 import '../models/print_audit_event.dart';
 import '../models/print_job.dart';
 import '../models/printer_config.dart';
 import '../models/purchase_submission.dart';
+import '../models/register_session_summary.dart';
 import '../models/sale_order.dart';
 import '../models/shop_settings.dart';
 import '../services/barcode_label_command_encoder.dart';
@@ -531,6 +533,32 @@ class PrintingRepository {
     return result;
   }
 
+  /// Prints an end-of-shift Z-Report on the POS receipt printer (the classic
+  /// thermal drawer copy). The A4/PDF variant is produced separately by
+  /// [RegisterZReportPdfService] for archiving/sharing.
+  Future<PrintTransportResult> printRegisterZReport({
+    required RegisterSessionSummary summary,
+    ShopSettings? shopSettings,
+    Uint8List? shopLogoBytes,
+  }) async {
+    final configResult = await loadDefaultPrinterConfig();
+    final config = switch (configResult) {
+      Ok<PrinterConfig>() => configResult.value,
+      Error<PrinterConfig>() => null,
+    };
+    if (config == null) {
+      return const PrintTransportResult.failure('printer config unavailable');
+    }
+    return _printThermalPayload(
+      _zReportPayload(
+        summary: summary,
+        shopSettings: shopSettings,
+        shopLogoBytes: shopLogoBytes,
+      ),
+      config,
+    );
+  }
+
   Future<OrderDocumentActionStatus> shareSaleInvoice({
     required SaleOrder order,
     ShopSettings? shopSettings,
@@ -881,6 +909,124 @@ class PrintingRepository {
           'balance_after': proof.balanceAfter!.toStringAsFixed(2),
         },
       },
+    };
+  }
+
+  /// Thermal payload for an end-of-shift Z-Report. Every value is fully
+  /// formatted here (currency symbol attached via [formatMoney]); the encoder
+  /// only lays the rows out. Labels are Arabic, matching the other thermal
+  /// slips. Rows that would be zero/empty (no pay-ins, no refunds, etc.) are
+  /// dropped so a quiet shift stays short.
+  Map<String, Object?> _zReportPayload({
+    required RegisterSessionSummary summary,
+    ShopSettings? shopSettings,
+    Uint8List? shopLogoBytes,
+  }) {
+    final sales = summary.sales;
+    final cash = summary.cash;
+    final refunds = summary.refunds;
+
+    final meta = <String>[
+      'الوردية: ${summary.sessionNumber}',
+      if (summary.ownerName.trim().isNotEmpty)
+        'الكاشير: ${summary.ownerName.trim()}',
+      if (summary.openedAt != null) 'فُتحت: ${formatDateTime(summary.openedAt!)}',
+      if (summary.closedAt != null) 'أُغلقت: ${formatDateTime(summary.closedAt!)}',
+      'الحالة: ${summary.status == 'closed' ? 'مغلقة' : 'مفتوحة'}',
+    ];
+
+    final salesRows = <Map<String, Object?>>[
+      {'label': 'إجمالي المبيعات', 'value': formatMoney(sales.grossSales)},
+      if (sales.discountTotal > 0)
+        {'label': 'الخصومات', 'value': formatMoney(sales.discountTotal)},
+      if (refunds.refundTotal > 0)
+        {'label': 'المرتجعات', 'value': formatMoney(refunds.refundTotal)},
+      {
+        'label': 'صافي المبيعات',
+        'value': formatMoney(sales.netSales),
+        'emphasize': true,
+      },
+      {'label': 'عدد الفواتير', 'value': '${sales.orderCount}'},
+      {'label': 'القطع المباعة', 'value': sales.itemsSold},
+      if (sales.voidCount > 0)
+        {'label': 'فواتير ملغاة', 'value': '${sales.voidCount}'},
+      if (summary.expenses.count > 0)
+        {'label': 'مصروفات الوردية', 'value': formatMoney(summary.expenses.total)},
+    ];
+
+    final paymentRows = <Map<String, Object?>>[
+      for (final method in summary.paymentMethods)
+        if (method.hasActivity)
+          {
+            'label': '${_zReportMethodLabel(method.method)} (${method.count})',
+            'value': formatMoney(method.net),
+          },
+    ];
+
+    final categoryRows = <Map<String, Object?>>[
+      for (final category in summary.categories)
+        {
+          'label': '${category.category ?? 'غير مصنف'} ×${category.quantity}',
+          'value': formatMoney(category.net),
+        },
+    ];
+
+    final cashRows = <Map<String, Object?>>[
+      {'label': 'النقد الافتتاحي', 'value': formatMoney(cash.openingCash)},
+      {'label': 'مبيعات نقدية', 'value': formatMoney(cash.cashSalesTotal)},
+      if (cash.payInTotal > 0)
+        {'label': 'إيداع نقدي', 'value': formatMoney(cash.payInTotal)},
+      if (cash.payOutTotal > 0)
+        {'label': 'سحب نقدي', 'value': formatMoney(cash.payOutTotal)},
+      if (cash.cashRefundTotal > 0)
+        {'label': 'مرتجعات نقدية', 'value': formatMoney(cash.cashRefundTotal)},
+      {
+        'label': 'النقد المتوقع',
+        'value': formatMoney(cash.expectedCash),
+        'emphasize': true,
+      },
+      if (cash.closingCash != null)
+        {'label': 'النقد الفعلي', 'value': formatMoney(cash.closingCash!)},
+      if (cash.cashVariance != null)
+        {
+          'label': 'الفرق',
+          'value': formatMoney(cash.cashVariance!),
+          'emphasize': true,
+        },
+    ];
+
+    return {
+      'kind': 'z_report',
+      'shop': {
+        ..._shopPayload(shopSettings, logoBytes: shopLogoBytes),
+        'currency_symbol': currencySymbol,
+      },
+      'report': {
+        'title': 'تقرير إغلاق الوردية',
+        'meta': meta,
+        'sections': [
+          {'title': 'ملخص المبيعات', 'rows': salesRows},
+          {
+            'title': 'حسب طريقة الدفع',
+            'rows': paymentRows,
+            'total': {
+              'label': 'إجمالي المقبوضات',
+              'value': formatMoney(summary.paymentTotals.net),
+            },
+          },
+          {'title': 'المبيعات حسب الفئة', 'rows': categoryRows},
+          {'title': 'تسوية النقد', 'rows': cashRows},
+        ],
+      },
+    };
+  }
+
+  String _zReportMethodLabel(String method) {
+    return switch (method) {
+      'cash' => 'نقدًا',
+      'card' => 'بطاقة',
+      'transfer' => 'تحويل',
+      _ => method,
     };
   }
 

@@ -19,6 +19,7 @@ from apps.core.permissions import HasPointyPermission
 from apps.core.roles import user_is_manager
 from apps.fraud.services import schedule_targeted_sweep
 from .models import Order, RegisterCashMovement, RegisterSession
+from .register_summary import build_register_session_summary
 from .serializers import (
     CheckoutSerializer,
     ConvertQuotationSerializer,
@@ -452,6 +453,7 @@ class RegisterSessionViewSet(
         "list": ("sales.view_registersession",),
         "retrieve": ("sales.view_registersession",),
         "orders": ("sales.view_registersession", "sales.view_order"),
+        "summary": ("sales.view_registersession",),
         "cash_movements": (
             "sales.view_registersession",
             "sales.view_registercashmovement",
@@ -501,6 +503,14 @@ class RegisterSessionViewSet(
         return Response(
             OrderSerializer(orders, many=True, context={"request": request}).data,
         )
+
+    @action(detail=True, methods=["get"])
+    def summary(self, request, pk=None):
+        """Full end-of-shift summary across all payment methods plus a
+        sales-by-category breakdown and cash reconciliation. Single source of
+        truth for the manager session view and the printable Z-Report."""
+        session = self.get_object()
+        return Response(build_register_session_summary(session))
 
     @action(detail=True, methods=["get"], url_path="cash-movements")
     def cash_movements(self, request, pk=None):

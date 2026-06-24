@@ -3,6 +3,7 @@ import '../models/register_cash_movement.dart';
 import '../models/register_cash_movement_page.dart';
 import '../models/register_session.dart';
 import '../models/register_session_page.dart';
+import '../models/register_session_summary.dart';
 import '../services/pos_api_service.dart';
 
 class RegisterSessionRepository {
@@ -24,6 +25,14 @@ class RegisterSessionRepository {
   }) async {
     return Result.guard(
       () => _service.fetchRegisterSessionCashMovements(sessionId, page: page),
+    );
+  }
+
+  Future<Result<RegisterSessionSummary>> loadSessionSummary(
+    int sessionId,
+  ) async {
+    return Result.guard(
+      () => _service.fetchRegisterSessionSummary(sessionId),
     );
   }
 

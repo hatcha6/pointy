@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 
 import '../../../core/analytics_audit.dart';
@@ -10,28 +12,44 @@ import '../../../data/models/register_cash_movement.dart';
 import '../../../data/models/register_cash_movement_page.dart';
 import '../../../data/models/register_session.dart';
 import '../../../data/models/register_session_page.dart';
+import '../../../data/models/register_session_summary.dart';
 import '../../../data/models/sale_order.dart';
 import '../../../data/models/sale_order_page.dart';
+import '../../../data/models/shop_settings.dart';
+import '../../../data/repositories/printing_repository.dart';
 import '../../../data/repositories/register_session_repository.dart';
 import '../../../data/repositories/sale_repository.dart';
+import '../../../data/repositories/shop_settings_repository.dart';
+import '../pdf/z_report_pdf.dart';
 
 class RegisterSessionHistoryViewModel extends ChangeNotifier {
   RegisterSessionHistoryViewModel(
     this._registerSessionRepository,
     this._saleRepository, {
+    required PrintingRepository printingRepository,
+    required ShopSettingsRepository shopSettingsRepository,
+    RegisterZReportPdfService pdfService = const RegisterZReportPdfService(),
     AnalyticsEngine? analyticsEngine,
-  }) : _analyticsEngine = analyticsEngine {
+  }) : _printingRepository = printingRepository,
+       _shopSettingsRepository = shopSettingsRepository,
+       _pdfService = pdfService,
+       _analyticsEngine = analyticsEngine {
     loadSessions();
   }
 
   final RegisterSessionRepository _registerSessionRepository;
   final SaleRepository _saleRepository;
+  final PrintingRepository _printingRepository;
+  final ShopSettingsRepository _shopSettingsRepository;
+  final RegisterZReportPdfService _pdfService;
   final AnalyticsEngine? _analyticsEngine;
+  bool _isPrintingZReport = false;
 
   List<RegisterSession> _sessions = [];
   List<SaleOrder> _orders = [];
   List<RegisterCashMovement> _cashMovements = [];
   RegisterSession? _selectedSession;
+  RegisterSessionSummary? _selectedSummary;
   SaleOrderQuery _orderQuery = const SaleOrderQuery();
   bool _isLoadingSessions = false;
   bool _isLoadingMoreSessions = false;
@@ -39,9 +57,11 @@ class RegisterSessionHistoryViewModel extends ChangeNotifier {
   bool _isLoadingMoreOrders = false;
   bool _isLoadingCashMovements = false;
   bool _isLoadingMoreCashMovements = false;
+  bool _isLoadingSummary = false;
   bool _hasSessionLoadError = false;
   bool _hasOrderLoadError = false;
   bool _hasCashMovementLoadError = false;
+  bool _hasSummaryLoadError = false;
   bool _hasMoreSessions = true;
   bool _hasMoreOrders = false;
   bool _hasMoreCashMovements = false;
@@ -54,6 +74,7 @@ class RegisterSessionHistoryViewModel extends ChangeNotifier {
   List<RegisterCashMovement> get cashMovements =>
       List.unmodifiable(_cashMovements);
   RegisterSession? get selectedSession => _selectedSession;
+  RegisterSessionSummary? get selectedSummary => _selectedSummary;
   SaleOrderQuery get orderQuery => _orderQuery;
   bool get isLoadingSessions => _isLoadingSessions;
   bool get isLoadingMoreSessions => _isLoadingMoreSessions;
@@ -61,9 +82,13 @@ class RegisterSessionHistoryViewModel extends ChangeNotifier {
   bool get isLoadingMoreOrders => _isLoadingMoreOrders;
   bool get isLoadingCashMovements => _isLoadingCashMovements;
   bool get isLoadingMoreCashMovements => _isLoadingMoreCashMovements;
+  bool get isLoadingSummary => _isLoadingSummary;
+  bool get isPrintingZReport => _isPrintingZReport;
+  bool get canPrintZReport => _selectedSummary != null && !_isPrintingZReport;
   bool get hasSessionLoadError => _hasSessionLoadError;
   bool get hasOrderLoadError => _hasOrderLoadError;
   bool get hasCashMovementLoadError => _hasCashMovementLoadError;
+  bool get hasSummaryLoadError => _hasSummaryLoadError;
   bool get hasMoreSessions => _hasMoreSessions;
   bool get hasMoreOrders => _hasMoreOrders;
   bool get hasMoreCashMovements => _hasMoreCashMovements;
@@ -86,6 +111,7 @@ class RegisterSessionHistoryViewModel extends ChangeNotifier {
         if (_selectedSession != null &&
             !_sessions.any((session) => session.id == _selectedSession!.id)) {
           _selectedSession = null;
+          _selectedSummary = null;
           _orders = [];
           _cashMovements = [];
           _hasMoreOrders = false;
@@ -96,6 +122,7 @@ class RegisterSessionHistoryViewModel extends ChangeNotifier {
       case Error<RegisterSessionPage>():
         _sessions = [];
         _selectedSession = null;
+        _selectedSummary = null;
         _orders = [];
         _cashMovements = [];
         _hasMoreOrders = false;
@@ -141,6 +168,7 @@ class RegisterSessionHistoryViewModel extends ChangeNotifier {
     }
 
     _selectedSession = session;
+    _selectedSummary = null;
     _trackSessionSelected(session);
     _orders = [];
     _cashMovements = [];
@@ -148,13 +176,19 @@ class RegisterSessionHistoryViewModel extends ChangeNotifier {
     _isLoadingMoreOrders = false;
     _isLoadingCashMovements = true;
     _isLoadingMoreCashMovements = false;
+    _isLoadingSummary = true;
     _hasOrderLoadError = false;
     _hasCashMovementLoadError = false;
+    _hasSummaryLoadError = false;
     _hasMoreOrders = true;
     _hasMoreCashMovements = true;
     _nextOrderPage = 1;
     _nextCashMovementPage = 1;
     notifyListeners();
+
+    // Load the summary concurrently with orders/movements — it backs the first
+    // (manager) tab, so we don't want it queued behind the paginated lists.
+    final summaryFuture = _loadSummary(session.id);
 
     final result = await _saleRepository.loadOrdersForSession(
       session.id,
@@ -190,6 +224,120 @@ class RegisterSessionHistoryViewModel extends ChangeNotifier {
 
     _isLoadingCashMovements = false;
     notifyListeners();
+
+    await summaryFuture;
+  }
+
+  Future<void> _loadSummary(int sessionId) async {
+    _isLoadingSummary = true;
+    _hasSummaryLoadError = false;
+    notifyListeners();
+
+    final result = await _registerSessionRepository.loadSessionSummary(
+      sessionId,
+    );
+    // The user may have switched sessions while this was in flight; ignore a
+    // stale response so it never overwrites the now-selected session.
+    if (_selectedSession?.id != sessionId) {
+      return;
+    }
+    switch (result) {
+      case Ok<RegisterSessionSummary>():
+        _selectedSummary = result.value;
+      case Error<RegisterSessionSummary>():
+        _selectedSummary = null;
+        _hasSummaryLoadError = true;
+    }
+
+    _isLoadingSummary = false;
+    notifyListeners();
+  }
+
+  /// Re-fetch the summary for the selected session (after a refund, or to retry
+  /// a failed load). No-op when nothing is selected.
+  Future<void> refreshSelectedSummary() async {
+    final session = _selectedSession;
+    if (session == null) {
+      return;
+    }
+    await _loadSummary(session.id);
+  }
+
+  /// Prints the thermal Z-Report (drawer copy) on the POS receipt printer.
+  Future<bool> printZReportThermal() async {
+    return _runZReport('thermal', (summary, shopSettings, logoBytes) async {
+      final result = await _printingRepository.printRegisterZReport(
+        summary: summary,
+        shopSettings: shopSettings,
+        shopLogoBytes: logoBytes,
+      );
+      return result.isSuccess;
+    });
+  }
+
+  /// Opens the system print dialog for the A4 PDF Z-Report.
+  Future<bool> printZReportPdf() async {
+    return _runZReport('pdf_print', (summary, shopSettings, logoBytes) {
+      return _pdfService.printZReport(
+        summary: summary,
+        shopSettings: shopSettings,
+        shopLogoBytes: logoBytes,
+      );
+    });
+  }
+
+  /// Shares/saves the A4 PDF Z-Report through the OS share sheet.
+  Future<bool> shareZReportPdf() async {
+    return _runZReport('pdf_share', (summary, shopSettings, logoBytes) {
+      return _pdfService.shareZReport(
+        summary: summary,
+        shopSettings: shopSettings,
+        shopLogoBytes: logoBytes,
+      );
+    });
+  }
+
+  Future<bool> _runZReport(
+    String format,
+    Future<bool> Function(
+      RegisterSessionSummary summary,
+      ShopSettings? shopSettings,
+      Uint8List? logoBytes,
+    )
+    action,
+  ) async {
+    final summary = _selectedSummary;
+    if (summary == null || _isPrintingZReport) {
+      return false;
+    }
+    _isPrintingZReport = true;
+    notifyListeners();
+    try {
+      final shopSettings = await _loadShopSettings();
+      final logoBytes = await _loadShopLogoBytes(shopSettings);
+      final delivered = await action(summary, shopSettings, logoBytes);
+      _trackZReportDelivered(summary, format: format, delivered: delivered);
+      return delivered;
+    } finally {
+      _isPrintingZReport = false;
+      notifyListeners();
+    }
+  }
+
+  Future<ShopSettings?> _loadShopSettings() async {
+    final result = await _shopSettingsRepository.loadSettings();
+    return switch (result) {
+      Ok<ShopSettings>(value: final settings) => settings,
+      Error<ShopSettings>() => null,
+    };
+  }
+
+  Future<Uint8List?> _loadShopLogoBytes(ShopSettings? settings) async {
+    final result = await _shopSettingsRepository.loadLogoBytes(settings);
+    return switch (result) {
+      Ok<Uint8List?>(value: final bytes) => bytes,
+      Error<Uint8List?>() => null,
+    };
   }
 
   Future<void> loadMoreOrders() async {
@@ -358,6 +506,9 @@ class RegisterSessionHistoryViewModel extends ChangeNotifier {
     switch (result) {
       case Ok<SaleOrder>(value: final updatedOrder):
         _replaceOrder(updatedOrder);
+        // A void/return changes sales, refunds and the drawer — refresh the
+        // summary so the panel and any reprint reflect the new numbers.
+        unawaited(refreshSelectedSummary());
         _trackOrderAdjustmentCompleted(
           eventName: eventName,
           originalOrder: order,
@@ -396,6 +547,35 @@ class RegisterSessionHistoryViewModel extends ChangeNotifier {
         'opening_cash': session.openingCash,
         'expected_cash': session.expectedCash,
         'denomination_total': session.denominationTotal,
+      },
+    );
+  }
+
+  void _trackZReportDelivered(
+    RegisterSessionSummary summary, {
+    required String format,
+    required bool delivered,
+  }) {
+    trackAuditEvent(
+      _analyticsEngine,
+      name: delivered
+          ? 'register_session.z_report.delivered'
+          : 'register_session.z_report.failed',
+      severity: delivered
+          ? AnalyticsEventSeverity.info
+          : AnalyticsEventSeverity.warning,
+      sessionId: 'register:${summary.sessionId}',
+      entityType: 'register_session',
+      entityId: summary.sessionId,
+      attributes: {
+        'register_session_id': summary.sessionId,
+        'session_number': summary.sessionNumber,
+        'format': format,
+        'source': 'register_session_history',
+      },
+      metrics: {
+        'net_sales': summary.sales.netSales,
+        'payment_total': summary.paymentTotals.net,
       },
     );
   }

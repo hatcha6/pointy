@@ -2,6 +2,7 @@ import '../models/register_cash_movement.dart';
 import '../models/register_cash_movement_page.dart';
 import '../models/register_session.dart';
 import '../models/register_session_page.dart';
+import '../models/register_session_summary.dart';
 import '../models/sale_order.dart';
 import '../models/sale_order_page.dart';
 import 'api_session.dart';
@@ -70,6 +71,21 @@ class RegisterSessionApiClient {
       );
     }
     return const SaleOrderPage(orders: [], hasMore: false);
+  }
+
+  Future<RegisterSessionSummary> fetchRegisterSessionSummary(
+    int sessionId,
+  ) async {
+    final response = await _session.get(
+      'register-sessions/$sessionId/summary/',
+    );
+    _session.ensureSuccess(
+      response,
+      'Register session summary request failed with status',
+    );
+    return RegisterSessionSummary.fromJson(
+      _session.decodedBody(response) as Map<String, Object?>,
+    );
   }
 
   Future<RegisterCashMovementPage> fetchRegisterSessionCashMovements(

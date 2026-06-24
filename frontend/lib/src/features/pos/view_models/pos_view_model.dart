@@ -22,6 +22,7 @@ import '../../../data/models/product_variant.dart';
 import '../../../data/models/product_variant_page.dart';
 import '../../../data/models/register_cash_movement.dart';
 import '../../../data/models/register_session.dart';
+import '../../../data/models/register_session_summary.dart';
 import '../../../data/models/sale_order.dart';
 import '../../../data/models/shop_settings.dart';
 import '../../../data/repositories/catalog_repository.dart';
@@ -181,6 +182,9 @@ class PosViewModel extends ChangeNotifier {
   bool _hasCheckoutSettingsError = false;
   RegisterSession? _availableRegisterSession;
   RegisterSession? _activeRegisterSession;
+  // Id of the most recently closed session, so the close flow can offer to
+  // print its Z-Report after the active session has already been cleared.
+  int? _lastClosedRegisterSessionId;
   int _catalogRequestVersion = 0;
   Future<void>? _catalogLoadFuture;
   ProductQuery? _catalogLoadFutureQuery;
@@ -304,6 +308,7 @@ class PosViewModel extends ChangeNotifier {
   bool get hasCheckoutSettingsError => _hasCheckoutSettingsError;
   RegisterSession? get availableRegisterSession => _availableRegisterSession;
   RegisterSession? get activeRegisterSession => _activeRegisterSession;
+  int? get lastClosedRegisterSessionId => _lastClosedRegisterSessionId;
   ProductQuery get query => _query;
   bool get requireOpeningCash => _checkoutSettings?.requireOpeningCash ?? true;
   bool get allowOverselling => _checkoutSettings?.allowOverselling ?? false;

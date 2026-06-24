@@ -104,6 +104,7 @@ extension PosRegisterSessionActions on PosViewModel {
     switch (result) {
       case Ok<RegisterSession>():
         _trackRegisterSessionClosed(result.value);
+        _lastClosedRegisterSessionId = result.value.id;
         _activeRegisterSession = null;
         _availableRegisterSession = null;
         _resetSaleSessions();
@@ -118,6 +119,34 @@ extension PosRegisterSessionActions on PosViewModel {
         _notifyChanged();
         return false;
     }
+  }
+
+  /// Fetches a closed session's summary and prints its thermal Z-Report on the
+  /// POS receipt printer. Used by the close flow to offer the cashier a drawer
+  /// copy right after closing the shift.
+  Future<bool> printClosedRegisterSessionZReport(int sessionId) async {
+    final summaryResult = await _registerSessionRepository.loadSessionSummary(
+      sessionId,
+    );
+    final summary = switch (summaryResult) {
+      Ok<RegisterSessionSummary>(value: final value) => value,
+      Error<RegisterSessionSummary>() => null,
+    };
+    if (summary == null) {
+      return false;
+    }
+    final settingsResult = await _shopSettingsRepository.loadSettings();
+    final shopSettings = switch (settingsResult) {
+      Ok<ShopSettings>(value: final value) => value,
+      Error<ShopSettings>() => null,
+    };
+    final logoBytes = await _loadShopLogoBytes(shopSettings);
+    final result = await _printingRepository.printRegisterZReport(
+      summary: summary,
+      shopSettings: shopSettings,
+      shopLogoBytes: logoBytes,
+    );
+    return result.isSuccess;
   }
 
   Future<bool> createActiveRegisterCashMovement({

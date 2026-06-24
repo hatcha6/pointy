@@ -4473,6 +4473,54 @@
     }
   },
   "sessionNoVariance": "لا يوجد فرق مسجل",
+  "sessionSummaryLoadError": "تعذّر تحميل ملخص الوردية.",
+  "sessionSalesSummaryTitle": "ملخص المبيعات",
+  "sessionGrossSalesMetric": "إجمالي المبيعات",
+  "sessionDiscountsMetric": "الخصومات",
+  "sessionRefundsMetric": "المرتجعات",
+  "sessionNetSalesMetric": "صافي المبيعات",
+  "sessionOrderCountMetric": "عدد الفواتير",
+  "sessionItemsSoldMetric": "القطع المباعة",
+  "sessionVoidCountMetric": "فواتير ملغاة",
+  "sessionExpensesMetric": "مصروفات الوردية",
+  "sessionPaymentMethodsTitle": "حسب طريقة الدفع",
+  "sessionPaymentCollectedLabel": "المقبوض",
+  "sessionPaymentCommissionLabel": "العمولة",
+  "sessionPaymentRefundLabel": "المرتجع",
+  "sessionPaymentNetLabel": "الصافي",
+  "sessionPaymentsTotalLabel": "إجمالي المقبوضات",
+  "sessionPaymentOperationsCount": "{count, plural, =0{لا عمليات} =1{عملية واحدة} =2{عمليتان} other{{count} عملية}}",
+  "@sessionPaymentOperationsCount": {
+    "description": "Operation count for a payment method on the session summary.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "sessionCategoriesTitle": "المبيعات حسب الفئة",
+  "sessionUncategorizedLabel": "غير مصنف",
+  "sessionNoCategorySales": "لا توجد مبيعات حسب الفئة في هذه الجلسة.",
+  "sessionCategoryLineLabel": "{category} ×{quantity}",
+  "@sessionCategoryLineLabel": {
+    "description": "Category breakdown row label: category name and quantity sold.",
+    "placeholders": {
+      "category": {
+        "type": "String"
+      },
+      "quantity": {
+        "type": "String"
+      }
+    }
+  },
+  "sessionZReportTitle": "تقرير إغلاق الوردية (Z)",
+  "sessionPrintZReportThermal": "طباعة (إيصال)",
+  "sessionPrintZReportPdf": "طباعة PDF",
+  "sessionShareZReportPdf": "مشاركة / حفظ PDF",
+  "sessionZReportPrintedMessage": "تمت طباعة تقرير الوردية.",
+  "sessionZReportSharedMessage": "تم تجهيز تقرير الوردية.",
+  "sessionZReportFailedMessage": "تعذّرت طباعة تقرير الوردية.",
+  "sessionClosedPrintZReportPrompt": "تم إغلاق الوردية. هل تريد طباعة تقرير الإغلاق (Z)؟",
   "sessionSalesLoadError": "تعذر تحميل مبيعات هذه الجلسة.",
   "emptySessionSales": "لا توجد مبيعات مسجلة في هذه الجلسة.",
   "allCustomersFilterLabel": "كل العملاء",

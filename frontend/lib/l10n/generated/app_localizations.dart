@@ -13363,6 +13363,180 @@ abstract class AppLocalizations {
   /// **'لا يوجد فرق مسجل'**
   String get sessionNoVariance;
 
+  /// No description provided for @sessionSummaryLoadError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر تحميل ملخص الوردية.'**
+  String get sessionSummaryLoadError;
+
+  /// No description provided for @sessionSalesSummaryTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'ملخص المبيعات'**
+  String get sessionSalesSummaryTitle;
+
+  /// No description provided for @sessionGrossSalesMetric.
+  ///
+  /// In ar, this message translates to:
+  /// **'إجمالي المبيعات'**
+  String get sessionGrossSalesMetric;
+
+  /// No description provided for @sessionDiscountsMetric.
+  ///
+  /// In ar, this message translates to:
+  /// **'الخصومات'**
+  String get sessionDiscountsMetric;
+
+  /// No description provided for @sessionRefundsMetric.
+  ///
+  /// In ar, this message translates to:
+  /// **'المرتجعات'**
+  String get sessionRefundsMetric;
+
+  /// No description provided for @sessionNetSalesMetric.
+  ///
+  /// In ar, this message translates to:
+  /// **'صافي المبيعات'**
+  String get sessionNetSalesMetric;
+
+  /// No description provided for @sessionOrderCountMetric.
+  ///
+  /// In ar, this message translates to:
+  /// **'عدد الفواتير'**
+  String get sessionOrderCountMetric;
+
+  /// No description provided for @sessionItemsSoldMetric.
+  ///
+  /// In ar, this message translates to:
+  /// **'القطع المباعة'**
+  String get sessionItemsSoldMetric;
+
+  /// No description provided for @sessionVoidCountMetric.
+  ///
+  /// In ar, this message translates to:
+  /// **'فواتير ملغاة'**
+  String get sessionVoidCountMetric;
+
+  /// No description provided for @sessionExpensesMetric.
+  ///
+  /// In ar, this message translates to:
+  /// **'مصروفات الوردية'**
+  String get sessionExpensesMetric;
+
+  /// No description provided for @sessionPaymentMethodsTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'حسب طريقة الدفع'**
+  String get sessionPaymentMethodsTitle;
+
+  /// No description provided for @sessionPaymentCollectedLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'المقبوض'**
+  String get sessionPaymentCollectedLabel;
+
+  /// No description provided for @sessionPaymentCommissionLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'العمولة'**
+  String get sessionPaymentCommissionLabel;
+
+  /// No description provided for @sessionPaymentRefundLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'المرتجع'**
+  String get sessionPaymentRefundLabel;
+
+  /// No description provided for @sessionPaymentNetLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الصافي'**
+  String get sessionPaymentNetLabel;
+
+  /// No description provided for @sessionPaymentsTotalLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'إجمالي المقبوضات'**
+  String get sessionPaymentsTotalLabel;
+
+  /// Operation count for a payment method on the session summary.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, =0{لا عمليات} =1{عملية واحدة} =2{عمليتان} other{{count} عملية}}'**
+  String sessionPaymentOperationsCount(int count);
+
+  /// No description provided for @sessionCategoriesTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'المبيعات حسب الفئة'**
+  String get sessionCategoriesTitle;
+
+  /// No description provided for @sessionUncategorizedLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'غير مصنف'**
+  String get sessionUncategorizedLabel;
+
+  /// No description provided for @sessionNoCategorySales.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد مبيعات حسب الفئة في هذه الجلسة.'**
+  String get sessionNoCategorySales;
+
+  /// Category breakdown row label: category name and quantity sold.
+  ///
+  /// In ar, this message translates to:
+  /// **'{category} ×{quantity}'**
+  String sessionCategoryLineLabel(String category, String quantity);
+
+  /// No description provided for @sessionZReportTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'تقرير إغلاق الوردية (Z)'**
+  String get sessionZReportTitle;
+
+  /// No description provided for @sessionPrintZReportThermal.
+  ///
+  /// In ar, this message translates to:
+  /// **'طباعة (إيصال)'**
+  String get sessionPrintZReportThermal;
+
+  /// No description provided for @sessionPrintZReportPdf.
+  ///
+  /// In ar, this message translates to:
+  /// **'طباعة PDF'**
+  String get sessionPrintZReportPdf;
+
+  /// No description provided for @sessionShareZReportPdf.
+  ///
+  /// In ar, this message translates to:
+  /// **'مشاركة / حفظ PDF'**
+  String get sessionShareZReportPdf;
+
+  /// No description provided for @sessionZReportPrintedMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'تمت طباعة تقرير الوردية.'**
+  String get sessionZReportPrintedMessage;
+
+  /// No description provided for @sessionZReportSharedMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم تجهيز تقرير الوردية.'**
+  String get sessionZReportSharedMessage;
+
+  /// No description provided for @sessionZReportFailedMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّرت طباعة تقرير الوردية.'**
+  String get sessionZReportFailedMessage;
+
+  /// No description provided for @sessionClosedPrintZReportPrompt.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم إغلاق الوردية. هل تريد طباعة تقرير الإغلاق (Z)؟'**
+  String get sessionClosedPrintZReportPrompt;
+
   /// No description provided for @sessionSalesLoadError.
   ///
   /// In ar, this message translates to:

@@ -86,6 +86,12 @@
       "port": 8080
     },
     {
+      "name": "register-session-preview",
+      "runtimeExecutable": "make",
+      "runtimeArgs": ["frontend-register-session-preview"],
+      "port": 8080
+    },
+    {
       "name": "ai-chat-preview",
       "runtimeExecutable": "make",
       "runtimeArgs": ["frontend-ai-preview"],

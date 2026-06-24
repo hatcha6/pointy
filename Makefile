@@ -275,6 +275,9 @@ frontend-shop-setup-preview: frontend-install ## Run the first-run shop-setup wi
 frontend-migration-preview: frontend-install ## Run the data-migration settings UI preview harness as a local web server.
 	cd "$(FRONTEND_DIR)" && $(FLUTTER) run -d web-server --web-hostname $(WEB_HOST) --web-port $(WEB_PORT) -t lib/dev/migration_preview.dart
 
+frontend-register-session-preview: frontend-install ## Run the register-session summary + Z-Report UI preview harness as a local web server.
+	cd "$(FRONTEND_DIR)" && $(FLUTTER) run -d web-server --web-hostname $(WEB_HOST) --web-port $(WEB_PORT) -t lib/dev/register_session_preview.dart
+
 frontend-test: frontend-install ## Run Flutter tests.
 	cd "$(FRONTEND_DIR)" && $(FLUTTER) test
 

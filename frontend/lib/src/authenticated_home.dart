@@ -354,6 +354,8 @@ class _AuthenticatedRoutes implements AppNavigation {
         viewModel: RegisterSessionHistoryViewModel(
           dependencies.registerSessionRepository,
           dependencies.saleRepository,
+          printingRepository: dependencies.printingRepository,
+          shopSettingsRepository: dependencies.shopSettingsRepository,
           analyticsEngine: dependencies.analyticsEngine,
         ),
         contactRepository: dependencies.contactRepository,
