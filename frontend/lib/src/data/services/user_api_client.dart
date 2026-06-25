@@ -1,3 +1,4 @@
+import '../models/permission_catalog.dart';
 import '../models/pos_user.dart';
 import '../models/user_activity.dart';
 import 'api_session.dart';
@@ -7,16 +8,32 @@ class UserApiClient {
 
   final PosApiSession _session;
 
-  Future<PosUserPage> fetchUsers({int page = 1, String search = ''}) async {
+  Future<PosUserPage> fetchUsers({
+    int page = 1,
+    String search = '',
+    String role = '',
+  }) async {
     final response = await _session.get(
       'users/',
       query: {
         'page': '$page',
         if (search.trim().isNotEmpty) 'search': search.trim(),
+        if (role.trim().isNotEmpty) 'groups__name': role.trim(),
       },
     );
     _session.ensureSuccess(response, 'Users request failed with status');
     return PosUserPage.fromAny(_session.decodedBody(response));
+  }
+
+  Future<PermissionCatalog> fetchPermissionCatalog() async {
+    final response = await _session.get('users/permission-catalog/');
+    _session.ensureSuccess(
+      response,
+      'Permission catalog request failed with status',
+    );
+    return PermissionCatalog.fromJson(
+      _session.decodedBody(response) as Map<String, Object?>,
+    );
   }
 
   Future<PosUser> createUser(UserCreateDraft draft) async {

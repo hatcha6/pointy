@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../core/analytics_interaction_tracker.dart';
-import '../data/models/pos_user.dart';
+import '../features/users/role_presentation.dart';
 import 'command_palette/command_palette.dart';
 import 'components/components.dart';
 import 'design/design.dart';
@@ -31,7 +31,7 @@ class AppNavigationDrawer extends StatelessWidget {
 
     return PointyNavigationSurface(
       userLabel: navigation.currentUser.label,
-      roleLabel: _roleLabel(l10n, navigation.currentUser.role),
+      roleLabel: roleLabelFor(context, navigation.currentUser.role),
       navigationChildren: [
         const _CommandPaletteTile(closeDrawer: true),
         const SizedBox(height: 4),
@@ -74,7 +74,7 @@ class AppNavigationDrawer extends StatelessWidget {
 
     return PointyNavigationRailSurface(
       userLabel: navigation.currentUser.label,
-      roleLabel: _roleLabel(l10n, navigation.currentUser.role),
+      roleLabel: roleLabelFor(context, navigation.currentUser.role),
       logoutTooltip: l10n.logoutButton,
       onLogout: () {
         _logout(context, target: 'navigation_rail', closeDrawer: false);
@@ -197,14 +197,6 @@ class AppNavigationDrawer extends StatelessWidget {
     navigation.logout(context);
   }
 
-  String _roleLabel(AppLocalizations l10n, UserRole role) {
-    return switch (role) {
-      UserRole.manager => l10n.managerRoleLabel,
-      UserRole.cashier => l10n.cashierRoleLabel,
-      UserRole.accountant => l10n.accountantRoleLabel,
-      UserRole.technician => l10n.technicianRoleLabel,
-    };
-  }
 }
 
 class _NavigationGroup {

@@ -14,7 +14,7 @@ from apps.catalog.services import category_ids_with_descendants
 from apps.core.idempotency import run_idempotent_request
 from apps.core.models import ShopSettings
 from apps.core.permissions import HasPointyPermission
-from apps.core.roles import user_is_manager
+from apps.core.roles import user_has_full_visibility
 from .models import StockCount, StockCountLine, StockItem, StockMovement
 from .serializers import StockItemSerializer, StockMovementSerializer
 from .services import (
@@ -250,7 +250,13 @@ class StockCountViewSet(
         queryset = super().get_queryset().annotate(
             counted_line_count=Count("lines", distinct=True),
         )
-        if user_is_manager(self.request.user):
+        # Anyone who can apply counts (managers, supervisors, storekeepers) must
+        # be able to see every count to review/apply it; reporting roles get the
+        # same shop-wide view. Floor staff stay scoped to their own counts. The
+        # blind "current"/"start" lookups filter by owner_key directly, so this
+        # never leaks another counter's in-progress count into the count loop.
+        user = self.request.user
+        if user_has_full_visibility(user) or user.has_perm("inventory.apply_stockcount"):
             return queryset
         return queryset.filter(owner_key=stock_count_owner_key(self.request))
 

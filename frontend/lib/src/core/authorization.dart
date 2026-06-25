@@ -60,6 +60,7 @@ enum AppCapability {
   viewOperations,
   createJobs,
   assignJobs,
+  reopenJobs,
   manageJobMaterials,
   manageWorkflows,
   manageRecipes,
@@ -457,6 +458,11 @@ class AuthorizationCapabilities {
           ..add(AppCapability.viewOperations)
           ..add(AppCapability.assignJobs);
       }
+      if (_hasAny(user, const ['reopen_job', 'operations.reopen_job'])) {
+        capabilities
+          ..add(AppCapability.viewOperations)
+          ..add(AppCapability.reopenJobs);
+      }
       if (_hasAny(user, const [
         'add_jobmaterial',
         'operations.add_jobmaterial',
@@ -665,6 +671,7 @@ class AuthorizationCapabilities {
   bool get canViewOperations => allows(AppCapability.viewOperations);
   bool get canCreateJobs => allows(AppCapability.createJobs);
   bool get canAssignJobs => allows(AppCapability.assignJobs);
+  bool get canReopenJobs => allows(AppCapability.reopenJobs);
   bool get canManageJobMaterials => allows(AppCapability.manageJobMaterials);
   bool get canManageWorkflows => allows(AppCapability.manageWorkflows);
   bool get canManageRecipes => allows(AppCapability.manageRecipes);

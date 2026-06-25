@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
+import '../../../core/authorization.dart';
 import '../../../data/models/pos_user.dart';
 import '../../../data/models/user_activity.dart';
 import '../../../shared/date_formatters.dart';
@@ -10,12 +11,23 @@ import '../../../shared/components/components.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../../../shared/shell/shell.dart';
 import '../../purchasing/views/purchase_order_filter_sheet.dart';
+import '../role_presentation.dart';
 import '../view_models/user_details_view_model.dart';
 
 class UserDetailsScreen extends StatelessWidget {
-  const UserDetailsScreen({super.key, required this.viewModel});
+  const UserDetailsScreen({
+    super.key,
+    required this.viewModel,
+    required this.capabilities,
+    required this.onManagePermissions,
+  });
 
   final UserDetailsViewModel viewModel;
+  final AuthorizationCapabilities capabilities;
+
+  /// Opens the permission editor for the given user; resolves true if it saved,
+  /// in which case the detail view refreshes.
+  final Future<bool> Function(PosUser user) onManagePermissions;
 
   @override
   Widget build(BuildContext context) {
@@ -53,6 +65,13 @@ class UserDetailsScreen extends StatelessWidget {
                   user: user,
                   activity: viewModel.activity,
                   isRefreshing: viewModel.isLoading,
+                  capabilities: capabilities,
+                  onManagePermissions: () async {
+                    final changed = await onManagePermissions(viewModel.user);
+                    if (changed) {
+                      await viewModel.loadActivity();
+                    }
+                  },
                 ),
         );
       },
@@ -65,11 +84,15 @@ class _UserDetailsBody extends StatelessWidget {
     required this.user,
     required this.activity,
     required this.isRefreshing,
+    required this.capabilities,
+    required this.onManagePermissions,
   });
 
   final PosUser user;
   final UserActivityOverview? activity;
   final bool isRefreshing;
+  final AuthorizationCapabilities capabilities;
+  final VoidCallback onManagePermissions;
 
   @override
   Widget build(BuildContext context) {
@@ -86,6 +109,12 @@ class _UserDetailsBody extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               _UserHeader(user: user, isRefreshing: isRefreshing),
+              SizedBox(height: spacing.md),
+              _PermissionsSection(
+                user: user,
+                canManage: capabilities.canManageUsers,
+                onManagePermissions: onManagePermissions,
+              ),
               SizedBox(height: spacing.md),
               if (overview == null)
                 PointyDetailSection(
@@ -125,11 +154,10 @@ class _UserHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    final presentation = rolePresentationFor(context, user.role);
     return PointyDetailSection(
       title: user.label,
-      icon: user.role.isManager
-          ? Icons.admin_panel_settings_outlined
-          : Icons.point_of_sale_outlined,
+      icon: presentation.icon,
       trailing: isRefreshing
           ? const SizedBox.square(
               dimension: 20,
@@ -139,17 +167,25 @@ class _UserHeader extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(user.username),
+          Text('@${user.username}'),
+          if (user.email.trim().isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text(
+              user.email.trim(),
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: context.pointyColors.mutedInk),
+            ),
+          ],
           const SizedBox(height: 8),
           Wrap(
             spacing: 8,
             runSpacing: 8,
             children: [
               PointyStatusPill(
-                label: _roleLabel(l10n, user.role),
-                icon: user.role.isManager
-                    ? Icons.admin_panel_settings_outlined
-                    : Icons.point_of_sale_outlined,
+                label: presentation.label,
+                icon: presentation.icon,
+                color: presentation.color,
               ),
               PointyStatusPill(
                 label: user.isActive
@@ -164,6 +200,76 @@ class _UserHeader extends StatelessWidget {
               ),
             ],
           ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PermissionsSection extends StatelessWidget {
+  const _PermissionsSection({
+    required this.user,
+    required this.canManage,
+    required this.onManagePermissions,
+  });
+
+  final PosUser user;
+  final bool canManage;
+  final VoidCallback onManagePermissions;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final colors = context.pointyColors;
+    final isManager = user.role.isManager;
+    final inheritedCount = isManager
+        ? null
+        : user.rolePermissions.where((code) => code != '*').length;
+
+    return PointyDetailSection(
+      title: l10n.userPermissionsSectionTitle,
+      icon: Icons.verified_user_outlined,
+      trailing: canManage
+          ? TextButton.icon(
+              onPressed: onManagePermissions,
+              icon: const Icon(Icons.tune, size: 18),
+              label: Text(l10n.userEditPermissionsAction),
+            )
+          : null,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (isManager)
+            Text(l10n.permissionsManagerHasAll)
+          else ...[
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                PointyStatusPill(
+                  label: l10n.userPermissionsInheritedCount(inheritedCount ?? 0),
+                  icon: Icons.lock_outline,
+                  color: colors.mutedInk,
+                ),
+                PointyStatusPill(
+                  label: l10n.userPermissionsExtraCount(user.extraPermissionCount),
+                  icon: Icons.tune,
+                  color: user.hasExtraPermissions
+                      ? colors.accentAmber
+                      : colors.mutedInk,
+                ),
+              ],
+            ),
+            if (!user.hasExtraPermissions) ...[
+              const SizedBox(height: 8),
+              Text(
+                l10n.userPermissionsNoExtras,
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: colors.mutedInk),
+              ),
+            ],
+          ],
         ],
       ),
     );
@@ -460,15 +566,6 @@ class _ActivityTile extends StatelessWidget {
             ),
     );
   }
-}
-
-String _roleLabel(AppLocalizations l10n, UserRole role) {
-  return switch (role) {
-    UserRole.manager => l10n.managerRoleLabel,
-    UserRole.cashier => l10n.cashierRoleLabel,
-    UserRole.accountant => l10n.accountantRoleLabel,
-    UserRole.technician => l10n.technicianRoleLabel,
-  };
 }
 
 String _saleStatusLabel(AppLocalizations l10n, String status) {

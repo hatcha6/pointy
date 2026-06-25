@@ -213,7 +213,11 @@ class _FakeActivityLogApiService extends PosApiService {
   }
 
   @override
-  Future<PosUserPage> fetchUsers({int page = 1, String search = ''}) async {
+  Future<PosUserPage> fetchUsers({
+    int page = 1,
+    String search = '',
+    String role = '',
+  }) async {
     return const PosUserPage(users: [_cashier, _secondCashier], hasMore: false);
   }
 }

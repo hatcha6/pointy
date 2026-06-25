@@ -12,7 +12,7 @@ from apps.analytics.services import record_domain_event
 from apps.core.idempotency import run_idempotent_request
 from apps.core.models import ShopSettings
 from apps.core.permissions import HasPointyPermission
-from apps.core.roles import user_is_manager
+from apps.core.roles import user_has_full_visibility
 from apps.sales.models import Order, OrderAdjustment, RegisterSession
 from apps.sales.serializers import (
     CustomerAccountPaymentSerializer,
@@ -326,7 +326,7 @@ class CustomerViewSet(viewsets.ModelViewSet):
 
     def _customer_orders(self, customer):
         queryset = customer.orders.transactional()
-        if user_is_manager(self.request.user):
+        if user_has_full_visibility(self.request.user):
             return queryset
         return queryset.filter(
             register_session__owner_key=f"user:{self.request.user.pk}",
@@ -334,7 +334,7 @@ class CustomerViewSet(viewsets.ModelViewSet):
 
     def _customer_quotations(self, customer):
         queryset = customer.orders.quotations()
-        if user_is_manager(self.request.user):
+        if user_has_full_visibility(self.request.user):
             return queryset
         return queryset.filter(
             register_session__owner_key=f"user:{self.request.user.pk}",
@@ -342,7 +342,7 @@ class CustomerViewSet(viewsets.ModelViewSet):
 
     def _customer_adjustments(self, customer):
         queryset = OrderAdjustment.objects.filter(order__customer=customer)
-        if user_is_manager(self.request.user):
+        if user_has_full_visibility(self.request.user):
             return queryset
         return queryset.filter(
             order__register_session__owner_key=f"user:{self.request.user.pk}",

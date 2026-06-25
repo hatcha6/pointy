@@ -32,6 +32,7 @@ import 'data/repositories/sale_repository.dart';
 import 'data/repositories/sales_channel_repository.dart';
 import 'data/repositories/shop_settings_repository.dart';
 import 'data/repositories/stock_count_repository.dart';
+import 'data/repositories/subscription_repository.dart';
 import 'data/repositories/user_repository.dart';
 import 'data/services/backend_discovery_service.dart';
 import 'data/services/connection_coordinator.dart';
@@ -95,6 +96,7 @@ class PointyAppDependencies {
     purchaseRepository = PurchaseRepository(service);
     paymentsRepository = PaymentsRepository(service);
     stockCountRepository = StockCountRepository(service);
+    subscriptionRepository = SubscriptionRepository(service);
     userRepository = UserRepository(service);
     connectionCoordinator = ConnectionCoordinator(
       service: service,
@@ -151,6 +153,7 @@ class PointyAppDependencies {
   late final PurchaseRepository purchaseRepository;
   late final PaymentsRepository paymentsRepository;
   late final StockCountRepository stockCountRepository;
+  late final SubscriptionRepository subscriptionRepository;
   late final UserRepository userRepository;
   late final ConnectionCoordinator connectionCoordinator;
   late final AuthViewModel authViewModel;

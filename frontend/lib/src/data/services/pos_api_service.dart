@@ -10,6 +10,7 @@ import '../models/bill_of_materials.dart';
 import '../models/bought_together_product.dart';
 import '../models/business_alert.dart';
 import '../models/onboarding.dart';
+import '../models/permission_catalog.dart';
 import '../models/price_check_event.dart';
 import '../models/price_checker_device.dart';
 import '../models/print_audit_event.dart';
@@ -47,6 +48,7 @@ import '../models/register_session.dart';
 import '../models/register_session_page.dart';
 import '../models/register_session_summary.dart';
 import '../../features/payments/models/payment_record.dart';
+import '../models/relay_installation_status.dart';
 import '../models/relay_pairing.dart';
 import '../models/report_run.dart';
 import '../models/sale_order.dart';
@@ -265,8 +267,16 @@ class PosApiService {
     return _businessNotifications.restoreHiddenNotifications();
   }
 
-  Future<PosUserPage> fetchUsers({int page = 1, String search = ''}) {
-    return _users.fetchUsers(page: page, search: search);
+  Future<PosUserPage> fetchUsers({
+    int page = 1,
+    String search = '',
+    String role = '',
+  }) {
+    return _users.fetchUsers(page: page, search: search, role: role);
+  }
+
+  Future<PermissionCatalog> fetchPermissionCatalog() {
+    return _users.fetchPermissionCatalog();
   }
 
   Future<PosUser> createUser(UserCreateDraft draft) {
@@ -1192,6 +1202,12 @@ class PosApiService {
     return _relay.requestPairing(
       RelayPairingRequest(deviceId: deviceId, deviceName: deviceName),
     );
+  }
+
+  Future<RelayInstallationStatus> fetchRelayInstallationStatus({
+    bool sync = false,
+  }) {
+    return _relay.fetchInstallationStatus(sync: sync);
   }
 
   Future<SaleOrder> checkout(

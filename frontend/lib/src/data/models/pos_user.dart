@@ -1,17 +1,42 @@
 enum UserRole {
   manager,
-  cashier,
+  supervisor,
   accountant,
-  technician;
+  auditor,
+  purchasingAgent,
+  inventoryClerk,
+  technician,
+  cashier;
 
   bool get isManager => this == UserRole.manager;
+  bool get isSupervisor => this == UserRole.supervisor;
   bool get isAccountant => this == UserRole.accountant;
+  bool get isAuditor => this == UserRole.auditor;
+  bool get isPurchasingAgent => this == UserRole.purchasingAgent;
+  bool get isInventoryClerk => this == UserRole.inventoryClerk;
   bool get isTechnician => this == UserRole.technician;
+  bool get isCashier => this == UserRole.cashier;
+
+  /// The roles an admin can assign, ordered from most to least privileged.
+  static const List<UserRole> assignable = [
+    UserRole.manager,
+    UserRole.supervisor,
+    UserRole.accountant,
+    UserRole.auditor,
+    UserRole.purchasingAgent,
+    UserRole.inventoryClerk,
+    UserRole.technician,
+    UserRole.cashier,
+  ];
 
   static UserRole fromJson(Object? value) {
     return switch (value?.toString().toLowerCase()) {
       'manager' => UserRole.manager,
+      'supervisor' => UserRole.supervisor,
       'accountant' => UserRole.accountant,
+      'auditor' => UserRole.auditor,
+      'purchasing_agent' => UserRole.purchasingAgent,
+      'inventory_clerk' => UserRole.inventoryClerk,
       'technician' => UserRole.technician,
       'cashier' => UserRole.cashier,
       _ => UserRole.cashier,
@@ -21,9 +46,13 @@ enum UserRole {
   String toJson() {
     return switch (this) {
       UserRole.manager => 'manager',
-      UserRole.cashier => 'cashier',
+      UserRole.supervisor => 'supervisor',
       UserRole.accountant => 'accountant',
+      UserRole.auditor => 'auditor',
+      UserRole.purchasingAgent => 'purchasing_agent',
+      UserRole.inventoryClerk => 'inventory_clerk',
       UserRole.technician => 'technician',
+      UserRole.cashier => 'cashier',
     };
   }
 }
@@ -39,6 +68,9 @@ class PosUser {
     this.displayName = '',
     this.email = '',
     this.permissions = const {},
+    this.rolePermissions = const {},
+    this.extraPermissions = const {},
+    this.extraPermissionCount = 0,
     this.hasPermissionSnapshot = false,
     this.aiAvailable = false,
     this.allowCashierCustomerAccess = false,
@@ -52,8 +84,25 @@ class PosUser {
   final String email;
   final UserRole role;
   final bool isActive;
+
+  /// Effective permissions (role ∪ directly-granted), used to derive
+  /// capabilities. May contain the `*` sentinel for managers.
   final Set<String> permissions;
+
+  /// Permission codes inherited from the role (shown locked in the editor).
+  final Set<String> rolePermissions;
+
+  /// Permission codes granted directly to this user, on top of the role.
+  final Set<String> extraPermissions;
+
+  /// Count of directly-granted permissions (cheap field sent on the list view
+  /// even when the full [extraPermissions] set is omitted).
+  final int extraPermissionCount;
+
   final bool hasPermissionSnapshot;
+
+  /// Whether this user has any directly-granted permissions beyond their role.
+  bool get hasExtraPermissions => extraPermissionCount > 0;
 
   /// Whether the shop's AI entitlement is active for this session. Sourced from
   /// the auth response's top-level `ai_available` flag, not a user attribute.
@@ -87,6 +136,9 @@ class PosUser {
           ? json['is_active'] as bool
           : json['is_active']?.toString() != 'false',
       permissions: _permissionsFromJson(_permissionPayload(json)),
+      rolePermissions: _permissionsFromJson(json['role_permissions']),
+      extraPermissions: _permissionsFromJson(json['extra_permissions']),
+      extraPermissionCount: _extraPermissionCount(json),
       hasPermissionSnapshot: _permissionPayload(json) != null,
       aiAvailable: json['ai_available'] == true,
       allowCashierCustomerAccess: json['allow_cashier_customer_access'] == true,
@@ -95,8 +147,18 @@ class PosUser {
 
   static Object? _permissionPayload(Map<String, Object?> json) {
     return json['permissions'] ??
+        json['effective_permissions'] ??
         json['user_permissions'] ??
         json['permission_codenames'];
+  }
+
+  static int _extraPermissionCount(Map<String, Object?> json) {
+    final raw = json['extra_permission_count'];
+    if (raw is num) {
+      return raw.toInt();
+    }
+    final extras = json['extra_permissions'];
+    return extras is Iterable ? extras.length : 0;
   }
 
   static Set<String> _permissionsFromJson(Object? value) {
@@ -165,10 +227,18 @@ class PasswordChangeDraft {
 }
 
 class PosUserPage {
-  const PosUserPage({required this.users, required this.hasMore});
+  const PosUserPage({
+    required this.users,
+    required this.hasMore,
+    this.totalCount,
+  });
 
   final List<PosUser> users;
   final bool hasMore;
+
+  /// Total number of users matching the query across all pages (from the
+  /// paginated `count`), independent of how many are currently loaded.
+  final int? totalCount;
 
   factory PosUserPage.fromAny(Object? decoded) {
     if (decoded is Map<String, Object?>) {
@@ -179,18 +249,25 @@ class PosUserPage {
                 .map(PosUser.fromJson)
                 .toList(growable: false)
           : const <PosUser>[];
-      return PosUserPage(users: users, hasMore: decoded['next'] != null);
-    }
-    if (decoded is List<Object?>) {
+      final count = decoded['count'];
       return PosUserPage(
-        users: decoded
-            .whereType<Map<String, Object?>>()
-            .map(PosUser.fromJson)
-            .toList(growable: false),
-        hasMore: false,
+        users: users,
+        hasMore: decoded['next'] != null,
+        totalCount: count is num ? count.toInt() : null,
       );
     }
-    return const PosUserPage(users: [], hasMore: false);
+    if (decoded is List<Object?>) {
+      final users = decoded
+          .whereType<Map<String, Object?>>()
+          .map(PosUser.fromJson)
+          .toList(growable: false);
+      return PosUserPage(
+        users: users,
+        hasMore: false,
+        totalCount: users.length,
+      );
+    }
+    return const PosUserPage(users: [], hasMore: false, totalCount: 0);
   }
 }
 
@@ -202,6 +279,7 @@ class UserCreateDraft {
     this.displayName = '',
     this.email = '',
     this.isActive = true,
+    this.extraPermissions,
   });
 
   final String username;
@@ -210,6 +288,7 @@ class UserCreateDraft {
   final String displayName;
   final String email;
   final bool isActive;
+  final List<String>? extraPermissions;
 
   Map<String, Object?> toJson() {
     return {
@@ -219,20 +298,36 @@ class UserCreateDraft {
       'first_name': displayName,
       'email': email,
       'is_active': isActive,
+      if (extraPermissions != null) 'extra_permissions': extraPermissions,
     };
   }
 }
 
 class UserUpdateDraft {
-  const UserUpdateDraft({this.role, this.isActive});
+  const UserUpdateDraft({
+    this.role,
+    this.isActive,
+    this.displayName,
+    this.email,
+    this.password,
+    this.extraPermissions,
+  });
 
   final UserRole? role;
   final bool? isActive;
+  final String? displayName;
+  final String? email;
+  final String? password;
+  final List<String>? extraPermissions;
 
   Map<String, Object?> toJson() {
     return {
       if (role != null) 'role': role!.toJson(),
       if (isActive != null) 'is_active': isActive,
+      if (displayName != null) 'first_name': displayName,
+      if (email != null) 'email': email,
+      if (password != null && password!.isNotEmpty) 'password': password,
+      if (extraPermissions != null) 'extra_permissions': extraPermissions,
     };
   }
 }

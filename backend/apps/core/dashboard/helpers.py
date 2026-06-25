@@ -23,7 +23,7 @@ from rest_framework.views import APIView
 
 from apps.catalog.models import Product, ProductCategory
 from apps.core.permissions import HasPointyPermission
-from apps.core.roles import user_is_manager
+from apps.core.roles import user_has_full_visibility
 from apps.customers.models import Customer
 from apps.discounts.models import DiscountRedemption, DiscountRule
 from apps.employees.models import Employee, EmployeeLoan, PayrollRun
@@ -633,14 +633,11 @@ def _owner_key(request):
 def _views_shop_wide(request):
     """Whether dashboard data may span all registers instead of the caller's.
 
-    Reporting roles (managers, accountants) see shop-wide aggregates; anyone
-    else is scoped to their own register sessions so a cashier can never read
-    totals that would let them fake a clean drawer count.
+    Reporting roles (managers, accountants, supervisors, auditors) see shop-wide
+    aggregates; anyone else is scoped to their own register sessions so a cashier
+    can never read totals that would let them fake a clean drawer count.
     """
-    return user_is_manager(request.user) or _can(
-        request.user,
-        "reports.view_reportrun",
-    )
+    return user_has_full_visibility(request.user)
 
 
 def _can(user, permission):

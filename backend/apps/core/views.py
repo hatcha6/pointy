@@ -18,6 +18,7 @@ from apps.attachments.serializers import AttachmentSerializer
 from apps.attachments.services import active_attachments_for, content_type_for_upload
 
 from .models import ShopSettings
+from .permission_catalog import grouped_for
 from .permissions import HasPointyPermission
 from .relay import relay_ai_available
 from .roles import (
@@ -199,6 +200,7 @@ class PosUserViewSet(viewsets.ModelViewSet):
         "list": ("auth.view_user",),
         "retrieve": ("auth.view_user",),
         "activity": ("auth.view_user",),
+        "permission_catalog": ("auth.view_user",),
         "create": ("auth.add_user",),
         "update": ("auth.change_user",),
         "partial_update": ("auth.change_user",),
@@ -208,6 +210,14 @@ class PosUserViewSet(viewsets.ModelViewSet):
     filterset_fields = ("is_active", "groups__name")
     search_fields = ("username", "email", "first_name", "last_name")
     ordering_fields = ("username", "date_joined")
+
+    def get_queryset(self):
+        # Prefetch everything the serializer touches per row (role display,
+        # inherited + extra permission codes) so list/retrieve stay O(1) queries.
+        return super().get_queryset().prefetch_related(
+            "groups",
+            "user_permissions__content_type",
+        )
 
     def initial(self, request, *args, **kwargs):
         ensure_role_groups()
@@ -229,6 +239,7 @@ class PosUserViewSet(viewsets.ModelViewSet):
                 "target_user_id": user.pk,
                 "assigned_role": role,
                 "is_active": user.is_active,
+                "extra_permission_count": user.user_permissions.count(),
             },
         )
 
@@ -249,6 +260,7 @@ class PosUserViewSet(viewsets.ModelViewSet):
                 "assigned_role": role or "",
                 "is_active": user.is_active,
                 "password_changed": password_changed,
+                "extra_permission_count": user.user_permissions.count(),
             },
         )
 
@@ -257,10 +269,16 @@ class PosUserViewSet(viewsets.ModelViewSet):
         user = self.get_object()
         return Response(
             {
-                "user": PosUserSerializer(user).data,
+                "user": self.get_serializer(user).data,
                 **build_user_activity(user),
             }
         )
+
+    @action(detail=False, methods=["get"], url_path="permission-catalog")
+    def permission_catalog(self, request):
+        """Grouped catalog of permissions an admin may grant per user, each
+        flagged with whether the current admin is allowed to grant it."""
+        return Response({"groups": grouped_for(request.user)})
 
     def perform_destroy(self, instance):
         target_user_id = instance.pk

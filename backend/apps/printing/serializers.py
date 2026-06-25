@@ -3,7 +3,7 @@ from rest_framework import serializers
 from rest_framework.exceptions import PermissionDenied
 
 from apps.catalog.models import ProductCategory
-from apps.core.roles import user_is_manager
+from apps.core.roles import user_has_full_visibility
 from apps.payments.models import Payment
 from apps.purchasing.models import PurchaseOrder, SupplierPayment
 from apps.sales.models import Order
@@ -455,7 +455,7 @@ class PrintAuditEventRecordSerializer(serializers.Serializer):
 
     def _sale_order(self, order_id, request):
         queryset = Order.objects.all()
-        if request is not None and not user_is_manager(request.user):
+        if request is not None and not user_has_full_visibility(request.user):
             queryset = queryset.filter(
                 register_session__owner_key=self._register_session_owner_key(request),
             )

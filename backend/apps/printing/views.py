@@ -7,7 +7,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from apps.core.permissions import HasPointyPermission
-from apps.core.roles import user_is_manager
+from apps.core.roles import user_has_full_visibility
 from .models import (
     PrepStation,
     PrinterProfile,
@@ -192,7 +192,7 @@ class PrintAuditEventViewSet(
             queryset = queryset.exclude(
                 document_type=PrintAuditEvent.DocumentType.SALE_ORDER,
             )
-        elif not user_is_manager(user):
+        elif not user_has_full_visibility(user):
             queryset = queryset.filter(
                 ~Q(document_type=PrintAuditEvent.DocumentType.SALE_ORDER)
                 | Q(

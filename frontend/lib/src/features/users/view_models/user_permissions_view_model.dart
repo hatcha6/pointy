@@ -1,0 +1,199 @@
+import 'package:flutter/foundation.dart';
+
+import '../../../core/result.dart';
+import '../../../data/models/permission_catalog.dart';
+import '../../../data/models/pos_user.dart';
+import '../../../data/repositories/user_repository.dart';
+
+/// Drives the per-user permission editor: loads the grantable catalog, tracks
+/// the desired set of directly-granted (extra) permissions, and saves them.
+///
+/// Permissions inherited from the role are shown locked; only grantable,
+/// non-role permissions can be toggled. Managers hold everything, so the editor
+/// renders read-only for them.
+class UserPermissionsViewModel extends ChangeNotifier {
+  UserPermissionsViewModel(this._repository, {required PosUser user})
+    : _user = user,
+      _selectedExtras = Set.of(user.extraPermissions) {
+    loadCatalog();
+  }
+
+  final UserRepository _repository;
+
+  PosUser _user;
+  PermissionCatalog _catalog = PermissionCatalog.empty;
+  Set<String> _selectedExtras;
+  String _search = '';
+  bool _isLoading = false;
+  bool _hasError = false;
+  bool _isSaving = false;
+  bool _hasSaveError = false;
+  bool _savedOnce = false;
+
+  PosUser get user => _user;
+  PermissionCatalog get catalog => _catalog;
+  bool get isLoading => _isLoading;
+  bool get hasError => _hasError;
+  bool get isSaving => _isSaving;
+  bool get hasSaveError => _hasSaveError;
+  String get search => _search;
+
+  /// Whether the target user holds every permission via their role (manager).
+  bool get roleHasAll =>
+      _user.role.isManager || _user.rolePermissions.contains('*');
+
+  bool get isEditable => !roleHasAll;
+
+  bool isInRole(String code) =>
+      roleHasAll || _user.rolePermissions.contains(code);
+
+  bool isExtra(String code) => _selectedExtras.contains(code);
+
+  bool isGranted(String code) => isInRole(code) || isExtra(code);
+
+  /// A code is toggleable only if it is grantable by the current admin and not
+  /// already supplied by the role.
+  bool canToggle(PermissionCatalogEntry entry) =>
+      isEditable && entry.grantable && !isInRole(entry.code);
+
+  int get inheritedCount {
+    if (roleHasAll) {
+      return _catalog.totalCount;
+    }
+    return _catalog.groups
+        .expand((group) => group.permissions)
+        .where((entry) => _user.rolePermissions.contains(entry.code))
+        .length;
+  }
+
+  int get extraCount => _selectedExtras.length;
+
+  bool get hasChanges =>
+      !setEquals(_selectedExtras, Set.of(_user.extraPermissions));
+
+  /// Groups filtered by the active search term (matches label, description or
+  /// code), preserving order. Empty groups are dropped.
+  List<PermissionCatalogGroup> get visibleGroups {
+    if (_search.isEmpty) {
+      return _catalog.groups;
+    }
+    final term = _search.toLowerCase();
+    final result = <PermissionCatalogGroup>[];
+    for (final group in _catalog.groups) {
+      final matches = group.permissions
+          .where(
+            (entry) =>
+                entry.label.toLowerCase().contains(term) ||
+                entry.description.toLowerCase().contains(term) ||
+                entry.code.toLowerCase().contains(term),
+          )
+          .toList(growable: false);
+      if (matches.isNotEmpty) {
+        result.add(
+          PermissionCatalogGroup(
+            key: group.key,
+            label: group.label,
+            description: group.description,
+            permissions: matches,
+          ),
+        );
+      }
+    }
+    return result;
+  }
+
+  int grantedInGroup(PermissionCatalogGroup group) =>
+      group.permissions.where((entry) => isGranted(entry.code)).length;
+
+  Future<void> loadCatalog() async {
+    _isLoading = true;
+    _hasError = false;
+    notifyListeners();
+
+    final result = await _repository.loadPermissionCatalog();
+    switch (result) {
+      case Ok<PermissionCatalog>(value: final catalog):
+        _catalog = catalog;
+      case Error<PermissionCatalog>(exception: _):
+        _hasError = true;
+    }
+
+    _isLoading = false;
+    notifyListeners();
+  }
+
+  void setSearch(String value) {
+    final trimmed = value.trim();
+    if (trimmed == _search) {
+      return;
+    }
+    _search = trimmed;
+    notifyListeners();
+  }
+
+  void toggle(PermissionCatalogEntry entry, bool granted) {
+    if (!canToggle(entry)) {
+      return;
+    }
+    if (granted) {
+      _selectedExtras.add(entry.code);
+    } else {
+      _selectedExtras.remove(entry.code);
+    }
+    notifyListeners();
+  }
+
+  void setGroup(PermissionCatalogGroup group, bool granted) {
+    for (final entry in group.permissions) {
+      if (!canToggle(entry)) {
+        continue;
+      }
+      if (granted) {
+        _selectedExtras.add(entry.code);
+      } else {
+        _selectedExtras.remove(entry.code);
+      }
+    }
+    notifyListeners();
+  }
+
+  /// Whether every grantable, non-role entry in [group] is currently selected.
+  bool isGroupFullyGranted(PermissionCatalogGroup group) {
+    final toggleable = group.permissions.where(canToggle).toList();
+    if (toggleable.isEmpty) {
+      return false;
+    }
+    return toggleable.every((entry) => isExtra(entry.code));
+  }
+
+  Future<bool> save() async {
+    if (!isEditable) {
+      return false;
+    }
+    _isSaving = true;
+    _hasSaveError = false;
+    notifyListeners();
+
+    final result = await _repository.updateUser(
+      id: _user.id,
+      draft: UserUpdateDraft(extraPermissions: _selectedExtras.toList()),
+    );
+    _isSaving = false;
+    switch (result) {
+      case Ok<PosUser>(value: final updated):
+        _user = updated;
+        _selectedExtras = Set.of(updated.extraPermissions);
+        _savedOnce = true;
+        notifyListeners();
+        return true;
+      case Error<PosUser>(exception: _):
+        _hasSaveError = true;
+        notifyListeners();
+        return false;
+    }
+  }
+
+  /// Whether at least one successful save happened this session (so the opener
+  /// knows to refresh its list/detail copy).
+  bool get didSave => _savedOnce;
+}

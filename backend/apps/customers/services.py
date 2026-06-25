@@ -50,7 +50,12 @@ def link_card_payment(payment) -> PaymentCard | None:
     * new card + order has no customer  -> mint a placeholder customer, attach to order
     * new card + order has a customer   -> create the card under that customer
     * existing card + order has no customer -> order adopts the card's owner
-    * existing card + order has a customer  -> leave the owner, just link the payment
+    * existing card + order has a *named* customer -> the named customer wins.
+      Fold the card (and the placeholder it was parked under) into them, so the
+      moment a cashier finally picks the customer we back-fill every earlier
+      anonymous sale on that card -- no manual reassign, no forgotten link. Two
+      *named* customers on one card is a real conflict (a shared card, or a
+      mis-picked customer), so that case is left for the manual reassign action.
     """
     receipt_data = payment.card_receipt_data or {}
     fingerprint = card_fingerprint(receipt_data)
@@ -69,7 +74,7 @@ def link_card_payment(payment) -> PaymentCard | None:
         card = _create_card(order, fingerprint, masked_pan, receipt_data)
     else:
         _touch_card(card, masked_pan, receipt_data)
-        _adopt_card_owner(order, card)
+        _reconcile_card_owner(order, card)
 
     payment.card = card
     payment.save(update_fields=["card", "updated_at"])
@@ -102,7 +107,7 @@ def _create_card(order, fingerprint, masked_pan, receipt_data) -> PaymentCard:
         # Same card raced in on another register; fold into the now-existing row.
         card = PaymentCard.objects.select_for_update().get(fingerprint=fingerprint)
         _touch_card(card, masked_pan, receipt_data)
-        _adopt_card_owner(order, card)
+        _reconcile_card_owner(order, card)
         return card
 
     if not order.customer_id:
@@ -121,10 +126,71 @@ def _touch_card(card, masked_pan, receipt_data) -> None:
     )
 
 
-def _adopt_card_owner(order, card) -> None:
+def _reconcile_card_owner(order, card) -> None:
+    """Settle who owns ``card`` once it meets ``order``'s customer.
+
+    A walk-in order (no customer) simply takes on whoever already owns the card,
+    so a returning anonymous shopper keeps landing under the same placeholder.
+    But once the order carries a *named* customer and the card is still parked
+    under an auto-created placeholder, the named customer wins -- that's the
+    cashier finally telling us who this is, and it's our job to record it rather
+    than leave the data half-filled.
+    """
     if not order.customer_id:
         order.customer = card.customer
         order.save(update_fields=["customer", "updated_at"])
+        return
+
+    if order.customer_id == card.customer_id:
+        return  # already aligned
+
+    placeholder = card.customer
+    named_customer = order.customer
+    if not placeholder.is_auto_created or named_customer.is_auto_created:
+        # Either the card already belongs to a named customer (a real
+        # conflict -> leave it for the manual reassign action) or the order's
+        # customer is itself a placeholder (nothing more authoritative to adopt).
+        return
+
+    # Capture the placeholder's id up front: merge_customers deletes it, and
+    # Django zeroes the in-memory pk on delete, so the audit trail would lose it.
+    placeholder_id = placeholder.pk
+    if placeholder.cards.count() == 1:
+        # The placeholder only ever existed to hold this one card, so fold its
+        # whole history -- this card plus every earlier anonymous sale on it --
+        # into the named customer and retire the placeholder.
+        merge_customers(source=placeholder, target=named_customer)
+        folded = True
+    else:
+        # The placeholder still holds other cards (a split tender minted it for
+        # more than one), so move just this card and leave a co-payer's alone.
+        card.customer = named_customer
+        card.save(update_fields=["customer", "updated_at"])
+        folded = False
+
+    _record_auto_link(
+        card_id=card.pk,
+        from_customer_id=placeholder_id,
+        to_customer_id=named_customer.pk,
+        folded=folded,
+    )
+
+
+def _record_auto_link(*, card_id, from_customer_id, to_customer_id, folded) -> None:
+    # Moving a card between customers is normally a deliberate human action, so
+    # leave an audit trail even when we do it automatically.
+    from apps.analytics.services import record_domain_event
+
+    record_domain_event(
+        name="customers.payment_card.auto_linked",
+        entity_type="payment_card",
+        entity_id=card_id,
+        attributes={
+            "from_customer_id": from_customer_id,
+            "to_customer_id": to_customer_id,
+            "placeholder_merged": folded,
+        },
+    )
 
 
 @transaction.atomic

@@ -29,9 +29,11 @@ import '../view_models/prep_stations_view_model.dart';
 import '../view_models/price_checkers_view_model.dart';
 import '../view_models/sales_channels_view_model.dart';
 import '../view_models/shop_settings_view_model.dart';
+import '../view_models/subscription_status_view_model.dart';
 import 'operations_settings_page.dart';
 import 'price_checkers_page.dart';
 import 'sales_channels_page.dart';
+import 'subscription_status_page.dart';
 
 part 'shop_settings_widgets.dart';
 part 'shop_backup_widgets.dart';
@@ -47,6 +49,7 @@ class ShopSettingsScreen extends StatelessWidget {
     required this.modifierGroupsViewModel,
     required this.attendanceViewModel,
     required this.migrationViewModel,
+    required this.subscriptionViewModel,
     required this.capabilities,
     required this.navigation,
   });
@@ -59,6 +62,7 @@ class ShopSettingsScreen extends StatelessWidget {
   final ModifierGroupsViewModel modifierGroupsViewModel;
   final AttendanceViewModel attendanceViewModel;
   final MigrationViewModel migrationViewModel;
+  final SubscriptionStatusViewModel subscriptionViewModel;
   final AuthorizationCapabilities capabilities;
   final AppNavigation navigation;
 
@@ -102,6 +106,7 @@ class ShopSettingsScreen extends StatelessWidget {
               modifierGroupsViewModel: modifierGroupsViewModel,
               attendanceViewModel: attendanceViewModel,
               migrationViewModel: migrationViewModel,
+              subscriptionViewModel: subscriptionViewModel,
               canManageSalesChannels: capabilities.canManageSalesChannels,
               canManagePriceCheckers: capabilities.canManagePriceCheckers,
               canManageWorkflows: capabilities.canManageWorkflows,
@@ -124,6 +129,7 @@ class _ShopSettingsBody extends StatelessWidget {
     required this.modifierGroupsViewModel,
     required this.attendanceViewModel,
     required this.migrationViewModel,
+    required this.subscriptionViewModel,
     required this.canManageSalesChannels,
     required this.canManagePriceCheckers,
     required this.canManageWorkflows,
@@ -138,6 +144,7 @@ class _ShopSettingsBody extends StatelessWidget {
   final ModifierGroupsViewModel modifierGroupsViewModel;
   final AttendanceViewModel attendanceViewModel;
   final MigrationViewModel migrationViewModel;
+  final SubscriptionStatusViewModel subscriptionViewModel;
   final bool canManageSalesChannels;
   final bool canManagePriceCheckers;
   final bool canManageWorkflows;
@@ -177,6 +184,7 @@ class _ShopSettingsBody extends StatelessWidget {
       modifierGroupsViewModel: modifierGroupsViewModel,
       attendanceViewModel: attendanceViewModel,
       migrationViewModel: migrationViewModel,
+      subscriptionViewModel: subscriptionViewModel,
       canManageSalesChannels: canManageSalesChannels,
       canManagePriceCheckers: canManagePriceCheckers,
       canManageWorkflows: canManageWorkflows,
@@ -196,6 +204,7 @@ class _ShopSettingsForm extends StatefulWidget {
     required this.modifierGroupsViewModel,
     required this.attendanceViewModel,
     required this.migrationViewModel,
+    required this.subscriptionViewModel,
     required this.canManageSalesChannels,
     required this.canManagePriceCheckers,
     required this.canManageWorkflows,
@@ -211,6 +220,7 @@ class _ShopSettingsForm extends StatefulWidget {
   final ModifierGroupsViewModel modifierGroupsViewModel;
   final AttendanceViewModel attendanceViewModel;
   final MigrationViewModel migrationViewModel;
+  final SubscriptionStatusViewModel subscriptionViewModel;
   final bool canManageSalesChannels;
   final bool canManagePriceCheckers;
   final bool canManageWorkflows;
@@ -528,6 +538,12 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
                           onTap: widget.viewModel.isExportingAnalytics
                               ? null
                               : () => _openAnalyticsExport(context),
+                        ),
+                        PointySettingsTile(
+                          icon: Icons.workspace_premium_outlined,
+                          title: l10n.subscriptionSectionTitle,
+                          subtitle: l10n.subscriptionSectionSubtitle,
+                          onTap: () => _openSubscriptionStatus(context),
                         ),
                       ],
                     ),
@@ -1229,6 +1245,15 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
       MaterialPageRoute<void>(
         builder: (routeContext) =>
             AttendanceSettingsPage(viewModel: widget.attendanceViewModel),
+      ),
+    );
+  }
+
+  Future<void> _openSubscriptionStatus(BuildContext context) {
+    return Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (routeContext) =>
+            SubscriptionStatusPage(viewModel: widget.subscriptionViewModel),
       ),
     );
   }

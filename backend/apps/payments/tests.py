@@ -11,6 +11,7 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient
 
+from apps.analytics.models import AnalyticsEvent
 from apps.catalog.testing import create_product_with_default_variant
 from apps.core.models import ShopSettings
 from apps.core.roles import CASHIER_GROUP, MANAGER_GROUP, ensure_role_groups
@@ -396,13 +397,13 @@ class MoamalatCardReceiptTests(TestCase):
 
         self.assertTrue(serializer.is_valid(), serializer.errors)
 
-    def _pay_card(self, order, amount):
+    def _pay_card(self, order, amount, pan="639974*********8809"):
         serializer = PaymentSerializer(
             data={
                 "order": order.pk,
                 "method": Payment.Method.CARD,
                 "amount": amount,
-                "card_receipt_url": _moamalat_receipt_url(f"{amount}0"),
+                "card_receipt_url": _moamalat_receipt_url(f"{amount}0", pan=pan),
             }
         )
         serializer.is_valid(raise_exception=True)
@@ -454,15 +455,80 @@ class MoamalatCardReceiptTests(TestCase):
         order.refresh_from_db()
         self.assertEqual(order.customer_id, real.pk)
 
+    def test_naming_customer_on_later_sale_folds_placeholder_history(self):
+        # First sale is anonymous: the card mints a hidden placeholder and the
+        # walk-in order lands under it.
+        first = self._pay_card(self.order, "6.00")
+        placeholder = first.card.customer
+        self.assertTrue(placeholder.is_auto_created)
+        placeholder_id = placeholder.pk
 
-def _moamalat_receipt_url(amount):
+        # Next time the same card is used the cashier remembers to pick the
+        # customer. We should attach the card to that named customer with no
+        # manual reassign...
+        real = Customer.objects.create(full_name="Layla Ahmed")
+        second_order = self._new_order(customer=real)
+        with self.captureOnCommitCallbacks(execute=True):
+            second = self._pay_card(second_order, "6.00")
+
+        self.assertEqual(PaymentCard.objects.count(), 1)
+        second.card.refresh_from_db()
+        self.assertEqual(second.card.customer_id, real.pk)
+        # ...and the placeholder is retired, its earlier anonymous sale
+        # back-filled onto the now-known customer (the whole point: no orphaned,
+        # half-filled data left behind).
+        self.assertFalse(Customer.objects.filter(pk=placeholder_id).exists())
+        self.order.refresh_from_db()
+        self.assertEqual(self.order.customer_id, real.pk)
+        # The silent move leaves an audit trail naming both ends.
+        event = AnalyticsEvent.objects.get(name="customers.payment_card.auto_linked")
+        self.assertEqual(event.attributes["from_customer_id"], placeholder_id)
+        self.assertEqual(event.attributes["to_customer_id"], real.pk)
+        self.assertTrue(event.attributes["placeholder_merged"])
+
+    def test_card_already_owned_by_named_customer_is_not_stolen(self):
+        # A card tied to one named customer must not silently jump to another on
+        # the next sale (a shared card or a mis-picked customer) -- that stays a
+        # manual reassign decision.
+        owner = Customer.objects.create(full_name="First Owner")
+        first = self._pay_card(self._new_order(customer=owner), "6.00")
+        self.assertEqual(first.card.customer_id, owner.pk)
+
+        other = Customer.objects.create(full_name="Second Person")
+        second = self._pay_card(self._new_order(customer=other), "6.00")
+
+        second.card.refresh_from_db()
+        self.assertEqual(second.card.customer_id, owner.pk)
+
+    def test_split_tender_placeholder_moves_only_the_named_card(self):
+        # One anonymous order paid by two different cards parks both under a
+        # single placeholder. Naming one card's customer later must move only
+        # that card -- the co-payer's card stays put.
+        order = self._new_order()  # total 10.00, left partly paid below
+        paid_a = self._pay_card(order, "6.00")
+        paid_b = self._pay_card(order, "1.00", pan="510321*********1234")
+        placeholder = paid_a.card.customer
+        self.assertEqual(placeholder.cards.count(), 2)
+
+        real = Customer.objects.create(full_name="Card A Owner")
+        self._pay_card(self._new_order(customer=real), "6.00")
+
+        paid_a.card.refresh_from_db()
+        paid_b.card.refresh_from_db()
+        self.assertEqual(paid_a.card.customer_id, real.pk)
+        # Co-payer's card and the placeholder both survive untouched.
+        self.assertEqual(paid_b.card.customer_id, placeholder.pk)
+        self.assertTrue(Customer.objects.filter(pk=placeholder.pk).exists())
+
+
+def _moamalat_receipt_url(amount, pan="639974*********8809"):
     fields = {
         "MerchantName": "SANAD ALBUNYAN ALTAWZIE A",
         "TerminalCity": "MISURATA LY",
         "TerminalId": "0JA8Y13W",
         "CardType": "NUMO BANK1",
         "AID": "A0000009021010",
-        "PAN": "639974*********8809",
+        "PAN": pan,
         "CardHolder": "QARQOOM SALEH",
         "TransactionType": "شراء",
         "InvoiceNumber": "5",

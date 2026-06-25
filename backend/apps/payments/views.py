@@ -3,7 +3,7 @@ from rest_framework.permissions import IsAuthenticated
 
 from apps.core.idempotency import run_idempotent_request
 from apps.core.permissions import HasPointyPermission
-from apps.core.roles import user_is_manager
+from apps.core.roles import user_has_full_visibility
 from .models import Payment
 from .serializers import PaymentLedgerSerializer, PaymentSerializer
 
@@ -57,7 +57,7 @@ class PaymentViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         queryset = super().get_queryset()
-        if user_is_manager(self.request.user):
+        if user_has_full_visibility(self.request.user):
             return queryset
         return queryset.filter(
             order__register_session__owner_key=payment_owner_key(self.request)

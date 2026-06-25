@@ -3717,6 +3717,294 @@ abstract class AppLocalizations {
   /// **'إدارة المستخدمين'**
   String get usersManagementTitle;
 
+  /// No description provided for @supervisorRoleLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'مشرف'**
+  String get supervisorRoleLabel;
+
+  /// No description provided for @auditorRoleLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'مدقق'**
+  String get auditorRoleLabel;
+
+  /// No description provided for @purchasingAgentRoleLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'مسؤول المشتريات'**
+  String get purchasingAgentRoleLabel;
+
+  /// No description provided for @inventoryClerkRoleLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'أمين المخزن'**
+  String get inventoryClerkRoleLabel;
+
+  /// No description provided for @managerRoleDescription.
+  ///
+  /// In ar, this message translates to:
+  /// **'صلاحية كاملة على كل أقسام النظام والإعدادات.'**
+  String get managerRoleDescription;
+
+  /// No description provided for @supervisorRoleDescription.
+  ///
+  /// In ar, this message translates to:
+  /// **'إشراف على المبيعات والمخزون والمشتريات والتقارير على مستوى المتجر، دون إدارة المستخدمين أو الإعدادات أو اعتماد الرواتب.'**
+  String get supervisorRoleDescription;
+
+  /// No description provided for @accountantRoleDescription.
+  ///
+  /// In ar, this message translates to:
+  /// **'المالية والرواتب والسلف والمصروفات والتقارير.'**
+  String get accountantRoleDescription;
+
+  /// No description provided for @auditorRoleDescription.
+  ///
+  /// In ar, this message translates to:
+  /// **'اطّلاع فقط على المبيعات والتقارير والمخزون والمشتريات دون أي تعديل.'**
+  String get auditorRoleDescription;
+
+  /// No description provided for @purchasingAgentRoleDescription.
+  ///
+  /// In ar, this message translates to:
+  /// **'إدارة دورة أوامر الشراء كاملة والموردين.'**
+  String get purchasingAgentRoleDescription;
+
+  /// No description provided for @inventoryClerkRoleDescription.
+  ///
+  /// In ar, this message translates to:
+  /// **'إدارة المخزون والجرد واستلام المشتريات.'**
+  String get inventoryClerkRoleDescription;
+
+  /// No description provided for @technicianRoleDescription.
+  ///
+  /// In ar, this message translates to:
+  /// **'تنفيذ أوامر الصيانة والتصنيع ومتابعة العملاء.'**
+  String get technicianRoleDescription;
+
+  /// No description provided for @cashierRoleDescription.
+  ///
+  /// In ar, this message translates to:
+  /// **'البيع عبر نقطة البيع وإدارة وردية الصندوق.'**
+  String get cashierRoleDescription;
+
+  /// No description provided for @usersSearchHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'ابحث عن مستخدم'**
+  String get usersSearchHint;
+
+  /// No description provided for @roleFilterAllLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'كل الأدوار'**
+  String get roleFilterAllLabel;
+
+  /// No description provided for @usersTotalMetric.
+  ///
+  /// In ar, this message translates to:
+  /// **'إجمالي المستخدمين'**
+  String get usersTotalMetric;
+
+  /// No description provided for @usersActiveMetric.
+  ///
+  /// In ar, this message translates to:
+  /// **'النشطون'**
+  String get usersActiveMetric;
+
+  /// No description provided for @usersCustomPermissionsMetric.
+  ///
+  /// In ar, this message translates to:
+  /// **'صلاحيات مخصصة'**
+  String get usersCustomPermissionsMetric;
+
+  /// Badge showing how many custom permissions a user has.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count} مخصصة'**
+  String usersCustomPermissionsBadge(int count);
+
+  /// No description provided for @usersNoMatches.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا يوجد مستخدمون مطابقون'**
+  String get usersNoMatches;
+
+  /// No description provided for @userActionsTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'إجراءات'**
+  String get userActionsTooltip;
+
+  /// No description provided for @userEditAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعديل'**
+  String get userEditAction;
+
+  /// No description provided for @userManagePermissionsAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'الصلاحيات'**
+  String get userManagePermissionsAction;
+
+  /// No description provided for @userActivateAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'تفعيل'**
+  String get userActivateAction;
+
+  /// No description provided for @userDeactivateAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعطيل'**
+  String get userDeactivateAction;
+
+  /// No description provided for @userEditTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعديل المستخدم'**
+  String get userEditTitle;
+
+  /// No description provided for @passwordResetLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'كلمة مرور جديدة (اتركها فارغة لعدم التغيير)'**
+  String get passwordResetLabel;
+
+  /// No description provided for @userEditSelfRoleLocked.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا يمكنك تغيير دورك أو تعطيل حسابك بنفسك.'**
+  String get userEditSelfRoleLocked;
+
+  /// No description provided for @userManagePermissionsLinkTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'الصلاحيات الإضافية'**
+  String get userManagePermissionsLinkTitle;
+
+  /// No description provided for @userManagePermissionsLinkSubtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'منح صلاحيات فوق صلاحيات الدور'**
+  String get userManagePermissionsLinkSubtitle;
+
+  /// No description provided for @updateUserError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر تحديث المستخدم'**
+  String get updateUserError;
+
+  /// Permission editor screen title.
+  ///
+  /// In ar, this message translates to:
+  /// **'صلاحيات {user}'**
+  String userPermissionsTitle(String user);
+
+  /// No description provided for @permissionsLoadError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر تحميل الصلاحيات'**
+  String get permissionsLoadError;
+
+  /// No description provided for @permissionsManagerHasAll.
+  ///
+  /// In ar, this message translates to:
+  /// **'هذا المستخدم مدير ويملك جميع الصلاحيات.'**
+  String get permissionsManagerHasAll;
+
+  /// Summary of inherited vs extra permission counts.
+  ///
+  /// In ar, this message translates to:
+  /// **'{inherited} من الدور • {extra} مخصصة'**
+  String permissionsSummaryInheritedExtra(int inherited, int extra);
+
+  /// No description provided for @permissionsSearchHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'ابحث في الصلاحيات'**
+  String get permissionsSearchHint;
+
+  /// No description provided for @permissionsEmpty.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد صلاحيات مطابقة'**
+  String get permissionsEmpty;
+
+  /// No description provided for @permissionsSelectGroup.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحديد الكل'**
+  String get permissionsSelectGroup;
+
+  /// No description provided for @permissionsClearGroup.
+  ///
+  /// In ar, this message translates to:
+  /// **'إلغاء التحديد'**
+  String get permissionsClearGroup;
+
+  /// No description provided for @permissionsInheritedFromRole.
+  ///
+  /// In ar, this message translates to:
+  /// **'من الدور'**
+  String get permissionsInheritedFromRole;
+
+  /// No description provided for @permissionsNeedsHigherPermission.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحتاج صلاحية أعلى'**
+  String get permissionsNeedsHigherPermission;
+
+  /// No description provided for @permissionsSaveError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر حفظ الصلاحيات'**
+  String get permissionsSaveError;
+
+  /// No description provided for @permissionsSaveButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'حفظ الصلاحيات'**
+  String get permissionsSaveButton;
+
+  /// No description provided for @permissionsSavedMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم تحديث الصلاحيات'**
+  String get permissionsSavedMessage;
+
+  /// No description provided for @userPermissionsSectionTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'الصلاحيات'**
+  String get userPermissionsSectionTitle;
+
+  /// No description provided for @userEditPermissionsAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعديل'**
+  String get userEditPermissionsAction;
+
+  /// Count of role-inherited permissions.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count} من الدور'**
+  String userPermissionsInheritedCount(int count);
+
+  /// Count of extra (directly granted) permissions.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count} مخصصة'**
+  String userPermissionsExtraCount(int count);
+
+  /// No description provided for @userPermissionsNoExtras.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد صلاحيات إضافية مخصصة لهذا المستخدم.'**
+  String get userPermissionsNoExtras;
+
   /// No description provided for @refreshUsersTooltip.
   ///
   /// In ar, this message translates to:
@@ -20387,6 +20675,252 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'تعذّر تحويل عرض السعر'**
   String get convertQuotationError;
+
+  /// Title for the subscription/relay status section and its page.
+  ///
+  /// In ar, this message translates to:
+  /// **'الاشتراك والوصول عن بُعد'**
+  String get subscriptionSectionTitle;
+
+  /// Subtitle shown on the subscription tile in the settings hub.
+  ///
+  /// In ar, this message translates to:
+  /// **'معرّف التثبيت وحالة اشتراكاتك'**
+  String get subscriptionSectionSubtitle;
+
+  /// Error state shown when the relay installation status fails to load.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر تحميل حالة الاشتراك.'**
+  String get subscriptionStatusLoadError;
+
+  /// Tooltip for the button that re-syncs subscription state from the relay server.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحديث من الخادم'**
+  String get subscriptionRefreshTooltip;
+
+  /// Snackbar shown when a relay sync fails; the cached snapshot is kept.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر الاتصال بالخادم لتحديث الحالة. يتم عرض آخر حالة محفوظة.'**
+  String get subscriptionSyncFailedMessage;
+
+  /// Snackbar shown after a successful relay sync.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم تحديث حالة الاشتراك.'**
+  String get subscriptionSyncedMessage;
+
+  /// Hero title used when the shop name is unknown.
+  ///
+  /// In ar, this message translates to:
+  /// **'اشتراك بوينتي'**
+  String get subscriptionHeroFallbackTitle;
+
+  /// Label for an active, unexpired subscription.
+  ///
+  /// In ar, this message translates to:
+  /// **'نشط'**
+  String get subscriptionStatusActive;
+
+  /// Label for an expired subscription.
+  ///
+  /// In ar, this message translates to:
+  /// **'منتهٍ'**
+  String get subscriptionStatusExpired;
+
+  /// Label for a subscription that has never been activated.
+  ///
+  /// In ar, this message translates to:
+  /// **'غير مُفعّل'**
+  String get subscriptionStatusInactive;
+
+  /// Short on/enabled state used in status pills and rows.
+  ///
+  /// In ar, this message translates to:
+  /// **'مُفعّل'**
+  String get subscriptionStateOn;
+
+  /// Short off/disabled state used in status pills and rows.
+  ///
+  /// In ar, this message translates to:
+  /// **'متوقّف'**
+  String get subscriptionStateOff;
+
+  /// Hero subtitle showing the subscription end date.
+  ///
+  /// In ar, this message translates to:
+  /// **'حتى {date}'**
+  String subscriptionUntilDate(String date);
+
+  /// Hero pill summarising remote-access state.
+  ///
+  /// In ar, this message translates to:
+  /// **'الوصول عن بُعد · {state}'**
+  String subscriptionRemoteAccessPill(String state);
+
+  /// Hero pill summarising AI-assistant state.
+  ///
+  /// In ar, this message translates to:
+  /// **'الذكاء الاصطناعي · {state}'**
+  String subscriptionAiPill(String state);
+
+  /// Section title for the relay installation identifier.
+  ///
+  /// In ar, this message translates to:
+  /// **'معرّف التثبيت'**
+  String get subscriptionInstallationIdTitle;
+
+  /// Explains what the installation ID is for.
+  ///
+  /// In ar, this message translates to:
+  /// **'أرسل هذا المعرّف للدعم لتفعيل اشتراكك أو تجديده.'**
+  String get subscriptionInstallationIdHelper;
+
+  /// Label for the copy-installation-ID button.
+  ///
+  /// In ar, this message translates to:
+  /// **'نسخ'**
+  String get subscriptionInstallationIdCopy;
+
+  /// Snackbar confirming the installation ID was copied.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم نسخ معرّف التثبيت.'**
+  String get subscriptionInstallationIdCopied;
+
+  /// Callout title when the shop has no relay installation yet.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم يتم الربط بالخادم بعد'**
+  String get subscriptionNotConfiguredTitle;
+
+  /// Callout body when the shop has no relay installation yet.
+  ///
+  /// In ar, this message translates to:
+  /// **'تواصل مع الدعم لتفعيل الوصول عن بُعد ومساعد الذكاء الاصطناعي.'**
+  String get subscriptionNotConfiguredMessage;
+
+  /// Section title for remote-access subscription state.
+  ///
+  /// In ar, this message translates to:
+  /// **'الوصول عن بُعد'**
+  String get subscriptionRemoteAccessTitle;
+
+  /// Callout title when remote access is available.
+  ///
+  /// In ar, this message translates to:
+  /// **'الوصول عن بُعد مُفعّل'**
+  String get subscriptionRemoteAccessActiveTitle;
+
+  /// Callout body when remote access is available.
+  ///
+  /// In ar, this message translates to:
+  /// **'يمكنك استخدام التطبيق خارج المتجر عبر خادم بوينتي.'**
+  String get subscriptionRemoteAccessActiveMessage;
+
+  /// Callout title when remote access is unavailable.
+  ///
+  /// In ar, this message translates to:
+  /// **'الوصول عن بُعد غير مُفعّل'**
+  String get subscriptionRemoteAccessInactiveTitle;
+
+  /// Callout body when remote access is unavailable.
+  ///
+  /// In ar, this message translates to:
+  /// **'تتطلب هذه الميزة اشتراكًا فعّالًا. تواصل مع الدعم لتفعيلها.'**
+  String get subscriptionRemoteAccessInactiveMessage;
+
+  /// Summary row label for the feature on/off state.
+  ///
+  /// In ar, this message translates to:
+  /// **'الحالة'**
+  String get subscriptionFieldStatus;
+
+  /// Summary row label for the subscription state.
+  ///
+  /// In ar, this message translates to:
+  /// **'الاشتراك'**
+  String get subscriptionFieldSubscription;
+
+  /// Summary row label for the subscription end date.
+  ///
+  /// In ar, this message translates to:
+  /// **'ينتهي في'**
+  String get subscriptionFieldExpiresOn;
+
+  /// Summary row label for time left on the subscription.
+  ///
+  /// In ar, this message translates to:
+  /// **'المدة المتبقية'**
+  String get subscriptionFieldRemaining;
+
+  /// Summary row label for the last connector check-in.
+  ///
+  /// In ar, this message translates to:
+  /// **'آخر اتصال بالخادم'**
+  String get subscriptionFieldLastConnected;
+
+  /// Shown for an active subscription with no expiry date.
+  ///
+  /// In ar, this message translates to:
+  /// **'بدون تاريخ انتهاء'**
+  String get subscriptionExpiryNever;
+
+  /// Days remaining until the subscription lapses.
+  ///
+  /// In ar, this message translates to:
+  /// **'متبقّي {days} يوم'**
+  String subscriptionDaysLeft(int days);
+
+  /// Shown when the remote-access connector has never checked in.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم يتصل بعد'**
+  String get subscriptionNeverConnected;
+
+  /// Section title for the AI-assistant subscription state.
+  ///
+  /// In ar, this message translates to:
+  /// **'مساعد الذكاء الاصطناعي'**
+  String get subscriptionAiTitle;
+
+  /// Callout title when AI is available.
+  ///
+  /// In ar, this message translates to:
+  /// **'مساعد الذكاء الاصطناعي مُفعّل'**
+  String get subscriptionAiActiveTitle;
+
+  /// Callout body when AI is available.
+  ///
+  /// In ar, this message translates to:
+  /// **'اشتراكك يشمل المساعد الذكي. هذا هو استهلاكك الحالي.'**
+  String get subscriptionAiActiveMessage;
+
+  /// Callout title when AI is unavailable.
+  ///
+  /// In ar, this message translates to:
+  /// **'مساعد الذكاء الاصطناعي غير مُفعّل'**
+  String get subscriptionAiInactiveTitle;
+
+  /// Callout body when AI is unavailable.
+  ///
+  /// In ar, this message translates to:
+  /// **'أضِف المساعد الذكي إلى اشتراكك للاستفادة منه. تواصل مع الدعم.'**
+  String get subscriptionAiInactiveMessage;
+
+  /// Shown when AI usage data could not be fetched.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر تحميل بيانات الاستهلاك حاليًا.'**
+  String get subscriptionAiUsageUnavailable;
+
+  /// Caption showing when the snapshot was last refreshed from the relay.
+  ///
+  /// In ar, this message translates to:
+  /// **'آخر تحديث للحالة: {time}'**
+  String subscriptionLastSynced(String time);
 }
 
 class _AppLocalizationsDelegate

@@ -61,12 +61,15 @@ import 'features/settings/view_models/prep_stations_view_model.dart';
 import 'features/settings/view_models/price_checkers_view_model.dart';
 import 'features/settings/view_models/sales_channels_view_model.dart';
 import 'features/settings/view_models/shop_settings_view_model.dart';
+import 'features/settings/view_models/subscription_status_view_model.dart';
 import 'features/settings/views/shop_settings_screen.dart';
 import 'features/user_settings/views/user_settings_screen.dart';
 import 'features/users/view_models/user_management_view_model.dart';
 import 'features/users/view_models/user_details_view_model.dart';
+import 'features/users/view_models/user_permissions_view_model.dart';
 import 'features/users/views/user_details_screen.dart';
 import 'features/users/views/user_management_screen.dart';
+import 'features/users/views/user_permissions_screen.dart';
 import 'data/models/barcode_label.dart';
 import 'data/models/contact.dart';
 import 'data/models/product.dart';
@@ -414,6 +417,8 @@ class _AuthenticatedRoutes implements AppNavigation {
         currentUser: currentUser,
         capabilities: capabilities,
         navigation: this,
+        onOpenUserPermissions: (user) =>
+            _openUserPermissions(routeContext, user),
         onOpenUserDetails: guardedValueAction(AppCapability.manageUsers, (
           user,
         ) {
@@ -425,11 +430,31 @@ class _AuthenticatedRoutes implements AppNavigation {
                 dependencies.userRepository,
                 initialUser: user,
               ),
+              capabilities: capabilities,
+              onManagePermissions: (target) =>
+                  _openUserPermissions(routeContext, target),
             ),
           );
         }),
       ),
     );
+  }
+
+  Future<bool> _openUserPermissions(BuildContext context, PosUser user) async {
+    if (!capabilities.allows(AppCapability.manageUsers)) {
+      return false;
+    }
+    _trackScreenView('user_permissions');
+    final updated = await push<PosUser>(
+      context,
+      (_) => UserPermissionsScreen(
+        viewModel: UserPermissionsViewModel(
+          dependencies.userRepository,
+          user: user,
+        ),
+      ),
+    );
+    return updated != null;
   }
 
   Widget employeePayrollRouteBuilder(BuildContext routeContext) {
@@ -556,6 +581,9 @@ class _AuthenticatedRoutes implements AppNavigation {
         ),
         attendanceViewModel: dependencies.attendanceViewModel,
         migrationViewModel: dependencies.migrationViewModel,
+        subscriptionViewModel: SubscriptionStatusViewModel(
+          dependencies.subscriptionRepository,
+        ),
         capabilities: capabilities,
         navigation: this,
       ),

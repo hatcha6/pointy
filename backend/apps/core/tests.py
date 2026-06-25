@@ -43,12 +43,18 @@ from apps.sales.models import Order, OrderLine, RegisterCashMovement, RegisterSe
 from .models import RelayConnectorSetupToken, RelayInstallation, ShopSettings
 from .roles import (
     ACCOUNTANT_GROUP,
+    AUDITOR_GROUP,
     CASHIER_GROUP,
+    INVENTORY_CLERK_GROUP,
     MANAGER_GROUP,
+    PURCHASING_AGENT_GROUP,
+    SUPERVISOR_GROUP,
     create_initial_admin_user,
     ensure_role_groups,
     initial_admin_setup_required,
+    user_has_full_visibility,
 )
+from . import permission_catalog
 from .discovery import private_network_host_for_peer
 
 
@@ -1804,3 +1810,344 @@ class ShopSetupTests(TestCase):
             format="json",
         )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+
+class RolePermissionBootstrapTests(TestCase):
+    def test_new_role_groups_bootstrap_with_expected_permissions(self):
+        ensure_role_groups()
+        for role in (
+            SUPERVISOR_GROUP,
+            INVENTORY_CLERK_GROUP,
+            PURCHASING_AGENT_GROUP,
+            AUDITOR_GROUP,
+        ):
+            self.assertTrue(Group.objects.filter(name=role).exists(), role)
+
+        def codes(role):
+            return {
+                f"{perm.content_type.app_label}.{perm.codename}"
+                for perm in Group.objects.get(name=role).permissions.all()
+            }
+
+        supervisor = codes(SUPERVISOR_GROUP)
+        self.assertIn("reports.view_reportrun", supervisor)
+        self.assertIn("inventory.apply_stockcount", supervisor)
+        self.assertIn("operations.assign_job", supervisor)
+        # Supervisor is shop-wide but not an admin.
+        self.assertNotIn("auth.change_user", supervisor)
+        self.assertNotIn("core.change_shopsettings", supervisor)
+
+        clerk = codes(INVENTORY_CLERK_GROUP)
+        self.assertIn("inventory.apply_stockcount", clerk)
+        self.assertIn("purchasing.receive_purchaseorder", clerk)
+        self.assertNotIn("purchasing.add_purchaseorder", clerk)
+
+        buyer = codes(PURCHASING_AGENT_GROUP)
+        self.assertIn("purchasing.add_purchaseorder", buyer)
+        self.assertIn("purchasing.cancel_purchaseorder", buyer)
+
+        auditor = codes(AUDITOR_GROUP)
+        self.assertIn("reports.view_reportrun", auditor)
+        self.assertIn("sales.view_order", auditor)
+        # Read-only: no write permissions leak in.
+        self.assertFalse({c for c in auditor if c.split(".", 1)[1].startswith(
+            ("add_", "change_", "delete_")
+        )})
+
+    def test_ensure_role_groups_prunes_stale_role_permissions(self):
+        ensure_role_groups()
+        from django.contrib.auth.models import Permission
+
+        cashier_group = Group.objects.get(name=CASHIER_GROUP)
+        stray = Permission.objects.get(
+            content_type__app_label="payments", codename="delete_payment"
+        )
+        cashier_group.permissions.add(stray)
+        # Re-running the idempotent bootstrap must remove anything not in the
+        # role's code constant (set semantics), keeping groups authoritative.
+        ensure_role_groups()
+        self.assertFalse(
+            cashier_group.permissions.filter(pk=stray.pk).exists()
+        )
+
+    def test_user_has_full_visibility(self):
+        ensure_role_groups()
+        User = get_user_model()
+        manager = User.objects.create_user(username="m", password="p")
+        manager.groups.add(Group.objects.get(name=MANAGER_GROUP))
+        supervisor = User.objects.create_user(username="s", password="p")
+        supervisor.groups.add(Group.objects.get(name=SUPERVISOR_GROUP))
+        auditor = User.objects.create_user(username="a", password="p")
+        auditor.groups.add(Group.objects.get(name=AUDITOR_GROUP))
+        cashier = User.objects.create_user(username="c", password="p")
+        cashier.groups.add(Group.objects.get(name=CASHIER_GROUP))
+
+        self.assertTrue(user_has_full_visibility(manager))
+        self.assertTrue(user_has_full_visibility(supervisor))
+        self.assertTrue(user_has_full_visibility(auditor))
+        self.assertFalse(user_has_full_visibility(cashier))
+
+
+class PermissionCatalogTests(TestCase):
+    def setUp(self):
+        ensure_role_groups()
+        User = get_user_model()
+        self.manager = User.objects.create_user(username="manager", password="pass")
+        self.manager.groups.add(Group.objects.get(name=MANAGER_GROUP))
+        self.cashier = User.objects.create_user(username="cashier", password="pass")
+        self.cashier.groups.add(Group.objects.get(name=CASHIER_GROUP))
+
+    def test_catalog_codes_are_all_real_permissions(self):
+        from django.contrib.auth.models import Permission
+
+        for code in permission_catalog.catalog_codes():
+            app_label, codename = code.split(".", 1)
+            self.assertTrue(
+                Permission.objects.filter(
+                    content_type__app_label=app_label, codename=codename
+                ).exists(),
+                f"catalog code {code} has no matching permission",
+            )
+
+    def test_manager_can_read_catalog_with_everything_grantable(self):
+        client = APIClient()
+        client.force_authenticate(user=self.manager)
+        response = client.get(reverse("pos-user-permission-catalog"))
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        groups = response.data["groups"]
+        self.assertTrue(groups)
+        all_items = [p for g in groups for p in g["permissions"]]
+        self.assertTrue(all(item["grantable"] for item in all_items))
+
+    def test_cashier_cannot_read_catalog(self):
+        client = APIClient()
+        client.force_authenticate(user=self.cashier)
+        response = client.get(reverse("pos-user-permission-catalog"))
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_delegated_admin_grantable_reflects_held_permissions(self):
+        from django.contrib.auth.models import Permission
+
+        delegate = get_user_model().objects.create_user(
+            username="delegate", password="pass"
+        )
+        delegate.user_permissions.add(
+            Permission.objects.get(
+                content_type__app_label="auth", codename="view_user"
+            )
+        )
+        client = APIClient()
+        client.force_authenticate(user=delegate)
+        response = client.get(reverse("pos-user-permission-catalog"))
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        grantable = {
+            p["code"]
+            for g in response.data["groups"]
+            for p in g["permissions"]
+            if p["grantable"]
+        }
+        self.assertIn("auth.view_user", grantable)
+        self.assertNotIn("inventory.apply_stockcount", grantable)
+
+
+class ExtraPermissionGrantTests(TestCase):
+    def setUp(self):
+        ensure_role_groups()
+        User = get_user_model()
+        self.manager = User.objects.create_user(username="manager", password="pass")
+        self.manager.groups.add(Group.objects.get(name=MANAGER_GROUP))
+        self.cashier = User.objects.create_user(username="cashier", password="pass")
+        self.cashier.groups.add(Group.objects.get(name=CASHIER_GROUP))
+
+    def _patch(self, actor, target, body):
+        client = APIClient()
+        client.force_authenticate(user=actor)
+        return client.patch(
+            reverse("pos-user-detail", args=[target.pk]), body, format="json"
+        )
+
+    def test_manager_grants_extra_permission_flows_through(self):
+        response = self._patch(
+            self.manager,
+            self.cashier,
+            {"extra_permissions": ["inventory.apply_stockcount"]},
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn("inventory.apply_stockcount", response.data["extra_permissions"])
+        self.assertIn(
+            "inventory.apply_stockcount", response.data["effective_permissions"]
+        )
+        self.cashier.refresh_from_db()
+        # Direct grant merges into effective permissions used by capabilities.
+        self.assertIn(
+            "inventory.apply_stockcount", self.cashier.get_all_permissions()
+        )
+
+    def test_extra_permission_must_be_in_catalog(self):
+        # sales.delete_order exists but is intentionally not grantable per-user.
+        response = self._patch(
+            self.manager, self.cashier, {"extra_permissions": ["sales.delete_order"]}
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_no_privilege_escalation_beyond_actor_permissions(self):
+        from django.contrib.auth.models import Permission
+
+        delegate = get_user_model().objects.create_user(
+            username="delegate", password="pass"
+        )
+        delegate.user_permissions.add(
+            Permission.objects.get(content_type__app_label="auth", codename="view_user"),
+            Permission.objects.get(
+                content_type__app_label="auth", codename="change_user"
+            ),
+        )
+        # Delegate may manage users but does not hold apply_stockcount, so they
+        # cannot grant it to anyone (including themselves).
+        response = self._patch(
+            delegate, self.cashier, {"extra_permissions": ["inventory.apply_stockcount"]}
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertNotIn(
+            "inventory.apply_stockcount", self.cashier.get_all_permissions()
+        )
+
+    def test_role_change_reconciles_redundant_extras(self):
+        # Grant two extras to a cashier: one the accountant role covers, one it
+        # does not.
+        self._patch(
+            self.manager,
+            self.cashier,
+            {
+                "extra_permissions": [
+                    "payments.view_payment",  # accountant role includes this
+                    "inventory.apply_stockcount",  # accountant role does not
+                ]
+            },
+        )
+        response = self._patch(
+            self.manager, self.cashier, {"role": ACCOUNTANT_GROUP}
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        extras = response.data["extra_permissions"]
+        self.assertNotIn("payments.view_payment", extras)  # now redundant
+        self.assertIn("inventory.apply_stockcount", extras)  # still extra
+
+    def test_promotion_to_manager_clears_extras(self):
+        self._patch(
+            self.manager,
+            self.cashier,
+            {"extra_permissions": ["inventory.apply_stockcount"]},
+        )
+        response = self._patch(self.manager, self.cashier, {"role": MANAGER_GROUP})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["extra_permissions"], [])
+
+    def test_create_user_with_extras_creates_employee_and_grants(self):
+        from apps.employees.models import Employee
+
+        client = APIClient()
+        client.force_authenticate(user=self.manager)
+        response = client.post(
+            reverse("pos-user-list"),
+            {
+                "username": "power-cashier",
+                "first_name": "نور",
+                "password": "new-secret-pass",
+                "role": CASHIER_GROUP,
+                "extra_permissions": ["inventory.apply_stockcount"],
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        user = get_user_model().objects.get(username="power-cashier")
+        self.assertTrue(Employee.objects.filter(user=user).exists())
+        self.assertIn("inventory.apply_stockcount", user.get_all_permissions())
+
+    def test_user_list_serialization_query_count_is_constant(self):
+        # Serialize the prefetched queryset directly so the count is not polluted
+        # by the per-request ensure_role_groups() bootstrap in the viewset; this
+        # isolates the serializer's N+1 behaviour, which the prefetch must flatten.
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+
+        from apps.core.serializers import PosUserSerializer
+
+        User = get_user_model()
+
+        class _ListView:
+            action = "list"
+
+        def serialize_query_count():
+            queryset = User.objects.order_by("username").prefetch_related(
+                "groups", "user_permissions__content_type"
+            )
+            with CaptureQueriesContext(connection) as ctx:
+                # Touch .data to force full evaluation + prefetch.
+                _ = PosUserSerializer(
+                    queryset, many=True, context={"view": _ListView()}
+                ).data
+            return len(ctx.captured_queries)
+
+        from django.contrib.auth.models import Permission
+
+        apply_stockcount = Permission.objects.get(
+            content_type__app_label="inventory", codename="apply_stockcount"
+        )
+
+        def add_users(prefix, count):
+            for index in range(count):
+                user = User.objects.create_user(
+                    username=f"{prefix}{index}", password="pass"
+                )
+                user.groups.add(Group.objects.get(name=CASHIER_GROUP))
+                # Give everyone an extra grant so the content_type prefetch fires
+                # in both measurements (it is skipped entirely when no user has
+                # any direct permission).
+                user.user_permissions.add(apply_stockcount)
+
+        add_users("batch-a-", 3)
+        first = serialize_query_count()
+        add_users("batch-b-", 3)
+        second = serialize_query_count()
+
+        # No N+1: doubling the user set must not change the query count.
+        self.assertEqual(first, second)
+        self.assertLessEqual(second, 4)
+
+
+class SupervisorVisibilityTests(TestCase):
+    def setUp(self):
+        ensure_role_groups()
+        User = get_user_model()
+        self.supervisor = User.objects.create_user(username="sup", password="pass")
+        self.supervisor.groups.add(Group.objects.get(name=SUPERVISOR_GROUP))
+        self.cashier = User.objects.create_user(username="till", password="pass")
+        self.cashier.groups.add(Group.objects.get(name=CASHIER_GROUP))
+        self.other_cashier = User.objects.create_user(username="till2", password="pass")
+        self.other_cashier.groups.add(Group.objects.get(name=CASHIER_GROUP))
+        # An order owned by `cashier`'s register session.
+        session = RegisterSession.objects.create(
+            owner=self.cashier,
+            owner_key=f"user:{self.cashier.pk}",
+            status=RegisterSession.Status.OPEN,
+            opening_cash=Decimal("0.00"),
+        )
+        self.order = Order.objects.create(
+            register_session=session,
+            status=Order.Status.PAID,
+            subtotal=Decimal("10.00"),
+            total=Decimal("10.00"),
+        )
+
+    def _order_ids(self, user):
+        client = APIClient()
+        client.force_authenticate(user=user)
+        response = client.get(reverse("order-list"))
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        results = response.data.get("results", response.data)
+        return {row["id"] for row in results}
+
+    def test_supervisor_sees_all_sessions_other_cashier_does_not(self):
+        self.assertIn(self.order.id, self._order_ids(self.supervisor))
+        self.assertNotIn(self.order.id, self._order_ids(self.other_cashier))

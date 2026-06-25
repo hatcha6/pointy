@@ -90,7 +90,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
                         child: Text(l10n.jobCancelAction),
                       ),
                     if (job.status != OperationsJobStatus.open &&
-                        widget.currentUser.role.isManager)
+                        widget.capabilities.canReopenJobs)
                       PopupMenuItem(
                         value: 'reopen',
                         child: Text(l10n.jobReopenAction),

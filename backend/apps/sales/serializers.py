@@ -11,7 +11,7 @@ from apps.catalog.units import (
     validate_quantity,
 )
 from apps.core.models import RelayInstallation, ShopSettings
-from apps.core.roles import user_is_manager
+from apps.core.roles import user_has_full_visibility, user_is_manager
 from apps.customers.models import Customer
 from apps.discounts.services import rounding_metadata_payload
 from .models import (
@@ -139,7 +139,7 @@ class RegisterSessionSerializer(serializers.ModelSerializer):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         request = self.context.get("request")
-        if request is None or not user_is_manager(request.user):
+        if request is None or not user_has_full_visibility(request.user):
             for field in self.reconciliation_fields:
                 self.fields.pop(field, None)
 

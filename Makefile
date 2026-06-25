@@ -245,6 +245,9 @@ frontend-operations-preview: frontend-install ## Run the operations UI preview h
 frontend-categories-preview: frontend-install ## Run the categories UI preview harness as a local web server.
 	cd "$(FRONTEND_DIR)" && $(FLUTTER) run -d web-server --web-hostname $(WEB_HOST) --web-port $(WEB_PORT) -t lib/dev/categories_preview.dart
 
+frontend-users-preview: frontend-install ## Run the users + roles/permissions UI preview harness as a local web server.
+	cd "$(FRONTEND_DIR)" && $(FLUTTER) run -d web-server --web-hostname $(WEB_HOST) --web-port $(WEB_PORT) -t lib/dev/users_preview.dart
+
 frontend-discounts-preview: frontend-install ## Run the discounts UI preview harness as a local web server.
 	cd "$(FRONTEND_DIR)" && $(FLUTTER) run -d web-server --web-hostname $(WEB_HOST) --web-port $(WEB_PORT) -t lib/dev/discounts_preview.dart
 
@@ -277,6 +280,9 @@ frontend-migration-preview: frontend-install ## Run the data-migration settings 
 
 frontend-register-session-preview: frontend-install ## Run the register-session summary + Z-Report UI preview harness as a local web server.
 	cd "$(FRONTEND_DIR)" && $(FLUTTER) run -d web-server --web-hostname $(WEB_HOST) --web-port $(WEB_PORT) -t lib/dev/register_session_preview.dart
+
+frontend-subscription-preview: frontend-install ## Run the subscription / relay status settings UI preview harness as a local web server.
+	cd "$(FRONTEND_DIR)" && $(FLUTTER) run -d web-server --web-hostname $(WEB_HOST) --web-port $(WEB_PORT) -t lib/dev/subscription_preview.dart
 
 frontend-test: frontend-install ## Run Flutter tests.
 	cd "$(FRONTEND_DIR)" && $(FLUTTER) test

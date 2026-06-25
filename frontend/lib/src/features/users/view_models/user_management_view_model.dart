@@ -25,6 +25,9 @@ class UserManagementViewModel extends ChangeNotifier {
   bool _hasSaveError = false;
   bool _hasMoreUsers = true;
   int _nextPage = 1;
+  int? _totalCount;
+  String _searchQuery = '';
+  UserRole? _roleFilter;
 
   List<PosUser> get users => List.unmodifiable(_users);
   bool get isLoading => _isLoading;
@@ -33,6 +36,39 @@ class UserManagementViewModel extends ChangeNotifier {
   bool get hasError => _hasError;
   bool get hasSaveError => _hasSaveError;
   bool get hasMoreUsers => _hasMoreUsers;
+  String get searchQuery => _searchQuery;
+  UserRole? get roleFilter => _roleFilter;
+
+  /// Total users matching the active query across all pages, or — until the
+  /// server count is known — the number currently loaded.
+  int get totalCount => _totalCount ?? _users.length;
+
+  /// Active-user count among the loaded set (exact once everything is loaded).
+  int get activeCount => _users.where((user) => user.isActive).length;
+
+  /// Number of loaded users carrying directly-granted (custom) permissions.
+  int get customPermissionUserCount =>
+      _users.where((user) => user.hasExtraPermissions).length;
+
+  /// Whether any filter/search is narrowing the list.
+  bool get isFiltered => _searchQuery.isNotEmpty || _roleFilter != null;
+
+  Future<void> setSearchQuery(String value) async {
+    final trimmed = value.trim();
+    if (trimmed == _searchQuery) {
+      return;
+    }
+    _searchQuery = trimmed;
+    await loadUsers();
+  }
+
+  Future<void> setRoleFilter(UserRole? role) async {
+    if (role == _roleFilter) {
+      return;
+    }
+    _roleFilter = role;
+    await loadUsers();
+  }
 
   Future<void> loadUsers() async {
     _isLoading = true;
@@ -41,11 +77,16 @@ class UserManagementViewModel extends ChangeNotifier {
     _nextPage = 1;
     notifyListeners();
 
-    final result = await _userRepository.loadUsers(page: _nextPage);
+    final result = await _userRepository.loadUsers(
+      page: _nextPage,
+      search: _searchQuery,
+      role: _roleFilter?.toJson() ?? '',
+    );
     switch (result) {
       case Ok<PosUserPage>(value: final page):
         _users = page.users;
         _hasMoreUsers = page.hasMore;
+        _totalCount = page.totalCount;
         _nextPage = 2;
       case Error<PosUserPage>(exception: _):
         _hasError = true;
@@ -64,11 +105,16 @@ class UserManagementViewModel extends ChangeNotifier {
     _isLoadingMore = true;
     notifyListeners();
 
-    final result = await _userRepository.loadUsers(page: _nextPage);
+    final result = await _userRepository.loadUsers(
+      page: _nextPage,
+      search: _searchQuery,
+      role: _roleFilter?.toJson() ?? '',
+    );
     switch (result) {
       case Ok<PosUserPage>(value: final page):
         _users = [..._users, ...page.users];
         _hasMoreUsers = page.hasMore;
+        _totalCount = page.totalCount ?? _totalCount;
         _nextPage += 1;
       case Error<PosUserPage>(exception: _):
         _hasError = true;
@@ -89,6 +135,7 @@ class UserManagementViewModel extends ChangeNotifier {
     switch (result) {
       case Ok<PosUser>(value: final user):
         _users = [..._users, user];
+        _totalCount = (_totalCount ?? _users.length - 1) + 1;
         _trackUserCreated(user, draft);
         notifyListeners();
         return true;
@@ -99,20 +146,32 @@ class UserManagementViewModel extends ChangeNotifier {
     }
   }
 
-  Future<bool> updateUserRole(PosUser user, UserRole role) {
-    return _updateUser(
-      user,
-      UserUpdateDraft(role: role),
-      eventName: 'users.management.user.role_changed',
-    );
-  }
-
   Future<bool> updateUserActive(PosUser user, bool isActive) {
     return _updateUser(
       user,
       UserUpdateDraft(isActive: isActive),
       eventName: 'users.management.user.active_changed',
     );
+  }
+
+  /// Apply an arbitrary edit (profile, role, and/or extra permissions) from the
+  /// edit sheet or permissions editor, then patch the local row in place.
+  Future<bool> saveUserEdits(PosUser user, UserUpdateDraft draft) {
+    return _updateUser(
+      user,
+      draft,
+      eventName: 'users.management.user.edited',
+    );
+  }
+
+  /// Replace a row already updated elsewhere (e.g. the pushed permissions
+  /// editor returned a fresh user) without another network round-trip.
+  void replaceUser(PosUser updatedUser) {
+    _users = [
+      for (final existing in _users)
+        if (existing.id == updatedUser.id) updatedUser else existing,
+    ];
+    notifyListeners();
   }
 
   Future<bool> _updateUser(
@@ -159,6 +218,7 @@ class UserManagementViewModel extends ChangeNotifier {
         'is_active': user.isActive,
         'email_present': draft.email.trim().isNotEmpty,
         'display_name_present': draft.displayName.trim().isNotEmpty,
+        'extra_permission_count': user.extraPermissionCount,
         'source': 'user_management',
       },
     );
@@ -181,6 +241,7 @@ class UserManagementViewModel extends ChangeNotifier {
         'new_role': updatedUser.role.toJson(),
         'previous_is_active': previousUser.isActive,
         'new_is_active': updatedUser.isActive,
+        'extra_permission_count': updatedUser.extraPermissionCount,
         'source': 'user_management',
       },
     );

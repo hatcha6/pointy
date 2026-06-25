@@ -11,7 +11,23 @@ MANAGER_GROUP = "manager"
 CASHIER_GROUP = "cashier"
 ACCOUNTANT_GROUP = "accountant"
 TECHNICIAN_GROUP = "technician"
-ROLE_GROUPS = (MANAGER_GROUP, CASHIER_GROUP, ACCOUNTANT_GROUP, TECHNICIAN_GROUP)
+SUPERVISOR_GROUP = "supervisor"
+INVENTORY_CLERK_GROUP = "inventory_clerk"
+PURCHASING_AGENT_GROUP = "purchasing_agent"
+AUDITOR_GROUP = "auditor"
+# Order matters: it is the priority used to resolve a user's single display role
+# (manager first). Each user is assigned exactly one role group via
+# PosUserSerializer._assign_role, so the priority only ever matters defensively.
+ROLE_GROUPS = (
+    MANAGER_GROUP,
+    SUPERVISOR_GROUP,
+    ACCOUNTANT_GROUP,
+    AUDITOR_GROUP,
+    PURCHASING_AGENT_GROUP,
+    INVENTORY_CLERK_GROUP,
+    TECHNICIAN_GROUP,
+    CASHIER_GROUP,
+)
 INITIAL_SETUP_IGNORED_MODELS = {
     ("admin", "logentry"),
     ("analytics", "analyticsevent"),
@@ -174,6 +190,165 @@ ACCOUNTANT_PERMISSION_CODES = (
     "attendance.view_attendancepunch",
     "attendance.view_attendanceday",
 )
+# مشرف / assistant manager: shop-wide oversight plus the ability to run a till.
+# reports.view_reportrun is what flips full (shop-wide) visibility on — see
+# user_has_full_visibility — and unlocks the revenue dashboards. Deliberately no
+# auth.*_user (no user management), no change_shopsettings, no payroll/loans, and
+# no fraud management; those stay manager-only.
+SUPERVISOR_PERMISSION_CODES = (
+    "reports.view_reportrun",
+    "analytics.view_analyticsevent",
+    "core.view_shopsettings",
+    # Sales floor: can operate a register and oversee every session.
+    "sales.view_order",
+    "sales.add_order",
+    "sales.view_registersession",
+    "sales.add_registersession",
+    "sales.change_registersession",
+    "sales.view_registercashmovement",
+    "sales.add_registercashmovement",
+    "payments.view_payment",
+    "payments.add_payment",
+    "printing.add_printjob",
+    "printing.change_printjob",
+    "printing.view_printjob",
+    "printing.view_printjobevent",
+    "printing.add_printauditevent",
+    "printing.change_printauditevent",
+    "printing.view_printauditevent",
+    # Inventory oversight, including applying counts.
+    "catalog.view_product",
+    "catalog.view_productcategory",
+    "catalog.view_unitofmeasure",
+    "inventory.view_stockitem",
+    "inventory.view_stockmovement",
+    "inventory.add_stockmovement",
+    "inventory.view_stockcount",
+    "inventory.add_stockcount",
+    "inventory.change_stockcount",
+    "inventory.apply_stockcount",
+    # Receiving stock against purchase orders.
+    "purchasing.view_purchaseorder",
+    "purchasing.receive_purchaseorder",
+    "purchasing.view_supplier",
+    # Customers and floor-level discounting.
+    "customers.view_customer",
+    "customers.add_customer",
+    "customers.change_customer",
+    "customers.add_asset",
+    "customers.view_asset",
+    "discounts.view_discountrule",
+    "discounts.add_discountrule",
+    "discounts.change_discountrule",
+    # Operations oversight: assign, reopen, approve quotes.
+    "operations.view_job",
+    "operations.add_job",
+    "operations.change_job",
+    "operations.assign_job",
+    "operations.reopen_job",
+    "expenses.view_expense",
+    "analytics.add_analyticsevent",
+)
+# أمين المخزن / storekeeper: catalog visibility, the full stock-count loop
+# (including apply), stock movements, and receiving against purchase orders.
+INVENTORY_CLERK_PERMISSION_CODES = (
+    "core.view_shopsettings",
+    "catalog.view_product",
+    "catalog.view_productcategory",
+    "catalog.view_unitofmeasure",
+    "inventory.view_stockitem",
+    "inventory.view_stockmovement",
+    "inventory.add_stockmovement",
+    "inventory.view_stockcount",
+    "inventory.add_stockcount",
+    "inventory.change_stockcount",
+    "inventory.apply_stockcount",
+    "purchasing.view_purchaseorder",
+    "purchasing.receive_purchaseorder",
+    "purchasing.view_supplier",
+    "analytics.add_analyticsevent",
+)
+# مسؤول المشتريات / buyer: the whole purchase-order lifecycle plus suppliers.
+PURCHASING_AGENT_PERMISSION_CODES = (
+    "core.view_shopsettings",
+    "catalog.view_product",
+    "catalog.view_productcategory",
+    "catalog.view_unitofmeasure",
+    "purchasing.view_supplier",
+    "purchasing.add_supplier",
+    "purchasing.change_supplier",
+    "purchasing.view_purchaseorder",
+    "purchasing.add_purchaseorder",
+    "purchasing.edit_draft_purchaseorder",
+    "purchasing.receive_purchaseorder",
+    "purchasing.adjust_received_purchaseorder",
+    "purchasing.cancel_purchaseorder",
+    "purchasing.view_supplierpayment",
+    "inventory.view_stockitem",
+    "inventory.view_stockmovement",
+    "analytics.add_analyticsevent",
+)
+# مدقق / auditor: read-only across the operational and financial picture. No
+# add/change/delete anywhere. HR/payroll is deliberately excluded — grant it
+# per-user when an owner wants an HR auditor (that is what extra permissions are
+# for). reports.view_reportrun gives shop-wide read visibility + dashboards.
+AUDITOR_PERMISSION_CODES = (
+    "reports.view_reportrun",
+    "analytics.view_analyticsevent",
+    "core.view_shopsettings",
+    "sales.view_order",
+    "sales.view_registersession",
+    "sales.view_registercashmovement",
+    "payments.view_payment",
+    "inventory.view_stockitem",
+    "inventory.view_stockmovement",
+    "inventory.view_stockcount",
+    "purchasing.view_purchaseorder",
+    "purchasing.view_supplier",
+    "purchasing.view_supplierpayment",
+    "customers.view_customer",
+    "customers.view_asset",
+    "discounts.view_discountrule",
+    "expenses.view_expense",
+    "catalog.view_product",
+    "catalog.view_productcategory",
+    "catalog.view_unitofmeasure",
+    "operations.view_job",
+)
+# Single source of truth mapping a role group to the codenames it bundles. Used
+# to surface "permissions inherited from the role" without hitting the database
+# per row. Manager is intentionally absent: it holds every permission and is
+# represented by the "*" sentinel in role_permission_codes().
+ROLE_PERMISSION_CODES = {
+    CASHIER_GROUP: CASHIER_PERMISSION_CODES,
+    ACCOUNTANT_GROUP: ACCOUNTANT_PERMISSION_CODES,
+    TECHNICIAN_GROUP: TECHNICIAN_PERMISSION_CODES,
+    SUPERVISOR_GROUP: SUPERVISOR_PERMISSION_CODES,
+    INVENTORY_CLERK_GROUP: INVENTORY_CLERK_PERMISSION_CODES,
+    PURCHASING_AGENT_GROUP: PURCHASING_AGENT_PERMISSION_CODES,
+    AUDITOR_GROUP: AUDITOR_PERMISSION_CODES,
+}
+
+
+def role_permission_codes(role):
+    """Return the frozenset of ``app_label.codename`` strings a role grants.
+
+    Returns ``None`` for the manager role, which holds every permission.
+    """
+    if role == MANAGER_GROUP:
+        return None
+    return frozenset(ROLE_PERMISSION_CODES.get(role, ()))
+
+
+def assigned_role_from_group_names(group_names, *, is_superuser=False):
+    """Resolve a user's single display role from the names of groups they belong
+    to, honouring ROLE_GROUPS priority (manager/superuser first)."""
+    if is_superuser or MANAGER_GROUP in group_names:
+        return MANAGER_GROUP
+    for role in ROLE_GROUPS:
+        if role in group_names:
+            return role
+    return None
 
 
 def _permissions_for_codes(permission_codes):
@@ -199,14 +374,10 @@ def ensure_role_groups():
         content_type__app_label__in=MANAGER_PERMISSION_DOMAINS,
     )
     manager_user_permissions = _permissions_for_codes(USER_PERMISSION_CODES)
-    cashier_permissions = _permissions_for_codes(CASHIER_PERMISSION_CODES)
-    accountant_permissions = _permissions_for_codes(ACCOUNTANT_PERMISSION_CODES)
-    technician_permissions = _permissions_for_codes(TECHNICIAN_PERMISSION_CODES)
 
     groups[MANAGER_GROUP].permissions.add(*manager_permissions, *manager_user_permissions)
-    groups[CASHIER_GROUP].permissions.add(*cashier_permissions)
-    groups[ACCOUNTANT_GROUP].permissions.add(*accountant_permissions)
-    groups[TECHNICIAN_GROUP].permissions.add(*technician_permissions)
+    for role, codes in ROLE_PERMISSION_CODES.items():
+        groups[role].permissions.set(_permissions_for_codes(codes))
     return groups
 
 
@@ -220,6 +391,21 @@ def user_has_role(user, role):
 
 def user_is_manager(user):
     return user_has_role(user, MANAGER_GROUP)
+
+
+def user_has_full_visibility(user):
+    """Whether a user may see shop-wide records rather than only their own
+    register session's. True for managers and any reporting role (anyone holding
+    ``reports.view_reportrun`` — managers, accountants, supervisors, auditors).
+
+    This is the read/visibility counterpart to manager-only *authority* (refunds,
+    voids, post-window adjustments), which stays gated on ``user_is_manager``.
+    """
+    if not user or not user.is_authenticated:
+        return False
+    if user.is_superuser or user_is_manager(user):
+        return True
+    return user.has_perm("reports.view_reportrun")
 
 
 def initial_admin_setup_required():

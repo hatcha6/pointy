@@ -1807,6 +1807,17 @@ void main() {
     await tester.pumpAndSettle(const Duration(seconds: 1));
 
     expect(find.text('بيانات العميل'), findsOneWidget);
+
+    // The sales summary sits below the profile and payment-cards sections, so in
+    // the test viewport it starts below the fold; scroll it into view (building
+    // the lazy ListView item) before asserting its contents.
+    await tester.scrollUntilVisible(
+      find.text('ملخص تعاملات العميل'),
+      400,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+
     expect(find.text('ملخص تعاملات العميل'), findsOneWidget);
     expect(find.text('إجمالي الفواتير'), findsOneWidget);
     expect(find.text('صافي المبيعات'), findsOneWidget);
@@ -2956,6 +2967,7 @@ void main() {
             capabilities: AuthorizationCapabilities.forUser(cashier),
             navigation: FakeAppNavigation(currentUser: cashier),
             onOpenUserDetails: (_) {},
+            onOpenUserPermissions: (_) async => false,
           ),
         ),
       );

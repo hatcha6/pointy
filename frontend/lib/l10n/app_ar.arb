@@ -1352,6 +1352,97 @@
   "managerRoleLabel": "مدير",
   "cashierRoleLabel": "كاشير",
   "usersManagementTitle": "إدارة المستخدمين",
+  "supervisorRoleLabel": "مشرف",
+  "auditorRoleLabel": "مدقق",
+  "purchasingAgentRoleLabel": "مسؤول المشتريات",
+  "inventoryClerkRoleLabel": "أمين المخزن",
+  "managerRoleDescription": "صلاحية كاملة على كل أقسام النظام والإعدادات.",
+  "supervisorRoleDescription": "إشراف على المبيعات والمخزون والمشتريات والتقارير على مستوى المتجر، دون إدارة المستخدمين أو الإعدادات أو اعتماد الرواتب.",
+  "accountantRoleDescription": "المالية والرواتب والسلف والمصروفات والتقارير.",
+  "auditorRoleDescription": "اطّلاع فقط على المبيعات والتقارير والمخزون والمشتريات دون أي تعديل.",
+  "purchasingAgentRoleDescription": "إدارة دورة أوامر الشراء كاملة والموردين.",
+  "inventoryClerkRoleDescription": "إدارة المخزون والجرد واستلام المشتريات.",
+  "technicianRoleDescription": "تنفيذ أوامر الصيانة والتصنيع ومتابعة العملاء.",
+  "cashierRoleDescription": "البيع عبر نقطة البيع وإدارة وردية الصندوق.",
+  "usersSearchHint": "ابحث عن مستخدم",
+  "roleFilterAllLabel": "كل الأدوار",
+  "usersTotalMetric": "إجمالي المستخدمين",
+  "usersActiveMetric": "النشطون",
+  "usersCustomPermissionsMetric": "صلاحيات مخصصة",
+  "usersCustomPermissionsBadge": "{count} مخصصة",
+  "@usersCustomPermissionsBadge": {
+    "description": "Badge showing how many custom permissions a user has.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "usersNoMatches": "لا يوجد مستخدمون مطابقون",
+  "userActionsTooltip": "إجراءات",
+  "userEditAction": "تعديل",
+  "userManagePermissionsAction": "الصلاحيات",
+  "userActivateAction": "تفعيل",
+  "userDeactivateAction": "تعطيل",
+  "userEditTitle": "تعديل المستخدم",
+  "passwordResetLabel": "كلمة مرور جديدة (اتركها فارغة لعدم التغيير)",
+  "userEditSelfRoleLocked": "لا يمكنك تغيير دورك أو تعطيل حسابك بنفسك.",
+  "userManagePermissionsLinkTitle": "الصلاحيات الإضافية",
+  "userManagePermissionsLinkSubtitle": "منح صلاحيات فوق صلاحيات الدور",
+  "updateUserError": "تعذّر تحديث المستخدم",
+  "userPermissionsTitle": "صلاحيات {user}",
+  "@userPermissionsTitle": {
+    "description": "Permission editor screen title.",
+    "placeholders": {
+      "user": {
+        "type": "String"
+      }
+    }
+  },
+  "permissionsLoadError": "تعذّر تحميل الصلاحيات",
+  "permissionsManagerHasAll": "هذا المستخدم مدير ويملك جميع الصلاحيات.",
+  "permissionsSummaryInheritedExtra": "{inherited} من الدور • {extra} مخصصة",
+  "@permissionsSummaryInheritedExtra": {
+    "description": "Summary of inherited vs extra permission counts.",
+    "placeholders": {
+      "inherited": {
+        "type": "int"
+      },
+      "extra": {
+        "type": "int"
+      }
+    }
+  },
+  "permissionsSearchHint": "ابحث في الصلاحيات",
+  "permissionsEmpty": "لا توجد صلاحيات مطابقة",
+  "permissionsSelectGroup": "تحديد الكل",
+  "permissionsClearGroup": "إلغاء التحديد",
+  "permissionsInheritedFromRole": "من الدور",
+  "permissionsNeedsHigherPermission": "تحتاج صلاحية أعلى",
+  "permissionsSaveError": "تعذّر حفظ الصلاحيات",
+  "permissionsSaveButton": "حفظ الصلاحيات",
+  "permissionsSavedMessage": "تم تحديث الصلاحيات",
+  "userPermissionsSectionTitle": "الصلاحيات",
+  "userEditPermissionsAction": "تعديل",
+  "userPermissionsInheritedCount": "{count} من الدور",
+  "@userPermissionsInheritedCount": {
+    "description": "Count of role-inherited permissions.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "userPermissionsExtraCount": "{count} مخصصة",
+  "@userPermissionsExtraCount": {
+    "description": "Count of extra (directly granted) permissions.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "userPermissionsNoExtras": "لا توجد صلاحيات إضافية مخصصة لهذا المستخدم.",
   "refreshUsersTooltip": "تحديث المستخدمين",
   "addUserButton": "إضافة مستخدم",
   "userCreateTitle": "مستخدم جديد",
@@ -6832,5 +6923,184 @@
   },
   "convertQuotationConfirm": "تحويل",
   "convertQuotationSuccess": "تم تحويل عرض السعر إلى بيع",
-  "convertQuotationError": "تعذّر تحويل عرض السعر"
+  "convertQuotationError": "تعذّر تحويل عرض السعر",
+  "subscriptionSectionTitle": "الاشتراك والوصول عن بُعد",
+  "@subscriptionSectionTitle": {
+    "description": "Title for the subscription/relay status section and its page."
+  },
+  "subscriptionSectionSubtitle": "معرّف التثبيت وحالة اشتراكاتك",
+  "@subscriptionSectionSubtitle": {
+    "description": "Subtitle shown on the subscription tile in the settings hub."
+  },
+  "subscriptionStatusLoadError": "تعذّر تحميل حالة الاشتراك.",
+  "@subscriptionStatusLoadError": {
+    "description": "Error state shown when the relay installation status fails to load."
+  },
+  "subscriptionRefreshTooltip": "تحديث من الخادم",
+  "@subscriptionRefreshTooltip": {
+    "description": "Tooltip for the button that re-syncs subscription state from the relay server."
+  },
+  "subscriptionSyncFailedMessage": "تعذّر الاتصال بالخادم لتحديث الحالة. يتم عرض آخر حالة محفوظة.",
+  "@subscriptionSyncFailedMessage": {
+    "description": "Snackbar shown when a relay sync fails; the cached snapshot is kept."
+  },
+  "subscriptionSyncedMessage": "تم تحديث حالة الاشتراك.",
+  "@subscriptionSyncedMessage": {
+    "description": "Snackbar shown after a successful relay sync."
+  },
+  "subscriptionHeroFallbackTitle": "اشتراك بوينتي",
+  "@subscriptionHeroFallbackTitle": {
+    "description": "Hero title used when the shop name is unknown."
+  },
+  "subscriptionStatusActive": "نشط",
+  "@subscriptionStatusActive": {
+    "description": "Label for an active, unexpired subscription."
+  },
+  "subscriptionStatusExpired": "منتهٍ",
+  "@subscriptionStatusExpired": {
+    "description": "Label for an expired subscription."
+  },
+  "subscriptionStatusInactive": "غير مُفعّل",
+  "@subscriptionStatusInactive": {
+    "description": "Label for a subscription that has never been activated."
+  },
+  "subscriptionStateOn": "مُفعّل",
+  "@subscriptionStateOn": {
+    "description": "Short on/enabled state used in status pills and rows."
+  },
+  "subscriptionStateOff": "متوقّف",
+  "@subscriptionStateOff": {
+    "description": "Short off/disabled state used in status pills and rows."
+  },
+  "subscriptionUntilDate": "حتى {date}",
+  "@subscriptionUntilDate": {
+    "description": "Hero subtitle showing the subscription end date.",
+    "placeholders": {
+      "date": {"type": "String"}
+    }
+  },
+  "subscriptionRemoteAccessPill": "الوصول عن بُعد · {state}",
+  "@subscriptionRemoteAccessPill": {
+    "description": "Hero pill summarising remote-access state.",
+    "placeholders": {
+      "state": {"type": "String"}
+    }
+  },
+  "subscriptionAiPill": "الذكاء الاصطناعي · {state}",
+  "@subscriptionAiPill": {
+    "description": "Hero pill summarising AI-assistant state.",
+    "placeholders": {
+      "state": {"type": "String"}
+    }
+  },
+  "subscriptionInstallationIdTitle": "معرّف التثبيت",
+  "@subscriptionInstallationIdTitle": {
+    "description": "Section title for the relay installation identifier."
+  },
+  "subscriptionInstallationIdHelper": "أرسل هذا المعرّف للدعم لتفعيل اشتراكك أو تجديده.",
+  "@subscriptionInstallationIdHelper": {
+    "description": "Explains what the installation ID is for."
+  },
+  "subscriptionInstallationIdCopy": "نسخ",
+  "@subscriptionInstallationIdCopy": {
+    "description": "Label for the copy-installation-ID button."
+  },
+  "subscriptionInstallationIdCopied": "تم نسخ معرّف التثبيت.",
+  "@subscriptionInstallationIdCopied": {
+    "description": "Snackbar confirming the installation ID was copied."
+  },
+  "subscriptionNotConfiguredTitle": "لم يتم الربط بالخادم بعد",
+  "@subscriptionNotConfiguredTitle": {
+    "description": "Callout title when the shop has no relay installation yet."
+  },
+  "subscriptionNotConfiguredMessage": "تواصل مع الدعم لتفعيل الوصول عن بُعد ومساعد الذكاء الاصطناعي.",
+  "@subscriptionNotConfiguredMessage": {
+    "description": "Callout body when the shop has no relay installation yet."
+  },
+  "subscriptionRemoteAccessTitle": "الوصول عن بُعد",
+  "@subscriptionRemoteAccessTitle": {
+    "description": "Section title for remote-access subscription state."
+  },
+  "subscriptionRemoteAccessActiveTitle": "الوصول عن بُعد مُفعّل",
+  "@subscriptionRemoteAccessActiveTitle": {
+    "description": "Callout title when remote access is available."
+  },
+  "subscriptionRemoteAccessActiveMessage": "يمكنك استخدام التطبيق خارج المتجر عبر خادم بوينتي.",
+  "@subscriptionRemoteAccessActiveMessage": {
+    "description": "Callout body when remote access is available."
+  },
+  "subscriptionRemoteAccessInactiveTitle": "الوصول عن بُعد غير مُفعّل",
+  "@subscriptionRemoteAccessInactiveTitle": {
+    "description": "Callout title when remote access is unavailable."
+  },
+  "subscriptionRemoteAccessInactiveMessage": "تتطلب هذه الميزة اشتراكًا فعّالًا. تواصل مع الدعم لتفعيلها.",
+  "@subscriptionRemoteAccessInactiveMessage": {
+    "description": "Callout body when remote access is unavailable."
+  },
+  "subscriptionFieldStatus": "الحالة",
+  "@subscriptionFieldStatus": {
+    "description": "Summary row label for the feature on/off state."
+  },
+  "subscriptionFieldSubscription": "الاشتراك",
+  "@subscriptionFieldSubscription": {
+    "description": "Summary row label for the subscription state."
+  },
+  "subscriptionFieldExpiresOn": "ينتهي في",
+  "@subscriptionFieldExpiresOn": {
+    "description": "Summary row label for the subscription end date."
+  },
+  "subscriptionFieldRemaining": "المدة المتبقية",
+  "@subscriptionFieldRemaining": {
+    "description": "Summary row label for time left on the subscription."
+  },
+  "subscriptionFieldLastConnected": "آخر اتصال بالخادم",
+  "@subscriptionFieldLastConnected": {
+    "description": "Summary row label for the last connector check-in."
+  },
+  "subscriptionExpiryNever": "بدون تاريخ انتهاء",
+  "@subscriptionExpiryNever": {
+    "description": "Shown for an active subscription with no expiry date."
+  },
+  "subscriptionDaysLeft": "متبقّي {days} يوم",
+  "@subscriptionDaysLeft": {
+    "description": "Days remaining until the subscription lapses.",
+    "placeholders": {
+      "days": {"type": "int"}
+    }
+  },
+  "subscriptionNeverConnected": "لم يتصل بعد",
+  "@subscriptionNeverConnected": {
+    "description": "Shown when the remote-access connector has never checked in."
+  },
+  "subscriptionAiTitle": "مساعد الذكاء الاصطناعي",
+  "@subscriptionAiTitle": {
+    "description": "Section title for the AI-assistant subscription state."
+  },
+  "subscriptionAiActiveTitle": "مساعد الذكاء الاصطناعي مُفعّل",
+  "@subscriptionAiActiveTitle": {
+    "description": "Callout title when AI is available."
+  },
+  "subscriptionAiActiveMessage": "اشتراكك يشمل المساعد الذكي. هذا هو استهلاكك الحالي.",
+  "@subscriptionAiActiveMessage": {
+    "description": "Callout body when AI is available."
+  },
+  "subscriptionAiInactiveTitle": "مساعد الذكاء الاصطناعي غير مُفعّل",
+  "@subscriptionAiInactiveTitle": {
+    "description": "Callout title when AI is unavailable."
+  },
+  "subscriptionAiInactiveMessage": "أضِف المساعد الذكي إلى اشتراكك للاستفادة منه. تواصل مع الدعم.",
+  "@subscriptionAiInactiveMessage": {
+    "description": "Callout body when AI is unavailable."
+  },
+  "subscriptionAiUsageUnavailable": "تعذّر تحميل بيانات الاستهلاك حاليًا.",
+  "@subscriptionAiUsageUnavailable": {
+    "description": "Shown when AI usage data could not be fetched."
+  },
+  "subscriptionLastSynced": "آخر تحديث للحالة: {time}",
+  "@subscriptionLastSynced": {
+    "description": "Caption showing when the snapshot was last refreshed from the relay.",
+    "placeholders": {
+      "time": {"type": "String"}
+    }
+  }
 }

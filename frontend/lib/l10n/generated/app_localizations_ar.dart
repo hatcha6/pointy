@@ -2122,6 +2122,173 @@ class AppLocalizationsAr extends AppLocalizations {
   String get usersManagementTitle => 'إدارة المستخدمين';
 
   @override
+  String get supervisorRoleLabel => 'مشرف';
+
+  @override
+  String get auditorRoleLabel => 'مدقق';
+
+  @override
+  String get purchasingAgentRoleLabel => 'مسؤول المشتريات';
+
+  @override
+  String get inventoryClerkRoleLabel => 'أمين المخزن';
+
+  @override
+  String get managerRoleDescription =>
+      'صلاحية كاملة على كل أقسام النظام والإعدادات.';
+
+  @override
+  String get supervisorRoleDescription =>
+      'إشراف على المبيعات والمخزون والمشتريات والتقارير على مستوى المتجر، دون إدارة المستخدمين أو الإعدادات أو اعتماد الرواتب.';
+
+  @override
+  String get accountantRoleDescription =>
+      'المالية والرواتب والسلف والمصروفات والتقارير.';
+
+  @override
+  String get auditorRoleDescription =>
+      'اطّلاع فقط على المبيعات والتقارير والمخزون والمشتريات دون أي تعديل.';
+
+  @override
+  String get purchasingAgentRoleDescription =>
+      'إدارة دورة أوامر الشراء كاملة والموردين.';
+
+  @override
+  String get inventoryClerkRoleDescription =>
+      'إدارة المخزون والجرد واستلام المشتريات.';
+
+  @override
+  String get technicianRoleDescription =>
+      'تنفيذ أوامر الصيانة والتصنيع ومتابعة العملاء.';
+
+  @override
+  String get cashierRoleDescription =>
+      'البيع عبر نقطة البيع وإدارة وردية الصندوق.';
+
+  @override
+  String get usersSearchHint => 'ابحث عن مستخدم';
+
+  @override
+  String get roleFilterAllLabel => 'كل الأدوار';
+
+  @override
+  String get usersTotalMetric => 'إجمالي المستخدمين';
+
+  @override
+  String get usersActiveMetric => 'النشطون';
+
+  @override
+  String get usersCustomPermissionsMetric => 'صلاحيات مخصصة';
+
+  @override
+  String usersCustomPermissionsBadge(int count) {
+    return '$count مخصصة';
+  }
+
+  @override
+  String get usersNoMatches => 'لا يوجد مستخدمون مطابقون';
+
+  @override
+  String get userActionsTooltip => 'إجراءات';
+
+  @override
+  String get userEditAction => 'تعديل';
+
+  @override
+  String get userManagePermissionsAction => 'الصلاحيات';
+
+  @override
+  String get userActivateAction => 'تفعيل';
+
+  @override
+  String get userDeactivateAction => 'تعطيل';
+
+  @override
+  String get userEditTitle => 'تعديل المستخدم';
+
+  @override
+  String get passwordResetLabel =>
+      'كلمة مرور جديدة (اتركها فارغة لعدم التغيير)';
+
+  @override
+  String get userEditSelfRoleLocked =>
+      'لا يمكنك تغيير دورك أو تعطيل حسابك بنفسك.';
+
+  @override
+  String get userManagePermissionsLinkTitle => 'الصلاحيات الإضافية';
+
+  @override
+  String get userManagePermissionsLinkSubtitle =>
+      'منح صلاحيات فوق صلاحيات الدور';
+
+  @override
+  String get updateUserError => 'تعذّر تحديث المستخدم';
+
+  @override
+  String userPermissionsTitle(String user) {
+    return 'صلاحيات $user';
+  }
+
+  @override
+  String get permissionsLoadError => 'تعذّر تحميل الصلاحيات';
+
+  @override
+  String get permissionsManagerHasAll =>
+      'هذا المستخدم مدير ويملك جميع الصلاحيات.';
+
+  @override
+  String permissionsSummaryInheritedExtra(int inherited, int extra) {
+    return '$inherited من الدور • $extra مخصصة';
+  }
+
+  @override
+  String get permissionsSearchHint => 'ابحث في الصلاحيات';
+
+  @override
+  String get permissionsEmpty => 'لا توجد صلاحيات مطابقة';
+
+  @override
+  String get permissionsSelectGroup => 'تحديد الكل';
+
+  @override
+  String get permissionsClearGroup => 'إلغاء التحديد';
+
+  @override
+  String get permissionsInheritedFromRole => 'من الدور';
+
+  @override
+  String get permissionsNeedsHigherPermission => 'تحتاج صلاحية أعلى';
+
+  @override
+  String get permissionsSaveError => 'تعذّر حفظ الصلاحيات';
+
+  @override
+  String get permissionsSaveButton => 'حفظ الصلاحيات';
+
+  @override
+  String get permissionsSavedMessage => 'تم تحديث الصلاحيات';
+
+  @override
+  String get userPermissionsSectionTitle => 'الصلاحيات';
+
+  @override
+  String get userEditPermissionsAction => 'تعديل';
+
+  @override
+  String userPermissionsInheritedCount(int count) {
+    return '$count من الدور';
+  }
+
+  @override
+  String userPermissionsExtraCount(int count) {
+    return '$count مخصصة';
+  }
+
+  @override
+  String get userPermissionsNoExtras =>
+      'لا توجد صلاحيات إضافية مخصصة لهذا المستخدم.';
+
+  @override
   String get refreshUsersTooltip => 'تحديث المستخدمين';
 
   @override
@@ -11749,4 +11916,146 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get convertQuotationError => 'تعذّر تحويل عرض السعر';
+
+  @override
+  String get subscriptionSectionTitle => 'الاشتراك والوصول عن بُعد';
+
+  @override
+  String get subscriptionSectionSubtitle => 'معرّف التثبيت وحالة اشتراكاتك';
+
+  @override
+  String get subscriptionStatusLoadError => 'تعذّر تحميل حالة الاشتراك.';
+
+  @override
+  String get subscriptionRefreshTooltip => 'تحديث من الخادم';
+
+  @override
+  String get subscriptionSyncFailedMessage =>
+      'تعذّر الاتصال بالخادم لتحديث الحالة. يتم عرض آخر حالة محفوظة.';
+
+  @override
+  String get subscriptionSyncedMessage => 'تم تحديث حالة الاشتراك.';
+
+  @override
+  String get subscriptionHeroFallbackTitle => 'اشتراك بوينتي';
+
+  @override
+  String get subscriptionStatusActive => 'نشط';
+
+  @override
+  String get subscriptionStatusExpired => 'منتهٍ';
+
+  @override
+  String get subscriptionStatusInactive => 'غير مُفعّل';
+
+  @override
+  String get subscriptionStateOn => 'مُفعّل';
+
+  @override
+  String get subscriptionStateOff => 'متوقّف';
+
+  @override
+  String subscriptionUntilDate(String date) {
+    return 'حتى $date';
+  }
+
+  @override
+  String subscriptionRemoteAccessPill(String state) {
+    return 'الوصول عن بُعد · $state';
+  }
+
+  @override
+  String subscriptionAiPill(String state) {
+    return 'الذكاء الاصطناعي · $state';
+  }
+
+  @override
+  String get subscriptionInstallationIdTitle => 'معرّف التثبيت';
+
+  @override
+  String get subscriptionInstallationIdHelper =>
+      'أرسل هذا المعرّف للدعم لتفعيل اشتراكك أو تجديده.';
+
+  @override
+  String get subscriptionInstallationIdCopy => 'نسخ';
+
+  @override
+  String get subscriptionInstallationIdCopied => 'تم نسخ معرّف التثبيت.';
+
+  @override
+  String get subscriptionNotConfiguredTitle => 'لم يتم الربط بالخادم بعد';
+
+  @override
+  String get subscriptionNotConfiguredMessage =>
+      'تواصل مع الدعم لتفعيل الوصول عن بُعد ومساعد الذكاء الاصطناعي.';
+
+  @override
+  String get subscriptionRemoteAccessTitle => 'الوصول عن بُعد';
+
+  @override
+  String get subscriptionRemoteAccessActiveTitle => 'الوصول عن بُعد مُفعّل';
+
+  @override
+  String get subscriptionRemoteAccessActiveMessage =>
+      'يمكنك استخدام التطبيق خارج المتجر عبر خادم بوينتي.';
+
+  @override
+  String get subscriptionRemoteAccessInactiveTitle =>
+      'الوصول عن بُعد غير مُفعّل';
+
+  @override
+  String get subscriptionRemoteAccessInactiveMessage =>
+      'تتطلب هذه الميزة اشتراكًا فعّالًا. تواصل مع الدعم لتفعيلها.';
+
+  @override
+  String get subscriptionFieldStatus => 'الحالة';
+
+  @override
+  String get subscriptionFieldSubscription => 'الاشتراك';
+
+  @override
+  String get subscriptionFieldExpiresOn => 'ينتهي في';
+
+  @override
+  String get subscriptionFieldRemaining => 'المدة المتبقية';
+
+  @override
+  String get subscriptionFieldLastConnected => 'آخر اتصال بالخادم';
+
+  @override
+  String get subscriptionExpiryNever => 'بدون تاريخ انتهاء';
+
+  @override
+  String subscriptionDaysLeft(int days) {
+    return 'متبقّي $days يوم';
+  }
+
+  @override
+  String get subscriptionNeverConnected => 'لم يتصل بعد';
+
+  @override
+  String get subscriptionAiTitle => 'مساعد الذكاء الاصطناعي';
+
+  @override
+  String get subscriptionAiActiveTitle => 'مساعد الذكاء الاصطناعي مُفعّل';
+
+  @override
+  String get subscriptionAiActiveMessage =>
+      'اشتراكك يشمل المساعد الذكي. هذا هو استهلاكك الحالي.';
+
+  @override
+  String get subscriptionAiInactiveTitle => 'مساعد الذكاء الاصطناعي غير مُفعّل';
+
+  @override
+  String get subscriptionAiInactiveMessage =>
+      'أضِف المساعد الذكي إلى اشتراكك للاستفادة منه. تواصل مع الدعم.';
+
+  @override
+  String get subscriptionAiUsageUnavailable =>
+      'تعذّر تحميل بيانات الاستهلاك حاليًا.';
+
+  @override
+  String subscriptionLastSynced(String time) {
+    return 'آخر تحديث للحالة: $time';
+  }
 }

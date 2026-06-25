@@ -16,7 +16,7 @@ from apps.core.idempotency import run_idempotent_request
 from apps.core.discovery import request_is_relayed
 from apps.core.models import ShopSettings
 from apps.core.permissions import HasPointyPermission
-from apps.core.roles import user_is_manager
+from apps.core.roles import user_has_full_visibility
 from apps.fraud.services import schedule_targeted_sweep
 from .models import Order, RegisterCashMovement, RegisterSession
 from .register_summary import build_register_session_summary
@@ -109,7 +109,7 @@ class OrderViewSet(
             queryset = queryset.filter(lines__variant_id=variant_id)
         if product_id or variant_id:
             queryset = queryset.distinct()
-        if user_is_manager(self.request.user):
+        if user_has_full_visibility(self.request.user):
             return queryset
         return queryset.filter(register_session__owner_key=register_session_owner_key(self.request))
 
@@ -474,7 +474,7 @@ class RegisterSessionViewSet(
 
     def get_queryset(self):
         queryset = super().get_queryset()
-        if user_is_manager(self.request.user):
+        if user_has_full_visibility(self.request.user):
             return queryset
         return queryset.filter(owner_key=register_session_owner_key(self.request))
 

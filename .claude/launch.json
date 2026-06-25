@@ -44,6 +44,12 @@
       "port": 8080
     },
     {
+      "name": "users-preview",
+      "runtimeExecutable": "make",
+      "runtimeArgs": ["frontend-users-preview"],
+      "port": 8080
+    },
+    {
       "name": "pos-preview",
       "runtimeExecutable": "make",
       "runtimeArgs": ["frontend-pos-preview"],
@@ -95,6 +101,12 @@
       "name": "ai-chat-preview",
       "runtimeExecutable": "make",
       "runtimeArgs": ["frontend-ai-preview"],
+      "port": 8080
+    },
+    {
+      "name": "subscription-preview",
+      "runtimeExecutable": "make",
+      "runtimeArgs": ["frontend-subscription-preview"],
       "port": 8080
     },
     {

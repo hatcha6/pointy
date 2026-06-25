@@ -1,4 +1,5 @@
 import '../../core/result.dart';
+import '../models/permission_catalog.dart';
 import '../models/pos_user.dart';
 import '../models/user_activity.dart';
 import '../services/pos_api_service.dart';
@@ -11,8 +12,15 @@ class UserRepository {
   Future<Result<PosUserPage>> loadUsers({
     int page = 1,
     String search = '',
+    String role = '',
   }) async {
-    return Result.guard(() => _service.fetchUsers(page: page, search: search));
+    return Result.guard(
+      () => _service.fetchUsers(page: page, search: search, role: role),
+    );
+  }
+
+  Future<Result<PermissionCatalog>> loadPermissionCatalog() async {
+    return Result.guard(() => _service.fetchPermissionCatalog());
   }
 
   Future<Result<PosUser>> createUser(UserCreateDraft draft) async {
