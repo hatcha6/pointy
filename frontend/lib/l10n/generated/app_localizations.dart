@@ -19596,6 +19596,12 @@ abstract class AppLocalizations {
   /// **'اكتب رسالتك هنا…'**
   String get aiAssistantInputHint;
 
+  /// No description provided for @aiAssistantDisclaimer.
+  ///
+  /// In ar, this message translates to:
+  /// **'المساعد الذكي قد يخطئ. تحقّق من المعلومات المهمة.'**
+  String get aiAssistantDisclaimer;
+
   /// No description provided for @aiAssistantSendTooltip.
   ///
   /// In ar, this message translates to:

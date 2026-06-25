@@ -11321,6 +11321,10 @@ class AppLocalizationsAr extends AppLocalizations {
   String get aiAssistantInputHint => 'اكتب رسالتك هنا…';
 
   @override
+  String get aiAssistantDisclaimer =>
+      'المساعد الذكي قد يخطئ. تحقّق من المعلومات المهمة.';
+
+  @override
   String get aiAssistantSendTooltip => 'إرسال';
 
   @override

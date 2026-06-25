@@ -168,7 +168,9 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(
-        SnackBar(content: Text(l10n.aiAssistantImageLimit(widget.viewModel.maxImages))),
+        SnackBar(
+          content: Text(l10n.aiAssistantImageLimit(widget.viewModel.maxImages)),
+        ),
       );
   }
 
@@ -218,13 +220,16 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
     unawaited(openSourceUrl(context, url));
   }
 
-  Future<void> _openAssistantLink(AiLinkHandler handler, AiDeepLink link) async {
+  Future<void> _openAssistantLink(
+    AiLinkHandler handler,
+    AiDeepLink link,
+  ) async {
     final opened = await handler(context, link);
     if (!opened && mounted) {
       final l10n = AppLocalizations.of(context)!;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(l10n.aiAssistantLinkUnavailable)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(l10n.aiAssistantLinkUnavailable)));
     }
   }
 
@@ -472,10 +477,7 @@ class _MessageList extends StatelessWidget {
         // A stable per-message key preserves each bubble's element (and so its
         // memoized markdown) across structural rebuilds and rewinds; the repaint
         // boundary keeps a streaming bubble's repaints off its neighbours.
-        return RepaintBoundary(
-          key: ValueKey<AiMessage>(message),
-          child: child,
-        );
+        return RepaintBoundary(key: ValueKey<AiMessage>(message), child: child);
       },
     );
   }
@@ -788,7 +790,10 @@ class _QuestionCard extends StatefulWidget {
 /// id + name) or the "create a new product" path.
 class _ProductChoice {
   const _ProductChoice.existing(this.variantId, this.name) : createNew = false;
-  const _ProductChoice.createNew() : variantId = null, name = null, createNew = true;
+  const _ProductChoice.createNew()
+    : variantId = null,
+      name = null,
+      createNew = true;
 
   final int? variantId;
   final String? name;
@@ -855,7 +860,8 @@ class _QuestionCardState extends State<_QuestionCard> {
     AiQuestion question,
     AppLocalizations l10n,
   ) {
-    String? required() => question.isRequired ? l10n.aiAssistantAskUserRequired : null;
+    String? required() =>
+        question.isRequired ? l10n.aiAssistantAskUserRequired : null;
     switch (question.type) {
       case AiQuestionType.singleSelect:
         final selected = _single[question.id];
@@ -897,14 +903,23 @@ class _QuestionCardState extends State<_QuestionCard> {
         final minSelect = question.minSelect ?? (question.isRequired ? 1 : 0);
         if (count < minSelect) {
           final error = question.maxSelect != null
-              ? l10n.aiAssistantAskUserSelectRange(minSelect, question.maxSelect!)
+              ? l10n.aiAssistantAskUserSelectRange(
+                  minSelect,
+                  question.maxSelect!,
+                )
               : l10n.aiAssistantAskUserSelectAtLeast(minSelect);
-          return (answer: null, error: count == 0 ? required() ?? error : error);
+          return (
+            answer: null,
+            error: count == 0 ? required() ?? error : error,
+          );
         }
         if (question.maxSelect != null && count > question.maxSelect!) {
           return (
             answer: null,
-            error: l10n.aiAssistantAskUserSelectRange(minSelect, question.maxSelect!),
+            error: l10n.aiAssistantAskUserSelectRange(
+              minSelect,
+              question.maxSelect!,
+            ),
           );
         }
         return (
@@ -923,7 +938,11 @@ class _QuestionCardState extends State<_QuestionCard> {
           return (answer: null, error: required());
         }
         return (
-          answer: AiAnswer(questionId: question.id, type: question.type, value: value),
+          answer: AiAnswer(
+            questionId: question.id,
+            type: question.type,
+            value: value,
+          ),
           error: null,
         );
       case AiQuestionType.number:
@@ -952,7 +971,11 @@ class _QuestionCardState extends State<_QuestionCard> {
           return (answer: null, error: l10n.aiAssistantAskUserNumberInvalid);
         }
         return (
-          answer: AiAnswer(questionId: question.id, type: question.type, value: parsed),
+          answer: AiAnswer(
+            questionId: question.id,
+            type: question.type,
+            value: parsed,
+          ),
           error: null,
         );
       case AiQuestionType.productPicker:
@@ -963,7 +986,11 @@ class _QuestionCardState extends State<_QuestionCard> {
         if (choice.createNew) {
           // "Create a new product" — the AI reads is_other and creates it.
           return (
-            answer: AiAnswer(questionId: question.id, type: question.type, isOther: true),
+            answer: AiAnswer(
+              questionId: question.id,
+              type: question.type,
+              isOther: true,
+            ),
             error: null,
           );
         }
@@ -987,7 +1014,11 @@ class _QuestionCardState extends State<_QuestionCard> {
           return (answer: null, error: required());
         }
         return (
-          answer: AiAnswer(questionId: question.id, type: question.type, value: text),
+          answer: AiAnswer(
+            questionId: question.id,
+            type: question.type,
+            value: text,
+          ),
           error: null,
         );
     }
@@ -1014,7 +1045,8 @@ class _QuestionCardState extends State<_QuestionCard> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 for (var i = 0; i < _questions.length; i++) ...[
-                  if (i > 0) Divider(height: spacing.lg * 1.4, color: colors.line),
+                  if (i > 0)
+                    Divider(height: spacing.lg * 1.4, color: colors.line),
                   _buildQuestion(_questions[i]),
                 ],
                 SizedBox(height: spacing.md),
@@ -1097,7 +1129,9 @@ class _QuestionCardState extends State<_QuestionCard> {
               ),
             if (question.allowOther)
               ChoiceChip(
-                label: Text(question.otherLabel ?? l10n.aiAssistantAskUserOther),
+                label: Text(
+                  question.otherLabel ?? l10n.aiAssistantAskUserOther,
+                ),
                 selected: selected == _kQuestionOther,
                 onSelected: (_) => setState(() {
                   _single[question.id] = _kQuestionOther;
@@ -1136,7 +1170,9 @@ class _QuestionCardState extends State<_QuestionCard> {
               ),
             if (question.allowOther)
               FilterChip(
-                label: Text(question.otherLabel ?? l10n.aiAssistantAskUserOther),
+                label: Text(
+                  question.otherLabel ?? l10n.aiAssistantAskUserOther,
+                ),
                 selected: set.contains(_kQuestionOther),
                 onSelected: (on) => setState(() {
                   on ? set.add(_kQuestionOther) : set.remove(_kQuestionOther);
@@ -1174,8 +1210,9 @@ class _QuestionCardState extends State<_QuestionCard> {
       minLines: question.multiline ? 3 : 1,
       maxLines: question.multiline ? 6 : 1,
       maxLength: question.maxLength,
-      textInputAction:
-          question.multiline ? TextInputAction.newline : TextInputAction.done,
+      textInputAction: question.multiline
+          ? TextInputAction.newline
+          : TextInputAction.done,
       decoration: InputDecoration(
         hintText: question.placeholder ?? l10n.aiAssistantAskUserTextHint,
       ),
@@ -1220,7 +1257,9 @@ class _QuestionCardState extends State<_QuestionCard> {
       spacing: spacing.xs,
       children: [
         ChoiceChip(
-          label: Text(question.confirmLabel ?? l10n.aiAssistantAskUserConfirmYes),
+          label: Text(
+            question.confirmLabel ?? l10n.aiAssistantAskUserConfirmYes,
+          ),
           selected: value == true,
           onSelected: (_) => setState(() {
             _confirm[question.id] = true;
@@ -1248,13 +1287,18 @@ class _QuestionCardState extends State<_QuestionCard> {
     // confident enough to auto-link) — render each as a one-tap confirm so the
     // user rarely has to open the search.
     final candidates = question.options;
-    final selectedVariant = (choice != null && !choice.createNew) ? choice.variantId : null;
-    final candidateIds =
-        candidates.map((o) => int.tryParse(o.value)).whereType<int>().toSet();
+    final selectedVariant = (choice != null && !choice.createNew)
+        ? choice.variantId
+        : null;
+    final candidateIds = candidates
+        .map((o) => int.tryParse(o.value))
+        .whereType<int>()
+        .toSet();
     // The confirmation banner only shows when the answer isn't already a highlighted
     // candidate tile — i.e. "create new", or a product chosen via the search sheet.
     final showBanner =
-        choice != null && (choice.createNew || !candidateIds.contains(selectedVariant));
+        choice != null &&
+        (choice.createNew || !candidateIds.contains(selectedVariant));
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1267,7 +1311,9 @@ class _QuestionCardState extends State<_QuestionCard> {
           _buildProductCandidate(
             question,
             option,
-            selected: selectedVariant != null && int.tryParse(option.value) == selectedVariant,
+            selected:
+                selectedVariant != null &&
+                int.tryParse(option.value) == selectedVariant,
           ),
         if (candidates.isNotEmpty) SizedBox(height: spacing.xs),
         Wrap(
@@ -1295,7 +1341,9 @@ class _QuestionCardState extends State<_QuestionCard> {
                   _errors.remove(question.id);
                 }),
                 icon: const Icon(Icons.add, size: 18),
-                label: Text(question.denyLabel ?? l10n.aiAssistantProductPickerCreateNew),
+                label: Text(
+                  question.denyLabel ?? l10n.aiAssistantProductPickerCreateNew,
+                ),
               ),
           ],
         ),
@@ -1311,7 +1359,10 @@ class _QuestionCardState extends State<_QuestionCard> {
     final textTheme = Theme.of(context).textTheme;
     final l10n = AppLocalizations.of(context)!;
     return Container(
-      padding: EdgeInsets.symmetric(horizontal: spacing.sm, vertical: spacing.xs),
+      padding: EdgeInsets.symmetric(
+        horizontal: spacing.sm,
+        vertical: spacing.xs,
+      ),
       decoration: BoxDecoration(
         color: colors.primaryContainer,
         borderRadius: BorderRadius.circular(10),
@@ -1331,7 +1382,9 @@ class _QuestionCardState extends State<_QuestionCard> {
               choice.createNew
                   ? l10n.aiAssistantProductPickerCreateNewChosen
                   : (choice.name ?? ''),
-              style: textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
+              style: textTheme.bodyMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
         ],
@@ -1361,20 +1414,30 @@ class _QuestionCardState extends State<_QuestionCard> {
           onTap: variantId == null
               ? null
               : () => setState(() {
-                  _product[question.id] = _ProductChoice.existing(variantId, option.label);
+                  _product[question.id] = _ProductChoice.existing(
+                    variantId,
+                    option.label,
+                  );
                   _errors.remove(question.id);
                 }),
           child: Container(
-            padding: EdgeInsets.symmetric(horizontal: spacing.sm, vertical: spacing.sm),
+            padding: EdgeInsets.symmetric(
+              horizontal: spacing.sm,
+              vertical: spacing.sm,
+            ),
             decoration: BoxDecoration(
               color: selected ? colors.primaryContainer : colors.surfaceSunken,
               borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: selected ? colors.primary : colors.line),
+              border: Border.all(
+                color: selected ? colors.primary : colors.line,
+              ),
             ),
             child: Row(
               children: [
                 Icon(
-                  selected ? Icons.radio_button_checked : Icons.radio_button_unchecked,
+                  selected
+                      ? Icons.radio_button_checked
+                      : Icons.radio_button_unchecked,
                   size: 18,
                   color: selected ? colors.primary : colors.mutedInk,
                 ),
@@ -1466,7 +1529,8 @@ class _AnswerSummary extends StatelessWidget {
     final textTheme = Theme.of(context).textTheme;
     final questions = message.pendingQuestion?.questions ?? const [];
     final answers = {
-      for (final a in message.submittedAnswers ?? const <AiAnswer>[]) a.questionId: a,
+      for (final a in message.submittedAnswers ?? const <AiAnswer>[])
+        a.questionId: a,
     };
     final skipped = (message.submittedAnswers ?? const []).isEmpty;
 
@@ -1499,14 +1563,20 @@ class _AnswerSummary extends StatelessWidget {
               SizedBox(height: 2),
               Text(
                 _displayAnswer(question, answers[question.id]!, l10n),
-                style: textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
+                style: textTheme.bodyMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ],
       ],
     );
   }
 
-  String _displayAnswer(AiQuestion question, AiAnswer answer, AppLocalizations l10n) {
+  String _displayAnswer(
+    AiQuestion question,
+    AiAnswer answer,
+    AppLocalizations l10n,
+  ) {
     String labelFor(String value) {
       for (final option in question.options) {
         if (option.value == value) {
@@ -1560,9 +1630,9 @@ Future<void> openSourceUrl(BuildContext context, String url) async {
     await Clipboard.setData(ClipboardData(text: url));
     if (context.mounted) {
       final l10n = AppLocalizations.of(context)!;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(l10n.aiAssistantLinkCopied)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(l10n.aiAssistantLinkCopied)));
     }
   }
 }
@@ -1591,28 +1661,38 @@ class _SourcesIndicator extends StatelessWidget {
       final shown = sources.take(_maxShown).toList();
       final extra = sources.length - shown.length;
       for (var i = 0; i < shown.length; i++) {
-        tiles.add(Positioned(
-          left: i * _step,
-          child: _FaviconAvatar(source: shown[i], size: _avatar, ringColor: colors.surface),
-        ));
+        tiles.add(
+          Positioned(
+            left: i * _step,
+            child: _FaviconAvatar(
+              source: shown[i],
+              size: _avatar,
+              ringColor: colors.surface,
+            ),
+          ),
+        );
       }
       if (extra > 0) {
-        tiles.add(Positioned(
-          left: shown.length * _step,
-          child: _SourceBadge(
-            label: '+$extra',
-            size: _avatar,
-            ringColor: colors.surface,
+        tiles.add(
+          Positioned(
+            left: shown.length * _step,
+            child: _SourceBadge(
+              label: '+$extra',
+              size: _avatar,
+              ringColor: colors.surface,
+            ),
           ),
-        ));
+        );
       }
     } else {
       // Web searched but no citations came back → a generic globe.
-      tiles.add(_SourceBadge(
-        icon: Icons.public,
-        size: _avatar,
-        ringColor: colors.surface,
-      ));
+      tiles.add(
+        _SourceBadge(
+          icon: Icons.public,
+          size: _avatar,
+          ringColor: colors.surface,
+        ),
+      );
     }
 
     final clusterCount = hasSources
@@ -1629,10 +1709,10 @@ class _SourcesIndicator extends StatelessWidget {
           borderRadius: BorderRadius.circular(_avatar),
           onTap: hasSources
               ? () => showModalBottomSheet<void>(
-                    context: context,
-                    showDragHandle: true,
-                    builder: (_) => _SourcesSheet(sources: sources),
-                  )
+                  context: context,
+                  showDragHandle: true,
+                  builder: (_) => _SourcesSheet(sources: sources),
+                )
               : null,
           child: Padding(
             padding: const EdgeInsets.all(2),
@@ -1803,14 +1883,17 @@ class _SourcesSheet extends StatelessWidget {
                                       source.host,
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
-                                      style: theme.textTheme.bodySmall?.copyWith(
-                                        color: colors.mutedInk,
-                                      ),
+                                      style: theme.textTheme.bodySmall
+                                          ?.copyWith(color: colors.mutedInk),
                                     ),
                                 ],
                               ),
                             ),
-                            Icon(Icons.open_in_new, size: 16, color: colors.mutedInk),
+                            Icon(
+                              Icons.open_in_new,
+                              size: 16,
+                              color: colors.mutedInk,
+                            ),
                           ],
                         ),
                       ),
@@ -1911,7 +1994,10 @@ class _ToolRunChip extends StatelessWidget {
     final canInspect = run.hasDetails;
 
     final chip = Container(
-      padding: EdgeInsets.symmetric(horizontal: spacing.sm, vertical: spacing.xs),
+      padding: EdgeInsets.symmetric(
+        horizontal: spacing.sm,
+        vertical: spacing.xs,
+      ),
       decoration: BoxDecoration(
         color: mutating ? colors.primaryContainer : colors.surfaceSunken,
         borderRadius: BorderRadius.circular(20),
@@ -1933,7 +2019,9 @@ class _ToolRunChip extends StatelessWidget {
             Icon(
               failed
                   ? Icons.error_outline
-                  : (mutating ? Icons.check_circle : Icons.check_circle_outline),
+                  : (mutating
+                        ? Icons.check_circle
+                        : Icons.check_circle_outline),
               size: 14,
               color: failed ? colors.danger : colors.success,
             ),
@@ -2003,7 +2091,9 @@ class _ToolRunDetailSheet extends StatelessWidget {
     final l10n = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
     final failed = run.ok == false;
-    final title = (run.label != null && run.label!.isNotEmpty) ? run.label! : run.name;
+    final title = (run.label != null && run.label!.isNotEmpty)
+        ? run.label!
+        : run.name;
     final argsText = _pretty(run.arguments);
     final outputText = (run.output != null && run.output!.isNotEmpty)
         ? run.output!
@@ -2037,7 +2127,9 @@ class _ToolRunDetailSheet extends StatelessWidget {
                     ),
                   ),
                   Text(
-                    failed ? l10n.aiAssistantToolStatusFailed : l10n.aiAssistantToolStatusOk,
+                    failed
+                        ? l10n.aiAssistantToolStatusFailed
+                        : l10n.aiAssistantToolStatusOk,
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: failed ? colors.danger : colors.success,
                       fontWeight: FontWeight.w600,
@@ -2476,63 +2568,79 @@ class _Composer extends StatelessWidget {
       ),
       child: SafeArea(
         top: false,
-        child: Container(
-          decoration: BoxDecoration(
-            color: colors.surfaceSunken,
-            borderRadius: BorderRadius.circular(26),
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (viewModel.hasPendingAttachments)
-                _PendingAttachmentStrip(viewModel: viewModel),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              decoration: BoxDecoration(
+                color: colors.surfaceSunken,
+                borderRadius: BorderRadius.circular(26),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  _AttachButton(
-                    tooltip: l10n.aiAssistantAttachTooltip,
-                    onTap: locked ? null : onAttach,
-                  ),
-                  Expanded(
-                    child: TextField(
-                      controller: controller,
-                      focusNode: focusNode,
-                      enabled: !locked,
-                      minLines: 1,
-                      maxLines: 6,
-                      textInputAction: TextInputAction.send,
-                      onSubmitted: (_) => onSend(),
-                      decoration: InputDecoration(
-                        hintText: viewModel.hasPendingQuestion
-                            ? l10n.aiAssistantAskUserPendingComposer
-                            : l10n.aiAssistantInputHint,
-                        border: InputBorder.none,
-                        isCollapsed: true,
-                        contentPadding: const EdgeInsets.symmetric(
-                          vertical: 13,
+                  if (viewModel.hasPendingAttachments)
+                    _PendingAttachmentStrip(viewModel: viewModel),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      _AttachButton(
+                        tooltip: l10n.aiAssistantAttachTooltip,
+                        onTap: locked ? null : onAttach,
+                      ),
+                      Expanded(
+                        child: TextField(
+                          controller: controller,
+                          focusNode: focusNode,
+                          enabled: !locked,
+                          minLines: 1,
+                          maxLines: 6,
+                          textInputAction: TextInputAction.send,
+                          onSubmitted: (_) => onSend(),
+                          decoration: InputDecoration(
+                            hintText: viewModel.hasPendingQuestion
+                                ? l10n.aiAssistantAskUserPendingComposer
+                                : l10n.aiAssistantInputHint,
+                            border: InputBorder.none,
+                            isCollapsed: true,
+                            contentPadding: const EdgeInsets.symmetric(
+                              vertical: 13,
+                            ),
+                          ),
                         ),
                       ),
-                    ),
-                  ),
-                  if (showRing)
-                    Padding(
-                      padding: const EdgeInsetsDirectional.only(bottom: 3),
-                      child: _UsageRing(usage: usage, onTap: onUsage),
-                    ),
-                  const SizedBox(width: 2),
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 3),
-                    child: _SendButton(
-                      controller: controller,
-                      viewModel: viewModel,
-                      onSend: onSend,
-                    ),
+                      if (showRing)
+                        Padding(
+                          padding: const EdgeInsetsDirectional.only(bottom: 3),
+                          child: _UsageRing(usage: usage, onTap: onUsage),
+                        ),
+                      const SizedBox(width: 2),
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 3),
+                        child: _SendButton(
+                          controller: controller,
+                          viewModel: viewModel,
+                          onSend: onSend,
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
-            ],
-          ),
+            ),
+            Padding(
+              padding: EdgeInsets.only(top: spacing.xs),
+              child: Text(
+                l10n.aiAssistantDisclaimer,
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: colors.mutedInk,
+                  height: 1.3,
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -2922,12 +3030,7 @@ class _UsageSheet extends StatelessWidget {
     final snapshot = usage;
     return SafeArea(
       child: Padding(
-        padding: EdgeInsets.fromLTRB(
-          spacing.lg,
-          0,
-          spacing.lg,
-          spacing.lg,
-        ),
+        padding: EdgeInsets.fromLTRB(spacing.lg, 0, spacing.lg, spacing.lg),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,

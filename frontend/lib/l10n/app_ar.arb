@@ -6671,6 +6671,7 @@
   "aiAssistantDrawerLabel": "المساعد الذكي",
   "aiAssistantTitle": "المساعد الذكي",
   "aiAssistantInputHint": "اكتب رسالتك هنا…",
+  "aiAssistantDisclaimer": "المساعد الذكي قد يخطئ. تحقّق من المعلومات المهمة.",
   "aiAssistantSendTooltip": "إرسال",
   "aiAssistantNewChat": "محادثة جديدة",
   "aiAssistantHistoryTitle": "المحادثات السابقة",
