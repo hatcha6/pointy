@@ -7,6 +7,7 @@ from rest_framework import serializers
 
 from apps.analytics.models import AnalyticsEvent
 from apps.analytics.services import record_domain_event
+from apps.holidays.services import special_day_keys_for
 from apps.discounts.models import (
     AppliedDiscount,
     DiscountRedemption,
@@ -151,6 +152,11 @@ def save_purchase_order_with_lines(
 ):
     is_create = purchase_order is None
     if purchase_order is None:
+        # Tag the PO with the special day(s) active on its creation date (the
+        # user's "when ordered" choice) — a stable forecasting signal. Defensive:
+        # degrades to an empty list, never blocks PO creation.
+        if "special_day_keys" not in order_fields:
+            order_fields["special_day_keys"] = special_day_keys_for()
         purchase_order = PurchaseOrder.objects.create(**order_fields)
     else:
         if purchase_order.status != PurchaseOrder.Status.DRAFT:

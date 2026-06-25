@@ -3,7 +3,11 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/hmac"
+	"crypto/rand"
+	"crypto/sha256"
 	"crypto/tls"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -68,6 +72,8 @@ func run(args []string) error {
 		return runSubscription(args[1:])
 	case "migrate":
 		return runMigrate(args[1:])
+	case "gen-token":
+		return runGenToken(args[1:])
 	case "help", "-h", "--help":
 		printUsage()
 		return nil
@@ -78,6 +84,11 @@ func run(args []string) error {
 
 func runServer(args []string) error {
 	flags := flag.NewFlagSet("server", flag.ExitOnError)
+	platform := flags.String(
+		"platform",
+		envString("POINTY_RELAY_PLATFORM", ""),
+		"deployment profile: \"paas\" for a single public endpoint behind a TLS-terminating load balancer with bearer-token admin (auto-binds 0.0.0.0, edge TLS, auto-migrate); empty for a self-hosted private-network deployment",
+	)
 	httpAddr := flags.String(
 		"http",
 		envString("POINTY_RELAY_HTTP_ADDR", "127.0.0.1:8091"),
@@ -182,6 +193,11 @@ func runServer(args []string) error {
 		"database-url",
 		envString("POINTY_RELAY_DATABASE_URL", defaultRelayDatabaseURL),
 		"PostgreSQL database URL for relay installations",
+	)
+	autoMigrate := flags.Bool(
+		"auto-migrate",
+		envBool("POINTY_RELAY_AUTO_MIGRATE", false),
+		"apply pending PostgreSQL migrations on startup before serving (default on for the paas profile)",
 	)
 	redisURL := flags.String(
 		"redis-url",
@@ -401,8 +417,60 @@ func runServer(args []string) error {
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
+	profile := strings.ToLower(strings.TrimSpace(*platform))
+	if profile == "paas" {
+		// A PaaS host (e.g. JPaaS) sits behind the platform load balancer,
+		// exposes a single public HTTP endpoint, and is administered remotely
+		// over a bearer token. Flip the defaults that only make sense for a
+		// private-network deployment so a fresh deploy needs nothing beyond the
+		// admin token and the datastore URLs. Each default still yields to an
+		// explicit operator override (flag or environment variable).
+		if !operatorProvided(flags, "http", "POINTY_RELAY_HTTP_ADDR") {
+			*httpAddr = defaultPaaSHTTPAddr()
+		}
+		if !operatorProvided(flags, "connector", "POINTY_RELAY_CONNECTOR_ADDR") {
+			*connectorAddr = "0.0.0.0:8092"
+		}
+		if !operatorProvided(flags, "allow-insecure-http", "POINTY_RELAY_ALLOW_INSECURE_HTTP") {
+			// The load balancer terminates public HTTPS and forwards plain HTTP
+			// over the platform's internal network. The connector port keeps its
+			// end-to-end mTLS (auto-TLS) because the load balancer passes that
+			// raw TCP stream through without decrypting it.
+			*allowInsecureHTTP = true
+		}
+		if !operatorProvided(flags, "auto-migrate", "POINTY_RELAY_AUTO_MIGRATE") {
+			*autoMigrate = true
+		}
+		// Auto-form the node-to-node mesh so horizontal autoscaling needs no
+		// per-instance configuration. Every instance shares the admin token, so
+		// we derive the inter-node secret from it (identical on every clone, never
+		// distributed or stored), and each instance advertises its own LAN address
+		// into Redis for peers to reach. Setting POINTY_RELAY_NODE_PROXY_TOKEN
+		// (even to empty) opts out.
+		if !operatorProvided(flags, "node-proxy-token", "POINTY_RELAY_NODE_PROXY_TOKEN") {
+			*nodeProxyToken = deriveNodeProxyToken(*adminToken)
+		}
+		if strings.TrimSpace(*nodeProxyToken) != "" &&
+			!operatorProvided(flags, "node-internal-url", "POINTY_RELAY_NODE_INTERNAL_URL") {
+			// A bare-IP URL is only safe to advertise when the internal HTTP hop is
+			// cleartext (the paas default). If the operator re-enabled relay-side
+			// TLS, the LAN IP wouldn't match the certificate SAN, so we require an
+			// explicit POINTY_RELAY_NODE_INTERNAL_URL instead of guessing.
+			if *allowInsecureHTTP {
+				if ip, ok := primaryPrivateIPv4(); ok {
+					if url, ok := nodeURLFor(ip, *httpAddr); ok {
+						*nodeInternalURL = url
+						if !operatorProvided(flags, "allow-insecure-node-proxy", "POINTY_RELAY_ALLOW_INSECURE_NODE_PROXY") {
+							*allowInsecureNodeProxy = true
+						}
+					}
+				}
+			}
+		}
+	}
 	if err := validateServerSecurityConfig(serverSecurityConfig{
 		Production:             *production,
+		Platform:               profile,
 		AdminHTTPAddr:          *adminHTTPAddr,
 		AdminToken:             *adminToken,
 		AllowOpenAdmin:         *allowOpenAdmin,
@@ -429,6 +497,23 @@ func runServer(args []string) error {
 	}
 
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	if profile == "paas" {
+		logger.Info(
+			"relay paas profile active",
+			"http_addr", *httpAddr,
+			"connector_addr", *connectorAddr,
+			"node_internal_url", *nodeInternalURL,
+			"node_mesh", strings.TrimSpace(*nodeProxyToken) != "",
+			"auto_migrate", *autoMigrate,
+		)
+		if strings.TrimSpace(*nodeProxyToken) != "" && strings.TrimSpace(*nodeInternalURL) == "" {
+			logger.Warn(
+				"relay node mesh is enabled but no LAN address could be auto-detected to advertise; " +
+					"connectors on this instance will be unreachable from peer nodes. Set " +
+					"POINTY_RELAY_NODE_INTERNAL_URL explicitly when running multiple instances.",
+			)
+		}
+	}
 	setupCtx, setupCancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer setupCancel()
 
@@ -437,6 +522,15 @@ func runServer(args []string) error {
 		return err
 	}
 	defer postgresStore.Close()
+
+	if *autoMigrate {
+		// Migrations take a Postgres advisory lock, so concurrent autoscaled
+		// instances applying them on startup serialize safely.
+		if err := postgresStore.Migrate(setupCtx); err != nil {
+			return fmt.Errorf("startup migration failed: %w", err)
+		}
+		logger.Info("relay startup migrations applied")
+	}
 
 	redisClient, err := newRedisClient(setupCtx, *redisURL)
 	if err != nil {
@@ -728,6 +822,7 @@ func runServer(args []string) error {
 
 type serverSecurityConfig struct {
 	Production             bool
+	Platform               string
 	AdminHTTPAddr          string
 	AdminToken             string
 	AllowOpenAdmin         bool
@@ -761,6 +856,9 @@ func validateServerSecurityConfig(config serverSecurityConfig) error {
 	if (strings.TrimSpace(config.ConnectorClientCA) == "") !=
 		(strings.TrimSpace(config.ConnectorClientCAKey) == "") {
 		return fmt.Errorf("connector client CA certificate and key must be provided together or omitted for automatic generation")
+	}
+	if strings.ToLower(strings.TrimSpace(config.Platform)) == "paas" {
+		return validatePaaSServerSecurityConfig(config)
 	}
 	if !config.Production {
 		return nil
@@ -820,6 +918,200 @@ func validateServerSecurityConfig(config serverSecurityConfig) error {
 		return fmt.Errorf("production relay configuration is unsafe: %s", strings.Join(problems, "; "))
 	}
 	return nil
+}
+
+// minAdminTokenLength is the shortest admin bearer token the paas profile will
+// accept. The token is the sole gate on the admin/subscription API on an
+// internet-facing endpoint, so it must be long enough to resist guessing.
+// `pointy-relay gen-token` prints a 64-character value.
+const minAdminTokenLength = 24
+
+// wellKnownWeakAdminTokens are development placeholders that must never reach an
+// internet-facing deployment, regardless of length.
+var wellKnownWeakAdminTokens = map[string]bool{
+	"local-admin": true,
+	"admin":       true,
+	"changeme":    true,
+	"password":    true,
+	"secret":      true,
+	"token":       true,
+}
+
+func validateStrongAdminToken(token string) error {
+	trimmed := strings.TrimSpace(token)
+	if trimmed == "" {
+		return errors.New("admin token is required (generate one with `pointy-relay gen-token`)")
+	}
+	if wellKnownWeakAdminTokens[strings.ToLower(trimmed)] {
+		return errors.New("admin token is a well-known development value (generate one with `pointy-relay gen-token`)")
+	}
+	if len([]rune(trimmed)) < minAdminTokenLength {
+		return fmt.Errorf(
+			"admin token must be at least %d characters (generate one with `pointy-relay gen-token`)",
+			minAdminTokenLength,
+		)
+	}
+	return nil
+}
+
+// validatePaaSServerSecurityConfig enforces the safety floor for the paas
+// profile: a single public endpoint, TLS terminated at the load balancer, and a
+// strong bearer token as the only admin gate. The connector keeps its
+// end-to-end mTLS untouched.
+func validatePaaSServerSecurityConfig(config serverSecurityConfig) error {
+	var problems []string
+	if config.AllowOpenAdmin {
+		problems = append(problems, "open admin endpoints are not allowed")
+	}
+	if err := validateStrongAdminToken(config.AdminToken); err != nil {
+		problems = append(problems, err.Error())
+	}
+	if strings.TrimSpace(config.AdminHTTPAddr) != "" {
+		problems = append(problems, "the paas profile serves admin on the single public endpoint; unset the separate admin listener (POINTY_RELAY_ADMIN_HTTP_ADDR)")
+	}
+	if config.RequireAdminClientCert {
+		problems = append(problems, "the paas profile authenticates admin with the bearer token; do not require admin client certificates (POINTY_RELAY_REQUIRE_ADMIN_CLIENT_CERT)")
+	}
+	if config.AllowInsecureConnector {
+		problems = append(problems, "cleartext connector listener is not allowed; the connector keeps end-to-end mTLS through the load balancer's TCP passthrough")
+	}
+	// When the connector relies on auto-generated TLS on a wildcard bind, its
+	// server certificate needs an explicit hostname or connectors dialing the
+	// public name can't verify it (the fallback SANs are localhost/127.0.0.1).
+	if config.AutoTLS &&
+		strings.TrimSpace(config.ConnectorTLSCert) == "" &&
+		!hasUsableCertificateHost(config.ConnectorTLSServerName, config.ConnectorAddr) {
+		problems = append(problems, "connector TLS server name is required (POINTY_RELAY_CONNECTOR_TLS_SERVER_NAME) so on-prem connectors can verify the relay on a wildcard bind")
+	}
+	// Only relevant if the operator opts the relay back into terminating HTTPS
+	// itself (allow-insecure-http=false) instead of the default edge termination.
+	if !config.AllowInsecureHTTP &&
+		config.AutoTLS &&
+		strings.TrimSpace(config.HTTPTLSCert) == "" &&
+		!hasUsableCertificateHost(config.HTTPTLSServerName, config.HTTPAddr) {
+		problems = append(problems, "HTTP TLS server name is required (POINTY_RELAY_HTTP_TLS_SERVER_NAME) when the relay terminates HTTPS itself on a wildcard bind")
+	}
+	if strings.TrimSpace(config.NodeInternalURL) != "" && strings.TrimSpace(config.NodeProxyToken) == "" {
+		problems = append(problems, "node proxy token is required when node internal URL is configured")
+	}
+	if len(problems) > 0 {
+		return fmt.Errorf("paas relay configuration is unsafe: %s", strings.Join(problems, "; "))
+	}
+	return nil
+}
+
+// operatorProvided reports whether the operator explicitly set a server flag,
+// via either its command-line flag or its backing environment variable. It lets
+// the paas profile supply defaults without clobbering deliberate overrides.
+func operatorProvided(flags *flag.FlagSet, flagName, envName string) bool {
+	provided := false
+	flags.Visit(func(f *flag.Flag) {
+		if f.Name == flagName {
+			provided = true
+		}
+	})
+	if provided {
+		return true
+	}
+	_, ok := os.LookupEnv(envName)
+	return ok
+}
+
+// defaultPaaSHTTPAddr binds all interfaces so the platform load balancer can
+// reach the container, honoring an injected $PORT when the platform provides
+// one (Heroku/Render/Railway style) and falling back to the conventional port.
+func defaultPaaSHTTPAddr() string {
+	if port := strings.TrimSpace(os.Getenv("PORT")); port != "" {
+		return net.JoinHostPort("0.0.0.0", port)
+	}
+	return "0.0.0.0:8091"
+}
+
+// nodeProxyTokenDerivationLabel namespaces the HMAC so the node-proxy secret is
+// a distinct value from the admin token, not the admin token itself. Bumping the
+// suffix rotates every node's derived secret in lockstep on the next restart.
+const nodeProxyTokenDerivationLabel = "pointy-relay-node-proxy/v1"
+
+// deriveNodeProxyToken produces the shared node-to-node bearer secret from the
+// admin token. Every autoscaled instance holds the same admin token, so they all
+// derive the same proxy token without it ever being distributed or stored, and
+// it inherits the admin token's (paas-enforced) strength.
+func deriveNodeProxyToken(adminToken string) string {
+	mac := hmac.New(sha256.New, []byte(strings.TrimSpace(adminToken)))
+	mac.Write([]byte(nodeProxyTokenDerivationLabel))
+	return hex.EncodeToString(mac.Sum(nil))
+}
+
+// nodeURLFor builds the address peers use to reach this instance's node-relay
+// routes, reusing the public HTTP listener's port on the detected LAN IP. The
+// scheme is http because the paas profile terminates public TLS upstream and
+// speaks cleartext on the trusted internal network.
+func nodeURLFor(ip string, httpAddr string) (string, bool) {
+	ip = strings.TrimSpace(ip)
+	if ip == "" {
+		return "", false
+	}
+	_, port, err := net.SplitHostPort(strings.TrimSpace(httpAddr))
+	if err != nil || strings.TrimSpace(port) == "" {
+		return "", false
+	}
+	return "http://" + net.JoinHostPort(ip, port), true
+}
+
+// primaryPrivateIPv4 returns this container's first routable private IPv4
+// address (RFC 1918), which is what sibling instances on the platform's internal
+// network use to reach it. It deliberately returns only private addresses —
+// never loopback, link-local, or public — so the auto-mesh never advertises a
+// public IP that would carry token-bearing node-to-node traffic over the open
+// internet. It returns false when no private address exists so the caller falls
+// back to single-node behavior instead of advertising something unsafe.
+func primaryPrivateIPv4() (string, bool) {
+	addrs, err := net.InterfaceAddrs()
+	if err != nil {
+		return "", false
+	}
+	for _, addr := range addrs {
+		var ip net.IP
+		switch v := addr.(type) {
+		case *net.IPNet:
+			ip = v.IP
+		case *net.IPAddr:
+			ip = v.IP
+		}
+		ip4 := ip.To4()
+		if ip4 == nil || !ip4.IsGlobalUnicast() {
+			continue
+		}
+		if ip4.IsPrivate() {
+			return ip4.String(), true
+		}
+	}
+	return "", false
+}
+
+func runGenToken(args []string) error {
+	flags := flag.NewFlagSet("gen-token", flag.ExitOnError)
+	size := flags.Int("bytes", 32, "number of random bytes encoded into the token")
+	if err := flags.Parse(args); err != nil {
+		return err
+	}
+	token, err := generateAdminToken(*size)
+	if err != nil {
+		return err
+	}
+	fmt.Println(token)
+	return nil
+}
+
+func generateAdminToken(size int) (string, error) {
+	if size < 16 {
+		return "", usageError("gen-token requires at least 16 bytes")
+	}
+	buf := make([]byte, size)
+	if _, err := rand.Read(buf); err != nil {
+		return "", fmt.Errorf("generate admin token: %w", err)
+	}
+	return hex.EncodeToString(buf), nil
 }
 
 func runConnector(args []string) error {
@@ -1755,11 +2047,20 @@ func printUsage() {
   pointy-relay provision [flags]
   pointy-relay subscription update [flags]
   pointy-relay migrate [flags]
+  pointy-relay gen-token [flags]
 
 Commands:
   server        Run relay control, remote HTTP, and connector listeners.
   connector     Run the on-prem connector beside a Pointy backend.
   provision     Create an installation with connector and access tokens.
   subscription  Manage company-owned relay subscription state.
-  migrate       Apply relay PostgreSQL migrations.`)
+  migrate       Apply relay PostgreSQL migrations.
+  gen-token     Print a strong random admin token for POINTY_RELAY_ADMIN_TOKEN.
+
+Deployment profiles (server --platform / POINTY_RELAY_PLATFORM):
+  paas          Single public endpoint behind a TLS-terminating load balancer,
+                bearer-token admin, auto-bind 0.0.0.0, edge TLS, auto-migrate.
+                Requires a strong POINTY_RELAY_ADMIN_TOKEN.
+  (empty)       Self-hosted private-network deployment (set --production to
+                enforce split admin listener + mTLS).`)
 }

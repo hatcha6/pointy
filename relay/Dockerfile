@@ -30,5 +30,11 @@ COPY --from=build /out/pointy-relay /usr/local/bin/pointy-relay
 USER 65532:65532
 WORKDIR /var/lib/pointy
 
+# 8091: public HTTP (phones, relay, admin) — put the platform TLS terminator in
+# front. 8092: on-prem connector tunnel (raw TCP + mTLS) — needs L4 passthrough.
+EXPOSE 8091 8092
+
 ENTRYPOINT ["/usr/local/bin/pointy-relay"]
-CMD ["help"]
+# Defaults to the relay server for hosted deployments. Override the command for
+# one-off tasks, e.g. `docker run … pointy-relay gen-token`.
+CMD ["server"]

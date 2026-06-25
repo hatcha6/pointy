@@ -89,6 +89,7 @@ INSTALLED_APPS = [
     "apps.price_checker",
     "apps.ai",
     "apps.migration",
+    "apps.holidays",
 ]
 
 MIDDLEWARE = [
@@ -150,6 +151,11 @@ LANGUAGE_CODE = "en-us"
 TIME_ZONE = "UTC"
 USE_I18N = True
 USE_TZ = True
+
+# The shop's local timezone, used only to resolve which calendar date an event
+# falls on for the holidays calendar (see apps.core.timeutils). It deliberately
+# does NOT change Django's UTC TIME_ZONE or app-wide timezone.localdate().
+POINTY_BUSINESS_TIMEZONE = env("POINTY_BUSINESS_TIMEZONE", default="Africa/Tripoli")
 
 STATIC_URL = "static/"
 STATIC_ROOT = Path(env("DJANGO_STATIC_ROOT", default=str(BASE_DIR / "staticfiles")))
@@ -240,6 +246,12 @@ CELERY_BEAT_SCHEDULE = {
     "sales.release-expired-quote-reservations": {
         "task": "sales.release_expired_quote_reservations",
         "schedule": crontab(minute=15, hour=0),
+    },
+    # Pull the relay's holiday calendar (Eids entered per year, local events,
+    # central corrections) into the local table once a day.
+    "holidays.sync-holidays": {
+        "task": "holidays.sync_holidays",
+        "schedule": crontab(minute=30, hour=0),
     },
 }
 

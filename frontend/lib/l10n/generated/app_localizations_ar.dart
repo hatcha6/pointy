@@ -1470,6 +1470,10 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
+  String get dashboardSpecialDayMessage =>
+      'تعرف بوينتي أن اليوم مناسبة خاصة 🎉';
+
+  @override
   String get dashboardSalesTrendTitle => 'اتجاه صافي المبيعات';
 
   @override

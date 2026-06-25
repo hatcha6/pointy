@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -20,6 +21,7 @@ var (
 	ErrConnectorCertificateRevoked             = errors.New("connector certificate fingerprint is revoked")
 	ErrCertificateMaterialNameRequired         = errors.New("certificate material name is required")
 	ErrCertificateMaterialCreateRequired       = errors.New("certificate material create function is required")
+	ErrHolidayNotFound                         = errors.New("holiday not found")
 )
 
 type Clock interface {
@@ -169,6 +171,45 @@ type AdminSubscriptionStore interface {
 	ListAdminAuditEvents(ctx context.Context, installationID string, limit int) ([]AdminAuditEvent, error)
 }
 
+// Holiday is a special calendar day (holiday / event) served to shops and used
+// for sales/purchase tagging + dashboard announcements. A row is either global
+// (InstallationID == "") or scoped to one installation's local event. Nullable
+// rule fields use pointers so 0 is distinguishable from "unset" (weekday 0 ==
+// Monday). Dates are "YYYY-MM-DD" strings, matching the Django consumer.
+type Holiday struct {
+	ID              string    `json:"id"`
+	Key             string    `json:"key"`
+	InstallationID  string    `json:"installation_id,omitempty"`
+	NameEN          string    `json:"name_en"`
+	NameAR          string    `json:"name_ar"`
+	Category        string    `json:"category"`
+	RuleType        string    `json:"rule_type"`
+	Month           *int      `json:"month"`
+	Day             *int      `json:"day"`
+	Weekday         *int      `json:"weekday"`
+	WeekOrdinal     *int      `json:"week_ordinal"`
+	OffsetDays      int       `json:"offset_days"`
+	SpanDays        int       `json:"span_days"`
+	StartDate       *string   `json:"start_date"`
+	EndDate         *string   `json:"end_date"`
+	ShowInDashboard bool      `json:"show_in_dashboard"`
+	Active          bool      `json:"active"`
+	CreatedAt       time.Time `json:"created_at"`
+	UpdatedAt       time.Time `json:"updated_at"`
+}
+
+// HolidayStore is an optional store capability (type-asserted by the HTTP layer
+// like AdminSubscriptionStore) so the core InstallationStore stays unchanged.
+type HolidayStore interface {
+	// ListHolidays returns global rows plus the given installation's own rows.
+	ListHolidays(ctx context.Context, installationID string) ([]Holiday, error)
+	// ListAllHolidays returns every row (admin management view).
+	ListAllHolidays(ctx context.Context) ([]Holiday, error)
+	CreateHoliday(ctx context.Context, holiday Holiday) (Holiday, error)
+	UpdateHoliday(ctx context.Context, holiday Holiday) (Holiday, error)
+	DeleteHoliday(ctx context.Context, id string) error
+}
+
 // installationTokenIdentityValid verifies that rawToken is a well-formed token
 // of the given purpose that belongs to installation, without applying any
 // entitlement/subscription gate. Callers layer the appropriate gate on top.
@@ -246,6 +287,7 @@ type fileStoreData struct {
 	Installations                    map[string]Installation                   `json:"installations"`
 	AdminAuditEvents                 map[string][]AdminAuditEvent              `json:"admin_audit_events,omitempty"`
 	RevokedConnectorCertFingerprints map[string]ConnectorCertificateRevocation `json:"revoked_connector_certificate_fingerprints,omitempty"`
+	Holidays                         map[string]Holiday                        `json:"holidays,omitempty"`
 }
 
 func NewFileStore(path string, clock Clock) (*FileStore, error) {
@@ -593,7 +635,110 @@ func (s *FileStore) load() error {
 	if s.data.RevokedConnectorCertFingerprints == nil {
 		s.data.RevokedConnectorCertFingerprints = map[string]ConnectorCertificateRevocation{}
 	}
+	if s.data.Holidays == nil {
+		s.data.Holidays = map[string]Holiday{}
+	}
 	return nil
+}
+
+func (s *FileStore) ListHolidays(_ context.Context, installationID string) ([]Holiday, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	var holidays []Holiday
+	for _, holiday := range s.data.Holidays {
+		if holiday.InstallationID == "" || holiday.InstallationID == installationID {
+			holidays = append(holidays, holiday)
+		}
+	}
+	sortHolidays(holidays)
+	return holidays, nil
+}
+
+func (s *FileStore) ListAllHolidays(_ context.Context) ([]Holiday, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	holidays := make([]Holiday, 0, len(s.data.Holidays))
+	for _, holiday := range s.data.Holidays {
+		holidays = append(holidays, holiday)
+	}
+	sortHolidays(holidays)
+	return holidays, nil
+}
+
+func (s *FileStore) CreateHoliday(_ context.Context, holiday Holiday) (Holiday, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if strings.TrimSpace(holiday.ID) == "" {
+		id, err := NewInstallationID()
+		if err != nil {
+			return Holiday{}, err
+		}
+		holiday.ID = id
+	}
+	now := s.clock.Now()
+	holiday.CreatedAt = now
+	holiday.UpdatedAt = now
+	if holiday.SpanDays <= 0 {
+		holiday.SpanDays = 1
+	}
+	if s.data.Holidays == nil {
+		s.data.Holidays = map[string]Holiday{}
+	}
+	s.data.Holidays[holiday.ID] = holiday
+	if err := s.saveLocked(); err != nil {
+		delete(s.data.Holidays, holiday.ID)
+		return Holiday{}, err
+	}
+	return holiday, nil
+}
+
+func (s *FileStore) UpdateHoliday(_ context.Context, holiday Holiday) (Holiday, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	existing, ok := s.data.Holidays[holiday.ID]
+	if !ok {
+		return Holiday{}, ErrHolidayNotFound
+	}
+	holiday.CreatedAt = existing.CreatedAt
+	holiday.UpdatedAt = s.clock.Now()
+	if holiday.SpanDays <= 0 {
+		holiday.SpanDays = 1
+	}
+	s.data.Holidays[holiday.ID] = holiday
+	if err := s.saveLocked(); err != nil {
+		s.data.Holidays[holiday.ID] = existing
+		return Holiday{}, err
+	}
+	return holiday, nil
+}
+
+func (s *FileStore) DeleteHoliday(_ context.Context, id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	existing, ok := s.data.Holidays[id]
+	if !ok {
+		return ErrHolidayNotFound
+	}
+	delete(s.data.Holidays, id)
+	if err := s.saveLocked(); err != nil {
+		s.data.Holidays[id] = existing
+		return err
+	}
+	return nil
+}
+
+func sortHolidays(holidays []Holiday) {
+	sort.Slice(holidays, func(i, j int) bool {
+		if holidays[i].Category != holidays[j].Category {
+			return holidays[i].Category < holidays[j].Category
+		}
+		return holidays[i].Key < holidays[j].Key
+	})
 }
 
 func (s *FileStore) saveLocked() error {

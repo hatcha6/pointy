@@ -132,6 +132,128 @@ go run ./cmd/pointy-relay provision \
   --subscription-active
 ```
 
+## Hosted Deployment (PaaS)
+
+The full production setup above assumes a self-hosted, private-network topology
+with a separate admin listener and mTLS everywhere. When the relay runs on a
+managed platform instead (e.g. LibyanSpider JPaaS) — internet-facing, autoscaled,
+TLS terminated at the platform load balancer, administered remotely with the
+operator CLI — use the `paas` profile rather than `--production`.
+
+`POINTY_RELAY_PLATFORM=paas` flips the private-network defaults to
+container-friendly ones so a deploy needs nothing beyond the admin token and
+datastore URLs. It binds `0.0.0.0`, treats public TLS as terminated upstream
+(plain HTTP on the internal network), applies pending migrations on startup
+(advisory-locked, so concurrent instances are safe), serves admin on the single
+public endpoint gated **only** by the bearer token, and refuses to boot unless
+`POINTY_RELAY_ADMIN_TOKEN` is strong (≥24 chars, not a known placeholder).
+
+Generate a token once and set it in the platform's environment:
+
+```sh
+pointy-relay gen-token        # prints a 64-char random token
+```
+
+Minimal hosted environment:
+
+```sh
+POINTY_RELAY_PLATFORM=paas
+POINTY_RELAY_ADMIN_TOKEN=<output of gen-token>
+POINTY_RELAY_DATABASE_URL=postgres://…
+POINTY_RELAY_REDIS_URL=redis://…
+POINTY_RELAY_CONNECTOR_TLS_SERVER_NAME=relay.yourdomain.com   # public name connectors dial
+POINTY_RELAY_OPENROUTER_API_KEY=…                             # optional, enables AI
+```
+
+The container image (`relay/Dockerfile`) `EXPOSE`s both ports and defaults its
+command to `server`. Run migrations automatically (the default here) or as a
+one-off deploy hook with `pointy-relay migrate`.
+
+### Two endpoints, two NGINX modes
+
+The relay exposes **two** ports, and they must be fronted differently — this is
+the key to keeping the connector's mTLS intact:
+
+| Port | Traffic | NGINX mode | Who terminates TLS |
+|------|---------|-----------|--------------------|
+| 8091 | phones, relay, **admin CLI** | L7 — terminate HTTPS, reverse-proxy plain HTTP | NGINX (real domain cert) |
+| 8092 | on-prem connector (**raw TCP + mTLS**) | L4 — `stream {}` passthrough, **no** TLS termination | the relay, end-to-end |
+
+mTLS only survives a load balancer under **TCP passthrough**. If NGINX
+terminates TLS on 8092 it becomes the TLS peer and the connector's client-cert
+identity is lost; with an L4 `stream` passthrough NGINX forwards the encrypted
+bytes blind and the handshake completes end-to-end between the on-prem backend
+and the relay process. So terminate HTTPS for 8091, and pass 8092 through:
+
+```nginx
+# 8091 — public HTTPS terminated here, plain HTTP to the relay.
+# proxy_buffering off + HTTP/1.1 keep AI SSE streaming responsive.
+server {
+    listen 443 ssl;
+    server_name relay.yourdomain.com;
+    ssl_certificate     /etc/nginx/relay.crt;
+    ssl_certificate_key /etc/nginx/relay.key;
+    location / {
+        proxy_pass http://relay_http;          # upstream → app:8091
+        proxy_http_version 1.1;
+        proxy_set_header Connection "";
+        proxy_buffering off;
+        proxy_read_timeout 300s;
+    }
+}
+
+# 8092 — raw TCP passthrough; the relay terminates connector mTLS itself.
+stream {
+    server {
+        listen 8092;
+        proxy_pass relay_connector;            # upstream → app:8092
+    }
+}
+```
+
+The relay's auto-generated connector CA and server certificate are stored in
+PostgreSQL, so every autoscaled instance presents the same material — passthrough
+mTLS holds across the fleet. If you want the NGINX→relay hop on 8091 encrypted
+too (defense in depth on the platform's internal network), set
+`POINTY_RELAY_ALLOW_INSECURE_HTTP=false` and `POINTY_RELAY_HTTP_TLS_SERVER_NAME`
+so the relay serves its own (auto) TLS, then `proxy_pass https://…` with
+`proxy_ssl_verify off`.
+
+### Autoscaling (auto-mesh)
+
+Connectors pin to one instance over the TCP port; phone traffic may land on a
+different instance, so cross-instance routing needs the node-to-node mesh. The
+`paas` profile forms that mesh automatically — horizontal autoscaling is
+hands-off, no per-instance configuration:
+
+- **Shared secret** — `POINTY_RELAY_NODE_PROXY_TOKEN` is derived from the admin
+  token via HMAC. Every clone holds the same admin token, so they all compute
+  the same node-proxy secret; it is never distributed or stored, and it inherits
+  the admin token's enforced strength.
+- **Self-advertised address** — each instance detects its own private (RFC 1918)
+  LAN IP and advertises `http://<ip>:<http-port>` into Redis for peers to reach.
+  Redis already tracks which node holds each connector (`POINTY_RELAY_REDIS_URL`).
+
+So the autoscaler just clones the container (same admin token, same Redis and
+Postgres) and each new instance self-registers. The node-to-node hop is cleartext
+on the platform's internal network, gated by the shared token (the same trust
+model as the NGINX→relay hop); the request is namespaced and authenticated, never
+anonymous.
+
+Overrides and edge cases:
+
+- Set `POINTY_RELAY_NODE_INTERNAL_URL` and/or `POINTY_RELAY_NODE_PROXY_TOKEN`
+  explicitly to take over either half (e.g. a stable internal DNS name, or an
+  `https://` peer URL with node mTLS).
+- Set `POINTY_RELAY_NODE_PROXY_TOKEN=` (empty) to opt out of the mesh entirely
+  (single-instance deployments don't need it — presence lookups always resolve to
+  the local node).
+- Auto-advertising is skipped when the internal HTTP hop is not cleartext (you
+  re-enabled relay-side TLS), because a bare LAN IP wouldn't match the certificate
+  SAN — set `POINTY_RELAY_NODE_INTERNAL_URL` explicitly there.
+- If no private LAN IP can be detected, the instance logs a warning and runs in
+  single-node mode rather than advertising an unreachable address.
+
 ## Company Admin
 
 Relay subscription and entitlement changes are company-owned cloud operations,

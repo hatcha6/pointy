@@ -665,6 +665,166 @@ func (s *PostgresStore) validateToken(
 	return installation, nil
 }
 
+func (s *PostgresStore) ListHolidays(ctx context.Context, installationID string) ([]Holiday, error) {
+	return s.queryHolidays(
+		ctx,
+		selectHolidaySQL+` WHERE installation_id IS NULL OR installation_id = $1 ORDER BY category, key`,
+		installationID,
+	)
+}
+
+func (s *PostgresStore) ListAllHolidays(ctx context.Context) ([]Holiday, error) {
+	return s.queryHolidays(ctx, selectHolidaySQL+` ORDER BY category, key`)
+}
+
+func (s *PostgresStore) queryHolidays(ctx context.Context, sql string, args ...any) ([]Holiday, error) {
+	rows, err := s.pool.Query(ctx, sql, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var holidays []Holiday
+	for rows.Next() {
+		holiday, err := scanHoliday(rows)
+		if err != nil {
+			return nil, err
+		}
+		holidays = append(holidays, holiday)
+	}
+	return holidays, rows.Err()
+}
+
+func (s *PostgresStore) CreateHoliday(ctx context.Context, holiday Holiday) (Holiday, error) {
+	if strings.TrimSpace(holiday.ID) == "" {
+		id, err := NewInstallationID()
+		if err != nil {
+			return Holiday{}, err
+		}
+		holiday.ID = id
+	}
+	if holiday.SpanDays <= 0 {
+		holiday.SpanDays = 1
+	}
+	now := s.clock.Now()
+	holiday.CreatedAt = now
+	holiday.UpdatedAt = now
+	return scanHoliday(s.pool.QueryRow(
+		ctx,
+		`INSERT INTO relay_holidays (
+			id, key, installation_id, name_en, name_ar, category, rule_type,
+			month, day, weekday, week_ordinal, offset_days, span_days,
+			start_date, end_date, show_in_dashboard, active, created_at, updated_at
+		) VALUES (
+			$1, $2, NULLIF($3, ''), $4, $5, $6, $7,
+			$8, $9, $10, $11, $12, $13,
+			$14::date, $15::date, $16, $17, $18::timestamptz, $19::timestamptz
+		) RETURNING `+holidayColumns,
+		holiday.ID, holiday.Key, holiday.InstallationID, holiday.NameEN, holiday.NameAR,
+		holiday.Category, holiday.RuleType,
+		intPtrArg(holiday.Month), intPtrArg(holiday.Day), intPtrArg(holiday.Weekday),
+		intPtrArg(holiday.WeekOrdinal), holiday.OffsetDays, holiday.SpanDays,
+		strPtrArg(holiday.StartDate), strPtrArg(holiday.EndDate),
+		holiday.ShowInDashboard, holiday.Active, holiday.CreatedAt, holiday.UpdatedAt,
+	))
+}
+
+func (s *PostgresStore) UpdateHoliday(ctx context.Context, holiday Holiday) (Holiday, error) {
+	if holiday.SpanDays <= 0 {
+		holiday.SpanDays = 1
+	}
+	return scanHoliday(s.pool.QueryRow(
+		ctx,
+		`UPDATE relay_holidays SET
+			key = $2, installation_id = NULLIF($3, ''), name_en = $4, name_ar = $5,
+			category = $6, rule_type = $7, month = $8, day = $9, weekday = $10,
+			week_ordinal = $11, offset_days = $12, span_days = $13,
+			start_date = $14::date, end_date = $15::date, show_in_dashboard = $16,
+			active = $17, updated_at = $18::timestamptz
+		WHERE id = $1
+		RETURNING `+holidayColumns,
+		holiday.ID, holiday.Key, holiday.InstallationID, holiday.NameEN, holiday.NameAR,
+		holiday.Category, holiday.RuleType,
+		intPtrArg(holiday.Month), intPtrArg(holiday.Day), intPtrArg(holiday.Weekday),
+		intPtrArg(holiday.WeekOrdinal), holiday.OffsetDays, holiday.SpanDays,
+		strPtrArg(holiday.StartDate), strPtrArg(holiday.EndDate),
+		holiday.ShowInDashboard, holiday.Active, s.clock.Now(),
+	))
+}
+
+func (s *PostgresStore) DeleteHoliday(ctx context.Context, id string) error {
+	tag, err := s.pool.Exec(ctx, `DELETE FROM relay_holidays WHERE id = $1`, id)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrHolidayNotFound
+	}
+	return nil
+}
+
+func intPtrArg(value *int) any {
+	if value == nil {
+		return nil
+	}
+	return *value
+}
+
+func strPtrArg(value *string) any {
+	if value == nil {
+		return nil
+	}
+	return *value
+}
+
+const holidayColumns = `id, key, COALESCE(installation_id, ''), name_en, name_ar,
+	category, rule_type, month, day, weekday, week_ordinal, offset_days, span_days,
+	to_char(start_date, 'YYYY-MM-DD'), to_char(end_date, 'YYYY-MM-DD'),
+	show_in_dashboard, active, created_at, updated_at`
+
+const selectHolidaySQL = `SELECT ` + holidayColumns + ` FROM relay_holidays`
+
+func scanHoliday(row pgx.Row) (Holiday, error) {
+	var holiday Holiday
+	var month, day, weekday, weekOrdinal pgtype.Int2
+	var startDate, endDate pgtype.Text
+	err := row.Scan(
+		&holiday.ID, &holiday.Key, &holiday.InstallationID, &holiday.NameEN,
+		&holiday.NameAR, &holiday.Category, &holiday.RuleType,
+		&month, &day, &weekday, &weekOrdinal, &holiday.OffsetDays, &holiday.SpanDays,
+		&startDate, &endDate, &holiday.ShowInDashboard, &holiday.Active,
+		&holiday.CreatedAt, &holiday.UpdatedAt,
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Holiday{}, ErrHolidayNotFound
+	}
+	if err != nil {
+		return Holiday{}, err
+	}
+	holiday.Month = int2Ptr(month)
+	holiday.Day = int2Ptr(day)
+	holiday.Weekday = int2Ptr(weekday)
+	holiday.WeekOrdinal = int2Ptr(weekOrdinal)
+	if startDate.Valid {
+		value := startDate.String
+		holiday.StartDate = &value
+	}
+	if endDate.Valid {
+		value := endDate.String
+		holiday.EndDate = &value
+	}
+	holiday.CreatedAt = holiday.CreatedAt.UTC()
+	holiday.UpdatedAt = holiday.UpdatedAt.UTC()
+	return holiday, nil
+}
+
+func int2Ptr(value pgtype.Int2) *int {
+	if !value.Valid {
+		return nil
+	}
+	result := int(value.Int16)
+	return &result
+}
+
 const selectInstallationSQL = `SELECT
 	id,
 	business_id,

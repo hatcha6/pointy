@@ -1,5 +1,34 @@
 part of 'dashboard_screen.dart';
 
+/// Festive banner announcing today's holiday/special event(s). The event
+/// name(s) are the headline (so staff — and Pointy — visibly know the day is
+/// special); a single supporting line carries the chrome. Names come localized
+/// from the server; multiple same-day events (e.g. Independence Day + Christmas
+/// Eve) are joined with a separator.
+class _SpecialDayBanner extends StatelessWidget {
+  const _SpecialDayBanner({required this.specialDays});
+
+  final List<DashboardSpecialDay> specialDays;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final languageCode = Localizations.localeOf(context).languageCode;
+    final names = specialDays
+        .map((day) => day.localizedName(languageCode))
+        .where((name) => name.isNotEmpty)
+        .toList(growable: false);
+    if (names.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    return PointyDetailCallout(
+      icon: Icons.celebration_outlined,
+      title: names.join(' · '),
+      message: l10n.dashboardSpecialDayMessage,
+    );
+  }
+}
+
 class _SalesTrendChart extends StatelessWidget {
   const _SalesTrendChart({required this.points});
 

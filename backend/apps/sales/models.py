@@ -273,6 +273,10 @@ class Order(TimeStampedModel):
     subtotal = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     discount_total = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     total = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    # Snapshot of the special-day keys (apps.holidays) active on the shop-local
+    # date of the sale — an immutable feature signal for forecasting that must
+    # survive later edits to the holiday calendar.
+    special_day_keys = models.JSONField(default=list, blank=True)
     # Reverse accessor for the discounts applied to this order document so the
     # API can prefetch them in a single query instead of one lookup per order
     # row when serialising lists of orders.

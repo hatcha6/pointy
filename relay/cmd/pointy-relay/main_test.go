@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"net"
 	"net/http"
 	"strings"
 	"testing"
@@ -331,6 +332,205 @@ func TestValidateServerSecurityConfigRejectsProductionAutoTLSWithoutServerName(t
 	}
 	if !strings.Contains(err.Error(), "server name") {
 		t.Fatalf("expected server name error, got %v", err)
+	}
+}
+
+func TestValidateServerSecurityConfigAcceptsPaaSProfile(t *testing.T) {
+	if err := validateServerSecurityConfig(validPaaSServerSecurityConfig()); err != nil {
+		t.Fatalf("valid paas config rejected: %v", err)
+	}
+}
+
+func TestValidateServerSecurityConfigRejectsUnsafePaaSConfig(t *testing.T) {
+	for _, tt := range []struct {
+		name    string
+		mutate  func(*serverSecurityConfig)
+		message string
+	}{
+		{
+			name:    "empty admin token",
+			mutate:  func(config *serverSecurityConfig) { config.AdminToken = "" },
+			message: "admin token is required",
+		},
+		{
+			name:    "weak admin token",
+			mutate:  func(config *serverSecurityConfig) { config.AdminToken = "local-admin" },
+			message: "well-known development value",
+		},
+		{
+			name:    "short admin token",
+			mutate:  func(config *serverSecurityConfig) { config.AdminToken = "abc123" },
+			message: "at least 24 characters",
+		},
+		{
+			name:    "open admin",
+			mutate:  func(config *serverSecurityConfig) { config.AllowOpenAdmin = true },
+			message: "open admin",
+		},
+		{
+			name:    "separate admin listener",
+			mutate:  func(config *serverSecurityConfig) { config.AdminHTTPAddr = "127.0.0.1:8093" },
+			message: "single public endpoint",
+		},
+		{
+			name:    "admin client certs required",
+			mutate:  func(config *serverSecurityConfig) { config.RequireAdminClientCert = true },
+			message: "bearer token",
+		},
+		{
+			name:    "insecure connector",
+			mutate:  func(config *serverSecurityConfig) { config.AllowInsecureConnector = true },
+			message: "end-to-end mTLS",
+		},
+		{
+			name:    "auto-TLS connector without server name on wildcard bind",
+			mutate:  func(config *serverSecurityConfig) { config.ConnectorTLSServerName = "" },
+			message: "connector TLS server name",
+		},
+		{
+			name: "node internal URL without proxy token",
+			mutate: func(config *serverSecurityConfig) {
+				config.NodeInternalURL = "https://relay-node-a.internal"
+				config.NodeProxyToken = ""
+			},
+			message: "node proxy token",
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			config := validPaaSServerSecurityConfig()
+			tt.mutate(&config)
+
+			err := validateServerSecurityConfig(config)
+			if err == nil {
+				t.Fatal("expected unsafe paas config rejection")
+			}
+			if !strings.Contains(err.Error(), tt.message) {
+				t.Fatalf("expected error containing %q, got %v", tt.message, err)
+			}
+		})
+	}
+}
+
+func TestValidateStrongAdminToken(t *testing.T) {
+	if err := validateStrongAdminToken("ZkQk9b2c5f8a1d4e7g0h3j6k9m2n5p8q"); err != nil {
+		t.Fatalf("strong token rejected: %v", err)
+	}
+	for _, tt := range []struct {
+		name  string
+		token string
+	}{
+		{name: "empty", token: "   "},
+		{name: "weak", token: "ChangeMe"},
+		{name: "short", token: "tooshort"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := validateStrongAdminToken(tt.token); err == nil {
+				t.Fatalf("expected %s token rejection", tt.name)
+			}
+		})
+	}
+}
+
+func TestGenerateAdminTokenProducesDistinctStrongTokens(t *testing.T) {
+	first, err := generateAdminToken(32)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := generateAdminToken(32)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first == second {
+		t.Fatal("generated admin tokens must be unique")
+	}
+	if len(first) != 64 {
+		t.Fatalf("expected 64 hex characters, got %d", len(first))
+	}
+	if err := validateStrongAdminToken(first); err != nil {
+		t.Fatalf("generated token failed the strong-token gate: %v", err)
+	}
+	if _, err := generateAdminToken(8); err == nil {
+		t.Fatal("expected rejection of an undersized token request")
+	}
+}
+
+func TestDeriveNodeProxyTokenIsDeterministicAndStrong(t *testing.T) {
+	const admin = "Zk7Qx2b9c4f1a8d5e3g6h0j9k2m5n8p1"
+
+	first := deriveNodeProxyToken(admin)
+	if first != deriveNodeProxyToken(admin) {
+		t.Fatal("same admin token must derive the same node proxy token across instances")
+	}
+	if first == deriveNodeProxyToken(admin+"x") {
+		t.Fatal("different admin tokens must derive different node proxy tokens")
+	}
+	if first == admin {
+		t.Fatal("derived token must not equal the admin token")
+	}
+	if len(first) != 64 {
+		t.Fatalf("expected a 64-char hex secret, got %d chars", len(first))
+	}
+	// Whitespace around the admin token must not change the derived value, so a
+	// stray newline in one instance's env can't desync the mesh.
+	if deriveNodeProxyToken("  "+admin+"\n") != first {
+		t.Fatal("admin token whitespace must not affect derivation")
+	}
+}
+
+func TestNodeURLFor(t *testing.T) {
+	for _, tt := range []struct {
+		name     string
+		ip       string
+		httpAddr string
+		want     string
+		ok       bool
+	}{
+		{name: "wildcard bind", ip: "10.0.3.7", httpAddr: "0.0.0.0:8091", want: "http://10.0.3.7:8091", ok: true},
+		{name: "explicit host", ip: "172.16.5.9", httpAddr: "0.0.0.0:443", want: "http://172.16.5.9:443", ok: true},
+		{name: "empty ip", ip: "", httpAddr: "0.0.0.0:8091", ok: false},
+		{name: "addr without port", ip: "10.0.3.7", httpAddr: "10.0.3.7", ok: false},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			got, ok := nodeURLFor(tt.ip, tt.httpAddr)
+			if ok != tt.ok {
+				t.Fatalf("ok = %v, want %v", ok, tt.ok)
+			}
+			if ok && got != tt.want {
+				t.Fatalf("url = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestPrimaryPrivateIPv4ReturnsUsableOrNothing(t *testing.T) {
+	// The host environment decides whether an address exists; assert only that
+	// when one is returned it is a parseable, private IPv4 — never loopback,
+	// link-local, or public — so the mesh can't advertise something unsafe.
+	ip, ok := primaryPrivateIPv4()
+	if !ok {
+		return
+	}
+	parsed := net.ParseIP(ip)
+	if parsed == nil || parsed.To4() == nil {
+		t.Fatalf("expected a valid IPv4 address, got %q", ip)
+	}
+	if parsed.IsLoopback() || parsed.IsLinkLocalUnicast() {
+		t.Fatalf("must not advertise a loopback or link-local address, got %q", ip)
+	}
+	if !parsed.IsPrivate() {
+		t.Fatalf("must only advertise a private (RFC 1918) address, got %q", ip)
+	}
+}
+
+func validPaaSServerSecurityConfig() serverSecurityConfig {
+	return serverSecurityConfig{
+		Platform:               "paas",
+		AdminToken:             "Zk7Qx2b9c4f1a8d5e3g6h0j9k2m5n8p1",
+		AllowInsecureHTTP:      true,
+		HTTPAddr:               "0.0.0.0:8091",
+		ConnectorAddr:          "0.0.0.0:8092",
+		ConnectorTLSServerName: "relay.example.com",
+		AutoTLS:                true,
 	}
 }
 

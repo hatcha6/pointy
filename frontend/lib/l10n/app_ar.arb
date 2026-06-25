@@ -894,6 +894,10 @@
       }
     }
   },
+  "dashboardSpecialDayMessage": "تعرف بوينتي أن اليوم مناسبة خاصة 🎉",
+  "@dashboardSpecialDayMessage": {
+    "description": "Supporting line on the dashboard banner shown when today is a holiday/special event; the event name(s) appear as the bold title above it."
+  },
   "dashboardSalesTrendTitle": "اتجاه صافي المبيعات",
   "dashboardHourlySalesTitle": "المبيعات حسب الساعة",
   "dashboardTopProductsTitle": "أفضل المنتجات",

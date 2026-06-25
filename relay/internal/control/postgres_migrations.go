@@ -136,7 +136,65 @@ CREATE INDEX IF NOT EXISTS relay_certificate_materials_expires_at_idx
 	WHERE expires_at IS NOT NULL;
 `,
 	},
+	{
+		version: 7,
+		name:    "relay holidays calendar",
+		sql: `
+CREATE TABLE IF NOT EXISTS relay_holidays (
+	id text PRIMARY KEY,
+	key text NOT NULL UNIQUE,
+	installation_id text REFERENCES relay_installations(id) ON DELETE CASCADE,
+	name_en text NOT NULL DEFAULT '',
+	name_ar text NOT NULL DEFAULT '',
+	category text NOT NULL DEFAULT 'national',
+	rule_type text NOT NULL,
+	month smallint,
+	day smallint,
+	weekday smallint,
+	week_ordinal smallint,
+	offset_days smallint NOT NULL DEFAULT 0,
+	span_days smallint NOT NULL DEFAULT 1,
+	start_date date,
+	end_date date,
+	show_in_dashboard boolean NOT NULL DEFAULT true,
+	active boolean NOT NULL DEFAULT true,
+	created_at timestamptz NOT NULL,
+	updated_at timestamptz NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS relay_holidays_installation_idx
+	ON relay_holidays (installation_id)
+	WHERE installation_id IS NOT NULL;
+
+-- Seed the fixed Gregorian holidays + White Friday (global rows). The moon-based
+-- Eids and local events are added manually via the admin API. Idempotent: a
+-- re-run leaves existing keys untouched.
+INSERT INTO relay_holidays
+	(id, key, name_en, name_ar, category, rule_type, month, day, weekday, week_ordinal, show_in_dashboard, created_at, updated_at)
+VALUES
+	('new_year', 'new_year', 'New Year''s Day', 'رأس السنة الميلادية', 'national', 'fixed', 1, 1, NULL, NULL, true, now(), now()),
+	('feb17_revolution', 'feb17_revolution', '17 February Revolution', 'ثورة 17 فبراير', 'national', 'fixed', 2, 17, NULL, NULL, true, now(), now()),
+	('valentines_day', 'valentines_day', 'Valentine''s Day', 'عيد الحب', 'commercial', 'fixed', 2, 14, NULL, NULL, false, now(), now()),
+	('womens_day', 'womens_day', 'International Women''s Day', 'اليوم العالمي للمرأة', 'international', 'fixed', 3, 8, NULL, NULL, true, now(), now()),
+	('mothers_day', 'mothers_day', 'Mother''s Day', 'عيد الأم', 'commercial', 'fixed', 3, 21, NULL, NULL, true, now(), now()),
+	('labour_day', 'labour_day', 'Labour Day', 'عيد العمال', 'national', 'fixed', 5, 1, NULL, NULL, true, now(), now()),
+	('fathers_day', 'fathers_day', 'Father''s Day', 'عيد الأب', 'commercial', 'fixed', 6, 21, NULL, NULL, true, now(), now()),
+	('martyrs_day', 'martyrs_day', 'Martyrs'' Day', 'يوم الشهيد', 'national', 'fixed', 9, 16, NULL, NULL, true, now(), now()),
+	('liberation_day', 'liberation_day', 'Liberation Day', 'يوم التحرير', 'national', 'fixed', 10, 23, NULL, NULL, true, now(), now()),
+	('mens_day', 'mens_day', 'International Men''s Day', 'اليوم العالمي للرجل', 'international', 'fixed', 11, 19, NULL, NULL, true, now(), now()),
+	('white_friday', 'white_friday', 'White Friday', 'الجمعة البيضاء', 'commercial', 'nth_weekday', 11, NULL, 4, -1, true, now(), now()),
+	('independence_day', 'independence_day', 'Libyan Independence Day', 'عيد الاستقلال', 'national', 'fixed', 12, 24, NULL, NULL, true, now(), now()),
+	('christmas_eve', 'christmas_eve', 'Christmas Eve', 'ليلة عيد الميلاد', 'religious', 'fixed', 12, 24, NULL, NULL, true, now(), now())
+ON CONFLICT (key) DO NOTHING;
+`,
+	},
 }
+
+// migrationsAdvisoryLockKey serializes concurrent migrators (e.g. autoscaled
+// relay instances applying migrations on startup) so they don't race on the
+// relay_schema_migrations primary key. The value is an arbitrary fixed constant
+// unique to this migration set; the lock auto-releases when the transaction ends.
+const migrationsAdvisoryLockKey int64 = 7_213_590_021_847_553
 
 func MigratePostgres(ctx context.Context, pool *pgxpool.Pool) error {
 	tx, err := pool.Begin(ctx)
@@ -144,6 +202,10 @@ func MigratePostgres(ctx context.Context, pool *pgxpool.Pool) error {
 		return err
 	}
 	defer tx.Rollback(ctx)
+
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock($1)`, migrationsAdvisoryLockKey); err != nil {
+		return err
+	}
 
 	if _, err := tx.Exec(ctx, `
 CREATE TABLE IF NOT EXISTS relay_schema_migrations (

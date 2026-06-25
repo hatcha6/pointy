@@ -14,6 +14,7 @@ from apps.analytics.services import record_domain_event
 from apps.channels.services import require_active_sales_channel
 from apps.core.models import ShopSettings
 from apps.core.roles import user_is_manager
+from apps.holidays.services import special_day_keys_for
 from apps.discounts.models import DiscountRule, normalize_coupon_code
 from apps.discounts.services import (
     DiscountContext,
@@ -93,6 +94,12 @@ def create_order_with_lines(
             coupon_codes=coupon_codes,
         )
     discount_by_line_key = discount_allocations_by_line_key(discount_result)
+
+    # Snapshot the special day(s) active right now (shop-local) onto the sale so
+    # forecasting has a stable per-sale signal. Defensive by contract: a holidays
+    # failure degrades to an empty list and never rolls back a paid sale.
+    if "special_day_keys" not in order_fields:
+        order_fields["special_day_keys"] = special_day_keys_for()
 
     order = Order.objects.create(**order_fields)
     line_objects_by_key = {}

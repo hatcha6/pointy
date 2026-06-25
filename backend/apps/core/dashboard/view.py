@@ -46,6 +46,7 @@ from apps.sales.models import (
     RegisterCashMovement,
     RegisterSession,
 )
+from apps.holidays.services import today_dashboard_special_days
 
 from .helpers import *  # noqa: F401,F403
 
@@ -67,6 +68,10 @@ class DashboardView(APIView):
                 "previous_end": period["previous_end"].isoformat(),
             },
             "sections": {},
+            # Today's special day(s), if any, for the festive dashboard banner.
+            # Not permission-gated (every user sees it) and served from a cached,
+            # query-free helper so it never adds load to the dashboard.
+            "today_special_days": today_dashboard_special_days(),
         }
 
         # Revenue aggregates additionally require the reporting permission.

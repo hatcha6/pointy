@@ -467,6 +467,10 @@ class _DashboardSections extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        if (snapshot.todaySpecialDays.isNotEmpty) ...[
+          _SpecialDayBanner(specialDays: snapshot.todaySpecialDays),
+          SizedBox(height: spacing.lg),
+        ],
         if (showGetStarted) ...[
           _GetStartedChecklist(
             // showGetStarted guarantees zero products and zero sales here; only

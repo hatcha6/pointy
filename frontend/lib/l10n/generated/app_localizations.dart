@@ -2780,6 +2780,12 @@ abstract class AppLocalizations {
   /// **'إلغاء {voids}، إرجاع {returns}'**
   String dashboardAdjustmentsDetail(int voids, int returns);
 
+  /// Supporting line on the dashboard banner shown when today is a holiday/special event; the event name(s) appear as the bold title above it.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعرف بوينتي أن اليوم مناسبة خاصة 🎉'**
+  String get dashboardSpecialDayMessage;
+
   /// No description provided for @dashboardSalesTrendTitle.
   ///
   /// In ar, this message translates to:

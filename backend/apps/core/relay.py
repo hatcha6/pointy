@@ -128,6 +128,12 @@ class RelayControlClient:
         """Read the installation's current 5h + weekly AI usage (no consume)."""
         return self._request("GET", "/v1/ai/usage", relay_token=access_token)
 
+    def get_holidays(self, *, access_token):
+        """Read the installation's holiday calendar (global rows + this shop's
+        local events). Authenticated with the installation access token, like
+        ``get_ai_usage``. Returns the decoded ``{"holidays": [...]}`` payload."""
+        return self._request("GET", "/v1/holidays", relay_token=access_token)
+
     def search_product_images(self, *, access_token, query, page=1, page_size=30):
         """Run a relay-hosted product image search (Serper.dev).
 

@@ -9,6 +9,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"html/template"
 	"io"
 	"log/slog"
@@ -495,6 +496,26 @@ func (s HTTPServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		s.withAdmin(w, r, s.handleAdminSubscriptionForm)
+	case r.URL.Path == "/v1/holidays" && r.Method == http.MethodGet:
+		// Shops pull their calendar (globals + own) with an installation token.
+		if !s.RouteMode.allowsPublic() {
+			writeNotFound(w)
+			return
+		}
+		s.handleListHolidays(w, r)
+	case r.URL.Path == "/v1/holidays" && r.Method == http.MethodPost:
+		if !s.RouteMode.allowsAdmin() {
+			writeNotFound(w)
+			return
+		}
+		s.withAdmin(w, r, s.handleCreateHoliday)
+	case strings.HasPrefix(r.URL.Path, "/v1/holidays/"):
+		// Admin management: GET /v1/holidays/ (list all), PATCH/DELETE /v1/holidays/{id}.
+		if !s.RouteMode.allowsAdmin() {
+			writeNotFound(w)
+			return
+		}
+		s.withAdmin(w, r, s.handleHolidayByID)
 	default:
 		if !s.RouteMode.allowsPublic() {
 			writeNotFound(w)
@@ -1016,6 +1037,164 @@ func (s HTTPServer) handleInstallation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusNotFound, map[string]string{"error": "not found"})
+}
+
+func (s HTTPServer) holidayStore(w http.ResponseWriter) (control.HolidayStore, bool) {
+	store, ok := s.Store.(control.HolidayStore)
+	if !ok {
+		writeJSON(w, http.StatusNotImplemented, map[string]string{"error": "holiday store unavailable"})
+		return nil, false
+	}
+	return store, true
+}
+
+// handleListHolidays serves a shop's calendar (global rows + that installation's
+// own), authenticated with the installation access token like the other public
+// endpoints.
+func (s HTTPServer) handleListHolidays(w http.ResponseWriter, r *http.Request) {
+	store, ok := s.holidayStore(w)
+	if !ok {
+		return
+	}
+	rawToken := strings.TrimSpace(r.Header.Get(AccessTokenHeader))
+	if rawToken == "" {
+		s.metrics().RecordCredentialRejected()
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "relay token required"})
+		return
+	}
+	installation, err := s.Store.ValidateAccessToken(r.Context(), rawToken)
+	if err != nil {
+		s.recordCredentialError(err)
+		writeRelayCredentialError(w, err)
+		return
+	}
+	holidays, err := store.ListHolidays(r.Context(), installation.ID)
+	if err != nil {
+		s.logger().Error("list holidays failed", "installation_id", installation.ID, "error", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "holiday store failed"})
+		return
+	}
+	writeJSON(w, http.StatusOK, holidayListResponse(holidays))
+}
+
+func (s HTTPServer) handleCreateHoliday(w http.ResponseWriter, r *http.Request) {
+	store, ok := s.holidayStore(w)
+	if !ok {
+		return
+	}
+	holiday, err := decodeHolidayBody(r)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+	holiday.ID = "" // server-assigned on create
+	created, err := store.CreateHoliday(r.Context(), holiday)
+	if err != nil {
+		s.logger().Error("create holiday failed", "error", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "holiday store failed"})
+		return
+	}
+	writeJSON(w, http.StatusCreated, created)
+}
+
+// handleHolidayByID dispatches the admin-only operations under /v1/holidays/:
+// GET /v1/holidays/ lists every row, PATCH/DELETE /v1/holidays/{id} edits one.
+func (s HTTPServer) handleHolidayByID(w http.ResponseWriter, r *http.Request) {
+	store, ok := s.holidayStore(w)
+	if !ok {
+		return
+	}
+	id := strings.Trim(strings.TrimPrefix(r.URL.Path, "/v1/holidays/"), "/")
+	if id == "" {
+		if r.Method == http.MethodGet {
+			holidays, err := store.ListAllHolidays(r.Context())
+			if err != nil {
+				s.logger().Error("list all holidays failed", "error", err)
+				writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "holiday store failed"})
+				return
+			}
+			writeJSON(w, http.StatusOK, holidayListResponse(holidays))
+			return
+		}
+		writeNotFound(w)
+		return
+	}
+	switch r.Method {
+	case http.MethodPatch:
+		holiday, err := decodeHolidayBody(r)
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+			return
+		}
+		holiday.ID = id
+		updated, err := store.UpdateHoliday(r.Context(), holiday)
+		if err != nil {
+			writeHolidayStoreError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, updated)
+	case http.MethodDelete:
+		if err := store.DeleteHoliday(r.Context(), id); err != nil {
+			writeHolidayStoreError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
+	default:
+		writeNotFound(w)
+	}
+}
+
+func decodeHolidayBody(r *http.Request) (control.Holiday, error) {
+	// Defaults applied before decode so an omitted flag means "on".
+	holiday := control.Holiday{ShowInDashboard: true, Active: true, SpanDays: 1}
+	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&holiday); err != nil {
+		return control.Holiday{}, fmt.Errorf("invalid request body")
+	}
+	holiday.Key = strings.TrimSpace(holiday.Key)
+	holiday.RuleType = strings.TrimSpace(holiday.RuleType)
+	if holiday.Key == "" {
+		return control.Holiday{}, fmt.Errorf("key is required")
+	}
+	switch holiday.RuleType {
+	case "fixed", "nth_weekday", "range":
+	default:
+		return control.Holiday{}, fmt.Errorf("rule_type must be fixed, nth_weekday, or range")
+	}
+	if holiday.RuleType == "range" {
+		if holiday.StartDate == nil || holiday.EndDate == nil {
+			return control.Holiday{}, fmt.Errorf("range holidays require start_date and end_date")
+		}
+		start, err := time.Parse("2006-01-02", *holiday.StartDate)
+		if err != nil {
+			return control.Holiday{}, fmt.Errorf("start_date must be YYYY-MM-DD")
+		}
+		end, err := time.Parse("2006-01-02", *holiday.EndDate)
+		if err != nil {
+			return control.Holiday{}, fmt.Errorf("end_date must be YYYY-MM-DD")
+		}
+		if end.Before(start) {
+			return control.Holiday{}, fmt.Errorf("end_date must be on or after start_date")
+		}
+	}
+	if holiday.SpanDays <= 0 {
+		holiday.SpanDays = 1
+	}
+	return holiday, nil
+}
+
+func writeHolidayStoreError(w http.ResponseWriter, err error) {
+	if errors.Is(err, control.ErrHolidayNotFound) {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "holiday not found"})
+		return
+	}
+	writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "holiday store failed"})
+}
+
+func holidayListResponse(holidays []control.Holiday) map[string]any {
+	if holidays == nil {
+		holidays = []control.Holiday{}
+	}
+	return map[string]any{"holidays": holidays}
 }
 
 func (s HTTPServer) handleInstallationAuditEvents(

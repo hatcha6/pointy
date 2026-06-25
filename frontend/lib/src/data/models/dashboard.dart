@@ -2,11 +2,17 @@ class DashboardSnapshot {
   const DashboardSnapshot({
     required this.period,
     required this.sections,
+    this.todaySpecialDays = const [],
     this.generatedAt,
   });
 
   final DashboardPeriod period;
   final DashboardSections sections;
+
+  /// Holiday(s) / special event(s) active today (shop-local), for the festive
+  /// dashboard banner. Already filtered server-side to the announceable ones
+  /// (e.g. Valentine's Day is tagged on sales but excluded here).
+  final List<DashboardSpecialDay> todaySpecialDays;
   final DateTime? generatedAt;
 
   bool get hasSections => sections.hasAny;
@@ -16,7 +22,43 @@ class DashboardSnapshot {
       generatedAt: _dateTimeFromJson(json['generated_at']),
       period: DashboardPeriod.fromJson(_mapFromJson(json['period'])),
       sections: DashboardSections.fromJson(_mapFromJson(json['sections'])),
+      todaySpecialDays: _listFromJson(json['today_special_days'])
+          .whereType<Map<String, Object?>>()
+          .map(DashboardSpecialDay.fromJson)
+          .toList(growable: false),
     );
+  }
+}
+
+/// One special calendar day surfaced on the dashboard. Names arrive from the
+/// server in both languages; [localizedName] picks one for the active locale.
+class DashboardSpecialDay {
+  const DashboardSpecialDay({
+    required this.key,
+    required this.nameEn,
+    required this.nameAr,
+    required this.category,
+  });
+
+  final String key;
+  final String nameEn;
+  final String nameAr;
+  final String category;
+
+  factory DashboardSpecialDay.fromJson(Map<String, Object?> json) {
+    return DashboardSpecialDay(
+      key: json['key']?.toString() ?? '',
+      nameEn: json['name_en']?.toString() ?? '',
+      nameAr: json['name_ar']?.toString() ?? '',
+      category: json['category']?.toString() ?? '',
+    );
+  }
+
+  String localizedName(String languageCode) {
+    if (languageCode.startsWith('ar')) {
+      return nameAr.isNotEmpty ? nameAr : nameEn;
+    }
+    return nameEn.isNotEmpty ? nameEn : nameAr;
   }
 }
 
@@ -804,9 +846,7 @@ class PayrollDashboardSummary {
       payrollRunCount: _intFromJson(json['payroll_run_count']),
       draftRunCount: _intFromJson(json['draft_run_count']),
       pendingRunCount: _intFromJson(json['pending_run_count']),
-      pendingLoanRequestCount: _intFromJson(
-        json['pending_loan_request_count'],
-      ),
+      pendingLoanRequestCount: _intFromJson(json['pending_loan_request_count']),
     );
   }
 }
@@ -1240,7 +1280,6 @@ double _moneyFromJson(Object? value) {
   }
   return double.tryParse(value?.toString() ?? '') ?? 0;
 }
-
 
 class DashboardFraudSection {
   const DashboardFraudSection({

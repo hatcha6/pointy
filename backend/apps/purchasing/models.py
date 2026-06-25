@@ -95,6 +95,10 @@ class PurchaseOrder(TimeStampedModel):
     supplier_invoice_date = models.DateField(blank=True, null=True)
     notes = models.TextField(blank=True)
     discount_codes = models.JSONField(default=list, blank=True)
+    # Snapshot of the special-day keys (apps.holidays) active on the shop-local
+    # date this PO was created — an immutable feature signal for forecasting that
+    # must survive later edits to the holiday calendar.
+    special_day_keys = models.JSONField(default=list, blank=True)
     subtotal = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     discount_total = models.DecimalField(
         max_digits=10,
