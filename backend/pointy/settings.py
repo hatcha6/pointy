@@ -235,6 +235,12 @@ CELERY_BEAT_SCHEDULE = {
         "task": "core.run_due_scheduled_backup",
         "schedule": timedelta(minutes=1),
     },
+    # Free stock held by quotations (فاتورة عرض) once their validity date passes,
+    # so expired reservations don't stay locked until someone converts or cancels.
+    "sales.release-expired-quote-reservations": {
+        "task": "sales.release_expired_quote_reservations",
+        "schedule": crontab(minute=15, hour=0),
+    },
 }
 
 CORS_ALLOWED_ORIGINS = env("CORS_ALLOWED_ORIGINS")

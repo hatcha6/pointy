@@ -37,6 +37,7 @@ from .models import (
     RegisterSession,
     StockReservation,
 )
+from . import tasks as sales_tasks
 from .services import (
     prepare_sale_stock_adjustments,
     release_quote_reservations,
@@ -2434,6 +2435,44 @@ class StockReservationTests(TestCase):
         self.assertEqual(
             order.stock_reservations.filter(
                 status=StockReservation.Status.RELEASED
+            ).count(),
+            1,
+        )
+
+    def _reserving_quote(self, qty, *, valid_until):
+        order = self._quote(qty)
+        order.reserves_stock = True
+        order.valid_until = valid_until
+        order.save(update_fields=["reserves_stock", "valid_until"])
+        reserve_stock_for_quote(order)
+        return order
+
+    def test_scheduled_task_releases_only_lapsed_quotation_reservations(self):
+        today = timezone.localdate()
+        # Lapsed yesterday → its hold must be freed automatically.
+        expired = self._reserving_quote(4, valid_until=today - timedelta(days=1))
+        # Valid through today → kept until tomorrow (boundary: valid_until == today).
+        still_valid = self._reserving_quote(2, valid_until=today)
+
+        self.stock.refresh_from_db()
+        self.assertEqual(self.stock.quantity_committed, Decimal("6.000"))
+
+        # Drive the actual Celery beat entrypoint, not just the service.
+        released = sales_tasks.release_expired_quote_reservations()
+
+        self.assertEqual(released, 1)
+        self.stock.refresh_from_db()
+        # Only the lapsed quotation's 4 units return to availability.
+        self.assertEqual(self.stock.quantity_committed, Decimal("2.000"))
+        self.assertEqual(
+            expired.stock_reservations.filter(
+                status=StockReservation.Status.RELEASED
+            ).count(),
+            1,
+        )
+        self.assertEqual(
+            still_valid.stock_reservations.filter(
+                status=StockReservation.Status.ACTIVE
             ).count(),
             1,
         )

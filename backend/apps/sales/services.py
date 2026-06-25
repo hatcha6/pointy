@@ -663,6 +663,37 @@ def consume_quote_reservations(order):
         _settle_reservation(reservation, StockReservation.Status.CONSUMED)
 
 
+def release_expired_quote_reservations(*, today=None):
+    """Release the holds of every quotation whose validity has lapsed.
+
+    A quotation is lapsed once its ``valid_until`` falls before ``today`` (the
+    local date by default), so a quote valid through today keeps its hold until
+    tomorrow. The quotation stays visible; only the hold is freed, returning the
+    held units to availability. Returns the number of quotations released.
+
+    Each quotation is settled in its own transaction so one failure can't strand
+    the rest, and ``release_quote_reservations`` locks its rows FOR UPDATE, so
+    this is safe to run on a schedule beside a concurrent convert. Idempotent.
+    """
+    today = today or timezone.localdate()
+    expired = (
+        Order.objects.quotations()
+        .filter(
+            reserves_stock=True,
+            valid_until__isnull=False,
+            valid_until__lt=today,
+            stock_reservations__status=StockReservation.Status.ACTIVE,
+        )
+        .distinct()
+    )
+    released = 0
+    for quotation in expired:
+        with transaction.atomic():
+            release_quote_reservations(quotation)
+        released += 1
+    return released
+
+
 @transaction.atomic
 def record_customer_payment(
     order,
