@@ -1,5 +1,7 @@
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart' show defaultTargetPlatform, kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../core/result.dart';
@@ -53,6 +55,7 @@ class ProductImageField extends StatelessWidget {
     this.currentImage,
     this.enabled = true,
     this.isSaving = false,
+    this.imagePicker,
   });
 
   final CatalogRepository catalogRepository;
@@ -62,6 +65,16 @@ class ProductImageField extends StatelessWidget {
   final ValueChanged<ProductImageSelection?> onChanged;
   final bool enabled;
   final bool isSaving;
+
+  /// Injectable for tests; defaults to a real [ImagePicker] at capture time.
+  final ImagePicker? imagePicker;
+
+  /// Camera capture is offered on mobile and the web; desktop image_picker has
+  /// no camera source, so the button is hidden there rather than failing.
+  bool get _cameraSupported =>
+      kIsWeb ||
+      defaultTargetPlatform == TargetPlatform.android ||
+      defaultTargetPlatform == TargetPlatform.iOS;
 
   @override
   Widget build(BuildContext context) {
@@ -114,6 +127,14 @@ class ProductImageField extends StatelessWidget {
                         icon: const Icon(Icons.upload_file_outlined),
                         label: Text(l10n.productImageUploadButton),
                       ),
+                      if (_cameraSupported)
+                        OutlinedButton.icon(
+                          onPressed: enabled && !isSaving
+                              ? () => _captureFromCamera(context)
+                              : null,
+                          icon: const Icon(Icons.photo_camera_outlined),
+                          label: Text(l10n.productImageCameraButton),
+                        ),
                       OutlinedButton.icon(
                         onPressed: enabled && !isSaving
                             ? () => _searchInternet(context)
@@ -166,6 +187,49 @@ class ProductImageField extends StatelessWidget {
           filename: file.name,
           bytes: bytes,
           contentType: _contentTypeForFile(file),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _captureFromCamera(BuildContext context) async {
+    final l10n = AppLocalizations.of(context)!;
+    final messenger = ScaffoldMessenger.of(context);
+    final XFile? photo;
+    try {
+      photo = await (imagePicker ?? ImagePicker()).pickImage(
+        source: ImageSource.camera,
+        // Cap the long edge so a full-resolution camera photo doesn't balloon
+        // the upload; image_picker re-encodes to JPEG when imageQuality is set.
+        maxWidth: 1600,
+        maxHeight: 1600,
+        imageQuality: 85,
+      );
+    } on Exception {
+      // No camera on this platform/browser, or permission was denied.
+      messenger
+        ..clearSnackBars()
+        ..showSnackBar(
+          SnackBar(content: Text(l10n.productImageCameraUnavailable)),
+        );
+      return;
+    }
+    if (photo == null) {
+      return; // The user backed out of the camera.
+    }
+    final bytes = await photo.readAsBytes();
+    if (bytes.isEmpty) {
+      messenger
+        ..clearSnackBars()
+        ..showSnackBar(SnackBar(content: Text(l10n.productImagePickError)));
+      return;
+    }
+    onChanged(
+      UploadedProductImageSelection(
+        ProductImageUpload(
+          filename: _cameraFilename(photo),
+          bytes: bytes,
+          contentType: _contentTypeForName(photo.name, photo.mimeType),
         ),
       ),
     );
@@ -511,6 +575,28 @@ String _contentTypeForFile(PlatformFile file) {
     'gif' => 'image/gif',
     'webp' => 'image/webp',
     'svg' => 'image/svg+xml',
+    _ => 'image/jpeg',
+  };
+}
+
+String _cameraFilename(XFile photo) {
+  final name = photo.name.trim();
+  if (name.isNotEmpty && name.contains('.')) {
+    return name;
+  }
+  return 'camera-${DateTime.now().millisecondsSinceEpoch}.jpg';
+}
+
+String _contentTypeForName(String name, String? mimeType) {
+  if (mimeType != null && mimeType.startsWith('image/')) {
+    return mimeType;
+  }
+  final dot = name.lastIndexOf('.');
+  final extension = dot >= 0 ? name.substring(dot + 1).toLowerCase() : '';
+  return switch (extension) {
+    'png' => 'image/png',
+    'gif' => 'image/gif',
+    'webp' => 'image/webp',
     _ => 'image/jpeg',
   };
 }

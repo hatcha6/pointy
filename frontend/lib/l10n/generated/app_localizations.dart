@@ -8043,6 +8043,12 @@ abstract class AppLocalizations {
   /// **'رفع صورة'**
   String get productImageUploadButton;
 
+  /// No description provided for @productImageCameraButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'التقاط صورة'**
+  String get productImageCameraButton;
+
   /// No description provided for @productImageSearchButton.
   ///
   /// In ar, this message translates to:
@@ -8060,6 +8066,12 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'تعذر قراءة الصورة المختارة.'**
   String get productImagePickError;
+
+  /// No description provided for @productImageCameraUnavailable.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر فتح الكاميرا على هذا الجهاز.'**
+  String get productImageCameraUnavailable;
 
   /// No description provided for @productImageSearchTitle.
   ///

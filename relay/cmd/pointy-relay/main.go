@@ -373,6 +373,31 @@ func runServer(args []string) error {
 		envInt64("POINTY_RELAY_AI_MAX_REQUEST_BYTES", 16<<20),
 		"maximum AI chat request body bytes (prompt + base64 attachments)",
 	)
+	serperAPIKey := flags.String(
+		"serper-api-key",
+		envString("POINTY_RELAY_SERPER_API_KEY", ""),
+		"Serper.dev API key for relay-hosted product image search; empty disables image search",
+	)
+	serperBaseURL := flags.String(
+		"serper-base-url",
+		envString("POINTY_RELAY_SERPER_BASE_URL", "https://google.serper.dev/images"),
+		"Serper.dev images endpoint",
+	)
+	serperImageLanguage := flags.String(
+		"serper-image-language",
+		envString("POINTY_RELAY_SERPER_IMAGE_LANGUAGE", "ar"),
+		"Serper image search language code (hl)",
+	)
+	serperImageCountry := flags.String(
+		"serper-image-country",
+		envString("POINTY_RELAY_SERPER_IMAGE_COUNTRY", "us"),
+		"Serper image search country code (gl)",
+	)
+	imageSearchRequestTimeout := flags.Duration(
+		"image-search-request-timeout",
+		envDuration("POINTY_RELAY_IMAGE_SEARCH_REQUEST_TIMEOUT", 8*time.Second),
+		"total timeout for a relay-hosted product image search request",
+	)
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
@@ -616,17 +641,22 @@ func runServer(args []string) error {
 			"smart":    strings.TrimSpace(*aiModelSmart),
 			"frontier": strings.TrimSpace(*aiModelFrontier),
 		},
-		AIDefaultTier:        strings.TrimSpace(*aiDefaultTier),
-		AIRouterModel:        strings.TrimSpace(*aiRouterModel),
-		AIVisionModel:         strings.TrimSpace(*aiVisionModel),
-		AIWebSearchEnabled:    *aiWebSearchEnabled,
-		AIWebSearchMaxResults: *aiWebSearchMaxResults,
-		AILimit5H:            ratelimit.Policy{Limit: *aiLimit5H, Window: *aiLimit5HWindow},
-		AILimitWeekly:        ratelimit.Policy{Limit: *aiLimitWeekly, Window: *aiLimitWeeklyWindow},
-		AIMaxImagesPerPrompt: *aiMaxImages,
-		AIMaxRequestBytes:    *aiMaxRequestBytes,
-		AIRequestTimeout:     *aiRequestTimeout,
-		AIChatRateLimit:      ratelimit.Policy{Limit: *aiChatRateLimit, Window: *rateLimitWindow},
+		AIDefaultTier:             strings.TrimSpace(*aiDefaultTier),
+		AIRouterModel:             strings.TrimSpace(*aiRouterModel),
+		AIVisionModel:             strings.TrimSpace(*aiVisionModel),
+		AIWebSearchEnabled:        *aiWebSearchEnabled,
+		AIWebSearchMaxResults:     *aiWebSearchMaxResults,
+		AILimit5H:                 ratelimit.Policy{Limit: *aiLimit5H, Window: *aiLimit5HWindow},
+		AILimitWeekly:             ratelimit.Policy{Limit: *aiLimitWeekly, Window: *aiLimitWeeklyWindow},
+		AIMaxImagesPerPrompt:      *aiMaxImages,
+		AIMaxRequestBytes:         *aiMaxRequestBytes,
+		AIRequestTimeout:          *aiRequestTimeout,
+		AIChatRateLimit:           ratelimit.Policy{Limit: *aiChatRateLimit, Window: *rateLimitWindow},
+		SerperAPIKey:              strings.TrimSpace(*serperAPIKey),
+		SerperBaseURL:             strings.TrimSpace(*serperBaseURL),
+		SerperImageLanguage:       strings.TrimSpace(*serperImageLanguage),
+		SerperImageCountry:        strings.TrimSpace(*serperImageCountry),
+		ImageSearchRequestTimeout: *imageSearchRequestTimeout,
 	}
 	publicHTTPHandler := baseHTTPHandler
 	publicHTTPHandler.RouteMode = relayserver.RouteAll

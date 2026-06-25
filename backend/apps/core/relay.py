@@ -32,6 +32,7 @@ class RelayControlConfig:
     admin_token: str
     timeout_seconds: int
     ai_timeout_seconds: int
+    image_search_timeout_seconds: int
     allow_insecure_control: bool
     ca_file: str
     client_cert_file: str
@@ -50,6 +51,10 @@ def relay_config():
         ),
         ai_timeout_seconds=max(
             int(getattr(settings, "POINTY_RELAY_AI_REQUEST_TIMEOUT_SECONDS", 120)),
+            1,
+        ),
+        image_search_timeout_seconds=max(
+            int(getattr(settings, "POINTY_RELAY_IMAGE_SEARCH_TIMEOUT_SECONDS", 15)),
             1,
         ),
         allow_insecure_control=bool(
@@ -122,6 +127,23 @@ class RelayControlClient:
     def get_ai_usage(self, access_token):
         """Read the installation's current 5h + weekly AI usage (no consume)."""
         return self._request("GET", "/v1/ai/usage", relay_token=access_token)
+
+    def search_product_images(self, *, access_token, query, page=1, page_size=30):
+        """Run a relay-hosted product image search (Serper.dev).
+
+        The relay holds the Serper key — so shops never manage one — and gates on
+        the installation's remote-access entitlement (subscription +
+        relay_enabled), exactly like a relayed request. Returns the decoded
+        ``{"results": [...]}`` payload; raises ``RelayControlError`` on transport
+        or non-2xx status.
+        """
+        return self._request(
+            "POST",
+            "/v1/image-search",
+            body={"query": query, "page": page, "page_size": page_size},
+            relay_token=access_token,
+            timeout=self.config.image_search_timeout_seconds,
+        )
 
     def open_ai_stream(
         self,
@@ -208,7 +230,7 @@ class RelayControlClient:
         except error.URLError as exc:
             raise RelayControlError(f"relay AI request failed: {exc.reason}") from exc
 
-    def _request(self, method, path, *, body=None, admin=False, relay_token=""):
+    def _request(self, method, path, *, body=None, admin=False, relay_token="", timeout=None):
         data = None
         headers = {"Accept": "application/json"}
         if body is not None:
@@ -224,7 +246,7 @@ class RelayControlClient:
         try:
             with request.urlopen(
                 http_request,
-                timeout=self.config.timeout_seconds,
+                timeout=timeout or self.config.timeout_seconds,
                 context=self._ssl_context,
             ) as response:
                 content = response.read()

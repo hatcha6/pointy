@@ -302,6 +302,16 @@ type HTTPServer struct {
 	AILimitWeekly        ratelimit.Policy
 	AIMaxImagesPerPrompt int
 	AIMaxRequestBytes    int64
+	// Relay-hosted product image search (Serper.dev). The key lives only here so
+	// shops never manage one; gated on the remote-access entitlement
+	// (subscription + relay_enabled) via ValidateAccessToken. Empty key disables
+	// the endpoint.
+	SerperAPIKey              string
+	SerperBaseURL             string
+	SerperImageLanguage       string
+	SerperImageCountry        string
+	ImageSearchRequestTimeout time.Duration
+	ImageSearchHTTPClient     *http.Client
 }
 
 type RouteMode int
@@ -425,6 +435,12 @@ func (s HTTPServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		s.handleAIUsage(w, r)
+	case r.URL.Path == "/v1/image-search" && r.Method == http.MethodPost:
+		if !s.RouteMode.allowsPublic() {
+			writeNotFound(w)
+			return
+		}
+		s.handleImageSearch(w, r)
 	case r.URL.Path == "/v1/status" && r.Method == http.MethodGet:
 		if !s.RouteMode.allowsAdmin() {
 			writeNotFound(w)

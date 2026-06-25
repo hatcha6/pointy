@@ -4531,6 +4531,9 @@ class AppLocalizationsAr extends AppLocalizations {
   String get productImageUploadButton => 'رفع صورة';
 
   @override
+  String get productImageCameraButton => 'التقاط صورة';
+
+  @override
   String get productImageSearchButton => 'بحث في الإنترنت';
 
   @override
@@ -4538,6 +4541,10 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get productImagePickError => 'تعذر قراءة الصورة المختارة.';
+
+  @override
+  String get productImageCameraUnavailable =>
+      'تعذّر فتح الكاميرا على هذا الجهاز.';
 
   @override
   String get productImageSearchTitle => 'بحث صور المنتج';

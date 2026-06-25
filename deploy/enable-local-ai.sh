@@ -47,7 +47,9 @@ if [ -z "$INSTALLATION_ID" ]; then
   exit 1
 fi
 
-echo "==> Enabling the AI entitlement on the relay…"
+echo "==> Enabling the AI + remote-access entitlements on the relay…"
+# relay-enabled is what gates relay-hosted product image search (it rides the
+# remote-access entitlement), so enable it here too for an out-of-the-box dev run.
 (
   cd relay &&
     GOCACHE="$ROOT/relay/.gocache" GOMODCACHE="$ROOT/relay/.gomodcache" \
@@ -55,8 +57,9 @@ echo "==> Enabling the AI entitlement on the relay…"
       --allow-insecure-control=true \
       --installation-id "$INSTALLATION_ID" \
       --actor "local-dev" \
-      --reason "local AI testing" \
+      --reason "local AI + image search testing" \
       --ai-enabled=true \
+      --relay-enabled=true \
       --subscription-active=true
 )
 
@@ -65,10 +68,11 @@ echo "==> Syncing the entitlement into Django…"
 
 cat <<DONE
 
-✅ AI is enabled locally (installation $INSTALLATION_ID).
+✅ AI + product image search are enabled locally (installation $INSTALLATION_ID).
    1. Open   http://127.0.0.1:8080
    2. Sign in as   $ADMIN_USERNAME / $ADMIN_PASSWORD
    3. Open   "المساعد الذكي"   from the drawer and start chatting.
 
-   (AI replies need an OpenRouter key in relay/.env.)
+   (AI replies need an OpenRouter key, and product image search needs a
+    Serper key — POINTY_RELAY_SERPER_API_KEY — both in relay/.env.)
 DONE

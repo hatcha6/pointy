@@ -121,26 +121,29 @@ Common upload entry points:
   token so product image previews can render in the Flutter web app without
   exposing unrestricted file URLs
 
-Internet product image search is provider-backed so production deployments can
-use APIs with clear quota and usage controls. Configure providers as an ordered
-comma-separated list. Pointy collects unique results from each configured
-provider, and if one provider is missing a key, errors, or exhausts quota, the
-request continues with the next provider:
+Internet product image search is relay-hosted (Serper.dev): the relay holds one
+search key for every shop and gates each request on the shop's relay
+subscription, so individual deployments never manage a search API key. Set the
+key on the relay, not on the backend:
 
 ```sh
-POINTY_IMAGE_SEARCH_PROVIDERS=serper,serpapi
-POINTY_SERPER_API_KEY=your-serper-key
-POINTY_SERPAPI_API_KEY=your-key
+# relay/.env (or the relay's environment)
+POINTY_RELAY_SERPER_API_KEY=your-serper-key
+# Optional overrides (defaults shown):
+# POINTY_RELAY_SERPER_BASE_URL=https://google.serper.dev/images
+# POINTY_RELAY_SERPER_IMAGE_LANGUAGE=ar
+# POINTY_RELAY_SERPER_IMAGE_COUNTRY=us
+```
+
+The backend forwards `GET /api/products/image-search/` to the relay's
+`POST /v1/image-search` endpoint using the shop's relay access token; an empty
+key (or a shop without an active relay subscription) simply disables the feature.
+The backend still owns the import/download settings:
+
+```sh
 POINTY_PRODUCT_IMAGE_IMPORT_MAX_BYTES=10485760
 POINTY_ATTACHMENT_CONTENT_TOKEN_MAX_AGE_SECONDS=21600
 ```
-
-`POINTY_IMAGE_SEARCH_PROVIDER` is still accepted for older deployments as the
-preferred first provider, with the other built-in providers added behind it.
-Serper uses `https://google.serper.dev/images` and SerpApi uses
-`https://serpapi.com/search.json` by default; override
-`POINTY_SERPER_ENDPOINT` or `POINTY_SERPAPI_ENDPOINT` for tests or custom
-gateways.
 
 Search responses include short-lived signed import tokens instead of raw image
 download URLs. When a user selects a result, Pointy validates the remote host,

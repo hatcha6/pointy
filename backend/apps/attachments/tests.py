@@ -1,6 +1,7 @@
 import tempfile
 from decimal import Decimal
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
@@ -12,6 +13,7 @@ from rest_framework import status
 from rest_framework.test import APIClient
 
 from apps.catalog.testing import create_product_with_default_variant
+from apps.core.relay import RelayControlError
 from apps.core.roles import MANAGER_GROUP, ensure_role_groups
 from apps.purchasing.models import PurchaseOrder, Supplier
 
@@ -20,7 +22,6 @@ from .image_search import (
     ProductImageSearchUnavailable,
     RemoteImageUpload,
     search_product_images,
-    search_serper_images,
     sign_image_import_payload,
 )
 from .models import Attachment
@@ -177,142 +178,83 @@ class AttachmentApiTests(TestCase):
         self.assertIn("import_token", result)
         self.assertNotIn("image_url", result)
 
-    def test_product_image_search_uses_next_provider_when_first_is_unavailable(self):
-        calls = []
-
-        def unavailable_provider(*, query, page, page_size):
-            calls.append(("serper", query, page, page_size))
-            raise ProductImageSearchUnavailable("quota exhausted")
-
-        def available_provider(*, query, page, page_size):
-            calls.append(("serpapi", query, page, page_size))
-            return [
-                ProductImageSearchResult(
-                    title="Fallback coffee bag",
-                    thumbnail_url="https://images.example.com/fallback-thumb.jpg",
-                    image_url="https://images.example.com/fallback-full.jpg",
-                    source_url="https://shop.example.com/fallback-coffee",
-                    source_name="Example Shop",
-                    provider="serpapi",
-                )
-            ]
-
-        with override_settings(POINTY_IMAGE_SEARCH_PROVIDERS="serper,serpapi"):
-            with (
-                patch(
-                    "apps.attachments.image_search.search_serper_images",
-                    side_effect=unavailable_provider,
-                ),
-                patch(
-                    "apps.attachments.image_search.search_serpapi_images",
-                    side_effect=available_provider,
-                ),
-            ):
-                results = search_product_images(query="قهوة", page=1, page_size=10)
-
-        self.assertEqual(results[0].provider, "serpapi")
-        self.assertEqual(
-            calls,
-            [
-                ("serper", "قهوة", 1, 10),
-                ("serpapi", "قهوة", 1, 10),
-            ],
-        )
-
-    def test_product_image_search_accumulates_unique_results_across_providers(self):
-        def serper_provider(*, query, page, page_size):
-            return [
-                ProductImageSearchResult(
-                    title="Coffee one",
-                    thumbnail_url="https://images.example.com/one-thumb.jpg",
-                    image_url="https://images.example.com/one-full.jpg",
-                    source_url="https://shop.example.com/coffee-one",
-                    source_name="Example Shop",
-                    provider="serper",
-                ),
-                ProductImageSearchResult(
-                    title="Coffee two",
-                    thumbnail_url="https://images.example.com/two-thumb.jpg",
-                    image_url="https://images.example.com/two-full.jpg",
-                    source_url="https://shop.example.com/coffee-two",
-                    source_name="Example Shop",
-                    provider="serper",
-                ),
-            ]
-
-        def serpapi_provider(*, query, page, page_size):
-            return [
-                ProductImageSearchResult(
-                    title="Coffee two duplicate",
-                    thumbnail_url="https://images.example.com/two-thumb-copy.jpg",
-                    image_url="https://images.example.com/two-full.jpg",
-                    source_url="https://shop.example.com/coffee-two-copy",
-                    source_name="Example Shop",
-                    provider="serpapi",
-                ),
-                ProductImageSearchResult(
-                    title="Coffee three",
-                    thumbnail_url="https://images.example.com/three-thumb.jpg",
-                    image_url="https://images.example.com/three-full.jpg",
-                    source_url="https://shop.example.com/coffee-three",
-                    source_name="Example Shop",
-                    provider="serpapi",
-                ),
-            ]
-
-        with override_settings(POINTY_IMAGE_SEARCH_PROVIDERS="serper,serpapi"):
-            with (
-                patch(
-                    "apps.attachments.image_search.search_serper_images",
-                    side_effect=serper_provider,
-                ),
-                patch(
-                    "apps.attachments.image_search.search_serpapi_images",
-                    side_effect=serpapi_provider,
-                ),
-            ):
-                results = search_product_images(query="قهوة", page=1, page_size=3)
-
-        self.assertEqual(
-            [result.image_url for result in results],
-            [
-                "https://images.example.com/one-full.jpg",
-                "https://images.example.com/two-full.jpg",
-                "https://images.example.com/three-full.jpg",
-            ],
-        )
-
-    def test_serper_image_search_maps_api_response(self):
-        with override_settings(
-            POINTY_SERPER_API_KEY="serper-key",
-            POINTY_SERPER_ENDPOINT="https://serper.example.com/images",
-        ):
-            with patch(
-                "apps.attachments.image_search.fetch_json",
-                return_value={
-                    "images": [
-                        {
-                            "title": "Coffee bag",
-                            "imageUrl": "https://images.example.com/coffee.jpg",
-                            "thumbnailUrl": "https://images.example.com/thumb.jpg",
-                            "link": "https://shop.example.com/coffee",
-                            "domain": "shop.example.com",
-                            "imageWidth": 900,
-                            "imageHeight": 700,
-                        }
-                    ]
+    def test_product_image_search_maps_relay_results(self):
+        relay_payload = {
+            "results": [
+                {
+                    "title": "Coffee bag",
+                    "image_url": "https://images.example.com/coffee.jpg",
+                    "thumbnail_url": "https://images.example.com/thumb.jpg",
+                    "source_url": "https://shop.example.com/coffee",
+                    "source_name": "shop.example.com",
+                    "width": 900,
+                    "height": 700,
                 },
-            ) as fetch_json:
-                results = search_serper_images(query="قهوة", page=2, page_size=12)
+                # Same image URL as the first result: deduped away.
+                {
+                    "title": "Coffee bag copy",
+                    "image_url": "https://images.example.com/coffee.jpg",
+                    "thumbnail_url": "https://images.example.com/thumb-copy.jpg",
+                    "source_url": "https://shop.example.com/coffee-copy",
+                    "source_name": "shop.example.com",
+                },
+                # No image URL: dropped.
+                {
+                    "title": "No image",
+                    "thumbnail_url": "https://images.example.com/x.jpg",
+                },
+            ]
+        }
+        with (
+            patch(
+                "apps.attachments.image_search.RelayInstallation"
+            ) as mock_installation,
+            patch(
+                "apps.attachments.image_search.RelayControlClient"
+            ) as mock_client,
+        ):
+            mock_installation.load.return_value = SimpleNamespace(
+                access_token="ptr1.inst.secret"
+            )
+            mock_client.return_value.search_product_images.return_value = relay_payload
+            results = search_product_images(query="قهوة", page=2, page_size=12)
 
         self.assertEqual(len(results), 1)
         self.assertEqual(results[0].provider, "serper")
+        self.assertEqual(results[0].image_url, "https://images.example.com/coffee.jpg")
         self.assertEqual(results[0].source_name, "shop.example.com")
         self.assertEqual(results[0].width, 900)
-        self.assertEqual(fetch_json.call_args.kwargs["method"], "POST")
-        self.assertEqual(fetch_json.call_args.kwargs["body"]["page"], 2)
-        self.assertEqual(fetch_json.call_args.kwargs["body"]["num"], 12)
-        self.assertEqual(fetch_json.call_args.kwargs["headers"]["X-API-KEY"], "serper-key")
+        call_kwargs = mock_client.return_value.search_product_images.call_args.kwargs
+        self.assertEqual(call_kwargs["access_token"], "ptr1.inst.secret")
+        self.assertEqual(call_kwargs["query"], "قهوة")
+        self.assertEqual(call_kwargs["page"], 2)
+        self.assertEqual(call_kwargs["page_size"], 12)
+
+    def test_product_image_search_unavailable_without_relay_installation(self):
+        with patch(
+            "apps.attachments.image_search.RelayInstallation"
+        ) as mock_installation:
+            mock_installation.load.return_value = None
+            with self.assertRaises(ProductImageSearchUnavailable):
+                search_product_images(query="قهوة")
+
+    def test_product_image_search_unavailable_when_relay_errors(self):
+        with (
+            patch(
+                "apps.attachments.image_search.RelayInstallation"
+            ) as mock_installation,
+            patch(
+                "apps.attachments.image_search.RelayControlClient"
+            ) as mock_client,
+        ):
+            mock_installation.load.return_value = SimpleNamespace(
+                access_token="ptr1.inst.secret"
+            )
+            mock_client.return_value.search_product_images.side_effect = (
+                RelayControlError("relay AI returned 402: relay subscription inactive")
+            )
+            with self.assertRaises(ProductImageSearchUnavailable):
+                search_product_images(query="قهوة")
 
     def test_product_image_import_downloads_and_stores_primary_image(self):
         token = sign_image_import_payload(
@@ -322,7 +264,7 @@ class AttachmentApiTests(TestCase):
                 "source_url": "https://shop.example.com/coffee",
                 "source_name": "Example Shop",
                 "title": "Coffee bag",
-                "provider": "serpapi",
+                "provider": "serper",
             }
         )
 
