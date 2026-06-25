@@ -282,30 +282,49 @@ curl \
   http://127.0.0.1:8091/v1/installations/<installation-id>/subscription
 ```
 
-The same path is available through the operator CLI:
+### Operator CLI
+
+The operator CLI wraps the whole admin API for day-to-day fleet management.
+Export the connection settings once and every command stays terse:
 
 ```sh
-POINTY_RELAY_ADMIN_TOKEN=local-admin \
-go run ./cmd/pointy-relay subscription update \
-  --allow-insecure-control=true \
-  --installation-id '<installation-id>' \
-  --actor 'ops@example.com' \
-  --reason 'paid annual subscription' \
-  --relay-enabled=true \
-  --subscription-active=true \
-  --subscription-ends-at '2026-12-31T23:59:59Z'
+export POINTY_RELAY_CONTROL_URL='https://relay.yourdomain.com'
+export POINTY_RELAY_ADMIN_TOKEN='<admin-token>'
+export POINTY_RELAY_OPERATOR='ops@example.com'   # default audit actor
 ```
 
-Every subscription update requires an actor and reason and writes a relay admin
+Find and inspect installations (human-readable tables; add `--json` for scripts):
+
+```sh
+pointy-relay installations list                 # whole fleet, newest first
+pointy-relay installations list --query bakery  # filter by id/business/shop
+pointy-relay installations list --inactive      # only lapsed subscriptions
+pointy-relay installations show <id>            # full subscription state
+pointy-relay installations status <id>          # live connector + cert health
+pointy-relay installations audit <id>           # recent change history
+```
+
+Change subscriptions fast — each writes an audited event (actor + reason are
+filled automatically, override with `--actor`/`--reason`):
+
+```sh
+pointy-relay subscription enable  <id>            # relay + subscription on
+pointy-relay subscription disable <id>            # relay + subscription off
+pointy-relay subscription extend  <id> --days 365 # set end 1 year out, active
+pointy-relay subscription enable  <id> --ai       # also grant the AI entitlement
+```
+
+For explicit field-by-field control, `subscription update` takes the id as the
+first argument (or `--installation-id`) plus any of `--relay-enabled`,
+`--subscription-active`, `--ai-enabled`, `--subscription-ends-at`,
+`--clear-subscription-end`. Provision a new installation remotely with
+`pointy-relay installations provision --shop-name '...' --relay-enabled` (the
+one-time connector and access tokens print once).
+
+Every subscription change requires an actor and reason and writes a relay admin
 audit event with before/after subscription state. Audit state deliberately
 excludes connector token hashes, access token hashes, bearer tokens, and
-certificate PEM. Read recent relay-admin audit events with:
-
-```sh
-curl \
-  -H 'Authorization: Bearer <admin-token>' \
-  http://127.0.0.1:8091/v1/installations/<installation-id>/audit-events
-```
+certificate PEM.
 
 Customer backends learn about these cloud-side changes through their existing
 relay sync path. Remote access remains disabled/not subscribed by default until

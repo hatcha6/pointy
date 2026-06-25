@@ -1,0 +1,391 @@
+# Builds and publishes the Pointy release artifacts when a GitHub Release is
+# published:
+#   * build-android  — universal release APK for cashier tablets/phones
+#   * build-windows  — portable x64 Windows app (VC++ runtime bundled) for till PCs
+#   * build-onprem   — fully offline Docker bundle (.zip) for the on-prem server
+#
+# Toolchain versions are pinned to what the repo is developed against
+# (Flutter 3.38.6 / Dart 3.10.7, JDK 17, Go 1.25 + Python 3.12 via the Docker
+# images). Trigger it by publishing a release (tag like `v1.2.3`), or run it
+# manually from the Actions tab to produce test artifacts without a release.
+name: Release
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version for a manual test build (artifacts only, no release upload), e.g. 1.2.3"
+        required: false
+        default: "0.0.0-dev"
+
+# Required so the build jobs can attach assets to the triggering GitHub Release.
+permissions:
+  contents: write
+
+env:
+  FLUTTER_VERSION: "3.38.6"
+  FLUTTER_CHANNEL: "stable"
+  JAVA_VERSION: "17"
+  POSTGRES_IMAGE: "postgres:17-alpine"
+  REDIS_IMAGE: "redis:7-alpine"
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Resolve a single version string + build number shared by every build job.
+  # ---------------------------------------------------------------------------
+  version:
+    name: Resolve version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.derive.outputs.version }}
+      build_number: ${{ steps.derive.outputs.build_number }}
+      is_release: ${{ steps.derive.outputs.is_release }}
+      tag: ${{ steps.derive.outputs.tag }}
+    steps:
+      - id: derive
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "release" ]; then
+            TAG="${{ github.event.release.tag_name }}"
+            IS_RELEASE=true
+          else
+            TAG="${{ github.event.inputs.version }}"
+            IS_RELEASE=false
+          fi
+          VERSION="${TAG#v}"                # strip a leading "v" if present
+          {
+            echo "tag=${TAG}"
+            echo "version=${VERSION}"
+            echo "build_number=${{ github.run_number }}"
+            echo "is_release=${IS_RELEASE}"
+          } >> "$GITHUB_OUTPUT"
+          echo "Resolved: tag=${TAG} version=${VERSION} build=${{ github.run_number }} is_release=${IS_RELEASE}"
+
+  # ---------------------------------------------------------------------------
+  # Android — universal release APK (one file that runs on every ABI, minSdk 23).
+  # ---------------------------------------------------------------------------
+  build-android:
+    name: Build Android APK
+    needs: version
+    runs-on: ubuntu-latest
+    env:
+      # Empty unless the repo has the signing secrets configured. When present we
+      # sign with the real upload key; otherwise the build falls back to debug
+      # signing (see frontend/android/app/build.gradle.kts).
+      ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+          cache: gradle
+
+      - name: Set up Flutter ${{ env.FLUTTER_VERSION }}
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: ${{ env.FLUTTER_CHANNEL }}
+          cache: true
+
+      - name: Configure release signing
+        if: ${{ env.ANDROID_KEYSTORE_BASE64 != '' }}
+        working-directory: frontend/android
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > app/upload-keystore.jks
+          cat > key.properties <<EOF
+          storeFile=upload-keystore.jks
+          storePassword=${ANDROID_KEYSTORE_PASSWORD}
+          keyAlias=${ANDROID_KEY_ALIAS}
+          keyPassword=${ANDROID_KEY_PASSWORD}
+          EOF
+          echo "Release signing configured (real upload key)."
+
+      - name: Flutter pub get
+        working-directory: frontend
+        run: |
+          flutter --version
+          flutter pub get
+
+      - name: Generate localizations
+        working-directory: frontend
+        run: flutter gen-l10n
+
+      - name: Build universal release APK
+        working-directory: frontend
+        run: >
+          flutter build apk --release
+          --build-name=${{ needs.version.outputs.version }}
+          --build-number=${{ needs.version.outputs.build_number }}
+
+      - name: Stage artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          cp frontend/build/app/outputs/flutter-apk/app-release.apk \
+             "dist/pointy-${{ needs.version.outputs.version }}-android-universal.apk"
+          ( cd dist && sha256sum ./*.apk > SHA256SUMS-android.txt )
+          ls -lh dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pointy-android
+          path: dist/*
+          if-no-files-found: error
+
+      - name: Attach to release
+        if: ${{ needs.version.outputs.is_release == 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${{ needs.version.outputs.tag }}" dist/* --clobber
+
+  # ---------------------------------------------------------------------------
+  # Windows — x64 build packaged as an Inno Setup installer (Start Menu + desktop
+  # shortcuts, uninstaller) for easy setup, plus a portable ZIP for locked-down
+  # deployments. The Visual C++ runtime DLLs are bundled in both so the app
+  # launches on old/minimal PCs that never installed the VC++ Redistributable.
+  # Authenticode signing is applied automatically when the signing secrets exist.
+  # ---------------------------------------------------------------------------
+  build-windows:
+    name: Build Windows app
+    needs: version
+    runs-on: windows-latest
+    env:
+      # Empty unless the repo has the signing secrets. When present, the app and
+      # the installer are Authenticode-signed (no SmartScreen "unknown publisher"
+      # warning); otherwise they ship unsigned and the build still succeeds.
+      WINDOWS_SIGNING_CERT_BASE64: ${{ secrets.WINDOWS_SIGNING_CERT_BASE64 }}
+      WINDOWS_SIGNING_CERT_PASSWORD: ${{ secrets.WINDOWS_SIGNING_CERT_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Flutter ${{ env.FLUTTER_VERSION }}
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: ${{ env.FLUTTER_CHANNEL }}
+          cache: true
+
+      - name: Flutter pub get
+        working-directory: frontend
+        run: |
+          flutter --version
+          flutter config --enable-windows-desktop
+          flutter pub get
+
+      - name: Generate localizations
+        working-directory: frontend
+        run: flutter gen-l10n
+
+      - name: Build Windows release (x64)
+        working-directory: frontend
+        run: >
+          flutter build windows --release
+          --build-name=${{ needs.version.outputs.version }}
+          --build-number=${{ needs.version.outputs.build_number }}
+
+      - name: Bundle VC++ runtime
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          # Locate the Release output (build/windows/<arch>/runner/Release).
+          $release = (Get-ChildItem "frontend/build/windows" -Recurse -Directory |
+                      Where-Object { $_.Name -eq 'Release' -and $_.FullName -match 'runner' } |
+                      Select-Object -First 1).FullName
+          if (-not $release) { throw "Windows Release output not found." }
+          Write-Host "Release output: $release"
+
+          # Copy the app-local Visual C++ runtime so the app runs without the
+          # VC++ Redistributable installed (key for old/minimal till PCs).
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $vsPath = & $vswhere -latest -property installationPath
+          $crtDir = Get-ChildItem "$vsPath\VC\Redist\MSVC\*\x64\Microsoft.VC*.CRT" -Directory |
+                    Sort-Object FullName | Select-Object -Last 1
+          if (-not $crtDir) { throw "Could not locate the VC++ redistributable CRT directory." }
+          Write-Host "Bundling VC++ runtime from: $($crtDir.FullName)"
+          Copy-Item "$($crtDir.FullName)\*.dll" -Destination $release -Force
+
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          # Hand the Release path to later steps.
+          "RELEASE_DIR=$release" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding ascii
+
+      - name: Prepare code signing
+        if: ${{ env.WINDOWS_SIGNING_CERT_BASE64 != '' }}
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $pfx = Join-Path $env:RUNNER_TEMP "pointy-signing.pfx"
+          [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:WINDOWS_SIGNING_CERT_BASE64))
+          $signtool = (Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\signtool.exe" |
+                       Sort-Object FullName | Select-Object -Last 1).FullName
+          if (-not $signtool) { throw "signtool.exe not found in the Windows SDK." }
+          "PFX_PATH=$pfx"      | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding ascii
+          "SIGNTOOL=$signtool" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding ascii
+
+      - name: Code-sign the app
+        if: ${{ env.WINDOWS_SIGNING_CERT_BASE64 != '' }}
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          & "$env:SIGNTOOL" sign /f "$env:PFX_PATH" /p "$env:WINDOWS_SIGNING_CERT_PASSWORD" `
+            /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 `
+            "$env:RELEASE_DIR\pointy_frontend.exe"
+          if ($LASTEXITCODE -ne 0) { throw "Signing the app failed ($LASTEXITCODE)." }
+
+      - name: Package portable ZIP
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $version = "${{ needs.version.outputs.version }}"
+          Compress-Archive -Path "$env:RELEASE_DIR\*" -DestinationPath "dist/pointy-$version-windows-x64.zip" -Force
+
+      - name: Build installer (Inno Setup)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $version = "${{ needs.version.outputs.version }}"
+          choco install innosetup --no-progress -y
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { throw "ISCC.exe not found at $iscc" }
+          $out = (Resolve-Path dist).Path
+          & "$iscc" "/DAppVersion=$version" "/DSourceDir=$env:RELEASE_DIR" "/DOutputDir=$out" `
+            "frontend\windows\installer\pointy.iss"
+          if ($LASTEXITCODE -ne 0) { throw "Inno Setup compile failed ($LASTEXITCODE)." }
+
+      - name: Code-sign the installer
+        if: ${{ env.WINDOWS_SIGNING_CERT_BASE64 != '' }}
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $setup = "dist\pointy-${{ needs.version.outputs.version }}-windows-x64-setup.exe"
+          & "$env:SIGNTOOL" sign /f "$env:PFX_PATH" /p "$env:WINDOWS_SIGNING_CERT_PASSWORD" `
+            /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 "$setup"
+          if ($LASTEXITCODE -ne 0) { throw "Signing the installer failed ($LASTEXITCODE)." }
+
+      - name: Checksums
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          Get-ChildItem dist -File | Where-Object { $_.Extension -in '.exe', '.zip' } | ForEach-Object {
+            "{0}  {1}" -f (Get-FileHash $_.FullName -Algorithm SHA256).Hash, $_.Name
+          } | Out-File -Encoding ascii "dist/SHA256SUMS-windows.txt"
+          Get-ChildItem dist | Select-Object Name, Length | Format-Table -AutoSize
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pointy-windows
+          path: dist/*
+          if-no-files-found: error
+
+      - name: Attach to release
+        if: ${{ needs.version.outputs.is_release == 'true' }}
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $files = Get-ChildItem dist | ForEach-Object { $_.FullName }
+          gh release upload "${{ needs.version.outputs.tag }}" $files --clobber
+
+  # ---------------------------------------------------------------------------
+  # On-prem server — build the backend + relay images, pull Postgres + Redis,
+  # docker-save all four, and zip them together with the Compose file, env
+  # template, installer scripts and docs. The result is a self-contained,
+  # registry-free installation the customer site loads and runs.
+  # ---------------------------------------------------------------------------
+  build-onprem:
+    name: Build on-prem bundle
+    needs: version
+    runs-on: ubuntu-latest
+    env:
+      # The backend Dockerfile uses a `# syntax=` directive, which requires
+      # BuildKit (default on the runner, but set it explicitly to be safe).
+      DOCKER_BUILDKIT: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build backend image
+        run: docker build -f backend/Dockerfile -t "pointy-backend:${{ needs.version.outputs.version }}" .
+
+      - name: Build relay image
+        run: docker build -f relay/Dockerfile -t "pointy-relay:${{ needs.version.outputs.version }}" .
+
+      - name: Build web image (Flutter web + nginx)
+        run: >
+          docker build -f deploy/onprem/web/Dockerfile
+          --build-arg FLUTTER_VERSION=${{ env.FLUTTER_VERSION }}
+          -t "pointy-web:${{ needs.version.outputs.version }}" .
+
+      - name: Pull database + cache images
+        run: |
+          docker pull "${POSTGRES_IMAGE}"
+          docker pull "${REDIS_IMAGE}"
+
+      - name: Stage on-prem bundle
+        shell: bash
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          BUNDLE="pointy-onprem-${VERSION}"
+          mkdir -p "${BUNDLE}/images" dist
+
+          echo "==> Saving images for offline 'docker load'…"
+          docker save "pointy-backend:${VERSION}" -o "${BUNDLE}/images/pointy-backend-${VERSION}.tar"
+          docker save "pointy-relay:${VERSION}"   -o "${BUNDLE}/images/pointy-relay-${VERSION}.tar"
+          docker save "pointy-web:${VERSION}"      -o "${BUNDLE}/images/pointy-web-${VERSION}.tar"
+          docker save "${POSTGRES_IMAGE}"          -o "${BUNDLE}/images/postgres.tar"
+          docker save "${REDIS_IMAGE}"             -o "${BUNDLE}/images/redis.tar"
+
+          echo "==> Rendering offline Compose (drop source 'build:' sections, keep anchors)…"
+          yq eval 'del(.services.backend.build) | del(.services.connector.build) | del(.services.web.build)' \
+            deploy/onprem/docker-compose.yml | sed 's/!!merge //g' > "${BUNDLE}/docker-compose.yml"
+
+          echo "==> Pinning the shipped image tags in the .env template…"
+          sed -e "s|^POINTY_BACKEND_IMAGE=.*|POINTY_BACKEND_IMAGE=pointy-backend:${VERSION}|" \
+              -e "s|^POINTY_RELAY_IMAGE=.*|POINTY_RELAY_IMAGE=pointy-relay:${VERSION}|" \
+              -e "s|^POINTY_WEB_IMAGE=.*|POINTY_WEB_IMAGE=pointy-web:${VERSION}|" \
+              deploy/onprem/.env.example > "${BUNDLE}/.env.example"
+
+          cp deploy/onprem/install.sh deploy/onprem/install.ps1 \
+             deploy/onprem/watchdog.sh deploy/onprem/watchdog.ps1 \
+             deploy/onprem/register-autostart.sh deploy/onprem/register-autostart.ps1 \
+             deploy/onprem/INSTALL.md deploy/onprem/README.md "${BUNDLE}/"
+          chmod +x "${BUNDLE}/install.sh" "${BUNDLE}/watchdog.sh" "${BUNDLE}/register-autostart.sh"
+          echo "${VERSION}" > "${BUNDLE}/VERSION.txt"
+
+          echo "==> Sanity-checking rendered Compose…"
+          yq eval '.services | keys' "${BUNDLE}/docker-compose.yml"
+          if grep -qE '^\s+build:' "${BUNDLE}/docker-compose.yml"; then
+            echo "ERROR: build: section survived in the offline compose" >&2
+            exit 1
+          fi
+
+          echo "==> Zipping bundle…"
+          zip -r -q "dist/${BUNDLE}.zip" "${BUNDLE}"
+          ( cd dist && sha256sum "${BUNDLE}.zip" > SHA256SUMS-onprem.txt )
+          ls -lh dist "${BUNDLE}/images"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pointy-onprem
+          path: dist/*
+          if-no-files-found: error
+
+      - name: Attach to release
+        if: ${{ needs.version.outputs.is_release == 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${{ needs.version.outputs.tag }}" dist/* --clobber

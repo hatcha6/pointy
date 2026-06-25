@@ -106,6 +106,17 @@ func (s *CachedInstallationStore) ListAdminAuditEvents(
 	return adminStore.ListAdminAuditEvents(ctx, installationID, limit)
 }
 
+func (s *CachedInstallationStore) ListInstallations(
+	ctx context.Context,
+	filter InstallationFilter,
+) ([]Installation, error) {
+	adminStore, ok := s.store.(AdminSubscriptionStore)
+	if !ok {
+		return nil, errors.New("admin installation store is unavailable")
+	}
+	return adminStore.ListInstallations(ctx, filter)
+}
+
 func (s *CachedInstallationStore) ValidateConnectorToken(
 	ctx context.Context,
 	rawToken string,

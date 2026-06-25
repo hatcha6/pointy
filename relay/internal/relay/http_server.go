@@ -472,6 +472,12 @@ func (s HTTPServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		s.handlePublicInvoice(w, r)
+	case r.URL.Path == "/v1/installations" && r.Method == http.MethodGet:
+		if !s.RouteMode.allowsAdmin() {
+			writeNotFound(w)
+			return
+		}
+		s.withAdmin(w, r, s.handleListInstallations)
 	case r.URL.Path == "/v1/installations" && r.Method == http.MethodPost:
 		if !s.RouteMode.allowsAdmin() {
 			writeNotFound(w)
@@ -1195,6 +1201,45 @@ func holidayListResponse(holidays []control.Holiday) map[string]any {
 		holidays = []control.Holiday{}
 	}
 	return map[string]any{"holidays": holidays}
+}
+
+func (s HTTPServer) handleListInstallations(w http.ResponseWriter, r *http.Request) {
+	adminStore, ok := s.Store.(control.AdminSubscriptionStore)
+	if !ok {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "relay admin installation store unavailable"})
+		return
+	}
+	filter := control.InstallationFilter{Query: strings.TrimSpace(r.URL.Query().Get("query"))}
+	if rawLimit := strings.TrimSpace(r.URL.Query().Get("limit")); rawLimit != "" {
+		parsed, err := strconv.Atoi(rawLimit)
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid limit"})
+			return
+		}
+		filter.Limit = parsed
+	}
+	if rawActive := strings.TrimSpace(r.URL.Query().Get("subscription_active")); rawActive != "" {
+		active, err := strconv.ParseBool(rawActive)
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid subscription_active"})
+			return
+		}
+		filter.SubscriptionActive = &active
+	}
+	installations, err := adminStore.ListInstallations(r.Context(), filter)
+	if err != nil {
+		writeStoreError(w, err)
+		return
+	}
+	now := s.clock().Now()
+	payloads := make([]map[string]any, 0, len(installations))
+	for _, installation := range installations {
+		payloads = append(payloads, adminInstallationPayload(installation, now))
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"installations": payloads,
+		"count":         len(payloads),
+	})
 }
 
 func (s HTTPServer) handleInstallationAuditEvents(

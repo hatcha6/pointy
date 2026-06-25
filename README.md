@@ -525,3 +525,51 @@ make dev-no-redis  # Start only Django and Flutter
 make postgres-ping # Check PostgreSQL connectivity
 make redis-ping    # Check Redis connectivity
 ```
+
+## Releases (GitHub Actions)
+
+`.github/workflows/release.yml` builds and publishes the customer-facing
+artifacts. It runs automatically when a **GitHub Release is published** (tag like
+`v1.2.3`), and can also be run from the Actions tab (**Run workflow**) to produce
+test artifacts without cutting a release. Three build jobs run in parallel and
+attach their output to the release:
+
+| Job             | Artifact                                  | Notes |
+| --------------- | ----------------------------------------- | ----- |
+| `build-android` | `pointy-<ver>-android-universal.apk`      | One universal APK (all ABIs, `minSdk 23` / Android 6.0) for sideloading to till devices. |
+| `build-windows` | `pointy-<ver>-windows-x64-setup.exe` (+ portable `.zip`) | **Inno Setup installer** (Start Menu + desktop shortcuts, uninstaller) for easy one-click setup — recommended. A portable extract-and-run `.zip` ships alongside for locked-down deployments. The Visual C++ runtime is bundled in both, so the app runs on old/minimal Windows 10+ PCs with no extra install. |
+| `build-onprem`  | `pointy-onprem-<ver>.zip`                 | Fully offline server bundle: backend + relay + **web (Flutter web + nginx)** + Postgres + Redis images saved as `docker load` tarballs, the Compose file (`restart: always`), `.env.example`, installers, and a boot/crash **watchdog** that self-heals the stack so the till has no outages. Browser users open `http://<server-ip>/`. See [`deploy/onprem/INSTALL.md`](deploy/onprem/INSTALL.md). |
+
+Toolchain versions are pinned in the workflow `env:` to match local development
+(Flutter 3.38.6 / Dart 3.10.7, JDK 17; Go 1.25 + Python 3.12 come from the Docker
+images). Bump them there when the project upgrades.
+
+### Android signing
+
+The APK is **debug-signed by default** so the workflow works out of the box. To
+ship production-signed builds, add these repository secrets — the build then
+signs with your upload key automatically (see
+`frontend/android/app/build.gradle.kts`):
+
+| Secret                        | Value |
+| ----------------------------- | ----- |
+| `ANDROID_KEYSTORE_BASE64`     | `base64 -w0 upload-keystore.jks` |
+| `ANDROID_KEYSTORE_PASSWORD`   | Keystore password |
+| `ANDROID_KEY_ALIAS`           | Key alias |
+| `ANDROID_KEY_PASSWORD`        | Key password |
+
+> The default `applicationId`/`namespace` is still `com.example.frontend`. Change
+> it to a real, owned id before publishing to the Play Store (sideloaded APKs are
+> unaffected).
+
+### Windows installer signing
+
+The installer (`frontend/windows/installer/pointy.iss`, compiled with Inno Setup)
+works unsigned, but Windows SmartScreen then warns "unknown publisher" on first
+run. To Authenticode-sign the app and the installer automatically, add these
+secrets — the build signs both when they are present:
+
+| Secret                           | Value |
+| -------------------------------- | ----- |
+| `WINDOWS_SIGNING_CERT_BASE64`    | Code-signing cert as base64 PFX (`base64 -w0 cert.pfx`) |
+| `WINDOWS_SIGNING_CERT_PASSWORD`  | PFX password |

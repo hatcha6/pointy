@@ -262,6 +262,76 @@ func TestHTTPAdminEndpointsRequireVerifiedClientCertificate(t *testing.T) {
 	}
 }
 
+func TestListInstallationsEndpointRedactsAndFilters(t *testing.T) {
+	now := time.Date(2026, 6, 2, 12, 0, 0, 0, time.UTC)
+	store, err := control.NewFileStore(filepath.Join(t.TempDir(), "installations.json"), testClock{now: now})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, shop := range []string{"Alpha Market", "Beta Bakery"} {
+		if _, err := store.ProvisionInstallation(context.Background(), control.ProvisionInstallationRequest{ShopName: shop}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	server := HTTPServer{
+		Store:      store,
+		Hub:        NewHub(),
+		Logger:     slog.New(slog.NewTextHandler(io.Discard, nil)),
+		RouteMode:  RouteAll,
+		AdminToken: "admin-token",
+		Clock:      testClock{now: now},
+	}
+
+	request, err := http.NewRequest(http.MethodGet, "http://relay.test/v1/installations?query=bakery", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Header.Set("Authorization", "Bearer admin-token")
+	recorder := httptest.NewRecorder()
+	server.ServeHTTP(recorder, request)
+	response := recorder.Result()
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", response.StatusCode)
+	}
+	var payload struct {
+		Count         int              `json:"count"`
+		Installations []map[string]any `json:"installations"`
+	}
+	if err := json.NewDecoder(response.Body).Decode(&payload); err != nil {
+		t.Fatal(err)
+	}
+	if payload.Count != 1 || len(payload.Installations) != 1 {
+		t.Fatalf("expected 1 filtered installation, got %#v", payload)
+	}
+	if payload.Installations[0]["shop_name"] != "Beta Bakery" {
+		t.Fatalf("unexpected installation %#v", payload.Installations[0])
+	}
+	if _, leaked := payload.Installations[0]["connector_token_hash"]; leaked {
+		t.Fatal("installation listing must not expose connector token hash")
+	}
+}
+
+func TestListInstallationsEndpointRequiresAdminToken(t *testing.T) {
+	store, _ := provisionRelayInstallation(t)
+	server := HTTPServer{
+		Store:      store,
+		Hub:        NewHub(),
+		Logger:     slog.New(slog.NewTextHandler(io.Discard, nil)),
+		RouteMode:  RouteAll,
+		AdminToken: "admin-token",
+	}
+	request, err := http.NewRequest(http.MethodGet, "http://relay.test/v1/installations", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	recorder := httptest.NewRecorder()
+	server.ServeHTTP(recorder, request)
+	if recorder.Result().StatusCode != http.StatusUnauthorized {
+		t.Fatalf("expected 401 without admin token, got %d", recorder.Result().StatusCode)
+	}
+}
+
 func TestHTTPPublicRouteModeHidesAdminAndNodeRoutes(t *testing.T) {
 	store, _ := provisionRelayInstallation(t)
 	server := HTTPServer{

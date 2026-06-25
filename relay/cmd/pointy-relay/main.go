@@ -22,6 +22,7 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"text/tabwriter"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -68,6 +69,8 @@ func run(args []string) error {
 		return runConnector(args[1:])
 	case "provision":
 		return runProvision(args[1:])
+	case "installations":
+		return runInstallations(args[1:])
 	case "subscription":
 		return runSubscription(args[1:])
 	case "migrate":
@@ -1376,11 +1379,19 @@ func runProvision(args []string) error {
 
 func runSubscription(args []string) error {
 	if len(args) == 0 {
-		return usageError("missing subscription command")
+		return usageError("missing subscription command (update, enable, disable, extend, audit)")
 	}
 	switch args[0] {
 	case "update":
 		return runSubscriptionUpdate(args[1:])
+	case "enable":
+		return runSubscriptionToggle(args[1:], true)
+	case "disable":
+		return runSubscriptionToggle(args[1:], false)
+	case "extend":
+		return runSubscriptionExtend(args[1:])
+	case "audit":
+		return runInstallationsAudit(args[1:])
 	default:
 		return usageError("unknown subscription command %q", args[0])
 	}
@@ -1388,56 +1399,23 @@ func runSubscription(args []string) error {
 
 func runSubscriptionUpdate(args []string) error {
 	flags := flag.NewFlagSet("subscription update", flag.ExitOnError)
-	controlURL := flags.String(
-		"control-url",
-		envString("POINTY_RELAY_CONTROL_URL", "http://127.0.0.1:8091"),
-		"relay admin control URL",
-	)
-	adminToken := flags.String(
-		"admin-token",
-		envString("POINTY_RELAY_ADMIN_TOKEN", ""),
-		"relay admin bearer token",
-	)
-	allowInsecureControl := flags.Bool(
-		"allow-insecure-control",
-		envBool("POINTY_RELAY_ALLOW_INSECURE_CONTROL", false),
-		"allow cleartext relay admin control URL for local development",
-	)
-	controlCA := flags.String(
-		"control-ca",
-		envString("POINTY_RELAY_CONTROL_CA_FILE", ""),
-		"CA bundle for relay admin control TLS",
-	)
-	controlClientCert := flags.String(
-		"control-client-cert",
-		envString("POINTY_RELAY_CONTROL_CLIENT_CERT_FILE", ""),
-		"client certificate for relay admin control mTLS",
-	)
-	controlClientKey := flags.String(
-		"control-client-key",
-		envString("POINTY_RELAY_CONTROL_CLIENT_KEY_FILE", ""),
-		"client key for relay admin control mTLS",
-	)
-	controlTLSServerName := flags.String(
-		"control-tls-server-name",
-		envString("POINTY_RELAY_CONTROL_TLS_SERVER_NAME", ""),
-		"expected relay admin control TLS server name",
-	)
-	installationID := flags.String("installation-id", "", "installation id to update")
-	actor := flags.String("actor", "", "company operator or automation id")
+	admin := registerAdminControlFlags(flags)
+	actor := flags.String("actor", "", "operator id for the audit trail (default: $POINTY_RELAY_OPERATOR or OS user)")
 	reason := flags.String("reason", "", "audit reason for the subscription change")
 	relayEnabled := flags.String("relay-enabled", "", "optional true/false relay entitlement")
 	subscriptionActive := flags.String("subscription-active", "", "optional true/false subscription state")
 	aiEnabled := flags.String("ai-enabled", "", "optional true/false AI entitlement")
 	subscriptionEndsAt := flags.String("subscription-ends-at", "", "optional RFC3339 subscription end time")
 	clearEnd := flags.Bool("clear-subscription-end", false, "clear subscription end time")
-	if err := flags.Parse(args); err != nil {
+	asJSON := flags.Bool("json", false, "print the raw JSON response")
+	installationIDFlag := flags.String("installation-id", "", "installation id (or pass it as the first argument)")
+	id, err := idAndFlagsOptional(args, flags, installationIDFlag)
+	if err != nil {
 		return err
 	}
-
 	body, err := subscriptionUpdateBody(subscriptionUpdateOptions{
-		InstallationID:       *installationID,
-		Actor:                *actor,
+		InstallationID:       id,
+		Actor:                resolveActor(*actor),
 		Reason:               *reason,
 		RelayEnabled:         *relayEnabled,
 		SubscriptionActive:   *subscriptionActive,
@@ -1448,55 +1426,562 @@ func runSubscriptionUpdate(args []string) error {
 	if err != nil {
 		return err
 	}
-	endpoint, err := relayAdminEndpoint(*controlURL, "/v1/installations/"+url.PathEscape(strings.TrimSpace(*installationID))+"/subscription")
+	return applySubscriptionChange(admin, id, body, *asJSON)
+}
+
+func runSubscriptionToggle(args []string, enable bool) error {
+	verb := "enable"
+	if !enable {
+		verb = "disable"
+	}
+	flags := flag.NewFlagSet("subscription "+verb, flag.ExitOnError)
+	admin := registerAdminControlFlags(flags)
+	actor := flags.String("actor", "", "operator id for the audit trail (default: $POINTY_RELAY_OPERATOR or OS user)")
+	reason := flags.String("reason", "", "audit reason (defaults to the action)")
+	withAI := flags.Bool("ai", false, "also toggle the AI entitlement")
+	asJSON := flags.Bool("json", false, "print the raw JSON response")
+	id, err := idAndFlags(args, flags)
 	if err != nil {
 		return err
 	}
-	client, err := newRelayAdminHTTPClient(relayAdminHTTPClientOptions{
-		ControlURL:     *controlURL,
-		AllowInsecure:  *allowInsecureControl,
-		CAFile:         *controlCA,
-		ClientCertFile: *controlClientCert,
-		ClientKeyFile:  *controlClientKey,
-		TLSServerName:  *controlTLSServerName,
+	state := strconv.FormatBool(enable)
+	options := subscriptionUpdateOptions{
+		InstallationID:     id,
+		Actor:              resolveActor(*actor),
+		Reason:             defaultReason(*reason, verb+"d relay subscription via operator CLI"),
+		RelayEnabled:       state,
+		SubscriptionActive: state,
+	}
+	if *withAI {
+		options.AIEnabled = state
+	}
+	body, err := subscriptionUpdateBody(options)
+	if err != nil {
+		return err
+	}
+	return applySubscriptionChange(admin, id, body, *asJSON)
+}
+
+func runSubscriptionExtend(args []string) error {
+	flags := flag.NewFlagSet("subscription extend", flag.ExitOnError)
+	admin := registerAdminControlFlags(flags)
+	actor := flags.String("actor", "", "operator id for the audit trail (default: $POINTY_RELAY_OPERATOR or OS user)")
+	reason := flags.String("reason", "", "audit reason (defaults to the action)")
+	days := flags.Int("days", 0, "number of days from now to set the subscription end")
+	asJSON := flags.Bool("json", false, "print the raw JSON response")
+	id, err := idAndFlags(args, flags)
+	if err != nil {
+		return err
+	}
+	if *days <= 0 {
+		return usageError("--days must be a positive number")
+	}
+	endsAt := time.Now().UTC().Add(time.Duration(*days) * 24 * time.Hour)
+	body, err := subscriptionUpdateBody(subscriptionUpdateOptions{
+		InstallationID:     id,
+		Actor:              resolveActor(*actor),
+		Reason:             defaultReason(*reason, fmt.Sprintf("extended subscription %d day(s) via operator CLI", *days)),
+		SubscriptionActive: "true",
+		SubscriptionEndsAt: endsAt.Format(time.RFC3339),
 	})
 	if err != nil {
 		return err
 	}
-	content, err := json.Marshal(body)
+	return applySubscriptionChange(admin, id, body, *asJSON)
+}
+
+func applySubscriptionChange(admin *adminControlFlags, id string, body map[string]any, asJSON bool) error {
+	raw, err := admin.requestJSON(http.MethodPatch, "/v1/installations/"+url.PathEscape(id)+"/subscription", nil, body)
 	if err != nil {
 		return err
 	}
-	request, err := http.NewRequest(http.MethodPatch, endpoint.String(), bytes.NewReader(content))
+	if asJSON {
+		return printRawJSON(raw)
+	}
+	var response struct {
+		Installation installationView `json:"installation"`
+	}
+	if err := json.Unmarshal(raw, &response); err != nil {
+		return err
+	}
+	fmt.Printf("Updated %s.\n\n", id)
+	return renderInstallationDetail(response.Installation)
+}
+
+func runInstallations(args []string) error {
+	if len(args) == 0 {
+		return usageError("missing installations command (list, show, status, audit, provision)")
+	}
+	switch args[0] {
+	case "list":
+		return runInstallationsList(args[1:])
+	case "show":
+		return runInstallationsShow(args[1:])
+	case "status":
+		return runInstallationsStatus(args[1:])
+	case "audit":
+		return runInstallationsAudit(args[1:])
+	case "provision":
+		return runInstallationsProvision(args[1:])
+	default:
+		return usageError("unknown installations command %q", args[0])
+	}
+}
+
+func runInstallationsList(args []string) error {
+	flags := flag.NewFlagSet("installations list", flag.ExitOnError)
+	admin := registerAdminControlFlags(flags)
+	query := flags.String("query", "", "case-insensitive substring over id, business id, and shop name")
+	limit := flags.Int("limit", 0, "maximum rows to return (default 200)")
+	activeOnly := flags.Bool("active", false, "only installations with an active subscription")
+	inactiveOnly := flags.Bool("inactive", false, "only installations with an inactive subscription")
+	asJSON := flags.Bool("json", false, "print the raw JSON response")
+	if err := flags.Parse(args); err != nil {
+		return err
+	}
+	if *activeOnly && *inactiveOnly {
+		return usageError("--active and --inactive are mutually exclusive")
+	}
+	params := url.Values{}
+	if q := strings.TrimSpace(*query); q != "" {
+		params.Set("query", q)
+	}
+	if *limit > 0 {
+		params.Set("limit", strconv.Itoa(*limit))
+	}
+	if *activeOnly {
+		params.Set("subscription_active", "true")
+	}
+	if *inactiveOnly {
+		params.Set("subscription_active", "false")
+	}
+	raw, err := admin.requestJSON(http.MethodGet, "/v1/installations", params, nil)
 	if err != nil {
 		return err
+	}
+	if *asJSON {
+		return printRawJSON(raw)
+	}
+	var response installationListResponse
+	if err := json.Unmarshal(raw, &response); err != nil {
+		return err
+	}
+	return renderInstallationTable(response)
+}
+
+func runInstallationsShow(args []string) error {
+	flags := flag.NewFlagSet("installations show", flag.ExitOnError)
+	admin := registerAdminControlFlags(flags)
+	asJSON := flags.Bool("json", false, "print the raw JSON response")
+	id, err := idAndFlags(args, flags)
+	if err != nil {
+		return err
+	}
+	raw, err := admin.requestJSON(http.MethodGet, "/v1/installations/"+url.PathEscape(id), nil, nil)
+	if err != nil {
+		return err
+	}
+	if *asJSON {
+		return printRawJSON(raw)
+	}
+	var installation installationView
+	if err := json.Unmarshal(raw, &installation); err != nil {
+		return err
+	}
+	return renderInstallationDetail(installation)
+}
+
+func runInstallationsStatus(args []string) error {
+	flags := flag.NewFlagSet("installations status", flag.ExitOnError)
+	admin := registerAdminControlFlags(flags)
+	asJSON := flags.Bool("json", false, "print the raw JSON response")
+	id, err := idAndFlags(args, flags)
+	if err != nil {
+		return err
+	}
+	raw, err := admin.requestJSON(http.MethodGet, "/v1/installations/"+url.PathEscape(id)+"/status", nil, nil)
+	if err != nil {
+		return err
+	}
+	if *asJSON {
+		return printRawJSON(raw)
+	}
+	var status installationStatusView
+	if err := json.Unmarshal(raw, &status); err != nil {
+		return err
+	}
+	return renderInstallationStatus(status)
+}
+
+func runInstallationsAudit(args []string) error {
+	flags := flag.NewFlagSet("installations audit", flag.ExitOnError)
+	admin := registerAdminControlFlags(flags)
+	limit := flags.Int("limit", 0, "maximum audit events to return")
+	asJSON := flags.Bool("json", false, "print the raw JSON response")
+	id, err := idAndFlags(args, flags)
+	if err != nil {
+		return err
+	}
+	params := url.Values{}
+	if *limit > 0 {
+		params.Set("limit", strconv.Itoa(*limit))
+	}
+	raw, err := admin.requestJSON(http.MethodGet, "/v1/installations/"+url.PathEscape(id)+"/audit-events", params, nil)
+	if err != nil {
+		return err
+	}
+	if *asJSON {
+		return printRawJSON(raw)
+	}
+	var response auditEventsResponse
+	if err := json.Unmarshal(raw, &response); err != nil {
+		return err
+	}
+	return renderAuditEvents(response)
+}
+
+func runInstallationsProvision(args []string) error {
+	flags := flag.NewFlagSet("installations provision", flag.ExitOnError)
+	admin := registerAdminControlFlags(flags)
+	businessID := flags.String("business-id", "", "business identifier to attach to the installation")
+	shopName := flags.String("shop-name", "", "shop name to attach to the installation")
+	relayEnabled := flags.Bool("relay-enabled", false, "enable remote relay access immediately")
+	subscriptionActive := flags.Bool("subscription-active", false, "mark the relay subscription active immediately")
+	aiEnabled := flags.Bool("ai-enabled", false, "enable the AI entitlement immediately")
+	subscriptionEndsAt := flags.String("subscription-ends-at", "", "optional RFC3339 subscription end time")
+	if err := flags.Parse(args); err != nil {
+		return err
+	}
+	body := map[string]any{
+		"business_id":         strings.TrimSpace(*businessID),
+		"shop_name":           strings.TrimSpace(*shopName),
+		"relay_enabled":       *relayEnabled,
+		"subscription_active": *subscriptionActive,
+		"ai_enabled":          *aiEnabled,
+	}
+	if ends := strings.TrimSpace(*subscriptionEndsAt); ends != "" {
+		if _, err := time.Parse(time.RFC3339, ends); err != nil {
+			return fmt.Errorf("subscription-ends-at must be RFC3339: %w", err)
+		}
+		body["subscription_ends_at"] = ends
+	}
+	raw, err := admin.requestJSON(http.MethodPost, "/v1/installations", nil, body)
+	if err != nil {
+		return err
+	}
+	// Always print the full JSON: the one-time connector and access tokens are
+	// only returned here and the operator must capture them.
+	return printRawJSON(raw)
+}
+
+// adminControlFlags collects the connection settings every API-based operator
+// command shares. Registering them once (and reading defaults from the
+// environment) lets an operator export POINTY_RELAY_CONTROL_URL and
+// POINTY_RELAY_ADMIN_TOKEN a single time and then run terse commands.
+type adminControlFlags struct {
+	controlURL     *string
+	adminToken     *string
+	allowInsecure  *bool
+	caFile         *string
+	clientCertFile *string
+	clientKeyFile  *string
+	tlsServerName  *string
+}
+
+func registerAdminControlFlags(flags *flag.FlagSet) *adminControlFlags {
+	return &adminControlFlags{
+		controlURL:     flags.String("control-url", envString("POINTY_RELAY_CONTROL_URL", "http://127.0.0.1:8091"), "relay admin control URL"),
+		adminToken:     flags.String("admin-token", envString("POINTY_RELAY_ADMIN_TOKEN", ""), "relay admin bearer token"),
+		allowInsecure:  flags.Bool("allow-insecure-control", envBool("POINTY_RELAY_ALLOW_INSECURE_CONTROL", false), "allow cleartext relay admin control URL for local development"),
+		caFile:         flags.String("control-ca", envString("POINTY_RELAY_CONTROL_CA_FILE", ""), "CA bundle for relay admin control TLS"),
+		clientCertFile: flags.String("control-client-cert", envString("POINTY_RELAY_CONTROL_CLIENT_CERT_FILE", ""), "client certificate for relay admin control mTLS"),
+		clientKeyFile:  flags.String("control-client-key", envString("POINTY_RELAY_CONTROL_CLIENT_KEY_FILE", ""), "client key for relay admin control mTLS"),
+		tlsServerName:  flags.String("control-tls-server-name", envString("POINTY_RELAY_CONTROL_TLS_SERVER_NAME", ""), "expected relay admin control TLS server name"),
+	}
+}
+
+// requestJSON performs an authenticated admin API call and returns the raw JSON
+// response body. body is nil for GET requests; query may be nil.
+func (a *adminControlFlags) requestJSON(method, path string, query url.Values, body any) (json.RawMessage, error) {
+	if strings.TrimSpace(*a.adminToken) == "" {
+		return nil, fmt.Errorf("admin token is required (set --admin-token or POINTY_RELAY_ADMIN_TOKEN)")
+	}
+	endpoint, err := relayAdminEndpoint(*a.controlURL, path)
+	if err != nil {
+		return nil, err
+	}
+	if len(query) > 0 {
+		endpoint.RawQuery = query.Encode()
+	}
+	client, err := newRelayAdminHTTPClient(relayAdminHTTPClientOptions{
+		ControlURL:     *a.controlURL,
+		AllowInsecure:  *a.allowInsecure,
+		CAFile:         *a.caFile,
+		ClientCertFile: *a.clientCertFile,
+		ClientKeyFile:  *a.clientKeyFile,
+		TLSServerName:  *a.tlsServerName,
+	})
+	if err != nil {
+		return nil, err
+	}
+	var reader io.Reader
+	if body != nil {
+		content, err := json.Marshal(body)
+		if err != nil {
+			return nil, err
+		}
+		reader = bytes.NewReader(content)
+	}
+	request, err := http.NewRequest(method, endpoint.String(), reader)
+	if err != nil {
+		return nil, err
 	}
 	request.Header.Set("Accept", "application/json")
-	request.Header.Set("Content-Type", "application/json")
-	if strings.TrimSpace(*adminToken) == "" {
-		return fmt.Errorf("admin token is required")
+	if body != nil {
+		request.Header.Set("Content-Type", "application/json")
 	}
-	request.Header.Set("Authorization", "Bearer "+strings.TrimSpace(*adminToken))
+	request.Header.Set("Authorization", "Bearer "+strings.TrimSpace(*a.adminToken))
 	response, err := client.Do(request)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer response.Body.Close()
+	payload, _ := io.ReadAll(io.LimitReader(response.Body, 4<<20))
 	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
-		detail, _ := io.ReadAll(io.LimitReader(response.Body, 4096))
-		return fmt.Errorf(
-			"subscription update returned %d: %s",
-			response.StatusCode,
-			strings.TrimSpace(string(detail)),
+		return nil, fmt.Errorf("relay admin %s %s returned %d: %s", method, path, response.StatusCode, strings.TrimSpace(string(payload)))
+	}
+	return json.RawMessage(payload), nil
+}
+
+// idAndFlags treats the first argument as the installation id and parses the
+// remaining arguments as flags, so commands read as `... <id> [flags]`.
+func idAndFlags(args []string, flags *flag.FlagSet) (string, error) {
+	if len(args) == 0 || strings.HasPrefix(args[0], "-") {
+		return "", usageError("missing installation id as the first argument")
+	}
+	id := strings.TrimSpace(args[0])
+	if id == "" {
+		return "", usageError("installation id must not be empty")
+	}
+	if err := flags.Parse(args[1:]); err != nil {
+		return "", err
+	}
+	return id, nil
+}
+
+// idAndFlagsOptional accepts the installation id either as the first positional
+// argument or via --installation-id, keeping the original subscription-update
+// interface working while allowing the terser positional form.
+func idAndFlagsOptional(args []string, flags *flag.FlagSet, idFlag *string) (string, error) {
+	if len(args) > 0 && !strings.HasPrefix(args[0], "-") {
+		return idAndFlags(args, flags)
+	}
+	if err := flags.Parse(args); err != nil {
+		return "", err
+	}
+	id := strings.TrimSpace(*idFlag)
+	if id == "" {
+		return "", usageError("missing installation id (pass it as the first argument or via --installation-id)")
+	}
+	return id, nil
+}
+
+// resolveActor fills the audit actor from the flag, then the environment, then
+// the OS user, so operators rarely need to type --actor.
+func resolveActor(flagValue string) string {
+	if v := strings.TrimSpace(flagValue); v != "" {
+		return v
+	}
+	if v := strings.TrimSpace(os.Getenv("POINTY_RELAY_OPERATOR")); v != "" {
+		return v
+	}
+	if v := strings.TrimSpace(os.Getenv("USER")); v != "" {
+		return v
+	}
+	return "operator-cli"
+}
+
+func defaultReason(flagValue, fallback string) string {
+	if v := strings.TrimSpace(flagValue); v != "" {
+		return v
+	}
+	return fallback
+}
+
+func printRawJSON(raw json.RawMessage) error {
+	var buf bytes.Buffer
+	if err := json.Indent(&buf, raw, "", "  "); err != nil {
+		// Not valid JSON to re-indent; print as-is.
+		_, err = os.Stdout.Write(raw)
+		fmt.Println()
+		return err
+	}
+	_, err := os.Stdout.Write(buf.Bytes())
+	fmt.Println()
+	return err
+}
+
+type installationView struct {
+	ID                       string  `json:"id"`
+	BusinessID               string  `json:"business_id"`
+	ShopName                 string  `json:"shop_name"`
+	RelayEnabled             bool    `json:"relay_enabled"`
+	SubscriptionActive       bool    `json:"subscription_active"`
+	AIEnabled                bool    `json:"ai_enabled"`
+	RelayActive              bool    `json:"relay_active"`
+	SubscriptionEndsAt       *string `json:"subscription_ends_at"`
+	LastConnectorConnectedAt *string `json:"last_connector_connected_at"`
+	CreatedAt                *string `json:"created_at"`
+	CertificateExpiresAt     *string `json:"connector_certificate_expires_at"`
+}
+
+type installationListResponse struct {
+	Installations []installationView `json:"installations"`
+	Count         int                `json:"count"`
+}
+
+type installationStatusView struct {
+	InstallationID           string  `json:"installation_id"`
+	ShopName                 string  `json:"shop_name"`
+	RelayEnabled             bool    `json:"relay_enabled"`
+	RelayActive              bool    `json:"relay_active"`
+	SubscriptionActive       bool    `json:"subscription_active"`
+	SubscriptionEndsAt       *string `json:"subscription_ends_at"`
+	ConnectorOnlineLocal     bool    `json:"connector_online_local"`
+	LastConnectorConnectedAt *string `json:"last_connector_connected_at"`
+	CertificateExpiresAt     *string `json:"connector_certificate_expires_at"`
+	ConnectorPresence        *struct {
+		Online bool   `json:"online"`
+		NodeID string `json:"node_id"`
+	} `json:"connector_presence"`
+}
+
+type auditEventsResponse struct {
+	InstallationID string `json:"installation_id"`
+	Events         []struct {
+		Action    string  `json:"action"`
+		Actor     string  `json:"actor"`
+		Reason    string  `json:"reason"`
+		CreatedAt *string `json:"created_at"`
+	} `json:"events"`
+}
+
+func renderInstallationTable(response installationListResponse) error {
+	if len(response.Installations) == 0 {
+		fmt.Println("No installations found.")
+		return nil
+	}
+	writer := tabwriter.NewWriter(os.Stdout, 0, 2, 2, ' ', 0)
+	fmt.Fprintln(writer, "ID\tSHOP\tRELAY\tSUB\tAI\tENDS\tLAST SEEN")
+	for _, installation := range response.Installations {
+		fmt.Fprintf(
+			writer,
+			"%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
+			installation.ID,
+			dashIfEmpty(installation.ShopName),
+			onOff(installation.RelayEnabled),
+			onOff(installation.SubscriptionActive),
+			onOff(installation.AIEnabled),
+			formatTimeField(installation.SubscriptionEndsAt),
+			formatTimeField(installation.LastConnectorConnectedAt),
 		)
 	}
-	var payload any
-	if err := json.NewDecoder(io.LimitReader(response.Body, 1<<20)).Decode(&payload); err != nil {
-		return fmt.Errorf("subscription update returned invalid JSON: %w", err)
+	if err := writer.Flush(); err != nil {
+		return err
 	}
-	encoder := json.NewEncoder(os.Stdout)
-	encoder.SetIndent("", "  ")
-	return encoder.Encode(payload)
+	fmt.Printf("\n%d installation(s).\n", response.Count)
+	return nil
+}
+
+func renderInstallationDetail(installation installationView) error {
+	writer := tabwriter.NewWriter(os.Stdout, 0, 2, 2, ' ', 0)
+	rows := [][2]string{
+		{"id", installation.ID},
+		{"shop", dashIfEmpty(installation.ShopName)},
+		{"business", dashIfEmpty(installation.BusinessID)},
+		{"relay enabled", onOff(installation.RelayEnabled)},
+		{"subscription", onOff(installation.SubscriptionActive)},
+		{"relay active", onOff(installation.RelayActive)},
+		{"ai enabled", onOff(installation.AIEnabled)},
+		{"subscription ends", formatTimeField(installation.SubscriptionEndsAt)},
+		{"last connector seen", formatTimeField(installation.LastConnectorConnectedAt)},
+		{"connector cert expires", formatTimeField(installation.CertificateExpiresAt)},
+		{"created", formatTimeField(installation.CreatedAt)},
+	}
+	for _, row := range rows {
+		fmt.Fprintf(writer, "%s\t%s\n", row[0], row[1])
+	}
+	return writer.Flush()
+}
+
+func renderInstallationStatus(status installationStatusView) error {
+	online := status.ConnectorOnlineLocal
+	node := ""
+	if status.ConnectorPresence != nil {
+		online = online || status.ConnectorPresence.Online
+		node = status.ConnectorPresence.NodeID
+	}
+	writer := tabwriter.NewWriter(os.Stdout, 0, 2, 2, ' ', 0)
+	rows := [][2]string{
+		{"id", status.InstallationID},
+		{"shop", dashIfEmpty(status.ShopName)},
+		{"relay enabled", onOff(status.RelayEnabled)},
+		{"relay active", onOff(status.RelayActive)},
+		{"subscription", onOff(status.SubscriptionActive)},
+		{"subscription ends", formatTimeField(status.SubscriptionEndsAt)},
+		{"connector online", onOff(online)},
+		{"connector node", dashIfEmpty(node)},
+		{"last connector seen", formatTimeField(status.LastConnectorConnectedAt)},
+		{"connector cert expires", formatTimeField(status.CertificateExpiresAt)},
+	}
+	for _, row := range rows {
+		fmt.Fprintf(writer, "%s\t%s\n", row[0], row[1])
+	}
+	return writer.Flush()
+}
+
+func renderAuditEvents(response auditEventsResponse) error {
+	if len(response.Events) == 0 {
+		fmt.Printf("No audit events for %s.\n", response.InstallationID)
+		return nil
+	}
+	writer := tabwriter.NewWriter(os.Stdout, 0, 2, 2, ' ', 0)
+	fmt.Fprintln(writer, "TIME\tACTION\tACTOR\tREASON")
+	for _, event := range response.Events {
+		fmt.Fprintf(
+			writer,
+			"%s\t%s\t%s\t%s\n",
+			formatTimeField(event.CreatedAt),
+			dashIfEmpty(event.Action),
+			dashIfEmpty(event.Actor),
+			dashIfEmpty(event.Reason),
+		)
+	}
+	return writer.Flush()
+}
+
+func formatTimeField(value *string) string {
+	if value == nil || strings.TrimSpace(*value) == "" {
+		return "—"
+	}
+	if parsed, err := time.Parse(time.RFC3339, *value); err == nil {
+		return parsed.UTC().Format("2006-01-02 15:04 UTC")
+	}
+	return *value
+}
+
+func onOff(value bool) string {
+	if value {
+		return "on"
+	}
+	return "off"
+}
+
+func dashIfEmpty(value string) string {
+	if strings.TrimSpace(value) == "" {
+		return "—"
+	}
+	return value
 }
 
 func runMigrate(args []string) error {
@@ -2044,18 +2529,33 @@ func printUsage() {
 	fmt.Fprintln(os.Stderr, `Usage:
   pointy-relay server [flags]
   pointy-relay connector [flags]
+  pointy-relay installations <list|show|status|audit|provision> [args]
+  pointy-relay subscription <update|enable|disable|extend|audit> <id> [flags]
   pointy-relay provision [flags]
-  pointy-relay subscription update [flags]
   pointy-relay migrate [flags]
   pointy-relay gen-token [flags]
 
 Commands:
-  server        Run relay control, remote HTTP, and connector listeners.
-  connector     Run the on-prem connector beside a Pointy backend.
-  provision     Create an installation with connector and access tokens.
-  subscription  Manage company-owned relay subscription state.
-  migrate       Apply relay PostgreSQL migrations.
-  gen-token     Print a strong random admin token for POINTY_RELAY_ADMIN_TOKEN.
+  server         Run relay control, remote HTTP, and connector listeners.
+  connector      Run the on-prem connector beside a Pointy backend.
+  installations  Fleet management over the admin API:
+                   list [--query q] [--active|--inactive] [--limit n] [--json]
+                   show <id> [--json]        full subscription + connector state
+                   status <id> [--json]      live connector / certificate health
+                   audit <id> [--json]       recent subscription change history
+                   provision [--shop-name .. --relay-enabled ..]   create remotely
+  subscription   Fast subscription changes over the admin API (audited):
+                   enable <id>               turn relay + subscription on
+                   disable <id>              turn relay + subscription off
+                   extend <id> --days N      set the end date N days out, active
+                   update <id> [flags]       explicit field-by-field control
+                   audit <id>                change history (alias)
+  provision      Create an installation directly against the database (host-side).
+  migrate        Apply relay PostgreSQL migrations.
+  gen-token      Print a strong random admin token for POINTY_RELAY_ADMIN_TOKEN.
+
+Admin API commands read POINTY_RELAY_CONTROL_URL and POINTY_RELAY_ADMIN_TOKEN
+from the environment; export them once for terse, repeatable management.
 
 Deployment profiles (server --platform / POINTY_RELAY_PLATFORM):
   paas          Single public endpoint behind a TLS-terminating load balancer,

@@ -169,6 +169,36 @@ type AdminSubscriptionStore interface {
 		metadata AdminAuditMetadata,
 	) (Installation, AdminAuditEvent, error)
 	ListAdminAuditEvents(ctx context.Context, installationID string, limit int) ([]AdminAuditEvent, error)
+	ListInstallations(ctx context.Context, filter InstallationFilter) ([]Installation, error)
+}
+
+// InstallationFilter narrows an operator's installation listing. Zero value
+// returns every installation (newest first), capped at a safe default.
+type InstallationFilter struct {
+	// Query is a case-insensitive substring matched against id, business_id, and
+	// shop_name. Empty matches everything.
+	Query string
+	// SubscriptionActive, when set, keeps only installations with that
+	// subscription state. Nil leaves the state unfiltered.
+	SubscriptionActive *bool
+	// Limit caps the number of rows returned. Non-positive or oversized values
+	// fall back to the store's default cap.
+	Limit int
+}
+
+// DefaultInstallationListLimit and maxInstallationListLimit bound a listing so a
+// large fleet can't return an unbounded result set to the operator CLI.
+const (
+	DefaultInstallationListLimit = 200
+	maxInstallationListLimit     = 1000
+)
+
+// normalizedListLimit clamps a requested limit into the supported range.
+func normalizedListLimit(limit int) int {
+	if limit <= 0 || limit > maxInstallationListLimit {
+		return DefaultInstallationListLimit
+	}
+	return limit
 }
 
 // Holiday is a special calendar day (holiday / event) served to shops and used
@@ -460,6 +490,47 @@ func (s *FileStore) ListAdminAuditEvents(
 		events = events[:limit]
 	}
 	return events, nil
+}
+
+func (s *FileStore) ListInstallations(
+	_ context.Context,
+	filter InstallationFilter,
+) ([]Installation, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	query := strings.ToLower(strings.TrimSpace(filter.Query))
+	installations := make([]Installation, 0, len(s.data.Installations))
+	for _, installation := range s.data.Installations {
+		if !installationMatchesFilter(installation, query, filter.SubscriptionActive) {
+			continue
+		}
+		installations = append(installations, installation)
+	}
+	// Newest first, with id as a stable tiebreaker so output is deterministic.
+	sort.Slice(installations, func(i, j int) bool {
+		if installations[i].CreatedAt.Equal(installations[j].CreatedAt) {
+			return installations[i].ID < installations[j].ID
+		}
+		return installations[i].CreatedAt.After(installations[j].CreatedAt)
+	})
+	limit := normalizedListLimit(filter.Limit)
+	if len(installations) > limit {
+		installations = installations[:limit]
+	}
+	return installations, nil
+}
+
+func installationMatchesFilter(installation Installation, loweredQuery string, active *bool) bool {
+	if active != nil && installation.SubscriptionActive != *active {
+		return false
+	}
+	if loweredQuery == "" {
+		return true
+	}
+	return strings.Contains(strings.ToLower(installation.ID), loweredQuery) ||
+		strings.Contains(strings.ToLower(installation.BusinessID), loweredQuery) ||
+		strings.Contains(strings.ToLower(installation.ShopName), loweredQuery)
 }
 
 func (s *FileStore) ValidateConnectorToken(

@@ -4,6 +4,12 @@ This stack is for a customer site where Windows is the host OS and Docker
 Desktop runs Linux containers. Cashier devices connect to the backend over LAN;
 PostgreSQL, Redis, Celery, and the connector stay inside Docker.
 
+A `web` service (nginx) also serves the Flutter web app and reverse-proxies the
+API on the same origin, so any device on the LAN can use Pointy from a browser at
+`http://<server-ip>/` with no install. Native tills still connect directly to the
+backend on `:8000` via discovery, so the web front door is purely additive — if
+it is down, the tills are unaffected.
+
 ## First Install
 
 1. Install Docker Desktop and enable Linux containers.
@@ -12,7 +18,8 @@ PostgreSQL, Redis, Celery, and the connector stay inside Docker.
 3. Copy `deploy/onprem/.env.example` to `deploy/onprem/.env`.
 4. Replace every secret and every `192.168.1.50` example with the Windows
    host's static LAN IP.
-5. Allow inbound Windows Firewall traffic for TCP `8000` and UDP `47777`.
+5. Allow inbound Windows Firewall traffic for TCP `8000` (API), UDP `47777`
+   (LAN discovery), and TCP `80` (browser access).
 6. Start the stack:
 
 ```sh
@@ -87,6 +94,12 @@ capabilities, blocks privilege escalation, and sets PID limits for the Pointy
 backend, Celery, Beat, and connector containers. Writable paths are limited to
 named volumes, tmpfs, and explicitly configured backup drive mounts.
 
+The `web` (nginx) container is also read-only with tmpfs-only writable paths,
+no-new-privileges, and CPU/memory/PID caps. It keeps its default Linux
+capabilities on purpose — nginx needs them to bind port 80 and drop worker
+process privileges — but holds no secrets and only serves the static web bundle
+and proxies the API.
+
 Every service also has a memory (`mem_limit`) and CPU (`cpus`) cap so one
 runaway process — a heavy report, a worker leak, a restore — cannot starve the
 host and take down the till. Defaults total well under 8GB; raise the
@@ -121,8 +134,15 @@ movements are read-only in the Django admin and cannot be deleted there.
   free space on the Docker volume host and on backup drives; the backup
   retention count (`POINTY_BACKUP_RETENTION_COUNT`) bounds archive growth, and
   container logs are capped at 10MB × 5 files per service.
-- **A service crashes:** All services use `restart: unless-stopped` and Docker
-  health checks. Celery only starts once the backend is healthy.
+- **A service crashes:** All services use `restart: always`, so Docker restarts
+  a crashed container in place immediately and brings the whole stack back when
+  the Docker engine starts. Celery only starts once the backend is healthy.
+- **A container is destroyed, or the host reboots:** A watchdog
+  (`watchdog.ps1` / `watchdog.sh`, registered via `register-autostart.*`) runs at
+  boot and every 5 minutes. It runs `docker compose up -d` to recreate any
+  removed/stopped container and restarts any container left "unhealthy" (which
+  the restart policy alone will not do). See INSTALL.md > Resilience — on Windows
+  this also requires automatic logon so Docker Desktop starts unattended.
 - **Long task hangs:** Celery enforces soft/hard time limits
   (`CELERY_TASK_*_TIME_LIMIT`) so a stuck task cannot pin a worker forever;
   backup/restore are exempted with their own higher limits.

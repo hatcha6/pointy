@@ -265,6 +265,51 @@ func (s *PostgresStore) GetInstallation(ctx context.Context, id string) (Install
 	return scanInstallation(s.pool.QueryRow(ctx, selectInstallationSQL+" WHERE id = $1", id))
 }
 
+func (s *PostgresStore) ListInstallations(
+	ctx context.Context,
+	filter InstallationFilter,
+) ([]Installation, error) {
+	query := selectInstallationSQL
+	var conditions []string
+	var args []any
+	if q := strings.TrimSpace(filter.Query); q != "" {
+		args = append(args, "%"+strings.ToLower(q)+"%")
+		n := len(args)
+		conditions = append(conditions, fmt.Sprintf(
+			"(lower(id) LIKE $%d OR lower(business_id) LIKE $%d OR lower(shop_name) LIKE $%d)",
+			n, n, n,
+		))
+	}
+	if filter.SubscriptionActive != nil {
+		args = append(args, *filter.SubscriptionActive)
+		conditions = append(conditions, fmt.Sprintf("subscription_active = $%d", len(args)))
+	}
+	if len(conditions) > 0 {
+		query += " WHERE " + strings.Join(conditions, " AND ")
+	}
+	args = append(args, normalizedListLimit(filter.Limit))
+	query += fmt.Sprintf(" ORDER BY created_at DESC, id ASC LIMIT $%d", len(args))
+
+	rows, err := s.pool.Query(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var installations []Installation
+	for rows.Next() {
+		installation, err := scanInstallation(rows)
+		if err != nil {
+			return nil, err
+		}
+		installations = append(installations, installation)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return installations, nil
+}
+
 func (s *PostgresStore) UpdateSubscription(
 	ctx context.Context,
 	id string,

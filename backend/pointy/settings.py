@@ -29,6 +29,7 @@ env = environ.Env(
     POINTY_DISCOVERY_UDP_PORT=(int, 47777),
     POINTY_DISCOVERY_API_PORT=(int, 8000),
     POINTY_DISCOVERY_TRUST_PROXY_HEADERS=(bool, False),
+    POINTY_ALLOW_PRIVATE_HOSTS=(bool, False),
     POINTY_PRICE_CHECKER_AUTOSTART=(bool, False),
     POINTY_PRICE_CHECKER_TCP_ENABLED=(bool, True),
     POINTY_PRICE_CHECKER_TCP_PORT=(int, 9101),
@@ -55,6 +56,19 @@ environ.Env.read_env(BASE_DIR / ".env")
 SECRET_KEY = env("DJANGO_SECRET_KEY", default="dev-only-change-me")
 DEBUG = env("DJANGO_DEBUG")
 ALLOWED_HOSTS = env("DJANGO_ALLOWED_HOSTS")
+
+# On-prem LAN appliances get their IP from DHCP and rely on UDP discovery so
+# cashier tills find the backend with zero configuration. Pinning ALLOWED_HOSTS
+# to a fixed IP would defeat that. When POINTY_ALLOW_PRIVATE_HOSTS is on we open
+# Django's built-in check to "*" and let PrivateNetworkHostMiddleware enforce the
+# real policy: accept any private/loopback/link-local Host (any LAN address the
+# server might have) plus the explicitly listed names, and reject public hosts.
+POINTY_ALLOW_PRIVATE_HOSTS = env("POINTY_ALLOW_PRIVATE_HOSTS")
+if POINTY_ALLOW_PRIVATE_HOSTS:
+    POINTY_LAN_ALLOWED_HOST_NAMES = sorted(
+        {host.lower() for host in ALLOWED_HOSTS} | {"localhost", "127.0.0.1", "backend"}
+    )
+    ALLOWED_HOSTS = ["*"]
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -104,6 +118,14 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
+
+if POINTY_ALLOW_PRIVATE_HOSTS:
+    # Enforce the private-host policy that ALLOWED_HOSTS = ["*"] above intentionally
+    # relaxed. Runs right after SecurityMiddleware so a disallowed Host is rejected
+    # before any view or session work.
+    _security_mw = "django.middleware.security.SecurityMiddleware"
+    _insert_at = MIDDLEWARE.index(_security_mw) + 1 if _security_mw in MIDDLEWARE else 0
+    MIDDLEWARE.insert(_insert_at, "apps.core.host_validation.PrivateNetworkHostMiddleware")
 
 ROOT_URLCONF = "pointy.urls"
 

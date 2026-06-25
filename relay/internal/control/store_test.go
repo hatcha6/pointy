@@ -16,6 +16,71 @@ func (c fixedClock) Now() time.Time {
 	return c.now
 }
 
+func TestFileStoreListInstallations(t *testing.T) {
+	now := time.Date(2026, 6, 2, 12, 0, 0, 0, time.UTC)
+	store, err := NewFileStore(filepath.Join(t.TempDir(), "installations.json"), fixedClock{now: now})
+	if err != nil {
+		t.Fatal(err)
+	}
+	active := true
+	inactive := false
+	ids := map[string]string{}
+	for _, seed := range []struct {
+		shop   string
+		active *bool
+	}{
+		{shop: "Alpha Market", active: &active},
+		{shop: "Beta Bakery", active: &inactive},
+		{shop: "Gamma Grocery", active: &active},
+	} {
+		provisioned, err := store.ProvisionInstallation(context.Background(), ProvisionInstallationRequest{
+			ShopName:           seed.shop,
+			SubscriptionActive: seed.active,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		ids[seed.shop] = provisioned.Installation.ID
+	}
+
+	all, err := store.ListInstallations(context.Background(), InstallationFilter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(all) != 3 {
+		t.Fatalf("expected 3 installations, got %d", len(all))
+	}
+
+	matched, err := store.ListInstallations(context.Background(), InstallationFilter{Query: "bakery"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(matched) != 1 || matched[0].ID != ids["Beta Bakery"] {
+		t.Fatalf("query filter returned %#v", matched)
+	}
+
+	activeOnly, err := store.ListInstallations(context.Background(), InstallationFilter{SubscriptionActive: &active})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(activeOnly) != 2 {
+		t.Fatalf("expected 2 active installations, got %d", len(activeOnly))
+	}
+	for _, installation := range activeOnly {
+		if !installation.SubscriptionActive {
+			t.Fatalf("active filter returned an inactive installation %s", installation.ID)
+		}
+	}
+
+	limited, err := store.ListInstallations(context.Background(), InstallationFilter{Limit: 2})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(limited) != 2 {
+		t.Fatalf("expected limit to cap at 2, got %d", len(limited))
+	}
+}
+
 func TestFileStoreProvisionAndValidateTokens(t *testing.T) {
 	now := time.Date(2026, 6, 2, 12, 0, 0, 0, time.UTC)
 	store, err := NewFileStore(filepath.Join(t.TempDir(), "installations.json"), fixedClock{now: now})

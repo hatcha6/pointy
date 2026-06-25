@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
+
 import 'core/analytics_engine.dart';
 import 'core/result.dart';
 import 'data/models/analytics_event.dart';
@@ -58,11 +60,26 @@ import 'features/stock_count/view_models/stock_count_sessions_view_model.dart';
 import 'features/user_settings/view_models/user_settings_view_model.dart';
 import 'shared/theme/theme_controller.dart';
 
+/// Default API base URL for a fresh install.
+///
+/// On the web the app is served by the on-prem server itself (nginx serves the
+/// Flutter build and reverse-proxies `/api` to the backend), so the API lives at
+/// the same origin the page was loaded from. Browsers cannot run the UDP
+/// discovery the native apps use, so this same-origin default is how the served
+/// web build finds its backend with no configuration. Native builds keep the
+/// loopback default and then discover the real LAN backend.
+String defaultApiBaseUrl() {
+  if (kIsWeb) {
+    return '${Uri.base.origin}/api';
+  }
+  return 'http://127.0.0.1:8000/api';
+}
+
 class PointyAppDependencies {
   PointyAppDependencies({
     PosApiService? apiService,
     bool? enableAutomaticConnection,
-  }) : service = apiService ?? PosApiService(),
+  }) : service = apiService ?? PosApiService(baseUrl: defaultApiBaseUrl()),
        _enableAutomaticConnection =
            enableAutomaticConnection ?? apiService == null {
     analyticsRepository = AnalyticsRepository(service);

@@ -3,9 +3,11 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"flag"
 	"io"
 	"net"
 	"net/http"
+	"os"
 	"strings"
 	"testing"
 
@@ -452,6 +454,162 @@ func TestGenerateAdminTokenProducesDistinctStrongTokens(t *testing.T) {
 	if _, err := generateAdminToken(8); err == nil {
 		t.Fatal("expected rejection of an undersized token request")
 	}
+}
+
+func TestResolveActorPrefersFlagThenEnv(t *testing.T) {
+	t.Setenv("POINTY_RELAY_OPERATOR", "ops-team")
+	t.Setenv("USER", "hatem")
+	if got := resolveActor("explicit"); got != "explicit" {
+		t.Fatalf("flag should win, got %q", got)
+	}
+	if got := resolveActor(""); got != "ops-team" {
+		t.Fatalf("env operator should win, got %q", got)
+	}
+	t.Setenv("POINTY_RELAY_OPERATOR", "")
+	if got := resolveActor("  "); got != "hatem" {
+		t.Fatalf("OS user should be the fallback, got %q", got)
+	}
+}
+
+func TestDefaultReasonAndFormatters(t *testing.T) {
+	if defaultReason("  ", "fallback") != "fallback" {
+		t.Fatal("blank reason should fall back")
+	}
+	if defaultReason("paid", "fallback") != "paid" {
+		t.Fatal("explicit reason should win")
+	}
+	if onOff(true) != "on" || onOff(false) != "off" {
+		t.Fatal("onOff mapping is wrong")
+	}
+	if dashIfEmpty("") != "—" || dashIfEmpty("x") != "x" {
+		t.Fatal("dashIfEmpty mapping is wrong")
+	}
+	stamp := "2026-06-25T17:20:02Z"
+	if got := formatTimeField(&stamp); got != "2026-06-25 17:20 UTC" {
+		t.Fatalf("unexpected formatted time %q", got)
+	}
+	if formatTimeField(nil) != "—" {
+		t.Fatal("nil time should render as a dash")
+	}
+}
+
+func TestIdAndFlagsRequiresPositionalID(t *testing.T) {
+	flags := flag.NewFlagSet("t", flag.ContinueOnError)
+	flags.SetOutput(io.Discard)
+	if _, err := idAndFlags(nil, flags); err == nil {
+		t.Fatal("expected an error when no id is supplied")
+	}
+
+	flags = flag.NewFlagSet("t", flag.ContinueOnError)
+	verbose := flags.Bool("json", false, "")
+	id, err := idAndFlags([]string{"inst_1", "--json"}, flags)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if id != "inst_1" || !*verbose {
+		t.Fatalf("expected id and parsed flag, got id=%q json=%v", id, *verbose)
+	}
+}
+
+func TestRunInstallationsListRendersTable(t *testing.T) {
+	restore := newRelayAdminHTTPClient
+	defer func() { newRelayAdminHTTPClient = restore }()
+	var capturedPath, capturedQuery, capturedAuth string
+	newRelayAdminHTTPClient = func(_ relayAdminHTTPClientOptions) (*http.Client, error) {
+		return &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+			capturedPath = r.URL.Path
+			capturedQuery = r.URL.RawQuery
+			capturedAuth = r.Header.Get("Authorization")
+			body := `{"count":1,"installations":[{"id":"inst_1","shop_name":"Alpha Market","relay_enabled":true,"subscription_active":true,"ai_enabled":false}]}`
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Body:       io.NopCloser(strings.NewReader(body)),
+				Header:     http.Header{"Content-Type": []string{"application/json"}},
+			}, nil
+		})}, nil
+	}
+
+	out, err := captureStdout(t, func() error {
+		return runInstallationsList([]string{
+			"--control-url", "https://relay.test",
+			"--admin-token", "secret",
+			"--query", "alpha",
+			"--active",
+		})
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if capturedPath != "/v1/installations" {
+		t.Fatalf("unexpected path %q", capturedPath)
+	}
+	if !strings.Contains(capturedQuery, "query=alpha") || !strings.Contains(capturedQuery, "subscription_active=true") {
+		t.Fatalf("unexpected query %q", capturedQuery)
+	}
+	if capturedAuth != "Bearer secret" {
+		t.Fatalf("unexpected auth header %q", capturedAuth)
+	}
+	if !strings.Contains(out, "Alpha Market") || !strings.Contains(out, "1 installation(s).") {
+		t.Fatalf("table output missing expected content:\n%s", out)
+	}
+}
+
+func TestRunSubscriptionToggleSendsAuditedPatch(t *testing.T) {
+	restore := newRelayAdminHTTPClient
+	defer func() { newRelayAdminHTTPClient = restore }()
+	t.Setenv("POINTY_RELAY_OPERATOR", "ops-team")
+	var method, path string
+	var sent map[string]any
+	newRelayAdminHTTPClient = func(_ relayAdminHTTPClientOptions) (*http.Client, error) {
+		return &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+			method = r.Method
+			path = r.URL.Path
+			_ = json.NewDecoder(r.Body).Decode(&sent)
+			body := `{"installation":{"id":"inst_1","shop_name":"Alpha Market","relay_enabled":true,"subscription_active":true},"audit_event":{}}`
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Body:       io.NopCloser(strings.NewReader(body)),
+				Header:     http.Header{"Content-Type": []string{"application/json"}},
+			}, nil
+		})}, nil
+	}
+
+	out, err := captureStdout(t, func() error {
+		return runSubscriptionToggle([]string{"inst_1", "--control-url", "https://relay.test", "--admin-token", "secret"}, true)
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if method != http.MethodPatch || path != "/v1/installations/inst_1/subscription" {
+		t.Fatalf("unexpected request %s %s", method, path)
+	}
+	if sent["relay_enabled"] != true || sent["subscription_active"] != true {
+		t.Fatalf("enable must set both flags true, got %#v", sent)
+	}
+	if sent["actor"] != "ops-team" {
+		t.Fatalf("actor should default from env, got %#v", sent["actor"])
+	}
+	if strings.TrimSpace(sent["reason"].(string)) == "" {
+		t.Fatal("a default reason must be supplied for the audit trail")
+	}
+	if !strings.Contains(out, "Updated inst_1.") {
+		t.Fatalf("expected a confirmation line, got:\n%s", out)
+	}
+}
+
+func captureStdout(t *testing.T, fn func() error) (string, error) {
+	t.Helper()
+	original := os.Stdout
+	reader, writer, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.Stdout = writer
+	runErr := fn()
+	_ = writer.Close()
+	os.Stdout = original
+	data, _ := io.ReadAll(reader)
+	return string(data), runErr
 }
 
 func TestDeriveNodeProxyTokenIsDeterministicAndStrong(t *testing.T) {
