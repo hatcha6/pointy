@@ -28,8 +28,10 @@ import 'package:pointy_frontend/src/data/repositories/device_settings_repository
 import 'package:pointy_frontend/src/data/repositories/printing_repository.dart';
 import 'package:pointy_frontend/src/data/repositories/inventory_repository.dart';
 import 'package:pointy_frontend/src/data/repositories/purchase_repository.dart';
+import 'package:pointy_frontend/src/data/repositories/sale_repository.dart';
 import 'package:pointy_frontend/src/data/repositories/shop_settings_repository.dart';
 import 'package:pointy_frontend/src/data/repositories/user_repository.dart';
+import 'package:pointy_frontend/src/features/returns_exchange/views/returns_exchange_lookup_screen.dart';
 import 'package:pointy_frontend/src/data/services/barcode_label_command_encoder.dart';
 import 'package:pointy_frontend/src/data/services/esc_pos_receipt_encoder.dart';
 import 'package:pointy_frontend/src/data/services/pos_api_service.dart';
@@ -2271,6 +2273,131 @@ void main() {
     expect(exchangeBody?['replacement_lines'], [
       {'variant': 1, 'quantity': 1, 'unit_cost': '3.75'},
     ]);
+  });
+
+  testWidgets('returns/exchange lookup finds an invoice and exchanges items', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(800, 1800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    Map<String, Object?>? exchangeBody;
+    final apiService = _mockApiService(
+      onSaleExchange: (request) {
+        exchangeBody = jsonDecode(request.body) as Map<String, Object?>;
+      },
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        locale: const Locale('ar'),
+        localizationsDelegates: const [
+          AppLocalizations.delegate,
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: ReturnsExchangeLookupScreen(
+          saleRepository: SaleRepository(apiService),
+          printingRepository: PrintingRepository(apiService),
+          shopSettingsRepository: ShopSettingsRepository(apiService),
+          catalogRepository: CatalogRepository(apiService),
+          capabilities: AuthorizationCapabilities.forUser(
+            PosUser.fromJson(
+              _userJson(
+                role: 'cashier',
+                permissions: const [
+                  'sales.add_order',
+                  'sales.process_return_lookup',
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Look up the invoice by its receipt number.
+    await tester.enterText(find.byType(TextField).first, 'R-100');
+    await tester.testTextInput.receiveAction(TextInputAction.search);
+    await tester.pumpAndSettle();
+
+    // The invoice's Exchange action is offered; open the dialog.
+    expect(find.text('استبدال'), findsOneWidget);
+    await tester.tap(find.text('استبدال'));
+    await tester.pumpAndSettle();
+    expect(find.text('العناصر المُرتجعة'), findsOneWidget);
+    expect(find.text('العناصر البديلة'), findsOneWidget);
+
+    // Return one of the original line.
+    await tester.tap(find.byIcon(Icons.add).first);
+    await tester.pumpAndSettle();
+
+    // Search for and add a replacement product. The field searches as you type,
+    // so just enter the query and let the debounce fire — no button to press.
+    await tester.enterText(
+      find.widgetWithText(TextField, 'ابحث عن منتج بديل'),
+      'قهوة',
+    );
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byIcon(Icons.add).last);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('تأكيد'));
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+
+    expect(exchangeBody?['lines'], [
+      {'line': 1000, 'quantity': '1'},
+    ]);
+    expect(exchangeBody?['replacement_lines'], [
+      {'variant': 1, 'quantity': '1'},
+    ]);
+    expect(exchangeBody?['settlement_method'], 'cash');
+  });
+
+  testWidgets('returns/exchange lookup reports an unknown receipt number', (
+    WidgetTester tester,
+  ) async {
+    final apiService = _mockApiService();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        locale: const Locale('ar'),
+        localizationsDelegates: const [
+          AppLocalizations.delegate,
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: ReturnsExchangeLookupScreen(
+          saleRepository: SaleRepository(apiService),
+          printingRepository: PrintingRepository(apiService),
+          shopSettingsRepository: ShopSettingsRepository(apiService),
+          catalogRepository: CatalogRepository(apiService),
+          capabilities: AuthorizationCapabilities.forUser(
+            PosUser.fromJson(
+              _userJson(
+                role: 'cashier',
+                permissions: const ['sales.process_return_lookup'],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byType(TextField).first, 'R-404');
+    await tester.testTextInput.receiveAction(TextInputAction.search);
+    await tester.pumpAndSettle();
+
+    expect(find.text('لا توجد فاتورة بهذا الرقم.'), findsOneWidget);
   });
 
   testWidgets(
@@ -4609,6 +4736,7 @@ PosApiService _mockApiService({
   void Function(http.Request request)? onCashMovement,
   void Function(http.Request request)? onReprint,
   void Function(http.Request request)? onReturn,
+  void Function(http.Request request)? onSaleExchange,
   void Function(http.Request request)? onVoid,
   void Function(http.Request request)? onPrintJobReport,
   void Function(http.Request request)? onPrintJobRequeue,
@@ -5679,6 +5807,24 @@ PosApiService _mockApiService({
 
       if (path.endsWith('/orders/100/return-items/')) {
         onReturn?.call(request);
+        return _jsonResponse(
+          _orderJson(returnedQuantity: 1, returnableQuantity: 1),
+        );
+      }
+
+      if (path.endsWith('/orders/lookup/')) {
+        if (request.url.queryParameters['receipt'] != 'R-100') {
+          return http.Response.bytes(
+            utf8.encode(jsonEncode({'detail': 'No invoice matches.'})),
+            404,
+            headers: const {'Content-Type': 'application/json; charset=utf-8'},
+          );
+        }
+        return _jsonResponse(_orderJson());
+      }
+
+      if (path.endsWith('/orders/100/exchange-items/')) {
+        onSaleExchange?.call(request);
         return _jsonResponse(
           _orderJson(returnedQuantity: 1, returnableQuantity: 1),
         );

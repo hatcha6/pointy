@@ -291,6 +291,10 @@ type HTTPServer struct {
 	AIHTTPClient     *http.Client
 	// Vision/multimodal model used when a prompt carries attachments.
 	AIVisionModel string
+	// AIAudioModel handles turns carrying a recorded voice clip; empty falls back
+	// to the vision model (which for Gemini-class multimodal models already
+	// accepts audio).
+	AIAudioModel string
 	// AIWebSearchEnabled turns on OpenRouter's web-search plugin for user turns
 	// whose query needs current/external info (decided by a cheap classifier, so it
 	// fires only when necessary — never on the shop's own-data questions).

@@ -31,6 +31,7 @@ from .load_testing import build_ramp_stages, capacity_summary, collapse_reasons
 from .models import (
     Order,
     OrderAdjustment,
+    OrderExchange,
     OrderLine,
     OrderLineModifier,
     RegisterCashMovement,
@@ -2898,3 +2899,160 @@ class CashierCustomerAccessTests(TestCase):
             ).status_code,
             status.HTTP_403_FORBIDDEN,
         )
+
+
+class OrderExchangeAndLookupApiTests(TestCase):
+    """HTTP coverage for the sales exchange endpoint and the returns-desk invoice
+    lookup: the new scoped permission, cross-session visibility, and the
+    cashier-window override."""
+
+    def setUp(self):
+        ensure_role_groups()
+        self.product = create_product_with_default_variant(
+            sku="COFFEE", barcode="", name="Coffee", unit_price=Decimal("3.50"),
+        )
+        self.variant = self.product.default_variant
+        self.stock = StockItem.objects.create(variant=self.variant, quantity_on_hand=10)
+        self.replacement = create_product_with_default_variant(
+            sku="TEA", barcode="", name="Tea", unit_price=Decimal("5.00"),
+        )
+        self.replacement_variant = self.replacement.default_variant
+        StockItem.objects.create(variant=self.replacement_variant, quantity_on_hand=10)
+
+    def _cashier(self, username, *, lookup_perm=False):
+        from django.contrib.auth.models import Permission
+
+        User = get_user_model()
+        user = User.objects.create_user(username=username, password="pass")
+        user.groups.add(Group.objects.get(name=CASHIER_GROUP))
+        if lookup_perm:
+            user.user_permissions.add(
+                Permission.objects.get(
+                    codename="process_return_lookup",
+                    content_type__app_label="sales",
+                )
+            )
+        # Re-fetch so has_perm() doesn't read a stale per-instance perm cache.
+        return User.objects.get(pk=user.pk)
+
+    def _client_for(self, user):
+        client = APIClient()
+        client.force_authenticate(user=user)
+        return client
+
+    def _start_session(self, client):
+        return client.post(
+            reverse("register-session-start"), {"opening_cash": "0.00"}, format="json"
+        ).data
+
+    def _checkout_coffee(self, client):
+        return client.post(
+            reverse("order-checkout"),
+            {
+                "lines": [{"variant": self.variant.pk, "quantity": 1}],
+                "payment_method": "cash",
+                "amount_received": "3.50",
+            },
+            format="json",
+        ).data
+
+    def _exchange_payload(self, line_id):
+        return {
+            "reason": "Swap for tea",
+            "lines": [{"line": line_id, "quantity": 1}],
+            "replacement_lines": [
+                {"variant": self.replacement_variant.pk, "quantity": 1}
+            ],
+            "settlement_method": "cash",
+        }
+
+    def test_exchange_collects_net_difference_and_links_orders(self):
+        client = self._client_for(self._cashier("ex-1"))
+        self._start_session(client)
+        order = self._checkout_coffee(client)
+        line_id = order["lines"][0]["id"]
+
+        response = client.post(
+            reverse("order-exchange-items", args=[order["id"]]),
+            self._exchange_payload(line_id),
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        exchange = OrderExchange.objects.get()
+        self.assertEqual(exchange.net_amount, Decimal("1.50"))
+        self.assertEqual(exchange.replacement_order.status, Order.Status.PAID)
+        self.stock.refresh_from_db()
+        self.assertEqual(self.stock.quantity_on_hand, 10)  # coffee restocked
+
+    def test_lookup_requires_the_scoped_permission(self):
+        owner_client = self._client_for(self._cashier("owner-1"))
+        self._start_session(owner_client)
+        order = self._checkout_coffee(owner_client)
+
+        other_client = self._client_for(self._cashier("other-1"))
+        self._start_session(other_client)
+        denied = other_client.get(
+            reverse("order-lookup"), {"receipt": order["receipt_number"]}
+        )
+        self.assertEqual(denied.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_lookup_finds_another_cashiers_invoice_with_permission(self):
+        owner_client = self._client_for(self._cashier("owner-2"))
+        self._start_session(owner_client)
+        order = self._checkout_coffee(owner_client)
+
+        agent_client = self._client_for(self._cashier("agent-2", lookup_perm=True))
+        self._start_session(agent_client)
+        found = agent_client.get(
+            reverse("order-lookup"), {"receipt": order["receipt_number"]}
+        )
+        self.assertEqual(found.status_code, status.HTTP_200_OK, found.data)
+        self.assertEqual(found.data["id"], order["id"])
+
+        unknown = agent_client.get(reverse("order-lookup"), {"receipt": "R-nope"})
+        self.assertEqual(unknown.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_cannot_exchange_another_session_invoice_without_permission(self):
+        owner_client = self._client_for(self._cashier("owner-3"))
+        self._start_session(owner_client)
+        order = self._checkout_coffee(owner_client)
+        line_id = order["lines"][0]["id"]
+
+        other_client = self._client_for(self._cashier("other-3"))
+        self._start_session(other_client)
+        blocked = other_client.post(
+            reverse("order-exchange-items", args=[order["id"]]),
+            self._exchange_payload(line_id),
+            format="json",
+        )
+        self.assertEqual(blocked.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(OrderExchange.objects.count(), 0)
+
+    def test_window_override_lets_permitted_cashier_exchange_old_invoice(self):
+        owner_client = self._client_for(self._cashier("owner-4"))
+        self._start_session(owner_client)
+        order = self._checkout_coffee(owner_client)
+        line_id = order["lines"][0]["id"]
+        # Push the invoice past the cashier return window.
+        Order.objects.filter(pk=order["id"]).update(
+            created_at=timezone.now() - timedelta(days=30)
+        )
+
+        blocked = owner_client.post(
+            reverse("order-exchange-items", args=[order["id"]]),
+            self._exchange_payload(line_id),
+            format="json",
+        )
+        self.assertEqual(blocked.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(OrderExchange.objects.count(), 0)
+
+        agent_client = self._client_for(self._cashier("agent-4", lookup_perm=True))
+        self._start_session(agent_client)
+        allowed = agent_client.post(
+            reverse("order-exchange-items", args=[order["id"]]),
+            self._exchange_payload(line_id),
+            format="json",
+        )
+        self.assertEqual(allowed.status_code, status.HTTP_200_OK, allowed.data)
+        self.assertEqual(OrderExchange.objects.count(), 1)

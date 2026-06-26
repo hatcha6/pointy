@@ -156,6 +156,24 @@ class SaleRepository {
     );
   }
 
+  Future<Result<SaleOrder>> exchangeItems({
+    required int saleOrderId,
+    required SaleExchangeDraft draft,
+  }) async {
+    return Result.guard(
+      () => _service.exchangeSaleOrderItems(
+        saleOrderId: saleOrderId,
+        draft: draft,
+      ),
+    );
+  }
+
+  Future<Result<SaleOrder>> lookupByReceipt(String receiptNumber) async {
+    return Result.guard(
+      () => _service.lookupSaleOrderByReceipt(receiptNumber),
+    );
+  }
+
   List<SaleStockShortage> _stockShortagesFromException(
     PosApiException exception,
   ) {

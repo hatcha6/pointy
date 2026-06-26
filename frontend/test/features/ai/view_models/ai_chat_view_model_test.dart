@@ -117,6 +117,31 @@ void main() {
     expect(viewModel.errorKind, isNull);
   });
 
+  test('sendRecordedAudio sends the clip (no text) as an audio attachment', () async {
+    final repo = _FakeAiChatRepository([const AiChatDone(conversationId: 3)]);
+    final viewModel = AiChatViewModel(repo);
+    addTearDown(viewModel.dispose);
+
+    await viewModel.sendRecordedAudio(
+      AiAttachment(
+        kind: AiAttachmentKind.audio,
+        dataUri: 'data:audio/wav;base64,QUJD',
+        name: 'voice-message.wav',
+        mime: 'audio/wav',
+        durationMs: 4000,
+      ),
+    );
+
+    expect(repo.lastAttachments.length, 1);
+    expect(repo.lastAttachments.single.kind, AiAttachmentKind.audio);
+    final userMessage = viewModel.messages.first;
+    expect(userMessage.isUser, isTrue);
+    expect(userMessage.content, '');
+    expect(userMessage.attachments.single.isAudio, isTrue);
+    // Pending list is cleared once the turn is sent.
+    expect(viewModel.hasPendingAttachments, isFalse);
+  });
+
   test(
     'streamed deltas notify the message, not the whole view model (jank fix)',
     () async {

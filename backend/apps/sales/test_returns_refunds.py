@@ -30,8 +30,15 @@ from apps.discounts.models import DiscountRule
 from apps.inventory.models import StockItem, StockMovement
 from apps.payments.models import Payment
 
-from .models import Order, OrderAdjustment, OrderAdjustmentLine
-from .services import checkout_order, return_order_items, void_order
+from apps.analytics.models import AnalyticsEvent
+
+from .models import Order, OrderAdjustment, OrderAdjustmentLine, OrderExchange
+from .services import (
+    checkout_order,
+    exchange_order_items,
+    return_order_items,
+    void_order,
+)
 
 
 class ReturnsRefundsTestCase(TestCase):
@@ -552,3 +559,189 @@ class ReturnsRefundsTestCase(TestCase):
         self.assertEqual(refund_payment.amount, Decimal("-3.50"))
         new_payment = Payment.objects.filter(order=new_order, amount__gt=0).get()
         self.assertEqual(new_payment.amount, Decimal("5.00"))
+
+
+class ExchangeServiceTestCase(ReturnsRefundsTestCase):
+    """The atomic ``exchange_order_items`` operation: return the chosen original
+    line(s) and ring up replacement line(s) at current price as one audited unit,
+    settling only the net difference. Reuses the parent fixtures (manager user,
+    open session, a stocked 3.50 "Coffee")."""
+
+    def _replacement(self, *, name="Tea", sku="TEA", unit_price="5.00", on_hand="4"):
+        product = create_product_with_default_variant(
+            name=name,
+            sku=sku,
+            unit_price=unit_price,
+            barcode="",
+        )
+        StockItem.objects.create(
+            variant=product.default_variant,
+            quantity_on_hand=Decimal(on_hand),
+        )
+        return product.default_variant
+
+    def _replacement_lines(self, variant, quantity="1"):
+        # Mirror the priced line shape CheckoutLineSerializer hands the service.
+        return [
+            {
+                "variant": variant,
+                "quantity": Decimal(quantity),
+                "effective_unit_price": variant.unit_price,
+            }
+        ]
+
+    def _replacement_variant(self, exchange):
+        return exchange.replacement_order.lines.get().variant
+
+    # 1. Replacement pricier than the returned item -> customer pays the gap.
+    def test_exchange_customer_pays_more(self):
+        tea = self._replacement(unit_price="5.00", on_hand="4")
+        order = self._checkout(
+            quantity="1",
+            payments=[{"method": Payment.Method.CASH, "amount": Decimal("3.50")}],
+        )
+        line = order.lines.get()
+
+        # ``record_domain_event`` fires on transaction commit; capture it so the
+        # audit row is written inside the test's wrapping transaction.
+        with self.captureOnCommitCallbacks(execute=True):
+            exchange = exchange_order_items(
+                order=order,
+                outbound_lines=[(line, 1)],
+                replacement_lines=self._replacement_lines(tea),
+                settlement_method=Payment.Method.CASH,
+                reason="Wanted tea instead",
+            )
+
+        order.refresh_from_db()
+        self.assertEqual(order.status, Order.Status.VOID)  # fully returned
+        self.assertEqual(self._stock_qty(), Decimal("10"))  # coffee restocked
+        tea_stock = StockItem.objects.get(variant=tea)
+        self.assertEqual(tea_stock.quantity_on_hand, Decimal("3"))  # tea sold
+
+        self.assertEqual(exchange.outbound_amount, Decimal("3.50"))
+        self.assertEqual(exchange.replacement_amount, Decimal("5.00"))
+        self.assertEqual(exchange.net_amount, Decimal("1.50"))  # customer owes 1.50
+        self.assertEqual(exchange.original_order_id, order.pk)
+        self.assertEqual(
+            exchange.return_adjustment.adjustment_type,
+            OrderAdjustment.AdjustmentType.RETURN,
+        )
+        self.assertEqual(exchange.replacement_order.status, Order.Status.PAID)
+        # Audit: the return leg, the new sale, and the exchange link all recorded.
+        self.assertTrue(
+            AnalyticsEvent.objects.filter(name="sales.order.exchanged").exists()
+        )
+
+    # 2. Replacement cheaper -> the difference is refunded (net negative).
+    def test_exchange_store_refunds_less(self):
+        # Original sale is the pricier 5.00 tea; exchange down to a 3.50 coffee.
+        tea = self._replacement(unit_price="5.00", on_hand="4")
+        order = checkout_order(
+            register_session=self.session,
+            lines_data=[{"variant": tea, "quantity": Decimal("1")}],
+            payments_data=[{"method": Payment.Method.CASH, "amount": Decimal("5.00")}],
+        )
+        line = order.lines.get()
+
+        exchange = exchange_order_items(
+            order=order,
+            outbound_lines=[(line, 1)],
+            replacement_lines=self._replacement_lines(self.variant),  # coffee 3.50
+            settlement_method=Payment.Method.CASH,
+            reason="Cheaper item",
+        )
+
+        self.assertEqual(exchange.outbound_amount, Decimal("5.00"))
+        self.assertEqual(exchange.replacement_amount, Decimal("3.50"))
+        self.assertEqual(exchange.net_amount, Decimal("-1.50"))  # refund 1.50
+        self.assertEqual(self._stock_qty(), Decimal("9"))  # one coffee sold out
+
+    # 3. Equal value -> even exchange, zero net.
+    def test_exchange_even_moves_no_net(self):
+        other = self._replacement(name="Mocha", sku="MOCHA", unit_price="3.50", on_hand="4")
+        order = self._checkout(
+            quantity="1",
+            payments=[{"method": Payment.Method.CASH, "amount": Decimal("3.50")}],
+        )
+        line = order.lines.get()
+
+        exchange = exchange_order_items(
+            order=order,
+            outbound_lines=[(line, 1)],
+            replacement_lines=self._replacement_lines(other),
+            settlement_method=Payment.Method.CASH,
+            reason="Same price swap",
+        )
+
+        self.assertEqual(exchange.net_amount, Decimal("0.00"))
+        self.assertEqual(exchange.replacement_order.total, Decimal("3.50"))
+
+    # 4. Returning only some lines leaves the original invoice PAID.
+    def test_exchange_partial_keeps_original_paid(self):
+        tea = self._replacement(unit_price="5.00", on_hand="4")
+        order = self._checkout(
+            quantity="3",
+            payments=[{"method": Payment.Method.CASH, "amount": Decimal("10.50")}],
+        )
+        line = order.lines.get()
+
+        exchange = exchange_order_items(
+            order=order,
+            outbound_lines=[(line, 1)],
+            replacement_lines=self._replacement_lines(tea),
+            settlement_method=Payment.Method.CASH,
+            reason="Swap one of three",
+        )
+
+        order.refresh_from_db()
+        line.refresh_from_db()
+        self.assertEqual(order.status, Order.Status.PAID)  # 2 of 3 remain
+        self.assertEqual(line.returnable_quantity, 2)
+        self.assertEqual(exchange.outbound_amount, Decimal("3.50"))
+
+    # 5. The cash drawer reconciles to the net across both legs.
+    def test_exchange_register_cash_reconciles(self):
+        tea = self._replacement(unit_price="5.00", on_hand="4")
+        order = self._checkout(
+            quantity="1",
+            payments=[{"method": Payment.Method.CASH, "amount": Decimal("3.50")}],
+        )
+        line = order.lines.get()
+
+        exchange_order_items(
+            order=order,
+            outbound_lines=[(line, 1)],
+            replacement_lines=self._replacement_lines(tea),
+            settlement_method=Payment.Method.CASH,
+            reason="Reconcile",
+        )
+
+        self.session.refresh_from_db()
+        # opening 0 + cash sales (3.50 coffee + 5.00 tea) - cash refund (3.50)
+        # = 5.00, i.e. the original 3.50 plus the +1.50 exchange net.
+        self.assertEqual(self.session.cash_refund_total, Decimal("3.50"))
+        self.assertEqual(self.session.expected_cash, Decimal("5.00"))
+
+    # 6. Over-returning an outbound line is rejected (no partial side effects).
+    def test_exchange_over_return_rejected(self):
+        tea = self._replacement(unit_price="5.00", on_hand="4")
+        order = self._checkout(
+            quantity="1",
+            payments=[{"method": Payment.Method.CASH, "amount": Decimal("3.50")}],
+        )
+        line = order.lines.get()
+
+        with self.assertRaises(serializers.ValidationError):
+            exchange_order_items(
+                order=order,
+                outbound_lines=[(line, 2)],  # only 1 was sold
+                replacement_lines=self._replacement_lines(tea),
+                settlement_method=Payment.Method.CASH,
+                reason="Greedy",
+            )
+        order.refresh_from_db()
+        self.assertEqual(order.status, Order.Status.PAID)  # untouched
+        self.assertEqual(OrderExchange.objects.count(), 0)
+        tea_stock = StockItem.objects.get(variant=tea)
+        self.assertEqual(tea_stock.quantity_on_hand, Decimal("4"))  # no replacement

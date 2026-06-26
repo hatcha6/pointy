@@ -39,11 +39,13 @@ type Message struct {
 
 // ContentPart is one piece of a multimodal message (OpenAI content-array form).
 type ContentPart struct {
-	Type     string // "text" | "image_url" | "file"
-	Text     string // Type == "text"
-	ImageURL string // Type == "image_url" (a data: URI)
-	FileName string // Type == "file"
-	FileData string // Type == "file" (a data: URI)
+	Type        string // "text" | "image_url" | "file" | "input_audio"
+	Text        string // Type == "text"
+	ImageURL    string // Type == "image_url" (a data: URI)
+	FileName    string // Type == "file"
+	FileData    string // Type == "file" (a data: URI)
+	AudioData   string // Type == "input_audio" (raw base64, no data: prefix)
+	AudioFormat string // Type == "input_audio" ("wav" | "mp3")
 }
 
 // ToolCall is one function call the model wants executed (OpenAI shape).
@@ -185,6 +187,11 @@ func wireContent(msg Message) any {
 			parts = append(parts, map[string]any{
 				"type": "file",
 				"file": map[string]any{"filename": p.FileName, "file_data": p.FileData},
+			})
+		case "input_audio":
+			parts = append(parts, map[string]any{
+				"type":        "input_audio",
+				"input_audio": map[string]any{"data": p.AudioData, "format": p.AudioFormat},
 			})
 		}
 	}

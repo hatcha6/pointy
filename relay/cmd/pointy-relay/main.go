@@ -352,6 +352,11 @@ func runServer(args []string) error {
 		envString("POINTY_RELAY_AI_VISION_MODEL", "google/gemma-4-31b-it:free"),
 		"OpenRouter model used when a prompt carries image/file attachments",
 	)
+	aiAudioModel := flags.String(
+		"ai-audio-model",
+		envString("POINTY_RELAY_AI_AUDIO_MODEL", ""),
+		"OpenRouter model used when a prompt carries a recorded voice clip; empty falls back to the vision model",
+	)
 	aiWebSearchEnabled := flags.Bool(
 		"ai-web-search-enabled",
 		envBool("POINTY_RELAY_AI_WEB_SEARCH_ENABLED", true),
@@ -741,6 +746,7 @@ func runServer(args []string) error {
 		AIDefaultTier:             strings.TrimSpace(*aiDefaultTier),
 		AIRouterModel:             strings.TrimSpace(*aiRouterModel),
 		AIVisionModel:             strings.TrimSpace(*aiVisionModel),
+		AIAudioModel:              strings.TrimSpace(*aiAudioModel),
 		AIWebSearchEnabled:        *aiWebSearchEnabled,
 		AIWebSearchMaxResults:     *aiWebSearchMaxResults,
 		AILimit5H:                 ratelimit.Policy{Limit: *aiLimit5H, Window: *aiLimit5HWindow},

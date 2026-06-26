@@ -6,10 +6,11 @@ import 'package:flutter/foundation.dart';
 
 enum AiMessageRole { user, assistant }
 
-enum AiAttachmentKind { image, file }
+enum AiAttachmentKind { image, file, audio }
 
-/// An image or file the user attaches to a prompt. Carried to the relay as a
-/// base64 data URI; [previewBytes] is kept locally only to render a thumbnail.
+/// An image, file, or recorded voice clip the user attaches to a prompt. Carried
+/// to the relay as a base64 data URI; [previewBytes] is kept locally only to
+/// render an image thumbnail.
 class AiAttachment {
   AiAttachment({
     required this.kind,
@@ -17,6 +18,7 @@ class AiAttachment {
     required this.name,
     required this.mime,
     this.previewBytes,
+    this.durationMs,
   });
 
   final AiAttachmentKind kind;
@@ -25,7 +27,13 @@ class AiAttachment {
   final String mime;
   final Uint8List? previewBytes;
 
+  /// Recording length for an [AiAttachmentKind.audio] clip, used to render the
+  /// "0:12" duration on its voice chip. Set for a freshly-recorded message; null
+  /// when rehydrated from history (the server keeps only kind/name/mime).
+  final int? durationMs;
+
   bool get isImage => kind == AiAttachmentKind.image;
+  bool get isAudio => kind == AiAttachmentKind.audio;
 
   Map<String, Object?> toJson() => {
     'kind': kind.name,
@@ -38,13 +46,22 @@ class AiAttachment {
   /// the server returns only metadata (kind/name/mime) — never the bytes.
   factory AiAttachment.fromMetadata(Map<String, Object?> json) {
     return AiAttachment(
-      kind: (json['kind'] as String?) == 'image'
-          ? AiAttachmentKind.image
-          : AiAttachmentKind.file,
+      kind: _kindFromWire(json['kind'] as String?),
       dataUri: '',
       name: (json['name'] as String?) ?? '',
       mime: (json['mime'] as String?) ?? '',
     );
+  }
+
+  static AiAttachmentKind _kindFromWire(String? raw) {
+    switch (raw) {
+      case 'image':
+        return AiAttachmentKind.image;
+      case 'audio':
+        return AiAttachmentKind.audio;
+      default:
+        return AiAttachmentKind.file;
+    }
   }
 }
 

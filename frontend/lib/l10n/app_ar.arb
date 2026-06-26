@@ -4498,6 +4498,13 @@
       }
     }
   },
+  "posSessionMenuTitle": "إجراءات الجلسة",
+  "posSessionMenuTooltip": "خيارات الجلسة",
+  "payInRegisterSessionDescription": "إيداع مبلغ نقدي في الدرج",
+  "payOutRegisterSessionDescription": "سحب مبلغ نقدي من الدرج",
+  "collectDebtSessionDescription": "استلام دفعة من عميل عليه رصيد آجل",
+  "refreshCatalogDescription": "مزامنة قائمة المنتجات مع الخادم",
+  "closeRegisterSessionDescription": "إنهاء الجلسة وعدّ النقدية في الدرج",
   "cashMovementMenuTooltip": "حركات نقدية للدرج",
   "payInRegisterSessionTitle": "إضافة نقدية للدرج",
   "payOutRegisterSessionTitle": "سحب نقدية من الدرج",
@@ -4776,6 +4783,43 @@
   "saleAdjustmentReasonLabel": "سبب اختياري",
   "saleAdjustmentReasonHint": "مثال: طلب العميل الإرجاع",
   "saleReturnQuantityLabel": "كمية الإرجاع",
+  "saleExchangeButton": "استبدال",
+  "saleExchangeTitle": "استبدال منتجات",
+  "saleExchangeSuccess": "تم تسجيل الاستبدال.",
+  "saleExchangeError": "تعذّر تسجيل الاستبدال.",
+  "saleExchangeReturnedSectionTitle": "العناصر المُرتجعة",
+  "saleExchangeReplacementSectionTitle": "العناصر البديلة",
+  "saleExchangeSearchLabel": "ابحث عن منتج بديل",
+  "saleExchangeSearchButton": "بحث",
+  "saleExchangeNoResults": "لا توجد نتائج مطابقة.",
+  "saleExchangeInvalidError": "اختر عنصرًا مُرتجعًا واحدًا على الأقل وعنصرًا بديلًا.",
+  "saleExchangeSettlementLabel": "طريقة تسوية الفرق",
+  "saleExchangeNetPay": "على العميل دفع {amount}",
+  "@saleExchangeNetPay": {
+    "description": "Net the customer owes on an exchange.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "saleExchangeNetRefund": "يُرَدّ للعميل {amount}",
+  "@saleExchangeNetRefund": {
+    "description": "Net refunded to the customer on an exchange.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "saleExchangeNetEven": "تبادل متكافئ — لا فرق",
+  "navReturnsExchange": "المرتجعات والاستبدال",
+  "returnsLookupTitle": "المرتجعات والاستبدال",
+  "returnsLookupPrompt": "أدخل رقم الفاتورة لإجراء إرجاع أو استبدال.",
+  "returnsLookupFieldLabel": "رقم الفاتورة",
+  "returnsLookupSearchButton": "بحث",
+  "returnsLookupNotFound": "لا توجد فاتورة بهذا الرقم.",
+  "returnsLookupEmpty": "ابحث عن فاتورة برقمها للبدء.",
   "salePaymentsTitle": "المدفوعات",
   "salePaymentCommission": "العمولة {amount} بنسبة {percent}%",
   "@salePaymentCommission": {
@@ -6695,6 +6739,11 @@
   "aiAssistantAttachFile": "ملف",
   "aiAssistantRemoveAttachment": "إزالة المرفق",
   "aiAssistantAttachmentImage": "صورة",
+  "aiAssistantRecordTooltip": "تسجيل رسالة صوتية",
+  "aiAssistantRecordCancelTooltip": "إلغاء التسجيل",
+  "aiAssistantVoiceMessage": "رسالة صوتية",
+  "aiAssistantRecording": "جارٍ التسجيل…",
+  "aiAssistantMicPermissionDenied": "يلزم إذن الميكروفون لتسجيل الرسائل الصوتية. فعّله من إعدادات الجهاز.",
   "aiAssistantImageLimit": "يمكنك إرفاق {count} صور كحد أقصى",
   "@aiAssistantImageLimit": {
     "placeholders": { "count": { "type": "int" } }

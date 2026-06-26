@@ -1,100 +1,46 @@
 part of 'purchase_order_details_screen.dart';
 
-class _PurchaseAdjustmentDialog extends StatefulWidget {
-  const _PurchaseAdjustmentDialog({
-    required this.title,
-    required this.icon,
-    required this.order,
-  });
-
-  final String title;
-  final IconData icon;
-  final PurchaseOrder order;
-
-  @override
-  State<_PurchaseAdjustmentDialog> createState() =>
-      _PurchaseAdjustmentDialogState();
+/// Maps a purchase order's adjustable lines onto the shared
+/// [AdjustmentLineOption] shape used by [showQuantityAdjustmentDialog] and the
+/// exchange dialog's outbound section. Purchasing deals in whole units, so the
+/// options never allow decimal entry.
+List<AdjustmentLineOption> _purchaseAdjustmentOptions(
+  AppLocalizations l10n,
+  PurchaseOrder order,
+) {
+  return [
+    for (final line in order.lines)
+      if (line.adjustableQuantity > 0)
+        AdjustmentLineOption(
+          lineId: line.id,
+          title: line.displayName.isEmpty
+              ? l10n.purchaseOrderUnknownProduct
+              : line.displayName,
+          subtitle: [
+            l10n.purchaseOrderLineQuantity(line.quantity),
+            l10n.unitPriceEach(formatMoney(line.unitCost)),
+            l10n.purchaseAdjustmentLineRemaining(
+              line.adjustableQuantity,
+              line.quantity,
+            ),
+          ].join(' • '),
+          maxQuantity: line.adjustableQuantity.toDouble(),
+        ),
+  ];
 }
 
-class _PurchaseAdjustmentDialogState extends State<_PurchaseAdjustmentDialog> {
-  late final Map<int, int> _quantities = {
-    for (final line in widget.order.lines) line.id: 0,
-  };
-  final TextEditingController _reasonController = TextEditingController();
-
-  @override
-  void dispose() {
-    _reasonController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
-    final adjustableLines = widget.order.lines
-        .where((line) => line.adjustableQuantity > 0)
-        .toList(growable: false);
-
-    return AlertDialog(
-      icon: Icon(widget.icon),
-      title: Text(widget.title),
-      content: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 540),
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (adjustableLines.isEmpty)
-                Text(l10n.purchaseNoAdjustableItems)
-              else
-                for (final line in adjustableLines)
-                  _PurchaseAdjustmentLineStepper(
-                    line: line,
-                    value: _quantities[line.id] ?? 0,
-                    onChanged: (value) {
-                      setState(() => _quantities[line.id] = value);
-                    },
-                  ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _reasonController,
-                decoration: InputDecoration(
-                  labelText: l10n.purchaseAdjustmentReasonLabel,
-                  hintText: l10n.purchaseAdjustmentReasonHint,
-                ),
-                maxLines: 2,
-              ),
-            ],
-          ),
-        ),
+/// Converts the shared dialog's selections back into purchasing's whole-unit
+/// draft model.
+List<PurchaseAdjustmentLineDraft> _purchaseAdjustmentDrafts(
+  List<AdjustmentLineSelection> selections,
+) {
+  return [
+    for (final selection in selections)
+      PurchaseAdjustmentLineDraft(
+        lineId: selection.lineId,
+        quantity: selection.quantity.round(),
       ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: Text(l10n.cancelButton),
-        ),
-        FilledButton(
-          onPressed: () {
-            final lines = [
-              for (final line in adjustableLines)
-                if ((_quantities[line.id] ?? 0) > 0)
-                  PurchaseAdjustmentLineDraft(
-                    lineId: line.id,
-                    quantity: _quantities[line.id]!,
-                  ),
-            ];
-            Navigator.of(context).pop(
-              _PurchaseAdjustmentDialogResult(
-                lines: lines,
-                reason: _reasonController.text.trim(),
-              ),
-            );
-          },
-          child: Text(l10n.confirmButton),
-        ),
-      ],
-    );
-  }
+  ];
 }
 
 class _PurchaseExchangeDialog extends StatefulWidget {
@@ -108,10 +54,7 @@ class _PurchaseExchangeDialog extends StatefulWidget {
 }
 
 class _PurchaseExchangeDialogState extends State<_PurchaseExchangeDialog> {
-  late final List<PurchaseOrderLine> _adjustableLines = widget.order.lines
-      .where((line) => line.adjustableQuantity > 0)
-      .toList(growable: false);
-  late final Map<int, int> _quantities = {
+  late final Map<int, double> _quantities = {
     for (final line in widget.order.lines) line.id: 0,
   };
   late final List<_PurchaseReplacementOption> _productOptions =
@@ -139,6 +82,7 @@ class _PurchaseExchangeDialogState extends State<_PurchaseExchangeDialog> {
     final screenWidth = MediaQuery.sizeOf(context).width;
     final dialogWidth = (screenWidth - 48).clamp(280.0, 640.0).toDouble();
     final isCompact = dialogWidth < 520;
+    final adjustmentOptions = _purchaseAdjustmentOptions(l10n, widget.order);
 
     return AlertDialog(
       icon: const Icon(Icons.swap_horiz_outlined),
@@ -157,15 +101,15 @@ class _PurchaseExchangeDialogState extends State<_PurchaseExchangeDialog> {
                 ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
               ),
               const SizedBox(height: 4),
-              if (_adjustableLines.isEmpty)
+              if (adjustmentOptions.isEmpty)
                 Text(l10n.purchaseNoAdjustableItems)
               else
-                for (final line in _adjustableLines)
-                  _PurchaseAdjustmentLineStepper(
-                    line: line,
-                    value: _quantities[line.id] ?? 0,
+                for (final option in adjustmentOptions)
+                  AdjustmentLineStepper(
+                    option: option,
+                    value: _quantities[option.lineId] ?? 0,
                     onChanged: (value) {
-                      setState(() => _quantities[line.id] = value);
+                      setState(() => _quantities[option.lineId] = value);
                     },
                   ),
               const SizedBox(height: 16),
@@ -221,13 +165,10 @@ class _PurchaseExchangeDialogState extends State<_PurchaseExchangeDialog> {
                 ),
               ],
               const SizedBox(height: 12),
-              TextField(
+              AdjustmentReasonField(
                 controller: _reasonController,
-                decoration: InputDecoration(
-                  labelText: l10n.purchaseAdjustmentReasonLabel,
-                  hintText: l10n.purchaseAdjustmentReasonHint,
-                ),
-                maxLines: 2,
+                label: l10n.purchaseAdjustmentReasonLabel,
+                hint: l10n.purchaseAdjustmentReasonHint,
               ),
             ],
           ),
@@ -244,14 +185,11 @@ class _PurchaseExchangeDialogState extends State<_PurchaseExchangeDialog> {
   }
 
   void _submit() {
-    final lines = [
-      for (final line in _adjustableLines)
-        if ((_quantities[line.id] ?? 0) > 0)
-          PurchaseAdjustmentLineDraft(
-            lineId: line.id,
-            quantity: _quantities[line.id]!,
-          ),
-    ];
+    final lines = _purchaseAdjustmentDrafts([
+      for (final entry in _quantities.entries)
+        if (entry.value > 0)
+          AdjustmentLineSelection(lineId: entry.key, quantity: entry.value),
+    ]);
     final replacementLines = <PurchaseReplacementLineDraft>[];
     for (final editor in _replacementEditors) {
       final quantity = int.tryParse(editor.quantityController.text.trim());
@@ -444,77 +382,6 @@ List<_PurchaseReplacementOption> _replacementOptionsFromOrderLines(
     });
   }
   return optionsByVariant.values.toList(growable: false);
-}
-
-class _PurchaseAdjustmentLineStepper extends StatelessWidget {
-  const _PurchaseAdjustmentLineStepper({
-    required this.line,
-    required this.value,
-    required this.onChanged,
-  });
-
-  final PurchaseOrderLine line;
-  final int value;
-  final ValueChanged<int> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
-
-    return ListTile(
-      contentPadding: EdgeInsets.zero,
-      title: Text(
-        line.displayName.isEmpty
-            ? l10n.purchaseOrderUnknownProduct
-            : line.displayName,
-      ),
-      subtitle: Text(
-        [
-          l10n.purchaseOrderLineQuantity(line.quantity),
-          l10n.unitPriceEach(formatMoney(line.unitCost)),
-          l10n.purchaseAdjustmentLineRemaining(
-            line.adjustableQuantity,
-            line.quantity,
-          ),
-        ].join(' • '),
-      ),
-      trailing: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          IconButton(
-            tooltip: l10n.removeOneTooltip,
-            onPressed: value <= 0 ? null : () => onChanged(value - 1),
-            icon: const Icon(Icons.remove),
-          ),
-          SizedBox(
-            width: 32,
-            child: Text(
-              '$value',
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-          ),
-          IconButton(
-            tooltip: l10n.addOneTooltip,
-            onPressed: value >= line.adjustableQuantity
-                ? null
-                : () => onChanged(value + 1),
-            icon: const Icon(Icons.add),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _PurchaseAdjustmentDialogResult {
-  const _PurchaseAdjustmentDialogResult({
-    required this.lines,
-    required this.reason,
-  });
-
-  final List<PurchaseAdjustmentLineDraft> lines;
-  final String reason;
 }
 
 class _PurchaseExchangeDialogResult {

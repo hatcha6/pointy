@@ -271,6 +271,17 @@ class AiChatViewModel extends ChangeNotifier {
     );
   }
 
+  /// Queue a freshly-recorded voice clip and send it right away, bundled with
+  /// any images/files already attached, as a turn with no typed text.
+  Future<void> sendRecordedAudio(AiAttachment audio) async {
+    if (_isStreaming) {
+      return;
+    }
+    _pendingAttachments.add(audio);
+    notifyListeners();
+    await sendMessage('');
+  }
+
   /// Answer the pending ask_user question and resume the agentic turn: a fresh
   /// assistant bubble streams the model's continuation. [declined] resumes with a
   /// skip instead of answers, so a flow never deadlocks on an ignored question.

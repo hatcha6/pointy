@@ -25,6 +25,7 @@ from .serializers import (
     ConvertQuotationSerializer,
     CustomerInvoicePaymentSerializer,
     DiscountPreviewSerializer,
+    OrderExchangeInputSerializer,
     OrderSerializer,
     PublicInvoiceSerializer,
     OrderReturnSerializer,
@@ -60,10 +61,15 @@ class OrderViewSet(
         "discount_preview": ("sales.add_order",),
         "return_items": ("sales.add_order",),
         "void": ("sales.add_order",),
+        "exchange_items": ("sales.add_order",),
         "record_payment": ("sales.add_order",),
         "outstanding": ("sales.view_order",),
         "convert": ("sales.add_order",),
         "reprint": ("sales.view_order", "printing.add_printjob"),
+        # Returns-desk lookup: find ONE invoice by receipt number without
+        # browsing the list. Visibility for the adjustment verbs above is widened
+        # for this permission in get_queryset (the verbs keep needing add_order).
+        "lookup": ("sales.process_return_lookup",),
     }
     queryset = Order.objects.select_related(
         "customer",
@@ -78,6 +84,8 @@ class OrderViewSet(
         ),
         "payments",
         "applied_discounts",
+        "exchanges__replacement_order",
+        "exchanges__created_by",
     )
     # Dict form (vs a plain tuple) so the date field also exposes range/day
     # lookups (created_at__gte / __lte / __date) — additive, existing exact
@@ -110,6 +118,14 @@ class OrderViewSet(
         if product_id or variant_id:
             queryset = queryset.distinct()
         if user_has_full_visibility(self.request.user):
+            return queryset
+        # A returns-desk operator may reach ONE invoice at a time (fetch it by id
+        # or receipt number and adjust it) without seeing the whole list. The
+        # ``list`` action stays session-scoped, so this never widens browsing.
+        lookup_actions = {"retrieve", "return_items", "void", "exchange_items", "lookup"}
+        if self.action in lookup_actions and self.request.user.has_perm(
+            "sales.process_return_lookup"
+        ):
             return queryset
         return queryset.filter(register_session__owner_key=register_session_owner_key(self.request))
 
@@ -339,6 +355,59 @@ class OrderViewSet(
         serializer.save()
         order.refresh_from_db()
         schedule_targeted_sweep()
+        return Response(
+            OrderSerializer(order, context={"request": request}).data,
+            status=status.HTTP_200_OK,
+        )
+
+    @action(detail=True, methods=["post"], url_path="exchange-items")
+    def exchange_items(self, request, pk=None):
+        return run_idempotent_request(
+            request,
+            lambda: self._exchange_items(request),
+        )
+
+    def _exchange_items(self, request):
+        order = self.get_object()
+        session = self._open_register_session(request)
+        if session is None:
+            raise serializers.ValidationError(
+                {"detail": "No open register session for this request owner."}
+            )
+        serializer = OrderExchangeInputSerializer(
+            data=request.data,
+            context={
+                "order": order,
+                "request": request,
+                "adjustment_register_session": session,
+            },
+        )
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        order.refresh_from_db()
+        schedule_targeted_sweep()
+        return Response(
+            OrderSerializer(order, context={"request": request}).data,
+            status=status.HTTP_200_OK,
+        )
+
+    @action(detail=False, methods=["get"])
+    def lookup(self, request):
+        """Returns-desk: fetch a single invoice by its receipt number. Visibility
+        is widened by ``sales.process_return_lookup`` in ``get_queryset`` so the
+        operator can reach an invoice they did not ring up, without listing all
+        invoices."""
+        receipt_number = (request.query_params.get("receipt") or "").strip()
+        if not receipt_number:
+            raise serializers.ValidationError(
+                {"receipt": "A receipt number is required."}
+            )
+        order = self.get_queryset().filter(receipt_number=receipt_number).first()
+        if order is None:
+            return Response(
+                {"detail": "No invoice matches that receipt number."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
         return Response(
             OrderSerializer(order, context={"request": request}).data,
             status=status.HTTP_200_OK,

@@ -19,6 +19,8 @@ import '../../../shared/design/design.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../../../shared/shell/shell.dart';
 import '../view_models/ai_chat_view_model.dart';
+import '../voice_recording.dart';
+import 'voice_recorder_bar.dart';
 
 const double _maxContentWidth = 860;
 const double _bubbleRadius = 18;
@@ -48,10 +50,15 @@ class AiAssistantScreen extends StatefulWidget {
     required this.navigation,
     this.productSearch,
     this.onOpenAiLink,
+    this.voiceRecorder,
   });
 
   final AiChatViewModel viewModel;
   final AppNavigation navigation;
+
+  /// Captures microphone audio for voice messages. Injectable so widget tests
+  /// can drive a fake; null falls back to the real `record`-backed recorder.
+  final VoiceRecorder? voiceRecorder;
 
   /// Loads products for a product_picker question. Null when the host didn't wire
   /// a catalog source — the picker degrades to "create new product" only.
@@ -83,6 +90,15 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
   /// token growth, so we only force a scroll-to-bottom on the former.
   int _lastMessageCount = 0;
 
+  /// Mic capture for voice messages, created lazily and kept for the screen's
+  /// lifetime so it survives multiple record/stop cycles.
+  late final VoiceRecorder _voiceRecorder =
+      widget.voiceRecorder ?? RecordVoiceRecorder();
+
+  /// While true the composer shows the live waveform recorder instead of the
+  /// text input.
+  bool _isRecording = false;
+
   @override
   void initState() {
     super.initState();
@@ -102,6 +118,7 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
     _controller.dispose();
     _inputFocus.dispose();
     _scrollController.dispose();
+    unawaited(_voiceRecorder.dispose());
     super.dispose();
   }
 
@@ -195,6 +212,57 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
     }
     _controller.clear();
     unawaited(widget.viewModel.sendMessage(text));
+  }
+
+  /// Enter recording mode: confirm mic access first (so a denial surfaces a
+  /// notice instead of a dead button), drop the keyboard, then swap the input
+  /// for the live waveform recorder.
+  Future<void> _startRecording() async {
+    if (_isRecording ||
+        widget.viewModel.isStreaming ||
+        widget.viewModel.hasPendingQuestion) {
+      return;
+    }
+    final granted = await _voiceRecorder.hasPermission();
+    if (!mounted) {
+      return;
+    }
+    if (!granted) {
+      _showMicPermissionNotice();
+      return;
+    }
+    _inputFocus.unfocus();
+    setState(() => _isRecording = true);
+  }
+
+  /// The recorder finished: package the WAV clip as an audio attachment and send
+  /// it (alongside any images/files already queued) as a turn with no text.
+  void _onVoiceCaptured(Uint8List wavBytes, Duration duration) {
+    setState(() => _isRecording = false);
+    final attachment = AiAttachment(
+      kind: AiAttachmentKind.audio,
+      dataUri: 'data:audio/wav;base64,${base64Encode(wavBytes)}',
+      name: 'voice-message.wav',
+      mime: 'audio/wav',
+      durationMs: duration.inMilliseconds,
+    );
+    unawaited(widget.viewModel.sendRecordedAudio(attachment));
+  }
+
+  void _cancelRecording() {
+    if (!mounted) {
+      return;
+    }
+    setState(() => _isRecording = false);
+  }
+
+  void _showMicPermissionNotice() {
+    final l10n = AppLocalizations.of(context)!;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(content: Text(l10n.aiAssistantMicPermissionDenied)),
+      );
   }
 
   void _submitAnswer(List<AiAnswer> answers) {
@@ -393,6 +461,11 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
                     onSend: _send,
                     onAttach: _openAttachSheet,
                     onUsage: _openUsageSheet,
+                    isRecording: _isRecording,
+                    voiceRecorder: _voiceRecorder,
+                    onStartRecording: _startRecording,
+                    onVoiceCaptured: _onVoiceCaptured,
+                    onCancelRecording: _cancelRecording,
                   ),
                 ],
               ),
@@ -2539,6 +2612,11 @@ class _Composer extends StatelessWidget {
     required this.onSend,
     required this.onAttach,
     required this.onUsage,
+    required this.isRecording,
+    required this.voiceRecorder,
+    required this.onStartRecording,
+    required this.onVoiceCaptured,
+    required this.onCancelRecording,
   });
 
   final TextEditingController controller;
@@ -2547,6 +2625,11 @@ class _Composer extends StatelessWidget {
   final VoidCallback onSend;
   final VoidCallback onAttach;
   final VoidCallback onUsage;
+  final bool isRecording;
+  final VoiceRecorder voiceRecorder;
+  final VoidCallback onStartRecording;
+  final void Function(Uint8List wavBytes, Duration duration) onVoiceCaptured;
+  final VoidCallback onCancelRecording;
 
   @override
   Widget build(BuildContext context) {
@@ -2582,49 +2665,71 @@ class _Composer extends StatelessWidget {
                 children: [
                   if (viewModel.hasPendingAttachments)
                     _PendingAttachmentStrip(viewModel: viewModel),
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      _AttachButton(
-                        tooltip: l10n.aiAssistantAttachTooltip,
-                        onTap: locked ? null : onAttach,
-                      ),
-                      Expanded(
-                        child: TextField(
-                          controller: controller,
-                          focusNode: focusNode,
-                          enabled: !locked,
-                          minLines: 1,
-                          maxLines: 6,
-                          textInputAction: TextInputAction.send,
-                          onSubmitted: (_) => onSend(),
-                          decoration: InputDecoration(
-                            hintText: viewModel.hasPendingQuestion
-                                ? l10n.aiAssistantAskUserPendingComposer
-                                : l10n.aiAssistantInputHint,
-                            border: InputBorder.none,
-                            isCollapsed: true,
-                            contentPadding: const EdgeInsets.symmetric(
-                              vertical: 13,
-                            ),
+                  AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 180),
+                    child: isRecording
+                        ? VoiceRecorderBar(
+                            key: const ValueKey('voice-recorder'),
+                            recorder: voiceRecorder,
+                            onSend: onVoiceCaptured,
+                            onCancel: onCancelRecording,
+                          )
+                        : Row(
+                            key: const ValueKey('composer-input'),
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              _AttachButton(
+                                tooltip: l10n.aiAssistantAttachTooltip,
+                                onTap: locked ? null : onAttach,
+                              ),
+                              Expanded(
+                                child: TextField(
+                                  controller: controller,
+                                  focusNode: focusNode,
+                                  enabled: !locked,
+                                  minLines: 1,
+                                  maxLines: 6,
+                                  textInputAction: TextInputAction.send,
+                                  onSubmitted: (_) => onSend(),
+                                  decoration: InputDecoration(
+                                    hintText: viewModel.hasPendingQuestion
+                                        ? l10n.aiAssistantAskUserPendingComposer
+                                        : l10n.aiAssistantInputHint,
+                                    border: InputBorder.none,
+                                    isCollapsed: true,
+                                    contentPadding: const EdgeInsets.symmetric(
+                                      vertical: 13,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              if (showRing)
+                                Padding(
+                                  padding: const EdgeInsetsDirectional.only(
+                                    bottom: 3,
+                                  ),
+                                  child: _UsageRing(usage: usage, onTap: onUsage),
+                                ),
+                              // Mic to start a voice message — shown whenever the
+                              // field is empty (so you can record with images
+                              // already queued); it yields to Send while typing.
+                              _MicButton(
+                                controller: controller,
+                                tooltip: l10n.aiAssistantRecordTooltip,
+                                onTap: locked ? null : onStartRecording,
+                                locked: locked,
+                              ),
+                              const SizedBox(width: 2),
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 3),
+                                child: _SendButton(
+                                  controller: controller,
+                                  viewModel: viewModel,
+                                  onSend: onSend,
+                                ),
+                              ),
+                            ],
                           ),
-                        ),
-                      ),
-                      if (showRing)
-                        Padding(
-                          padding: const EdgeInsetsDirectional.only(bottom: 3),
-                          child: _UsageRing(usage: usage, onTap: onUsage),
-                        ),
-                      const SizedBox(width: 2),
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 3),
-                        child: _SendButton(
-                          controller: controller,
-                          viewModel: viewModel,
-                          onSend: onSend,
-                        ),
-                      ),
-                    ],
                   ),
                 ],
               ),
@@ -2747,21 +2852,77 @@ class _SendButton extends StatelessWidget {
             !viewModel.hasPendingQuestion &&
             (controller.text.trim().isNotEmpty ||
                 viewModel.hasPendingAttachments);
+        // Nothing to send yet → the mic takes this slot instead.
+        if (!canSend) {
+          return const SizedBox.shrink();
+        }
         return Tooltip(
           message: l10n.aiAssistantSendTooltip,
           child: Material(
-            color: canSend ? colors.primary : colors.line,
+            color: colors.primary,
             shape: const CircleBorder(),
             child: InkWell(
               customBorder: const CircleBorder(),
-              onTap: canSend ? onSend : null,
-              child: SizedBox(
+              onTap: onSend,
+              child: const SizedBox(
                 width: 38,
                 height: 38,
                 child: Icon(
                   Icons.arrow_upward_rounded,
                   size: 20,
-                  color: canSend ? Colors.white : colors.mutedInk,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// The mic button that starts a voice message. Lives in the trailing cluster and
+/// is shown only while the field is empty (and the composer isn't locked) — so
+/// it's the resting-state action, yielding to [_SendButton] as soon as the user
+/// types. It stays visible when only attachments are queued, so a photo can be
+/// paired with a voice note.
+class _MicButton extends StatelessWidget {
+  const _MicButton({
+    required this.controller,
+    required this.tooltip,
+    required this.onTap,
+    required this.locked,
+  });
+
+  final TextEditingController controller;
+  final String tooltip;
+  final VoidCallback? onTap;
+  final bool locked;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.pointyColors;
+    return ListenableBuilder(
+      listenable: controller,
+      builder: (context, _) {
+        final show = !locked && controller.text.trim().isEmpty;
+        if (!show) {
+          return const SizedBox.shrink();
+        }
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 3),
+          child: Tooltip(
+            message: tooltip,
+            child: Material(
+              color: colors.primary,
+              shape: const CircleBorder(),
+              child: InkWell(
+                customBorder: const CircleBorder(),
+                onTap: onTap,
+                child: const SizedBox(
+                  width: 38,
+                  height: 38,
+                  child: Icon(Icons.mic_rounded, size: 20, color: Colors.white),
                 ),
               ),
             ),
@@ -2823,6 +2984,7 @@ class _PendingAttachmentTile extends StatelessWidget {
     final colors = context.pointyColors;
     final l10n = AppLocalizations.of(context)!;
     final isImage = attachment.isImage && attachment.previewBytes != null;
+    final isAudio = attachment.isAudio;
 
     return Stack(
       children: [
@@ -2848,16 +3010,20 @@ class _PendingAttachmentTile extends StatelessWidget {
                   child: Row(
                     children: [
                       Icon(
-                        Icons.description_outlined,
+                        isAudio
+                            ? Icons.mic_rounded
+                            : Icons.description_outlined,
                         size: 20,
                         color: colors.primaryStrong,
                       ),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          attachment.name.isEmpty
-                              ? l10n.aiAssistantAttachFile
-                              : attachment.name,
+                          isAudio
+                              ? _voiceLabel(l10n, attachment)
+                              : (attachment.name.isEmpty
+                                    ? l10n.aiAssistantAttachFile
+                                    : attachment.name),
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                           style: Theme.of(context).textTheme.bodySmall,
@@ -2925,6 +3091,14 @@ class _SentAttachments extends StatelessWidget {
   }
 }
 
+/// Label for a voice attachment chip — "رسالة صوتية", with " · 0:12" appended
+/// when the recording length is known (freshly sent; history keeps no duration).
+String _voiceLabel(AppLocalizations l10n, AiAttachment attachment) {
+  final base = l10n.aiAssistantVoiceMessage;
+  final ms = attachment.durationMs;
+  return ms != null ? '$base · ${formatRecordingDuration(ms)}' : base;
+}
+
 class _FileChip extends StatelessWidget {
   const _FileChip({required this.attachment});
 
@@ -2935,11 +3109,13 @@ class _FileChip extends StatelessWidget {
     final colors = context.pointyColors;
     final spacing = AdaptiveSpacing.of(context);
     final l10n = AppLocalizations.of(context)!;
-    final label = attachment.name.isNotEmpty
-        ? attachment.name
-        : (attachment.isImage
-              ? l10n.aiAssistantAttachmentImage
-              : l10n.aiAssistantAttachFile);
+    final label = attachment.isAudio
+        ? _voiceLabel(l10n, attachment)
+        : (attachment.name.isNotEmpty
+              ? attachment.name
+              : (attachment.isImage
+                    ? l10n.aiAssistantAttachmentImage
+                    : l10n.aiAssistantAttachFile));
 
     return Container(
       padding: EdgeInsets.symmetric(
@@ -2955,9 +3131,11 @@ class _FileChip extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(
-            attachment.isImage
-                ? Icons.image_outlined
-                : Icons.description_outlined,
+            attachment.isAudio
+                ? Icons.mic_rounded
+                : (attachment.isImage
+                      ? Icons.image_outlined
+                      : Icons.description_outlined),
             size: 16,
             color: colors.primaryStrong,
           ),

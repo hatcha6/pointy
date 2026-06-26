@@ -7686,6 +7686,29 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
+  String get posSessionMenuTitle => 'إجراءات الجلسة';
+
+  @override
+  String get posSessionMenuTooltip => 'خيارات الجلسة';
+
+  @override
+  String get payInRegisterSessionDescription => 'إيداع مبلغ نقدي في الدرج';
+
+  @override
+  String get payOutRegisterSessionDescription => 'سحب مبلغ نقدي من الدرج';
+
+  @override
+  String get collectDebtSessionDescription =>
+      'استلام دفعة من عميل عليه رصيد آجل';
+
+  @override
+  String get refreshCatalogDescription => 'مزامنة قائمة المنتجات مع الخادم';
+
+  @override
+  String get closeRegisterSessionDescription =>
+      'إنهاء الجلسة وعدّ النقدية في الدرج';
+
+  @override
   String get cashMovementMenuTooltip => 'حركات نقدية للدرج';
 
   @override
@@ -8207,6 +8230,75 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get saleReturnQuantityLabel => 'كمية الإرجاع';
+
+  @override
+  String get saleExchangeButton => 'استبدال';
+
+  @override
+  String get saleExchangeTitle => 'استبدال منتجات';
+
+  @override
+  String get saleExchangeSuccess => 'تم تسجيل الاستبدال.';
+
+  @override
+  String get saleExchangeError => 'تعذّر تسجيل الاستبدال.';
+
+  @override
+  String get saleExchangeReturnedSectionTitle => 'العناصر المُرتجعة';
+
+  @override
+  String get saleExchangeReplacementSectionTitle => 'العناصر البديلة';
+
+  @override
+  String get saleExchangeSearchLabel => 'ابحث عن منتج بديل';
+
+  @override
+  String get saleExchangeSearchButton => 'بحث';
+
+  @override
+  String get saleExchangeNoResults => 'لا توجد نتائج مطابقة.';
+
+  @override
+  String get saleExchangeInvalidError =>
+      'اختر عنصرًا مُرتجعًا واحدًا على الأقل وعنصرًا بديلًا.';
+
+  @override
+  String get saleExchangeSettlementLabel => 'طريقة تسوية الفرق';
+
+  @override
+  String saleExchangeNetPay(String amount) {
+    return 'على العميل دفع $amount';
+  }
+
+  @override
+  String saleExchangeNetRefund(String amount) {
+    return 'يُرَدّ للعميل $amount';
+  }
+
+  @override
+  String get saleExchangeNetEven => 'تبادل متكافئ — لا فرق';
+
+  @override
+  String get navReturnsExchange => 'المرتجعات والاستبدال';
+
+  @override
+  String get returnsLookupTitle => 'المرتجعات والاستبدال';
+
+  @override
+  String get returnsLookupPrompt =>
+      'أدخل رقم الفاتورة لإجراء إرجاع أو استبدال.';
+
+  @override
+  String get returnsLookupFieldLabel => 'رقم الفاتورة';
+
+  @override
+  String get returnsLookupSearchButton => 'بحث';
+
+  @override
+  String get returnsLookupNotFound => 'لا توجد فاتورة بهذا الرقم.';
+
+  @override
+  String get returnsLookupEmpty => 'ابحث عن فاتورة برقمها للبدء.';
 
   @override
   String get salePaymentsTitle => 'المدفوعات';
@@ -11397,6 +11489,22 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get aiAssistantAttachmentImage => 'صورة';
+
+  @override
+  String get aiAssistantRecordTooltip => 'تسجيل رسالة صوتية';
+
+  @override
+  String get aiAssistantRecordCancelTooltip => 'إلغاء التسجيل';
+
+  @override
+  String get aiAssistantVoiceMessage => 'رسالة صوتية';
+
+  @override
+  String get aiAssistantRecording => 'جارٍ التسجيل…';
+
+  @override
+  String get aiAssistantMicPermissionDenied =>
+      'يلزم إذن الميكروفون لتسجيل الرسائل الصوتية. فعّله من إعدادات الجهاز.';
 
   @override
   String aiAssistantImageLimit(int count) {

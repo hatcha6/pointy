@@ -349,6 +349,7 @@ class SaleOrder {
     this.kitchenPrintJobs = const [],
     this.canVoid = false,
     this.canReturn = false,
+    this.canExchange = false,
     this.requiresManagerAdjustment = false,
     this.discountTotal = 0,
     this.appliedDiscounts = const [],
@@ -381,6 +382,7 @@ class SaleOrder {
   final List<PrintJob> kitchenPrintJobs;
   final bool canVoid;
   final bool canReturn;
+  final bool canExchange;
   final bool requiresManagerAdjustment;
   final List<SaleOrderLine> lines;
   final List<SalePayment> payments;
@@ -431,6 +433,7 @@ class SaleOrder {
           const [],
       canVoid: _boolFromJson(json['can_void']),
       canReturn: _boolFromJson(json['can_return']),
+      canExchange: _boolFromJson(json['can_exchange']),
       requiresManagerAdjustment: _boolFromJson(
         json['requires_manager_adjustment'],
       ),
@@ -768,6 +771,66 @@ class SaleReturnLineDraft {
   Map<String, Object?> toJson() {
     return {'line': lineId, 'quantity': formatQuantityForApi(quantity)};
   }
+}
+
+/// A sales exchange: return the chosen original line(s) and ring up replacement
+/// item(s) at current price. The backend settles only the net difference (see
+/// `exchange_order_items`).
+class SaleExchangeDraft {
+  const SaleExchangeDraft({
+    required this.lines,
+    required this.replacementLines,
+    this.settlementMethod = 'cash',
+    this.reason = '',
+  });
+
+  /// Outbound (returned) lines — same shape as a return.
+  final List<SaleReturnLineDraft> lines;
+  final List<SaleExchangeReplacementLineDraft> replacementLines;
+
+  /// Tender used to settle a positive difference owed by the customer.
+  final String settlementMethod;
+  final String reason;
+
+  Map<String, Object?> toJson() {
+    return {
+      'reason': reason,
+      'settlement_method': settlementMethod,
+      'lines': lines.map((line) => line.toJson()).toList(growable: false),
+      'replacement_lines': replacementLines
+          .map((line) => line.toJson())
+          .toList(growable: false),
+    };
+  }
+}
+
+class SaleExchangeReplacementLineDraft {
+  const SaleExchangeReplacementLineDraft({
+    required this.variantId,
+    required this.quantity,
+  });
+
+  final int variantId;
+  final double quantity;
+
+  Map<String, Object?> toJson() {
+    return {'variant': variantId, 'quantity': formatQuantityForApi(quantity)};
+  }
+}
+
+/// A replacement product candidate surfaced by the exchange dialog's search.
+class ExchangeProductOption {
+  const ExchangeProductOption({
+    required this.variantId,
+    required this.label,
+    required this.unitPrice,
+    this.sku = '',
+  });
+
+  final int variantId;
+  final String label;
+  final double unitPrice;
+  final String sku;
 }
 
 int _productIdFromJson(Object? value) {

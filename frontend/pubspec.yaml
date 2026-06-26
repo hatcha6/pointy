@@ -56,6 +56,7 @@ dependencies:
   gpt_markdown: ^1.1.7
   # Open web-search source citations (http/https links in AI replies) externally.
   url_launcher: ^6.3.1
+  record: ^6.2.1
 
 dev_dependencies:
   flutter_test:

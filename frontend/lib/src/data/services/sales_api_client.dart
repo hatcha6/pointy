@@ -180,4 +180,34 @@ class SalesApiClient {
       _session.decodedBody(response) as Map<String, Object?>,
     );
   }
+
+  Future<SaleOrder> exchangeSaleOrderItems({
+    required int saleOrderId,
+    required SaleExchangeDraft draft,
+  }) async {
+    final response = await _session.post(
+      'orders/$saleOrderId/exchange-items/',
+      body: draft.toJson(),
+    );
+    _session.ensureSuccess(
+      response,
+      'Sale exchange request failed with status',
+    );
+    return SaleOrder.fromJson(
+      _session.decodedBody(response) as Map<String, Object?>,
+    );
+  }
+
+  /// Returns-desk lookup: fetch a single invoice by its receipt number. Gated
+  /// server-side by ``sales.process_return_lookup``.
+  Future<SaleOrder> lookupSaleOrderByReceipt(String receiptNumber) async {
+    final response = await _session.get(
+      'orders/lookup/',
+      query: {'receipt': receiptNumber},
+    );
+    _session.ensureSuccess(response, 'Invoice lookup failed with status');
+    return SaleOrder.fromJson(
+      _session.decodedBody(response) as Map<String, Object?>,
+    );
+  }
 }

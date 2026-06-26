@@ -34,6 +34,7 @@ import 'features/expenses/view_models/expense_categories_view_model.dart';
 import 'features/expenses/view_models/expenses_view_model.dart';
 import 'features/expenses/views/expenses_screen.dart';
 import 'features/invoices/views/invoice_details_screen.dart';
+import 'features/returns_exchange/views/returns_exchange_lookup_screen.dart';
 import 'features/invoices/views/invoice_list_screen.dart';
 import 'features/notifications/views/notification_center_host.dart';
 import 'features/operations/view_models/job_details_view_model.dart';
@@ -218,6 +219,7 @@ class _AuthenticatedRoutes implements AppNavigation {
       AppNavigationDestination.aiAssistant => aiAssistantRouteBuilder,
       AppNavigationDestination.operations => operationsRouteBuilder,
       AppNavigationDestination.invoices => invoicesRouteBuilder,
+      AppNavigationDestination.returnsExchange => returnsExchangeRouteBuilder,
       AppNavigationDestination.purchasing => purchasingRouteBuilder,
       AppNavigationDestination.contacts => contactsRouteBuilder,
       AppNavigationDestination.catalog => catalogRouteBuilder,
@@ -386,6 +388,7 @@ class _AuthenticatedRoutes implements AppNavigation {
               saleRepository: dependencies.saleRepository,
               printingRepository: dependencies.printingRepository,
               shopSettingsRepository: dependencies.shopSettingsRepository,
+              catalogRepository: dependencies.catalogRepository,
               initialOrder: order,
               capabilities: capabilities,
               analyticsEngine: dependencies.analyticsEngine,
@@ -397,11 +400,26 @@ class _AuthenticatedRoutes implements AppNavigation {
           saleRepository: dependencies.saleRepository,
           printingRepository: dependencies.printingRepository,
           shopSettingsRepository: dependencies.shopSettingsRepository,
+          catalogRepository: dependencies.catalogRepository,
           initialOrder: order,
           capabilities: capabilities,
           analyticsEngine: dependencies.analyticsEngine,
           showHeader: true,
         ),
+      ),
+    );
+  }
+
+  Widget returnsExchangeRouteBuilder(BuildContext routeContext) {
+    return _screen(
+      'returns_exchange',
+      ReturnsExchangeLookupScreen(
+        saleRepository: dependencies.saleRepository,
+        printingRepository: dependencies.printingRepository,
+        shopSettingsRepository: dependencies.shopSettingsRepository,
+        catalogRepository: dependencies.catalogRepository,
+        capabilities: capabilities,
+        analyticsEngine: dependencies.analyticsEngine,
       ),
     );
   }
@@ -785,6 +803,7 @@ class _AuthenticatedRoutes implements AppNavigation {
                   saleRepository: dependencies.saleRepository,
                   printingRepository: dependencies.printingRepository,
                   shopSettingsRepository: dependencies.shopSettingsRepository,
+                  catalogRepository: dependencies.catalogRepository,
                   initialOrder: result.value,
                   capabilities: capabilities,
                   analyticsEngine: dependencies.analyticsEngine,
@@ -1651,6 +1670,7 @@ class _AuthenticatedRoutes implements AppNavigation {
         saleRepository: dependencies.saleRepository,
         printingRepository: dependencies.printingRepository,
         shopSettingsRepository: dependencies.shopSettingsRepository,
+        catalogRepository: dependencies.catalogRepository,
         initialOrder: order,
         capabilities: capabilities,
         analyticsEngine: dependencies.analyticsEngine,

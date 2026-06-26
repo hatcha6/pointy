@@ -302,6 +302,16 @@ class Order(TimeStampedModel):
                 name="sales_order_type_status_idx",
             ),
         ]
+        permissions = [
+            # Lets a trusted cashier look up a single invoice by its receipt
+            # number and return/exchange it — without browsing the full invoice
+            # list, and overriding the short cashier-window time limit. Granted
+            # per-user from the permission catalog; not part of any role default.
+            (
+                "process_return_lookup",
+                "Look up and return/exchange any invoice by receipt number",
+            ),
+        ]
 
     def recalculate(self) -> None:
         subtotal = Decimal("0.00")
@@ -587,6 +597,62 @@ class OrderAdjustmentLine(TimeStampedModel):
     def line_total(self):
         gross_total = self.unit_price * self.quantity
         return (gross_total - self.discount_total).quantize(Decimal("0.01"))
+
+
+class OrderExchange(TimeStampedModel):
+    """Links the two legs of a sales exchange into one audited operation.
+
+    A sales exchange is modelled as a RETURN of the original line(s) plus a fresh
+    SALE of the replacement item(s) — two real, independently-correct documents,
+    so revenue, COGS, profit, stock and the cash drawer all reconcile through the
+    existing return + checkout machinery (see services.exchange_order_items). This
+    row ties them together and records the net money the customer settled, so the
+    pair is discoverable and auditable as a single exchange (parallel to the
+    purchasing side's PurchaseOrderAdjustment of type EXCHANGE).
+    """
+
+    original_order = models.ForeignKey(
+        Order,
+        on_delete=models.PROTECT,
+        related_name="exchanges",
+    )
+    return_adjustment = models.OneToOneField(
+        OrderAdjustment,
+        on_delete=models.PROTECT,
+        related_name="exchange",
+    )
+    replacement_order = models.OneToOneField(
+        Order,
+        on_delete=models.PROTECT,
+        related_name="exchange_source",
+    )
+    register_session = models.ForeignKey(
+        RegisterSession,
+        on_delete=models.PROTECT,
+        related_name="order_exchanges",
+    )
+    # Value of the returned goods (= return_adjustment.amount), the replacement
+    # goods (replacement_order.total), and the net the customer settled
+    # (replacement_amount - outbound_amount): positive = customer paid the
+    # difference, negative = refunded to the customer, zero = even exchange.
+    outbound_amount = models.DecimalField(max_digits=10, decimal_places=2)
+    replacement_amount = models.DecimalField(max_digits=10, decimal_places=2)
+    net_amount = models.DecimalField(max_digits=10, decimal_places=2)
+    settlement_method = models.CharField(max_length=16, default="cash")
+    reason = models.TextField(blank=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="order_exchanges",
+        blank=True,
+        null=True,
+    )
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self) -> str:
+        return f"exchange net {self.net_amount} for {self.original_order_id}"
 
 
 class StockReservation(TimeStampedModel):

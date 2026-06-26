@@ -1424,6 +1424,17 @@ class PosApiService {
     return _sales.returnSaleOrderItems(saleOrderId: saleOrderId, draft: draft);
   }
 
+  Future<SaleOrder> exchangeSaleOrderItems({
+    required int saleOrderId,
+    required SaleExchangeDraft draft,
+  }) {
+    return _sales.exchangeSaleOrderItems(saleOrderId: saleOrderId, draft: draft);
+  }
+
+  Future<SaleOrder> lookupSaleOrderByReceipt(String receiptNumber) {
+    return _sales.lookupSaleOrderByReceipt(receiptNumber);
+  }
+
   Future<PurchaseOrder> createPurchaseOrder(
     PurchaseOrderDraft draft, {
     String? idempotencyKey,

@@ -13,6 +13,7 @@ import '../../../shared/components/components.dart';
 import '../../../shared/date_formatters.dart';
 import '../../../shared/design/design.dart';
 import '../../../shared/formatters.dart';
+import '../../../shared/order/quantity_adjustment_dialog.dart';
 import '../../../shared/order_totals.dart';
 import '../../../shared/payment_labels.dart';
 import '../../../shared/payments/record_payment_dialog.dart';

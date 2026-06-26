@@ -5,6 +5,7 @@ import '../../../core/analytics_engine.dart';
 import '../../../core/authorization.dart';
 import '../../../data/models/print_audit_event.dart';
 import '../../../data/models/sale_order.dart';
+import '../../../data/repositories/catalog_repository.dart';
 import '../../../data/repositories/printing_repository.dart';
 import '../../../data/repositories/sale_repository.dart';
 import '../../../data/repositories/shop_settings_repository.dart';
@@ -22,6 +23,7 @@ class InvoiceDetailsScreen extends StatefulWidget {
     required this.saleRepository,
     required this.printingRepository,
     required this.shopSettingsRepository,
+    required this.catalogRepository,
     required this.initialOrder,
     required this.capabilities,
     this.analyticsEngine,
@@ -30,6 +32,7 @@ class InvoiceDetailsScreen extends StatefulWidget {
   final SaleRepository saleRepository;
   final PrintingRepository printingRepository;
   final ShopSettingsRepository shopSettingsRepository;
+  final CatalogRepository catalogRepository;
   final SaleOrder initialOrder;
   final AuthorizationCapabilities capabilities;
   final AnalyticsEngine? analyticsEngine;
@@ -43,6 +46,7 @@ class _InvoiceDetailsScreenState extends State<InvoiceDetailsScreen> {
     widget.saleRepository,
     printingRepository: widget.printingRepository,
     shopSettingsRepository: widget.shopSettingsRepository,
+    catalogRepository: widget.catalogRepository,
     initialOrder: widget.initialOrder,
     analyticsEngine: widget.analyticsEngine,
   );
@@ -78,6 +82,7 @@ class _InvoiceDetailsScreenState extends State<InvoiceDetailsScreen> {
               saleRepository: widget.saleRepository,
               printingRepository: widget.printingRepository,
               shopSettingsRepository: widget.shopSettingsRepository,
+              catalogRepository: widget.catalogRepository,
               initialOrder: widget.initialOrder,
               capabilities: widget.capabilities,
               analyticsEngine: widget.analyticsEngine,
@@ -98,6 +103,7 @@ class InvoiceDetailsView extends StatefulWidget {
     required this.saleRepository,
     required this.printingRepository,
     required this.shopSettingsRepository,
+    required this.catalogRepository,
     required this.initialOrder,
     required this.capabilities,
     this.analyticsEngine,
@@ -108,6 +114,7 @@ class InvoiceDetailsView extends StatefulWidget {
   final SaleRepository saleRepository;
   final PrintingRepository printingRepository;
   final ShopSettingsRepository shopSettingsRepository;
+  final CatalogRepository catalogRepository;
   final SaleOrder initialOrder;
   final AuthorizationCapabilities capabilities;
   final AnalyticsEngine? analyticsEngine;
@@ -132,6 +139,7 @@ class _InvoiceDetailsViewState extends State<InvoiceDetailsView> {
         widget.saleRepository,
         printingRepository: widget.printingRepository,
         shopSettingsRepository: widget.shopSettingsRepository,
+        catalogRepository: widget.catalogRepository,
         initialOrder: widget.initialOrder,
         analyticsEngine: widget.analyticsEngine,
       );
@@ -167,6 +175,12 @@ class _InvoiceDetailsViewState extends State<InvoiceDetailsView> {
                   onPrintAudit: () => _showPrintAudit(order),
                   onVoid: _canVoid(order) ? _viewModel.voidInvoice : null,
                   onReturn: _canReturn(order) ? _viewModel.returnItems : null,
+                  onExchange: _canExchange(order)
+                      ? _viewModel.exchangeItems
+                      : null,
+                  onProductSearch: _canExchange(order)
+                      ? _viewModel.searchReplacementProducts
+                      : null,
                   isRecordingPayment: _viewModel.isRecordingPayment,
                   onRecordPayment: _recordPayment,
                   isConverting: _viewModel.isConverting,
@@ -220,6 +234,12 @@ class _InvoiceDetailsViewState extends State<InvoiceDetailsView> {
 
   bool _canReturn(SaleOrder order) {
     return order.canReturn || _canManagerAdjust(order);
+  }
+
+  /// An exchange rings up a replacement sale, so it also needs checkout rights.
+  bool _canExchange(SaleOrder order) {
+    return widget.capabilities.canCheckoutSale &&
+        (order.canExchange || _canManagerAdjust(order));
   }
 
   bool _canManagerAdjust(SaleOrder order) {
@@ -315,6 +335,7 @@ class _InvoiceDetailsViewState extends State<InvoiceDetailsView> {
           saleRepository: widget.saleRepository,
           printingRepository: widget.printingRepository,
           shopSettingsRepository: widget.shopSettingsRepository,
+          catalogRepository: widget.catalogRepository,
           initialOrder: newOrder,
           capabilities: widget.capabilities,
           analyticsEngine: widget.analyticsEngine,

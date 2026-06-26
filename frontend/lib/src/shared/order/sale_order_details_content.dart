@@ -6,8 +6,11 @@ import '../../data/services/order_document_service.dart';
 import '../components/components.dart';
 import '../formatters.dart';
 import '../order_totals.dart';
-import 'pointy_quantity_stepper.dart' show formatSaleQuantity;
+import 'pointy_quantity_stepper.dart'
+    show PointyQuantityStepper, formatSaleQuantity;
+import 'quantity_adjustment_dialog.dart';
 import '../payment_labels.dart';
+import '../query_controls/debounced_search_field.dart';
 import '../responsive/responsive.dart';
 import '../date_formatters.dart';
 
@@ -29,6 +32,14 @@ typedef SaleOrderRecordPaymentAction = Future<bool> Function(SaleOrder order);
 /// Converts an OPEN quotation into a sale. Returns true on success.
 typedef SaleOrderConvertAction = Future<bool> Function(SaleOrder order);
 
+/// Exchanges returned line(s) for replacement item(s). Returns true on success.
+typedef SaleOrderExchangeAction =
+    Future<bool> Function(SaleOrder order, SaleExchangeDraft draft);
+
+/// Searches the catalog for replacement products in the exchange dialog.
+typedef ExchangeProductSearch =
+    Future<List<ExchangeProductOption>> Function(String query);
+
 class SaleOrderDetailsContent extends StatefulWidget {
   const SaleOrderDetailsContent({
     super.key,
@@ -38,6 +49,8 @@ class SaleOrderDetailsContent extends StatefulWidget {
     this.onPrintAudit,
     this.onVoid,
     this.onReturn,
+    this.onExchange,
+    this.onProductSearch,
     this.onRecordPayment,
     this.onConvert,
     this.isRecordingPayment = false,
@@ -54,6 +67,12 @@ class SaleOrderDetailsContent extends StatefulWidget {
   final VoidCallback? onPrintAudit;
   final SaleOrderVoidAction? onVoid;
   final SaleOrderReturnAction? onReturn;
+
+  /// When provided (with [onProductSearch]) and the order is adjustable,
+  /// surfaces an "استبدال" action that returns line(s) and rings up
+  /// replacement item(s) in one operation.
+  final SaleOrderExchangeAction? onExchange;
+  final ExchangeProductSearch? onProductSearch;
 
   /// When provided and the order is an unpaid credit invoice, surfaces a
   /// prominent "آجل — المتبقّي X" callout with a "تسجيل دفعة" action.
@@ -117,12 +136,14 @@ class _SaleOrderDetailsContentState extends State<SaleOrderDetailsContent> {
               isConverting: widget.isConverting,
               canReturn: _canReturn,
               canVoid: _canVoid,
+              canExchange: _canExchange,
               canConvert: _canConvert,
               onReprint: widget.onReprint == null ? null : _requestReprint,
               onShare: widget.onShare == null ? null : _shareInvoice,
               onPrintAudit: widget.onPrintAudit,
               onReturn: _canReturn ? _showReturnDialog : null,
               onVoid: _canVoid ? _showVoidDialog : null,
+              onExchange: _canExchange ? _showExchangeDialog : null,
               onConvert: _canConvert ? _convertQuotation : null,
               useInvoiceLabels: widget.useInvoiceLabels,
             ),
@@ -158,12 +179,20 @@ class _SaleOrderDetailsContentState extends State<SaleOrderDetailsContent> {
         _hasReturnableItems;
   }
 
+  bool get _canExchange {
+    return widget.onExchange != null &&
+        widget.onProductSearch != null &&
+        widget.order.status == 'paid' &&
+        _hasReturnableItems;
+  }
+
   bool get _hasVisibleActions {
     return widget.onReprint != null ||
         widget.onShare != null ||
         widget.onPrintAudit != null ||
         _canReturn ||
         _canVoid ||
+        _canExchange ||
         _canConvert;
   }
 
@@ -301,9 +330,38 @@ class _SaleOrderDetailsContentState extends State<SaleOrderDetailsContent> {
 
   Future<void> _showReturnDialog() async {
     final l10n = AppLocalizations.of(context)!;
-    final result = await showDialog<_ReturnDialogResult>(
-      context: context,
-      builder: (context) => _SaleReturnDialog(order: widget.order),
+    final result = await showQuantityAdjustmentDialog(
+      context,
+      icon: Icons.keyboard_return_outlined,
+      title: l10n.saleReturnTitle,
+      emptyMessage: l10n.saleNoReturnableItems,
+      reasonLabel: l10n.saleAdjustmentReasonLabel,
+      reasonHint: l10n.saleAdjustmentReasonHint,
+      options: [
+        for (final line in widget.order.lines)
+          if (line.returnableQuantity > 0)
+            AdjustmentLineOption(
+              lineId: line.id,
+              title: saleLineDisplayName(line, l10n),
+              subtitle: [
+                l10n.saleLineQuantityAndPrice(
+                  formatSaleQuantity(line.quantity),
+                  formatMoney(line.unitPrice),
+                ),
+                if (line.returnedQuantity > 0)
+                  l10n.saleLineReturnedQuantity(
+                    formatSaleQuantity(line.returnedQuantity),
+                    formatSaleQuantity(line.quantity),
+                  ),
+              ].join(' • '),
+              maxQuantity: line.returnableQuantity,
+              allowDecimal: line.unit != 'piece',
+              decimalEntryTitle: l10n.posWeightDialogTitle,
+              decimalEntryHint: l10n.saleReturnQuantityHint(
+                formatSaleQuantity(line.returnableQuantity),
+              ),
+            ),
+      ],
     );
     if (result == null || widget.onReturn == null) {
       return;
@@ -314,9 +372,39 @@ class _SaleOrderDetailsContentState extends State<SaleOrderDetailsContent> {
     }
 
     await _runAdjustment(
-      () => widget.onReturn!(widget.order, result.lines, result.reason),
+      () => widget.onReturn!(
+        widget.order,
+        [
+          for (final selection in result.lines)
+            SaleReturnLineDraft(
+              lineId: selection.lineId,
+              quantity: selection.quantity,
+            ),
+        ],
+        result.reason,
+      ),
       successMessage: l10n.saleReturnSuccess,
       errorMessage: l10n.saleReturnError,
+    );
+  }
+
+  Future<void> _showExchangeDialog() async {
+    final l10n = AppLocalizations.of(context)!;
+    final draft = await showDialog<SaleExchangeDraft>(
+      context: context,
+      builder: (context) => _SaleExchangeDialog(
+        order: widget.order,
+        onProductSearch: widget.onProductSearch!,
+      ),
+    );
+    if (draft == null || widget.onExchange == null) {
+      return;
+    }
+
+    await _runAdjustment(
+      () => widget.onExchange!(widget.order, draft),
+      successMessage: l10n.saleExchangeSuccess,
+      errorMessage: l10n.saleExchangeError,
     );
   }
 
@@ -354,12 +442,14 @@ class _ActionsSection extends StatelessWidget {
     required this.isConverting,
     required this.canReturn,
     required this.canVoid,
+    required this.canExchange,
     required this.canConvert,
     this.onReprint,
     this.onShare,
     this.onPrintAudit,
     this.onReturn,
     this.onVoid,
+    this.onExchange,
     this.onConvert,
     required this.useInvoiceLabels,
   });
@@ -371,12 +461,14 @@ class _ActionsSection extends StatelessWidget {
   final bool isConverting;
   final bool canReturn;
   final bool canVoid;
+  final bool canExchange;
   final bool canConvert;
   final VoidCallback? onReprint;
   final VoidCallback? onShare;
   final VoidCallback? onPrintAudit;
   final VoidCallback? onReturn;
   final VoidCallback? onVoid;
+  final VoidCallback? onExchange;
   final VoidCallback? onConvert;
   final bool useInvoiceLabels;
 
@@ -453,6 +545,12 @@ class _ActionsSection extends StatelessWidget {
               onPressed: isBusy ? null : onReturn,
               icon: const Icon(Icons.keyboard_return_outlined),
               label: Text(l10n.saleReturnButton),
+            ),
+          if (canExchange)
+            OutlinedButton.icon(
+              onPressed: isBusy ? null : onExchange,
+              icon: const Icon(Icons.swap_horiz_outlined),
+              label: Text(l10n.saleExchangeButton),
             ),
           if (canVoid)
             FilledButton.icon(
@@ -684,20 +782,40 @@ class _DetailRow extends StatelessWidget {
   }
 }
 
-class _SaleReturnDialog extends StatefulWidget {
-  const _SaleReturnDialog({required this.order});
+/// One chosen replacement product line inside [_SaleExchangeDialog].
+class _ExchangeReplacement {
+  _ExchangeReplacement({required this.option});
 
-  final SaleOrder order;
-
-  @override
-  State<_SaleReturnDialog> createState() => _SaleReturnDialogState();
+  final ExchangeProductOption option;
+  double quantity = 1;
 }
 
-class _SaleReturnDialogState extends State<_SaleReturnDialog> {
-  late final Map<int, double> _quantities = {
+/// Returns the chosen original line(s) and rings up replacement item(s) in one
+/// step. Outbound lines reuse the shared [AdjustmentLineStepper]; replacements
+/// are picked via a catalog search ([SaleOrderDetailsContent.onProductSearch]),
+/// priced at current price, with a live net-difference summary. The backend is
+/// authoritative on money; the summary is an estimate from current prices.
+class _SaleExchangeDialog extends StatefulWidget {
+  const _SaleExchangeDialog({required this.order, required this.onProductSearch});
+
+  final SaleOrder order;
+  final ExchangeProductSearch onProductSearch;
+
+  @override
+  State<_SaleExchangeDialog> createState() => _SaleExchangeDialogState();
+}
+
+class _SaleExchangeDialogState extends State<_SaleExchangeDialog> {
+  late final Map<int, double> _outbound = {
     for (final line in widget.order.lines) line.id: 0,
   };
+  final List<_ExchangeReplacement> _replacements = [];
   final TextEditingController _reasonController = TextEditingController();
+  PaymentMethod _settlement = PaymentMethod.cash;
+  String _query = '';
+  List<ExchangeProductOption> _results = const [];
+  bool _searching = false;
+  bool _showError = false;
 
   @override
   void dispose() {
@@ -705,41 +823,209 @@ class _SaleReturnDialogState extends State<_SaleReturnDialog> {
     super.dispose();
   }
 
+  /// Runs as the user types (the field debounces). An empty query clears the
+  /// results; a stale response (the query moved on while awaiting) is discarded
+  /// so an earlier search can't overwrite a newer one.
+  Future<void> _runSearch(String query) async {
+    final trimmed = query.trim();
+    if (trimmed.isEmpty) {
+      setState(() {
+        _query = '';
+        _results = const [];
+        _searching = false;
+      });
+      return;
+    }
+    setState(() {
+      _query = trimmed;
+      _searching = true;
+    });
+    final results = await widget.onProductSearch(trimmed);
+    if (!mounted || trimmed != _query) {
+      return;
+    }
+    setState(() {
+      _results = results;
+      _searching = false;
+    });
+  }
+
+  void _addReplacement(ExchangeProductOption option) {
+    setState(() {
+      final index = _replacements.indexWhere(
+        (r) => r.option.variantId == option.variantId,
+      );
+      if (index >= 0) {
+        _replacements[index].quantity += 1;
+      } else {
+        _replacements.add(_ExchangeReplacement(option: option));
+      }
+      _showError = false;
+    });
+  }
+
+  double get _outboundValue {
+    var total = 0.0;
+    for (final line in widget.order.lines) {
+      total += (_outbound[line.id] ?? 0) * line.unitPrice;
+    }
+    return total;
+  }
+
+  double get _replacementValue {
+    var total = 0.0;
+    for (final replacement in _replacements) {
+      total += replacement.quantity * replacement.option.unitPrice;
+    }
+    return total;
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    final theme = Theme.of(context);
+    final sectionStyle = theme.textTheme.titleSmall?.copyWith(
+      fontWeight: FontWeight.w700,
+    );
     final returnableLines = widget.order.lines
         .where((line) => line.returnableQuantity > 0)
         .toList(growable: false);
+    final net = _replacementValue - _outboundValue;
 
     return AlertDialog(
-      icon: const Icon(Icons.keyboard_return_outlined),
-      title: Text(l10n.saleReturnTitle),
-      content: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 520),
+      icon: const Icon(Icons.swap_horiz_outlined),
+      title: Text(l10n.saleExchangeTitle),
+      content: SizedBox(
+        width: 480,
         child: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              Text(l10n.saleExchangeReturnedSectionTitle, style: sectionStyle),
               if (returnableLines.isEmpty)
                 Text(l10n.saleNoReturnableItems)
               else
                 for (final line in returnableLines)
-                  _ReturnLineStepper(
-                    line: line,
-                    value: _quantities[line.id] ?? 0,
+                  AdjustmentLineStepper(
+                    option: AdjustmentLineOption(
+                      lineId: line.id,
+                      title: saleLineDisplayName(line, l10n),
+                      subtitle: l10n.saleLineQuantityAndPrice(
+                        formatSaleQuantity(line.quantity),
+                        formatMoney(line.unitPrice),
+                      ),
+                      maxQuantity: line.returnableQuantity,
+                      allowDecimal: line.unit != 'piece',
+                      decimalEntryTitle: l10n.posWeightDialogTitle,
+                      decimalEntryHint: l10n.saleReturnQuantityHint(
+                        formatSaleQuantity(line.returnableQuantity),
+                      ),
+                    ),
+                    value: _outbound[line.id] ?? 0,
                     onChanged: (value) {
-                      setState(() => _quantities[line.id] = value);
+                      setState(() => _outbound[line.id] = value);
                     },
                   ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _reasonController,
-                decoration: InputDecoration(
-                  labelText: l10n.saleAdjustmentReasonLabel,
-                  hintText: l10n.saleAdjustmentReasonHint,
+              const Divider(height: 24),
+              Text(l10n.saleExchangeReplacementSectionTitle, style: sectionStyle),
+              const SizedBox(height: 8),
+              DebouncedSearchField(
+                value: _query,
+                hintText: l10n.saleExchangeSearchLabel,
+                clearTooltip: l10n.clearSearchTooltip,
+                onChanged: _runSearch,
+              ),
+              if (_searching)
+                const Padding(
+                  padding: EdgeInsets.only(top: 8),
+                  child: LinearProgressIndicator(minHeight: 2),
                 ),
-                maxLines: 2,
+              if (_results.isNotEmpty)
+                for (final option in _results)
+                  ListTile(
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(option.label),
+                    subtitle: Text(formatMoney(option.unitPrice)),
+                    trailing: IconButton(
+                      tooltip: l10n.addOneTooltip,
+                      onPressed: () => _addReplacement(option),
+                      icon: const Icon(Icons.add),
+                    ),
+                  )
+              else if (!_searching && _query.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  child: Text(
+                    l10n.saleExchangeNoResults,
+                    style: theme.textTheme.bodySmall,
+                  ),
+                ),
+              for (final (index, replacement) in _replacements.indexed)
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(replacement.option.label),
+                  subtitle: Text(formatMoney(replacement.option.unitPrice)),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      PointyQuantityStepper(
+                        quantity: replacement.quantity,
+                        incrementTooltip: l10n.addOneTooltip,
+                        decrementTooltip: l10n.removeOneTooltip,
+                        onDecrement: () {
+                          setState(() {
+                            if (replacement.quantity <= 1) {
+                              _replacements.removeAt(index);
+                            } else {
+                              replacement.quantity -= 1;
+                            }
+                          });
+                        },
+                        onIncrement: () {
+                          setState(() => replacement.quantity += 1);
+                        },
+                      ),
+                      IconButton(
+                        tooltip: l10n.removeOneTooltip,
+                        onPressed: () {
+                          setState(() => _replacements.removeAt(index));
+                        },
+                        icon: const Icon(Icons.delete_outline),
+                      ),
+                    ],
+                  ),
+                ),
+              if (_showError) ...[
+                const SizedBox(height: 8),
+                Text(
+                  l10n.saleExchangeInvalidError,
+                  style: TextStyle(color: theme.colorScheme.error),
+                ),
+              ],
+              const SizedBox(height: 16),
+              Text(l10n.saleExchangeSettlementLabel, style: sectionStyle),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                children: [
+                  for (final method in PaymentMethod.values)
+                    ChoiceChip(
+                      label: Text(paymentMethodLabel(l10n, method)),
+                      avatar: Icon(paymentMethodIcon(method), size: 18),
+                      selected: _settlement == method,
+                      onSelected: (_) => setState(() => _settlement = method),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              _ExchangeNetSummary(net: net),
+              const SizedBox(height: 12),
+              AdjustmentReasonField(
+                controller: _reasonController,
+                label: l10n.saleAdjustmentReasonLabel,
+                hint: l10n.saleAdjustmentReasonHint,
               ),
             ],
           ),
@@ -750,143 +1036,77 @@ class _SaleReturnDialogState extends State<_SaleReturnDialog> {
           onPressed: () => Navigator.of(context).pop(),
           child: Text(l10n.cancelButton),
         ),
-        FilledButton(
-          onPressed: () {
-            final lines = [
-              for (final line in returnableLines)
-                if ((_quantities[line.id] ?? 0) > 0)
-                  SaleReturnLineDraft(
-                    lineId: line.id,
-                    quantity: _quantities[line.id]!,
-                  ),
-            ];
-            Navigator.of(context).pop(
-              _ReturnDialogResult(
-                lines: lines,
-                reason: _reasonController.text.trim(),
-              ),
-            );
-          },
-          child: Text(l10n.confirmButton),
-        ),
+        FilledButton(onPressed: _submit, child: Text(l10n.confirmButton)),
       ],
+    );
+  }
+
+  void _submit() {
+    final lines = [
+      for (final line in widget.order.lines)
+        if ((_outbound[line.id] ?? 0) > 0)
+          SaleReturnLineDraft(
+            lineId: line.id,
+            quantity: _outbound[line.id]!,
+          ),
+    ];
+    final replacementLines = [
+      for (final replacement in _replacements)
+        if (replacement.quantity > 0)
+          SaleExchangeReplacementLineDraft(
+            variantId: replacement.option.variantId,
+            quantity: replacement.quantity,
+          ),
+    ];
+    if (lines.isEmpty || replacementLines.isEmpty) {
+      setState(() => _showError = true);
+      return;
+    }
+    Navigator.of(context).pop(
+      SaleExchangeDraft(
+        lines: lines,
+        replacementLines: replacementLines,
+        settlementMethod: _settlement.apiValue,
+        reason: _reasonController.text.trim(),
+      ),
     );
   }
 }
 
-class _ReturnLineStepper extends StatelessWidget {
-  const _ReturnLineStepper({
-    required this.line,
-    required this.value,
-    required this.onChanged,
-  });
+/// Live "customer pays / refund / even" summary for the exchange dialog.
+class _ExchangeNetSummary extends StatelessWidget {
+  const _ExchangeNetSummary({required this.net});
 
-  final SaleOrderLine line;
-  final double value;
-  final ValueChanged<double> onChanged;
+  final double net;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-
-    return ListTile(
-      contentPadding: EdgeInsets.zero,
-      title: Text(saleLineDisplayName(line, l10n)),
-      subtitle: Text(
-        [
-          l10n.saleLineQuantityAndPrice(
-            formatSaleQuantity(line.quantity),
-            formatMoney(line.unitPrice),
-          ),
-          if (line.returnedQuantity > 0)
-            l10n.saleLineReturnedQuantity(
-              formatSaleQuantity(line.returnedQuantity),
-              formatSaleQuantity(line.quantity),
-            ),
-        ].join(' • '),
-      ),
-      trailing: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          IconButton(
-            tooltip: l10n.removeOneTooltip,
-            onPressed: value <= 0 ? null : () => onChanged(value - 1),
-            icon: const Icon(Icons.remove),
-          ),
-          SizedBox(
-            width: 56,
-            child: InkWell(
-              onTap: line.unit == 'piece' ? null : () => _editWeight(context),
-              child: Text(
-                formatSaleQuantity(value),
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
-            ),
-          ),
-          IconButton(
-            tooltip: l10n.addOneTooltip,
-            onPressed: value >= line.returnableQuantity
-                ? null
-                : () => onChanged(
-                    (value + 1).clamp(0, line.returnableQuantity).toDouble(),
-                  ),
-            icon: const Icon(Icons.add),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-extension on _ReturnLineStepper {
-  Future<void> _editWeight(BuildContext context) async {
-    final l10n = AppLocalizations.of(context)!;
-    final controller = TextEditingController(
-      text: value > 0 ? formatSaleQuantity(value) : '',
-    );
-    final entered = await showDialog<double>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text(l10n.posWeightDialogTitle),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          decoration: InputDecoration(
-            labelText: l10n.posWeightDialogTitle,
-            helperText: l10n.saleReturnQuantityHint(
-              formatSaleQuantity(line.returnableQuantity),
-            ),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(),
-            child: Text(l10n.cancelButton),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(
-              dialogContext,
-            ).pop(double.tryParse(controller.text.trim())),
-            child: Text(l10n.confirmButton),
-          ),
-        ],
-      ),
-    );
-    controller.dispose();
-    if (entered == null || entered < 0) {
-      return;
+    final theme = Theme.of(context);
+    final String label;
+    if (net > 0.005) {
+      label = l10n.saleExchangeNetPay(formatMoney(net));
+    } else if (net < -0.005) {
+      label = l10n.saleExchangeNetRefund(formatMoney(-net));
+    } else {
+      label = l10n.saleExchangeNetEven;
     }
-    onChanged(entered.clamp(0, line.returnableQuantity).toDouble());
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(
+        label,
+        textAlign: TextAlign.center,
+        style: theme.textTheme.titleMedium?.copyWith(
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
   }
-}
-
-class _ReturnDialogResult {
-  const _ReturnDialogResult({required this.lines, required this.reason});
-
-  final List<SaleReturnLineDraft> lines;
-  final String reason;
 }
 
 /// "آجل — المتبقّي X" callout shown on a debt invoice that still carries a

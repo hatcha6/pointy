@@ -167,6 +167,33 @@ func TestToWireMessagesCarriesToolFields(t *testing.T) {
 	}
 }
 
+func TestWireContentSerializesMultimodalParts(t *testing.T) {
+	msgs := []Message{{
+		Role: "user",
+		Parts: []ContentPart{
+			{Type: "text", Text: "hi"},
+			{Type: "image_url", ImageURL: "data:image/png;base64,IMG"},
+			{Type: "input_audio", AudioData: "QUJD", AudioFormat: "wav"},
+		},
+	}}
+	raw, err := json.Marshal(toWireMessages(msgs))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(raw)
+	// Map keys serialize in sorted order; assert on order-independent fragments.
+	for _, want := range []string{
+		`"type":"image_url"`,
+		`"image_url":{"url":"data:image/png;base64,IMG"}`,
+		`"type":"input_audio"`,
+		`"input_audio":{"data":"QUJD","format":"wav"}`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("wire JSON missing %s:\n%s", want, got)
+		}
+	}
+}
+
 func TestConsumeSSESurfacesStreamError(t *testing.T) {
 	sse := `data: {"error":{"message":"boom"}}` + "\n\n"
 	var events []Event

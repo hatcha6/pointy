@@ -36,6 +36,7 @@ from .models import (
     Order,
     OrderAdjustment,
     OrderAdjustmentLine,
+    OrderExchange,
     OrderLine,
     OrderLineModifier,
     StockReservation,
@@ -1031,16 +1032,21 @@ def mark_order_paid(order, *, request=None, stock_already_recorded=False):
     return locked_order
 
 
-def validate_order_adjustment_allowed(order, *, request=None):
+def validate_order_adjustment_allowed(order, *, request=None, allow_window_override=False):
     if order.status != Order.Status.PAID:
         raise serializers.ValidationError({"detail": "Only paid orders can be adjusted."})
     if order.register_session is None:
         raise serializers.ValidationError(
             {"detail": "Order is not linked to a register session."}
         )
+    # Non-managers normally cannot touch an order once the short cashier window
+    # has elapsed. ``allow_window_override`` lifts that for a trusted operator
+    # (a cashier holding ``sales.process_return_lookup``) processing a returns
+    # desk lookup — they may adjust any invoice by number regardless of age.
     if (
         request is not None
         and not user_is_manager(request.user)
+        and not allow_window_override
         and cashier_window_expired(order)
     ):
         raise serializers.ValidationError(
@@ -1260,9 +1266,13 @@ def fresh_order_adjustment_lines(locked_order, lines, *, locked_lines=None):
 
 
 @transaction.atomic
-def void_order(*, order, reason, request=None, register_session=None):
+def void_order(
+    *, order, reason, request=None, register_session=None, allow_window_override=False
+):
     locked_order = Order.objects.select_for_update().get(pk=order.pk)
-    validate_order_adjustment_allowed(locked_order, request=request)
+    validate_order_adjustment_allowed(
+        locked_order, request=request, allow_window_override=allow_window_override
+    )
     locked_lines = lock_order_lines_for_update(locked_order)
     lines = [
         (line, line.returnable_quantity)
@@ -1314,9 +1324,13 @@ def void_order(*, order, reason, request=None, register_session=None):
 
 
 @transaction.atomic
-def return_order_items(*, order, lines, reason, request=None, register_session=None):
+def return_order_items(
+    *, order, lines, reason, request=None, register_session=None, allow_window_override=False
+):
     locked_order = Order.objects.select_for_update().get(pk=order.pk)
-    validate_order_adjustment_allowed(locked_order, request=request)
+    validate_order_adjustment_allowed(
+        locked_order, request=request, allow_window_override=allow_window_override
+    )
     locked_lines = lock_order_lines_for_update(locked_order)
     lines = fresh_order_adjustment_lines(
         locked_order,
@@ -1367,6 +1381,117 @@ def return_order_items(*, order, lines, reason, request=None, register_session=N
         },
     )
     return adjustment
+
+
+@transaction.atomic
+def exchange_order_items(
+    *,
+    order,
+    outbound_lines,
+    replacement_lines,
+    settlement_method,
+    reason,
+    request=None,
+    register_session=None,
+    allow_window_override=False,
+):
+    """Exchange returned item(s) for replacement item(s) as one atomic operation.
+
+    Composes the two existing, individually-correct legs:
+
+    * **Outbound** — ``return_order_items`` restocks the returned goods, reverses
+      the original tender(s), and is counted by reporting as a RETURN. Adjustment
+      eligibility (paid status, register session, cashier window) is validated
+      here.
+    * **Replacement** — ``checkout_order`` rings up the replacement item(s) as a
+      real new sale at current price, paid by ``settlement_method``, so revenue,
+      COGS, profit and stock all flow through the normal checkout path.
+
+    The customer settles only the net (``replacement_amount - outbound_amount``);
+    the gross legs reconcile the cash drawer to that same net via the existing
+    ``OrderAdjustment.cash_amount`` + ``Payment`` rows. An ``OrderExchange`` row
+    links the pair and a ``sales.order.exchanged`` audit event is recorded.
+    """
+    adjustment = return_order_items(
+        order=order,
+        lines=outbound_lines,
+        reason=reason,
+        request=request,
+        register_session=register_session,
+        allow_window_override=allow_window_override,
+    )
+
+    session = register_session or order.register_session
+    discount_result = calculate_sales_discounts(
+        lines_data=replacement_lines,
+        customer=order.customer,
+    )
+    replacement_total = money(discount_result.total)
+    payments_data = (
+        [{"method": settlement_method, "amount": replacement_total}]
+        if replacement_total > 0
+        else []
+    )
+    replacement_order = checkout_order(
+        register_session=session,
+        lines_data=replacement_lines,
+        payments_data=payments_data,
+        customer=order.customer,
+        discount_result=discount_result,
+        request=request,
+    )
+
+    outbound_amount = money(adjustment.amount)
+    net_amount = money(replacement_total - outbound_amount)
+    exchange = OrderExchange.objects.create(
+        original_order=order,
+        return_adjustment=adjustment,
+        replacement_order=replacement_order,
+        register_session=session,
+        outbound_amount=outbound_amount,
+        replacement_amount=replacement_total,
+        net_amount=net_amount,
+        settlement_method=settlement_method,
+        reason=reason,
+        created_by=adjustment_created_by(request),
+    )
+    expired = cashier_window_expired(order)
+    record_domain_event(
+        name="sales.order.exchanged",
+        event_type=AnalyticsEvent.EventType.AUDIT,
+        severity=(
+            AnalyticsEvent.Severity.WARNING
+            if expired
+            else AnalyticsEvent.Severity.INFO
+        ),
+        user=getattr(request, "user", None),
+        entity_type="sale_order",
+        entity_id=order.pk,
+        attributes={
+            "receipt_number": order.receipt_number,
+            "register_session_id": order.register_session_id,
+            "exchange_id": exchange.pk,
+            "adjustment_id": adjustment.pk,
+            "replacement_order_id": replacement_order.pk,
+            "replacement_receipt_number": replacement_order.receipt_number,
+            "settlement_method": settlement_method,
+            "reason_present": bool(reason),
+            "manager_override": bool(
+                request is not None and user_is_manager(request.user)
+            ),
+            "window_override": bool(allow_window_override),
+            "cashier_window_expired": expired,
+            "requires_suspicion_review": expired,
+            "outbound_line_count": len(outbound_lines),
+            "replacement_line_count": len(replacement_lines),
+        },
+        metrics={
+            "outbound_amount": float(outbound_amount),
+            "replacement_amount": float(replacement_total),
+            "net_amount": float(net_amount),
+        },
+    )
+    return exchange
 
 
 def record_return_stock_movement(*, order, variant, quantity, created_by):

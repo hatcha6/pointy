@@ -19,8 +19,9 @@ import (
 const defaultAIRequestTimeout = 120 * time.Second
 
 // defaultAIMaxRequestBytes caps the inbound chat JSON (prompt + history + any
-// base64 attachments).
-const defaultAIMaxRequestBytes = 16 << 20
+// base64 attachments, including recorded voice clips which run larger than
+// images).
+const defaultAIMaxRequestBytes = 24 << 20
 
 const defaultAIMaxImagesPerPrompt = 5
 
@@ -225,12 +226,17 @@ func (s HTTPServer) handleAIChat(w http.ResponseWriter, r *http.Request) {
 		tier = routeTier
 		model = s.resolveAIModel(tier)
 	case hasAttachments:
-		// Multimodal turn must run on the vision model, but we STILL classify
-		// difficulty (factoring in the attachment + tools) so the continuations
-		// that follow inherit the right tier.
+		// Multimodal turn must run on the vision model — or the audio model when a
+		// voice clip is attached — but we STILL classify difficulty (factoring in
+		// the attachment + tools) so the continuations that follow inherit the
+		// right tier.
 		routeTier = s.routeAITier(r.Context(), request.Messages, routeSignals{attachments: true, tools: hasTools})
 		tier = "vision"
-		model = strings.TrimSpace(s.AIVisionModel)
+		if hasAudioAttachments(request.Attachments) {
+			model = s.aiAudioModel()
+		} else {
+			model = strings.TrimSpace(s.AIVisionModel)
+		}
 	case hasTools:
 		routeTier = s.routeAITier(r.Context(), request.Messages, routeSignals{tools: true})
 		if routeTier == "fast" {
@@ -448,6 +454,17 @@ func (s HTTPServer) resolveAIModel(tier string) string {
 		}
 	}
 	return ""
+}
+
+// aiAudioModel returns the model used for turns carrying a recorded voice clip.
+// Audio input needs an audio-capable model; this defaults to the vision model
+// (the common Gemini-class multimodal models already accept audio) unless a
+// dedicated POINTY_RELAY_AI_AUDIO_MODEL is configured.
+func (s HTTPServer) aiAudioModel() string {
+	if model := strings.TrimSpace(s.AIAudioModel); model != "" {
+		return model
+	}
+	return strings.TrimSpace(s.AIVisionModel)
 }
 
 func (s HTTPServer) aiRequestTimeout() time.Duration {
@@ -751,13 +768,58 @@ func countImageAttachments(attachments []aiAttachment) int {
 	return count
 }
 
+// hasFileAttachments reports whether any attachment is a document/file (not an
+// image and not audio), gating the OpenRouter file-parser plugin so an
+// audio-only turn doesn't drag in PDF parsing it can't use.
 func hasFileAttachments(attachments []aiAttachment) bool {
 	for _, a := range attachments {
-		if !strings.EqualFold(strings.TrimSpace(a.Kind), "image") {
+		kind := strings.TrimSpace(a.Kind)
+		if !strings.EqualFold(kind, "image") && !strings.EqualFold(kind, "audio") {
 			return true
 		}
 	}
 	return false
+}
+
+func hasAudioAttachments(attachments []aiAttachment) bool {
+	for _, a := range attachments {
+		if strings.EqualFold(strings.TrimSpace(a.Kind), "audio") {
+			return true
+		}
+	}
+	return false
+}
+
+// decodeAudioDataURI splits a base64 audio data URI into its raw base64 payload
+// (OpenAI's input_audio part wants the payload WITHOUT the "data:...;base64,"
+// prefix) and a short format token ("wav"/"mp3"), derived from the URI's media
+// type and falling back to the attachment MIME.
+func decodeAudioDataURI(dataURI, mime string) (string, string) {
+	payload := dataURI
+	mediaType := strings.TrimSpace(mime)
+	if strings.HasPrefix(dataURI, "data:") {
+		if comma := strings.IndexByte(dataURI, ','); comma >= 0 {
+			header := dataURI[len("data:"):comma]
+			payload = dataURI[comma+1:]
+			if semi := strings.IndexByte(header, ';'); semi >= 0 {
+				mediaType = header[:semi]
+			} else {
+				mediaType = header
+			}
+		}
+	}
+	return payload, audioFormatFromMediaType(mediaType)
+}
+
+// audioFormatFromMediaType maps an audio media type to the format token an
+// input_audio part expects. Defaults to "wav" — the format the app records.
+func audioFormatFromMediaType(mediaType string) string {
+	switch strings.ToLower(strings.TrimSpace(mediaType)) {
+	case "audio/mpeg", "audio/mp3":
+		return "mp3"
+	default:
+		return "wav"
+	}
 }
 
 // buildAIMessages converts the wire messages to ai.Message, attaching any
@@ -783,9 +845,13 @@ func buildAIMessages(msgs []aiChatMessage, attachments []aiAttachment) []ai.Mess
 		}
 		parts := []ai.ContentPart{{Type: "text", Text: m.Content}}
 		for _, a := range attachments {
-			if strings.EqualFold(strings.TrimSpace(a.Kind), "image") {
+			switch {
+			case strings.EqualFold(strings.TrimSpace(a.Kind), "image"):
 				parts = append(parts, ai.ContentPart{Type: "image_url", ImageURL: a.DataURI})
-			} else {
+			case strings.EqualFold(strings.TrimSpace(a.Kind), "audio"):
+				data, format := decodeAudioDataURI(a.DataURI, a.MIME)
+				parts = append(parts, ai.ContentPart{Type: "input_audio", AudioData: data, AudioFormat: format})
+			default:
 				name := strings.TrimSpace(a.Name)
 				if name == "" {
 					name = "file"

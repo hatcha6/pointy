@@ -73,7 +73,7 @@ class AiConversationDetailSerializer(AiConversationSerializer):
 
 
 class AiAttachmentSerializer(serializers.Serializer):
-    kind = serializers.ChoiceField(choices=["image", "file"])
+    kind = serializers.ChoiceField(choices=["image", "file", "audio"])
     data_uri = serializers.CharField()
     name = serializers.CharField(required=False, allow_blank=True, default="")
     mime = serializers.CharField(required=False, allow_blank=True, default="")

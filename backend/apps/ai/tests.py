@@ -404,6 +404,41 @@ class AiChatViewTests(TestCase):
             [{"kind": "image", "name": "x.png", "mime": "image/png"}],
         )
 
+    def test_forwards_audio_attachment_and_persists_metadata(self):
+        # A recorded voice message rides the same attachment path as images: the
+        # data URI reaches the relay and only metadata is persisted.
+        with patch("apps.ai.views.RelayControlClient") as mock_client:
+            mock_client.return_value.open_ai_stream.return_value = FakeRelayResponse(
+                fake_sse_lines(["ok"])
+            )
+            response = self.client.post(
+                reverse("ai-chat"),
+                {
+                    "attachments": [
+                        {
+                            "kind": "audio",
+                            "data_uri": "data:audio/wav;base64,QUJD",
+                            "name": "voice-message.wav",
+                            "mime": "audio/wav",
+                        }
+                    ],
+                },
+                format="json",
+            )
+            self.assertEqual(response.status_code, 200)
+            b"".join(response.streaming_content)
+
+        _, kwargs = mock_client.return_value.open_ai_stream.call_args
+        self.assertEqual(len(kwargs["attachments"]), 1)
+        self.assertEqual(kwargs["attachments"][0]["kind"], "audio")
+        self.assertEqual(kwargs["attachments"][0]["data_uri"], "data:audio/wav;base64,QUJD")
+
+        user_msg = AiMessage.objects.get(role=AiMessage.ROLE_USER)
+        self.assertEqual(
+            user_msg.attachments,
+            [{"kind": "audio", "name": "voice-message.wav", "mime": "audio/wav"}],
+        )
+
     def test_attachment_only_turn_is_allowed_and_reaches_the_model(self):
         with patch("apps.ai.views.RelayControlClient") as mock_client:
             mock_client.return_value.open_ai_stream.return_value = FakeRelayResponse(

@@ -13381,6 +13381,48 @@ abstract class AppLocalizations {
   /// **'جلسة {sessionNumber}'**
   String activeRegisterSessionLabel(String sessionNumber);
 
+  /// No description provided for @posSessionMenuTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'إجراءات الجلسة'**
+  String get posSessionMenuTitle;
+
+  /// No description provided for @posSessionMenuTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'خيارات الجلسة'**
+  String get posSessionMenuTooltip;
+
+  /// No description provided for @payInRegisterSessionDescription.
+  ///
+  /// In ar, this message translates to:
+  /// **'إيداع مبلغ نقدي في الدرج'**
+  String get payInRegisterSessionDescription;
+
+  /// No description provided for @payOutRegisterSessionDescription.
+  ///
+  /// In ar, this message translates to:
+  /// **'سحب مبلغ نقدي من الدرج'**
+  String get payOutRegisterSessionDescription;
+
+  /// No description provided for @collectDebtSessionDescription.
+  ///
+  /// In ar, this message translates to:
+  /// **'استلام دفعة من عميل عليه رصيد آجل'**
+  String get collectDebtSessionDescription;
+
+  /// No description provided for @refreshCatalogDescription.
+  ///
+  /// In ar, this message translates to:
+  /// **'مزامنة قائمة المنتجات مع الخادم'**
+  String get refreshCatalogDescription;
+
+  /// No description provided for @closeRegisterSessionDescription.
+  ///
+  /// In ar, this message translates to:
+  /// **'إنهاء الجلسة وعدّ النقدية في الدرج'**
+  String get closeRegisterSessionDescription;
+
   /// No description provided for @cashMovementMenuTooltip.
   ///
   /// In ar, this message translates to:
@@ -14334,6 +14376,132 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'كمية الإرجاع'**
   String get saleReturnQuantityLabel;
+
+  /// No description provided for @saleExchangeButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'استبدال'**
+  String get saleExchangeButton;
+
+  /// No description provided for @saleExchangeTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'استبدال منتجات'**
+  String get saleExchangeTitle;
+
+  /// No description provided for @saleExchangeSuccess.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم تسجيل الاستبدال.'**
+  String get saleExchangeSuccess;
+
+  /// No description provided for @saleExchangeError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر تسجيل الاستبدال.'**
+  String get saleExchangeError;
+
+  /// No description provided for @saleExchangeReturnedSectionTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'العناصر المُرتجعة'**
+  String get saleExchangeReturnedSectionTitle;
+
+  /// No description provided for @saleExchangeReplacementSectionTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'العناصر البديلة'**
+  String get saleExchangeReplacementSectionTitle;
+
+  /// No description provided for @saleExchangeSearchLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'ابحث عن منتج بديل'**
+  String get saleExchangeSearchLabel;
+
+  /// No description provided for @saleExchangeSearchButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'بحث'**
+  String get saleExchangeSearchButton;
+
+  /// No description provided for @saleExchangeNoResults.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد نتائج مطابقة.'**
+  String get saleExchangeNoResults;
+
+  /// No description provided for @saleExchangeInvalidError.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر عنصرًا مُرتجعًا واحدًا على الأقل وعنصرًا بديلًا.'**
+  String get saleExchangeInvalidError;
+
+  /// No description provided for @saleExchangeSettlementLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'طريقة تسوية الفرق'**
+  String get saleExchangeSettlementLabel;
+
+  /// Net the customer owes on an exchange.
+  ///
+  /// In ar, this message translates to:
+  /// **'على العميل دفع {amount}'**
+  String saleExchangeNetPay(String amount);
+
+  /// Net refunded to the customer on an exchange.
+  ///
+  /// In ar, this message translates to:
+  /// **'يُرَدّ للعميل {amount}'**
+  String saleExchangeNetRefund(String amount);
+
+  /// No description provided for @saleExchangeNetEven.
+  ///
+  /// In ar, this message translates to:
+  /// **'تبادل متكافئ — لا فرق'**
+  String get saleExchangeNetEven;
+
+  /// No description provided for @navReturnsExchange.
+  ///
+  /// In ar, this message translates to:
+  /// **'المرتجعات والاستبدال'**
+  String get navReturnsExchange;
+
+  /// No description provided for @returnsLookupTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'المرتجعات والاستبدال'**
+  String get returnsLookupTitle;
+
+  /// No description provided for @returnsLookupPrompt.
+  ///
+  /// In ar, this message translates to:
+  /// **'أدخل رقم الفاتورة لإجراء إرجاع أو استبدال.'**
+  String get returnsLookupPrompt;
+
+  /// No description provided for @returnsLookupFieldLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'رقم الفاتورة'**
+  String get returnsLookupFieldLabel;
+
+  /// No description provided for @returnsLookupSearchButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'بحث'**
+  String get returnsLookupSearchButton;
+
+  /// No description provided for @returnsLookupNotFound.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد فاتورة بهذا الرقم.'**
+  String get returnsLookupNotFound;
+
+  /// No description provided for @returnsLookupEmpty.
+  ///
+  /// In ar, this message translates to:
+  /// **'ابحث عن فاتورة برقمها للبدء.'**
+  String get returnsLookupEmpty;
 
   /// No description provided for @salePaymentsTitle.
   ///
@@ -19739,6 +19907,36 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'صورة'**
   String get aiAssistantAttachmentImage;
+
+  /// No description provided for @aiAssistantRecordTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'تسجيل رسالة صوتية'**
+  String get aiAssistantRecordTooltip;
+
+  /// No description provided for @aiAssistantRecordCancelTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'إلغاء التسجيل'**
+  String get aiAssistantRecordCancelTooltip;
+
+  /// No description provided for @aiAssistantVoiceMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'رسالة صوتية'**
+  String get aiAssistantVoiceMessage;
+
+  /// No description provided for @aiAssistantRecording.
+  ///
+  /// In ar, this message translates to:
+  /// **'جارٍ التسجيل…'**
+  String get aiAssistantRecording;
+
+  /// No description provided for @aiAssistantMicPermissionDenied.
+  ///
+  /// In ar, this message translates to:
+  /// **'يلزم إذن الميكروفون لتسجيل الرسائل الصوتية. فعّله من إعدادات الجهاز.'**
+  String get aiAssistantMicPermissionDenied;
 
   /// No description provided for @aiAssistantImageLimit.
   ///

@@ -11,6 +11,7 @@ enum AppNavigationDestination {
   aiAssistant,
   operations,
   invoices,
+  returnsExchange,
   purchasing,
   contacts,
   catalog,
@@ -43,6 +44,8 @@ AppCapability appNavigationDestinationCapability(
     AppNavigationDestination.aiAssistant => AppCapability.useAiAssistant,
     AppNavigationDestination.operations => AppCapability.viewOperations,
     AppNavigationDestination.invoices => AppCapability.viewInvoices,
+    AppNavigationDestination.returnsExchange =>
+      AppCapability.processReturnsByLookup,
     AppNavigationDestination.purchasing => AppCapability.accessPurchasing,
     AppNavigationDestination.contacts => AppCapability.manageContacts,
     AppNavigationDestination.catalog => AppCapability.viewCatalogManagement,

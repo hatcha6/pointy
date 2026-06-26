@@ -16,6 +16,7 @@ from apps.customers.models import Customer
 from apps.discounts.services import rounding_metadata_payload
 from .models import (
     Order,
+    OrderExchange,
     OrderLine,
     RegisterCashMovement,
     RegisterSession,
@@ -29,6 +30,7 @@ from .services import (
     checkout_order,
     convert_quotation_to_sale,
     create_order_with_lines,
+    exchange_order_items,
     record_customer_account_payment,
     record_customer_payment,
     return_order_items,
@@ -318,9 +320,45 @@ class OrderPaymentSerializer(serializers.Serializer):
     created_at = serializers.DateTimeField(read_only=True)
 
 
+class ExchangeReplacementOrderSerializer(serializers.ModelSerializer):
+    """Lightweight summary of the replacement sale an exchange created — avoids
+    recursing into the full ``OrderSerializer``."""
+
+    class Meta:
+        model = Order
+        fields = ["id", "receipt_number", "total", "created_at"]
+        read_only_fields = fields
+
+
+class OrderExchangeSerializer(serializers.ModelSerializer):
+    created_by_username = serializers.CharField(
+        source="created_by.username",
+        read_only=True,
+    )
+    replacement_order = ExchangeReplacementOrderSerializer(read_only=True)
+
+    class Meta:
+        model = OrderExchange
+        fields = [
+            "id",
+            "outbound_amount",
+            "replacement_amount",
+            "net_amount",
+            "settlement_method",
+            "reason",
+            "return_adjustment",
+            "replacement_order",
+            "created_by",
+            "created_by_username",
+            "created_at",
+        ]
+        read_only_fields = fields
+
+
 class OrderSerializer(serializers.ModelSerializer):
     lines = OrderLineSerializer(many=True, allow_empty=False)
     payments = OrderPaymentSerializer(many=True, read_only=True)
+    exchanges = OrderExchangeSerializer(many=True, read_only=True)
     customer_number = serializers.CharField(
         source="customer.customer_number",
         read_only=True,
@@ -336,6 +374,7 @@ class OrderSerializer(serializers.ModelSerializer):
     sales_channel_slug = serializers.CharField(source="sales_channel.slug", read_only=True)
     can_void = serializers.SerializerMethodField()
     can_return = serializers.SerializerMethodField()
+    can_exchange = serializers.SerializerMethodField()
     requires_manager_adjustment = serializers.SerializerMethodField()
     applied_discounts = serializers.SerializerMethodField()
     public_invoice_url = serializers.SerializerMethodField()
@@ -380,6 +419,7 @@ class OrderSerializer(serializers.ModelSerializer):
             "customer_email",
             "lines",
             "payments",
+            "exchanges",
             "subtotal",
             "discount_total",
             "total",
@@ -389,6 +429,7 @@ class OrderSerializer(serializers.ModelSerializer):
             "total_profit",
             "can_void",
             "can_return",
+            "can_exchange",
             "requires_manager_adjustment",
             "created_at",
             "updated_at",
@@ -418,6 +459,7 @@ class OrderSerializer(serializers.ModelSerializer):
             "total_profit",
             "can_void",
             "can_return",
+            "can_exchange",
             "requires_manager_adjustment",
             "created_at",
             "updated_at",
@@ -427,6 +469,12 @@ class OrderSerializer(serializers.ModelSerializer):
         return self._can_adjust_order(order)
 
     def get_can_return(self, order):
+        return self._can_adjust_order(order)
+
+    def get_can_exchange(self, order):
+        # An exchange is a return + a new sale, so it is offered exactly when the
+        # order can be adjusted. The frontend additionally gates the button on the
+        # operator's checkout capability.
         return self._can_adjust_order(order)
 
     def get_requires_manager_adjustment(self, order):
@@ -1121,6 +1169,46 @@ class OrderAdjustmentLineInputSerializer(serializers.Serializer):
     )
 
 
+def validate_returnable_lines(order, lines):
+    """Validate ``[{line, quantity}]`` adjustment input against an order: each
+    line must belong to the order and the (summed) requested quantity must not
+    exceed its remaining ``returnable_quantity``. Returns ``[(OrderLine, qty)]``.
+    Shared by the return and exchange serializers.
+    """
+    requested_by_line = {}
+    for line_data in lines:
+        line = line_data["line"]
+        if line.order_id != order.pk:
+            raise serializers.ValidationError(
+                {"lines": "Return line does not belong to this order."}
+            )
+        requested_by_line[line.pk] = (
+            requested_by_line.get(line.pk, 0) + line_data["quantity"]
+        )
+
+    lines_by_id = {
+        line.pk: line
+        for line in OrderLine.objects.filter(
+            pk__in=requested_by_line,
+            order=order,
+        ).select_related("variant", "variant__product")
+    }
+    validated_lines = []
+    for line_id, quantity in requested_by_line.items():
+        line = lines_by_id[line_id]
+        if quantity > line.returnable_quantity:
+            raise serializers.ValidationError(
+                {
+                    "lines": (
+                        f"Cannot return more than {line.returnable_quantity} "
+                        "remaining items."
+                    )
+                }
+            )
+        validated_lines.append((line, quantity))
+    return validated_lines
+
+
 class OrderAdjustmentSerializer(serializers.Serializer):
     reason = serializers.CharField(required=False, allow_blank=True, trim_whitespace=True)
 
@@ -1148,40 +1236,9 @@ class OrderReturnSerializer(OrderAdjustmentSerializer):
 
     def validate(self, attrs):
         attrs = super().validate(attrs)
-        order = self.context["order"]
-        requested_by_line = {}
-        for line_data in attrs["lines"]:
-            line = line_data["line"]
-            if line.order_id != order.pk:
-                raise serializers.ValidationError(
-                    {"lines": "Return line does not belong to this order."}
-                )
-            requested_by_line[line.pk] = (
-                requested_by_line.get(line.pk, 0) + line_data["quantity"]
-            )
-
-        lines_by_id = {
-            line.pk: line
-            for line in OrderLine.objects.filter(
-                pk__in=requested_by_line,
-                order=order,
-            ).select_related("variant", "variant__product")
-        }
-        validated_lines = []
-        for line_id, quantity in requested_by_line.items():
-            line = lines_by_id[line_id]
-            if quantity > line.returnable_quantity:
-                raise serializers.ValidationError(
-                    {
-                        "lines": (
-                            f"Cannot return more than {line.returnable_quantity} "
-                            "remaining items."
-                        )
-                    }
-                )
-            validated_lines.append((line, quantity))
-
-        attrs["validated_lines"] = validated_lines
+        attrs["validated_lines"] = validate_returnable_lines(
+            self.context["order"], attrs["lines"]
+        )
         return attrs
 
     def save(self, **kwargs):
@@ -1191,4 +1248,59 @@ class OrderReturnSerializer(OrderAdjustmentSerializer):
             reason=self.validated_data.get("reason", ""),
             request=self.context.get("request"),
             register_session=self.context.get("adjustment_register_session"),
+        )
+
+
+class OrderExchangeInputSerializer(serializers.Serializer):
+    """Return the chosen original line(s) and ring up replacement item(s) at
+    current price in one operation. ``lines`` are returnable outbound lines (same
+    shape as a return); ``replacement_lines`` reuse the checkout line serializer
+    so the replacement is priced and validated exactly like a normal sale.
+    """
+
+    lines = OrderAdjustmentLineInputSerializer(many=True, allow_empty=False)
+    replacement_lines = CheckoutLineSerializer(many=True, allow_empty=False)
+    settlement_method = serializers.ChoiceField(choices=[], required=False)
+    reason = serializers.CharField(required=False, allow_blank=True, trim_whitespace=True)
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        from apps.payments.models import Payment
+
+        self.fields["settlement_method"].choices = Payment.Method.choices
+        self.fields["settlement_method"].default = Payment.Method.CASH
+
+    def validate(self, attrs):
+        from apps.payments.models import Payment
+
+        order = self.context["order"]
+        request = self.context.get("request")
+        # A trusted returns-desk operator (holds ``sales.process_return_lookup``)
+        # may adjust any looked-up invoice regardless of the cashier window.
+        allow_window_override = bool(
+            request is not None
+            and request.user.has_perm("sales.process_return_lookup")
+        )
+        validate_order_adjustment_allowed(
+            order,
+            request=request,
+            allow_window_override=allow_window_override,
+        )
+        attrs["validated_lines"] = validate_returnable_lines(order, attrs["lines"])
+        attrs["allow_window_override"] = allow_window_override
+        attrs["settlement_method"] = (
+            attrs.get("settlement_method") or Payment.Method.CASH
+        )
+        return attrs
+
+    def save(self, **kwargs):
+        return exchange_order_items(
+            order=self.context["order"],
+            outbound_lines=self.validated_data["validated_lines"],
+            replacement_lines=self.validated_data["replacement_lines"],
+            settlement_method=self.validated_data["settlement_method"],
+            reason=self.validated_data.get("reason", ""),
+            request=self.context.get("request"),
+            register_session=self.context.get("adjustment_register_session"),
+            allow_window_override=self.validated_data["allow_window_override"],
         )

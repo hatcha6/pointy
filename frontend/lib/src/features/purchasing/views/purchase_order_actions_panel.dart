@@ -720,15 +720,14 @@ Future<void> _showPurchaseAdjustmentDialog(
 }) async {
   final l10n = AppLocalizations.of(context)!;
   final messenger = ScaffoldMessenger.of(context);
-  final result = await showDialog<_PurchaseAdjustmentDialogResult>(
-    context: context,
-    builder: (context) {
-      return _PurchaseAdjustmentDialog(
-        title: title,
-        icon: icon,
-        order: viewModel.order,
-      );
-    },
+  final result = await showQuantityAdjustmentDialog(
+    context,
+    icon: icon,
+    title: title,
+    emptyMessage: l10n.purchaseNoAdjustableItems,
+    reasonLabel: l10n.purchaseAdjustmentReasonLabel,
+    reasonHint: l10n.purchaseAdjustmentReasonHint,
+    options: _purchaseAdjustmentOptions(l10n, viewModel.order),
   );
   if (result == null) {
     return;
@@ -742,7 +741,10 @@ Future<void> _showPurchaseAdjustmentDialog(
     return;
   }
 
-  final didAdjust = await action(lines: result.lines, reason: result.reason);
+  final didAdjust = await action(
+    lines: _purchaseAdjustmentDrafts(result.lines),
+    reason: result.reason,
+  );
   if (!context.mounted || !didAdjust) {
     return;
   }

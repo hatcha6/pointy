@@ -25,6 +25,7 @@ enum AppCapability {
   managePayroll,
   accessPos,
   viewInvoices,
+  processReturnsByLookup,
   accessPurchasing,
   createPurchaseOrder,
   editDraftPurchaseOrder,
@@ -283,6 +284,14 @@ class AuthorizationCapabilities {
           ..add(AppCapability.viewInvoices)
           ..add(AppCapability.viewRegisterSessions)
           ..add(AppCapability.viewRegisterSessionOrders);
+      }
+      // Returns desk: look up a single invoice by number and return/exchange it
+      // without browsing the full invoice list (a scoped, audited grant).
+      if (_hasAny(user, const [
+        'process_return_lookup',
+        'sales.process_return_lookup',
+      ])) {
+        capabilities.add(AppCapability.processReturnsByLookup);
       }
       if (_hasAny(user, const ['add_order', 'sales.add_order'])) {
         capabilities
@@ -627,6 +636,8 @@ class AuthorizationCapabilities {
   bool get canManageAttendance => allows(AppCapability.manageAttendance);
   bool get canAccessPos => allows(AppCapability.accessPos);
   bool get canViewInvoices => allows(AppCapability.viewInvoices);
+  bool get canProcessReturnsByLookup =>
+      allows(AppCapability.processReturnsByLookup);
   bool get canAccessPurchasing => allows(AppCapability.accessPurchasing);
   bool get canCreatePurchaseOrder => allows(AppCapability.createPurchaseOrder);
   bool get canEditDraftPurchaseOrder =>

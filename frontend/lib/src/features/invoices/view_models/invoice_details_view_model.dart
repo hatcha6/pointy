@@ -5,8 +5,11 @@ import '../../../core/analytics_engine.dart';
 import '../../../core/result.dart';
 import '../../../data/models/analytics_event.dart';
 import '../../../data/models/print_audit_event.dart';
+import '../../../data/models/product_page.dart';
+import '../../../data/models/product_query.dart';
 import '../../../data/models/sale_order.dart';
 import '../../../data/models/shop_settings.dart';
+import '../../../data/repositories/catalog_repository.dart';
 import '../../../data/repositories/printing_repository.dart';
 import '../../../data/repositories/sale_repository.dart';
 import '../../../data/repositories/shop_settings_repository.dart';
@@ -18,14 +21,17 @@ class InvoiceDetailsViewModel extends ChangeNotifier {
     this._saleRepository, {
     required PrintingRepository printingRepository,
     required ShopSettingsRepository shopSettingsRepository,
+    required CatalogRepository catalogRepository,
     required SaleOrder initialOrder,
     AnalyticsEngine? analyticsEngine,
   }) : _printingRepository = printingRepository,
        _shopSettingsRepository = shopSettingsRepository,
+       _catalogRepository = catalogRepository,
        _order = initialOrder,
        _analyticsEngine = analyticsEngine;
 
   final SaleRepository _saleRepository;
+  final CatalogRepository _catalogRepository;
   final PrintingRepository _printingRepository;
   final ShopSettingsRepository _shopSettingsRepository;
   final AnalyticsEngine? _analyticsEngine;
@@ -295,6 +301,49 @@ class InvoiceDetailsViewModel extends ChangeNotifier {
         'returned_line_count': lines.length,
       },
     );
+  }
+
+  Future<bool> exchangeItems(SaleOrder order, SaleExchangeDraft draft) async {
+    final result = await _saleRepository.exchangeItems(
+      saleOrderId: order.id,
+      draft: draft,
+    );
+    return _handleOrderAdjustmentResult(
+      result,
+      eventName: 'invoices.order_exchange.completed',
+      order: order,
+      reason: draft.reason,
+      metrics: {
+        'returned_line_count': draft.lines.length,
+        'replacement_line_count': draft.replacementLines.length,
+      },
+    );
+  }
+
+  /// Catalog search backing the exchange dialog's replacement picker. Returns
+  /// active products (with a sellable variant) as priced options.
+  Future<List<ExchangeProductOption>> searchReplacementProducts(
+    String query,
+  ) async {
+    final result = await _catalogRepository.loadProducts(
+      query: ProductQuery(
+        search: query,
+        availability: ProductAvailabilityFilter.active,
+      ),
+    );
+    return switch (result) {
+      Ok(value: final page) => [
+        for (final product in page.products)
+          if (product.variantId != null)
+            ExchangeProductOption(
+              variantId: product.variantId!,
+              label: product.sellableName,
+              unitPrice: product.effectiveUnitPrice,
+              sku: product.effectiveSku,
+            ),
+      ],
+      Error<ProductPage>() => const [],
+    };
   }
 
   bool _handleOrderAdjustmentResult(

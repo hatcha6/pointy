@@ -291,6 +291,68 @@ func TestBuildAIMessagesAttachesToLastUser(t *testing.T) {
 	}
 }
 
+func TestBuildAIMessagesAudioPart(t *testing.T) {
+	msgs := []aiChatMessage{{Role: "user", Content: ""}}
+	attachments := []aiAttachment{
+		{Kind: "audio", DataURI: "data:audio/wav;base64,QUJD", Name: "voice-message.wav", MIME: "audio/wav"},
+	}
+	out := buildAIMessages(msgs, attachments)
+	if len(out) != 1 {
+		t.Fatalf("expected 1 message, got %d", len(out))
+	}
+	last := out[0]
+	if len(last.Parts) != 2 {
+		t.Fatalf("expected text + audio part, got %#v", last.Parts)
+	}
+	audio := last.Parts[1]
+	if audio.Type != "input_audio" {
+		t.Fatalf("expected input_audio part, got %#v", audio)
+	}
+	// OpenAI's input_audio wants the bare base64, NOT the data: URI.
+	if audio.AudioData != "QUJD" {
+		t.Fatalf("expected stripped base64 payload, got %q", audio.AudioData)
+	}
+	if audio.AudioFormat != "wav" {
+		t.Fatalf("expected wav format, got %q", audio.AudioFormat)
+	}
+}
+
+func TestDecodeAudioDataURI(t *testing.T) {
+	cases := []struct {
+		name     string
+		dataURI  string
+		mime     string
+		wantData string
+		wantFmt  string
+	}{
+		{"wav data uri", "data:audio/wav;base64,QUJD", "audio/wav", "QUJD", "wav"},
+		{"mpeg media type", "data:audio/mpeg;base64,ZZZ", "", "ZZZ", "mp3"},
+		{"bare base64 uses mime", "QUJD", "audio/mpeg", "QUJD", "mp3"},
+		{"unknown defaults to wav", "data:application/octet-stream;base64,QQ", "", "QQ", "wav"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			data, format := decodeAudioDataURI(tc.dataURI, tc.mime)
+			if data != tc.wantData || format != tc.wantFmt {
+				t.Fatalf("decodeAudioDataURI(%q,%q) = (%q,%q), want (%q,%q)",
+					tc.dataURI, tc.mime, data, format, tc.wantData, tc.wantFmt)
+			}
+		})
+	}
+}
+
+func TestHasFileAttachmentsExcludesImageAndAudio(t *testing.T) {
+	if hasFileAttachments([]aiAttachment{{Kind: "audio"}}) {
+		t.Fatal("audio must not count as a file attachment (no PDF parser plugin)")
+	}
+	if hasFileAttachments([]aiAttachment{{Kind: "image"}}) {
+		t.Fatal("image must not count as a file attachment")
+	}
+	if !hasFileAttachments([]aiAttachment{{Kind: "file"}}) {
+		t.Fatal("a file attachment must be detected")
+	}
+}
+
 func TestHandleAIChatRoutesAttachmentsToVisionModel(t *testing.T) {
 	now := time.Date(2026, 6, 2, 12, 0, 0, 0, time.UTC)
 	store, provisioned := provisionAIInstallation(t, now)
@@ -313,6 +375,55 @@ func TestHandleAIChatRoutesAttachmentsToVisionModel(t *testing.T) {
 	payload := recorder.Body.String()
 	if !strings.Contains(payload, `"tier":"vision"`) || !strings.Contains(payload, `"model":"test/vision"`) {
 		t.Fatalf("expected vision routing, got %q", payload)
+	}
+}
+
+func TestHandleAIChatRoutesAudioToAudioModel(t *testing.T) {
+	now := time.Date(2026, 6, 2, 12, 0, 0, 0, time.UTC)
+	store, provisioned := provisionAIInstallation(t, now)
+	openrouter := stubOpenRouterServer(t, "smart")
+	defer openrouter.Close()
+	server := newAITestServer(t, store, openrouter.URL)
+	server.AIVisionModel = "test/vision"
+	server.AIAudioModel = "test/audio"
+
+	body := strings.NewReader(`{"messages":[{"role":"user","content":""}],"attachments":[{"kind":"audio","data_uri":"data:audio/wav;base64,AAAA","name":"voice-message.wav","mime":"audio/wav"}]}`)
+	request := httptest.NewRequest(http.MethodPost, "http://relay.test/v1/ai/chat", body)
+	request.Header.Set(AccessTokenHeader, provisioned.AccessToken)
+	recorder := httptest.NewRecorder()
+	server.ServeHTTP(recorder, request)
+	response := recorder.Result()
+	defer response.Body.Close()
+
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", response.StatusCode)
+	}
+	payload := recorder.Body.String()
+	if !strings.Contains(payload, `"model":"test/audio"`) {
+		t.Fatalf("expected audio routing to test/audio, got %q", payload)
+	}
+}
+
+func TestHandleAIChatAudioFallsBackToVisionModel(t *testing.T) {
+	now := time.Date(2026, 6, 2, 12, 0, 0, 0, time.UTC)
+	store, provisioned := provisionAIInstallation(t, now)
+	openrouter := stubOpenRouterServer(t, "smart")
+	defer openrouter.Close()
+	server := newAITestServer(t, store, openrouter.URL)
+	server.AIVisionModel = "test/vision"
+	// No AIAudioModel configured → audio rides the vision model.
+
+	body := strings.NewReader(`{"messages":[{"role":"user","content":""}],"attachments":[{"kind":"audio","data_uri":"data:audio/wav;base64,AAAA","mime":"audio/wav"}]}`)
+	request := httptest.NewRequest(http.MethodPost, "http://relay.test/v1/ai/chat", body)
+	request.Header.Set(AccessTokenHeader, provisioned.AccessToken)
+	recorder := httptest.NewRecorder()
+	server.ServeHTTP(recorder, request)
+	response := recorder.Result()
+	defer response.Body.Close()
+
+	payload := recorder.Body.String()
+	if !strings.Contains(payload, `"model":"test/vision"`) {
+		t.Fatalf("expected audio to fall back to the vision model, got %q", payload)
 	}
 }
 

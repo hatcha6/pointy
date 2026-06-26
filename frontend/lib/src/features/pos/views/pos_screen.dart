@@ -58,95 +58,23 @@ class PosScreen extends StatelessWidget {
             leading: const PointyNavigationMenuButton(),
             title: Text(l10n.appTitle),
             actions: [
+              // A single, clearly-labeled session control replaces the old row of
+              // cryptic icon-only buttons. It shows the active session and opens a
+              // labeled menu of everything you can do at the register.
               if (viewModel.activeRegisterSession != null)
                 PosAccessGuard(
                   capabilities: capabilities,
                   fallback: const SizedBox.shrink(),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                    child: Center(
-                      child: Chip(
-                        avatar: const Icon(Icons.point_of_sale_outlined),
-                        label: Text(
-                          l10n.activeRegisterSessionLabel(
-                            viewModel.activeRegisterSession!.sessionNumber,
-                          ),
-                        ),
-                      ),
-                    ),
+                  child: _RegisterSessionPill(
+                    sessionNumber:
+                        viewModel.activeRegisterSession!.sessionNumber,
+                    tooltip: l10n.posSessionMenuTooltip,
+                    busy:
+                        viewModel.isCreatingCashMovement ||
+                        viewModel.isClosingRegisterSession,
+                    onTap: () => _showRegisterSessionMenu(context),
                   ),
                 ),
-              if (viewModel.activeRegisterSession != null)
-                RegisterCashMovementCreateGuard(
-                  capabilities: capabilities,
-                  child: PopupMenuButton<RegisterCashMovementType>(
-                    tooltip: l10n.cashMovementMenuTooltip,
-                    enabled: !viewModel.isCreatingCashMovement,
-                    icon: viewModel.isCreatingCashMovement
-                        ? const SizedBox.square(
-                            dimension: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.account_balance_wallet_outlined),
-                    onSelected: (movementType) {
-                      _showCashMovementSheet(context, movementType);
-                    },
-                    itemBuilder: (context) {
-                      return [
-                        PopupMenuItem(
-                          value: RegisterCashMovementType.payIn,
-                          child: ListTile(
-                            contentPadding: EdgeInsets.zero,
-                            leading: const Icon(Icons.input),
-                            title: Text(l10n.payInRegisterSessionButton),
-                          ),
-                        ),
-                        PopupMenuItem(
-                          value: RegisterCashMovementType.payOut,
-                          child: ListTile(
-                            contentPadding: EdgeInsets.zero,
-                            leading: const Icon(Icons.output),
-                            title: Text(l10n.payOutRegisterSessionButton),
-                          ),
-                        ),
-                      ];
-                    },
-                  ),
-                ),
-              if (viewModel.activeRegisterSession != null)
-                RegisterSessionCloseGuard(
-                  capabilities: capabilities,
-                  child: IconButton(
-                    tooltip: l10n.closeRegisterSessionTooltip,
-                    onPressed: viewModel.isClosingRegisterSession
-                        ? null
-                        : () => _showCloseRegisterSessionSheet(context),
-                    icon: const Icon(Icons.lock_outline),
-                  ),
-                ),
-              if (capabilities.canCollectCustomerDebt &&
-                  viewModel.activeRegisterSession != null)
-                IconButton(
-                  tooltip: l10n.collectDebtTitle,
-                  onPressed: () => showCollectDebtDialog(
-                    context,
-                    contactRepository: contactRepository,
-                    printingRepository: printingRepository,
-                    shopSettingsRepository: shopSettingsRepository,
-                  ),
-                  icon: const Icon(Icons.request_quote_outlined),
-                ),
-              PosAccessGuard(
-                capabilities: capabilities,
-                fallback: const SizedBox.shrink(),
-                child: IconButton(
-                  tooltip: l10n.refreshCatalogTooltip,
-                  onPressed: viewModel.activeRegisterSession == null
-                      ? null
-                      : viewModel.loadCatalog,
-                  icon: const Icon(Icons.sync),
-                ),
-              ),
             ],
           ),
           body: PosAccessGuard(
@@ -255,6 +183,246 @@ class PosScreen extends StatelessWidget {
         SnackBar(content: Text(l10n.cashMovementCreatedMessage)),
       );
     }
+  }
+
+  /// Opens the labeled register-session menu — every register action presented
+  /// as an icon + title + description tile, gated by the same capabilities the
+  /// old toolbar icons were.
+  Future<void> _showRegisterSessionMenu(BuildContext context) async {
+    final l10n = AppLocalizations.of(context)!;
+    final session = viewModel.activeRegisterSession;
+    if (session == null) {
+      return;
+    }
+    final actions = _sessionActions(context);
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (sheetContext) {
+        final spacing = AdaptiveSpacing.of(sheetContext);
+        final colors = sheetContext.pointyColors;
+        return SafeArea(
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Padding(
+                  padding: EdgeInsetsDirectional.fromSTEB(
+                    spacing.lg,
+                    spacing.xs,
+                    spacing.lg,
+                    spacing.sm,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        l10n.posSessionMenuTitle,
+                        style: Theme.of(sheetContext).textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w800),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        l10n.activeRegisterSessionLabel(session.sessionNumber),
+                        style: Theme.of(sheetContext).textTheme.bodySmall
+                            ?.copyWith(color: colors.mutedInk),
+                      ),
+                    ],
+                  ),
+                ),
+                for (final action in actions)
+                  _PosSessionActionTile(
+                    action: action,
+                    onInvoke: () {
+                      Navigator.of(sheetContext).pop();
+                      action.onTap();
+                    },
+                  ),
+                SizedBox(height: spacing.sm),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  /// The register actions available right now, each gated by the capability that
+  /// backed its old toolbar icon. The pill itself requires POS access, so the
+  /// refresh action (also POS-access) guarantees the menu is never empty.
+  List<_PosSessionAction> _sessionActions(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    return [
+      if (capabilities.canCreateRegisterCashMovement) ...[
+        _PosSessionAction(
+          icon: Icons.add_circle_outline,
+          label: l10n.payInRegisterSessionButton,
+          description: l10n.payInRegisterSessionDescription,
+          onTap: () =>
+              _showCashMovementSheet(context, RegisterCashMovementType.payIn),
+        ),
+        _PosSessionAction(
+          icon: Icons.remove_circle_outline,
+          label: l10n.payOutRegisterSessionButton,
+          description: l10n.payOutRegisterSessionDescription,
+          onTap: () =>
+              _showCashMovementSheet(context, RegisterCashMovementType.payOut),
+        ),
+      ],
+      if (capabilities.canCollectCustomerDebt)
+        _PosSessionAction(
+          icon: Icons.request_quote_outlined,
+          label: l10n.collectDebtTitle,
+          description: l10n.collectDebtSessionDescription,
+          onTap: () => showCollectDebtDialog(
+            context,
+            contactRepository: contactRepository,
+            printingRepository: printingRepository,
+            shopSettingsRepository: shopSettingsRepository,
+          ),
+        ),
+      if (capabilities.canAccessPos)
+        _PosSessionAction(
+          icon: Icons.sync,
+          label: l10n.refreshCatalogTooltip,
+          description: l10n.refreshCatalogDescription,
+          onTap: viewModel.loadCatalog,
+        ),
+      if (capabilities.canCloseRegisterSession)
+        _PosSessionAction(
+          icon: Icons.lock_outline,
+          label: l10n.closeRegisterSessionTooltip,
+          description: l10n.closeRegisterSessionDescription,
+          danger: true,
+          onTap: () => _showCloseRegisterSessionSheet(context),
+        ),
+    ];
+  }
+}
+
+/// One labeled action in the POS session menu.
+class _PosSessionAction {
+  const _PosSessionAction({
+    required this.icon,
+    required this.label,
+    required this.description,
+    required this.onTap,
+    this.danger = false,
+  });
+
+  final IconData icon;
+  final String label;
+  final String description;
+  final VoidCallback onTap;
+  final bool danger;
+}
+
+/// The tappable session control in the POS app bar: shows the active session and
+/// opens the labeled session-actions menu. Replaces the row of icon-only buttons
+/// users couldn't decode.
+class _RegisterSessionPill extends StatelessWidget {
+  const _RegisterSessionPill({
+    required this.sessionNumber,
+    required this.tooltip,
+    required this.onTap,
+    this.busy = false,
+  });
+
+  final String sessionNumber;
+  final String tooltip;
+  final VoidCallback onTap;
+  final bool busy;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final onBar = IconTheme.of(context).color ?? Colors.white;
+    return Padding(
+      padding: const EdgeInsetsDirectional.only(end: 8),
+      child: Center(
+        child: Tooltip(
+          message: tooltip,
+          child: Material(
+            color: onBar.withValues(alpha: 0.16),
+            shape: const StadiumBorder(),
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              onTap: onTap,
+              child: Padding(
+                padding: const EdgeInsetsDirectional.fromSTEB(12, 7, 8, 7),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (busy)
+                      SizedBox.square(
+                        dimension: 16,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: onBar,
+                        ),
+                      )
+                    else
+                      Icon(
+                        Icons.point_of_sale_outlined,
+                        size: 18,
+                        color: onBar,
+                      ),
+                    const SizedBox(width: 6),
+                    Text(
+                      l10n.activeRegisterSessionLabel(sessionNumber),
+                      style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                        color: onBar,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(width: 2),
+                    Icon(Icons.expand_more_rounded, size: 18, color: onBar),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// A labeled action tile in the session menu (icon + title + description),
+/// mirroring the purchase-order action sheet so the two feel consistent.
+class _PosSessionActionTile extends StatelessWidget {
+  const _PosSessionActionTile({required this.action, required this.onInvoke});
+
+  final _PosSessionAction action;
+  final VoidCallback onInvoke;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.pointyColors;
+    final accent = action.danger ? colors.danger : colors.primaryStrong;
+    return ListTile(
+      onTap: onInvoke,
+      leading: CircleAvatar(
+        backgroundColor: accent.withValues(alpha: 0.12),
+        foregroundColor: accent,
+        child: Icon(action.icon),
+      ),
+      title: Text(
+        action.label,
+        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+          color: action.danger ? colors.danger : colors.ink,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+      subtitle: Text(
+        action.description,
+        style: Theme.of(
+          context,
+        ).textTheme.bodySmall?.copyWith(color: colors.mutedInk),
+      ),
+    );
   }
 }
 

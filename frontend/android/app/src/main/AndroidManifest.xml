@@ -10,6 +10,8 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.CAMERA" />
+    <!-- Microphone access for recording voice messages to the AI assistant. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
     <!-- USB Host access for native USB receipt/label printing. Not required so
          the app still installs on devices without USB OTG support. -->

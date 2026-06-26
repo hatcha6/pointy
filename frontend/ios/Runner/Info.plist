@@ -39,6 +39,8 @@
 	</array>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>تستخدم نقطة البيع الشبكة المحلية لاكتشاف طابعات الإيصالات.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>تستخدم نقطة البيع الميكروفون لتسجيل الرسائل الصوتية وإرسالها إلى المساعد الذكي.</string>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>

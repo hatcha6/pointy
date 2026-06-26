@@ -101,6 +101,20 @@ List<NavCatalogGroup> appNavigationCatalog(AppLocalizations l10n) {
           keywords: const ['invoices', 'sales', 'فواتير', 'مبيعات'],
         ),
         NavCatalogEntry(
+          destination: AppNavigationDestination.returnsExchange,
+          icon: Icons.swap_horiz_outlined,
+          selectedIcon: Icons.swap_horiz,
+          label: l10n.navReturnsExchange,
+          keywords: const [
+            'returns',
+            'exchange',
+            'refund',
+            'مرتجعات',
+            'استبدال',
+            'إرجاع',
+          ],
+        ),
+        NavCatalogEntry(
           destination: AppNavigationDestination.registerSessions,
           icon: Icons.manage_history_outlined,
           selectedIcon: Icons.manage_history,
