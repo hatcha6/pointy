@@ -21,7 +21,12 @@ RUN python -m venv /opt/pointy-venv \
 
 FROM python:3.12-slim AS runtime
 
+# Build version, surfaced as POINTY_VERSION so the app reports the real release
+# (diagnostics header, fleet status). Defaults to a dev marker for local builds.
+ARG POINTY_VERSION=0.0.0-dev
+
 ENV PATH="/opt/pointy-venv/bin:${PATH}" \
+    POINTY_VERSION=${POINTY_VERSION} \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PYTHONSAFEPATH=1

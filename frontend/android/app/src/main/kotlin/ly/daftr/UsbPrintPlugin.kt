@@ -1,4 +1,4 @@
-package com.example.frontend
+package ly.daftr
 
 import android.app.PendingIntent
 import android.content.BroadcastReceiver
@@ -29,7 +29,7 @@ import java.util.concurrent.Executors
 class UsbPrintPlugin(private val context: Context) : MethodChannel.MethodCallHandler {
     companion object {
         const val CHANNEL = "pointy/usb_print"
-        private const val ACTION_USB_PERMISSION = "com.example.frontend.USB_PERMISSION"
+        private const val ACTION_USB_PERMISSION = "ly.daftr.USB_PERMISSION"
 
         // VendorIds of common USB-serial bridge silicon → routed to usb_serial.
         private val SERIAL_VENDOR_IDS = setOf(0x0403, 0x1a86, 0x10c4, 0x067b, 0x2341, 0x1659)

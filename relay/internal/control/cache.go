@@ -197,6 +197,95 @@ func (s *CachedInstallationStore) MarkConnectorConnected(
 	return nil
 }
 
+func (s *CachedInstallationStore) updateStore() (UpdateStore, error) {
+	updateStore, ok := s.store.(UpdateStore)
+	if !ok {
+		return nil, errors.New("update store is unavailable")
+	}
+	return updateStore, nil
+}
+
+func (s *CachedInstallationStore) SetInstallationChannel(
+	ctx context.Context,
+	id, channel string,
+) (Installation, error) {
+	updateStore, err := s.updateStore()
+	if err != nil {
+		return Installation{}, err
+	}
+	installation, err := updateStore.SetInstallationChannel(ctx, id, channel)
+	if err != nil {
+		return Installation{}, err
+	}
+	_ = s.cacheInstallation(ctx, installation)
+	return installation, nil
+}
+
+func (s *CachedInstallationStore) PinInstallationVersion(
+	ctx context.Context,
+	id, version string,
+) (Installation, error) {
+	updateStore, err := s.updateStore()
+	if err != nil {
+		return Installation{}, err
+	}
+	installation, err := updateStore.PinInstallationVersion(ctx, id, version)
+	if err != nil {
+		return Installation{}, err
+	}
+	_ = s.cacheInstallation(ctx, installation)
+	return installation, nil
+}
+
+func (s *CachedInstallationStore) ReportAgentStatus(
+	ctx context.Context,
+	id string,
+	status AgentStatus,
+) (Installation, error) {
+	updateStore, err := s.updateStore()
+	if err != nil {
+		return Installation{}, err
+	}
+	installation, err := updateStore.ReportAgentStatus(ctx, id, status)
+	if err != nil {
+		return Installation{}, err
+	}
+	_ = s.cacheInstallation(ctx, installation)
+	return installation, nil
+}
+
+func (s *CachedInstallationStore) GetChannelTarget(
+	ctx context.Context,
+	channel string,
+) (ChannelTarget, bool, error) {
+	updateStore, err := s.updateStore()
+	if err != nil {
+		return ChannelTarget{}, false, err
+	}
+	return updateStore.GetChannelTarget(ctx, channel)
+}
+
+func (s *CachedInstallationStore) UpsertChannelTarget(
+	ctx context.Context,
+	target ChannelTarget,
+) error {
+	updateStore, err := s.updateStore()
+	if err != nil {
+		return err
+	}
+	return updateStore.UpsertChannelTarget(ctx, target)
+}
+
+func (s *CachedInstallationStore) ListChannelTargets(
+	ctx context.Context,
+) ([]ChannelTarget, error) {
+	updateStore, err := s.updateStore()
+	if err != nil {
+		return nil, err
+	}
+	return updateStore.ListChannelTargets(ctx)
+}
+
 func (s *CachedInstallationStore) validateToken(
 	ctx context.Context,
 	rawToken string,

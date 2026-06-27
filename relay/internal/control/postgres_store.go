@@ -215,6 +215,8 @@ func (s *PostgresStore) ProvisionInstallation(
 		SubscriptionEndsAt: request.SubscriptionEndsAt,
 		CreatedAt:          now,
 		UpdatedAt:          now,
+		UpdateChannel:      DefaultUpdateChannel,
+		UpdateStatus:       "idle",
 	}
 
 	_, err = s.pool.Exec(
@@ -329,22 +331,7 @@ func (s *PostgresStore) UpdateSubscription(
 			END,
 			updated_at = $11::timestamptz
 		WHERE id = $1
-		RETURNING
-			id,
-			business_id,
-			shop_name,
-			connector_token_hash,
-			access_token_hash,
-			connector_certificate_fingerprint,
-			connector_certificate_serial,
-			connector_certificate_expires_at,
-			relay_enabled,
-			ai_enabled,
-			subscription_active,
-			subscription_ends_at,
-			created_at,
-			updated_at,
-			last_connector_connected_at`,
+		RETURNING `+installationColumns,
 		id,
 		update.RelayEnabled != nil,
 		boolValue(update.RelayEnabled),
@@ -398,22 +385,7 @@ func (s *PostgresStore) UpdateSubscriptionWithAudit(
 			END,
 			updated_at = $11::timestamptz
 		WHERE id = $1
-		RETURNING
-			id,
-			business_id,
-			shop_name,
-			connector_token_hash,
-			access_token_hash,
-			connector_certificate_fingerprint,
-			connector_certificate_serial,
-			connector_certificate_expires_at,
-			relay_enabled,
-			ai_enabled,
-			subscription_active,
-			subscription_ends_at,
-			created_at,
-			updated_at,
-			last_connector_connected_at`,
+		RETURNING `+installationColumns,
 		id,
 		update.RelayEnabled != nil,
 		boolValue(update.RelayEnabled),
@@ -576,22 +548,7 @@ func (s *PostgresStore) SetConnectorCertificate(
 			connector_certificate_expires_at = $4::timestamptz,
 			updated_at = $5::timestamptz
 		WHERE id = $1
-		RETURNING
-			id,
-			business_id,
-			shop_name,
-			connector_token_hash,
-			access_token_hash,
-			connector_certificate_fingerprint,
-			connector_certificate_serial,
-			connector_certificate_expires_at,
-			relay_enabled,
-			ai_enabled,
-			subscription_active,
-			subscription_ends_at,
-			created_at,
-			updated_at,
-			last_connector_connected_at`,
+		RETURNING `+installationColumns,
 		id,
 		certificate.FingerprintSHA256,
 		certificate.SerialNumber,
@@ -685,6 +642,167 @@ func (s *PostgresStore) MarkConnectorConnected(
 		return ErrNotFound
 	}
 	return nil
+}
+
+func (s *PostgresStore) SetInstallationChannel(
+	ctx context.Context,
+	id, channel string,
+) (Installation, error) {
+	return scanInstallation(s.pool.QueryRow(
+		ctx,
+		`UPDATE relay_installations
+		SET update_channel = $2, updated_at = $3::timestamptz
+		WHERE id = $1
+		RETURNING `+installationColumns,
+		id,
+		NormalizeChannel(channel),
+		s.clock.Now(),
+	))
+}
+
+func (s *PostgresStore) PinInstallationVersion(
+	ctx context.Context,
+	id, version string,
+) (Installation, error) {
+	return scanInstallation(s.pool.QueryRow(
+		ctx,
+		`UPDATE relay_installations
+		SET pinned_version = $2, updated_at = $3::timestamptz
+		WHERE id = $1
+		RETURNING `+installationColumns,
+		id,
+		strings.TrimSpace(version),
+		s.clock.Now(),
+	))
+}
+
+func (s *PostgresStore) ReportAgentStatus(
+	ctx context.Context,
+	id string,
+	status AgentStatus,
+) (Installation, error) {
+	now := s.clock.Now().UTC()
+	terminal := status.UpdateStatus == "succeeded" || status.UpdateStatus == "failed"
+	return scanInstallation(s.pool.QueryRow(
+		ctx,
+		`UPDATE relay_installations
+		SET
+			current_version = CASE WHEN $2 <> '' THEN $2 ELSE current_version END,
+			agent_version = CASE WHEN $3 <> '' THEN $3 ELSE agent_version END,
+			update_status = CASE WHEN $4 <> '' THEN $4 ELSE update_status END,
+			update_error = $5,
+			last_update_at = CASE WHEN $6 THEN $7::timestamptz ELSE last_update_at END,
+			agent_last_seen_at = $7::timestamptz,
+			updated_at = $7::timestamptz
+		WHERE id = $1
+		RETURNING `+installationColumns,
+		id,
+		strings.TrimSpace(status.CurrentVersion),
+		strings.TrimSpace(status.AgentVersion),
+		strings.TrimSpace(status.UpdateStatus),
+		strings.TrimSpace(status.UpdateError),
+		terminal,
+		now,
+	))
+}
+
+func (s *PostgresStore) GetChannelTarget(
+	ctx context.Context,
+	channel string,
+) (ChannelTarget, bool, error) {
+	target, err := scanChannelTarget(s.pool.QueryRow(
+		ctx,
+		selectChannelTargetSQL+" WHERE channel = $1",
+		NormalizeChannel(channel),
+	))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ChannelTarget{}, false, nil
+	}
+	if err != nil {
+		return ChannelTarget{}, false, err
+	}
+	return target, true, nil
+}
+
+func (s *PostgresStore) UpsertChannelTarget(ctx context.Context, target ChannelTarget) error {
+	ids := target.CanaryIDs
+	if ids == nil {
+		ids = []string{}
+	}
+	canaryIDs, err := json.Marshal(ids)
+	if err != nil {
+		return err
+	}
+	_, err = s.pool.Exec(
+		ctx,
+		`INSERT INTO relay_channel_targets
+			(channel, target_version, rollout_phase, rollout_percent, canary_ids, updated_at)
+		VALUES ($1, $2, $3, $4, $5::jsonb, $6::timestamptz)
+		ON CONFLICT (channel) DO UPDATE SET
+			target_version = EXCLUDED.target_version,
+			rollout_phase = EXCLUDED.rollout_phase,
+			rollout_percent = EXCLUDED.rollout_percent,
+			canary_ids = EXCLUDED.canary_ids,
+			updated_at = EXCLUDED.updated_at`,
+		NormalizeChannel(target.Channel),
+		strings.TrimSpace(target.TargetVersion),
+		target.RolloutPhase,
+		target.RolloutPercent,
+		canaryIDs,
+		s.clock.Now(),
+	)
+	return err
+}
+
+func (s *PostgresStore) ListChannelTargets(ctx context.Context) ([]ChannelTarget, error) {
+	rows, err := s.pool.Query(ctx, selectChannelTargetSQL+" ORDER BY channel")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var targets []ChannelTarget
+	for rows.Next() {
+		target, err := scanChannelTarget(rows)
+		if err != nil {
+			return nil, err
+		}
+		targets = append(targets, target)
+	}
+	return targets, rows.Err()
+}
+
+const selectChannelTargetSQL = `SELECT
+	channel,
+	target_version,
+	rollout_phase,
+	rollout_percent,
+	canary_ids,
+	updated_at
+FROM relay_channel_targets`
+
+func scanChannelTarget(row pgx.Row) (ChannelTarget, error) {
+	var target ChannelTarget
+	var canaryIDs []byte
+	var updatedAt pgtype.Timestamptz
+	if err := row.Scan(
+		&target.Channel,
+		&target.TargetVersion,
+		&target.RolloutPhase,
+		&target.RolloutPercent,
+		&canaryIDs,
+		&updatedAt,
+	); err != nil {
+		return ChannelTarget{}, err
+	}
+	if len(canaryIDs) > 0 {
+		if err := json.Unmarshal(canaryIDs, &target.CanaryIDs); err != nil {
+			return ChannelTarget{}, err
+		}
+	}
+	if updatedAt.Valid {
+		target.UpdatedAt = updatedAt.Time.UTC()
+	}
+	return target, nil
 }
 
 func (s *PostgresStore) validateToken(
@@ -870,8 +988,9 @@ func int2Ptr(value pgtype.Int2) *int {
 	return &result
 }
 
-const selectInstallationSQL = `SELECT
-	id,
+// installationColumns is the canonical column order shared by selectInstallationSQL
+// and every UPDATE ... RETURNING so scanInstallation stays in sync from one place.
+const installationColumns = `id,
 	business_id,
 	shop_name,
 	connector_token_hash,
@@ -885,8 +1004,17 @@ const selectInstallationSQL = `SELECT
 	subscription_ends_at,
 	created_at,
 	updated_at,
-	last_connector_connected_at
-FROM relay_installations`
+	last_connector_connected_at,
+	update_channel,
+	pinned_version,
+	current_version,
+	agent_version,
+	update_status,
+	update_error,
+	last_update_at,
+	agent_last_seen_at`
+
+const selectInstallationSQL = `SELECT ` + installationColumns + ` FROM relay_installations`
 
 const selectCertificateMaterialSQL = `SELECT
 	name,
@@ -902,6 +1030,8 @@ func scanInstallation(row pgx.Row) (Installation, error) {
 	var connectorCertificateExpiresAt pgtype.Timestamptz
 	var subscriptionEndsAt pgtype.Timestamptz
 	var lastConnectorConnectedAt pgtype.Timestamptz
+	var lastUpdateAt pgtype.Timestamptz
+	var agentLastSeenAt pgtype.Timestamptz
 	err := row.Scan(
 		&installation.ID,
 		&installation.BusinessID,
@@ -918,6 +1048,14 @@ func scanInstallation(row pgx.Row) (Installation, error) {
 		&installation.CreatedAt,
 		&installation.UpdatedAt,
 		&lastConnectorConnectedAt,
+		&installation.UpdateChannel,
+		&installation.PinnedVersion,
+		&installation.CurrentVersion,
+		&installation.AgentVersion,
+		&installation.UpdateStatus,
+		&installation.UpdateError,
+		&lastUpdateAt,
+		&agentLastSeenAt,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Installation{}, ErrNotFound
@@ -936,6 +1074,14 @@ func scanInstallation(row pgx.Row) (Installation, error) {
 	if lastConnectorConnectedAt.Valid {
 		value := lastConnectorConnectedAt.Time.UTC()
 		installation.LastConnectorConnectedAt = &value
+	}
+	if lastUpdateAt.Valid {
+		value := lastUpdateAt.Time.UTC()
+		installation.LastUpdateAt = &value
+	}
+	if agentLastSeenAt.Valid {
+		value := agentLastSeenAt.Time.UTC()
+		installation.AgentLastSeenAt = &value
 	}
 	installation.CreatedAt = installation.CreatedAt.UTC()
 	installation.UpdatedAt = installation.UpdatedAt.UTC()

@@ -12,9 +12,10 @@ it is down, the tills are unaffected.
 
 ## First Install
 
-1. Install Docker Desktop and enable Linux containers.
-2. In Docker Desktop settings, give the VM at least 4GB memory for tiny pilots
-   or 6GB+ for the recommended 8GB host profile.
+1. Docker is installed for you — `install.sh` / `install.ps1` download and install
+   it automatically if it's missing (run as root on Linux / elevated on Windows).
+2. On Windows give the Docker VM at least 4GB memory for tiny pilots or 6GB+ for
+   the recommended 8GB host profile.
 3. Copy `deploy/onprem/.env.example` to `deploy/onprem/.env`.
 4. Replace every secret and every `192.168.1.50` example with the Windows
    host's static LAN IP.
@@ -44,6 +45,36 @@ curl http://127.0.0.1:8000/readyz/
 and Redis access.
 
 ## Updates
+
+### Remote (no site visit)
+
+Once `register-autostart.sh` (Linux) / `register-autostart.ps1` (Windows) has run,
+a host-level **update agent** (`update-agent.sh` / `update-agent.ps1`) runs on a
+timer alongside the watchdog. Each run it asks the relay which version this shop
+should run (`POINTY_RELAY_PUBLIC_API_URL` in `.env`, authenticated with the shop's
+connector token), and when a newer one is assigned it downloads the bundle **from
+the relay**, verifies its sha256, backs up the database, applies it, health-checks
+`/readyz/`, and **rolls back automatically** if the new version is unhealthy. It
+reports status back to the relay (`pointy-relay fleet status`).
+
+Operators drive it entirely from the relay — no shop access needed:
+
+```sh
+pointy-relay artifacts upload --version 1.4.0 --bundle pointy-onprem-1.4.0.zip
+pointy-relay fleet set-version 1.4.0 --channel stable --rollout canary
+pointy-relay fleet rollout 50%        # widen once the canaries look healthy
+pointy-relay fleet rollout all
+pointy-relay fleet pause              # kill switch: stop the rollout immediately
+pointy-relay fleet pin <id> 1.3.0    # roll one shop back / hold it on a version
+```
+
+Preview what a shop would do without applying: `bash update-agent.sh --check`.
+The agent needs `jq` or `python3`, plus `unzip`, on the host. A failed forward DB
+migration is the one case auto-rollback can't fully heal — the agent takes a
+`pg_dump` first (under `backups/`); keep migrations backward-compatible across one
+version.
+
+### Manual (offline / air-gapped)
 
 ```sh
 docker compose --env-file deploy/onprem/.env -f deploy/onprem/docker-compose.yml build backend connector

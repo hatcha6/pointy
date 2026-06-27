@@ -58,15 +58,54 @@ Unit=pointy-watchdog.service
 WantedBy=timers.target
 EOF
 
-echo "==> Enabling timer"
+UPDATE_SERVICE=/etc/systemd/system/pointy-update-agent.service
+UPDATE_TIMER=/etc/systemd/system/pointy-update-agent.timer
+
+if [ -f "${HERE}/update-agent.sh" ]; then
+  echo "==> Writing ${UPDATE_SERVICE}"
+  cat > "${UPDATE_SERVICE}" <<EOF
+[Unit]
+Description=Pointy remote update agent (pull + apply the relay-assigned version)
+After=docker.service network-online.target
+Wants=docker.service network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=${HERE}
+ExecStart=/usr/bin/env bash ${HERE}/update-agent.sh
+EOF
+
+  echo "==> Writing ${UPDATE_TIMER}"
+  cat > "${UPDATE_TIMER}" <<EOF
+[Unit]
+Description=Run the Pointy remote update agent shortly after boot and periodically
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=30min
+AccuracySec=1min
+Persistent=true
+Unit=pointy-update-agent.service
+
+[Install]
+WantedBy=timers.target
+EOF
+fi
+
+echo "==> Enabling timers"
 systemctl daemon-reload
 systemctl enable --now pointy-watchdog.timer
 systemctl start pointy-watchdog.service || true
+if [ -f "${UPDATE_TIMER}" ]; then
+  systemctl enable --now pointy-update-agent.timer
+fi
 
 echo ""
 echo "Done. The watchdog runs ~30s after every boot and every 5 minutes."
+echo "The update agent runs ~2min after boot and every 30 minutes."
 echo "Inspect with:"
-echo "  systemctl status pointy-watchdog.timer"
+echo "  systemctl status pointy-watchdog.timer pointy-update-agent.timer"
 echo "  journalctl -u pointy-watchdog.service -f"
+echo "  journalctl -u pointy-update-agent.service -f"
 echo ""
 echo "Make sure Docker itself starts on boot:  sudo systemctl enable docker"

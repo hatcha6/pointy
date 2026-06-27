@@ -73,6 +73,29 @@ Register-ScheduledTask -TaskName $taskName -Action $action `
 Write-Host "    Registered. Running it once now to bring the stack up..."
 Start-ScheduledTask -TaskName $taskName
 
+# Register the remote update agent (pulls + applies the relay-assigned version).
+$updateAgent = Join-Path $here "update-agent.ps1"
+if (Test-Path $updateAgent) {
+    Write-Host "==> Registering scheduled task 'PointyUpdateAgent'..."
+    $updateAction = New-ScheduledTaskAction -Execute "powershell.exe" `
+        -Argument "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$updateAgent`"" `
+        -WorkingDirectory $here
+    # ~2 min after startup, then every 30 minutes.
+    $updateStartup = New-ScheduledTaskTrigger -AtStartup
+    $updateStartup.Delay = "PT2M"
+    $updateStartup.Repetition = (New-ScheduledTaskTrigger -Once -At (Get-Date) `
+            -RepetitionInterval (New-TimeSpan -Minutes 30) `
+            -RepetitionDuration (New-TimeSpan -Days 3650)).Repetition
+    $updateSettings = New-ScheduledTaskSettingsSet `
+        -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries `
+        -StartWhenAvailable `
+        -ExecutionTimeLimit ([TimeSpan]::Zero) `
+        -MultipleInstances IgnoreNew
+    Register-ScheduledTask -TaskName "PointyUpdateAgent" -Action $updateAction `
+        -Trigger $updateStartup -Principal $principal -Settings $updateSettings -Force | Out-Null
+    Write-Host "    Registered. The update agent runs ~2 min after startup and every 30 minutes."
+}
+
 # Configure Docker Desktop to start at login (best effort).
 try {
     $settingsPath = Join-Path $env:APPDATA "Docker\settings.json"

@@ -57,6 +57,9 @@ dependencies:
   # Open web-search source citations (http/https links in AI replies) externally.
   url_launcher: ^6.3.1
   record: ^6.2.1
+  # Client self-update: read the running app version + a temp dir for the download.
+  package_info_plus: ^8.0.0
+  path_provider: ^2.1.4
 
 dev_dependencies:
   flutter_test:

@@ -12,6 +12,8 @@
     <uses-permission android:name="android.permission.CAMERA" />
     <!-- Microphone access for recording voice messages to the AI assistant. -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- Install a downloaded APK during in-app self-update (system shows its own prompt). -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <!-- USB Host access for native USB receipt/label printing. Not required so
          the app still installs on devices without USB OTG support. -->
@@ -43,6 +45,17 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
+        <!-- Serves the downloaded APK to the system installer during self-update. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data

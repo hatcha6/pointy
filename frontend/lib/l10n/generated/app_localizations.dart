@@ -21131,6 +21131,114 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'آخر تحديث للحالة: {time}'**
   String subscriptionLastSynced(String time);
+
+  /// No description provided for @clientUpdatesTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحديثات التطبيق'**
+  String get clientUpdatesTitle;
+
+  /// No description provided for @clientUpdatesSubtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحقّق من وجود تحديث وثبّته'**
+  String get clientUpdatesSubtitle;
+
+  /// No description provided for @getAppsTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'تنزيل التطبيق على جهاز جديد'**
+  String get getAppsTitle;
+
+  /// No description provided for @getAppsSubtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'رمز QR ورابط للتنزيل عبر الشبكة المحلية'**
+  String get getAppsSubtitle;
+
+  /// No description provided for @appUpdatesPageTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحديثات التطبيق'**
+  String get appUpdatesPageTitle;
+
+  /// No description provided for @appUpdatesCurrentVersionLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الإصدار الحالي'**
+  String get appUpdatesCurrentVersionLabel;
+
+  /// No description provided for @appUpdatesChecking.
+  ///
+  /// In ar, this message translates to:
+  /// **'جارٍ التحقق من التحديثات…'**
+  String get appUpdatesChecking;
+
+  /// No description provided for @appUpdatesUpToDate.
+  ///
+  /// In ar, this message translates to:
+  /// **'أنت تستخدم أحدث إصدار.'**
+  String get appUpdatesUpToDate;
+
+  /// No description provided for @appUpdatesAvailableLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'يتوفّر إصدار جديد'**
+  String get appUpdatesAvailableLabel;
+
+  /// No description provided for @appUpdatesInstall.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحديث الآن'**
+  String get appUpdatesInstall;
+
+  /// No description provided for @appUpdatesDownloading.
+  ///
+  /// In ar, this message translates to:
+  /// **'جارٍ التنزيل…'**
+  String get appUpdatesDownloading;
+
+  /// No description provided for @appUpdatesFailed.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر التحديث. حاول مرة أخرى.'**
+  String get appUpdatesFailed;
+
+  /// No description provided for @appUpdatesUnsupportedWeb.
+  ///
+  /// In ar, this message translates to:
+  /// **'تتم إدارة تحديثات نسخة الويب من الخادم.'**
+  String get appUpdatesUnsupportedWeb;
+
+  /// No description provided for @appUpdatesRecheck.
+  ///
+  /// In ar, this message translates to:
+  /// **'إعادة التحقق'**
+  String get appUpdatesRecheck;
+
+  /// No description provided for @getAppsDialogTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'تنزيل تطبيقات Pointy'**
+  String get getAppsDialogTitle;
+
+  /// No description provided for @getAppsInstructions.
+  ///
+  /// In ar, this message translates to:
+  /// **'امسح الرمز أو افتح الرابط على الجهاز الجديد (على نفس الشبكة) للتنزيل.'**
+  String get getAppsInstructions;
+
+  /// No description provided for @getAppsCopyLink.
+  ///
+  /// In ar, this message translates to:
+  /// **'نسخ الرابط'**
+  String get getAppsCopyLink;
+
+  /// No description provided for @getAppsLinkCopied.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم نسخ الرابط'**
+  String get getAppsLinkCopied;
 }
 
 class _AppLocalizationsDelegate

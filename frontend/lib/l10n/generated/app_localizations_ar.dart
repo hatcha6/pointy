@@ -12174,4 +12174,60 @@ class AppLocalizationsAr extends AppLocalizations {
   String subscriptionLastSynced(String time) {
     return 'آخر تحديث للحالة: $time';
   }
+
+  @override
+  String get clientUpdatesTitle => 'تحديثات التطبيق';
+
+  @override
+  String get clientUpdatesSubtitle => 'تحقّق من وجود تحديث وثبّته';
+
+  @override
+  String get getAppsTitle => 'تنزيل التطبيق على جهاز جديد';
+
+  @override
+  String get getAppsSubtitle => 'رمز QR ورابط للتنزيل عبر الشبكة المحلية';
+
+  @override
+  String get appUpdatesPageTitle => 'تحديثات التطبيق';
+
+  @override
+  String get appUpdatesCurrentVersionLabel => 'الإصدار الحالي';
+
+  @override
+  String get appUpdatesChecking => 'جارٍ التحقق من التحديثات…';
+
+  @override
+  String get appUpdatesUpToDate => 'أنت تستخدم أحدث إصدار.';
+
+  @override
+  String get appUpdatesAvailableLabel => 'يتوفّر إصدار جديد';
+
+  @override
+  String get appUpdatesInstall => 'تحديث الآن';
+
+  @override
+  String get appUpdatesDownloading => 'جارٍ التنزيل…';
+
+  @override
+  String get appUpdatesFailed => 'تعذّر التحديث. حاول مرة أخرى.';
+
+  @override
+  String get appUpdatesUnsupportedWeb =>
+      'تتم إدارة تحديثات نسخة الويب من الخادم.';
+
+  @override
+  String get appUpdatesRecheck => 'إعادة التحقق';
+
+  @override
+  String get getAppsDialogTitle => 'تنزيل تطبيقات Pointy';
+
+  @override
+  String get getAppsInstructions =>
+      'امسح الرمز أو افتح الرابط على الجهاز الجديد (على نفس الشبكة) للتنزيل.';
+
+  @override
+  String get getAppsCopyLink => 'نسخ الرابط';
+
+  @override
+  String get getAppsLinkCopied => 'تم نسخ الرابط';
 }

@@ -81,6 +81,11 @@ from apps.core.backup_views import (
     RestoreUploadView,
 )
 from apps.core.dashboard import DashboardView
+from apps.clients.views import (
+    ClientFileView,
+    ClientLandingView,
+    ClientManifestView,
+)
 from apps.core.relay_views import (
     DiscoveryServiceView,
     RelayConnectorConfigView,
@@ -240,6 +245,10 @@ urlpatterns = [
         DiscoveryServiceView.as_view(),
         name="discovery-service",
     ),
+    # Client installers served on the LAN (top-level so nginx proxies /clients/).
+    path("clients/", ClientLandingView.as_view(), name="clients-landing"),
+    path("clients/manifest.json", ClientManifestView.as_view(), name="clients-manifest"),
+    path("clients/files/<str:name>", ClientFileView.as_view(), name="clients-file"),
     path(
         "api/relay/installation/",
         RelayInstallationView.as_view(),

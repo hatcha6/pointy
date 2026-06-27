@@ -33,7 +33,7 @@ val hasReleaseSigning = keystorePropertiesFile.exists()
 val oldestSupportedApi = 23
 
 android {
-    namespace = "com.example.frontend"
+    namespace = "ly.daftr"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -48,7 +48,7 @@ android {
 
     defaultConfig {
         // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "com.example.frontend"
+        applicationId = "ly.daftr"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         //

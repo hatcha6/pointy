@@ -7156,5 +7156,23 @@
     "placeholders": {
       "time": {"type": "String"}
     }
-  }
+  },
+  "clientUpdatesTitle": "تحديثات التطبيق",
+  "clientUpdatesSubtitle": "تحقّق من وجود تحديث وثبّته",
+  "getAppsTitle": "تنزيل التطبيق على جهاز جديد",
+  "getAppsSubtitle": "رمز QR ورابط للتنزيل عبر الشبكة المحلية",
+  "appUpdatesPageTitle": "تحديثات التطبيق",
+  "appUpdatesCurrentVersionLabel": "الإصدار الحالي",
+  "appUpdatesChecking": "جارٍ التحقق من التحديثات…",
+  "appUpdatesUpToDate": "أنت تستخدم أحدث إصدار.",
+  "appUpdatesAvailableLabel": "يتوفّر إصدار جديد",
+  "appUpdatesInstall": "تحديث الآن",
+  "appUpdatesDownloading": "جارٍ التنزيل…",
+  "appUpdatesFailed": "تعذّر التحديث. حاول مرة أخرى.",
+  "appUpdatesUnsupportedWeb": "تتم إدارة تحديثات نسخة الويب من الخادم.",
+  "appUpdatesRecheck": "إعادة التحقق",
+  "getAppsDialogTitle": "تنزيل تطبيقات Pointy",
+  "getAppsInstructions": "امسح الرمز أو افتح الرابط على الجهاز الجديد (على نفس الشبكة) للتنزيل.",
+  "getAppsCopyLink": "نسخ الرابط",
+  "getAppsLinkCopied": "تم نسخ الرابط"
 }

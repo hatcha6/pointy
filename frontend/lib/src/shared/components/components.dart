@@ -18,6 +18,7 @@ export 'pointy_metric_grid.dart';
 export 'pointy_metric_tile.dart';
 export 'pointy_navigation_surface.dart';
 export 'pointy_permission_denied_view.dart';
+export 'pointy_qr_image.dart';
 export 'pointy_section_header.dart';
 export 'pointy_skeleton.dart';
 export 'pointy_settings_section.dart';

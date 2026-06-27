@@ -29,6 +29,7 @@ import (
 
 	"github.com/redis/go-redis/v9"
 
+	"pointy/relay/internal/artifacts"
 	"pointy/relay/internal/connector"
 	"pointy/relay/internal/control"
 	"pointy/relay/internal/discovery"
@@ -48,6 +49,11 @@ const (
 	defaultMaxRelayedResponseBodyBytes = int64(50 << 20)
 	defaultRateLimitWindow             = time.Minute
 )
+
+// version is the build version, injected at link time from the git tag
+// (-ldflags "-X main.version=<tag>"). It defaults to "dev" for local builds and
+// is reported by the connector heartbeat so the fleet shows real versions.
+var version = "dev"
 
 func main() {
 	if err := run(os.Args[1:]); err != nil {
@@ -75,10 +81,17 @@ func run(args []string) error {
 		return runInstallations(args[1:])
 	case "subscription":
 		return runSubscription(args[1:])
+	case "fleet":
+		return runFleet(args[1:])
+	case "artifacts":
+		return runArtifacts(args[1:])
 	case "migrate":
 		return runMigrate(args[1:])
 	case "gen-token":
 		return runGenToken(args[1:])
+	case "version", "-v", "--version":
+		fmt.Println(version)
+		return nil
 	case "help", "-h", "--help":
 		printUsage()
 		return nil
@@ -86,6 +99,11 @@ func run(args []string) error {
 		return usageError("unknown command %q", args[0])
 	}
 }
+
+// defaultArtifactDir is the relay's auto-enabled store for on-prem update bundles.
+// It matches the relay image WORKDIR (/var/lib/pointy, owned by uid 65532); mount a
+// volume there to persist bundles across redeploys.
+const defaultArtifactDir = "/var/lib/pointy/artifacts"
 
 func runServer(args []string) error {
 	flags := flag.NewFlagSet("server", flag.ExitOnError)
@@ -233,6 +251,11 @@ func runServer(args []string) error {
 		"allow-insecure-node-proxy",
 		envBool("POINTY_RELAY_ALLOW_INSECURE_NODE_PROXY", false),
 		"allow HTTP node-to-node relay URLs for local development",
+	)
+	artifactDir := flags.String(
+		"artifact-dir",
+		envString("POINTY_RELAY_ARTIFACT_DIR", defaultArtifactDir),
+		"directory for on-prem update bundles the relay serves to the fleet; mount a volume here to persist across redeploys",
 	)
 	ticketTTL := flags.Duration(
 		"ticket-ttl",
@@ -711,9 +734,32 @@ func runServer(args []string) error {
 		NodeRelayURL: strings.TrimSpace(*nodeInternalURL),
 		Draining:     *draining,
 	}
+	var artifactStore *artifacts.Store
+	if dir := strings.TrimSpace(*artifactDir); dir != "" {
+		as, artErr := artifacts.New(dir)
+		switch {
+		case artErr == nil:
+			artifactStore = as
+			logger.Info("relay artifact store ready", "dir", dir)
+		case dir != defaultArtifactDir:
+			// Operator chose this directory explicitly, so a failure to use it is a
+			// misconfiguration worth stopping for.
+			return fmt.Errorf("artifact store: %w", artErr)
+		default:
+			// The auto default isn't usable here (e.g. local dev without
+			// /var/lib/pointy). Run without remote update rather than refusing to
+			// start — the relay's core duties don't depend on it.
+			logger.Warn(
+				"relay artifact store disabled: default directory not usable (remote update off)",
+				"dir", dir, "error", artErr,
+			)
+		}
+	}
+
 	baseHTTPHandler := relayserver.HTTPServer{
 		Store:                         store,
 		Hub:                           hub,
+		Artifacts:                     artifactStore,
 		Logger:                        logger,
 		AdminToken:                    *adminToken,
 		AllowOpenAdmin:                *allowOpenAdmin,
@@ -2680,7 +2726,7 @@ func postBackendConnectorHeartbeat(
 	endpoint := *backendURL
 	endpoint.Path = joinPath(endpoint.Path, "/api/relay/connector-heartbeat/")
 	endpoint.RawQuery = ""
-	body := strings.NewReader(`{"version":"pointy-relay"}`)
+	body := strings.NewReader(fmt.Sprintf(`{"version":%q}`, "pointy-relay/"+version))
 	request, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint.String(), body)
 	if err != nil {
 		return err
@@ -3060,6 +3106,8 @@ func printUsage() {
   pointy-relay connector [flags]
   pointy-relay installations <list|show|status|diagnostics|audit|provision> [args]
   pointy-relay subscription <set|update|enable|disable|extend|audit> <id> [flags]
+  pointy-relay fleet <status|set-version|rollout|pause|pin|unpin|channel> [args]
+  pointy-relay artifacts upload --version X --bundle pointy-onprem-X.zip
   pointy-relay provision [flags]
   pointy-relay migrate [flags]
   pointy-relay gen-token [flags]
@@ -3083,9 +3131,17 @@ Commands:
                    extend <id> --days N      set the end date N days out, active
                    update <id> [flags]       explicit field-by-field control
                    audit <id>                change history (alias)
+  fleet          Remote on-prem update control plane (admin API):
+                   status [--query q] [--json]   versions across the fleet
+                   set-version <v> [--channel stable] [--rollout canary|all|N%]
+                   rollout <canary|all|N%> [--channel]   advance the rollout
+                   pause [--channel]         kill switch: stop the rollout
+                   pin <id> <v> / unpin <id> / channel <id> <channel>
+  artifacts      upload --version X --bundle pointy-onprem-X.zip   serve a bundle
   provision      Create an installation directly against the database (host-side).
   migrate        Apply relay PostgreSQL migrations.
   gen-token      Print a strong random admin token for POINTY_RELAY_ADMIN_TOKEN.
+  version        Print the build version.
 
 Admin API commands read POINTY_RELAY_CONTROL_URL and POINTY_RELAY_ADMIN_TOKEN
 from the environment; export them once for terse, repeatable management.

@@ -188,6 +188,37 @@ VALUES
 ON CONFLICT (key) DO NOTHING;
 `,
 	},
+	{
+		version: 8,
+		name:    "remote update control plane",
+		sql: `
+ALTER TABLE relay_installations
+	ADD COLUMN IF NOT EXISTS update_channel text NOT NULL DEFAULT 'stable';
+ALTER TABLE relay_installations
+	ADD COLUMN IF NOT EXISTS pinned_version text NOT NULL DEFAULT '';
+ALTER TABLE relay_installations
+	ADD COLUMN IF NOT EXISTS current_version text NOT NULL DEFAULT '';
+ALTER TABLE relay_installations
+	ADD COLUMN IF NOT EXISTS agent_version text NOT NULL DEFAULT '';
+ALTER TABLE relay_installations
+	ADD COLUMN IF NOT EXISTS update_status text NOT NULL DEFAULT 'idle';
+ALTER TABLE relay_installations
+	ADD COLUMN IF NOT EXISTS update_error text NOT NULL DEFAULT '';
+ALTER TABLE relay_installations
+	ADD COLUMN IF NOT EXISTS last_update_at timestamptz;
+ALTER TABLE relay_installations
+	ADD COLUMN IF NOT EXISTS agent_last_seen_at timestamptz;
+
+CREATE TABLE IF NOT EXISTS relay_channel_targets (
+	channel text PRIMARY KEY,
+	target_version text NOT NULL DEFAULT '',
+	rollout_phase text NOT NULL DEFAULT 'paused',
+	rollout_percent integer NOT NULL DEFAULT 0,
+	canary_ids jsonb NOT NULL DEFAULT '[]'::jsonb,
+	updated_at timestamptz NOT NULL
+);
+`,
+	},
 }
 
 // migrationsAdvisoryLockKey serializes concurrent migrators (e.g. autoscaled

@@ -12,6 +12,7 @@ import '../../../data/models/attachment_summary.dart';
 import '../../../data/models/shop_settings.dart';
 import '../../../data/models/system_backup.dart';
 import '../../../data/services/analytics_export_downloader.dart';
+import '../../../data/services/client_update_service.dart';
 import '../../../shared/app_navigation_drawer.dart';
 import '../../../shared/authorization_guards.dart';
 import '../../../shared/components/components.dart';
@@ -31,6 +32,7 @@ import '../view_models/sales_channels_view_model.dart';
 import '../view_models/shop_settings_view_model.dart';
 import '../view_models/subscription_status_view_model.dart';
 import 'operations_settings_page.dart';
+import 'app_updates_page.dart';
 import 'price_checkers_page.dart';
 import 'sales_channels_page.dart';
 import 'subscription_status_page.dart';
@@ -50,6 +52,7 @@ class ShopSettingsScreen extends StatelessWidget {
     required this.attendanceViewModel,
     required this.migrationViewModel,
     required this.subscriptionViewModel,
+    required this.clientUpdateService,
     required this.capabilities,
     required this.navigation,
   });
@@ -63,6 +66,7 @@ class ShopSettingsScreen extends StatelessWidget {
   final AttendanceViewModel attendanceViewModel;
   final MigrationViewModel migrationViewModel;
   final SubscriptionStatusViewModel subscriptionViewModel;
+  final ClientUpdateService clientUpdateService;
   final AuthorizationCapabilities capabilities;
   final AppNavigation navigation;
 
@@ -107,6 +111,7 @@ class ShopSettingsScreen extends StatelessWidget {
               attendanceViewModel: attendanceViewModel,
               migrationViewModel: migrationViewModel,
               subscriptionViewModel: subscriptionViewModel,
+              clientUpdateService: clientUpdateService,
               canManageSalesChannels: capabilities.canManageSalesChannels,
               canManagePriceCheckers: capabilities.canManagePriceCheckers,
               canManageWorkflows: capabilities.canManageWorkflows,
@@ -130,6 +135,7 @@ class _ShopSettingsBody extends StatelessWidget {
     required this.attendanceViewModel,
     required this.migrationViewModel,
     required this.subscriptionViewModel,
+    required this.clientUpdateService,
     required this.canManageSalesChannels,
     required this.canManagePriceCheckers,
     required this.canManageWorkflows,
@@ -145,6 +151,7 @@ class _ShopSettingsBody extends StatelessWidget {
   final AttendanceViewModel attendanceViewModel;
   final MigrationViewModel migrationViewModel;
   final SubscriptionStatusViewModel subscriptionViewModel;
+  final ClientUpdateService clientUpdateService;
   final bool canManageSalesChannels;
   final bool canManagePriceCheckers;
   final bool canManageWorkflows;
@@ -185,6 +192,7 @@ class _ShopSettingsBody extends StatelessWidget {
       attendanceViewModel: attendanceViewModel,
       migrationViewModel: migrationViewModel,
       subscriptionViewModel: subscriptionViewModel,
+      clientUpdateService: clientUpdateService,
       canManageSalesChannels: canManageSalesChannels,
       canManagePriceCheckers: canManagePriceCheckers,
       canManageWorkflows: canManageWorkflows,
@@ -205,6 +213,7 @@ class _ShopSettingsForm extends StatefulWidget {
     required this.attendanceViewModel,
     required this.migrationViewModel,
     required this.subscriptionViewModel,
+    required this.clientUpdateService,
     required this.canManageSalesChannels,
     required this.canManagePriceCheckers,
     required this.canManageWorkflows,
@@ -221,6 +230,7 @@ class _ShopSettingsForm extends StatefulWidget {
   final AttendanceViewModel attendanceViewModel;
   final MigrationViewModel migrationViewModel;
   final SubscriptionStatusViewModel subscriptionViewModel;
+  final ClientUpdateService clientUpdateService;
   final bool canManageSalesChannels;
   final bool canManagePriceCheckers;
   final bool canManageWorkflows;
@@ -398,6 +408,28 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
                   children: [
                     PointySettingsSection(
                       children: [
+                        PointySettingsTile(
+                          icon: Icons.system_update_outlined,
+                          title: l10n.clientUpdatesTitle,
+                          subtitle: l10n.clientUpdatesSubtitle,
+                          onTap: () => Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                              builder: (_) => AppUpdatesPage(
+                                service: widget.clientUpdateService,
+                              ),
+                            ),
+                          ),
+                        ),
+                        PointySettingsTile(
+                          icon: Icons.qr_code_2_outlined,
+                          title: l10n.getAppsTitle,
+                          subtitle: l10n.getAppsSubtitle,
+                          onTap: () => showGetAppsDialog(
+                            context,
+                            downloadUrl: widget.clientUpdateService
+                                .lanDownloadUrl(),
+                          ),
+                        ),
                         PointySettingsTile(
                           icon: Icons.storefront_outlined,
                           title: l10n.shopIdentitySectionTitle,

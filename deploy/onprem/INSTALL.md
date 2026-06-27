@@ -32,9 +32,15 @@ images/                 Saved Docker images (loaded by the installer)
 
 ## Requirements
 
-- **Windows host (typical):** Docker Desktop with the Linux-containers engine.
+The installer sets up Docker for you — if Docker isn't already installed it
+downloads and installs it automatically (run as **root** on Linux / **elevated**
+PowerShell on Windows, with internet access). You only need:
+
+- **Windows host (typical):** Docker Desktop runs the Linux-containers engine.
   Give the Docker VM at least 4 GB (tiny pilot) or 6 GB+ (recommended 8 GB host).
-- **Linux host:** Docker Engine 23+ with the Compose v2 plugin.
+  A one-time sign-out/reboot may be needed right after a fresh Docker install.
+- **Linux host:** Docker Engine + the Compose v2 plugin (the installer uses
+  Docker's official install script).
 
 ## Install
 

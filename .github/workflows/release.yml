@@ -307,7 +307,7 @@ jobs:
   # ---------------------------------------------------------------------------
   build-onprem:
     name: Build on-prem bundle
-    needs: version
+    needs: [version, build-android, build-windows]
     runs-on: ubuntu-latest
     env:
       # The backend Dockerfile uses a `# syntax=` directive, which requires
@@ -316,11 +316,30 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # The client installers built by the android/windows jobs are bundled so a
+      # new shop's backend can serve them on the LAN and clients can self-update.
+      - name: Download Android client
+        uses: actions/download-artifact@v4
+        with:
+          name: pointy-android
+          path: client-artifacts
+      - name: Download Windows client
+        uses: actions/download-artifact@v4
+        with:
+          name: pointy-windows
+          path: client-artifacts
+
       - name: Build backend image
-        run: docker build -f backend/Dockerfile -t "pointy-backend:${{ needs.version.outputs.version }}" .
+        run: >
+          docker build -f backend/Dockerfile
+          --build-arg POINTY_VERSION=${{ needs.version.outputs.version }}
+          -t "pointy-backend:${{ needs.version.outputs.version }}" .
 
       - name: Build relay image
-        run: docker build -f relay/Dockerfile -t "pointy-relay:${{ needs.version.outputs.version }}" .
+        run: >
+          docker build -f relay/Dockerfile
+          --build-arg POINTY_VERSION=${{ needs.version.outputs.version }}
+          -t "pointy-relay:${{ needs.version.outputs.version }}" .
 
       - name: Build web image (Flutter web + nginx)
         run: >
@@ -349,6 +368,26 @@ jobs:
           docker save "${POSTGRES_IMAGE}"          -o "${BUNDLE}/images/postgres.tar"
           docker save "${REDIS_IMAGE}"             -o "${BUNDLE}/images/redis.tar"
 
+          echo "==> Staging client installers (Android APK + Windows installer)…"
+          mkdir -p "${BUNDLE}/clients"
+          apk="$(ls client-artifacts/pointy-*-android-universal.apk 2>/dev/null | head -1 || true)"
+          win="$(ls client-artifacts/pointy-*-windows-x64-setup.exe 2>/dev/null | head -1 || true)"
+          android_json="null"
+          windows_json="null"
+          if [ -n "${apk}" ]; then
+            cp "${apk}" "${BUNDLE}/clients/"
+            f="$(basename "${apk}")"
+            android_json="{\"file\":\"${f}\",\"sha256\":\"$(sha256sum "${apk}" | awk '{print $1}')\",\"size\":$(stat -c%s "${apk}")}"
+          fi
+          if [ -n "${win}" ]; then
+            cp "${win}" "${BUNDLE}/clients/"
+            f="$(basename "${win}")"
+            windows_json="{\"file\":\"${f}\",\"sha256\":\"$(sha256sum "${win}" | awk '{print $1}')\",\"size\":$(stat -c%s "${win}")}"
+          fi
+          printf '{"version":"%s","android":%s,"windows":%s}\n' \
+            "${VERSION}" "${android_json}" "${windows_json}" > "${BUNDLE}/clients/manifest.json"
+          echo "Client manifest:"; cat "${BUNDLE}/clients/manifest.json"
+
           echo "==> Rendering offline Compose (drop source 'build:' sections, keep anchors)…"
           yq eval 'del(.services.backend.build) | del(.services.connector.build) | del(.services.web.build)' \
             deploy/onprem/docker-compose.yml | sed 's/!!merge //g' > "${BUNDLE}/docker-compose.yml"
@@ -362,8 +401,10 @@ jobs:
           cp deploy/onprem/install.sh deploy/onprem/install.ps1 \
              deploy/onprem/watchdog.sh deploy/onprem/watchdog.ps1 \
              deploy/onprem/register-autostart.sh deploy/onprem/register-autostart.ps1 \
+             deploy/onprem/update-agent.sh deploy/onprem/update-agent.ps1 \
              deploy/onprem/INSTALL.md deploy/onprem/README.md "${BUNDLE}/"
-          chmod +x "${BUNDLE}/install.sh" "${BUNDLE}/watchdog.sh" "${BUNDLE}/register-autostart.sh"
+          chmod +x "${BUNDLE}/install.sh" "${BUNDLE}/watchdog.sh" \
+             "${BUNDLE}/register-autostart.sh" "${BUNDLE}/update-agent.sh"
           echo "${VERSION}" > "${BUNDLE}/VERSION.txt"
 
           echo "==> Sanity-checking rendered Compose…"

@@ -20,6 +20,7 @@ import (
 	"strings"
 	"time"
 
+	"pointy/relay/internal/artifacts"
 	"pointy/relay/internal/control"
 	"pointy/relay/internal/limit"
 	"pointy/relay/internal/observability"
@@ -248,8 +249,11 @@ var publicInvoiceErrorTemplate = template.Must(template.New("public-invoice-erro
 </html>`))
 
 type HTTPServer struct {
-	Store                         control.InstallationStore
-	Hub                           *Hub
+	Store control.InstallationStore
+	Hub   *Hub
+	// Artifacts stores on-prem update bundles the relay serves to the fleet.
+	// Nil disables the remote-update endpoints.
+	Artifacts                     *artifacts.Store
 	Logger                        *slog.Logger
 	RouteMode                     RouteMode
 	AdminToken                    string
@@ -476,6 +480,27 @@ func (s HTTPServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		s.withNodeProxy(w, r, s.handleNodeInstallationDiagnosticsAnalytics)
+	case r.URL.Path == "/v1/agent/manifest" && r.Method == http.MethodGet:
+		// On-prem update agent (connector-token authed) asks what to run.
+		if !s.RouteMode.allowsPublic() {
+			writeNotFound(w)
+			return
+		}
+		s.withConnectorToken(w, r, s.handleAgentManifest)
+	case strings.HasPrefix(r.URL.Path, "/v1/agent/artifacts/") && r.Method == http.MethodGet:
+		// On-prem update agent pulls the bundle bytes (supports Range/resume).
+		if !s.RouteMode.allowsPublic() {
+			writeNotFound(w)
+			return
+		}
+		s.withConnectorToken(w, r, s.handleAgentArtifact)
+	case r.URL.Path == "/v1/agent/status" && r.Method == http.MethodPost:
+		// On-prem update agent reports its current version + last result.
+		if !s.RouteMode.allowsPublic() {
+			writeNotFound(w)
+			return
+		}
+		s.withConnectorToken(w, r, s.handleAgentStatus)
 	case strings.HasPrefix(r.URL.Path, "/invoices/") && r.Method == http.MethodGet:
 		if !s.RouteMode.allowsPublic() {
 			writeNotFound(w)
@@ -500,6 +525,24 @@ func (s HTTPServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		s.withAdmin(w, r, s.handleInstallation)
+	case r.URL.Path == "/v1/fleet" && r.Method == http.MethodGet:
+		if !s.RouteMode.allowsAdmin() {
+			writeNotFound(w)
+			return
+		}
+		s.withAdmin(w, r, s.handleFleetStatus)
+	case strings.HasPrefix(r.URL.Path, "/v1/fleet/channels/") && r.Method == http.MethodPut:
+		if !s.RouteMode.allowsAdmin() {
+			writeNotFound(w)
+			return
+		}
+		s.withAdmin(w, r, s.handleSetChannelTarget)
+	case strings.HasPrefix(r.URL.Path, "/v1/artifacts/"):
+		if !s.RouteMode.allowsAdmin() {
+			writeNotFound(w)
+			return
+		}
+		s.withAdmin(w, r, s.handleAdminArtifact)
 	case (r.URL.Path == "/admin" || r.URL.Path == "/admin/") && r.Method == http.MethodGet:
 		if !s.RouteMode.allowsAdmin() {
 			writeNotFound(w)
@@ -1023,6 +1066,10 @@ func (s HTTPServer) handleInstallation(w http.ResponseWriter, r *http.Request) {
 	}
 	if len(parts) == 2 && parts[1] == "diagnostics-analytics" && r.Method == http.MethodGet {
 		s.handleInstallationDiagnosticsAnalytics(w, r, id)
+		return
+	}
+	if len(parts) == 2 && parts[1] == "update" && r.Method == http.MethodPatch {
+		s.handleInstallationUpdateConfig(w, r, id)
 		return
 	}
 	if len(parts) == 2 && parts[1] == "connector-certificate" && r.Method == http.MethodPost {

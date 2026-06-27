@@ -2,6 +2,8 @@ package control
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -50,6 +52,19 @@ type Installation struct {
 	CreatedAt                       time.Time  `json:"created_at"`
 	UpdatedAt                       time.Time  `json:"updated_at"`
 	LastConnectorConnectedAt        *time.Time `json:"last_connector_connected_at,omitempty"`
+
+	// Remote-update fields. UpdateChannel selects which channel target this
+	// installation follows (default "stable"); PinnedVersion overrides the
+	// channel for one shop. The remaining fields are reported by the on-prem
+	// update agent.
+	UpdateChannel   string     `json:"update_channel,omitempty"`
+	PinnedVersion   string     `json:"pinned_version,omitempty"`
+	CurrentVersion  string     `json:"current_version,omitempty"`
+	AgentVersion    string     `json:"agent_version,omitempty"`
+	UpdateStatus    string     `json:"update_status,omitempty"`
+	UpdateError     string     `json:"update_error,omitempty"`
+	LastUpdateAt    *time.Time `json:"last_update_at,omitempty"`
+	AgentLastSeenAt *time.Time `json:"agent_last_seen_at,omitempty"`
 }
 
 func (i Installation) RelayActive(now time.Time) bool {
@@ -170,6 +185,109 @@ type AdminSubscriptionStore interface {
 	) (Installation, AdminAuditEvent, error)
 	ListAdminAuditEvents(ctx context.Context, installationID string, limit int) ([]AdminAuditEvent, error)
 	ListInstallations(ctx context.Context, filter InstallationFilter) ([]Installation, error)
+}
+
+// DefaultUpdateChannel is the channel an installation follows when none is set.
+const DefaultUpdateChannel = "stable"
+
+// Rollout phases for a channel target. A phase gates which installations on the
+// channel are eligible for the target version yet, so a bad release never lands
+// on the whole fleet at once.
+const (
+	RolloutPaused  = "paused"  // kill switch: nobody applies (manifest returns hold)
+	RolloutCanary  = "canary"  // only the explicitly listed canary installations
+	RolloutPercent = "percent" // a deterministic percentage of the channel
+	RolloutAll     = "all"     // every installation on the channel
+)
+
+// ChannelTarget is the relay's desired version for one update channel plus its
+// staged-rollout state. There is one row per channel; setting a new target
+// replaces it.
+type ChannelTarget struct {
+	Channel        string    `json:"channel"`
+	TargetVersion  string    `json:"target_version"`
+	RolloutPhase   string    `json:"rollout_phase"`
+	RolloutPercent int       `json:"rollout_percent,omitempty"`
+	CanaryIDs      []string  `json:"canary_ids,omitempty"`
+	UpdatedAt      time.Time `json:"updated_at"`
+}
+
+// AgentStatus is what the on-prem update agent reports after each run.
+type AgentStatus struct {
+	CurrentVersion string
+	AgentVersion   string
+	UpdateStatus   string
+	UpdateError    string
+}
+
+// UpdateStore is an optional store capability (type-asserted by the HTTP layer
+// like AdminSubscriptionStore / HolidayStore) for the remote-update control
+// plane. Keeping it separate leaves the core InstallationStore unchanged.
+type UpdateStore interface {
+	SetInstallationChannel(ctx context.Context, id, channel string) (Installation, error)
+	PinInstallationVersion(ctx context.Context, id, version string) (Installation, error)
+	ReportAgentStatus(ctx context.Context, id string, status AgentStatus) (Installation, error)
+	GetChannelTarget(ctx context.Context, channel string) (ChannelTarget, bool, error)
+	UpsertChannelTarget(ctx context.Context, target ChannelTarget) error
+	ListChannelTargets(ctx context.Context) ([]ChannelTarget, error)
+}
+
+// NormalizeChannel folds an empty/blank channel to the default.
+func NormalizeChannel(channel string) string {
+	channel = strings.TrimSpace(channel)
+	if channel == "" {
+		return DefaultUpdateChannel
+	}
+	return channel
+}
+
+// AssignedUpdate computes the version an installation should run and whether the
+// agent should apply it. directive is "apply" or "hold". An explicit pin wins;
+// otherwise the channel target gates on the rollout phase and artifact presence.
+// It never enforces no-downgrade: pinning an older version is how an operator
+// rolls one shop back.
+func AssignedUpdate(
+	installation Installation,
+	target ChannelTarget,
+	hasArtifact func(version string) bool,
+) (version string, directive string) {
+	if v := strings.TrimSpace(installation.PinnedVersion); v != "" {
+		if hasArtifact(v) {
+			return v, "apply"
+		}
+		return "", "hold"
+	}
+	v := strings.TrimSpace(target.TargetVersion)
+	if v == "" || !installationInRollout(installation.ID, target) || !hasArtifact(v) {
+		return "", "hold"
+	}
+	return v, "apply"
+}
+
+func installationInRollout(id string, target ChannelTarget) bool {
+	switch target.RolloutPhase {
+	case RolloutAll:
+		return true
+	case RolloutCanary:
+		for _, canaryID := range target.CanaryIDs {
+			if canaryID == id {
+				return true
+			}
+		}
+		return false
+	case RolloutPercent:
+		return rolloutBucket(id) < target.RolloutPercent
+	default: // paused or unknown → hold
+		return false
+	}
+}
+
+// rolloutBucket maps an installation id deterministically into [0,100) so a
+// percentage rollout is stable across polls (the same shops stay in the cohort
+// as the percentage grows).
+func rolloutBucket(id string) int {
+	sum := sha256.Sum256([]byte(id))
+	return int(binary.BigEndian.Uint32(sum[:4]) % 100)
 }
 
 // InstallationFilter narrows an operator's installation listing. Zero value
@@ -318,6 +436,7 @@ type fileStoreData struct {
 	AdminAuditEvents                 map[string][]AdminAuditEvent              `json:"admin_audit_events,omitempty"`
 	RevokedConnectorCertFingerprints map[string]ConnectorCertificateRevocation `json:"revoked_connector_certificate_fingerprints,omitempty"`
 	Holidays                         map[string]Holiday                        `json:"holidays,omitempty"`
+	ChannelTargets                   map[string]ChannelTarget                  `json:"channel_targets,omitempty"`
 }
 
 func NewFileStore(path string, clock Clock) (*FileStore, error) {
@@ -376,6 +495,8 @@ func (s *FileStore) ProvisionInstallation(
 		SubscriptionEndsAt: request.SubscriptionEndsAt,
 		CreatedAt:          now,
 		UpdatedAt:          now,
+		UpdateChannel:      DefaultUpdateChannel,
+		UpdateStatus:       "idle",
 	}
 	s.data.Installations[id] = installation
 	if err := s.saveLocked(); err != nil {
@@ -709,7 +830,117 @@ func (s *FileStore) load() error {
 	if s.data.Holidays == nil {
 		s.data.Holidays = map[string]Holiday{}
 	}
+	if s.data.ChannelTargets == nil {
+		s.data.ChannelTargets = map[string]ChannelTarget{}
+	}
 	return nil
+}
+
+func (s *FileStore) SetInstallationChannel(
+	_ context.Context,
+	id, channel string,
+) (Installation, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	installation, ok := s.data.Installations[id]
+	if !ok {
+		return Installation{}, ErrNotFound
+	}
+	installation.UpdateChannel = NormalizeChannel(channel)
+	installation.UpdatedAt = s.clock.Now()
+	s.data.Installations[id] = installation
+	if err := s.saveLocked(); err != nil {
+		return Installation{}, err
+	}
+	return installation, nil
+}
+
+func (s *FileStore) PinInstallationVersion(
+	_ context.Context,
+	id, version string,
+) (Installation, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	installation, ok := s.data.Installations[id]
+	if !ok {
+		return Installation{}, ErrNotFound
+	}
+	installation.PinnedVersion = strings.TrimSpace(version)
+	installation.UpdatedAt = s.clock.Now()
+	s.data.Installations[id] = installation
+	if err := s.saveLocked(); err != nil {
+		return Installation{}, err
+	}
+	return installation, nil
+}
+
+func (s *FileStore) ReportAgentStatus(
+	_ context.Context,
+	id string,
+	status AgentStatus,
+) (Installation, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	installation, ok := s.data.Installations[id]
+	if !ok {
+		return Installation{}, ErrNotFound
+	}
+	applyAgentStatus(&installation, status, s.clock.Now())
+	s.data.Installations[id] = installation
+	if err := s.saveLocked(); err != nil {
+		return Installation{}, err
+	}
+	return installation, nil
+}
+
+func (s *FileStore) GetChannelTarget(
+	_ context.Context,
+	channel string,
+) (ChannelTarget, bool, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	target, ok := s.data.ChannelTargets[NormalizeChannel(channel)]
+	return target, ok, nil
+}
+
+func (s *FileStore) UpsertChannelTarget(_ context.Context, target ChannelTarget) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	target.Channel = NormalizeChannel(target.Channel)
+	target.UpdatedAt = s.clock.Now()
+	if s.data.ChannelTargets == nil {
+		s.data.ChannelTargets = map[string]ChannelTarget{}
+	}
+	previous, had := s.data.ChannelTargets[target.Channel]
+	s.data.ChannelTargets[target.Channel] = target
+	if err := s.saveLocked(); err != nil {
+		if had {
+			s.data.ChannelTargets[target.Channel] = previous
+		} else {
+			delete(s.data.ChannelTargets, target.Channel)
+		}
+		return err
+	}
+	return nil
+}
+
+func (s *FileStore) ListChannelTargets(_ context.Context) ([]ChannelTarget, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	targets := make([]ChannelTarget, 0, len(s.data.ChannelTargets))
+	for _, target := range s.data.ChannelTargets {
+		targets = append(targets, target)
+	}
+	sort.Slice(targets, func(i, j int) bool {
+		return targets[i].Channel < targets[j].Channel
+	})
+	return targets, nil
 }
 
 func (s *FileStore) ListHolidays(_ context.Context, installationID string) ([]Holiday, error) {
@@ -902,6 +1133,28 @@ func applySubscriptionUpdate(
 	}
 	installation.UpdatedAt = now
 	return installation
+}
+
+// applyAgentStatus folds an agent's reported status into an installation. It only
+// overwrites version fields when the agent sent a non-empty value, stamps
+// AgentLastSeenAt every call, and records LastUpdateAt on a terminal result.
+func applyAgentStatus(installation *Installation, status AgentStatus, now time.Time) {
+	now = now.UTC()
+	if v := strings.TrimSpace(status.CurrentVersion); v != "" {
+		installation.CurrentVersion = v
+	}
+	if v := strings.TrimSpace(status.AgentVersion); v != "" {
+		installation.AgentVersion = v
+	}
+	if v := strings.TrimSpace(status.UpdateStatus); v != "" {
+		installation.UpdateStatus = v
+		if v == "succeeded" || v == "failed" {
+			installation.LastUpdateAt = &now
+		}
+	}
+	installation.UpdateError = strings.TrimSpace(status.UpdateError)
+	installation.AgentLastSeenAt = &now
+	installation.UpdatedAt = now
 }
 
 func InstallationSubscriptionAuditState(

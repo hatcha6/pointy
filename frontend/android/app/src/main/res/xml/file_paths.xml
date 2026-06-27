@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- path_provider's getTemporaryDirectory() maps to the app cache dir, where the
+         self-update APK is downloaded before being handed to the system installer. -->
+    <cache-path name="downloads" path="." />
+    <files-path name="files" path="." />
+</paths>

@@ -2,6 +2,10 @@
 
 FROM golang:1.25-alpine AS build
 
+# Build version, injected into the binary so the connector heartbeat + `version`
+# command report the real release. Defaults to "dev" for local builds.
+ARG POINTY_VERSION=dev
+
 WORKDIR /src/relay
 
 COPY relay/go.mod relay/go.sum ./
@@ -10,7 +14,7 @@ RUN go mod download
 COPY relay/ ./
 RUN CGO_ENABLED=0 GOOS=linux go build \
     -trimpath \
-    -ldflags="-s -w" \
+    -ldflags="-s -w -X main.version=${POINTY_VERSION}" \
     -o /out/pointy-relay \
     ./cmd/pointy-relay
 

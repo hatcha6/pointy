@@ -20,6 +20,7 @@ x-backend-environment: &backend-environment
   DJANGO_SECURE_PROXY_SSL_HEADER: "${DJANGO_SECURE_PROXY_SSL_HEADER:-}"
   DJANGO_STATIC_ROOT: /var/lib/pointy/staticfiles
   DJANGO_MEDIA_ROOT: /var/lib/pointy/media
+  DJANGO_CLIENTS_ROOT: /var/lib/pointy/clients
   DATABASE_URL: "${POINTY_DATABASE_URL:?Set POINTY_DATABASE_URL in deploy/onprem/.env}"
   DATABASE_CONN_MAX_AGE: "60"
   REDIS_URL: "${POINTY_REDIS_URL:-redis://redis:6379/0}"
@@ -139,6 +140,7 @@ services:
       - pointy-media:/var/lib/pointy/media
       - pointy-static:/var/lib/pointy/staticfiles
       - pointy-backups:/var/lib/pointy/backups
+      - pointy-clients:/var/lib/pointy/clients
       - pointy-backup-staging:/tmp/pointy-backup-staging
       - type: bind
         source: "${POINTY_BACKUP_DRIVE_1_SOURCE:-./external-backups/drive-1}"
@@ -328,3 +330,4 @@ volumes:
   pointy-backup-staging:
   pointy-celerybeat:
   pointy-connector-state:
+  pointy-clients:

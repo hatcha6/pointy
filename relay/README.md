@@ -349,6 +349,25 @@ Customer backends learn about these cloud-side changes through their existing
 relay sync path. Remote access remains disabled/not subscribed by default until
 this relay-admin workflow changes it.
 
+Push on-prem backend updates to the fleet without visiting any shop. Upload a
+built bundle to the relay once, then set a target version per channel with a
+staged rollout; each shop's on-prem update agent pulls the bundle from the relay,
+applies it, health-checks, and auto-rolls-back on failure (see
+`deploy/onprem/README.md`). The relay stores bundles under `/var/lib/pointy/artifacts`
+automatically (no config needed); mount a persistent volume there so they survive a
+redeploy, or override with `--artifact-dir` / `POINTY_RELAY_ARTIFACT_DIR`.
+
+```sh
+pointy-relay artifacts upload --version 1.4.0 --bundle pointy-onprem-1.4.0.zip
+pointy-relay fleet set-version 1.4.0 --channel stable --rollout canary --canary inst_1,inst_2
+pointy-relay fleet status                # current → assigned version across the fleet
+pointy-relay fleet rollout 50%           # widen the rollout once canaries are healthy
+pointy-relay fleet rollout all
+pointy-relay fleet pause                 # kill switch: stop the rollout immediately
+pointy-relay fleet pin <id> 1.3.0        # pin/roll back one shop; unpin with fleet unpin <id>
+pointy-relay fleet channel <id> beta     # move a shop to another channel
+```
+
 Route a remote request with a short-lived relay ticket:
 
 ```sh

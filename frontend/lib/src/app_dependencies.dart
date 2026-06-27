@@ -37,6 +37,7 @@ import 'data/repositories/stock_count_repository.dart';
 import 'data/repositories/subscription_repository.dart';
 import 'data/repositories/user_repository.dart';
 import 'data/services/backend_discovery_service.dart';
+import 'data/services/client_update_service.dart';
 import 'data/services/connection_coordinator.dart';
 import 'data/services/connection_profile_storage.dart';
 import 'data/services/pos_api_service.dart';
@@ -123,6 +124,9 @@ class PointyAppDependencies {
       ),
       storage: const SharedPreferencesConnectionProfileStorage(),
     );
+    clientUpdateService = ClientUpdateService(
+      apiBaseUrl: () => service.baseUrl,
+    );
     authViewModel = AuthViewModel(
       authRepository,
       analyticsEngine: analyticsEngine,
@@ -139,6 +143,7 @@ class PointyAppDependencies {
   }
 
   final PosApiService service;
+  late final ClientUpdateService clientUpdateService;
   final bool _enableAutomaticConnection;
   late final AnalyticsRepository analyticsRepository;
   late final AnalyticsEngine analyticsEngine;

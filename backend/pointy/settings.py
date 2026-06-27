@@ -104,6 +104,7 @@ INSTALLED_APPS = [
     "apps.ai",
     "apps.migration",
     "apps.holidays",
+    "apps.clients",
 ]
 
 MIDDLEWARE = [
@@ -183,6 +184,9 @@ STATIC_URL = "static/"
 STATIC_ROOT = Path(env("DJANGO_STATIC_ROOT", default=str(BASE_DIR / "staticfiles")))
 MEDIA_URL = "media/"
 MEDIA_ROOT = Path(env("DJANGO_MEDIA_ROOT", default=str(BASE_DIR / "media")))
+# Directory of bundled client installers (Android APK + Windows installer) served
+# on the LAN by apps.clients. Populated by the on-prem install/update flow.
+CLIENTS_ROOT = Path(env("DJANGO_CLIENTS_ROOT", default=str(BASE_DIR / "clients")))
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 REDIS_URL = env("REDIS_URL", default="redis://localhost:6379/0")
@@ -424,8 +428,13 @@ REST_FRAMEWORK = {
     },
 }
 
+# Build version, injected at image build time from the git tag (see backend
+# Dockerfile ARG POINTY_VERSION). "0.0.0-dev" for local/unbuilt runs. Surfaced in
+# the diagnostics export header and the remote-update fleet view.
+POINTY_VERSION = env("POINTY_VERSION", default="0.0.0-dev")
+
 SPECTACULAR_SETTINGS = {
     "TITLE": "Pointy POS API",
     "DESCRIPTION": "Catalog, inventory, sales, and payment API for a point-of-sale system.",
-    "VERSION": "0.1.0",
+    "VERSION": POINTY_VERSION,
 }

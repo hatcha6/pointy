@@ -602,6 +602,7 @@ class _AuthenticatedRoutes implements AppNavigation {
         subscriptionViewModel: SubscriptionStatusViewModel(
           dependencies.subscriptionRepository,
         ),
+        clientUpdateService: dependencies.clientUpdateService,
         capabilities: capabilities,
         navigation: this,
       ),
